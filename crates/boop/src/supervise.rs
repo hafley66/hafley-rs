@@ -12,6 +12,9 @@ use crate::channel::{Delivery, LaneChannel};
 
 /// How often the inbox is re-read while a turn runs.
 const POLL: Duration = Duration::from_millis(700);
+/// Provider-flake resumes per lane; deepinfra measured ~98% per-request uptime,
+/// so a multi-hundred-request lane sees several drops.
+const FLAKE_RESUME_CAP: u32 = 5;
 
 /// What one lane run needs.
 pub struct LaneRun {
@@ -69,6 +72,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut held: Vec<Hail> = Vec::new();
     let mut turn = brief;
+    let mut flake_resumes = 0u32;
     loop {
         channel.start_turn(&turn)?;
         remember_conversation(&lane, channel);
@@ -92,6 +96,14 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
         };
         println!("[boop] turn ended: {}", end.detail);
         remember_conversation(&lane, channel);
+        if end.retryable && flake_resumes < FLAKE_RESUME_CAP {
+            flake_resumes += 1;
+            println!("[boop] provider flake, resuming ({flake_resumes}/{FLAKE_RESUME_CAP})");
+            turn = "The previous turn ended on a provider error you never saw. \
+                    Re-read your last steps and continue the brief from where you left off."
+                .to_owned();
+            continue;
+        }
         for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
             seen.insert(hail.id.clone());
             held.push(hail);
