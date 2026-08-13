@@ -34,6 +34,9 @@ impl Delivery {
 #[derive(Clone, Debug)]
 pub struct TurnEnd {
     pub ok: bool,
+    /// The turn died on a provider flake the agent never saw; the supervisor
+    /// may resume the conversation instead of ending the lane.
+    pub retryable: bool,
     /// A one-line reason, printed by the supervisor and never parsed.
     pub detail: String,
 }
@@ -42,6 +45,7 @@ impl TurnEnd {
     pub fn ok(detail: impl Into<String>) -> TurnEnd {
         TurnEnd {
             ok: true,
+            retryable: false,
             detail: detail.into(),
         }
     }
@@ -49,6 +53,15 @@ impl TurnEnd {
     pub fn failed(detail: impl Into<String>) -> TurnEnd {
         TurnEnd {
             ok: false,
+            retryable: false,
+            detail: detail.into(),
+        }
+    }
+
+    pub fn flaked(detail: impl Into<String>) -> TurnEnd {
+        TurnEnd {
+            ok: false,
+            retryable: true,
             detail: detail.into(),
         }
     }

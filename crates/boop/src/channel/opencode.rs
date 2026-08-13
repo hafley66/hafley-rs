@@ -75,7 +75,12 @@ impl LaneChannel for OpencodeChannel {
             self.session = newest_session(&self.cwd, self.turn_started_ms);
         }
         Ok(Some(match status {
-            0 => TurnEnd::ok("rc=0"),
+            // `opencode run` exits 0 when the provider drops the stream; the
+            // db's trailing MessageAbortedError is the only tell.
+            0 => match self.session.as_deref().map(last_message_aborted) {
+                Some(true) => TurnEnd::flaked("rc=0 with an aborted stream"),
+                _ => TurnEnd::ok("rc=0"),
+            },
             other => TurnEnd::failed(format!("rc={other}")),
         }))
     }
@@ -101,6 +106,29 @@ pub(crate) fn wait_for(child: &mut Child, timeout: std::time::Duration) -> Resul
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
+}
+
+/// Whether `session`'s newest message carries an error; a stream the provider
+/// dropped ends on MessageAbortedError while the process still exits 0.
+fn last_message_aborted(session: &str) -> bool {
+    let Some(path) = crate::harness::opencode::store_path() else {
+        return false;
+    };
+    let Ok(connection) = rusqlite::Connection::open_with_flags(
+        &path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ) else {
+        return false;
+    };
+    connection
+        .query_row(
+            "SELECT json_extract(data, '$.error.name') IS NOT NULL FROM message
+              WHERE session_id = ?1
+              ORDER BY time_created DESC LIMIT 1",
+            rusqlite::params![session],
+            |row| row.get::<_, bool>(0),
+        )
+        .unwrap_or(false)
 }
 
 /// The newest opencode session under `cwd` created at or after `since_ms`.
