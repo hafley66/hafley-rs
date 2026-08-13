@@ -108,8 +108,8 @@ pub(crate) fn wait_for(child: &mut Child, timeout: std::time::Duration) -> Resul
     }
 }
 
-/// Whether `session`'s newest message carries an error; a stream the provider
-/// dropped ends on MessageAbortedError while the process still exits 0.
+/// A no-finish or errored newest row means a dropped stream: the row exists
+/// from request start, while the shutdown error write can lose the reap race.
 fn last_message_aborted(session: &str) -> bool {
     let Some(path) = crate::harness::opencode::store_path() else {
         return false;
@@ -122,7 +122,9 @@ fn last_message_aborted(session: &str) -> bool {
     };
     connection
         .query_row(
-            "SELECT json_extract(data, '$.error.name') IS NOT NULL FROM message
+            "SELECT json_extract(data, '$.finish') IS NULL
+                 OR json_extract(data, '$.error.name') IS NOT NULL
+              FROM message
               WHERE session_id = ?1
               ORDER BY time_created DESC LIMIT 1",
             rusqlite::params![session],
