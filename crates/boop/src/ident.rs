@@ -22,7 +22,8 @@ pub struct Store {
 
 /// Bumped whenever stored rows mean something different. 8 = agent_pr keyed
 /// (session_id, turn, pr_url_id): a turn with two PRs keeps two rows.
-pub const SCHEMA_VERSION: i64 = 9;
+/// 10 = agent_favorite, user-pinned markdown bodies.
+pub const SCHEMA_VERSION: i64 = 10;
 
 /// A row returned to the CLI, joined back from ids to the TEXT the query
 /// surface exposes.
@@ -225,9 +226,24 @@ impl Store {
         Ok(turns > 0)
     }
 
-    /// Drop every table, recreate the schema, stamp the version. The caller
-    /// re-syncs from byte 0; nothing here reads a transcript.
+    /// Drop every table, recreate the schema, stamp the version; the caller
+    /// re-syncs from byte 0. Favorites alone cross the drop by value.
     pub fn rebuild(&self) -> Result<()> {
+        let mut favorites: Vec<(String, String, String, i64, i64)> = Vec::new();
+        {
+            let mut statement = self.connection.prepare(
+                "SELECT m.body, f.note, f.source, f.created_ts, m.first_ts
+                   FROM agent_favorite f
+                   JOIN markdown_cache m ON m.markdown_id = f.markdown_id
+                  ORDER BY f.favorite_id",
+            )?;
+            let rows = statement.query_map([], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+            })?;
+            for row in rows {
+                favorites.push(row?);
+            }
+        }
         let mut names = Vec::new();
         {
             let mut statement = self.connection.prepare(
@@ -244,6 +260,14 @@ impl Store {
         }
         self.connection.execute_batch(SCHEMA)?;
         self.stamp_version()?;
+        for (body, note, source, created_ts, first_ts) in favorites {
+            let markdown_id = self.intern_markdown(&body, first_ts as u64)?;
+            self.connection.execute(
+                "INSERT INTO agent_favorite (markdown_id, note, source, created_ts)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![markdown_id, note, source, created_ts],
+            )?;
+        }
         self.connection.execute_batch("VACUUM")?;
         Ok(())
     }
@@ -706,6 +730,18 @@ impl Store {
             params![digest],
             |row| row.get(0),
         )?)
+    }
+
+    /// Pin one markdown body as a favorite. The body dedupes through
+    /// markdown_cache; note and source ride on the favorite row itself.
+    pub fn favorite_add(&self, body: &str, note: &str, source: &str, ts: u64) -> Result<i64> {
+        let markdown_id = self.intern_markdown(body, ts)?;
+        self.connection.execute(
+            "INSERT INTO agent_favorite (markdown_id, note, source, created_ts)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![markdown_id, note, source, ts as i64],
+        )?;
+        Ok(self.connection.last_insert_rowid())
     }
 
     /// The trace a session belongs to, by trace name.
@@ -1609,6 +1645,18 @@ CREATE TABLE IF NOT EXISTS markdown_cache (
   first_ts INTEGER NOT NULL
 );
 
+-- User-pinned markdown, the one user-authored state in the store: no
+-- transcript re-projects it, so rebuild() carries it across the drop by value.
+-- source is plain text (a session id, a url, whatever the user typed), never a
+-- dict id, so re-import needs no id remap.
+CREATE TABLE IF NOT EXISTS agent_favorite (
+  favorite_id INTEGER PRIMARY KEY,
+  markdown_id INTEGER NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT '',
+  created_ts INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS agent_trace (
   trace_id INTEGER PRIMARY KEY,
   root_session_id INTEGER,
@@ -2424,6 +2472,33 @@ mod tests {
         assert_eq!(urls.len(), 2);
 
         drop(store);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    /// Favorites are user-authored with no transcript behind them; rebuild
+    /// drops every projected row and the favorite comes back intact.
+    #[test]
+    fn a_favorite_survives_rebuild() {
+        let db_path = temp_path("fav");
+        let _ = std::fs::remove_file(&db_path);
+        {
+            let store = Store::open(db_path.clone()).unwrap();
+            let id = store
+                .favorite_add("# kept\n\n| a | b |\n", "the writers table", "chat", 42)
+                .unwrap();
+            assert!(id > 0);
+            store.rebuild().unwrap();
+            let (_, rows) = store
+                .passthrough(
+                    "SELECT f.note, f.source, m.body FROM agent_favorite f
+                     JOIN markdown_cache m ON m.markdown_id = f.markdown_id",
+                )
+                .unwrap();
+            assert_eq!(rows.len(), 1, "the favorite crossed the rebuild");
+            let row = rows[0].as_object().unwrap();
+            assert_eq!(row.get("note").unwrap(), "the writers table");
+            assert_eq!(row.get("body").unwrap(), "# kept\n\n| a | b |\n");
+        }
         let _ = std::fs::remove_file(&db_path);
     }
 

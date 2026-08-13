@@ -416,6 +416,20 @@ impl Store {
         Ok(out)
     }
 
+    /// Favorites newest-first, body included.
+    pub fn query_favorites(&self, limit: Option<u64>) -> Result<Vec<Row>> {
+        let mut sql = String::from(
+            "SELECT f.favorite_id, f.note, f.source, f.created_ts, m.bytes, m.body
+               FROM agent_favorite f
+               JOIN markdown_cache m ON m.markdown_id = f.markdown_id
+              ORDER BY f.favorite_id DESC",
+        );
+        if let Some(limit) = limit {
+            sql.push_str(&format!(" LIMIT {limit}"));
+        }
+        self.rows(&sql, Vec::new())
+    }
+
     /// How far ingest has read each transcript.
     pub fn query_sync_cursors(&self, limit: Option<u64>) -> Result<Vec<Row>> {
         let mut sql = String::from(

@@ -101,7 +101,7 @@ ever wears hangs under one:
   The brief body is stored AS OF SPAWN. Editing the file afterward does not
   change what the store says the lane was told.
 
-STORE SCHEMA: this build writes version 9. A store written by an older build is
+STORE SCHEMA: this build writes version 10. A store written by an older build is
 refused, and `boop db sync create --rebuild` drops every stored row and
 re-projects every transcript from byte 0 (about 18 s over 1.5 GB here). Nothing
 is wiped without that flag.
@@ -3058,6 +3058,12 @@ enum DbCmd {
         #[command(subcommand)]
         cmd: PriceCmd,
     },
+    /// User-pinned markdown: save a message you want to keep, read it back.
+    #[cfg(feature = "agent-read")]
+    Favorite {
+        #[command(subcommand)]
+        cmd: FavoriteCmd,
+    },
     /// Ingest new transcript bytes.
     Sync {
         #[command(subcommand)]
@@ -3218,6 +3224,30 @@ enum SyncCmd {
         /// Keep syncing on a poll instead of returning.
         #[arg(long)]
         forever: bool,
+    },
+}
+
+#[cfg(feature = "agent-read")]
+#[derive(Subcommand)]
+enum FavoriteCmd {
+    /// Pin markdown into the store, from --file or stdin.
+    Add {
+        /// Markdown file to pin; stdin when absent.
+        #[arg(long)]
+        file: Option<PathBuf>,
+        /// Why this one is kept.
+        #[arg(long)]
+        note: Option<String>,
+        /// Where it came from: a session id, a url, plain text.
+        #[arg(long)]
+        source: Option<String>,
+    },
+    /// Favorites newest-first, body included.
+    List {
+        #[arg(long)]
+        limit: Option<u64>,
+        #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
+        format: QueryFormat,
     },
 }
 
@@ -4137,6 +4167,34 @@ fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
         },
         #[cfg(feature = "agent-read")]
         DbCmd::Price { cmd } => run_price(cmd),
+        #[cfg(feature = "agent-read")]
+        DbCmd::Favorite { cmd } => match cmd {
+            FavoriteCmd::Add { file, note, source } => {
+                let body = match file {
+                    Some(path) => std::fs::read_to_string(&path)
+                        .with_context(|| format!("read {}", path.display()))?,
+                    None => {
+                        let mut buffer = String::new();
+                        std::io::Read::read_to_string(&mut std::io::stdin(), &mut buffer)?;
+                        buffer
+                    }
+                };
+                let store = open_store()?;
+                let id = store.favorite_add(
+                    &body,
+                    note.as_deref().unwrap_or(""),
+                    source.as_deref().unwrap_or(""),
+                    now_ms(),
+                )?;
+                line(&format!("favorite {id}"));
+                Ok(())
+            }
+            FavoriteCmd::List { limit, format } => {
+                let store = open_store()?;
+                emit_json_rows(&store.query_favorites(limit)?, format);
+                Ok(())
+            }
+        },
         DbCmd::Sync { cmd } => match cmd {
             SyncCmd::Create { rebuild, forever } => {
                 if forever {
