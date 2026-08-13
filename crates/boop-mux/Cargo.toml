@@ -1,0 +1,12 @@
+[package]
+name = "boop-mux"
+version.workspace = true
+edition.workspace = true
+description = "the tmux multiplexer seam boop drives: one trait, one implementation over tmux_interface"
+license.workspace = true
+
+[dependencies]
+# Application-level errors; the trait methods return these.
+anyhow = "1"
+# Layer 1: typed tmux command argv builder for the one-shot commands.
+tmux_interface = "0.4"
