@@ -9,13 +9,22 @@ use anyhow::{Context, Result};
 use tracing::{debug, error, info, warn};
 
 use crate::bus;
-use crate::channel::{Delivery, LaneChannel};
+use crate::channel::{Delivery, LaneChannel, TurnEnd};
 
 /// How often the inbox is re-read while a turn runs.
 const POLL: Duration = Duration::from_millis(700);
 /// Provider-flake resumes per lane; deepinfra measured ~98% per-request uptime,
 /// so a multi-hundred-request lane sees several drops.
 const FLAKE_RESUME_CAP: u32 = 5;
+/// A turn with no store write AT ALL by this deadline is the silent-stall
+/// class (repro: empty stdout+stderr forever); healthy turns write in seconds.
+const FIRST_SIGNAL_LIMIT: Duration = Duration::from_secs(30);
+/// Mid-turn quiet bound. Measured over a week of healthy traffic: 261
+/// in-message gaps over 120s (long tool calls), so 30s here would false-kill.
+const STALL_LIMIT: Duration = Duration::from_secs(5 * 60);
+/// The turn text a resumed conversation opens with instead of the full brief.
+const RESUME_NUDGE: &str = "The previous turn ended on a provider error you never saw. \
+     Re-read your last steps and continue the brief from where you left off.";
 
 /// What one lane run needs.
 pub struct LaneRun {
@@ -81,15 +90,52 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
     info!(brief = %lane.brief.display(), "lane brief loaded");
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut held: Vec<Hail> = Vec::new();
-    let mut turn = brief;
+    // A resumed conversation already holds the brief; re-feeding it restarts
+    // the work, so a resume opens with the continue nudge instead.
+    let mut turn = match channel.conversation_id() {
+        Some(conversation) => {
+            info!(
+                conversation_id = conversation,
+                "lane resuming pinned conversation"
+            );
+            println!("[boop] resuming conversation {conversation}");
+            RESUME_NUDGE.to_owned()
+        }
+        None => brief,
+    };
     let mut flake_resumes = 0u32;
     loop {
         info!(turn_bytes = turn.len(), "lane turn starting");
+        let turn_started = crate::channel::now_ms();
         channel.start_turn(&turn)?;
         remember_conversation(&lane, channel);
         let end = loop {
             if let Some(end) = channel.poll_turn(POLL)? {
                 break end;
+            }
+            let this_turn_activity = channel
+                .last_activity_ms()
+                .filter(|written| *written >= turn_started);
+            let (idle_ms, limit) = match this_turn_activity {
+                Some(written) => (
+                    crate::channel::now_ms().saturating_sub(written),
+                    STALL_LIMIT,
+                ),
+                None => (
+                    crate::channel::now_ms().saturating_sub(turn_started),
+                    FIRST_SIGNAL_LIMIT,
+                ),
+            };
+            if idle_ms > limit.as_millis() as u64 {
+                warn!(idle_ms, "lane turn stalled; killing the harness child");
+                println!("[boop] turn stalled ({}s idle), retrying", idle_ms / 1000);
+                channel.close().inspect_err(|error| {
+                    error!(error = %error, "stalled lane channel close failed");
+                })?;
+                break TurnEnd::flaked(format!(
+                    "stalled: {}s with no harness activity",
+                    idle_ms / 1000
+                ));
             }
             for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
                 seen.insert(hail.id.clone());
@@ -133,9 +179,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
                 flake_resume_cap = FLAKE_RESUME_CAP,
                 "lane provider flake; resuming"
             );
-            turn = "The previous turn ended on a provider error you never saw. \
-                    Re-read your last steps and continue the brief from where you left off."
-                .to_owned();
+            turn = RESUME_NUDGE.to_owned();
             continue;
         }
         for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
@@ -210,6 +254,14 @@ fn remember_conversation(lane: &LaneRun, channel: &dyn LaneChannel) {
             "conversation trace attached"
         );
     }
+}
+
+/// The conversation id a previous supervisor pinned for this lane, if any.
+/// Read by the cold-restart path so a respawn continues instead of restarting.
+pub fn pinned_conversation(dir: &Path, lane: &str) -> Option<String> {
+    let raw = std::fs::read_to_string(dir.join("registry.json")).ok()?;
+    let map: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    map.get(lane)?.get("sessionId")?.as_str().map(str::to_owned)
 }
 
 /// Write the harness's own conversation id onto the lane's registry route so a
@@ -304,6 +356,20 @@ mod tests {
             body: format!("body of {id}"),
             r#ref: None,
         }
+    }
+
+    // FAIL-PRE-FIX: a respawned supervisor had no route read-back, so every
+    // cold restart opened a fresh session with the full brief.
+    #[test]
+    fn a_pinned_conversation_round_trips_through_the_registry_route() {
+        let dir = tempdir();
+        assert_eq!(pinned_conversation(&dir, "mine"), None);
+        record_conversation(&dir, "mine", "ses_route_1");
+        assert_eq!(
+            pinned_conversation(&dir, "mine").as_deref(),
+            Some("ses_route_1")
+        );
+        assert_eq!(pinned_conversation(&dir, "other"), None);
     }
 
     #[test]

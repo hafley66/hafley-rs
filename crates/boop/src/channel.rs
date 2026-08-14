@@ -102,6 +102,12 @@ pub trait LaneChannel: Send {
     /// still running, which is when the supervisor offers it new text.
     fn poll_turn(&mut self, timeout: std::time::Duration) -> Result<Option<TurnEnd>>;
 
+    /// Epoch millis of the newest harness-side write for this conversation.
+    /// `None` means no signal; the supervisor then measures from turn start.
+    fn last_activity_ms(&self) -> Option<u64> {
+        None
+    }
+
     /// Release the harness child.
     fn close(&mut self) -> Result<()>;
 }

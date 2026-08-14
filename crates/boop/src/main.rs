@@ -1514,6 +1514,12 @@ fn run_lane_supervisor(
     let adapter = harness_by_id(registry, harness_id)?;
     let dir = mail_dir(mail_dir_arg)?;
     let cwd = std::env::current_dir().context("read the current directory")?;
+    // A respawned lane continues its pinned conversation instead of cold-
+    // starting a new one with the full brief.
+    let resume = resume
+        .map(str::to_owned)
+        .or_else(|| boop::supervise::pinned_conversation(&dir, lane));
+    let resume = resume.as_deref();
     let spec = boop::channel::ChannelSpec {
         model: model.map(str::to_owned),
         cwd: cwd.clone(),

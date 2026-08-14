@@ -116,6 +116,16 @@ impl LaneChannel for OpencodeChannel {
         }))
     }
 
+    fn last_activity_ms(&self) -> Option<u64> {
+        // The first turn's session id is only pinned at turn end, so a live
+        // lookup keeps the stall watchdog from seeing a healthy turn as silent.
+        let session = match self.session.clone() {
+            Some(session) => session,
+            None => newest_session(&self.cwd, self.turn_started_ms)?,
+        };
+        newest_activity(&session)
+    }
+
     fn close(&mut self) -> Result<()> {
         if let Some(mut turn) = self.turn.take() {
             let _ = turn.kill();
@@ -123,6 +133,29 @@ impl LaneChannel for OpencodeChannel {
         }
         Ok(())
     }
+}
+
+/// The newest message/part write for a session. A live turn streams part rows,
+/// so a flat-lined value under a running child is a stalled provider stream.
+pub(crate) fn newest_activity(session: &str) -> Option<u64> {
+    let path = crate::harness::opencode::store_path()?;
+    let connection = rusqlite::Connection::open_with_flags(
+        &path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .ok()?;
+    connection
+        .query_row(
+            "SELECT max(newest) FROM (
+               SELECT max(time_updated) AS newest FROM message WHERE session_id = ?1
+               UNION ALL
+               SELECT max(time_created) FROM part WHERE session_id = ?1)",
+            rusqlite::params![session],
+            |row| row.get::<_, Option<i64>>(0),
+        )
+        .ok()
+        .flatten()
+        .map(|value| value as u64)
 }
 
 /// Reap `child` if it exits within `timeout`; `None` means still running.
