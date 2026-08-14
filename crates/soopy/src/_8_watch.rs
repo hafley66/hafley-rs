@@ -21,8 +21,8 @@ pub struct SourceWatcher {
     tree: SourceTree,
     query: SourceQuery,
     snapshot: SourceSnapshot,
-    root: PathBuf,
     git_dir: PathBuf,
+    common_dir: PathBuf,
 }
 
 impl SourceWatcher {
@@ -31,7 +31,7 @@ impl SourceWatcher {
             bail!("watch requires Revision::Worktree");
         }
         let root = repository.root.clone();
-        let git_dir = git_dir(&root)?;
+        let (git_dir, common_dir) = git_dirs(&root)?;
         let mut tree = SourceTree::open(repository);
         let snapshot = tree.snapshot(&query)?;
         let (send, events) = mpsc::channel();
@@ -42,11 +42,13 @@ impl SourceWatcher {
         watcher
             .watch(&root, RecursiveMode::Recursive)
             .context("watch source root")?;
-        // A worktree can place its Git directory outside its root. Narrow
-        // watches observe ref movement without watching pack/object churn.
+        // A linked worktree keeps its Git directory and its shared refs outside
+        // the worktree root. Narrow watches observe HEAD, the index, packed refs
+        // and named-ref movement without watching pack/object churn.
         if git_dir != root.join(".git") {
             let _ = watcher.watch(&git_dir, RecursiveMode::NonRecursive);
-            let refs = git_dir.join("refs");
+            let _ = watcher.watch(&common_dir, RecursiveMode::NonRecursive);
+            let refs = common_dir.join("refs");
             if refs.is_dir() {
                 let _ = watcher.watch(&refs, RecursiveMode::Recursive);
             }
@@ -57,8 +59,8 @@ impl SourceWatcher {
             tree,
             query,
             snapshot,
-            root,
             git_dir,
+            common_dir,
         })
     }
 
@@ -98,6 +100,7 @@ impl SourceWatcher {
 
         let mut rescan = false;
         let mut touches_git = false;
+        let mut touches_index = false;
         let mut touches_source = false;
         for event in events {
             match event {
@@ -105,14 +108,20 @@ impl SourceWatcher {
                     rescan |= event.need_rescan();
                     for path in event.paths {
                         touches_git |= self.is_git_ref(&path);
+                        touches_index |= self.is_git_index(&path);
                         touches_source |= !self.is_git_path(&path);
                     }
                 }
                 Err(_) => rescan = true,
             }
         }
-        if !rescan && !touches_git && !touches_source {
+        if !rescan && !touches_git && !touches_index && !touches_source {
             return Ok(Vec::new());
+        }
+        // An index write changes tracked/dirty state without moving a ref or a
+        // source file, so the snapshot content diff would otherwise be empty.
+        if touches_index {
+            rescan = true;
         }
         let before = self.snapshot.clone();
         let after = self.tree.snapshot(&self.query)?;
@@ -135,31 +144,44 @@ impl SourceWatcher {
     fn is_git_ref(&self, path: &Path) -> bool {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         path == self.git_dir.join("HEAD")
-            || path == self.git_dir.join("packed-refs")
-            || path.starts_with(self.git_dir.join("refs"))
-            || (path.starts_with(&self.root.join(".git"))
-                && (path.ends_with("HEAD")
-                    || path.ends_with("packed-refs")
-                    || path.components().any(|component| component.as_os_str() == "refs")))
+            || path == self.common_dir.join("HEAD")
+            || path == self.common_dir.join("packed-refs")
+            || path.starts_with(self.common_dir.join("refs"))
+    }
+
+    fn is_git_index(&self, path: &Path) -> bool {
+        let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        ["index", "index.lock"]
+            .iter()
+            .any(|name| path == self.git_dir.join(name) || path == self.common_dir.join(name))
     }
 
     fn is_git_path(&self, path: &Path) -> bool {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        path.starts_with(&self.git_dir) || path.starts_with(self.root.join(".git"))
+        path.starts_with(&self.git_dir) || path.starts_with(&self.common_dir)
     }
 }
 
-fn git_dir(root: &Path) -> Result<PathBuf> {
+fn git_dirs(root: &Path) -> Result<(PathBuf, PathBuf)> {
     let output = std::process::Command::new("git")
         .arg("-C")
         .arg(root)
-        .args(["rev-parse", "--absolute-git-dir"])
+        .args(["rev-parse", "--absolute-git-dir", "--git-common-dir"])
         .output()
-        .context("find Git directory for watcher")?;
+        .context("find Git directories for watcher")?;
     if !output.status.success() {
-        bail!("git rev-parse --absolute-git-dir failed for {}", root.display());
+        bail!("git rev-parse --absolute-git-dir --git-common-dir failed for {}", root.display());
     }
-    Ok(PathBuf::from(String::from_utf8(output.stdout)?.trim()))
+    let text = String::from_utf8(output.stdout)?;
+    let mut lines = text.lines();
+    let git_dir = PathBuf::from(lines.next().unwrap_or_default());
+    let common = lines.next().unwrap_or_default();
+    let common_dir = if Path::new(common).is_absolute() {
+        PathBuf::from(common)
+    } else {
+        root.join(common)
+    };
+    Ok((git_dir, common_dir))
 }
 
 fn revision_head(revision: &RevisionId) -> Option<&crate::_0_types::ObjectId> {

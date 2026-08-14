@@ -23,17 +23,24 @@ pub fn discover(start: impl AsRef<Path>) -> Result<Repository> {
 }
 pub fn open(root: impl Into<PathBuf>) -> Result<Repository> {
     let root = std::fs::canonicalize(root.into()).context("canonicalize repository root")?;
+    // Repository identity comes from the common Git directory, not the
+    // per-worktree `--git-dir`. A linked worktree reports
+    // `<common>/.git/worktrees/<name>` for `--git-dir` but shares the common
+    // directory with its siblings, so hashing the common directory keeps one
+    // repository's identity stable across its worktrees.
     let identity = Command::new("git")
         .arg("-C")
         .arg(&root)
-        .args(["rev-parse", "--git-dir"])
+        .args(["rev-parse", "--git-common-dir"])
         .output()
-        .context("run git rev-parse --git-dir")?;
+        .context("run git rev-parse --git-common-dir")?;
     if !identity.status.success() {
         bail!("{} is not a Git repository", root.display());
     }
-    let git_dir = String::from_utf8(identity.stdout)?;
-    let key = blake3::hash(format!("{}\0{}", root.display(), git_dir.trim()).as_bytes());
+    let common_dir = String::from_utf8(identity.stdout)?.trim().to_string();
+    let common_path = std::fs::canonicalize(root.join(&common_dir))
+        .with_context(|| format!("canonicalize common Git directory {common_dir:?}"))?;
+    let key = blake3::hash(common_path.as_os_str().to_string_lossy().as_bytes());
     Ok(Repository {
         root,
         identity: RepositoryId(Arc::from(key.to_hex().as_str())),

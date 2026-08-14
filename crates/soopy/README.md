@@ -110,9 +110,9 @@ pub trait SourceSelect<T> {
 }
 ```
 
-## Correctness work before API stabilization
+## Correctness invariants
 
-The current implementation has these open invariants:
+These invariants are enforced by the implementation and pinned by `tests/1_correctness.rs`:
 
 1. `repo_files` pathspecs are relative to the selected repository root;
    unscoped `files` pathspecs are relative to the caller's working directory.
@@ -123,12 +123,16 @@ The current implementation has these open invariants:
 4. Every content identity returned by enumeration round-trips through
    `SourceTree::read_many`.
 5. Worktree caches release entries absent from the latest completed walk.
-6. Tracked symlink behavior agrees across worktree and commit snapshots.
+6. Tracked symlink behavior agrees across worktree and commit snapshots
+   (symlinks are dropped in both).
 7. Repository identity and worktree identity are separate and tested across
    linked worktrees.
 8. Failed Git commands cannot produce clean or complete source coordinates.
-9. Supported platforms have explicit tests for non-UTF-8 and newline-bearing
-   repository paths.
+9. Non-UTF-8 and newline-bearing repository paths are rejected explicitly,
+   because `RepoPath` is a UTF-8 `Arc<str>` and the Git batch protocols are
+   line-oriented. A repository containing either cannot be enumerated by
+   `git_files` or `read_many`, which errors rather than collapsing or corrupting
+   the coordinate.
 
 ## CLI
 

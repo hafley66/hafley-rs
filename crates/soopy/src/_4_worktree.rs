@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -32,6 +32,7 @@ pub fn enumerate(
 ) -> Result<Vec<SourceEntry>> {
     let matcher = compile(patterns)?;
     let mut rows = Vec::new();
+    let mut seen = BTreeSet::new();
     let mut walk = WalkBuilder::new(&repository.root);
     walk.hidden(false).filter_entry(|entry| {
         if entry.file_name() == ".git" {
@@ -50,7 +51,11 @@ pub fn enumerate(
         if !matcher.is_match(relative) {
             continue;
         }
-        let path = RepoPath(Arc::from(relative.to_string_lossy().replace('\\', "/")));
+        let relative = relative
+            .to_str()
+            .with_context(|| format!("non-UTF-8 path is not supported: {:?}", entry.path()))?;
+        let path = RepoPath(Arc::from(relative.replace('\\', "/")));
+        seen.insert(path.clone());
         let metadata = entry.metadata().context("read worktree metadata")?;
         let modified_secs = metadata
             .modified()
@@ -88,6 +93,7 @@ pub fn enumerate(
             size,
         });
     }
+    cache.files.retain(|path, _| seen.contains(path));
     cache.walk_ref_secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs() as i64)

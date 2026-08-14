@@ -24,13 +24,20 @@ pub fn enumerate(repository: &Repository, revision: &RevisionId, patterns: &[Pat
     for record in output.stdout.split(|byte| *byte == 0).filter(|record| !record.is_empty()) {
         let Some(tab) = record.iter().position(|byte| *byte == b'\t') else { continue };
         let meta = String::from_utf8_lossy(&record[..tab]);
-        let path = String::from_utf8_lossy(&record[tab + 1..]).into_owned();
+        let path = std::str::from_utf8(&record[tab + 1..])
+            .with_context(|| format!("non-UTF-8 path in tree {} is not supported", commit.0))?;
         let fields: Vec<&str> = meta.split_whitespace().collect();
-        if fields.get(1) != Some(&"blob") || !matcher.is_match(&path) {
+        // `git ls-tree` reports symlinks as `blob` with mode `120000`. The
+        // worktree walker does not follow symlinks, so a tracked symlink must
+        // be dropped here too for the two snapshots to agree.
+        if fields.get(1) != Some(&"blob") || fields.first() == Some(&"120000") || !matcher.is_match(path) {
             continue;
         }
         let Some(oid) = fields.get(2) else { continue };
-        let size = fields.get(3).and_then(|value| value.parse().ok()).unwrap_or(0);
+        let size = match fields.get(3) {
+            Some(value) => value.parse().with_context(|| format!("parse `git ls-tree` size {value:?} for {path:?}"))?,
+            None => 0,
+        };
         rows.push(SourceEntry {
             source: SourceRef {
                 repository: repository.identity.clone(),

@@ -77,12 +77,14 @@ fn listed_paths(repository: &Repository, revision: &RevisionId, pathspecs: &[Str
     if !output.status.success() {
         bail!("git ls-files failed in {}", repository.root.display());
     }
-    Ok(output
-        .stdout
-        .split(|byte| *byte == 0)
-        .filter(|path| !path.is_empty())
-        .map(|path| String::from_utf8_lossy(path).into_owned())
-        .collect())
+    let mut paths = Vec::new();
+    for record in output.stdout.split(|byte| *byte == 0).filter(|path| !path.is_empty()) {
+        let path = std::str::from_utf8(record)
+            .with_context(|| format!("non-UTF-8 tracked path is not supported: {:?}", String::from_utf8_lossy(record)))?;
+        crate::_10_path::ensure_line_safe(path)?;
+        paths.push(path.to_string());
+    }
+    Ok(paths)
 }
 
 fn worktree_rows(
@@ -190,6 +192,29 @@ fn entry(
         std::fs::metadata(repository.root.join(path)).ok().map(|metadata| metadata.len())
     };
     entry_with_size(repository, revision, path, oid, size)
+}
+
+/// Hash arbitrary bytes as a Git blob and return its object ID, matching the
+/// `git hash-object` OID that the tracked-file surface emits for worktree
+/// content. Used by `read_many` to round-trip a `GitBlob` identity.
+pub(crate) fn hash_object(repository: &Repository, bytes: &[u8]) -> Result<ObjectId> {
+    let mut child = Command::new("git")
+        .arg("-C")
+        .arg(&repository.root)
+        .args(["hash-object", "--stdin"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .context("start git hash-object --stdin")?;
+    {
+        let input = child.stdin.as_mut().context("open git hash-object stdin")?;
+        input.write_all(bytes).context("write git hash-object bytes")?;
+    }
+    let output = child.wait_with_output().context("wait for git hash-object --stdin")?;
+    if !output.status.success() {
+        bail!("git hash-object failed in {}", repository.root.display());
+    }
+    Ok(ObjectId(Arc::from(String::from_utf8(output.stdout)?.trim())))
 }
 
 fn entry_with_size(
