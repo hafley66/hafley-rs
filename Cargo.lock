@@ -844,6 +844,7 @@ dependencies = [
  "notify",
  "serde",
  "serde_json",
+ "sysinfo",
 ]
 
 [[package]]

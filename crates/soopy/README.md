@@ -434,3 +434,32 @@ RevisionGraph::query
 Git owns revision syntax, graph traversal, refs, fetching, and object storage.
 Soopy supplies repository-qualified coordinates, typed requests and results,
 validation, batching, content checks, and filesystem/ref change reporting.
+
+## Scale receipts
+
+The root `justfile` runs the release-built scale harness against an existing
+checkout. Receipts are written below ignored `target/soopy-scale/`. JSON keeps
+retained-handle construction, tracked-file enumeration, cold batched blob
+reads, and warm reads through the same persistent Git batch process separate.
+It samples the harness process RSS after each stage and counts open descriptors
+before and after retaining the requested handles.
+The adjacent resource receipt records peak RSS and operating-system process
+counters from `/usr/bin/time`.
+
+```bash
+just soopy-scale-linux-deps
+just soopy-scale-linux-all
+just soopy-scale /path/to/repository ':(glob)**/*.rs' 500 16 local
+```
+
+The dependency recipe walks build-description files. The all-files recipe
+reads every tracked blob twice and is operator-triggered because repository
+size controls its duration and I/O volume. Repeating one repository handle 500
+times measures retained Soopy state. It does not model 500 distinct watcher
+registrations or 500 distinct repository contents.
+
+Blob answers are owned byte buffers. Batch size therefore bounds live answer
+bytes, while the process allocator may retain freed pages after large or
+irregular blobs. The Linux recipes default to 16 files per read batch so the
+receipt exposes that retained-memory behavior without combining hundreds of
+large generated headers into one live answer vector.

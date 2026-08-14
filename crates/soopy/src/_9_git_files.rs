@@ -5,7 +5,7 @@
 
 use std::io::Write;
 use std::path::{Component, Path};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Output, Stdio};
 use std::sync::Arc;
 
 use anyhow::{bail, Context, Result};
@@ -107,7 +107,7 @@ fn worktree_rows(
     revision: &RevisionId,
     paths: &[String],
 ) -> Result<Vec<SourceEntry>> {
-    let mut child = Command::new("git")
+    let child = Command::new("git")
         .arg("-C")
         .arg(&repository.root)
         .args(["hash-object", "--stdin-paths"])
@@ -115,15 +115,11 @@ fn worktree_rows(
         .stdout(Stdio::piped())
         .spawn()
         .context("start git hash-object --stdin-paths")?;
-    {
-        let input = child.stdin.as_mut().context("open git hash-object stdin")?;
-        for path in paths {
-            writeln!(input, "{path}").context("write git hash-object path")?;
-        }
+    let mut input = Vec::new();
+    for path in paths {
+        writeln!(input, "{path}").context("buffer git hash-object path")?;
     }
-    let output = child
-        .wait_with_output()
-        .context("wait for git hash-object --stdin-paths")?;
+    let output = communicate(child, input, "git hash-object --stdin-paths")?;
     if !output.status.success() {
         bail!("git hash-object failed in {}", repository.root.display());
     }
@@ -149,7 +145,7 @@ fn commit_rows(
     commit: &ObjectId,
     paths: &[String],
 ) -> Result<Vec<SourceEntry>> {
-    let mut child = Command::new("git")
+    let child = Command::new("git")
         .arg("-C")
         .arg(&repository.root)
         .args([
@@ -160,15 +156,11 @@ fn commit_rows(
         .stdout(Stdio::piped())
         .spawn()
         .context("start git cat-file --batch-check")?;
-    {
-        let input = child.stdin.as_mut().context("open git cat-file stdin")?;
-        for path in paths {
-            writeln!(input, "{}:{path}", commit.0).context("write git cat-file object")?;
-        }
+    let mut input = Vec::new();
+    for path in paths {
+        writeln!(input, "{}:{path}", commit.0).context("buffer git cat-file object")?;
     }
-    let output = child
-        .wait_with_output()
-        .context("wait for git cat-file --batch-check")?;
+    let output = communicate(child, input, "git cat-file --batch-check")?;
     if !output.status.success() {
         bail!("git cat-file failed in {}", repository.root.display());
     }
@@ -194,6 +186,22 @@ fn commit_rows(
             }
         })
         .collect())
+}
+
+/// Feed a Git batch process while its stdout is drained by `wait_with_output`.
+/// Writing the complete request stream first deadlocks once both pipe buffers
+/// fill on repository-sized batches.
+fn communicate(mut child: Child, input: Vec<u8>, operation: &'static str) -> Result<Output> {
+    let mut stdin = child.stdin.take().context("open Git batch stdin")?;
+    let writer = std::thread::spawn(move || -> std::io::Result<()> { stdin.write_all(&input) });
+    let output = child
+        .wait_with_output()
+        .with_context(|| format!("wait for {operation}"))?;
+    writer
+        .join()
+        .map_err(|_| anyhow::anyhow!("{operation} input writer panicked"))?
+        .with_context(|| format!("write {operation} input"))?;
+    Ok(output)
 }
 
 fn entry(

@@ -141,13 +141,15 @@ impl SourceTree {
                     (Arc::from(bytes), digest)
                 }
                 RevisionId::Commit(commit) => {
-                    // Resolve the requested `commit:path` and read that blob,
-                    // rather than trusting an arbitrary caller-supplied OID.
-                    let oid = crate::_3_revision::resolve_commit_path(
-                        &self.repository,
-                        commit,
-                        request.source.path.0.as_ref(),
-                    )?;
+                    let spec = format!("{}:{}", commit.0, request.source.path.0);
+                    if self.git.is_none() {
+                        self.git = Some(GitBatch::open(&self.repository.root)?);
+                    }
+                    let (oid, bytes) = self
+                        .git
+                        .as_mut()
+                        .context("Git batch reader was not initialized")?
+                        .read_spec(&spec)?;
                     if let Some(expected) = request.expected.as_ref() {
                         match expected {
                             ContentId::GitBlob(expected_oid) if expected_oid.0 == oid.0 => {}
@@ -165,14 +167,6 @@ impl SourceTree {
                             }
                         }
                     }
-                    if self.git.is_none() {
-                        self.git = Some(GitBatch::open(&self.repository.root)?);
-                    }
-                    let bytes = self
-                        .git
-                        .as_mut()
-                        .context("Git batch reader was not initialized")?
-                        .read(&oid)?;
                     (bytes, ContentId::GitBlob(oid))
                 }
             };

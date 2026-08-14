@@ -32,14 +32,21 @@ impl GitBatch {
     }
 
     pub fn read(&mut self, oid: &ObjectId) -> Result<Arc<[u8]>> {
-        writeln!(self.input, "{}", oid.0)?;
+        let (_, bytes) = self.read_spec(&oid.0)?;
+        Ok(bytes)
+    }
+
+    /// Read an expression such as `commit:path` and return Git's resolved OID.
+    pub fn read_spec(&mut self, spec: &str) -> Result<(ObjectId, Arc<[u8]>)> {
+        writeln!(self.input, "{spec}")?;
         self.input.flush()?;
         let mut header = String::new();
         self.output.read_line(&mut header)?;
         let fields: Vec<&str> = header.split_whitespace().collect();
         if fields.len() != 3 || fields[1] != "blob" {
-            bail!("git cat-file response for {}: {}", oid.0, header.trim());
+            bail!("git cat-file response for {spec}: {}", header.trim());
         }
+        let oid = ObjectId(Arc::from(fields[0]));
         let size: usize = fields[2].parse().context("parse Git blob size")?;
         let mut bytes = vec![0; size];
         self.output.read_exact(&mut bytes)?;
@@ -48,7 +55,7 @@ impl GitBatch {
         if newline[0] != b'\n' {
             bail!("git cat-file response missing blob terminator");
         }
-        Ok(Arc::from(bytes))
+        Ok((oid, Arc::from(bytes)))
     }
 }
 

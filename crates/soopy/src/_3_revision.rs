@@ -53,25 +53,3 @@ fn dirty(repository: &Repository) -> Result<bool> {
     }
     Ok(!output.stdout.is_empty())
 }
-
-/// Resolve the blob a `commit:path` names. Used to verify a committed read
-/// against its expected identity before returning content.
-pub fn resolve_commit_path(
-    repository: &Repository,
-    commit: &ObjectId,
-    path: &str,
-) -> Result<ObjectId> {
-    let spec = format!("{}:{}", commit.0, path);
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(&repository.root)
-        .args(["rev-parse", "--verify", &spec])
-        .output()
-        .with_context(|| format!("resolve {spec}"))?;
-    if !output.status.success() {
-        bail!("{spec} does not resolve in {}", repository.root.display());
-    }
-    Ok(ObjectId(Arc::from(
-        String::from_utf8(output.stdout)?.trim(),
-    )))
-}
