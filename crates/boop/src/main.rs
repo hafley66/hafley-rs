@@ -9,7 +9,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use boop::bus::Route;
@@ -52,6 +52,8 @@ COMPLETION: --parent appends an on-exit hail `lane <id> done rc=$rc` into the
   `--wait` blocks on that row and exits with the lane's rc, so spawn-and-join is
   one command; `--wait-timeout <s>` (default 3600, 0 waits forever) exits 124.
   The same wait after the fact is `boop beep lane wait <lane>`.
+  The supervisor writes that row itself on every exit path, and a wait whose
+  lane route goes dead with no row exits 3 instead of blocking.
 
 LIVENESS: a lane can die silently, producing nothing. Liveness is TWO checks:
     1. process alive:    boop beep ps <lane>
@@ -2510,6 +2512,121 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// FAIL-PRE-FIX: a lane whose pane evaporated left `lane wait` polling a
+    /// mailbox nothing would write to, forever under `--timeout 0`.
+    #[test]
+    fn wait_calls_a_lane_dead_when_its_route_stops_being_live() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        write_route(&dir, "l", registered_route("2026-08-01T00:00:00.000Z")).unwrap();
+        assert_eq!(
+            super::wait_for_outcome(
+                &dir,
+                "l",
+                None,
+                std::time::Duration::from_millis(1),
+                &|_, _| super::RouteLiveness::Dead,
+            ),
+            super::WaitOutcome::Died,
+            "a dead route with no result row exits 3, never blocks"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The supervisor writes the result row and the pane epilogue writes a
+    /// second one; the wait answers the same rc, so the pair costs nothing.
+    #[test]
+    fn a_duplicate_result_row_leaves_the_wait_unchanged() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut supervisor = result_message("m-supervisor", "l", 2);
+        supervisor.to = "sprefa-coordinator".into();
+        append_message(&dir, &supervisor).unwrap();
+        assert_eq!(super::lane_result_rc(&dir, "l"), Some(2));
+        let mut epilogue = result_message("m-epilogue", "l", 2);
+        epilogue.to = "sprefa-coordinator".into();
+        append_message(&dir, &epilogue).unwrap();
+        assert_eq!(super::lane_result_rc(&dir, "l"), Some(2));
+        assert_eq!(
+            super::wait_for_outcome(
+                &dir,
+                "l",
+                Some(std::time::Duration::from_secs(2)),
+                std::time::Duration::from_millis(1),
+                &|_, _| super::RouteLiveness::Unknown,
+            ),
+            super::WaitOutcome::Result(2)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A lane that reported is unaffected by the liveness probe: its pane is
+    /// already gone by the time the epilogue's row is read.
+    #[test]
+    fn a_result_row_beats_a_dead_route() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut message = result_message("m-5", "l", 9);
+        message.to = "sprefa-coordinator".into();
+        append_message(&dir, &message).unwrap();
+        assert_eq!(
+            super::wait_for_outcome(
+                &dir,
+                "l",
+                Some(std::time::Duration::from_secs(2)),
+                std::time::Duration::from_millis(1),
+                &|_, _| super::RouteLiveness::Dead,
+            ),
+            super::WaitOutcome::Result(9)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An unreachable tmux, a lane with no route and a live lane all read the
+    /// same to the wait: keep polling until the deadline.
+    #[test]
+    fn an_undecidable_route_still_times_out_rather_than_reporting_death() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        for liveness in [super::RouteLiveness::Unknown, super::RouteLiveness::Live] {
+            assert_eq!(
+                super::wait_for_outcome(
+                    &dir,
+                    "l",
+                    Some(std::time::Duration::from_millis(40)),
+                    std::time::Duration::from_millis(10),
+                    &|_, _| liveness,
+                ),
+                super::WaitOutcome::TimedOut,
+                "{liveness:?} is not evidence of death"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A route reads dead for the poll or two between registration and the
+    /// session answering, which must not end the wait.
+    #[test]
+    fn a_single_dead_observation_does_not_end_the_wait() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let polls = std::sync::atomic::AtomicU32::new(0);
+        assert_eq!(
+            super::wait_for_outcome(
+                &dir,
+                "l",
+                Some(std::time::Duration::from_millis(60)),
+                std::time::Duration::from_millis(10),
+                &|_, _| match polls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) {
+                    0 => super::RouteLiveness::Dead,
+                    _ => super::RouteLiveness::Live,
+                },
+            ),
+            super::WaitOutcome::TimedOut
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// RECEIPT. A registry row written before the branch-derived names (lane id
     /// with no kind, `lane/*` worktree cwd) still reads, resolves and deletes.
     #[test]
@@ -3024,10 +3141,11 @@ enum LaneCmd {
         cmd: LaneMessageCmd,
     },
     /// Wait for the lane's result row, then exit with the rc it names. `--timeout`
-    /// seconds exits 124; a row that already exists returns its rc immediately.
+    /// seconds exits 124; a route that dies with no row exits 3.
     Wait {
         lane: String,
-        /// Seconds to wait before exiting 124; 0 waits forever.
+        /// Seconds to wait before exiting 124; 0 waits until the lane reports
+        /// or its route dies.
         #[arg(long, default_value_t = 0)]
         timeout: u64,
         #[arg(long)]
@@ -3787,6 +3905,7 @@ fn run_lane_pane(
 
 /// `beep lane wait`: poll for a `kind=result` row from `lane`, exit with its
 /// rc; `--timeout` seconds exits 124, a pre-existing row returns immediately.
+/// A route that goes dead with no result row exits 3.
 fn run_lane_wait(mail_dir_arg: Option<&Path>, lane: &str, timeout_secs: u64) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let deadline = if timeout_secs == 0 {
@@ -3795,15 +3914,69 @@ fn run_lane_wait(mail_dir_arg: Option<&Path>, lane: &str, timeout_secs: u64) -> 
         Some(std::time::Duration::from_secs(timeout_secs))
     };
     info!(lane, timeout_secs, "lane result wait starting");
-    match wait_for_result(&dir, lane, deadline, std::time::Duration::from_secs(1)) {
-        Some(rc) => {
+    match wait_for_outcome(
+        &dir,
+        lane,
+        deadline,
+        std::time::Duration::from_secs(1),
+        &route_liveness,
+    ) {
+        WaitOutcome::Result(rc) => {
             info!(lane, exit_code = rc, "lane result received");
             std::process::exit(rc)
         }
-        None => {
+        WaitOutcome::Died => {
+            warn!(lane, exit_code = 3, "lane route died with no result row");
+            line(&format!(
+                "lane {lane} died without a result (see its worktree and opencode session for the trail)"
+            ));
+            std::process::exit(3)
+        }
+        WaitOutcome::TimedOut => {
             info!(lane, exit_code = 124, "lane result wait timed out");
             std::process::exit(124)
         }
+    }
+}
+
+/// What one wait resolved to.
+#[derive(Debug, PartialEq, Eq)]
+enum WaitOutcome {
+    Result(i32),
+    /// The route stopped being live and no result row for this spawn exists.
+    Died,
+    TimedOut,
+}
+
+/// Whether the lane's route is still backed by a live tmux session.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RouteLiveness {
+    Live,
+    Dead,
+    /// No route row, no tmux target, or tmux itself unreachable. None of the
+    /// three is evidence of death, so none of them ends a wait.
+    Unknown,
+}
+
+/// Consecutive dead observations before a wait calls the lane dead. A route is
+/// written before its session answers, so one observation is never enough.
+const DEAD_POLLS: u32 = 5;
+
+/// The route's liveness through the same probe `lane list` prints.
+fn route_liveness(dir: &std::path::Path, lane: &str) -> RouteLiveness {
+    let Ok(routes) = bus::read_routes(dir) else {
+        return RouteLiveness::Unknown;
+    };
+    let Some(route) = routes.get(lane) else {
+        return RouteLiveness::Unknown;
+    };
+    if route.tmux.is_none() {
+        return RouteLiveness::Unknown;
+    }
+    match lane_state(&tmux::mux().live_sessions(None), route) {
+        "live" => RouteLiveness::Live,
+        "dead" => RouteLiveness::Dead,
+        _ => RouteLiveness::Unknown,
     }
 }
 
@@ -3860,20 +4033,46 @@ fn parse_result_rc(body: &str) -> Option<i32> {
 
 /// Poll `lane_result_rc` every `interval` until a result appears or `deadline`
 /// passes. `None` on deadline is a timeout; `since` bounds satisfying rows.
+#[cfg(test)]
 fn wait_for_result(
     dir: &std::path::Path,
     lane: &str,
     deadline: Option<std::time::Duration>,
     interval: std::time::Duration,
 ) -> Option<i32> {
+    match wait_for_outcome(dir, lane, deadline, interval, &|_, _| {
+        RouteLiveness::Unknown
+    }) {
+        WaitOutcome::Result(rc) => Some(rc),
+        WaitOutcome::Died | WaitOutcome::TimedOut => None,
+    }
+}
+
+/// As `wait_for_result`, plus the liveness probe that turns a vanished lane
+/// into `Died` instead of a wait that outlives the process it waits on.
+fn wait_for_outcome(
+    dir: &std::path::Path,
+    lane: &str,
+    deadline: Option<std::time::Duration>,
+    interval: std::time::Duration,
+    liveness: &dyn Fn(&std::path::Path, &str) -> RouteLiveness,
+) -> WaitOutcome {
     let since = route_registered_at(dir, lane);
     let start = std::time::Instant::now();
+    let mut dead_polls = 0u32;
     loop {
         if let Some(rc) = lane_result_rc_since(dir, lane, since) {
-            return Some(rc);
+            return WaitOutcome::Result(rc);
+        }
+        dead_polls = match liveness(dir, lane) {
+            RouteLiveness::Dead => dead_polls + 1,
+            RouteLiveness::Live | RouteLiveness::Unknown => 0,
+        };
+        if dead_polls >= DEAD_POLLS {
+            return WaitOutcome::Died;
         }
         if deadline.is_some_and(|limit| start.elapsed() >= limit) {
-            return None;
+            return WaitOutcome::TimedOut;
         }
         std::thread::sleep(interval);
     }
