@@ -6,12 +6,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
-use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 
 use crate::_0_types::{
     Head, IndexDelta, IndexId, IndexSnapshot, Repository, RepositoryDelta, RepositorySnapshot,
-    Revision, RevisionId, SourceDelta, SourceQuery, SourceSnapshot, WatchCoalescing,
-    WatchQuery, WorktreeDelta, WorktreeObservation, WorktreeSnapshot,
+    Revision, RevisionId, SourceDelta, SourceQuery, SourceSnapshot, WatchCoalescing, WatchQuery,
+    WorktreeDelta, WorktreeObservation, WorktreeSnapshot,
 };
 use crate::_11_refs::{diff_refs, Refs};
 use crate::_2_repository::open;
@@ -45,18 +45,17 @@ impl RepositoryWatcher {
             .map(|_| SourceTree::open(repository.clone()));
         let refs = query.refs.as_ref().map(|_| Refs::open(repository.clone()));
         let (send, events) = mpsc::channel();
-        let mut watcher = notify::recommended_watcher(move |event| {
-            let _ = send.send(event);
-        })
+        // The macOS kqueue backend finishes watch registration before this
+        // constructor returns. FSEvents streams start asynchronously and can
+        // miss a mutation made immediately after `watch_repository` returns.
+        let mut watcher = RecommendedWatcher::new(
+            move |event| {
+                let _ = send.send(event);
+            },
+            watcher_config(),
+        )
         .context("create repository watcher")?;
-        let registrations = register_watches(
-            &mut watcher,
-            &root,
-            &git_dir,
-            &common_dir,
-            query.source.is_some() || query.refs.is_some(),
-            query.linked_worktrees,
-        )?;
+        let registrations = register_watches(&mut watcher, &root, &git_dir, &common_dir, &query)?;
         let mut watcher_state = Self {
             _watcher: watcher,
             events,
@@ -82,15 +81,15 @@ impl RepositoryWatcher {
             .expect("repository watcher stores its opening snapshot")
     }
 
-    /// Wait for one coalesced native-event batch and return logical repository
-    /// deltas. Native overflow and callback errors emit `RescanRequired` before
-    /// the deterministic old-to-new delta sequence.
+    /// Wait for one coalesced watcher-event batch and return logical repository
+    /// deltas. Watcher overflow and callback errors emit `RescanRequired`
+    /// before the deterministic old-to-new delta sequence.
     pub fn recv(&mut self) -> Result<Vec<RepositoryDelta>> {
         let first = self.events.recv().context("repository watcher closed")?;
         self.recv_batch(first)
     }
 
-    /// Like `recv`, with a caller-provided timeout. A timeout means no native
+    /// Like `recv`, with a caller-provided timeout. A timeout means no watcher
     /// event arrived and leaves the retained snapshot unchanged.
     pub fn recv_timeout(&mut self, timeout: Duration) -> Result<Option<Vec<RepositoryDelta>>> {
         match self.events.recv_timeout(timeout) {
@@ -148,7 +147,11 @@ impl RepositoryWatcher {
             (None, None) => None,
             _ => bail!("repository watcher ref state is inconsistent"),
         };
-        let index = self.query.index.then(|| index_snapshot(&self.repository)).transpose()?;
+        let index = self
+            .query
+            .index
+            .then(|| index_snapshot(&self.repository))
+            .transpose()?;
         let worktrees = self
             .query
             .linked_worktrees
@@ -290,7 +293,9 @@ impl SourceWatcher {
     }
 
     pub fn recv_timeout(&mut self, timeout: Duration) -> Result<Option<Vec<SourceDelta>>> {
-        self.inner.recv_timeout(timeout).map(|deltas| deltas.map(source_deltas))
+        self.inner
+            .recv_timeout(timeout)
+            .map(|deltas| deltas.map(source_deltas))
     }
 }
 
@@ -352,6 +357,39 @@ struct WatchRegistrations {
     worktrees: bool,
 }
 
+fn watcher_config() -> Config {
+    Config::default()
+        .with_compare_contents(false)
+        .with_follow_symlinks(false)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct WatchTarget {
+    path: PathBuf,
+    recursive: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct WatchPlan {
+    targets: Vec<WatchTarget>,
+    refs_watched: bool,
+    worktrees_watched: bool,
+}
+
+impl WatchPlan {
+    fn covers(&self, path: &Path) -> bool {
+        self.targets
+            .iter()
+            .any(|target| target.path == path || target.recursive && path.starts_with(&target.path))
+    }
+
+    fn add(&mut self, path: PathBuf, recursive: bool) {
+        if !self.covers(&path) {
+            self.targets.push(WatchTarget { path, recursive });
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum OptionalWatch {
     Refs(PathBuf),
@@ -377,40 +415,72 @@ fn pending_optional_watches(
     pending
 }
 
+fn watch_plan(
+    root: &Path,
+    git_dir: &Path,
+    common_dir: &Path,
+    query: &WatchQuery,
+    refs_exist: bool,
+    worktrees_exist: bool,
+) -> WatchPlan {
+    let mut plan = WatchPlan {
+        targets: Vec::new(),
+        refs_watched: false,
+        worktrees_watched: false,
+    };
+    if query.source.is_some() {
+        plan.add(root.to_path_buf(), true);
+    }
+
+    let watch_refs = query.source.is_some() || query.refs.is_some();
+    let watch_git_dir = watch_refs || query.index || query.linked_worktrees;
+    if watch_git_dir {
+        plan.add(git_dir.to_path_buf(), false);
+    }
+    if (watch_refs || query.linked_worktrees) && common_dir != git_dir {
+        plan.add(common_dir.to_path_buf(), false);
+    }
+
+    let refs = common_dir.join("refs");
+    if watch_refs && refs_exist {
+        plan.add(refs.clone(), true);
+    }
+    plan.refs_watched = watch_refs && plan.covers(&refs);
+
+    let worktrees = common_dir.join("worktrees");
+    if query.linked_worktrees && worktrees_exist {
+        plan.add(worktrees.clone(), true);
+    }
+    plan.worktrees_watched = query.linked_worktrees && plan.covers(&worktrees);
+    plan
+}
+
 fn register_watches(
     watcher: &mut RecommendedWatcher,
     root: &Path,
     git_dir: &Path,
     common_dir: &Path,
-    watch_refs: bool,
-    linked_worktrees: bool,
+    query: &WatchQuery,
 ) -> Result<WatchRegistrations> {
-    watch(watcher, root, RecursiveMode::Recursive, "watch source root")?;
-    watch(watcher, git_dir, RecursiveMode::NonRecursive, "watch worktree Git directory")?;
-    if common_dir != git_dir {
-        watch(watcher, common_dir, RecursiveMode::NonRecursive, "watch common Git directory")?;
-    }
-    let refs = common_dir.join("refs");
-    let refs_watched = watch_refs && refs.exists();
-    if refs_watched {
-        watch(watcher, &refs, RecursiveMode::Recursive, "watch shared Git refs")?;
-    }
-    let mut worktrees_watched = false;
-    if linked_worktrees {
-        let worktrees = common_dir.join("worktrees");
-        if worktrees.exists() {
-            watch(
-                watcher,
-                &worktrees,
-                RecursiveMode::Recursive,
-                "watch linked worktree metadata",
-            )?;
-            worktrees_watched = true;
-        }
+    let plan = watch_plan(
+        root,
+        git_dir,
+        common_dir,
+        query,
+        common_dir.join("refs").exists(),
+        common_dir.join("worktrees").exists(),
+    );
+    for target in &plan.targets {
+        let mode = if target.recursive {
+            RecursiveMode::Recursive
+        } else {
+            RecursiveMode::NonRecursive
+        };
+        watch(watcher, &target.path, mode, "register repository watch")?;
     }
     Ok(WatchRegistrations {
-        refs: refs_watched,
-        worktrees: worktrees_watched,
+        refs: plan.refs_watched,
+        worktrees: plan.worktrees_watched,
     })
 }
 
@@ -420,7 +490,9 @@ fn watch(
     mode: RecursiveMode,
     action: &str,
 ) -> Result<()> {
-    watcher.watch(path, mode).with_context(|| format!("{action}: {}", path.display()))
+    watcher
+        .watch(path, mode)
+        .with_context(|| format!("{action}: {}", path.display()))
 }
 
 fn git_dirs(root: &Path) -> Result<(PathBuf, PathBuf)> {
@@ -438,8 +510,12 @@ fn git_dirs(root: &Path) -> Result<(PathBuf, PathBuf)> {
     }
     let text = String::from_utf8(output.stdout).context("decode Git directory paths")?;
     let mut lines = text.lines();
-    let git_dir = lines.next().context("Git directory response omitted git dir")?;
-    let common = lines.next().context("Git directory response omitted common dir")?;
+    let git_dir = lines
+        .next()
+        .context("Git directory response omitted git dir")?;
+    let common = lines
+        .next()
+        .context("Git directory response omitted common dir")?;
     if lines.next().is_some() {
         bail!("Git directory response has unexpected extra lines");
     }
@@ -462,7 +538,10 @@ fn index_snapshot(repository: &Repository) -> Result<IndexSnapshot> {
         .output()
         .context("read Git index")?;
     if !output.status.success() {
-        bail!("git ls-files --stage failed in {}", repository.root.display());
+        bail!(
+            "git ls-files --stage failed in {}",
+            repository.root.display()
+        );
     }
     Ok(IndexSnapshot {
         repository: repository.identity.clone(),
@@ -495,7 +574,10 @@ fn worktree_snapshot(repository: &Repository) -> Result<WorktreeSnapshot> {
                 commit = Some(Arc::from(value));
             } else if let Some(value) = line.strip_prefix("branch ") {
                 branch = Some(Arc::from(value));
-            } else if line == "prunable" || line.strip_prefix("prunable ").is_some() || line == "bare" {
+            } else if line == "prunable"
+                || line.strip_prefix("prunable ").is_some()
+                || line == "bare"
+            {
                 prunable = true;
             }
         }
@@ -506,15 +588,22 @@ fn worktree_snapshot(repository: &Repository) -> Result<WorktreeSnapshot> {
         if !root.exists() {
             continue;
         }
-        let observed = open(&root).with_context(|| format!("open linked worktree {}", root.display()))?;
+        let observed =
+            open(&root).with_context(|| format!("open linked worktree {}", root.display()))?;
         if observed.identity != repository.identity {
-            bail!("linked worktree {} belongs to another repository", root.display());
+            bail!(
+                "linked worktree {} belongs to another repository",
+                root.display()
+            );
         }
         let head = match (branch, commit.clone()) {
             (Some(target), Some(_)) => Head::Symbolic { target },
             (Some(target), None) => Head::Unborn { target },
             (None, Some(commit)) => Head::Detached(crate::_0_types::ObjectId(commit)),
-            (None, None) => bail!("Git worktree record omitted HEAD state for {}", root.display()),
+            (None, None) => bail!(
+                "Git worktree record omitted HEAD state for {}",
+                root.display()
+            ),
         };
         worktrees.push(WorktreeObservation {
             repository: repository.identity.clone(),
@@ -537,7 +626,11 @@ fn diff_repository(
 ) -> Vec<RepositoryDelta> {
     let mut deltas = Vec::new();
     if let (Some(before), Some(after)) = (&before.refs, &after.refs) {
-        deltas.extend(diff_refs(before, after).into_iter().map(RepositoryDelta::Ref));
+        deltas.extend(
+            diff_refs(before, after)
+                .into_iter()
+                .map(RepositoryDelta::Ref),
+        );
     }
     if let (Some(before), Some(after)) = (&before.source, &after.source) {
         if worktree_head(&before.revision) != worktree_head(&after.revision) {
@@ -557,7 +650,11 @@ fn diff_repository(
         }
     }
     if let (Some(before), Some(after)) = (&before.worktrees, &after.worktrees) {
-        deltas.extend(diff_worktrees(before, after).into_iter().map(RepositoryDelta::Worktree));
+        deltas.extend(
+            diff_worktrees(before, after)
+                .into_iter()
+                .map(RepositoryDelta::Worktree),
+        );
     }
     deltas
 }
@@ -644,13 +741,14 @@ mod tests {
     use std::sync::Arc;
 
     use crate::_0_types::{
-        IndexDelta, IndexId, IndexSnapshot, ObjectId, RepositoryDelta, RepositoryId,
-        RevisionId, SourceDelta, SourceSnapshot, WorktreeId,
+        IndexDelta, IndexId, IndexSnapshot, ObjectId, RepositoryDelta, RepositoryId, RevisionId,
+        SourceDelta, SourceSnapshot, WorktreeId,
     };
 
     use super::{
         classify_event_batch, diff_repository, path_is_relevant, pending_optional_watches,
-        should_snapshot, source_deltas, EventState, OptionalWatch,
+        should_snapshot, source_deltas, watch_plan, watcher_config, EventState, OptionalWatch,
+        WatchTarget,
     };
 
     fn worktree_revision(head: &str, dirty: bool) -> RevisionId {
@@ -670,12 +768,128 @@ mod tests {
     }
 
     #[test]
-    fn overflow_without_paths_still_requires_a_snapshot() {
-        let overflow = classify_event_batch(
-            vec![Err(notify::Error::generic("overflow"))],
-            |_| false,
+    fn watcher_config_avoids_content_hashing_and_symlink_traversal() {
+        let config = watcher_config();
+        assert!(!config.compare_contents());
+        assert!(!config.follow_symlinks());
+    }
+
+    #[test]
+    fn refs_only_plan_omits_repository_root_and_uses_git_metadata() {
+        let repository = repository();
+        let query = crate::_0_types::WatchQuery {
+            source: None,
+            refs: Some(crate::_0_types::RefQuery {
+                repository: repository.identity,
+                namespace: Arc::from(""),
+                name: None,
+                pattern: None,
+            }),
+            index: false,
+            linked_worktrees: false,
+            coalescing: Default::default(),
+        };
+        let plan = watch_plan(
+            std::path::Path::new("/repository"),
+            std::path::Path::new("/repository/.git"),
+            std::path::Path::new("/repository/.git"),
+            &query,
+            true,
+            false,
         );
-        assert_eq!(overflow, EventState { relevant: false, rescan: true });
+        assert_eq!(
+            plan.targets,
+            vec![
+                WatchTarget {
+                    path: "/repository/.git".into(),
+                    recursive: false,
+                },
+                WatchTarget {
+                    path: "/repository/.git/refs".into(),
+                    recursive: true,
+                },
+            ]
+        );
+        assert!(plan.refs_watched);
+        assert!(!plan.worktrees_watched);
+    }
+
+    #[test]
+    fn source_plan_uses_one_recursive_root_when_it_contains_git_metadata() {
+        let query = crate::_0_types::WatchQuery {
+            source: Some(crate::_0_types::SourceQuery {
+                revision: crate::_0_types::Revision::Worktree,
+                patterns: Vec::new(),
+            }),
+            refs: None,
+            index: false,
+            linked_worktrees: false,
+            coalescing: Default::default(),
+        };
+        let plan = watch_plan(
+            std::path::Path::new("/repository"),
+            std::path::Path::new("/repository/.git"),
+            std::path::Path::new("/repository/.git"),
+            &query,
+            true,
+            true,
+        );
+        assert_eq!(
+            plan.targets,
+            vec![WatchTarget {
+                path: "/repository".into(),
+                recursive: true,
+            }]
+        );
+        assert!(plan.refs_watched);
+        assert!(!plan.worktrees_watched);
+    }
+
+    #[test]
+    fn linked_worktree_plan_uses_metadata_without_repository_root() {
+        let query = crate::_0_types::WatchQuery {
+            source: None,
+            refs: None,
+            index: false,
+            linked_worktrees: true,
+            coalescing: Default::default(),
+        };
+        let plan = watch_plan(
+            std::path::Path::new("/repository"),
+            std::path::Path::new("/repository/.git"),
+            std::path::Path::new("/repository/.git"),
+            &query,
+            false,
+            true,
+        );
+        assert_eq!(
+            plan.targets,
+            vec![
+                WatchTarget {
+                    path: "/repository/.git".into(),
+                    recursive: false,
+                },
+                WatchTarget {
+                    path: "/repository/.git/worktrees".into(),
+                    recursive: true,
+                },
+            ]
+        );
+        assert!(!plan.refs_watched);
+        assert!(plan.worktrees_watched);
+    }
+
+    #[test]
+    fn overflow_without_paths_still_requires_a_snapshot() {
+        let overflow =
+            classify_event_batch(vec![Err(notify::Error::generic("overflow"))], |_| false);
+        assert_eq!(
+            overflow,
+            EventState {
+                relevant: false,
+                rescan: true
+            }
+        );
         assert!(should_snapshot(overflow));
         assert!(!should_snapshot(EventState {
             relevant: false,
@@ -711,7 +925,12 @@ mod tests {
         assert!(diff_repository(&snapshot(before.clone()), &snapshot(dirty)).is_empty());
         assert!(diff_repository(&snapshot(before), &snapshot(advanced))
             .iter()
-            .any(|delta| matches!(delta, crate::_0_types::RepositoryDelta::Source(crate::_0_types::SourceDelta::RevisionChanged { .. }))));
+            .any(|delta| matches!(
+                delta,
+                crate::_0_types::RepositoryDelta::Source(
+                    crate::_0_types::SourceDelta::RevisionChanged { .. }
+                )
+            )));
     }
 
     #[test]

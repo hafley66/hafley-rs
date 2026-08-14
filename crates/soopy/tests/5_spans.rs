@@ -217,12 +217,7 @@ fn spans_reject_invalid_ranges_and_under_budget_newline_indexes() {
     assert!(tree.span_text_many(&[text_request(&entry, 5, 4)]).is_err());
     assert!(tree.span_text_many(&[text_request(&entry, 0, 8)]).is_err());
     assert!(tree
-        .span_position_many(&[position_request(
-            &entry,
-            0,
-            1,
-            newline_index_storage(3) - 1,
-        )])
+        .span_position_many(&[position_request(&entry, 0, 1, newline_index_storage(3) - 1,)])
         .is_err());
     std::fs::remove_dir_all(root).unwrap();
 }
@@ -357,7 +352,11 @@ fn public_span_requests_and_results_round_trip_through_json() {
     let mut tree = SourceTree::open(soopy::open(&root).unwrap());
     let entry = text_entry(&mut tree, Revision::Named(Arc::from("HEAD")));
     let request = text_request(&entry, 1, 3);
-    let text = tree.span_text_many(std::slice::from_ref(&request)).unwrap().pop().unwrap();
+    let text = tree
+        .span_text_many(std::slice::from_ref(&request))
+        .unwrap()
+        .pop()
+        .unwrap();
     let position_request = position_request(&entry, 1, 3, newline_index_storage(3));
     let position = tree
         .span_position_many(std::slice::from_ref(&position_request))

@@ -177,6 +177,53 @@ fn repository_watcher_emits_ref_targets_and_head_changes() {
 }
 
 #[test]
+fn repository_watcher_delivers_ref_update_to_receiver() {
+    let root = repository();
+    let before = git(&root, &["rev-parse", "HEAD"]);
+    git(&root, &["branch", "topic"]);
+    let repository = soopy::open(&root).unwrap();
+    let tree = SourceTree::open(repository.clone());
+    let mut watcher = tree
+        .watch_repository(WatchQuery {
+            source: None,
+            refs: Some(RefQuery {
+                repository: repository.identity,
+                namespace: Arc::from("refs/heads"),
+                name: None,
+                pattern: None,
+            }),
+            index: false,
+            linked_worktrees: false,
+            coalescing: WatchCoalescing {
+                quiet_ms: 20,
+                max_ms: 300,
+            },
+        })
+        .unwrap();
+    git(&root, &["commit", "--allow-empty", "-qm", "advance topic"]);
+    let after = git(&root, &["rev-parse", "HEAD"]);
+    git(&root, &["update-ref", "refs/heads/topic", after.trim()]);
+
+    let mut observed = false;
+    for _ in 0..4 {
+        let Some(deltas) = watcher.recv_timeout(Duration::from_secs(1)).unwrap() else {
+            continue;
+        };
+        if deltas.iter().any(|delta| {
+            matches!(delta, RepositoryDelta::Ref(RefDelta::Changed { before: old, after: new })
+                if old.name.as_ref() == "refs/heads/topic"
+                    && old.direct.0.as_ref() == before.trim()
+                    && new.direct.0.as_ref() == after.trim())
+        }) {
+            observed = true;
+            break;
+        }
+    }
+    assert!(observed, "receiver did not deliver topic ref transition");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn repository_watcher_emits_detached_head_transition() {
     let root = repository();
     let tree = SourceTree::open(soopy::open(&root).unwrap());
@@ -184,7 +231,19 @@ fn repository_watcher_emits_detached_head_transition() {
     git(&root, &["checkout", "-q", "--detach", "HEAD"]);
     let deltas = receive(&mut watcher);
     assert!(deltas.iter().any(|delta| {
-        matches!(delta, RepositoryDelta::Ref(RefDelta::HeadChanged { before: soopy::HeadObservation { state: Head::Symbolic { .. }, target: Some(_) }, after: soopy::HeadObservation { state: Head::Detached(_), target: Some(_) } }))
+        matches!(
+            delta,
+            RepositoryDelta::Ref(RefDelta::HeadChanged {
+                before: soopy::HeadObservation {
+                    state: Head::Symbolic { .. },
+                    target: Some(_)
+                },
+                after: soopy::HeadObservation {
+                    state: Head::Detached(_),
+                    target: Some(_)
+                }
+            })
+        )
     }));
     std::fs::remove_dir_all(root).unwrap();
 }
@@ -201,7 +260,9 @@ fn repository_watcher_orders_source_create_change_and_remove_paths() {
     let paths: Vec<_> = created
         .iter()
         .filter_map(|delta| match delta {
-            RepositoryDelta::Source(SourceDelta::Added(entry)) => Some(entry.source.path.0.as_ref()),
+            RepositoryDelta::Source(SourceDelta::Added(entry)) => {
+                Some(entry.source.path.0.as_ref())
+            }
             _ => None,
         })
         .collect();
@@ -225,6 +286,45 @@ fn repository_watcher_orders_source_create_change_and_remove_paths() {
 }
 
 #[test]
+fn source_watcher_delivers_rename_as_removed_then_added() {
+    let root = repository();
+    std::fs::write(root.join("old.rs"), "pub const OLD: u8 = 1;\n").unwrap();
+    let tree = SourceTree::open(soopy::open(&root).unwrap());
+    let mut watcher = tree
+        .watch(SourceQuery {
+            revision: Revision::Worktree,
+            patterns: vec![Pattern("**/*.rs".into())],
+        })
+        .unwrap();
+    std::fs::rename(root.join("old.rs"), root.join("new.rs")).unwrap();
+
+    let mut removed = false;
+    let mut added = false;
+    for _ in 0..4 {
+        let Some(deltas) = watcher.recv_timeout(Duration::from_secs(1)).unwrap() else {
+            continue;
+        };
+        for delta in deltas {
+            match delta {
+                SourceDelta::Removed(source) if source.path.0.as_ref() == "old.rs" => {
+                    removed = true;
+                }
+                SourceDelta::Added(entry) if entry.source.path.0.as_ref() == "new.rs" => {
+                    added = true;
+                }
+                _ => {}
+            }
+        }
+        if removed && added {
+            break;
+        }
+    }
+    assert!(removed, "receiver did not deliver old.rs removal");
+    assert!(added, "receiver did not deliver new.rs addition");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn repository_watcher_observes_linked_worktree_metadata() {
     let root = repository();
     let linked = unique("linked");
@@ -243,7 +343,14 @@ fn repository_watcher_observes_linked_worktree_metadata() {
         .unwrap();
     git(
         &root,
-        &["worktree", "add", "-q", "-b", "feature", linked.to_str().unwrap()],
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "feature",
+            linked.to_str().unwrap(),
+        ],
     );
     let deltas = receive(&mut watcher);
     let linked = linked.canonicalize().unwrap();
@@ -257,11 +364,71 @@ fn repository_watcher_observes_linked_worktree_metadata() {
     assert!(deltas.iter().any(|delta| {
         matches!(delta, RepositoryDelta::Worktree(WorktreeDelta::Changed { before, after }) if before.root == linked && before.commit != after.commit)
     }));
-    git(&root, &["worktree", "remove", "--force", linked.to_str().unwrap()]);
+    git(
+        &root,
+        &["worktree", "remove", "--force", linked.to_str().unwrap()],
+    );
     let deltas = receive(&mut watcher);
     assert!(deltas.iter().any(|delta| {
         matches!(delta, RepositoryDelta::Worktree(WorktreeDelta::Removed(observation)) if observation.root == linked)
     }));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn repository_watcher_delivers_linked_worktree_commit_without_source_selection() {
+    let root = repository();
+    let linked = unique("linked_without_source");
+    git(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "feature-no-source",
+            linked.to_str().unwrap(),
+        ],
+    );
+    let repository = soopy::open(&root).unwrap();
+    let tree = SourceTree::open(repository.clone());
+    let mut watcher = tree
+        .watch_repository(WatchQuery {
+            source: None,
+            refs: Some(RefQuery {
+                repository: repository.identity,
+                namespace: Arc::from(""),
+                name: None,
+                pattern: None,
+            }),
+            index: false,
+            linked_worktrees: true,
+            coalescing: WatchCoalescing {
+                quiet_ms: 20,
+                max_ms: 300,
+            },
+        })
+        .unwrap();
+    let linked = linked.canonicalize().unwrap();
+    std::fs::write(linked.join("src/lib.rs"), "pub const VALUE: u8 = 2;\n").unwrap();
+    git(&linked, &["add", "src/lib.rs"]);
+    git(&linked, &["commit", "-qm", "advance linked"]);
+    let mut observed = false;
+    for _ in 0..4 {
+        let Some(deltas) = watcher.recv_timeout(Duration::from_secs(1)).unwrap() else {
+            continue;
+        };
+        if deltas.iter().any(|delta| {
+            matches!(delta, RepositoryDelta::Worktree(WorktreeDelta::Changed { before, after }) if before.root == linked && before.commit != after.commit)
+        }) {
+            observed = true;
+            break;
+        }
+    }
+    assert!(
+        observed,
+        "receiver did not deliver linked worktree commit change"
+    );
     std::fs::remove_dir_all(root).unwrap();
 }
 

@@ -187,7 +187,11 @@ fn build_newline_indexes(
 /// Create a child span inside `parent` from child-relative half-open byte
 /// offsets. The child retains the parent's exact `SourceRef`; no source bytes
 /// or relational row IDs are copied or allocated.
-pub fn span_slice(parent: &SourceSpan, relative_start: u64, relative_end: u64) -> Result<SourceSpan> {
+pub fn span_slice(
+    parent: &SourceSpan,
+    relative_start: u64,
+    relative_end: u64,
+) -> Result<SourceSpan> {
     let parent_length = parent
         .end
         .checked_sub(parent.start)
@@ -196,9 +200,7 @@ pub fn span_slice(parent: &SourceSpan, relative_start: u64, relative_end: u64) -
         bail!("child span start {relative_start} exceeds end {relative_end}");
     }
     if relative_end > parent_length {
-        bail!(
-            "child span end {relative_end} exceeds parent length {parent_length}"
-        );
+        bail!("child span end {relative_end} exceeds parent length {parent_length}");
     }
     Ok(SourceSpan {
         source: parent.source.clone(),
@@ -265,7 +267,8 @@ impl SourceTree {
                 let index = indexes
                     .get(source_index)
                     .context("newline index is missing for deduplicated read")?;
-                let start = usize::try_from(request.span.start).context("span start exceeds usize")?;
+                let start =
+                    usize::try_from(request.span.start).context("span start exceeds usize")?;
                 let end = usize::try_from(request.span.end).context("span end exceeds usize")?;
                 Ok(SpanPosition {
                     span: request.span.clone(),
@@ -287,9 +290,7 @@ mod tests {
         SourceSpan, SpanPositionRequest,
     };
 
-    use super::{
-        build_newline_indexes, deduplicate_read_requests, ReadRequest, SpanReadBatch,
-    };
+    use super::{build_newline_indexes, deduplicate_read_requests, ReadRequest, SpanReadBatch};
 
     fn source_ref() -> SourceRef {
         SourceRef {
