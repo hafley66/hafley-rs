@@ -9,6 +9,7 @@ mod _7_source_tree;
 mod _8_watch;
 mod _9_git_files;
 mod _10_path;
+mod _11_refs;
 
 pub use _0_types::*;
 pub use _1_pattern::Pattern;
@@ -16,3 +17,4 @@ pub use _2_repository::{discover, open};
 pub use _6_git_batch::GitBatch;
 pub use _7_source_tree::SourceTree;
 pub use _8_watch::SourceWatcher;
+pub use _11_refs::{diff_refs, Refs};

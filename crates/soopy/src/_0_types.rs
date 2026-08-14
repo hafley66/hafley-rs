@@ -21,6 +21,28 @@ mod arc_str {
     }
 }
 
+/// Serde bridge for `Option<Arc<str>>`, mirroring `arc_str` for optional string
+/// fields. It serializes `None` as a JSON null and `Some` as the plain string.
+mod opt_arc_str {
+    use super::*;
+
+    pub fn serialize<S: Serializer>(
+        value: &Option<Arc<str>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        match value {
+            Some(value) => serializer.serialize_some(value.as_ref()),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Arc<str>>, D::Error> {
+        Ok(Option::<String>::deserialize(deserializer)?.map(Arc::from))
+    }
+}
+
 /// Identity of one shared Git object database / logical repository.
 ///
 /// Construction: `crate::_2_repository::open` hashes the canonicalized
@@ -245,4 +267,137 @@ impl fmt::Display for ContentId {
             Self::Blake3(bytes) => write!(f, "blake3:{}", blake3::Hash::from_bytes(*bytes)),
         }
     }
+}
+
+/// The kind of Git object a ref points at or a tag peels to.
+///
+/// Serialization is the lowercase Git object-type spelling (`blob`, `tree`,
+/// `commit`, `tag`), which is the value `git for-each-ref` and `cat-file`
+/// report, never a Rust variant name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum ObjectKind {
+    Blob,
+    Tree,
+    Commit,
+    Tag,
+}
+
+/// The tagger identity recorded on an annotated tag object.
+///
+/// `when` is the whole-second Unix timestamp from `%(taggerdate:unix)`, chosen
+/// over a localized date string so serialization is deterministic.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct Tagger {
+    #[serde(with = "arc_str")]
+    pub name: Arc<str>,
+    #[serde(with = "arc_str")]
+    pub email: Arc<str>,
+    pub when: i64,
+}
+
+/// Metadata carried by an annotated tag object, present only when a ref's
+/// direct object is itself a `tag`. The peeled target object is recorded on
+/// the enclosing observation; this carries the target's kind and the tagger
+/// and message authored into the tag object.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct TagMetadata {
+    /// Kind of the object the tag peels to (its target), normally `Commit`.
+    pub target_kind: ObjectKind,
+    pub tagger: Tagger,
+    #[serde(with = "arc_str")]
+    pub message: Arc<str>,
+}
+
+/// One observation of a ref: its full name, symbolic target when present, and
+/// the object identity it resolves to.
+///
+/// `direct` is the unpeeled object the ref names; `peeled` is `Some` only when
+/// `direct` is a tag object and holds the peeled-through target. `kind` is the
+/// kind of `direct`. `tag` carries annotated-tag metadata when `kind` is `Tag`.
+///
+/// Equality/ordering: structural over `(repository, name, ...)`.
+///
+/// Serialization: structural, with object names as hex strings.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct RefObservation {
+    pub repository: RepositoryId,
+    /// Full ref name, e.g. `refs/heads/main`.
+    #[serde(with = "arc_str")]
+    pub name: Arc<str>,
+    /// Symbolic target when the ref is itself a symref (e.g. `refs/remotes/origin/HEAD`).
+    #[serde(with = "opt_arc_str")]
+    pub symbolic: Option<Arc<str>>,
+    pub direct: ObjectId,
+    pub peeled: Option<ObjectId>,
+    pub kind: ObjectKind,
+    pub tag: Option<TagMetadata>,
+}
+
+/// The per-worktree `HEAD` state.
+///
+/// `Symbolic` names another ref (normally a branch); the resolved commit is
+/// already carried by that branch's own observation. `Detached` points
+/// directly at a commit, which is not present in the named-ref set. `Unborn`
+/// names a branch that has no commit yet.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum Head {
+    Symbolic {
+        #[serde(with = "arc_str")]
+        target: Arc<str>,
+    },
+    Detached(ObjectId),
+    Unborn {
+        #[serde(with = "arc_str")]
+        target: Arc<str>,
+    },
+}
+
+/// A repository-scoped ref selection.
+///
+/// `namespace` is a ref prefix such as `refs/heads`, `refs/tags`, or
+/// `refs/remotes`; empty enumerates every ref. `name` selects one exact full
+/// ref name and takes precedence over `pattern`, a glob over full ref names.
+/// Both are optional.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct RefQuery {
+    pub repository: RepositoryId,
+    #[serde(with = "arc_str")]
+    pub namespace: Arc<str>,
+    #[serde(with = "opt_arc_str")]
+    pub name: Option<Arc<str>>,
+    #[serde(with = "opt_arc_str")]
+    pub pattern: Option<Arc<str>>,
+}
+
+/// A deterministic collection of ref observations for one repository and one
+/// worktree's `HEAD`.
+///
+/// `refs` is sorted by full ref name, and every field serializes structurally,
+/// so two equal snapshots serialize to one byte string.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RefSnapshot {
+    pub repository: RepositoryId,
+    pub head: Head,
+    pub refs: Vec<RefObservation>,
+}
+
+/// A ref-level transition between two snapshots of one repository: a ref
+/// arriving, leaving, or changing its target.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RefDelta {
+    Added(RefObservation),
+    Removed(RefObservation),
+    Changed {
+        before: RefObservation,
+        after: RefObservation,
+    },
+}
+
+/// A repository-scoped event envelope for the watch surface. It carries source
+/// and ref deltas plus a rescan condition, with no DL6 clocks or retractions.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RepositoryDelta {
+    Ref(RefDelta),
+    Source(SourceDelta),
+    RescanRequired,
 }
