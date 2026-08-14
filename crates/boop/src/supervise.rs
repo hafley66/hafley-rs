@@ -75,7 +75,16 @@ pub fn hail_text(hail: &Hail) -> String {
     format!("[boop hail {} from {}] {}", hail.id, hail.from, hail.body)
 }
 
+/// How one lane's supervision ended.
+struct Ended {
+    exit_code: i32,
+    /// The last turn's reason, carried out when the lane ended on a provider
+    /// flake so the result row names what killed it.
+    detail: Option<String>,
+}
+
 /// Run the lane to completion and return the exit code the pane re-raises.
+/// Every exit path here writes the result row; the pane epilogue may not run.
 pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
     let _span = tracing::info_span!(
         "lane.supervise",
@@ -85,6 +94,19 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
         resume = lane.resume.as_deref().unwrap_or_default(),
     )
     .entered();
+    let ended = supervise(&lane, channel);
+    let ended = match ended {
+        Ok(ended) => ended,
+        Err(error) => {
+            record_result(&lane, 1, Some(&format!("supervisor error: {error}")));
+            return Err(error);
+        }
+    };
+    record_result(&lane, ended.exit_code, ended.detail.as_deref());
+    Ok(ended.exit_code)
+}
+
+fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
     let brief = std::fs::read_to_string(&lane.brief)
         .with_context(|| format!("read lane brief {}", lane.brief.display()))?;
     info!(brief = %lane.brief.display(), "lane brief loaded");
@@ -108,7 +130,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
         info!(turn_bytes = turn.len(), "lane turn starting");
         let turn_started = crate::channel::now_ms();
         channel.start_turn(&turn)?;
-        remember_conversation(&lane, channel);
+        remember_conversation(lane, channel);
         let end = loop {
             if let Some(end) = channel.poll_turn(POLL)? {
                 break end;
@@ -170,7 +192,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
             retryable = end.retryable,
             "lane turn ended"
         );
-        remember_conversation(&lane, channel);
+        remember_conversation(lane, channel);
         if end.retryable && flake_resumes < FLAKE_RESUME_CAP {
             flake_resumes += 1;
             println!("[boop] provider flake, resuming ({flake_resumes}/{FLAKE_RESUME_CAP})");
@@ -195,7 +217,10 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
                 false => 1,
             };
             info!(exit_code, "lane supervision complete");
-            return Ok(exit_code);
+            return Ok(Ended {
+                exit_code,
+                detail: end.retryable.then(|| end.detail.clone()),
+            });
         }
         turn = held
             .drain(..)
@@ -206,6 +231,69 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
             .collect::<Vec<_>>()
             .join("\n\n");
     }
+}
+
+/// The lane's parent per the registry. The pane epilogue addresses its result
+/// hail the same way, so both rows answer the same wait.
+fn registered_parent(dir: &Path, lane: &str) -> Option<String> {
+    bus::read_routes(dir).ok()?.get(lane)?.parent.clone()
+}
+
+/// The result row body. `rc=<code>` is the token `lane wait` parses out; the
+/// flake reason rides behind it for a human reading the mailbox.
+fn result_body(lane: &str, exit_code: i32, detail: Option<&str>) -> String {
+    match detail {
+        Some(detail) => format!("lane {lane} done rc={exit_code} ({detail})"),
+        None => format!("lane {lane} done rc={exit_code}"),
+    }
+}
+
+/// Write the lane's result row before the pane can evaporate: a killed pane
+/// never runs its epilogue, and the waiter reads only this mailbox.
+fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
+    let Some(parent) = registered_parent(&lane.mail_dir, &lane.lane) else {
+        debug!(
+            lane = lane.lane,
+            exit_code, "lane has no registered parent; no result row written"
+        );
+        return;
+    };
+    let row = bus::Message {
+        id: bus::mint_id(),
+        from: lane.lane.clone(),
+        to: parent.clone(),
+        from_timestamp: bus::now_iso(),
+        to_timestamp: None,
+        kind: "result".into(),
+        reply_to: None,
+        body: result_body(&lane.lane, exit_code, detail),
+        r#ref: None,
+    };
+    match append_row(&lane.mail_dir, &row) {
+        Ok(()) => {
+            info!(
+                lane = lane.lane,
+                parent, exit_code, "lane result row written"
+            );
+            println!("[boop] result rc={exit_code} hailed to {parent}");
+        }
+        Err(error) => {
+            error!(lane = lane.lane, parent, error = %error, "lane result row write failed");
+            println!("[boop] result row write failed: {error}");
+        }
+    }
+}
+
+/// Append one row to the lane's mailbox, the same file and line format the
+/// `boop hail` verb appends to.
+fn append_row(dir: &Path, row: &bus::Message) -> std::io::Result<()> {
+    use std::io::Write;
+    std::fs::create_dir_all(dir)?;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("bus.ndjson"))?;
+    writeln!(file, "{}", bus::message_line(row))
 }
 
 /// Pin the harness's current conversation to the lane route and to the lane's
@@ -430,6 +518,104 @@ mod tests {
         let hail = pending(&dir, "mine", &BTreeSet::new()).unwrap().remove(0);
         ack(&dir, &hail);
         assert!(pending(&dir, "mine", &BTreeSet::new()).unwrap().is_empty());
+    }
+
+    /// A provider stream that is already gone when the first turn opens: the
+    /// error path out of `run`, before any conversation id exists.
+    struct DeadChannel;
+
+    impl LaneChannel for DeadChannel {
+        fn conversation_id(&self) -> Option<String> {
+            None
+        }
+        fn start_turn(&mut self, _text: &str) -> Result<()> {
+            anyhow::bail!("provider stream closed")
+        }
+        fn steer(&mut self, _text: &str) -> Result<Delivery> {
+            unreachable!("the turn never opened")
+        }
+        fn poll_turn(&mut self, _timeout: Duration) -> Result<Option<TurnEnd>> {
+            unreachable!("the turn never opened")
+        }
+        fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    fn parented_lane(dir: &Path, lane: &str, parent: &str) -> LaneRun {
+        std::fs::write(
+            dir.join("registry.json"),
+            serde_json::json!({ lane: { "kind": "lane", "parent": parent } }).to_string(),
+        )
+        .unwrap();
+        let brief = dir.join("brief.md");
+        std::fs::write(&brief, "do the work\n").unwrap();
+        LaneRun {
+            lane: lane.to_owned(),
+            brief,
+            mail_dir: dir.to_owned(),
+            cwd: dir.to_owned(),
+            model: None,
+            resume: None,
+        }
+    }
+
+    fn result_rows(dir: &Path) -> Vec<bus::Message> {
+        let mut rows = Vec::new();
+        for path in bus::read_boxes(dir).unwrap_or_default() {
+            rows.extend(bus::parse_box(&path));
+        }
+        rows.into_iter()
+            .filter(|row| row.kind == "result")
+            .collect()
+    }
+
+    // FAIL-PRE-FIX: the result row lived only in the pane's shell epilogue, so
+    // a lane that died inside the supervisor never reported and the waiter hung.
+    #[test]
+    fn a_supervisor_error_still_writes_the_lane_s_result_row() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        assert!(run(lane, &mut DeadChannel).is_err());
+        let rows = result_rows(&dir);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].from, "mine");
+        assert_eq!(rows[0].to, "coordinator");
+        assert!(
+            rows[0]
+                .body
+                .starts_with("lane mine done rc=1 (supervisor error:"),
+            "{}",
+            rows[0].body
+        );
+    }
+
+    /// A lane spawned without `--parent` has nobody to report to, and a row
+    /// addressed to the empty string would never match a wait.
+    #[test]
+    fn a_parentless_lane_writes_no_result_row() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        std::fs::write(dir.join("registry.json"), r#"{"mine":{"kind":"lane"}}"#).unwrap();
+        assert!(run(lane, &mut DeadChannel).is_err());
+        assert!(result_rows(&dir).is_empty());
+    }
+
+    /// The flake reason rides behind the `rc=` token the waiter parses, so a
+    /// stall-killed lane says so in the mailbox.
+    #[test]
+    fn a_flake_detail_rides_behind_the_rc_token() {
+        let body = result_body("mine", 1, Some("stalled: 300s with no harness activity"));
+        assert_eq!(
+            body,
+            "lane mine done rc=1 (stalled: 300s with no harness activity)"
+        );
+        assert_eq!(
+            body.split_whitespace()
+                .find_map(|token| token.strip_prefix("rc=")),
+            Some("1")
+        );
+        assert_eq!(result_body("mine", 0, None), "lane mine done rc=0");
     }
 
     fn tempdir() -> PathBuf {
