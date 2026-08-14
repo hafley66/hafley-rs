@@ -8,6 +8,7 @@ mod _6_git_batch;
 mod _7_source_tree;
 mod _8_watch;
 mod _9_git_files;
+mod _10_path;
 
 pub use _0_types::*;
 pub use _1_pattern::Pattern;
