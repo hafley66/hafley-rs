@@ -401,3 +401,163 @@ pub enum RepositoryDelta {
     Source(SourceDelta),
     RescanRequired,
 }
+
+/// Outcome of resolving one revision to a commit object.
+///
+/// `Present` is a commit that exists in the object database and is not a
+/// shallow boundary. `Absent` is a revision that does not resolve to any
+/// commit. `ShallowBoundary` is a commit present locally but whose parents
+/// were cut by a shallow clone or deepen, so it is the tip of the locally
+/// available history. `CorruptObject` is an object that exists on disk but
+/// cannot be read or parsed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RevisionResolution {
+    Present(ObjectId),
+    Absent,
+    ShallowBoundary(ObjectId),
+    CorruptObject,
+}
+
+/// The direct parents of one commit, in the order the commit object records
+/// them. The first entry is the first parent (the branch advanced), the rest
+/// are merged-in parents.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommitParents {
+    pub commit: ObjectId,
+    pub parents: Vec<ObjectId>,
+}
+
+/// The answer to one ancestry question: is `ancestor` reachable from
+/// `descendant`?
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Ancestry {
+    pub ancestor: ObjectId,
+    pub descendant: ObjectId,
+    pub is_ancestor: bool,
+}
+
+/// The merge bases of two commits. `bases` is empty when the commits share no
+/// history; otherwise it lists every best common ancestor, sorted by OID.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MergeBase {
+    pub left: ObjectId,
+    pub right: ObjectId,
+    pub bases: Vec<ObjectId>,
+}
+
+/// Symmetric commit counts between two commits: `ahead` counts commits
+/// reachable from `left` but not `right`, `behind` the reverse.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AheadBehind {
+    pub left: ObjectId,
+    pub right: ObjectId,
+    pub ahead: u64,
+    pub behind: u64,
+}
+
+/// A deterministic walk of the commits reachable from one peeled start. The
+/// start is the commit the revision peels to (a lightweight or annotated tag
+/// peels before the walk), and `commits` lists every reachable commit in
+/// stable topological order, newest first.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommitWalk {
+    pub start: ObjectId,
+    pub commits: Vec<ObjectId>,
+}
+
+/// A batched revision-graph request: several resolutions, parent lookups,
+/// ancestry questions, merge-base pairs, ahead/behind pairs, and walks in one
+/// call. Every input list is answered in order; the result preserves that
+/// order.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RevisionGraphQuery {
+    pub repository: RepositoryId,
+    pub resolve: Vec<Revision>,
+    pub parents: Vec<ObjectId>,
+    pub ancestry: Vec<(ObjectId, ObjectId)>,
+    pub merge_bases: Vec<(ObjectId, ObjectId)>,
+    pub ahead_behind: Vec<(ObjectId, ObjectId)>,
+    pub walks: Vec<Revision>,
+}
+
+/// The batched result of one `RevisionGraphQuery`, with every vector parallel
+/// to its request. `parents`, `ancestry`, `merge_bases`, and `ahead_behind`
+/// list entries correspond one-to-one with their query lists; `resolutions`
+/// and `walks` mirror `resolve` and `walks`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RevisionGraphResult {
+    pub repository: RepositoryId,
+    pub resolutions: Vec<RevisionResolution>,
+    pub parents: Vec<CommitParents>,
+    pub ancestry: Vec<Ancestry>,
+    pub merge_bases: Vec<MergeBase>,
+    pub ahead_behind: Vec<AheadBehind>,
+    pub walks: Vec<CommitWalk>,
+}
+
+/// The set of network mutations an acquisition request is permitted to
+/// perform. The default rejects everything, so read-only callers and callers
+/// that forget to opt in can never fetch, unshallow, or update refs.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AcquisitionPolicy {
+    /// Permit fetching branch refs from a remote.
+    pub allow_fetch: bool,
+    /// Permit fetching tag refs from a remote.
+    pub allow_tag_fetch: bool,
+    /// Permit deepening or fully unshallowing a shallow clone.
+    pub allow_unshallow: bool,
+}
+
+/// One permitted acquisition operation, carrying the remote and target it
+/// describes. Every operation is gated by the matching policy flag before any
+/// Git process is spawned.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AcquisitionOperation {
+    /// Fetch one branch ref from a remote.
+    FetchRef { remote: Arc<str>, name: Arc<str> },
+    /// Fetch one tag ref from a remote.
+    FetchTag { remote: Arc<str>, name: Arc<str> },
+    /// Deepen a shallow clone by `depth` more commits.
+    Deepen { remote: Arc<str>, depth: u32 },
+    /// Fully unshallow the clone.
+    Unshallow { remote: Arc<str> },
+}
+
+/// A batched acquisition request: the repository plus an ordered list of
+/// operations whose receipts are returned in order.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AcquisitionRequest {
+    pub repository: RepositoryId,
+    pub operations: Vec<AcquisitionOperation>,
+}
+
+/// The typed receipt for one acquisition operation.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AcquisitionReceipt {
+    /// The ref already resolved locally; no fetch was needed.
+    AlreadyPresent { target: ObjectId },
+    /// A branch ref was fetched and now resolves to `target`.
+    FetchedRef {
+        #[serde(with = "arc_str")]
+        name: Arc<str>,
+        target: ObjectId,
+    },
+    /// A tag ref was fetched and now resolves to `target`.
+    FetchedTag {
+        #[serde(with = "arc_str")]
+        name: Arc<str>,
+        target: ObjectId,
+    },
+    /// The clone was deepened by `depth` commits.
+    Deepened { depth: u32 },
+    /// The clone was fully unshallowed.
+    Unshallowed,
+    /// The operation was permitted but could not complete (e.g. the remote is
+    /// absent or unreachable).
+    Unavailable {
+        #[serde(with = "arc_str")]
+        reason: Arc<str>,
+    },
+    /// The policy rejected the operation before any Git process ran.
+    RejectedByPolicy,
+}
