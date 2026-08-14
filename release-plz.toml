@@ -1,0 +1,21 @@
+[workspace]
+changelog_update = false
+dependencies_update = false
+git_only = true
+git_release_enable = true
+git_tag_enable = true
+pr_labels = ["release"]
+release_commits = "^(feat|fix|perf|refactor)(\\([^)]*\\))?(!)?:"
+semver_check = true
+
+[[package]]
+name = "boop"
+version_group = "boop"
+changelog_update = true
+changelog_path = "CHANGELOG.md"
+changelog_include = ["boop-mux"]
+
+[[package]]
+name = "boop-mux"
+version_group = "boop"
+changelog_update = false

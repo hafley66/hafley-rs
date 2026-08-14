@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v6
+      - name: install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: test workspace
+        run: cargo test --workspace --locked
+
+  semver:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: check public api compatibility
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          package: boop, boop-mux
+          baseline-rev: ${{ github.event.pull_request.base.sha }}

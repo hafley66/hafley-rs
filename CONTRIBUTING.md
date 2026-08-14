@@ -1,0 +1,41 @@
+# contributing
+
+## commits
+
+release automation reads conventional commit subjects.
+
+```text
+feat(boop): add an event source
+fix(boop): handle a missing finish event
+perf(boop-mux): reduce tmux queries
+refactor(boop): separate event decoding
+feat(boop)!: change the public event model
+```
+
+`feat`, `fix`, `perf`, and `refactor` enter the changelog and request a release. use `!` or a `BREAKING CHANGE:` footer for an incompatible public api change. `docs`, `test`, `build`, `ci`, `chore`, and `style` do not request a release.
+
+## versions
+
+`boop` and `boop-mux` share the `boop` release-plz version group. a change affecting either package can advance the group version. while the packages use `0.0.x`, release-plz advances features and fixes by one patch version.
+
+release-plz owns release-time edits to these fields and files:
+
+- `crates/boop/Cargo.toml` package version
+- `crates/boop-mux/Cargo.toml` package version
+- internal dependency versions between the packages
+- `Cargo.lock`
+- `CHANGELOG.md`
+
+the release pull request contains those edits for review. merging it lets the next main-branch run create package tags and github releases. these crates use git-only releases and are not published to crates.io.
+
+## local checks
+
+```sh
+cargo test --workspace --locked
+```
+
+pull requests also compare the public rust api of `boop` and `boop-mux` with the pull request base commit using cargo-semver-checks.
+
+## repository setting
+
+github must allow actions to create and approve pull requests under settings, actions, general, workflow permissions. the workflows use the repository `GITHUB_TOKEN`; no cargo registry token is required for git-only releases.
