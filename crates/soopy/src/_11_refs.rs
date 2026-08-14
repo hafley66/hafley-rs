@@ -67,18 +67,21 @@ impl Refs {
             bail!("ref query belongs to another repository");
         }
         let head = resolve_head(&self.repository)?;
+        let head_target = head_commit(&self.repository);
         let mut refs = enumerate(&self.repository, query)?;
         refs.sort_by(|left, right| left.name.cmp(&right.name));
         Ok(RefSnapshot {
             repository: self.repository.identity.clone(),
             head,
+            head_target,
             refs,
         })
     }
 }
 
-/// Classify named-ref transitions between two snapshots of one repository into
-/// `Added`, `Removed`, and `Changed` deltas, ordered by full ref name.
+/// Classify HEAD and named-ref transitions between two snapshots of one
+/// repository. A changed HEAD comes first; named refs then follow full ref
+/// name order.
 pub fn diff_refs(before: &RefSnapshot, after: &RefSnapshot) -> Vec<RefDelta> {
     let before_map: BTreeMap<_, _> = before
         .refs
@@ -94,6 +97,18 @@ pub fn diff_refs(before: &RefSnapshot, after: &RefSnapshot) -> Vec<RefDelta> {
     names.sort();
     names.dedup();
     let mut deltas = Vec::new();
+    if before.head != after.head || before.head_target != after.head_target {
+        deltas.push(RefDelta::HeadChanged {
+            before: crate::_0_types::HeadObservation {
+                state: before.head.clone(),
+                target: before.head_target.clone(),
+            },
+            after: crate::_0_types::HeadObservation {
+                state: after.head.clone(),
+                target: after.head_target.clone(),
+            },
+        });
+    }
     for name in names {
         match (before_map.get(&name), after_map.get(&name)) {
             (None, Some(after)) => deltas.push(RefDelta::Added((*after).clone())),

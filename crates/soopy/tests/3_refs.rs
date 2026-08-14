@@ -272,8 +272,14 @@ fn ref_delta_classifies_add_remove_and_target_change() {
     let mut added = 0;
     let mut removed = 0;
     let mut changed = 0;
+    let mut head_changed = 0;
     for delta in &deltas {
         match delta {
+            RefDelta::HeadChanged { before, after } => {
+                assert_eq!(before.target.as_ref().unwrap().0.as_ref(), first_commit);
+                assert_ne!(before.target, after.target);
+                head_changed += 1;
+            }
             RefDelta::Added(row) => {
                 assert_eq!(row.name.as_ref(), "refs/heads/topic");
                 added += 1;
@@ -291,6 +297,46 @@ fn ref_delta_classifies_add_remove_and_target_change() {
             }
         }
     }
-    assert_eq!((added, removed, changed), (1, 1, 1));
+    assert_eq!((head_changed, added, removed, changed), (1, 1, 1, 1));
     std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn packed_ref_replacement_and_removal_have_deterministic_deltas() {
+    let root = repository();
+    git(&root, &["tag", "v1"]);
+    git(&root, &["pack-refs", "--all", "--prune"]);
+    let before = snapshot(&root, "refs/tags");
+
+    std::fs::write(root.join("src/lib.rs"), "pub const VALUE: u8 = 2;\n").unwrap();
+    git(&root, &["add", "src/lib.rs"]);
+    git(&root, &["commit", "-qm", "advance"]);
+    git(&root, &["tag", "-f", "v1"]);
+    git(&root, &["pack-refs", "--all", "--prune"]);
+    let replaced = snapshot(&root, "refs/tags");
+    assert!(diff_refs(&before, &replaced).iter().any(|delta| {
+        matches!(delta, RefDelta::Changed { before, after } if before.name.as_ref() == "refs/tags/v1" && before.direct != after.direct)
+    }));
+
+    git(&root, &["tag", "-d", "v1"]);
+    git(&root, &["pack-refs", "--all", "--prune"]);
+    let removed = snapshot(&root, "refs/tags");
+    assert!(diff_refs(&replaced, &removed).iter().any(|delta| {
+        matches!(delta, RefDelta::Removed(observation) if observation.name.as_ref() == "refs/tags/v1")
+    }));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn head_delta_retains_commit_targets_when_ref_query_filters_branch() {
+    let root = repository();
+    let before = snapshot(&root, "refs/tags");
+    std::fs::write(root.join("src/lib.rs"), "pub const VALUE: u8 = 2;\n").unwrap();
+    git(&root, &["add", "src/lib.rs"]);
+    git(&root, &["commit", "-qm", "advance filtered branch"]);
+    let after = snapshot(&root, "refs/tags");
+    assert!(diff_refs(&before, &after).iter().any(|delta| {
+        matches!(delta, RefDelta::HeadChanged { before, after } if before.target.is_some() && after.target.is_some() && before.target != after.target)
+    }));
+    std::fs::remove_dir_all(root).unwrap();
 }

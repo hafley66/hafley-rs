@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use globset::{Glob, GlobSet, GlobSetBuilder};
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Pattern(pub String);
 
 pub(crate) fn compile(patterns: &[Pattern]) -> Result<GlobSet> {

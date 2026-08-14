@@ -43,6 +43,21 @@ mod opt_arc_str {
     }
 }
 
+/// Serde bridge for immutable byte buffers. Span text serializes as bytes so
+/// it preserves arbitrary source slices, including slices that split UTF-8
+/// code points.
+mod arc_bytes {
+    use super::*;
+
+    pub fn serialize<S: Serializer>(value: &Arc<[u8]>, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(value)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Arc<[u8]>, D::Error> {
+        Ok(Arc::from(Vec::<u8>::deserialize(deserializer)?))
+    }
+}
+
 /// Identity of one shared Git object database / logical repository.
 ///
 /// Construction: `crate::_2_repository::open` hashes the canonicalized
@@ -192,7 +207,7 @@ pub struct SourceRef {
     pub path: RepoPath,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceEntry {
     pub source: SourceRef,
     pub content: ContentId,
@@ -212,9 +227,72 @@ pub struct SourceBytes {
     pub bytes: Arc<[u8]>,
 }
 
+/// A half-open byte range `[start, end)` within one revision-qualified source
+/// file. The owning `SourceRef` is the stable coordinate that later maps to a
+/// runtime `rev_file_id`; Soopy deliberately does not allocate dense row IDs.
+///
+/// Byte offsets need not be UTF-8 character boundaries. `span_text_many`
+/// returns the exact bytes; `span_position_many` reports one-based lines and
+/// zero-based byte columns so every valid byte boundary has a position.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct SourceSpan {
+    pub source: SourceRef,
+    pub start: u64,
+    pub end: u64,
+}
+
+/// One demand for the bytes in a `SourceSpan`. `expected` retains the same
+/// replacement check as `ReadRequest` when callers carry a prior content ID.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpanTextRequest {
+    pub span: SourceSpan,
+    pub expected: Option<ContentId>,
+}
+
+/// The exact byte slice for one span request. It repeats the source content
+/// identity as retrieval evidence, while `SourceSpan` remains the sole span
+/// coordinate and stores no text itself.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpanText {
+    pub span: SourceSpan,
+    pub content: ContentId,
+    #[serde(with = "arc_bytes")]
+    pub bytes: Arc<[u8]>,
+}
+
+/// A source position with a one-based line and a zero-based byte column.
+/// `byte_column` counts bytes from the preceding newline, rather than Unicode
+/// scalar values or display columns.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct BytePosition {
+    pub line: u64,
+    pub byte_column: u64,
+}
+
+/// One demand for line positions at the start and end of a `SourceSpan`.
+///
+/// `newline_index_byte_budget` is an explicit upper bound for the temporary
+/// line-start index storage: `(newline count + 1) * size_of::<usize>()`.
+/// A request above its budget fails before allocating that index.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpanPositionRequest {
+    pub span: SourceSpan,
+    pub expected: Option<ContentId>,
+    pub newline_index_byte_budget: u64,
+}
+
+/// Start and exclusive-end positions for one `SourceSpan`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpanPosition {
+    pub span: SourceSpan,
+    pub content: ContentId,
+    pub start: BytePosition,
+    pub end: BytePosition,
+}
+
 /// One repository-local source selection. `SourceTree` supplies the repository;
 /// the query selects one worktree or commit and a union of path globs.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceQuery {
     pub revision: Revision,
     pub patterns: Vec<Pattern>,
@@ -229,7 +307,7 @@ pub struct GitFilesQuery {
 }
 
 /// A directory coordinate derived from the selected source entries.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct DirectoryEntry {
     pub repository: RepositoryId,
     pub revision: RevisionId,
@@ -237,7 +315,7 @@ pub struct DirectoryEntry {
 }
 
 /// A stable result for one `SourceQuery` execution.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceSnapshot {
     pub revision: RevisionId,
     pub files: Vec<SourceEntry>,
@@ -245,7 +323,7 @@ pub struct SourceSnapshot {
 }
 
 /// A logical change between two snapshots of one worktree query.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SourceDelta {
     Added(SourceEntry),
     Changed {
@@ -352,6 +430,15 @@ pub enum Head {
     },
 }
 
+/// The attachment state of one worktree HEAD plus the commit it currently
+/// resolves to. Symbolic branch names remain useful even when a ref query
+/// filters that branch out; `target` carries the resolved commit independently.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct HeadObservation {
+    pub state: Head,
+    pub target: Option<ObjectId>,
+}
+
 /// A repository-scoped ref selection.
 ///
 /// `namespace` is a ref prefix such as `refs/heads`, `refs/tags`, or
@@ -377,7 +464,10 @@ pub struct RefQuery {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RefSnapshot {
     pub repository: RepositoryId,
+    /// The symbolic, detached, or unborn attachment state of this checkout.
     pub head: Head,
+    /// The commit `HEAD` resolves to, independent of selected named refs.
+    pub head_target: Option<ObjectId>,
     pub refs: Vec<RefObservation>,
 }
 
@@ -385,6 +475,10 @@ pub struct RefSnapshot {
 /// arriving, leaving, or changing its target.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RefDelta {
+    HeadChanged {
+        before: HeadObservation,
+        after: HeadObservation,
+    },
     Added(RefObservation),
     Removed(RefObservation),
     Changed {
@@ -393,12 +487,106 @@ pub enum RefDelta {
     },
 }
 
-/// A repository-scoped event envelope for the watch surface. It carries source
-/// and ref deltas plus a rescan condition, with no DL6 clocks or retractions.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// One validated debounce policy for a repository watcher. Durations are plain
+/// milliseconds so typed requests remain portable across runtime boundaries.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WatchCoalescing {
+    pub quiet_ms: u32,
+    pub max_ms: u32,
+}
+
+impl Default for WatchCoalescing {
+    fn default() -> Self {
+        Self {
+            quiet_ms: 120,
+            max_ms: 600,
+        }
+    }
+}
+
+/// The selected repository surfaces for one watcher. A source surface is
+/// limited to `Revision::Worktree`; immutable commits have no watchable state.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WatchQuery {
+    pub source: Option<SourceQuery>,
+    pub refs: Option<RefQuery>,
+    pub index: bool,
+    pub linked_worktrees: bool,
+    pub coalescing: WatchCoalescing,
+}
+
+/// Identity of the logical staged-index entry set. It is the BLAKE3 digest of
+/// `git ls-files --stage -z`, preserving stage, mode, blob, and path data.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct IndexId(pub [u8; 32]);
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IndexSnapshot {
+    pub repository: RepositoryId,
+    /// The checkout whose index was observed. Index identity deliberately does
+    /// not carry the mutable worktree's HEAD or dirty flags: unstaged writes
+    /// do not change the staged index entry set.
+    pub worktree: WorktreeId,
+    pub index: IndexId,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IndexDelta {
+    Changed {
+        before: IndexSnapshot,
+        after: IndexSnapshot,
+    },
+}
+
+/// One live linked checkout. `head` is derived from `git worktree list
+/// --porcelain`; a removed checkout remains observable through its prior row.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct WorktreeObservation {
+    pub repository: RepositoryId,
+    pub worktree: WorktreeId,
+    pub root: PathBuf,
+    /// The commit recorded by `git worktree list --porcelain`, separate from
+    /// the branch attachment state so an advancing symbolic branch is visible.
+    pub commit: Option<ObjectId>,
+    pub head: Head,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorktreeSnapshot {
+    pub repository: RepositoryId,
+    pub worktrees: Vec<WorktreeObservation>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WorktreeDelta {
+    Added(WorktreeObservation),
+    Removed(WorktreeObservation),
+    Changed {
+        before: WorktreeObservation,
+        after: WorktreeObservation,
+    },
+}
+
+/// Stable state for the selected watch surfaces. It is available after `open`
+/// and every successful rescan, and is ordered by source paths, ref names, and
+/// worktree IDs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RepositorySnapshot {
+    pub repository: RepositoryId,
+    pub source: Option<SourceSnapshot>,
+    pub refs: Option<RefSnapshot>,
+    pub index: Option<IndexSnapshot>,
+    pub worktrees: Option<WorktreeSnapshot>,
+}
+
+/// A repository-scoped event envelope. Soopy owns the snapshots and deltas;
+/// the DL6 runtime owns clocks, rev_advanced rows, and retractions.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RepositoryDelta {
     Ref(RefDelta),
     Source(SourceDelta),
+    Index(IndexDelta),
+    Worktree(WorktreeDelta),
     RescanRequired,
 }
 

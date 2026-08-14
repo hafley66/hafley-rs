@@ -18,6 +18,10 @@ Repository + Revision + Pattern[]
 
 SourceSnapshot + filesystem / Git ref events
     -> SourceDelta { Added, Changed, Removed, RevisionChanged, RescanRequired }
+
+WatchQuery
+    -> RepositorySnapshot
+    -> RepositoryDelta { Ref, Source, Index, Worktree, RescanRequired }
 ```
 
 Worktree entries use BLAKE3 content IDs. Committed entries retain Git blob OIDs.
@@ -44,6 +48,7 @@ are out of scope and belong to `source-identity-mapping`.
 | `RepoPath` | repository-relative, `/`-separated UTF-8 | one per path spelling | while path exists |
 | `ContentId` | `GitBlob` OID or `Blake3` digest | one per byte identity | content lifetime |
 | `SourceRef` | `(RepositoryId, RevisionId, RepoPath)` | one file at one revision | placement lifetime |
+| `SourceSpan` | `(SourceRef, start, end)` half-open byte offsets | one byte range in one revision-qualified file | placement lifetime |
 
 `RevisionId::Worktree` carries the checkout's `WorktreeId`, so a worktree
 coordinate cannot alias a sibling linked checkout. `RevisionId::Commit` is
@@ -84,27 +89,58 @@ SourceQuery
     -> Selection { match identity, rank }
 ```
 
-## Watch coverage
+## Watch API
 
-The current `SourceWatcher` owns one repository, one `Revision::Worktree`
-query, one prior snapshot, and one worktree cache. It watches the source root
-and selected Git ref paths, coalesces native events for 120–600 ms, computes a
-fresh snapshot, and emits `Added`, `Changed`, `Removed`, `RevisionChanged`, or
-`RescanRequired`.
+`RepositoryWatcher` owns one opened repository, a `WatchQuery`, one prior
+`RepositorySnapshot`, and independent source/ref readers. `WatchQuery` selects
+one optional worktree source query, one optional ref query, index observation,
+linked-worktree observation, and a validated quiet/max coalescing window.
 
-The repository watch surface still needs typed events for:
+```rust
+use std::sync::Arc;
+use soopy::{Pattern, RefQuery, Revision, SourceQuery, SourceTree, WatchQuery};
 
-- Git worktree creation and removal;
-- checkout attachment or detachment;
-- HEAD and named-ref movement;
-- index changes;
-- repository-set changes;
-- simultaneous watched worktrees and queries;
-- search-result deltas derived from source deltas.
+let repository = soopy::discover(".")?;
+let tree = SourceTree::open(repository);
+let mut watcher = tree.watch_repository(WatchQuery {
+    source: Some(SourceQuery {
+        revision: Revision::Worktree,
+        patterns: vec![Pattern("**/*.rs".into())],
+    }),
+    refs: Some(RefQuery {
+        repository: tree.repository().identity.clone(),
+        namespace: Arc::from(""),
+        name: None,
+        pattern: None,
+    }),
+    index: true,
+    linked_worktrees: true,
+    coalescing: Default::default(),
+})?;
 
-These events should preserve separate repository, worktree, revision, path,
-and content identities. Filesystem event paths are inputs to that model rather
-than the public event vocabulary.
+for delta in watcher.recv()? {
+    println!("{delta:?}");
+}
+# Ok::<(), anyhow::Error>(())
+```
+
+`RefDelta::Changed` carries complete old/new `RefObservation` values, including
+direct and peeled targets. `RefDelta::HeadChanged` records symbolic, detached,
+and unborn transitions plus the resolved old/new commit targets, independent
+of the selected `RefQuery`. `IndexDelta` compares BLAKE3 identities of the logical
+`git ls-files --stage -z` entry set and is keyed by `WorktreeId`, so unstaged
+source writes do not create index deltas. `WorktreeDelta` compares linked
+checkout roots, attachment state, and observed commit OIDs returned by `git
+worktree list --porcelain`.
+
+The watcher registers the worktree root, current Git directory, shared Git
+directory, shared `refs/`, and, when requested, shared `worktrees/`. Object
+and pack churn are ignored. A native overflow or callback error emits
+`RescanRequired`, then the deterministic old-to-new delta sequence from a
+fresh complete snapshot. The watcher never mutates Git state.
+
+`SourceWatcher` and the `soopy watch` command retain the source-only surface.
+An index-only event maps to its existing `SourceDelta::RescanRequired` result.
 
 ## Planned library surfaces
 
@@ -274,6 +310,47 @@ let files = tree.read_many(&requests)?;
 The snapshot records repository-relative paths, revision identity, content
 identity, and byte size. `read_many` checks each request against its expected
 content identity before returning bytes.
+
+### Revision-qualified spans
+
+`SourceSpan` carries a `SourceRef` plus half-open `[start, end)` byte offsets.
+It is the source coordinate that the DL6 runtime later maps to `rev_file_id`
+and `file_span_id`; Soopy does not allocate dense relational IDs or store
+text, line, or column values with the span.
+
+```rust
+use soopy::{SourceSpan, SpanPositionRequest, SpanTextRequest};
+
+let entry = &snapshot.files[0];
+let span = SourceSpan {
+    source: entry.source.clone(),
+    start: 0,
+    end: 8,
+};
+let text = tree.span_text_many(&[SpanTextRequest {
+    span: span.clone(),
+    expected: Some(entry.content.clone()),
+}])?;
+let positions = tree.span_position_many(&[SpanPositionRequest {
+    span,
+    expected: Some(entry.content.clone()),
+    newline_index_byte_budget: 1_048_576,
+}])?;
+# Ok::<(), anyhow::Error>(())
+```
+
+`span_text_many` and `span_position_many` batch through `read_many`, including
+the persistent `git cat-file --batch` reader for committed blobs. Every range
+is validated against retrieved byte length. Positions use one-based lines and
+zero-based byte columns, so positions remain defined at arbitrary byte
+boundaries, including UTF-8 interiors, empty spans, and EOF. Position requests
+must budget temporary line-start storage as `(newline count + 1) *
+size_of::<usize>()`.
+
+Current span retrieval is worktree and Git-blob retrieval through `SourceTree`.
+Stored-content retrieval is introduced at the downstream `023a` relational
+identity/runtime boundary, where stored bytes receive a `ContentId` and map to
+`rev_file_id` rows.
 
 ### Refs and revision graphs
 

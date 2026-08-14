@@ -104,6 +104,15 @@ impl SourceTree {
         crate::_8_watch::SourceWatcher::open(self.repository.clone(), query)
     }
 
+    /// Start a repository watcher over an explicit combination of source, ref,
+    /// index, and linked-worktree surfaces.
+    pub fn watch_repository(
+        &self,
+        query: crate::_0_types::WatchQuery,
+    ) -> Result<crate::_8_watch::RepositoryWatcher> {
+        crate::_8_watch::RepositoryWatcher::open(self.repository.clone(), query)
+    }
+
     pub fn read_many(&mut self, requests: &[ReadRequest]) -> Result<Vec<SourceBytes>> {
         let mut answers = Vec::with_capacity(requests.len());
         for request in requests {
