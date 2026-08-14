@@ -47,7 +47,10 @@ pub fn enumerate(
         if !entry.file_type().is_some_and(|kind| kind.is_file()) {
             continue;
         }
-        let relative = entry.path().strip_prefix(&repository.root).context("make repository-relative path")?;
+        let relative = entry
+            .path()
+            .strip_prefix(&repository.root)
+            .context("make repository-relative path")?;
         if !matcher.is_match(relative) {
             continue;
         }
@@ -68,7 +71,10 @@ pub fn enumerate(
             Some(cached)
                 if cached.modified_secs == modified_secs
                     && cached.size == size
-                    && cached.modified_secs < cache.walk_ref_secs => cached.content.clone(),
+                    && cached.modified_secs < cache.walk_ref_secs =>
+            {
+                cached.content.clone()
+            }
             _ => {
                 let bytes = std::fs::read(entry.path())
                     .with_context(|| format!("read {}", entry.path().display()))?;

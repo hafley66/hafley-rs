@@ -1,9 +1,9 @@
 mod _0_types;
-mod _10_path;
 mod _11_refs;
 mod _12_revision_graph;
 mod _13_fetch;
 mod _1_pattern;
+mod _1a_path;
 mod _2_repository;
 mod _3_revision;
 mod _4_worktree;

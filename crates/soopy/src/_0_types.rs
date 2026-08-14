@@ -147,10 +147,10 @@ pub struct Repository {
 }
 
 /// A revision selection supplied by a caller, before resolution.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Revision {
     Worktree,
-    Named(Arc<str>),
+    Named(#[serde(with = "arc_str")] Arc<str>),
     Commit(ObjectId),
 }
 
@@ -469,7 +469,7 @@ pub struct CommitWalk {
 /// ancestry questions, merge-base pairs, ahead/behind pairs, and walks in one
 /// call. Every input list is answered in order; the result preserves that
 /// order.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RevisionGraphQuery {
     pub repository: RepositoryId,
     pub resolve: Vec<Revision>,
@@ -498,7 +498,7 @@ pub struct RevisionGraphResult {
 /// The set of network mutations an acquisition request is permitted to
 /// perform. The default rejects everything, so read-only callers and callers
 /// that forget to opt in can never fetch, unshallow, or update refs.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AcquisitionPolicy {
     /// Permit fetching branch refs from a remote.
     pub allow_fetch: bool,
@@ -511,21 +511,38 @@ pub struct AcquisitionPolicy {
 /// One permitted acquisition operation, carrying the remote and target it
 /// describes. Every operation is gated by the matching policy flag before any
 /// Git process is spawned.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AcquisitionOperation {
     /// Fetch one branch ref from a remote.
-    FetchRef { remote: Arc<str>, name: Arc<str> },
+    FetchRef {
+        #[serde(with = "arc_str")]
+        remote: Arc<str>,
+        #[serde(with = "arc_str")]
+        name: Arc<str>,
+    },
     /// Fetch one tag ref from a remote.
-    FetchTag { remote: Arc<str>, name: Arc<str> },
+    FetchTag {
+        #[serde(with = "arc_str")]
+        remote: Arc<str>,
+        #[serde(with = "arc_str")]
+        name: Arc<str>,
+    },
     /// Deepen a shallow clone by `depth` more commits.
-    Deepen { remote: Arc<str>, depth: u32 },
+    Deepen {
+        #[serde(with = "arc_str")]
+        remote: Arc<str>,
+        depth: u32,
+    },
     /// Fully unshallow the clone.
-    Unshallow { remote: Arc<str> },
+    Unshallow {
+        #[serde(with = "arc_str")]
+        remote: Arc<str>,
+    },
 }
 
 /// A batched acquisition request: the repository plus an ordered list of
 /// operations whose receipts are returned in order.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AcquisitionRequest {
     pub repository: RepositoryId,
     pub operations: Vec<AcquisitionOperation>,
@@ -535,7 +552,10 @@ pub struct AcquisitionRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AcquisitionReceipt {
     /// The ref already resolved locally; no fetch was needed.
-    AlreadyPresent { target: ObjectId },
+    AlreadyPresent {
+        direct: ObjectId,
+        peeled: Option<ObjectId>,
+    },
     /// A branch ref was fetched and now resolves to `target`.
     FetchedRef {
         #[serde(with = "arc_str")]
@@ -546,12 +566,15 @@ pub enum AcquisitionReceipt {
     FetchedTag {
         #[serde(with = "arc_str")]
         name: Arc<str>,
-        target: ObjectId,
+        direct: ObjectId,
+        peeled: Option<ObjectId>,
     },
     /// The clone was deepened by `depth` commits.
     Deepened { depth: u32 },
     /// The clone was fully unshallowed.
     Unshallowed,
+    /// The repository already had complete history.
+    AlreadyComplete,
     /// The operation was permitted but could not complete (e.g. the remote is
     /// absent or unreachable).
     Unavailable {
@@ -560,4 +583,11 @@ pub enum AcquisitionReceipt {
     },
     /// The policy rejected the operation before any Git process ran.
     RejectedByPolicy,
+}
+
+/// One acquisition result paired with the operation that produced it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AcquisitionOutcome {
+    pub operation: AcquisitionOperation,
+    pub receipt: AcquisitionReceipt,
 }

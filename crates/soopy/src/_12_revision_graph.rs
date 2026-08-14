@@ -14,7 +14,7 @@
 //! one process each, documented in the lane report.
 
 use std::collections::BTreeSet;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::Arc;
 
@@ -153,13 +153,17 @@ fn shallow_set(repository: &Repository) -> Result<BTreeSet<ObjectId>> {
     }
     let path = std::path::PathBuf::from(String::from_utf8(output.stdout)?.trim());
     let mut set = BTreeSet::new();
-    if let Ok(text) = std::fs::read_to_string(&path) {
-        for line in text.lines() {
-            let line = line.trim();
-            if !line.is_empty() {
-                set.insert(ObjectId(Arc::from(line.to_string())));
+    match std::fs::read_to_string(&path) {
+        Ok(text) => {
+            for line in text.lines() {
+                let line = line.trim();
+                if !line.is_empty() {
+                    set.insert(ObjectId(Arc::from(line.to_string())));
+                }
             }
         }
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
     }
     Ok(set)
 }
@@ -179,9 +183,12 @@ fn commit_parents(repository: &Repository, oids: &[ObjectId]) -> Result<Vec<Comm
                 .split(|byte| *byte == b'\n')
                 .take_while(|line| !line.is_empty())
                 .filter_map(|line| line.strip_prefix(b"parent "))
-                .filter_map(|oid| std::str::from_utf8(oid).ok())
-                .map(|oid| ObjectId(Arc::from(oid.to_string())))
-                .collect();
+                .map(|oid| {
+                    std::str::from_utf8(oid)
+                        .context("parent OID is not UTF-8")
+                        .map(|oid| ObjectId(Arc::from(oid.to_string())))
+                })
+                .collect::<Result<Vec<_>>>()?;
             Ok(CommitParents {
                 commit: oid.clone(),
                 parents,
@@ -224,6 +231,13 @@ fn merge_base(repository: &Repository, left: &ObjectId, right: &ObjectId) -> Res
         .args(["merge-base", "--all", &left.0, &right.0])
         .output()
         .with_context(|| format!("merge-base {} {}", left.0, right.0))?;
+    if output.status.code() == Some(1) {
+        return Ok(MergeBase {
+            left: left.clone(),
+            right: right.clone(),
+            bases: Vec::new(),
+        });
+    }
     if !output.status.success() {
         bail!("git merge-base failed for {} {}", left.0, right.0);
     }
@@ -268,7 +282,7 @@ fn ahead_behind(repository: &Repository, left: &ObjectId, right: &ObjectId) -> R
 
 /// Walk every commit reachable from a revision, peeling lightweight and
 /// annotated tags first. One `git rev-list --topo-order` invocation returns a
-/// stable, newest-first traversal independent of commit timestamps.
+/// deterministic topological traversal for a fixed repository state.
 fn walk(repository: &Repository, revision: &Revision) -> Result<CommitWalk> {
     let resolution = resolve(repository, revision)?;
     let start = match resolution {
@@ -300,6 +314,7 @@ struct CommitBatch {
 }
 
 impl CommitBatch {
+    const MAX_COMMIT_BYTES: usize = 16 * 1024 * 1024;
     fn open(root: &std::path::Path) -> Result<Self> {
         let mut child = Command::new("git")
             .arg("-C")
@@ -333,10 +348,16 @@ impl CommitBatch {
             );
         }
         let size: usize = fields[2].parse().context("parse commit size")?;
+        if size > Self::MAX_COMMIT_BYTES {
+            bail!("commit {} exceeds {} bytes", oid.0, Self::MAX_COMMIT_BYTES);
+        }
         let mut body = vec![0; size];
         self.output.read_exact(&mut body)?;
         let mut newline = [0u8; 1];
         self.output.read_exact(&mut newline)?;
+        if newline != *b"\n" {
+            bail!("git cat-file returned an invalid delimiter for {}", oid.0);
+        }
         Ok(body)
     }
 }

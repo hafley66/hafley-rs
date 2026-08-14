@@ -12,8 +12,8 @@ use std::sync::Arc;
 use anyhow::{bail, Context, Result};
 
 use crate::_0_types::{
-    AcquisitionOperation, AcquisitionPolicy, AcquisitionReceipt, AcquisitionRequest, ObjectId,
-    Repository,
+    AcquisitionOperation, AcquisitionOutcome, AcquisitionPolicy, AcquisitionReceipt,
+    AcquisitionRequest, ObjectId, Repository,
 };
 
 /// An open handle over one repository for policy-gated acquisition.
@@ -38,14 +38,25 @@ impl Acquisition {
         &self,
         policy: &AcquisitionPolicy,
         request: &AcquisitionRequest,
-    ) -> Result<Vec<AcquisitionReceipt>> {
+    ) -> Result<Vec<AcquisitionOutcome>> {
         if request.repository != self.repository.identity {
             bail!("acquisition request belongs to another repository");
+        }
+        for operation in &request.operations {
+            if policy_allows(policy, operation) {
+                validate_operation(&self.repository, operation)?;
+            }
         }
         request
             .operations
             .iter()
-            .map(|operation| self.execute_one(policy, operation))
+            .map(|operation| {
+                self.execute_one(policy, operation)
+                    .map(|receipt| AcquisitionOutcome {
+                        operation: operation.clone(),
+                        receipt,
+                    })
+            })
             .collect()
     }
 
@@ -68,9 +79,12 @@ impl Acquisition {
         remote: &str,
         name: &str,
     ) -> Result<AcquisitionReceipt> {
-        // A locally resolvable ref is already present; no fetch is attempted.
-        if let Some(target) = resolve_ref(&self.repository, name)? {
-            return Ok(AcquisitionReceipt::AlreadyPresent { target });
+        let tracking_ref = format!("refs/remotes/{remote}/{name}");
+        if let Some(direct) = resolve_object(&self.repository, &tracking_ref)? {
+            return Ok(AcquisitionReceipt::AlreadyPresent {
+                peeled: resolve_commit(&self.repository, &tracking_ref)?,
+                direct,
+            });
         }
         if !policy.allow_fetch {
             return Ok(AcquisitionReceipt::RejectedByPolicy);
@@ -78,12 +92,12 @@ impl Acquisition {
         // Fetch the branch and update the remote-tracking ref so the result is
         // observable afterwards through a stable ref name.
         let refspec = format!("refs/heads/{name}:refs/remotes/{remote}/{name}");
-        if let Some(reason) = git_fetch(&self.repository, remote, &[refspec.as_str()]) {
+        if let Some(reason) = git_fetch(&self.repository, &[], remote, &[refspec.as_str()]) {
             return Ok(AcquisitionReceipt::Unavailable {
                 reason: Arc::from(reason),
             });
         }
-        let target = resolve_ref(&self.repository, &format!("refs/remotes/{remote}/{name}"))?
+        let target = resolve_commit(&self.repository, &tracking_ref)?
             .context("fetched ref did not resolve")?;
         Ok(AcquisitionReceipt::FetchedRef {
             name: Arc::from(name),
@@ -98,23 +112,28 @@ impl Acquisition {
         name: &str,
     ) -> Result<AcquisitionReceipt> {
         let tag_ref = format!("refs/tags/{name}");
-        if let Some(target) = resolve_ref(&self.repository, &tag_ref)? {
-            return Ok(AcquisitionReceipt::AlreadyPresent { target });
+        if let Some(direct) = resolve_object(&self.repository, &tag_ref)? {
+            return Ok(AcquisitionReceipt::AlreadyPresent {
+                peeled: resolve_commit(&self.repository, &tag_ref)?,
+                direct,
+            });
         }
         if !policy.allow_tag_fetch {
             return Ok(AcquisitionReceipt::RejectedByPolicy);
         }
         let refspec = format!("{tag_ref}:{tag_ref}");
-        if let Some(reason) = git_fetch(&self.repository, remote, &[refspec.as_str()]) {
+        if let Some(reason) = git_fetch(&self.repository, &[], remote, &[refspec.as_str()]) {
             return Ok(AcquisitionReceipt::Unavailable {
                 reason: Arc::from(reason),
             });
         }
-        let target =
-            resolve_ref(&self.repository, &tag_ref)?.context("fetched tag did not resolve")?;
+        let direct = resolve_object(&self.repository, &tag_ref)?
+            .context("fetched tag object did not resolve")?;
+        let peeled = resolve_commit(&self.repository, &tag_ref)?;
         Ok(AcquisitionReceipt::FetchedTag {
             name: Arc::from(name),
-            target,
+            direct,
+            peeled,
         })
     }
 
@@ -127,8 +146,11 @@ impl Acquisition {
         if !policy.allow_unshallow {
             return Ok(AcquisitionReceipt::RejectedByPolicy);
         }
+        if !is_shallow(&self.repository)? {
+            return Ok(AcquisitionReceipt::AlreadyComplete);
+        }
         let flag = format!("--deepen={depth}");
-        if let Some(reason) = git_fetch(&self.repository, remote, &[flag.as_str()]) {
+        if let Some(reason) = git_fetch(&self.repository, &[flag.as_str()], remote, &[]) {
             return Ok(AcquisitionReceipt::Unavailable {
                 reason: Arc::from(reason),
             });
@@ -140,7 +162,10 @@ impl Acquisition {
         if !policy.allow_unshallow {
             return Ok(AcquisitionReceipt::RejectedByPolicy);
         }
-        if let Some(reason) = git_fetch(&self.repository, remote, &["--unshallow"]) {
+        if !is_shallow(&self.repository)? {
+            return Ok(AcquisitionReceipt::AlreadyComplete);
+        }
+        if let Some(reason) = git_fetch(&self.repository, &["--unshallow"], remote, &[]) {
             return Ok(AcquisitionReceipt::Unavailable {
                 reason: Arc::from(reason),
             });
@@ -149,19 +174,32 @@ impl Acquisition {
     }
 }
 
+fn policy_allows(policy: &AcquisitionPolicy, operation: &AcquisitionOperation) -> bool {
+    match operation {
+        AcquisitionOperation::FetchRef { .. } => policy.allow_fetch,
+        AcquisitionOperation::FetchTag { .. } => policy.allow_tag_fetch,
+        AcquisitionOperation::Deepen { .. } | AcquisitionOperation::Unshallow { .. } => {
+            policy.allow_unshallow
+        }
+    }
+}
+
 /// Resolve a ref name to its commit OID, or `None` when it does not resolve.
-fn resolve_ref(repository: &Repository, name: &str) -> Result<Option<ObjectId>> {
+fn resolve_object(repository: &Repository, name: &str) -> Result<Option<ObjectId>> {
+    resolve_expression(repository, name)
+}
+
+fn resolve_commit(repository: &Repository, name: &str) -> Result<Option<ObjectId>> {
+    resolve_expression(repository, &format!("{name}^{{commit}}"))
+}
+
+fn resolve_expression(repository: &Repository, expression: &str) -> Result<Option<ObjectId>> {
     let output = Command::new("git")
         .arg("-C")
         .arg(&repository.root)
-        .args([
-            "rev-parse",
-            "--verify",
-            "--quiet",
-            &format!("{name}^{{commit}}"),
-        ])
+        .args(["rev-parse", "--verify", "--quiet", expression])
         .output()
-        .with_context(|| format!("resolve ref {name:?}"))?;
+        .with_context(|| format!("resolve ref {expression:?}"))?;
     if !output.status.success() {
         return Ok(None);
     }
@@ -170,15 +208,76 @@ fn resolve_ref(repository: &Repository, name: &str) -> Result<Option<ObjectId>> 
     ))))
 }
 
+fn validate_operation(repository: &Repository, operation: &AcquisitionOperation) -> Result<()> {
+    let (remote, kind, name) = match operation {
+        AcquisitionOperation::FetchRef { remote, name } => {
+            (remote.as_ref(), Some("heads"), Some(name.as_ref()))
+        }
+        AcquisitionOperation::FetchTag { remote, name } => {
+            (remote.as_ref(), Some("tags"), Some(name.as_ref()))
+        }
+        AcquisitionOperation::Deepen { remote, depth } => {
+            if *depth == 0 {
+                bail!("deepen depth must be greater than zero");
+            }
+            (remote.as_ref(), None, None)
+        }
+        AcquisitionOperation::Unshallow { remote } => (remote.as_ref(), None, None),
+    };
+    if remote.is_empty() || remote.starts_with('-') || remote.contains(['\0', '\n', '\r', ':']) {
+        bail!("invalid Git remote name {remote:?}");
+    }
+    let remote_status = Command::new("git")
+        .arg("-C")
+        .arg(&repository.root)
+        .args(["remote", "get-url", "--", remote])
+        .output()
+        .with_context(|| format!("validate remote {remote:?}"))?;
+    if !remote_status.status.success() {
+        bail!("unknown Git remote {remote:?}");
+    }
+    if let (Some(kind), Some(name)) = (kind, name) {
+        let full = format!("refs/{kind}/{name}");
+        let status = Command::new("git")
+            .args(["check-ref-format", &full])
+            .status()
+            .with_context(|| format!("validate ref name {name:?}"))?;
+        if !status.success() {
+            bail!("invalid Git {kind} name {name:?}");
+        }
+    }
+    Ok(())
+}
+
+fn is_shallow(repository: &Repository) -> Result<bool> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(&repository.root)
+        .args(["rev-parse", "--is-shallow-repository"])
+        .output()
+        .context("detect shallow repository")?;
+    if !output.status.success() {
+        bail!("git rev-parse --is-shallow-repository failed");
+    }
+    Ok(String::from_utf8(output.stdout)?.trim() == "true")
+}
+
 /// Run `git fetch <remote> <args...>`. Returns `None` on success and the
 /// captured stderr on failure, used as the `Unavailable` receipt reason.
-fn git_fetch(repository: &Repository, remote: &str, args: &[&str]) -> Option<String> {
+fn git_fetch(
+    repository: &Repository,
+    options: &[&str],
+    remote: &str,
+    refspecs: &[&str],
+) -> Option<String> {
     let output = Command::new("git")
         .arg("-C")
         .arg(&repository.root)
         .arg("fetch")
+        .args(options)
+        .arg("--")
         .arg(remote)
-        .args(args)
+        .args(refspecs)
         .output();
     match output {
         Ok(output) if output.status.success() => None,

@@ -156,7 +156,13 @@ fn delta_json(delta: &SourceDelta) -> serde_json::Value {
     }
 }
 
-fn run_rg(root: &std::path::Path, pattern: &str, patterns: &[String], format: QueryFormat, fzf: bool) -> Result<()> {
+fn run_rg(
+    root: &std::path::Path,
+    pattern: &str,
+    patterns: &[String],
+    format: QueryFormat,
+    fzf: bool,
+) -> Result<()> {
     let mut rg = ProcessCommand::new("rg");
     rg.current_dir(root)
         .arg("--line-number")
@@ -203,13 +209,19 @@ fn main() -> Result<()> {
     let repository = soopy::discover(&cli.repo)?;
     let mut tree = SourceTree::open(repository);
     match cli.command {
-        Command::Resolve { revision: name } => println!("{:?}", tree.resolve_revision(revision(name))?),
+        Command::Resolve { revision: name } => {
+            println!("{:?}", tree.resolve_revision(revision(name))?)
+        }
         Command::Files { selection, format } => {
             let snapshot = tree.snapshot(&query(selection))?;
             for entry in snapshot.files {
                 match format {
-                    ListingFormat::Tsv => println!("{}\t{}\t{}", entry.source.path.0, entry.content, entry.size),
-                    ListingFormat::Jsonl => println!("{}", serde_json::to_string(&entry_json(&entry))?),
+                    ListingFormat::Tsv => {
+                        println!("{}\t{}\t{}", entry.source.path.0, entry.content, entry.size)
+                    }
+                    ListingFormat::Jsonl => {
+                        println!("{}", serde_json::to_string(&entry_json(&entry))?)
+                    }
                 }
             }
         }
@@ -250,13 +262,26 @@ fn main() -> Result<()> {
                 for delta in watcher.recv()? {
                     match format {
                         WatchFormat::Text => println!("{:?}", delta),
-                        WatchFormat::Jsonl => println!("{}", serde_json::to_string(&delta_json(&delta))?),
+                        WatchFormat::Jsonl => {
+                            println!("{}", serde_json::to_string(&delta_json(&delta))?)
+                        }
                     }
                 }
             }
         }
-        Command::Query { pattern, patterns, format, fzf } => {
-            run_rg(tree.repository().root.as_path(), &pattern, &patterns, format, fzf)?;
+        Command::Query {
+            pattern,
+            patterns,
+            format,
+            fzf,
+        } => {
+            run_rg(
+                tree.repository().root.as_path(),
+                &pattern,
+                &patterns,
+                format,
+                fzf,
+            )?;
         }
     }
     Ok(())

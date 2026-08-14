@@ -24,7 +24,11 @@ impl GitBatch {
             .context("start git cat-file --batch")?;
         let input = child.stdin.take().context("open cat-file stdin")?;
         let output = BufReader::new(child.stdout.take().context("open cat-file stdout")?);
-        Ok(Self { child, input, output })
+        Ok(Self {
+            child,
+            input,
+            output,
+        })
     }
 
     pub fn read(&mut self, oid: &ObjectId) -> Result<Arc<[u8]>> {

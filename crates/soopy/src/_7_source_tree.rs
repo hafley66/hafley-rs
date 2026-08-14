@@ -110,7 +110,7 @@ impl SourceTree {
             if request.source.repository != self.repository.identity {
                 bail!("read request belongs to another repository");
             }
-            crate::_10_path::ensure_repository_relative(&request.source.path.0)?;
+            crate::_1a_path::ensure_repository_relative(&request.source.path.0)?;
             let (bytes, content) = match &request.source.revision {
                 RevisionId::Worktree { worktree, .. } => {
                     if *worktree != self.repository.worktree {

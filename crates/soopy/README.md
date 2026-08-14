@@ -166,6 +166,23 @@ These invariants are enforced by the implementation and pinned by `tests/1_corre
 
 ## CLI
 
+The binary is a thin command adapter over the source API. `--repo` accepts a
+repository root or any path inside it. `WORK` selects mutable worktree bytes;
+any other revision is resolved by Git and selects immutable committed bytes.
+
+| Command | Input | Output | Backend |
+|---|---|---|---|
+| `resolve REV` | `WORK`, ref, tag, or commit expression | resolved `RevisionId` | `SourceTree::resolve_revision` |
+| `files` | revision plus repeated globs | path, content identity, size | `SourceTree::snapshot` |
+| `read` | revision plus repeated globs | verified bytes for every match | `snapshot` then `read_many` |
+| `watch` | repeated worktree globs | coalesced source deltas | `SourceTree::watch` |
+| `query PATTERN` | text pattern plus repeated globs | matching text records | CLI adapter over `rg` |
+
+`files`, `read`, and `watch` use typed Soopy library operations. `query` is a
+CLI-only process adapter. `--fzf` sends its output to the installed `fzf`
+binary. Revision-graph and acquisition operations currently have a Rust API
+and no CLI subcommands.
+
 Build and inspect the complete command reference:
 
 ```sh
@@ -232,6 +249,8 @@ library dependency or a Soopy public type.
 
 ## Library
 
+### Files and bytes
+
 ```rust
 use soopy::{Pattern, ReadRequest, Revision, SourceTree};
 
@@ -251,3 +270,90 @@ let requests = snapshot.files
 let files = tree.read_many(&requests)?;
 # Ok::<(), anyhow::Error>(())
 ```
+
+The snapshot records repository-relative paths, revision identity, content
+identity, and byte size. `read_many` checks each request against its expected
+content identity before returning bytes.
+
+### Refs and revision graphs
+
+`Refs` enumerates full Git ref names and retains both sides of annotated tags:
+the direct tag-object OID and the peeled target OID. `RevisionGraph` delegates
+Git graph mechanics to Git plumbing and returns typed, serializable results.
+
+```rust
+use std::sync::Arc;
+use soopy::{Revision, RevisionGraph, RevisionGraphQuery};
+
+let repository = soopy::discover(".")?;
+let graph = RevisionGraph::open(repository.clone());
+let result = graph.query(&RevisionGraphQuery {
+    repository: repository.identity.clone(),
+    resolve: vec![Revision::Named(Arc::from("main"))],
+    parents: vec![],
+    ancestry: vec![],
+    merge_bases: vec![],
+    ahead_behind: vec![],
+    walks: vec![Revision::Named(Arc::from("main"))],
+})?;
+# Ok::<(), anyhow::Error>(())
+```
+
+One query may request revision resolution, direct parents, ancestry tests,
+merge bases, ahead/behind counts, and reachable-commit walks. Result vectors
+remain parallel to their request vectors. An unrelated pair has an empty
+merge-base vector. Resolution distinguishes present, absent, corrupt, and
+shallow-boundary commits.
+
+### Controlled acquisition
+
+`Acquisition` is the only API in Soopy that fetches objects or changes refs.
+Every operation is checked against an explicit policy. The default policy
+rejects all operations before running a Git process.
+
+```rust
+use std::sync::Arc;
+use soopy::{
+    Acquisition, AcquisitionOperation, AcquisitionPolicy, AcquisitionRequest,
+};
+
+let repository = soopy::discover(".")?;
+let acquisition = Acquisition::open(repository.clone());
+let outcomes = acquisition.execute(
+    &AcquisitionPolicy {
+        allow_fetch: true,
+        allow_tag_fetch: false,
+        allow_unshallow: false,
+    },
+    &AcquisitionRequest {
+        repository: repository.identity.clone(),
+        operations: vec![AcquisitionOperation::FetchRef {
+            remote: Arc::from("origin"),
+            name: Arc::from("main"),
+        }],
+    },
+)?;
+# Ok::<(), anyhow::Error>(())
+```
+
+Supported operations are `FetchRef`, `FetchTag`, `Deepen`, and `Unshallow`.
+The full request is validated before the first permitted mutation. Remote and
+ref names must identify configured remotes and valid full branch/tag suffixes.
+Each `AcquisitionOutcome` carries the original operation and its receipt.
+Receipts distinguish policy rejection, existing data, fetched data, deepened
+history, completed history, unavailable acquisition, and a repository that
+already has complete history. Tag receipts preserve direct and peeled OIDs.
+
+The intended caller sequence is:
+
+```text
+RevisionGraph::query
+    -> observe Absent or ShallowBoundary
+    -> choose an AcquisitionPolicy outside Soopy
+    -> Acquisition::execute
+    -> RevisionGraph::query again
+```
+
+Git owns revision syntax, graph traversal, refs, fetching, and object storage.
+Soopy supplies repository-qualified coordinates, typed requests and results,
+validation, batching, content checks, and filesystem/ref change reporting.

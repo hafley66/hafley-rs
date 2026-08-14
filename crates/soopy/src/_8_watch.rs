@@ -170,7 +170,10 @@ fn git_dirs(root: &Path) -> Result<(PathBuf, PathBuf)> {
         .output()
         .context("find Git directories for watcher")?;
     if !output.status.success() {
-        bail!("git rev-parse --absolute-git-dir --git-common-dir failed for {}", root.display());
+        bail!(
+            "git rev-parse --absolute-git-dir --git-common-dir failed for {}",
+            root.display()
+        );
     }
     let text = String::from_utf8(output.stdout)?;
     let mut lines = text.lines();
@@ -202,7 +205,11 @@ pub(crate) fn diff(before: &SourceSnapshot, after: &SourceSnapshot) -> Vec<Sourc
         .iter()
         .map(|entry| (entry.source.path.clone(), entry))
         .collect();
-    let mut paths = before.keys().chain(after.keys()).cloned().collect::<Vec<_>>();
+    let mut paths = before
+        .keys()
+        .chain(after.keys())
+        .cloned()
+        .collect::<Vec<_>>();
     paths.sort();
     paths.dedup();
     let mut deltas = Vec::new();
@@ -252,16 +259,31 @@ mod tests {
 
     #[test]
     fn diff_classifies_add_change_and_remove_by_content_identity() {
-        assert!(matches!(diff(&SourceSnapshot {
-            revision: RevisionId::Commit(ObjectId(Arc::from("head"))),
-            files: Vec::new(),
-            directories: Vec::new(),
-        }, &snapshot("src/a.rs", "one"))[0], SourceDelta::Added(_)));
-        assert!(matches!(diff(&snapshot("src/a.rs", "one"), &snapshot("src/a.rs", "two"))[0], SourceDelta::Changed { .. }));
-        assert!(matches!(diff(&snapshot("src/a.rs", "one"), &SourceSnapshot {
-            revision: RevisionId::Commit(ObjectId(Arc::from("head"))),
-            files: Vec::new(),
-            directories: Vec::new(),
-        })[0], SourceDelta::Removed(_)));
+        assert!(matches!(
+            diff(
+                &SourceSnapshot {
+                    revision: RevisionId::Commit(ObjectId(Arc::from("head"))),
+                    files: Vec::new(),
+                    directories: Vec::new(),
+                },
+                &snapshot("src/a.rs", "one")
+            )[0],
+            SourceDelta::Added(_)
+        ));
+        assert!(matches!(
+            diff(&snapshot("src/a.rs", "one"), &snapshot("src/a.rs", "two"))[0],
+            SourceDelta::Changed { .. }
+        ));
+        assert!(matches!(
+            diff(
+                &snapshot("src/a.rs", "one"),
+                &SourceSnapshot {
+                    revision: RevisionId::Commit(ObjectId(Arc::from("head"))),
+                    files: Vec::new(),
+                    directories: Vec::new(),
+                }
+            )[0],
+            SourceDelta::Removed(_)
+        ));
     }
 }

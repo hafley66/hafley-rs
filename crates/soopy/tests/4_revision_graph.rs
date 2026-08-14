@@ -423,7 +423,7 @@ fn acquisition_policy_rejects_network_mutation_by_default() {
         .unwrap();
     assert!(receipts
         .iter()
-        .all(|receipt| matches!(receipt, AcquisitionReceipt::RejectedByPolicy)));
+        .all(|outcome| matches!(outcome.receipt, AcquisitionReceipt::RejectedByPolicy)));
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -431,8 +431,9 @@ fn acquisition_policy_rejects_network_mutation_by_default() {
 fn offline_local_remote_fetch_and_deepen_are_permitted() {
     let origin = linear_repo(5);
     // Tag an intermediate commit so the tag is absent from a depth-1 clone.
-    git(&origin, &["tag", "v1", "HEAD~2"]);
+    git(&origin, &["tag", "-a", "v1", "-m", "release", "HEAD~2"]);
     let tag_target = oid(&origin, "v1^{commit}");
+    let tag_object = oid(&origin, "v1");
 
     // A depth-1 clone starts shallow at HEAD and lacks the tag.
     let shallow = unique("shallow");
@@ -464,9 +465,9 @@ fn offline_local_remote_fetch_and_deepen_are_permitted() {
     };
     let receipts = acquisition.execute(&policy, &request).unwrap();
     assert!(matches!(
-        &receipts[0],
-        AcquisitionReceipt::FetchedTag { name, target }
-            if name.as_ref() == "v1" && *target == tag_target
+        &receipts[0].receipt,
+        AcquisitionReceipt::FetchedTag { name, direct, peeled: Some(target) }
+            if name.as_ref() == "v1" && *direct == tag_object && *target == tag_target
     ));
 
     // Unshallow against the local file remote, no external network involved.
@@ -477,7 +478,7 @@ fn offline_local_remote_fetch_and_deepen_are_permitted() {
         }],
     };
     let receipts = acquisition.execute(&policy, &request).unwrap();
-    assert_eq!(receipts[0], AcquisitionReceipt::Unshallowed);
+    assert_eq!(receipts[0].receipt, AcquisitionReceipt::Unshallowed);
 
     // The full history is now reachable and HEAD resolves as present.
     let result = query(
@@ -508,10 +509,185 @@ fn offline_local_remote_fetch_and_deepen_are_permitted() {
     };
     let receipts = acquisition.execute(&policy, &request).unwrap();
     assert!(matches!(
-        receipts[0],
+        receipts[0].receipt,
         AcquisitionReceipt::AlreadyPresent { .. }
     ));
 
     std::fs::remove_dir_all(&origin).unwrap();
     std::fs::remove_dir_all(&shallow).unwrap();
+}
+
+#[test]
+fn unrelated_histories_have_no_merge_base() {
+    let root = linear_repo(1);
+    let left = oid(&root, "HEAD");
+    git(&root, &["checkout", "-q", "--orphan", "other"]);
+    git(&root, &["rm", "-q", "-rf", "."]);
+    std::fs::write(root.join("other"), "other\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-qm", "other"]);
+    let right = oid(&root, "HEAD");
+    let result = query(
+        &root,
+        &RevisionGraphQuery {
+            repository: repo_identity(&root),
+            resolve: vec![],
+            parents: vec![],
+            ancestry: vec![],
+            merge_bases: vec![(left, right)],
+            ahead_behind: vec![],
+            walks: vec![],
+        },
+    );
+    assert!(result.merge_bases[0].bases.is_empty());
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn fetch_ref_and_deepen_execute_against_a_local_remote() {
+    let origin = linear_repo(5);
+    let shallow = unique("fetch_ref_deepen");
+    git(
+        &origin,
+        &[
+            "clone",
+            "-q",
+            "--depth=1",
+            &format!("file://{}", origin.display()),
+            shallow.to_str().unwrap(),
+        ],
+    );
+    git(&origin, &["checkout", "-qb", "topic"]);
+    std::fs::write(origin.join("topic"), "topic\n").unwrap();
+    git(&origin, &["add", "."]);
+    git(&origin, &["commit", "-qm", "topic"]);
+    let topic = oid(&origin, "HEAD");
+
+    let repository = soopy::open(&shallow).unwrap();
+    let acquisition = Acquisition::open(repository.clone());
+    let policy = AcquisitionPolicy {
+        allow_fetch: true,
+        allow_tag_fetch: false,
+        allow_unshallow: true,
+    };
+    let outcomes = acquisition
+        .execute(
+            &policy,
+            &AcquisitionRequest {
+                repository: repository.identity.clone(),
+                operations: vec![
+                    AcquisitionOperation::FetchRef {
+                        remote: Arc::from("origin"),
+                        name: Arc::from("topic"),
+                    },
+                    AcquisitionOperation::Deepen {
+                        remote: Arc::from("origin"),
+                        depth: 2,
+                    },
+                ],
+            },
+        )
+        .unwrap();
+    assert!(
+        matches!(&outcomes[0].receipt, AcquisitionReceipt::FetchedRef { target, .. } if *target == topic)
+    );
+    assert_eq!(
+        outcomes[1].receipt,
+        AcquisitionReceipt::Deepened { depth: 2 }
+    );
+    let walked = query(
+        &shallow,
+        &RevisionGraphQuery {
+            repository: repository.identity,
+            resolve: vec![],
+            parents: vec![],
+            ancestry: vec![],
+            merge_bases: vec![],
+            ahead_behind: vec![],
+            walks: vec![Revision::Named(Arc::from("HEAD"))],
+        },
+    );
+    assert_eq!(walked.walks[0].commits.len(), 3);
+    std::fs::remove_dir_all(&origin).unwrap();
+    std::fs::remove_dir_all(&shallow).unwrap();
+}
+
+#[test]
+fn acquisition_validates_the_complete_request_before_mutation() {
+    let root = linear_repo(1);
+    git(
+        &root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            &format!("file://{}", root.display()),
+        ],
+    );
+    let repository = soopy::open(&root).unwrap();
+    let acquisition = Acquisition::open(repository.clone());
+    let request = AcquisitionRequest {
+        repository: repository.identity,
+        operations: vec![
+            AcquisitionOperation::FetchRef {
+                remote: Arc::from("origin"),
+                name: Arc::from("main"),
+            },
+            AcquisitionOperation::FetchTag {
+                remote: Arc::from("--upload-pack=bad"),
+                name: Arc::from("v1"),
+            },
+        ],
+    };
+    let before = state_fingerprint(&root);
+    assert!(acquisition
+        .execute(
+            &AcquisitionPolicy {
+                allow_fetch: true,
+                allow_tag_fetch: true,
+                allow_unshallow: false
+            },
+            &request
+        )
+        .is_err());
+    assert_eq!(before, state_fingerprint(&root));
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn acquisition_requests_round_trip_and_complete_repositories_are_noops() {
+    let root = linear_repo(1);
+    git(
+        &root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            &format!("file://{}", root.display()),
+        ],
+    );
+    let repository = soopy::open(&root).unwrap();
+    let request = AcquisitionRequest {
+        repository: repository.identity.clone(),
+        operations: vec![AcquisitionOperation::Unshallow {
+            remote: Arc::from("origin"),
+        }],
+    };
+    let encoded = serde_json::to_string(&request).unwrap();
+    assert_eq!(
+        serde_json::from_str::<AcquisitionRequest>(&encoded).unwrap(),
+        request
+    );
+    let outcomes = Acquisition::open(repository)
+        .execute(
+            &AcquisitionPolicy {
+                allow_fetch: false,
+                allow_tag_fetch: false,
+                allow_unshallow: true,
+            },
+            &request,
+        )
+        .unwrap();
+    assert_eq!(outcomes[0].receipt, AcquisitionReceipt::AlreadyComplete);
+    std::fs::remove_dir_all(&root).unwrap();
 }
