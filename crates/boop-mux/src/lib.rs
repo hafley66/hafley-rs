@@ -68,6 +68,10 @@ pub trait Multiplexer {
         cwd: &str,
         command: &str,
     ) -> Result<String>;
+
+    /// Exchange two windows' positions. Used to hold the interactive window
+    /// at index 0 so a bare session attach lands in the agent TUI.
+    fn swap_windows(&self, socket: Option<&str>, source: &str, destination: &str) -> Result<()>;
 }
 
 /// The one `Multiplexer` implementation: tmux itself, driven by a mix of raw
@@ -331,6 +335,25 @@ impl Multiplexer for Tmux {
         let target = String::from_utf8_lossy(&output.stdout).trim().to_owned();
         debug!(session, window = name, target, "tmux new window completed");
         Ok(target)
+    }
+
+    fn swap_windows(&self, socket: Option<&str>, source: &str, destination: &str) -> Result<()> {
+        debug!(source, destination, socket = socket.unwrap_or_default(), "tmux swap windows starting");
+        let mut builder = Command::new("tmux");
+        if let Some(socket) = socket {
+            builder.arg("-L").arg(socket);
+        }
+        builder.args(["swap-window", "-s", source, "-t", destination]);
+        let output = builder.output().context("tmux swap-window")?;
+        if !output.status.success() {
+            warn!(source, destination, "tmux swap windows failed");
+            anyhow::bail!(
+                "swap-windows {source} <-> {destination}: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        debug!(source, destination, "tmux swap windows completed");
+        Ok(())
     }
 }
 

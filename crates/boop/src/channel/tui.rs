@@ -68,6 +68,16 @@ impl TuiChannel {
                 &profile.command,
             )
             .with_context(|| format!("open a {} tui window", profile.harness))?;
+        // Hold the interactive window at index 0: a bare session attach then
+        // lands in the agent TUI, not the supervisor log window.
+        let target = match target.rsplit(':').next().and_then(|i| i.parse::<u32>().ok()) {
+            Some(index) if index > 0 => {
+                let zero = format!("{session}:0");
+                crate::tmux::mux().swap_windows(socket.as_deref(), &target, &zero)?;
+                zero
+            }
+            _ => target,
+        };
         let mut channel = TuiChannel {
             profile,
             socket,
