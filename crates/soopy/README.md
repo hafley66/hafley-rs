@@ -28,6 +28,30 @@ The worktree walker honors ignore rules, excludes `.git`, and prunes nested
 repositories. Git revisions use `git ls-tree`; Git CLI remains the object
 database backend.
 
+## Source coordinate identities
+
+Soopy owns the stable source coordinates and serializable request/result
+types. Dense relational IDs (`FileId`, `RevFileId`, `BlobId`, `FileSpanId`)
+are out of scope and belong to `source-identity-mapping`.
+
+| Type | Construction | Uniqueness | Lifetime |
+|---|---|---|---|
+| `RepositoryId` | hash of canonicalized `--git-common-dir` | one per common Git directory | repository lifetime |
+| `WorktreeId` | hash of canonicalized `--absolute-git-dir` | one per checkout root | checkout lifetime |
+| `RevisionId` | `Worktree` carries `WorktreeId` + `HEAD` + dirty; `Commit` carries an OID | commit: immutable OID; worktree: one observation | commit: object DB; worktree: one snapshot |
+| `RefId` | `(RepositoryId, full ref name)` | one per `(repo, name)` | while ref exists |
+| `ObjectId` | a Git object name | one per object name | object DB lifetime |
+| `RepoPath` | repository-relative, `/`-separated UTF-8 | one per path spelling | while path exists |
+| `ContentId` | `GitBlob` OID or `Blake3` digest | one per byte identity | content lifetime |
+| `SourceRef` | `(RepositoryId, RevisionId, RepoPath)` | one file at one revision | placement lifetime |
+
+`RevisionId::Worktree` carries the checkout's `WorktreeId`, so a worktree
+coordinate cannot alias a sibling linked checkout. `RevisionId::Commit` is
+repository-scoped and readable from any linked worktree that shares the object
+database. Every public coordinate derives `Serialize`/`Deserialize` over its
+plain key (string or byte array), never a `Display` string, and round-trips
+through `serde_json`.
+
 ## Implementation boundary
 
 Soopy's normal library and CLI paths are intended to remain Rust-native except
@@ -126,13 +150,19 @@ These invariants are enforced by the implementation and pinned by `tests/1_corre
 6. Tracked symlink behavior agrees across worktree and commit snapshots
    (symlinks are dropped in both).
 7. Repository identity and worktree identity are separate and tested across
-   linked worktrees.
+   linked worktrees: linked worktrees share `RepositoryId` but have distinct
+   `WorktreeId`, and reopening a checkout reproduces both.
 8. Failed Git commands cannot produce clean or complete source coordinates.
 9. Non-UTF-8 and newline-bearing repository paths are rejected explicitly,
    because `RepoPath` is a UTF-8 `Arc<str>` and the Git batch protocols are
    line-oriented. A repository containing either cannot be enumerated by
    `git_files` or `read_many`, which errors rather than collapsing or corrupting
    the coordinate.
+10. A worktree `SourceRef` opened through one checkout cannot be read through a
+    different checkout: `read_many` rejects a `RevisionId::Worktree` whose
+    `WorktreeId` differs from the open `SourceTree`'s checkout. Commit reads
+    stay repository-scoped and succeed from any linked worktree sharing the
+    object database.
 
 ## CLI
 

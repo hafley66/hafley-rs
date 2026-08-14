@@ -8,8 +8,8 @@ use crate::_0_types::{
     SourceBytes, SourceEntry, SourceQuery, SourceSnapshot,
 };
 use crate::_1_pattern::Pattern;
-use crate::_6_git_batch::GitBatch;
 use crate::_4_worktree::WorktreeCache;
+use crate::_6_git_batch::GitBatch;
 
 pub struct SourceTree {
     repository: Repository,
@@ -34,12 +34,21 @@ impl SourceTree {
         crate::_3_revision::resolve(&self.repository, revision)
     }
 
-    pub fn enumerate(&mut self, revision: &RevisionId, patterns: &[Pattern]) -> Result<Vec<SourceEntry>> {
+    pub fn enumerate(
+        &mut self,
+        revision: &RevisionId,
+        patterns: &[Pattern],
+    ) -> Result<Vec<SourceEntry>> {
         match revision {
-            RevisionId::Worktree { .. } => {
-                crate::_4_worktree::enumerate(&self.repository, revision, patterns, &mut self.worktree)
+            RevisionId::Worktree { .. } => crate::_4_worktree::enumerate(
+                &self.repository,
+                revision,
+                patterns,
+                &mut self.worktree,
+            ),
+            RevisionId::Commit(_) => {
+                crate::_5_git_tree::enumerate(&self.repository, revision, patterns)
             }
-            RevisionId::Commit(_) => crate::_5_git_tree::enumerate(&self.repository, revision, patterns),
         }
     }
 
@@ -103,17 +112,21 @@ impl SourceTree {
             }
             crate::_10_path::ensure_repository_relative(&request.source.path.0)?;
             let (bytes, content) = match &request.source.revision {
-                RevisionId::Worktree { .. } => {
+                RevisionId::Worktree { worktree, .. } => {
+                    if *worktree != self.repository.worktree {
+                        bail!("worktree read request belongs to another worktree");
+                    }
                     let path = self.repository.root.join(request.source.path.0.as_ref());
-                    let bytes = std::fs::read(&path).with_context(|| format!("read {}", path.display()))?;
+                    let bytes =
+                        std::fs::read(&path).with_context(|| format!("read {}", path.display()))?;
                     // Worktree enumeration can carry either identity: the
                     // filesystem snapshot uses BLAKE3, while the tracked-file
                     // surface uses the Git blob OID. Honor the caller's
                     // expected variant so both round-trip through `read_many`.
                     let digest = match request.expected.as_ref() {
-                        Some(ContentId::GitBlob(_)) => {
-                            ContentId::GitBlob(crate::_9_git_files::hash_object(&self.repository, &bytes)?)
-                        }
+                        Some(ContentId::GitBlob(_)) => ContentId::GitBlob(
+                            crate::_9_git_files::hash_object(&self.repository, &bytes)?,
+                        ),
                         _ => ContentId::Blake3(*blake3::hash(&bytes).as_bytes()),
                     };
                     (Arc::from(bytes), digest)
@@ -121,7 +134,11 @@ impl SourceTree {
                 RevisionId::Commit(commit) => {
                     // Resolve the requested `commit:path` and read that blob,
                     // rather than trusting an arbitrary caller-supplied OID.
-                    let oid = crate::_3_revision::resolve_commit_path(&self.repository, commit, request.source.path.0.as_ref())?;
+                    let oid = crate::_3_revision::resolve_commit_path(
+                        &self.repository,
+                        commit,
+                        request.source.path.0.as_ref(),
+                    )?;
                     if let Some(expected) = request.expected.as_ref() {
                         match expected {
                             ContentId::GitBlob(expected_oid) if expected_oid.0 == oid.0 => {}
@@ -134,20 +151,34 @@ impl SourceTree {
                                     expected_oid.0
                                 )
                             }
-                            ContentId::Blake3(_) => bail!("commit read requires a Git blob identity"),
+                            ContentId::Blake3(_) => {
+                                bail!("commit read requires a Git blob identity")
+                            }
                         }
                     }
                     if self.git.is_none() {
                         self.git = Some(GitBatch::open(&self.repository.root)?);
                     }
-                    let bytes = self.git.as_mut().context("Git batch reader was not initialized")?.read(&oid)?;
+                    let bytes = self
+                        .git
+                        .as_mut()
+                        .context("Git batch reader was not initialized")?
+                        .read(&oid)?;
                     (bytes, ContentId::GitBlob(oid))
                 }
             };
-            if request.expected.as_ref().is_some_and(|expected| expected != &content) {
+            if request
+                .expected
+                .as_ref()
+                .is_some_and(|expected| expected != &content)
+            {
                 bail!("content changed for {}", request.source.path.0);
             }
-            answers.push(SourceBytes { source: request.source.clone(), content, bytes });
+            answers.push(SourceBytes {
+                source: request.source.clone(),
+                content,
+                bytes,
+            });
         }
         Ok(answers)
     }

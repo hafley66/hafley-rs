@@ -9,10 +9,16 @@ pub fn resolve(repository: &Repository, revision: Revision) -> Result<RevisionId
     match revision {
         Revision::Worktree => {
             let head = rev_parse(repository, "HEAD").ok().map(ObjectId);
-            Ok(RevisionId::Worktree { head, dirty: dirty(repository)? })
+            Ok(RevisionId::Worktree {
+                worktree: repository.worktree.clone(),
+                head,
+                dirty: dirty(repository)?,
+            })
         }
         Revision::Named(name) => Ok(RevisionId::Commit(ObjectId(rev_parse(repository, &name)?))),
-        Revision::Commit(commit) => Ok(RevisionId::Commit(ObjectId(rev_parse(repository, &commit.0)?))),
+        Revision::Commit(commit) => Ok(RevisionId::Commit(ObjectId(rev_parse(
+            repository, &commit.0,
+        )?))),
     }
 }
 
@@ -24,7 +30,10 @@ fn rev_parse(repository: &Repository, name: &str) -> Result<Arc<str>> {
         .output()
         .with_context(|| format!("resolve revision {name:?}"))?;
     if !output.status.success() {
-        bail!("revision {name:?} does not resolve in {}", repository.root.display());
+        bail!(
+            "revision {name:?} does not resolve in {}",
+            repository.root.display()
+        );
     }
     Ok(Arc::from(String::from_utf8(output.stdout)?.trim()))
 }
@@ -37,14 +46,21 @@ fn dirty(repository: &Repository) -> Result<bool> {
         .output()
         .context("inspect worktree state")?;
     if !output.status.success() {
-        bail!("git status failed in {} (a clean worktree cannot be inferred from a failed command)", repository.root.display());
+        bail!(
+            "git status failed in {} (a clean worktree cannot be inferred from a failed command)",
+            repository.root.display()
+        );
     }
     Ok(!output.stdout.is_empty())
 }
 
 /// Resolve the blob a `commit:path` names. Used to verify a committed read
 /// against its expected identity before returning content.
-pub fn resolve_commit_path(repository: &Repository, commit: &ObjectId, path: &str) -> Result<ObjectId> {
+pub fn resolve_commit_path(
+    repository: &Repository,
+    commit: &ObjectId,
+    path: &str,
+) -> Result<ObjectId> {
     let spec = format!("{}:{}", commit.0, path);
     let output = Command::new("git")
         .arg("-C")
@@ -55,5 +71,7 @@ pub fn resolve_commit_path(repository: &Repository, commit: &ObjectId, path: &st
     if !output.status.success() {
         bail!("{spec} does not resolve in {}", repository.root.display());
     }
-    Ok(ObjectId(Arc::from(String::from_utf8(output.stdout)?.trim())))
+    Ok(ObjectId(Arc::from(
+        String::from_utf8(output.stdout)?.trim(),
+    )))
 }
