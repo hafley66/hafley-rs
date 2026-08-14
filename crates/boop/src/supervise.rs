@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use tracing::{debug, error, info, warn};
 
 use crate::bus;
 use crate::channel::{Delivery, LaneChannel};
@@ -67,13 +68,23 @@ pub fn hail_text(hail: &Hail) -> String {
 
 /// Run the lane to completion and return the exit code the pane re-raises.
 pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
+    let _span = tracing::info_span!(
+        "lane.supervise",
+        lane = lane.lane,
+        cwd = %lane.cwd.display(),
+        model = lane.model.as_deref().unwrap_or_default(),
+        resume = lane.resume.as_deref().unwrap_or_default(),
+    )
+    .entered();
     let brief = std::fs::read_to_string(&lane.brief)
         .with_context(|| format!("read lane brief {}", lane.brief.display()))?;
+    info!(brief = %lane.brief.display(), "lane brief loaded");
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut held: Vec<Hail> = Vec::new();
     let mut turn = brief;
     let mut flake_resumes = 0u32;
     loop {
+        info!(turn_bytes = turn.len(), "lane turn starting");
         channel.start_turn(&turn)?;
         remember_conversation(&lane, channel);
         let end = loop {
@@ -85,20 +96,43 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
                 match channel.steer(&hail_text(&hail))? {
                     Delivery::MidTurn => {
                         println!("[boop] hail {} delivered midturn", hail.id);
+                        info!(
+                            hail_id = hail.id,
+                            from = hail.from,
+                            delivery = "midturn",
+                            "lane hail delivered"
+                        );
                         record_delivery(&lane.mail_dir, &lane.lane, &hail, Delivery::MidTurn);
                     }
                     Delivery::NextTurn => {
                         println!("[boop] hail {} held for the next turn", hail.id);
+                        info!(
+                            hail_id = hail.id,
+                            from = hail.from,
+                            delivery = "nextturn",
+                            "lane hail held"
+                        );
                         held.push(hail);
                     }
                 }
             }
         };
         println!("[boop] turn ended: {}", end.detail);
+        info!(
+            turn_end_reason = end.detail,
+            turn_ok = end.ok,
+            retryable = end.retryable,
+            "lane turn ended"
+        );
         remember_conversation(&lane, channel);
         if end.retryable && flake_resumes < FLAKE_RESUME_CAP {
             flake_resumes += 1;
             println!("[boop] provider flake, resuming ({flake_resumes}/{FLAKE_RESUME_CAP})");
+            warn!(
+                flake_resumes,
+                flake_resume_cap = FLAKE_RESUME_CAP,
+                "lane provider flake; resuming"
+            );
             turn = "The previous turn ended on a provider error you never saw. \
                     Re-read your last steps and continue the brief from where you left off."
                 .to_owned();
@@ -109,11 +143,15 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
             held.push(hail);
         }
         if held.is_empty() {
-            channel.close()?;
-            return Ok(match end.ok {
+            channel.close().inspect_err(|error| {
+                error!(error = %error, "lane channel close failed");
+            })?;
+            let exit_code = match end.ok {
                 true => 0,
                 false => 1,
-            });
+            };
+            info!(exit_code, "lane supervision complete");
+            return Ok(exit_code);
         }
         turn = held
             .drain(..)
@@ -131,19 +169,47 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
 /// not, so every id this lane ever wears lands under one trace.
 fn remember_conversation(lane: &LaneRun, channel: &dyn LaneChannel) {
     let Some(id) = channel.conversation_id() else {
+        debug!(lane = lane.lane, "lane channel has no conversation id yet");
         return;
     };
+    info!(
+        lane = lane.lane,
+        conversation_id = id,
+        conversation_id_kind = channel.conversation_id_kind(),
+        "lane conversation resolved"
+    );
     record_conversation(&lane.mail_dir, &lane.lane, &id);
-    let Ok(store) = crate::Store::default_path().and_then(crate::Store::open) else {
-        return;
+    let store = match crate::Store::default_path().and_then(crate::Store::open) {
+        Ok(store) => store,
+        Err(error) => {
+            warn!(lane = lane.lane, error = %error, "open trace store failed");
+            return;
+        }
     };
     let trace = store
         .trace_of(&lane.lane)
         .ok()
         .flatten()
         .unwrap_or_else(|| format!("trace-{}", lane.lane));
-    let _ = store.attach_trace(&lane.lane, &trace, "lane-run", crate::channel::now_ms());
-    let _ = store.attach_trace(&id, &trace, "supervisor-conversation", crate::channel::now_ms());
+    if let Err(error) = store.attach_trace(&lane.lane, &trace, "lane-run", crate::channel::now_ms())
+    {
+        warn!(lane = lane.lane, trace, error = %error, "lane trace attachment failed");
+    }
+    if let Err(error) = store.attach_trace(
+        &id,
+        &trace,
+        "supervisor-conversation",
+        crate::channel::now_ms(),
+    ) {
+        warn!(lane = lane.lane, conversation_id = id, trace, error = %error, "conversation trace attachment failed");
+    } else {
+        info!(
+            lane = lane.lane,
+            conversation_id = id,
+            trace,
+            "conversation trace attached"
+        );
+    }
 }
 
 /// Write the harness's own conversation id onto the lane's registry route so a
@@ -152,7 +218,7 @@ fn record_conversation(dir: &Path, lane: &str, conversation: &str) {
     let path = dir.join("registry.json");
     let lane = lane.to_owned();
     let conversation = conversation.to_owned();
-    let _ = bus::cas_update_json(&path, |map| {
+    if let Err(error) = bus::cas_update_json(&path, |map| {
         let entry = map
             .entry(lane.clone())
             .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
@@ -163,7 +229,11 @@ fn record_conversation(dir: &Path, lane: &str, conversation: &str) {
             );
         }
         Ok(())
-    });
+    }) {
+        warn!(lane, conversation_id = conversation, error = %error, "conversation route update failed");
+    } else {
+        info!(lane, conversation_id = conversation, mail_dir = %dir.display(), "conversation route updated");
+    }
 }
 
 /// Stamp the mailbox row delivered so no later read re-offers it.
@@ -178,7 +248,11 @@ pub fn ack(dir: &Path, hail: &Hail) {
     row.to_timestamp = Some(bus::now_iso());
     let line = bus::message_line(&row);
     let path = dir.join("bus.ndjson");
-    let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) else {
+    let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    else {
         return;
     };
     use std::io::Write;
@@ -189,15 +263,21 @@ pub fn ack(dir: &Path, hail: &Hail) {
 /// get it, and did it land mid-turn".
 fn record_delivery(dir: &Path, lane: &str, hail: &Hail, tier: Delivery) {
     ack(dir, hail);
-    let Ok(store) = crate::Store::default_path().and_then(crate::Store::open) else {
-        return;
+    let store = match crate::Store::default_path().and_then(crate::Store::open) {
+        Ok(store) => store,
+        Err(error) => {
+            warn!(lane, hail_id = hail.id, error = %error, "open store for delivery edge failed");
+            return;
+        }
     };
-    let _ = store.add_edge_at(
+    if let Err(error) = store.add_edge_at(
         &hail.from,
         lane,
         &format!("deliver-{}", tier.as_str()),
         crate::channel::now_ms(),
-    );
+    ) {
+        warn!(lane, hail_id = hail.id, delivery = tier.as_str(), error = %error, "delivery edge write failed");
+    }
 }
 
 #[cfg(test)]
@@ -263,7 +343,10 @@ mod tests {
             from: "coordinator".into(),
             body: "stop and write /tmp/x".into(),
         });
-        assert_eq!(text, "[boop hail m1 from coordinator] stop and write /tmp/x");
+        assert_eq!(
+            text,
+            "[boop hail m1 from coordinator] stop and write /tmp/x"
+        );
     }
 
     #[test]

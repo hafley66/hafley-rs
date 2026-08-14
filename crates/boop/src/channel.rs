@@ -84,6 +84,12 @@ pub trait LaneChannel: Send {
     /// the lane's registry route so a later resume can find it.
     fn conversation_id(&self) -> Option<String>;
 
+    /// The namespace of `conversation_id`; a TUI may temporarily expose its
+    /// transport target while a harness session id is not yet resolved.
+    fn conversation_id_kind(&self) -> &'static str {
+        "harness_session"
+    }
+
     /// Send `text` as a new turn. Called once to open the lane with the brief,
     /// then again for every batch of messages that arrived between turns.
     fn start_turn(&mut self, text: &str) -> Result<()>;
@@ -123,5 +129,4 @@ mod tests {
         assert!(TurnEnd::ok("done").ok);
         assert!(!TurnEnd::failed("boom").ok);
     }
-
 }

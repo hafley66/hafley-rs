@@ -9,6 +9,8 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
+use tracing::{error, info};
+use tracing_subscriber::EnvFilter;
 
 use boop::bus::Route;
 use boop::event::AgentEvent;
@@ -443,6 +445,7 @@ fn line(text: &str) {
 }
 
 fn main() -> Result<()> {
+    init_tracing()?;
     let cli = Cli::parse();
     let registry = Registry::discover();
     match cli.command {
@@ -622,6 +625,18 @@ fn main() -> Result<()> {
     }
 }
 
+/// Install the one stderr subscriber for the CLI. Libraries emit spans and
+/// events only, so embedding `boop` never changes its caller's subscriber.
+fn init_tracing() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .with_writer(std::io::stderr)
+        .try_init()
+        .map_err(|error| anyhow::anyhow!("initialise tracing subscriber: {error}"))
+}
+
 // ---------------------------------------------------------------------------
 // Pass 1 verbs: layer 2 (transcript)
 // ---------------------------------------------------------------------------
@@ -755,6 +770,7 @@ fn emit_rows(rows: &[ident::Row], format: QueryFormat) {
 /// `boop sync`: tail every harness forward from stored offsets into the db.
 fn run_sync_all(registry: &Registry, rebuild: bool) -> Result<()> {
     let started = std::time::Instant::now();
+    info!(rebuild, "transcript sync started");
     let store = ident::Store::open(ident::Store::default_path()?)?;
     if rebuild {
         store.rebuild()?;
@@ -783,6 +799,11 @@ fn run_sync_all(registry: &Registry, rebuild: bool) -> Result<()> {
                 if unchanged {
                     continue;
                 }
+                tracing::debug!(
+                    harness = adapter.id(),
+                    session_id = session.session_id,
+                    "transcript session sync started"
+                );
                 let pid = session_route_pid(&routes, &session);
                 stat.add(ident::sync_session_with_pid(
                     &store,
@@ -813,9 +834,21 @@ fn run_sync_all(registry: &Registry, rebuild: bool) -> Result<()> {
                 stat.usage_updated,
                 serde_json::to_string(&counts)?
             );
+            info!(
+                events = stat.written,
+                dropped = stat.dropped,
+                usage_new = stat.usage_written,
+                usage_updated = stat.usage_updated,
+                elapsed_ms,
+                rate,
+                "transcript sync finished"
+            );
         }
         Err(error) => {
-            let _ = store.rollback();
+            error!(error = %error, "transcript sync failed; rolling back");
+            if let Err(rollback_error) = store.rollback() {
+                error!(error = %rollback_error, "transcript sync rollback failed");
+            }
             return Err(error);
         }
     }
@@ -1144,6 +1177,14 @@ fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
     // The caller is the PARENT of the lane being born, never its identity.
     let caller = identity::resolve(&bus::read_routes(&mail_dir(args.mail_dir.as_deref())?)?)?;
     let harness_id = adapter.id().to_owned();
+    info!(
+        lane = args.to,
+        harness = harness_id,
+        model = args.model.as_deref().unwrap_or_default(),
+        cwd = args.cwd,
+        tmux_target = args.tmux.as_deref().unwrap_or_default(),
+        "lane dispatch starting"
+    );
     let branch = args
         .branch
         .clone()
@@ -1214,6 +1255,14 @@ fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
     };
     write_route(&dir, &args.to, route)?;
     append_message(&dir, &message)?;
+    info!(
+        lane = args.to,
+        harness = adapter.id(),
+        tmux_target = session.tmux.as_deref().unwrap_or_default(),
+        conversation_id = session.session_id,
+        conversation_id_kind = "spawn_handle",
+        "lane dispatch registered"
+    );
     println!(
         "dispatched {} -> {} (tmux {})",
         message.id,
@@ -1394,7 +1443,10 @@ fn run_hail(
     // A lane pane runs the supervisor, which reads this mailbox directly;
     // typing at its stdout would reach no agent.
     if route.kind == "lane" {
-        println!("queued {} -> {to} (lane supervisor delivers it)", message.id);
+        println!(
+            "queued {} -> {to} (lane supervisor delivers it)",
+            message.id
+        );
         return Ok(());
     }
     let pane = route.tmux.as_deref();
@@ -1451,6 +1503,14 @@ fn run_lane_supervisor(
     resume: Option<&str>,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
+    info!(
+        lane,
+        harness = harness_id,
+        model = model.unwrap_or_default(),
+        cwd = %std::env::current_dir().unwrap_or_default().display(),
+        resume = resume.unwrap_or_default(),
+        "lane supervisor starting"
+    );
     let adapter = harness_by_id(registry, harness_id)?;
     let dir = mail_dir(mail_dir_arg)?;
     let cwd = std::env::current_dir().context("read the current directory")?;
@@ -1459,7 +1519,9 @@ fn run_lane_supervisor(
         cwd: cwd.clone(),
         resume: resume.map(str::to_owned),
     };
-    let mut channel = adapter.open_channel(&spec)?;
+    let mut channel = adapter.open_channel(&spec).inspect_err(|error| {
+        error!(lane, harness = harness_id, error = %error, "lane channel open failed");
+    })?;
     let run = boop::supervise::LaneRun {
         lane: lane.to_owned(),
         brief: brief.to_owned(),
@@ -1468,7 +1530,15 @@ fn run_lane_supervisor(
         model: model.map(str::to_owned),
         resume: resume.map(str::to_owned),
     };
-    let code = boop::supervise::run(run, channel.as_mut())?;
+    let code = boop::supervise::run(run, channel.as_mut()).inspect_err(|error| {
+        error!(lane, harness = harness_id, error = %error, "lane supervisor failed");
+    })?;
+    info!(
+        lane,
+        harness = harness_id,
+        exit_code = code,
+        "lane supervisor finished"
+    );
     println!("[boop] lane {lane} finished rc={code}");
     std::process::exit(code);
 }
@@ -1695,6 +1765,13 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         args.name.as_deref(),
         args.tmux.as_deref(),
     )?;
+    info!(
+        lane = identity.lane,
+        tmux_target = identity.tmux,
+        harness = harness_id,
+        cwd = %repo.display(),
+        "lane create resolved"
+    );
     let worktree_mode = identity.worktree_dir.is_some();
     let brief = args.brief.clone().unwrap_or_else(|| repo.join("brief.md"));
     if !brief.is_absolute() {
@@ -1744,6 +1821,11 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     });
 
     if args.dry_run {
+        info!(
+            lane = identity.lane,
+            harness = harness_id,
+            "lane create dry run"
+        );
         let spec = boop::harness::SpawnSpec {
             harness: harness_id.clone(),
             branch: identity.branch.clone(),
@@ -1829,7 +1911,7 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             cwd: repo.display().to_string(),
             cmd: prompt,
             from: None,
-            harness: Some(harness_id),
+            harness: Some(harness_id.clone()),
             session_id: None,
             model,
             mode: Some("auto".into()),
@@ -1852,6 +1934,11 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             warm_start: !args.no_start,
         },
     )?;
+    info!(
+        lane = lane_id,
+        harness = harness_id,
+        "lane create dispatched"
+    );
     if args.wait {
         // Same code path as `beep lane wait`, which exits with the lane's rc.
         return run_lane_wait(Some(&hail_mail_dir), &lane_id, args.wait_timeout);
@@ -1928,6 +2015,7 @@ fn run_prune(mail_dir_arg: Option<&Path>) -> Result<()> {
         }
         Ok(())
     })?;
+    info!(routes_deleted = dead.len(), mail_dir = %dir.display(), "lane routes pruned");
     println!("pruned {} dead routes", dead.len());
     Ok(())
 }
@@ -3614,6 +3702,7 @@ fn run_lane_delete(mail_dir_arg: Option<&Path>, lane: &str, route_only: bool) ->
         current.remove(lane);
         Ok(())
     })?;
+    info!(lane, route_only, "lane route deleted");
     println!("deleted {lane}");
     Ok(())
 }
@@ -3699,9 +3788,16 @@ fn run_lane_wait(mail_dir_arg: Option<&Path>, lane: &str, timeout_secs: u64) -> 
     } else {
         Some(std::time::Duration::from_secs(timeout_secs))
     };
+    info!(lane, timeout_secs, "lane result wait starting");
     match wait_for_result(&dir, lane, deadline, std::time::Duration::from_secs(1)) {
-        Some(rc) => std::process::exit(rc),
-        None => std::process::exit(124),
+        Some(rc) => {
+            info!(lane, exit_code = rc, "lane result received");
+            std::process::exit(rc)
+        }
+        None => {
+            info!(lane, exit_code = 124, "lane result wait timed out");
+            std::process::exit(124)
+        }
     }
 }
 

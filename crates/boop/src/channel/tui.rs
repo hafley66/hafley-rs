@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+use tracing::{debug, info, warn};
 
 use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEnd};
 
@@ -40,7 +41,19 @@ pub struct TuiChannel {
 }
 
 impl TuiChannel {
-    pub fn open(profile: TuiProfile, spec: &ChannelSpec, socket: Option<String>) -> Result<TuiChannel> {
+    pub fn open(
+        profile: TuiProfile,
+        spec: &ChannelSpec,
+        socket: Option<String>,
+    ) -> Result<TuiChannel> {
+        let _span = tracing::info_span!(
+            "channel.tui.open",
+            harness = profile.harness,
+            cwd = %spec.cwd.display(),
+            model = spec.model.as_deref().unwrap_or_default(),
+            resume = spec.resume.as_deref().unwrap_or_default(),
+        )
+        .entered();
         let session = host_session(socket.as_deref())?;
         let cwd = spec.cwd.display().to_string();
         let target = crate::tmux::mux()
@@ -61,6 +74,12 @@ impl TuiChannel {
             turn_open: false,
         };
         channel.wait_for_boot()?;
+        info!(
+            harness = channel.profile.harness,
+            tmux_target = channel.target,
+            tmux_session = channel.session,
+            "tui channel opened"
+        );
         Ok(channel)
     }
 
@@ -90,6 +109,11 @@ impl TuiChannel {
             std::thread::sleep(Duration::from_millis(1200));
         }
         self.settled_since = None;
+        debug!(
+            harness = self.profile.harness,
+            tmux_target = self.target,
+            "tui boot settled"
+        );
         Ok(())
     }
 
@@ -125,10 +149,26 @@ impl TuiChannel {
 
 impl LaneChannel for TuiChannel {
     fn conversation_id(&self) -> Option<String> {
+        debug!(
+            harness = self.profile.harness,
+            conversation_id = self.target,
+            conversation_id_kind = "tmux_target",
+            "tui channel exposes tmux target as conversation id"
+        );
         Some(self.target.clone())
     }
 
+    fn conversation_id_kind(&self) -> &'static str {
+        "tmux_target"
+    }
+
     fn start_turn(&mut self, text: &str) -> Result<()> {
+        info!(
+            harness = self.profile.harness,
+            tmux_target = self.target,
+            text_bytes = text.len(),
+            "tui turn starting"
+        );
         self.type_and_submit(text)?;
         self.turn_open = true;
         self.settled_since = None;
@@ -136,6 +176,12 @@ impl LaneChannel for TuiChannel {
     }
 
     fn steer(&mut self, text: &str) -> Result<Delivery> {
+        info!(
+            harness = self.profile.harness,
+            tmux_target = self.target,
+            text_bytes = text.len(),
+            "tui turn steer"
+        );
         self.type_and_submit(text)?;
         if let Some(key) = self.profile.steer_key {
             std::thread::sleep(Duration::from_millis(400));
@@ -150,6 +196,20 @@ impl LaneChannel for TuiChannel {
         loop {
             if self.settled_for(IDLE_SETTLE)? {
                 self.turn_open = false;
+                let (pane_hash, unchanged_ms) = self
+                    .settled_since
+                    .map(|(hash, since)| {
+                        (format!("{hash:016x}"), since.elapsed().as_millis() as u64)
+                    })
+                    .unwrap_or_default();
+                warn!(
+                    harness = self.profile.harness,
+                    tmux_target = self.target,
+                    pane_hash,
+                    pane_unchanged_ms = unchanged_ms,
+                    turn_end_reason = "pane_idle",
+                    "tui turn classified as complete from pane idleness"
+                );
                 return Ok(Some(TurnEnd::ok("pane idle")));
             }
             if Instant::now() >= deadline {
@@ -160,7 +220,16 @@ impl LaneChannel for TuiChannel {
     }
 
     fn close(&mut self) -> Result<()> {
-        let _ = crate::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, "C-c");
+        info!(
+            harness = self.profile.harness,
+            tmux_target = self.target,
+            "tui channel closing"
+        );
+        if let Err(error) =
+            crate::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, "C-c")
+        {
+            warn!(harness = self.profile.harness, tmux_target = self.target, error = %error, "tui interrupt failed");
+        }
         Ok(())
     }
 }
@@ -266,15 +335,25 @@ mod tests {
     #[test]
     fn both_profiles_run_auto_and_carry_the_model() {
         let opencode = opencode_profile(&spec(Some("openrouter/deepseek/deepseek-v4-flash-0731")));
-        assert!(opencode.command.starts_with("opencode --auto"), "{}", opencode.command);
         assert!(
-            opencode.command.contains("-m 'openrouter/deepseek/deepseek-v4-flash-0731'"),
+            opencode.command.starts_with("opencode --auto"),
+            "{}",
+            opencode.command
+        );
+        assert!(
+            opencode
+                .command
+                .contains("-m 'openrouter/deepseek/deepseek-v4-flash-0731'"),
             "{}",
             opencode.command
         );
         let kimi = kimi_profile(&spec(Some("kimi-code/k3")));
         assert!(kimi.command.starts_with("kimi --auto"), "{}", kimi.command);
-        assert!(kimi.command.contains("-m 'kimi-code/k3'"), "{}", kimi.command);
+        assert!(
+            kimi.command.contains("-m 'kimi-code/k3'"),
+            "{}",
+            kimi.command
+        );
     }
 
     #[test]

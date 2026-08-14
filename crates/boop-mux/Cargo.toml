@@ -1,6 +1,6 @@
 [package]
 name = "boop-mux"
-version.workspace = true
+version = "0.0.1"
 edition.workspace = true
 description = "the tmux multiplexer seam boop drives: one trait, one implementation over tmux_interface"
 license.workspace = true
@@ -10,3 +10,5 @@ license.workspace = true
 anyhow = "1"
 # Layer 1: typed tmux command argv builder for the one-shot commands.
 tmux_interface = "0.4"
+# boop owns the subscriber; this library only emits operation boundaries.
+tracing.workspace = true

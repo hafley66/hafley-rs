@@ -14,6 +14,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use anyhow::{Context, Result};
+use tracing::{debug, warn};
 
 /// The tmux multiplexer operations boop drives. Object-safe: every method takes
 /// `&self` and returns a concrete or `anyhow` type.
@@ -144,10 +145,21 @@ impl Multiplexer for Tmux {
             .add_command(HasSession::new().target_session(exact_target(session)))
             .status()
             .context("tmux has-session")?;
+        debug!(
+            session,
+            socket = socket.unwrap_or_default(),
+            alive = status.success(),
+            "tmux has-session completed"
+        );
         Ok(status.success())
     }
 
     fn kill_session(&self, socket: Option<&str>, session: &str) -> Result<()> {
+        debug!(
+            session,
+            socket = socket.unwrap_or_default(),
+            "tmux kill-session starting"
+        );
         use tmux_interface::{KillSession, Tmux};
         let builder = Tmux::new();
         let builder = match socket {
@@ -158,6 +170,7 @@ impl Multiplexer for Tmux {
             .add_command(KillSession::new().target_session(exact_target(session)))
             .output()
             .context("tmux kill-session")?;
+        debug!(session, "tmux kill-session completed");
         Ok(())
     }
 
@@ -198,6 +211,11 @@ impl Multiplexer for Tmux {
         }
         let output = builder.output().context("tmux capture-pane")?;
         if !output.status.success() {
+            warn!(
+                target,
+                socket = socket.unwrap_or_default(),
+                "tmux capture-pane failed"
+            );
             anyhow::bail!(
                 "capture-pane {target}: {}",
                 String::from_utf8_lossy(&output.stderr).trim()
@@ -213,6 +231,12 @@ impl Multiplexer for Tmux {
         cwd: &str,
         command: &str,
     ) -> Result<()> {
+        debug!(
+            session = name,
+            cwd,
+            socket = socket.unwrap_or_default(),
+            "tmux new detached session starting"
+        );
         use tmux_interface::{NewSession, Tmux};
         let builder = Tmux::new();
         let builder = match socket {
@@ -228,19 +252,38 @@ impl Multiplexer for Tmux {
             .add_command(new)
             .output()
             .context("tmux new-session")?;
+        debug!(session = name, "tmux new detached session completed");
         Ok(())
     }
 
     fn send_keys_literal(&self, socket: Option<&str>, pane: &str, body: &str) -> Result<()> {
+        debug!(
+            target = pane,
+            socket = socket.unwrap_or_default(),
+            text_bytes = body.len(),
+            "tmux literal text send"
+        );
         send_keys(socket, &["-t", pane, "-l", "--", body])?;
         send_keys(socket, &["-t", pane, "Enter"])
     }
 
     fn send_text(&self, socket: Option<&str>, pane: &str, body: &str) -> Result<()> {
+        debug!(
+            target = pane,
+            socket = socket.unwrap_or_default(),
+            text_bytes = body.len(),
+            "tmux text send"
+        );
         send_keys(socket, &["-t", pane, "-l", "--", body])
     }
 
     fn send_key_named(&self, socket: Option<&str>, pane: &str, key: &str) -> Result<()> {
+        debug!(
+            target = pane,
+            socket = socket.unwrap_or_default(),
+            key,
+            "tmux key send"
+        );
         send_keys(socket, &["-t", pane, key])
     }
 
@@ -252,22 +295,42 @@ impl Multiplexer for Tmux {
         cwd: &str,
         command: &str,
     ) -> Result<String> {
+        debug!(
+            session,
+            window = name,
+            cwd,
+            socket = socket.unwrap_or_default(),
+            "tmux new window starting"
+        );
         let mut builder = Command::new("tmux");
         if let Some(socket) = socket {
             builder.arg("-L").arg(socket);
         }
         builder.args([
-            "new-window", "-d", "-P", "-F", "#{session_name}:#{window_index}", "-t", session, "-n",
-            name, "-c", cwd, command,
+            "new-window",
+            "-d",
+            "-P",
+            "-F",
+            "#{session_name}:#{window_index}",
+            "-t",
+            session,
+            "-n",
+            name,
+            "-c",
+            cwd,
+            command,
         ]);
         let output = builder.output().context("tmux new-window")?;
         if !output.status.success() {
+            warn!(session, window = name, "tmux new window failed");
             anyhow::bail!(
                 "new-window in {session}: {}",
                 String::from_utf8_lossy(&output.stderr).trim()
             );
         }
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        let target = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        debug!(session, window = name, target, "tmux new window completed");
+        Ok(target)
     }
 }
 
@@ -366,6 +429,10 @@ impl ControlClient {
     /// canonical mode with echo on; `boop` is not a terminal emulator and must
     /// not change terminal attributes.
     pub fn spawn(socket: Option<&str>) -> Result<Self> {
+        debug!(
+            socket = socket.unwrap_or_default(),
+            "tmux control client starting"
+        );
         let mut builder = Command::new("tmux");
         if let Some(socket) = socket {
             builder.arg("-L").arg(socket);
@@ -379,6 +446,10 @@ impl ControlClient {
             .context("spawn tmux -C; is tmux installed and reachable?")?;
         let stdin = child.stdin.take().context("tmux control stdin")?;
         let stdout = child.stdout.take().context("tmux control stdout")?;
+        debug!(
+            socket = socket.unwrap_or_default(),
+            "tmux control client started"
+        );
         Ok(ControlClient {
             child,
             stdin,
@@ -393,6 +464,7 @@ impl ControlClient {
     /// number tmux assigns (which is server-global and not predictable), and
     /// the first pair on a fresh connection is tmux's own attach block.
     pub fn command(&mut self, argv: &[&str]) -> Result<Vec<String>> {
+        debug!(argc = argv.len(), "tmux control command starting");
         let line = argv
             .iter()
             .map(|arg| quote_arg(arg))
@@ -417,6 +489,11 @@ impl ControlClient {
                         open = None;
                         continue;
                     }
+                    debug!(
+                        argc = argv.len(),
+                        output_lines = body.len(),
+                        "tmux control command completed"
+                    );
                     return Ok(body);
                 }
                 ControlEvent::BlockError { num } if Some(num) == open => {
@@ -425,6 +502,7 @@ impl ControlClient {
                         open = None;
                         continue;
                     }
+                    warn!(argc = argv.len(), "tmux control command failed");
                     anyhow::bail!("tmux command failed: {}", argv.join(" "));
                 }
                 ControlEvent::BlockEnd { .. } | ControlEvent::BlockError { .. } => {}
@@ -512,6 +590,11 @@ fn send_keys(socket: Option<&str>, argv: &[&str]) -> Result<()> {
     builder.args(argv);
     let output = builder.output().context("tmux send-keys")?;
     if !output.status.success() {
+        warn!(
+            socket = socket.unwrap_or_default(),
+            argc = argv.len(),
+            "tmux send-keys failed"
+        );
         anyhow::bail!(
             "tmux send-keys failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()

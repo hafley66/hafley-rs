@@ -1,6 +1,6 @@
 [package]
 name = "boop"
-version.workspace = true
+version = "0.0.1"
 edition.workspace = true
 description = "cross-harness agent transcript reader: tail agent events from every harness on this machine as one stream"
 license.workspace = true
@@ -14,7 +14,7 @@ agent-read = []
 
 [dependencies]
 # The tmux multiplexer seam: one trait, one implementation, in its own crate.
-boop-mux = { version = "0.1.0", path = "../boop-mux" }
+boop-mux = { version = "0.0.1", path = "../boop-mux" }
 # clap derive gives the self-describing --help, subcommand help, and shell
 # completions this CLI exists to have. Chosen by the user (build-vs-buy, fixed).
 clap = { version = "4", features = ["derive"] }
@@ -37,6 +37,10 @@ sysinfo = "0.39"
 rusqlite = { version = "0.40", features = ["bundled"] }
 # Transcript timestamps parse against Rfc3339; hand-rolled date math is gone.
 time = { version = "0.3", features = ["parsing", "formatting"] }
+# Process-wide diagnostics. The binary installs the subscriber; library code
+# only emits conventional tracing events and spans.
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [dev-dependencies]
 # Peak-bytes-allocated counter for tests/bench_grid.rs's own #[global_allocator].

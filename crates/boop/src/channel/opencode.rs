@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 use anyhow::{Context, Result};
+use tracing::{debug, info, warn};
 
 use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEnd};
 
@@ -35,6 +36,10 @@ impl LaneChannel for OpencodeChannel {
         self.session.clone()
     }
 
+    fn conversation_id_kind(&self) -> &'static str {
+        "opencode_session"
+    }
+
     fn start_turn(&mut self, text: &str) -> Result<()> {
         if self.turn.is_some() {
             anyhow::bail!("an opencode turn is already running");
@@ -49,6 +54,13 @@ impl LaneChannel for OpencodeChannel {
         }
         command.arg(text);
         self.turn_started_ms = crate::channel::now_ms();
+        info!(
+            cwd = %self.cwd.display(),
+            model = self.model.as_deref().unwrap_or_default(),
+            conversation_id = self.session.as_deref().unwrap_or_default(),
+            text_bytes = text.len(),
+            "opencode process turn starting"
+        );
         self.turn = Some(
             command
                 .current_dir(&self.cwd)
@@ -73,11 +85,30 @@ impl LaneChannel for OpencodeChannel {
         self.turn = None;
         if self.session.is_none() {
             self.session = newest_session(&self.cwd, self.turn_started_ms);
+            match self.session.as_deref() {
+                Some(conversation_id) => info!(
+                    conversation_id,
+                    conversation_id_kind = "opencode_session",
+                    "opencode session resolved"
+                ),
+                None => {
+                    warn!(cwd = %self.cwd.display(), since_ms = self.turn_started_ms, "opencode session lookup returned no session")
+                }
+            }
+        }
+        let state = self.session.as_deref().and_then(last_message_state);
+        if let Some(state) = &state {
+            info!(
+                conversation_id = self.session.as_deref().unwrap_or_default(),
+                last_opencode_finish = state.finish.as_deref().unwrap_or_default(),
+                last_opencode_error = state.error.as_deref().unwrap_or_default(),
+                "opencode trailing message state"
+            );
         }
         Ok(Some(match status {
             // `opencode run` exits 0 when the provider drops the stream; the
             // db's trailing MessageAbortedError is the only tell.
-            0 => match self.session.as_deref().map(last_message_aborted) {
+            0 => match state.as_ref().map(LastMessageState::aborted) {
                 Some(true) => TurnEnd::flaked("rc=0 with an aborted stream"),
                 _ => TurnEnd::ok("rc=0"),
             },
@@ -108,29 +139,59 @@ pub(crate) fn wait_for(child: &mut Child, timeout: std::time::Duration) -> Resul
     }
 }
 
-/// A no-finish or errored newest row means a dropped stream: the row exists
-/// from request start, while the shutdown error write can lose the reap race.
-fn last_message_aborted(session: &str) -> bool {
+/// The finish/error fields on OpenCode's newest message row. A missing finish
+/// or an error means the stream was aborted.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct LastMessageState {
+    finish: Option<String>,
+    error: Option<String>,
+}
+
+impl LastMessageState {
+    fn aborted(&self) -> bool {
+        self.finish.is_none() || self.error.is_some()
+    }
+}
+
+/// The newest message state for a conversation. OpenCode owns this database;
+/// lookup failures leave the existing process exit-code behavior unchanged.
+fn last_message_state(session: &str) -> Option<LastMessageState> {
     let Some(path) = crate::harness::opencode::store_path() else {
-        return false;
+        debug!(
+            conversation_id = session,
+            "opencode store path unavailable for trailing message lookup"
+        );
+        return None;
     };
-    let Ok(connection) = rusqlite::Connection::open_with_flags(
+    let connection = match rusqlite::Connection::open_with_flags(
         &path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    ) else {
-        return false;
+    ) {
+        Ok(connection) => connection,
+        Err(error) => {
+            warn!(conversation_id = session, store_path = %path.display(), error = %error, "open opencode store for trailing message lookup failed");
+            return None;
+        }
     };
     connection
         .query_row(
-            "SELECT json_extract(data, '$.finish') IS NULL
-                 OR json_extract(data, '$.error.name') IS NOT NULL
+            "SELECT json_extract(data, '$.finish'), json_extract(data, '$.error.name')
               FROM message
               WHERE session_id = ?1
               ORDER BY time_created DESC LIMIT 1",
             rusqlite::params![session],
-            |row| row.get::<_, bool>(0),
+            |row| {
+                Ok(LastMessageState {
+                    finish: row.get(0)?,
+                    error: row.get(1)?,
+                })
+            },
         )
-        .unwrap_or(false)
+        .map_err(|error| {
+            debug!(conversation_id = session, error = %error, "opencode trailing message lookup returned no row");
+            error
+        })
+        .ok()
 }
 
 /// The newest opencode session under `cwd` created at or after `since_ms`.
@@ -141,6 +202,10 @@ fn newest_session(cwd: &Path, since_ms: u64) -> Option<String> {
         &path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
+    .map_err(|error| {
+        warn!(cwd = %cwd.display(), error = %error, "open opencode store for session lookup failed");
+        error
+    })
     .ok()?;
     let directory = cwd.display().to_string();
     connection
@@ -188,5 +253,24 @@ mod tests {
         request.resume = Some("ses_abc".to_owned());
         let channel = OpencodeChannel::open(&request).unwrap();
         assert_eq!(channel.conversation_id().as_deref(), Some("ses_abc"));
+    }
+
+    #[test]
+    fn missing_finish_or_error_marks_a_trailing_message_aborted() {
+        assert!(LastMessageState {
+            finish: None,
+            error: None,
+        }
+        .aborted());
+        assert!(LastMessageState {
+            finish: Some("stop".into()),
+            error: Some("MessageAbortedError".into()),
+        }
+        .aborted());
+        assert!(!LastMessageState {
+            finish: Some("stop".into()),
+            error: None,
+        }
+        .aborted());
     }
 }
