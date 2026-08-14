@@ -109,7 +109,13 @@ fn worktree_source_ref_from_one_checkout_cannot_be_read_through_another() {
         source: entries[0].source.clone(),
         expected: Some(entries[0].content.clone()),
     };
-    assert!(linked_tree.read_many(&[request]).is_err());
+    assert!(linked_tree
+        .read_many(std::slice::from_ref(&request))
+        .is_err());
+    let mut buffer = Vec::new();
+    assert!(linked_tree
+        .read_each(std::slice::from_ref(&request), &mut buffer, |_| Ok(()))
+        .is_err());
     git(
         &main,
         &["worktree", "remove", "--force", linked.to_str().unwrap()],

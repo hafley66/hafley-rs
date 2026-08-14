@@ -105,6 +105,30 @@ fn repo_path_cannot_escape_its_root() {
 }
 
 #[test]
+fn read_each_rejects_a_foreign_repository() {
+    let root = repository();
+    let foreign_root = repository();
+    let mut tree = SourceTree::open(soopy::open(&root).unwrap());
+    let revision = tree.resolve_revision(Revision::Worktree).unwrap();
+    let entry = tree
+        .enumerate(&revision, &[Pattern("**/*.rs".into())])
+        .unwrap()
+        .pop()
+        .unwrap();
+    let request = ReadRequest {
+        source: entry.source,
+        expected: Some(entry.content),
+    };
+    let mut foreign_tree = SourceTree::open(soopy::open(&foreign_root).unwrap());
+    let mut buffer = Vec::new();
+    assert!(foreign_tree
+        .read_each(std::slice::from_ref(&request), &mut buffer, |_| Ok(()))
+        .is_err());
+    std::fs::remove_dir_all(&root).unwrap();
+    std::fs::remove_dir_all(&foreign_root).unwrap();
+}
+
+#[test]
 fn commit_read_verifies_commit_path_against_expected_blob() {
     let root = repository();
     let repo = soopy::open(&root).unwrap();
@@ -122,7 +146,11 @@ fn commit_read_verifies_commit_path_against_expected_blob() {
         },
         expected: Some(entries[0].content.clone()),
     };
-    assert!(tree.read_many(&[wrong]).is_err());
+    assert!(tree.read_many(std::slice::from_ref(&wrong)).is_err());
+    let mut buffer = Vec::new();
+    assert!(tree
+        .read_each(std::slice::from_ref(&wrong), &mut buffer, |_| Ok(()))
+        .is_err());
     std::fs::remove_dir_all(&root).unwrap();
 }
 

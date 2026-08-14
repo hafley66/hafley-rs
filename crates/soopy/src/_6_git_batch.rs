@@ -38,6 +38,17 @@ impl GitBatch {
 
     /// Read an expression such as `commit:path` and return Git's resolved OID.
     pub fn read_spec(&mut self, spec: &str) -> Result<(ObjectId, Arc<[u8]>)> {
+        let mut bytes = Vec::new();
+        let oid = self.read_spec_into(spec, &mut bytes)?;
+        Ok((oid, Arc::from(bytes)))
+    }
+
+    /// Read an expression such as `commit:path` into a caller-owned buffer.
+    ///
+    /// The buffer is resized to the resolved blob's exact size. Reusing it
+    /// across calls retains at most the largest blob allocation instead of one
+    /// allocation per returned source.
+    pub fn read_spec_into(&mut self, spec: &str, bytes: &mut Vec<u8>) -> Result<ObjectId> {
         writeln!(self.input, "{spec}")?;
         self.input.flush()?;
         let mut header = String::new();
@@ -48,14 +59,15 @@ impl GitBatch {
         }
         let oid = ObjectId(Arc::from(fields[0]));
         let size: usize = fields[2].parse().context("parse Git blob size")?;
-        let mut bytes = vec![0; size];
-        self.output.read_exact(&mut bytes)?;
+        bytes.clear();
+        bytes.resize(size, 0);
+        self.output.read_exact(&mut *bytes)?;
         let mut newline = [0];
         self.output.read_exact(&mut newline)?;
         if newline[0] != b'\n' {
             bail!("git cat-file response missing blob terminator");
         }
-        Ok((oid, Arc::from(bytes)))
+        Ok(oid)
     }
 }
 

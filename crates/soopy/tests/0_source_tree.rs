@@ -69,6 +69,103 @@ fn worktree_and_head_are_distinct_sources() {
 }
 
 #[test]
+fn read_each_streams_worktree_and_commit_bytes() {
+    let root = repository();
+    let repo = soopy::open(&root).unwrap();
+    let mut tree = SourceTree::open(repo);
+    let patterns = [Pattern("**/*.rs".into())];
+    let worktree = tree.resolve_revision(Revision::Worktree).unwrap();
+    let commit = tree
+        .resolve_revision(Revision::Named(Arc::from("HEAD")))
+        .unwrap();
+    let worktree_entry = tree.enumerate(&worktree, &patterns).unwrap().pop().unwrap();
+    let commit_entry = tree.enumerate(&commit, &patterns).unwrap().pop().unwrap();
+    let requests = [
+        ReadRequest {
+            source: worktree_entry.source,
+            expected: Some(worktree_entry.content),
+        },
+        ReadRequest {
+            source: commit_entry.source,
+            expected: Some(commit_entry.content),
+        },
+    ];
+    let mut buffer = Vec::new();
+    let mut bytes = Vec::new();
+    tree.read_each(&requests, &mut buffer, |answer| {
+        bytes.push((answer.content.clone(), answer.bytes.to_vec()));
+        Ok(())
+    })
+    .unwrap();
+    assert!(matches!(bytes[0].0, ContentId::Blake3(_)));
+    assert_eq!(bytes[0].1, b"pub const VALUE: u8 = 2;\n");
+    assert!(matches!(bytes[1].0, ContentId::GitBlob(_)));
+    assert_eq!(bytes[1].1, b"pub const VALUE: u8 = 1;\n");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn read_each_reuses_the_caller_buffer() {
+    let root = repository();
+    let repo = soopy::open(&root).unwrap();
+    let mut tree = SourceTree::open(repo);
+    let revision = tree.resolve_revision(Revision::Worktree).unwrap();
+    let entry = tree
+        .enumerate(&revision, &[Pattern("**/*.rs".into())])
+        .unwrap()
+        .pop()
+        .unwrap();
+    let request = ReadRequest {
+        source: entry.source,
+        expected: Some(entry.content),
+    };
+    let mut buffer = Vec::with_capacity(64);
+    let pointer = buffer.as_ptr();
+    for _ in 0..2 {
+        tree.read_each(std::slice::from_ref(&request), &mut buffer, |answer| {
+            assert_eq!(answer.bytes.as_ptr(), pointer);
+            assert_eq!(answer.bytes, b"pub const VALUE: u8 = 2;\n");
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(buffer.as_ptr(), pointer);
+    }
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn read_each_propagates_callback_failure_and_keeps_git_batch_aligned() {
+    let root = repository();
+    let repo = soopy::open(&root).unwrap();
+    let mut tree = SourceTree::open(repo);
+    let revision = tree
+        .resolve_revision(Revision::Named(Arc::from("HEAD")))
+        .unwrap();
+    let entry = tree
+        .enumerate(&revision, &[Pattern("**/*.rs".into())])
+        .unwrap()
+        .pop()
+        .unwrap();
+    let request = ReadRequest {
+        source: entry.source,
+        expected: Some(entry.content),
+    };
+    let mut buffer = Vec::new();
+    let error = tree
+        .read_each(std::slice::from_ref(&request), &mut buffer, |_| {
+            anyhow::bail!("stop streaming")
+        })
+        .unwrap_err();
+    assert!(error.to_string().contains("stop streaming"));
+    tree.read_each(std::slice::from_ref(&request), &mut buffer, |answer| {
+        assert_eq!(answer.bytes, b"pub const VALUE: u8 = 1;\n");
+        Ok(())
+    })
+    .unwrap();
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn snapshot_derives_directories_and_prunes_nested_repositories() {
     let root = repository();
     std::fs::create_dir_all(root.join("vendor/inner/src")).unwrap();

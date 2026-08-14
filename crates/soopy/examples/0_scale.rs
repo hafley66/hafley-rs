@@ -17,6 +17,8 @@ struct Args {
     handles: usize,
     #[arg(long, default_value_t = 16)]
     batch: usize,
+    #[arg(long, default_value_t = 3)]
+    warm_passes: usize,
     #[arg(long = "pathspec")]
     pathspecs: Vec<String>,
 }
@@ -47,8 +49,8 @@ struct ScaleReceipt {
     batch_size: usize,
     cold_read: PassReceipt,
     rss_bytes_after_cold_read: Option<u64>,
-    warm_read: PassReceipt,
-    rss_bytes_after_warm_read: Option<u64>,
+    warm_reads: Vec<PassReceipt>,
+    rss_bytes_after_warm_reads: Vec<Option<u64>>,
 }
 
 fn descriptor_count() -> Option<usize> {
@@ -63,20 +65,25 @@ fn rss_bytes(system: &mut System) -> Option<u64> {
     system.process(pid).map(|process| process.memory())
 }
 
-fn read_pass(tree: &mut SourceTree, requests: &[ReadRequest], batch: usize) -> Result<PassReceipt> {
+fn read_pass(
+    tree: &mut SourceTree,
+    requests: &[ReadRequest],
+    batch: usize,
+    buffer: &mut Vec<u8>,
+) -> Result<PassReceipt> {
     let started = Instant::now();
     let mut bytes = 0_u64;
     let mut files = 0_usize;
     let mut batches = 0_usize;
     for chunk in requests.chunks(batch) {
-        let answers = tree.read_many(chunk)?;
         batches += 1;
-        files += answers.len();
-        for answer in answers {
+        tree.read_each(chunk, buffer, |answer| {
+            files += 1;
             bytes = bytes
                 .checked_add(u64::try_from(answer.bytes.len()).context("byte count exceeds u64")?)
                 .context("total byte count exceeds u64")?;
-        }
+            Ok(())
+        })?;
     }
     Ok(PassReceipt {
         elapsed_ms: started.elapsed().as_millis(),
@@ -123,10 +130,15 @@ fn main() -> Result<()> {
         })
         .collect();
 
-    let cold_read = read_pass(&mut tree, &requests, args.batch)?;
+    let mut buffer = Vec::new();
+    let cold_read = read_pass(&mut tree, &requests, args.batch, &mut buffer)?;
     let rss_bytes_after_cold_read = rss_bytes(&mut system);
-    let warm_read = read_pass(&mut tree, &requests, args.batch)?;
-    let rss_bytes_after_warm_read = rss_bytes(&mut system);
+    let mut warm_reads = Vec::with_capacity(args.warm_passes);
+    let mut rss_bytes_after_warm_reads = Vec::with_capacity(args.warm_passes);
+    for _ in 0..args.warm_passes {
+        warm_reads.push(read_pass(&mut tree, &requests, args.batch, &mut buffer)?);
+        rss_bytes_after_warm_reads.push(rss_bytes(&mut system));
+    }
     std::hint::black_box(&handles);
     std::thread::sleep(Duration::from_millis(100));
 
@@ -149,8 +161,8 @@ fn main() -> Result<()> {
             batch_size: args.batch,
             cold_read,
             rss_bytes_after_cold_read,
-            warm_read,
-            rss_bytes_after_warm_read,
+            warm_reads,
+            rss_bytes_after_warm_reads,
         })?
     );
     Ok(())

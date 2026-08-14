@@ -235,23 +235,30 @@ fn main() -> Result<()> {
                     expected: Some(entry.content.clone()),
                 })
                 .collect();
-            for answer in tree.read_many(&requests)? {
+            let stdout = std::io::stdout();
+            let mut stdout = stdout.lock();
+            let mut buffer = Vec::new();
+            tree.read_each(&requests, &mut buffer, |answer| {
                 match format {
                     ReadFormat::Raw => {
-                        println!("{}\t{}", answer.source.path.0, answer.bytes.len());
-                        std::io::stdout().write_all(&answer.bytes)?;
-                        println!();
+                        writeln!(stdout, "{}\t{}", answer.source.path.0, answer.bytes.len())?;
+                        stdout.write_all(answer.bytes)?;
+                        writeln!(stdout)?;
                     }
-                    ReadFormat::Jsonl => println!(
-                        "{}",
-                        serde_json::to_string(&json!({
-                            "path": answer.source.path.0.as_ref(),
-                            "content": answer.content.to_string(),
-                            "bytes": answer.bytes.as_ref(),
-                        }))?
-                    ),
+                    ReadFormat::Jsonl => {
+                        writeln!(
+                            stdout,
+                            "{}",
+                            serde_json::to_string(&json!({
+                                "path": answer.source.path.0.as_ref(),
+                                "content": answer.content.to_string(),
+                                "bytes": answer.bytes,
+                            }))?
+                        )?;
+                    }
                 }
-            }
+                Ok(())
+            })?;
         }
         Command::Watch { patterns, format } => {
             let mut watcher = tree.watch(SourceQuery {

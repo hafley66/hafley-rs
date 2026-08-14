@@ -227,6 +227,17 @@ pub struct SourceBytes {
     pub bytes: Arc<[u8]>,
 }
 
+/// Borrowed source bytes provided by [`SourceTree::read_each`].
+///
+/// The view is valid only for the visitor call. Callers that need to retain
+/// bytes beyond that call can copy them or use [`SourceTree::read_many`].
+#[derive(Clone, Copy, Debug)]
+pub struct SourceBytesRef<'a> {
+    pub source: &'a SourceRef,
+    pub content: &'a ContentId,
+    pub bytes: &'a [u8],
+}
+
 /// A half-open byte range `[start, end)` within one revision-qualified source
 /// file. The owning `SourceRef` is the stable coordinate that later maps to a
 /// runtime `rev_file_id`; Soopy deliberately does not allocate dense row IDs.
