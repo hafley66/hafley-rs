@@ -2,6 +2,15 @@
 
 all notable changes to `boop` and `boop-mux` are recorded here. versions follow semantic versioning.
 
+## [0.0.2] - 2026-08-13
+
+### fixed
+
+- OpenCode TUI lanes resolve and retain the harness `ses_*` conversation id instead of recording a tmux pane target.
+- an idle OpenCode pane completes only after the newest assistant message records `finish=stop` without an error.
+- finishless or errored OpenCode messages produce a retryable failed turn instead of a successful lane result.
+- intermediate `finish=tool-calls` state remains active, preventing the supervisor from sending `C-c` during tool execution.
+
 ## [0.0.1] - 2026-08-13
 
 ### added
@@ -16,3 +25,4 @@ all notable changes to `boop` and `boop-mux` are recorded here. versions follow 
 - TUI lanes record their tmux target as the conversation identity, preventing OpenCode transcript lookup by its `ses_*` id.
 
 [0.0.1]: https://github.com/hafley66/hafley-rs/releases/tag/v0.0.1
+[0.0.2]: https://github.com/hafley66/hafley-rs/releases/tag/v0.0.2

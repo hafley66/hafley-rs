@@ -142,20 +142,24 @@ pub(crate) fn wait_for(child: &mut Child, timeout: std::time::Duration) -> Resul
 /// The finish/error fields on OpenCode's newest message row. A missing finish
 /// or an error means the stream was aborted.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct LastMessageState {
-    finish: Option<String>,
-    error: Option<String>,
+pub(crate) struct LastMessageState {
+    pub(crate) finish: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 impl LastMessageState {
-    fn aborted(&self) -> bool {
+    pub(crate) fn aborted(&self) -> bool {
         self.finish.is_none() || self.error.is_some()
+    }
+
+    pub(crate) fn completed(&self) -> bool {
+        self.finish.as_deref() == Some("stop") && self.error.is_none()
     }
 }
 
 /// The newest message state for a conversation. OpenCode owns this database;
 /// lookup failures leave the existing process exit-code behavior unchanged.
-fn last_message_state(session: &str) -> Option<LastMessageState> {
+pub(crate) fn last_message_state(session: &str) -> Option<LastMessageState> {
     let Some(path) = crate::harness::opencode::store_path() else {
         debug!(
             conversation_id = session,
@@ -196,7 +200,7 @@ fn last_message_state(session: &str) -> Option<LastMessageState> {
 
 /// The newest opencode session under `cwd` created at or after `since_ms`.
 /// opencode owns this store; boop only reads it.
-fn newest_session(cwd: &Path, since_ms: u64) -> Option<String> {
+pub(crate) fn newest_session(cwd: &Path, since_ms: u64) -> Option<String> {
     let path = crate::harness::opencode::store_path()?;
     let connection = rusqlite::Connection::open_with_flags(
         &path,
@@ -272,5 +276,24 @@ mod tests {
             error: None,
         }
         .aborted());
+    }
+
+    #[test]
+    fn only_a_clean_stop_is_terminal_success() {
+        assert!(LastMessageState {
+            finish: Some("stop".into()),
+            error: None,
+        }
+        .completed());
+        assert!(!LastMessageState {
+            finish: Some("tool-calls".into()),
+            error: None,
+        }
+        .completed());
+        assert!(!LastMessageState {
+            finish: None,
+            error: Some("MessageAbortedError".into()),
+        }
+        .completed());
     }
 }

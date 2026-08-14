@@ -35,6 +35,9 @@ pub struct TuiChannel {
     socket: Option<String>,
     target: String,
     session: String,
+    cwd: PathBuf,
+    conversation: Option<String>,
+    turn_started_ms: u64,
     /// Pane body hash and when it was first seen, for the idle test.
     settled_since: Option<(u64, Instant)>,
     turn_open: bool,
@@ -70,6 +73,9 @@ impl TuiChannel {
             socket,
             target,
             session,
+            cwd: spec.cwd.clone(),
+            conversation: spec.resume.clone(),
+            turn_started_ms: 0,
             settled_since: None,
             turn_open: false,
         };
@@ -149,17 +155,14 @@ impl TuiChannel {
 
 impl LaneChannel for TuiChannel {
     fn conversation_id(&self) -> Option<String> {
-        debug!(
-            harness = self.profile.harness,
-            conversation_id = self.target,
-            conversation_id_kind = "tmux_target",
-            "tui channel exposes tmux target as conversation id"
-        );
-        Some(self.target.clone())
+        self.conversation.clone()
     }
 
     fn conversation_id_kind(&self) -> &'static str {
-        "tmux_target"
+        match self.profile.harness {
+            "opencode" => "opencode_session",
+            _ => "harness_session",
+        }
     }
 
     fn start_turn(&mut self, text: &str) -> Result<()> {
@@ -169,6 +172,7 @@ impl LaneChannel for TuiChannel {
             text_bytes = text.len(),
             "tui turn starting"
         );
+        self.turn_started_ms = crate::channel::now_ms();
         self.type_and_submit(text)?;
         self.turn_open = true;
         self.settled_since = None;
@@ -195,13 +199,64 @@ impl LaneChannel for TuiChannel {
         let deadline = Instant::now() + timeout;
         loop {
             if self.settled_for(IDLE_SETTLE)? {
-                self.turn_open = false;
                 let (pane_hash, unchanged_ms) = self
                     .settled_since
                     .map(|(hash, since)| {
                         (format!("{hash:016x}"), since.elapsed().as_millis() as u64)
                     })
                     .unwrap_or_default();
+                if self.profile.harness == "opencode" {
+                    if self.conversation.is_none() {
+                        self.conversation = crate::channel::opencode::newest_session(
+                            &self.cwd,
+                            self.turn_started_ms,
+                        );
+                    }
+                    let Some(conversation_id) = self.conversation.as_deref() else {
+                        warn!(
+                            tmux_target = self.target,
+                            cwd = %self.cwd.display(),
+                            since_ms = self.turn_started_ms,
+                            "opencode pane is idle but its session is unresolved"
+                        );
+                        self.settled_since = None;
+                        continue;
+                    };
+                    let Some(state) = crate::channel::opencode::last_message_state(conversation_id)
+                    else {
+                        self.settled_since = None;
+                        continue;
+                    };
+                    if state.aborted() {
+                        self.turn_open = false;
+                        warn!(
+                            conversation_id,
+                            last_opencode_finish = state.finish.as_deref().unwrap_or_default(),
+                            last_opencode_error = state.error.as_deref().unwrap_or_default(),
+                            "opencode tui turn ended with an aborted stream"
+                        );
+                        return Ok(Some(TurnEnd::flaked("opencode message aborted")));
+                    }
+                    if !state.completed() {
+                        debug!(
+                            conversation_id,
+                            last_opencode_finish = state.finish.as_deref().unwrap_or_default(),
+                            "opencode pane is idle while its message remains nonterminal"
+                        );
+                        self.settled_since = None;
+                        continue;
+                    }
+                    self.turn_open = false;
+                    info!(
+                        conversation_id,
+                        pane_hash,
+                        pane_unchanged_ms = unchanged_ms,
+                        turn_end_reason = "opencode_stop",
+                        "opencode tui turn completed"
+                    );
+                    return Ok(Some(TurnEnd::ok("opencode stop")));
+                }
+                self.turn_open = false;
                 warn!(
                     harness = self.profile.harness,
                     tmux_target = self.target,
