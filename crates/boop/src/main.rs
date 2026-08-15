@@ -43,7 +43,8 @@ edge and stay invisible to tracking:
   coordinator, --harness to the one the model spelling names (gpt-* codex,
   provider/model opencode, kimi-* kimi).
   Overrides: --lane <id>, --tmux <name>, --base-sha <sha>, --harness <id>.
-  Model preset: --preset flash4 resolves through the platform config directory's boop/config.json.
+  Model preset: --preset flash4 resolves through the platform config directory's
+  boop/config.json; `boop config presets` lists every name with its model and harness.
   One shot: worktree at base sha + spawn + route registration.
   Always --dry-run first; the printed `cmd:` line is the literal spawn.
 
@@ -442,6 +443,9 @@ enum ConfigCmd {
     /// Print the loaded config as pretty JSON, including the defaults a
     /// missing file produces.
     Show,
+    /// One row per model preset: name, model, variant, the harness the model
+    /// spelling names, and which row `default-model-preset` points at.
+    Presets,
 }
 
 /// Write one line, treating a closed pipe as a normal end. Rust masks SIGPIPE,
@@ -5074,8 +5078,64 @@ fn run_config(cmd: ConfigCmd) -> Result<()> {
     match cmd {
         ConfigCmd::Path => line(&config::default_path()?.display().to_string()),
         ConfigCmd::Show => line(&config::show(&config::default_path()?)?),
+        ConfigCmd::Presets => line(&presets_table()?),
     }
     Ok(())
+}
+
+/// Each preset resolved to model, variant, and the harness the model spelling
+/// names, with the `default-model-preset` row marked.
+fn presets_table() -> Result<String> {
+    let path = config::default_path()?;
+    let config = config::load(&path)?;
+    let mut rows: Vec<[String; 5]> = vec![[
+        "PRESET".into(),
+        "MODEL".into(),
+        "VARIANT".into(),
+        "HARNESS".into(),
+        "DEFAULT".into(),
+    ]];
+    for name in config.model_presets.keys() {
+        let preset = config::resolve_preset(name, &path)?;
+        let harness = lane::harness_for_model(&preset.model)?
+            .map(|harness| harness.into_owned())
+            .unwrap_or_else(|| "?".to_owned());
+        let default = if config.default_model_preset.as_deref() == Some(name) {
+            "*"
+        } else {
+            ""
+        };
+        rows.push([
+            name.clone(),
+            preset.model,
+            preset.variant.unwrap_or_default(),
+            harness,
+            default.to_owned(),
+        ]);
+    }
+    if rows.len() == 1 {
+        return Ok(format!("no model presets in {}", path.display()));
+    }
+    let mut widths = [0usize; 5];
+    for row in &rows {
+        for (width, cell) in widths.iter_mut().zip(row) {
+            *width = (*width).max(cell.len());
+        }
+    }
+    let table = rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .zip(widths)
+                .map(|(cell, width)| format!("{cell:<width$}"))
+                .collect::<Vec<_>>()
+                .join("  ")
+                .trim_end()
+                .to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    Ok(table)
 }
 
 /// The `db usage` alias's report SQL: totals with cost over the whole store.
