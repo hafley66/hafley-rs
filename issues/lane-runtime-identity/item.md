@@ -2,7 +2,7 @@
 created: 2026-08-13
 updated: 2026-08-14
 type: task
-status: testing
+status: done
 priority: high
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation, component-trace-identity, intent-foundation]
@@ -13,6 +13,7 @@ assignee: luna
 commits:
 - hash: f4c8399
   summary: resolve-lane-runtime-identity
+closed: 2026-08-14
 ---
 
 # 001 Resolve lane runtime identity
@@ -25,11 +26,11 @@ Provide one resolver from lane identity to trace, root session, current harness 
 
 ## Acceptance Criteria
 
-- [ ] Placeholder lane sessions and generated harness sessions are distinguishable.
-- [ ] Active session selection uses trace attachments and activity timestamps.
-- [ ] Resume, compaction, and session replacement retain one trace.
-- [ ] Missing and ambiguous mappings return typed diagnostics.
-- [ ] Callers do not join dictionary tables directly.
+- [x] Placeholder lane sessions and generated harness sessions are distinguishable.
+- [x] Active session selection uses trace attachments and activity timestamps.
+- [x] Resume, compaction, and session replacement retain one trace.
+- [x] Missing and ambiguous mappings return typed diagnostics.
+- [x] Callers do not join dictionary tables directly.
 
 ## Decisions
 

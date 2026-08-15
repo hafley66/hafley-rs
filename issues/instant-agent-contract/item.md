@@ -2,7 +2,7 @@
 created: 2026-08-14
 updated: 2026-08-14
 type: task
-status: testing
+status: done
 priority: high
 epic: boop-lane-observability
 labels: [domain-boop, domain-instant, intent-design, artifact-plan]
@@ -11,6 +11,7 @@ lane_seq: 9
 collision: [instant-agent-contract]
 related: ['@lane-runtime-identity', '@lane-status-command']
 assignee: luna
+closed: 2026-08-14
 ---
 
 # 009 Map Instant agent consumer contract
@@ -27,18 +28,18 @@ Freeze the Instant consumer contract before changing Boop or Instant. Map curren
 
 ## Acceptance Criteria
 
-- [ ] Catalogs every Instant Rust and TypeScript reader used by the Agents, CASS, and Harness Trace panels.
-- [ ] Records message-count formulas by user, assistant, tool call, session, trace, and lane.
-- [ ] Records tmux session, pane, PID, shell-only lane, route, mailbox, worktree, and completion joins.
-- [ ] Marks each field as stored fact, read-time derivation, or Instant presentation state.
-- [ ] Maps each field to an existing Boop table/query or a named gap.
-- [ ] Separates CASS issue/reservation data from agent transcript and runtime data.
-- [ ] Names deterministic fixtures that pin Claude, Codex, OpenCode, Kimi, and shell-only behavior.
+- [x] Catalogs every Instant Rust and TypeScript reader used by the Agents, CASS, and Harness Trace panels.
+- [x] Records message-count formulas by user, assistant, tool call, session, trace, and lane.
+- [x] Records tmux session, pane, PID, shell-only lane, route, mailbox, worktree, and completion joins.
+- [x] Marks each field as stored fact, read-time derivation, or Instant presentation state.
+- [x] Maps each field to an existing Boop table/query or a named gap.
+- [x] Separates CASS issue/reservation data from agent transcript and runtime data.
+- [x] Names deterministic fixtures that pin Claude, Codex, OpenCode, Kimi, and shell-only behavior.
 
 ## Tests Run
 
-- [ ] `issuectl doctor`
-- [ ] Source references verified with `rg`
+- [x] `issuectl doctor`
+- [x] Source references verified with `rg`
 
 ## Implementation Notes
 
