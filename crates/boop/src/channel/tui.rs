@@ -580,18 +580,15 @@ mod tests {
         let mut channel =
             TuiChannel::open(profile, &spec(None), Some(guard.socket.clone())).unwrap();
         let dead = channel.target().to_owned();
-        let status = std::process::Command::new("tmux")
-            .args(["-L", &guard.socket, "kill-window", "-t", &dead])
-            .status()
+        crate::tmux::mux()
+            .kill_window(Some(&guard.socket), &dead)
             .unwrap();
-        assert!(status.success());
         channel.start_turn("hello-after-death").unwrap();
-        let pane = std::process::Command::new("tmux")
-            .args(["-L", &guard.socket, "capture-pane", "-p", "-t", channel.target()])
-            .output()
+        let pane = crate::tmux::mux()
+            .capture_pane(Some(&guard.socket), channel.target(), None)
             .unwrap();
         assert!(
-            String::from_utf8_lossy(&pane.stdout).contains("hello-after-death"),
+            pane.contains("hello-after-death"),
             "typed text missing from the respawned window"
         );
     }

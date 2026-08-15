@@ -52,6 +52,14 @@ impl Multiplexer for FakeMux {
         Ok(())
     }
 
+    fn new_bare_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn kill_window(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
     fn target_alive(&self, _: Option<&str>, _: &str) -> bool {
         false
     }

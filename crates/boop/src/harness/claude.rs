@@ -619,11 +619,9 @@ mod tests {
         // A plain shell session stays alive so the injected text can be read
         // back; the transport is what this capability proves.
         let name = format!("ctl-{}", std::process::id());
-        let status = std::process::Command::new("tmux")
-            .args(["-L", &guard.socket, "new-session", "-d", "-s", &name])
-            .status()
+        crate::tmux::mux()
+            .new_bare_session(Some(&guard.socket), &name)
             .unwrap();
-        assert!(status.success());
         let session = SessionRef {
             harness: "claude",
             session_id: "ctl".to_owned(),
@@ -640,13 +638,11 @@ mod tests {
         let claude = Claude;
         let outcome = claude.send(&session, "hello from boop").unwrap();
         assert_eq!(outcome, crate::harness::SendOutcome::Injected);
-        let pane = std::process::Command::new("tmux")
-            .args(["-L", &guard.socket, "capture-pane", "-t", &name, "-p"])
-            .output()
-            .unwrap()
-            .stdout;
+        let pane = crate::tmux::mux()
+            .capture_pane(Some(&guard.socket), &name, None)
+            .unwrap();
         assert!(
-            String::from_utf8_lossy(&pane).contains("hello from boop"),
+            pane.contains("hello from boop"),
             "injected text not found in pane"
         );
     }
@@ -710,10 +706,8 @@ mod tests {
     }
 
     fn has_session_on(guard: &TmuxGuard, name: &str) -> bool {
-        std::process::Command::new("tmux")
-            .args(["-L", &guard.socket, "has-session", "-t", name])
-            .status()
-            .map(|s| s.success())
+        crate::tmux::mux()
+            .has_session(Some(&guard.socket), name)
             .unwrap_or(false)
     }
 }

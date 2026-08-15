@@ -711,11 +711,9 @@ mod tests {
     fn opencode_send_injects_into_a_live_pane() {
         let guard = TmuxGuard::new();
         let name = format!("ctl-{}", std::process::id());
-        let status = std::process::Command::new("tmux")
-            .args(["-L", &guard.socket, "new-session", "-d", "-s", &name])
-            .status()
+        crate::tmux::mux()
+            .new_bare_session(Some(&guard.socket), &name)
             .unwrap();
-        assert!(status.success());
         let session = crate::harness::SessionRef {
             harness: "opencode",
             session_id: "ctl".to_owned(),
@@ -732,22 +730,18 @@ mod tests {
         let opencode = Opencode;
         let outcome = opencode.send(&session, "hello from boop").unwrap();
         assert_eq!(outcome, crate::harness::SendOutcome::Injected);
-        let pane = std::process::Command::new("tmux")
-            .args(["-L", &guard.socket, "capture-pane", "-t", &name, "-p"])
-            .output()
-            .unwrap()
-            .stdout;
+        let pane = crate::tmux::mux()
+            .capture_pane(Some(&guard.socket), &name, None)
+            .unwrap();
         assert!(
-            String::from_utf8_lossy(&pane).contains("hello from boop"),
+            pane.contains("hello from boop"),
             "injected text not found in pane"
         );
     }
 
     fn has_session_on(guard: &TmuxGuard, name: &str) -> bool {
-        std::process::Command::new("tmux")
-            .args(["-L", &guard.socket, "has-session", "-t", name])
-            .status()
-            .map(|s| s.success())
+        crate::tmux::mux()
+            .has_session(Some(&guard.socket), name)
             .unwrap_or(false)
     }
 }
