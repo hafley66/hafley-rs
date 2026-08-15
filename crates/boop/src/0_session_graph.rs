@@ -25,6 +25,15 @@ pub struct AgentSessionGraphQuery {
 /// Function type for the pure durable graph projection.
 pub type LoadAgentSessionGraph = fn(&Store, AgentSessionGraphQuery) -> Result<AgentSessionGraph>;
 
+/// Harness-qualified public identity. The store currently keys sessions by
+/// the bare `dict_session` value, so a collision that already merged rows in
+/// storage cannot be reconstructed by this projection.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct AgentSessionIdentity {
+    pub harness: String,
+    pub id: String,
+}
+
 /// The complete native-session and shell projection.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct AgentSessionGraph {
@@ -37,7 +46,7 @@ pub struct AgentSessionGraph {
 /// One normalized harness transcript session.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct AgentSessionNode {
-    pub session: String,
+    pub session: AgentSessionIdentity,
     pub harness: String,
     pub cwd: Option<PathBuf>,
     pub tmux: Option<String>,
@@ -48,8 +57,8 @@ pub struct AgentSessionNode {
 /// One native parent-child session relation.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct AgentSessionEdge {
-    pub parent: String,
-    pub child: String,
+    pub parent: AgentSessionIdentity,
+    pub child: AgentSessionIdentity,
     pub kind: String,
 }
 
@@ -58,6 +67,9 @@ pub struct AgentSessionEdge {
 pub struct AgentShellNode {
     pub lane: String,
     pub parent_lane: Option<String>,
+    pub harness: Option<String>,
+    pub mode: Option<String>,
+    pub session: Option<AgentSessionIdentity>,
     pub cwd: Option<PathBuf>,
     pub tmux: Option<String>,
     pub pid: Option<u32>,
@@ -105,12 +117,15 @@ pub fn load_agent_session_graph(
                               FROM agent_usage GROUP BY session_id) usage
                    ON usage.session_id = a.session_id
                 WHERE (?1 IS NULL OR c.value = ?1)
-                  AND (?2 OR st.value IS NULL OR st.value = 'live')
+                  AND (?2 OR st.value IS NULL OR st.value <> 'dead')
                 ORDER BY s.value";
     let mut statement = store.connection().prepare(sql)?;
     let rows = statement.query_map(rusqlite::params![cwd, history], |row| {
         Ok(AgentSessionNode {
-            session: row.get(0)?,
+            session: AgentSessionIdentity {
+                id: row.get(0)?,
+                harness: row.get(1)?,
+            },
             harness: row.get(1)?,
             cwd: row.get::<_, Option<String>>(2)?.map(PathBuf::from),
             tmux: row.get(3)?,
@@ -123,29 +138,41 @@ pub fn load_agent_session_graph(
     let sessions = rows.collect::<rusqlite::Result<Vec<_>>>()?;
     let included = sessions
         .iter()
-        .map(|session| session.session.as_str())
+        .map(|session| session.session.id.as_str())
         .collect::<BTreeSet<_>>();
-
-    let edge_sql = "SELECT p.value, c.value, k.value
+    let edge_sql = "SELECT p.value, c.value, hp.value, hc.value, k.value
                       FROM agent_edge e
                       JOIN dict_session p ON p.id = e.parent_session_id
                       JOIN dict_session c ON c.id = e.child_session_id
+                      LEFT JOIN agent_session ap ON ap.session_id = e.parent_session_id
+                      LEFT JOIN agent_session ac ON ac.session_id = e.child_session_id
+                      LEFT JOIN dict_harness hp ON hp.id = ap.harness_id
+                      LEFT JOIN dict_harness hc ON hc.id = ac.harness_id
                       JOIN dict_edekind k ON k.id = e.edge_kind_id
                      ORDER BY p.value, c.value, k.value";
     let mut statement = store.connection().prepare(edge_sql)?;
     let edges = statement
         .query_map([], |row| {
+            let child_harness = row
+                .get::<_, Option<String>>(3)?
+                .unwrap_or_else(|| "unknown".to_owned());
             Ok(AgentSessionEdge {
-                parent: row.get(0)?,
-                child: row.get(1)?,
-                kind: row.get(2)?,
+                parent: AgentSessionIdentity {
+                    id: row.get(0)?,
+                    harness: row
+                        .get::<_, Option<String>>(2)?
+                        .unwrap_or_else(|| child_harness.clone()),
+                },
+                child: AgentSessionIdentity {
+                    id: row.get(1)?,
+                    harness: child_harness,
+                },
+                kind: row.get(4)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?
         .into_iter()
-        .filter(|edge| {
-            included.contains(edge.parent.as_str()) && included.contains(edge.child.as_str())
-        })
+        .filter(|edge| included.contains(edge.child.id.as_str()))
         .collect::<Vec<_>>();
 
     let shell_sql = "SELECT lane.value, parent.value, cwd.value, pane.value,
@@ -158,7 +185,8 @@ pub fn load_agent_session_graph(
                        LEFT JOIN dict_pane pane ON pane.id = live.tmux_pane_id
                        LEFT JOIN dict_status status ON status.id = live.status_id
                       WHERE (?1 IS NULL OR cwd.value = ?1)
-                        AND (?2 OR COALESCE(status.value, 'unknown') = 'live')
+                        AND (?2 OR status.value = 'live')
+                        AND lane_row.harness_id IS NULL
                       ORDER BY lane.value, lane_row.spawned_ts DESC";
     let mut statement = store.connection().prepare(shell_sql)?;
     let mut shells = Vec::new();
@@ -167,6 +195,9 @@ pub fn load_agent_session_graph(
         Ok(AgentShellNode {
             lane: row.get(0)?,
             parent_lane: row.get(1)?,
+            harness: None,
+            mode: None,
+            session: None,
             cwd: row.get::<_, Option<String>>(2)?.map(PathBuf::from),
             tmux: row.get(3)?,
             pid: row
@@ -197,10 +228,10 @@ pub fn load_agent_session_graph_with_runtime(
 ) -> Result<AgentSessionGraph> {
     let include_history = query.include_history;
     let mut graph = load_agent_session_graph(store, query)?;
-    let session_ids = graph
+    let session_keys = graph
         .sessions
         .iter()
-        .map(|session| session.session.as_str())
+        .map(|session| session_key(&session.session))
         .collect::<BTreeSet<_>>();
     let rows = runtime_snapshot(RuntimeSnapshotInput {
         store,
@@ -211,7 +242,7 @@ pub fn load_agent_session_graph_with_runtime(
         processes: runtime.processes,
     })?;
     for row in rows {
-        if session_ids.contains(row.session.as_deref().unwrap_or("")) {
+        if runtime_row_is_native(&row, &session_keys) {
             continue;
         }
         if let Some(shell) = shell_from_runtime(row) {
@@ -237,6 +268,9 @@ pub fn load_agent_session_graph_with_runtime(
 
 fn shell_from_runtime(row: AgentRuntimeRow) -> Option<AgentShellNode> {
     let route = row.route?;
+    if route.kind != "shell" && route.harness.is_some() {
+        return None;
+    }
     let tmux = row.tmux_target.or(row.tmux_pane)?;
     let state = if matches!(row.liveness.process, crate::runtime::ProcessLiveness::Live)
         || matches!(row.liveness.tmux, crate::runtime::TmuxLiveness::Live)
@@ -252,6 +286,12 @@ fn shell_from_runtime(row: AgentRuntimeRow) -> Option<AgentShellNode> {
     Some(AgentShellNode {
         lane: row.lane,
         parent_lane: route.parent,
+        harness: route.harness.clone(),
+        mode: route.mode.clone(),
+        session: route.session_id.map(|id| AgentSessionIdentity {
+            harness: route.harness.unwrap_or_else(|| "unknown".to_owned()),
+            id,
+        }),
         cwd: row.cwd.map(PathBuf::from),
         tmux: Some(tmux),
         pid: row.pid.and_then(|pid| u32::try_from(pid).ok()),
@@ -259,10 +299,58 @@ fn shell_from_runtime(row: AgentRuntimeRow) -> Option<AgentShellNode> {
     })
 }
 
+fn session_key(identity: &AgentSessionIdentity) -> String {
+    format!("{}\0{}", identity.harness, identity.id)
+}
+
+fn runtime_row_is_native(row: &AgentRuntimeRow, session_keys: &BTreeSet<String>) -> bool {
+    let Some(session) = row.session.as_deref() else {
+        return false;
+    };
+    let Some(route) = row.route.as_ref() else {
+        return false;
+    };
+    route
+        .harness
+        .as_ref()
+        .map(|harness| session_keys.contains(&format!("{harness}\0{session}")))
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+pub(crate) fn assert_fixture_sessions_project(
+    adapter: &dyn crate::harness::Harness,
+    sessions: &[crate::harness::SessionRef],
+    expected_edges: usize,
+) {
+    let path = std::env::temp_dir().join(format!(
+        "boop-session-graph-fixture-{}-{}.db",
+        std::process::id(),
+        adapter.id()
+    ));
+    let _ = std::fs::remove_file(&path);
+    let store = Store::open(path.clone()).unwrap();
+    for session in sessions {
+        crate::ident::sync_session(&store, adapter, session).unwrap();
+    }
+    let graph = load_agent_session_graph(
+        &store,
+        AgentSessionGraphQuery {
+            cwd: None,
+            include_history: true,
+        },
+    )
+    .unwrap();
+    assert_eq!(graph.sessions.len(), sessions.len());
+    assert!(graph.edges.len() >= expected_edges);
+    let _ = std::fs::remove_file(path);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ident::LaneSpawn;
+    use crate::runtime::{ProcessLiveness, ResolvedRoute, RuntimeLiveness, TmuxLiveness};
 
     #[test]
     fn graph_projects_sessions_edges_and_shells_from_setwise_relations() {
@@ -305,7 +393,115 @@ mod tests {
     }
 
     #[test]
-    fn all_harness_fixture_rows_use_the_same_native_edge_shape() {
+    fn current_graph_keeps_discovered_native_sessions_with_idle_status() {
+        let path =
+            std::env::temp_dir().join(format!("boop-session-graph-idle-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        let session = store.intern_public("dict_session", "idle-native").unwrap();
+        let harness = store.intern_public("dict_harness", "claude").unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                rusqlite::params![session, harness],
+            )
+            .unwrap();
+        store
+            .record_status("idle-native", 1, "idle", None, None)
+            .unwrap();
+        let graph = load_agent_session_graph(
+            &store,
+            AgentSessionGraphQuery {
+                cwd: None,
+                include_history: false,
+            },
+        )
+        .unwrap();
+        assert_eq!(graph.sessions.len(), 1);
+        assert_eq!(graph.sessions[0].state.as_deref(), Some("idle"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn only_shell_routes_project_as_shell_nodes() {
+        let route = ResolvedRoute {
+            lane: "lane".into(),
+            kind: "lane".into(),
+            harness: Some("codex".into()),
+            tmux: Some("lane".into()),
+            cwd: Some("/repo".into()),
+            model: None,
+            mode: Some("auto".into()),
+            session_id: Some("native".into()),
+            source_path: None,
+            parent: None,
+            goal: None,
+            registered_at: None,
+        };
+        let native = AgentRuntimeRow {
+            lane: "lane".into(),
+            trace: None,
+            root_session: None,
+            session: Some("native".into()),
+            parent: None,
+            route: Some(route.clone()),
+            cwd: Some("/repo".into()),
+            tmux_target: Some("lane".into()),
+            tmux_pane: None,
+            pid: None,
+            reported_status: Some("live".into()),
+            liveness: RuntimeLiveness {
+                tmux: TmuxLiveness::Live,
+                process: ProcessLiveness::Unknown,
+            },
+            completion: None,
+            mailbox: Default::default(),
+            worktree: Default::default(),
+            diagnostics: Vec::new(),
+        };
+        assert!(shell_from_runtime(native).is_none());
+        let mut shell_route = route;
+        shell_route.kind = "shell".into();
+        shell_route.harness = None;
+        let mut shell = AgentRuntimeRow {
+            lane: "shell".into(),
+            route: Some(shell_route),
+            tmux_target: Some("shell".into()),
+            ..native_for_shell()
+        };
+        shell.session = None;
+        let shell = shell_from_runtime(shell).unwrap();
+        assert_eq!(shell.mode.as_deref(), Some("auto"));
+        assert_eq!(shell.harness, None);
+    }
+
+    fn native_for_shell() -> AgentRuntimeRow {
+        AgentRuntimeRow {
+            lane: "shell".into(),
+            trace: None,
+            root_session: None,
+            session: None,
+            parent: None,
+            route: None,
+            cwd: Some("/repo".into()),
+            tmux_target: None,
+            tmux_pane: None,
+            pid: None,
+            reported_status: Some("live".into()),
+            liveness: RuntimeLiveness {
+                tmux: TmuxLiveness::Live,
+                process: ProcessLiveness::Unknown,
+            },
+            completion: None,
+            mailbox: Default::default(),
+            worktree: Default::default(),
+            diagnostics: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn qualified_identity_preserves_harness_for_distinct_native_rows() {
         let path = std::env::temp_dir().join(format!(
             "boop-session-graph-harnesses-{}.db",
             std::process::id()
@@ -343,6 +539,14 @@ mod tests {
         assert_eq!(graph.sessions.len(), 8);
         assert_eq!(graph.edges.len(), 4);
         assert!(graph.edges.iter().all(|edge| edge.kind == "spawned"));
+        assert!(graph
+            .sessions
+            .iter()
+            .any(|session| session.session.harness == "claude"));
+        assert!(graph
+            .sessions
+            .iter()
+            .any(|session| session.session.harness == "opencode"));
         let _ = std::fs::remove_file(path);
     }
 }

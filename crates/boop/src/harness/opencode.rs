@@ -34,39 +34,7 @@ impl Harness for Opencode {
         let Some(path) = store_path() else {
             return Ok(Vec::new());
         };
-        let Ok(connection) = open_read_only(&path) else {
-            return Ok(Vec::new());
-        };
-        let mut statement = connection.prepare(
-            "SELECT id, directory, parent_id, slug, time_updated FROM session ORDER BY time_updated",
-        )?;
-        let rows = statement.query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, Option<String>>(1)?,
-                row.get::<_, Option<String>>(2)?,
-                row.get::<_, Option<String>>(3)?,
-                row.get::<_, i64>(4)?,
-            ))
-        })?;
-        let mut sessions = Vec::new();
-        for row in rows {
-            let (id, directory, parent, slug, updated) = row?;
-            sessions.push(SessionRef {
-                harness: "opencode",
-                session_id: id.clone(),
-                nickname: slug.unwrap_or(id),
-                path: path.clone(),
-                cwd: directory,
-                git_branch: None,
-                modified_ms: updated as u64,
-                size: 0,
-                tmux: None,
-                tmux_socket: None,
-                parent,
-            });
-        }
-        Ok(sessions)
+        sessions_from(&path)
     }
 
     fn read_from(&self, session: &SessionRef, offset: u64) -> Result<ReadChunk> {
@@ -239,6 +207,40 @@ impl Harness for Opencode {
             next_cursor: cursor,
         })
     }
+}
+
+fn sessions_from(path: &std::path::Path) -> Result<Vec<SessionRef>> {
+    let connection = open_read_only(path)?;
+    let mut statement = connection.prepare(
+        "SELECT id, directory, parent_id, slug, time_updated FROM session ORDER BY time_updated",
+    )?;
+    let rows = statement.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, Option<String>>(1)?,
+            row.get::<_, Option<String>>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, i64>(4)?,
+        ))
+    })?;
+    let mut sessions = Vec::new();
+    for row in rows {
+        let (id, directory, parent, slug, updated) = row?;
+        sessions.push(SessionRef {
+            harness: "opencode",
+            session_id: id.clone(),
+            nickname: slug.unwrap_or(id),
+            path: path.to_owned(),
+            cwd: directory,
+            git_branch: None,
+            modified_ms: updated as u64,
+            size: 0,
+            tmux: None,
+            tmux_socket: None,
+            parent,
+        });
+    }
+    Ok(sessions)
 }
 
 fn record(stat: &mut SyncStat, inserted: usize) {
@@ -453,7 +455,7 @@ fn parts_of(connection: &Connection, message_id: &str) -> Result<Vec<Part>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{launch_command, Opencode, Part};
+    use super::{launch_command, sessions_from, Opencode, Part};
     use crate::harness::{Harness, SpawnSpec};
 
     /// Capabilities are claims; each true one needs a test.
@@ -494,6 +496,32 @@ mod tests {
     #[test]
     fn a_missing_store_is_no_sessions() {
         assert!(super::open_read_only(std::path::Path::new("/tmp/boop-no-such.db")).is_err());
+    }
+
+    #[test]
+    fn opencode_fixture_acquisition_and_parent_project_through_graph() {
+        let fixture = sessions_from(std::path::Path::new(
+            "tests/fixtures/opencode/bench/opencode.db",
+        ))
+        .unwrap();
+        assert_eq!(fixture.len(), 2);
+
+        let path =
+            std::env::temp_dir().join(format!("boop-opencode-parent-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        std::fs::copy("tests/fixtures/opencode/bench/opencode.db", &path).unwrap();
+        rusqlite::Connection::open(&path)
+            .unwrap()
+            .execute(
+                "INSERT INTO session(id, directory, parent_id, slug, time_updated)
+                 VALUES ('ses_parent_fixture', '/bench/opencode', NULL, 'parent', 1),
+                        ('ses_child_fixture', '/bench/opencode', 'ses_parent_fixture', 'child', 2)",
+                [],
+            )
+            .unwrap();
+        let sessions = sessions_from(&path).unwrap();
+        crate::session_graph::assert_fixture_sessions_project(&Opencode, &sessions, 1);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

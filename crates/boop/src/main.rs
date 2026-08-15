@@ -828,6 +828,7 @@ fn sync_all(
         let offsets = store.all_cursor_offsets()?;
         for adapter in registry.all() {
             for session in adapter.sessions()? {
+                store.project_discovered_session(&session)?;
                 // Freshness gate: a transcript whose length still equals its
                 // consumed cursor needs no re-read (walking+stat-ing all files
                 // costs ~0.02s; opening every 2.86 GB corpus does not). A

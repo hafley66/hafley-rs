@@ -25,6 +25,7 @@ pub mod registry;
 pub mod rows;
 pub mod runtime;
 #[cfg(feature = "agent-read")]
+#[path = "0_session_graph.rs"]
 pub mod session_graph;
 #[cfg(feature = "agent-read")]
 pub mod summary;
@@ -55,8 +56,8 @@ pub use runtime::{
 #[cfg(feature = "agent-read")]
 pub use session_graph::{
     load_agent_session_graph, load_agent_session_graph_with_runtime, AgentSessionEdge,
-    AgentSessionGraph, AgentSessionGraphQuery, AgentSessionGraphRuntime, AgentSessionNode,
-    AgentShellNode, LoadAgentSessionGraph, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
+    AgentSessionGraph, AgentSessionGraphQuery, AgentSessionGraphRuntime, AgentSessionIdentity,
+    AgentSessionNode, AgentShellNode, LoadAgentSessionGraph, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
 };
 #[cfg(feature = "agent-read")]
 pub use summary::{
