@@ -202,12 +202,15 @@ fn wait_turn(channel: &mut dyn LaneChannel) -> Result<()> {
 /// The chat's harness session id once it exists; until the harness resolves
 /// one, fall back to the newest session whose cwd is the pipe's own.
 fn mapper_session(adapter: &dyn Harness, channel: &dyn LaneChannel, cwd: &Path) -> Option<String> {
-    if channel.conversation_id_kind() == "harness_session" {
-        if let Some(id) = channel.conversation_id() {
-            return Some(id);
-        }
+    if let Some(id) = channel.conversation_id() {
+        return Some(id);
     }
-    let cwd = cwd.display().to_string();
+    // opencode canonicalizes directories (/tmp -> /private/tmp); compare the
+    // canonical spelling or the fallback never matches.
+    let cwd = std::fs::canonicalize(cwd)
+        .unwrap_or_else(|_| cwd.to_owned())
+        .display()
+        .to_string();
     adapter
         .sessions()
         .ok()?
