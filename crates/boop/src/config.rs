@@ -165,11 +165,12 @@ mod tests {
                 model_presets: BTreeMap::from([
                     (
                         "flash4".into(),
-                        PresetEntry::Legacy(
-                            "openrouter/deepseek/deepseek-v4-flash-0731".into()
-                        )
+                        PresetEntry::Legacy("openrouter/deepseek/deepseek-v4-flash-0731".into())
                     ),
-                    ("luna".into(), PresetEntry::Legacy("gpt-5.6-luna@medium".into())),
+                    (
+                        "luna".into(),
+                        PresetEntry::Legacy("gpt-5.6-luna@medium".into())
+                    ),
                 ]),
                 model_harness: BTreeMap::from([("glm".into(), "opencode".into())]),
                 opencode_banned: BTreeMap::from([("gemini".into(), "gemini".into())]),
@@ -208,7 +209,10 @@ mod tests {
             resolve_model("flash4", &path).unwrap(),
             "openrouter/deepseek/deepseek-v4-flash-0731"
         );
-        assert_eq!(resolve_variant("flash4", &path).unwrap(), Some("high".into()));
+        assert_eq!(
+            resolve_variant("flash4", &path).unwrap(),
+            Some("high".into())
+        );
         assert_eq!(resolve_variant("luna", &path).unwrap(), None);
     }
 

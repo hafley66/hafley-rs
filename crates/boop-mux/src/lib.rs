@@ -748,8 +748,7 @@ mod tests {
         }
 
         fn create_session(&self, name: &str) {
-            Tmux
-                .new_bare_session(Some(&self.socket), name)
+            Tmux.new_bare_session(Some(&self.socket), name)
                 .expect("tmux installed and reachable to create the test session");
         }
     }

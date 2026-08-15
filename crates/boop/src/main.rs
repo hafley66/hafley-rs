@@ -1560,6 +1560,7 @@ fn run_hail(
 
 /// Drive one lane to completion inside its pane, then exit with the harness's
 /// own code so the on-exit epilogue reports a true rc.
+#[allow(clippy::too_many_arguments)]
 fn run_lane_supervisor(
     registry: &Registry,
     lane: &str,
