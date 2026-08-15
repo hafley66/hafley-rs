@@ -17,6 +17,10 @@ use crate::rows::TurnRow;
 /// The queue cap; past this, only the newest pair survives.
 const QUEUE_CAP: usize = 4;
 
+/// A failed rewrite is retried this many times, then the pair is dropped.
+const REWRITE_ATTEMPTS: u32 = 3;
+const REWRITE_BACKOFF: Duration = Duration::from_secs(10);
+
 /// One contact pair: a user turn and the assistant turn that preceded it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pair {
@@ -392,7 +396,10 @@ pub fn normalize(text: &str) -> String {
 
 /// The resident loop.
 pub fn run(args: Args) -> Result<()> {
-    let store = crate::open_default().context("open boop store")?;
+    // Read-only: this loop never writes the store, and a read-only connection
+    // never fights the resident `db sync` writer for the write lock.
+    let store = crate::ident::Store::open_readonly(crate::ident::Store::default_path()?)
+        .context("open boop store read-only")?;
     let registry = Registry::discover();
     let harness = crate::lane::harness_for_model(&args.model)?
         .with_context(|| format!("model `{}` names no harness", args.model))?;
@@ -409,7 +416,12 @@ pub fn run(args: Args) -> Result<()> {
     let mut done = load_done(&args.state_dir)?;
     let mut rewriter = Rewriter::open(&args.formula, adapter, &args).context("open the rewriter")?;
     loop {
-        cursor = poll_once(&store, &mut rewriter, &args, &template, cursor, &mut done)?;
+        match poll_once(&store, &mut rewriter, &args, &template, cursor, &mut done) {
+            Ok(next) => cursor = next,
+            // A transient store error (a locked read, a stalled query) kills
+            // no resident; the next tick retries from the same cursor.
+            Err(error) => eprintln!("concatmap: tick failed at cursor {cursor}, retrying: {error:#}"),
+        }
         std::thread::sleep(args.poll);
     }
 }
@@ -452,9 +464,22 @@ fn poll_once(
         })
         .collect();
     for pair in coalesce_with_cap(fresh, args.formula.coalesce) {
-        // A failed rewrite drops the pair, never the resident.
-        if let Err(error) = process_pair(&pair, store, rewriter, args, template, done) {
-            eprintln!("concatmap: rewrite failed for {}-{}: {error:#}", pair.session, pair.turn);
+        // A failed rewrite retries, then drops the pair; it never drops the resident.
+        for attempt in 1..=REWRITE_ATTEMPTS {
+            match process_pair(&pair, store, rewriter, args, template, done) {
+                Ok(()) => break,
+                Err(error) if attempt < REWRITE_ATTEMPTS => {
+                    eprintln!(
+                        "concatmap: rewrite failed for {}-{} (attempt {attempt}/{}), retrying in {}s: {error:#}",
+                        pair.session, pair.turn, REWRITE_ATTEMPTS, REWRITE_BACKOFF.as_secs()
+                    );
+                    std::thread::sleep(REWRITE_BACKOFF);
+                }
+                Err(error) => eprintln!(
+                    "concatmap: rewrite failed for {}-{}: {error:#}",
+                    pair.session, pair.turn
+                ),
+            }
         }
     }
     if max_seen > cursor {
