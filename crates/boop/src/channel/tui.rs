@@ -28,6 +28,9 @@ pub struct TuiProfile {
     /// Keys sent once after boot to clear a first-run dialog. Every lane gets
     /// a fresh worktree, so a per-folder trust prompt fires on every spawn.
     pub boot_keys: Vec<&'static str>,
+    /// The CLI flag that reattaches a conversation on respawn; the spelling
+    /// differs per TUI (`opencode -s`, `kimi -S`).
+    pub resume_flag: Option<&'static str>,
 }
 
 pub struct TuiChannel {
@@ -68,20 +71,7 @@ impl TuiChannel {
                 &profile.command,
             )
             .with_context(|| format!("open a {} tui window", profile.harness))?;
-        // Hold the interactive window at index 0: a bare session attach then
-        // lands in the agent TUI, not the supervisor log window.
-        let target = match target
-            .rsplit(':')
-            .next()
-            .and_then(|i| i.parse::<u32>().ok())
-        {
-            Some(index) if index > 0 => {
-                let zero = format!("{session}:0");
-                crate::tmux::mux().swap_windows(socket.as_deref(), &target, &zero)?;
-                zero
-            }
-            _ => target,
-        };
+        let target = hold_at_zero(socket.as_deref(), &session, target)?;
         let mut channel = TuiChannel {
             profile,
             socket,
@@ -106,6 +96,50 @@ impl TuiChannel {
     /// The tmux target a human attaches to, and the route's `tmux` field.
     pub fn target(&self) -> &str {
         &self.target
+    }
+
+    /// A TUI may exit on the stall interrupt rather than absorb it; respawn
+    /// its window on the same session, resuming any pinned conversation.
+    fn reopen_window(&mut self) -> Result<()> {
+        let mut command = self.profile.command.clone();
+        if let (Some(flag), Some(conversation)) =
+            (self.profile.resume_flag, self.conversation.as_deref())
+        {
+            if !command.contains(&format!(" {flag} ")) {
+                command.push_str(&format!(" {flag} {}", quote(conversation)));
+            }
+        }
+        let target = crate::tmux::mux()
+            .new_window(
+                self.socket.as_deref(),
+                &self.session,
+                &format!("{}-agent", self.profile.harness),
+                &self.cwd.display().to_string(),
+                &command,
+            )
+            .with_context(|| format!("respawn a {} tui window", self.profile.harness))?;
+        self.target = hold_at_zero(self.socket.as_deref(), &self.session, target)?;
+        self.turn_open = false;
+        self.settled_since = None;
+        warn!(
+            harness = self.profile.harness,
+            tmux_target = self.target,
+            resumed = self.conversation.is_some(),
+            "tui agent window respawned after death"
+        );
+        self.wait_for_boot()
+    }
+
+    /// Type text into the agent window, respawning it first if it died.
+    fn type_and_submit_or_respawn(&mut self, text: &str) -> Result<()> {
+        if let Err(error) = self.type_and_submit(text) {
+            if !window_is_gone(&error) {
+                return Err(error);
+            }
+            self.reopen_window()?;
+            self.type_and_submit(text)?;
+        }
+        Ok(())
     }
 
     /// Boot is done when the pane has painted something and then held it. The
@@ -187,7 +221,7 @@ impl LaneChannel for TuiChannel {
             "tui turn starting"
         );
         self.turn_started_ms = crate::channel::now_ms();
-        self.type_and_submit(text)?;
+        self.type_and_submit_or_respawn(text)?;
         self.turn_open = true;
         self.settled_since = None;
         Ok(())
@@ -200,7 +234,7 @@ impl LaneChannel for TuiChannel {
             text_bytes = text.len(),
             "tui turn steer"
         );
-        self.type_and_submit(text)?;
+        self.type_and_submit_or_respawn(text)?;
         if let Some(key) = self.profile.steer_key {
             std::thread::sleep(Duration::from_millis(400));
             crate::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, key)?;
@@ -212,7 +246,15 @@ impl LaneChannel for TuiChannel {
     fn poll_turn(&mut self, timeout: Duration) -> Result<Option<TurnEnd>> {
         let deadline = Instant::now() + timeout;
         loop {
-            if self.settled_for(IDLE_SETTLE)? {
+            let settled = match self.settled_for(IDLE_SETTLE) {
+                Ok(settled) => settled,
+                Err(error) if window_is_gone(&error) => {
+                    self.turn_open = false;
+                    return Ok(Some(TurnEnd::flaked("tui window died mid-turn")));
+                }
+                Err(error) => return Err(error),
+            };
+            if settled {
                 let (pane_hash, unchanged_ms) = self
                     .settled_since
                     .map(|(hash, since)| {
@@ -288,6 +330,19 @@ impl LaneChannel for TuiChannel {
         }
     }
 
+    /// Pane repaint is no durable signal; opencode's store write times are,
+    /// exactly as the run channel reports them.
+    fn last_activity_ms(&self) -> Option<u64> {
+        if self.profile.harness != "opencode" {
+            return None;
+        }
+        let session = match self.conversation.clone() {
+            Some(session) => session,
+            None => crate::channel::opencode::newest_session(&self.cwd, self.turn_started_ms)?,
+        };
+        crate::channel::opencode::newest_activity(&session)
+    }
+
     fn close(&mut self) -> Result<()> {
         info!(
             harness = self.profile.harness,
@@ -350,6 +405,7 @@ pub fn opencode_profile(spec: &ChannelSpec) -> TuiProfile {
         command,
         steer_key: None,
         boot_keys: Vec::new(),
+        resume_flag: Some("-s"),
     }
 }
 
@@ -368,11 +424,35 @@ pub fn kimi_profile(spec: &ChannelSpec) -> TuiProfile {
         command,
         steer_key: Some("C-s"),
         boot_keys: vec!["Enter"],
+        resume_flag: Some("-S"),
     }
 }
 
 fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
+}
+
+/// A bare session attach lands in window 0, so the agent window is held
+/// there; the displaced window takes the agent window's old index.
+fn hold_at_zero(socket: Option<&str>, session: &str, target: String) -> Result<String> {
+    match target
+        .rsplit(':')
+        .next()
+        .and_then(|index| index.parse::<u32>().ok())
+    {
+        Some(index) if index > 0 => {
+            let zero = format!("{session}:0");
+            crate::tmux::mux().swap_windows(socket, &target, &zero)?;
+            Ok(zero)
+        }
+        _ => Ok(target),
+    }
+}
+
+/// tmux names a vanished window in its stderr; any other failure is not
+/// recoverable by respawning one.
+fn window_is_gone(error: &anyhow::Error) -> bool {
+    format!("{error:#}").contains("can't find window")
 }
 
 #[cfg(test)]
@@ -445,5 +525,74 @@ mod tests {
     fn a_changed_body_hashes_differently() {
         assert_ne!(hash("working ."), hash("working .."));
         assert_eq!(hash("idle"), hash("idle"));
+    }
+
+    #[test]
+    fn only_a_vanished_window_reads_as_gone() {
+        assert!(window_is_gone(&anyhow::anyhow!(
+            "tmux send-keys failed: can't find window: 0"
+        )));
+        assert!(!window_is_gone(&anyhow::anyhow!("no server running")));
+    }
+
+    #[test]
+    fn a_named_window_target_is_never_swapped() {
+        let target = hold_at_zero(Some("boop-test-nosuch"), "sess", "sess:agent".to_owned());
+        assert_eq!(target.unwrap(), "sess:agent");
+    }
+
+    #[test]
+    fn each_tui_declares_its_resume_flag() {
+        assert_eq!(opencode_profile(&spec(None)).resume_flag, Some("-s"));
+        assert_eq!(kimi_profile(&spec(None)).resume_flag, Some("-S"));
+    }
+
+    struct TmuxGuard {
+        socket: String,
+    }
+
+    impl TmuxGuard {
+        fn new(tag: &str) -> TmuxGuard {
+            let socket = format!("boop-test-{}-tui-{tag}", std::process::id());
+            crate::tmux::kill_test_server(&socket);
+            TmuxGuard { socket }
+        }
+    }
+
+    impl Drop for TmuxGuard {
+        fn drop(&mut self) {
+            crate::tmux::kill_test_server(&self.socket);
+        }
+    }
+
+    /// FAIL-PRE-FIX: without `reopen_window`, a killed agent window made the
+    /// next `start_turn` a hard error (the 38s lane death, sprefa ledger 51).
+    #[test]
+    fn start_turn_respawns_a_dead_agent_window() {
+        let guard = TmuxGuard::new("respawn");
+        let profile = TuiProfile {
+            harness: "tuitest",
+            command: "sh -c 'echo booted; exec sleep 300'".to_owned(),
+            steer_key: None,
+            boot_keys: Vec::new(),
+            resume_flag: None,
+        };
+        let mut channel =
+            TuiChannel::open(profile, &spec(None), Some(guard.socket.clone())).unwrap();
+        let dead = channel.target().to_owned();
+        let status = std::process::Command::new("tmux")
+            .args(["-L", &guard.socket, "kill-window", "-t", &dead])
+            .status()
+            .unwrap();
+        assert!(status.success());
+        channel.start_turn("hello-after-death").unwrap();
+        let pane = std::process::Command::new("tmux")
+            .args(["-L", &guard.socket, "capture-pane", "-p", "-t", channel.target()])
+            .output()
+            .unwrap();
+        assert!(
+            String::from_utf8_lossy(&pane.stdout).contains("hello-after-death"),
+            "typed text missing from the respawned window"
+        );
     }
 }
