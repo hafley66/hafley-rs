@@ -24,8 +24,12 @@ pub mod query;
 pub mod registry;
 pub mod rows;
 pub mod runtime;
+#[cfg(feature = "agent-read")]
+pub mod summary;
 pub mod supervise;
 pub mod tail;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod tmux;
 #[cfg(feature = "agent-read")]
 pub mod usage;
@@ -45,6 +49,11 @@ pub use runtime::{
     runtime_snapshot, runtime_snapshot_now, AgentRuntimeRow, CompletionRecord, LaneRuntime,
     MailboxCounts, ProcessIdentity, ProcessLiveness, ResolvedRoute, RuntimeDiagnostic,
     RuntimeLiveness, RuntimeSnapshotInput, TmuxLiveness, WorktreeCoordinates,
+};
+#[cfg(feature = "agent-read")]
+pub use summary::{
+    agent_summary, agent_summary_now, AgentSummary, AgentSummaryActivity, AgentSummaryAgent,
+    AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION,
 };
 #[cfg(feature = "agent-read")]
 pub use usage::{GroupBy, UsageQuery};

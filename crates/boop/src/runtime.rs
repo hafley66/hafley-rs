@@ -665,98 +665,19 @@ impl Store {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeMap, BTreeSet, HashMap};
+    use std::collections::{BTreeMap, HashMap};
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::Ordering;
 
     use crate::bus::{Message, Route};
     use crate::proc::{ProcReader, ProcessInfo};
-    use crate::tmux::{LiveSessions, Multiplexer};
+    use crate::test_support::FakeMux;
     use crate::Store;
 
     use super::{
         parse_exit_code, runtime_snapshot, ProcessLiveness, RuntimeDiagnostic,
         RuntimeSnapshotInput, TmuxLiveness,
     };
-
-    struct FakeMux {
-        sessions: Option<BTreeSet<String>>,
-        observations: AtomicUsize,
-    }
-
-    impl FakeMux {
-        fn available(names: &[&str]) -> Self {
-            FakeMux {
-                sessions: Some(names.iter().map(|name| (*name).to_owned()).collect()),
-                observations: AtomicUsize::new(0),
-            }
-        }
-
-        fn inaccessible() -> Self {
-            FakeMux {
-                sessions: None,
-                observations: AtomicUsize::new(0),
-            }
-        }
-    }
-
-    impl Multiplexer for FakeMux {
-        fn session_of_pane(&self, _: Option<&str>, _: &str) -> Option<String> {
-            None
-        }
-        fn pane_pid(&self, _: Option<&str>, _: &str) -> Option<u32> {
-            None
-        }
-        fn live_sessions(&self, _: Option<&str>) -> Option<LiveSessions> {
-            self.observations.fetch_add(1, Ordering::SeqCst);
-            self.sessions.as_ref().map(|names| LiveSessions {
-                names: names.clone(),
-            })
-        }
-        fn has_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<bool> {
-            Ok(false)
-        }
-        fn kill_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
-        fn target_alive(&self, _: Option<&str>, _: &str) -> bool {
-            false
-        }
-        fn capture_pane(&self, _: Option<&str>, _: &str, _: Option<u32>) -> anyhow::Result<String> {
-            Ok(String::new())
-        }
-        fn new_detached_session(
-            &self,
-            _: Option<&str>,
-            _: &str,
-            _: &str,
-            _: &str,
-        ) -> anyhow::Result<()> {
-            Ok(())
-        }
-        fn send_keys_literal(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
-        fn send_text(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
-        fn send_key_named(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
-        fn new_window(
-            &self,
-            _: Option<&str>,
-            _: &str,
-            _: &str,
-            _: &str,
-            _: &str,
-        ) -> anyhow::Result<String> {
-            Ok(String::new())
-        }
-        fn swap_windows(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
-    }
 
     struct FakeProcesses {
         live: HashMap<u32, ProcessInfo>,
