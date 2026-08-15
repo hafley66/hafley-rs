@@ -660,4 +660,10 @@ mod tests {
         assert_ne!(sub.session_id, main.session_id);
         assert!(main.cwd.is_some(), "state.json workDir recovered as cwd");
     }
+
+    #[test]
+    fn kimi_fixture_projects_through_the_graph_query() {
+        let sessions = sessions_in(&std::path::PathBuf::from("tests/fixtures/kimi")).unwrap();
+        crate::_0_session_graph::assert_fixture_sessions_project(&super::Kimi, &sessions, 1);
+    }
 }

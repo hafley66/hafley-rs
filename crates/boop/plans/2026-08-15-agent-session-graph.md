@@ -250,6 +250,27 @@ registry-only shell rows, and routed status settling. The Rust target covers
 the trace-index Claude and Codex parent fixtures; it does not currently prove
 OpenCode parent links or Kimi non-main agent rows.
 
+## Projection correction decisions
+
+- `include_history = false` keeps every discovered native session except rows
+  explicitly observed as `dead`; discovery without a tmux target is `idle`,
+  and remains current native evidence. Shell rows require current route/lane
+  evidence and a live pane; `--history` includes dead shell rows.
+- Shell identity comes from the route registry (`kind == "shell"` or no
+  harness). Durable lane rows with a harness remain route-backed native rows;
+  the public shell node retains route harness, mode, and session-join fields.
+- Public native identities are `{harness, id}` pairs and every edge endpoint
+  uses the same type. The existing `dict_session` unique bare-string key can
+  already have merged cross-harness collisions, so this release reports the
+  stored harness and defers a storage-key migration that would recover lost
+  identity.
+- The public edge relation requires both endpoint sessions in the filtered
+  graph. Provider-discovered parent ids whose parent transcript is absent stay
+  in durable `agent_edge` and are omitted from the public projection.
+- Discovery metadata and parent edges are projected before the unchanged-byte
+  gate. Empty or unchanged transcripts therefore still enter the graph without
+  reparsing or runtime acquisition.
+
 ## CLI
 
 ```text

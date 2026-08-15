@@ -941,6 +941,12 @@ mod tests {
     }
 
     #[test]
+    fn codex_fixture_projects_through_the_graph_query() {
+        let sessions = sessions_in(&std::path::PathBuf::from("tests/fixtures/codex")).unwrap();
+        crate::_0_session_graph::assert_fixture_sessions_project(&super::Codex, &sessions, 1);
+    }
+
+    #[test]
     fn parses_the_corpus_timestamp_shape() {
         assert_eq!(
             claude::parse_iso_ms("2026-08-09T17:20:05.152Z"),
