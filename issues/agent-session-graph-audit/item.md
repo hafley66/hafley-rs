@@ -2,13 +2,14 @@
 created: 2026-08-15
 updated: 2026-08-15
 type: task
-status: in-progress
+status: done
 priority: high
 epic: boop-lane-observability
 labels: [domain-boop, domain-instant, intent-research, artifact-contract]
 lane: boop-contract
 related: ['@boop-session-graph', '@instant-boop-migration']
 collision: [boop-agent-session-contract]
+closed: 2026-08-15
 ---
 
 # 015 Audit native harness session graph
