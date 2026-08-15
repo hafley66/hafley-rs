@@ -943,7 +943,7 @@ mod tests {
     #[test]
     fn codex_fixture_projects_through_the_graph_query() {
         let sessions = sessions_in(&std::path::PathBuf::from("tests/fixtures/codex")).unwrap();
-        crate::session_graph::assert_fixture_sessions_project(&super::Codex, &sessions, 1);
+        crate::_0_session_graph::assert_fixture_sessions_project(&super::Codex, &sessions, 1);
     }
 
     #[test]

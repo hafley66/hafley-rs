@@ -47,7 +47,6 @@ pub struct AgentSessionGraph {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct AgentSessionNode {
     pub session: AgentSessionIdentity,
-    pub harness: String,
     pub cwd: Option<PathBuf>,
     pub tmux: Option<String>,
     pub state: Option<String>,
@@ -69,7 +68,7 @@ pub struct AgentShellNode {
     pub parent_lane: Option<String>,
     pub harness: Option<String>,
     pub mode: Option<String>,
-    pub session: Option<AgentSessionIdentity>,
+    pub session_id: Option<String>,
     pub cwd: Option<PathBuf>,
     pub tmux: Option<String>,
     pub pid: Option<u32>,
@@ -126,7 +125,6 @@ pub fn load_agent_session_graph(
                 id: row.get(0)?,
                 harness: row.get(1)?,
             },
-            harness: row.get(1)?,
             cwd: row.get::<_, Option<String>>(2)?.map(PathBuf::from),
             tmux: row.get(3)?,
             state: row.get(4)?,
@@ -172,7 +170,9 @@ pub fn load_agent_session_graph(
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?
         .into_iter()
-        .filter(|edge| included.contains(edge.child.id.as_str()))
+        .filter(|edge| {
+            included.contains(edge.parent.id.as_str()) && included.contains(edge.child.id.as_str())
+        })
         .collect::<Vec<_>>();
 
     let shell_sql = "SELECT lane.value, parent.value, cwd.value, pane.value,
@@ -197,7 +197,7 @@ pub fn load_agent_session_graph(
             parent_lane: row.get(1)?,
             harness: None,
             mode: None,
-            session: None,
+            session_id: None,
             cwd: row.get::<_, Option<String>>(2)?.map(PathBuf::from),
             tmux: row.get(3)?,
             pid: row
@@ -288,10 +288,7 @@ fn shell_from_runtime(row: AgentRuntimeRow) -> Option<AgentShellNode> {
         parent_lane: route.parent,
         harness: route.harness.clone(),
         mode: route.mode.clone(),
-        session: route.session_id.map(|id| AgentSessionIdentity {
-            harness: route.harness.unwrap_or_else(|| "unknown".to_owned()),
-            id,
-        }),
+        session_id: route.session_id,
         cwd: row.cwd.map(PathBuf::from),
         tmux: Some(tmux),
         pid: row.pid.and_then(|pid| u32::try_from(pid).ok()),
@@ -464,16 +461,16 @@ mod tests {
         let mut shell_route = route;
         shell_route.kind = "shell".into();
         shell_route.harness = None;
-        let mut shell = AgentRuntimeRow {
+        let shell = AgentRuntimeRow {
             lane: "shell".into(),
             route: Some(shell_route),
             tmux_target: Some("shell".into()),
             ..native_for_shell()
         };
-        shell.session = None;
         let shell = shell_from_runtime(shell).unwrap();
         assert_eq!(shell.mode.as_deref(), Some("auto"));
         assert_eq!(shell.harness, None);
+        assert_eq!(shell.session_id.as_deref(), Some("native"));
     }
 
     fn native_for_shell() -> AgentRuntimeRow {
@@ -539,6 +536,15 @@ mod tests {
         assert_eq!(graph.sessions.len(), 8);
         assert_eq!(graph.edges.len(), 4);
         assert!(graph.edges.iter().all(|edge| edge.kind == "spawned"));
+        let identities = graph
+            .sessions
+            .iter()
+            .map(|session| session.session.clone())
+            .collect::<BTreeSet<_>>();
+        assert!(graph
+            .edges
+            .iter()
+            .all(|edge| identities.contains(&edge.parent) && identities.contains(&edge.child)));
         assert!(graph
             .sessions
             .iter()

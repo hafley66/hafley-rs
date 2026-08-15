@@ -43,3 +43,5 @@ durable state is explicitly `dead`; shell scope is route-qualified and requires
 shell route evidence. Public session and edge identities are `{harness, id}`.
 The existing bare-string `dict_session` key can have already-collided rows, so
 recovering those historical collisions remains a storage migration deferral.
+Public edges require both endpoints in the filtered session set; dangling
+provider parent edges remain durable but are omitted from JSON.

@@ -520,7 +520,7 @@ mod tests {
             )
             .unwrap();
         let sessions = sessions_from(&path).unwrap();
-        crate::session_graph::assert_fixture_sessions_project(&Opencode, &sessions, 1);
+        crate::_0_session_graph::assert_fixture_sessions_project(&Opencode, &sessions, 1);
         let _ = std::fs::remove_file(path);
     }
 

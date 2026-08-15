@@ -7,6 +7,8 @@
 //! pins the exact call per view.
 
 #[cfg(feature = "agent-read")]
+pub mod _0_session_graph;
+#[cfg(feature = "agent-read")]
 pub mod activity;
 pub mod bus;
 pub mod channel;
@@ -25,9 +27,6 @@ pub mod registry;
 pub mod rows;
 pub mod runtime;
 #[cfg(feature = "agent-read")]
-#[path = "0_session_graph.rs"]
-pub mod session_graph;
-#[cfg(feature = "agent-read")]
 pub mod summary;
 pub mod supervise;
 pub mod tail;
@@ -38,6 +37,12 @@ pub mod tmux;
 pub mod usage;
 pub mod worktree;
 
+#[cfg(feature = "agent-read")]
+pub use _0_session_graph::{
+    load_agent_session_graph, load_agent_session_graph_with_runtime, AgentSessionEdge,
+    AgentSessionGraph, AgentSessionGraphQuery, AgentSessionGraphRuntime, AgentSessionIdentity,
+    AgentSessionNode, AgentShellNode, LoadAgentSessionGraph, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
+};
 #[cfg(feature = "agent-read")]
 pub use activity::{ActivityCount, ActivityScope, ToolResultAvailability};
 pub use ident::{Store, SyncStat};
@@ -52,12 +57,6 @@ pub use runtime::{
     runtime_snapshot, runtime_snapshot_now, AgentRuntimeRow, CompletionRecord, LaneRuntime,
     MailboxCounts, ProcessIdentity, ProcessLiveness, ResolvedRoute, RuntimeDiagnostic,
     RuntimeLiveness, RuntimeSnapshotInput, TmuxLiveness, WorktreeCoordinates,
-};
-#[cfg(feature = "agent-read")]
-pub use session_graph::{
-    load_agent_session_graph, load_agent_session_graph_with_runtime, AgentSessionEdge,
-    AgentSessionGraph, AgentSessionGraphQuery, AgentSessionGraphRuntime, AgentSessionIdentity,
-    AgentSessionNode, AgentShellNode, LoadAgentSessionGraph, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
 };
 #[cfg(feature = "agent-read")]
 pub use summary::{

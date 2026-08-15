@@ -664,6 +664,6 @@ mod tests {
     #[test]
     fn kimi_fixture_projects_through_the_graph_query() {
         let sessions = sessions_in(&std::path::PathBuf::from("tests/fixtures/kimi")).unwrap();
-        crate::session_graph::assert_fixture_sessions_project(&super::Kimi, &sessions, 1);
+        crate::_0_session_graph::assert_fixture_sessions_project(&super::Kimi, &sessions, 1);
     }
 }

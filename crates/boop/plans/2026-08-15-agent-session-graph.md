@@ -115,6 +115,9 @@ field meanings and normalized relation boundaries remain stable.
   already have merged cross-harness collisions, so this release reports the
   stored harness and defers a storage-key migration that would recover lost
   identity.
+- The public edge relation requires both endpoint sessions in the filtered
+  graph. Provider-discovered parent ids whose parent transcript is absent stay
+  in durable `agent_edge` and are omitted from the public projection.
 - Discovery metadata and parent edges are projected before the unchanged-byte
   gate. Empty or unchanged transcripts therefore still enter the graph without
   reparsing or runtime acquisition.

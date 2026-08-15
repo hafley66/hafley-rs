@@ -677,7 +677,7 @@ mod tests {
     fn claude_fixture_projects_through_the_graph_query() {
         use super::sessions_in;
         let sessions = sessions_in(&std::path::PathBuf::from("tests/fixtures/claude")).unwrap();
-        crate::session_graph::assert_fixture_sessions_project(&super::Claude, &sessions, 1);
+        crate::_0_session_graph::assert_fixture_sessions_project(&super::Claude, &sessions, 0);
     }
 
     /// FAIL-FIRST (D4). 52 of 1318 live transcript stems name two different
