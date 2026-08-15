@@ -5,6 +5,7 @@
 //! is the outer driver until the push-based watcher seam lands).
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 
@@ -31,6 +32,7 @@ fn main() -> Result<()> {
         .with_context(|| format!("create state dir {}", state_dir.display()))?;
     let state_path = state_dir.join(format!("{}.dl6", args.agent));
     let cursor_path = state_dir.join("cursor");
+    let offset_path = state_dir.join(format!("{}.offset", args.agent));
 
     let rules = rules::load_rules(&args.rules)?;
     let mut host = Host::new(&args.agent, rules, state_path.clone())?;
@@ -43,23 +45,61 @@ fn main() -> Result<()> {
         worktree: args.worktree.clone(),
     };
 
-    // One pass: read new turns since the cursor, bundle pairs, route each, send,
-    // fold a reply, commit, advance the cursor.
+    // One pass: read new turns since the cursor, bundle pairs, route each,
+    // send, wait for the reply to settle, fold, commit, advance the cursor.
     let turns = pipe::read_new_turns(&store, &args.session, cursor.max_ts)?;
     let pairs = pipe::bundle_pairs(&turns);
     for pair in pairs {
         host.ingest_pair(pair.clone());
         let actions = host.evaluate()?;
+        let sent = actions
+            .iter()
+            .any(|action| matches!(action, concatmap::Action::Send { .. }));
         for action in &actions {
             effects.apply(action)?;
         }
-        let (reply, _) = pipe::tail_transcript(&args.transcript, 0)
-            .context("tail mapper transcript")?;
-        pipe::fold_and_commit(&mut host, &effects, &reply, "fold")?;
+        if sent {
+            let from = load_offset(&offset_path)?;
+            match pipe::wait_reply(
+                &args.transcript,
+                from,
+                Duration::from_secs(args.settle_secs),
+                Duration::from_secs(args.reply_timeout),
+            ) {
+                Ok(Some((reply, next))) => {
+                    save_offset(&offset_path, next)?;
+                    pipe::fold_and_commit(&mut host, &effects, &reply, "fold")?;
+                }
+                _ => {
+                    if let Some(cancelled) = host.cancel_in_flight() {
+                        tracing::warn!(
+                            session = cancelled.session,
+                            turn = cancelled.turn,
+                            "reply timed out; pair skipped"
+                        );
+                    }
+                }
+            }
+        }
         cursor.observe(pair.turn);
     }
     cursor.save(&cursor_path)?;
     Ok(())
+}
+
+/// The transcript tail offset persists beside the state file; a missing file
+/// starts at 0.
+fn load_offset(path: &std::path::Path) -> Result<u64> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => text.trim().parse().with_context(|| format!("parse {}", path.display())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(0),
+        Err(error) => Err(error).with_context(|| format!("read {}", path.display())),
+    }
+}
+
+fn save_offset(path: &std::path::Path, offset: u64) -> Result<()> {
+    std::fs::write(path, offset.to_string())
+        .with_context(|| format!("write {}", path.display()))
 }
 
 /// CLI args for one pass. v1 keeps these explicit; a future watcher-driven loop
@@ -72,6 +112,8 @@ struct Args {
     worktree: PathBuf,
     rules: PathBuf,
     transcript: PathBuf,
+    settle_secs: u64,
+    reply_timeout: u64,
 }
 
 impl Args {
@@ -84,6 +126,8 @@ impl Args {
         let mut worktree = None;
         let mut rules = None;
         let mut transcript = None;
+        let mut settle_secs = 15u64;
+        let mut reply_timeout = 300u64;
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--agent" => agent = Some(args.next().context("--agent needs a value")?),
@@ -96,6 +140,20 @@ impl Args {
                 "--rules" => rules = Some(args.next().context("--rules needs a value")?),
                 "--transcript" => {
                     transcript = Some(args.next().context("--transcript needs a value")?)
+                }
+                "--settle-secs" => {
+                    settle_secs = args
+                        .next()
+                        .context("--settle-secs needs a value")?
+                        .parse()
+                        .context("--settle-secs is not an integer")?
+                }
+                "--reply-timeout" => {
+                    reply_timeout = args
+                        .next()
+                        .context("--reply-timeout needs a value")?
+                        .parse()
+                        .context("--reply-timeout is not an integer")?
                 }
                 other => anyhow::bail!("unknown argument {other}"),
             }
@@ -110,6 +168,8 @@ impl Args {
             transcript: transcript
                 .context("missing --transcript")
                 .map(PathBuf::from)?,
+            settle_secs,
+            reply_timeout,
         })
     }
 }

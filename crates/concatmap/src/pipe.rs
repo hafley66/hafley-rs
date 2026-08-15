@@ -6,8 +6,12 @@
 
 use std::fs::File;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+
+/// Reply-wait poll interval.
+const POLL: Duration = Duration::from_millis(500);
 
 use crate::action::Action;
 use crate::host::{Host, Pair};
@@ -84,6 +88,52 @@ pub fn tail_transcript(path: &Path, from: u64) -> Result<(String, u64)> {
     Ok((text, result.next_offset))
 }
 
+/// Wait for the resident chat to answer after a send: closed when the
+/// transcript grew past `from` then held one length for `settle`, else None.
+pub fn wait_reply(
+    path: &Path,
+    from: u64,
+    settle: Duration,
+    timeout: Duration,
+) -> Result<Option<(String, u64)>> {
+    let deadline = Instant::now() + timeout;
+    let mut saw_new_bytes = false;
+    let mut stable_since: Option<Instant> = None;
+    let mut last_len = from;
+    while Instant::now() < deadline {
+        std::thread::sleep(POLL);
+        let len = std::fs::metadata(path)
+            .with_context(|| format!("stat transcript {}", path.display()))?
+            .len();
+        if len > last_len {
+            saw_new_bytes = true;
+            last_len = len;
+            stable_since = None;
+            continue;
+        }
+        if saw_new_bytes {
+            let since = *stable_since.get_or_insert(Instant::now());
+            if since.elapsed() >= settle {
+                let mut file = File::open(path)
+                    .with_context(|| format!("open transcript {}", path.display()))?;
+                let result = boop::tail::read_complete_lines(&mut file, from)?;
+                let mut text = String::new();
+                for line in &result.lines {
+                    text.push_str(&String::from_utf8_lossy(&line.bytes));
+                    text.push('\n');
+                }
+                return Ok(Some((text, result.next_offset)));
+            }
+        }
+    }
+    if saw_new_bytes {
+        tracing::warn!(transcript = %path.display(), "reply never settled; folding nothing");
+    } else {
+        tracing::warn!(transcript = %path.display(), "reply timeout with no new bytes");
+    }
+    Ok(None)
+}
+
 /// Fold a completed reply into state and commit when it changed. Returns true
 /// when a commit was written. `note` is the commit subject for this fold.
 pub fn fold_and_commit<S: ChatSink>(
@@ -111,7 +161,8 @@ mod tests {
     use crate::cursor::Cursor;
     use crate::host::Host;
     use crate::interp::Effects;
-    use crate::pipe::{bundle_pairs, fold_and_commit, tail_transcript, trim_double_encoded};
+    use crate::pipe::{bundle_pairs, fold_and_commit, tail_transcript, trim_double_encoded, wait_reply};
+    use std::time::Duration;
     use crate::rules::RuleSet;
 
     fn turn(session: &str, turn: i64, role: &str, said: &str) -> boop::rows::TurnRow {
@@ -129,6 +180,27 @@ mod tests {
     fn trims_double_encoding() {
         assert_eq!(trim_double_encoded("\"hello\""), "hello");
         assert_eq!(trim_double_encoded("hello"), "hello");
+    }
+
+    #[test]
+    fn wait_reply_returns_new_bytes_once_the_transcript_settles() {
+        let path = std::env::temp_dir().join(format!("concatmap_wait_settle_{}", std::process::id()));
+        std::fs::write(&path, "line one\n").unwrap();
+        let got = wait_reply(&path, 0, Duration::from_millis(50), Duration::from_secs(5))
+            .unwrap()
+            .expect("settled reply");
+        assert_eq!(got.0, "line one\n");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn wait_reply_times_out_when_settle_never_holds() {
+        let path = std::env::temp_dir().join(format!("concatmap_wait_timeout_{}", std::process::id()));
+        std::fs::write(&path, "line one\n").unwrap();
+        let got = wait_reply(&path, 0, Duration::from_secs(60), Duration::from_millis(200))
+            .unwrap();
+        assert!(got.is_none(), "deadline before settle is a timeout, not a fold");
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

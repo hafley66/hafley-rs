@@ -92,7 +92,7 @@ impl Host {
     /// a commit when the state actually changed. An idempotent replay (the same
     /// facts already present) does not dirty the state.
     pub fn complete_reply(&mut self, reply: &str) -> Vec<Action> {
-        let fold = fold_reply(&self.agent, reply, &self.state);
+        let fold = fold_reply(reply, &self.state);
         let mut actions = Vec::new();
         let mut changed = false;
         for fact in &fold.asserts {
@@ -108,6 +108,12 @@ impl Host {
         }
         self.in_flight = None;
         actions
+    }
+
+    /// Drop an in-flight dispatch without folding a reply (reply timeout).
+    /// The pair stays in `done`, so a timeout is terminal for it.
+    pub fn cancel_in_flight(&mut self) -> Option<Pair> {
+        self.in_flight.take()
     }
 
     fn dispatch_pair(&mut self, pair: Pair) -> Result<Vec<Action>> {

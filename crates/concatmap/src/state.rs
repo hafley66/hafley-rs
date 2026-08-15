@@ -3,7 +3,7 @@
 //! this file is the analysis corpus. The file is pure facts, never fenced
 //! render output; rendering is derived.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -18,8 +18,6 @@ pub struct State {
     /// `(agent, from, to, kind)` from `state_edge` facts.
     pub edges: BTreeSet<(String, String, String, String)>,
 }
-
-use std::collections::BTreeSet;
 
 impl State {
     /// Load state from a `.dl6` file. A missing file is an empty state, not an
@@ -153,7 +151,7 @@ pub struct Fold {
 /// directives of the form `fact state_note(...)`/`fact state_edge(...)` to
 /// assert and `retract state_note(...)`/`retract state_edge(...)` to retract.
 /// Lines that are not directives are ignored.
-pub fn fold_reply(agent: &str, reply: &str, state: &State) -> Fold {
+pub fn fold_reply(reply: &str, state: &State) -> Fold {
     let mut fold = Fold::default();
     for line in reply.lines() {
         let line = line.trim();
@@ -185,7 +183,6 @@ pub fn fold_reply(agent: &str, reply: &str, state: &State) -> Fold {
             }
         }
     }
-    let _ = agent;
     fold
 }
 
@@ -265,7 +262,7 @@ mod tests {
             "retract state_note(agent=\"tighten\", key=\"k\", body=\"old\")\n",
             "retract state_note(agent=\"tighten\", key=\"absent\", body=\"x\")\n",
         );
-        let fold = fold_reply("tighten", reply, &state);
+        let fold = fold_reply(reply, &state);
         assert_eq!(fold.asserts.len(), 1);
         assert_eq!(fold.retracts.len(), 1, "absent key retraction is dropped");
         let _ = std::fs::remove_file(temp_path("fold"));
