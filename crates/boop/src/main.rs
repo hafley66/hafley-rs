@@ -157,9 +157,12 @@ enum SubCmd {
         /// The mode word substituted into the template.
         #[arg(long)]
         mode: String,
-        /// The one-shot model id.
-        #[arg(long, default_value = "openrouter/deepseek/deepseek-v4-flash-0731")]
-        model: String,
+        /// The one-shot model id, in the harness's own flag spelling.
+        #[arg(long, conflicts_with = "preset")]
+        model: Option<String>,
+        /// Model preset resolving through boop/config.json, as lane create.
+        #[arg(long)]
+        preset: Option<String>,
         /// Directory holding cursor and done markers.
         #[arg(long)]
         state: PathBuf,
@@ -649,19 +652,30 @@ fn main() -> Result<()> {
             template,
             mode,
             model,
+            preset,
             state,
             out,
             poll_secs,
             cap,
-        } => boop::concatmap::run(boop::concatmap::Args {
-            template,
-            mode,
-            model,
-            state_dir: state,
-            out_dir: out,
-            poll: std::time::Duration::from_secs(poll_secs),
-            cap,
-        }),
+        } => {
+            // Common model-selection subset: explicit model wins, preset
+            // resolves through config; flash4 is the standing default.
+            let config_path = config::default_path()?;
+            let model = match (model, preset) {
+                (Some(model), _) => model,
+                (None, Some(preset)) => config::resolve_model(&preset, &config_path)?,
+                (None, None) => config::resolve_model("flash4", &config_path)?,
+            };
+            boop::concatmap::run(boop::concatmap::Args {
+                template,
+                mode,
+                model,
+                state_dir: state,
+                out_dir: out,
+                poll: std::time::Duration::from_secs(poll_secs),
+                cap,
+            })
+        }
         SubCmd::Whoami { json } => run_whoami(json),
         SubCmd::Config { cmd } => run_config(cmd),
     }
