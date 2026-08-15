@@ -179,9 +179,12 @@ enum SubCmd {
         /// Absent rules run the oneshot feed.
         #[arg(long)]
         rules: Option<PathBuf>,
-        /// Map one conversation only, not every session in the store.
+        /// Map one conversation only.
         #[arg(long)]
         session: Option<String>,
+        /// Map the caller's own session (the `whoami` ladder resolves it).
+        #[arg(long, conflicts_with = "session")]
+        me: bool,
     },
     /// Report the caller's own identity and the rung that resolved it.
     Whoami {
@@ -666,6 +669,7 @@ fn main() -> Result<()> {
             cap,
             rules,
             session,
+            me,
         } => {
             // Common model-selection subset: explicit model wins, preset
             // resolves through config; flash4 is the standing default.
@@ -678,6 +682,19 @@ fn main() -> Result<()> {
             let formula = match &rules {
                 Some(path) => boop::concatmap::Formula::load(path)?,
                 None => boop::concatmap::Formula::oneshot(),
+            };
+            let session = match (session, me) {
+                (Some(session), _) => Some(session),
+                (None, true) => {
+                    let routes = bus::read_routes(&mail_dir(None)?).unwrap_or_default();
+                    let identity = identity::resolve(&routes)?;
+                    Some(identity.session.context(
+                        "--me found no caller session (no BOOP_SESSION, no tmux pane rung); pass --session <id>",
+                    )?)
+                }
+                (None, false) => anyhow::bail!(
+                    "name the conversation to map: --session <id>, or --me to take the caller's own"
+                ),
             };
             boop::concatmap::run(boop::concatmap::Args {
                 template,

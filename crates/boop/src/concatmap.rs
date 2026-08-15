@@ -41,7 +41,8 @@ pub struct Args {
     pub poll: Duration,
     pub cap: u32,
     pub formula: Formula,
-    /// One conversation only; `None` maps every session.
+    /// One conversation only. The CLI refuses to leave it unset (`--session`
+    /// or `--me`); `None` stays a library-internal spelling.
     pub session: Option<String>,
 }
 
