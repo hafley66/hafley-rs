@@ -1253,18 +1253,16 @@ pub fn sync_session_with_pid(
         pid,
         session.tmux.as_deref(),
     )?;
-    if ingested.stat.written > 0 || ingested.stat.usage_written > 0 {
-        store.upsert_session_row(
-            &session.session_id,
-            session.harness,
-            &session.nickname,
-            session.cwd.as_deref(),
-            session.git_branch.as_deref(),
-            session.modified_ms,
-        )?;
-        if let Some(parent) = &session.parent {
-            store.add_edge(parent, &session.session_id, "spawned")?;
-        }
+    store.upsert_session_row(
+        &session.session_id,
+        session.harness,
+        &session.nickname,
+        session.cwd.as_deref(),
+        session.git_branch.as_deref(),
+        session.modified_ms,
+    )?;
+    if let Some(parent) = &session.parent {
+        store.add_edge(parent, &session.session_id, "spawned")?;
     }
     store.set_cursor(&session.session_id, &key, ingested.next_cursor)?;
     Ok(ingested.stat)

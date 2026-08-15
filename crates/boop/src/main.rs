@@ -478,7 +478,7 @@ fn main() -> Result<()> {
         SubCmd::Events { query } => run_query(&query),
         SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild),
         #[cfg(feature = "agent-read")]
-        SubCmd::Agent { cmd } => run_public_agent_summary(&registry, cmd),
+        SubCmd::Agent { cmd } => run_public_agent_command(&registry, cmd),
         SubCmd::Follow {} => run_follow(&registry),
         SubCmd::Chat {
             query,
@@ -3109,6 +3109,7 @@ mod tests {
 // to REST is 1:1 per plans/2026-08-09-boop-openapi.yaml.
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum BeepCmd {
     /// Harness adapters and what each can do.
@@ -3383,6 +3384,26 @@ enum AgentSummaryCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
+    /// Synchronize transcripts, then emit the native session graph.
+    Sessions {
+        /// Restrict session and shell rows to one working directory.
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+        /// Include historical and inactive rows.
+        #[arg(long)]
+        history: bool,
+        /// The public graph contract currently emits JSON.
+        #[arg(long, value_enum, default_value_t = AgentSessionGraphFormat::Json)]
+        format: AgentSessionGraphFormat,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+}
+
+#[cfg(feature = "agent-read")]
+#[derive(Clone, Copy, ValueEnum)]
+enum AgentSessionGraphFormat {
+    Json,
 }
 
 #[derive(Subcommand)]
@@ -4846,13 +4867,54 @@ fn run_agent_summary(format: AgentSummaryFormat, mail_dir_arg: Option<&Path>) ->
 }
 
 #[cfg(feature = "agent-read")]
-fn run_public_agent_summary(registry: &Registry, cmd: AgentSummaryCmd) -> Result<()> {
+fn run_public_agent_command(registry: &Registry, cmd: AgentSummaryCmd) -> Result<()> {
     match cmd {
         AgentSummaryCmd::Summary { format, mail_dir } => after_agent_summary_sync(
             |liveness| sync_all(registry, false, false, liveness),
             || run_agent_summary(format, mail_dir.as_deref()),
         ),
+        AgentSummaryCmd::Sessions {
+            cwd,
+            history,
+            format: AgentSessionGraphFormat::Json,
+            mail_dir,
+        } => after_agent_summary_sync(
+            |liveness| sync_all(registry, false, false, liveness),
+            || run_agent_sessions(cwd, history, mail_dir.as_deref()),
+        ),
     }
+}
+
+#[cfg(feature = "agent-read")]
+fn run_agent_sessions(
+    cwd: Option<PathBuf>,
+    include_history: bool,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let store = open_ro_store()?;
+    let dir = mail_dir(mail_dir_arg)?;
+    let routes = bus::read_routes(&dir)?;
+    let mut messages = Vec::new();
+    for path in bus::read_boxes(&dir)? {
+        messages.extend(bus::parse_box(&path));
+    }
+    let processes = boop::proc::SysinfoSnapshot::capture()?;
+    let graph = boop::load_agent_session_graph_with_runtime(
+        &store,
+        boop::AgentSessionGraphQuery {
+            cwd,
+            include_history,
+        },
+        boop::AgentSessionGraphRuntime {
+            routes: &routes,
+            messages: &messages,
+            multiplexer: boop::tmux::mux(),
+            tmux_socket: None,
+            processes: &processes,
+        },
+    )?;
+    line(&serde_json::to_string(&graph)?);
+    Ok(())
 }
 
 #[cfg(feature = "agent-read")]

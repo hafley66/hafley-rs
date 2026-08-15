@@ -21,18 +21,18 @@ Implement the typed, set-wise agent session graph described by `crates/boop/plan
 
 ## Acceptance Criteria
 
-- [ ] A typed library query returns schema version, session nodes, parent edges, and shell-only lane nodes.
-- [ ] The query uses set-wise store reads and one bounded runtime observation.
+- [x] A typed library query returns schema version, session nodes, parent edges, and shell-only lane nodes.
+- [x] The query uses set-wise store reads and one bounded runtime observation.
 - [ ] Claude, Codex, OpenCode, and Kimi parent fixtures project through the same relation.
-- [ ] `boop agent sessions [--cwd <path>] [--history] --format json` emits one JSON document.
-- [ ] Public help contains no `swarm` vocabulary.
-- [ ] Existing `boop agent summary` behavior remains covered.
+- [x] `boop agent sessions [--cwd <path>] [--history] --format json` emits one JSON document.
+- [x] Public help contains no `swarm` vocabulary.
+- [x] Existing `boop agent summary` behavior remains covered.
 
 ## Tests Run
 
-- [ ] `cargo test -p boop`
-- [ ] `cargo clippy -p boop --all-targets -- -D warnings`
-- [ ] `issuectl doctor`
+- [x] `cargo test -p boop`
+- [x] `cargo clippy -p boop --all-targets -- -D warnings`
+- [x] `issuectl doctor`
 
 ## Implementation Notes
 
