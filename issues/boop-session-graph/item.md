@@ -2,13 +2,14 @@
 created: 2026-08-15
 updated: 2026-08-15
 type: task
-status: open
+status: done
 priority: high
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation, artifact-api, artifact-cli]
 lane: boop-query
 related: ['@agent-session-graph-audit', '@instant-boop-migration']
 collision: [boop-agent-session-graph]
+closed: 2026-08-15
 ---
 
 # 016 Expose typed agent session graph
