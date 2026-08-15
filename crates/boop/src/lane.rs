@@ -275,17 +275,17 @@ pub fn harness_for_model(model: &str) -> Result<Option<Cow<'static, str>>> {
     }
     let name = name.to_ascii_lowercase();
     let config = config::loaded()?;
-    if !config.model_harness.is_empty() {
-        return Ok(config
-            .model_harness
-            .iter()
-            .find(|(prefix, _)| name.starts_with(prefix.as_str()))
-            .map(|(_, harness)| Cow::Borrowed(harness.as_str())));
-    }
-    Ok(MODEL_HARNESS
-        .into_iter()
-        .find(|(prefix, _)| name.starts_with(prefix))
-        .map(|(_, harness)| Cow::Borrowed(harness)))
+    Ok(config
+        .model_harness
+        .iter()
+        .find(|(prefix, _)| name.starts_with(prefix.as_str()))
+        .map(|(_, harness)| Cow::Borrowed(harness.as_str()))
+        .or_else(|| {
+            MODEL_HARNESS
+                .into_iter()
+                .find(|(prefix, _)| name.starts_with(prefix))
+                .map(|(_, harness)| Cow::Borrowed(harness))
+        }))
 }
 
 /// A model family whose own harness runs on a flat-rate plan; opencode would
@@ -295,17 +295,17 @@ fn plan_harness_family(model: &str) -> Result<Option<Cow<'static, str>>> {
     let name = lowered.split('@').next().unwrap_or(&lowered).trim();
     let bare = name.rsplit('/').next().unwrap_or(name);
     let config = config::loaded()?;
-    if !config.opencode_banned.is_empty() {
-        return Ok(config
-            .opencode_banned
-            .iter()
-            .find(|(prefix, _)| bare.starts_with(prefix.as_str()))
-            .map(|(_, owner)| Cow::Borrowed(owner.as_str())));
-    }
-    Ok(PLAN_FAMILY_TO_HARNESS
-        .into_iter()
-        .find(|(prefix, _)| bare.starts_with(prefix))
-        .map(|(_, owner)| Cow::Borrowed(owner)))
+    Ok(config
+        .opencode_banned
+        .iter()
+        .find(|(prefix, _)| bare.starts_with(prefix.as_str()))
+        .map(|(_, owner)| Cow::Borrowed(owner.as_str()))
+        .or_else(|| {
+            PLAN_FAMILY_TO_HARNESS
+                .into_iter()
+                .find(|(prefix, _)| bare.starts_with(prefix))
+                .map(|(_, owner)| Cow::Borrowed(owner))
+        }))
 }
 
 /// The refused-from-opencode error, naming the flat-rate harness that owns the
