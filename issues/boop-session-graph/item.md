@@ -1,0 +1,39 @@
+---
+created: 2026-08-15
+updated: 2026-08-15
+type: task
+status: open
+priority: high
+epic: boop-lane-observability
+labels: [domain-boop, intent-implementation, artifact-api, artifact-cli]
+lane: boop-query
+related: ['@agent-session-graph-audit', '@instant-boop-migration']
+collision: [boop-agent-session-graph]
+---
+
+# 016 Expose typed agent session graph
+
+## Description
+
+## Objective
+
+Implement the typed, set-wise agent session graph described by `crates/boop/plans/2026-08-15-agent-session-graph.md`, including native parent edges and shell-only runtime rows.
+
+## Acceptance Criteria
+
+- [ ] A typed library query returns schema version, session nodes, parent edges, and shell-only lane nodes.
+- [ ] The query uses set-wise store reads and one bounded runtime observation.
+- [ ] Claude, Codex, OpenCode, and Kimi parent fixtures project through the same relation.
+- [ ] `boop agent sessions [--cwd <path>] [--history] --format json` emits one JSON document.
+- [ ] Public help contains no `swarm` vocabulary.
+- [ ] Existing `boop agent summary` behavior remains covered.
+
+## Tests Run
+
+- [ ] `cargo test -p boop`
+- [ ] `cargo clippy -p boop --all-targets -- -D warnings`
+- [ ] `issuectl doctor`
+
+## Implementation Notes
+
+Luna implementation lane. Work only in a dedicated Hafley worktree. Commit the implementation without pushing or merging.
