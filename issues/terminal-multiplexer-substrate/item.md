@@ -3,7 +3,7 @@ created: 2026-08-15
 updated: 2026-08-15
 type: epic
 owner: chrishafley
-status: open
+status: deferred
 priority: normal
 labels: [domain-boop, component-multiplexer, intent-architecture]
 ---
