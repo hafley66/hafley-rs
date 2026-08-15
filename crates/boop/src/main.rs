@@ -150,6 +150,12 @@ enum SubCmd {
         #[command(subcommand)]
         cmd: Option<DbCmd>,
     },
+    /// Freshly synchronize and summarize Boop agent/runtime/activity facts.
+    #[cfg(feature = "agent-read")]
+    Agent {
+        #[command(subcommand)]
+        cmd: AgentSummaryCmd,
+    },
     /// Report the caller's own identity and the rung that resolved it.
     Whoami {
         #[arg(long)]
@@ -409,6 +415,13 @@ enum QueryFormat {
     Text,
 }
 
+#[cfg(feature = "agent-read")]
+#[derive(Clone, Copy, ValueEnum)]
+enum AgentSummaryFormat {
+    Text,
+    Json,
+}
+
 #[derive(Clone, Copy, ValueEnum)]
 enum OutputFormat {
     Text,
@@ -436,7 +449,7 @@ enum ConfigCmd {
 fn line(text: &str) {
     use std::io::Write;
     let mut out = std::io::stdout().lock();
-    match writeln!(out, "{text}") {
+    match write_line(&mut out, text) {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => std::process::exit(0),
         Err(error) => {
@@ -444,6 +457,10 @@ fn line(text: &str) {
             std::process::exit(1);
         }
     }
+}
+
+fn write_line(output: &mut impl std::io::Write, text: &str) -> std::io::Result<()> {
+    writeln!(output, "{text}")
 }
 
 fn main() -> Result<()> {
@@ -460,6 +477,8 @@ fn main() -> Result<()> {
         } => run_tail(&registry, &session_id, from.unwrap_or(0), format),
         SubCmd::Events { query } => run_query(&query),
         SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild),
+        #[cfg(feature = "agent-read")]
+        SubCmd::Agent { cmd } => run_public_agent_summary(&registry, cmd),
         SubCmd::Follow {} => run_follow(&registry),
         SubCmd::Chat {
             query,
@@ -771,6 +790,27 @@ fn emit_rows(rows: &[ident::Row], format: QueryFormat) {
 
 /// `boop sync`: tail every harness forward from stored offsets into the db.
 fn run_sync_all(registry: &Registry, rebuild: bool) -> Result<()> {
+    sync_all(registry, rebuild, true, SyncLiveness::StampLivePid)
+}
+
+/// Whether incremental transcript sync asks tmux for a route PID per changed
+/// session. Summary freshness only needs transcript and usage facts; its later
+/// runtime projection owns one bounded tmux/process observation.
+#[derive(Clone, Copy)]
+enum SyncLiveness {
+    StampLivePid,
+    TranscriptOnly,
+}
+
+/// Incrementally synchronize transcript facts. `report` controls only the
+/// human progress receipt; callers that must emit one stable document keep it
+/// false and write their own result after this returns.
+fn sync_all(
+    registry: &Registry,
+    rebuild: bool,
+    report: bool,
+    liveness: SyncLiveness,
+) -> Result<()> {
     let started = std::time::Instant::now();
     info!(rebuild, "transcript sync started");
     let store = ident::Store::open(ident::Store::default_path()?)?;
@@ -806,7 +846,7 @@ fn run_sync_all(registry: &Registry, rebuild: bool) -> Result<()> {
                     session_id = session.session_id,
                     "transcript session sync started"
                 );
-                let pid = session_route_pid(&routes, &session);
+                let pid = sync_session_pid(liveness, || session_route_pid(&routes, &session));
                 stat.add(ident::sync_session_with_pid(
                     &store,
                     adapter.as_ref(),
@@ -828,14 +868,16 @@ fn run_sync_all(registry: &Registry, rebuild: bool) -> Result<()> {
                 .saturating_mul(1000)
                 .checked_div(elapsed_ms.max(1))
                 .unwrap_or(0) as u64;
-            println!(
-                "events={} dropped={} usage_new={} usage_updated={} sparse_sessions={sparse} elapsed_ms={elapsed_ms} rate={rate}/s db_bytes={db_bytes} counts={}",
-                stat.written,
-                stat.dropped,
-                stat.usage_written,
-                stat.usage_updated,
-                serde_json::to_string(&counts)?
-            );
+            if report {
+                println!(
+                    "events={} dropped={} usage_new={} usage_updated={} sparse_sessions={sparse} elapsed_ms={elapsed_ms} rate={rate}/s db_bytes={db_bytes} counts={}",
+                    stat.written,
+                    stat.dropped,
+                    stat.usage_written,
+                    stat.usage_updated,
+                    serde_json::to_string(&counts)?
+                );
+            }
             info!(
                 events = stat.written,
                 dropped = stat.dropped,
@@ -855,6 +897,23 @@ fn run_sync_all(registry: &Registry, rebuild: bool) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn sync_session_pid(liveness: SyncLiveness, acquire: impl FnOnce() -> Option<i64>) -> Option<i64> {
+    match liveness {
+        SyncLiveness::StampLivePid => acquire(),
+        SyncLiveness::TranscriptOnly => None,
+    }
+}
+
+/// The public summary command first refreshes transcript facts without
+/// per-session liveness probes, then performs its one bounded runtime summary.
+fn after_agent_summary_sync<T>(
+    sync: impl FnOnce(SyncLiveness) -> Result<()>,
+    summary: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    sync(SyncLiveness::TranscriptOnly)?;
+    summary()
 }
 
 /// A store written before dense ordinals is readable but not appendable, so
@@ -2103,14 +2162,119 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
     use std::path::PathBuf;
     use std::process::Command;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use clap::Parser;
 
     use super::{
-        append_message, config, dead_reason, default_preset_for_harness, resolve_dispatch_harness,
-        run_lane_delete, run_lane_prune, session_matches_route, write_route,
+        after_agent_summary_sync, agent_summary_text, append_message, config, dead_reason,
+        default_preset_for_harness, resolve_dispatch_harness, run_lane_delete, run_lane_prune,
+        session_matches_route, sync_session_pid, write_line, write_route, AgentSummaryCmd, Cli,
+        SubCmd,
     };
     use boop::bus::{read_routes, Route};
     use boop::proc::SysinfoSnapshot;
     use boop::registry::Registry;
+    use boop::{
+        AgentRuntimeRow, AgentSummary, AgentSummaryActivity, AgentSummaryAgent, MailboxCounts,
+        ProcessLiveness, RuntimeLiveness, TmuxLiveness, WorktreeCoordinates,
+    };
+
+    #[test]
+    fn public_agent_summary_command_parses() {
+        let cli = Cli::try_parse_from(["boop", "agent", "summary", "--format", "text"])
+            .expect("public agent summary command parses");
+        assert!(matches!(
+            cli.command,
+            SubCmd::Agent {
+                cmd: AgentSummaryCmd::Summary { .. }
+            }
+        ));
+    }
+
+    #[test]
+    fn public_summary_freshness_defers_liveness_to_the_summary_observation() {
+        let tmux_acquisitions = AtomicUsize::new(0);
+        let summary_observations = AtomicUsize::new(0);
+        after_agent_summary_sync(
+            |liveness| {
+                for _ in 0..2 {
+                    let pid = sync_session_pid(liveness, || {
+                        tmux_acquisitions.fetch_add(1, Ordering::SeqCst);
+                        Some(1)
+                    });
+                    assert_eq!(pid, None);
+                }
+                Ok(())
+            },
+            || {
+                summary_observations.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            },
+        )
+        .expect("public summary orchestration");
+        assert_eq!(tmux_acquisitions.load(Ordering::SeqCst), 0);
+        assert_eq!(summary_observations.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn agent_summary_text_fixture_has_fixed_columns() {
+        let summary = AgentSummary {
+            schema_version: 1,
+            active_agents: 1,
+            agents: vec![AgentSummaryAgent {
+                runtime: AgentRuntimeRow {
+                    lane: "lane-a".into(),
+                    trace: Some("trace-a".into()),
+                    root_session: None,
+                    session: Some("session-a".into()),
+                    parent: None,
+                    route: None,
+                    cwd: None,
+                    tmux_target: None,
+                    tmux_pane: None,
+                    pid: None,
+                    reported_status: None,
+                    liveness: RuntimeLiveness {
+                        tmux: TmuxLiveness::Live,
+                        process: ProcessLiveness::Unknown,
+                    },
+                    completion: None,
+                    mailbox: MailboxCounts {
+                        inbox: 2,
+                        outbox: 3,
+                        unacknowledged: 1,
+                    },
+                    worktree: WorktreeCoordinates::default(),
+                    diagnostics: Vec::new(),
+                },
+                activity: AgentSummaryActivity {
+                    user: 4,
+                    assistant: 5,
+                    tool_call: 6,
+                    total: 15,
+                    calls: 7,
+                    input_tokens: 8,
+                    output_tokens: 9,
+                    cache_create_5m_tokens: 10,
+                    cache_create_1h_tokens: 11,
+                    cache_read_tokens: 12,
+                    first_activity_ts: None,
+                    last_activity_ts: None,
+                    tool_result_availability: boop::ToolResultAvailability::Unavailable,
+                },
+            }],
+        };
+        let rendered = agent_summary_text(&summary);
+        assert_eq!(
+            rendered,
+            "schema_version\t1\nactive_agents\t1\nlane\ttrace\troot_session\tsession\tparent\troute\tcwd\ttmux_target\ttmux_pane\tpid\treported_status\ttmux_liveness\tprocess_liveness\tcompletion\tinbox\toutbox\tunacknowledged\tworktree_route_cwd\tworktree_process_cwd\tdiagnostics\tuser\tassistant\ttool_call\ttotal\tcalls\tinput_tokens\toutput_tokens\tcache_create_5m_tokens\tcache_create_1h_tokens\tcache_read_tokens\nlane-a\ttrace-a\t-\tsession-a\t-\tnull\t-\t-\t-\t-\t-\tlive\tunknown\tnull\t2\t3\t1\t-\t-\t[]\t4\t5\t6\t15\t7\t8\t9\t10\t11\t12"
+        );
+        let mut output = Vec::new();
+        write_line(&mut output, &rendered).expect("write summary output");
+        assert_eq!(output, format!("{rendered}\n").as_bytes());
+        assert!(!output.ends_with(b"\n\n"));
+    }
 
     /// A named harness that is not registered must be refused, never quietly
     /// swapped for the first adapter, which would be a capability lie.
@@ -3175,6 +3339,19 @@ enum AgentCmd {
     },
 }
 
+#[cfg(feature = "agent-read")]
+#[derive(Subcommand)]
+enum AgentSummaryCmd {
+    /// Synchronize incremental transcript facts, then emit the versioned
+    /// CASS-compatible Boop agent summary.
+    Summary {
+        #[arg(long, value_enum, default_value_t = AgentSummaryFormat::Json)]
+        format: AgentSummaryFormat,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+}
+
 #[derive(Subcommand)]
 enum LaneMessageCmd {
     List {
@@ -3203,6 +3380,16 @@ enum MessageCmd {
 
 #[derive(Subcommand)]
 enum DbCmd {
+    /// Versioned CASS-compatible agent/runtime/activity summary. CASS issue,
+    /// reservation, and provider records are separate contracts.
+    #[cfg(feature = "agent-read")]
+    #[command(hide = true)]
+    AgentSummary {
+        #[arg(long, value_enum, default_value_t = AgentSummaryFormat::Json)]
+        format: AgentSummaryFormat,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
     #[cfg(feature = "agent-read")]
     Session {
         #[command(subcommand)]
@@ -4398,6 +4585,8 @@ fn render_ndjson(nodes: &[LaneNode]) -> Vec<String> {
 fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
     match cmd {
         #[cfg(feature = "agent-read")]
+        DbCmd::AgentSummary { format, mail_dir } => run_agent_summary(format, mail_dir.as_deref()),
+        #[cfg(feature = "agent-read")]
         DbCmd::Session { cmd } => match cmd {
             SessionCmd::List { limit, format } => {
                 let store = open_store()?;
@@ -4600,6 +4789,107 @@ fn run_status(window_minutes: u64, format: QueryFormat) -> Result<()> {
     }
     emit_json_rows(&rows, format);
     Ok(())
+}
+
+#[cfg(feature = "agent-read")]
+fn run_agent_summary(format: AgentSummaryFormat, mail_dir_arg: Option<&Path>) -> Result<()> {
+    let store = open_ro_store()?;
+    let dir = mail_dir(mail_dir_arg)?;
+    let routes = bus::read_routes(&dir)?;
+    let mut messages = Vec::new();
+    for path in bus::read_boxes(&dir)? {
+        messages.extend(bus::parse_box(&path));
+    }
+    let summary = boop::agent_summary_now(&store, &routes, &messages)?;
+    match format {
+        AgentSummaryFormat::Json => line(&serde_json::to_string(&summary)?),
+        AgentSummaryFormat::Text => line(&agent_summary_text(&summary)),
+    }
+    Ok(())
+}
+
+#[cfg(feature = "agent-read")]
+fn run_public_agent_summary(registry: &Registry, cmd: AgentSummaryCmd) -> Result<()> {
+    match cmd {
+        AgentSummaryCmd::Summary { format, mail_dir } => after_agent_summary_sync(
+            |liveness| sync_all(registry, false, false, liveness),
+            || run_agent_summary(format, mail_dir.as_deref()),
+        ),
+    }
+}
+
+#[cfg(feature = "agent-read")]
+fn agent_summary_text(summary: &boop::AgentSummary) -> String {
+    use std::fmt::Write;
+
+    let mut output = format!(
+        "schema_version\t{}\nactive_agents\t{}\nlane\ttrace\troot_session\tsession\tparent\troute\tcwd\ttmux_target\ttmux_pane\tpid\treported_status\ttmux_liveness\tprocess_liveness\tcompletion\tinbox\toutbox\tunacknowledged\tworktree_route_cwd\tworktree_process_cwd\tdiagnostics\tuser\tassistant\ttool_call\ttotal\tcalls\tinput_tokens\toutput_tokens\tcache_create_5m_tokens\tcache_create_1h_tokens\tcache_read_tokens",
+        summary.schema_version, summary.active_agents
+    );
+    for agent in &summary.agents {
+        let runtime = &agent.runtime;
+        output.push('\n');
+        write!(
+            output,
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            runtime.lane,
+            runtime.trace.as_deref().unwrap_or("-"),
+            runtime.root_session.as_deref().unwrap_or("-"),
+            runtime.session.as_deref().unwrap_or("-"),
+            runtime.parent.as_deref().unwrap_or("-"),
+            json_cell(&runtime.route),
+            runtime.cwd.as_deref().unwrap_or("-"),
+            runtime.tmux_target.as_deref().unwrap_or("-"),
+            runtime.tmux_pane.as_deref().unwrap_or("-"),
+            runtime.pid.map(|pid| pid.to_string()).unwrap_or_else(|| "-".into()),
+            runtime.reported_status.as_deref().unwrap_or("-"),
+            tmux_liveness_text(&runtime.liveness.tmux),
+            process_liveness_text(&runtime.liveness.process),
+            json_cell(&runtime.completion),
+            runtime.mailbox.inbox,
+            runtime.mailbox.outbox,
+            runtime.mailbox.unacknowledged,
+            runtime.worktree.route_cwd.as_deref().unwrap_or("-"),
+            runtime.worktree.process_cwd.as_deref().unwrap_or("-"),
+            json_cell(&runtime.diagnostics),
+            agent.activity.user,
+            agent.activity.assistant,
+            agent.activity.tool_call,
+            agent.activity.total,
+            agent.activity.calls,
+            agent.activity.input_tokens,
+            agent.activity.output_tokens,
+            agent.activity.cache_create_5m_tokens,
+            agent.activity.cache_create_1h_tokens,
+            agent.activity.cache_read_tokens,
+        )
+        .expect("write to string");
+    }
+    output
+}
+
+#[cfg(feature = "agent-read")]
+fn json_cell(value: &impl serde::Serialize) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "null".into())
+}
+
+#[cfg(feature = "agent-read")]
+fn tmux_liveness_text(liveness: &boop::TmuxLiveness) -> &'static str {
+    match liveness {
+        boop::TmuxLiveness::Live => "live",
+        boop::TmuxLiveness::Dead => "dead",
+        boop::TmuxLiveness::Inaccessible => "inaccessible",
+        boop::TmuxLiveness::Unmanaged => "unmanaged",
+    }
+}
+
+#[cfg(feature = "agent-read")]
+fn process_liveness_text(liveness: &boop::ProcessLiveness) -> &'static str {
+    match liveness {
+        boop::ProcessLiveness::Live => "live",
+        boop::ProcessLiveness::Dead => "dead",
+        boop::ProcessLiveness::Unknown => "unknown",
+    }
 }
 
 #[cfg(feature = "agent-read")]
