@@ -751,7 +751,7 @@ fn main() -> Result<()> {
                 None => boop::concatmap::Formula::oneshot(),
             };
             let template = match &template {
-                Some(path) => Some(std::fs::read_to_string(path)?),
+                Some(path) => Some(boop::concatmap::expand_env(&std::fs::read_to_string(path)?)),
                 None => None,
             };
             if formula.window.is_none() {

@@ -96,7 +96,7 @@ impl Formula {
     pub fn load(path: &Path) -> Result<Formula> {
         let text = std::fs::read_to_string(path)
             .with_context(|| format!("read rules {}", path.display()))?;
-        let file: FormulaFile = serde_json::from_str(&text)
+        let file: FormulaFile = serde_json::from_str(&expand_env(&text))
             .with_context(|| format!("parse rules {}", path.display()))?;
         let feed = match file.feed.as_str() {
             "oneshot" => Feed::OneShot,
@@ -394,6 +394,31 @@ pub fn render_template(template: &str, mode: &str, ai: &str, user: &str) -> Stri
         .replace("{{mode}}", mode)
         .replace("{{ai_text}}", ai)
         .replace("{{user_text}}", user)
+}
+
+/// Expand `${NAME}` and `${NAME:-default}` (shell defaulting) in the
+/// template and rules files before use; unset+defaultless is empty, like sh.
+pub fn expand_env(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find("${") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 2..];
+        let Some(end) = after.find('}') else {
+            out.push_str("${");
+            out.push_str(after);
+            return out;
+        };
+        let name = &after[..end];
+        let value = match name.split_once(":-") {
+            Some((var, default)) => std::env::var(var).unwrap_or_else(|_| default.to_owned()),
+            None => std::env::var(name).unwrap_or_default(),
+        };
+        out.push_str(&value);
+        rest = &after[end + 1..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Whitespace-collapsed form for the fixed-point test.
@@ -744,6 +769,16 @@ mod tests {
     #[test]
     fn normalize_collapses_all_whitespace() {
         assert_eq!(normalize("a \n\t b  c"), "a b c");
+    }
+
+    #[test]
+    fn env_expansion_defaults_like_the_shell() {
+        std::env::set_var("CM_EXPAND_TEST", "set");
+        assert_eq!(expand_env("x ${CM_EXPAND_TEST} y"), "x set y");
+        assert_eq!(expand_env("${CM_EXPAND_TEST:-d}"), "set");
+        assert_eq!(expand_env("${CM_EXPAND_UNSET:-dflt}"), "dflt");
+        assert_eq!(expand_env("${CM_EXPAND_UNSET}"), "");
+        assert_eq!(expand_env("literal ${unterminated"), "literal ${unterminated");
     }
 
     #[test]
