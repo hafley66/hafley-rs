@@ -40,6 +40,26 @@ RULES: a json file choosing the feed and bundle shape:
   \"bundle\": \"pair\" (default) or \"run\"       pair = 1 ai + 1 user; run collapses same-role runs
   \"coalesce\": 4                        backlog cap; only the newest survives past it (0 = never drop)
   \"references\": true                   append the source session's file touches as of the bundle
+  \"window\": \"SELECT ...\"               caller-owned SQL replacing the compiled bundlers:
+                                         binds :session (TEXT), :session_id (INTEGER), :cursor (ms);
+                                         returns INTEGER `id` + TEXT `text`, one row per bundle.
+                                         With a window, --template/--mode are optional (text ships
+                                         verbatim) and the loop only does cursor + done + send.
+
+WINDOW EXAMPLE (gaps-and-islands over agent_turn, same-role runs concat'ed):
+  rules.json:
+    {\"feed\": \"chat\",
+     \"goal\": \"tighten each <ai> turn; code and numbers verbatim\",
+     \"window\": \"WITH marked AS (
+        SELECT t.turn, t.ts, r.value AS role, t.said,
+               ROW_NUMBER() OVER (ORDER BY t.ts, t.turn)
+             - ROW_NUMBER() OVER (PARTITION BY r.value ORDER BY t.ts, t.turn) AS island
+        FROM agent_turn t JOIN dict_role r ON r.id = t.role_id
+        JOIN dict_session s ON s.id = t.session_id
+        WHERE s.value = :session AND t.ts > :cursor)
+      SELECT max(turn) AS id, group_concat(said, char(10)) AS text
+      FROM marked GROUP BY role, island ORDER BY min(ts)\"}
+  boop concatmap --me --rules rules.json --state s --out o
 
 EXAMPLES:
   # oneshot refinement of one conversation, flash4 default model:
@@ -196,12 +216,13 @@ enum SubCmd {
     #[command(after_help = CONCATMAP_EXAMPLES)]
     Concatmap {
         /// Prompt template file; substitutes {{mode}}, {{ai_text}} (the
-        /// assistant turn(s) before the user turn), {{user_text}}.
+        /// assistant turn(s) before the user turn), {{user_text}}. Optional
+        /// under a rules `window` (the SQL's `text` column ships verbatim).
         #[arg(long)]
-        template: PathBuf,
-        /// The mode word substituted into the template.
+        template: Option<PathBuf>,
+        /// The mode word substituted into the template (compiled bundling).
         #[arg(long)]
-        mode: String,
+        mode: Option<String>,
         /// The one-shot model id, in the harness's own flag spelling.
         #[arg(long, conflicts_with = "preset")]
         model: Option<String>,
@@ -729,6 +750,16 @@ fn main() -> Result<()> {
                 Some(path) => boop::concatmap::Formula::load(path)?,
                 None => boop::concatmap::Formula::oneshot(),
             };
+            let template = match &template {
+                Some(path) => Some(std::fs::read_to_string(path)?),
+                None => None,
+            };
+            if formula.window.is_none() {
+                anyhow::ensure!(
+                    template.is_some() && mode.is_some(),
+                    "compiled bundling needs --template and --mode; or pass --rules with a window SQL"
+                );
+            }
             let session = match (session, me) {
                 (Some(session), _) => Some(session),
                 (None, true) => {

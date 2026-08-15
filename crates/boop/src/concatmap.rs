@@ -33,8 +33,8 @@ pub struct Pair {
 
 /// Loop configuration, one row per CLI flag.
 pub struct Args {
-    pub template: PathBuf,
-    pub mode: String,
+    pub template: Option<String>,
+    pub mode: Option<String>,
     pub model: String,
     pub state_dir: PathBuf,
     pub out_dir: PathBuf,
@@ -67,6 +67,9 @@ pub struct Formula {
     /// Append a <references> block of the source session's file touches as
     /// of each bundle, so reference claims come from the store, not the model.
     pub references: bool,
+    /// Caller-owned window SQL; when present it replaces the compiled
+    /// bundlers entirely (see `Store::window_rows` for the row contract).
+    pub window: Option<String>,
 }
 
 /// How consecutive same-role turns bundle. `Pair` takes the single preceding
@@ -85,6 +88,7 @@ impl Formula {
             bundle: BundleShape::Pair,
             coalesce: QUEUE_CAP,
             references: false,
+            window: None,
         }
     }
 
@@ -110,6 +114,7 @@ impl Formula {
             bundle,
             coalesce: file.coalesce.unwrap_or(QUEUE_CAP),
             references: file.references.unwrap_or(false),
+            window: file.window,
         })
     }
 }
@@ -121,6 +126,7 @@ struct FormulaFile {
     bundle: Option<String>,
     coalesce: Option<usize>,
     references: Option<bool>,
+    window: Option<String>,
 }
 
 /// The rewrite surface: one enum value per feed, chosen once at boot from the
@@ -411,13 +417,12 @@ pub fn run(args: Args) -> Result<()> {
         .with_context(|| format!("create {}", args.state_dir.display()))?;
     std::fs::create_dir_all(&args.out_dir)
         .with_context(|| format!("create {}", args.out_dir.display()))?;
-    let template = std::fs::read_to_string(&args.template)
-        .with_context(|| format!("read {}", args.template.display()))?;
+    let template = args.template.clone();
     let mut cursor = load_or_seed_cursor(&args.state_dir, &store)?;
     let mut done = load_done(&args.state_dir)?;
     let mut rewriter = Rewriter::open(&args.formula, adapter, &args).context("open the rewriter")?;
     loop {
-        match poll_once(&store, &mut rewriter, &args, &template, cursor, &mut done) {
+        match poll_once(&store, &mut rewriter, &args, template.as_deref(), cursor, &mut done) {
             Ok(next) => cursor = next,
             // A transient store error (a locked read, a stalled query) kills
             // no resident; the next tick retries from the same cursor.
@@ -432,7 +437,7 @@ fn poll_once(
     store: &crate::Store,
     rewriter: &mut Rewriter<'_>,
     args: &Args,
-    template: &str,
+    template: Option<&str>,
     cursor: i64,
     done: &mut BTreeSet<(String, i64)>,
 ) -> Result<i64> {
@@ -448,37 +453,64 @@ fn poll_once(
             max_seen = row.ts;
         }
     }
-    let bundled = match args.formula.bundle {
-        BundleShape::Pair => bundle_pairs(&rows),
-        BundleShape::Run => bundle_runs(&rows),
-    };
-    let fresh: Vec<Pair> = bundled
-        .into_iter()
-        .filter(|pair| !done.contains(&(pair.session.clone(), pair.turn)))
-        .filter_map(|mut pair| {
-            // A windowed query can miss the assistant turn that sits before
-            // the cursor; pull it from the store before giving up on the pair.
-            if pair.ai_text.trim().is_empty() {
-                pair.ai_text = last_assistant_before(store, &pair)?;
+    // One job per bundle: either the caller's window SQL owns the partition,
+    // or the compiled bundlers do.
+    let jobs: Vec<Job> = match &args.formula.window {
+        Some(sql) => {
+            let session_id = store
+                .session_id_lookup(args.session.as_deref().unwrap_or(""))
+                .context("look up the session id for the window SQL")?;
+            let mut window = store
+                .window_rows(sql, args.session.as_deref(), session_id, cursor)
+                .context("run the window SQL")?;
+            if args.formula.coalesce > 0 && window.len() > args.formula.coalesce {
+                window = window.split_off(window.len() - 1);
             }
-            Some(pair)
-        })
-        .collect();
-    for pair in coalesce_with_cap(fresh, args.formula.coalesce) {
-        // A failed rewrite retries, then drops the pair; it never drops the resident.
+            window
+                .into_iter()
+                .filter(|row| !done.contains(&(args.session.clone().unwrap_or_default(), row.id)))
+                .map(|row| Job::Window {
+                    session: args.session.clone().unwrap_or_default(),
+                    row,
+                })
+                .collect()
+        }
+        None => {
+            let bundled = match args.formula.bundle {
+                BundleShape::Pair => bundle_pairs(&rows),
+                BundleShape::Run => bundle_runs(&rows),
+            };
+            bundled
+                .into_iter()
+                .filter(|pair| !done.contains(&(pair.session.clone(), pair.turn)))
+                .filter_map(|mut pair| {
+                    // A windowed query can miss the assistant turn that sits before
+                    // the cursor; pull it from the store before giving up on the pair.
+                    if pair.ai_text.trim().is_empty() {
+                        pair.ai_text = last_assistant_before(store, &pair)?;
+                    }
+                    Some(pair)
+                })
+                .map(|pair| Job::Pair(pair))
+                .collect()
+        }
+    };
+    let jobs = coalesce_jobs(jobs, args.formula.coalesce);
+    for job in &jobs {
+        // A failed rewrite retries, then drops the bundle; it never drops the resident.
         for attempt in 1..=REWRITE_ATTEMPTS {
-            match process_pair(&pair, store, rewriter, args, template, done) {
+            match process_job(job, store, rewriter, args, template, done) {
                 Ok(()) => break,
                 Err(error) if attempt < REWRITE_ATTEMPTS => {
                     eprintln!(
                         "concatmap: rewrite failed for {}-{} (attempt {attempt}/{}), retrying in {}s: {error:#}",
-                        pair.session, pair.turn, REWRITE_ATTEMPTS, REWRITE_BACKOFF.as_secs()
+                        job.key().0, job.key().1, REWRITE_ATTEMPTS, REWRITE_BACKOFF.as_secs()
                     );
                     std::thread::sleep(REWRITE_BACKOFF);
                 }
                 Err(error) => eprintln!(
                     "concatmap: rewrite failed for {}-{}: {error:#}",
-                    pair.session, pair.turn
+                    job.key().0, job.key().1
                 ),
             }
         }
@@ -488,6 +520,34 @@ fn poll_once(
             .context("write cursor")?;
     }
     Ok(max_seen)
+}
+
+/// One bundle to map, whichever side produced it.
+enum Job {
+    Window {
+        session: String,
+        row: crate::query::WindowRow,
+    },
+    Pair(Pair),
+}
+
+impl Job {
+    /// The done-marker key and the out-file stem.
+    fn key(&self) -> (String, i64) {
+        match self {
+            Job::Window { session, row } => (session.clone(), row.id),
+            Job::Pair(pair) => (pair.session.clone(), pair.turn),
+        }
+    }
+}
+
+/// Past the cap, only the newest job survives; a cap of 0 never drops.
+fn coalesce_jobs(mut jobs: Vec<Job>, cap: usize) -> Vec<Job> {
+    if cap > 0 && jobs.len() > cap {
+        jobs.split_off(jobs.len() - 1)
+    } else {
+        jobs
+    }
 }
 
 /// First run seeds at the store's newest ts so only post-launch pairs map.
@@ -520,44 +580,53 @@ fn load_done(state_dir: &Path) -> Result<BTreeSet<(String, i64)>> {
     Ok(done)
 }
 
-fn process_pair(
-    pair: &Pair,
+fn process_job(
+    job: &Job,
     store: &crate::Store,
     rewriter: &mut Rewriter<'_>,
     args: &Args,
-    template: &str,
+    template: Option<&str>,
     done: &mut BTreeSet<(String, i64)>,
 ) -> Result<()> {
-    let mut msg = render_template(template, &args.mode, &pair.ai_text, &pair.user_text);
-    if args.formula.references {
-        msg.push_str("\n\n<references>\n");
-        let query = crate::query::FactQuery {
-            session: Some(pair.session.clone()),
-            until: Some(pair.ts as u64),
-            ..Default::default()
-        };
-        if let Ok(rows) = store.touch_rows(&query) {
-            // One line per path, the newest verb and turn seen up to now.
-            let mut seen: BTreeMap<&str, (String, i64)> = BTreeMap::new();
-            for row in &rows {
-                seen.insert(&row.path, (row.verb.clone(), row.turn));
+    let (session, id, msg) = match job {
+        // The window SQL already built the message; it ships verbatim.
+        Job::Window { session, row } => (session.clone(), row.id, row.text.clone()),
+        Job::Pair(pair) => {
+            let template = template.context("compiled bundling needs --template")?;
+            let mode = args.mode.as_deref().context("compiled bundling needs --mode")?;
+            let mut msg = render_template(template, mode, &pair.ai_text, &pair.user_text);
+            if args.formula.references {
+                msg.push_str("\n\n<references>\n");
+                let query = crate::query::FactQuery {
+                    session: Some(pair.session.clone()),
+                    until: Some(pair.ts as u64),
+                    ..Default::default()
+                };
+                if let Ok(rows) = store.touch_rows(&query) {
+                    // One line per path, the newest verb and turn seen up to now.
+                    let mut seen: BTreeMap<&str, (String, i64)> = BTreeMap::new();
+                    for row in &rows {
+                        seen.insert(&row.path, (row.verb.clone(), row.turn));
+                    }
+                    for (path, (verb, turn)) in seen {
+                        msg.push_str(&format!("{path}  {verb}  turn {turn}\n"));
+                    }
+                }
+                msg.push_str("</references>");
             }
-            for (path, (verb, turn)) in seen {
-                msg.push_str(&format!("{path}  {verb}  turn {turn}\n"));
-            }
+            (pair.session.clone(), pair.turn, msg)
         }
-        msg.push_str("</references>");
-    }
-    let out_dir = args.out_dir.join(pair.session.chars().take(8).collect::<String>());
+    };
+    let out_dir = args.out_dir.join(session.chars().take(8).collect::<String>());
     std::fs::create_dir_all(&out_dir)
         .with_context(|| format!("create {}", out_dir.display()))?;
-    let out_path = out_dir.join(format!("{}.md", pair.turn));
+    let out_path = out_dir.join(format!("{}.md", id));
     let text = rewriter.rewrite(store, &msg)?;
     std::fs::write(&out_path, text)
         .with_context(|| format!("write {}", out_path.display()))?;
-    std::fs::write(args.state_dir.join("done").join(format!("{}-{}", pair.session, pair.turn)), b"")
+    std::fs::write(args.state_dir.join("done").join(format!("{}-{}", session, id)), b"")
         .context("write done marker")?;
-    done.insert((pair.session.clone(), pair.turn));
+    done.insert((session, id));
     Ok(())
 }
 
@@ -738,6 +807,23 @@ mod tests {
         let formula = Formula::load(&path).unwrap();
         assert!(formula.references);
         assert_eq!(formula.coalesce, 0);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn formula_reads_the_window_sql() {
+        let path = std::env::temp_dir().join(format!("cm_formula_win_{}.json", std::process::id()));
+        std::fs::write(
+            &path,
+            r#"{"feed": "chat", "goal": "g", "window": "SELECT 1 AS id, 'x' AS text"}"#,
+        )
+        .unwrap();
+        let formula = Formula::load(&path).unwrap();
+        assert_eq!(
+            formula.window.as_deref(),
+            Some("SELECT 1 AS id, 'x' AS text")
+        );
+        assert_eq!(Formula::oneshot().window, None);
         let _ = std::fs::remove_file(&path);
     }
 }

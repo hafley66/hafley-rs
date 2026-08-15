@@ -15,6 +15,70 @@ fn opt_i64(value: Option<u64>) -> rusqlite::types::Value {
     value.map(|v| v as i64).into()
 }
 
+/// One bundle row a window SQL returns: `id` (stable done-marker key) and
+/// `text` (the message batch, already concat'ed by the SQL).
+pub struct WindowRow {
+    pub id: i64,
+    pub text: String,
+}
+
+impl Store {
+    /// The interned dict id for a session string, or `None` when the store
+    /// has never seen it. Lookup only: safe on a read-only connection.
+    pub fn session_id_lookup(&self, session: &str) -> Result<Option<i64>> {
+        let id = self
+            .connection()
+            .query_row(
+                "SELECT id FROM dict_session WHERE value = ?1",
+                params![session],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(Some)
+            .or_else(|error| match error {
+                rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                other => Err(other),
+            })?;
+        Ok(id)
+    }
+
+    /// Run a caller's window SQL. Binds `:session` TEXT, `:session_id`
+    /// INTEGER, `:cursor` ms. Rows: INTEGER `id`, TEXT `text`.
+    pub fn window_rows(
+        &self,
+        sql: &str,
+        session: Option<&str>,
+        session_id: Option<i64>,
+        cursor: i64,
+    ) -> Result<Vec<WindowRow>> {
+        let mut statement = self.connection().prepare(sql)?;
+        let mut bind = |name: &str, value: rusqlite::types::Value| -> Result<()> {
+            match statement.parameter_index(name)? {
+                Some(index) => Ok(statement.raw_bind_parameter(index, value)?),
+                None => Ok(()),
+            }
+        };
+        if let Some(session) = session {
+            bind(":session", session.to_owned().into())?;
+        }
+        if let Some(session_id) = session_id {
+            bind(":session_id", session_id.into())?;
+        }
+        bind(":cursor", cursor.into())?;
+        let mut rows = statement.raw_query();
+        let mut out = Vec::new();
+        while let Some(row) = rows.next()? {
+            let id = row
+                .get::<_, i64>("id")
+                .map_err(|_| anyhow::anyhow!("window SQL must return an INTEGER `id` column"))?;
+            let text = row
+                .get::<_, String>("text")
+                .map_err(|_| anyhow::anyhow!("window SQL must return a TEXT `text` column"))?;
+            out.push(WindowRow { id, text });
+        }
+        Ok(out)
+    }
+}
+
 /// One fact table the `db` tree lists. Variant names are the CLI nouns.
 #[derive(Clone, Copy, Debug)]
 pub enum FactKind {
@@ -562,6 +626,39 @@ mod tests {
         ));
         let _ = std::fs::remove_file(&path);
         (Store::open(path.clone()).unwrap(), path)
+    }
+
+    /// The caller's window SQL partitions same-role runs (gaps-and-islands),
+    /// concats each island, and honours `:session_id` / `:cursor` binds.
+    #[test]
+    fn window_sql_partitions_runs_and_binds_params() {
+        let (store, path) = store();
+        store.write_turn("ses", 1, 10, "assistant", "a1").unwrap();
+        store.write_turn("ses", 2, 11, "assistant", "a2").unwrap();
+        store.write_turn("ses", 3, 12, "user", "u1").unwrap();
+        store.write_turn("ses", 4, 13, "user", "u2").unwrap();
+        let sql = "WITH marked AS (
+                       SELECT t.turn, t.ts, r.value AS role, t.said,
+                              ROW_NUMBER() OVER (ORDER BY t.ts, t.turn)
+                            - ROW_NUMBER() OVER (PARTITION BY r.value ORDER BY t.ts, t.turn) AS island
+                       FROM agent_turn t JOIN dict_role r ON r.id = t.role_id
+                       WHERE t.session_id = :session_id AND t.ts > :cursor)
+                   SELECT max(turn) AS id, group_concat(said, ' | ') AS text
+                   FROM marked GROUP BY role, island ORDER BY min(ts)";
+        let session_id = store.session_id_lookup("ses").unwrap().unwrap();
+        let rows = store
+            .window_rows(sql, Some("ses"), Some(session_id), 0)
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!((rows[0].id, rows[0].text.as_str()), (2, "a1 | a2"));
+        assert_eq!((rows[1].id, rows[1].text.as_str()), (4, "u1 | u2"));
+        let fresh = store
+            .window_rows(sql, Some("ses"), Some(session_id), 11)
+            .unwrap();
+        assert_eq!(fresh.len(), 1);
+        assert_eq!((fresh[0].id, fresh[0].text.as_str()), (4, "u1 | u2"));
+        assert!(store.session_id_lookup("nope").unwrap().is_none());
+        let _ = std::fs::remove_file(&path);
     }
 
     /// Every fact list must answer on an empty store rather than error: a new
