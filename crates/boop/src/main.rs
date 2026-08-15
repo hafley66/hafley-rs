@@ -963,6 +963,18 @@ fn run_follow(registry: &Registry) -> Result<()> {
     loop {
         let store = ident::Store::open(ident::Store::default_path()?)?;
         store.begin()?;
+        // Rescan every tick: a conversation opened after boot (the concatmap
+        // mapper's) is otherwise invisible to this resident forever.
+        for adapter in registry.all() {
+            for session in adapter.sessions()? {
+                let known = sessions
+                    .iter()
+                    .any(|(id, s)| *id == adapter.id() && s.session_id == session.session_id);
+                if !known {
+                    sessions.push((adapter.id().to_owned(), session));
+                }
+            }
+        }
         for (harness_id, session) in &sessions {
             let mtime = file_mtime_ms(&session.path).unwrap_or(0);
             if last_mtime.get(&session.session_id).copied().unwrap_or(0) == mtime {
