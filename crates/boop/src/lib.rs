@@ -6,6 +6,8 @@
 //! `Store::query_sessions` and `Store::usage_report`; `plans/boop-instant-v2-contract.md`
 //! pins the exact call per view.
 
+#[cfg(feature = "agent-read")]
+pub mod activity;
 pub mod bus;
 pub mod channel;
 #[cfg(feature = "agent-read")]
@@ -29,6 +31,8 @@ pub mod tmux;
 pub mod usage;
 pub mod worktree;
 
+#[cfg(feature = "agent-read")]
+pub use activity::{ActivityCount, ActivityScope, ToolResultAvailability};
 pub use ident::{Store, SyncStat};
 #[cfg(feature = "agent-read")]
 pub use query::{FactKind, FactQuery};
