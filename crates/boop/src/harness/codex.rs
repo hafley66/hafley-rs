@@ -667,6 +667,7 @@ mod tests {
             repo: std::env::temp_dir(),
             env_stamp: None,
             model: None,
+            variant: None,
             on_exit: None,
             tmux: None,
             lane: "lane-test".to_owned(),

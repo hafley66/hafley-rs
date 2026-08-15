@@ -87,6 +87,9 @@ pub fn supervisor_command(spec: &SpawnSpec) -> String {
     if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
         command.push_str(&format!(" --model {}", quote(model)));
     }
+    if let Some(variant) = spec.variant.as_deref().filter(|value| !value.is_empty()) {
+        command.push_str(&format!(" --variant {}", quote(variant)));
+    }
     if let Some(session) = &spec.resume_session {
         command.push_str(&format!(" --resume {}", quote(session)));
     }
@@ -186,6 +189,9 @@ pub struct SpawnSpec {
     /// The model the lane runs, in the harness's own flag spelling. `None`
     /// lets the harness default; a harness with no default refuses.
     pub model: Option<String>,
+    /// opencode reasoning-effort variant (`--variant low|medium|high`).
+    /// `None` emits no flag, keeping opencode's own per-model default.
+    pub variant: Option<String>,
     /// Shell appended after the harness command exits; it may read `$__rc`
     /// (the harness exit code), which the lane re-raises afterwards.
     pub on_exit: Option<String>,

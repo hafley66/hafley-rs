@@ -516,6 +516,7 @@ fn main() -> Result<()> {
                 parent: None,
                 on_exit: None,
                 warm_start: true,
+                variant: None,
             },
         ),
         SubCmd::Resolve { to, mail_dir } => run_resolve(&to, mail_dir.as_deref()),
@@ -574,6 +575,7 @@ fn main() -> Result<()> {
                 brief,
                 model,
                 preset,
+                variant: None,
                 tmux,
                 parent,
                 branch,
@@ -1157,6 +1159,8 @@ struct DispatchArgs {
     resolve_wait: u64,
     main_tree: bool,
     base_sha: Option<String>,
+    /// opencode reasoning-effort variant, threaded from `lane create`.
+    variant: Option<String>,
     /// Overrides the branch name derived from `tmux`/`to`; `lane create`
     /// sets this from its own `--branch` flag.
     branch: Option<String>,
@@ -1232,6 +1236,7 @@ fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
             caller.session.as_deref(),
         )),
         model: args.model.clone(),
+        variant: args.variant.clone(),
         on_exit: args.on_exit.clone(),
         tmux: args.tmux.clone(),
         lane: args.to.clone(),
@@ -1503,6 +1508,7 @@ fn run_lane_supervisor(
     brief: &Path,
     model: Option<&str>,
     resume: Option<&str>,
+    variant: Option<&str>,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
     info!(
@@ -1511,6 +1517,7 @@ fn run_lane_supervisor(
         model = model.unwrap_or_default(),
         cwd = %std::env::current_dir().unwrap_or_default().display(),
         resume = resume.unwrap_or_default(),
+        variant = variant.unwrap_or_default(),
         "lane supervisor starting"
     );
     let adapter = harness_by_id(registry, harness_id)?;
@@ -1737,6 +1744,7 @@ struct LaneArgs {
     brief: Option<PathBuf>,
     model: Option<String>,
     preset: Option<String>,
+    variant: Option<String>,
     tmux: Option<String>,
     parent: Option<String>,
     branch: Option<String>,
@@ -1756,6 +1764,7 @@ struct LaneArgs {
 fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     let config_path = config::default_path()?;
     let config = config::load(&config_path)?;
+    let model_given = args.model.is_some();
     let requested_model = match (args.model, args.preset.as_deref()) {
         (Some(model), _) => Some(model),
         (None, Some(preset)) => Some(config::resolve_model(preset, &config_path)?),
@@ -1795,6 +1804,25 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         default_preset.as_deref(),
         &config_path,
     )?;
+    // The preset that resolved the model also carries the variant; an explicit
+    // --model opts out of both preset lookups. CLI --variant wins over preset.
+    let preset_name = if model_given {
+        None
+    } else {
+        args.preset.as_deref().or(default_preset.as_deref())
+    };
+    let variant = match args.variant {
+        Some(variant) => Some(variant),
+        None => preset_name
+            .and_then(|name| config::resolve_variant(name, &config_path).ok())
+            .flatten(),
+    };
+    if variant.is_some() && harness_id == "codex" {
+        anyhow::bail!(
+            "--variant is opencode-only; the codex channel sets reasoning effort via the \
+             `model@effort` suffix instead"
+        );
+    }
     let prompt = brief.display().to_string();
     // A worktree branches from origin/main unless pinned; the repo-tree shape
     // keeps its own HEAD, where a base of origin/main would be a merge.
@@ -1851,6 +1879,7 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
                 caller.session.as_deref(),
             )),
             model: model.clone(),
+            variant: variant.clone(),
             on_exit: on_exit.clone(),
             tmux: Some(identity.tmux.clone()),
             lane: identity.lane.clone(),
@@ -1940,6 +1969,7 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             goal: args.goal.clone(),
             on_exit,
             warm_start: !args.no_start,
+            variant: variant.clone(),
         },
     )?;
     info!(
@@ -3029,6 +3059,10 @@ enum LaneCmd {
         /// Resolve a named provider/model entry from the platform Boop config.
         #[arg(long, conflicts_with = "model")]
         preset: Option<String>,
+        /// opencode reasoning-effort variant (low|medium|high); CLI wins over
+        /// the preset's variant, and opencode's default applies when neither.
+        #[arg(long)]
+        variant: Option<String>,
         /// Block until the lane's on-exit result row lands, then exit with its
         /// rc. Needs a parent, since that hail is what writes the row.
         #[arg(long)]
@@ -3066,6 +3100,9 @@ enum LaneCmd {
         /// Continue an existing harness conversation instead of opening one.
         #[arg(long)]
         resume: Option<String>,
+        /// opencode reasoning-effort variant, threaded from `lane create`.
+        #[arg(long)]
+        variant: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -3612,6 +3649,7 @@ fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             brief,
             model,
             preset,
+            variant,
             tmux,
             parent,
             branch,
@@ -3633,6 +3671,7 @@ fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
                 brief,
                 model,
                 preset,
+                variant,
                 tmux,
                 parent,
                 branch,
@@ -3653,6 +3692,7 @@ fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             brief,
             model,
             resume,
+            variant,
             mail_dir,
         } => run_lane_supervisor(
             registry,
@@ -3661,6 +3701,7 @@ fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             &brief,
             model.as_deref(),
             resume.as_deref(),
+            variant.as_deref(),
             mail_dir.as_deref(),
         ),
         LaneCmd::Get { lane, mail_dir } => run_lane_get(mail_dir.as_deref(), &lane),

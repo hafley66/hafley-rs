@@ -329,6 +329,9 @@ fn launch_command(spec: &SpawnSpec) -> Result<String> {
         .filter(|value| !value.is_empty())
         .context("spawn spec has no model; opencode needs one resolved by the caller")?;
     let mut command = format!("opencode run -m {}", shell_quote(model));
+    if let Some(variant) = spec.variant.as_deref().filter(|value| !value.is_empty()) {
+        command.push_str(&format!(" --variant {}", shell_quote(variant)));
+    }
     if let Some(session) = &spec.resume_session {
         command.push_str(&format!(" -s {}", shell_quote(session)));
     }
@@ -544,6 +547,7 @@ mod tests {
             repo: std::env::temp_dir(),
             env_stamp: None,
             model: Some("m".to_owned()),
+            variant: None,
             on_exit: None,
             tmux: None,
             lane: "lane-test".to_owned(),
@@ -630,6 +634,27 @@ mod tests {
         let command = launch_command(&req).unwrap();
         assert!(command.contains("opencode run -m 'openrouter/deepseek/deepseek-v4-flash-0731'"));
         assert!(command.contains("--auto \"$(cat \"/tmp/brief.md\")\""));
+    }
+
+    #[test]
+    fn variant_flag_is_emitted_when_set() {
+        let guard = TmuxGuard::new();
+        let mut req = spec(&guard);
+        req.variant = Some("low".to_owned());
+        let command = launch_command(&req).unwrap();
+        assert!(command.contains(" --variant 'low'"), "{command}");
+    }
+
+    #[test]
+    fn no_variant_means_no_flag_and_byte_identical() {
+        let guard = TmuxGuard::new();
+        let req = spec(&guard);
+        let command = launch_command(&req).unwrap();
+        assert!(!command.contains("--variant"), "{command}");
+        assert_eq!(
+            command,
+            "opencode run -m 'm' --auto \"$(cat \"/tmp/brief.md\")\""
+        );
     }
 
     #[test]

@@ -10,11 +10,29 @@ use serde::{Deserialize, Serialize};
 #[serde(default, rename_all = "kebab-case")]
 pub struct Config {
     pub default_model_preset: Option<String>,
-    pub model_presets: BTreeMap<String, String>,
+    pub model_presets: BTreeMap<String, PresetEntry>,
     /// Model-name prefix -> harness id, overriding lane.rs's compiled table.
     pub model_harness: BTreeMap<String, String>,
     /// Model-family prefix -> owning harness for the flat-rate-plan ban.
     pub opencode_banned: BTreeMap<String, String>,
+}
+
+/// One named preset: the provider/model string plus an optional opencode
+/// reasoning-effort variant. `model_presets` values accept either the legacy
+/// bare model string or this object form.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ModelPreset {
+    pub model: String,
+    #[serde(default)]
+    pub variant: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum PresetEntry {
+    Object(ModelPreset),
+    Legacy(String),
 }
 
 static CONFIG: OnceLock<Result<Config, anyhow::Error>> = OnceLock::new();
@@ -49,19 +67,41 @@ pub fn load(path: &Path) -> Result<Config> {
 }
 
 pub fn resolve_model(preset: &str, path: &Path) -> Result<String> {
+    Ok(resolve_preset(preset, path)?.model)
+}
+
+/// The opencode variant a named preset carries, if any. A preset that names
+/// no variant resolves to `None`, meaning the CLI flag decides alone.
+pub fn resolve_variant(preset: &str, path: &Path) -> Result<Option<String>> {
+    Ok(resolve_preset(preset, path)?.variant)
+}
+
+/// The full named preset, both the model string and its optional variant.
+pub fn resolve_preset(preset: &str, path: &Path) -> Result<ModelPreset> {
     let config = load(path)?;
-    config.model_presets.get(preset).cloned().with_context(|| {
-        let available = config.model_presets.keys().cloned().collect::<Vec<_>>();
-        let available = if available.is_empty() {
-            "none".to_owned()
-        } else {
-            available.join(", ")
-        };
-        format!(
-            "model preset `{preset}` is absent from {} (available: {available})",
-            path.display()
-        )
-    })
+    config
+        .model_presets
+        .get(preset)
+        .cloned()
+        .map(|entry| match entry {
+            PresetEntry::Object(preset) => preset,
+            PresetEntry::Legacy(model) => ModelPreset {
+                model,
+                variant: None,
+            },
+        })
+        .with_context(|| {
+            let available = config.model_presets.keys().cloned().collect::<Vec<_>>();
+            let available = if available.is_empty() {
+                "none".to_owned()
+            } else {
+                available.join(", ")
+            };
+            format!(
+                "model preset `{preset}` is absent from {} (available: {available})",
+                path.display()
+            )
+        })
 }
 
 /// Pick a lane's spawn model: explicit --model, then --preset, then
@@ -125,14 +165,51 @@ mod tests {
                 model_presets: BTreeMap::from([
                     (
                         "flash4".into(),
-                        "openrouter/deepseek/deepseek-v4-flash-0731".into()
+                        PresetEntry::Legacy(
+                            "openrouter/deepseek/deepseek-v4-flash-0731".into()
+                        )
                     ),
-                    ("luna".into(), "gpt-5.6-luna@medium".into()),
+                    ("luna".into(), PresetEntry::Legacy("gpt-5.6-luna@medium".into())),
                 ]),
                 model_harness: BTreeMap::from([("glm".into(), "opencode".into())]),
                 opencode_banned: BTreeMap::from([("gemini".into(), "gemini".into())]),
             }
         );
+    }
+
+    #[test]
+    fn preset_object_form_carries_a_variant() {
+        let config: Config = serde_json::from_str(
+            r#"
+{
+  "model-presets": {
+    "flash4": { "model": "openrouter/deepseek/deepseek-v4-flash-0731", "variant": "high" },
+    "luna": "gpt-5.6-luna@medium"
+  }
+}
+"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            config.model_presets.get("flash4"),
+            Some(PresetEntry::Object(_))
+        ));
+        assert!(matches!(
+            config.model_presets.get("luna"),
+            Some(PresetEntry::Legacy(_))
+        ));
+        let path = write_config(
+            r#"{ "model-presets": {
+                "flash4": { "model": "openrouter/deepseek/deepseek-v4-flash-0731", "variant": "high" },
+                "luna": "gpt-5.6-luna@medium" } }"#,
+            "object-preset",
+        );
+        assert_eq!(
+            resolve_model("flash4", &path).unwrap(),
+            "openrouter/deepseek/deepseek-v4-flash-0731"
+        );
+        assert_eq!(resolve_variant("flash4", &path).unwrap(), Some("high".into()));
+        assert_eq!(resolve_variant("luna", &path).unwrap(), None);
     }
 
     fn write_config(text: &str, name: &str) -> std::path::PathBuf {
