@@ -37,6 +37,8 @@ pub struct Args {
     pub poll: Duration,
     pub cap: u32,
     pub formula: Formula,
+    /// One conversation only; `None` maps every session.
+    pub session: Option<String>,
 }
 
 /// How a bundle reaches the model. The rules file names the feed; the loop
@@ -54,14 +56,30 @@ pub enum Feed {
 pub struct Formula {
     pub feed: Feed,
     pub goal: Option<String>,
+    pub bundle: BundleShape,
+    /// Backlog cap; 0 never drops. Defaults to `QUEUE_CAP`.
+    pub coalesce: usize,
+}
+
+/// How consecutive same-role turns bundle. `Pair` takes the single preceding
+/// assistant turn; `Run` collapses each same-role run into one block.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BundleShape {
+    Pair,
+    Run,
 }
 
 impl Formula {
     pub fn oneshot() -> Formula {
-        Formula { feed: Feed::OneShot, goal: None }
+        Formula {
+            feed: Feed::OneShot,
+            goal: None,
+            bundle: BundleShape::Pair,
+            coalesce: QUEUE_CAP,
+        }
     }
 
-    /// Load from a json rules file: `{"feed": "chat", "goal": "..."}`.
+    /// Load from a json rules file.
     pub fn load(path: &Path) -> Result<Formula> {
         let text = std::fs::read_to_string(path)
             .with_context(|| format!("read rules {}", path.display()))?;
@@ -72,7 +90,17 @@ impl Formula {
             "chat" => Feed::Chat,
             other => bail!("unknown feed `{other}` in {}; expected oneshot or chat", path.display()),
         };
-        Ok(Formula { feed, goal: file.goal })
+        let bundle = match file.bundle.as_deref() {
+            None | Some("pair") => BundleShape::Pair,
+            Some("run") => BundleShape::Run,
+            Some(other) => bail!("unknown bundle `{other}` in {}; expected pair or run", path.display()),
+        };
+        Ok(Formula {
+            feed,
+            goal: file.goal,
+            bundle,
+            coalesce: file.coalesce.unwrap_or(QUEUE_CAP),
+        })
     }
 }
 
@@ -80,6 +108,8 @@ impl Formula {
 struct FormulaFile {
     feed: String,
     goal: Option<String>,
+    bundle: Option<String>,
+    coalesce: Option<usize>,
 }
 
 /// The rewrite surface: one enum value per feed, chosen once at boot from the
@@ -257,6 +287,61 @@ pub fn bundle_pairs(rows: &[TurnRow]) -> Vec<Pair> {
     pairs
 }
 
+/// Consecutive same-role rows collapse: each user run since the model last
+/// spoke is one bundle; each assistant run is one `ai_text` block.
+pub fn bundle_runs(rows: &[TurnRow]) -> Vec<Pair> {
+    fn push_pair(
+        session: &str,
+        ai_text: &str,
+        pending: &mut Option<(i64, i64, String)>,
+        pairs: &mut Vec<Pair>,
+    ) {
+        if let Some((turn, ts, text)) = pending.take() {
+            pairs.push(Pair {
+                session: session.to_owned(),
+                turn,
+                ts,
+                ai_text: ai_text.to_owned(),
+                user_text: text,
+            });
+        }
+    }
+    let mut pairs = Vec::new();
+    let mut session = String::new();
+    let mut ai_text = String::new();
+    let mut pending: Option<(i64, i64, String)> = None;
+    for row in rows {
+        let said = trim_double_encoded(&row.said).to_owned();
+        if row.session != session {
+            push_pair(&session, &ai_text, &mut pending, &mut pairs);
+            session = row.session.clone();
+            ai_text.clear();
+        }
+        if row.role == "assistant" {
+            if pending.is_some() {
+                push_pair(&session, &ai_text, &mut pending, &mut pairs);
+                ai_text.clear();
+            }
+            if !ai_text.is_empty() {
+                ai_text.push_str("\n\n");
+            }
+            ai_text.push_str(&said);
+        } else if row.role == "user" && !said.starts_with("mode: ") {
+            match &mut pending {
+                Some((turn, ts, text)) => {
+                    text.push_str("\n\n");
+                    text.push_str(&said);
+                    *turn = row.turn;
+                    *ts = row.ts;
+                }
+                None => pending = Some((row.turn, row.ts, said)),
+            }
+        }
+    }
+    push_pair(&session, &ai_text, &mut pending, &mut pairs);
+    pairs
+}
+
 /// The newest assistant turn in `pair`'s session strictly before its ts, or
 /// `None` when the session had none (its first turn; nothing to rewrite).
 fn last_assistant_before(store: &crate::Store, pair: &Pair) -> Option<String> {
@@ -273,9 +358,9 @@ fn last_assistant_before(store: &crate::Store, pair: &Pair) -> Option<String> {
         .map(|row| trim_double_encoded(&row.said).to_owned())
 }
 
-/// Past the cap, only the newest pair survives.
-pub fn coalesce(mut pairs: Vec<Pair>) -> Vec<Pair> {
-    if pairs.len() > QUEUE_CAP {
+/// Past the cap, only the newest pair survives; a cap of 0 never drops.
+pub fn coalesce_with_cap(mut pairs: Vec<Pair>, cap: usize) -> Vec<Pair> {
+    if cap > 0 && pairs.len() > cap {
         pairs.split_off(pairs.len() - 1)
     } else {
         pairs
@@ -331,6 +416,7 @@ fn poll_once(
 ) -> Result<i64> {
     let query = TurnQuery {
         since: Some(cursor.max(0) as u64),
+        session: args.session.clone(),
         ..Default::default()
     };
     let rows = store.turn_rows(&query).context("query new turns")?;
@@ -340,7 +426,11 @@ fn poll_once(
             max_seen = row.ts;
         }
     }
-    let fresh: Vec<Pair> = bundle_pairs(&rows)
+    let bundled = match args.formula.bundle {
+        BundleShape::Pair => bundle_pairs(&rows),
+        BundleShape::Run => bundle_runs(&rows),
+    };
+    let fresh: Vec<Pair> = bundled
         .into_iter()
         .filter(|pair| !done.contains(&(pair.session.clone(), pair.turn)))
         .filter_map(|mut pair| {
@@ -352,7 +442,7 @@ fn poll_once(
             Some(pair)
         })
         .collect();
-    for pair in coalesce(fresh) {
+    for pair in coalesce_with_cap(fresh, args.formula.coalesce) {
         // A failed rewrite drops the pair, never the resident.
         if let Err(error) = process_pair(&pair, store, rewriter, args, template, done) {
             eprintln!("concatmap: rewrite failed for {}-{}: {error:#}", pair.session, pair.turn);
@@ -492,7 +582,7 @@ mod tests {
                 user_text: String::new(),
             })
             .collect();
-        let kept = coalesce(pairs);
+        let kept = coalesce_with_cap(pairs, QUEUE_CAP);
         assert_eq!(kept.len(), 1);
         assert_eq!(kept[0].turn, 4);
     }
@@ -508,7 +598,17 @@ mod tests {
                 user_text: String::new(),
             })
             .collect();
-        assert_eq!(coalesce(pairs).len(), 4);
+        assert_eq!(coalesce_with_cap(pairs, QUEUE_CAP).len(), 4);
+        let uncapped: Vec<Pair> = (0..2)
+            .map(|turn| Pair {
+                session: "s".into(),
+                turn,
+                ts: turn,
+                ai_text: String::new(),
+                user_text: String::new(),
+            })
+            .collect();
+        assert_eq!(coalesce_with_cap(uncapped, 0).len(), 2);
     }
 
     #[test]
@@ -543,6 +643,33 @@ mod tests {
 
     #[test]
     fn formula_without_rules_is_oneshot() {
-        assert_eq!(Formula::oneshot(), Formula { feed: Feed::OneShot, goal: None });
+        assert_eq!(Formula::oneshot().feed, Feed::OneShot);
+        assert_eq!(Formula::oneshot().bundle, BundleShape::Pair);
+        assert_eq!(Formula::oneshot().coalesce, QUEUE_CAP);
+    }
+
+    #[test]
+    fn run_bundling_collapses_each_same_role_run() {
+        let rows = vec![
+            row("s", 1, 10, "assistant", "first reply"),
+            row("s", 2, 11, "assistant", "second reply"),
+            row("s", 3, 12, "user", "wait"),
+            row("s", 4, 13, "user", "actually do this"),
+            row("s", 5, 14, "assistant", "done"),
+            row("s", 6, 15, "user", "next"),
+        ];
+        let pairs = bundle_runs(&rows);
+        assert_eq!(pairs.len(), 2);
+        assert_eq!(pairs[0].ai_text, "first reply\n\nsecond reply");
+        assert_eq!(pairs[0].user_text, "wait\n\nactually do this");
+        assert_eq!(pairs[0].turn, 4);
+        assert_eq!(pairs[1].ai_text, "done");
+        assert_eq!(pairs[1].user_text, "next");
+    }
+
+    #[test]
+    fn run_bundling_skips_mapper_prompts_whole() {
+        let rows = vec![row("m", 1, 10, "user", "mode: tighten\n\nrewrite")];
+        assert!(bundle_runs(&rows).is_empty());
     }
 }

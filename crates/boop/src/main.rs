@@ -179,6 +179,9 @@ enum SubCmd {
         /// Absent rules run the oneshot feed.
         #[arg(long)]
         rules: Option<PathBuf>,
+        /// Map one conversation only, not every session in the store.
+        #[arg(long)]
+        session: Option<String>,
     },
     /// Report the caller's own identity and the rung that resolved it.
     Whoami {
@@ -662,6 +665,7 @@ fn main() -> Result<()> {
             poll_secs,
             cap,
             rules,
+            session,
         } => {
             // Common model-selection subset: explicit model wins, preset
             // resolves through config; flash4 is the standing default.
@@ -684,6 +688,7 @@ fn main() -> Result<()> {
                 poll: std::time::Duration::from_secs(poll_secs),
                 cap,
                 formula,
+                session,
             })
         }
         SubCmd::Whoami { json } => run_whoami(json),
