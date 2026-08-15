@@ -954,29 +954,24 @@ fn run_follow(registry: &Registry) -> Result<()> {
     }
     let mut last_mtime: std::collections::HashMap<String, u64> = sessions
         .iter()
-        .map(|(_, session)| {
-            let mtime = file_mtime_ms(&session.path).unwrap_or(0);
-            (session.session_id.clone(), mtime)
-        })
+        .map(|(_, session)| (session.session_id.clone(), session.modified_ms))
         .collect();
     let routes = bus::read_routes(&mail_dir(None)?).unwrap_or_default();
     loop {
         let store = ident::Store::open(ident::Store::default_path()?)?;
         store.begin()?;
-        // Rescan every tick: a conversation opened after boot (the concatmap
-        // mapper's) is otherwise invisible to this resident forever.
+        // Rebuild the list every tick: a conversation opened after boot (the
+        // concatmap mapper's) is otherwise invisible to this resident forever.
+        sessions.clear();
         for adapter in registry.all() {
             for session in adapter.sessions()? {
-                let known = sessions
-                    .iter()
-                    .any(|(id, s)| *id == adapter.id() && s.session_id == session.session_id);
-                if !known {
-                    sessions.push((adapter.id().to_owned(), session));
-                }
+                sessions.push((adapter.id().to_owned(), session));
             }
         }
         for (harness_id, session) in &sessions {
-            let mtime = file_mtime_ms(&session.path).unwrap_or(0);
+            // `modified_ms` is each adapter's source of truth; a shared sqlite
+            // main file never moves under WAL writes, so file mtime starved opencode.
+            let mtime = session.modified_ms;
             if last_mtime.get(&session.session_id).copied().unwrap_or(0) == mtime {
                 continue;
             }
@@ -1010,18 +1005,6 @@ fn session_route_pid(
 fn session_matches_route(route: &bus::Route, session: &boop::harness::SessionRef) -> bool {
     route.session_id.as_deref() == Some(session.session_id.as_str())
         || (route.cwd.is_some() && route.cwd.as_deref() == session.cwd.as_deref())
-}
-
-fn file_mtime_ms(path: &std::path::Path) -> Result<u64> {
-    use std::time::UNIX_EPOCH;
-    let metadata = std::fs::metadata(path)?;
-    match metadata.modified() {
-        Ok(time) => Ok(time
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0)),
-        Err(_) => Ok(0),
-    }
 }
 
 fn resolve_harness<'a>(registry: &'a Registry, id: &str) -> Result<&'a dyn boop::harness::Harness> {
