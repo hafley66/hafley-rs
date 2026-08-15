@@ -21,6 +21,7 @@ pub mod proc;
 pub mod query;
 pub mod registry;
 pub mod rows;
+pub mod runtime;
 pub mod supervise;
 pub mod tail;
 pub mod tmux;
@@ -35,6 +36,9 @@ pub use registry::Registry;
 pub use rows::{
     CommandRow, EdgeRow, FactCursor, FetchRow, LiveSpanRow, SessionRow, StatusRow, TouchRow,
     TurnRow, UsageRow,
+};
+pub use runtime::{
+    CompletionRecord, LaneRuntime, ProcessIdentity, ResolvedRoute, RuntimeDiagnostic,
 };
 #[cfg(feature = "agent-read")]
 pub use usage::{GroupBy, UsageQuery};
