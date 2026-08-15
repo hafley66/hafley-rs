@@ -1,7 +1,7 @@
 //! The concatMap refinement loop: read new (assistant, user) contact pairs
 //! from the store and pipe each through a one-shot model pass to fixed point.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -59,6 +59,9 @@ pub struct Formula {
     pub bundle: BundleShape,
     /// Backlog cap; 0 never drops. Defaults to `QUEUE_CAP`.
     pub coalesce: usize,
+    /// Append a <references> block of the source session's file touches as
+    /// of each bundle, so reference claims come from the store, not the model.
+    pub references: bool,
 }
 
 /// How consecutive same-role turns bundle. `Pair` takes the single preceding
@@ -76,6 +79,7 @@ impl Formula {
             goal: None,
             bundle: BundleShape::Pair,
             coalesce: QUEUE_CAP,
+            references: false,
         }
     }
 
@@ -100,6 +104,7 @@ impl Formula {
             goal: file.goal,
             bundle,
             coalesce: file.coalesce.unwrap_or(QUEUE_CAP),
+            references: file.references.unwrap_or(false),
         })
     }
 }
@@ -110,6 +115,7 @@ struct FormulaFile {
     goal: Option<String>,
     bundle: Option<String>,
     coalesce: Option<usize>,
+    references: Option<bool>,
 }
 
 /// The rewrite surface: one enum value per feed, chosen once at boot from the
@@ -496,7 +502,26 @@ fn process_pair(
     template: &str,
     done: &mut BTreeSet<(String, i64)>,
 ) -> Result<()> {
-    let msg = render_template(template, &args.mode, &pair.ai_text, &pair.user_text);
+    let mut msg = render_template(template, &args.mode, &pair.ai_text, &pair.user_text);
+    if args.formula.references {
+        msg.push_str("\n\n<references>\n");
+        let query = crate::query::FactQuery {
+            session: Some(pair.session.clone()),
+            until: Some(pair.ts as u64),
+            ..Default::default()
+        };
+        if let Ok(rows) = store.touch_rows(&query) {
+            // One line per path, the newest verb and turn seen up to now.
+            let mut seen: BTreeMap<&str, (String, i64)> = BTreeMap::new();
+            for row in &rows {
+                seen.insert(&row.path, (row.verb.clone(), row.turn));
+            }
+            for (path, (verb, turn)) in seen {
+                msg.push_str(&format!("{path}  {verb}  turn {turn}\n"));
+            }
+        }
+        msg.push_str("</references>");
+    }
     let out_dir = args.out_dir.join(pair.session.chars().take(8).collect::<String>());
     std::fs::create_dir_all(&out_dir)
         .with_context(|| format!("create {}", out_dir.display()))?;
@@ -674,5 +699,19 @@ mod tests {
     fn run_bundling_skips_mapper_prompts_whole() {
         let rows = vec![row("m", 1, 10, "user", "mode: tighten\n\nrewrite")];
         assert!(bundle_runs(&rows).is_empty());
+    }
+
+    #[test]
+    fn formula_reads_the_references_flag() {
+        let path = std::env::temp_dir().join(format!("cm_formula_ref_{}.json", std::process::id()));
+        std::fs::write(
+            &path,
+            r#"{"feed": "chat", "goal": "g", "bundle": "run", "coalesce": 0, "references": true}"#,
+        )
+        .unwrap();
+        let formula = Formula::load(&path).unwrap();
+        assert!(formula.references);
+        assert_eq!(formula.coalesce, 0);
+        let _ = std::fs::remove_file(&path);
     }
 }
