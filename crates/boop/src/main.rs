@@ -20,6 +20,49 @@ use boop::{bus, config, ident, identity, lane, proc, tmux};
 #[cfg(feature = "agent-read")]
 use boop::{query, usage};
 
+const CONCATMAP_EXAMPLES: &str = "\
+TEMPLATE: a markdown file whose rendered form IS the prompt. Keys:
+  {{mode}}      the --mode word (labels the experiment; also how the loop
+                recognises and skips its own mapper prompts)
+  {{ai_text}}   the assistant turn(s) before the user turn
+  {{user_text}} the user turn that follows
+
+STATE: the loop's own memory, one dir per experiment:
+  <state>/cursor    last store ts seen (first run seeds at the newest ts,
+                    so only pairs made AFTER launch get mapped)
+  <state>/done/     one empty marker per mapped (session, turn); a restart
+                    never remaps them
+  For the chat feed the state dir is also the resident model's cwd.
+
+RULES: a json file choosing the feed and bundle shape:
+  {\"feed\": \"oneshot\"}                       fresh process per bundle, passes to fixed point
+  {\"feed\": \"chat\", \"goal\": \"...\"}          one enduring resident; goal is its first turn
+  \"bundle\": \"pair\" (default) or \"run\"       pair = 1 ai + 1 user; run collapses same-role runs
+  \"coalesce\": 4                        backlog cap; only the newest survives past it (0 = never drop)
+  \"references\": true                   append the source session's file touches as of the bundle
+
+EXAMPLES:
+  # oneshot refinement of one conversation, flash4 default model:
+  boop concatmap --session ses_abc123 --mode tighten \\
+    --template tighten.md \\
+    --state ~/.agent/concatmap/tighten/state \\
+    --out   ~/.agent/concatmap/tighten/out
+
+  # same, but map the caller's own session (whoami ladder resolves it):
+  boop concatmap --me --mode tighten --template tighten.md --state s --out o
+
+  # enduring resident whose history accumulates; rewrites land per turn:
+  #   rules.json: {\"feed\": \"chat\", \"goal\": \"tighten each <ai> turn; code and
+  #                numbers verbatim; return only the rewritten turn\",
+  #                \"bundle\": \"run\", \"coalesce\": 4, \"references\": true}
+  boop concatmap --me --rules rules.json --mode tighten \\
+    --template tighten.md --state s --out o
+
+  # template file shape (tighten.md):
+  #   mode: {{mode}}
+  #   <ai>{{ai_text}}</ai>
+  #   <user>{{user_text}}</user>";
+
 const DOCTRINE: &str = "\
 DOCTRINE (this help is the usage contract; agents read it with `boop --help`):
 
@@ -148,10 +191,12 @@ enum SubCmd {
         #[command(subcommand)]
         cmd: Option<DbCmd>,
     },
-    /// Refinement loop: map each new (assistant, user) contact pair through a
-    /// one-shot model pass until the output stops changing.
+    /// Refinement loop: map each new (assistant, user) contact pair through
+    /// a model pass and write the rewrite per turn (see examples below).
+    #[command(after_help = CONCATMAP_EXAMPLES)]
     Concatmap {
-        /// Template file with {{mode}}, {{ai_text}}, {{user_text}} keys.
+        /// Prompt template file; substitutes {{mode}}, {{ai_text}} (the
+        /// assistant turn(s) before the user turn), {{user_text}}.
         #[arg(long)]
         template: PathBuf,
         /// The mode word substituted into the template.
@@ -163,7 +208,8 @@ enum SubCmd {
         /// Model preset resolving through boop/config.json, as lane create.
         #[arg(long)]
         preset: Option<String>,
-        /// Directory holding cursor and done markers.
+        /// Loop-owned memory: cursor file (last store ts seen; first run
+        /// seeds at the newest ts) and done/ markers; chat feed's cwd too.
         #[arg(long)]
         state: PathBuf,
         /// Directory receiving <session8>/<turn>.md rewrites.
@@ -175,8 +221,8 @@ enum SubCmd {
         /// Max model passes before the last pass wins.
         #[arg(long, default_value_t = 3)]
         cap: u32,
-        /// Rules file naming the feed: {"feed": "oneshot"|"chat", "goal": "..."}.
-        /// Absent rules run the oneshot feed.
+        /// Rules json naming feed {"oneshot"|"chat"} plus goal, bundle
+        /// {"pair"|"run"}, coalesce, references. Absent = oneshot/pair.
         #[arg(long)]
         rules: Option<PathBuf>,
         /// Map one conversation only.
