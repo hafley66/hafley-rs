@@ -1,6 +1,6 @@
 ---
 created: 2026-08-13
-updated: 2026-08-13
+updated: 2026-08-14
 type: task
 status: open
 priority: high
@@ -33,3 +33,14 @@ Add the canonical monitoring workflow to `boop --help`.
 ### 2026-08-14T03:37:02Z · @codex
 
 Consolidated scope: document the public lane and beep command families and own deterministic end-to-end fixtures for pre-turn death, active token movement, tool work, clean completion, silent death, OpenCode generated sessions, and Codex replacement sessions.
+
+## Comments
+
+### 2026-08-15T00:19:47Z · @codex
+
+Observed 2026-08-14: top-level boop --help documents , while  accepts  and rejects . Align the doctrine and subcommand contract.
+
+### 2026-08-15T00:20:07Z · @codex
+
+Correction: top-level boop help documents --wait-timeout SECONDS, while boop beep lane wait accepts --timeout SECONDS and rejects --wait-timeout. Align the doctrine and subcommand contract.
+
