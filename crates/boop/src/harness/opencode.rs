@@ -2,6 +2,7 @@
 //! `message.rowid` in its SQLite store, read-only; opencode owns that store.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use rusqlite::{Connection, OpenFlags};
@@ -119,11 +120,28 @@ impl Harness for Opencode {
             .as_deref()
             .filter(|value| !value.is_empty())
             .context("one-shot spec has no model; opencode needs one resolved")?;
-        let output = std::process::Command::new("opencode")
+        // A wedged `opencode run` must not wedge the caller: poll the child and
+        // kill it past the guard instead of blocking on output() forever.
+        const GUARD: Duration = Duration::from_secs(600);
+        let mut child = std::process::Command::new("opencode")
             .args(["run", "-m", model, &spec.prompt])
-            .output()
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
             .context("spawn opencode run")?;
-        if !output.status.success() {
+        let started = std::time::Instant::now();
+        let status = loop {
+            match child.try_wait().context("poll opencode run")? {
+                Some(status) => break status,
+                None if started.elapsed() >= GUARD => {
+                    let _ = child.kill();
+                    anyhow::bail!("opencode run -m {model} exceeded 600s guard, killed");
+                }
+                None => std::thread::sleep(Duration::from_millis(500)),
+            }
+        };
+        let output = child.wait_with_output().context("collect opencode run output")?;
+        if !status.success() {
             anyhow::bail!(
                 "opencode run -m {model} failed: {}",
                 String::from_utf8_lossy(&output.stderr).trim()
