@@ -175,6 +175,10 @@ enum SubCmd {
         /// Max model passes before the last pass wins.
         #[arg(long, default_value_t = 3)]
         cap: u32,
+        /// Rules file naming the feed: {"feed": "oneshot"|"chat", "goal": "..."}.
+        /// Absent rules run the oneshot feed.
+        #[arg(long)]
+        rules: Option<PathBuf>,
     },
     /// Report the caller's own identity and the rung that resolved it.
     Whoami {
@@ -657,6 +661,7 @@ fn main() -> Result<()> {
             out,
             poll_secs,
             cap,
+            rules,
         } => {
             // Common model-selection subset: explicit model wins, preset
             // resolves through config; flash4 is the standing default.
@@ -666,6 +671,10 @@ fn main() -> Result<()> {
                 (None, Some(preset)) => config::resolve_model(&preset, &config_path)?,
                 (None, None) => config::resolve_model("flash4", &config_path)?,
             };
+            let formula = match &rules {
+                Some(path) => boop::concatmap::Formula::load(path)?,
+                None => boop::concatmap::Formula::oneshot(),
+            };
             boop::concatmap::run(boop::concatmap::Args {
                 template,
                 mode,
@@ -674,6 +683,7 @@ fn main() -> Result<()> {
                 out_dir: out,
                 poll: std::time::Duration::from_secs(poll_secs),
                 cap,
+                formula,
             })
         }
         SubCmd::Whoami { json } => run_whoami(json),

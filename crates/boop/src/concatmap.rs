@@ -3,10 +3,12 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
+use serde::Deserialize;
 
+use crate::channel::{ChannelSpec, LaneChannel};
 use crate::harness::{Harness, OneShotSpec};
 use crate::ident::TurnQuery;
 use crate::registry::Registry;
@@ -34,6 +36,190 @@ pub struct Args {
     pub out_dir: PathBuf,
     pub poll: Duration,
     pub cap: u32,
+    pub formula: Formula,
+}
+
+/// How a bundle reaches the model. The rules file names the feed; the loop
+/// code never changes when the formula does.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Feed {
+    /// Boot a one-shot process per bundle; fixed-point passes to `cap`.
+    OneShot,
+    /// One resident chat; history is the accumulator (scan), and `goal`
+    /// is the opening turn declaring how to handle every bundle.
+    Chat,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Formula {
+    pub feed: Feed,
+    pub goal: Option<String>,
+}
+
+impl Formula {
+    pub fn oneshot() -> Formula {
+        Formula { feed: Feed::OneShot, goal: None }
+    }
+
+    /// Load from a json rules file: `{"feed": "chat", "goal": "..."}`.
+    pub fn load(path: &Path) -> Result<Formula> {
+        let text = std::fs::read_to_string(path)
+            .with_context(|| format!("read rules {}", path.display()))?;
+        let file: FormulaFile = serde_json::from_str(&text)
+            .with_context(|| format!("parse rules {}", path.display()))?;
+        let feed = match file.feed.as_str() {
+            "oneshot" => Feed::OneShot,
+            "chat" => Feed::Chat,
+            other => bail!("unknown feed `{other}` in {}; expected oneshot or chat", path.display()),
+        };
+        Ok(Formula { feed, goal: file.goal })
+    }
+}
+
+#[derive(Deserialize)]
+struct FormulaFile {
+    feed: String,
+    goal: Option<String>,
+}
+
+/// The rewrite surface: one enum value per feed, chosen once at boot from the
+/// formula. `rewrite` is the whole contract.
+enum Rewriter<'a> {
+    OneShot {
+        adapter: &'a dyn Harness,
+        model: String,
+        cap: u32,
+    },
+    Chat {
+        adapter: &'a dyn Harness,
+        channel: Box<dyn LaneChannel>,
+        cwd: PathBuf,
+        goal: Option<String>,
+    },
+}
+
+/// Turn-end and reply-capture budgets for the chat feed.
+const CHAT_TURN_TIMEOUT: Duration = Duration::from_secs(600);
+const CHAT_REPLY_TIMEOUT: Duration = Duration::from_secs(120);
+const CHAT_POLL: Duration = Duration::from_secs(5);
+
+impl<'a> Rewriter<'a> {
+    fn open(formula: &Formula, adapter: &'a dyn Harness, args: &Args) -> Result<Rewriter<'a>> {
+        match formula.feed {
+            Feed::OneShot => Ok(Rewriter::OneShot {
+                adapter,
+                model: args.model.clone(),
+                cap: args.cap,
+            }),
+            Feed::Chat => {
+                let spec = ChannelSpec {
+                    model: Some(args.model.clone()),
+                    cwd: args.state_dir.clone(),
+                    resume: None,
+                };
+                let channel = adapter
+                    .open_channel(&spec)
+                    .context("open the resident chat")?;
+                Ok(Rewriter::Chat {
+                    adapter,
+                    channel,
+                    cwd: args.state_dir.clone(),
+                    goal: formula.goal.clone(),
+                })
+            }
+        }
+    }
+
+    fn rewrite(&mut self, store: &crate::Store, msg: &str) -> Result<String> {
+        match self {
+            Rewriter::OneShot { adapter, model, cap } => {
+                passes_until_fixed(*adapter, msg, model, *cap)
+            }
+            Rewriter::Chat { adapter, channel, cwd, goal } => {
+                let channel = channel.as_mut();
+                if let Some(goal) = goal.take() {
+                    channel.start_turn(&goal).context("send the goal turn")?;
+                    wait_turn(channel)?;
+                }
+                let session = mapper_session(*adapter, channel, cwd);
+                let marker = session
+                    .as_deref()
+                    .and_then(|s| newest_assistant_ts(store, s))
+                    .unwrap_or(0);
+                channel.start_turn(msg).context("send the bundle")?;
+                wait_turn(channel)?;
+                let session = session
+                    .context("the resident chat never resolved a harness session id")?;
+                wait_reply_text(store, &session, marker)
+            }
+        }
+    }
+}
+
+/// Block until the in-flight turn ends or the budget dies.
+fn wait_turn(channel: &mut dyn LaneChannel) -> Result<()> {
+    let deadline = Instant::now() + CHAT_TURN_TIMEOUT;
+    while Instant::now() < deadline {
+        match channel.poll_turn(CHAT_POLL)? {
+            Some(end) if end.ok => return Ok(()),
+            Some(end) => bail!("resident chat turn failed: {}", end.detail),
+            None => continue,
+        }
+    }
+    bail!("resident chat turn exceeded {}s", CHAT_TURN_TIMEOUT.as_secs())
+}
+
+/// The chat's harness session id once it exists; until the harness resolves
+/// one, fall back to the newest session whose cwd is the pipe's own.
+fn mapper_session(adapter: &dyn Harness, channel: &dyn LaneChannel, cwd: &Path) -> Option<String> {
+    if channel.conversation_id_kind() == "harness_session" {
+        if let Some(id) = channel.conversation_id() {
+            return Some(id);
+        }
+    }
+    let cwd = cwd.display().to_string();
+    adapter
+        .sessions()
+        .ok()?
+        .into_iter()
+        .filter(|session| session.cwd.as_deref() == Some(cwd.as_str()))
+        .max_by_key(|session| session.modified_ms)
+        .map(|session| session.session_id)
+}
+
+fn newest_assistant_ts(store: &crate::Store, session: &str) -> Option<i64> {
+    let query = TurnQuery {
+        session: Some(session.to_owned()),
+        role: Some("assistant".to_owned()),
+        ..Default::default()
+    };
+    let rows = store.turn_rows(&query).ok()?;
+    rows.iter().map(|row| row.ts).max()
+}
+
+/// The rewrite is the mapper conversation's newest assistant turn past
+/// `marker`; sync ingests it, so poll the store until it lands.
+fn wait_reply_text(store: &crate::Store, session: &str, marker: i64) -> Result<String> {
+    let deadline = Instant::now() + CHAT_REPLY_TIMEOUT;
+    while Instant::now() < deadline {
+        let query = TurnQuery {
+            session: Some(session.to_owned()),
+            role: Some("assistant".to_owned()),
+            ..Default::default()
+        };
+        if let Some(row) = store
+            .turn_rows(&query)
+            .ok()
+            .and_then(|rows| rows.into_iter().filter(|row| row.ts > marker).max_by_key(|row| row.ts))
+        {
+            let text = trim_double_encoded(&row.said).to_owned();
+            if !text.trim().is_empty() {
+                return Ok(text);
+            }
+        }
+        std::thread::sleep(Duration::from_secs(1));
+    }
+    bail!("reply from {session} never reached the store past {}", marker)
 }
 
 /// Strip the double encoding a stored `said` can carry: a leading or trailing
@@ -127,8 +313,9 @@ pub fn run(args: Args) -> Result<()> {
         .with_context(|| format!("read {}", args.template.display()))?;
     let mut cursor = load_or_seed_cursor(&args.state_dir, &store)?;
     let mut done = load_done(&args.state_dir)?;
+    let mut rewriter = Rewriter::open(&args.formula, adapter, &args).context("open the rewriter")?;
     loop {
-        cursor = poll_once(&store, adapter, &args, &template, cursor, &mut done)?;
+        cursor = poll_once(&store, &mut rewriter, &args, &template, cursor, &mut done)?;
         std::thread::sleep(args.poll);
     }
 }
@@ -136,7 +323,7 @@ pub fn run(args: Args) -> Result<()> {
 /// One tick: query new pairs, coalesce, process serially, advance the cursor.
 fn poll_once(
     store: &crate::Store,
-    adapter: &dyn Harness,
+    rewriter: &mut Rewriter<'_>,
     args: &Args,
     template: &str,
     cursor: i64,
@@ -166,7 +353,10 @@ fn poll_once(
         })
         .collect();
     for pair in coalesce(fresh) {
-        process_pair(&pair, adapter, args, template, done)?;
+        // A failed rewrite drops the pair, never the resident.
+        if let Err(error) = process_pair(&pair, store, rewriter, args, template, done) {
+            eprintln!("concatmap: rewrite failed for {}-{}: {error:#}", pair.session, pair.turn);
+        }
     }
     if max_seen > cursor {
         std::fs::write(args.state_dir.join("cursor"), max_seen.to_string())
@@ -207,7 +397,8 @@ fn load_done(state_dir: &Path) -> Result<BTreeSet<(String, i64)>> {
 
 fn process_pair(
     pair: &Pair,
-    adapter: &dyn Harness,
+    store: &crate::Store,
+    rewriter: &mut Rewriter<'_>,
     args: &Args,
     template: &str,
     done: &mut BTreeSet<(String, i64)>,
@@ -217,7 +408,7 @@ fn process_pair(
     std::fs::create_dir_all(&out_dir)
         .with_context(|| format!("create {}", out_dir.display()))?;
     let out_path = out_dir.join(format!("{}.md", pair.turn));
-    let text = passes_until_fixed(adapter, &msg, &args.model, args.cap)?;
+    let text = rewriter.rewrite(store, &msg)?;
     std::fs::write(&out_path, text)
         .with_context(|| format!("write {}", out_path.display()))?;
     std::fs::write(args.state_dir.join("done").join(format!("{}-{}", pair.session, pair.turn)), b"")
@@ -330,5 +521,28 @@ mod tests {
     #[test]
     fn normalize_collapses_all_whitespace() {
         assert_eq!(normalize("a \n\t b  c"), "a b c");
+    }
+
+    #[test]
+    fn formula_loads_the_chat_feed_and_goal() {
+        let path = std::env::temp_dir().join(format!("cm_formula_{}.json", std::process::id()));
+        std::fs::write(&path, r#"{"feed": "chat", "goal": "tighten each bundle"}"#).unwrap();
+        let formula = Formula::load(&path).unwrap();
+        assert_eq!(formula.feed, Feed::Chat);
+        assert_eq!(formula.goal.as_deref(), Some("tighten each bundle"));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn formula_rejects_an_unknown_feed() {
+        let path = std::env::temp_dir().join(format!("cm_formula_bad_{}.json", std::process::id()));
+        std::fs::write(&path, r#"{"feed": "teleport"}"#).unwrap();
+        assert!(Formula::load(&path).is_err());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn formula_without_rules_is_oneshot() {
+        assert_eq!(Formula::oneshot(), Formula { feed: Feed::OneShot, goal: None });
     }
 }
