@@ -2132,7 +2132,6 @@ fn append_ack(
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
     use std::path::PathBuf;
-    use std::process::Command;
 
     use super::{
         append_message, config, dead_reason, default_preset_for_harness, resolve_dispatch_harness,
@@ -2257,11 +2256,9 @@ mod tests {
 
     impl LiveTmuxSession {
         fn new(name: &str) -> Self {
-            let status = Command::new("tmux")
-                .args(["new-session", "-d", "-s", name])
-                .status()
+            crate::tmux::mux()
+                .new_bare_session(None, name)
                 .expect("tmux installed and reachable");
-            assert!(status.success(), "failed to create live session {name}");
             LiveTmuxSession {
                 name: name.to_owned(),
             }
@@ -2270,9 +2267,7 @@ mod tests {
 
     impl Drop for LiveTmuxSession {
         fn drop(&mut self) {
-            let _ = Command::new("tmux")
-                .args(["kill-session", "-t", &self.name])
-                .status();
+            let _ = crate::tmux::mux().kill_session(None, &self.name);
         }
     }
 

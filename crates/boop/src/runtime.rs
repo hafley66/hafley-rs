@@ -734,6 +734,9 @@ mod tests {
         ) -> anyhow::Result<()> {
             Ok(())
         }
+        fn new_bare_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
         fn send_keys_literal(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
             Ok(())
         }
@@ -754,6 +757,9 @@ mod tests {
             Ok(String::new())
         }
         fn swap_windows(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn kill_window(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
             Ok(())
         }
     }

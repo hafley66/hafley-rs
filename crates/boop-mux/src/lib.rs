@@ -49,6 +49,10 @@ pub trait Multiplexer {
         cwd: &str,
         command: &str,
     ) -> Result<()>;
+    /// Spawn a detached tmux session with no command and no cwd, for test
+    /// scaffolding; production sessions go through `new_detached_session`.
+    fn new_bare_session(&self, socket: Option<&str>, name: &str) -> Result<()>;
+
     /// Send a literal line then Enter into a pane.
     fn send_keys_literal(&self, socket: Option<&str>, pane: &str, body: &str) -> Result<()>;
 
@@ -72,6 +76,9 @@ pub trait Multiplexer {
     /// Exchange two windows' positions. Used to hold the interactive window
     /// at index 0 so a bare session attach lands in the agent TUI.
     fn swap_windows(&self, socket: Option<&str>, source: &str, destination: &str) -> Result<()>;
+
+    /// Kill one window, leaving the rest of its session intact.
+    fn kill_window(&self, socket: Option<&str>, target: &str) -> Result<()>;
 }
 
 /// The one `Multiplexer` implementation: tmux itself, driven by a mix of raw
@@ -260,6 +267,33 @@ impl Multiplexer for Tmux {
         Ok(())
     }
 
+    fn new_bare_session(&self, socket: Option<&str>, name: &str) -> Result<()> {
+        debug!(
+            session = name,
+            socket = socket.unwrap_or_default(),
+            "tmux new bare session starting"
+        );
+        use tmux_interface::{NewSession, Tmux};
+        let builder = Tmux::new();
+        let builder = match socket {
+            Some(socket) => builder.socket_name(socket),
+            None => builder,
+        };
+        let new = NewSession::new().detached().session_name(name);
+        let output = builder
+            .add_command(new)
+            .output()
+            .context("tmux new-session")?;
+        if !output.success() {
+            anyhow::bail!(
+                "new-session {name}: {}",
+                String::from_utf8_lossy(&output.stderr()).trim()
+            );
+        }
+        debug!(session = name, "tmux new bare session completed");
+        Ok(())
+    }
+
     fn send_keys_literal(&self, socket: Option<&str>, pane: &str, body: &str) -> Result<()> {
         debug!(
             target = pane,
@@ -358,6 +392,32 @@ impl Multiplexer for Tmux {
             );
         }
         debug!(source, destination, "tmux swap windows completed");
+        Ok(())
+    }
+
+    fn kill_window(&self, socket: Option<&str>, target: &str) -> Result<()> {
+        debug!(
+            target,
+            socket = socket.unwrap_or_default(),
+            "tmux kill-window starting"
+        );
+        use tmux_interface::{KillWindow, Tmux};
+        let builder = Tmux::new();
+        let builder = match socket {
+            Some(socket) => builder.socket_name(socket),
+            None => builder,
+        };
+        let output = builder
+            .add_command(KillWindow::new().target_window(target))
+            .output()
+            .context("tmux kill-window")?;
+        if !output.success() {
+            anyhow::bail!(
+                "kill-window {target}: {}",
+                String::from_utf8_lossy(&output.stderr()).trim()
+            );
+        }
+        debug!(target, "tmux kill-window completed");
         Ok(())
     }
 }
@@ -688,11 +748,9 @@ mod tests {
         }
 
         fn create_session(&self, name: &str) {
-            let status = Command::new("tmux")
-                .args(["-L", &self.socket, "new-session", "-d", "-s", name])
-                .status()
+            Tmux
+                .new_bare_session(Some(&self.socket), name)
                 .expect("tmux installed and reachable to create the test session");
-            assert!(status.success(), "failed to create test session {name}");
         }
     }
 
@@ -840,11 +898,7 @@ mod tests {
             mux().target_alive(Some(&server.socket), "alive:0.0"),
             "a live adopted pane target is alive"
         );
-        let status = Command::new("tmux")
-            .args(["-L", &server.socket, "kill-session", "-t", "alive"])
-            .status()
-            .unwrap();
-        assert!(status.success());
+        mux().kill_session(Some(&server.socket), "alive").unwrap();
         assert!(
             !mux().target_alive(Some(&server.socket), "alive"),
             "a dead session must not survive prune"
