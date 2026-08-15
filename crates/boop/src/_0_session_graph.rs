@@ -142,28 +142,23 @@ pub fn load_agent_session_graph(
                       FROM agent_edge e
                       JOIN dict_session p ON p.id = e.parent_session_id
                       JOIN dict_session c ON c.id = e.child_session_id
-                      LEFT JOIN agent_session ap ON ap.session_id = e.parent_session_id
-                      LEFT JOIN agent_session ac ON ac.session_id = e.child_session_id
-                      LEFT JOIN dict_harness hp ON hp.id = ap.harness_id
-                      LEFT JOIN dict_harness hc ON hc.id = ac.harness_id
+                      JOIN agent_session ap ON ap.session_id = e.parent_session_id
+                      JOIN agent_session ac ON ac.session_id = e.child_session_id
+                      JOIN dict_harness hp ON hp.id = ap.harness_id
+                      JOIN dict_harness hc ON hc.id = ac.harness_id
                       JOIN dict_edekind k ON k.id = e.edge_kind_id
                      ORDER BY p.value, c.value, k.value";
     let mut statement = store.connection().prepare(edge_sql)?;
     let edges = statement
         .query_map([], |row| {
-            let child_harness = row
-                .get::<_, Option<String>>(3)?
-                .unwrap_or_else(|| "unknown".to_owned());
             Ok(AgentSessionEdge {
                 parent: AgentSessionIdentity {
                     id: row.get(0)?,
-                    harness: row
-                        .get::<_, Option<String>>(2)?
-                        .unwrap_or_else(|| child_harness.clone()),
+                    harness: row.get(2)?,
                 },
                 child: AgentSessionIdentity {
                     id: row.get(1)?,
-                    harness: child_harness,
+                    harness: row.get(3)?,
                 },
                 kind: row.get(4)?,
             })
