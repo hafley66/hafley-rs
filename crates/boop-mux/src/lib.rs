@@ -338,7 +338,12 @@ impl Multiplexer for Tmux {
     }
 
     fn swap_windows(&self, socket: Option<&str>, source: &str, destination: &str) -> Result<()> {
-        debug!(source, destination, socket = socket.unwrap_or_default(), "tmux swap windows starting");
+        debug!(
+            source,
+            destination,
+            socket = socket.unwrap_or_default(),
+            "tmux swap windows starting"
+        );
         let mut builder = Command::new("tmux");
         if let Some(socket) = socket {
             builder.arg("-L").arg(socket);

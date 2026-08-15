@@ -1,28 +1,125 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
-use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::RecursiveMode;
+use notify_debouncer_full::DebounceEventResult;
 
 use crate::_0_types::{
-    Head, IndexDelta, IndexId, IndexSnapshot, Repository, RepositoryDelta, RepositorySnapshot,
-    Revision, RevisionId, SourceDelta, SourceQuery, SourceSnapshot, WatchCoalescing, WatchQuery,
-    WorktreeDelta, WorktreeObservation, WorktreeSnapshot,
+    DirectoryDelta, FileQuery, FileSnapshot, FileWatchQuery, Head, IndexDelta, IndexId,
+    IndexSnapshot, Repository, RepositoryDelta, RepositorySnapshot, Revision, RevisionId,
+    SourceDelta, SourceQuery, SourceSnapshot, WatchCoalescing, WatchQuery, WorktreeDelta,
+    WorktreeObservation, WorktreeSnapshot,
 };
 use crate::_11_refs::{diff_refs, Refs};
 use crate::_2_repository::open;
+use crate::_2a_directory::DirectoryRoot;
 use crate::_7_source_tree::SourceTree;
+#[cfg(test)]
+use crate::_8a_watch_core::watcher_config;
+use crate::_8a_watch_core::{recv_batch, watcher_with_events, WatchEvents, WatcherHandle};
+
+/// Watcher for a plain filesystem directory. It owns no Git handle and never
+/// invokes Git during construction, snapshotting, or event delivery.
+pub struct DirectoryWatcher {
+    _watcher: WatcherHandle,
+    events: WatchEvents,
+    directory: DirectoryRoot,
+    query: FileWatchQuery,
+    snapshot: FileSnapshot,
+}
+
+impl DirectoryWatcher {
+    pub fn open(root: impl AsRef<Path>) -> Result<Self> {
+        Self::open_with_query(root, FileWatchQuery::default())
+    }
+
+    pub(crate) fn open_with_query(root: impl AsRef<Path>, query: FileWatchQuery) -> Result<Self> {
+        query.coalescing.validate()?;
+        let mut directory = DirectoryRoot::open(root)?;
+        let (mut watcher, events) = watcher_with_events(&query.coalescing)?;
+        watch(
+            &mut watcher,
+            &directory.root,
+            RecursiveMode::Recursive,
+            "register directory watch",
+        )?;
+        // Registration precedes the baseline. Retaining queued events closes
+        // the registration gap: a mutation racing the baseline is reconciled
+        // by the first old-to-new snapshot comparison.
+        let snapshot = directory.snapshot(&FileQuery {
+            patterns: query.patterns.clone(),
+        })?;
+        Ok(Self {
+            _watcher: watcher,
+            events,
+            directory,
+            query,
+            snapshot,
+        })
+    }
+
+    pub fn snapshot(&self) -> &FileSnapshot {
+        &self.snapshot
+    }
+
+    pub fn recv(&mut self) -> Result<Vec<DirectoryDelta>> {
+        let first = self.events.recv().context("directory watcher closed")?;
+        self.recv_batch(first)
+    }
+
+    pub fn recv_timeout(&mut self, timeout: Duration) -> Result<Option<Vec<DirectoryDelta>>> {
+        match self.events.recv_timeout(timeout) {
+            Ok(first) => self.recv_batch(first).map(Some),
+            Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
+            Err(mpsc::RecvTimeoutError::Disconnected) => bail!("directory watcher closed"),
+        }
+    }
+
+    fn recv_batch(&mut self, first: DebounceEventResult) -> Result<Vec<DirectoryDelta>> {
+        let events = recv_batch(&self.events, first, &self.query.coalescing);
+        let state = classify_event_batch(events, |path| self.is_relevant(path));
+        if !state.relevant && !state.rescan {
+            return Ok(Vec::new());
+        }
+        if !self.directory.root.exists() {
+            return Ok(vec![DirectoryDelta::RescanRequired]);
+        }
+        let after = self.directory.snapshot(&FileQuery {
+            patterns: self.query.patterns.clone(),
+        })?;
+        let mut deltas = Vec::new();
+        if state.rescan {
+            deltas.push(DirectoryDelta::RescanRequired);
+        }
+        deltas.extend(diff_directory(&self.snapshot, &after));
+        self.snapshot = after;
+        Ok(deltas)
+    }
+
+    fn is_relevant(&self, path: &Path) -> bool {
+        [path, path.canonicalize().as_deref().unwrap_or(path)]
+            .into_iter()
+            .any(|path| directory_path_is_relevant(&self.directory.root, path))
+    }
+}
+
+impl DirectoryRoot {
+    pub fn watch(&self, query: FileWatchQuery) -> Result<DirectoryWatcher> {
+        DirectoryWatcher::open_with_query(self.root.clone(), query)
+    }
+}
 
 /// Repository watcher over selected worktree-source, ref, index, and linked
 /// worktree surfaces. It owns independent source and ref readers so a caller's
 /// `SourceTree` never shares mutable watcher state.
 pub struct RepositoryWatcher {
-    _watcher: RecommendedWatcher,
-    events: Receiver<notify::Result<Event>>,
+    _watcher: WatcherHandle,
+    events: WatchEvents,
     repository: Repository,
     query: WatchQuery,
     snapshot: Option<RepositorySnapshot>,
@@ -44,17 +141,10 @@ impl RepositoryWatcher {
             .as_ref()
             .map(|_| SourceTree::open(repository.clone()));
         let refs = query.refs.as_ref().map(|_| Refs::open(repository.clone()));
-        let (send, events) = mpsc::channel();
         // The macOS kqueue backend finishes watch registration before this
         // constructor returns. FSEvents streams start asynchronously and can
         // miss a mutation made immediately after `watch_repository` returns.
-        let mut watcher = RecommendedWatcher::new(
-            move |event| {
-                let _ = send.send(event);
-            },
-            watcher_config(),
-        )
-        .context("create repository watcher")?;
+        let (mut watcher, events) = watcher_with_events(&query.coalescing)?;
         let registrations = register_watches(&mut watcher, &root, &git_dir, &common_dir, &query)?;
         let mut watcher_state = Self {
             _watcher: watcher,
@@ -99,22 +189,8 @@ impl RepositoryWatcher {
         }
     }
 
-    fn recv_batch(&mut self, first: notify::Result<Event>) -> Result<Vec<RepositoryDelta>> {
-        let started = Instant::now();
-        let quiet = Duration::from_millis(self.query.coalescing.quiet_ms.into());
-        let maximum = Duration::from_millis(self.query.coalescing.max_ms.into());
-        let mut events = vec![first];
-        loop {
-            let remaining = maximum.saturating_sub(started.elapsed());
-            if remaining.is_zero() {
-                break;
-            }
-            match self.events.recv_timeout(quiet.min(remaining)) {
-                Ok(event) => events.push(event),
-                Err(mpsc::RecvTimeoutError::Timeout) => break,
-                Err(mpsc::RecvTimeoutError::Disconnected) => break,
-            }
-        }
+    fn recv_batch(&mut self, first: DebounceEventResult) -> Result<Vec<RepositoryDelta>> {
+        let events = recv_batch(&self.events, first, &self.query.coalescing);
 
         let event_state = classify_event_batch(events, |path| self.is_relevant(path));
         if !event_state.relevant && !event_state.rescan {
@@ -225,15 +301,17 @@ fn should_snapshot(state: EventState) -> bool {
 }
 
 fn classify_event_batch(
-    events: impl IntoIterator<Item = notify::Result<Event>>,
+    events: impl IntoIterator<Item = DebounceEventResult>,
     is_relevant: impl Fn(&Path) -> bool,
 ) -> EventState {
     let mut state = EventState::default();
     for event in events {
         match event {
-            Ok(event) => {
-                state.rescan |= event.need_rescan();
-                state.relevant |= event.paths.iter().any(|path| is_relevant(path));
+            Ok(events) => {
+                for event in events {
+                    state.rescan |= event.need_rescan();
+                    state.relevant |= event.paths.iter().any(|path| is_relevant(path));
+                }
             }
             Err(_) => state.rescan = true,
         }
@@ -262,6 +340,15 @@ fn path_is_relevant(
         || query.refs.is_some() && (current_head || named_ref)
         || query.index && current_index
         || query.linked_worktrees && (current_head || common_head || linked_worktree)
+}
+
+fn directory_path_is_relevant(root: &Path, path: &Path) -> bool {
+    let Ok(relative) = path.strip_prefix(root) else {
+        return false;
+    };
+    !relative
+        .components()
+        .any(|component| component.as_os_str() == ".git")
 }
 
 /// Source-only compatibility wrapper used by `SourceTree::watch` and the
@@ -357,12 +444,6 @@ struct WatchRegistrations {
     worktrees: bool,
 }
 
-fn watcher_config() -> Config {
-    Config::default()
-        .with_compare_contents(false)
-        .with_follow_symlinks(false)
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct WatchTarget {
     path: PathBuf,
@@ -456,7 +537,7 @@ fn watch_plan(
 }
 
 fn register_watches(
-    watcher: &mut RecommendedWatcher,
+    watcher: &mut WatcherHandle,
     root: &Path,
     git_dir: &Path,
     common_dir: &Path,
@@ -485,7 +566,7 @@ fn register_watches(
 }
 
 fn watch(
-    watcher: &mut RecommendedWatcher,
+    watcher: &mut WatcherHandle,
     path: &Path,
     mode: RecursiveMode,
     action: &str,
@@ -701,6 +782,39 @@ pub(crate) fn diff(before: &SourceSnapshot, after: &SourceSnapshot) -> Vec<Sourc
     deltas
 }
 
+fn diff_directory(before: &FileSnapshot, after: &FileSnapshot) -> Vec<DirectoryDelta> {
+    let before: BTreeMap<_, _> = before
+        .files
+        .iter()
+        .map(|entry| (entry.file.path.clone(), entry))
+        .collect();
+    let after: BTreeMap<_, _> = after
+        .files
+        .iter()
+        .map(|entry| (entry.file.path.clone(), entry))
+        .collect();
+    let mut paths = before
+        .keys()
+        .chain(after.keys())
+        .cloned()
+        .collect::<Vec<_>>();
+    paths.sort();
+    paths.dedup();
+    let mut deltas = Vec::new();
+    for path in paths {
+        let path_buf = PathBuf::from(path.0.as_ref());
+        match (before.get(&path), after.get(&path)) {
+            (None, Some(_)) => deltas.push(DirectoryDelta::Added(path_buf)),
+            (Some(_), None) => deltas.push(DirectoryDelta::Removed(path_buf)),
+            (Some(before), Some(after)) if before.content != after.content => {
+                deltas.push(DirectoryDelta::Changed(path_buf));
+            }
+            _ => {}
+        }
+    }
+    deltas
+}
+
 fn diff_worktrees(before: &WorktreeSnapshot, after: &WorktreeSnapshot) -> Vec<WorktreeDelta> {
     let before: BTreeMap<_, _> = before
         .worktrees
@@ -882,7 +996,9 @@ mod tests {
     #[test]
     fn overflow_without_paths_still_requires_a_snapshot() {
         let overflow =
-            classify_event_batch(vec![Err(notify::Error::generic("overflow"))], |_| false);
+            classify_event_batch(vec![Err(vec![notify::Error::generic("overflow")])], |_| {
+                false
+            });
         assert_eq!(
             overflow,
             EventState {

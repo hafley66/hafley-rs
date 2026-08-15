@@ -2,11 +2,16 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command as ProcessCommand, Stdio};
 use std::sync::Arc;
+use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::json;
-use soopy::{Pattern, ReadRequest, Revision, SourceDelta, SourceEntry, SourceQuery, SourceTree};
+use soopy::{
+    GitFileQuery, Pattern, ReadRequest, Revision, SourceDelta, SourceEntry, SourceQuery,
+    SourceRoot, SourceTree,
+};
+use sysinfo::{Pid, ProcessesToUpdate, System};
 
 /// Query repository worktrees and immutable Git revisions.
 ///
@@ -26,6 +31,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Observe one cold and three warm tracked-state snapshots and emit one
+    /// JSON record for the Just performance gates.
+    StatusMetrics,
     /// Resolve WORK, a branch, tag, or commit to the repository's stable source coordinate.
     Resolve {
         /// Revision name. `WORK` names the mutable worktree.
@@ -209,6 +217,50 @@ fn main() -> Result<()> {
     let repository = soopy::discover(&cli.repo)?;
     let mut tree = SourceTree::open(repository);
     match cli.command {
+        Command::StatusMetrics => {
+            let mut source = SourceRoot::discover_git(&cli.repo)?;
+            let git = source
+                .git_mut()
+                .context("status metrics requires Git discovery")?;
+            let mut system = System::new();
+            let started = Instant::now();
+            let cold_started = Instant::now();
+            let cold = git.tracked_state_with_metrics(&GitFileQuery::default())?;
+            let cold_ms = cold_started.elapsed().as_secs_f64() * 1_000.0;
+            let cold_rss = resident_set_bytes(&mut system);
+            let mut warm = Vec::with_capacity(3);
+            for _ in 0..3 {
+                let warm_started = Instant::now();
+                let result = git.tracked_state_with_metrics(&GitFileQuery::default())?;
+                warm.push(json!({
+                    "wall_ms": warm_started.elapsed().as_secs_f64() * 1_000.0,
+                    "rss_bytes": resident_set_bytes(&mut system),
+                    "metrics": result.metrics,
+                }));
+            }
+            let peak_rss = cold_rss
+                .into_iter()
+                .chain(
+                    warm.iter()
+                        .filter_map(|receipt| receipt["rss_bytes"].as_u64()),
+                )
+                .max();
+            println!(
+                "{}",
+                serde_json::to_string(&json!({
+                    "files": cold.observations.len(),
+                    "cold": {
+                        "wall_ms": cold_ms,
+                        "rss_bytes": cold_rss,
+                        "metrics": cold.metrics,
+                    },
+                    "warm": warm,
+                    "wall_ms": started.elapsed().as_secs_f64() * 1_000.0,
+                    "peak_rss_bytes": peak_rss,
+                    "open_file_descriptors": open_file_descriptors(),
+                }))?
+            );
+        }
         Command::Resolve { revision: name } => {
             println!("{:?}", tree.resolve_revision(revision(name))?)
         }
@@ -292,4 +344,16 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn open_file_descriptors() -> Option<usize> {
+    std::fs::read_dir("/dev/fd")
+        .ok()
+        .map(|entries| entries.count())
+}
+
+fn resident_set_bytes(system: &mut System) -> Option<u64> {
+    let pid = Pid::from_u32(std::process::id());
+    system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+    system.process(pid).map(sysinfo::Process::memory)
 }

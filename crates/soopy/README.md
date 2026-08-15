@@ -68,9 +68,10 @@ object database. Soopy may invoke the `git` executable for those mechanics.
 |---|---|---|
 | Filesystem traversal | `ignore` | `ignore` |
 | Path matching | `globset` | `globset` |
-| Filesystem events | `notify` | `notify` |
+| Filesystem event backend | `notify` | `notify` |
+| Filesystem event normalization | `notify-debouncer-full` | `notify-debouncer-full` |
 | Worktree hashing | `blake3` | `blake3` |
-| Git trees, index, refs, and objects | `git` subprocesses | explicit Git backend using `git` |
+| Git trees, blobs, revisions, index, refs, and conflicts | `git` subprocesses | `git` subprocesses |
 | Text search | `rg` subprocess | `grep-searcher`, `grep-matcher`, `grep-regex` |
 | Fuzzy ranking | `fzf` subprocess | high-level `nucleo` |
 | Selection command surface | inherited `fzf` process | `clap` arguments over typed `nucleo` results |
@@ -137,7 +138,17 @@ The watcher registers the worktree root, current Git directory, shared Git
 directory, shared `refs/`, and, when requested, shared `worktrees/`. Object
 and pack churn are ignored. A native overflow or callback error emits
 `RescanRequired`, then the deterministic old-to-new delta sequence from a
-fresh complete snapshot. The watcher never mutates Git state.
+fresh complete snapshot. `notify-debouncer-full` owns raw event normalization,
+rename stitching, and its quiet window; Soopy applies the typed path filter and
+retains the public maximum receipt collection. The watcher never mutates Git
+state.
+
+Tracked-state observations use Git's index/tree protocols and one persistent
+`git hash-object --stdin-paths` worker for regular worktree files, so Git
+attributes, CRLF conversion, and clean filters participate in worktree object
+identity. A repository-owned byte worker uses `git hash-object --stdin
+--no-filters` for symlink target bytes because Git's path worker follows a
+link. Plain `DirectoryRoot` snapshots remain BLAKE3-based and never invoke Git.
 
 `SourceWatcher` and the `soopy watch` command retain the source-only surface.
 An index-only event maps to its existing `SourceDelta::RescanRequired` result.

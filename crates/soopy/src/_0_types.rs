@@ -93,6 +93,79 @@ pub struct RepositoryId(#[serde(with = "arc_str")] pub Arc<str>);
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct WorktreeId(#[serde(with = "arc_str")] pub Arc<str>);
 
+/// Identity of one canonical filesystem directory, independent of Git.
+///
+/// Construction: [`DirectoryRoot`](crate::DirectoryRoot) hashes its
+/// canonical absolute path. The identity therefore has no repository,
+/// revision, ref, index, or object-database coordinate.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct DirectoryId(#[serde(with = "arc_str")] pub Arc<str>);
+
+/// A UTF-8, `/`-separated file path relative to a [`DirectoryRoot`].
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct RootPath(#[serde(with = "arc_str")] pub Arc<str>);
+
+/// A filesystem-first coordinate for one file under a canonical directory.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct FileRef {
+    pub directory: DirectoryId,
+    pub path: RootPath,
+}
+
+/// One file observed by a plain directory snapshot.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileEntry {
+    pub file: FileRef,
+    pub content: ContentId,
+    pub size: u64,
+}
+
+/// A filesystem-first selection. Empty `patterns` selects every regular file.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileQuery {
+    pub patterns: Vec<Pattern>,
+}
+
+/// A stable result for one [`FileQuery`] execution.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileSnapshot {
+    pub files: Vec<FileEntry>,
+    pub directories: Vec<RootPath>,
+}
+
+/// One request for current bytes from a filesystem-first file coordinate.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileReadRequest {
+    pub file: FileRef,
+    pub expected: Option<ContentId>,
+}
+
+/// Borrowed bytes provided by [`DirectoryRoot::read_each`](crate::DirectoryRoot::read_each).
+/// The byte slice remains valid only for the visitor call.
+#[derive(Clone, Copy, Debug)]
+pub struct FileBytesRef<'a> {
+    pub file: &'a FileRef,
+    pub content: &'a ContentId,
+    pub bytes: &'a [u8],
+}
+
+/// Filesystem selection and debounce policy for a directory watcher.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileWatchQuery {
+    pub patterns: Vec<Pattern>,
+    pub coalescing: WatchCoalescing,
+}
+
+/// A logical change between two plain-directory snapshots. Paths are relative
+/// to the watched directory and contain no Git coordinate.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DirectoryDelta {
+    Added(PathBuf),
+    Changed(PathBuf),
+    Removed(PathBuf),
+    RescanRequired,
+}
+
 /// Identity of one Git object: a blob, tree, commit, or tag OID.
 ///
 /// Construction: from a `git rev-parse`/`git ls-tree`/`git hash-object`
@@ -315,6 +388,154 @@ pub struct SourceQuery {
 pub struct GitFilesQuery {
     pub revision: Revision,
     pub pathspecs: Vec<String>,
+}
+
+/// Whether [`GitFileQuery`] includes filesystem paths not present in either
+/// `HEAD` or the index. The default keeps the tracked surface bounded to Git's
+/// tracked namespace; callers that need unknown filesystem paths opt in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UntrackedFilePolicy {
+    #[default]
+    Exclude,
+    Include,
+}
+
+/// Selection for [`GitWorktreeRoot::tracked_state`](crate::GitWorktreeRoot::tracked_state).
+/// `pathspecs` are passed to Git as Git pathspecs, as with [`GitFilesQuery`].
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GitFileQuery {
+    pub pathspecs: Vec<String>,
+    pub untracked: UntrackedFilePolicy,
+}
+
+/// Git's normalized entry kind. `Gitlink` content is the nested commit OID;
+/// it remains distinct from a blob by this field even though both are object
+/// names in [`EntryIdentity::content`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum GitEntryKind {
+    File,
+    Symlink,
+    Gitlink,
+    Tree,
+    Other,
+}
+
+/// Git's normalized tree/index mode, represented in its conventional octal
+/// value (`0o100644`, `0o120000`, `0o160000`, ...).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct GitEntryMode(pub u32);
+
+/// The complete identity compared at each adjacent status transition. Content
+/// IDs are insufficient: executable bit, symlink/file replacement, and
+/// gitlink replacement are visible only through `kind` and `mode`.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct EntryIdentity {
+    pub kind: GitEntryKind,
+    pub mode: GitEntryMode,
+    pub content: ContentId,
+}
+
+/// One index stage preserved for a path. A normal index entry has only stage
+/// zero. Stages one through three make the row [`TrackedFileState::Unmerged`]
+/// and are returned rather than being reduced to a synthetic stage-zero entry.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IndexStageEntry {
+    pub stage: u8,
+    pub identity: EntryIdentity,
+}
+
+/// The direct difference between two adjacent entries. The two transition
+/// fields on an observation distinguish additions/deletions/modifications
+/// without inferring them from an aggregate dirty bit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EntryTransition {
+    Unchanged,
+    Added,
+    Deleted,
+    Modified,
+    ModeChanged,
+    TypeChanged,
+    ModeAndContentChanged,
+    TypeAndContentChanged,
+    TypeAndModeChanged,
+    TypeModeAndContentChanged,
+}
+
+/// Per-worktree `HEAD` availability. An unborn repository has no tree to
+/// compare against; this remains visible independently of each path's missing
+/// `head` entry.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TrackedHeadState {
+    Present(ObjectId),
+    Unborn,
+}
+
+/// The four comparable tracked states plus Git cases that have no valid
+/// stage-zero/working-tree comparison. `Sparse` retains the index and HEAD
+/// entries but does not claim an absent skipped worktree file is a deletion.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TrackedFileState {
+    Clean,
+    Unstaged,
+    Staged,
+    StagedAndUnstaged,
+    Unmerged,
+    IntentToAdd,
+    Sparse,
+    Untracked,
+    Unsupported(TrackedFileUnsupported),
+}
+
+/// A deterministic unsupported condition. Every unsupported representation
+/// still returns its available HEAD/index/worktree identities and index stages.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TrackedFileUnsupported {
+    GitlinkWorktreeUnavailable,
+    WorktreeTypeUnavailable,
+    WorktreeContentUnavailable,
+}
+
+/// One path's complete HEAD/index/worktree observation. `staged_change`
+/// compares HEAD to index; `unstaged_change` compares index to worktree.
+/// `None` marks a comparison intentionally unavailable for one of the typed
+/// exceptional states, never a collapsed clean result.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrackedFileObservation {
+    pub worktree: WorktreeId,
+    pub path: RepoPath,
+    pub state: TrackedFileState,
+    pub head_state: TrackedHeadState,
+    pub head: Option<EntryIdentity>,
+    pub index: Option<EntryIdentity>,
+    pub worktree_entry: Option<EntryIdentity>,
+    pub index_stages: Vec<IndexStageEntry>,
+    pub staged_change: Option<bool>,
+    pub unstaged_change: Option<bool>,
+    pub head_to_index: Option<EntryTransition>,
+    pub index_to_worktree: Option<EntryTransition>,
+}
+
+/// Work performed by one tracked-state observation. `git_child_processes`
+/// counts every Git child launched during that call, including a newly opened
+/// persistent hash worker. `bytes_hashed` counts only worktree bytes sent to
+/// the content hasher after a cache miss.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrackedStateMetrics {
+    pub git_child_processes: u64,
+    pub hash_worker_launches: u64,
+    pub byte_worker_launches: u64,
+    pub bytes_hashed: u64,
+    pub worktree_cache_hits: u64,
+    pub worktree_cache_misses: u64,
+}
+
+/// The typed result of one tracked-state observation. The compatibility
+/// [`GitWorktreeRoot::tracked_state`](crate::GitWorktreeRoot::tracked_state)
+/// method returns only `observations`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrackedStateResult {
+    pub observations: Vec<TrackedFileObservation>,
+    pub metrics: TrackedStateMetrics,
 }
 
 /// A directory coordinate derived from the selected source entries.
