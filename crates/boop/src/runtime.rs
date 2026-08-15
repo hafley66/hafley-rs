@@ -15,6 +15,8 @@ use serde::Serialize;
 
 use crate::bus::{Message, Route};
 use crate::ident::Store;
+use crate::proc::{ProcReader, SysinfoSnapshot};
+use crate::tmux::{LiveSessions, Multiplexer};
 
 /// A typed reason why one part of a lane runtime could not be resolved.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -115,6 +117,229 @@ pub struct LaneRuntime {
     pub placeholder_session: Option<String>,
     pub generated_sessions: Vec<String>,
     pub diagnostics: Vec<RuntimeDiagnostic>,
+}
+
+/// Tmux state from the one listing taken for a runtime snapshot.
+///
+/// `Inaccessible` is deliberately separate from `Dead`: an unavailable tmux
+/// server has not supplied evidence about any route target.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TmuxLiveness {
+    Live,
+    Dead,
+    Inaccessible,
+    Unmanaged,
+}
+
+/// Current process state from the one process snapshot taken for a request.
+/// A row in `agent_live` is a prior observation. It names a PID but does not
+/// prove that PID still exists when this projection is read.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProcessLiveness {
+    Live,
+    Dead,
+    Unknown,
+}
+
+/// The two independent liveness checks available to a lane route.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct RuntimeLiveness {
+    pub tmux: TmuxLiveness,
+    pub process: ProcessLiveness,
+}
+
+/// Mailbox totals after the bus rows have been folded once.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct MailboxCounts {
+    /// Folded rows addressed to this lane.
+    pub inbox: u64,
+    /// Folded rows sent by this lane.
+    pub outbox: u64,
+    /// Folded inbox rows without a recipient timestamp.
+    pub unacknowledged: u64,
+}
+
+/// Coordinates of the directory associated with this lane. `route_cwd` is
+/// the supervisor's registered worktree; `process_cwd` is populated only when
+/// the process snapshot still contains the reported PID.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct WorktreeCoordinates {
+    pub route_cwd: Option<String>,
+    pub process_cwd: Option<String>,
+}
+
+/// One bounded runtime row. Shell-only routes have a route and mailbox
+/// coordinates but nullable trace/session/process identity.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct AgentRuntimeRow {
+    pub lane: String,
+    pub trace: Option<String>,
+    pub root_session: Option<String>,
+    pub session: Option<String>,
+    pub parent: Option<String>,
+    pub route: Option<ResolvedRoute>,
+    pub cwd: Option<String>,
+    pub tmux_target: Option<String>,
+    pub tmux_pane: Option<String>,
+    pub pid: Option<i64>,
+    /// The last durable `agent_live` status, retained as a report rather than
+    /// current liveness evidence.
+    pub reported_status: Option<String>,
+    pub liveness: RuntimeLiveness,
+    pub completion: Option<CompletionRecord>,
+    pub mailbox: MailboxCounts,
+    pub worktree: WorktreeCoordinates,
+    pub diagnostics: Vec<RuntimeDiagnostic>,
+}
+
+/// Inputs for one projection request. `processes` must be a stable process
+/// snapshot, such as `SysinfoSnapshot`, rather than a reader that refreshes
+/// for every PID. `runtime_snapshot_now` captures that snapshot once for the
+/// normal production path.
+pub struct RuntimeSnapshotInput<'a> {
+    pub store: &'a Store,
+    pub routes: &'a BTreeMap<String, Route>,
+    pub messages: &'a [Message],
+    pub multiplexer: &'a dyn Multiplexer,
+    pub tmux_socket: Option<&'a str>,
+    pub processes: &'a dyn ProcReader,
+}
+
+/// Resolve every known lane into a bounded read model.
+///
+/// This function folds mailbox rows once and calls `live_sessions` once. It
+/// only asks the supplied stable process snapshot whether reported PIDs are
+/// still present, so stale durable reports cannot turn into current evidence.
+pub fn runtime_snapshot(input: RuntimeSnapshotInput<'_>) -> Result<Vec<AgentRuntimeRow>> {
+    let folded_messages = crate::bus::fold(input.messages);
+    let live_sessions = input.multiplexer.live_sessions(input.tmux_socket);
+    let mut lanes = input.store.runtime_lane_names()?;
+    lanes.extend(input.routes.keys().cloned());
+    lanes.sort();
+    lanes.dedup();
+
+    lanes
+        .into_iter()
+        .map(|lane| {
+            let runtime = input.store.resolve_lane_runtime_with_messages(
+                &lane,
+                input.routes,
+                &folded_messages,
+            )?;
+            Ok(runtime_row(
+                runtime,
+                &folded_messages,
+                &live_sessions,
+                input.processes,
+            ))
+        })
+        .collect()
+}
+
+/// Production convenience for a snapshot from the OS. Process acquisition is
+/// one `SysinfoSnapshot::capture` for the complete request.
+pub fn runtime_snapshot_now(
+    store: &Store,
+    routes: &BTreeMap<String, Route>,
+    messages: &[Message],
+) -> Result<Vec<AgentRuntimeRow>> {
+    let processes = SysinfoSnapshot::capture()?;
+    runtime_snapshot(RuntimeSnapshotInput {
+        store,
+        routes,
+        messages,
+        multiplexer: crate::tmux::mux(),
+        tmux_socket: None,
+        processes: &processes,
+    })
+}
+
+fn runtime_row(
+    runtime: LaneRuntime,
+    messages: &[Message],
+    live_sessions: &Option<LiveSessions>,
+    processes: &dyn ProcReader,
+) -> AgentRuntimeRow {
+    let route = runtime.route.clone();
+    let tmux_target = route.as_ref().and_then(|route| route.tmux.clone());
+    let reported_process = runtime.process.clone();
+    let pid = reported_process.as_ref().and_then(|process| process.pid);
+    let process_cwd = pid
+        .and_then(|pid| u32::try_from(pid).ok())
+        .and_then(|pid| processes.process(pid))
+        .and_then(|process| process.cwd)
+        .map(|path| path.to_string_lossy().into_owned());
+    let liveness = RuntimeLiveness {
+        tmux: tmux_liveness(live_sessions, tmux_target.as_deref()),
+        process: process_liveness(processes, pid),
+    };
+    let mailbox = mailbox_counts(messages, &runtime.lane);
+    let cwd = route.as_ref().and_then(|route| route.cwd.clone());
+    AgentRuntimeRow {
+        lane: runtime.lane,
+        trace: runtime.trace,
+        root_session: runtime.root_session,
+        session: runtime.current_session,
+        parent: route.as_ref().and_then(|route| route.parent.clone()),
+        route,
+        cwd: cwd.clone(),
+        tmux_target,
+        tmux_pane: reported_process
+            .as_ref()
+            .and_then(|process| process.tmux_pane.clone()),
+        pid,
+        reported_status: reported_process.and_then(|process| process.status),
+        liveness,
+        completion: runtime.completion,
+        mailbox,
+        worktree: WorktreeCoordinates {
+            route_cwd: cwd,
+            process_cwd,
+        },
+        diagnostics: runtime.diagnostics,
+    }
+}
+
+fn tmux_liveness(live_sessions: &Option<LiveSessions>, target: Option<&str>) -> TmuxLiveness {
+    let Some(target) = target else {
+        return TmuxLiveness::Unmanaged;
+    };
+    let Some(live_sessions) = live_sessions else {
+        return TmuxLiveness::Inaccessible;
+    };
+    let session = target.split(':').next().unwrap_or(target);
+    if live_sessions.has(session) {
+        TmuxLiveness::Live
+    } else {
+        TmuxLiveness::Dead
+    }
+}
+
+fn process_liveness(processes: &dyn ProcReader, pid: Option<i64>) -> ProcessLiveness {
+    match pid.and_then(|pid| u32::try_from(pid).ok()) {
+        Some(pid) if processes.is_alive(pid) => ProcessLiveness::Live,
+        Some(_) => ProcessLiveness::Dead,
+        None => ProcessLiveness::Unknown,
+    }
+}
+
+fn mailbox_counts(messages: &[Message], lane: &str) -> MailboxCounts {
+    messages
+        .iter()
+        .fold(MailboxCounts::default(), |mut counts, message| {
+            if message.to == lane {
+                counts.inbox += 1;
+                if message.to_timestamp.is_none() {
+                    counts.unacknowledged += 1;
+                }
+            }
+            if message.from == lane {
+                counts.outbox += 1;
+            }
+            counts
+        })
 }
 
 #[derive(Clone, Debug)]
@@ -312,6 +537,16 @@ fn parse_exit_code(body: &str) -> Option<i32> {
 }
 
 impl Store {
+    /// Capture the tmux and process observations once and return every lane
+    /// known to the route registry or durable lane table.
+    pub fn runtime_snapshot(
+        &self,
+        routes: &BTreeMap<String, Route>,
+        messages: &[Message],
+    ) -> Result<Vec<AgentRuntimeRow>> {
+        runtime_snapshot_now(self, routes, messages)
+    }
+
     /// Resolve a lane without mailbox input. Completion remains `None` and is
     /// represented by `RuntimeDiagnostic::MissingCompletion`.
     pub fn resolve_lane_runtime(
@@ -338,6 +573,15 @@ impl Store {
             rusqlite::params![lane],
             |row| row.get(0),
         )?)
+    }
+
+    fn runtime_lane_names(&self) -> Result<Vec<String>> {
+        let sql = "SELECT DISTINCT d.value FROM agent_lane lane
+                   JOIN dict_session d ON d.id = lane.lane_id
+                   ORDER BY d.value";
+        let mut statement = self.connection().prepare(sql)?;
+        let rows = statement.query_map([], |row| row.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<String>>>()?)
     }
 
     fn runtime_trace_names(&self, lane: &str) -> Result<Vec<String>> {
@@ -421,12 +665,139 @@ impl Store {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet, HashMap};
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use crate::bus::{Message, Route};
+    use crate::proc::{ProcReader, ProcessInfo};
+    use crate::tmux::{LiveSessions, Multiplexer};
     use crate::Store;
 
-    use super::{parse_exit_code, RuntimeDiagnostic};
+    use super::{
+        parse_exit_code, runtime_snapshot, ProcessLiveness, RuntimeDiagnostic,
+        RuntimeSnapshotInput, TmuxLiveness,
+    };
+
+    struct FakeMux {
+        sessions: Option<BTreeSet<String>>,
+        observations: AtomicUsize,
+    }
+
+    impl FakeMux {
+        fn available(names: &[&str]) -> Self {
+            FakeMux {
+                sessions: Some(names.iter().map(|name| (*name).to_owned()).collect()),
+                observations: AtomicUsize::new(0),
+            }
+        }
+
+        fn inaccessible() -> Self {
+            FakeMux {
+                sessions: None,
+                observations: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    impl Multiplexer for FakeMux {
+        fn session_of_pane(&self, _: Option<&str>, _: &str) -> Option<String> {
+            None
+        }
+        fn pane_pid(&self, _: Option<&str>, _: &str) -> Option<u32> {
+            None
+        }
+        fn live_sessions(&self, _: Option<&str>) -> Option<LiveSessions> {
+            self.observations.fetch_add(1, Ordering::SeqCst);
+            self.sessions.as_ref().map(|names| LiveSessions {
+                names: names.clone(),
+            })
+        }
+        fn has_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<bool> {
+            Ok(false)
+        }
+        fn kill_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn target_alive(&self, _: Option<&str>, _: &str) -> bool {
+            false
+        }
+        fn capture_pane(&self, _: Option<&str>, _: &str, _: Option<u32>) -> anyhow::Result<String> {
+            Ok(String::new())
+        }
+        fn new_detached_session(
+            &self,
+            _: Option<&str>,
+            _: &str,
+            _: &str,
+            _: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_keys_literal(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_text(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_key_named(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn new_window(
+            &self,
+            _: Option<&str>,
+            _: &str,
+            _: &str,
+            _: &str,
+            _: &str,
+        ) -> anyhow::Result<String> {
+            Ok(String::new())
+        }
+        fn swap_windows(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    struct FakeProcesses {
+        live: HashMap<u32, ProcessInfo>,
+    }
+
+    impl FakeProcesses {
+        fn with(pid: u32, cwd: &str) -> Self {
+            FakeProcesses {
+                live: HashMap::from([(
+                    pid,
+                    ProcessInfo {
+                        pid,
+                        parent: None,
+                        name: "fixture".into(),
+                        rss_bytes: 0,
+                        cpu_percent: 0.0,
+                        start_time_secs: 0,
+                        cwd: Some(PathBuf::from(cwd)),
+                    },
+                )]),
+            }
+        }
+    }
+
+    impl ProcReader for FakeProcesses {
+        fn is_alive(&self, pid: u32) -> bool {
+            self.live.contains_key(&pid)
+        }
+        fn process(&self, pid: u32) -> Option<ProcessInfo> {
+            self.live.get(&pid).cloned()
+        }
+        fn children(&self, _: u32) -> Vec<u32> {
+            Vec::new()
+        }
+        fn descendants(&self, _: u32) -> Vec<u32> {
+            Vec::new()
+        }
+        fn descendent_count(&self, _: u32) -> usize {
+            0
+        }
+    }
 
     fn route(session_id: Option<&str>) -> Route {
         Route {
@@ -442,6 +813,24 @@ mod tests {
             goal: Some("goal".into()),
             registered_at: Some("2026-08-14T00:00:00Z".into()),
         }
+    }
+
+    fn snapshot_rows<'a>(
+        store: &'a Store,
+        routes: &'a BTreeMap<String, Route>,
+        messages: &'a [Message],
+        mux: &'a FakeMux,
+        processes: &'a FakeProcesses,
+    ) -> Vec<super::AgentRuntimeRow> {
+        runtime_snapshot(RuntimeSnapshotInput {
+            store,
+            routes,
+            messages,
+            multiplexer: mux,
+            tmux_socket: None,
+            processes,
+        })
+        .unwrap()
     }
 
     fn fresh_store(name: &str) -> (std::path::PathBuf, Store) {
@@ -595,6 +984,138 @@ mod tests {
             .contains(&RuntimeDiagnostic::MissingTrace {
                 lane: "lane-a".into()
             }));
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn snapshot_joins_live_dead_and_shell_only_routes_from_one_tmux_observation() {
+        let (path, store) = fresh_store("snapshot");
+        for (lane, session, pid, pane) in [
+            ("lane-live", "generated-live", 101, "%1"),
+            ("lane-dead", "generated-dead", 202, "%2"),
+        ] {
+            store
+                .attach_trace(lane, &format!("trace-{lane}"), "lane-create", 10)
+                .unwrap();
+            store
+                .attach_trace(session, &format!("trace-{lane}"), "supervisor", 11)
+                .unwrap();
+            add_session(&store, session, 20);
+            store
+                .record_status(session, 30, "live", Some(pid), Some(pane))
+                .unwrap();
+        }
+        let mut routes = BTreeMap::new();
+        let mut live = route(Some("generated-live"));
+        live.tmux = Some("live-tmux:0".into());
+        live.cwd = Some("/repo/.boop-worktrees/feature/live".into());
+        live.parent = Some("coordinator".into());
+        routes.insert("lane-live".into(), live);
+        let mut dead = route(Some("generated-dead"));
+        dead.tmux = Some("dead-tmux".into());
+        routes.insert("lane-dead".into(), dead);
+        let mut shell = route(None);
+        shell.kind = "shell".into();
+        shell.tmux = Some("shell-tmux".into());
+        shell.cwd = Some("/repo/.boop-worktrees/feature/shell".into());
+        routes.insert("shell-only".into(), shell);
+        let messages = vec![
+            Message {
+                id: "inbox".into(),
+                from: "coordinator".into(),
+                to: "lane-live".into(),
+                from_timestamp: "1".into(),
+                to_timestamp: None,
+                kind: "note".into(),
+                reply_to: None,
+                body: "work".into(),
+                r#ref: None,
+            },
+            Message {
+                id: "result".into(),
+                from: "lane-live".into(),
+                to: "coordinator".into(),
+                from_timestamp: "2".into(),
+                to_timestamp: None,
+                kind: "result".into(),
+                reply_to: None,
+                body: "lane lane-live done rc=0".into(),
+                r#ref: None,
+            },
+            // This later row acknowledges the first envelope. The fold keeps
+            // one inbox row and its acknowledgement.
+            Message {
+                id: "inbox".into(),
+                from: "coordinator".into(),
+                to: "lane-live".into(),
+                from_timestamp: "3".into(),
+                to_timestamp: Some("4".into()),
+                kind: "note".into(),
+                reply_to: None,
+                body: "work".into(),
+                r#ref: None,
+            },
+        ];
+        let mux = FakeMux::available(&["live-tmux", "shell-tmux"]);
+        let processes = FakeProcesses::with(101, "/observed/live");
+        let rows = snapshot_rows(&store, &routes, &messages, &mux, &processes);
+        assert_eq!(mux.observations.load(Ordering::SeqCst), 1);
+        assert_eq!(rows.len(), 3);
+        let live = rows.iter().find(|row| row.lane == "lane-live").unwrap();
+        assert_eq!(live.session.as_deref(), Some("generated-live"));
+        assert_eq!(live.parent.as_deref(), Some("coordinator"));
+        assert_eq!(live.liveness.tmux, TmuxLiveness::Live);
+        assert_eq!(live.liveness.process, ProcessLiveness::Live);
+        assert_eq!(live.worktree.process_cwd.as_deref(), Some("/observed/live"));
+        assert_eq!(live.mailbox.inbox, 1);
+        assert_eq!(live.mailbox.outbox, 1);
+        assert_eq!(live.mailbox.unacknowledged, 0);
+        assert_eq!(
+            live.completion.as_ref().and_then(|row| row.exit_code),
+            Some(0)
+        );
+        let dead = rows.iter().find(|row| row.lane == "lane-dead").unwrap();
+        assert_eq!(dead.liveness.tmux, TmuxLiveness::Dead);
+        assert_eq!(dead.liveness.process, ProcessLiveness::Dead);
+        let shell = rows.iter().find(|row| row.lane == "shell-only").unwrap();
+        assert!(shell.trace.is_none());
+        assert!(shell.session.is_none());
+        assert_eq!(shell.liveness.tmux, TmuxLiveness::Live);
+        assert_eq!(
+            shell.worktree.route_cwd.as_deref(),
+            Some("/repo/.boop-worktrees/feature/shell")
+        );
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn inaccessible_tmux_and_stale_live_report_do_not_prove_liveness() {
+        let (path, store) = fresh_store("stale-report");
+        store
+            .attach_trace("lane-a", "trace-lane-a", "lane-create", 10)
+            .unwrap();
+        store
+            .attach_trace("generated-a", "trace-lane-a", "supervisor", 11)
+            .unwrap();
+        add_session(&store, "generated-a", 20);
+        // This report was durable when written but PID 999 is absent from the
+        // current process fixture, so the snapshot must report it dead.
+        store
+            .record_status("generated-a", 30, "live", Some(999), Some("%9"))
+            .unwrap();
+        let mut routes = BTreeMap::new();
+        routes.insert("lane-a".into(), route(Some("generated-a")));
+        let mux = FakeMux::inaccessible();
+        let processes = FakeProcesses {
+            live: HashMap::new(),
+        };
+        let rows = snapshot_rows(&store, &routes, &[], &mux, &processes);
+        assert_eq!(mux.observations.load(Ordering::SeqCst), 1);
+        assert_eq!(rows[0].reported_status.as_deref(), Some("live"));
+        assert_eq!(rows[0].liveness.tmux, TmuxLiveness::Inaccessible);
+        assert_eq!(rows[0].liveness.process, ProcessLiveness::Dead);
         drop(store);
         let _ = std::fs::remove_file(path);
     }
