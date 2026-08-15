@@ -2,7 +2,7 @@
 created: 2026-08-14
 updated: 2026-08-14
 type: feature
-status: open
+status: obsolete
 priority: high
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation, artifact-api, artifact-cli]
@@ -10,6 +10,7 @@ lane: boop-query
 lane_seq: 10
 collision: [boop-store-schema]
 blocked_by: ['@instant-agent-contract', '@lane-runtime-identity', '@lane-tracing-events']
+closed: 2026-08-14
 ---
 
 # 010 Expose typed agent activity projection
@@ -48,3 +49,9 @@ The body synchronizes transcript facts once, aggregates by requested session, tr
 ## Implementation Notes
 
 Reuse `agent_turn`, `agent_usage`, `agent_trace_span`, `agent_lane`, `agent_edge`, `agent_live`, and mailbox/runtime acquisition. Do not expose SQLite table IDs to Instant.
+
+## Decisions
+
+### 2026-08-15T02:01:56Z · @codex
+
+Scope absorbed by completed boop-activity-counts, boop-runtime-snapshot, and boop-cass-summary. No separate implementation remains.
