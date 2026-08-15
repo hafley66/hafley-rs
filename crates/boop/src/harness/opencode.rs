@@ -9,7 +9,7 @@ use serde_json::Value;
 
 use crate::event::AgentEvent;
 use crate::harness::{
-    Capabilities, Harness, Ingested, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
+    Capabilities, Harness, Ingested, OneShotSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
 use crate::ident::{Store, SyncStat, UsageRow};
 
@@ -111,6 +111,25 @@ impl Harness for Opencode {
 
     fn preview_command(&self, spec: &SpawnSpec) -> Option<String> {
         Some(crate::harness::supervisor_command(spec))
+    }
+
+    fn one_shot(&self, spec: &OneShotSpec) -> Result<String> {
+        let model = spec
+            .model
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .context("one-shot spec has no model; opencode needs one resolved")?;
+        let output = std::process::Command::new("opencode")
+            .args(["run", "-m", model, &spec.prompt])
+            .output()
+            .context("spawn opencode run")?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "opencode run -m {model} failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
     }
 
     fn spawn(&self, spec: &SpawnSpec) -> Result<SessionRef> {

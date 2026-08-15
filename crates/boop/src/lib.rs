@@ -10,6 +10,7 @@ pub mod bus;
 pub mod channel;
 #[cfg(feature = "agent-read")]
 pub mod chat;
+pub mod concatmap;
 pub mod config;
 pub mod event;
 pub mod harness;

@@ -148,6 +148,31 @@ enum SubCmd {
         #[command(subcommand)]
         cmd: Option<DbCmd>,
     },
+    /// Refinement loop: map each new (assistant, user) contact pair through a
+    /// one-shot model pass until the output stops changing.
+    Concatmap {
+        /// Template file with {{mode}}, {{ai_text}}, {{user_text}} keys.
+        #[arg(long)]
+        template: PathBuf,
+        /// The mode word substituted into the template.
+        #[arg(long)]
+        mode: String,
+        /// The one-shot model id.
+        #[arg(long, default_value = "openrouter/deepseek/deepseek-v4-flash-0731")]
+        model: String,
+        /// Directory holding cursor and done markers.
+        #[arg(long)]
+        state: PathBuf,
+        /// Directory receiving <session8>/<turn>.md rewrites.
+        #[arg(long)]
+        out: PathBuf,
+        /// Seconds between turn queries.
+        #[arg(long, default_value_t = 5)]
+        poll_secs: u64,
+        /// Max model passes before the last pass wins.
+        #[arg(long, default_value_t = 3)]
+        cap: u32,
+    },
     /// Report the caller's own identity and the rung that resolved it.
     Whoami {
         #[arg(long)]
@@ -620,6 +645,23 @@ fn main() -> Result<()> {
                 ),
             },
         },
+        SubCmd::Concatmap {
+            template,
+            mode,
+            model,
+            state,
+            out,
+            poll_secs,
+            cap,
+        } => boop::concatmap::run(boop::concatmap::Args {
+            template,
+            mode,
+            model,
+            state_dir: state,
+            out_dir: out,
+            poll: std::time::Duration::from_secs(poll_secs),
+            cap,
+        }),
         SubCmd::Whoami { json } => run_whoami(json),
         SubCmd::Config { cmd } => run_config(cmd),
     }
