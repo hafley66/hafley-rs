@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 use std::fs::File;
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
@@ -223,8 +224,8 @@ struct SessionMeta {
 }
 
 fn first_session_meta(path: &Path) -> Option<SessionMeta> {
-    let mut file = File::open(path).ok()?;
-    let first = tail::read_first_complete_line(&mut file).ok()??;
+    let mut reader = BufReader::new(File::open(path).ok()?);
+    let first = tail::read_first_complete_line(&mut reader).ok()??;
     let value: Value = serde_json::from_slice(&first.bytes).ok()?;
     if value.get("type").and_then(Value::as_str) != Some("session_meta") {
         return None;

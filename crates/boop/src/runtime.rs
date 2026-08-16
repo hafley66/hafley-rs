@@ -214,6 +214,7 @@ pub struct RuntimeSnapshotInput<'a> {
 /// still present, so stale durable reports cannot turn into current evidence.
 pub fn runtime_snapshot(input: RuntimeSnapshotInput<'_>) -> Result<Vec<AgentRuntimeRow>> {
     let folded_messages = crate::bus::fold(input.messages);
+    let (mailboxes, completions) = mailbox_projection(&folded_messages);
     let live_sessions = input.multiplexer.live_sessions(input.tmux_socket);
     let mut lanes = input.store.runtime_lane_names()?;
     lanes.extend(input.routes.keys().cloned());
@@ -223,14 +224,15 @@ pub fn runtime_snapshot(input: RuntimeSnapshotInput<'_>) -> Result<Vec<AgentRunt
     lanes
         .into_iter()
         .map(|lane| {
-            let runtime = input.store.resolve_lane_runtime_with_messages(
+            let runtime = resolve_with_completion(
+                input.store,
                 &lane,
                 input.routes,
-                &folded_messages,
+                completions.get(&lane).cloned(),
             )?;
             Ok(runtime_row(
                 runtime,
-                &folded_messages,
+                mailboxes.get(&lane).cloned().unwrap_or_default(),
                 &live_sessions,
                 input.processes,
             ))
@@ -258,7 +260,7 @@ pub fn runtime_snapshot_now(
 
 fn runtime_row(
     runtime: LaneRuntime,
-    messages: &[Message],
+    mailbox: MailboxCounts,
     live_sessions: &Option<LiveSessions>,
     processes: &dyn ProcReader,
 ) -> AgentRuntimeRow {
@@ -275,7 +277,6 @@ fn runtime_row(
         tmux: tmux_liveness(live_sessions, tmux_target.as_deref()),
         process: process_liveness(processes, pid),
     };
-    let mailbox = mailbox_counts(messages, &runtime.lane);
     let cwd = route.as_ref().and_then(|route| route.cwd.clone());
     AgentRuntimeRow {
         lane: runtime.lane,
@@ -325,21 +326,42 @@ fn process_liveness(processes: &dyn ProcReader, pid: Option<i64>) -> ProcessLive
     }
 }
 
-fn mailbox_counts(messages: &[Message], lane: &str) -> MailboxCounts {
-    messages
-        .iter()
-        .fold(MailboxCounts::default(), |mut counts, message| {
-            if message.to == lane {
-                counts.inbox += 1;
-                if message.to_timestamp.is_none() {
-                    counts.unacknowledged += 1;
+fn mailbox_projection(
+    messages: &[Message],
+) -> (
+    BTreeMap<String, MailboxCounts>,
+    BTreeMap<String, CompletionRecord>,
+) {
+    let mut counts = BTreeMap::<String, MailboxCounts>::new();
+    let mut completions = BTreeMap::<String, CompletionRecord>::new();
+    for message in messages {
+        let inbox = counts.entry(message.to.clone()).or_default();
+        inbox.inbox += 1;
+        if message.to_timestamp.is_none() {
+            inbox.unacknowledged += 1;
+        }
+        counts.entry(message.from.clone()).or_default().outbox += 1;
+        if message.kind == "result" {
+            let completion = CompletionRecord {
+                id: message.id.clone(),
+                from: message.from.clone(),
+                to: message.to.clone(),
+                timestamp: message.from_timestamp.clone(),
+                body: message.body.clone(),
+                exit_code: parse_exit_code(&message.body),
+            };
+            for lane in [&message.from, &message.to] {
+                let replace = completions.get(lane).is_none_or(|current| {
+                    (completion.timestamp.as_str(), completion.id.as_str())
+                        > (current.timestamp.as_str(), current.id.as_str())
+                });
+                if replace {
+                    completions.insert(lane.clone(), completion.clone());
                 }
             }
-            if message.from == lane {
-                counts.outbox += 1;
-            }
-            counts
-        })
+        }
+    }
+    (counts, completions)
 }
 
 #[derive(Clone, Debug)]
@@ -369,6 +391,15 @@ pub fn resolve(
     routes: &BTreeMap<String, Route>,
     messages: &[Message],
 ) -> Result<LaneRuntime> {
+    resolve_with_completion(store, lane, routes, latest_completion(messages, lane))
+}
+
+fn resolve_with_completion(
+    store: &Store,
+    lane: &str,
+    routes: &BTreeMap<String, Route>,
+    completion: Option<CompletionRecord>,
+) -> Result<LaneRuntime> {
     let mut runtime = LaneRuntime {
         lane: lane.to_owned(),
         trace: None,
@@ -376,7 +407,7 @@ pub fn resolve(
         current_session: None,
         route: None,
         process: None,
-        completion: latest_completion(messages, lane),
+        completion,
         placeholder_session: None,
         generated_sessions: Vec::new(),
         diagnostics: Vec::new(),

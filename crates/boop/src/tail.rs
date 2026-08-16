@@ -6,7 +6,7 @@
 //! into `next_offset`. The next call re-reads it.
 
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::io::{BufRead, Read, Seek, SeekFrom};
 
 /// One complete line (terminated by `\n`) read from a file.
 #[derive(Clone, Debug)]
@@ -31,10 +31,9 @@ pub struct ReadResult {
 ///
 /// Session discovery needs metadata from the first record and must not load
 /// the remainder of a multi-gigabyte append-only transcript corpus.
-pub fn read_first_complete_line(file: &mut File) -> anyhow::Result<Option<CompleteLine>> {
-    file.seek(SeekFrom::Start(0))?;
+pub fn read_first_complete_line(reader: &mut impl BufRead) -> anyhow::Result<Option<CompleteLine>> {
     let mut bytes = Vec::new();
-    BufReader::new(file).read_until(b'\n', &mut bytes)?;
+    reader.read_until(b'\n', &mut bytes)?;
     if bytes.last() != Some(&b'\n') {
         return Ok(None);
     }
@@ -99,7 +98,7 @@ fn read_from(file: &mut File, offset: u64) -> anyhow::Result<ReadResult> {
 #[cfg(test)]
 mod tests {
     use std::fs::{File, OpenOptions};
-    use std::io::Write;
+    use std::io::{BufReader, Cursor, Write};
     use std::path::PathBuf;
 
     use super::{read_complete_lines, read_first_complete_line};
@@ -141,14 +140,25 @@ mod tests {
     fn first_line_reader_requires_a_newline_and_ignores_the_tail() {
         let path = temp_path("first");
         overwrite(&path, b"metadata\nbody\nmore\n");
-        let line = read_first_complete_line(&mut open(&path)).unwrap().unwrap();
+        let mut reader = BufReader::new(open(&path));
+        let line = read_first_complete_line(&mut reader).unwrap().unwrap();
         assert_eq!(line.start, 0);
         assert_eq!(line.bytes, b"metadata");
 
         overwrite(&path, b"partial");
-        assert!(read_first_complete_line(&mut open(&path))
-            .unwrap()
-            .is_none());
+        let mut reader = BufReader::new(open(&path));
+        assert!(read_first_complete_line(&mut reader).unwrap().is_none());
+    }
+
+    #[test]
+    fn first_line_reader_does_not_consume_the_transcript_tail() {
+        let mut body = b"metadata\n".to_vec();
+        body.resize(1024 * 1024, b'x');
+        let body_len = body.len() as u64;
+        let mut reader = BufReader::new(Cursor::new(body));
+        let line = read_first_complete_line(&mut reader).unwrap().unwrap();
+        assert_eq!(line.bytes, b"metadata");
+        assert!(reader.get_ref().position() < body_len);
     }
 
     #[test]

@@ -1,5 +1,8 @@
 set shell := ["bash", "-cu"]
 
+boop-perf-grid:
+    cargo test -p boop --test bench_grid -- --nocapture
+
 soopy-scale repo pathspec="" handles="500" batch="16" label="manual":
     bash crates/soopy/bench/0_run.sh "{{repo}}" "{{handles}}" "{{batch}}" "{{label}}" "{{pathspec}}"
 

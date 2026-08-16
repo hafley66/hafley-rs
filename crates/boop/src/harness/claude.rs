@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use std::fs::File;
+use std::io::BufReader;
 use std::path::PathBuf;
 
 use anyhow::Context;
@@ -229,8 +230,8 @@ fn first_record_context(path: &std::path::Path) -> (Option<String>, Option<Strin
     let Ok(file) = File::open(path) else {
         return (None, None);
     };
-    let mut file = file;
-    let Ok(Some(first)) = tail::read_first_complete_line(&mut file) else {
+    let mut reader = BufReader::new(file);
+    let Ok(Some(first)) = tail::read_first_complete_line(&mut reader) else {
         return (None, None);
     };
     let Ok(value) = serde_json::from_slice::<Value>(&first.bytes) else {
