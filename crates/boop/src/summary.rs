@@ -4,12 +4,12 @@
 //! transcript, usage, and completion facts only. CASS issue, reservation, and
 //! provider records are separate contracts and do not appear in these types.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Result;
 use serde::Serialize;
 
-use crate::activity::{ActivityScope, ToolResultAvailability};
+use crate::activity::ToolResultAvailability;
 use crate::bus::{Message, Route};
 use crate::proc::{ProcReader, SysinfoSnapshot};
 use crate::runtime::{runtime_snapshot, AgentRuntimeRow, RuntimeSnapshotInput};
@@ -91,9 +91,23 @@ impl Default for AgentSummaryActivity {
 
 /// Join lane activity counts to a single bounded runtime observation.
 pub fn agent_summary(query: AgentSummaryQuery<'_>) -> Result<AgentSummary> {
+    let runtime = runtime_snapshot(RuntimeSnapshotInput {
+        store: query.store,
+        routes: query.routes,
+        messages: query.messages,
+        multiplexer: query.multiplexer,
+        tmux_socket: query.tmux_socket,
+        processes: query.processes,
+    })?;
+    let selected_traces = runtime
+        .iter()
+        .filter_map(|row| row.trace.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
     let activity = query
         .store
-        .activity_counts(ActivityScope::Trace)?
+        .activity_counts_for_traces(&selected_traces)?
         .into_iter()
         .map(|row| {
             (
@@ -116,14 +130,6 @@ pub fn agent_summary(query: AgentSummaryQuery<'_>) -> Result<AgentSummary> {
             )
         })
         .collect::<BTreeMap<_, _>>();
-    let runtime = runtime_snapshot(RuntimeSnapshotInput {
-        store: query.store,
-        routes: query.routes,
-        messages: query.messages,
-        multiplexer: query.multiplexer,
-        tmux_socket: query.tmux_socket,
-        processes: query.processes,
-    })?;
     let mut agents = runtime
         .into_iter()
         .map(|row| AgentSummaryAgent {

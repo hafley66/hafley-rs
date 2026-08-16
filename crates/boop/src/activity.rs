@@ -6,6 +6,7 @@
 //! joins their per-session aggregates to a distinct membership relation.
 
 use anyhow::Result;
+use rusqlite::params_from_iter;
 use serde::Serialize;
 
 use crate::ident::Store;
@@ -156,9 +157,113 @@ SELECT members.identity,
     )
 }
 
+fn scoped_trace_activity_sql(trace_count: usize) -> String {
+    let traces = (1..=trace_count)
+        .map(|index| format!("?{index}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        r#"
+WITH
+selected_traces(trace_id, identity) AS MATERIALIZED (
+    SELECT trace.id, trace.value
+      FROM dict_trace AS trace
+     WHERE trace.value IN ({traces})
+),
+members(session_id, identity) AS MATERIALIZED (
+    SELECT span.session_id, trace.identity
+      FROM selected_traces AS trace
+      LEFT JOIN agent_trace_span AS span ON span.trace_id = trace.trace_id
+),
+turn_counts AS (
+    SELECT turn.session_id,
+           COUNT(*) FILTER (WHERE role.value = 'user') AS user_count,
+           COUNT(*) FILTER (WHERE role.value = 'assistant') AS assistant_count,
+           COUNT(*) FILTER (WHERE role.value = 'tool') AS tool_count,
+           COUNT(*) AS total_count,
+           MIN(turn.ts) AS first_ts,
+           MAX(turn.ts) AS last_ts
+      FROM agent_turn AS turn
+      JOIN dict_role AS role ON role.id = turn.role_id
+     WHERE turn.session_id IN (
+               SELECT session_id FROM members WHERE session_id IS NOT NULL
+           )
+     GROUP BY turn.session_id
+),
+usage_counts AS (
+    SELECT usage.session_id,
+           COUNT(*) AS call_count,
+           SUM(usage.input_tokens) AS input_tokens,
+           SUM(usage.output_tokens) AS output_tokens,
+           SUM(usage.cache_create_5m_tokens) AS cache_create_5m_tokens,
+           SUM(usage.cache_create_1h_tokens) AS cache_create_1h_tokens,
+           SUM(usage.cache_read_tokens) AS cache_read_tokens,
+           MIN(usage.ts) AS first_ts,
+           MAX(usage.ts) AS last_ts
+      FROM agent_usage AS usage
+     WHERE usage.session_id IN (
+               SELECT session_id FROM members WHERE session_id IS NOT NULL
+           )
+     GROUP BY usage.session_id
+)
+SELECT members.identity,
+       COALESCE(SUM(turn_counts.user_count), 0) AS user_count,
+       COALESCE(SUM(turn_counts.assistant_count), 0) AS assistant_count,
+       COALESCE(SUM(turn_counts.tool_count), 0) AS tool_count,
+       COALESCE(SUM(turn_counts.total_count), 0) AS total_count,
+       COALESCE(SUM(usage_counts.call_count), 0) AS call_count,
+       COALESCE(SUM(usage_counts.input_tokens), 0) AS input_tokens,
+       COALESCE(SUM(usage_counts.output_tokens), 0) AS output_tokens,
+       COALESCE(SUM(usage_counts.cache_create_5m_tokens), 0) AS cache_create_5m_tokens,
+       COALESCE(SUM(usage_counts.cache_create_1h_tokens), 0) AS cache_create_1h_tokens,
+       COALESCE(SUM(usage_counts.cache_read_tokens), 0) AS cache_read_tokens,
+       MIN(CASE
+             WHEN turn_counts.first_ts IS NULL THEN usage_counts.first_ts
+             WHEN usage_counts.first_ts IS NULL THEN turn_counts.first_ts
+             WHEN turn_counts.first_ts < usage_counts.first_ts THEN turn_counts.first_ts
+             ELSE usage_counts.first_ts
+           END) AS first_activity_ts,
+       MAX(CASE
+             WHEN turn_counts.last_ts IS NULL THEN usage_counts.last_ts
+             WHEN usage_counts.last_ts IS NULL THEN turn_counts.last_ts
+             WHEN turn_counts.last_ts > usage_counts.last_ts THEN turn_counts.last_ts
+             ELSE usage_counts.last_ts
+           END) AS last_activity_ts
+  FROM members
+  LEFT JOIN turn_counts ON turn_counts.session_id = members.session_id
+  LEFT JOIN usage_counts ON usage_counts.session_id = members.session_id
+ GROUP BY members.identity
+ ORDER BY members.identity
+"#
+    )
+}
+
 fn count(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<u64> {
     let value: i64 = row.get(index)?;
     u64::try_from(value).map_err(|_| rusqlite::Error::IntegralValueOutOfRange(index, value))
+}
+
+fn activity_count(
+    scope: ActivityScope,
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<ActivityCount> {
+    Ok(ActivityCount {
+        scope,
+        identity: row.get(0)?,
+        user: count(row, 1)?,
+        assistant: count(row, 2)?,
+        tool_call: count(row, 3)?,
+        total: count(row, 4)?,
+        calls: count(row, 5)?,
+        input_tokens: row.get(6)?,
+        output_tokens: row.get(7)?,
+        cache_create_5m_tokens: row.get(8)?,
+        cache_create_1h_tokens: row.get(9)?,
+        cache_read_tokens: row.get(10)?,
+        first_activity_ts: row.get(11)?,
+        last_activity_ts: row.get(12)?,
+        tool_result_availability: ToolResultAvailability::Unavailable,
+    })
 }
 
 impl Store {
@@ -167,24 +272,24 @@ impl Store {
     /// the number of returned sessions, traces, or lanes.
     pub fn activity_counts(&self, scope: ActivityScope) -> Result<Vec<ActivityCount>> {
         let mut statement = self.connection().prepare(&activity_sql(scope))?;
-        let rows = statement.query_map([], |row| {
-            Ok(ActivityCount {
-                scope,
-                identity: row.get(0)?,
-                user: count(row, 1)?,
-                assistant: count(row, 2)?,
-                tool_call: count(row, 3)?,
-                total: count(row, 4)?,
-                calls: count(row, 5)?,
-                input_tokens: row.get(6)?,
-                output_tokens: row.get(7)?,
-                cache_create_5m_tokens: row.get(8)?,
-                cache_create_1h_tokens: row.get(9)?,
-                cache_read_tokens: row.get(10)?,
-                first_activity_ts: row.get(11)?,
-                last_activity_ts: row.get(12)?,
-                tool_result_availability: ToolResultAvailability::Unavailable,
-            })
+        let rows = statement.query_map([], |row| activity_count(scope, row))?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Aggregate only the selected trace identities. Agent summary uses this
+    /// internal projection after its runtime pass establishes the trace
+    /// boundary, so unrelated transcript tables are never aggregated.
+    pub(crate) fn activity_counts_for_traces(
+        &self,
+        traces: &[String],
+    ) -> Result<Vec<ActivityCount>> {
+        if traces.is_empty() {
+            return Ok(Vec::new());
+        }
+        let sql = scoped_trace_activity_sql(traces.len());
+        let mut statement = self.connection().prepare(&sql)?;
+        let rows = statement.query_map(params_from_iter(traces), |row| {
+            activity_count(ActivityScope::Trace, row)
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
@@ -197,7 +302,7 @@ mod tests {
     use crate::ident::{LaneSpawn, UsageRow};
     use crate::{ActivityScope, Store, ToolResultAvailability};
 
-    use super::activity_sql;
+    use super::{activity_sql, scoped_trace_activity_sql};
 
     fn fresh_store(name: &str) -> (PathBuf, Store) {
         let path = std::env::temp_dir().join(format!(
@@ -388,6 +493,79 @@ mod tests {
                 "{scope:?} activity query has per-identity work:\n{plan}"
             );
         }
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn scoped_trace_counts_seek_selected_sessions_only() {
+        let (path, store) = fresh_store("scoped-trace");
+        for (session_id, harness, turn_ts, usage_ts) in [
+            ("selected-claude", "claude", 10, 11),
+            ("selected-codex", "codex", 12, 13),
+        ] {
+            session(&store, session_id, harness, turn_ts);
+            store
+                .attach_trace(session_id, "trace-selected", "fixture", turn_ts as u64)
+                .unwrap();
+            turn(&store, session_id, 1, turn_ts, "assistant");
+            usage(
+                &store,
+                session_id,
+                1,
+                usage_ts as u64,
+                &format!("request-{session_id}"),
+                20,
+            );
+        }
+        for number in 0..7 {
+            let session_id = format!("unrelated-{number}");
+            store
+                .attach_trace(
+                    &session_id,
+                    &format!("trace-unrelated-{number}"),
+                    "fixture",
+                    20,
+                )
+                .unwrap();
+            turn(&store, &session_id, 1, 20, "assistant");
+            usage(&store, &session_id, 1, 21, &format!("request-{number}"), 30);
+        }
+        let selected = vec!["trace-selected".to_owned()];
+        let scoped = store.activity_counts_for_traces(&selected).unwrap();
+        let global = store
+            .activity_counts(ActivityScope::Trace)
+            .unwrap()
+            .into_iter()
+            .filter(|row| row.identity == "trace-selected")
+            .collect::<Vec<_>>();
+        assert_eq!(scoped, global);
+        assert_eq!(scoped[0].assistant, 2);
+        assert_eq!(scoped[0].calls, 2);
+
+        let sql = format!(
+            "EXPLAIN QUERY PLAN {}",
+            scoped_trace_activity_sql(selected.len())
+        );
+        let mut statement = store.connection().prepare(&sql).unwrap();
+        let plan = statement
+            .query_map(rusqlite::params!["trace-selected"], |row| {
+                row.get::<_, String>(3)
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap()
+            .join("\n")
+            .to_ascii_uppercase();
+        assert!(plan.contains("SEARCH TURN USING PRIMARY KEY"), "{plan}");
+        assert!(
+            plan.contains("SEARCH SPAN USING COVERING INDEX IDX_SPAN_TRACE"),
+            "{plan}"
+        );
+        assert!(plan.contains("SEARCH USAGE USING PRIMARY KEY"), "{plan}");
+        assert!(!plan.contains("SCAN TURN"), "{plan}");
+        assert!(!plan.contains("SCAN USAGE"), "{plan}");
+        drop(statement);
         drop(store);
         let _ = std::fs::remove_file(path);
     }
