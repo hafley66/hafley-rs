@@ -1,6 +1,7 @@
 //! The opencode adapter. opencode writes no transcript file, so this tails
 //! `message.rowid` in its SQLite store, read-only; opencode owns that store.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -177,13 +178,14 @@ impl Harness for Opencode {
                 next_cursor: from,
             });
         }
+        let parts = parts_for_messages(&connection, &messages)?;
         let mut turn = store.begin_walk(&session.session_id)?;
         let mut stat = SyncStat::default();
         let mut cursor = from;
-        for message in &messages {
+        for (message, message_parts) in messages.iter().zip(&parts) {
             cursor = message.rowid;
             let mut first_turn = None;
-            for part in parts_of(&connection, &message.id)? {
+            for part in message_parts {
                 match part.kind.as_str() {
                     "text" => {
                         turn += 1;
@@ -456,46 +458,88 @@ fn messages_after(connection: &Connection, session: &str, after: u64) -> Result<
     Ok(out)
 }
 
-fn parts_of(connection: &Connection, message_id: &str) -> Result<Vec<Part>> {
-    let mut statement =
-        connection.prepare("SELECT data FROM part WHERE message_id = ?1 ORDER BY id")?;
-    let rows = statement.query_map(rusqlite::params![message_id], |row| row.get::<_, String>(0))?;
-    let mut out = Vec::new();
-    for row in rows {
-        let data: Value = match serde_json::from_str(&row?) {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
-        let kind = data
-            .get("type")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_owned();
-        out.push(Part {
-            tool: data
-                .get("tool")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_owned(),
-            text: data
-                .get("text")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_owned(),
-            input: data
-                .get("state")
-                .and_then(|state| state.get("input"))
-                .cloned(),
-            kind,
-        });
+/// Load every part for a message batch in one statement, retaining the same
+/// message order at the caller and the same id order within each message as
+/// `parts_of` used to provide. SQLite's host-parameter limit varies by build,
+/// so large message batches are split before preparing the IN query.
+fn parts_for_messages(connection: &Connection, messages: &[Message]) -> Result<Vec<Vec<Part>>> {
+    const MAX_MESSAGE_IDS_PER_QUERY: usize = 500;
+    let mut parts: Vec<Vec<Part>> = (0..messages.len()).map(|_| Vec::new()).collect();
+
+    for (batch_index, message_batch) in messages.chunks(MAX_MESSAGE_IDS_PER_QUERY).enumerate() {
+        let message_indexes: HashMap<&str, usize> = message_batch
+            .iter()
+            .enumerate()
+            .map(|(index, message)| (message.id.as_str(), index))
+            .collect();
+        let placeholders = (1..=message_batch.len())
+            .map(|index| format!("?{index}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "SELECT message_id, data FROM part
+             WHERE message_id IN ({placeholders}) ORDER BY message_id, id"
+        );
+        let mut statement = connection.prepare(&sql)?;
+        let rows = statement.query_map(
+            rusqlite::params_from_iter(message_batch.iter().map(|message| message.id.as_str())),
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )?;
+        for row in rows {
+            let (message_id, raw) = row?;
+            let Some(&message_index) = message_indexes.get(message_id.as_str()) else {
+                continue;
+            };
+            let data: Value = match serde_json::from_str(&raw) {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
+            parts[batch_index * MAX_MESSAGE_IDS_PER_QUERY + message_index].push(Part {
+                kind: data
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_owned(),
+                tool: data
+                    .get("tool")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_owned(),
+                text: data
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_owned(),
+                input: data
+                    .get("state")
+                    .and_then(|state| state.get("input"))
+                    .cloned(),
+            });
+        }
     }
-    Ok(out)
+    Ok(parts)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{launch_command, sessions_from, Opencode, Part};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use rusqlite::trace::{TraceEvent, TraceEventCodes};
+
+    use super::{
+        launch_command, messages_after, parts_for_messages, sessions_from, Opencode, Part,
+    };
     use crate::harness::{Harness, SpawnSpec};
+
+    static PART_SELECTS: AtomicUsize = AtomicUsize::new(0);
+
+    fn count_part_selects(event: TraceEvent<'_>) {
+        if let TraceEvent::Stmt(_, sql) = event {
+            if sql.contains("FROM part") {
+                PART_SELECTS.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
 
     /// Capabilities are claims; each true one needs a test.
     #[test]
@@ -572,6 +616,49 @@ mod tests {
             input: None,
         };
         assert_eq!(part.text, "hello");
+    }
+
+    #[test]
+    fn opencode_parts_fixture_receipt_uses_one_part_query_and_preserves_order() {
+        let connection = super::open_read_only(std::path::Path::new(
+            "tests/fixtures/opencode/bench/opencode.db",
+        ))
+        .unwrap();
+        let messages = messages_after(&connection, "ses_bench_0001", 0).unwrap();
+        PART_SELECTS.store(0, Ordering::Relaxed);
+        connection.trace_v2(TraceEventCodes::SQLITE_TRACE_STMT, Some(count_part_selects));
+        let parts = parts_for_messages(&connection, &messages).unwrap();
+        connection.trace_v2(TraceEventCodes::empty(), None);
+
+        let part_count: usize = parts.iter().map(Vec::len).sum();
+        assert_eq!(messages.len(), 300);
+        assert_eq!(parts.len(), 300);
+        assert_eq!(part_count, 340);
+        assert_eq!(PART_SELECTS.load(Ordering::Relaxed), 1);
+
+        let first = &parts[0];
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].kind, "text");
+        assert_eq!(first[0].text, "bench prompt 0");
+        assert!(first[0].input.is_none());
+
+        let tool_message = &parts[5];
+        assert_eq!(
+            tool_message
+                .iter()
+                .map(|part| part.kind.as_str())
+                .collect::<Vec<_>>(),
+            ["text", "tool"]
+        );
+        assert_eq!(tool_message[1].tool, "bash");
+        assert_eq!(
+            tool_message[1]
+                .input
+                .as_ref()
+                .and_then(|input| input.get("command"))
+                .and_then(|command| command.as_str()),
+            Some("cargo test bench_5")
+        );
     }
 
     // ---- facet 3 ----
