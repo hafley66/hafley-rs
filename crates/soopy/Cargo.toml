@@ -13,6 +13,7 @@ atomic-write-file = "0.3"
 blake3 = "1"
 clap = { version = "4", features = ["derive"] }
 diffy = { version = "0.5", features = ["std"] }
+fs4 = "0.12"
 globset = "0.4"
 ignore = "0.4"
 notify = { version = "8", features = ["macos_kqueue"] }

@@ -18,6 +18,15 @@ perf-source-mutations-planner files="1000" edits_per_file="100" bytes_per_file="
 perf-source-mutations-stage files="1000" edits_per_file="100" bytes_per_file="4096" store="target/soopy-stage-scale":
     cargo run -q -p soopy --example 3_stage_store_scale -- --files "{{files}}" --edits-per-file "{{edits_per_file}}" --bytes-per-file "{{bytes_per_file}}" --store "{{store}}"
 
+test-source-mutations-commit:
+    cargo test -p soopy --test 14_commit_engine -- --nocapture
+
+test-source-mutations:
+    cargo test -p soopy --test 11_mutation_planner --test 13_stage_store --test 14_commit_engine -- --test-threads=1
+
+perf-source-mutations-commit files="1000":
+    cargo run -q -p soopy --example 4_commit_scale -- --files "{{files}}"
+
 test-git-optional:
     cargo test -p soopy --test 6_git_optional
 
