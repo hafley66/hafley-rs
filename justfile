@@ -12,6 +12,9 @@ soopy-scale-linux-deps handles="500" batch="16":
 soopy-scale-linux-all handles="500" batch="16":
     bash crates/soopy/bench/0_run.sh /Users/chrishafley/projects/ext/linux "{{handles}}" "{{batch}}" linux-all
 
+perf-source-mutations-planner files="1000" edits_per_file="100" bytes_per_file="4096":
+    bash crates/soopy/bench/2_source_mutations_planner.sh "{{files}}" "{{edits_per_file}}" "{{bytes_per_file}}"
+
 test-git-optional:
     cargo test -p soopy --test 6_git_optional
 
