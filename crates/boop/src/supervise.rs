@@ -22,9 +22,19 @@ const FIRST_SIGNAL_LIMIT: Duration = Duration::from_secs(30);
 /// Mid-turn quiet bound. Measured over a week of healthy traffic: 261
 /// in-message gaps over 120s (long tool calls), so 30s here would false-kill.
 const STALL_LIMIT: Duration = Duration::from_secs(5 * 60);
-/// The turn text a resumed conversation opens with instead of the full brief.
+/// The text a resumed conversation opens with instead of the full brief.
 const RESUME_NUDGE: &str = "The previous turn ended on a provider error you never saw. \
      Re-read your last steps and continue the brief from where you left off.";
+
+/// What the next turn re-opens with after a retryable end. A lane with no
+/// pinned conversation re-feeds the full brief: its TUI window was respawned
+/// blank, so a nudge would tell the harness to continue work it never saw.
+fn resume_text(conversation: Option<String>, brief: &str) -> String {
+    match conversation {
+        Some(_) => RESUME_NUDGE.to_owned(),
+        None => brief.to_owned(),
+    }
+}
 
 /// What one lane run needs.
 pub struct LaneRun {
@@ -123,7 +133,7 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
             println!("[boop] resuming conversation {conversation}");
             RESUME_NUDGE.to_owned()
         }
-        None => brief,
+        None => brief.clone(),
     };
     let mut flake_resumes = 0u32;
     loop {
@@ -201,7 +211,7 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
                 flake_resume_cap = FLAKE_RESUME_CAP,
                 "lane provider flake; resuming"
             );
-            turn = RESUME_NUDGE.to_owned();
+            turn = resume_text(channel.conversation_id(), &brief);
             continue;
         }
         for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
@@ -616,6 +626,15 @@ mod tests {
             Some("1")
         );
         assert_eq!(result_body("mine", 0, None), "lane mine done rc=0");
+    }
+
+    // FAIL-PRE-FIX: the flake resume always fed RESUME_NUDGE, so a lane whose
+    // TUI window died before its first turn settled respawned blank and lost
+    // the brief: the harness was told to continue work it never saw.
+    #[test]
+    fn a_resume_without_a_pinned_conversation_refeeds_the_brief() {
+        assert_eq!(resume_text(None, "do the work"), "do the work");
+        assert_eq!(resume_text(Some("ses_x".into()), "do the work"), RESUME_NUDGE);
     }
 
     fn tempdir() -> PathBuf {
