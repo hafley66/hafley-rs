@@ -146,6 +146,9 @@ impl Store {
     pub fn open(path: PathBuf) -> Result<Self> {
         let connection = Connection::open(&path)
             .with_context(|| format!("open boop.db at {}", path.display()))?;
+        connection
+            .busy_timeout(std::time::Duration::from_secs(5))
+            .with_context(|| format!("set busy_timeout on {}", path.display()))?;
         let tables_before: i64 = connection.query_row(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
             [],
@@ -199,6 +202,11 @@ impl Store {
     pub fn open_readonly(path: PathBuf) -> Result<Self> {
         let connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .with_context(|| format!("open boop.db read-only at {}", path.display()))?;
+        // A resident sync writer holds the write lock in bursts; a reader
+        // waits it out instead of surfacing "database is locked".
+        connection
+            .busy_timeout(std::time::Duration::from_secs(5))
+            .with_context(|| format!("set busy_timeout on {}", path.display()))?;
         Ok(Store { connection })
     }
 
@@ -1893,6 +1901,22 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let store = Store::open(path.clone()).unwrap();
         (path, store)
+    }
+
+    /// A resident sync writer holds the write lock in bursts; both open paths
+    /// must wait it out instead of surfacing "database is locked".
+    #[test]
+    fn both_open_paths_carry_a_busy_timeout() {
+        let (path, _store) = fresh_store("busy");
+        for store in [Store::open(path.clone()).unwrap(), Store::open_readonly(path.clone()).unwrap()]
+        {
+            let ms: i64 = store
+                .connection
+                .query_row("PRAGMA busy_timeout", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(ms, 5000);
+        }
+        let _ = std::fs::remove_file(&path);
     }
 
     /// The user's word: "markdown_cache is own table for reason". Twenty lanes

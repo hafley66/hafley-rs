@@ -20,6 +20,69 @@ use boop::{bus, config, ident, identity, lane, proc, tmux};
 #[cfg(feature = "agent-read")]
 use boop::{query, usage};
 
+const CONCATMAP_EXAMPLES: &str = "\
+TEMPLATE: a markdown file whose rendered form IS the prompt. Keys:
+  {{mode}}      the --mode word (labels the experiment; also how the loop
+                recognises and skips its own mapper prompts)
+  {{ai_text}}   the assistant turn(s) before the user turn
+  {{user_text}} the user turn that follows
+
+STATE: the loop's own memory, one dir per experiment:
+  <state>/cursor    last store ts seen (first run seeds at the newest ts,
+                    so only pairs made AFTER launch get mapped)
+  <state>/done/     one empty marker per mapped (session, turn); a restart
+                    never remaps them
+  For the chat feed the state dir is also the resident model's cwd.
+
+RULES: a json file choosing the feed and bundle shape:
+  {\"feed\": \"oneshot\"}                       fresh process per bundle, passes to fixed point
+  {\"feed\": \"chat\", \"goal\": \"...\"}          one enduring resident; goal is its first turn
+  \"bundle\": \"pair\" (default) or \"run\"       pair = 1 ai + 1 user; run collapses same-role runs
+  \"coalesce\": 4                        backlog cap; only the newest survives past it (0 = never drop)
+  \"references\": true                   append the source session's file touches as of the bundle
+  \"window\": \"SELECT ...\"               caller-owned SQL replacing the compiled bundlers:
+                                         binds :session (TEXT), :session_id (INTEGER), :cursor (ms);
+                                         returns INTEGER `id` + TEXT `text`, one row per bundle.
+                                         With a window, --template/--mode are optional (text ships
+                                         verbatim) and the loop only does cursor + done + send.
+
+WINDOW EXAMPLE (gaps-and-islands over agent_turn, same-role runs concat'ed):
+  rules.json:
+    {\"feed\": \"chat\",
+     \"goal\": \"tighten each <ai> turn; code and numbers verbatim\",
+     \"window\": \"WITH marked AS (
+        SELECT t.turn, t.ts, r.value AS role, t.said,
+               ROW_NUMBER() OVER (ORDER BY t.ts, t.turn)
+             - ROW_NUMBER() OVER (PARTITION BY r.value ORDER BY t.ts, t.turn) AS island
+        FROM agent_turn t JOIN dict_role r ON r.id = t.role_id
+        JOIN dict_session s ON s.id = t.session_id
+        WHERE s.value = :session AND t.ts > :cursor)
+      SELECT max(turn) AS id, group_concat(said, char(10)) AS text
+      FROM marked GROUP BY role, island ORDER BY min(ts)\"}
+  boop concatmap --me --rules rules.json --state s --out o
+
+EXAMPLES:
+  # oneshot refinement of one conversation, flash4 default model:
+  boop concatmap --session ses_abc123 --mode tighten \\
+    --template tighten.md \\
+    --state ~/.agent/concatmap/tighten/state \\
+    --out   ~/.agent/concatmap/tighten/out
+
+  # same, but map the caller's own session (whoami ladder resolves it):
+  boop concatmap --me --mode tighten --template tighten.md --state s --out o
+
+  # enduring resident whose history accumulates; rewrites land per turn:
+  #   rules.json: {\"feed\": \"chat\", \"goal\": \"tighten each <ai> turn; code and
+  #                numbers verbatim; return only the rewritten turn\",
+  #                \"bundle\": \"run\", \"coalesce\": 4, \"references\": true}
+  boop concatmap --me --rules rules.json --mode tighten \\
+    --template tighten.md --state s --out o
+
+  # template file shape (tighten.md):
+  #   mode: {{mode}}
+  #   <ai>{{ai_text}}</ai>
+  #   <user>{{user_text}}</user>";
+
 const DOCTRINE: &str = "\
 DOCTRINE (this help is the usage contract; agents read it with `boop --help`):
 
@@ -156,6 +219,48 @@ enum SubCmd {
     Agent {
         #[command(subcommand)]
         cmd: AgentSummaryCmd,
+    },
+    /// Refinement loop: map each new (assistant, user) contact pair through
+    /// a model pass and write the rewrite per turn (see examples below).
+    #[command(after_help = CONCATMAP_EXAMPLES)]
+    Concatmap {
+        /// Prompt template file; substitutes {{mode}}, {{ai_text}} (the
+        /// assistant turn(s) before the user turn), {{user_text}}. Optional
+        /// under a rules `window` (the SQL's `text` column ships verbatim).
+        #[arg(long)]
+        template: Option<PathBuf>,
+        /// The mode word substituted into the template (compiled bundling).
+        #[arg(long)]
+        mode: Option<String>,
+        /// The one-shot model id, in the harness's own flag spelling.
+        #[arg(long, conflicts_with = "preset")]
+        model: Option<String>,
+        /// Model preset resolving through boop/config.json, as lane create.
+        #[arg(long)]
+        preset: Option<String>,
+        /// Loop-owned memory: cursor file (last store ts seen; first run
+        /// seeds at the newest ts) and done/ markers; chat feed's cwd too.
+        #[arg(long)]
+        state: PathBuf,
+        /// Directory receiving <session8>/<turn>.md rewrites.
+        #[arg(long)]
+        out: PathBuf,
+        /// Seconds between turn queries.
+        #[arg(long, default_value_t = 5)]
+        poll_secs: u64,
+        /// Max model passes before the last pass wins.
+        #[arg(long, default_value_t = 3)]
+        cap: u32,
+        /// Rules json naming feed {"oneshot"|"chat"} plus goal, bundle
+        /// {"pair"|"run"}, coalesce, references. Absent = oneshot/pair.
+        #[arg(long)]
+        rules: Option<PathBuf>,
+        /// Map one conversation only.
+        #[arg(long)]
+        session: Option<String>,
+        /// Map the caller's own session (the `whoami` ladder resolves it).
+        #[arg(long, conflicts_with = "session")]
+        me: bool,
     },
     /// Report the caller's own identity and the rung that resolved it.
     Whoami {
@@ -647,6 +752,66 @@ fn main() -> Result<()> {
                 ),
             },
         },
+        SubCmd::Concatmap {
+            template,
+            mode,
+            model,
+            preset,
+            state,
+            out,
+            poll_secs,
+            cap,
+            rules,
+            session,
+            me,
+        } => {
+            // Common model-selection subset: explicit model wins, preset
+            // resolves through config; flash4 is the standing default.
+            let config_path = config::default_path()?;
+            let model = match (model, preset) {
+                (Some(model), _) => model,
+                (None, Some(preset)) => config::resolve_model(&preset, &config_path)?,
+                (None, None) => config::resolve_model("flash4", &config_path)?,
+            };
+            let formula = match &rules {
+                Some(path) => boop::concatmap::Formula::load(path)?,
+                None => boop::concatmap::Formula::oneshot(),
+            };
+            let template = match &template {
+                Some(path) => Some(boop::concatmap::expand_env(&std::fs::read_to_string(path)?)),
+                None => None,
+            };
+            if formula.window.is_none() {
+                anyhow::ensure!(
+                    template.is_some() && mode.is_some(),
+                    "compiled bundling needs --template and --mode; or pass --rules with a window SQL"
+                );
+            }
+            let session = match (session, me) {
+                (Some(session), _) => Some(session),
+                (None, true) => {
+                    let routes = bus::read_routes(&mail_dir(None)?).unwrap_or_default();
+                    let identity = identity::resolve(&routes)?;
+                    Some(identity.session.context(
+                        "--me found no caller session (no BOOP_SESSION, no tmux pane rung); pass --session <id>",
+                    )?)
+                }
+                (None, false) => anyhow::bail!(
+                    "name the conversation to map: --session <id>, or --me to take the caller's own"
+                ),
+            };
+            boop::concatmap::run(boop::concatmap::Args {
+                template,
+                mode,
+                model,
+                state_dir: state,
+                out_dir: out,
+                poll: std::time::Duration::from_secs(poll_secs),
+                cap,
+                formula,
+                session,
+            })
+        }
         SubCmd::Whoami { json } => run_whoami(json),
         SubCmd::Config { cmd } => run_config(cmd),
     }
@@ -951,17 +1116,24 @@ fn run_follow(registry: &Registry) -> Result<()> {
     }
     let mut last_mtime: std::collections::HashMap<String, u64> = sessions
         .iter()
-        .map(|(_, session)| {
-            let mtime = file_mtime_ms(&session.path).unwrap_or(0);
-            (session.session_id.clone(), mtime)
-        })
+        .map(|(_, session)| (session.session_id.clone(), session.modified_ms))
         .collect();
     let routes = bus::read_routes(&mail_dir(None)?).unwrap_or_default();
     loop {
         let store = ident::Store::open(ident::Store::default_path()?)?;
         store.begin()?;
+        // Rebuild the list every tick: a conversation opened after boot (the
+        // concatmap mapper's) is otherwise invisible to this resident forever.
+        sessions.clear();
+        for adapter in registry.all() {
+            for session in adapter.sessions()? {
+                sessions.push((adapter.id().to_owned(), session));
+            }
+        }
         for (harness_id, session) in &sessions {
-            let mtime = file_mtime_ms(&session.path).unwrap_or(0);
+            // `modified_ms` is each adapter's source of truth; a shared sqlite
+            // main file never moves under WAL writes, so file mtime starved opencode.
+            let mtime = session.modified_ms;
             if last_mtime.get(&session.session_id).copied().unwrap_or(0) == mtime {
                 continue;
             }
@@ -995,18 +1167,6 @@ fn session_route_pid(
 fn session_matches_route(route: &bus::Route, session: &boop::harness::SessionRef) -> bool {
     route.session_id.as_deref() == Some(session.session_id.as_str())
         || (route.cwd.is_some() && route.cwd.as_deref() == session.cwd.as_deref())
-}
-
-fn file_mtime_ms(path: &std::path::Path) -> Result<u64> {
-    use std::time::UNIX_EPOCH;
-    let metadata = std::fs::metadata(path)?;
-    match metadata.modified() {
-        Ok(time) => Ok(time
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0)),
-        Err(_) => Ok(0),
-    }
 }
 
 fn resolve_harness<'a>(registry: &'a Registry, id: &str) -> Result<&'a dyn boop::harness::Harness> {

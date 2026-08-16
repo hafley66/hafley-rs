@@ -2,6 +2,7 @@
 //! `message.rowid` in its SQLite store, read-only; opencode owns that store.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use rusqlite::{Connection, OpenFlags};
@@ -9,7 +10,7 @@ use serde_json::Value;
 
 use crate::event::AgentEvent;
 use crate::harness::{
-    Capabilities, Harness, Ingested, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
+    Capabilities, Harness, Ingested, OneShotSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
 use crate::ident::{Store, SyncStat, UsageRow};
 
@@ -79,6 +80,42 @@ impl Harness for Opencode {
 
     fn preview_command(&self, spec: &SpawnSpec) -> Option<String> {
         Some(crate::harness::supervisor_command(spec))
+    }
+
+    fn one_shot(&self, spec: &OneShotSpec) -> Result<String> {
+        let model = spec
+            .model
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .context("one-shot spec has no model; opencode needs one resolved")?;
+        // A wedged `opencode run` must not wedge the caller: poll the child and
+        // kill it past the guard instead of blocking on output() forever.
+        const GUARD: Duration = Duration::from_secs(600);
+        let mut child = std::process::Command::new("opencode")
+            .args(["run", "-m", model, &spec.prompt])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .context("spawn opencode run")?;
+        let started = std::time::Instant::now();
+        let status = loop {
+            match child.try_wait().context("poll opencode run")? {
+                Some(status) => break status,
+                None if started.elapsed() >= GUARD => {
+                    let _ = child.kill();
+                    anyhow::bail!("opencode run -m {model} exceeded 600s guard, killed");
+                }
+                None => std::thread::sleep(Duration::from_millis(500)),
+            }
+        };
+        let output = child.wait_with_output().context("collect opencode run output")?;
+        if !status.success() {
+            anyhow::bail!(
+                "opencode run -m {model} failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
     }
 
     fn spawn(&self, spec: &SpawnSpec) -> Result<SessionRef> {

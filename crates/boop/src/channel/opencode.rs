@@ -244,7 +244,10 @@ pub(crate) fn newest_session(cwd: &Path, since_ms: u64) -> Option<String> {
         error
     })
     .ok()?;
-    let directory = cwd.display().to_string();
+    // opencode canonicalizes its directory (macOS /tmp -> /private/tmp), so
+    // the query must compare the canonical spelling, not the caller's.
+    let canonical = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_owned());
+    let directory = canonical.display().to_string();
     connection
         .query_row(
             "SELECT id FROM session

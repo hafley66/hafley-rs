@@ -49,6 +49,11 @@ pub trait Harness {
         None
     }
 
+    /// Run one prompt to completion and return the reply text.
+    fn one_shot(&self, _spec: &OneShotSpec) -> anyhow::Result<String> {
+        anyhow::bail!("harness `{}` has no one-shot support", self.id())
+    }
+
     /// Spawn a session per `spec`, returning a handle to it.
     fn spawn(&self, _spec: &SpawnSpec) -> anyhow::Result<SessionRef> {
         anyhow::bail!("harness `{}` has no spawn support", self.id())
@@ -72,6 +77,15 @@ pub trait Harness {
     ) -> anyhow::Result<Box<dyn crate::channel::LaneChannel>> {
         anyhow::bail!("harness `{}` has no lane channel", self.id())
     }
+}
+
+/// One prompt run to completion, reply text returned. The harness owns the
+/// command spelling; no caller learns which binary ran.
+pub struct OneShotSpec {
+    /// The model in the harness's own flag spelling; `None` lets the harness
+    /// default, and a harness with no default refuses.
+    pub model: Option<String>,
+    pub prompt: String,
 }
 
 /// The one command a lane pane runs, whatever the harness: the boop
