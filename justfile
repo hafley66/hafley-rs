@@ -22,7 +22,10 @@ test-source-mutations-commit:
     cargo test -p soopy --test 14_commit_engine -- --nocapture
 
 test-source-mutations:
-    cargo test -p soopy --test 11_mutation_planner --test 13_stage_store --test 14_commit_engine -- --test-threads=1
+    cargo test -p soopy --test 9_source_actions --test 10_edit_producers --test 11_mutation_planner --test 12_producer_planner --test 13_stage_store --test 14_commit_engine --test 15_source_mutations -- --test-threads=1
+
+perf-source-mutations files="1000" edits_per_file="100" bytes_per_file="4096" receipt="target/perf-source-mutations/receipt.json":
+    cargo run --quiet --release -p soopy --example 5_source_mutations_scale -- --files "{{files}}" --edits-per-file "{{edits_per_file}}" --bytes-per-file "{{bytes_per_file}}" --receipt "{{receipt}}"
 
 perf-source-mutations-commit files="1000":
     cargo run -q -p soopy --example 4_commit_scale -- --files "{{files}}"
