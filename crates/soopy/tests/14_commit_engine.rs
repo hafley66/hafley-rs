@@ -227,6 +227,70 @@ fn failpoint_after_operation_replays_idempotently() {
     assert_eq!(receipt.stage_id, transaction.id);
     assert_eq!(fs::read(root.join("recover.txt")).unwrap(), b"new");
     assert!(!engine.journal_path_for(transaction.id).exists());
+    assert!(!state
+        .join("checkpoints")
+        .join(format!("{}.progress", transaction.id))
+        .exists());
+    let _ = fs::remove_dir_all(root);
+    let _ = fs::remove_dir_all(state);
+}
+
+#[test]
+fn journal_references_payload_blob_and_recovery_uses_target_state() {
+    let root = temp_dir("journal_payload");
+    let first = replace_file(&root, "first.txt", b"old-first", b"new-first");
+    let second = replace_file(&root, "second.txt", b"old-second", b"new-second");
+    let transaction = stage(&root, vec![first, second]);
+    let state = temp_dir("journal_payload_state");
+    let engine = CommitEngine::open(&root, &state).unwrap();
+    assert!(matches!(
+        engine.commit_with_failpoint(&transaction, Some(CommitFailpoint::AfterJournal)),
+        Err(CommitRefusal::Failpoint { .. })
+    ));
+    let journal = fs::read(engine.journal_path_for(transaction.id)).unwrap();
+    assert!(!journal
+        .windows(b"new-first".len())
+        .any(|bytes| bytes == b"new-first"));
+    let blob = transaction.files[0].staged_bytes.unwrap();
+    assert_eq!(
+        fs::read(state.join("blobs").join(blob.to_string())).unwrap(),
+        b"new-first"
+    );
+    let receipt = engine.recover(transaction.id).unwrap();
+    assert_eq!(receipt.journal_bytes, journal.len() as u64);
+    assert_eq!(receipt.checkpoint_bytes, 0);
+    assert!(!engine.journal_path_for(transaction.id).exists());
+    assert!(!state
+        .join("checkpoints")
+        .join(format!("{}.progress", transaction.id))
+        .exists());
+    let _ = fs::remove_dir_all(root);
+    let _ = fs::remove_dir_all(state);
+}
+
+#[test]
+fn target_state_survives_operation_boundary_and_recovery_restart() {
+    let root = temp_dir("journal_checkpoint");
+    let transaction = stage(
+        &root,
+        vec![
+            replace_file(&root, "first.txt", b"old-first", b"new-first"),
+            replace_file(&root, "second.txt", b"old-second", b"new-second"),
+        ],
+    );
+    let state = temp_dir("journal_checkpoint_state");
+    let engine = CommitEngine::open(&root, &state).unwrap();
+    assert!(matches!(
+        engine.commit_with_failpoint(&transaction, Some(CommitFailpoint::AfterOperation(1))),
+        Err(CommitRefusal::Failpoint { .. })
+    ));
+    assert_eq!(fs::read(root.join("first.txt")).unwrap(), b"new-first");
+    assert_eq!(fs::read(root.join("second.txt")).unwrap(), b"new-second");
+    let restarted = CommitEngine::open(&root, &state).unwrap();
+    let receipt = restarted.recover(transaction.id).unwrap();
+    assert_eq!(receipt.checkpoint_bytes, 0);
+    assert_eq!(fs::read(root.join("first.txt")).unwrap(), b"new-first");
+    assert_eq!(fs::read(root.join("second.txt")).unwrap(), b"new-second");
     let _ = fs::remove_dir_all(root);
     let _ = fs::remove_dir_all(state);
 }

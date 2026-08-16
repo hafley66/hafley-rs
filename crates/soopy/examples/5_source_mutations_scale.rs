@@ -79,6 +79,7 @@ struct StageMetrics {
 struct CommitMetrics {
     applied_files: usize,
     journal_bytes: u64,
+    checkpoint_bytes: u64,
     recovered_stage_id: String,
     idempotent_replay: bool,
 }
@@ -332,6 +333,7 @@ fn main() -> Result<()> {
         commit: CommitMetrics {
             applied_files: receipt.applied_files,
             journal_bytes: receipt.journal_bytes,
+            checkpoint_bytes: receipt.checkpoint_bytes,
             recovered_stage_id: receipt.stage_id.to_string(),
             idempotent_replay: true,
         },

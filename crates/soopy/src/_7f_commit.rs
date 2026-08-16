@@ -19,10 +19,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ContentId, FileModeObservation, PlannedFileKind, SourcePath, SourceRoot, SourceRootId, StageId,
-    StagedFile, StagedSourceTransaction,
+    StagedContentId, StagedFile, StagedSourceTransaction,
 };
 
-const JOURNAL_VERSION: u32 = 1;
+const JOURNAL_VERSION: u32 = 2;
 
 /// A deterministic interruption point used by integration tests and hosts
 /// that need to exercise restart recovery.
@@ -57,6 +57,7 @@ pub struct CommitReceipt {
     pub applied_files: usize,
     pub operations: Vec<CommitOperationReceipt>,
     pub journal_bytes: u64,
+    pub checkpoint_bytes: u64,
     pub watch: CommitWatchCorrelation,
 }
 
@@ -174,6 +175,7 @@ impl CommitEngine {
         }
         fs::create_dir_all(state_root.join("locks"))?;
         fs::create_dir_all(state_root.join("journals"))?;
+        fs::create_dir_all(state_root.join("blobs"))?;
         fs::create_dir_all(state_root.join("receipts"))?;
         Ok(Self {
             target_root,
@@ -234,20 +236,22 @@ impl CommitEngine {
                 journal: journal_path,
             });
         }
-        let mut journal = self.preflight(stage)?;
+        let journal = self.preflight(stage)?;
         validate_journal(&journal)?;
+        self.materialize_payloads(stage, &journal)?;
         write_journal(&journal_path, &journal)?;
         if failpoint == Some(CommitFailpoint::AfterJournal) {
             return Err(CommitRefusal::Failpoint {
                 point: CommitFailpoint::AfterJournal,
             });
         }
-        self.apply_journal(&mut journal, &journal_path, failpoint)?;
+        self.apply_journal(&journal, failpoint, &BTreeSet::new())?;
         let receipt = receipt(
             stage.id,
             &stage.root,
             &journal.operations,
             fs::metadata(&journal_path).map(|m| m.len()).unwrap_or(0),
+            0,
         );
         write_receipt(&self.receipt_path(stage.id), &receipt)?;
         remove_journal(&journal_path)?;
@@ -259,7 +263,7 @@ impl CommitEngine {
     pub fn recover(&self, stage_id: StageId) -> std::result::Result<CommitReceipt, CommitRefusal> {
         let _lock = self.lock()?;
         let journal_path = self.journal_path(stage_id);
-        let mut journal = read_journal(&journal_path)?;
+        let journal = read_journal(&journal_path)?;
         if journal.stage_id != stage_id {
             return Err(io_refusal_context(
                 "validate commit journal",
@@ -283,7 +287,11 @@ impl CommitEngine {
         let states = journal
             .operations
             .iter()
-            .map(|operation| classify_operation(&self.target_root, operation))
+            .map(|operation| {
+                let bytes = self.operation_bytes(operation)?;
+                let state = classify_operation(&self.target_root, operation, bytes.as_deref())?;
+                Ok(state)
+            })
             .collect::<std::result::Result<Vec<_>, _>>()?;
         if states.contains(&OperationState::Diverged) {
             return Err(CommitRefusal::RecoveryRequired {
@@ -291,16 +299,18 @@ impl CommitEngine {
                 journal: journal_path,
             });
         }
-        for (operation, state) in journal.operations.iter_mut().zip(states) {
-            operation.completed = state == OperationState::After;
-        }
-        write_journal(&journal_path, &journal)?;
-        self.apply_journal(&mut journal, &journal_path, None)?;
+        let completed = states
+            .iter()
+            .enumerate()
+            .filter_map(|(index, state)| (*state == OperationState::After).then_some(index))
+            .collect();
+        self.apply_journal(&journal, None, &completed)?;
         let receipt = receipt(
             stage_id,
             &journal.root,
             &journal.operations,
             fs::metadata(&journal_path).map(|m| m.len()).unwrap_or(0),
+            0,
         );
         write_receipt(&self.receipt_path(stage_id), &receipt)?;
         remove_journal(&journal_path)?;
@@ -348,6 +358,71 @@ impl CommitEngine {
         self.state_root.join("journals").join(format!("{id}.json"))
     }
 
+    fn blob_path(&self, id: StagedContentId) -> PathBuf {
+        self.state_root.join("blobs").join(id.to_hex())
+    }
+
+    fn materialize_payloads(
+        &self,
+        stage: &StagedSourceTransaction,
+        journal: &CommitJournal,
+    ) -> std::result::Result<(), CommitRefusal> {
+        for (file, operation) in stage.files.iter().zip(&journal.operations) {
+            let Some(blob) = operation.after_blob else {
+                continue;
+            };
+            let Some(bytes) = file.bytes_after.as_deref() else {
+                return Err(io_refusal_context(
+                    "materialize commit payload",
+                    "stage has no output bytes",
+                ));
+            };
+            if blake3::hash(bytes) != blake3::Hash::from_bytes(blob.0) {
+                return Err(io_refusal_context(
+                    "materialize commit payload",
+                    "stage blob digest mismatch",
+                ));
+            }
+            let path = self.blob_path(blob);
+            if path.exists() {
+                let existing = fs::read(&path)
+                    .map_err(|error| io_refusal_context("read commit payload", error))?;
+                if blake3::hash(&existing) != blake3::Hash::from_bytes(blob.0) {
+                    return Err(io_refusal_context(
+                        "verify commit payload",
+                        "payload digest mismatch",
+                    ));
+                }
+                continue;
+            }
+            let mut file = AtomicWriteFile::open(&path)
+                .map_err(|error| io_refusal_context("open commit payload", error))?;
+            file.write_all(bytes)
+                .map_err(|error| io_refusal_context("write commit payload", error))?;
+            file.commit()
+                .map_err(|error| io_refusal_context("publish commit payload", error))?;
+        }
+        sync_dir(&self.state_root.join("blobs"))
+    }
+
+    fn operation_bytes(
+        &self,
+        operation: &JournalOperation,
+    ) -> std::result::Result<Option<Vec<u8>>, CommitRefusal> {
+        let Some(blob) = operation.after_blob else {
+            return Ok(None);
+        };
+        let bytes = fs::read(self.blob_path(blob))
+            .map_err(|error| io_refusal_context("read commit payload", error))?;
+        if blake3::hash(&bytes) != blake3::Hash::from_bytes(blob.0) {
+            return Err(io_refusal_context(
+                "verify commit payload",
+                "payload digest mismatch",
+            ));
+        }
+        Ok(Some(bytes))
+    }
+
     fn actual_root_id(&self, expected: &SourceRootId) -> Result<SourceRootId> {
         let root = match expected {
             SourceRootId::Directory { .. } => SourceRoot::open_directory(&self.target_root)?,
@@ -390,12 +465,12 @@ impl CommitEngine {
 
     fn apply_journal(
         &self,
-        journal: &mut CommitJournal,
-        journal_path: &Path,
+        journal: &CommitJournal,
         failpoint: Option<CommitFailpoint>,
+        completed: &BTreeSet<usize>,
     ) -> std::result::Result<(), CommitRefusal> {
         for index in 0..journal.operations.len() {
-            if journal.operations[index].completed {
+            if completed.contains(&index) {
                 continue;
             }
             if failpoint == Some(CommitFailpoint::BeforeOperation(index)) {
@@ -403,14 +478,17 @@ impl CommitEngine {
                     point: CommitFailpoint::BeforeOperation(index),
                 });
             }
-            apply_operation(&self.target_root, &journal.operations[index])?;
+            let bytes = self.operation_bytes(&journal.operations[index])?;
+            apply_operation(
+                &self.target_root,
+                &journal.operations[index],
+                bytes.as_deref().unwrap_or_default(),
+            )?;
             if failpoint == Some(CommitFailpoint::AfterOperation(index)) {
                 return Err(CommitRefusal::Failpoint {
                     point: CommitFailpoint::AfterOperation(index),
                 });
             }
-            journal.operations[index].completed = true;
-            write_journal(journal_path, journal)?;
         }
         Ok(())
     }
@@ -441,10 +519,9 @@ struct JournalOperation {
     before_path: Option<SourcePath>,
     after_path: Option<SourcePath>,
     expected: Option<ContentId>,
-    after: Option<Vec<u8>>,
+    after_blob: Option<StagedContentId>,
     after_content: Option<ContentId>,
     mode: Option<FileModeObservation>,
-    completed: bool,
 }
 
 impl JournalOperation {
@@ -482,10 +559,13 @@ fn operation_from_file(file: &StagedFile) -> std::result::Result<JournalOperatio
         before_path: file.path_before.clone(),
         after_path: file.path_after.clone(),
         expected: file.content_before.clone(),
-        after: file.bytes_after.clone(),
+        after_blob: file.staged_bytes.or_else(|| {
+            file.bytes_after
+                .as_deref()
+                .map(|bytes| StagedContentId(*blake3::hash(bytes).as_bytes()))
+        }),
         after_content: file.content_after.clone(),
         mode: file.mode_before.clone(),
-        completed: false,
     })
 }
 
@@ -503,7 +583,7 @@ fn preflight_operation(
             if fs::symlink_metadata(&path).is_ok() {
                 return Err(preflight(destination, "create destination already exists"));
             }
-            if operation.after.is_none() {
+            if operation.after_blob.is_none() {
                 return Err(preflight(destination, "create has no output bytes"));
             }
         }
@@ -518,7 +598,7 @@ fn preflight_operation(
                 operation.expected.as_ref(),
                 operation.mode.as_ref(),
             )?;
-            if operation.after.is_none() {
+            if operation.after_blob.is_none() {
                 return Err(preflight(source, "replace has no output bytes"));
             }
         }
@@ -541,7 +621,7 @@ fn preflight_operation(
             if fs::symlink_metadata(&destination_path).is_ok() {
                 return Err(preflight(destination, "move destination already exists"));
             }
-            if operation.after.is_none() {
+            if operation.after_blob.is_none() {
                 return Err(preflight(destination, "move has no output bytes"));
             }
         }
@@ -564,6 +644,7 @@ fn preflight_operation(
 fn apply_operation(
     root: &Path,
     operation: &JournalOperation,
+    bytes: &[u8],
 ) -> std::result::Result<(), CommitRefusal> {
     match operation.kind {
         PlannedFileKind::Create | PlannedFileKind::Replace => {
@@ -575,14 +656,7 @@ fn apply_operation(
                     .ok_or_else(|| missing_path(operation))?,
             );
             ensure_parent_dirs(root, &path)?;
-            atomic_write(
-                &path,
-                operation
-                    .after
-                    .as_deref()
-                    .ok_or_else(|| missing_path(operation))?,
-                operation.mode.as_ref(),
-            )?;
+            atomic_write(&path, bytes, operation.mode.as_ref())?;
             sync_dir(path.parent().unwrap_or_else(|| Path::new(".")))?;
         }
         PlannedFileKind::Move => {
@@ -627,8 +701,8 @@ fn apply_operation(
 fn classify_operation(
     root: &Path,
     operation: &JournalOperation,
+    after: Option<&[u8]>,
 ) -> std::result::Result<OperationState, CommitRefusal> {
-    let after = operation.after.as_deref();
     match operation.kind {
         PlannedFileKind::Create | PlannedFileKind::Replace => {
             let path = target_path(
@@ -1107,6 +1181,7 @@ fn receipt(
     root: &SourceRootId,
     operations: &[JournalOperation],
     journal_bytes: u64,
+    checkpoint_bytes: u64,
 ) -> CommitReceipt {
     let receipts = operations
         .iter()
@@ -1125,6 +1200,7 @@ fn receipt(
         applied_files: operations.len(),
         operations: receipts,
         journal_bytes,
+        checkpoint_bytes,
         watch,
     }
 }

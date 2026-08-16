@@ -70,6 +70,7 @@ fn main() {
             "files": receipt.applied_files,
             "elapsed_ms": started.elapsed().as_secs_f64() * 1000.0,
             "journal_bytes": receipt.journal_bytes,
+            "checkpoint_bytes": receipt.checkpoint_bytes,
             "stage_id": receipt.stage_id.to_string(),
             "journal": engine.journal_path_for(receipt.stage_id),
         })
