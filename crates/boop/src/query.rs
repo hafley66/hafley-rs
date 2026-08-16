@@ -15,10 +15,12 @@ fn opt_i64(value: Option<u64>) -> rusqlite::types::Value {
     value.map(|v| v as i64).into()
 }
 
-/// One bundle row a window SQL returns: `id` (stable done-marker key) and
-/// `text` (the message batch, already concat'ed by the SQL).
+/// One bundle row a window SQL returns: `id` (stable done-marker key), `ts`
+/// (the cursor watermark: the max ts of the bundle's turns), and `text` (the
+/// message batch, already concat'ed by the SQL).
 pub struct WindowRow {
     pub id: i64,
+    pub ts: i64,
     pub text: String,
 }
 
@@ -42,7 +44,7 @@ impl Store {
     }
 
     /// Run a caller's window SQL. Binds `:session` TEXT, `:session_id`
-    /// INTEGER, `:cursor` ms. Rows: INTEGER `id`, TEXT `text`.
+    /// INTEGER, `:cursor` ms. Rows: INTEGER `id`, INTEGER `ts`, TEXT `text`.
     pub fn window_rows(
         &self,
         sql: &str,
@@ -70,10 +72,13 @@ impl Store {
             let id = row
                 .get::<_, i64>("id")
                 .map_err(|_| anyhow::anyhow!("window SQL must return an INTEGER `id` column"))?;
+            let ts = row
+                .get::<_, i64>("ts")
+                .map_err(|_| anyhow::anyhow!("window SQL must return an INTEGER `ts` column"))?;
             let text = row
                 .get::<_, String>("text")
                 .map_err(|_| anyhow::anyhow!("window SQL must return a TEXT `text` column"))?;
-            out.push(WindowRow { id, text });
+            out.push(WindowRow { id, ts, text });
         }
         Ok(out)
     }
@@ -643,20 +648,29 @@ mod tests {
                             - ROW_NUMBER() OVER (PARTITION BY r.value ORDER BY t.ts, t.turn) AS island
                        FROM agent_turn t JOIN dict_role r ON r.id = t.role_id
                        WHERE t.session_id = :session_id AND t.ts > :cursor)
-                   SELECT max(turn) AS id, group_concat(said, ' | ') AS text
+                   SELECT max(turn) AS id, max(ts) AS ts, group_concat(said, ' | ') AS text
                    FROM marked GROUP BY role, island ORDER BY min(ts)";
         let session_id = store.session_id_lookup("ses").unwrap().unwrap();
         let rows = store
             .window_rows(sql, Some("ses"), Some(session_id), 0)
             .unwrap();
         assert_eq!(rows.len(), 2);
-        assert_eq!((rows[0].id, rows[0].text.as_str()), (2, "a1 | a2"));
-        assert_eq!((rows[1].id, rows[1].text.as_str()), (4, "u1 | u2"));
+        assert_eq!(
+            (rows[0].id, rows[0].ts, rows[0].text.as_str()),
+            (2, 11, "a1 | a2")
+        );
+        assert_eq!(
+            (rows[1].id, rows[1].ts, rows[1].text.as_str()),
+            (4, 13, "u1 | u2")
+        );
         let fresh = store
             .window_rows(sql, Some("ses"), Some(session_id), 11)
             .unwrap();
         assert_eq!(fresh.len(), 1);
-        assert_eq!((fresh[0].id, fresh[0].text.as_str()), (4, "u1 | u2"));
+        assert_eq!(
+            (fresh[0].id, fresh[0].ts, fresh[0].text.as_str()),
+            (4, 13, "u1 | u2")
+        );
         assert!(store.session_id_lookup("nope").unwrap().is_none());
         let _ = std::fs::remove_file(&path);
     }

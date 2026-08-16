@@ -14,9 +14,6 @@ use crate::ident::TurnQuery;
 use crate::registry::Registry;
 use crate::rows::TurnRow;
 
-/// The queue cap; past this, only the newest pair survives.
-const QUEUE_CAP: usize = 4;
-
 /// A failed rewrite is retried this many times, then the pair is dropped.
 const REWRITE_ATTEMPTS: u32 = 3;
 const REWRITE_BACKOFF: Duration = Duration::from_secs(10);
@@ -39,7 +36,12 @@ pub struct Args {
     pub state_dir: PathBuf,
     pub out_dir: PathBuf,
     pub poll: Duration,
-    pub cap: u32,
+    /// Seed the cursor at 0 so an existing conversation maps in full. Default
+    /// remains tail-only; `cursor` names an explicit starting ts instead.
+    pub from_start: bool,
+    /// An explicit starting cursor ts (ms). Overrides the seed and the tail
+    /// default; `from_start` is the `0` spelling of the same knob.
+    pub cursor: Option<i64>,
     pub formula: Formula,
     /// One conversation only. The CLI refuses to leave it unset (`--session`
     /// or `--me`); `None` stays a library-internal spelling.
@@ -62,7 +64,8 @@ pub struct Formula {
     pub feed: Feed,
     pub goal: Option<String>,
     pub bundle: BundleShape,
-    /// Backlog cap; 0 never drops. Defaults to `QUEUE_CAP`.
+    /// Backlog cap; 0 never drops. Defaults to 0 (lossless); a caller opts
+    /// into dropping by naming a cap in the rules.
     pub coalesce: usize,
     /// Append a <references> block of the source session's file touches as
     /// of each bundle, so reference claims come from the store, not the model.
@@ -86,7 +89,7 @@ impl Formula {
             feed: Feed::OneShot,
             goal: None,
             bundle: BundleShape::Pair,
-            coalesce: QUEUE_CAP,
+            coalesce: 0,
             references: false,
             window: None,
         }
@@ -118,7 +121,7 @@ impl Formula {
             feed,
             goal: file.goal,
             bundle,
-            coalesce: file.coalesce.unwrap_or(QUEUE_CAP),
+            coalesce: file.coalesce.unwrap_or(0),
             references: file.references.unwrap_or(false),
             window: file.window,
         })
@@ -137,14 +140,14 @@ struct FormulaFile {
 
 /// The rewrite surface: one enum value per feed, chosen once at boot from the
 /// formula. `rewrite` is the whole contract.
-enum Rewriter<'a> {
+enum Rewriter {
     OneShot {
-        adapter: &'a dyn Harness,
+        adapter: &'static dyn Harness,
         model: String,
-        cap: u32,
+        timeout: Duration,
     },
     Chat {
-        adapter: &'a dyn Harness,
+        adapter: &'static dyn Harness,
         channel: Box<dyn LaneChannel>,
         cwd: PathBuf,
         goal: Option<String>,
@@ -156,13 +159,13 @@ const CHAT_TURN_TIMEOUT: Duration = Duration::from_secs(600);
 const CHAT_REPLY_TIMEOUT: Duration = Duration::from_secs(120);
 const CHAT_POLL: Duration = Duration::from_secs(5);
 
-impl<'a> Rewriter<'a> {
-    fn open(formula: &Formula, adapter: &'a dyn Harness, args: &Args) -> Result<Rewriter<'a>> {
+impl Rewriter {
+    fn open(formula: &Formula, adapter: &'static dyn Harness, args: &Args) -> Result<Rewriter> {
         match formula.feed {
             Feed::OneShot => Ok(Rewriter::OneShot {
                 adapter,
                 model: args.model.clone(),
-                cap: args.cap,
+                timeout: ONESHOT_TIMEOUT,
             }),
             Feed::Chat => {
                 let spec = ChannelSpec {
@@ -188,8 +191,8 @@ impl<'a> Rewriter<'a> {
             Rewriter::OneShot {
                 adapter,
                 model,
-                cap,
-            } => passes_until_fixed(*adapter, msg, model, *cap),
+                timeout,
+            } => one_shot_bounded(*adapter, msg, model, *timeout),
             Rewriter::Chat {
                 adapter,
                 channel,
@@ -455,7 +458,10 @@ pub fn run(args: Args) -> Result<()> {
     // never fights the resident `db sync` writer for the write lock.
     let store = crate::ident::Store::open_readonly(crate::ident::Store::default_path()?)
         .context("open boop store read-only")?;
-    let registry = Registry::discover();
+    // Leak the registry so the adapter is 'static: the oneshot feed bounds a
+    // model pass on its own thread. The resident never returns, so the leak is
+    // one small fixed allocation.
+    let registry: &'static Registry = Box::leak(Box::new(Registry::discover()));
     let harness = crate::lane::harness_for_model(&args.model)?
         .with_context(|| format!("model `{}` names no harness", args.model))?;
     let adapter = registry
@@ -466,7 +472,7 @@ pub fn run(args: Args) -> Result<()> {
     std::fs::create_dir_all(&args.out_dir)
         .with_context(|| format!("create {}", args.out_dir.display()))?;
     let template = args.template.clone();
-    let mut cursor = load_or_seed_cursor(&args.state_dir, &store)?;
+    let mut cursor = seed_cursor(&args, &store)?;
     let mut done = load_done(&args.state_dir)?;
     let mut rewriter =
         Rewriter::open(&args.formula, adapter, &args).context("open the rewriter")?;
@@ -493,24 +499,13 @@ pub fn run(args: Args) -> Result<()> {
 /// One tick: query new pairs, coalesce, process serially, advance the cursor.
 fn poll_once(
     store: &crate::Store,
-    rewriter: &mut Rewriter<'_>,
+    rewriter: &mut Rewriter,
     args: &Args,
     template: Option<&str>,
     cursor: i64,
     done: &mut BTreeSet<(String, i64)>,
 ) -> Result<i64> {
-    let query = TurnQuery {
-        since: Some(cursor.max(0) as u64),
-        session: args.session.clone(),
-        ..Default::default()
-    };
-    let rows = store.turn_rows(&query).context("query new turns")?;
     let mut max_seen = cursor;
-    for row in &rows {
-        if row.ts > max_seen {
-            max_seen = row.ts;
-        }
-    }
     // One job per bundle: either the caller's window SQL owns the partition,
     // or the compiled bundlers do.
     let jobs: Vec<Job> = match &args.formula.window {
@@ -518,11 +513,13 @@ fn poll_once(
             let session_id = store
                 .session_id_lookup(args.session.as_deref().unwrap_or(""))
                 .context("look up the session id for the window SQL")?;
-            let mut window = store
+            let window = store
                 .window_rows(sql, args.session.as_deref(), session_id, cursor)
                 .context("run the window SQL")?;
-            if args.formula.coalesce > 0 && window.len() > args.formula.coalesce {
-                window = window.split_off(window.len() - 1);
+            for row in &window {
+                if row.ts > max_seen {
+                    max_seen = row.ts;
+                }
             }
             window
                 .into_iter()
@@ -536,6 +533,17 @@ fn poll_once(
                 .collect()
         }
         None => {
+            let query = TurnQuery {
+                since: Some(cursor.max(0) as u64),
+                session: args.session.clone(),
+                ..Default::default()
+            };
+            let rows = store.turn_rows(&query).context("query new turns")?;
+            for row in &rows {
+                if row.ts > max_seen {
+                    max_seen = row.ts;
+                }
+            }
             let bundled = match args.formula.bundle {
                 BundleShape::Pair => bundle_pairs(&rows),
                 BundleShape::Run => bundle_runs(&rows),
@@ -557,22 +565,43 @@ fn poll_once(
     };
     let jobs = coalesce_jobs(jobs, args.formula.coalesce);
     for job in &jobs {
-        // A failed rewrite retries, then drops the bundle; it never drops the resident.
+        let key = job.key();
+        // A failed rewrite retries, then drops the bundle; it never drops the
+        // resident.
         for attempt in 1..=REWRITE_ATTEMPTS {
+            // A marker planted mid-flight (e.g. while another bundle hung)
+            // skips the bundle before the next attempt re-sends it.
+            if done.contains(&key) {
+                break;
+            }
             match process_job(job, store, rewriter, args, template, done) {
                 Ok(()) => break,
+                Err(error) if error.downcast_ref::<OneshotTimeout>().is_some() => {
+                    // A hang is not transient: mark it failed and move on
+                    // rather than burn the retry ladder on a stuck child.
+                    eprintln!(
+                        "concatmap: rewrite timed out for {}-{}: {error:#}",
+                        key.0, key.1
+                    );
+                    let _ = write_done_marker(args, &key.0, key.1, done);
+                    break;
+                }
                 Err(error) if attempt < REWRITE_ATTEMPTS => {
                     eprintln!(
                         "concatmap: rewrite failed for {}-{} (attempt {attempt}/{}), retrying in {}s: {error:#}",
-                        job.key().0, job.key().1, REWRITE_ATTEMPTS, REWRITE_BACKOFF.as_secs()
+                        key.0, key.1, REWRITE_ATTEMPTS, REWRITE_BACKOFF.as_secs()
                     );
                     std::thread::sleep(REWRITE_BACKOFF);
                 }
-                Err(error) => eprintln!(
-                    "concatmap: rewrite failed for {}-{}: {error:#}",
-                    job.key().0,
-                    job.key().1
-                ),
+                Err(error) => {
+                    eprintln!(
+                        "concatmap: rewrite failed for {}-{}: {error:#}",
+                        key.0, key.1
+                    );
+                    // A permanently-failed bundle is marked so a poisoned
+                    // window cannot re-hang the resident on a later tick.
+                    let _ = write_done_marker(args, &key.0, key.1, done);
+                }
             }
         }
     }
@@ -627,6 +656,18 @@ fn load_or_seed_cursor(state_dir: &Path, store: &crate::Store) -> Result<i64> {
     Ok(max_ts)
 }
 
+/// The starting cursor: `--from-start` is 0, `--cursor N` is N, otherwise the
+/// persisted cursor (seeding at the newest ts on first run).
+fn seed_cursor(args: &Args, store: &crate::Store) -> Result<i64> {
+    if args.from_start {
+        return Ok(0);
+    }
+    if let Some(cursor) = args.cursor {
+        return Ok(cursor);
+    }
+    load_or_seed_cursor(&args.state_dir, store)
+}
+
 /// Done markers survive restarts: one empty file per processed (session, turn).
 fn load_done(state_dir: &Path) -> Result<BTreeSet<(String, i64)>> {
     let dir = state_dir.join("done");
@@ -647,7 +688,7 @@ fn load_done(state_dir: &Path) -> Result<BTreeSet<(String, i64)>> {
 fn process_job(
     job: &Job,
     store: &crate::Store,
-    rewriter: &mut Rewriter<'_>,
+    rewriter: &mut Rewriter,
     args: &Args,
     template: Option<&str>,
     done: &mut BTreeSet<(String, i64)>,
@@ -691,43 +732,86 @@ fn process_job(
     let out_path = out_dir.join(format!("{}.md", id));
     let text = rewriter.rewrite(store, &msg)?;
     std::fs::write(&out_path, text).with_context(|| format!("write {}", out_path.display()))?;
-    std::fs::write(
-        args.state_dir
-            .join("done")
-            .join(format!("{}-{}", session, id)),
-        b"",
-    )
-    .context("write done marker")?;
-    done.insert((session, id));
+    write_done_marker(args, &session, id, done)
+}
+
+/// Persist a (session, turn) marker and record it in the live set. A marker is
+/// the skip signal: both a mapped bundle and a permanently-failed bundle write
+/// one, so neither is retried on a later tick.
+fn write_done_marker(
+    args: &Args,
+    session: &str,
+    id: i64,
+    done: &mut BTreeSet<(String, i64)>,
+) -> Result<()> {
+    let dir = args.state_dir.join("done");
+    std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
+    std::fs::write(dir.join(format!("{session}-{id}")), b"").context("write done marker")?;
+    done.insert((session.to_owned(), id));
     Ok(())
 }
 
-/// One-shot passes until the normalized output repeats or the cap hits. The
-/// harness adapter owns the command spelling; this loop names no binary.
-fn passes_until_fixed(adapter: &dyn Harness, msg: &str, model: &str, cap: u32) -> Result<String> {
-    let mut prev: Option<String> = None;
-    let mut last = String::new();
-    for _ in 0..cap.max(1) {
-        let spec = OneShotSpec {
-            model: Some(model.to_owned()),
-            prompt: msg.to_owned(),
-        };
-        let text = adapter
-            .one_shot(&spec)
-            .with_context(|| format!("one-shot pass on model {model}"))?;
-        if prev.as_deref() == Some(normalize(&text).as_str()) {
-            return Ok(text);
-        }
-        prev = Some(normalize(&text));
-        last = text;
+/// A hung oneshot must not hang the resident; the same bound as the chat feed.
+const ONESHOT_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// A oneshot pass that exceeded its bound. `poll_once` treats this as fatal for
+/// the bundle: it is marked and skipped, not retried (a hang does not heal).
+#[derive(Debug)]
+struct OneshotTimeout {
+    model: String,
+    secs: u64,
+}
+
+impl std::fmt::Display for OneshotTimeout {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "one-shot pass on model {} exceeded {}s",
+            self.model, self.secs
+        )
     }
-    Ok(last)
+}
+
+impl std::error::Error for OneshotTimeout {}
+
+/// One model call per window, bounded. A wedged adapter returns control at
+/// `timeout`; the adapter owns killing its own child (opencode's 600s guard),
+/// this bound is the caller's backstop.
+fn one_shot_bounded(
+    adapter: &'static dyn Harness,
+    msg: &str,
+    model: &str,
+    timeout: Duration,
+) -> Result<String> {
+    let spec = OneShotSpec {
+        model: Some(model.to_owned()),
+        prompt: msg.to_owned(),
+    };
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(adapter.one_shot(&spec));
+    });
+    match rx.recv_timeout(timeout) {
+        Ok(result) => result.with_context(|| format!("one-shot pass on model {model}")),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            Err(anyhow::Error::new(OneshotTimeout {
+                model: model.to_owned(),
+                secs: timeout.as_secs(),
+            }))
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            bail!("one-shot pass on model {model} panicked before replying")
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::channel::{Delivery, TurnEnd};
+    use crate::harness::{Harness, OneShotSpec, ReadChunk, SessionRef};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
 
     struct FlakedChannel {
         polls: usize,
@@ -817,7 +901,7 @@ mod tests {
                 user_text: String::new(),
             })
             .collect();
-        let kept = coalesce_with_cap(pairs, QUEUE_CAP);
+        let kept = coalesce_with_cap(pairs, 4);
         assert_eq!(kept.len(), 1);
         assert_eq!(kept[0].turn, 4);
     }
@@ -833,7 +917,7 @@ mod tests {
                 user_text: String::new(),
             })
             .collect();
-        assert_eq!(coalesce_with_cap(pairs, QUEUE_CAP).len(), 4);
+        assert_eq!(coalesce_with_cap(pairs, 4).len(), 4);
         let uncapped: Vec<Pair> = (0..2)
             .map(|turn| Pair {
                 session: "s".into(),
@@ -893,7 +977,7 @@ mod tests {
     fn formula_without_rules_is_oneshot() {
         assert_eq!(Formula::oneshot().feed, Feed::OneShot);
         assert_eq!(Formula::oneshot().bundle, BundleShape::Pair);
-        assert_eq!(Formula::oneshot().coalesce, QUEUE_CAP);
+        assert_eq!(Formula::oneshot().coalesce, 0);
     }
 
     #[test]
@@ -950,5 +1034,247 @@ mod tests {
         );
         assert_eq!(Formula::oneshot().window, None);
         let _ = std::fs::remove_file(&path);
+    }
+
+    fn store() -> (crate::Store, PathBuf) {
+        let path = std::env::temp_dir().join(format!(
+            "boop_cm_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _ = std::fs::remove_file(&path);
+        (crate::Store::open(path.clone()).unwrap(), path)
+    }
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "boop_cm_{}_{}_{}",
+            tag,
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// A bare session ref; enough for `project_discovered_session` to plant the
+    /// `agent_session` row `turn_rows` joins against.
+    fn session_ref(session: &str) -> SessionRef {
+        SessionRef {
+            harness: "fake",
+            session_id: session.to_owned(),
+            nickname: session.to_owned(),
+            path: PathBuf::new(),
+            cwd: None,
+            git_branch: None,
+            modified_ms: 0,
+            size: 0,
+            tmux: None,
+            tmux_socket: None,
+            parent: None,
+        }
+    }
+
+    /// A fake harness: counts `one_shot` calls, returns a canned reply, and
+    /// can hang its first call to exercise the oneshot timeout.
+    struct FakeHarness {
+        calls: AtomicUsize,
+        reply: &'static str,
+        hang_first: bool,
+    }
+
+    impl Harness for FakeHarness {
+        fn id(&self) -> &'static str {
+            "fake"
+        }
+        fn sessions(&self) -> Result<Vec<SessionRef>> {
+            Ok(Vec::new())
+        }
+        fn read_from(&self, _: &SessionRef, _: u64) -> Result<ReadChunk> {
+            Ok(ReadChunk {
+                events: Vec::new(),
+                next_offset: 0,
+                reset: false,
+                skipped: 0,
+            })
+        }
+        fn one_shot(&self, _: &OneShotSpec) -> Result<String> {
+            let n = self.calls.fetch_add(1, Ordering::SeqCst);
+            if self.hang_first && n == 0 {
+                std::thread::sleep(Duration::from_secs(3600));
+            }
+            Ok(self.reply.to_owned())
+        }
+    }
+
+    /// A fake resident chat: records every `start_turn` text and writes one
+    /// assistant reply to the store per turn, simulating the model + sync.
+    struct RecordingChannel {
+        db: PathBuf,
+        session: String,
+        next_ts: i64,
+        turns: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl LaneChannel for RecordingChannel {
+        fn conversation_id(&self) -> Option<String> {
+            Some(self.session.clone())
+        }
+        fn start_turn(&mut self, text: &str) -> Result<()> {
+            self.turns.lock().unwrap().push(text.to_owned());
+            let store = crate::Store::open(self.db.clone())?;
+            store.write_turn(
+                &self.session,
+                self.next_ts as u64,
+                self.next_ts as u64,
+                "assistant",
+                "reply",
+            )?;
+            self.next_ts += 1;
+            Ok(())
+        }
+        fn steer(&mut self, _: &str) -> Result<Delivery> {
+            Ok(Delivery::MidTurn)
+        }
+        fn poll_turn(&mut self, _: Duration) -> Result<Option<TurnEnd>> {
+            Ok(Some(TurnEnd::ok("done")))
+        }
+        fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    /// A window SQL partitioning same-role runs (gaps-and-islands) into
+    /// `id` + `ts` + `text`, honouring `:session` / `:cursor`.
+    const WINDOW_SQL: &str = "WITH marked AS (
+        SELECT t.turn, t.ts, r.value AS role, t.said,
+               ROW_NUMBER() OVER (ORDER BY t.ts, t.turn)
+             - ROW_NUMBER() OVER (PARTITION BY r.value ORDER BY t.ts, t.turn) AS island
+        FROM agent_turn t JOIN dict_role r ON r.id = t.role_id
+        JOIN dict_session s ON s.id = t.session_id
+        WHERE s.value = :session AND t.ts > :cursor)
+        SELECT max(turn) AS id, max(ts) AS ts, group_concat(said, char(10)) AS text
+        FROM marked GROUP BY role, island ORDER BY min(ts)";
+
+    fn window_args(state_dir: PathBuf, out_dir: PathBuf) -> Args {
+        Args {
+            template: None,
+            mode: None,
+            model: "fake-model".into(),
+            state_dir,
+            out_dir,
+            poll: Duration::ZERO,
+            from_start: true,
+            cursor: None,
+            formula: Formula {
+                feed: Feed::OneShot,
+                goal: None,
+                bundle: BundleShape::Pair,
+                coalesce: 0,
+                references: false,
+                window: Some(WINDOW_SQL.to_owned()),
+            },
+            session: Some("ses".into()),
+        }
+    }
+
+    #[test]
+    fn oneshot_window_maps_each_window_exactly_once() {
+        let (store, db_path) = store();
+        store.write_turn("ses", 1, 10, "assistant", "a1").unwrap();
+        store.write_turn("ses", 2, 11, "assistant", "a2").unwrap();
+        store.write_turn("ses", 3, 12, "user", "u1").unwrap();
+        store.write_turn("ses", 4, 13, "assistant", "a3").unwrap();
+        let harness: &'static FakeHarness = Box::leak(Box::new(FakeHarness {
+            calls: AtomicUsize::new(0),
+            reply: "rewritten",
+            hang_first: false,
+        }));
+        let args = window_args(temp_dir("oneshot_state"), temp_dir("oneshot_out"));
+        let mut rewriter = Rewriter::OneShot {
+            adapter: harness,
+            model: "fake-model".into(),
+            timeout: Duration::from_secs(5),
+        };
+        let mut done = BTreeSet::new();
+        // Three windows (assistant run, user run, assistant run); each is one
+        // model call, and the cursor lands on the newest ts.
+        let next = poll_once(&store, &mut rewriter, &args, None, 0, &mut done).unwrap();
+        assert_eq!(next, 13);
+        assert_eq!(harness.calls.load(Ordering::SeqCst), 3);
+        assert_eq!(done.len(), 3);
+        // Replaying from the advanced cursor yields nothing new.
+        let again = poll_once(&store, &mut rewriter, &args, None, next, &mut done).unwrap();
+        assert_eq!(again, 13);
+        assert_eq!(harness.calls.load(Ordering::SeqCst), 3);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[test]
+    fn poisoned_bundle_times_out_and_the_next_window_still_processes() {
+        let (store, db_path) = store();
+        store.write_turn("ses", 1, 10, "assistant", "a1").unwrap();
+        store.write_turn("ses", 2, 11, "user", "u1").unwrap();
+        let harness: &'static FakeHarness = Box::leak(Box::new(FakeHarness {
+            calls: AtomicUsize::new(0),
+            reply: "rewritten",
+            hang_first: true,
+        }));
+        let args = window_args(temp_dir("poison_state"), temp_dir("poison_out"));
+        let mut rewriter = Rewriter::OneShot {
+            adapter: harness,
+            model: "fake-model".into(),
+            timeout: Duration::from_millis(100),
+        };
+        let mut done = BTreeSet::new();
+        poll_once(&store, &mut rewriter, &args, None, 0, &mut done).unwrap();
+        // The hung first window is marked and skipped; the second still mapped.
+        assert_eq!(harness.calls.load(Ordering::SeqCst), 2);
+        assert_eq!(done.len(), 2);
+        let out = std::fs::read_to_string(args.out_dir.join("ses").join("2.md")).unwrap();
+        assert_eq!(out, "rewritten");
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[test]
+    fn chat_feed_carries_state_across_two_windows() {
+        let (store, db_path) = store();
+        store.project_discovered_session(&session_ref("s")).unwrap();
+        let adapter: &'static FakeHarness = Box::leak(Box::new(FakeHarness {
+            calls: AtomicUsize::new(0),
+            reply: "",
+            hang_first: false,
+        }));
+        let turns = Arc::new(Mutex::new(Vec::new()));
+        let mut rewriter = Rewriter::Chat {
+            adapter,
+            channel: Box::new(RecordingChannel {
+                db: db_path.clone(),
+                session: "s".into(),
+                next_ts: 1,
+                turns: turns.clone(),
+            }),
+            cwd: temp_dir("chat_cwd"),
+            goal: Some("goal turn".into()),
+        };
+        assert_eq!(rewriter.rewrite(&store, "bundle one").unwrap(), "reply");
+        assert_eq!(rewriter.rewrite(&store, "bundle two").unwrap(), "reply");
+        // The goal opens the resident once; both bundles accumulate on it.
+        let recorded = turns.lock().unwrap();
+        assert_eq!(
+            *recorded,
+            vec![
+                "goal turn".to_owned(),
+                "bundle one".to_owned(),
+                "bundle two".to_owned()
+            ]
+        );
+        let _ = std::fs::remove_file(&db_path);
     }
 }

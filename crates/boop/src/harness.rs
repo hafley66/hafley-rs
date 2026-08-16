@@ -10,8 +10,9 @@ pub mod codex;
 pub mod kimi;
 pub mod opencode;
 
-/// One agent harness that writes transcripts to this machine.
-pub trait Harness {
+/// One agent harness that writes transcripts to this machine. Harnesses are
+/// shareable so a caller can bound a synchronous pass on its own thread.
+pub trait Harness: Send + Sync {
     /// Stable short id used in CLI output and as the `--harness` filter value.
     fn id(&self) -> &'static str;
 
