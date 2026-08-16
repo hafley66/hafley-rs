@@ -29,20 +29,22 @@ TEMPLATE: a markdown file whose rendered form IS the prompt. Keys:
 
 STATE: the loop's own memory, one dir per experiment:
   <state>/cursor    last store ts seen (first run seeds at the newest ts,
-                    so only pairs made AFTER launch get mapped)
-  <state>/done/     one empty marker per mapped (session, turn); a restart
+                    so only pairs made AFTER launch get mapped; --from-start
+                    or --cursor <N> backfills an existing conversation)
+  <state>/done/     one empty marker per processed (session, turn); a restart
                     never remaps them
   For the chat feed the state dir is also the resident model's cwd.
 
 RULES: a json file choosing the feed and bundle shape:
-  {\"feed\": \"oneshot\"}                       fresh process per bundle, passes to fixed point
+  {\"feed\": \"oneshot\"}                       fresh process per bundle, one model call each
   {\"feed\": \"chat\", \"goal\": \"...\"}          one enduring resident; goal is its first turn
   \"bundle\": \"pair\" (default) or \"run\"       pair = 1 ai + 1 user; run collapses same-role runs
-  \"coalesce\": 4                        backlog cap; only the newest survives past it (0 = never drop)
+  \"coalesce\": 0                        backlog cap; only the newest survives past it (default 0 = never drop)
   \"references\": true                   append the source session's file touches as of the bundle
   \"window\": \"SELECT ...\"               caller-owned SQL replacing the compiled bundlers:
                                          binds :session (TEXT), :session_id (INTEGER), :cursor (ms);
-                                         returns INTEGER `id` + TEXT `text`, one row per bundle.
+                                         returns INTEGER `id` + INTEGER `ts` + TEXT `text`,
+                                         one row per bundle (`ts` is the cursor watermark).
                                          With a window, --template/--mode are optional (text ships
                                          verbatim) and the loop only does cursor + done + send.
 
@@ -57,7 +59,7 @@ WINDOW EXAMPLE (gaps-and-islands over agent_turn, same-role runs concat'ed):
         FROM agent_turn t JOIN dict_role r ON r.id = t.role_id
         JOIN dict_session s ON s.id = t.session_id
         WHERE s.value = :session AND t.ts > :cursor)
-      SELECT max(turn) AS id, group_concat(said, char(10)) AS text
+      SELECT max(turn) AS id, max(ts) AS ts, group_concat(said, char(10)) AS text
       FROM marked GROUP BY role, island ORDER BY min(ts)\"}
   boop concatmap --me --rules rules.json --state s --out o
 
@@ -248,9 +250,13 @@ enum SubCmd {
         /// Seconds between turn queries.
         #[arg(long, default_value_t = 5)]
         poll_secs: u64,
-        /// Max model passes before the last pass wins.
-        #[arg(long, default_value_t = 3)]
-        cap: u32,
+        /// Seed the cursor at 0 so an existing conversation maps in full.
+        /// Default is tail-only (seed at the newest store ts).
+        #[arg(long, conflicts_with = "cursor")]
+        from_start: bool,
+        /// An explicit starting cursor ts (ms); `--from-start` is `--cursor 0`.
+        #[arg(long)]
+        cursor: Option<i64>,
         /// Rules json naming feed {"oneshot"|"chat"} plus goal, bundle
         /// {"pair"|"run"}, coalesce, references. Absent = oneshot/pair.
         #[arg(long)]
@@ -760,7 +766,8 @@ fn main() -> Result<()> {
             state,
             out,
             poll_secs,
-            cap,
+            from_start,
+            cursor,
             rules,
             session,
             me,
@@ -807,7 +814,8 @@ fn main() -> Result<()> {
                 state_dir: state,
                 out_dir: out,
                 poll: std::time::Duration::from_secs(poll_secs),
-                cap,
+                from_start,
+                cursor,
                 formula,
                 session,
             })
