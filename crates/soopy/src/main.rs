@@ -8,8 +8,8 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::json;
 use soopy::{
-    GitFileQuery, Pattern, ReadRequest, Revision, SourceDelta, SourceEntry, SourceQuery,
-    SourceRoot, SourceTree,
+    DurableStageStore, GitFileQuery, Pattern, ReadRequest, Revision, SourceDelta, SourceEntry,
+    SourceQuery, SourceRoot, SourceTree, StageId, StageStore,
 };
 use sysinfo::{Pid, ProcessesToUpdate, System};
 
@@ -31,6 +31,18 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Display a sealed stage and its stored result bytes without reading the target root.
+    ShowStage {
+        id: String,
+        #[arg(long, value_name = "PATH")]
+        store: PathBuf,
+    },
+    /// Remove one stage manifest. Content blobs remain until explicit cleanup.
+    DiscardStage {
+        id: String,
+        #[arg(long, value_name = "PATH")]
+        store: PathBuf,
+    },
     /// Observe one cold and three warm tracked-state snapshots and emit one
     /// JSON record for the Just performance gates.
     StatusMetrics,
@@ -214,9 +226,22 @@ fn run_rg(
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    if let Command::ShowStage { id, store } = &cli.command {
+        let store = DurableStageStore::open(store)?;
+        let stage = store.load(id.parse::<StageId>().map_err(anyhow::Error::msg)?)?;
+        println!("{}", serde_json::to_string_pretty(&stage)?);
+        return Ok(());
+    }
+    if let Command::DiscardStage { id, store } = &cli.command {
+        let mut store = DurableStageStore::open(store)?;
+        let removed = store.discard(id.parse::<StageId>().map_err(anyhow::Error::msg)?)?;
+        println!("{}", serde_json::json!({"discarded": removed}));
+        return Ok(());
+    }
     let repository = soopy::discover(&cli.repo)?;
     let mut tree = SourceTree::open(repository);
     match cli.command {
+        Command::ShowStage { .. } | Command::DiscardStage { .. } => unreachable!(),
         Command::StatusMetrics => {
             let mut source = SourceRoot::discover_git(&cli.repo)?;
             let git = source

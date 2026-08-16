@@ -573,3 +573,62 @@ fn git_and_directory_targets_materialize_equivalent_replacement_bytes() {
     assert_eq!(git_status_after.stdout, git_status_before.stdout);
     std::fs::remove_dir_all(directory).unwrap();
 }
+
+#[cfg(unix)]
+#[test]
+fn planner_rejects_direct_symlink_targets_before_reading() {
+    let directory = temporary_root("symlink-target");
+    std::fs::write(directory.join("real.txt"), b"abc").unwrap();
+    std::os::unix::fs::symlink("real.txt", directory.join("link.txt")).unwrap();
+    let mut root = SourceRoot::open_directory(&directory).unwrap();
+    let root_id = SourceRootId::Directory {
+        directory: root.directory().identity.clone(),
+    };
+    let source = directory_source(&root, "link.txt");
+    let refusal = plan_mutations(
+        &mut root,
+        &StageRequest::new(
+            root_id,
+            vec![SourceAction::Replace {
+                source: source.clone(),
+                expected: content(b"abc"),
+                edits: vec![edit(source, 0, 1, b"x", ActionProducer::unordered("test"))],
+            }],
+        ),
+    )
+    .unwrap_err();
+    assert!(matches!(refusal, StageRefusal::Unreadable { .. }));
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn planner_retains_existing_mode_for_commit() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = temporary_root("mode-observation");
+    let source_path = directory.join("readonly.txt");
+    std::fs::write(&source_path, b"abc").unwrap();
+    std::fs::set_permissions(&source_path, std::fs::Permissions::from_mode(0o640)).unwrap();
+    let mut root = SourceRoot::open_directory(&directory).unwrap();
+    let root_id = SourceRootId::Directory {
+        directory: root.directory().identity.clone(),
+    };
+    let source = directory_source(&root, "readonly.txt");
+    let plan = plan_mutations(
+        &mut root,
+        &StageRequest::new(
+            root_id,
+            vec![SourceAction::Replace {
+                source: source.clone(),
+                expected: content(b"abc"),
+                edits: vec![edit(source, 0, 1, b"x", ActionProducer::unordered("test"))],
+            }],
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        plan.files[0].mode_before.as_ref().unwrap().unix_mode,
+        Some(0o100640)
+    );
+    std::fs::remove_dir_all(directory).unwrap();
+}

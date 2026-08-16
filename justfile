@@ -15,6 +15,9 @@ soopy-scale-linux-all handles="500" batch="16":
 perf-source-mutations-planner files="1000" edits_per_file="100" bytes_per_file="4096":
     bash crates/soopy/bench/2_source_mutations_planner.sh "{{files}}" "{{edits_per_file}}" "{{bytes_per_file}}"
 
+perf-source-mutations-stage files="1000" edits_per_file="100" bytes_per_file="4096" store="target/soopy-stage-scale":
+    cargo run -q -p soopy --example 3_stage_store_scale -- --files "{{files}}" --edits-per-file "{{edits_per_file}}" --bytes-per-file "{{bytes_per_file}}" --store "{{store}}"
+
 test-git-optional:
     cargo test -p soopy --test 6_git_optional
 

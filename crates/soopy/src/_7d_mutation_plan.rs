@@ -33,8 +33,19 @@ pub struct PlannedFile {
     pub path_after: Option<SourcePath>,
     pub content_before: Option<ContentId>,
     pub content_after: Option<ContentId>,
+    pub mode_before: Option<FileModeObservation>,
+    pub bytes_before: Option<Vec<u8>>,
     pub bytes_after: Option<Vec<u8>>,
     pub edits: Vec<NormalizedEdit>,
+}
+
+/// Existing target metadata retained for the commit phase. The source action
+/// stage does not change modes; commit 022 uses this observation when replacing
+/// or moving a file so permissions remain stable.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileModeObservation {
+    pub readonly: bool,
+    pub unix_mode: Option<u32>,
 }
 
 /// The normalized action represented by a [`PlannedFile`].
@@ -105,6 +116,8 @@ pub fn plan_mutations(
             path_after: Some(path),
             content_before: None,
             content_after: Some(blake3_content(&bytes)),
+            mode_before: None,
+            bytes_before: None,
             bytes_after: Some(bytes),
             edits: Vec::new(),
         });
@@ -124,6 +137,8 @@ pub fn plan_mutations(
                     path_after: Some(source_path(&source)),
                     content_before: Some(input.content.clone()),
                     content_after: Some(blake3_content(&bytes_after)),
+                    mode_before: Some(input.mode.clone()),
+                    bytes_before: Some(input.bytes.clone()),
                     bytes_after: Some(bytes_after),
                     edits,
                 });
@@ -135,6 +150,8 @@ pub fn plan_mutations(
                 path_after: Some(destination),
                 content_before: Some(input.content.clone()),
                 content_after: Some(input.content.clone()),
+                mode_before: Some(input.mode.clone()),
+                bytes_before: Some(input.bytes.clone()),
                 bytes_after: Some(input.bytes.clone()),
                 edits: Vec::new(),
             }),
@@ -145,6 +162,8 @@ pub fn plan_mutations(
                 path_after: None,
                 content_before: Some(input.content.clone()),
                 content_after: None,
+                mode_before: Some(input.mode.clone()),
+                bytes_before: Some(input.bytes.clone()),
                 bytes_after: None,
                 edits: Vec::new(),
             }),
@@ -179,6 +198,9 @@ pub enum StageRefusal {
     },
     Unreadable {
         source: ActionSource,
+        detail: String,
+    },
+    Store {
         detail: String,
     },
 }
@@ -261,6 +283,7 @@ pub struct StaleInput {
 struct SourceInput {
     content: ContentId,
     bytes: Vec<u8>,
+    mode: FileModeObservation,
 }
 
 struct GroupedActions {
@@ -487,10 +510,52 @@ fn destination_is_occupied(root: &SourceRoot, path: &SourcePath) -> bool {
     std::fs::symlink_metadata(base.join(relative)).is_ok()
 }
 
+fn direct_source_mode(
+    root: &SourceRoot,
+    source: &ActionSource,
+) -> Result<FileModeObservation, String> {
+    let path = match (root, source) {
+        (SourceRoot::Directory(directory), ActionSource::Directory { file }) => {
+            directory.root.join(file.path.0.as_ref())
+        }
+        (SourceRoot::GitWorktree(git), ActionSource::Git { source }) => {
+            git.repository.root.join(source.path.0.as_ref())
+        }
+        _ => return Err("source root does not match target root".to_owned()),
+    };
+    let metadata = std::fs::symlink_metadata(&path)
+        .map_err(|error| format!("read direct source metadata {}: {error}", path.display()))?;
+    if !metadata.file_type().is_file() {
+        return Err(format!(
+            "source target is not a regular file: {}",
+            path.display()
+        ));
+    }
+    #[cfg(unix)]
+    let unix_mode = {
+        use std::os::unix::fs::MetadataExt;
+        Some(metadata.mode())
+    };
+    #[cfg(not(unix))]
+    let unix_mode = None;
+    Ok(FileModeObservation {
+        readonly: metadata.permissions().readonly(),
+        unix_mode,
+    })
+}
+
 fn read_inputs(
     root: &mut SourceRoot,
     grouped: &GroupedActions,
 ) -> Result<BTreeMap<ActionSource, SourceInput>, StageRefusal> {
+    let mut modes = BTreeMap::new();
+    for source in grouped.sources.keys() {
+        let mode = direct_source_mode(root, source).map_err(|detail| StageRefusal::Unreadable {
+            source: source.clone(),
+            detail,
+        })?;
+        modes.insert(source.clone(), mode);
+    }
     match root {
         SourceRoot::Directory(directory) => {
             let requests: Vec<_> = grouped
@@ -513,6 +578,12 @@ fn read_inputs(
                     SourceInput {
                         content: answer.content.clone(),
                         bytes: answer.bytes.to_vec(),
+                        mode: modes
+                            .get(&ActionSource::Directory {
+                                file: answer.file.clone(),
+                            })
+                            .expect("mode checked before read")
+                            .clone(),
                     },
                 );
                 Ok(())
@@ -557,6 +628,12 @@ fn read_inputs(
                         SourceInput {
                             content: answer.content.clone(),
                             bytes: answer.bytes.to_vec(),
+                            mode: modes
+                                .get(&ActionSource::Git {
+                                    source: answer.source.clone(),
+                                })
+                                .expect("mode checked before read")
+                                .clone(),
                         },
                     );
                     Ok(())
