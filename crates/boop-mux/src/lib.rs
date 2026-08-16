@@ -306,12 +306,14 @@ impl Multiplexer for Tmux {
         if let Some(socket) = socket {
             builder.arg("-L").arg(socket);
         }
+        // The returned target must survive a window move or an index shift:
+        // an index spelling goes stale and tmux clamps it onto a neighbour.
         builder.args([
             "new-window",
             "-d",
             "-P",
             "-F",
-            "#{session_name}:#{window_index}",
+            "#{session_name}:#{window_id}",
             "-t",
             session,
             "-n",
