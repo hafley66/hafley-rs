@@ -10,7 +10,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::Result;
-use rusqlite::OptionalExtension;
+use rusqlite::{params_from_iter, OptionalExtension};
 use serde::Serialize;
 
 use crate::bus::{Message, Route};
@@ -216,7 +216,18 @@ pub fn runtime_snapshot(input: RuntimeSnapshotInput<'_>) -> Result<Vec<AgentRunt
     let folded_messages = crate::bus::fold(input.messages);
     let (mailboxes, completions) = mailbox_projection(&folded_messages);
     let live_sessions = input.multiplexer.live_sessions(input.tmux_socket);
-    let mut lanes = input.store.runtime_lane_names()?;
+    let batch = input.store.runtime_batch(input.routes)?;
+    runtime_snapshot_with_batch(input, &batch, &mailboxes, &completions, &live_sessions)
+}
+
+fn runtime_snapshot_with_batch(
+    input: RuntimeSnapshotInput<'_>,
+    batch: &RuntimeBatch,
+    mailboxes: &BTreeMap<String, MailboxCounts>,
+    completions: &BTreeMap<String, CompletionRecord>,
+    live_sessions: &Option<LiveSessions>,
+) -> Result<Vec<AgentRuntimeRow>> {
+    let mut lanes = batch.lanes.clone();
     lanes.extend(input.routes.keys().cloned());
     lanes.sort();
     lanes.dedup();
@@ -224,20 +235,32 @@ pub fn runtime_snapshot(input: RuntimeSnapshotInput<'_>) -> Result<Vec<AgentRunt
     lanes
         .into_iter()
         .map(|lane| {
-            let runtime = resolve_with_completion(
-                input.store,
+            let runtime = resolve_with_completion_batch(
                 &lane,
                 input.routes,
+                batch,
                 completions.get(&lane).cloned(),
             )?;
             Ok(runtime_row(
                 runtime,
                 mailboxes.get(&lane).cloned().unwrap_or_default(),
-                &live_sessions,
+                live_sessions,
                 input.processes,
             ))
         })
         .collect()
+}
+
+#[cfg(test)]
+fn runtime_snapshot_query_count(input: RuntimeSnapshotInput<'_>) -> Result<(usize, usize)> {
+    let folded_messages = crate::bus::fold(input.messages);
+    let (mailboxes, completions) = mailbox_projection(&folded_messages);
+    let live_sessions = input.multiplexer.live_sessions(input.tmux_socket);
+    let batch = input.store.runtime_batch(input.routes)?;
+    let query_count = batch.query_count;
+    let rows =
+        runtime_snapshot_with_batch(input, &batch, &mailboxes, &completions, &live_sessions)?;
+    Ok((rows.len(), query_count))
 }
 
 /// Production convenience for a snapshot from the OS. Process acquisition is
@@ -371,6 +394,18 @@ struct AttachedSession {
     generated: bool,
 }
 
+#[derive(Default)]
+struct RuntimeBatch {
+    lanes: Vec<String>,
+    lane_exists: std::collections::BTreeSet<String>,
+    traces: BTreeMap<String, Vec<String>>,
+    roots: BTreeMap<String, Option<String>>,
+    attached: BTreeMap<String, Vec<AttachedSession>>,
+    processes: BTreeMap<String, ProcessIdentity>,
+    #[cfg(test)]
+    query_count: usize,
+}
+
 const RUNTIME_ATTACHED_SESSIONS_SQL: &str = "SELECT d.value, span.attached_ts,
             MAX(
               COALESCE((SELECT MAX(ts) FROM agent_turn WHERE session_id = span.session_id), 0),
@@ -382,6 +417,49 @@ const RUNTIME_ATTACHED_SESSIONS_SQL: &str = "SELECT d.value, span.attached_ts,
        JOIN dict_session d ON d.id = span.session_id
       WHERE trace.value = ?1
       ORDER BY span.attached_ts, d.value";
+
+const RUNTIME_LANE_TRACES_SQL: &str = "SELECT lane.value, trace.value, 1
+          FROM (SELECT DISTINCT lane_id FROM agent_lane) lane_ids
+          JOIN dict_session lane ON lane.id = lane_ids.lane_id
+          LEFT JOIN agent_lane lane_row ON lane_row.lane_id = lane_ids.lane_id
+          LEFT JOIN dict_trace trace ON trace.id = lane_row.trace_id
+          UNION
+          SELECT lane.value, trace.value, 0
+            FROM agent_trace_span span
+            JOIN dict_session lane ON lane.id = span.session_id
+            JOIN dict_trace trace ON trace.id = span.trace_id
+          ORDER BY 1, 2, 3";
+
+const RUNTIME_ROOTS_SQL: &str = "SELECT trace.value, root.value
+          FROM agent_trace trace_row
+          JOIN dict_trace trace ON trace.id = trace_row.trace_id
+          LEFT JOIN dict_session root ON root.id = trace_row.root_session_id";
+
+const RUNTIME_ATTACHED_SESSIONS_ALL_SQL: &str = "SELECT trace.value, d.value, span.attached_ts,
+            MAX(
+              COALESCE((SELECT MAX(ts) FROM agent_turn WHERE session_id = span.session_id), 0),
+              COALESCE((SELECT MAX(ts) FROM agent_usage WHERE session_id = span.session_id), 0)
+            ),
+            EXISTS(SELECT 1 FROM agent_session a WHERE a.session_id = span.session_id)
+       FROM agent_trace_span span
+       JOIN dict_trace trace ON trace.id = span.trace_id
+       JOIN dict_session d ON d.id = span.session_id";
+
+const RUNTIME_PROCESSES_SQL: &str = "SELECT d.value, status.value, live.pid, pane.value
+          FROM agent_live live
+          JOIN dict_session d ON d.id = live.session_id
+          LEFT JOIN dict_status status ON status.id = live.status_id
+          LEFT JOIN dict_pane pane ON pane.id = live.tmux_pane_id";
+
+fn sql_placeholders(count: usize) -> String {
+    if count == 0 {
+        return "NULL".into();
+    }
+    (1..=count)
+        .map(|index| format!("?{index}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
 /// Resolve all runtime facets for `lane`, using only trace attachments as the
 /// session boundary and transcript/usage timestamps as activity evidence.
@@ -526,6 +604,138 @@ fn resolve_with_completion(
     Ok(runtime)
 }
 
+fn resolve_with_completion_batch(
+    lane: &str,
+    routes: &BTreeMap<String, Route>,
+    batch: &RuntimeBatch,
+    completion: Option<CompletionRecord>,
+) -> Result<LaneRuntime> {
+    let mut runtime = LaneRuntime {
+        lane: lane.to_owned(),
+        trace: None,
+        root_session: None,
+        current_session: None,
+        route: None,
+        process: None,
+        completion,
+        placeholder_session: None,
+        generated_sessions: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+
+    if runtime.completion.is_none() {
+        runtime
+            .diagnostics
+            .push(RuntimeDiagnostic::MissingCompletion);
+    }
+
+    let trace_names = batch.traces.get(lane).cloned().unwrap_or_default();
+    if trace_names.is_empty() {
+        runtime
+            .diagnostics
+            .push(if batch.lane_exists.contains(lane) {
+                RuntimeDiagnostic::MissingTrace {
+                    lane: lane.to_owned(),
+                }
+            } else {
+                RuntimeDiagnostic::MissingLane
+            });
+    } else if trace_names.len() > 1 {
+        runtime.diagnostics.push(RuntimeDiagnostic::AmbiguousTrace {
+            lane: lane.to_owned(),
+            traces: trace_names,
+        });
+    } else {
+        let trace = trace_names[0].clone();
+        runtime.trace = Some(trace.clone());
+        runtime.root_session = batch.roots.get(&trace).cloned().flatten();
+        let attached = batch.attached.get(&trace).cloned().unwrap_or_default();
+        runtime.placeholder_session = attached
+            .iter()
+            .find(|session| session.session == lane)
+            .map(|session| session.session.clone())
+            .or_else(|| Some(lane.to_owned()));
+        runtime.generated_sessions = attached
+            .iter()
+            .filter(|session| session.generated && session.session != lane)
+            .map(|session| session.session.clone())
+            .collect();
+
+        let candidates: Vec<&AttachedSession> = attached
+            .iter()
+            .filter(|session| session.generated && session.session != lane)
+            .collect();
+        if candidates.is_empty() {
+            runtime
+                .diagnostics
+                .push(RuntimeDiagnostic::MissingCurrentSession { trace });
+        } else {
+            let activity_ts = candidates
+                .iter()
+                .map(|session| session.activity_ts)
+                .max()
+                .unwrap_or(0);
+            let current: Vec<&AttachedSession> = candidates
+                .into_iter()
+                .filter(|session| session.activity_ts == activity_ts)
+                .collect();
+            if current.len() > 1 {
+                runtime
+                    .diagnostics
+                    .push(RuntimeDiagnostic::AmbiguousCurrentSession {
+                        trace,
+                        sessions: current
+                            .iter()
+                            .map(|session| session.session.clone())
+                            .collect(),
+                        activity_ts,
+                    });
+            } else if let Some(session) = current.first() {
+                runtime.current_session = Some(session.session.clone());
+            }
+        }
+    }
+
+    let route_matches = route_matches(routes, lane, runtime.current_session.as_deref());
+    match route_matches.as_slice() {
+        [] => runtime.diagnostics.push(RuntimeDiagnostic::MissingRoute),
+        [(route_lane, route)] => {
+            runtime.route = Some(ResolvedRoute::from_route(route_lane, route));
+        }
+        matches => runtime.diagnostics.push(RuntimeDiagnostic::AmbiguousRoute {
+            lanes: matches
+                .iter()
+                .map(|(route_lane, _)| (*route_lane).clone())
+                .collect(),
+        }),
+    }
+
+    let process_session = runtime
+        .current_session
+        .as_deref()
+        .or(runtime.placeholder_session.as_deref());
+    if let Some(session) = process_session {
+        runtime.process = batch.processes.get(session).cloned();
+    }
+    if runtime.process.is_none() {
+        if let Some(route) = runtime.route.as_ref() {
+            if route.tmux.is_some() {
+                runtime.process = Some(ProcessIdentity {
+                    session: runtime
+                        .current_session
+                        .clone()
+                        .unwrap_or_else(|| lane.to_owned()),
+                    status: None,
+                    pid: None,
+                    tmux_pane: route.tmux.clone(),
+                    alive: None,
+                });
+            }
+        }
+    }
+    Ok(runtime)
+}
+
 fn route_matches<'a>(
     routes: &'a BTreeMap<String, Route>,
     lane: &str,
@@ -610,21 +820,147 @@ impl Store {
         resolve(self, lane, routes, messages)
     }
 
+    fn runtime_batch(&self, routes: &BTreeMap<String, Route>) -> Result<RuntimeBatch> {
+        let mut batch = RuntimeBatch::default();
+
+        let mut statement = self.connection().prepare(RUNTIME_LANE_TRACES_SQL)?;
+        let rows = statement.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, bool>(2)?,
+            ))
+        })?;
+        for row in rows {
+            let (lane, trace, is_lane) = row?;
+            if is_lane && batch.lanes.last() != Some(&lane) {
+                batch.lanes.push(lane.clone());
+            }
+            if let Some(trace) = trace.filter(|_| is_lane || routes.contains_key(&lane)) {
+                let traces = batch.traces.entry(lane).or_default();
+                if traces.last() != Some(&trace) {
+                    traces.push(trace);
+                }
+            }
+        }
+        #[cfg(test)]
+        {
+            batch.query_count += 1;
+        }
+
+        let mut candidate_lanes = batch.lanes.clone();
+        candidate_lanes.extend(routes.keys().cloned());
+        candidate_lanes.sort();
+        candidate_lanes.dedup();
+        let lane_placeholders = sql_placeholders(candidate_lanes.len());
+        let lane_sql = format!(
+            "SELECT value FROM dict_session WHERE value IN ({lane_placeholders}) ORDER BY value"
+        );
+        let mut statement = self.connection().prepare(&lane_sql)?;
+        let rows = statement.query_map(params_from_iter(candidate_lanes.iter()), |row| {
+            row.get::<_, String>(0)
+        })?;
+        batch.lane_exists = rows.collect::<rusqlite::Result<std::collections::BTreeSet<_>>>()?;
+        #[cfg(test)]
+        {
+            batch.query_count += 1;
+        }
+
+        let traces: Vec<String> = batch
+            .traces
+            .values()
+            .flat_map(|traces| traces.iter().cloned())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        let trace_placeholders = sql_placeholders(traces.len());
+        let roots_sql = format!(
+            "{RUNTIME_ROOTS_SQL} WHERE trace.value IN ({trace_placeholders}) ORDER BY trace.value"
+        );
+        let mut statement = self.connection().prepare(&roots_sql)?;
+        let rows = statement.query_map(params_from_iter(traces.iter()), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+        })?;
+        for row in rows {
+            let (trace, root) = row?;
+            batch.roots.insert(trace, root);
+        }
+        #[cfg(test)]
+        {
+            batch.query_count += 1;
+        }
+
+        let attached_sql = format!(
+            "{RUNTIME_ATTACHED_SESSIONS_ALL_SQL} WHERE trace.value IN ({trace_placeholders}) \
+             ORDER BY trace.value, span.attached_ts, d.value"
+        );
+        let mut statement = self.connection().prepare(&attached_sql)?;
+        let rows = statement.query_map(params_from_iter(traces.iter()), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                AttachedSession {
+                    session: row.get(1)?,
+                    activity_ts: row.get(3)?,
+                    generated: row.get(4)?,
+                },
+            ))
+        })?;
+        for row in rows {
+            let (trace, session) = row?;
+            batch.attached.entry(trace).or_default().push(session);
+        }
+        #[cfg(test)]
+        {
+            batch.query_count += 1;
+        }
+
+        let mut process_sessions = candidate_lanes;
+        process_sessions.extend(
+            batch
+                .attached
+                .values()
+                .flat_map(|sessions| sessions.iter().map(|session| session.session.clone())),
+        );
+        process_sessions.sort();
+        process_sessions.dedup();
+        let process_placeholders = sql_placeholders(process_sessions.len());
+        let processes_sql = format!(
+            "{RUNTIME_PROCESSES_SQL} WHERE d.value IN ({process_placeholders}) ORDER BY d.value"
+        );
+        let mut statement = self.connection().prepare(&processes_sql)?;
+        let rows = statement.query_map(params_from_iter(process_sessions.iter()), |row| {
+            let session: String = row.get(0)?;
+            let status: Option<String> = row.get(1)?;
+            Ok((
+                session.clone(),
+                ProcessIdentity {
+                    session,
+                    alive: status.as_deref().map(|value| value == "live"),
+                    status,
+                    pid: row.get(2)?,
+                    tmux_pane: row.get(3)?,
+                },
+            ))
+        })?;
+        for row in rows {
+            let (session, process) = row?;
+            batch.processes.insert(session, process);
+        }
+        #[cfg(test)]
+        {
+            batch.query_count += 1;
+        }
+
+        batch.lanes.sort();
+        Ok(batch)
+    }
+
     fn runtime_lane_exists(&self, lane: &str) -> Result<bool> {
         Ok(self.connection().query_row(
             "SELECT EXISTS(SELECT 1 FROM dict_session WHERE value = ?1)",
             rusqlite::params![lane],
             |row| row.get(0),
         )?)
-    }
-
-    fn runtime_lane_names(&self) -> Result<Vec<String>> {
-        let sql = "SELECT DISTINCT d.value FROM agent_lane lane
-                   JOIN dict_session d ON d.id = lane.lane_id
-                   ORDER BY d.value";
-        let mut statement = self.connection().prepare(sql)?;
-        let rows = statement.query_map([], |row| row.get(0))?;
-        Ok(rows.collect::<rusqlite::Result<Vec<String>>>()?)
     }
 
     fn runtime_trace_names(&self, lane: &str) -> Result<Vec<String>> {
@@ -700,13 +1036,14 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use crate::bus::{Message, Route};
+    use crate::ident::LaneSpawn;
     use crate::proc::{ProcReader, ProcessInfo};
     use crate::test_support::FakeMux;
     use crate::Store;
 
     use super::{
-        parse_exit_code, runtime_snapshot, ProcessLiveness, RuntimeDiagnostic,
-        RuntimeSnapshotInput, TmuxLiveness, RUNTIME_ATTACHED_SESSIONS_SQL,
+        parse_exit_code, runtime_snapshot, runtime_snapshot_query_count, ProcessLiveness,
+        RuntimeDiagnostic, RuntimeSnapshotInput, TmuxLiveness, RUNTIME_ATTACHED_SESSIONS_SQL,
     };
 
     struct FakeProcesses {
@@ -1038,6 +1375,82 @@ mod tests {
         assert_eq!(
             shell.worktree.route_cwd.as_deref(),
             Some("/repo/.boop-worktrees/feature/shell")
+        );
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn snapshot_uses_fixed_durable_query_count_for_many_lanes() {
+        let (path, store) = fresh_store("batch-query-count");
+        let mut routes = BTreeMap::new();
+        for number in 0..139 {
+            let lane = format!("lane-{number:03}");
+            let session = format!("generated-{number:03}");
+            store
+                .attach_trace(&lane, &format!("trace-{number:03}"), "lane-create", 10)
+                .unwrap();
+            store
+                .attach_trace(
+                    &session,
+                    &format!("trace-{number:03}"),
+                    "supervisor-conversation",
+                    11,
+                )
+                .unwrap();
+            add_session(&store, &session, 20);
+            routes.insert(lane, route(Some(&session)));
+        }
+        let mux = FakeMux::available(&[]);
+        let processes = FakeProcesses {
+            live: HashMap::new(),
+        };
+        let (rows, query_count) = runtime_snapshot_query_count(RuntimeSnapshotInput {
+            store: &store,
+            routes: &routes,
+            messages: &[],
+            multiplexer: &mux,
+            tmux_socket: None,
+            processes: &processes,
+        })
+        .unwrap();
+        assert_eq!(rows, 139);
+        assert_eq!(query_count, 5);
+        assert_eq!(mux.observations.load(Ordering::SeqCst), 1);
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn snapshot_preserves_an_orphan_lane_trace_diagnostic() {
+        let (path, store) = fresh_store("orphan-lane-trace");
+        store
+            .record_lane_spawn(&LaneSpawn {
+                lane: "orphan-lane".into(),
+                trace: Some("trace-without-span".into()),
+                ts: 10,
+                ..LaneSpawn::default()
+            })
+            .unwrap();
+        let routes = BTreeMap::new();
+        let legacy = store.resolve_lane_runtime("orphan-lane", &routes).unwrap();
+        let mux = FakeMux::inaccessible();
+        let processes = FakeProcesses {
+            live: HashMap::new(),
+        };
+        let rows = snapshot_rows(&store, &routes, &[], &mux, &processes);
+        let batched = rows.iter().find(|row| row.lane == "orphan-lane").unwrap();
+        assert_eq!(batched.trace, legacy.trace);
+        assert_eq!(batched.diagnostics, legacy.diagnostics);
+        assert_eq!(
+            batched.diagnostics,
+            vec![
+                RuntimeDiagnostic::MissingCompletion,
+                RuntimeDiagnostic::MissingCurrentSession {
+                    trace: "trace-without-span".into(),
+                },
+                RuntimeDiagnostic::MissingRoute,
+            ]
         );
         drop(store);
         let _ = std::fs::remove_file(path);
