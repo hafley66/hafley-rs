@@ -40,6 +40,10 @@ pub struct TuiChannel {
     session: String,
     cwd: PathBuf,
     conversation: Option<String>,
+    /// The first turn's text; re-fed into a respawned window that lost its
+    /// conversation so a mid-lane steer never tells the harness to continue
+    /// work it never saw.
+    opening_turn: Option<String>,
     turn_started_ms: u64,
     /// Pane body hash and when it was first seen, for the idle test.
     settled_since: Option<(u64, Instant)>,
@@ -60,6 +64,7 @@ impl TuiChannel {
             resume = spec.resume.as_deref().unwrap_or_default(),
         )
         .entered();
+        let opened_ms = crate::channel::now_ms();
         let session = host_session(socket.as_deref())?;
         let cwd = spec.cwd.display().to_string();
         let target = crate::tmux::mux()
@@ -79,11 +84,23 @@ impl TuiChannel {
             session,
             cwd: spec.cwd.clone(),
             conversation: spec.resume.clone(),
+            opening_turn: None,
             turn_started_ms: 0,
             settled_since: None,
             turn_open: false,
         };
         channel.wait_for_boot()?;
+        if channel.profile.harness == "opencode" && channel.conversation.is_none() {
+            channel.conversation = crate::channel::opencode::newest_session(&spec.cwd, opened_ms);
+            if channel.conversation.is_none() {
+                warn!(
+                    harness = channel.profile.harness,
+                    cwd = %spec.cwd.display(),
+                    tmux_target = channel.target,
+                    "opencode session unresolved at boot; a respawn will re-feed the brief"
+                );
+            }
+        }
         info!(
             harness = channel.profile.harness,
             tmux_target = channel.target,
@@ -130,14 +147,50 @@ impl TuiChannel {
         self.wait_for_boot()
     }
 
-    /// Type text into the agent window, respawning it first if it died.
+    /// Type text into the agent window, respawning it first if it died. A
+    /// respawn that produced a blank window re-feeds the opening turn before
+    /// the pending text, so a mid-lane steer does not tell the harness to
+    /// continue work it never saw.
     fn type_and_submit_or_respawn(&mut self, text: &str) -> Result<()> {
         if let Err(error) = self.type_and_submit(text) {
             if !window_is_gone(&error) {
                 return Err(error);
             }
+            // A send failure from a still-live target is a wedged pane, not a
+            // death; respawning would discard a live-but-slow turn.
+            if crate::tmux::mux().target_alive(self.socket.as_deref(), &self.target) {
+                return Err(error);
+            }
             self.reopen_window()?;
-            self.type_and_submit(text)?;
+            let refeed = self
+                .opening_turn
+                .as_deref()
+                .filter(|opening| *opening != text)
+                .filter(|_| self.profile.resume_flag.is_none() || self.conversation.is_none());
+            match refeed {
+                Some(opening) => {
+                    self.type_and_submit(opening)?;
+                    self.wait_for_turn_accepted()?;
+                    self.type_and_submit(text)?;
+                }
+                None => {
+                    self.type_and_submit(text)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The brief re-feed is accepted when the respawned TUI settles after
+    /// submitting it; a continuously streaming harness is not blocked beyond
+    /// the deadline, after which the pending text is steered in regardless.
+    fn wait_for_turn_accepted(&mut self) -> Result<()> {
+        let deadline = Instant::now() + Duration::from_secs(8);
+        while Instant::now() < deadline {
+            if self.settled_for(Duration::from_secs(2))? {
+                return Ok(());
+            }
+            std::thread::sleep(Duration::from_millis(500));
         }
         Ok(())
     }
@@ -221,6 +274,9 @@ impl LaneChannel for TuiChannel {
             "tui turn starting"
         );
         self.turn_started_ms = crate::channel::now_ms();
+        if self.opening_turn.is_none() {
+            self.opening_turn = Some(text.to_owned());
+        }
         self.type_and_submit_or_respawn(text)?;
         self.turn_open = true;
         self.settled_since = None;
@@ -602,6 +658,91 @@ mod tests {
         assert!(
             pane.contains("hello-after-death"),
             "typed text missing from the respawned window"
+        );
+    }
+
+    // FAIL-PRE-FIX: a mid-lane steer after the agent window died typed only the
+    // nudge into the respawned window, so the harness was told to continue a
+    // brief it never saw. The assertion failed on the missing BRIEF-TEXT.
+    #[test]
+    fn a_mid_lane_respawn_refeeds_the_brief_before_the_nudge() {
+        let guard = TmuxGuard::new("refeed");
+        let profile = TuiProfile {
+            harness: "tuitest",
+            command: "sh -c 'echo booted; exec sleep 300'".to_owned(),
+            steer_key: None,
+            boot_keys: Vec::new(),
+            resume_flag: None,
+        };
+        let mut channel =
+            TuiChannel::open(profile, &spec(None), Some(guard.socket.clone())).unwrap();
+        channel.start_turn("BRIEF-TEXT").unwrap();
+        let dead = channel.target().to_owned();
+        crate::tmux::mux()
+            .kill_window(Some(&guard.socket), &dead)
+            .unwrap();
+        channel.steer("nudge-text").unwrap();
+        let pane = crate::tmux::mux()
+            .capture_pane(Some(&guard.socket), channel.target(), None)
+            .unwrap();
+        assert!(
+            pane.contains("BRIEF-TEXT"),
+            "brief not re-fed into the respawned window"
+        );
+        assert!(
+            pane.contains("nudge-text"),
+            "nudge missing from the respawned window"
+        );
+    }
+
+    // A respawn that resumes a pinned conversation must NOT re-feed the brief:
+    // the harness already holds it. The resume flag and id land in the respawn
+    // command, and only the nudge is typed.
+    #[test]
+    fn a_respawn_with_a_resumable_conversation_skips_the_brief() {
+        let guard = TmuxGuard::new("resume");
+        let cmd_file = std::env::temp_dir().join(format!(
+            "boop-tui-resume-{}-{}.txt",
+            std::process::id(),
+            crate::channel::now_ms()
+        ));
+        let _ = std::fs::remove_file(&cmd_file);
+        let profile = TuiProfile {
+            harness: "tuitest",
+            command: format!(
+                "sh -c 'echo booted; echo \"$@\" > {}; exec sleep 300' --",
+                cmd_file.display()
+            ),
+            steer_key: None,
+            boot_keys: Vec::new(),
+            resume_flag: Some("-s"),
+        };
+        let mut request = spec(None);
+        request.resume = Some("ses_abc".to_owned());
+        let mut channel = TuiChannel::open(profile, &request, Some(guard.socket.clone())).unwrap();
+        channel.start_turn("BRIEF-TEXT").unwrap();
+        let dead = channel.target().to_owned();
+        crate::tmux::mux()
+            .kill_window(Some(&guard.socket), &dead)
+            .unwrap();
+        channel.steer("nudge-text").unwrap();
+        let pane = crate::tmux::mux()
+            .capture_pane(Some(&guard.socket), channel.target(), None)
+            .unwrap();
+        assert!(
+            !pane.contains("BRIEF-TEXT"),
+            "the brief must not be re-fed when a conversation resumes"
+        );
+        assert!(pane.contains("nudge-text"));
+        let command = std::fs::read_to_string(&cmd_file).unwrap();
+        let _ = std::fs::remove_file(&cmd_file);
+        assert!(
+            command.contains("-s"),
+            "resume flag missing from respawn command: {command}"
+        );
+        assert!(
+            command.contains("ses_abc"),
+            "resume id missing from respawn command: {command}"
         );
     }
 }
