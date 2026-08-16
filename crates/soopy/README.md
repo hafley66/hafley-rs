@@ -448,6 +448,29 @@ validation, batching, content checks, and filesystem/ref change reporting.
 
 ## Scale receipts
 
+### Producer edit receipts
+
+`ProducedEdit` is the producer boundary for byte and UTF-8 replacements. It
+stores an `ActionSpan`, replacement bytes, and one or more rule-bearing
+`ActionProducer` records. `ProducedEditBatch` is the lossless planner input;
+its `into_text_edits` expansion retains equivalent producer records while
+leaving conflicting replacements separate. `from_text_edit` and
+`from_utf8_text_edit` are executable adapters over Soopy's existing byte and
+UTF-8 shapes. `deduplicate_equivalent_edits` groups identical range and
+replacement pairs while retaining every producer and rule. Overlaps and
+different replacements remain separate for planner conflict handling.
+
+The ast-grep adapter is the dependency-free `from_ast_grep_parts` function.
+An integration extracts scalar fields from the real
+`ast_grep_core::source::Edit<S>` value and supplies source identity and its
+rule-bearing `ActionProducer`. Biome has the explicitly named
+`BiomeBatchMutationContract` conversion seam; no Biome language runtime is
+included in Soopy. The 100k conversion smoke is run with:
+
+```bash
+cargo run -p soopy --example 1_edit_producers_scale -- --edits 100000
+```
+
 The root `justfile` runs the release-built scale harness against an existing
 checkout. Receipts are written below ignored `target/soopy-scale/`. JSON keeps
 retained-handle construction, tracked-file enumeration, cold batched blob

@@ -89,10 +89,14 @@ impl From<SourceSpan> for ActionSpan {
 /// same original-file byte offset. The stage planner requires every competing
 /// insertion to carry a distinct explicit value before it chooses an order.
 /// It never infers that order from `id` or input traversal order.
+/// `rule` retains the rule or check identifier that emitted the edit and is
+/// omitted from JSON when absent for compatibility with schema version 1.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ActionProducer {
     pub id: String,
     pub same_offset_order: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule: Option<String>,
 }
 
 impl ActionProducer {
@@ -102,6 +106,7 @@ impl ActionProducer {
         Self {
             id: id.into(),
             same_offset_order: None,
+            rule: None,
         }
     }
 
@@ -111,7 +116,14 @@ impl ActionProducer {
         Self {
             id: id.into(),
             same_offset_order: Some(same_offset_order),
+            rule: None,
         }
+    }
+
+    /// Attach the rule or check identifier that emitted this producer output.
+    pub fn with_rule(mut self, rule: impl Into<String>) -> Self {
+        self.rule = Some(rule.into());
+        self
     }
 }
 
