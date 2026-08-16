@@ -1323,6 +1323,11 @@ fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
         parent: args.parent.clone(),
         goal: args.goal.clone(),
         registered_at: Some(bus::now_iso()),
+        base_sha: Some(spec.base_sha.clone()),
+        worktree_dir: args
+            .worktree_dir
+            .clone()
+            .map(|dir| dir.display().to_string()),
     };
     write_route(&dir, &args.to, route)?;
     append_message(&dir, &message)?;
@@ -2087,6 +2092,8 @@ fn run_adopt(
         parent: parent.map(str::to_owned),
         goal: goal.map(str::to_owned),
         registered_at: Some(bus::now_iso()),
+        base_sha: None,
+        worktree_dir: None,
     };
     write_route(&dir, name, route)?;
     println!("adopted {name} -> tmux {tmux_session}");
@@ -2160,6 +2167,12 @@ fn route_to_json(route: &Route) -> serde_json::Value {
     }
     if let Some(registered_at) = &route.registered_at {
         object.insert("registeredAt".into(), serde_json::json!(registered_at));
+    }
+    if let Some(base_sha) = &route.base_sha {
+        object.insert("baseSha".into(), serde_json::json!(base_sha));
+    }
+    if let Some(worktree_dir) = &route.worktree_dir {
+        object.insert("worktreeDir".into(), serde_json::json!(worktree_dir));
     }
     serde_json::Value::Object(object)
 }
@@ -2380,6 +2393,8 @@ mod tests {
                 parent: None,
                 goal: None,
                 registered_at: None,
+                base_sha: None,
+                worktree_dir: None,
             },
         )
         .unwrap();
@@ -2415,6 +2430,8 @@ mod tests {
             parent: None,
             goal: None,
             registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
         }
     }
 
@@ -2525,6 +2542,8 @@ mod tests {
             parent: None,
             goal: None,
             registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
         };
         assert_eq!(
             dead_reason(&route, &snapshot).as_deref(),
@@ -2559,6 +2578,8 @@ mod tests {
             parent: None,
             goal: None,
             registered_at: Some(ts.into()),
+            base_sha: None,
+            worktree_dir: None,
         }
     }
 
@@ -2886,6 +2907,8 @@ mod tests {
             parent: None,
             goal: Some("ship the edge".into()),
             registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
         };
         write_route(&dir, "child", route).unwrap();
         let routes = read_routes(&dir).unwrap();
@@ -2953,6 +2976,8 @@ mod tests {
             parent: parent.map(str::to_owned),
             goal: None,
             registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
         }
     }
 
@@ -3071,6 +3096,8 @@ mod tests {
                 parent: None,
                 goal: Some("ship the edge".into()),
                 registered_at: None,
+                base_sha: None,
+                worktree_dir: None,
             },
         );
         let messages = vec![dispatch("coordinator", "child")];
@@ -3804,6 +3831,8 @@ fn run_agent(cmd: AgentCmd) -> Result<()> {
                     parent,
                     goal: None,
                     registered_at: Some(bus::now_iso()),
+                    base_sha: None,
+                    worktree_dir: None,
                 },
             )?;
             println!("registered {name}");
@@ -4008,8 +4037,21 @@ fn run_lane_list(
                 continue;
             }
         }
+        let flags = escape_flags(&dir, name);
+        let mut suffix = String::new();
+        if let Some(flags) = &flags {
+            if flags.worktree_untouched {
+                suffix.push_str(" WORKTREE-UNTOUCHED");
+            }
+            if !flags.main_commits.is_empty() {
+                suffix.push_str(&format!(
+                    " MAIN-TREE-COMMIT-SUSPECT={}",
+                    flags.main_commits.join(",")
+                ));
+            }
+        }
         line(&format!(
-            "{} {} {} {} {} {} {} {}",
+            "{} {} {} {} {} {} {} {}{}",
             pad(state, 4),
             pad(name, 16),
             pad(&route.kind, 12),
@@ -4018,6 +4060,7 @@ fn run_lane_list(
             pad(route.model.as_deref().unwrap_or("-"), 46),
             pad(route.tmux.as_deref().unwrap_or("-"), 16),
             route.cwd.as_deref().unwrap_or("-"),
+            suffix,
         ));
     }
     Ok(())
@@ -4173,6 +4216,9 @@ fn run_lane_wait(mail_dir_arg: Option<&Path>, lane: &str, timeout_secs: u64) -> 
     ) {
         WaitOutcome::Result(rc) => {
             info!(lane, exit_code = rc, "lane result received");
+            if let Some(flags) = escape_flags(&dir, lane) {
+                print_escape_flags(lane, &flags);
+            }
             std::process::exit(rc)
         }
         WaitOutcome::Died => {
@@ -4271,6 +4317,45 @@ fn route_registered_at(dir: &std::path::Path, lane: &str) -> Option<u64> {
         .get(lane)
         .and_then(|route| route.registered_at.as_deref())
         .and_then(parse_iso_ms)
+}
+
+/// The worktree-escape flags for a lane, or `None` when the route records no
+/// worktree (a main-tree spawn) or no base sha to compare against.
+fn escape_flags(dir: &std::path::Path, lane: &str) -> Option<boop::worktree::EscapeFlags> {
+    let routes = bus::read_routes(dir).ok()?;
+    let route = routes.get(lane)?;
+    let worktree = std::path::Path::new(route.worktree_dir.as_deref()?);
+    let base_sha = route.base_sha.as_deref()?;
+    if base_sha.is_empty() {
+        return None;
+    }
+    let repo = lane::repo_root(worktree).ok()?;
+    let spawned_at_ms = route
+        .registered_at
+        .as_deref()
+        .and_then(parse_iso_ms)
+        .unwrap_or(0);
+    Some(boop::worktree::detect_escape(
+        worktree,
+        &repo,
+        base_sha,
+        spawned_at_ms,
+    ))
+}
+
+/// Print the loud escape flags to stdout. `WORKTREE-UNTOUCHED` names a lane
+/// whose worktree gained no commit; `MAIN-TREE-COMMIT-SUSPECT` lists the shas
+/// that landed on local main during the lane's run.
+fn print_escape_flags(lane: &str, flags: &boop::worktree::EscapeFlags) {
+    if flags.worktree_untouched {
+        println!("WORKTREE-UNTOUCHED {lane}: no new commits in its registered worktree");
+    }
+    if !flags.main_commits.is_empty() {
+        println!(
+            "MAIN-TREE-COMMIT-SUSPECT {lane}: {}",
+            flags.main_commits.join(" ")
+        );
+    }
 }
 
 fn parse_result_rc(body: &str) -> Option<i32> {
