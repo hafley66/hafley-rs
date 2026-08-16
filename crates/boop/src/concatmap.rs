@@ -29,6 +29,7 @@ pub struct Pair {
 }
 
 /// Loop configuration, one row per CLI flag.
+#[derive(Clone)]
 pub struct Args {
     pub template: Option<String>,
     pub mode: Option<String>,
@@ -566,12 +567,25 @@ fn poll_once(
     let jobs = coalesce_jobs(jobs, args.formula.coalesce);
     for job in &jobs {
         let key = job.key();
+        // A marker planted by a human or a prior hang skips the job before any
+        // attempt; the stat is the second test after the in-memory set.
+        if done.contains(&key) {
+            continue;
+        }
+        if marker_planted(&args.state_dir, &key.0, key.1) {
+            done.insert(key);
+            continue;
+        }
         // A failed rewrite retries, then drops the bundle; it never drops the
         // resident.
         for attempt in 1..=REWRITE_ATTEMPTS {
             // A marker planted mid-flight (e.g. while another bundle hung)
             // skips the bundle before the next attempt re-sends it.
             if done.contains(&key) {
+                break;
+            }
+            if marker_planted(&args.state_dir, &key.0, key.1) {
+                done.insert(key.clone());
                 break;
             }
             match process_job(job, store, rewriter, args, template, done) {
@@ -668,9 +682,17 @@ fn seed_cursor(args: &Args, store: &crate::Store) -> Result<i64> {
     load_or_seed_cursor(&args.state_dir, store)
 }
 
+/// True when a (session, id) done marker exists on disk, planted either by
+/// this process or by a human while the resident is mid-flight.
+fn marker_planted(state_dir: &Path, session: &str, id: i64) -> bool {
+    state_dir
+        .join("done")
+        .join(format!("{session}-{id}"))
+        .exists()
+}
+
 /// Done markers survive restarts: one empty file per processed (session, turn).
-fn load_done(state_dir: &Path) -> Result<BTreeSet<(String, i64)>> {
-    let dir = state_dir.join("done");
+fn load_done(state_dir: &Path) -> Result<BTreeSet<(String, i64)>> {    let dir = state_dir.join("done");
     std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
     let mut done = BTreeSet::new();
     for entry in std::fs::read_dir(&dir).with_context(|| format!("read {}", dir.display()))? {
@@ -1087,6 +1109,7 @@ mod tests {
         calls: AtomicUsize,
         reply: &'static str,
         hang_first: bool,
+        plant_done: Option<(PathBuf, String, i64)>,
     }
 
     impl Harness for FakeHarness {
@@ -1106,6 +1129,12 @@ mod tests {
         }
         fn one_shot(&self, _: &OneShotSpec) -> Result<String> {
             let n = self.calls.fetch_add(1, Ordering::SeqCst);
+            if n == 0 {
+                if let Some((dir, session, id)) = &self.plant_done {
+                    std::fs::create_dir_all(dir).unwrap();
+                    std::fs::write(dir.join(format!("{session}-{id}")), b"").unwrap();
+                }
+            }
             if self.hang_first && n == 0 {
                 std::thread::sleep(Duration::from_secs(3600));
             }
@@ -1195,6 +1224,7 @@ mod tests {
             calls: AtomicUsize::new(0),
             reply: "rewritten",
             hang_first: false,
+            plant_done: None,
         }));
         let args = window_args(temp_dir("oneshot_state"), temp_dir("oneshot_out"));
         let mut rewriter = Rewriter::OneShot {
@@ -1225,6 +1255,7 @@ mod tests {
             calls: AtomicUsize::new(0),
             reply: "rewritten",
             hang_first: true,
+            plant_done: None,
         }));
         let args = window_args(temp_dir("poison_state"), temp_dir("poison_out"));
         let mut rewriter = Rewriter::OneShot {
@@ -1243,6 +1274,55 @@ mod tests {
     }
 
     #[test]
+    fn a_planted_marker_skips_the_bundle_mid_flight() {
+        let (store, db_path) = store();
+        store.write_turn("ses", 1, 10, "assistant", "a1").unwrap();
+        store.write_turn("ses", 2, 11, "user", "u1").unwrap();
+        let state_dir = temp_dir("plant_state");
+        let out_dir = temp_dir("plant_out");
+        // The first one_shot call plants a done marker for the second window
+        // (id 2) before returning, as a human would mid-flight.
+        let harness: &'static FakeHarness = Box::leak(Box::new(FakeHarness {
+            calls: AtomicUsize::new(0),
+            reply: "rewritten",
+            hang_first: false,
+            plant_done: Some((state_dir.join("done"), "ses".to_owned(), 2)),
+        }));
+        let args = window_args(state_dir, out_dir.clone());
+        let mut rewriter = Rewriter::OneShot {
+            adapter: harness,
+            model: "fake-model".into(),
+            timeout: Duration::from_secs(5),
+        };
+        let mut done = BTreeSet::new();
+        poll_once(&store, &mut rewriter, &args, None, 0, &mut done).unwrap();
+        // The first window mapped, then the planted marker skipped the second.
+        assert_eq!(harness.calls.load(Ordering::SeqCst), 1);
+        assert!(!out_dir.join("ses").join("2.md").exists());
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[test]
+    fn from_start_and_explicit_cursor_beat_the_persisted_seed() {
+        let (store, db_path) = store();
+        let state_dir = temp_dir("seed_state");
+        std::fs::write(state_dir.join("cursor"), "42").unwrap();
+        let mut args = window_args(state_dir, temp_dir("seed_out"));
+        args.from_start = false;
+
+        let mut from_start = args.clone();
+        from_start.from_start = true;
+        assert_eq!(seed_cursor(&from_start, &store).unwrap(), 0);
+
+        let mut explicit = args.clone();
+        explicit.cursor = Some(7);
+        assert_eq!(seed_cursor(&explicit, &store).unwrap(), 7);
+
+        assert_eq!(seed_cursor(&args, &store).unwrap(), 42);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[test]
     fn chat_feed_carries_state_across_two_windows() {
         let (store, db_path) = store();
         store.project_discovered_session(&session_ref("s")).unwrap();
@@ -1250,6 +1330,7 @@ mod tests {
             calls: AtomicUsize::new(0),
             reply: "",
             hang_first: false,
+            plant_done: None,
         }));
         let turns = Arc::new(Mutex::new(Vec::new()));
         let mut rewriter = Rewriter::Chat {
