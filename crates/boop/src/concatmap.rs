@@ -209,7 +209,11 @@ fn wait_turn(channel: &mut dyn LaneChannel) -> Result<()> {
     while Instant::now() < deadline {
         match channel.poll_turn(CHAT_POLL)? {
             Some(end) if end.ok => return Ok(()),
-            Some(end) => bail!("resident chat turn failed: {}", end.detail),
+            Some(end) => {
+                // Clear the wedged turn or the retry piles onto the stuck queue.
+                channel.interrupt()?;
+                bail!("resident chat turn failed: {}", end.detail)
+            }
             None => continue,
         }
     }
@@ -493,6 +497,8 @@ fn poll_once(
             }
             window
                 .into_iter()
+                // Empty `said` islands (tool-call placeholders) map to nothing.
+                .filter(|row| !row.text.trim().is_empty())
                 .filter(|row| !done.contains(&(args.session.clone().unwrap_or_default(), row.id)))
                 .map(|row| Job::Window {
                     session: args.session.clone().unwrap_or_default(),
@@ -680,6 +686,43 @@ fn passes_until_fixed(adapter: &dyn Harness, msg: &str, model: &str, cap: u32) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::channel::{Delivery, TurnEnd};
+
+    struct FlakedChannel {
+        polls: usize,
+        interrupted: usize,
+    }
+
+    impl LaneChannel for FlakedChannel {
+        fn conversation_id(&self) -> Option<String> {
+            Some("s".into())
+        }
+        fn start_turn(&mut self, _text: &str) -> Result<()> {
+            Ok(())
+        }
+        fn steer(&mut self, _text: &str) -> Result<Delivery> {
+            Ok(Delivery::MidTurn)
+        }
+        fn poll_turn(&mut self, _timeout: Duration) -> Result<Option<TurnEnd>> {
+            self.polls += 1;
+            Ok(Some(TurnEnd::flaked("wedged")))
+        }
+        fn interrupt(&mut self) -> Result<()> {
+            self.interrupted += 1;
+            Ok(())
+        }
+        fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_flaked_turn_is_cleared_before_the_error_surfaces() {
+        let mut channel = FlakedChannel { polls: 0, interrupted: 0 };
+        assert!(wait_turn(&mut channel).is_err());
+        assert_eq!(channel.polls, 1);
+        assert_eq!(channel.interrupted, 1);
+    }
 
     fn row(session: &str, turn: i64, ts: i64, role: &str, said: &str) -> TurnRow {
         TurnRow {

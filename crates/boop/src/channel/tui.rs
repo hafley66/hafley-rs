@@ -179,6 +179,18 @@ impl LaneChannel for TuiChannel {
         Ok(())
     }
 
+    fn interrupt(&mut self) -> Result<()> {
+        info!(
+            harness = self.profile.harness,
+            tmux_target = self.target,
+            "tui interrupt clearing a wedged turn"
+        );
+        crate::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, "Escape")?;
+        self.turn_open = false;
+        self.settled_since = None;
+        Ok(())
+    }
+
     fn steer(&mut self, text: &str) -> Result<Delivery> {
         info!(
             harness = self.profile.harness,

@@ -102,6 +102,13 @@ pub trait LaneChannel: Send {
     /// still running, which is when the supervisor offers it new text.
     fn poll_turn(&mut self, timeout: std::time::Duration) -> Result<Option<TurnEnd>>;
 
+    /// Clear a turn that will never complete (a message queued but never run)
+    /// so a retry starts from an idle harness; no-op without a clear key.
+    fn interrupt(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+
     /// Epoch millis of the newest harness-side write for this conversation.
     /// `None` means no signal; the supervisor then measures from turn start.
     fn last_activity_ms(&self) -> Option<u64> {
