@@ -651,25 +651,6 @@ impl Store {
         Ok(offset as u64)
     }
 
-    pub(crate) fn set_cursor_record(
-        &self,
-        session: &str,
-        path: &str,
-        record_id: &str,
-        turn: u64,
-        timestamp: u64,
-    ) -> Result<()> {
-        let sid = self.session_id(session)?;
-        let path_id = self.intern("dict_path", path)?;
-        let record_id_id = self.intern("dict_record", record_id)?;
-        self.connection.execute(
-            "UPDATE sync_cursor SET record_id_id = ?3, turn = ?4, timestamp = ?5
-             WHERE session_id = ?1 AND path_id = ?2",
-            params![sid, path_id, record_id_id, turn as i64, timestamp as i64],
-        )?;
-        Ok(())
-    }
-
     /// The consumed byte offset for a transcript, 0 when never synced. The
     /// sync freshness gate compares it to `metadata.len()` to skip re-reads.
     pub fn cursor_offset(&self, session: &str, path: &str) -> Result<u64> {
@@ -1321,6 +1302,18 @@ pub fn project_transcript(
         turn: store.max_turn(&session.session_id)?,
         stat: SyncStat::default(),
     };
+    let session_id = store.session_id(&session.session_id)?;
+    let path = session.path.display().to_string();
+    let path_id = store.intern("dict_path", &path)?;
+    let mut record_intern = store.connection.prepare_cached(
+        "INSERT INTO dict_record (value) VALUES (?1)
+         ON CONFLICT(value) DO UPDATE SET value = excluded.value
+         RETURNING id",
+    )?;
+    let mut cursor_update = store.connection.prepare_cached(
+        "UPDATE sync_cursor SET record_id_id = ?3, turn = ?4, timestamp = ?5
+         WHERE session_id = ?1 AND path_id = ?2",
+    )?;
     for line in &result.lines {
         project_line(store, session, line, &mut walk)?;
         let value: serde_json::Value = serde_json::from_slice(&line.bytes).unwrap_or_default();
@@ -1328,17 +1321,19 @@ pub fn project_transcript(
             .get("uuid")
             .and_then(serde_json::Value::as_str)
             .unwrap_or("record");
-        store.set_cursor_record(
-            &session.session_id,
-            &session.path.display().to_string(),
-            record_id,
-            walk.turn,
+        let record_id_id: i64 =
+            record_intern.query_row(rusqlite::params![record_id], |row| row.get(0))?;
+        cursor_update.execute(rusqlite::params![
+            session_id,
+            path_id,
+            record_id_id,
+            walk.turn as i64,
             value
                 .get("timestamp")
                 .and_then(serde_json::Value::as_str)
                 .and_then(crate::harness::claude::parse_iso_ms)
-                .unwrap_or(0),
-        )?;
+                .unwrap_or(0) as i64,
+        ])?;
     }
     Ok(crate::harness::Ingested {
         stat: walk.stat,
@@ -1885,12 +1880,24 @@ mod tests {
     use std::fs::OpenOptions;
     use std::io::Write;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use crate::harness::SessionRef;
 
     use rusqlite::params;
+    use rusqlite::trace::{TraceEvent, TraceEventCodes};
 
-    use super::{sync_session, sync_session_with_pid, Store};
+    use super::{project_transcript, sync_session, sync_session_with_pid, Store};
+
+    static CURSOR_SQL: AtomicUsize = AtomicUsize::new(0);
+
+    fn count_cursor_sql(event: TraceEvent<'_>) {
+        if let TraceEvent::Stmt(_, sql) = event {
+            if sql.contains("dict_record") || sql.contains("sync_cursor") {
+                CURSOR_SQL.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
 
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("boop_rel_{}_{}", std::process::id(), name))
@@ -2207,6 +2214,52 @@ mod tests {
         drop(store);
         let _ = std::fs::remove_file(&db_path);
         let _ = std::fs::remove_file(&lines_path);
+    }
+
+    #[test]
+    #[cfg(feature = "agent-read")]
+    fn claude_cursor_metadata_is_two_statements_per_line_and_resumes() {
+        let db_path = temp_path("cursor-batch-db");
+        let _ = std::fs::remove_file(&db_path);
+        let store = Store::open(db_path.clone()).unwrap();
+        let fixture_paths = [
+            "tests/fixtures/claude/bench/bench-claude-0001.jsonl",
+            "tests/fixtures/claude/bench/bench-claude-0002.jsonl",
+            "tests/fixtures/claude/bench/bench-claude-0003.jsonl",
+            "tests/fixtures/claude/bench/bench-claude-0004.jsonl",
+        ];
+        let total_lines: usize = fixture_paths
+            .iter()
+            .map(|path| std::fs::read_to_string(path).unwrap().lines().count())
+            .sum();
+        assert_eq!(total_lines, 600);
+
+        CURSOR_SQL.store(0, Ordering::Relaxed);
+        store
+            .connection()
+            .trace_v2(TraceEventCodes::SQLITE_TRACE_STMT, Some(count_cursor_sql));
+        let mut first_cursor = None;
+        for (index, path) in fixture_paths.iter().enumerate() {
+            let mut session = session_for(std::path::Path::new(path));
+            session.session_id = format!("cursor-fixture-{index}");
+            let ingested = project_transcript(&store, &session, 0).unwrap();
+            assert!(ingested.next_cursor > 0);
+            assert!(ingested.stat.written > 0);
+            if first_cursor.is_none() {
+                first_cursor = Some((session, ingested.next_cursor));
+            }
+        }
+        store.connection().trace_v2(TraceEventCodes::empty(), None);
+        assert_eq!(CURSOR_SQL.load(Ordering::Relaxed), total_lines * 2);
+
+        let (session, cursor) = first_cursor.unwrap();
+        let resumed = project_transcript(&store, &session, cursor).unwrap();
+        assert_eq!(resumed.next_cursor, cursor);
+        assert_eq!(resumed.stat.written, 0);
+        assert_eq!(resumed.stat.dropped, 0);
+
+        drop(store);
+        let _ = std::fs::remove_file(&db_path);
     }
 
     #[test]
