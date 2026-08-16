@@ -274,6 +274,8 @@ mod tests {
                 parent: None,
                 goal: None,
                 registered_at: None,
+                base_sha: None,
+                worktree_dir: None,
             },
         );
         let messages = vec![Message {
@@ -406,6 +408,8 @@ mod tests {
                     parent: None,
                     goal: None,
                     registered_at: None,
+                    base_sha: None,
+                    worktree_dir: None,
                 },
             );
         }

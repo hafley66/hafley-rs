@@ -44,6 +44,12 @@ pub struct Route {
     /// When this lane last registered (`lane create`/dispatch), ISO-8601. The
     /// wait since-boundary that skips a previous run's result rows.
     pub registered_at: Option<String>,
+    /// The base sha the spawn branched from. The `lane wait`/`lane list`
+    /// worktree-escape rail compares the registered worktree HEAD against it.
+    pub base_sha: Option<String>,
+    /// The worktree the spawn should have worked in; `None` for a main-tree
+    /// spawn (no worktree was created).
+    pub worktree_dir: Option<String>,
 }
 
 /// Read the route map out of the `--mail-dir` registry. Corrupt JSON is an
@@ -94,6 +100,9 @@ fn route_from_value(entry: &Value) -> Route {
         goal: string_field(object, "goal"),
         registered_at: string_field(object, "registeredAt")
             .or_else(|| string_field(object, "registered_at")),
+        base_sha: string_field(object, "baseSha").or_else(|| string_field(object, "base_sha")),
+        worktree_dir: string_field(object, "worktreeDir")
+            .or_else(|| string_field(object, "worktree_dir")),
     }
 }
 
@@ -111,6 +120,8 @@ impl Route {
             parent: None,
             goal: None,
             registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
         }
     }
 }

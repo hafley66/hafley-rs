@@ -733,6 +733,8 @@ mod tests {
             parent: None,
             goal: Some("goal".into()),
             registered_at: Some("2026-08-14T00:00:00Z".into()),
+            base_sha: None,
+            worktree_dir: None,
         }
     }
 

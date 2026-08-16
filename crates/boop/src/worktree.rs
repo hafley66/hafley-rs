@@ -128,6 +128,75 @@ fn run_shell(cwd: &PathBuf, command: &str) -> Result<()> {
     Ok(())
 }
 
+/// The two flags a `lane wait`/`lane list` prints when a lane's commits landed
+/// outside its registered worktree. Detection only: the coordinator reads these
+/// and decides, so nothing here resets or hard-fails.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct EscapeFlags {
+    /// The registered worktree has zero new commits: its HEAD still equals the
+    /// base sha the spawn branched from.
+    pub worktree_untouched: bool,
+    /// Short shas on the repo's local `main` that are not on `origin/main` and
+    /// are newer than the lane's spawn.
+    pub main_commits: Vec<String>,
+}
+
+impl EscapeFlags {
+    pub fn is_empty(&self) -> bool {
+        !self.worktree_untouched && self.main_commits.is_empty()
+    }
+}
+
+/// Compare a lane's worktree HEAD against the base sha the spawn recorded, and
+/// scan the repo's local `main` for commits the lane may have left there. A git
+/// failure is never an error: the rail only detects, it never blocks.
+pub fn detect_escape(
+    worktree: &Path,
+    repo: &Path,
+    base_sha: &str,
+    spawned_at_ms: u64,
+) -> EscapeFlags {
+    let worktree_untouched = match (git_stdout(worktree, &["rev-parse", "HEAD"]), base_sha) {
+        (Some(head), base) if !base.is_empty() => head == base,
+        _ => false,
+    };
+    EscapeFlags {
+        worktree_untouched,
+        main_commits: suspect_main_commits(repo, (spawned_at_ms / 1000) as i64),
+    }
+}
+
+/// Shas on the repo's local `main` that are not on `origin/main` and whose
+/// commit time is newer than `since_secs` (unix seconds).
+fn suspect_main_commits(repo: &Path, since_secs: i64) -> Vec<String> {
+    let Some(output) = git_stdout(repo, &["log", "origin/main..main", "--format=%H %ct"]) else {
+        return Vec::new();
+    };
+    output
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split_whitespace();
+            let sha = parts.next()?.to_owned();
+            let committed = parts.next()?.parse::<i64>().ok()?;
+            (committed > since_secs).then_some(sha)
+        })
+        .collect()
+}
+
+/// The trimmed stdout of `git -C repo <args>`, or `None` when git fails.
+fn git_stdout(repo: &Path, args: &[&str]) -> Option<String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     /// A repo with no justfile needs no warmup, so the spawn path stays quiet
@@ -357,5 +426,101 @@ mod tests {
             "non-fast-forward main-tree spawn must be refused"
         );
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    fn git(repo: &std::path::Path, args: &[&str]) {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// A repo on `main` with a seed commit exposed as `origin/main`, plus a
+    /// linked worktree checked out at the seed (the base) on `feature/x`.
+    struct EscapeRepo {
+        repo: std::path::PathBuf,
+        worktree: std::path::PathBuf,
+        base: String,
+    }
+
+    impl EscapeRepo {
+        fn new(tag: &str) -> EscapeRepo {
+            let root =
+                std::env::temp_dir().join(format!("boop-escape-{tag}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            let repo = root.join("repo");
+            let worktree = root.join("wt");
+            std::fs::create_dir_all(&repo).unwrap();
+            let base = init_repo(&repo);
+            // Expose the seed as origin/main, the default base a spawn reads.
+            git(&repo, &["update-ref", "refs/remotes/origin/main", &base]);
+            git(
+                &repo,
+                &[
+                    "worktree",
+                    "add",
+                    "-q",
+                    "-b",
+                    "feature/x",
+                    &worktree.display().to_string(),
+                    &base,
+                ],
+            );
+            EscapeRepo {
+                repo,
+                worktree,
+                base,
+            }
+        }
+    }
+
+    impl Drop for EscapeRepo {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(self.repo.parent().unwrap().to_path_buf());
+        }
+    }
+
+    /// RECEIPT. A lane that made no commit in its worktree leaves the worktree
+    /// HEAD on the base sha; the rail flags it untouched.
+    #[test]
+    fn an_untouched_worktree_is_flagged() {
+        let repo = EscapeRepo::new("untouched");
+        let flags = super::detect_escape(&repo.worktree, &repo.repo, &repo.base, 0);
+        assert!(flags.worktree_untouched, "flags: {flags:?}");
+        assert!(flags.main_commits.is_empty(), "flags: {flags:?}");
+    }
+
+    /// RECEIPT. A commit on the repo's local main (not on origin/main) during
+    /// the lane's run is listed as a main-tree suspect; the untouched worktree
+    /// is the pairing the escape issue reported.
+    #[test]
+    fn a_local_main_commit_is_flagged_suspect() {
+        let repo = EscapeRepo::new("main-commit");
+        std::fs::write(repo.repo.join("escape.txt"), "escaped").unwrap();
+        git(&repo.repo, &["add", "-A"]);
+        git(&repo.repo, &["commit", "-qm", "escaped to main"]);
+        let flags = super::detect_escape(&repo.worktree, &repo.repo, &repo.base, 0);
+        assert_eq!(flags.main_commits.len(), 1, "flags: {flags:?}");
+        assert!(flags.worktree_untouched, "flags: {flags:?}");
+    }
+
+    /// RECEIPT. A lane that committed inside its worktree and left main alone
+    /// prints neither flag.
+    #[test]
+    fn a_proper_worktree_commit_prints_no_flag() {
+        let repo = EscapeRepo::new("proper");
+        std::fs::write(repo.worktree.join("done.txt"), "done").unwrap();
+        git(&repo.worktree, &["add", "-A"]);
+        git(&repo.worktree, &["commit", "-qm", "work in the worktree"]);
+        let flags = super::detect_escape(&repo.worktree, &repo.repo, &repo.base, 0);
+        assert!(!flags.worktree_untouched, "flags: {flags:?}");
+        assert!(flags.main_commits.is_empty(), "flags: {flags:?}");
     }
 }

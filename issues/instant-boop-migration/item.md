@@ -1,6 +1,6 @@
 ---
 created: 2026-08-14
-updated: 2026-08-14
+updated: 2026-08-15
 type: task
 status: open
 priority: high
@@ -9,7 +9,7 @@ labels: [domain-instant, domain-boop, intent-migration, artifact-integration]
 lane: instant-consumer
 lane_seq: 11
 collision: [instant-agent-panels]
-blocked_by: ['@agent-activity-projection', '@lane-status-command']
+blocked_by: ['@agent-activity-projection', '@lane-status-command', '@agent-session-graph-audit', '@boop-session-graph']
 ---
 
 # 011 Migrate Instant agent panels to Boop
@@ -48,3 +48,9 @@ The body invokes one structured Boop command through the existing runner boundar
 ## Implementation Notes
 
 Instant owns panel state, terminal layout, and rendering. Boop owns harness acquisition, transcript normalization, trace/lane identity, runtime observation, and activity derivation.
+
+## Comments
+
+### 2026-08-15T16:14:37Z · @codex
+
+Session-graph contract and task split live in crates/boop/plans/2026-08-15-agent-session-graph.md. Replace cass_swarm_status vocabulary and acquisition with boop agent sessions JSON; preserve Instant-owned native-descendant subtraction and pane ownership.

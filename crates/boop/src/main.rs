@@ -43,7 +43,8 @@ edge and stay invisible to tracking:
   coordinator, --harness to the one the model spelling names (gpt-* codex,
   provider/model opencode, kimi-* kimi).
   Overrides: --lane <id>, --tmux <name>, --base-sha <sha>, --harness <id>.
-  Model preset: --preset flash4 resolves through the platform config directory's boop/config.json.
+  Model preset: --preset flash4 resolves through the platform config directory's
+  boop/config.json; `boop config presets` lists every name with its model and harness.
   One shot: worktree at base sha + spawn + route registration.
   Always --dry-run first; the printed `cmd:` line is the literal spawn.
 
@@ -442,6 +443,9 @@ enum ConfigCmd {
     /// Print the loaded config as pretty JSON, including the defaults a
     /// missing file produces.
     Show,
+    /// One row per model preset: name, model, variant, the harness the model
+    /// spelling names, and which row `default-model-preset` points at.
+    Presets,
 }
 
 /// Write one line, treating a closed pipe as a normal end. Rust masks SIGPIPE,
@@ -478,7 +482,7 @@ fn main() -> Result<()> {
         SubCmd::Events { query } => run_query(&query),
         SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild),
         #[cfg(feature = "agent-read")]
-        SubCmd::Agent { cmd } => run_public_agent_summary(&registry, cmd),
+        SubCmd::Agent { cmd } => run_public_agent_command(&registry, cmd),
         SubCmd::Follow {} => run_follow(&registry),
         SubCmd::Chat {
             query,
@@ -828,6 +832,7 @@ fn sync_all(
         let offsets = store.all_cursor_offsets()?;
         for adapter in registry.all() {
             for session in adapter.sessions()? {
+                store.project_discovered_session(&session)?;
                 // Freshness gate: a transcript whose length still equals its
                 // consumed cursor needs no re-read (walking+stat-ing all files
                 // costs ~0.02s; opening every 2.86 GB corpus does not). A
@@ -1318,6 +1323,11 @@ fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
         parent: args.parent.clone(),
         goal: args.goal.clone(),
         registered_at: Some(bus::now_iso()),
+        base_sha: Some(spec.base_sha.clone()),
+        worktree_dir: args
+            .worktree_dir
+            .clone()
+            .map(|dir| dir.display().to_string()),
     };
     write_route(&dir, &args.to, route)?;
     append_message(&dir, &message)?;
@@ -2082,6 +2092,8 @@ fn run_adopt(
         parent: parent.map(str::to_owned),
         goal: goal.map(str::to_owned),
         registered_at: Some(bus::now_iso()),
+        base_sha: None,
+        worktree_dir: None,
     };
     write_route(&dir, name, route)?;
     println!("adopted {name} -> tmux {tmux_session}");
@@ -2155,6 +2167,12 @@ fn route_to_json(route: &Route) -> serde_json::Value {
     }
     if let Some(registered_at) = &route.registered_at {
         object.insert("registeredAt".into(), serde_json::json!(registered_at));
+    }
+    if let Some(base_sha) = &route.base_sha {
+        object.insert("baseSha".into(), serde_json::json!(base_sha));
+    }
+    if let Some(worktree_dir) = &route.worktree_dir {
+        object.insert("worktreeDir".into(), serde_json::json!(worktree_dir));
     }
     serde_json::Value::Object(object)
 }
@@ -2375,6 +2393,8 @@ mod tests {
                 parent: None,
                 goal: None,
                 registered_at: None,
+                base_sha: None,
+                worktree_dir: None,
             },
         )
         .unwrap();
@@ -2410,6 +2430,8 @@ mod tests {
             parent: None,
             goal: None,
             registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
         }
     }
 
@@ -2520,6 +2542,8 @@ mod tests {
             parent: None,
             goal: None,
             registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
         };
         assert_eq!(
             dead_reason(&route, &snapshot).as_deref(),
@@ -2554,6 +2578,8 @@ mod tests {
             parent: None,
             goal: None,
             registered_at: Some(ts.into()),
+            base_sha: None,
+            worktree_dir: None,
         }
     }
 
@@ -2881,6 +2907,8 @@ mod tests {
             parent: None,
             goal: Some("ship the edge".into()),
             registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
         };
         write_route(&dir, "child", route).unwrap();
         let routes = read_routes(&dir).unwrap();
@@ -2948,6 +2976,8 @@ mod tests {
             parent: parent.map(str::to_owned),
             goal: None,
             registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
         }
     }
 
@@ -3066,6 +3096,8 @@ mod tests {
                 parent: None,
                 goal: Some("ship the edge".into()),
                 registered_at: None,
+                base_sha: None,
+                worktree_dir: None,
             },
         );
         let messages = vec![dispatch("coordinator", "child")];
@@ -3109,6 +3141,7 @@ mod tests {
 // to REST is 1:1 per plans/2026-08-09-boop-openapi.yaml.
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum BeepCmd {
     /// Harness adapters and what each can do.
@@ -3383,6 +3416,26 @@ enum AgentSummaryCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
+    /// Synchronize transcripts, then emit the native session graph.
+    Sessions {
+        /// Restrict session and shell rows to one working directory.
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+        /// Include historical and inactive rows.
+        #[arg(long)]
+        history: bool,
+        /// The public graph contract currently emits JSON.
+        #[arg(long, value_enum, default_value_t = AgentSessionGraphFormat::Json)]
+        format: AgentSessionGraphFormat,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+}
+
+#[cfg(feature = "agent-read")]
+#[derive(Clone, Copy, ValueEnum)]
+enum AgentSessionGraphFormat {
+    Json,
 }
 
 #[derive(Subcommand)]
@@ -3778,6 +3831,8 @@ fn run_agent(cmd: AgentCmd) -> Result<()> {
                     parent,
                     goal: None,
                     registered_at: Some(bus::now_iso()),
+                    base_sha: None,
+                    worktree_dir: None,
                 },
             )?;
             println!("registered {name}");
@@ -3982,8 +4037,21 @@ fn run_lane_list(
                 continue;
             }
         }
+        let flags = escape_flags(&dir, name);
+        let mut suffix = String::new();
+        if let Some(flags) = &flags {
+            if flags.worktree_untouched {
+                suffix.push_str(" WORKTREE-UNTOUCHED");
+            }
+            if !flags.main_commits.is_empty() {
+                suffix.push_str(&format!(
+                    " MAIN-TREE-COMMIT-SUSPECT={}",
+                    flags.main_commits.join(",")
+                ));
+            }
+        }
         line(&format!(
-            "{} {} {} {} {} {} {} {}",
+            "{} {} {} {} {} {} {} {}{}",
             pad(state, 4),
             pad(name, 16),
             pad(&route.kind, 12),
@@ -3992,6 +4060,7 @@ fn run_lane_list(
             pad(route.model.as_deref().unwrap_or("-"), 46),
             pad(route.tmux.as_deref().unwrap_or("-"), 16),
             route.cwd.as_deref().unwrap_or("-"),
+            suffix,
         ));
     }
     Ok(())
@@ -4147,6 +4216,9 @@ fn run_lane_wait(mail_dir_arg: Option<&Path>, lane: &str, timeout_secs: u64) -> 
     ) {
         WaitOutcome::Result(rc) => {
             info!(lane, exit_code = rc, "lane result received");
+            if let Some(flags) = escape_flags(&dir, lane) {
+                print_escape_flags(lane, &flags);
+            }
             std::process::exit(rc)
         }
         WaitOutcome::Died => {
@@ -4245,6 +4317,45 @@ fn route_registered_at(dir: &std::path::Path, lane: &str) -> Option<u64> {
         .get(lane)
         .and_then(|route| route.registered_at.as_deref())
         .and_then(parse_iso_ms)
+}
+
+/// The worktree-escape flags for a lane, or `None` when the route records no
+/// worktree (a main-tree spawn) or no base sha to compare against.
+fn escape_flags(dir: &std::path::Path, lane: &str) -> Option<boop::worktree::EscapeFlags> {
+    let routes = bus::read_routes(dir).ok()?;
+    let route = routes.get(lane)?;
+    let worktree = std::path::Path::new(route.worktree_dir.as_deref()?);
+    let base_sha = route.base_sha.as_deref()?;
+    if base_sha.is_empty() {
+        return None;
+    }
+    let repo = lane::repo_root(worktree).ok()?;
+    let spawned_at_ms = route
+        .registered_at
+        .as_deref()
+        .and_then(parse_iso_ms)
+        .unwrap_or(0);
+    Some(boop::worktree::detect_escape(
+        worktree,
+        &repo,
+        base_sha,
+        spawned_at_ms,
+    ))
+}
+
+/// Print the loud escape flags to stdout. `WORKTREE-UNTOUCHED` names a lane
+/// whose worktree gained no commit; `MAIN-TREE-COMMIT-SUSPECT` lists the shas
+/// that landed on local main during the lane's run.
+fn print_escape_flags(lane: &str, flags: &boop::worktree::EscapeFlags) {
+    if flags.worktree_untouched {
+        println!("WORKTREE-UNTOUCHED {lane}: no new commits in its registered worktree");
+    }
+    if !flags.main_commits.is_empty() {
+        println!(
+            "MAIN-TREE-COMMIT-SUSPECT {lane}: {}",
+            flags.main_commits.join(" ")
+        );
+    }
 }
 
 fn parse_result_rc(body: &str) -> Option<i32> {
@@ -4846,13 +4957,54 @@ fn run_agent_summary(format: AgentSummaryFormat, mail_dir_arg: Option<&Path>) ->
 }
 
 #[cfg(feature = "agent-read")]
-fn run_public_agent_summary(registry: &Registry, cmd: AgentSummaryCmd) -> Result<()> {
+fn run_public_agent_command(registry: &Registry, cmd: AgentSummaryCmd) -> Result<()> {
     match cmd {
         AgentSummaryCmd::Summary { format, mail_dir } => after_agent_summary_sync(
             |liveness| sync_all(registry, false, false, liveness),
             || run_agent_summary(format, mail_dir.as_deref()),
         ),
+        AgentSummaryCmd::Sessions {
+            cwd,
+            history,
+            format: AgentSessionGraphFormat::Json,
+            mail_dir,
+        } => after_agent_summary_sync(
+            |liveness| sync_all(registry, false, false, liveness),
+            || run_agent_sessions(cwd, history, mail_dir.as_deref()),
+        ),
     }
+}
+
+#[cfg(feature = "agent-read")]
+fn run_agent_sessions(
+    cwd: Option<PathBuf>,
+    include_history: bool,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let store = open_ro_store()?;
+    let dir = mail_dir(mail_dir_arg)?;
+    let routes = bus::read_routes(&dir)?;
+    let mut messages = Vec::new();
+    for path in bus::read_boxes(&dir)? {
+        messages.extend(bus::parse_box(&path));
+    }
+    let processes = boop::proc::SysinfoSnapshot::capture()?;
+    let graph = boop::load_agent_session_graph_with_runtime(
+        &store,
+        boop::AgentSessionGraphQuery {
+            cwd,
+            include_history,
+        },
+        boop::AgentSessionGraphRuntime {
+            routes: &routes,
+            messages: &messages,
+            multiplexer: boop::tmux::mux(),
+            tmux_socket: None,
+            processes: &processes,
+        },
+    )?;
+    line(&serde_json::to_string(&graph)?);
+    Ok(())
 }
 
 #[cfg(feature = "agent-read")]
@@ -5011,8 +5163,64 @@ fn run_config(cmd: ConfigCmd) -> Result<()> {
     match cmd {
         ConfigCmd::Path => line(&config::default_path()?.display().to_string()),
         ConfigCmd::Show => line(&config::show(&config::default_path()?)?),
+        ConfigCmd::Presets => line(&presets_table()?),
     }
     Ok(())
+}
+
+/// Each preset resolved to model, variant, and the harness the model spelling
+/// names, with the `default-model-preset` row marked.
+fn presets_table() -> Result<String> {
+    let path = config::default_path()?;
+    let config = config::load(&path)?;
+    let mut rows: Vec<[String; 5]> = vec![[
+        "PRESET".into(),
+        "MODEL".into(),
+        "VARIANT".into(),
+        "HARNESS".into(),
+        "DEFAULT".into(),
+    ]];
+    for name in config.model_presets.keys() {
+        let preset = config::resolve_preset(name, &path)?;
+        let harness = lane::harness_for_model(&preset.model)?
+            .map(|harness| harness.into_owned())
+            .unwrap_or_else(|| "?".to_owned());
+        let default = if config.default_model_preset.as_deref() == Some(name) {
+            "*"
+        } else {
+            ""
+        };
+        rows.push([
+            name.clone(),
+            preset.model,
+            preset.variant.unwrap_or_default(),
+            harness,
+            default.to_owned(),
+        ]);
+    }
+    if rows.len() == 1 {
+        return Ok(format!("no model presets in {}", path.display()));
+    }
+    let mut widths = [0usize; 5];
+    for row in &rows {
+        for (width, cell) in widths.iter_mut().zip(row) {
+            *width = (*width).max(cell.len());
+        }
+    }
+    let table = rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .zip(widths)
+                .map(|(cell, width)| format!("{cell:<width$}"))
+                .collect::<Vec<_>>()
+                .join("  ")
+                .trim_end()
+                .to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    Ok(table)
 }
 
 /// The `db usage` alias's report SQL: totals with cost over the whole store.

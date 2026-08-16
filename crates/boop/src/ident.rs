@@ -692,6 +692,24 @@ impl Store {
         Ok(out)
     }
 
+    /// Project discovery metadata independently of transcript bytes. Harness
+    /// discovery is authoritative for identity, cwd, activity, and native
+    /// parent relation even when a transcript is empty or unchanged.
+    pub fn project_discovered_session(&self, session: &SessionRef) -> Result<()> {
+        self.upsert_session_row(
+            &session.session_id,
+            session.harness,
+            &session.nickname,
+            session.cwd.as_deref(),
+            session.git_branch.as_deref(),
+            session.modified_ms,
+        )?;
+        if let Some(parent) = &session.parent {
+            self.ensure_edge(parent, &session.session_id, "spawned")?;
+        }
+        Ok(())
+    }
+
     /// Record a spawn edge between two known sessions, stamped at the current
     /// wall clock.
     pub fn add_edge(&self, parent: &str, child: &str, kind: &str) -> Result<()> {
@@ -718,6 +736,24 @@ impl Store {
                last_ts = excluded.last_ts,
                n = agent_edge.n + 1",
             params![parent_id, child_id, kind_id, ts as i64],
+        )?;
+        Ok(())
+    }
+
+    fn ensure_edge(&self, parent: &str, child: &str, kind: &str) -> Result<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+            .unwrap_or(0);
+        let parent_id = self.session_id(parent)?;
+        let child_id = self.session_id(child)?;
+        let kind_id = self.intern("dict_edekind", kind)?;
+        self.connection.execute(
+            "INSERT INTO agent_edge
+               (parent_session_id, child_session_id, edge_kind_id, first_ts, last_ts, n)
+             VALUES (?1, ?2, ?3, ?4, ?4, 1)
+             ON CONFLICT(parent_session_id, child_session_id, edge_kind_id) DO NOTHING",
+            params![parent_id, child_id, kind_id, now as i64],
         )?;
         Ok(())
     }
@@ -1253,19 +1289,7 @@ pub fn sync_session_with_pid(
         pid,
         session.tmux.as_deref(),
     )?;
-    if ingested.stat.written > 0 || ingested.stat.usage_written > 0 {
-        store.upsert_session_row(
-            &session.session_id,
-            session.harness,
-            &session.nickname,
-            session.cwd.as_deref(),
-            session.git_branch.as_deref(),
-            session.modified_ms,
-        )?;
-        if let Some(parent) = &session.parent {
-            store.add_edge(parent, &session.session_id, "spawned")?;
-        }
-    }
+    store.project_discovered_session(session)?;
     store.set_cursor(&session.session_id, &key, ingested.next_cursor)?;
     Ok(ingested.stat)
 }
@@ -2073,6 +2097,40 @@ mod tests {
             tmux_socket: None,
             parent: None,
         }
+    }
+
+    #[test]
+    fn discovery_projects_empty_unchanged_session_and_parent_edge() {
+        let (path, store) = fresh_store("discovery-empty");
+        let transcript = temp_path("discovery-empty.jsonl");
+        let _ = std::fs::remove_file(&transcript);
+        std::fs::File::create(&transcript).unwrap();
+        let session = SessionRef {
+            harness: "claude",
+            session_id: "empty-child".into(),
+            nickname: "empty-child".into(),
+            path: transcript.clone(),
+            cwd: Some("/repo".into()),
+            git_branch: None,
+            modified_ms: 7,
+            size: 0,
+            tmux: None,
+            tmux_socket: None,
+            parent: Some("empty-parent".into()),
+        };
+        store.project_discovered_session(&session).unwrap();
+        let graph_row: i64 = store
+            .connection()
+            .query_row(
+                "SELECT COUNT(*) FROM agent_session s JOIN dict_session d ON d.id = s.session_id WHERE d.value = 'empty-child'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(graph_row, 1);
+        assert_eq!(store.edge_rows(Some("empty-child")).unwrap().len(), 1);
+        let _ = std::fs::remove_file(transcript);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
