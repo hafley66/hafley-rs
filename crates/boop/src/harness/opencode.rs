@@ -178,71 +178,86 @@ impl Harness for Opencode {
                 next_cursor: from,
             });
         }
-        let parts = parts_for_messages(&connection, &messages)?;
         let mut turn = store.begin_walk(&session.session_id)?;
         let mut stat = SyncStat::default();
-        let mut cursor = from;
-        for (message, message_parts) in messages.iter().zip(&parts) {
-            cursor = message.rowid;
-            let mut first_turn = None;
-            for part in message_parts {
-                match part.kind.as_str() {
-                    "text" => {
-                        turn += 1;
-                        let inserted = store.write_turn(
-                            &session.session_id,
-                            turn,
-                            message.ts,
-                            &message.role,
-                            &part.text,
-                        )?;
-                        record(&mut stat, inserted);
-                        first_turn.get_or_insert(turn);
-                    }
-                    "tool" => {
-                        turn += 1;
-                        let inserted =
-                            store.write_turn(&session.session_id, turn, message.ts, "tool", "")?;
-                        record(&mut stat, inserted);
-                        first_turn.get_or_insert(turn);
-                        store.write_tool_fact(
-                            &session.session_id,
-                            turn,
-                            message.ts,
-                            &part.tool,
-                            part.input.as_ref(),
-                        )?;
-                    }
-                    _ => {}
-                }
-            }
-            let Some(usage) = message.usage() else {
-                continue;
-            };
-            let attach = match first_turn {
-                Some(turn) => turn,
-                None => {
-                    turn += 1;
-                    let inserted = store.write_turn(
+        let mut current_message = 0;
+        let mut active_message = false;
+        let mut first_turn = None;
+        visit_parts_for_messages(&connection, &messages, |message_index, part| {
+            if !active_message {
+                for message in messages.iter().take(message_index) {
+                    finish_message(
+                        store,
                         &session.session_id,
-                        turn,
-                        message.ts,
-                        &message.role,
-                        "",
+                        message,
+                        &mut first_turn,
+                        &mut turn,
+                        &mut stat,
                     )?;
-                    record(&mut stat, inserted);
-                    turn
                 }
-            };
-            let (is_new, changed) = store.write_usage(&session.session_id, attach, &usage)?;
-            if changed {
-                if is_new {
-                    stat.usage_written += 1;
-                } else {
-                    stat.usage_updated += 1;
+                current_message = message_index;
+                active_message = true;
+            } else if message_index != current_message {
+                finish_message(
+                    store,
+                    &session.session_id,
+                    &messages[current_message],
+                    &mut first_turn,
+                    &mut turn,
+                    &mut stat,
+                )?;
+                for message in messages
+                    .iter()
+                    .take(message_index)
+                    .skip(current_message + 1)
+                {
+                    first_turn = None;
+                    finish_message(
+                        store,
+                        &session.session_id,
+                        message,
+                        &mut first_turn,
+                        &mut turn,
+                        &mut stat,
+                    )?;
                 }
+                current_message = message_index;
+                first_turn = None;
             }
+            write_part(
+                store,
+                &session.session_id,
+                &messages[message_index],
+                &part,
+                &mut turn,
+                &mut first_turn,
+                &mut stat,
+            )
+        })?;
+        if active_message {
+            finish_message(
+                store,
+                &session.session_id,
+                &messages[current_message],
+                &mut first_turn,
+                &mut turn,
+                &mut stat,
+            )?;
+            current_message += 1;
         }
+        while current_message < messages.len() {
+            first_turn = None;
+            finish_message(
+                store,
+                &session.session_id,
+                &messages[current_message],
+                &mut first_turn,
+                &mut turn,
+                &mut stat,
+            )?;
+            current_message += 1;
+        }
+        let cursor = messages.last().map(|message| message.rowid).unwrap_or(from);
         Ok(Ingested {
             stat,
             next_cursor: cursor,
@@ -290,6 +305,72 @@ fn record(stat: &mut SyncStat, inserted: usize) {
     } else {
         stat.written += 1;
     }
+}
+
+fn write_part(
+    store: &Store,
+    session_id: &str,
+    message: &Message,
+    part: &Part,
+    turn: &mut u64,
+    first_turn: &mut Option<u64>,
+    stat: &mut SyncStat,
+) -> Result<()> {
+    match part.kind.as_str() {
+        "text" => {
+            *turn += 1;
+            let inserted =
+                store.write_turn(session_id, *turn, message.ts, &message.role, &part.text)?;
+            record(stat, inserted);
+            first_turn.get_or_insert(*turn);
+        }
+        "tool" => {
+            *turn += 1;
+            let inserted = store.write_turn(session_id, *turn, message.ts, "tool", "")?;
+            record(stat, inserted);
+            first_turn.get_or_insert(*turn);
+            store.write_tool_fact(
+                session_id,
+                *turn,
+                message.ts,
+                &part.tool,
+                part.input.as_ref(),
+            )?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn finish_message(
+    store: &Store,
+    session_id: &str,
+    message: &Message,
+    first_turn: &mut Option<u64>,
+    turn: &mut u64,
+    stat: &mut SyncStat,
+) -> Result<()> {
+    let Some(usage) = message.usage() else {
+        return Ok(());
+    };
+    let attach = match first_turn {
+        Some(turn) => *turn,
+        None => {
+            *turn += 1;
+            let inserted = store.write_turn(session_id, *turn, message.ts, &message.role, "")?;
+            record(stat, inserted);
+            *turn
+        }
+    };
+    let (is_new, changed) = store.write_usage(session_id, attach, &usage)?;
+    if changed {
+        if is_new {
+            stat.usage_written += 1;
+        } else {
+            stat.usage_updated += 1;
+        }
+    }
+    Ok(())
 }
 
 /// One opencode message, with the token counts it records.
@@ -458,13 +539,19 @@ fn messages_after(connection: &Connection, session: &str, after: u64) -> Result<
     Ok(out)
 }
 
-/// Load every part for a message batch in one statement, retaining the same
-/// message order at the caller and the same id order within each message as
-/// `parts_of` used to provide. SQLite's host-parameter limit varies by build,
-/// so large message batches are split before preparing the IN query.
-fn parts_for_messages(connection: &Connection, messages: &[Message]) -> Result<Vec<Vec<Part>>> {
+/// Visit every part for a message batch in one statement, retaining message
+/// order and part id order while keeping only the current row in memory.
+/// SQLite's host-parameter limit varies by build, so large message batches
+/// are split before preparing the IN query.
+fn visit_parts_for_messages<F>(
+    connection: &Connection,
+    messages: &[Message],
+    mut visit: F,
+) -> Result<()>
+where
+    F: FnMut(usize, Part) -> Result<()>,
+{
     const MAX_MESSAGE_IDS_PER_QUERY: usize = 500;
-    let mut parts: Vec<Vec<Part>> = (0..messages.len()).map(|_| Vec::new()).collect();
 
     for (batch_index, message_batch) in messages.chunks(MAX_MESSAGE_IDS_PER_QUERY).enumerate() {
         let message_indexes: HashMap<&str, usize> = message_batch
@@ -476,9 +563,14 @@ fn parts_for_messages(connection: &Connection, messages: &[Message]) -> Result<V
             .map(|index| format!("?{index}"))
             .collect::<Vec<_>>()
             .join(", ");
+        let order = (1..=message_batch.len())
+            .map(|index| format!("WHEN ?{index} THEN {}", index - 1))
+            .collect::<Vec<_>>()
+            .join(" ");
         let sql = format!(
             "SELECT message_id, data FROM part
-             WHERE message_id IN ({placeholders}) ORDER BY message_id, id"
+             WHERE message_id IN ({placeholders})
+             ORDER BY CASE message_id {order} END, id"
         );
         let mut statement = connection.prepare(&sql)?;
         let rows = statement.query_map(
@@ -494,30 +586,33 @@ fn parts_for_messages(connection: &Connection, messages: &[Message]) -> Result<V
                 Ok(value) => value,
                 Err(_) => continue,
             };
-            parts[batch_index * MAX_MESSAGE_IDS_PER_QUERY + message_index].push(Part {
-                kind: data
-                    .get("type")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_owned(),
-                tool: data
-                    .get("tool")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_owned(),
-                text: data
-                    .get("text")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_owned(),
-                input: data
-                    .get("state")
-                    .and_then(|state| state.get("input"))
-                    .cloned(),
-            });
+            visit(
+                batch_index * MAX_MESSAGE_IDS_PER_QUERY + message_index,
+                Part {
+                    kind: data
+                        .get("type")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_owned(),
+                    tool: data
+                        .get("tool")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_owned(),
+                    text: data
+                        .get("text")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_owned(),
+                    input: data
+                        .get("state")
+                        .and_then(|state| state.get("input"))
+                        .cloned(),
+                },
+            )?;
         }
     }
-    Ok(parts)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -527,7 +622,7 @@ mod tests {
     use rusqlite::trace::{TraceEvent, TraceEventCodes};
 
     use super::{
-        launch_command, messages_after, parts_for_messages, sessions_from, Opencode, Part,
+        launch_command, messages_after, sessions_from, visit_parts_for_messages, Opencode, Part,
     };
     use crate::harness::{Harness, SpawnSpec};
 
@@ -627,7 +722,12 @@ mod tests {
         let messages = messages_after(&connection, "ses_bench_0001", 0).unwrap();
         PART_SELECTS.store(0, Ordering::Relaxed);
         connection.trace_v2(TraceEventCodes::SQLITE_TRACE_STMT, Some(count_part_selects));
-        let parts = parts_for_messages(&connection, &messages).unwrap();
+        let mut parts: Vec<Vec<Part>> = (0..messages.len()).map(|_| Vec::new()).collect();
+        visit_parts_for_messages(&connection, &messages, |message_index, part| {
+            parts[message_index].push(part);
+            Ok(())
+        })
+        .unwrap();
         connection.trace_v2(TraceEventCodes::empty(), None);
 
         let part_count: usize = parts.iter().map(Vec::len).sum();
@@ -635,6 +735,16 @@ mod tests {
         assert_eq!(parts.len(), 300);
         assert_eq!(part_count, 340);
         assert_eq!(PART_SELECTS.load(Ordering::Relaxed), 1);
+        let tail = messages_after(&connection, "ses_bench_0001", messages[99].rowid).unwrap();
+        assert_eq!(tail.len(), 200);
+        assert_eq!(
+            tail.first().map(|message| message.rowid),
+            Some(messages[100].rowid)
+        );
+        assert_eq!(
+            tail.last().map(|message| message.rowid),
+            Some(messages[299].rowid)
+        );
 
         let first = &parts[0];
         assert_eq!(first.len(), 1);
@@ -659,6 +769,44 @@ mod tests {
                 .and_then(|command| command.as_str()),
             Some("cargo test bench_5")
         );
+    }
+
+    #[test]
+    fn opencode_parts_batch_skips_malformed_json_without_reordering() {
+        let path =
+            std::env::temp_dir().join(format!("boop-opencode-malformed-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        std::fs::copy("tests/fixtures/opencode/bench/opencode.db", &path).unwrap();
+        rusqlite::Connection::open(&path)
+            .unwrap()
+            .execute(
+                "INSERT INTO part(id, message_id, data) VALUES (?1, ?2, ?3)",
+                rusqlite::params![
+                    "ses_bench_0001_msg_0005_p9",
+                    "ses_bench_0001_msg_0005",
+                    "{malformed"
+                ],
+            )
+            .unwrap();
+
+        let connection = super::open_read_only(&path).unwrap();
+        let messages = messages_after(&connection, "ses_bench_0001", 0).unwrap();
+        let mut parts: Vec<Vec<Part>> = (0..messages.len()).map(|_| Vec::new()).collect();
+        visit_parts_for_messages(&connection, &messages, |message_index, part| {
+            parts[message_index].push(part);
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(parts.iter().map(Vec::len).sum::<usize>(), 340);
+        assert_eq!(
+            parts[5]
+                .iter()
+                .map(|part| part.kind.as_str())
+                .collect::<Vec<_>>(),
+            ["text", "tool"]
+        );
+        let _ = std::fs::remove_file(path);
     }
 
     // ---- facet 3 ----
