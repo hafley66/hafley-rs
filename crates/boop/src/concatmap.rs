@@ -101,12 +101,18 @@ impl Formula {
         let feed = match file.feed.as_str() {
             "oneshot" => Feed::OneShot,
             "chat" => Feed::Chat,
-            other => bail!("unknown feed `{other}` in {}; expected oneshot or chat", path.display()),
+            other => bail!(
+                "unknown feed `{other}` in {}; expected oneshot or chat",
+                path.display()
+            ),
         };
         let bundle = match file.bundle.as_deref() {
             None | Some("pair") => BundleShape::Pair,
             Some("run") => BundleShape::Run,
-            Some(other) => bail!("unknown bundle `{other}` in {}; expected pair or run", path.display()),
+            Some(other) => bail!(
+                "unknown bundle `{other}` in {}; expected pair or run",
+                path.display()
+            ),
         };
         Ok(Formula {
             feed,
@@ -179,10 +185,17 @@ impl<'a> Rewriter<'a> {
 
     fn rewrite(&mut self, store: &crate::Store, msg: &str) -> Result<String> {
         match self {
-            Rewriter::OneShot { adapter, model, cap } => {
-                passes_until_fixed(*adapter, msg, model, *cap)
-            }
-            Rewriter::Chat { adapter, channel, cwd, goal } => {
+            Rewriter::OneShot {
+                adapter,
+                model,
+                cap,
+            } => passes_until_fixed(*adapter, msg, model, *cap),
+            Rewriter::Chat {
+                adapter,
+                channel,
+                cwd,
+                goal,
+            } => {
                 let channel = channel.as_mut();
                 if let Some(goal) = goal.take() {
                     channel.start_turn(&goal).context("send the goal turn")?;
@@ -195,8 +208,8 @@ impl<'a> Rewriter<'a> {
                     .unwrap_or(0);
                 channel.start_turn(msg).context("send the bundle")?;
                 wait_turn(channel)?;
-                let session = session
-                    .context("the resident chat never resolved a harness session id")?;
+                let session =
+                    session.context("the resident chat never resolved a harness session id")?;
                 wait_reply_text(store, &session, marker)
             }
         }
@@ -217,7 +230,10 @@ fn wait_turn(channel: &mut dyn LaneChannel) -> Result<()> {
             None => continue,
         }
     }
-    bail!("resident chat turn exceeded {}s", CHAT_TURN_TIMEOUT.as_secs())
+    bail!(
+        "resident chat turn exceeded {}s",
+        CHAT_TURN_TIMEOUT.as_secs()
+    )
 }
 
 /// The chat's harness session id once it exists; until the harness resolves
@@ -261,11 +277,11 @@ fn wait_reply_text(store: &crate::Store, session: &str, marker: i64) -> Result<S
             role: Some("assistant".to_owned()),
             ..Default::default()
         };
-        if let Some(row) = store
-            .turn_rows(&query)
-            .ok()
-            .and_then(|rows| rows.into_iter().filter(|row| row.ts > marker).max_by_key(|row| row.ts))
-        {
+        if let Some(row) = store.turn_rows(&query).ok().and_then(|rows| {
+            rows.into_iter()
+                .filter(|row| row.ts > marker)
+                .max_by_key(|row| row.ts)
+        }) {
             let text = trim_double_encoded(&row.said).to_owned();
             if !text.trim().is_empty() {
                 return Ok(text);
@@ -273,7 +289,10 @@ fn wait_reply_text(store: &crate::Store, session: &str, marker: i64) -> Result<S
         }
         std::thread::sleep(Duration::from_secs(1));
     }
-    bail!("reply from {session} never reached the store past {}", marker)
+    bail!(
+        "reply from {session} never reached the store past {}",
+        marker
+    )
 }
 
 /// Strip the double encoding a stored `said` can carry: a leading or trailing
@@ -449,13 +468,23 @@ pub fn run(args: Args) -> Result<()> {
     let template = args.template.clone();
     let mut cursor = load_or_seed_cursor(&args.state_dir, &store)?;
     let mut done = load_done(&args.state_dir)?;
-    let mut rewriter = Rewriter::open(&args.formula, adapter, &args).context("open the rewriter")?;
+    let mut rewriter =
+        Rewriter::open(&args.formula, adapter, &args).context("open the rewriter")?;
     loop {
-        match poll_once(&store, &mut rewriter, &args, template.as_deref(), cursor, &mut done) {
+        match poll_once(
+            &store,
+            &mut rewriter,
+            &args,
+            template.as_deref(),
+            cursor,
+            &mut done,
+        ) {
             Ok(next) => cursor = next,
             // A transient store error (a locked read, a stalled query) kills
             // no resident; the next tick retries from the same cursor.
-            Err(error) => eprintln!("concatmap: tick failed at cursor {cursor}, retrying: {error:#}"),
+            Err(error) => {
+                eprintln!("concatmap: tick failed at cursor {cursor}, retrying: {error:#}")
+            }
         }
         std::thread::sleep(args.poll);
     }
@@ -522,7 +551,7 @@ fn poll_once(
                     }
                     Some(pair)
                 })
-                .map(|pair| Job::Pair(pair))
+                .map(Job::Pair)
                 .collect()
         }
     };
@@ -541,7 +570,8 @@ fn poll_once(
                 }
                 Err(error) => eprintln!(
                     "concatmap: rewrite failed for {}-{}: {error:#}",
-                    job.key().0, job.key().1
+                    job.key().0,
+                    job.key().1
                 ),
             }
         }
@@ -585,7 +615,10 @@ fn coalesce_jobs(mut jobs: Vec<Job>, cap: usize) -> Vec<Job> {
 fn load_or_seed_cursor(state_dir: &Path, store: &crate::Store) -> Result<i64> {
     let path = state_dir.join("cursor");
     if let Ok(text) = std::fs::read_to_string(&path) {
-        return text.trim().parse().with_context(|| format!("parse {}", path.display()));
+        return text
+            .trim()
+            .parse()
+            .with_context(|| format!("parse {}", path.display()));
     }
     let query = TurnQuery::default();
     let rows = store.turn_rows(&query).context("seed cursor")?;
@@ -624,7 +657,10 @@ fn process_job(
         Job::Window { session, row } => (session.clone(), row.id, row.text.clone()),
         Job::Pair(pair) => {
             let template = template.context("compiled bundling needs --template")?;
-            let mode = args.mode.as_deref().context("compiled bundling needs --mode")?;
+            let mode = args
+                .mode
+                .as_deref()
+                .context("compiled bundling needs --mode")?;
             let mut msg = render_template(template, mode, &pair.ai_text, &pair.user_text);
             if args.formula.references {
                 msg.push_str("\n\n<references>\n");
@@ -648,15 +684,20 @@ fn process_job(
             (pair.session.clone(), pair.turn, msg)
         }
     };
-    let out_dir = args.out_dir.join(session.chars().take(8).collect::<String>());
-    std::fs::create_dir_all(&out_dir)
-        .with_context(|| format!("create {}", out_dir.display()))?;
+    let out_dir = args
+        .out_dir
+        .join(session.chars().take(8).collect::<String>());
+    std::fs::create_dir_all(&out_dir).with_context(|| format!("create {}", out_dir.display()))?;
     let out_path = out_dir.join(format!("{}.md", id));
     let text = rewriter.rewrite(store, &msg)?;
-    std::fs::write(&out_path, text)
-        .with_context(|| format!("write {}", out_path.display()))?;
-    std::fs::write(args.state_dir.join("done").join(format!("{}-{}", session, id)), b"")
-        .context("write done marker")?;
+    std::fs::write(&out_path, text).with_context(|| format!("write {}", out_path.display()))?;
+    std::fs::write(
+        args.state_dir
+            .join("done")
+            .join(format!("{}-{}", session, id)),
+        b"",
+    )
+    .context("write done marker")?;
     done.insert((session, id));
     Ok(())
 }
@@ -718,7 +759,10 @@ mod tests {
 
     #[test]
     fn a_flaked_turn_is_cleared_before_the_error_surfaces() {
-        let mut channel = FlakedChannel { polls: 0, interrupted: 0 };
+        let mut channel = FlakedChannel {
+            polls: 0,
+            interrupted: 0,
+        };
         assert!(wait_turn(&mut channel).is_err());
         assert_eq!(channel.polls, 1);
         assert_eq!(channel.interrupted, 1);
@@ -821,7 +865,10 @@ mod tests {
         assert_eq!(expand_env("${CM_EXPAND_TEST:-d}"), "set");
         assert_eq!(expand_env("${CM_EXPAND_UNSET:-dflt}"), "dflt");
         assert_eq!(expand_env("${CM_EXPAND_UNSET}"), "");
-        assert_eq!(expand_env("literal ${unterminated"), "literal ${unterminated");
+        assert_eq!(
+            expand_env("literal ${unterminated"),
+            "literal ${unterminated"
+        );
     }
 
     #[test]

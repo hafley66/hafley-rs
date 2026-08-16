@@ -349,6 +349,18 @@ struct AttachedSession {
     generated: bool,
 }
 
+const RUNTIME_ATTACHED_SESSIONS_SQL: &str = "SELECT d.value, span.attached_ts,
+            MAX(
+              COALESCE((SELECT MAX(ts) FROM agent_turn WHERE session_id = span.session_id), 0),
+              COALESCE((SELECT MAX(ts) FROM agent_usage WHERE session_id = span.session_id), 0)
+            ),
+            EXISTS(SELECT 1 FROM agent_session a WHERE a.session_id = span.session_id)
+       FROM agent_trace_span span
+       JOIN dict_trace trace ON trace.id = span.trace_id
+       JOIN dict_session d ON d.id = span.session_id
+      WHERE trace.value = ?1
+      ORDER BY span.attached_ts, d.value";
+
 /// Resolve all runtime facets for `lane`, using only trace attachments as the
 /// session boundary and transcript/usage timestamps as activity evidence.
 pub fn resolve(
@@ -615,20 +627,7 @@ impl Store {
     }
 
     fn runtime_attached_sessions(&self, trace: &str) -> Result<Vec<AttachedSession>> {
-        let sql = "SELECT d.value, span.attached_ts,
-                          MAX(COALESCE(turns.last_ts, 0), COALESCE(usage.last_ts, 0)),
-                          EXISTS(SELECT 1 FROM agent_session a WHERE a.session_id = span.session_id)
-                     FROM agent_trace_span span
-                     JOIN dict_trace trace ON trace.id = span.trace_id
-                     JOIN dict_session d ON d.id = span.session_id
-                     LEFT JOIN (SELECT session_id, MAX(ts) AS last_ts FROM agent_turn GROUP BY session_id) turns
-                       ON turns.session_id = span.session_id
-                     LEFT JOIN (SELECT session_id, MAX(ts) AS last_ts FROM agent_usage GROUP BY session_id) usage
-                       ON usage.session_id = span.session_id
-                    WHERE trace.value = ?1
-                    GROUP BY span.session_id, d.value, span.attached_ts
-                    ORDER BY span.attached_ts, d.value";
-        let mut statement = self.connection().prepare(sql)?;
+        let mut statement = self.connection().prepare(RUNTIME_ATTACHED_SESSIONS_SQL)?;
         let rows = statement.query_map(rusqlite::params![trace], |row| {
             Ok(AttachedSession {
                 session: row.get(0)?,
@@ -676,7 +675,7 @@ mod tests {
 
     use super::{
         parse_exit_code, runtime_snapshot, ProcessLiveness, RuntimeDiagnostic,
-        RuntimeSnapshotInput, TmuxLiveness,
+        RuntimeSnapshotInput, TmuxLiveness, RUNTIME_ATTACHED_SESSIONS_SQL,
     };
 
     struct FakeProcesses {
@@ -1039,6 +1038,33 @@ mod tests {
         assert_eq!(rows[0].reported_status.as_deref(), Some("live"));
         assert_eq!(rows[0].liveness.tmux, TmuxLiveness::Inaccessible);
         assert_eq!(rows[0].liveness.process, ProcessLiveness::Dead);
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn attached_session_activity_seeks_each_session_instead_of_materializing_the_corpus() {
+        let (path, store) = fresh_store("attached-session-plan");
+        let sql = format!("EXPLAIN QUERY PLAN {RUNTIME_ATTACHED_SESSIONS_SQL}");
+        let mut statement = store.connection().prepare(&sql).unwrap();
+        let plan = statement
+            .query_map(rusqlite::params!["trace"], |row| row.get::<_, String>(3))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap()
+            .join("\n")
+            .to_ascii_uppercase();
+        assert!(!plan.contains("MATERIALIZE TURNS"), "{plan}");
+        assert!(!plan.contains("MATERIALIZE USAGE"), "{plan}");
+        assert!(
+            plan.contains("AGENT_TURN") && plan.contains("SESSION_ID=?"),
+            "{plan}"
+        );
+        assert!(
+            plan.contains("AGENT_USAGE") && plan.contains("SESSION_ID=?"),
+            "{plan}"
+        );
+        drop(statement);
         drop(store);
         let _ = std::fs::remove_file(path);
     }

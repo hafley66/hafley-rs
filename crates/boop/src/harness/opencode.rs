@@ -108,7 +108,9 @@ impl Harness for Opencode {
                 None => std::thread::sleep(Duration::from_millis(500)),
             }
         };
-        let output = child.wait_with_output().context("collect opencode run output")?;
+        let output = child
+            .wait_with_output()
+            .context("collect opencode run output")?;
         if !status.success() {
             anyhow::bail!(
                 "opencode run -m {model} failed: {}",

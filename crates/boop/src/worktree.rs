@@ -483,7 +483,7 @@ mod tests {
 
     impl Drop for EscapeRepo {
         fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(self.repo.parent().unwrap().to_path_buf());
+            let _ = std::fs::remove_dir_all(self.repo.parent().unwrap());
         }
     }
 

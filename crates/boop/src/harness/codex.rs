@@ -224,8 +224,7 @@ struct SessionMeta {
 
 fn first_session_meta(path: &Path) -> Option<SessionMeta> {
     let mut file = File::open(path).ok()?;
-    let result = tail::read_complete_lines(&mut file, 0).ok()?;
-    let first = result.lines.into_iter().next()?;
+    let first = tail::read_first_complete_line(&mut file).ok()??;
     let value: Value = serde_json::from_slice(&first.bytes).ok()?;
     if value.get("type").and_then(Value::as_str) != Some("session_meta") {
         return None;

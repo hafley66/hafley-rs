@@ -1908,8 +1908,10 @@ mod tests {
     #[test]
     fn both_open_paths_carry_a_busy_timeout() {
         let (path, _store) = fresh_store("busy");
-        for store in [Store::open(path.clone()).unwrap(), Store::open_readonly(path.clone()).unwrap()]
-        {
+        for store in [
+            Store::open(path.clone()).unwrap(),
+            Store::open_readonly(path.clone()).unwrap(),
+        ] {
             let ms: i64 = store
                 .connection
                 .query_row("PRAGMA busy_timeout", [], |row| row.get(0))

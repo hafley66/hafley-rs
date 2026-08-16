@@ -230,10 +230,7 @@ fn first_record_context(path: &std::path::Path) -> (Option<String>, Option<Strin
         return (None, None);
     };
     let mut file = file;
-    let Ok(result) = tail::read_complete_lines(&mut file, 0) else {
-        return (None, None);
-    };
-    let Some(first) = result.lines.into_iter().next() else {
+    let Ok(Some(first)) = tail::read_first_complete_line(&mut file) else {
         return (None, None);
     };
     let Ok(value) = serde_json::from_slice::<Value>(&first.bytes) else {

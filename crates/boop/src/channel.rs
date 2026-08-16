@@ -108,7 +108,6 @@ pub trait LaneChannel: Send {
         Ok(())
     }
 
-
     /// Epoch millis of the newest harness-side write for this conversation.
     /// `None` means no signal; the supervisor then measures from turn start.
     fn last_activity_ms(&self) -> Option<u64> {

@@ -214,7 +214,7 @@ mod tests {
     }
 
     use std::os::unix::fs::PermissionsExt;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::time::Duration;
 
     fn spec() -> ChannelSpec {
@@ -244,7 +244,7 @@ mod tests {
     const COMPLETED: &str =
         r#"{"type":"result","subtype":"success","is_error":false,"result":"done"}"#;
 
-    fn poll_after_open(binary: &PathBuf, feed: bool) -> TurnEnd {
+    fn poll_after_open(binary: &Path, feed: bool) -> TurnEnd {
         let mut channel =
             ClaudeChannel::open_with_binary(&spec(), &binary.display().to_string()).unwrap();
         if feed {

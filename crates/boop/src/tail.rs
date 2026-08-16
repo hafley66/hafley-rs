@@ -6,7 +6,7 @@
 //! into `next_offset`. The next call re-reads it.
 
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 
 /// One complete line (terminated by `\n`) read from a file.
 #[derive(Clone, Debug)]
@@ -25,6 +25,21 @@ pub struct ReadResult {
     pub next_offset: u64,
     /// True when the file was shorter than the requested offset.
     pub reset: bool,
+}
+
+/// Read only the first newline-terminated line.
+///
+/// Session discovery needs metadata from the first record and must not load
+/// the remainder of a multi-gigabyte append-only transcript corpus.
+pub fn read_first_complete_line(file: &mut File) -> anyhow::Result<Option<CompleteLine>> {
+    file.seek(SeekFrom::Start(0))?;
+    let mut bytes = Vec::new();
+    BufReader::new(file).read_until(b'\n', &mut bytes)?;
+    if bytes.last() != Some(&b'\n') {
+        return Ok(None);
+    }
+    bytes.pop();
+    Ok(Some(CompleteLine { start: 0, bytes }))
 }
 
 /// Read complete lines from `file`, starting at the byte `offset`.
@@ -87,7 +102,7 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
 
-    use super::read_complete_lines;
+    use super::{read_complete_lines, read_first_complete_line};
 
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("boop_tail_{}_{}", std::process::id(), name))
@@ -120,6 +135,20 @@ mod tests {
         assert_eq!(result.lines.len(), 3);
         assert_eq!(result.next_offset, 6);
         assert!(!result.reset);
+    }
+
+    #[test]
+    fn first_line_reader_requires_a_newline_and_ignores_the_tail() {
+        let path = temp_path("first");
+        overwrite(&path, b"metadata\nbody\nmore\n");
+        let line = read_first_complete_line(&mut open(&path)).unwrap().unwrap();
+        assert_eq!(line.start, 0);
+        assert_eq!(line.bytes, b"metadata");
+
+        overwrite(&path, b"partial");
+        assert!(read_first_complete_line(&mut open(&path))
+            .unwrap()
+            .is_none());
     }
 
     #[test]
