@@ -692,7 +692,8 @@ fn marker_planted(state_dir: &Path, session: &str, id: i64) -> bool {
 }
 
 /// Done markers survive restarts: one empty file per processed (session, turn).
-fn load_done(state_dir: &Path) -> Result<BTreeSet<(String, i64)>> {    let dir = state_dir.join("done");
+fn load_done(state_dir: &Path) -> Result<BTreeSet<(String, i64)>> {
+    let dir = state_dir.join("done");
     std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
     let mut done = BTreeSet::new();
     for entry in std::fs::read_dir(&dir).with_context(|| format!("read {}", dir.display()))? {
