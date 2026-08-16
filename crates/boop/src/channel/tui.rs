@@ -166,9 +166,7 @@ impl TuiChannel {
                 .opening_turn
                 .as_deref()
                 .filter(|opening| *opening != text)
-                .filter(|_| {
-                    self.profile.resume_flag.is_none() || self.conversation.is_none()
-                });
+                .filter(|_| self.profile.resume_flag.is_none() || self.conversation.is_none());
             match refeed {
                 Some(opening) => {
                     self.type_and_submit(opening)?;
@@ -721,8 +719,7 @@ mod tests {
         };
         let mut request = spec(None);
         request.resume = Some("ses_abc".to_owned());
-        let mut channel =
-            TuiChannel::open(profile, &request, Some(guard.socket.clone())).unwrap();
+        let mut channel = TuiChannel::open(profile, &request, Some(guard.socket.clone())).unwrap();
         channel.start_turn("BRIEF-TEXT").unwrap();
         let dead = channel.target().to_owned();
         crate::tmux::mux()

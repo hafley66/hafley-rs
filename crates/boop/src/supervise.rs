@@ -634,7 +634,10 @@ mod tests {
     #[test]
     fn a_resume_without_a_pinned_conversation_refeeds_the_brief() {
         assert_eq!(resume_text(None, "do the work"), "do the work");
-        assert_eq!(resume_text(Some("ses_x".into()), "do the work"), RESUME_NUDGE);
+        assert_eq!(
+            resume_text(Some("ses_x".into()), "do the work"),
+            RESUME_NUDGE
+        );
     }
 
     fn tempdir() -> PathBuf {
