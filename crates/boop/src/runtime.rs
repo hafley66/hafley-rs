@@ -418,18 +418,6 @@ const RUNTIME_ATTACHED_SESSIONS_SQL: &str = "SELECT d.value, span.attached_ts,
       WHERE trace.value = ?1
       ORDER BY span.attached_ts, d.value";
 
-const RUNTIME_LANE_TRACES_SQL: &str = "SELECT lane.value, trace.value, 1
-          FROM (SELECT DISTINCT lane_id FROM agent_lane) lane_ids
-          JOIN dict_session lane ON lane.id = lane_ids.lane_id
-          LEFT JOIN agent_lane lane_row ON lane_row.lane_id = lane_ids.lane_id
-          LEFT JOIN dict_trace trace ON trace.id = lane_row.trace_id
-          UNION
-          SELECT lane.value, trace.value, 0
-            FROM agent_trace_span span
-            JOIN dict_session lane ON lane.id = span.session_id
-            JOIN dict_trace trace ON trace.id = span.trace_id
-          ORDER BY 1, 2, 3";
-
 const RUNTIME_ROOTS_SQL: &str = "SELECT trace.value, root.value
           FROM agent_trace trace_row
           JOIN dict_trace trace ON trace.id = trace_row.trace_id
@@ -459,6 +447,42 @@ fn sql_placeholders(count: usize) -> String {
         .map(|index| format!("?{index}"))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// The durable lanes are all `agent_lane` identities; route-only lanes add
+/// requested names. Restricting the span arm to their dictionary ids preserves
+/// the old union while avoiding unrelated `agent_trace_span` rows.
+fn runtime_lane_traces_sql(requested_routes: usize) -> String {
+    let requested = if requested_routes == 0 {
+        "SELECT NULL WHERE FALSE".to_owned()
+    } else {
+        format!(
+            "VALUES ({})",
+            sql_placeholders(requested_routes).replace(", ", "), (")
+        )
+    };
+    format!(
+        "WITH requested_routes(value) AS ({requested}),
+              candidate_lane_ids(lane_id) AS (
+                  SELECT DISTINCT lane_id FROM agent_lane
+                  UNION
+                  SELECT session.id
+                    FROM dict_session session
+                    JOIN requested_routes requested ON requested.value = session.value
+              )
+         SELECT lane.value, trace.value, 1
+           FROM candidate_lane_ids candidate
+           JOIN dict_session lane ON lane.id = candidate.lane_id
+           LEFT JOIN agent_lane lane_row ON lane_row.lane_id = candidate.lane_id
+           LEFT JOIN dict_trace trace ON trace.id = lane_row.trace_id
+         UNION
+         SELECT lane.value, trace.value, 0
+           FROM candidate_lane_ids candidate
+           JOIN dict_session lane ON lane.id = candidate.lane_id
+           JOIN agent_trace_span span ON span.session_id = candidate.lane_id
+           JOIN dict_trace trace ON trace.id = span.trace_id
+         ORDER BY 1, 2, 3"
+    )
 }
 
 /// Resolve all runtime facets for `lane`, using only trace attachments as the
@@ -823,8 +847,10 @@ impl Store {
     fn runtime_batch(&self, routes: &BTreeMap<String, Route>) -> Result<RuntimeBatch> {
         let mut batch = RuntimeBatch::default();
 
-        let mut statement = self.connection().prepare(RUNTIME_LANE_TRACES_SQL)?;
-        let rows = statement.query_map([], |row| {
+        let route_names: Vec<&String> = routes.keys().collect();
+        let lane_traces_sql = runtime_lane_traces_sql(route_names.len());
+        let mut statement = self.connection().prepare(&lane_traces_sql)?;
+        let rows = statement.query_map(params_from_iter(route_names), |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, Option<String>>(1)?,
@@ -1042,8 +1068,9 @@ mod tests {
     use crate::Store;
 
     use super::{
-        parse_exit_code, runtime_snapshot, runtime_snapshot_query_count, ProcessLiveness,
-        RuntimeDiagnostic, RuntimeSnapshotInput, TmuxLiveness, RUNTIME_ATTACHED_SESSIONS_SQL,
+        parse_exit_code, runtime_lane_traces_sql, runtime_snapshot, runtime_snapshot_query_count,
+        ProcessLiveness, RuntimeDiagnostic, RuntimeSnapshotInput, TmuxLiveness,
+        RUNTIME_ATTACHED_SESSIONS_SQL,
     };
 
     struct FakeProcesses {
@@ -1417,6 +1444,73 @@ mod tests {
         assert_eq!(rows, 139);
         assert_eq!(query_count, 5);
         assert_eq!(mux.observations.load(Ordering::SeqCst), 1);
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn runtime_trace_span_query_seeks_only_candidate_lane_ids() {
+        let (path, store) = fresh_store("trace-span-scope");
+        store
+            .record_lane_spawn(&LaneSpawn {
+                lane: "durable-lane".into(),
+                ts: 10,
+                ..LaneSpawn::default()
+            })
+            .unwrap();
+        store
+            .attach_trace("route-only", "trace-route", "fixture", 11)
+            .unwrap();
+        for number in 0..7 {
+            store
+                .attach_trace(
+                    &format!("unrelated-{number}"),
+                    &format!("trace-unrelated-{number}"),
+                    "fixture",
+                    12,
+                )
+                .unwrap();
+        }
+        let routes = BTreeMap::from([("route-only".into(), route(None))]);
+        let route_names: Vec<&String> = routes.keys().collect();
+        let query_plan = format!(
+            "EXPLAIN QUERY PLAN {}",
+            runtime_lane_traces_sql(route_names.len())
+        );
+        let mut statement = store.connection().prepare(&query_plan).unwrap();
+        let plan = statement
+            .query_map(rusqlite::params_from_iter(route_names), |row| {
+                row.get::<_, String>(3)
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        drop(statement);
+        assert!(
+            plan.iter().any(|detail| {
+                detail.contains("SEARCH span USING INTEGER PRIMARY KEY")
+                    || detail.contains("SEARCH span USING PRIMARY KEY")
+            }),
+            "{plan:#?}"
+        );
+        assert!(
+            !plan.iter().any(|detail| detail.contains("SCAN span")),
+            "{plan:#?}"
+        );
+
+        let mux = FakeMux::available(&[]);
+        let processes = FakeProcesses {
+            live: HashMap::new(),
+        };
+        let rows = snapshot_rows(&store, &routes, &[], &mux, &processes);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(
+            rows.iter()
+                .find(|row| row.lane == "route-only")
+                .and_then(|row| row.trace.as_deref()),
+            Some("trace-route")
+        );
+        assert!(rows.iter().all(|row| !row.lane.starts_with("unrelated-")));
         drop(store);
         let _ = std::fs::remove_file(path);
     }
