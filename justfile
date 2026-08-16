@@ -33,6 +33,12 @@ perf-source-mutations-commit files="1000":
 test-git-optional:
     cargo test -p soopy --test 6_git_optional
 
+test-soopy-multi-repo-refresh:
+    cargo test -p soopy --test 16_multi_repo_refresh -- --nocapture
+
+perf-soopy-multi-repo-refresh repositories="32" rounds="3" concurrency="4":
+    cargo run --release -q -p soopy --example 6_multi_repo_refresh -- --repositories "{{repositories}}" --rounds "{{rounds}}" --concurrency "{{concurrency}}"
+
 perf-git-status-smoke:
     bash crates/soopy/bench/1_git_status.sh smoke
 

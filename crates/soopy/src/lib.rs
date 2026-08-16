@@ -2,6 +2,7 @@ mod _0_types;
 mod _11_refs;
 mod _12_revision_graph;
 mod _13_fetch;
+mod _14_multi_repo_refresh;
 mod _1_pattern;
 mod _1a_path;
 mod _2_repository;
@@ -28,6 +29,9 @@ pub use _0_types::*;
 pub use _11_refs::{diff_refs, Refs};
 pub use _12_revision_graph::RevisionGraph;
 pub use _13_fetch::Acquisition;
+pub use _14_multi_repo_refresh::{
+    run_multi_repo_refresh, MultiRepoRefreshConfig, MultiRepoRefreshReceipt,
+};
 pub use _1_pattern::Pattern;
 pub use _2_repository::{discover, open};
 pub use _2a_directory::DirectoryRoot;
