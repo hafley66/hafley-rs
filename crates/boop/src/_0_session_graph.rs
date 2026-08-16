@@ -86,6 +86,54 @@ pub struct AgentSessionGraphRuntime<'a> {
     pub processes: &'a dyn ProcReader,
 }
 
+/// Scope native sessions before reading their transcript and usage activity.
+/// The aggregate relations only touch session ids emitted by the graph filter,
+/// rather than grouping every row in the local corpus.
+const SESSION_GRAPH_SQL: &str = r#"
+WITH scoped_sessions AS MATERIALIZED (
+    SELECT a.session_id,
+           s.value AS session,
+           h.value AS harness,
+           c.value AS cwd,
+           p.value AS tmux,
+           st.value AS state
+      FROM agent_session a
+      JOIN dict_session s ON s.id = a.session_id
+      JOIN dict_harness h ON h.id = a.harness_id
+      LEFT JOIN dict_cwd c ON c.id = a.cwd_id
+      LEFT JOIN agent_live live ON live.session_id = a.session_id
+      LEFT JOIN dict_pane p ON p.id = live.tmux_pane_id
+      LEFT JOIN dict_status st ON st.id = live.status_id
+     WHERE (?1 IS NULL OR c.value = ?1)
+       AND (?2 OR st.value IS NULL OR st.value <> 'dead')
+),
+turns AS (
+    SELECT t.session_id, MAX(t.ts) AS last_ts
+      FROM agent_turn t
+     WHERE t.session_id IN (SELECT session_id FROM scoped_sessions)
+     GROUP BY t.session_id
+),
+usage AS (
+    SELECT u.session_id, MAX(u.ts) AS last_ts
+      FROM agent_usage u
+     WHERE u.session_id IN (SELECT session_id FROM scoped_sessions)
+     GROUP BY u.session_id
+)
+SELECT scoped.session,
+       scoped.harness,
+       scoped.cwd,
+       scoped.tmux,
+       scoped.state,
+       CASE WHEN turns.last_ts IS NULL AND usage.last_ts IS NULL
+            THEN NULL
+            ELSE MAX(COALESCE(turns.last_ts, 0), COALESCE(usage.last_ts, 0))
+       END AS last_ts
+  FROM scoped_sessions scoped
+  LEFT JOIN turns ON turns.session_id = scoped.session_id
+  LEFT JOIN usage ON usage.session_id = scoped.session_id
+ ORDER BY scoped.session
+"#;
+
 /// Load session nodes, native edges, and durable shell rows with set-wise
 /// store reads. No runtime acquisition occurs in this function.
 pub fn load_agent_session_graph(
@@ -97,28 +145,7 @@ pub fn load_agent_session_graph(
         .as_ref()
         .map(|path| path.to_string_lossy().into_owned());
     let history = query.include_history;
-    let sql = "SELECT s.value, h.value, c.value, p.value, st.value,
-                      CASE WHEN turns.last_ts IS NULL AND usage.last_ts IS NULL
-                           THEN NULL
-                           ELSE MAX(COALESCE(turns.last_ts, 0), COALESCE(usage.last_ts, 0))
-                      END AS last_ts
-                 FROM agent_session a
-                 JOIN dict_session s ON s.id = a.session_id
-                 JOIN dict_harness h ON h.id = a.harness_id
-                 LEFT JOIN dict_cwd c ON c.id = a.cwd_id
-                 LEFT JOIN agent_live live ON live.session_id = a.session_id
-                 LEFT JOIN dict_pane p ON p.id = live.tmux_pane_id
-                 LEFT JOIN dict_status st ON st.id = live.status_id
-                 LEFT JOIN (SELECT session_id, MAX(ts) AS last_ts
-                              FROM agent_turn GROUP BY session_id) turns
-                   ON turns.session_id = a.session_id
-                 LEFT JOIN (SELECT session_id, MAX(ts) AS last_ts
-                              FROM agent_usage GROUP BY session_id) usage
-                   ON usage.session_id = a.session_id
-                WHERE (?1 IS NULL OR c.value = ?1)
-                  AND (?2 OR st.value IS NULL OR st.value <> 'dead')
-                ORDER BY s.value";
-    let mut statement = store.connection().prepare(sql)?;
+    let mut statement = store.connection().prepare(SESSION_GRAPH_SQL)?;
     let rows = statement.query_map(rusqlite::params![cwd, history], |row| {
         Ok(AgentSessionNode {
             session: AgentSessionIdentity {
@@ -412,6 +439,101 @@ mod tests {
         .unwrap();
         assert_eq!(graph.sessions.len(), 1);
         assert_eq!(graph.sessions[0].state.as_deref(), Some("idle"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn scoped_activity_uses_the_latest_turn_or_usage_timestamp() {
+        let path = std::env::temp_dir().join(format!(
+            "boop-session-graph-last-activity-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        let session = store.intern_public("dict_session", "active").unwrap();
+        let harness = store.intern_public("dict_harness", "codex").unwrap();
+        let role = store.intern_public("dict_role", "assistant").unwrap();
+        let model = store.intern_public("dict_model", "model").unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                rusqlite::params![session, harness],
+            )
+            .unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO agent_turn(session_id, turn, ts, role_id, said) VALUES (?1, 1, 20, ?2, '')",
+                rusqlite::params![session, role],
+            )
+            .unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO dict_request(message_id, request_id) VALUES ('message', 'request')",
+                [],
+            )
+            .unwrap();
+        let request: i64 = store
+            .connection()
+            .query_row(
+                "SELECT id FROM dict_request WHERE message_id = 'message' AND request_id = 'request'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO agent_usage(session_id, turn, ts, request_ref, model_id) VALUES (?1, 1, 30, ?2, ?3)",
+                rusqlite::params![session, request, model],
+            )
+            .unwrap();
+        let graph = load_agent_session_graph(&store, AgentSessionGraphQuery::default()).unwrap();
+        assert_eq!(graph.sessions[0].last_activity_ts, Some(30));
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn scoped_graph_activity_plan_avoids_whole_corpus_aggregates() {
+        let path =
+            std::env::temp_dir().join(format!("boop-session-graph-plan-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        let session = store.intern_public("dict_session", "scoped").unwrap();
+        let harness = store.intern_public("dict_harness", "codex").unwrap();
+        let cwd = store.intern_public("dict_cwd", "/scoped").unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO agent_session(session_id, harness_id, cwd_id) VALUES (?1, ?2, ?3)",
+                rusqlite::params![session, harness, cwd],
+            )
+            .unwrap();
+        let plan_sql = format!("EXPLAIN QUERY PLAN {SESSION_GRAPH_SQL}");
+        let mut statement = store.connection().prepare(&plan_sql).unwrap();
+        let plan = statement
+            .query_map(rusqlite::params!["/scoped", false], |row| {
+                row.get::<_, String>(3)
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap()
+            .join("\n");
+        assert!(
+            !plan.contains("SCAN agent_turn") && !plan.contains("SCAN t"),
+            "turn aggregate scans the corpus:\n{plan}"
+        );
+        assert!(
+            !plan.contains("SCAN agent_usage") && !plan.contains("SCAN u"),
+            "usage aggregate scans the corpus:\n{plan}"
+        );
+        assert!(
+            plan.contains("SEARCH t") && plan.contains("SEARCH u"),
+            "scoped aggregate lookups missing:\n{plan}"
+        );
         let _ = std::fs::remove_file(path);
     }
 
