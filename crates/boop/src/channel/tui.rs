@@ -563,6 +563,7 @@ mod tests {
             model: model.map(str::to_owned),
             cwd: std::env::temp_dir(),
             resume: None,
+            lane: None,
         }
     }
 

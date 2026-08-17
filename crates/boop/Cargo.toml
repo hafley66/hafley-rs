@@ -41,6 +41,11 @@ time = { version = "0.3", features = ["parsing", "formatting"] }
 # only emits conventional tracing events and spans.
 tracing.workspace = true
 tracing-subscriber.workspace = true
+# Signal delivery off the handler. A lane pane is killed with SIGHUP/SIGTERM and
+# the supervisor must still write its result row, which means allocating and
+# opening a file: work no async-signal-safe handler may do. signal-hook's
+# handler only writes a self-pipe byte and the work runs on a normal thread.
+signal-hook = "0.4"
 
 [dev-dependencies]
 # Peak-bytes-allocated counter for tests/bench_grid.rs's own #[global_allocator].

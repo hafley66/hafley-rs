@@ -625,8 +625,8 @@ fn write_line(output: &mut impl std::io::Write, text: &str) -> std::io::Result<(
 }
 
 fn main() -> Result<()> {
-    init_tracing()?;
     let cli = Cli::parse();
+    init_tracing(supervised_lane(&cli.command))?;
     let registry = Registry::discover();
     match cli.command {
         SubCmd::Harnesses => run_harnesses(&registry),
@@ -890,16 +890,37 @@ fn main() -> Result<()> {
     }
 }
 
-/// Install the one stderr subscriber for the CLI. Libraries emit spans and
-/// events only, so embedding `boop` never changes its caller's subscriber.
-fn init_tracing() -> Result<()> {
+/// Install the one subscriber for the CLI. Libraries emit spans and events
+/// only, so embedding `boop` never changes its caller's subscriber.
+///
+/// A lane supervisor also writes every event to `~/.agent/lanes/<lane>/supervise.log`:
+/// the pane it logs to can be killed, and its scrollback goes with it.
+fn init_tracing(lane: Option<&str>) -> Result<()> {
+    let lane_log = lane.and_then(|lane| boop::trail::open(lane, boop::trail::SUPERVISE_LOG));
+    // The file copy carries no escape codes; the pane keeps its colours only
+    // when there is no file to share the formatter with.
+    let ansi = lane_log.is_none();
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
-        .with_writer(std::io::stderr)
+        .with_ansi(ansi)
+        .with_writer(boop::trail::lane_writer(lane_log))
         .try_init()
         .map_err(|error| anyhow::anyhow!("initialise tracing subscriber: {error}"))
+}
+
+/// The lane this invocation supervises, which is the only verb whose whole run
+/// belongs in one lane's trail.
+fn supervised_lane(command: &SubCmd) -> Option<&str> {
+    match command {
+        SubCmd::Beep {
+            cmd: BeepCmd::Lane {
+                cmd: LaneCmd::Run { lane, .. },
+            },
+        } => Some(lane),
+        _ => None,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1864,6 +1885,7 @@ fn run_lane_supervisor(
         model: model.map(str::to_owned),
         cwd: cwd.clone(),
         resume: resume.map(str::to_owned),
+        lane: Some(lane.to_owned()),
     };
     let mut channel = adapter.open_channel(&spec).inspect_err(|error| {
         error!(lane, harness = harness_id, error = %error, "lane channel open failed");
@@ -1876,6 +1898,8 @@ fn run_lane_supervisor(
         model: model.map(str::to_owned),
         resume: resume.map(str::to_owned),
     };
+    // Process-global, so it is armed here and not inside the library call.
+    boop::supervise::arm_signal_trail(&run);
     let code = boop::supervise::run(run, channel.as_mut()).inspect_err(|error| {
         error!(lane, harness = harness_id, error = %error, "lane supervisor failed");
     })?;
@@ -4394,6 +4418,9 @@ fn run_lane_list(
         }
         let flags = escape_flags(&dir, name);
         let mut suffix = String::new();
+        if state == "dead" {
+            suffix.push_str(&format!(" DEAD={}", dead_reason_token(&dir, name)));
+        }
         if let Some(flags) = &flags {
             if flags.worktree_untouched {
                 suffix.push_str(" WORKTREE-UNTOUCHED");
@@ -4402,6 +4429,13 @@ fn run_lane_list(
                 suffix.push_str(&format!(
                     " MAIN-TREE-COMMIT-SUSPECT={}",
                     flags.main_commits.join(",")
+                ));
+            }
+            for commit in &flags.ambiguous_main_commits {
+                suffix.push_str(&format!(
+                    " MAIN-TREE-COMMIT-AMBIGUOUS={}:{}",
+                    commit.sha,
+                    commit.lanes.join("|")
                 ));
             }
         }
@@ -4419,6 +4453,15 @@ fn run_lane_list(
         ));
     }
     Ok(())
+}
+
+/// Why a dead lane is dead, as one token. A missing home directory is itself an
+/// answer: nothing could have been written, so the row says `no-trail`.
+fn dead_reason_token(mail_dir: &std::path::Path, lane: &str) -> String {
+    let Ok(root) = boop::trail::lanes_root() else {
+        return boop::trail::DeadReason::NoTrail.token();
+    };
+    boop::trail::dead_reason(mail_dir, &root, lane).token()
 }
 
 fn lane_state(live: &Option<tmux::LiveSessions>, route: &Route) -> &'static str {
@@ -4689,22 +4732,67 @@ fn escape_flags(dir: &std::path::Path, lane: &str) -> Option<boop::worktree::Esc
         return None;
     }
     let repo = lane::repo_root(worktree).ok()?;
-    let spawned_at_ms = route
-        .registered_at
-        .as_deref()
-        .and_then(parse_iso_ms)
-        .unwrap_or(0);
+    let run = lane_window(dir, lane, &routes)?;
+    // Every other lane registered against this same repo. Without them a shared
+    // main tree makes one lane's commits look like every lane's.
+    let siblings: Vec<boop::worktree::LaneWindow> = routes
+        .keys()
+        .filter(|name| name.as_str() != lane)
+        .filter(|name| sibling_repo(name, &routes).as_deref() == Some(repo.as_path()))
+        .filter_map(|name| lane_window(dir, name, &routes))
+        .collect();
     Some(boop::worktree::detect_escape(
-        worktree,
-        &repo,
-        base_sha,
-        spawned_at_ms,
+        worktree, &repo, base_sha, &run, &siblings,
     ))
+}
+
+/// The repo a lane's registered worktree belongs to.
+fn sibling_repo(
+    lane: &str,
+    routes: &std::collections::BTreeMap<String, Route>,
+) -> Option<std::path::PathBuf> {
+    let route = routes.get(lane)?;
+    lane::repo_root(std::path::Path::new(route.worktree_dir.as_deref()?)).ok()
+}
+
+/// When a lane held its repo and on which branch: the spawn's `registered_at`
+/// opens the window, its result row closes it, and the worktree names the
+/// branch that witnesses reachability.
+fn lane_window(
+    dir: &std::path::Path,
+    lane: &str,
+    routes: &std::collections::BTreeMap<String, Route>,
+) -> Option<boop::worktree::LaneWindow> {
+    let route = routes.get(lane)?;
+    let worktree = std::path::Path::new(route.worktree_dir.as_deref()?);
+    let start_ms = route.registered_at.as_deref().and_then(parse_iso_ms)?;
+    Some(boop::worktree::LaneWindow {
+        lane: lane.to_owned(),
+        branch: boop::worktree::current_branch(worktree),
+        start_secs: (start_ms / 1000) as i64,
+        end_secs: lane_result_at_ms(dir, lane, start_ms).map(|ms| (ms / 1000) as i64),
+    })
+}
+
+/// Epoch millis of the lane's newest result row at or after `since`, which is
+/// the moment the lane stopped being able to commit anywhere.
+fn lane_result_at_ms(dir: &std::path::Path, lane: &str, since: u64) -> Option<u64> {
+    let mut rows = Vec::new();
+    for path in bus::read_boxes(dir).unwrap_or_default() {
+        rows.extend(bus::parse_box(&path));
+    }
+    rows.iter()
+        .filter(|row| row.kind == "result" && row.from == lane)
+        .filter_map(|row| parse_iso_ms(&row.from_timestamp))
+        .filter(|written| *written >= since)
+        .max()
 }
 
 /// Print the loud escape flags to stdout. `WORKTREE-UNTOUCHED` names a lane
 /// whose worktree gained no commit; `MAIN-TREE-COMMIT-SUSPECT` lists the shas
-/// that landed on local main during the lane's run.
+/// only this lane's branch or window accounts for, and
+/// `MAIN-TREE-COMMIT-AMBIGUOUS` the shas a concurrent lane could equally have
+/// made.
 fn print_escape_flags(lane: &str, flags: &boop::worktree::EscapeFlags) {
     if flags.worktree_untouched {
         println!("WORKTREE-UNTOUCHED {lane}: no new commits in its registered worktree");
@@ -4713,6 +4801,13 @@ fn print_escape_flags(lane: &str, flags: &boop::worktree::EscapeFlags) {
         println!(
             "MAIN-TREE-COMMIT-SUSPECT {lane}: {}",
             flags.main_commits.join(" ")
+        );
+    }
+    for commit in &flags.ambiguous_main_commits {
+        println!(
+            "MAIN-TREE-COMMIT-AMBIGUOUS {lane}: {} could be any of {}",
+            commit.sha,
+            commit.lanes.join(" ")
         );
     }
 }

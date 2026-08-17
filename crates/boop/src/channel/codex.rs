@@ -26,7 +26,7 @@ impl CodexChannel {
             .current_dir(&spec.cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(crate::trail::child_stderr(spec.lane.as_deref()))
             .spawn()
             .context("spawn codex app-server")?;
         let mut rpc = RpcChild::attach(child)?;

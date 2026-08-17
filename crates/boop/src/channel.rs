@@ -94,6 +94,9 @@ pub struct ChannelSpec {
     pub cwd: PathBuf,
     /// An existing conversation to continue instead of starting a new one.
     pub resume: Option<String>,
+    /// The lane whose trail the harness child's stderr is written to. `None`
+    /// is a caller outside a lane; its child inherits the pane's stderr.
+    pub lane: Option<String>,
 }
 
 /// One live conversation. Every harness answers the same four calls, so the

@@ -17,6 +17,7 @@ pub struct KimiChannel {
     session: Option<String>,
     turn: Option<Child>,
     lines: Option<Receiver<Value>>,
+    lane: Option<String>,
 }
 
 impl KimiChannel {
@@ -27,6 +28,7 @@ impl KimiChannel {
             session: spec.resume.clone(),
             turn: None,
             lines: None,
+            lane: spec.lane.clone(),
         })
     }
 }
@@ -53,7 +55,7 @@ impl LaneChannel for KimiChannel {
             .current_dir(&self.cwd)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(crate::trail::child_stderr(self.lane.as_deref()))
             .spawn()
             .context("spawn kimi prompt turn")?;
         let stdout = child.stdout.take().context("kimi child has no stdout")?;
@@ -138,6 +140,7 @@ mod tests {
             model: None,
             cwd: std::env::temp_dir(),
             resume: None,
+            lane: None,
         }
     }
 
