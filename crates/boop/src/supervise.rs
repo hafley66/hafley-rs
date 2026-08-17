@@ -122,9 +122,11 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
     info!(brief = %lane.brief.display(), "lane brief loaded");
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut held: Vec<Hail> = Vec::new();
-    // A resumed conversation already holds the brief; re-feeding it restarts
-    // the work, so a resume opens with the continue nudge instead.
-    let mut turn = match channel.conversation_id() {
+    // `conversation_id` may already exist for a freshly opened channel. Codex
+    // app-server returns its new thread id from `thread/start` before the first
+    // turn, so only the caller's explicit resume input proves that the thread
+    // already holds the brief.
+    let mut turn = match &lane.resume {
         Some(conversation) => {
             info!(
                 conversation_id = conversation,
@@ -638,6 +640,57 @@ mod tests {
             resume_text(Some("ses_x".into()), "do the work"),
             RESUME_NUDGE
         );
+    }
+
+    struct FreshIdentifiedChannel {
+        turns: Vec<String>,
+    }
+
+    impl LaneChannel for FreshIdentifiedChannel {
+        fn conversation_id(&self) -> Option<String> {
+            Some("fresh-thread-id".to_owned())
+        }
+
+        fn start_turn(&mut self, text: &str) -> Result<()> {
+            self.turns.push(text.to_owned());
+            Ok(())
+        }
+
+        fn steer(&mut self, _text: &str) -> Result<Delivery> {
+            Ok(Delivery::MidTurn)
+        }
+
+        fn poll_turn(&mut self, _timeout: Duration) -> Result<Option<TurnEnd>> {
+            Ok(Some(TurnEnd::ok("completed")))
+        }
+
+        fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    // FAIL-PRE-FIX: Codex app-server returns a thread id during channel open,
+    // before any turn contains the brief. The supervisor used the presence of
+    // that id as resume evidence and sent RESUME_NUDGE as the first turn.
+    #[test]
+    fn a_fresh_identified_channel_receives_the_full_brief() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let mut channel = FreshIdentifiedChannel { turns: Vec::new() };
+
+        assert_eq!(run(lane, &mut channel).unwrap(), 0);
+        assert_eq!(channel.turns, ["do the work\n"]);
+    }
+
+    #[test]
+    fn an_explicit_resume_receives_the_resume_nudge() {
+        let dir = tempdir();
+        let mut lane = parented_lane(&dir, "mine", "coordinator");
+        lane.resume = Some("existing-thread-id".to_owned());
+        let mut channel = FreshIdentifiedChannel { turns: Vec::new() };
+
+        assert_eq!(run(lane, &mut channel).unwrap(), 0);
+        assert_eq!(channel.turns, [RESUME_NUDGE]);
     }
 
     fn tempdir() -> PathBuf {

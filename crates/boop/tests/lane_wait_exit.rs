@@ -62,6 +62,13 @@ fn executable(name: &str) -> PathBuf {
     PathBuf::from(String::from_utf8(output.stdout).unwrap().trim())
 }
 
+fn write_executable(path: &std::path::Path, body: &str) {
+    std::fs::write(path, body).unwrap();
+    let mut permissions = std::fs::metadata(path).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(path, permissions).unwrap();
+}
+
 struct CreateFixture {
     root: PathBuf,
     repo: PathBuf,
@@ -268,4 +275,90 @@ fn create_dry_run_with_wait_does_not_block() {
         .status()
         .unwrap()
         .success());
+}
+
+/// RECEIPT. Codex app-server returns a fresh thread id before its first turn.
+/// The lane must still receive the complete brief; a thread id alone carries
+/// no evidence that any prior turn saw it.
+#[test]
+fn a_fresh_codex_app_server_thread_receives_the_lane_brief() {
+    let root = mail_dir("fresh-codex-brief");
+    let repo = root.join("repo");
+    let mail = root.join("mail");
+    let bin = root.join("bin");
+    let log = root.join("codex-rpc.ndjson");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&mail).unwrap();
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::write(
+        mail.join("registry.json"),
+        r#"{"feature-fresh-codex":{"kind":"lane","parent":"coordinator"}}"#,
+    )
+    .unwrap();
+    let brief = repo.join("brief.md");
+    let brief_text = "FRESH_CODEX_BRIEF_SENTINEL execute the complete lane task\n";
+    std::fs::write(&brief, brief_text).unwrap();
+
+    write_executable(
+        &bin.join("codex"),
+        r#"#!/bin/sh
+while IFS= read -r line; do
+  printf '%s\n' "$line" >> "$BOOP_TEST_CODEX_LOG"
+  id=$(printf '%s\n' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
+  case "$line" in
+    *'"method":"initialize"'*)
+      printf '{"jsonrpc":"2.0","id":%s,"result":{}}\n' "$id"
+      ;;
+    *'"method":"thread/start"'*)
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"thread":{"id":"fresh-thread-id"}}}\n' "$id"
+      ;;
+    *'"method":"turn/start"'*)
+      printf '{"jsonrpc":"2.0","id":%s,"result":{"turn":{"id":"turn-1"}}}\n' "$id"
+      printf '{"jsonrpc":"2.0","method":"turn/completed","params":{"turn":{"id":"turn-1","status":"completed"}}}\n'
+      ;;
+  esac
+done
+"#,
+    );
+
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let output = Command::new(env!("CARGO_BIN_EXE_boop"))
+        .env("PATH", path)
+        .env("BOOP_TEST_CODEX_LOG", &log)
+        .current_dir(&repo)
+        .args([
+            "beep",
+            "lane",
+            "run",
+            "--lane",
+            "feature-fresh-codex",
+            "--harness",
+            "codex",
+            "--brief",
+        ])
+        .arg(&brief)
+        .args(["--model", "gpt-test", "--mail-dir"])
+        .arg(&mail)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "stdout={}\nstderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let rpc = std::fs::read_to_string(&log).unwrap();
+    assert!(rpc.contains("FRESH_CODEX_BRIEF_SENTINEL"), "{rpc}");
+    assert!(
+        !rpc.contains("previous turn ended on a provider error"),
+        "{rpc}"
+    );
+    let result = std::fs::read_to_string(mail.join("bus.ndjson")).unwrap();
+    assert!(
+        result.contains("lane feature-fresh-codex done rc=0"),
+        "{result}"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
 }
