@@ -318,7 +318,8 @@ impl Multiplexer for Tmux {
             text_bytes = body.len(),
             "tmux literal text send"
         );
-        send_keys(socket, &["-t", pane, "-l", "--", body])?;
+        paste_body(socket, pane, body)?;
+        std::thread::sleep(SUBMIT_GAP);
         send_keys(socket, &["-t", pane, "Enter"])
     }
 
@@ -329,7 +330,7 @@ impl Multiplexer for Tmux {
             text_bytes = body.len(),
             "tmux text send"
         );
-        send_keys(socket, &["-t", pane, "-l", "--", body])
+        paste_body(socket, pane, body)
     }
 
     fn send_key_named(&self, socket: Option<&str>, pane: &str, key: &str) -> Result<()> {
@@ -688,11 +689,81 @@ pub(crate) fn exact_target(name: &str) -> String {
     format!("={name}")
 }
 
-fn send_keys(socket: Option<&str>, argv: &[&str]) -> Result<()> {
+/// Buffer names are server-global, so two concurrent sends must not collide.
+static PASTE_SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// A TUI grouping a burst of input as one paste reads an Enter inside that
+/// window as a newline, which piled several hails into one message.
+const SUBMIT_GAP: std::time::Duration = std::time::Duration::from_millis(400);
+
+/// `send-keys -l` types a body rune by rune (10540 bytes measured ~110s into
+/// an opencode TUI); `-p` brackets only when the pane asked for bracketed paste.
+fn paste_body(socket: Option<&str>, pane: &str, body: &str) -> Result<()> {
+    let buffer = format!(
+        "boop-{}-{}",
+        std::process::id(),
+        PASTE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    );
+    let mut load = tmux_command(socket);
+    load.args(["load-buffer", "-b", &buffer, "-"]);
+    let mut child = load
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("tmux load-buffer")?;
+    child
+        .stdin
+        .take()
+        .context("tmux load-buffer stdin")?
+        .write_all(body.as_bytes())
+        .context("write the paste body to tmux load-buffer")?;
+    let loaded = child
+        .wait_with_output()
+        .context("tmux load-buffer completion")?;
+    if !loaded.status.success() {
+        warn!(
+            socket = socket.unwrap_or_default(),
+            body_bytes = body.len(),
+            "tmux load-buffer failed"
+        );
+        anyhow::bail!(
+            "tmux load-buffer failed: {}",
+            String::from_utf8_lossy(&loaded.stderr).trim()
+        );
+    }
+    let pasted = tmux_command(socket)
+        .args(["paste-buffer", "-d", "-p", "-b", &buffer, "-t", pane])
+        .output()
+        .context("tmux paste-buffer")?;
+    if !pasted.status.success() {
+        let _ = tmux_command(socket)
+            .args(["delete-buffer", "-b", &buffer])
+            .output();
+        warn!(
+            target = pane,
+            socket = socket.unwrap_or_default(),
+            body_bytes = body.len(),
+            "tmux paste-buffer failed"
+        );
+        anyhow::bail!(
+            "tmux paste-buffer failed: {}",
+            String::from_utf8_lossy(&pasted.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
+fn tmux_command(socket: Option<&str>) -> Command {
     let mut builder = Command::new("tmux");
     if let Some(socket) = socket {
         builder.arg("-L").arg(socket);
     }
+    builder
+}
+
+fn send_keys(socket: Option<&str>, argv: &[&str]) -> Result<()> {
+    let mut builder = tmux_command(socket);
     builder.arg("send-keys");
     builder.args(argv);
     let output = builder.output().context("tmux send-keys")?;
@@ -924,6 +995,117 @@ mod tests {
         assert!(
             !mux().target_alive(Some(&server.socket), "alive:0.0"),
             "a dead session's pane target must not survive prune"
+        );
+    }
+
+    /// A scratch pane that records every byte it is sent. `sink` waits for the
+    /// pane to run before returning, so a send cannot race the redirect.
+    struct Sink {
+        path: std::path::PathBuf,
+    }
+
+    fn sink(server: &TestServer, name: &str, bracketed: bool) -> Sink {
+        let path = std::env::temp_dir().join(format!(
+            "boop-sink-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_file(&path);
+        // `printf '\033[?2004h'` is how an application asks tmux for
+        // bracketed paste; a plain `cat` pane never asks.
+        let command = match bracketed {
+            true => format!("sh -c 'printf \"\\033[?2004h\"; cat > {}'", path.display()),
+            false => format!("sh -c 'cat > {}'", path.display()),
+        };
+        Tmux.new_detached_session(Some(&server.socket), name, "/tmp", &command)
+            .expect("tmux installed and reachable to create the sink session");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !path.exists() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        Sink { path }
+    }
+
+    impl Sink {
+        /// The bytes the pane has received, polled until they match `want` or
+        /// the deadline passes; a mismatch returns what did arrive.
+        fn received(&self, want: &str) -> String {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            let mut last = String::new();
+            while std::time::Instant::now() < deadline {
+                last = std::fs::read_to_string(&self.path).unwrap_or_default();
+                if last == want {
+                    return last;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            last
+        }
+    }
+
+    impl Drop for Sink {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+
+    /// FAILS PRE-FIX (2026-08-17). `send-keys -l` typed the body rune by rune
+    /// with no paste markers; a TUI then read it as 10K keystrokes, not a paste.
+    #[test]
+    fn a_multiline_body_reaches_a_pasting_pane_bracketed_and_byte_exact() {
+        let server = TestServer::new();
+        let name = session_name();
+        let pane = sink(&server, &name, true);
+        let body = "# h\nfn f() {\n say \"q\"\n}\n";
+        let want = format!("\u{1b}[200~{body}\u{1b}[201~\n");
+        mux()
+            .send_keys_literal(Some(&server.socket), &name, body)
+            .expect("a multi-line body sends");
+        assert_eq!(
+            pane.received(&want),
+            want,
+            "a pasting pane must receive the body inside paste markers, then the submit key"
+        );
+    }
+
+    /// A brief is thousands of bytes; a typed send delivers one rune per write
+    /// and a TUI needs minutes to drain it.
+    #[test]
+    fn a_brief_sized_body_arrives_whole() {
+        let server = TestServer::new();
+        let name = session_name();
+        let pane = sink(&server, &name, true);
+        let body = "abcdefgh ijklmnop # { \" }\n".repeat(400);
+        let want = format!("\u{1b}[200~{body}\u{1b}[201~\n");
+        let started = std::time::Instant::now();
+        mux()
+            .send_keys_literal(Some(&server.socket), &name, &body)
+            .expect("a brief-sized body sends");
+        let got = pane.received(&want);
+        assert!(
+            got == want,
+            "10K of brief must land whole: {} of {} bytes in {:?}",
+            got.len(),
+            want.len(),
+            started.elapsed()
+        );
+    }
+
+    /// A shell pane never asks for bracketed paste, so the markers must not
+    /// appear in what it receives.
+    #[test]
+    fn a_plain_pane_receives_the_body_unwrapped() {
+        let server = TestServer::new();
+        let name = session_name();
+        let pane = sink(&server, &name, false);
+        let body = "# h\nsay \"q\"\n";
+        mux()
+            .send_text(Some(&server.socket), &name, body)
+            .expect("a body sends to a plain pane");
+        assert_eq!(
+            pane.received(body),
+            body,
+            "a pane that never asked for bracketed paste gets plain bytes"
         );
     }
 }
