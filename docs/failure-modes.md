@@ -5,9 +5,64 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 2 | 2026-08-17 | a respawned agent window is re-fed a brief it cannot place, or the wrong text entirely |
 | 1 | 2026-08-17 | a lane can die with no result row, no log, no trace |
 
 ---
+
+## 2. a respawned agent window is re-fed a brief it cannot place, or the wrong text entirely
+
+**Incident.** 2026-08-16, four flash4 lanes 0-for-4: three empty worktrees, one
+delivered-uncommitted. A fifth lane on the same model, dispatched the same way,
+finished clean because nothing stalled in it, so the model was never the
+variable. Each of the four had its opencode window killed by the stall
+interrupt and respawned.
+
+```mermaid
+sequenceDiagram
+    participant S as supervisor
+    participant W as opencode window
+    S->>W: turn 1 = brief
+    Note over W: works, commits nothing yet
+    S->>W: Escape (stall interrupt)
+    Note over W: window exits and dies
+    S->>W: respawn (no conversation captured)
+    S->>W: re-feed brief, bare
+    Note over W: reads it as a cold start,<br/>rewrites what the dead window did
+```
+
+**RCA.** Two defects, both in the refeed path
+(`crates/boop/src/channel/tui.rs` `type_and_submit_or_respawn`).
+
+| # | defect | consequence |
+|---|---|---|
+| 1 | the re-fed brief carried no marker that this was a resumption | the harness could not tell that the dead window's work was already in the worktree, so it started over on top of it |
+| 2 | the re-fed text was `TuiChannel`'s own capture of turn one, not the brief | a lane opened on `RESUME_NUDGE` (the explicit-resume path, `supervise.rs`) held the nudge as its refeed text; the brief had never entered the channel at all, and re-feeding a bare "continue from where you left off" to a blank window is the empty worktree |
+
+**Fix.**
+
+| # | change | file |
+|---|---|---|
+| 1 | `RESPAWN_PREFACE` opens every re-fed brief, one line, naming the window death and the worktree | `crates/boop/src/channel/tui.rs` |
+| 2 | `LaneChannel::set_brief` hands the brief to the channel before the first turn; the TUI channel keeps it and re-feeds it, falling back to turn one's text only when no supervisor set it | `crates/boop/src/channel.rs`, `channel/tui.rs`, `supervise.rs` |
+
+**Fail-pre-fix tests.** Each carries its sabotage receipt in its header.
+
+| test | sabotage that failed it | file |
+|---|---|---|
+| `a_refed_brief_opens_with_the_resumption_preface` | dropping `RESPAWN_PREFACE` from the refeed text | `channel/tui.rs` |
+| `a_supervisor_supplied_brief_outranks_the_first_turn` | a no-op `TuiChannel::set_brief` (re-fed `RESUME-NUDGE` in the brief's place) | `channel/tui.rs` |
+| `the_brief_reaches_the_channel_before_a_resume_nudge_opens_the_lane` | dropping the `channel.set_brief` call from `supervise` | `supervise.rs` |
+
+**Rail.** The brief is the supervisor's, handed over once and owned by the
+channel, so no respawn can re-feed anything else; and no refeed reaches a
+harness without the line telling it to read the worktree first.
+
+**What still cannot be answered.** A respawn that DOES resume a pinned
+conversation is trusted to have reattached it: `opencode -s <id>` with an id the
+store no longer holds opens a fresh session, and the channel still reports the
+id as its conversation. Verifying the reattach needs a store read after boot,
+which nothing does today.
 
 ## 1. a lane can die with no result row, no log, no trace
 

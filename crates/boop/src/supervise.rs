@@ -189,6 +189,9 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
     let brief = std::fs::read_to_string(&lane.brief)
         .with_context(|| format!("read lane brief {}", lane.brief.display()))?;
     info!(brief = %lane.brief.display(), "lane brief loaded");
+    // The channel re-feeds this text after a respawn that lost its
+    // conversation, so it must be the brief and not whichever turn opened.
+    channel.set_brief(&brief);
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut held: Vec<Hail> = Vec::new();
     // `conversation_id` may already exist for a freshly opened channel. Codex
@@ -712,13 +715,19 @@ mod tests {
         );
     }
 
+    #[derive(Default)]
     struct FreshIdentifiedChannel {
         turns: Vec<String>,
+        brief: Option<String>,
     }
 
     impl LaneChannel for FreshIdentifiedChannel {
         fn conversation_id(&self) -> Option<String> {
             Some("fresh-thread-id".to_owned())
+        }
+
+        fn set_brief(&mut self, brief: &str) {
+            self.brief = Some(brief.to_owned());
         }
 
         fn start_turn(&mut self, text: &str) -> Result<()> {
@@ -768,7 +777,7 @@ mod tests {
     fn a_fresh_identified_channel_receives_the_full_brief() {
         let dir = tempdir();
         let lane = parented_lane(&dir, "mine", "coordinator");
-        let mut channel = FreshIdentifiedChannel { turns: Vec::new() };
+        let mut channel = FreshIdentifiedChannel::default();
 
         assert_eq!(run(lane, &mut channel).unwrap(), 0);
         assert_eq!(channel.turns, ["do the work\n"]);
@@ -779,7 +788,7 @@ mod tests {
         let dir = tempdir();
         let mut lane = parented_lane(&dir, "mine", "coordinator");
         lane.resume = Some("existing-thread-id".to_owned());
-        let mut channel = FreshIdentifiedChannel { turns: Vec::new() };
+        let mut channel = FreshIdentifiedChannel::default();
 
         assert_eq!(run(lane, &mut channel).unwrap(), 0);
         assert_eq!(channel.turns, [RESUME_NUDGE]);
@@ -823,6 +832,22 @@ mod tests {
         let rows = result_rows(&dir);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].body, "lane mine done rc=143 (killed by SIGTERM)");
+    }
+
+    // FAIL-PRE-FIX: the brief reached the channel only as turn one's text, so a
+    // lane opened on the resume nudge left a respawned TUI window with the nudge
+    // to re-feed and the brief lost. Sabotage receipt: dropping the
+    // `channel.set_brief` call FAILED this on `brief: None`.
+    #[test]
+    fn the_brief_reaches_the_channel_before_a_resume_nudge_opens_the_lane() {
+        let dir = tempdir();
+        let mut lane = parented_lane(&dir, "mine", "coordinator");
+        lane.resume = Some("existing-thread-id".to_owned());
+        let mut channel = FreshIdentifiedChannel::default();
+
+        assert_eq!(run(lane, &mut channel).unwrap(), 0);
+        assert_eq!(channel.turns, [RESUME_NUDGE]);
+        assert_eq!(channel.brief.as_deref(), Some("do the work\n"));
     }
 
     fn tempdir() -> PathBuf {
