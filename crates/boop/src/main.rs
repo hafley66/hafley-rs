@@ -115,6 +115,8 @@ edge and stay invisible to tracking:
 
 COMPLETION: --parent appends an on-exit hail `lane <id> done rc=$rc` into the
   parent's mailbox. A lane spawned with --parent reports completion; do not poll.
+  A parent whose route is kind=coordinator (what `boop adopt` writes) gets that
+  hail TYPED INTO ITS PANE, mid-turn or idle; no wait needs arming.
   `--wait` blocks on that row and exits with the lane's rc, so spawn-and-join is
   one command; `--wait-timeout <s>` (default 3600, 0 waits forever) exits 124.
   The same wait after the fact is `boop beep lane wait <lane>`.
@@ -142,6 +144,8 @@ HAIL: boop beep hail <lane> --body \"text\" [--from <me>] [--kind <k>]
     kimi      typed into its TUI window, then C-s (Enter alone only QUEUES)
   A harness with no in-flight port would report `nextturn` and the supervisor
   would hold the text for a resume turn; none does today.
+  A kind=coordinator route (an adopted pane) is delivered by literal keystrokes
+  plus Enter into its pane; a kind=lane route is left for its supervisor.
   Proof of delivery is in the store, not in a screenshot:
     boop db \"SELECT * FROM agent_edge\" -- edge kind deliver-midturn/deliver-nextturn
   and the mailbox row's to_timestamp is stamped when the lane takes it.
@@ -436,7 +440,8 @@ enum SubCmd {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Rewrite a registry route only; never spawns.
+    /// Register an existing interactive pane as a coordinator route; never
+    /// spawns. Hails and lane-completion results are typed into its pane.
     #[command(hide = true)]
     Adopt {
         #[arg(long)]
