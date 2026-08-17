@@ -2,12 +2,39 @@
 //! default (branch at the stated base sha) and refuses a non-fast-forward;
 //! working in the main tree requires `main_tree: true`.
 
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
+use wait_timeout::ChildExt;
 
 use crate::harness::SpawnSpec;
+
+/// Every spawn-path child (`just --show`, `just boop-start`, the setup shell)
+/// dies on this one deadline; a hang here must not hang the whole spawn.
+const SPAWN_CHILD_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// A spawn-path child ran past `SPAWN_CHILD_TIMEOUT`; its whole process group
+/// was SIGKILLed rather than left to hang the spawn.
+#[derive(Debug)]
+pub struct SpawnChildTimedOut {
+    what: &'static str,
+    seconds: u64,
+}
+
+impl std::fmt::Display for SpawnChildTimedOut {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} exceeded the {}s spawn deadline and was killed",
+            self.what, self.seconds
+        )
+    }
+}
+
+impl std::error::Error for SpawnChildTimedOut {}
 
 /// Create the directory a spawn runs in and run its setup steps. Returns that
 /// directory. In the main tree the repo is the working dir and must
@@ -55,15 +82,13 @@ pub fn prepare_spawn_dir(spec: &SpawnSpec) -> Result<PathBuf> {
 /// pre-commit hook's inputs makes every `git commit` abort, and a lane reads
 /// that abort as success; warning instead would reproduce the loss it prevents.
 pub fn warm_start(worktree: &Path) -> Result<()> {
-    if !has_recipe(worktree, "boop-start") {
+    if !has_recipe(worktree, "boop-start")? {
         return Ok(());
     }
     let started = std::time::Instant::now();
-    let output = Command::new("just")
-        .arg("boop-start")
-        .current_dir(worktree)
-        .output()
-        .context("run just boop-start")?;
+    let mut cmd = Command::new("just");
+    cmd.arg("boop-start").current_dir(worktree);
+    let output = run_captured_with_deadline(cmd, "just boop-start", SPAWN_CHILD_TIMEOUT)?;
     let text = String::from_utf8_lossy(&output.stdout);
     for line in text.lines() {
         println!("  {line}");
@@ -81,14 +106,106 @@ pub fn warm_start(worktree: &Path) -> Result<()> {
     Ok(())
 }
 
-/// True when `just` is on PATH and this tree declares `name`.
-fn has_recipe(worktree: &Path, name: &str) -> bool {
-    Command::new("just")
-        .args(["--show", name])
-        .current_dir(worktree)
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+/// True when `just` is on PATH and this tree declares `name`. A timeout is a
+/// real failure and propagates; `just` missing or the recipe absent stays `false`.
+fn has_recipe(worktree: &Path, name: &str) -> Result<bool> {
+    let mut cmd = Command::new("just");
+    cmd.args(["--show", name]).current_dir(worktree);
+    match run_captured_with_deadline(cmd, "just --show", SPAWN_CHILD_TIMEOUT) {
+        Ok(output) => Ok(output.status.success()),
+        Err(err) if err.downcast_ref::<SpawnChildTimedOut>().is_some() => Err(err),
+        Err(_) => Ok(false),
+    }
+}
+
+/// Put `cmd` in its own process group so a timeout kill takes any grandchildren
+/// with it, then spawn it.
+fn spawn_grouped(cmd: &mut Command) -> Result<std::process::Child> {
+    cmd.process_group(0);
+    cmd.spawn().context("spawn child")
+}
+
+/// `kill -9` the whole group `pid` leads, since `pid` was made its own group
+/// leader by `spawn_grouped`.
+fn kill_process_group(pid: i32) {
+    let _ = Command::new("kill")
+        .args(["-9", &format!("-{pid}")])
+        .status();
+}
+
+fn read_all(pipe: Option<impl std::io::Read>) -> Vec<u8> {
+    let mut buf = Vec::new();
+    if let Some(mut pipe) = pipe {
+        let _ = pipe.read_to_end(&mut buf);
+    }
+    buf
+}
+
+/// Wait on `child` up to `deadline`; past it, kill the group and return
+/// `SpawnChildTimedOut` instead of leaving the caller to hang.
+fn wait_with_deadline(
+    mut child: std::process::Child,
+    what: &'static str,
+    deadline: Duration,
+) -> Result<std::process::ExitStatus> {
+    let pid = child.id() as i32;
+    match child
+        .wait_timeout(deadline)
+        .with_context(|| format!("wait on {what}"))?
+    {
+        Some(status) => Ok(status),
+        None => {
+            kill_process_group(pid);
+            let _ = child.wait();
+            Err(SpawnChildTimedOut {
+                what,
+                seconds: deadline.as_secs(),
+            }
+            .into())
+        }
+    }
+}
+
+/// Deadline-bounded equivalent of `Command::output`: stdout/stderr are read on
+/// their own threads so a full pipe can never block the deadline wait.
+fn run_captured_with_deadline(
+    mut cmd: Command,
+    what: &'static str,
+    deadline: Duration,
+) -> Result<std::process::Output> {
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    let mut child = spawn_grouped(&mut cmd)?;
+    let stdout_pipe = child.stdout.take();
+    let stderr_pipe = child.stderr.take();
+    let stdout_reader = std::thread::spawn(move || read_all(stdout_pipe));
+    let stderr_reader = std::thread::spawn(move || read_all(stderr_pipe));
+    let status = match wait_with_deadline(child, what, deadline) {
+        Ok(status) => status,
+        Err(err) => {
+            let _ = stdout_reader.join();
+            let _ = stderr_reader.join();
+            return Err(err);
+        }
+    };
+    let stdout = stdout_reader.join().unwrap_or_default();
+    let stderr = stderr_reader.join().unwrap_or_default();
+    Ok(std::process::Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
+/// Deadline-bounded equivalent of `Command::status`: stdio stays inherited, so
+/// the setup step's own output still streams live.
+fn run_status_with_deadline(
+    mut cmd: Command,
+    what: &'static str,
+    deadline: Duration,
+) -> Result<std::process::ExitStatus> {
+    let child = spawn_grouped(&mut cmd)?;
+    wait_with_deadline(child, what, deadline)
 }
 
 /// `git -C repo merge --ff-only <sha>`; a non-fast-forward is an error.
@@ -116,12 +233,9 @@ fn run_git(repo: &PathBuf, args: &[&str]) -> Result<()> {
 
 /// Run one setup step (a shell command) inside `cwd`.
 fn run_shell(cwd: &PathBuf, command: &str) -> Result<()> {
-    let status = Command::new("sh")
-        .arg("-c")
-        .arg(command)
-        .current_dir(cwd)
-        .status()
-        .with_context(|| format!("run setup step in {}", cwd.display()))?;
+    let mut cmd = Command::new("sh");
+    cmd.arg("-c").arg(command).current_dir(cwd);
+    let status = run_status_with_deadline(cmd, "sh -c <setup>", SPAWN_CHILD_TIMEOUT)?;
     if !status.success() {
         anyhow::bail!("setup step failed in {}: {command}", cwd.display());
     }
@@ -335,7 +449,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("boop-nostart-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        assert!(!super::has_recipe(&dir, "boop-start"));
+        assert!(!super::has_recipe(&dir, "boop-start").unwrap());
         super::warm_start(&dir).expect("no recipe means no work");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -347,10 +461,62 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("justfile"), "boop-start:\n    @exit 3\n").unwrap();
-        assert!(super::has_recipe(&dir, "boop-start"));
+        assert!(super::has_recipe(&dir, "boop-start").unwrap());
         let error = super::warm_start(&dir).unwrap_err().to_string();
         assert!(error.contains("could not commit"), "{error}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // RECEIPT: before this deadline, `sh -c 'sleep 999'` under `.status()`
+    // blocked forever; nothing in the spawn path ever returned.
+    #[test]
+    fn a_hung_setup_step_fails_within_its_deadline_instead_of_hanging() {
+        let mut cmd = std::process::Command::new("sh");
+        cmd.arg("-c").arg("sleep 999");
+        let started = std::time::Instant::now();
+        let result = super::run_status_with_deadline(
+            cmd,
+            "sh -c <setup>",
+            std::time::Duration::from_secs(2),
+        );
+        let elapsed = started.elapsed();
+        let error = result.unwrap_err();
+        assert!(
+            error.downcast_ref::<super::SpawnChildTimedOut>().is_some(),
+            "{error}"
+        );
+        assert!(elapsed < std::time::Duration::from_secs(10), "{elapsed:?}");
+    }
+
+    /// The killed child's whole process group dies too, not just the `sh` pid:
+    /// a grandchild started after the kill signal proves nothing survived.
+    #[test]
+    fn the_killed_child_leaves_no_orphan() {
+        let marker = std::env::temp_dir().join(format!(
+            "boop-orphan-check-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _ = std::fs::remove_file(&marker);
+        let mut cmd = std::process::Command::new("sh");
+        cmd.arg("-c").arg(format!(
+            "sleep 3 && touch {} && sleep 999",
+            marker.display()
+        ));
+        let result = super::run_status_with_deadline(
+            cmd,
+            "sh -c <setup>",
+            std::time::Duration::from_secs(1),
+        );
+        assert!(result.is_err());
+        std::thread::sleep(std::time::Duration::from_secs(4));
+        assert!(
+            !marker.exists(),
+            "the grandchild ran after the kill, so the group survived it"
+        );
     }
 
     use std::process::Command;
