@@ -112,6 +112,11 @@ pub trait LaneChannel: Send {
         "harness_session"
     }
 
+    /// Hand the lane's brief over before the first turn. A transport that can
+    /// lose its conversation re-feeds this text after a respawn; a harness that
+    /// keeps its own history ignores it.
+    fn set_brief(&mut self, _brief: &str) {}
+
     /// Send `text` as a new turn. Called once to open the lane with the brief,
     /// then again for every batch of messages that arrived between turns.
     fn start_turn(&mut self, text: &str) -> Result<()>;

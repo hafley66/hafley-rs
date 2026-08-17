@@ -15,6 +15,10 @@ const IDLE_SETTLE: Duration = Duration::from_secs(20);
 /// Footer lines carry a rotating tip and a clock; they are not turn state.
 const FOOTER_LINES: usize = 3;
 const BOOT_CEILING: Duration = Duration::from_secs(90);
+/// The line prefacing a re-fed brief. A respawned window starts inside a
+/// worktree that already holds the dead window's work, and a bare brief reads
+/// as a cold start. Kept to one pane line so a capture can assert it whole.
+const RESPAWN_PREFACE: &str = "Resumed after a window death; prior progress is in the worktree.";
 
 /// How one harness's terminal UI is spoken to.
 #[derive(Clone, Debug)]
@@ -40,10 +44,11 @@ pub struct TuiChannel {
     session: String,
     cwd: PathBuf,
     conversation: Option<String>,
-    /// The first turn's text; re-fed into a respawned window that lost its
-    /// conversation so a mid-lane steer never tells the harness to continue
-    /// work it never saw.
-    opening_turn: Option<String>,
+    /// The lane's brief, as the supervisor loaded it. Re-fed into a respawned
+    /// window that lost its conversation so a mid-lane steer never tells the
+    /// harness to continue work it never saw. A channel driven without a
+    /// supervisor falls back to the first turn's text.
+    brief: Option<String>,
     turn_started_ms: u64,
     /// Pane body hash and when it was first seen, for the idle test.
     settled_since: Option<(u64, Instant)>,
@@ -86,7 +91,7 @@ impl TuiChannel {
             session,
             cwd: spec.cwd.clone(),
             conversation: spec.resume.clone(),
-            opening_turn: None,
+            brief: None,
             turn_started_ms: 0,
             settled_since: None,
             turn_open: false,
@@ -151,7 +156,7 @@ impl TuiChannel {
     }
 
     /// Type text into the agent window, respawning it first if it died. A
-    /// respawn that produced a blank window re-feeds the opening turn before
+    /// respawn that produced a blank window re-feeds the prefaced brief before
     /// the pending text, so a mid-lane steer does not tell the harness to
     /// continue work it never saw.
     fn type_and_submit_or_respawn(&mut self, text: &str) -> Result<()> {
@@ -166,13 +171,14 @@ impl TuiChannel {
             }
             self.reopen_window()?;
             let refeed = self
-                .opening_turn
+                .brief
                 .as_deref()
-                .filter(|opening| *opening != text)
-                .filter(|_| self.profile.resume_flag.is_none() || self.conversation.is_none());
+                .filter(|brief| *brief != text)
+                .filter(|_| self.profile.resume_flag.is_none() || self.conversation.is_none())
+                .map(|brief| format!("{RESPAWN_PREFACE}\n\n{brief}"));
             match refeed {
-                Some(opening) => {
-                    self.type_and_submit(opening)?;
+                Some(refeed) => {
+                    self.type_and_submit(&refeed)?;
                     self.wait_for_turn_accepted()?;
                     self.type_and_submit(text)?;
                 }
@@ -269,6 +275,10 @@ impl LaneChannel for TuiChannel {
         }
     }
 
+    fn set_brief(&mut self, brief: &str) {
+        self.brief = Some(brief.to_owned());
+    }
+
     fn start_turn(&mut self, text: &str) -> Result<()> {
         info!(
             harness = self.profile.harness,
@@ -277,8 +287,8 @@ impl LaneChannel for TuiChannel {
             "tui turn starting"
         );
         self.turn_started_ms = crate::channel::now_ms();
-        if self.opening_turn.is_none() {
-            self.opening_turn = Some(text.to_owned());
+        if self.brief.is_none() {
+            self.brief = Some(text.to_owned());
         }
         self.type_and_submit_or_respawn(text)?;
         self.turn_open = true;
@@ -725,6 +735,75 @@ mod tests {
             pane.contains("nudge-text"),
             "nudge missing from the respawned window"
         );
+    }
+
+    // FAIL-PRE-FIX: the re-fed brief arrived bare, so the harness read it as a
+    // cold start and rewrote work the dead window had already committed to the
+    // worktree. Sabotage receipt: dropping RESPAWN_PREFACE from the refeed text
+    // FAILED this on the missing preface line.
+    #[test]
+    fn a_refed_brief_opens_with_the_resumption_preface() {
+        let guard = TmuxGuard::new("preface");
+        let profile = TuiProfile {
+            harness: "tuitest",
+            command: "sh -c 'echo booted; exec sleep 300'".to_owned(),
+            steer_key: None,
+            boot_keys: Vec::new(),
+            resume_flag: None,
+        };
+        let mut channel =
+            TuiChannel::open(profile, &spec(None), Some(guard.socket.clone())).unwrap();
+        channel.start_turn("BRIEF-TEXT").unwrap();
+        let dead = channel.target().to_owned();
+        crate::tmux::mux()
+            .kill_window(Some(&guard.socket), &dead)
+            .unwrap();
+        channel.steer("nudge-text").unwrap();
+        let pane = crate::tmux::mux()
+            .capture_pane(Some(&guard.socket), channel.target(), None)
+            .unwrap();
+        assert!(
+            pane.contains(RESPAWN_PREFACE),
+            "the re-fed brief carries no resumption preface: {pane}"
+        );
+        assert!(pane.contains("BRIEF-TEXT"), "{pane}");
+    }
+
+    // FAIL-PRE-FIX: the channel inferred the brief from whichever turn came
+    // first, so a lane opened on a resume nudge re-fed the nudge after a window
+    // death. Sabotage receipt: making `set_brief` a no-op FAILED this on the
+    // missing BRIEF-TEXT with RESUME-NUDGE re-fed in its place.
+    #[test]
+    fn a_supervisor_supplied_brief_outranks_the_first_turn() {
+        let guard = TmuxGuard::new("setbrief");
+        let profile = TuiProfile {
+            harness: "tuitest",
+            command: "sh -c 'echo booted; exec sleep 300'".to_owned(),
+            steer_key: None,
+            boot_keys: Vec::new(),
+            resume_flag: None,
+        };
+        let mut channel =
+            TuiChannel::open(profile, &spec(None), Some(guard.socket.clone())).unwrap();
+        channel.set_brief("BRIEF-TEXT");
+        channel.start_turn("RESUME-NUDGE").unwrap();
+        let dead = channel.target().to_owned();
+        crate::tmux::mux()
+            .kill_window(Some(&guard.socket), &dead)
+            .unwrap();
+        channel.steer("nudge-text").unwrap();
+        let pane = crate::tmux::mux()
+            .capture_pane(Some(&guard.socket), channel.target(), None)
+            .unwrap();
+        assert!(
+            pane.contains("BRIEF-TEXT"),
+            "the supervisor's brief was not re-fed: {pane}"
+        );
+        assert!(
+            !pane.contains("RESUME-NUDGE"),
+            "turn one's text was re-fed instead of the brief: {pane}"
+        );
+        assert!(pane.contains("nudge-text"), "{pane}");
     }
 
     // A respawn that resumes a pinned conversation must NOT re-feed the brief:
