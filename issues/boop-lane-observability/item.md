@@ -1,11 +1,15 @@
 ---
 created: 2026-08-13
-updated: 2026-08-13
+updated: 2026-08-17
 type: epic
 owner: chrishafley
 status: open
 priority: high
 labels: [domain-boop, intent-observability]
+related: ['@boop-pane-liveness']
+commits:
+- hash: 80d9bd0
+  summary: Fix fresh Codex lanes dropping their brief
 ---
 
 # 000 Boop lane observability
