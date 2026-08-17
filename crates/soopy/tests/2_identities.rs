@@ -212,7 +212,9 @@ fn the_blake3_constructor_matches_the_variant_it_builds() {
     );
     assert_eq!(ContentId::blake3(b"hello"), ContentId::blake3(b"hello"));
     assert_ne!(ContentId::blake3(b"hello"), ContentId::blake3(b"other"));
-    assert!(ContentId::blake3(b"hello").to_string().starts_with("blake3:"));
+    assert!(ContentId::blake3(b"hello")
+        .to_string()
+        .starts_with("blake3:"));
 }
 
 #[test]

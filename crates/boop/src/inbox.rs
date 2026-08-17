@@ -361,7 +361,10 @@ mod tests {
 
     #[test]
     fn a_batch_names_the_id_and_the_sender_of_every_row() {
-        let text = batch_text(&[message("m1", "coord", "first"), message("m2", "coord", "second")]);
+        let text = batch_text(&[
+            message("m1", "coord", "first"),
+            message("m2", "coord", "second"),
+        ]);
         assert_eq!(
             text,
             "[boop m1 from coordinator] first\n\n[boop m2 from coordinator] second"

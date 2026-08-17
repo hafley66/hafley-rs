@@ -1032,7 +1032,15 @@ mod tests {
             "a live adopted pane target is alive"
         );
         let output = Command::new("tmux")
-            .args(["-L", &server.socket, "list-panes", "-t", "alive", "-F", "#{pane_id}"])
+            .args([
+                "-L",
+                &server.socket,
+                "list-panes",
+                "-t",
+                "alive",
+                "-F",
+                "#{pane_id}",
+            ])
             .output()
             .unwrap();
         let pane = String::from_utf8(output.stdout).unwrap();

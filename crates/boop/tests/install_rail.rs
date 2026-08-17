@@ -150,7 +150,10 @@ fn a_commit_that_never_reached_origin_main_refuses_the_install() {
 #[test]
 fn a_repo_without_origin_main_refuses_the_install() {
     let repo = Fixture::new();
-    git(&repo.root, &["update-ref", "-d", "refs/remotes/origin/main"]);
+    git(
+        &repo.root,
+        &["update-ref", "-d", "refs/remotes/origin/main"],
+    );
     let (code, _, err) = guard(&repo.root);
     assert_eq!(code, 1, "{err}");
     assert!(err.contains("no origin/main"), "{err}");
