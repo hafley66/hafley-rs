@@ -14,9 +14,10 @@ use tracing_subscriber::EnvFilter;
 
 use boop::bus::Route;
 use boop::event::AgentEvent;
+use boop::mailwait::Watch;
 use boop::proc::ProcReader;
 use boop::registry::Registry;
-use boop::{bus, config, ident, identity, lane, proc, tmux};
+use boop::{bus, config, ident, identity, lane, mailwait, proc, tmux};
 #[cfg(feature = "agent-read")]
 use boop::{query, usage};
 
@@ -149,6 +150,18 @@ HAIL: boop beep hail <lane> --body \"text\" [--from <me>] [--kind <k>]
     boop db \"SELECT * FROM agent_edge\" -- edge kind deliver-midturn/deliver-nextturn
   and the mailbox row's to_timestamp is stamped when the lane takes it.
 
+WAIT: every agent can background a shell, so the universal push is a block:
+    boop wait <message-id>          the reply to what you just sent
+    boop wait --me [--as <name>]    the next unread mail addressed to you
+    boop beep hail <lane> --body \"...\" --wait-timeout <s>   send, then block
+  Default timeout 540s (under the 10-minute cap a background shell gives you),
+  `--wait-timeout <s>` overrides it, and a timeout exits 124 printing the
+  re-run line on stdout AND stderr. A reply is a row naming your id in
+  `reply_to`, or the recipient's next mail back to you. Every arrival is
+  printed and stamped delivered, so a second wait on the same id blocks
+  instead of replaying it. The LAST line of every exit is the next command to
+  run; nobody composes one by hand.
+
 ACK: boop beep message ack is age-based bulk-mark, NOT proof-of-read. An ack
   proves read at best, never compliance; compliance = the work's own artifacts.
 
@@ -276,6 +289,24 @@ enum SubCmd {
         #[arg(long)]
         json: bool,
     },
+    /// Block until mail lands: the reply to <id>, or the next unread row
+    /// addressed to you with --me. Every exit prints the next command to run.
+    Wait {
+        /// The id `boop beep hail` printed. Omit it and pass --me instead.
+        #[arg(value_name = "MESSAGE-ID", required_unless_present = "me")]
+        id: Option<String>,
+        /// Wait for the next unread mail addressed to the caller.
+        #[arg(long, conflicts_with = "id")]
+        me: bool,
+        /// Whose inbox to watch, when the whoami ladder cannot say.
+        #[arg(long = "as", value_name = "NAME")]
+        as_name: Option<String>,
+        /// Seconds to block before exiting 124.
+        #[arg(long, default_value_t = mailwait::DEFAULT_TIMEOUT_SECS)]
+        wait_timeout: u64,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
     /// Register this interactive Codex tmux pane as a coordinator route.
     Me {
         /// Registry name; defaults to codex-<pane id>.
@@ -394,6 +425,9 @@ enum SubCmd {
         box_: Option<String>,
         #[arg(long)]
         socket: Option<String>,
+        /// Send, then block for the reply exactly as `boop wait <id>` does.
+        #[arg(long, value_name = "SECS")]
+        wait_timeout: Option<u64>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -673,6 +707,7 @@ fn main() -> Result<()> {
             kind,
             box_,
             socket,
+            wait_timeout,
             mail_dir,
         } => run_hail(
             &registry,
@@ -682,6 +717,7 @@ fn main() -> Result<()> {
             kind.as_deref(),
             box_.as_deref(),
             socket.as_deref(),
+            wait_timeout,
             mail_dir.as_deref(),
         ),
         SubCmd::Sweep {
@@ -747,8 +783,8 @@ fn main() -> Result<()> {
             parent,
             goal,
             mail_dir,
-        // An adopted pane is an interactive session with no lane supervisor
-        // polling its mailbox; `coordinator` makes hail deliver by pane injection.
+            // An adopted pane is an interactive session with no lane supervisor
+            // polling its mailbox; `coordinator` makes hail deliver by pane injection.
         } => run_adopt(
             &name,
             "coordinator",
@@ -835,6 +871,19 @@ fn main() -> Result<()> {
                 session,
             })
         }
+        SubCmd::Wait {
+            id,
+            me,
+            as_name,
+            wait_timeout,
+            mail_dir,
+        } => run_wait(
+            id.as_deref(),
+            me,
+            as_name.as_deref(),
+            wait_timeout,
+            mail_dir.as_deref(),
+        ),
         SubCmd::Whoami { json } => run_whoami(json),
         SubCmd::Me { name, mail_dir } => run_me(name.as_deref(), mail_dir.as_deref()),
         SubCmd::Config { cmd } => run_config(cmd),
@@ -1678,6 +1727,7 @@ fn run_hail(
     kind: Option<&str>,
     box_name: Option<&str>,
     socket: Option<&str>,
+    wait_timeout: Option<u64>,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
@@ -1694,7 +1744,34 @@ fn run_hail(
     };
     append_message_to(&dir, box_name.unwrap_or("bus.ndjson"), &message)?;
     record_control_edge(&message)?;
-    let routes = bus::read_routes(&dir)?;
+    deliver_hail(registry, &dir, &message, socket)?;
+    line(&format!(
+        "to await the reply: boop wait {}   (or: boop wait --me &)",
+        message.id
+    ));
+    let Some(timeout_secs) = wait_timeout else {
+        return Ok(());
+    };
+    wait_and_exit(
+        &dir,
+        Watch::Reply { id: message.id },
+        timeout_secs,
+        None,
+        mail_dir_arg,
+    )
+}
+
+/// Put one queued message in front of its recipient, by whatever its route
+/// kind allows. A lane's own supervisor reads the mailbox, so a lane row is
+/// left where it lies.
+fn deliver_hail(
+    registry: &Registry,
+    dir: &Path,
+    message: &bus::Message,
+    socket: Option<&str>,
+) -> Result<()> {
+    let to = message.to.as_str();
+    let routes = bus::read_routes(dir)?;
     let Some(route) = routes.get(to) else {
         println!("queued {} -> {to}", message.id);
         println!("no registry route for {to}: message stays queued, to_timestamp null");
@@ -1721,7 +1798,7 @@ fn run_hail(
         println!("{to} has no tmux pane: message stays queued, to_timestamp null");
         return Ok(());
     };
-    let line = bus::injected_line(&message);
+    let line = bus::injected_line(message);
     // Route the send through the harness control facet; tmux is a transport
     // detail inside the impl. The session carries the pane handle spawn gave it.
     let harness_id = route.harness.as_deref().unwrap_or("claude");
@@ -1862,6 +1939,93 @@ fn record_control_edge(message: &boop::bus::Message) -> Result<()> {
         .unwrap_or(0);
     store.add_edge_at(&message.from, &message.to, &message.kind, timestamp)?;
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// wait
+// ---------------------------------------------------------------------------
+
+/// How often the mailbox is re-read. boop carries no file-watch dependency
+/// (notify lives in soopy), and a mail wait is measured in minutes.
+const WAIT_POLL: std::time::Duration = std::time::Duration::from_secs(1);
+
+fn run_wait(
+    id: Option<&str>,
+    me: bool,
+    as_name: Option<&str>,
+    timeout_secs: u64,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let watch = match (id, me) {
+        (Some(id), _) => Watch::Reply { id: id.to_owned() },
+        (None, _) => Watch::Inbox {
+            name: waiting_as(&dir, as_name)?,
+        },
+    };
+    wait_and_exit(&dir, watch, timeout_secs, as_name, mail_dir_arg)
+}
+
+/// Whose inbox `--me` watches: the name given, else the identity ladder's lane
+/// or session. An unresolved caller is told to name itself, never guessed at.
+fn waiting_as(dir: &Path, as_name: Option<&str>) -> Result<String> {
+    if let Some(name) = as_name {
+        return Ok(name.to_owned());
+    }
+    let routes = bus::read_routes(dir).unwrap_or_default();
+    let identity = identity::resolve(&routes)?;
+    identity.lane.or(identity.session).context(
+        "boop wait --me cannot tell who you are; pass --as <name> (boop whoami shows the ladder)",
+    )
+}
+
+/// Block until the watch is satisfied, print what arrived, take delivery of it,
+/// and exit. A timeout exits 124 with the re-run line on both streams.
+fn wait_and_exit(
+    dir: &Path,
+    watch: Watch,
+    timeout_secs: u64,
+    as_name: Option<&str>,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let command = watch.command(
+        timeout_secs,
+        as_name,
+        mail_dir_arg
+            .map(|path| path.display().to_string())
+            .as_deref(),
+    );
+    info!(watching = watch.what(), timeout_secs, "mail wait starting");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+    loop {
+        let arrivals = watch.arrivals(&all_messages(dir)?);
+        if !arrivals.is_empty() {
+            info!(
+                watching = watch.what(),
+                rows = arrivals.len(),
+                "mail wait answered"
+            );
+            for message in &arrivals {
+                line(&bus::message_line(message));
+                append_ack(dir, None, message)?;
+            }
+            line("re-arm: boop wait --me &");
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            let timed_out = mailwait::timeout_line(&watch, timeout_secs, &command);
+            info!(
+                watching = watch.what(),
+                timeout_secs,
+                exit_code = 124,
+                "mail wait timed out"
+            );
+            line(&timed_out);
+            eprintln!("{timed_out}"); // @eprintln-ok: the re-run line must survive a redirected stdout
+            std::process::exit(124);
+        }
+        std::thread::sleep(WAIT_POLL);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -3355,6 +3519,9 @@ enum BeepCmd {
         kind: Option<String>,
         #[arg(long)]
         socket: Option<String>,
+        /// Send, then block for the reply exactly as `boop wait <id>` does.
+        #[arg(long, value_name = "SECS")]
+        wait_timeout: Option<u64>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -3950,6 +4117,7 @@ fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
             from,
             kind,
             socket,
+            wait_timeout,
             mail_dir,
         } => run_hail(
             registry,
@@ -3959,6 +4127,7 @@ fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
             kind.as_deref(),
             None,
             socket.as_deref(),
+            wait_timeout,
             mail_dir.as_deref(),
         ),
         BeepCmd::Message { cmd } => match cmd {
