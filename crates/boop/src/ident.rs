@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::harness::SessionRef;
 
@@ -137,7 +137,7 @@ pub struct TraceEvent {
 
 /// A joined trace event returned by the lane query. Endpoint identities are
 /// returned as strings so callers never need dictionary table knowledge.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct TraceEventRow {
     pub event_key: String,
     pub lane: String,

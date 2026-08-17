@@ -4,16 +4,23 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::bus::{Message, Route};
 use crate::proc::ProcReader;
 use crate::runtime::{runtime_snapshot, AgentRuntimeRow, RuntimeSnapshotInput};
 use crate::tmux::Multiplexer;
-use crate::Store;
+use crate::{Store, TraceEventRow};
 
 /// Version of the JSON session-graph document.
+///
+/// `trace_events` is an additive member of schema version 1. It has a serde
+/// default so a version-1 document produced before this member existed still
+/// deserializes with an empty event list.
 pub const AGENT_SESSION_GRAPH_SCHEMA_VERSION: u32 = 1;
+
+/// Maximum number of trace events exposed by one graph document.
+const AGENT_SESSION_GRAPH_TRACE_EVENT_LIMIT: u64 = 1_000;
 
 /// Filters for one session-graph read.
 #[derive(Clone, Debug, Default)]
@@ -28,23 +35,27 @@ pub type LoadAgentSessionGraph = fn(&Store, AgentSessionGraphQuery) -> Result<Ag
 /// Harness-qualified public identity. The store currently keys sessions by
 /// the bare `dict_session` value, so a collision that already merged rows in
 /// storage cannot be reconstructed by this projection.
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Deserialize, Serialize)]
 pub struct AgentSessionIdentity {
     pub harness: String,
     pub id: String,
 }
 
 /// The complete native-session and shell projection.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct AgentSessionGraph {
     pub schema_version: u32,
     pub sessions: Vec<AgentSessionNode>,
     pub edges: Vec<AgentSessionEdge>,
     pub shells: Vec<AgentShellNode>,
+    /// Events whose lane belongs to one of the selected `sessions` or
+    /// `shells`. Older schema-version-1 documents may omit this member.
+    #[serde(default)]
+    pub trace_events: Vec<TraceEventRow>,
 }
 
 /// One normalized harness transcript session.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct AgentSessionNode {
     pub session: AgentSessionIdentity,
     pub cwd: Option<PathBuf>,
@@ -54,7 +65,7 @@ pub struct AgentSessionNode {
 }
 
 /// One native parent-child session relation.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct AgentSessionEdge {
     pub parent: AgentSessionIdentity,
     pub child: AgentSessionIdentity,
@@ -62,7 +73,7 @@ pub struct AgentSessionEdge {
 }
 
 /// One registered lane with no harness transcript session.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct AgentShellNode {
     pub lane: String,
     pub parent_lane: Option<String>,
@@ -234,12 +245,42 @@ pub fn load_agent_session_graph(
         }
     }
 
+    let trace_events = query_trace_events(store, &sessions, &shells)?;
+
     Ok(AgentSessionGraph {
         schema_version: AGENT_SESSION_GRAPH_SCHEMA_VERSION,
         sessions,
         edges,
         shells,
+        trace_events,
     })
+}
+
+/// Query the bounded event surface for exactly the lanes selected by the
+/// graph's cwd and history filters. `Store::query_trace_events` accepts one
+/// lane at a time, so the per-lane reads are merged and capped again here.
+fn query_trace_events(
+    store: &Store,
+    sessions: &[AgentSessionNode],
+    shells: &[AgentShellNode],
+) -> Result<Vec<TraceEventRow>> {
+    let lanes = sessions
+        .iter()
+        .map(|session| session.session.id.clone())
+        .chain(shells.iter().map(|shell| shell.lane.clone()))
+        .collect::<BTreeSet<_>>();
+    let mut events = Vec::new();
+    for lane in lanes {
+        events
+            .extend(store.query_trace_events(Some(&lane), AGENT_SESSION_GRAPH_TRACE_EVENT_LIMIT)?);
+    }
+    events.sort_by(|left, right| {
+        left.created_ts
+            .cmp(&right.created_ts)
+            .then_with(|| left.event_key.cmp(&right.event_key))
+    });
+    events.truncate(AGENT_SESSION_GRAPH_TRACE_EVENT_LIMIT as usize);
+    Ok(events)
 }
 
 /// Load the durable graph and merge one bounded tmux/process observation.
@@ -249,6 +290,10 @@ pub fn load_agent_session_graph_with_runtime(
     runtime: AgentSessionGraphRuntime<'_>,
 ) -> Result<AgentSessionGraph> {
     let include_history = query.include_history;
+    let cwd = query
+        .cwd
+        .as_ref()
+        .map(|path| path.to_string_lossy().into_owned());
     let mut graph = load_agent_session_graph(store, query)?;
     let session_keys = graph
         .sessions
@@ -271,6 +316,16 @@ pub fn load_agent_session_graph_with_runtime(
             if !include_history && shell.state != "live" {
                 continue;
             }
+            if let Some(cwd) = cwd.as_deref() {
+                let shell_matches_cwd = shell
+                    .cwd
+                    .as_ref()
+                    .map(|path| path.to_string_lossy() == cwd)
+                    .unwrap_or(false);
+                if !shell_matches_cwd {
+                    continue;
+                }
+            }
             if let Some(existing) = graph
                 .shells
                 .iter_mut()
@@ -285,6 +340,7 @@ pub fn load_agent_session_graph_with_runtime(
     graph
         .shells
         .sort_by(|left, right| left.lane.cmp(&right.lane));
+    graph.trace_events = query_trace_events(store, &graph.sessions, &graph.shells)?;
     Ok(graph)
 }
 
@@ -368,7 +424,7 @@ pub(crate) fn assert_fixture_sessions_project(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ident::LaneSpawn;
+    use crate::ident::{LaneSpawn, TraceEvent};
     use crate::runtime::{ProcessLiveness, ResolvedRoute, RuntimeLiveness, TmuxLiveness};
 
     #[test]
@@ -671,5 +727,195 @@ mod tests {
             .iter()
             .any(|session| session.session.harness == "opencode"));
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn graph_json_contains_trace_event_fixture_and_applies_cwd_and_history_filters() {
+        let path = std::env::temp_dir().join(format!(
+            "boop-session-graph-trace-filter-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        let harness = store.intern_public("dict_harness", "codex").unwrap();
+        let repo = store.intern_public("dict_cwd", "/repo").unwrap();
+        let other = store.intern_public("dict_cwd", "/other").unwrap();
+        for (name, cwd_id) in [
+            ("native-live", repo),
+            ("native-dead", repo),
+            ("native-other", other),
+        ] {
+            let session = store.intern_public("dict_session", name).unwrap();
+            store
+                .connection()
+                .execute(
+                    "INSERT INTO agent_session(session_id, harness_id, cwd_id) VALUES (?1, ?2, ?3)",
+                    rusqlite::params![session, harness, cwd_id],
+                )
+                .unwrap();
+        }
+        store
+            .record_status("native-live", 1, "live", None, None)
+            .unwrap();
+        store
+            .record_status("native-dead", 1, "dead", None, None)
+            .unwrap();
+        store
+            .record_status("native-other", 1, "live", None, None)
+            .unwrap();
+        for (lane, cwd, status) in [
+            ("shell-live", "/repo", "live"),
+            ("shell-dead", "/repo", "dead"),
+            ("shell-other", "/other", "live"),
+        ] {
+            store
+                .record_lane_spawn(&LaneSpawn {
+                    lane: lane.into(),
+                    cwd: Some(cwd.into()),
+                    ts: 1,
+                    ..LaneSpawn::default()
+                })
+                .unwrap();
+            store.record_status(lane, 1, status, None, None).unwrap();
+        }
+        for (lane, key, created_ts) in [
+            ("native-live", "event-native-live", 10),
+            ("native-dead", "event-native-dead", 20),
+            ("native-other", "event-native-other", 30),
+            ("shell-live", "event-shell-live", 40),
+            ("shell-dead", "event-shell-dead", 50),
+            ("shell-other", "event-shell-other", 60),
+        ] {
+            store
+                .record_trace_event(&TraceEvent {
+                    event_key: key.into(),
+                    lane: lane.into(),
+                    trace: Some("trace-fixture".into()),
+                    session: Some(lane.into()),
+                    kind: "turn-finish".into(),
+                    from_lane: Some("parent-lane".into()),
+                    to_lane: Some(lane.into()),
+                    started_ts: Some(7),
+                    finished_ts: Some(8),
+                    delivery_state: Some("delivered".into()),
+                    classification: Some("completed".into()),
+                    detail: "fixture detail".into(),
+                    created_ts,
+                })
+                .unwrap();
+        }
+
+        let current = load_agent_session_graph(
+            &store,
+            AgentSessionGraphQuery {
+                cwd: Some("/repo".into()),
+                include_history: false,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            current
+                .trace_events
+                .iter()
+                .map(|event| event.event_key.as_str())
+                .collect::<Vec<_>>(),
+            vec!["event-native-live", "event-shell-live"]
+        );
+        let json = serde_json::to_value(&current).unwrap();
+        assert_eq!(
+            json["trace_events"],
+            serde_json::json!([
+                {
+                    "event_key": "event-native-live",
+                    "lane": "native-live",
+                    "trace": "trace-fixture",
+                    "session": "native-live",
+                    "kind": "turn-finish",
+                    "from_lane": "parent-lane",
+                    "to_lane": "native-live",
+                    "started_ts": 7,
+                    "finished_ts": 8,
+                    "delivery_state": "delivered",
+                    "classification": "completed",
+                    "detail": "fixture detail",
+                    "created_ts": 10
+                },
+                {
+                    "event_key": "event-shell-live",
+                    "lane": "shell-live",
+                    "trace": "trace-fixture",
+                    "session": "shell-live",
+                    "kind": "turn-finish",
+                    "from_lane": "parent-lane",
+                    "to_lane": "shell-live",
+                    "started_ts": 7,
+                    "finished_ts": 8,
+                    "delivery_state": "delivered",
+                    "classification": "completed",
+                    "detail": "fixture detail",
+                    "created_ts": 40
+                }
+            ])
+        );
+        let event_keys = json["trace_events"][0]
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(
+            event_keys,
+            vec![
+                "event_key",
+                "lane",
+                "trace",
+                "session",
+                "kind",
+                "from_lane",
+                "to_lane",
+                "started_ts",
+                "finished_ts",
+                "delivery_state",
+                "classification",
+                "detail",
+                "created_ts",
+            ]
+        );
+
+        let history = load_agent_session_graph(
+            &store,
+            AgentSessionGraphQuery {
+                cwd: Some("/repo".into()),
+                include_history: true,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            history
+                .trace_events
+                .iter()
+                .map(|event| event.event_key.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "event-native-live",
+                "event-native-dead",
+                "event-shell-live",
+                "event-shell-dead",
+            ]
+        );
+        assert!(history
+            .trace_events
+            .iter()
+            .all(|event| !event.lane.ends_with("other")));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn schema_version_one_legacy_graph_defaults_trace_events() {
+        let graph: AgentSessionGraph =
+            serde_json::from_str(r#"{"schema_version":1,"sessions":[],"edges":[],"shells":[]}"#)
+                .unwrap();
+        assert_eq!(graph.schema_version, AGENT_SESSION_GRAPH_SCHEMA_VERSION);
+        assert!(graph.trace_events.is_empty());
     }
 }
