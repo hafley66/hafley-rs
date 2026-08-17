@@ -5,10 +5,72 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 3 | 2026-08-17 | ~/.cargo/bin/boop is whatever the last session built, and nothing printed says which |
 | 2 | 2026-08-17 | a respawned agent window is re-fed a brief it cannot place, or the wrong text entirely |
 | 1 | 2026-08-17 | a lane can die with no result row, no log, no trace |
 
 ---
+
+## 3. ~/.cargo/bin/boop is whatever the last session built, and nothing printed says which
+
+**Incident.** 2026-08-16, three installs over ~/.cargo/bin/boop inside ten
+minutes: 23:43 from a session carrying no fix, 23:45 from the tree holding PR
+#10, 23:49 from the no-fix session again. A lane spawned on the 23:49 bytes died
+at 42s and was reported as PR #10 failing, which it was not. 2026-08-17, a
+fourth install by plain `cp` over the existing file died on first run with
+`Killed: 9`: macOS kept the old code signature attached to the new bytes.
+
+```mermaid
+sequenceDiagram
+    participant A as session A (no fix)
+    participant B as session B (PR #10)
+    participant Bin as ~/.cargo/bin/boop
+    participant L as lane
+    A->>Bin: install 23:43
+    B->>Bin: install 23:45
+    A->>Bin: install 23:49
+    Bin->>L: spawn
+    L--xBin: dead at 42s
+    Note over L: reported as "PR #10 does not work"
+```
+
+**RCA.** Three defects, none of them in any lane.
+
+| # | defect | consequence |
+|---|---|---|
+| 1 | any tree could install, committed or not, merged or not | the running binary matched no nameable commit |
+| 2 | `boop --version` printed the package version and nothing else | all three installs printed `boop 0.0.2`, so no receipt could tell them apart |
+| 3 | a lane spawn logged no binary identity | a lane death could not be attributed to a build even in hindsight |
+
+**Fix.**
+
+| # | change | file |
+|---|---|---|
+| 1 | `just install-boop`: fetch, guard, build with the sha in the environment, then `rm` + `cp` + `codesign --force --sign -` | `justfile`, `crates/boop/scripts/install.sh` |
+| 2 | the guard refuses a tree whose tracked files differ from HEAD, or whose HEAD is not an ancestor of `origin/main`, or that has no `origin/main` to check against; untracked files are printed and allowed | `crates/boop/scripts/install-guard.sh`, also `just install-boop-check <repo>` |
+| 3 | `boop --version` prints `boop <version> (<short sha>[-dirty])`, the stamp coming from `BOOP_BUILD_SHA` when the recipe passes it and from git otherwise | `crates/boop/build.rs`, `crates/boop/src/lib.rs` `BUILD` |
+| 4 | `lane create` names its own build on its first log line, `lane create resolved` | `crates/boop/src/main.rs` `run_lane` |
+
+**Fail-pre-fix tests.** `crates/boop/tests/install_rail.rs`, each with its
+sabotage receipt in its header.
+
+| test | sabotage that failed it |
+|---|---|
+| `a_tracked_change_refuses_the_install` | the guard's tracked-changes block deleted (the install was ALLOWED) |
+| `a_commit_that_never_reached_origin_main_refuses_the_install` | the guard's `merge-base --is-ancestor` block deleted (the install was ALLOWED) |
+| `the_version_string_carries_the_commit_it_was_built_from` | the bare `version` clap attribute restored (`no build stamp in "boop 0.0.2"`) |
+| `a_lane_spawn_names_the_binary_that_ran_it` | `boop_build` dropped from `run_lane`'s first event |
+
+**Rail.** Installing is one recipe and the recipe refuses. `boop --version`
+names a commit, and every `lane create` prints that same string before it spawns
+anything, so a death has a build attached to it in the trail.
+
+**What still cannot be answered.** Nothing stops `cargo install --path` or a
+hand `cp`; the rail is the recipe being the easy path, not a lock on the file.
+The stamp rides the log rather than stdout: `lane create`'s stdout first line is
+a contract two tests in `tests/lane_wait_exit.rs` read.
+The `-dirty` suffix is best-effort: an edit made after the build script ran
+leaves the stamp behind, since no `rerun-if-changed` rule can watch every file.
 
 ## 2. a respawned agent window is re-fed a brief it cannot place, or the wrong text entirely
 

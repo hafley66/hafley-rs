@@ -203,7 +203,7 @@ hidden aliases for one release. Use `beep` and `db`.";
 #[derive(Parser)]
 #[command(
     name = "boop",
-    version,
+    version = boop::BUILD,
     about = "Cross-harness agent transcript reader: drive agents with `beep`, read what they did with `db`",
     after_help = DOCTRINE
 )]
@@ -2224,11 +2224,14 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         args.name.as_deref(),
         args.tmux.as_deref(),
     )?;
+    // The binary's own sha rides the first line of every spawn: a lane that
+    // dies is otherwise impossible to tie to the boop that spawned it.
     info!(
         lane = identity.lane,
         tmux_target = identity.tmux,
         harness = harness_id,
         cwd = %repo.display(),
+        boop_build = boop::BUILD,
         "lane create resolved"
     );
     let worktree_mode = identity.worktree_dir.is_some();

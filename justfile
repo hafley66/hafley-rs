@@ -1,5 +1,14 @@
 set shell := ["bash", "-cu"]
 
+# Install boop over ~/.cargo/bin/boop from a clean tree whose HEAD is already on
+# origin/main, stamping that sha into `boop --version`. Refuses otherwise.
+install-boop:
+    bash crates/boop/scripts/install.sh
+
+# The check on its own, for a driver reading a tree before it builds.
+install-boop-check repo=".":
+    bash crates/boop/scripts/install-guard.sh "{{repo}}"
+
 boop-perf-grid:
     cargo test -p boop --test bench_grid -- --nocapture
 

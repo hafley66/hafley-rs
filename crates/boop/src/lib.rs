@@ -6,6 +6,15 @@
 //! `Store::query_sessions` and `Store::usage_report`; `plans/boop-instant-v2-contract.md`
 //! pins the exact call per view.
 
+/// The build this binary is: the package version and the commit it came from,
+/// `<version> (<short sha>[-dirty])`. `unknown` where no checkout answered.
+/// Printed by `--version` and stamped into every lane spawn, so a lane death
+/// names the binary that ran it.
+pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("BOOP_BUILD_SHA"), ")");
+
+/// Just the commit stamp half of `BUILD`.
+pub const BUILD_SHA: &str = env!("BOOP_BUILD_SHA");
+
 #[cfg(feature = "agent-read")]
 pub mod _0_session_graph;
 #[cfg(feature = "agent-read")]
