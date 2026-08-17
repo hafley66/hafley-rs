@@ -352,7 +352,7 @@ pub fn harness_for_spawn(explicit: Option<&str>, model: Option<&str>) -> Result<
 }
 
 /// Who gets the completion hail: the flag, else the caller (a spawner is the
-/// parent of what it spawns), else a lone registered coordinator.
+/// parent of what it spawns), else a lone pane-backed registered coordinator.
 pub fn resolve_parent(
     explicit: Option<&str>,
     caller_lane: Option<&str>,
@@ -370,7 +370,16 @@ pub fn resolve_parent(
             source: "caller",
         };
     }
-    let mut coordinators = routes.keys().filter(|lane| lane.contains("coordinator"));
+    let mut coordinators = routes
+        .iter()
+        .filter(|(lane, route)| {
+            lane.contains("coordinator")
+                && route
+                    .tmux
+                    .as_deref()
+                    .is_some_and(|target| !target.is_empty())
+        })
+        .map(|(lane, _)| lane);
     let (Some(only), None) = (coordinators.next(), coordinators.next()) else {
         return ParentPick {
             parent: None,
@@ -797,5 +806,20 @@ mod tests {
         assert_eq!(pick.parent, None);
         assert_eq!(pick.source, "none");
         assert_eq!(resolve_parent(None, None, &BTreeMap::new()).source, "none");
+    }
+
+    /// A pane-less coordinator cannot receive the completion injection that
+    /// makes it useful as an inferred parent.
+    #[test]
+    fn a_pane_less_coordinator_is_not_an_inferred_parent() {
+        let mut routes = BTreeMap::new();
+        let mut coordinator = route("unused");
+        coordinator.kind = "coordinator".into();
+        coordinator.tmux = None;
+        routes.insert("sprefa-coordinator".to_owned(), coordinator);
+
+        let pick = resolve_parent(None, None, &routes);
+        assert_eq!(pick.parent, None);
+        assert_eq!(pick.source, "none");
     }
 }

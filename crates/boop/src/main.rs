@@ -1523,8 +1523,8 @@ struct DispatchArgs {
     parent: Option<String>,
     /// What the lane is running toward; written to the route and dispatch mail.
     goal: Option<String>,
-    /// Shell appended after the harness command; `lane create --parent`
-    /// composes the completion hail here.
+    /// Shell appended after the harness command; `lane create --parent` and
+    /// foreground `lane create --wait` compose the completion hail here.
     on_exit: Option<String>,
     /// Run the repo's `boop-start` recipe in a new worktree before spawning.
     warm_start: bool,
@@ -2088,7 +2088,11 @@ fn run_inbox_drain(
     let ledger = inbox::ledger_path(&dir, &name);
     let rows = inbox::undelivered(&all_messages(&dir)?, &name, &inbox::drained(&ledger));
     if rows.is_empty() {
-        debug!(inbox = name, hook = hook.as_str(), "inbox drain found nothing");
+        debug!(
+            inbox = name,
+            hook = hook.as_str(),
+            "inbox drain found nothing"
+        );
         return Ok(());
     }
     let ids: Vec<String> = rows.iter().map(|row| row.id.clone()).collect();
@@ -2428,10 +2432,15 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     let parent = lane::resolve_parent(args.parent.as_deref(), caller_lane.as_deref(), &routes);
     // The epilogue runs in the lane's pane: the sender is the lane, and the
     // mailbox must be the one this dispatch registered in, never the default.
-    let on_exit = parent.parent.as_ref().map(|parent| {
+    // A foreground waiter needs a result row, but it does not need a
+    // coordinator route. Give that row a private recipient when no real
+    // parent resolved. `lane_result_rc_since` keys completion by sender.
+    let result_recipient =
+        completion_recipient(parent.parent.as_deref(), args.wait, &identity.lane);
+    let on_exit = result_recipient.as_ref().map(|recipient| {
         format!(
             "boop hail --to {} --from {} --mail-dir {} --kind result --body \"lane {} done rc=$__rc\" ; boop beep lane delete {} --route-only --mail-dir {}",
-            shell_quote(parent),
+            shell_quote(recipient),
             shell_quote(&identity.lane),
             shell_quote(&hail_mail_dir.display().to_string()),
             identity.lane,
@@ -2491,6 +2500,9 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
                 "parent: {name} (from {}; completion hail appended on exit)",
                 parent.source
             ),
+            None if args.wait => {
+                println!("parent: - (foreground wait owns the completion receipt)")
+            }
             None => println!("parent: - (no completion hail; pass --parent <lane>)"),
         }
         if let Some(goal) = &args.goal {
@@ -2503,11 +2515,6 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             );
         }
         return Ok(());
-    }
-    if args.wait && parent.parent.is_none() {
-        anyhow::bail!(
-            "--wait needs a parent: the result row it blocks on is written by the on-exit hail, which only exists with --parent <lane>"
-        );
     }
     let lane_id = identity.lane.clone();
     let trace = args
@@ -2570,6 +2577,12 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
 
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
+}
+
+fn completion_recipient(parent: Option<&str>, wait: bool, lane: &str) -> Option<String> {
+    parent
+        .map(str::to_owned)
+        .or_else(|| wait.then(|| format!("__wait__{lane}")))
 }
 
 // ---------------------------------------------------------------------------
@@ -2790,10 +2803,10 @@ mod tests {
     use clap::Parser;
 
     use super::{
-        after_agent_summary_sync, agent_summary_text, append_message, config, dead_reason,
-        default_preset_for_harness, lane_state, resolve_dispatch_harness, route_liveness,
-        run_agent, run_lane_delete, run_lane_prune, session_matches_route, sync_session_pid,
-        write_line, write_route, AgentCmd, AgentSummaryCmd, Cli, MeCmd, SubCmd,
+        after_agent_summary_sync, agent_summary_text, append_message, completion_recipient, config,
+        dead_reason, default_preset_for_harness, lane_state, resolve_dispatch_harness,
+        route_liveness, run_agent, run_lane_delete, run_lane_prune, session_matches_route,
+        sync_session_pid, write_line, write_route, AgentCmd, AgentSummaryCmd, Cli, MeCmd, SubCmd,
     };
     use boop::bus::{self, read_routes, Route};
     use boop::proc::SysinfoSnapshot;
@@ -2802,6 +2815,19 @@ mod tests {
         AgentRuntimeRow, AgentSummary, AgentSummaryActivity, AgentSummaryAgent, MailboxCounts,
         ProcessLiveness, RuntimeLiveness, TmuxLiveness, WorktreeCoordinates,
     };
+
+    #[test]
+    fn foreground_wait_owns_a_result_recipient_without_a_parent() {
+        assert_eq!(
+            completion_recipient(None, true, "feature-a"),
+            Some("__wait__feature-a".into())
+        );
+        assert_eq!(
+            completion_recipient(Some("coordinator"), true, "feature-a"),
+            Some("coordinator".into())
+        );
+        assert_eq!(completion_recipient(None, false, "feature-a"), None);
+    }
 
     #[test]
     fn public_agent_summary_command_parses() {
@@ -3911,7 +3937,7 @@ enum LaneCmd {
         #[arg(long)]
         variant: Option<String>,
         /// Block until the lane's on-exit result row lands, then exit with its
-        /// rc. Needs a parent, since that hail is what writes the row.
+        /// rc. Without a parent, the waiter owns a private result recipient.
         #[arg(long)]
         wait: bool,
         /// Seconds `--wait` blocks before exiting 124; 0 waits forever.

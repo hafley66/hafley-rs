@@ -187,7 +187,10 @@ fn adopting_a_claude_coordinator_installs_both_hooks_once() {
     // Stop hook would deliver every hail twice.
     assert!(coord.adopt().status.success());
     assert_eq!(commands(&coord.settings(), "Stop"), vec![stop]);
-    assert_eq!(commands(&coord.settings(), "UserPromptSubmit"), vec![prompt]);
+    assert_eq!(
+        commands(&coord.settings(), "UserPromptSubmit"),
+        vec![prompt]
+    );
 
     let removed = coord.boop(&[
         "adopt",
@@ -256,14 +259,7 @@ fn a_hail_during_a_long_turn_arrives_once_at_the_next_stop_and_never_as_keystrok
     // Delivery is recorded on the bus, not only in the ledger, so a blocking
     // `boop wait --me` does not replay what the hook already handed over. The
     // interim shell hooks could not do this half and a wait replayed the mail.
-    let waited = coord.boop(&[
-        "wait",
-        "--me",
-        "--as",
-        &coord.name,
-        "--wait-timeout",
-        "1",
-    ]);
+    let waited = coord.boop(&["wait", "--me", "--as", &coord.name, "--wait-timeout", "1"]);
     assert_eq!(
         waited.status.code(),
         Some(124),
@@ -277,8 +273,14 @@ fn a_hail_during_a_long_turn_arrives_once_at_the_next_stop_and_never_as_keystrok
         !pane.contains("lane fake-lane done rc=0"),
         "the pane received keystrokes: {pane}"
     );
-    assert!(!pane.contains("second hail"), "the pane was typed at: {pane}");
-    assert!(!pane.contains("[bus "), "an injected line reached the pane: {pane}");
+    assert!(
+        !pane.contains("second hail"),
+        "the pane was typed at: {pane}"
+    );
+    assert!(
+        !pane.contains("[bus "),
+        "an injected line reached the pane: {pane}"
+    );
 }
 
 // The prompt hook prints the same mail as plain context, and one drain is the
@@ -290,7 +292,10 @@ fn the_prompt_hook_prints_the_mail_as_context_and_takes_delivery() {
     coord.hail("read this before your next prompt");
     let printed = coord.drain("prompt");
     assert!(printed.starts_with("boop inbox:\n\n"), "{printed}");
-    assert!(printed.contains("read this before your next prompt"), "{printed}");
+    assert!(
+        printed.contains("read this before your next prompt"),
+        "{printed}"
+    );
     assert!(
         serde_json::from_str::<serde_json::Value>(printed.trim()).is_err(),
         "the prompt hook must print context, not a decision object: {printed}"
@@ -353,7 +358,11 @@ fn a_lane_patch_installs_no_hooks() {
         String::from_utf8_lossy(&patched.stderr)
     );
     assert!(
-        !coord.project().join(".claude").join("settings.json").exists(),
+        !coord
+            .project()
+            .join(".claude")
+            .join("settings.json")
+            .exists(),
         "a lane must not get a hook inbox"
     );
 }
