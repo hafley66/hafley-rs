@@ -58,7 +58,7 @@ pub use _0_session_graph::{
 };
 #[cfg(feature = "agent-read")]
 pub use activity::{ActivityCount, ActivityScope, ToolResultAvailability};
-pub use ident::{Store, SyncStat};
+pub use ident::{Store, SyncStat, TraceEvent, TraceEventRow, TRACE_EVENT_RETENTION_LIMIT};
 #[cfg(feature = "agent-read")]
 pub use query::{FactKind, FactQuery};
 pub use registry::Registry;
