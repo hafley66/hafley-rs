@@ -2779,11 +2779,11 @@ mod tests {
 
     use super::{
         after_agent_summary_sync, agent_summary_text, append_message, config, dead_reason,
-        default_preset_for_harness, resolve_dispatch_harness, run_lane_delete, run_lane_prune,
-        session_matches_route, sync_session_pid, write_line, write_route, AgentSummaryCmd, Cli,
-        SubCmd,
+        default_preset_for_harness, lane_state, resolve_dispatch_harness, route_liveness,
+        run_agent, run_lane_delete, run_lane_prune, session_matches_route, sync_session_pid,
+        write_line, write_route, AgentCmd, AgentSummaryCmd, Cli, SubCmd,
     };
-    use boop::bus::{read_routes, Route};
+    use boop::bus::{self, read_routes, Route};
     use boop::proc::SysinfoSnapshot;
     use boop::registry::Registry;
     use boop::{
@@ -2934,6 +2934,56 @@ mod tests {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ))
+    }
+
+    #[test]
+    fn native_registration_stays_live_until_explicit_done_and_done_is_once() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        run_agent(AgentCmd::Register {
+            name: "native-child".into(),
+            kind: "native".into(),
+            parent: Some("coordinator".into()),
+            mail_dir: Some(dir.clone()),
+        })
+        .unwrap();
+
+        let route = read_routes(&dir).unwrap().remove("native-child").unwrap();
+        assert_eq!(
+            lane_state(&Some(boop::tmux::LiveSessions::default()), &route),
+            "live"
+        );
+        assert_eq!(
+            route_liveness(&dir, "native-child"),
+            super::RouteLiveness::Live
+        );
+
+        run_agent(AgentCmd::Done {
+            name: "native-child".into(),
+            rc: 7,
+            mail_dir: Some(dir.clone()),
+        })
+        .unwrap();
+        assert!(!read_routes(&dir).unwrap().contains_key("native-child"));
+
+        let second = run_agent(AgentCmd::Done {
+            name: "native-child".into(),
+            rc: 7,
+            mail_dir: Some(dir.clone()),
+        });
+        assert!(
+            second.is_err(),
+            "a completed native route cannot complete twice"
+        );
+        let messages = bus::read_boxes(&dir)
+            .unwrap()
+            .into_iter()
+            .flat_map(|path| bus::parse_box(&path))
+            .filter(|message| message.kind == "result" && message.from == "native-child")
+            .collect::<Vec<_>>();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].to, "coordinator");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// RECEIPT (Job 3b). A `--route-only` delete drops the lane's registry row
@@ -4460,9 +4510,15 @@ fn run_agent(cmd: AgentCmd) -> Result<()> {
         } => {
             let dir = mail_dir(mail_dir_arg.as_deref())?;
             let routes = bus::read_routes(&dir)?;
-            let parent = routes
+            let route = routes
                 .get(&name)
-                .and_then(|route| route.parent.as_deref())
+                .with_context(|| format!("no registered native route for `{name}`"))?;
+            if !matches!(route.kind.as_str(), "coordinator" | "native") {
+                anyhow::bail!("route `{name}` is not a native agent route")
+            }
+            let parent = route
+                .parent
+                .as_deref()
                 .unwrap_or("sprefa-coordinator")
                 .to_owned();
             let message = bus::Message {
@@ -4708,13 +4764,22 @@ fn dead_reason_token(mail_dir: &std::path::Path, lane: &str) -> String {
 }
 
 fn lane_state(live: &Option<tmux::LiveSessions>, route: &Route) -> &'static str {
-    // An adopted route's target can be a pane (`sprefa:0.0`); liveness is the
-    // session's, and `has` compares whole names.
-    let target = route.tmux.as_deref().unwrap_or("");
-    let session = target.split(':').next().unwrap_or("");
+    // Pane-less native registrations are addressable for their entire
+    // registration lifetime. Their completion event is `agent done`, so an
+    // absent tmux or process trail carries no death information.
+    if route.tmux.is_none() && matches!(route.kind.as_str(), "coordinator" | "native") {
+        return "live";
+    }
     match live {
         None => "?",
-        Some(sessions) if sessions.has(session) => "live",
+        Some(_)
+            if route
+                .tmux
+                .as_deref()
+                .is_some_and(|target| tmux::mux().target_alive(None, target)) =>
+        {
+            "live"
+        }
         Some(_) => "dead",
     }
 }
@@ -4911,6 +4976,9 @@ fn route_liveness(dir: &std::path::Path, lane: &str) -> RouteLiveness {
     let Some(route) = routes.get(lane) else {
         return RouteLiveness::Unknown;
     };
+    if route.tmux.is_none() && matches!(route.kind.as_str(), "coordinator" | "native") {
+        return RouteLiveness::Live;
+    }
     if route.tmux.is_none() {
         return RouteLiveness::Unknown;
     }

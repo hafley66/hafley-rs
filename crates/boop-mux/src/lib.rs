@@ -203,14 +203,18 @@ impl Multiplexer for Tmux {
     }
 
     fn target_alive(&self, socket: Option<&str>, target: &str) -> bool {
-        if !target.contains(':') {
+        if !target.contains(':') && !target.starts_with('%') {
             return self.has_session(socket, target).unwrap_or(false);
         }
         let mut builder = Command::new("tmux");
         if let Some(socket) = socket {
             builder.arg("-L").arg(socket);
         }
-        let target = exact_target(target);
+        let target = if target.starts_with('%') {
+            target.to_owned()
+        } else {
+            exact_target(target)
+        };
         let output = builder
             .args(["list-panes", "-t", &target, "-F", "#{pane_pid}"])
             .output()
@@ -986,6 +990,16 @@ mod tests {
         assert!(
             mux().target_alive(Some(&server.socket), "alive:0.0"),
             "a live adopted pane target is alive"
+        );
+        let output = Command::new("tmux")
+            .args(["-L", &server.socket, "list-panes", "-t", "alive", "-F", "#{pane_id}"])
+            .output()
+            .unwrap();
+        let pane = String::from_utf8(output.stdout).unwrap();
+        let pane = pane.trim();
+        assert!(
+            mux().target_alive(Some(&server.socket), pane),
+            "a live pane id target is alive"
         );
         mux().kill_session(Some(&server.socket), "alive").unwrap();
         assert!(
