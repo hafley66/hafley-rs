@@ -446,6 +446,7 @@ fn opencode_db_path() -> Option<PathBuf> {
 
 /// The opencode command a spawn runs. Opencode has no default model; the
 /// caller resolves one into `spec.model` or the spawn refuses.
+#[allow(dead_code)] // spawn() runs supervisor_command instead; kept live by its own tests below.
 fn launch_command(spec: &SpawnSpec) -> Result<String> {
     let model = spec
         .model
@@ -469,12 +470,14 @@ fn launch_command(spec: &SpawnSpec) -> Result<String> {
     }))
 }
 
+#[allow(dead_code)] // only called from launch_command, itself dead code (see above).
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
 }
 
 /// Double-quote a value for use inside an already-double-quoted `$(cat ...)`
 /// substitution; bash nests nested `"..."` correctly inside `$(...)`.
+#[allow(dead_code)] // only called from launch_command, itself dead code (see above).
 fn shell_quote_double(value: &str) -> String {
     format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
 }
@@ -625,6 +628,7 @@ mod tests {
         launch_command, messages_after, sessions_from, visit_parts_for_messages, Opencode, Part,
     };
     use crate::harness::{Harness, SpawnSpec};
+    use crate::test_support::TempRepo;
 
     static PART_SELECTS: AtomicUsize = AtomicUsize::new(0);
 
@@ -858,67 +862,6 @@ mod tests {
         }
     }
 
-    mod temp_repo {
-        use std::process::Command;
-
-        pub struct TempRepo {
-            pub dir: std::path::PathBuf,
-            pub sha: String,
-            pub worktree: std::path::PathBuf,
-        }
-
-        impl TempRepo {
-            pub fn new() -> TempRepo {
-                let dir = std::env::temp_dir().join(format!("boop-oc-repo-{}", std::process::id()));
-                let _ = std::fs::remove_dir_all(&dir);
-                let worktree =
-                    std::env::temp_dir().join(format!("boop-oc-wt-{}", std::process::id()));
-                let _ = std::fs::remove_dir_all(&worktree);
-                Command::new("git")
-                    .arg("init")
-                    .arg("-q")
-                    .arg(&dir)
-                    .status()
-                    .unwrap();
-                let d = dir.display().to_string();
-                Command::new("git")
-                    .args(["-C", &d, "config", "user.email", "t@t"])
-                    .status()
-                    .unwrap();
-                Command::new("git")
-                    .args(["-C", &d, "config", "user.name", "t"])
-                    .status()
-                    .unwrap();
-                std::fs::write(dir.join("seed.txt"), "s").unwrap();
-                Command::new("git")
-                    .args(["-C", &d, "add", "-A"])
-                    .status()
-                    .unwrap();
-                Command::new("git")
-                    .args(["-C", &d, "commit", "-qm", "seed"])
-                    .status()
-                    .unwrap();
-                let sha = String::from_utf8_lossy(
-                    &Command::new("git")
-                        .args(["-C", &d, "rev-parse", "HEAD"])
-                        .output()
-                        .unwrap()
-                        .stdout,
-                )
-                .trim()
-                .to_owned();
-                TempRepo { dir, sha, worktree }
-            }
-        }
-
-        impl Drop for TempRepo {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_dir_all(&self.dir);
-                let _ = std::fs::remove_dir_all(&self.worktree);
-            }
-        }
-    }
-
     #[test]
     fn a_missing_model_refuses_to_build_a_command() {
         let guard = TmuxGuard::new();
@@ -984,7 +927,7 @@ mod tests {
     #[test]
     fn opencode_spawn_returns_handle_and_stop_tears_down() {
         let guard = TmuxGuard::new();
-        let repo = temp_repo::TempRepo::new();
+        let repo = TempRepo::new();
         let worktree = repo.worktree.clone();
         let mut req = spec(&guard);
         req.main_tree = false;

@@ -15,6 +15,7 @@ use crate::harness::{
     Capabilities, Harness, Ingested, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
 use crate::ident::{Store, SyncStat, UsageRow};
+use crate::lane::ModelSpec;
 use crate::tail;
 
 pub struct Codex;
@@ -163,7 +164,7 @@ fn codex_sessions_dir() -> anyhow::Result<PathBuf> {
 
 /// `codex exec`, never interactive: the on-exit hail rides process exit and
 /// interactive codex idles forever (class 42). `@effort` -> reasoning config.
-fn launch_command(spec: &SpawnSpec) -> String {
+fn launch_command(spec: &SpawnSpec) -> anyhow::Result<String> {
     let mut command = match &spec.resume_session {
         Some(id) => format!(
             "codex exec resume {} {}",
@@ -174,24 +175,19 @@ fn launch_command(spec: &SpawnSpec) -> String {
     };
     command.push_str(" --dangerously-bypass-approvals-and-sandbox");
     if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
-        let (name, effort) = match model.rsplit_once('@') {
-            Some((name, effort)) if matches!(effort, "low" | "medium" | "high") => {
-                (name, Some(effort))
-            }
-            _ => (model, None),
-        };
-        command.push_str(&format!(" -m {}", shell_quote(name)));
-        if let Some(effort) = effort {
+        let model_spec: ModelSpec = model.parse()?;
+        command.push_str(&format!(" -m {}", shell_quote(&model_spec.name)));
+        if let Some(effort) = model_spec.effort {
             command.push_str(&format!(
                 " -c {}",
-                shell_quote(&format!("model_reasoning_effort=\"{effort}\""))
+                shell_quote(&format!("model_reasoning_effort=\"{}\"", effort.as_str()))
             ));
         }
     }
-    spec.with_on_exit(match &spec.env_stamp {
+    Ok(spec.with_on_exit(match &spec.env_stamp {
         Some(stamp) => format!("{stamp} {command}"),
         None => command,
-    })
+    }))
 }
 
 fn shell_quote(value: &str) -> String {
@@ -573,6 +569,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::harness::{claude, Harness, SessionRef};
+    use crate::test_support::TempRepo;
     use crate::Store;
 
     use super::{sessions_in, Codex};
@@ -623,7 +620,7 @@ mod tests {
         let mut spec = spawn_spec(None);
         spec.resume_session = Some("0192aef3-aaaa-bbbb-cccc-dddddddddddd".to_owned());
         spec.model = Some("gpt-5.6-luna".to_owned());
-        let command = super::launch_command(&spec);
+        let command = super::launch_command(&spec).unwrap();
         assert!(command.starts_with("codex exec resume "), "{command}");
         assert!(command.contains("'do the lane'"), "{command}");
         assert!(
@@ -637,7 +634,7 @@ mod tests {
     fn launch_command_passes_model_and_effort_suffix() {
         let mut spec = spawn_spec(None);
         spec.model = Some("gpt-5.6-luna@medium".to_owned());
-        let command = super::launch_command(&spec);
+        let command = super::launch_command(&spec).unwrap();
         assert!(command.starts_with("codex exec 'do the lane'"), "{command}");
         assert!(command.contains(" -m 'gpt-5.6-luna'"), "{command}");
         assert!(
@@ -650,17 +647,23 @@ mod tests {
     fn launch_command_leaves_plain_model_alone() {
         let mut spec = spawn_spec(None);
         spec.model = Some("gpt-5.6-sol".to_owned());
-        let command = super::launch_command(&spec);
+        let command = super::launch_command(&spec).unwrap();
         assert!(command.ends_with(" -m 'gpt-5.6-sol'"), "{command}");
         assert!(!command.contains("model_reasoning_effort"), "{command}");
     }
 
+    /// RECEIPT. Pre-fix, an `@` suffix outside the effort allowlist stayed
+    /// glued to the model name and was passed to codex unvalidated, failing
+    /// downstream inside the codex binary instead of here. `x@turbo` now
+    /// fails at parse, naming the allowlist.
     #[test]
-    fn launch_command_keeps_at_suffix_outside_effort_names() {
+    fn launch_command_rejects_an_at_suffix_outside_the_effort_allowlist() {
         let mut spec = spawn_spec(None);
         spec.model = Some("vendor@custom".to_owned());
-        let command = super::launch_command(&spec);
-        assert!(command.contains(" -m 'vendor@custom'"), "{command}");
+        let error = super::launch_command(&spec).unwrap_err().to_string();
+        assert!(error.contains("low"), "message: {error}");
+        assert!(error.contains("medium"), "message: {error}");
+        assert!(error.contains("high"), "message: {error}");
     }
 
     fn spawn_spec(socket: Option<String>) -> crate::harness::SpawnSpec {
@@ -718,74 +721,10 @@ mod tests {
             .unwrap_or(false)
     }
 
-    /// A throwaway git repo (one seed commit) plus a worktree path; tests
-    /// spawn against it and tear it down.
-    mod temp_repo {
-        use std::process::Command;
-
-        pub struct TempRepo {
-            pub dir: std::path::PathBuf,
-            pub sha: String,
-            pub worktree: std::path::PathBuf,
-        }
-
-        impl TempRepo {
-            pub fn new() -> TempRepo {
-                let dir =
-                    std::env::temp_dir().join(format!("boop-cdx-repo-{}", std::process::id()));
-                let _ = std::fs::remove_dir_all(&dir);
-                let worktree =
-                    std::env::temp_dir().join(format!("boop-cdx-wt-{}", std::process::id()));
-                let _ = std::fs::remove_dir_all(&worktree);
-                Command::new("git")
-                    .arg("init")
-                    .arg("-q")
-                    .arg(&dir)
-                    .status()
-                    .unwrap();
-                let d = dir.display().to_string();
-                Command::new("git")
-                    .args(["-C", &d, "config", "user.email", "t@t"])
-                    .status()
-                    .unwrap();
-                Command::new("git")
-                    .args(["-C", &d, "config", "user.name", "t"])
-                    .status()
-                    .unwrap();
-                std::fs::write(dir.join("seed.txt"), "s").unwrap();
-                Command::new("git")
-                    .args(["-C", &d, "add", "-A"])
-                    .status()
-                    .unwrap();
-                Command::new("git")
-                    .args(["-C", &d, "commit", "-qm", "seed"])
-                    .status()
-                    .unwrap();
-                let sha = String::from_utf8_lossy(
-                    &Command::new("git")
-                        .args(["-C", &d, "rev-parse", "HEAD"])
-                        .output()
-                        .unwrap()
-                        .stdout,
-                )
-                .trim()
-                .to_owned();
-                TempRepo { dir, sha, worktree }
-            }
-        }
-
-        impl Drop for TempRepo {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_dir_all(&self.dir);
-                let _ = std::fs::remove_dir_all(&self.worktree);
-            }
-        }
-    }
-
     #[test]
     fn codex_spawn_returns_handle_and_stop_tears_down() {
         let guard = TmuxGuard::new();
-        let repo = temp_repo::TempRepo::new();
+        let repo = TempRepo::new();
         let mut req = spawn_spec(Some(guard.socket.clone()));
         req.main_tree = false;
         req.base_sha = repo.sha.clone();

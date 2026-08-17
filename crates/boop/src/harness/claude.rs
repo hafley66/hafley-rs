@@ -368,6 +368,7 @@ mod tests {
 
     use crate::harness::Harness;
     use crate::harness::SessionRef;
+    use crate::test_support::TempRepo;
 
     use super::{launch_command, parse_iso_ms, Claude};
 
@@ -509,69 +510,6 @@ mod tests {
         }
     }
 
-    /// A throwaway git repo (one seed commit) plus a worktree path; tests
-    /// spawn against it and tear it down.
-    mod temp_repo {
-        use std::process::Command;
-
-        pub struct TempRepo {
-            pub dir: std::path::PathBuf,
-            pub sha: String,
-            pub worktree: std::path::PathBuf,
-        }
-
-        impl TempRepo {
-            pub fn new() -> TempRepo {
-                let dir = std::env::temp_dir().join(format!("boop-cl-repo-{}", std::process::id()));
-                let _ = std::fs::remove_dir_all(&dir);
-                let worktree =
-                    std::env::temp_dir().join(format!("boop-cl-wt-{}", std::process::id()));
-                let _ = std::fs::remove_dir_all(&worktree);
-                Command::new("git")
-                    .arg("init")
-                    .arg("-q")
-                    .arg(&dir)
-                    .status()
-                    .unwrap();
-                let d = dir.display().to_string();
-                Command::new("git")
-                    .args(["-C", &d, "config", "user.email", "t@t"])
-                    .status()
-                    .unwrap();
-                Command::new("git")
-                    .args(["-C", &d, "config", "user.name", "t"])
-                    .status()
-                    .unwrap();
-                std::fs::write(dir.join("seed.txt"), "s").unwrap();
-                Command::new("git")
-                    .args(["-C", &d, "add", "-A"])
-                    .status()
-                    .unwrap();
-                Command::new("git")
-                    .args(["-C", &d, "commit", "-qm", "seed"])
-                    .status()
-                    .unwrap();
-                let sha = String::from_utf8_lossy(
-                    &Command::new("git")
-                        .args(["-C", &d, "rev-parse", "HEAD"])
-                        .output()
-                        .unwrap()
-                        .stdout,
-                )
-                .trim()
-                .to_owned();
-                TempRepo { dir, sha, worktree }
-            }
-        }
-
-        impl Drop for TempRepo {
-            fn drop(&mut self) {
-                let _ = std::fs::remove_dir_all(&self.dir);
-                let _ = std::fs::remove_dir_all(&self.worktree);
-            }
-        }
-    }
-
     #[test]
     fn claude_capabilities_are_measured() {
         let caps = Claude.capabilities();
@@ -584,7 +522,7 @@ mod tests {
     #[test]
     fn claude_spawn_returns_handle_and_stop_tears_down() {
         let guard = TmuxGuard::new();
-        let repo = temp_repo::TempRepo::new();
+        let repo = TempRepo::new();
         let worktree = repo.worktree.clone();
         let mut req = spec(&guard);
         req.main_tree = false;

@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 
 use crate::channel::jsonrpc::RpcChild;
 use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
+use crate::lane::ModelSpec;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -36,14 +37,19 @@ impl CodexChannel {
             CALL_TIMEOUT,
         )?;
         rpc.notify("initialized", json!({}))?;
-        let (name, effort) = split_effort(spec.model.as_deref());
+        let model_spec = spec
+            .model
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .map(str::parse::<ModelSpec>)
+            .transpose()?;
         let mut params = json!({
             "cwd": spec.cwd.display().to_string(),
             "sandbox": "danger-full-access",
             "approvalPolicy": "never",
         });
-        if let Some(name) = name {
-            params["model"] = Value::String(name.to_owned());
+        if let Some(spec) = &model_spec {
+            params["model"] = Value::String(spec.name.clone());
         }
         let thread = match &spec.resume {
             Some(id) => {
@@ -60,7 +66,9 @@ impl CodexChannel {
             rpc,
             thread,
             turn: None,
-            effort: effort.map(str::to_owned),
+            effort: model_spec
+                .and_then(|spec| spec.effort)
+                .map(|effort| effort.as_str().to_owned()),
         })
     }
 }
@@ -144,20 +152,6 @@ impl LaneChannel for CodexChannel {
     }
 }
 
-/// Split `gpt-5.6-luna@medium` into a model name and a reasoning effort. Only
-/// the three efforts codex accepts count as a suffix.
-fn split_effort(model: Option<&str>) -> (Option<&str>, Option<&str>) {
-    let Some(model) = model.filter(|value| !value.is_empty()) else {
-        return (None, None);
-    };
-    match model.rsplit_once('@') {
-        Some((name, effort)) if matches!(effort, "low" | "medium" | "high") => {
-            (Some(name), Some(effort))
-        }
-        _ => (Some(model), None),
-    }
-}
-
 fn thread_id(reply: &Value) -> Option<String> {
     reply
         .get("thread")
@@ -169,24 +163,6 @@ fn thread_id(reply: &Value) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn effort_suffix_splits_only_on_the_three_codex_efforts() {
-        assert_eq!(
-            split_effort(Some("gpt-5.6-luna@medium")),
-            (Some("gpt-5.6-luna"), Some("medium"))
-        );
-        assert_eq!(
-            split_effort(Some("vendor@custom")),
-            (Some("vendor@custom"), None)
-        );
-        assert_eq!(
-            split_effort(Some("gpt-5.6-sol")),
-            (Some("gpt-5.6-sol"), None)
-        );
-        assert_eq!(split_effort(None), (None, None));
-        assert_eq!(split_effort(Some("")), (None, None));
-    }
 
     #[test]
     fn thread_id_reads_the_nested_field() {
