@@ -29,6 +29,7 @@ pub mod event;
 pub mod harness;
 pub mod ident;
 pub mod identity;
+pub mod inbox;
 pub mod lane;
 pub mod mailwait;
 pub mod proc;

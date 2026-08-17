@@ -20,6 +20,12 @@ fn boop(dir: &Path, args: &[&str]) -> std::process::Output {
         .args(args)
         .arg("--mail-dir")
         .arg(dir)
+        // A store of this test's own. Pointed at the machine's live
+        // ~/.agent/boop.db, `hail`'s control-edge write raced the user's own
+        // boop processes and died on `database is locked` (SQLite code 5) in 3
+        // of 5 whole-suite runs: 374MB, `journal_mode=delete`, a 5s busy_timeout
+        // and writers holding longer than that.
+        .env("BOOP_DB", dir.join("boop.db"))
         .output()
         .unwrap()
 }
@@ -60,9 +66,22 @@ fn route_kind(dir: &Path, name: &str) -> String {
 fn adopt_writes_a_coordinator_route() {
     let dir = mail_dir("adopt");
     let session = TestSession::new("adopt");
+    // `--cwd` is not optional in a test: without it, adopting a claude session
+    // installs the hook inbox into whatever directory the test binary ran in,
+    // which is the crate's own source tree.
     let output = boop(
         &dir,
-        &["adopt", "--name", "test-coord", "--tmux", &session.0, "--harness", "claude"],
+        &[
+            "adopt",
+            "--name",
+            "test-coord",
+            "--tmux",
+            &session.0,
+            "--harness",
+            "claude",
+            "--cwd",
+            dir.to_str().unwrap(),
+        ],
     );
     assert!(output.status.success(), "stderr: {:?}", output.stderr);
     assert_eq!(route_kind(&dir, "test-coord"), "coordinator");
@@ -88,9 +107,22 @@ fn lane_patch_still_writes_a_lane_route() {
 fn hail_to_an_adopted_coordinator_lands_in_its_pane() {
     let dir = mail_dir("deliver");
     let session = TestSession::new("deliver");
+    // `--no-hooks` is the point: pane injection is now the opt-out path, since a
+    // claude coordinator with the hook inbox installed is never typed at.
     let adopted = boop(
         &dir,
-        &["adopt", "--name", "ping-coord", "--tmux", &session.0, "--harness", "claude"],
+        &[
+            "adopt",
+            "--name",
+            "ping-coord",
+            "--tmux",
+            &session.0,
+            "--harness",
+            "claude",
+            "--cwd",
+            dir.to_str().unwrap(),
+            "--no-hooks",
+        ],
     );
     assert!(adopted.status.success(), "stderr: {:?}", adopted.stderr);
     let hailed = boop(

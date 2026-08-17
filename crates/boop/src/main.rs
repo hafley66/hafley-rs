@@ -9,7 +9,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use boop::bus::Route;
@@ -17,7 +17,7 @@ use boop::event::AgentEvent;
 use boop::mailwait::Watch;
 use boop::proc::ProcReader;
 use boop::registry::Registry;
-use boop::{bus, config, ident, identity, lane, mailwait, proc, tmux};
+use boop::{bus, config, ident, identity, inbox, lane, mailwait, proc, tmux};
 #[cfg(feature = "agent-read")]
 use boop::{query, usage};
 
@@ -307,6 +307,11 @@ enum SubCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
+    /// Mail a claude coordinator reads at a turn boundary: the hook inbox.
+    Inbox {
+        #[command(subcommand)]
+        cmd: InboxCmd,
+    },
     /// Register this interactive Codex tmux pane as a coordinator route.
     Me {
         /// Registry name; defaults to codex-<pane id>.
@@ -482,13 +487,23 @@ enum SubCmd {
         dry_run: bool,
     },
     /// Register an existing interactive pane as a coordinator route; never
-    /// spawns. Hails and lane-completion results are typed into its pane.
+    /// spawns. A claude session also gets the hook inbox, and reads its mail at
+    /// the next turn boundary; every other harness has it typed into its pane.
     #[command(hide = true)]
     Adopt {
         #[arg(long)]
         name: String,
         #[arg(long)]
         tmux: String,
+        /// Keep pane injection: do not install the hook inbox for a claude
+        /// coordinator.
+        #[arg(long)]
+        no_hooks: bool,
+        /// Take the hook inbox back out of the project settings and leave the
+        /// route alone. The pane is not checked, so a dead one is fine;
+        /// `boop inbox hooks --uninstall` is the same edit without a route.
+        #[arg(long)]
+        uninstall_hooks: bool,
         #[arg(long)]
         harness: Option<String>,
         #[arg(long)]
@@ -775,6 +790,8 @@ fn main() -> Result<()> {
         SubCmd::Adopt {
             name,
             tmux,
+            no_hooks,
+            uninstall_hooks,
             harness,
             session_id,
             cwd,
@@ -797,6 +814,10 @@ fn main() -> Result<()> {
             parent.as_deref(),
             goal.as_deref(),
             mail_dir.as_deref(),
+            HookWiring {
+                no_hooks,
+                uninstall: uninstall_hooks,
+            },
         ),
         SubCmd::Prune { mail_dir } => run_prune(mail_dir.as_deref()),
         SubCmd::Beep { cmd } => run_beep(&registry, cmd),
@@ -885,6 +906,7 @@ fn main() -> Result<()> {
             mail_dir.as_deref(),
         ),
         SubCmd::Whoami { json } => run_whoami(json),
+        SubCmd::Inbox { cmd } => run_inbox(cmd),
         SubCmd::Me { name, mail_dir } => run_me(name.as_deref(), mail_dir.as_deref()),
         SubCmd::Config { cmd } => run_config(cmd),
     }
@@ -1807,6 +1829,21 @@ fn deliver_hail(
         );
         return Ok(());
     }
+    // A session that drains its own mail at a turn boundary must never be typed
+    // at: the keystrokes would land mid-turn, mid-dialog, or in a tool call. The
+    // installed hook is the routing decision, so removing it restores injection.
+    if let Some(cwd) = route.cwd.as_deref() {
+        if inbox::installed_for(Path::new(cwd), to) {
+            println!("queued {} -> {to} (hook inbox drains it)", message.id);
+            info!(
+                to,
+                message_id = message.id,
+                delivery = "hook",
+                "hail queued for a hook inbox"
+            );
+            return Ok(());
+        }
+    }
     let pane = route.tmux.as_deref();
     let no_pane =
         pane.is_none() || pane.is_some_and(|target| !tmux::mux().target_alive(socket, target));
@@ -2001,6 +2038,96 @@ fn waiting_as(dir: &Path, as_name: Option<&str>) -> Result<String> {
     identity.lane.or(identity.session).context(
         "boop wait --me cannot tell who you are; pass --as <name> (boop whoami shows the ladder)",
     )
+}
+
+fn run_inbox(cmd: InboxCmd) -> Result<()> {
+    match cmd {
+        InboxCmd::Drain {
+            as_name,
+            hook,
+            mail_dir,
+        } => run_inbox_drain(as_name.as_deref(), hook.into(), mail_dir.as_deref()),
+        InboxCmd::Hooks {
+            name,
+            cwd,
+            uninstall,
+        } => {
+            let cwd = match cwd {
+                Some(cwd) => cwd,
+                None => std::env::current_dir().context("read the current directory")?,
+            };
+            let changed = write_inbox_hooks(&cwd, &name, uninstall)?;
+            report_inbox_hooks(&cwd, &name, uninstall, changed);
+            Ok(())
+        }
+    }
+}
+
+/// Hand over every unread row addressed to `name`, once. The bus ack and the
+/// drained-id ledger are both written before anything is printed: a batch this
+/// process printed and then died on must never be printed twice.
+fn run_inbox_drain(
+    as_name: Option<&str>,
+    hook: boop::inbox::Hook,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let name = waiting_as(&dir, as_name)?;
+    let ledger = inbox::ledger_path(&dir, &name);
+    let rows = inbox::undelivered(&all_messages(&dir)?, &name, &inbox::drained(&ledger));
+    if rows.is_empty() {
+        debug!(inbox = name, hook = hook.as_str(), "inbox drain found nothing");
+        return Ok(());
+    }
+    let ids: Vec<String> = rows.iter().map(|row| row.id.clone()).collect();
+    inbox::record_drained(&ledger, &ids)?;
+    append_acks(&dir, &rows)?;
+    info!(
+        inbox = name,
+        hook = hook.as_str(),
+        rows = rows.len(),
+        "inbox drained"
+    );
+    line(&hook.payload(&inbox::batch_text(&rows)));
+    Ok(())
+}
+
+/// Write the coordinator's hooks into its project settings, or take them out.
+/// Returns how many hook entries changed; 0 means the file already said this.
+fn write_inbox_hooks(cwd: &Path, name: &str, uninstall: bool) -> Result<usize> {
+    let path = inbox::settings_path(cwd);
+    if uninstall && !path.exists() {
+        return Ok(0);
+    }
+    // The CAS closure is `Fn` and may run more than once, so the count comes
+    // out through a cell rather than by assignment.
+    let changed = std::cell::Cell::new(0);
+    bus::cas_update_json(&path, |settings| {
+        changed.set(match uninstall {
+            true => inbox::uninstall(settings, name),
+            false => inbox::install(settings, name),
+        });
+        Ok(())
+    })?;
+    Ok(changed.get())
+}
+
+fn report_inbox_hooks(cwd: &Path, name: &str, uninstall: bool, changed: usize) {
+    let path = inbox::settings_path(cwd);
+    let verb = match (uninstall, changed) {
+        (false, 0) => "already installed for",
+        (false, _) => "installed for",
+        (true, 0) => "nothing to remove for",
+        (true, _) => "removed for",
+    };
+    println!("inbox hooks {verb} {name} in {}", path.display());
+    if !uninstall {
+        for hook in boop::inbox::Hook::installed() {
+            if let Some(event) = hook.event() {
+                println!("  {event}: {}", inbox::drain_command(name, hook));
+            }
+        }
+    }
 }
 
 /// Block until the watch is satisfied, print what arrived, take delivery of it,
@@ -2438,6 +2565,13 @@ fn shell_quote(value: &str) -> String {
 // ---------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
+/// What an adopt does about the adopted session's hook inbox.
+struct HookWiring {
+    no_hooks: bool,
+    uninstall: bool,
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_adopt(
     name: &str,
     kind: &str,
@@ -2450,7 +2584,16 @@ fn run_adopt(
     parent: Option<&str>,
     goal: Option<&str>,
     mail_dir_arg: Option<&Path>,
+    hooks: HookWiring,
 ) -> Result<()> {
+    // Taking the hooks out is about a project directory, not about a pane, and
+    // the pane is usually already gone by the time anyone wants that.
+    if hooks.uninstall {
+        let project = adopt_cwd(cwd)?;
+        let changed = write_inbox_hooks(&project, name, true)?;
+        report_inbox_hooks(&project, name, true, changed);
+        return Ok(());
+    }
     if !tmux::mux().has_session(None, tmux_session)? {
         println!("refusing adopt {name}: no such tmux session {tmux_session}");
         return Ok(());
@@ -2473,7 +2616,24 @@ fn run_adopt(
     };
     write_route(&dir, name, route)?;
     println!("adopted {name} -> tmux {tmux_session}");
+    // A claude pane is driven by a model between turns, so mail belongs at a
+    // turn boundary; every other harness keeps pane injection.
+    let claude = harness == Some("claude");
+    if claude && !hooks.no_hooks {
+        let project = adopt_cwd(cwd)?;
+        let changed = write_inbox_hooks(&project, name, false)?;
+        report_inbox_hooks(&project, name, false, changed);
+        println!("hails to {name} now queue for the hook inbox, never its keyboard");
+    }
     Ok(())
+}
+
+/// The project directory whose settings carry an adopted session's hooks.
+fn adopt_cwd(cwd: Option<&str>) -> Result<PathBuf> {
+    match cwd {
+        Some(cwd) => Ok(PathBuf::from(cwd)),
+        None => std::env::current_dir().context("read the current directory"),
+    }
 }
 
 fn run_prune(mail_dir_arg: Option<&Path>) -> Result<()> {
@@ -2577,9 +2737,36 @@ fn append_ack(
     _box_name: Option<&str>,
     message: &bus::Message,
 ) -> Result<()> {
-    let mut ack = message.clone();
-    ack.to_timestamp = Some(bus::now_iso());
-    append_message(dir, &ack)
+    append_acks(dir, std::slice::from_ref(message)).map(|_| ())
+}
+
+/// Take delivery of a whole batch in one open: a drained inbox is N rows and a
+/// per-row append would be N opens of the same file.
+fn append_acks(dir: &std::path::Path, messages: &[bus::Message]) -> Result<usize> {
+    if messages.is_empty() {
+        return Ok(0);
+    }
+    let path = dir.join("bus.ndjson");
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).context("create mail dir")?;
+    }
+    let stamp = bus::now_iso();
+    let mut batch = String::new();
+    for message in messages {
+        let mut ack = message.clone();
+        ack.to_timestamp = Some(stamp.clone());
+        batch.push_str(&bus::message_line(&ack));
+        batch.push('\n');
+    }
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .context("open ndjson box")?;
+    file.write_all(batch.as_bytes())
+        .context("append ndjson box")?;
+    Ok(messages.len())
 }
 
 #[cfg(test)]
@@ -3826,6 +4013,53 @@ enum LaneMessageCmd {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+enum HookArg {
+    /// Claude Code's `Stop`: the mail comes back as a block decision.
+    Stop,
+    /// Claude Code's `UserPromptSubmit`: the mail is printed as context.
+    Prompt,
+    /// A human or a script reading the inbox.
+    Plain,
+}
+
+impl From<HookArg> for boop::inbox::Hook {
+    fn from(arg: HookArg) -> boop::inbox::Hook {
+        match arg {
+            HookArg::Stop => boop::inbox::Hook::Stop,
+            HookArg::Prompt => boop::inbox::Hook::Prompt,
+            HookArg::Plain => boop::inbox::Hook::Plain,
+        }
+    }
+}
+
+#[derive(Subcommand)]
+enum InboxCmd {
+    /// Print the unread mail addressed to a coordinator and record it as handed
+    /// over. Silent with an empty inbox, so a hook that runs on every turn
+    /// costs one line of nothing.
+    Drain {
+        /// Whose inbox to drain; defaults to the identity ladder's answer.
+        #[arg(long = "as", value_name = "NAME")]
+        as_name: Option<String>,
+        #[arg(long, value_enum, default_value_t = HookArg::Plain)]
+        hook: HookArg,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Install (or remove) the two drain hooks in <cwd>/.claude/settings.json.
+    /// `boop adopt --harness claude` does this for you.
+    Hooks {
+        #[arg(long)]
+        name: String,
+        /// The project whose settings carry the hooks; defaults to this dir.
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+        #[arg(long)]
+        uninstall: bool,
+    },
+}
+
 #[derive(Subcommand)]
 enum MessageCmd {
     /// Mark mail handled, in bulk.
@@ -4335,6 +4569,8 @@ fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             parent,
             goal,
             mail_dir,
+            // A lane pane runs a supervisor that reads the mailbox itself, so
+            // no hook inbox belongs on it.
         } => run_adopt(
             &lane,
             "lane",
@@ -4347,6 +4583,10 @@ fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             parent.as_deref(),
             goal.as_deref(),
             mail_dir.as_deref(),
+            HookWiring {
+                no_hooks: true,
+                uninstall: false,
+            },
         ),
         LaneCmd::Delete {
             lane,

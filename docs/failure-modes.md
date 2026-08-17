@@ -5,11 +5,89 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 4 | 2026-08-17 | coordinator mail is typed into a pane a model is driving |
 | 3 | 2026-08-17 | ~/.cargo/bin/boop is whatever the last session built, and nothing printed says which |
 | 2 | 2026-08-17 | a respawned agent window is re-fed a brief it cannot place, or the wrong text entirely |
 | 1 | 2026-08-17 | a lane can die with no result row, no log, no trace |
 
 ---
+
+## 4. coordinator mail is typed into a pane a model is driving
+
+**Incident.** The user, 2026-08-16: "we need a different mail system,
+interrupting the enter key and dialog is a bit noisy, how do others solve this".
+Every hail to a coordinator-kind route was typed into its tmux pane, whatever
+that pane was doing: a tool call, a permission dialog, a half-written line. The
+keystrokes are indistinguishable from the human's own.
+
+```mermaid
+sequenceDiagram
+    participant L as lane
+    participant B as boop hail
+    participant P as coordinator pane
+    participant M as the model in it
+    L->>B: result rc=0
+    B->>P: send-keys the line + Enter
+    Note over P: mid tool call / mid dialog
+    P--xM: keystrokes land in whatever was open
+```
+
+**RCA.** Delivery had exactly one mechanism and no notion of a turn boundary.
+Two local orchestrators had already answered it differently, and neither types
+blind: herdr wraps its keystrokes in bracketed paste and learns pane state from
+the agent's own hooks (`~/projects/ext/herdr/src/app/api_helpers.rs:26-60`), and
+cate never types at all, driving its agent over RPC with hook state bridged in
+(`~/projects/cate-local/src/cateAgent/main/piRpcClient.ts:139`). A claude pane is
+driven by a model between turns, so its mail belongs at a turn boundary. An
+interim shell-hook version proved the shape live in sprefa on 2026-08-17, with
+one half missing: it could not ack on the bus, so a `boop wait` replayed mail the
+hook had already delivered.
+
+**Fix.**
+
+| # | change | file |
+|---|---|---|
+| 1 | `boop inbox drain --as <name> --hook stop\|prompt\|plain`: unread rows for `<name>`, recorded as handed over, then printed in that hook's shape. Silent on an empty inbox | `crates/boop/src/inbox.rs`, `main.rs` `run_inbox_drain` |
+| 2 | `boop adopt --harness claude` installs both hooks in `<cwd>/.claude/settings.json`, idempotently. `--no-hooks` opts out, `--uninstall-hooks` takes them back out with no live pane needed, and `boop inbox hooks --name X --uninstall` does the same | `main.rs` `run_adopt`, `write_inbox_hooks` |
+| 3 | `deliver_hail` queues instead of typing when the recipient's settings hold its drain hook. The installed hook IS the routing decision, so no registry field can disagree with it and removing the hook restores injection by itself | `main.rs` `deliver_hail` |
+| 4 | delivery is recorded twice: the bus ack (so a `boop wait` does not replay it) and the drained-id ledger `inbox-drained.<name>` (so a lost ack race cannot double-deliver) | `inbox.rs` `record_drained`, `main.rs` `append_acks` |
+| 5 | the ack batch is one open and one write, never one per row | `main.rs` `append_acks` |
+
+**Fail-pre-fix tests.** 12 unit tests in `inbox.rs`, 8 e2e in
+`tests/inbox_hooks.rs` over a real tmux pane. Sabotage receipts:
+
+| test | sabotage that failed it |
+|---|---|
+| `a_hail_during_a_long_turn_arrives_once_at_the_next_stop_and_never_as_keystrokes` | the `installed_for` branch cut from `deliver_hail`: `injected into tmux boop-inbox-61308-deliver` and the body in `capture-pane` |
+| `a_second_install_adds_nothing` + `adopting_a_claude_coordinator_installs_both_hooks_once` | the dedupe check cut from `install`, giving two Stop hooks and every hail twice |
+| `the_stop_payload_is_json_whatever_the_body_holds` | the payload hand-formatted instead of serialized; a body carrying a quote stopped parsing |
+| `a_drained_id_is_never_offered_again` | `record_drained` made a no-op |
+| the same e2e, on its wait assertion | `append_acks` cut from the drain: `a wait replayed drained mail`, printing the row the hook had already handed over |
+
+**Rail.** No keystroke reaches a claude coordinator. The e2e asserts the pane
+holds neither the hail body nor an injected `[bus ` line, and that a second
+drain, a second Stop, and a blocking `boop wait` all come back empty.
+
+**What still cannot be answered.** A hook that never fires never delivers: a
+coordinator killed mid-turn leaves its mail unread until it next reaches a Stop
+or a prompt, which is the same property the interim shell hooks had. Lanes keep
+the mailbox poll, deliberately: their pane runs a supervisor that reads the bus
+itself, and `beep lane patch` installs no hooks.
+
+**Test hygiene closed with it.** `coordinator_ping.rs` adopted a claude session
+with no `--cwd`, so once adopt installed hooks it wrote
+`crates/boop/.claude/settings.json` into the crate's own source tree, and its
+pane-injection test passed only because the route carried no cwd for
+`installed_for` to read. Both of its adopts now name a temp `--cwd`, and the
+injection test says `--no-hooks` out loud: pane injection is the opt-out path
+now.
+
+**A flake closed on the way past.** `tests/coordinator_ping.rs` wrote the
+machine's live `~/.agent/boop.db` and died on `database is locked` (SQLite code
+5) in 3 of 5 whole-suite runs: 374MB, `journal_mode=delete`, a 5s busy timeout,
+and the user's own boop processes holding write locks longer than that. Both
+files now point `BOOP_DB` at a store of the test's own. WAL on that store is a
+separate question and still open.
 
 ## 3. ~/.cargo/bin/boop is whatever the last session built, and nothing printed says which
 
