@@ -9,7 +9,7 @@ use std::sync::mpsc::{channel, Receiver};
 use anyhow::{Context, Result};
 use serde_json::Value;
 
-use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEnd};
+use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
 
 pub struct KimiChannel {
     cwd: PathBuf,
@@ -79,7 +79,7 @@ impl LaneChannel for KimiChannel {
         Ok(Delivery::NextTurn)
     }
 
-    fn poll_turn(&mut self, timeout: std::time::Duration) -> Result<Option<TurnEnd>> {
+    fn next_event(&mut self, timeout: std::time::Duration) -> Result<Option<TurnEvent>> {
         if let Some(lines) = self.lines.as_ref() {
             while let Ok(value) = lines.try_recv() {
                 if let Some(id) = session_id_of(&value) {
@@ -88,7 +88,7 @@ impl LaneChannel for KimiChannel {
             }
         }
         let Some(turn) = self.turn.as_mut() else {
-            return Ok(Some(TurnEnd::failed("no kimi turn to join")));
+            return Ok(Some(TurnEvent::failed("no kimi turn to join")));
         };
         let Some(status) =
             crate::channel::opencode::wait_for(turn, timeout).context("wait kimi turn")?
@@ -104,8 +104,8 @@ impl LaneChannel for KimiChannel {
             }
         }
         Ok(Some(match status {
-            0 => TurnEnd::ok("rc=0"),
-            other => TurnEnd::failed(format!("rc={other}")),
+            0 => TurnEvent::ok("rc=0"),
+            other => TurnEvent::failed(format!("rc={other}")),
         }))
     }
 

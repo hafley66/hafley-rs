@@ -287,6 +287,9 @@ impl Store {
     }
 
     pub fn default_path() -> Result<PathBuf> {
+        if let Some(path) = std::env::var_os("BOOP_DB").filter(|path| !path.is_empty()) {
+            return Ok(PathBuf::from(path));
+        }
         let home = dirs::home_dir().context("resolve home directory")?;
         Ok(home.join(".agent").join("boop.db"))
     }
@@ -1348,7 +1351,10 @@ impl Store {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn write_turn(
+    /// Write one turn, interning the session and role. The store's e2e tests
+    /// seed a source session through this; the resident `db sync` writer is
+    /// the normal caller.
+    pub fn write_turn(
         &self,
         session: &str,
         turn: u64,

@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
-use crate::channel::{ChannelSpec, LaneChannel};
+use crate::channel::{ChannelSpec, LaneChannel, TurnEvent};
 use crate::harness::{Harness, OneShotSpec};
 use crate::ident::TurnQuery;
 use crate::registry::Registry;
@@ -17,6 +17,10 @@ use crate::rows::TurnRow;
 /// A failed rewrite is retried this many times, then the pair is dropped.
 const REWRITE_ATTEMPTS: u32 = 3;
 const REWRITE_BACKOFF: Duration = Duration::from_secs(10);
+
+/// Default resident-chat context ceiling in tokens; `compact_tokens: 0` in the
+/// rules disables compaction, absent means this default.
+const DEFAULT_COMPACT_TOKENS: usize = 100_000;
 
 /// One contact pair: a user turn and the assistant turn that preceded it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,7 +39,8 @@ pub struct Args {
     pub mode: Option<String>,
     pub model: String,
     pub state_dir: PathBuf,
-    pub out_dir: PathBuf,
+    /// The boop store to read turns from; `None` resolves the default path.
+    pub store_path: Option<PathBuf>,
     pub poll: Duration,
     /// Seed the cursor at 0 so an existing conversation maps in full. Default
     /// remains tail-only; `cursor` names an explicit starting ts instead.
@@ -74,6 +79,10 @@ pub struct Formula {
     /// Caller-owned window SQL; when present it replaces the compiled
     /// bundlers entirely (see `Store::window_rows` for the row contract).
     pub window: Option<String>,
+    /// The resident chat's context ceiling in tokens. When its latest input
+    /// reaches this, the feed restarts it with a compacted resume. `0`
+    /// disables; absent in the rules means `DEFAULT_COMPACT_TOKENS`.
+    pub compact_tokens: usize,
 }
 
 /// How consecutive same-role turns bundle. `Pair` takes the single preceding
@@ -93,6 +102,7 @@ impl Formula {
             coalesce: 0,
             references: false,
             window: None,
+            compact_tokens: DEFAULT_COMPACT_TOKENS,
         }
     }
 
@@ -125,6 +135,7 @@ impl Formula {
             coalesce: file.coalesce.unwrap_or(0),
             references: file.references.unwrap_or(false),
             window: file.window,
+            compact_tokens: file.compact_tokens.unwrap_or(DEFAULT_COMPACT_TOKENS),
         })
     }
 }
@@ -137,6 +148,7 @@ struct FormulaFile {
     coalesce: Option<usize>,
     references: Option<bool>,
     window: Option<String>,
+    compact_tokens: Option<usize>,
 }
 
 /// The rewrite surface: one enum value per feed, chosen once at boot from the
@@ -149,15 +161,22 @@ enum Rewriter {
     },
     Chat {
         adapter: &'static dyn Harness,
+        spec: ChannelSpec,
         channel: Box<dyn LaneChannel>,
-        cwd: PathBuf,
-        goal: Option<String>,
+        /// The next goal turn to send; taken once, then set again on compact.
+        pending_goal: Option<String>,
+        compact_tokens: usize,
     },
 }
 
-/// Turn-end and reply-capture budgets for the chat feed.
+/// The goal a compacted resident receives: it re-reads the artifact it owns
+/// (which already carries the folded history) and keeps going.
+const COMPACT_RESUME_GOAL: &str =
+    "Your context was compacted. Read seq.d2 first (it holds your folded history), then continue.";
+
+/// Turn-done budget for the chat feed: each bundle blocks until the model's
+/// reply completes, then the next bundle goes out.
 const CHAT_TURN_TIMEOUT: Duration = Duration::from_secs(600);
-const CHAT_REPLY_TIMEOUT: Duration = Duration::from_secs(120);
 const CHAT_POLL: Duration = Duration::from_secs(5);
 
 impl Rewriter {
@@ -179,9 +198,10 @@ impl Rewriter {
                     .context("open the resident chat")?;
                 Ok(Rewriter::Chat {
                     adapter,
+                    spec,
                     channel,
-                    cwd: args.state_dir.clone(),
-                    goal: formula.goal.clone(),
+                    pending_goal: formula.goal.clone(),
+                    compact_tokens: formula.compact_tokens,
                 })
             }
         }
@@ -196,106 +216,74 @@ impl Rewriter {
             } => one_shot_bounded(*adapter, msg, model, *timeout),
             Rewriter::Chat {
                 adapter,
+                spec,
                 channel,
-                cwd,
-                goal,
+                pending_goal,
+                compact_tokens,
             } => {
-                let channel = channel.as_mut();
-                if let Some(goal) = goal.take() {
-                    channel.start_turn(&goal).context("send the goal turn")?;
-                    wait_turn(channel)?;
+                let lane: &mut dyn LaneChannel = channel.as_mut();
+                if let Some(goal) = pending_goal.take() {
+                    lane.start_turn(&goal).context("send the goal turn")?;
+                    wait_done(lane)?;
                 }
-                let session = mapper_session(*adapter, channel, cwd);
-                let marker = session
-                    .as_deref()
-                    .and_then(|s| newest_assistant_ts(store, s))
-                    .unwrap_or(0);
-                channel.start_turn(msg).context("send the bundle")?;
-                wait_turn(channel)?;
-                let session =
-                    session.context("the resident chat never resolved a harness session id")?;
-                wait_reply_text(store, &session, marker)
+                lane.start_turn(msg).context("send the bundle")?;
+                wait_done(lane)?;
+                // Context ceiling: when the resident's input has grown to the
+                // limit, restart it so the long session cannot exhaust its
+                // window. The artifact (seq.d2) already carries the history.
+                if *compact_tokens > 0 {
+                    let session = lane.conversation_id();
+                    let over = session
+                        .as_deref()
+                        .and_then(|id| mapper_context_tokens(store, id))
+                        .unwrap_or(0)
+                        >= *compact_tokens as i64;
+                    if over {
+                        lane.close().context("close the resident chat")?;
+                        *channel = adapter.open_channel(spec)?;
+                        *pending_goal = Some(COMPACT_RESUME_GOAL.to_owned());
+                    }
+                }
+                // The resident chat's own turns are the output; sync ingests
+                // them, so there is no reply text to return.
+                Ok(String::new())
             }
         }
     }
 }
 
-/// Block until the in-flight turn ends or the budget dies.
-fn wait_turn(channel: &mut dyn LaneChannel) -> Result<()> {
+/// The resident chat's current context size in tokens: its latest turn's fresh
+/// input plus the cached prior context, read from the store the sync ingests.
+fn mapper_context_tokens(store: &crate::Store, session: &str) -> Option<i64> {
+    let sql = format!(
+        "SELECT input_tokens + cache_read_tokens AS ctx FROM agent_usage
+         JOIN dict_session s ON s.id = agent_usage.session_id
+         WHERE s.value = '{session}' ORDER BY ts DESC LIMIT 1"
+    );
+    let (_, rows) = store.passthrough(&sql).ok()?;
+    rows.first()?.get("ctx")?.as_i64()
+}
+
+/// Block until the running turn completes (the model's reply finished), so the
+/// feed fires the next bundle only after the fold has consumed the last one.
+fn wait_done(channel: &mut dyn LaneChannel) -> Result<()> {
     let deadline = Instant::now() + CHAT_TURN_TIMEOUT;
     while Instant::now() < deadline {
-        match channel.poll_turn(CHAT_POLL)? {
-            Some(end) if end.ok => return Ok(()),
-            Some(end) => {
-                // Clear the wedged turn or the retry piles onto the stuck queue.
+        match channel.next_event(CHAT_POLL)? {
+            Some(TurnEvent::Done { .. }) => return Ok(()),
+            Some(TurnEvent::Flaked { detail }) => {
                 channel.interrupt()?;
-                bail!("resident chat turn failed: {}", end.detail)
+                bail!("resident chat turn flaked: {detail}");
             }
-            None => continue,
+            Some(TurnEvent::Failed { detail }) => {
+                bail!("resident chat turn failed: {detail}");
+            }
+            Some(TurnEvent::Started) | None => continue,
         }
     }
     bail!(
         "resident chat turn exceeded {}s",
         CHAT_TURN_TIMEOUT.as_secs()
-    )
-}
-
-/// The chat's harness session id once it exists; until the harness resolves
-/// one, fall back to the newest session whose cwd is the pipe's own.
-fn mapper_session(adapter: &dyn Harness, channel: &dyn LaneChannel, cwd: &Path) -> Option<String> {
-    if let Some(id) = channel.conversation_id() {
-        return Some(id);
-    }
-    // opencode canonicalizes directories (/tmp -> /private/tmp); compare the
-    // canonical spelling or the fallback never matches.
-    let cwd = std::fs::canonicalize(cwd)
-        .unwrap_or_else(|_| cwd.to_owned())
-        .display()
-        .to_string();
-    adapter
-        .sessions()
-        .ok()?
-        .into_iter()
-        .filter(|session| session.cwd.as_deref() == Some(cwd.as_str()))
-        .max_by_key(|session| session.modified_ms)
-        .map(|session| session.session_id)
-}
-
-fn newest_assistant_ts(store: &crate::Store, session: &str) -> Option<i64> {
-    let query = TurnQuery {
-        session: Some(session.to_owned()),
-        role: Some("assistant".to_owned()),
-        ..Default::default()
-    };
-    let rows = store.turn_rows(&query).ok()?;
-    rows.iter().map(|row| row.ts).max()
-}
-
-/// The rewrite is the mapper conversation's newest assistant turn past
-/// `marker`; sync ingests it, so poll the store until it lands.
-fn wait_reply_text(store: &crate::Store, session: &str, marker: i64) -> Result<String> {
-    let deadline = Instant::now() + CHAT_REPLY_TIMEOUT;
-    while Instant::now() < deadline {
-        let query = TurnQuery {
-            session: Some(session.to_owned()),
-            role: Some("assistant".to_owned()),
-            ..Default::default()
-        };
-        if let Some(row) = store.turn_rows(&query).ok().and_then(|rows| {
-            rows.into_iter()
-                .filter(|row| row.ts > marker)
-                .max_by_key(|row| row.ts)
-        }) {
-            let text = trim_double_encoded(&row.said).to_owned();
-            if !text.trim().is_empty() {
-                return Ok(text);
-            }
-        }
-        std::thread::sleep(Duration::from_secs(1));
-    }
-    bail!(
-        "reply from {session} never reached the store past {}",
-        marker
     )
 }
 
@@ -457,8 +445,12 @@ pub fn normalize(text: &str) -> String {
 pub fn run(args: Args) -> Result<()> {
     // Read-only: this loop never writes the store, and a read-only connection
     // never fights the resident `db sync` writer for the write lock.
-    let store = crate::ident::Store::open_readonly(crate::ident::Store::default_path()?)
-        .context("open boop store read-only")?;
+    let store_path = match &args.store_path {
+        Some(path) => path.clone(),
+        None => crate::ident::Store::default_path().context("resolve the default boop store")?,
+    };
+    let store =
+        crate::ident::Store::open_readonly(store_path).context("open boop store read-only")?;
     // Leak the registry so the adapter is 'static: the oneshot feed bounds a
     // model pass on its own thread. The resident never returns, so the leak is
     // one small fixed allocation.
@@ -470,8 +462,6 @@ pub fn run(args: Args) -> Result<()> {
         .with_context(|| format!("no adapter registered for harness `{harness}`"))?;
     std::fs::create_dir_all(&args.state_dir)
         .with_context(|| format!("create {}", args.state_dir.display()))?;
-    std::fs::create_dir_all(&args.out_dir)
-        .with_context(|| format!("create {}", args.out_dir.display()))?;
     let template = args.template.clone();
     let mut cursor = seed_cursor(&args, &store)?;
     let mut done = load_done(&args.state_dir)?;
@@ -748,13 +738,9 @@ fn process_job(
             (pair.session.clone(), pair.turn, msg)
         }
     };
-    let out_dir = args
-        .out_dir
-        .join(session.chars().take(8).collect::<String>());
-    std::fs::create_dir_all(&out_dir).with_context(|| format!("create {}", out_dir.display()))?;
-    let out_path = out_dir.join(format!("{}.md", id));
-    let text = rewriter.rewrite(store, &msg)?;
-    std::fs::write(&out_path, text).with_context(|| format!("write {}", out_path.display()))?;
+    // The mapper's own turns are the output; sync ingests them. The feed just
+    // delivers the bundle and records the marker.
+    rewriter.rewrite(store, &msg)?;
     write_done_marker(args, &session, id, done)
 }
 
@@ -831,49 +817,10 @@ fn one_shot_bounded(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channel::{Delivery, TurnEnd};
+    use crate::channel::{Delivery, TurnEvent};
     use crate::harness::{Harness, OneShotSpec, ReadChunk, SessionRef};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
-
-    struct FlakedChannel {
-        polls: usize,
-        interrupted: usize,
-    }
-
-    impl LaneChannel for FlakedChannel {
-        fn conversation_id(&self) -> Option<String> {
-            Some("s".into())
-        }
-        fn start_turn(&mut self, _text: &str) -> Result<()> {
-            Ok(())
-        }
-        fn steer(&mut self, _text: &str) -> Result<Delivery> {
-            Ok(Delivery::MidTurn)
-        }
-        fn poll_turn(&mut self, _timeout: Duration) -> Result<Option<TurnEnd>> {
-            self.polls += 1;
-            Ok(Some(TurnEnd::flaked("wedged")))
-        }
-        fn interrupt(&mut self) -> Result<()> {
-            self.interrupted += 1;
-            Ok(())
-        }
-        fn close(&mut self) -> Result<()> {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn a_flaked_turn_is_cleared_before_the_error_surfaces() {
-        let mut channel = FlakedChannel {
-            polls: 0,
-            interrupted: 0,
-        };
-        assert!(wait_turn(&mut channel).is_err());
-        assert_eq!(channel.polls, 1);
-        assert_eq!(channel.interrupted, 1);
-    }
 
     fn row(session: &str, turn: i64, ts: i64, role: &str, said: &str) -> TurnRow {
         TurnRow {
@@ -1172,8 +1119,8 @@ mod tests {
         fn steer(&mut self, _: &str) -> Result<Delivery> {
             Ok(Delivery::MidTurn)
         }
-        fn poll_turn(&mut self, _: Duration) -> Result<Option<TurnEnd>> {
-            Ok(Some(TurnEnd::ok("done")))
+        fn next_event(&mut self, _: Duration) -> Result<Option<TurnEvent>> {
+            Ok(Some(TurnEvent::ok("done")))
         }
         fn close(&mut self) -> Result<()> {
             Ok(())
@@ -1192,13 +1139,13 @@ mod tests {
         SELECT max(turn) AS id, max(ts) AS ts, group_concat(said, char(10)) AS text
         FROM marked GROUP BY role, island ORDER BY min(ts)";
 
-    fn window_args(state_dir: PathBuf, out_dir: PathBuf) -> Args {
+    fn window_args(state_dir: PathBuf) -> Args {
         Args {
             template: None,
             mode: None,
             model: "fake-model".into(),
             state_dir,
-            out_dir,
+            store_path: None,
             poll: Duration::ZERO,
             from_start: true,
             cursor: None,
@@ -1209,6 +1156,7 @@ mod tests {
                 coalesce: 0,
                 references: false,
                 window: Some(WINDOW_SQL.to_owned()),
+                compact_tokens: 0,
             },
             session: Some("ses".into()),
         }
@@ -1227,7 +1175,7 @@ mod tests {
             hang_first: false,
             plant_done: None,
         }));
-        let args = window_args(temp_dir("oneshot_state"), temp_dir("oneshot_out"));
+        let args = window_args(temp_dir("oneshot_state"));
         let mut rewriter = Rewriter::OneShot {
             adapter: harness,
             model: "fake-model".into(),
@@ -1258,7 +1206,7 @@ mod tests {
             hang_first: true,
             plant_done: None,
         }));
-        let args = window_args(temp_dir("poison_state"), temp_dir("poison_out"));
+        let args = window_args(temp_dir("poison_state"));
         let mut rewriter = Rewriter::OneShot {
             adapter: harness,
             model: "fake-model".into(),
@@ -1269,8 +1217,6 @@ mod tests {
         // The hung first window is marked and skipped; the second still mapped.
         assert_eq!(harness.calls.load(Ordering::SeqCst), 2);
         assert_eq!(done.len(), 2);
-        let out = std::fs::read_to_string(args.out_dir.join("ses").join("2.md")).unwrap();
-        assert_eq!(out, "rewritten");
         let _ = std::fs::remove_file(&db_path);
     }
 
@@ -1280,7 +1226,6 @@ mod tests {
         store.write_turn("ses", 1, 10, "assistant", "a1").unwrap();
         store.write_turn("ses", 2, 11, "user", "u1").unwrap();
         let state_dir = temp_dir("plant_state");
-        let out_dir = temp_dir("plant_out");
         // The first one_shot call plants a done marker for the second window
         // (id 2) before returning, as a human would mid-flight.
         let harness: &'static FakeHarness = Box::leak(Box::new(FakeHarness {
@@ -1289,7 +1234,7 @@ mod tests {
             hang_first: false,
             plant_done: Some((state_dir.join("done"), "ses".to_owned(), 2)),
         }));
-        let args = window_args(state_dir, out_dir.clone());
+        let args = window_args(state_dir);
         let mut rewriter = Rewriter::OneShot {
             adapter: harness,
             model: "fake-model".into(),
@@ -1299,7 +1244,7 @@ mod tests {
         poll_once(&store, &mut rewriter, &args, None, 0, &mut done).unwrap();
         // The first window mapped, then the planted marker skipped the second.
         assert_eq!(harness.calls.load(Ordering::SeqCst), 1);
-        assert!(!out_dir.join("ses").join("2.md").exists());
+        assert_eq!(done.len(), 2);
         let _ = std::fs::remove_file(&db_path);
     }
 
@@ -1308,7 +1253,7 @@ mod tests {
         let (store, db_path) = store();
         let state_dir = temp_dir("seed_state");
         std::fs::write(state_dir.join("cursor"), "42").unwrap();
-        let mut args = window_args(state_dir, temp_dir("seed_out"));
+        let mut args = window_args(state_dir);
         args.from_start = false;
 
         let mut from_start = args.clone();
@@ -1333,20 +1278,26 @@ mod tests {
             hang_first: false,
             plant_done: None,
         }));
+        let spec = ChannelSpec {
+            model: Some("fake-model".into()),
+            cwd: temp_dir("chat_cwd"),
+            resume: None,
+        };
         let turns = Arc::new(Mutex::new(Vec::new()));
         let mut rewriter = Rewriter::Chat {
             adapter,
+            spec,
             channel: Box::new(RecordingChannel {
                 db: db_path.clone(),
                 session: "s".into(),
                 next_ts: 1,
                 turns: turns.clone(),
             }),
-            cwd: temp_dir("chat_cwd"),
-            goal: Some("goal turn".into()),
+            pending_goal: Some("goal turn".into()),
+            compact_tokens: 0,
         };
-        assert_eq!(rewriter.rewrite(&store, "bundle one").unwrap(), "reply");
-        assert_eq!(rewriter.rewrite(&store, "bundle two").unwrap(), "reply");
+        assert_eq!(rewriter.rewrite(&store, "bundle one").unwrap(), "");
+        assert_eq!(rewriter.rewrite(&store, "bundle two").unwrap(), "");
         // The goal opens the resident once; both bundles accumulate on it.
         let recorded = turns.lock().unwrap();
         assert_eq!(
@@ -1357,6 +1308,83 @@ mod tests {
                 "bundle two".to_owned()
             ]
         );
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    /// The chat feed consumes the turn lifecycle as events: it fires a bundle,
+    /// waits for `TurnDone`, then fires the next. The channel is the subject and
+    /// the feed `concatMap`s over it (one inner pipeline per bundle, serial).
+    ///
+    ///   start_turn(goal)   -> Started -> Done
+    ///   start_turn(bundle) -> Started -> Done
+    ///   start_turn(bundle) -> Started -> Done
+    #[test]
+    fn the_chat_feed_waits_for_turn_done_before_the_next_bundle() {
+        struct Subject {
+            delivered: Arc<Mutex<Vec<String>>>,
+            events: Arc<AtomicUsize>,
+            started: bool,
+        }
+        impl LaneChannel for Subject {
+            fn conversation_id(&self) -> Option<String> {
+                Some("s".into())
+            }
+            fn start_turn(&mut self, text: &str) -> Result<()> {
+                self.delivered.lock().unwrap().push(text.to_owned());
+                self.started = false;
+                Ok(())
+            }
+            fn steer(&mut self, _: &str) -> Result<Delivery> {
+                Ok(Delivery::MidTurn)
+            }
+            fn next_event(&mut self, _: Duration) -> Result<Option<TurnEvent>> {
+                self.events.fetch_add(1, Ordering::SeqCst);
+                if !self.started {
+                    self.started = true;
+                    Ok(Some(TurnEvent::Started))
+                } else {
+                    Ok(Some(TurnEvent::ok("done")))
+                }
+            }
+            fn close(&mut self) -> Result<()> {
+                Ok(())
+            }
+        }
+
+        let (store, db_path) = store();
+        let adapter: &'static FakeHarness = Box::leak(Box::new(FakeHarness {
+            calls: AtomicUsize::new(0),
+            reply: "",
+            hang_first: false,
+            plant_done: None,
+        }));
+        let spec = ChannelSpec {
+            model: Some("fake-model".into()),
+            cwd: temp_dir("subject_cwd"),
+            resume: None,
+        };
+        let delivered = Arc::new(Mutex::new(Vec::new()));
+        let events = Arc::new(AtomicUsize::new(0));
+        let mut rewriter = Rewriter::Chat {
+            adapter,
+            spec,
+            channel: Box::new(Subject {
+                delivered: delivered.clone(),
+                events: events.clone(),
+                started: false,
+            }),
+            pending_goal: Some("goal turn".into()),
+            compact_tokens: 0,
+        };
+
+        rewriter.rewrite(&store, "bundle one").unwrap();
+        rewriter.rewrite(&store, "bundle two").unwrap();
+
+        let texts: Vec<String> = delivered.lock().unwrap().clone();
+        assert_eq!(texts, ["goal turn", "bundle one", "bundle two"]);
+        // Three turns (goal + two bundles), each consumed as Started then Done:
+        // the feed polled the subject for turn-done, never slept a fixed gap.
+        assert_eq!(events.load(Ordering::SeqCst), 6);
         let _ = std::fs::remove_file(&db_path);
     }
 }

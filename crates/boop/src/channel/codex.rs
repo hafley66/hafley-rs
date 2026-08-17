@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
 use crate::channel::jsonrpc::RpcChild;
-use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEnd};
+use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -102,7 +102,7 @@ impl LaneChannel for CodexChannel {
         }
     }
 
-    fn poll_turn(&mut self, timeout: Duration) -> Result<Option<TurnEnd>> {
+    fn next_event(&mut self, timeout: Duration) -> Result<Option<TurnEvent>> {
         let deadline = std::time::Instant::now() + timeout;
         loop {
             let left = deadline.saturating_duration_since(std::time::Instant::now());
@@ -130,8 +130,8 @@ impl LaneChannel for CodexChannel {
                         .and_then(Value::as_str)
                         .unwrap_or("unknown");
                     return Ok(Some(match status {
-                        "failed" => TurnEnd::failed(status),
-                        _ => TurnEnd::ok(status),
+                        "failed" => TurnEvent::failed(status),
+                        _ => TurnEvent::ok(status),
                     }));
                 }
                 _ => {}

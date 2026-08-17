@@ -10,7 +10,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
-use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEnd};
+use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
 
 pub struct ClaudeChannel {
     child: Child,
@@ -105,7 +105,7 @@ impl LaneChannel for ClaudeChannel {
         Ok(Delivery::MidTurn)
     }
 
-    fn poll_turn(&mut self, timeout: std::time::Duration) -> Result<Option<TurnEnd>> {
+    fn next_event(&mut self, timeout: std::time::Duration) -> Result<Option<TurnEvent>> {
         let deadline = std::time::Instant::now() + timeout;
         loop {
             let left = deadline.saturating_duration_since(std::time::Instant::now());
@@ -116,7 +116,7 @@ impl LaneChannel for ClaudeChannel {
                 Ok(event) => event,
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => return Ok(None),
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    return Ok(Some(TurnEnd::failed(
+                    return Ok(Some(TurnEvent::failed(
                         "claude stream closed before a result event",
                     )))
                 }
@@ -136,8 +136,8 @@ impl LaneChannel for ClaudeChannel {
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
             return Ok(Some(match errored {
-                false => TurnEnd::ok(subtype),
-                true => TurnEnd::failed(subtype),
+                false => TurnEvent::ok(subtype),
+                true => TurnEvent::failed(subtype),
             }));
         }
     }
@@ -244,14 +244,14 @@ mod tests {
     const COMPLETED: &str =
         r#"{"type":"result","subtype":"success","is_error":false,"result":"done"}"#;
 
-    fn poll_after_open(binary: &Path, feed: bool) -> TurnEnd {
+    fn poll_after_open(binary: &Path, feed: bool) -> TurnEvent {
         let mut channel =
             ClaudeChannel::open_with_binary(&spec(), &binary.display().to_string()).unwrap();
         if feed {
             let _ = channel.start_turn("do the lane");
         }
         channel
-            .poll_turn(Duration::from_secs(5))
+            .next_event(Duration::from_secs(5))
             .unwrap()
             .expect("the fake claude transcript yields a turn end")
     }
@@ -262,7 +262,11 @@ mod tests {
     fn a_completed_transcript_reports_ok_even_when_the_cli_exits_nonzero() {
         let binary = fake_claude("exit-one", &format!("printf '%s\\n' '{COMPLETED}'\nexit 1"));
         let end = poll_after_open(&binary, true);
-        assert!(end.ok, "completed transcript must not fail: {}", end.detail);
+        assert!(
+            end.is_done(),
+            "completed transcript must not fail: {}",
+            end.detail()
+        );
     }
 
     /// RECEIPT. The inverse case: a zero exit with a completed transcript is
@@ -274,7 +278,11 @@ mod tests {
             &format!("printf '%s\\n' '{COMPLETED}'\nexit 0"),
         );
         let end = poll_after_open(&binary, true);
-        assert!(end.ok, "clean completion must succeed: {}", end.detail);
+        assert!(
+            end.is_done(),
+            "clean completion must succeed: {}",
+            end.detail()
+        );
     }
 
     /// RECEIPT. A spawn that exits before emitting anything is a genuine
@@ -283,7 +291,7 @@ mod tests {
     fn a_spawn_that_emits_nothing_reports_failed() {
         let binary = fake_claude("no-output", "exit 7");
         let end = poll_after_open(&binary, false);
-        assert!(!end.ok, "an empty transcript must report failure");
+        assert!(!end.is_done(), "an empty transcript must report failure");
     }
 
     /// RECEIPT. Activity from the reader thread is visible to the stall

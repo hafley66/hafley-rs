@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use tracing::{debug, error, info, warn};
 
 use crate::bus;
-use crate::channel::{Delivery, LaneChannel, TurnEnd};
+use crate::channel::{Delivery, LaneChannel, TurnEvent};
 
 /// How often the inbox is re-read while a turn runs.
 const POLL: Duration = Duration::from_millis(700);
@@ -144,8 +144,9 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
         channel.start_turn(&turn)?;
         remember_conversation(lane, channel);
         let end = loop {
-            if let Some(end) = channel.poll_turn(POLL)? {
-                break end;
+            match channel.next_event(POLL)? {
+                Some(TurnEvent::Started) | None => {}
+                Some(end) => break end,
             }
             let this_turn_activity = channel
                 .last_activity_ms()
@@ -166,7 +167,7 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
                 channel.close().inspect_err(|error| {
                     error!(error = %error, "stalled lane channel close failed");
                 })?;
-                break TurnEnd::flaked(format!(
+                break TurnEvent::flaked(format!(
                     "stalled: {}s with no harness activity",
                     idle_ms / 1000
                 ));
@@ -197,15 +198,15 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
                 }
             }
         };
-        println!("[boop] turn ended: {}", end.detail);
+        println!("[boop] turn ended: {}", end.detail());
         info!(
-            turn_end_reason = end.detail,
-            turn_ok = end.ok,
-            retryable = end.retryable,
+            turn_end_reason = end.detail(),
+            turn_ok = end.is_done(),
+            retryable = end.retryable(),
             "lane turn ended"
         );
         remember_conversation(lane, channel);
-        if end.retryable && flake_resumes < FLAKE_RESUME_CAP {
+        if end.retryable() && flake_resumes < FLAKE_RESUME_CAP {
             flake_resumes += 1;
             println!("[boop] provider flake, resuming ({flake_resumes}/{FLAKE_RESUME_CAP})");
             warn!(
@@ -224,14 +225,14 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
             channel.close().inspect_err(|error| {
                 error!(error = %error, "lane channel close failed");
             })?;
-            let exit_code = match end.ok {
+            let exit_code = match end.is_done() {
                 true => 0,
                 false => 1,
             };
             info!(exit_code, "lane supervision complete");
             return Ok(Ended {
                 exit_code,
-                detail: end.retryable.then(|| end.detail.clone()),
+                detail: end.retryable().then(|| end.detail().to_owned()),
             });
         }
         turn = held
@@ -546,7 +547,7 @@ mod tests {
         fn steer(&mut self, _text: &str) -> Result<Delivery> {
             unreachable!("the turn never opened")
         }
-        fn poll_turn(&mut self, _timeout: Duration) -> Result<Option<TurnEnd>> {
+        fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
             unreachable!("the turn never opened")
         }
         fn close(&mut self) -> Result<()> {
@@ -660,8 +661,8 @@ mod tests {
             Ok(Delivery::MidTurn)
         }
 
-        fn poll_turn(&mut self, _timeout: Duration) -> Result<Option<TurnEnd>> {
-            Ok(Some(TurnEnd::ok("completed")))
+        fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
+            Ok(Some(TurnEvent::ok("completed")))
         }
 
         fn close(&mut self) -> Result<()> {

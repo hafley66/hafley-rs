@@ -30,40 +30,59 @@ impl Delivery {
     }
 }
 
-/// How one turn ended.
+/// One turn-lifecycle event from a live conversation. A channel emits these;
+/// the supervisor and the concatmap feed subscribe to them.
 #[derive(Clone, Debug)]
-pub struct TurnEnd {
-    pub ok: bool,
-    /// The turn died on a provider flake the agent never saw; the supervisor
-    /// may resume the conversation instead of ending the lane.
-    pub retryable: bool,
-    /// A one-line reason, printed by the supervisor and never parsed.
-    pub detail: String,
+pub enum TurnEvent {
+    /// The model began its reply (the harness painted/streamed after submit).
+    /// TUI-backed channels emit this; subprocess-backed channels go straight
+    /// from running to an end verdict.
+    Started,
+    /// The turn completed cleanly.
+    Done { detail: String },
+    /// The turn failed hard (not retryable).
+    Failed { detail: String },
+    /// The turn died on a provider flake the agent never saw; retryable.
+    Flaked { detail: String },
 }
 
-impl TurnEnd {
-    pub fn ok(detail: impl Into<String>) -> TurnEnd {
-        TurnEnd {
-            ok: true,
-            retryable: false,
+impl TurnEvent {
+    pub fn ok(detail: impl Into<String>) -> TurnEvent {
+        TurnEvent::Done {
             detail: detail.into(),
         }
     }
 
-    pub fn failed(detail: impl Into<String>) -> TurnEnd {
-        TurnEnd {
-            ok: false,
-            retryable: false,
+    pub fn failed(detail: impl Into<String>) -> TurnEvent {
+        TurnEvent::Failed {
             detail: detail.into(),
         }
     }
 
-    pub fn flaked(detail: impl Into<String>) -> TurnEnd {
-        TurnEnd {
-            ok: false,
-            retryable: true,
+    pub fn flaked(detail: impl Into<String>) -> TurnEvent {
+        TurnEvent::Flaked {
             detail: detail.into(),
         }
+    }
+
+    /// The one-line reason, printed by the supervisor and never parsed.
+    pub fn detail(&self) -> &str {
+        match self {
+            TurnEvent::Started => "started",
+            TurnEvent::Done { detail }
+            | TurnEvent::Failed { detail }
+            | TurnEvent::Flaked { detail } => detail,
+        }
+    }
+
+    /// True only for a clean completion.
+    pub fn is_done(&self) -> bool {
+        matches!(self, TurnEvent::Done { .. })
+    }
+
+    /// True only for a provider flake the agent never saw.
+    pub fn retryable(&self) -> bool {
+        matches!(self, TurnEvent::Flaked { .. })
     }
 }
 
@@ -98,9 +117,9 @@ pub trait LaneChannel: Send {
     /// took nothing and the supervisor must re-offer it after `join`.
     fn steer(&mut self, text: &str) -> Result<Delivery>;
 
-    /// Wait up to `timeout` for the running turn to end. `None` means it is
+    /// Block up to `timeout` for the next turn event. `None` means the turn is
     /// still running, which is when the supervisor offers it new text.
-    fn poll_turn(&mut self, timeout: std::time::Duration) -> Result<Option<TurnEnd>>;
+    fn next_event(&mut self, timeout: std::time::Duration) -> Result<Option<TurnEvent>>;
 
     /// Clear a turn that will never complete (a message queued but never run)
     /// so a retry starts from an idle harness; no-op without a clear key.
@@ -137,8 +156,11 @@ mod tests {
     }
 
     #[test]
-    fn turn_end_carries_its_verdict() {
-        assert!(TurnEnd::ok("done").ok);
-        assert!(!TurnEnd::failed("boom").ok);
+    fn turn_event_carries_its_verdict() {
+        assert!(TurnEvent::ok("done").is_done());
+        assert!(!TurnEvent::failed("boom").is_done());
+        assert!(TurnEvent::flaked("flake").retryable());
+        assert!(!TurnEvent::failed("boom").retryable());
+        assert_eq!(TurnEvent::ok("done").detail(), "done");
     }
 }

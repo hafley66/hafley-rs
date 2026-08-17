@@ -61,24 +61,23 @@ WINDOW EXAMPLE (gaps-and-islands over agent_turn, same-role runs concat'ed):
         WHERE s.value = :session AND t.ts > :cursor)
       SELECT max(turn) AS id, max(ts) AS ts, group_concat(said, char(10)) AS text
       FROM marked GROUP BY role, island ORDER BY min(ts)\"}
-  boop concatmap --me --rules rules.json --state s --out o
+  boop concatmap --me --rules rules.json --state s
 
 EXAMPLES:
   # oneshot refinement of one conversation, flash4 default model:
   boop concatmap --session ses_abc123 --mode tighten \\
     --template tighten.md \\
-    --state ~/.agent/concatmap/tighten/state \\
-    --out   ~/.agent/concatmap/tighten/out
+    --state ~/.agent/concatmap/tighten/state
 
   # same, but map the caller's own session (whoami ladder resolves it):
-  boop concatmap --me --mode tighten --template tighten.md --state s --out o
+  boop concatmap --me --mode tighten --template tighten.md --state s
 
   # enduring resident whose history accumulates; rewrites land per turn:
   #   rules.json: {\"feed\": \"chat\", \"goal\": \"tighten each <ai> turn; code and
   #                numbers verbatim; return only the rewritten turn\",
   #                \"bundle\": \"run\", \"coalesce\": 4, \"references\": true}
   boop concatmap --me --rules rules.json --mode tighten \\
-    --template tighten.md --state s --out o
+    --template tighten.md --state s
 
   # template file shape (tighten.md):
   #   mode: {{mode}}
@@ -248,9 +247,9 @@ enum SubCmd {
         /// seeds at the newest ts) and done/ markers; chat feed's cwd too.
         #[arg(long)]
         state: PathBuf,
-        /// Directory receiving <session8>/<turn>.md rewrites.
+        /// The boop store to read turns from (defaults to the resident store).
         #[arg(long)]
-        out: PathBuf,
+        store: Option<PathBuf>,
         /// Seconds between turn queries.
         #[arg(long, default_value_t = 5)]
         poll_secs: u64,
@@ -780,7 +779,7 @@ fn main() -> Result<()> {
             model,
             preset,
             state,
-            out,
+            store,
             poll_secs,
             from_start,
             cursor,
@@ -828,7 +827,7 @@ fn main() -> Result<()> {
                 mode,
                 model,
                 state_dir: state,
-                out_dir: out,
+                store_path: store,
                 poll: std::time::Duration::from_secs(poll_secs),
                 from_start,
                 cursor,

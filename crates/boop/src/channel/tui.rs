@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use tracing::{debug, info, warn};
 
-use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEnd};
+use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
 
 /// A TUI stops repainting when it stops working, so an unchanged pane body is
 /// the turn-end signal.
@@ -48,6 +48,8 @@ pub struct TuiChannel {
     /// Pane body hash and when it was first seen, for the idle test.
     settled_since: Option<(u64, Instant)>,
     turn_open: bool,
+    /// Whether this turn has already emitted `TurnEvent::Started`.
+    started_emitted: bool,
 }
 
 impl TuiChannel {
@@ -88,6 +90,7 @@ impl TuiChannel {
             turn_started_ms: 0,
             settled_since: None,
             turn_open: false,
+            started_emitted: false,
         };
         channel.wait_for_boot()?;
         if channel.profile.harness == "opencode" && channel.conversation.is_none() {
@@ -280,6 +283,7 @@ impl LaneChannel for TuiChannel {
         self.type_and_submit_or_respawn(text)?;
         self.turn_open = true;
         self.settled_since = None;
+        self.started_emitted = false;
         Ok(())
     }
 
@@ -292,6 +296,7 @@ impl LaneChannel for TuiChannel {
         crate::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, "Escape")?;
         self.turn_open = false;
         self.settled_since = None;
+        self.started_emitted = false;
         Ok(())
     }
 
@@ -311,14 +316,20 @@ impl LaneChannel for TuiChannel {
         Ok(Delivery::MidTurn)
     }
 
-    fn poll_turn(&mut self, timeout: Duration) -> Result<Option<TurnEnd>> {
+    fn next_event(&mut self, timeout: Duration) -> Result<Option<TurnEvent>> {
         let deadline = Instant::now() + timeout;
         loop {
+            // The turn is in flight and has not reported its start yet: emit
+            // `Started` once so a subscriber can tell "accepted" from "done".
+            if self.turn_open && !self.started_emitted {
+                self.started_emitted = true;
+                return Ok(Some(TurnEvent::Started));
+            }
             let settled = match self.settled_for(IDLE_SETTLE) {
                 Ok(settled) => settled,
                 Err(error) if window_is_gone(&error) => {
                     self.turn_open = false;
-                    return Ok(Some(TurnEnd::flaked("tui window died mid-turn")));
+                    return Ok(Some(TurnEvent::flaked("tui window died mid-turn")));
                 }
                 Err(error) => return Err(error),
             };
@@ -359,7 +370,7 @@ impl LaneChannel for TuiChannel {
                             last_opencode_error = state.error.as_deref().unwrap_or_default(),
                             "opencode tui turn ended with an aborted stream"
                         );
-                        return Ok(Some(TurnEnd::flaked("opencode message aborted")));
+                        return Ok(Some(TurnEvent::flaked("opencode message aborted")));
                     }
                     if !state.completed() {
                         debug!(
@@ -378,7 +389,7 @@ impl LaneChannel for TuiChannel {
                         turn_end_reason = "opencode_stop",
                         "opencode tui turn completed"
                     );
-                    return Ok(Some(TurnEnd::ok("opencode stop")));
+                    return Ok(Some(TurnEvent::ok("opencode stop")));
                 }
                 self.turn_open = false;
                 warn!(
@@ -389,7 +400,7 @@ impl LaneChannel for TuiChannel {
                     turn_end_reason = "pane_idle",
                     "tui turn classified as complete from pane idleness"
                 );
-                return Ok(Some(TurnEnd::ok("pane idle")));
+                return Ok(Some(TurnEvent::ok("pane idle")));
             }
             if Instant::now() >= deadline {
                 return Ok(None);

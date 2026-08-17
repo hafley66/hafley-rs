@@ -7,7 +7,7 @@ use std::process::{Child, Command, Stdio};
 use anyhow::{Context, Result};
 use tracing::{debug, info, warn};
 
-use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEnd};
+use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
 
 pub struct OpencodeChannel {
     cwd: PathBuf,
@@ -75,9 +75,9 @@ impl LaneChannel for OpencodeChannel {
         Ok(Delivery::NextTurn)
     }
 
-    fn poll_turn(&mut self, timeout: std::time::Duration) -> Result<Option<TurnEnd>> {
+    fn next_event(&mut self, timeout: std::time::Duration) -> Result<Option<TurnEvent>> {
         let Some(turn) = self.turn.as_mut() else {
-            return Ok(Some(TurnEnd::failed("no opencode turn to join")));
+            return Ok(Some(TurnEvent::failed("no opencode turn to join")));
         };
         let Some(status) = wait_for(turn, timeout).context("wait opencode run")? else {
             return Ok(None);
@@ -109,10 +109,10 @@ impl LaneChannel for OpencodeChannel {
             // `opencode run` exits 0 when the provider drops the stream; the
             // db's trailing MessageAbortedError is the only tell.
             0 => match state.as_ref().map(LastMessageState::aborted) {
-                Some(true) => TurnEnd::flaked("rc=0 with an aborted stream"),
-                _ => TurnEnd::ok("rc=0"),
+                Some(true) => TurnEvent::flaked("rc=0 with an aborted stream"),
+                _ => TurnEvent::ok("rc=0"),
             },
-            other => TurnEnd::failed(format!("rc={other}")),
+            other => TurnEvent::failed(format!("rc={other}")),
         }))
     }
 
@@ -281,10 +281,10 @@ mod tests {
     fn polling_without_a_turn_is_a_failed_end_not_a_panic() {
         let mut channel = OpencodeChannel::open(&spec()).unwrap();
         let end = channel
-            .poll_turn(std::time::Duration::from_millis(10))
+            .next_event(std::time::Duration::from_millis(10))
             .unwrap()
             .unwrap();
-        assert!(!end.ok);
+        assert!(!end.is_done());
     }
 
     #[test]
