@@ -91,14 +91,20 @@ fn from_env() -> Option<Identity> {
     })
 }
 
-/// Rung 2. `$TMUX_PANE` names the pane; tmux names its session; the registry
-/// names the lane that owns that session.
+/// Rung 2. `$TMUX_PANE` names interactive shells directly. Codex tool
+/// subprocesses omit it while retaining `TMUX`, so tmux resolves the calling
+/// client's selected pane. The registry may own that pane or its whole session.
 fn from_pane(routes: &BTreeMap<String, Route>) -> Option<Identity> {
-    let pane = std::env::var("TMUX_PANE").ok().filter(|p| !p.is_empty())?;
+    let pane = std::env::var("TMUX_PANE")
+        .ok()
+        .filter(|p| !p.is_empty())
+        .or_else(|| crate::tmux::mux().current_pane(None))?;
     let tmux_session = crate::tmux::mux().session_of_pane(None, &pane)?;
     let (lane, route) = routes
         .iter()
-        .find(|(_, route)| route.tmux.as_deref() == Some(tmux_session.as_str()))?;
+        .find(|(_, route)| {
+            matches!(route.tmux.as_deref(), Some(target) if target == pane || target == tmux_session)
+        })?;
     Some(Identity {
         session: route.session_id.clone().or_else(|| Some(lane.clone())),
         lane: Some(lane.clone()),
