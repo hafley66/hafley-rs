@@ -359,10 +359,12 @@ mod tests {
 
     use super::prepare_spawn_dir;
 
+    /// The escape rail names `origin/main..main`, so the fixture pins the
+    /// branch instead of taking `init.defaultBranch`. A runner that defaults to
+    /// `master` made every `EscapeRepo` test read an empty commit list.
     fn init_repo(path: &std::path::Path) -> String {
         Command::new("git")
-            .arg("init")
-            .arg("-q")
+            .args(["init", "-q", "-b", "main"])
             .arg(path)
             .status()
             .unwrap();
