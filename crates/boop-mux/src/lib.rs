@@ -19,6 +19,9 @@ use tracing::{debug, warn};
 /// The tmux multiplexer operations boop drives. Object-safe: every method takes
 /// `&self` and returns a concrete or `anyhow` type.
 pub trait Multiplexer {
+    /// The pane selected by the calling tmux client. Codex tool subprocesses
+    /// retain `TMUX` but omit `TMUX_PANE`, so this is their identity rung.
+    fn current_pane(&self, socket: Option<&str>) -> Option<String>;
     /// The tmux session that owns a pane. `None` when tmux is unreachable or
     /// the pane is unknown.
     fn session_of_pane(&self, socket: Option<&str>, pane: &str) -> Option<String>;
@@ -86,6 +89,20 @@ pub trait Multiplexer {
 pub struct Tmux;
 
 impl Multiplexer for Tmux {
+    fn current_pane(&self, socket: Option<&str>) -> Option<String> {
+        let mut builder = Command::new("tmux");
+        if let Some(socket) = socket {
+            builder.arg("-L").arg(socket);
+        }
+        builder.args(["display-message", "-p", "#{pane_id}"]);
+        let output = builder.output().ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let pane = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        (!pane.is_empty()).then_some(pane)
+    }
+
     fn session_of_pane(&self, socket: Option<&str>, pane: &str) -> Option<String> {
         let mut builder = Command::new("tmux");
         if let Some(socket) = socket {

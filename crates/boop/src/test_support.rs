@@ -29,6 +29,10 @@ impl FakeMux {
 }
 
 impl Multiplexer for FakeMux {
+    fn current_pane(&self, _: Option<&str>) -> Option<String> {
+        None
+    }
+
     fn session_of_pane(&self, _: Option<&str>, _: &str) -> Option<String> {
         None
     }

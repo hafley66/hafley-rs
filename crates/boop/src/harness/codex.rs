@@ -294,6 +294,16 @@ fn sessions_in(base: &Path) -> anyhow::Result<Vec<SessionRef>> {
     Ok(sessions)
 }
 
+/// The newest root Codex transcript whose recorded cwd is exactly `cwd`.
+/// Native subagent transcripts are excluded because their parent is present.
+pub fn latest_root_session_for_cwd(cwd: &Path) -> anyhow::Result<Option<SessionRef>> {
+    let cwd = cwd.display().to_string();
+    Ok(sessions_in(&codex_sessions_dir()?)?
+        .into_iter()
+        .rev()
+        .find(|session| session.cwd.as_deref() == Some(cwd.as_str()) && session.parent.is_none()))
+}
+
 /// `record_type` is `payload.type`, since the outer wrapper only ever says
 /// `session_meta`/`response_item`/`event_msg`.
 fn parse_line(session: &SessionRef, line: &tail::CompleteLine) -> Option<AgentEvent> {

@@ -273,6 +273,14 @@ enum SubCmd {
         #[arg(long)]
         json: bool,
     },
+    /// Register this interactive Codex tmux pane as a coordinator route.
+    Me {
+        /// Registry name; defaults to codex-<pane id>.
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
     /// Inspect the boop configuration the CLI reads.
     Config {
         #[command(subcommand)]
@@ -821,6 +829,7 @@ fn main() -> Result<()> {
             })
         }
         SubCmd::Whoami { json } => run_whoami(json),
+        SubCmd::Me { name, mail_dir } => run_me(name.as_deref(), mail_dir.as_deref()),
         SubCmd::Config { cmd } => run_config(cmd),
     }
 }
@@ -5288,6 +5297,41 @@ fn emit_json_rows(rows: &[ident::Row], format: QueryFormat) {
 // ---------------------------------------------------------------------------
 // whoami
 // ---------------------------------------------------------------------------
+
+fn run_me(name: Option<&str>, mail_dir_arg: Option<&Path>) -> Result<()> {
+    let pane = std::env::var("TMUX_PANE")
+        .ok()
+        .filter(|pane| !pane.is_empty())
+        .or_else(|| tmux::mux().current_pane(None))
+        .context("resolve current tmux pane; run boop me inside tmux")?;
+    let cwd = std::env::current_dir().context("read current directory")?;
+    let session = boop::harness::codex::latest_root_session_for_cwd(&cwd)?
+        .context("no root Codex transcript records the current directory")?;
+    let generated = format!("codex-{}", pane.trim_start_matches('%'));
+    let name = name.unwrap_or(&generated);
+    let dir = mail_dir(mail_dir_arg)?;
+    write_route(
+        &dir,
+        name,
+        Route {
+            kind: "coordinator".into(),
+            harness: Some("codex".into()),
+            tmux: Some(pane.clone()),
+            cwd: Some(cwd.display().to_string()),
+            model: None,
+            mode: Some("interactive".into()),
+            session_id: Some(session.session_id.clone()),
+            source_path: Some(session.path.display().to_string()),
+            parent: None,
+            goal: None,
+            registered_at: Some(bus::now_iso()),
+            base_sha: None,
+            worktree_dir: None,
+        },
+    )?;
+    println!("registered {name} -> {pane} codex {}", session.session_id);
+    Ok(())
+}
 
 fn run_whoami(json: bool) -> Result<()> {
     let dir = mail_dir(None)?;
