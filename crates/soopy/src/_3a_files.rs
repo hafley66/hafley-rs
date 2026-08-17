@@ -72,7 +72,7 @@ pub(crate) fn snapshot(root: &mut DirectoryRoot, query: &FileQuery) -> Result<Fi
             _ => {
                 let bytes = std::fs::read(entry.path())
                     .with_context(|| format!("read {}", entry.path().display()))?;
-                ContentId::Blake3(*blake3::hash(&bytes).as_bytes())
+                ContentId::blake3(&bytes)
             }
         };
         seen.insert(path.clone());
@@ -125,7 +125,7 @@ where
             .with_context(|| format!("open {}", path.display()))?
             .read_to_end(&mut buffer)
             .with_context(|| format!("read {}", path.display()))?;
-        let content = ContentId::Blake3(*blake3::hash(&buffer).as_bytes());
+        let content = ContentId::blake3(&buffer);
         if request
             .expected
             .as_ref()

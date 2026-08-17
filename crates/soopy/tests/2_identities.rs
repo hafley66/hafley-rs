@@ -199,3 +199,33 @@ fn every_public_coordinate_round_trips_without_display_strings() {
     let blake = serde_json::to_string(&ContentId::Blake3(*blake3::hash(b"x").as_bytes())).unwrap();
     assert!(!blake.contains("blake3:"));
 }
+
+// FAIL-PRE-FIX: `ContentId::blake3` did not exist and `ReadRequest` derived no
+// serde, so this pair failed to compile (`no function or associated item named
+// `blake3``, and `ReadRequest: Serialize` unsatisfied).
+
+#[test]
+fn the_blake3_constructor_matches_the_variant_it_builds() {
+    assert_eq!(
+        ContentId::blake3(b"hello"),
+        ContentId::Blake3(*blake3::hash(b"hello").as_bytes())
+    );
+    assert_eq!(ContentId::blake3(b"hello"), ContentId::blake3(b"hello"));
+    assert_ne!(ContentId::blake3(b"hello"), ContentId::blake3(b"other"));
+    assert!(ContentId::blake3(b"hello").to_string().starts_with("blake3:"));
+}
+
+#[test]
+fn a_read_request_round_trips_through_json() {
+    let repository = RepositoryId(Arc::from("repo"));
+    let object = ObjectId(Arc::from("oid"));
+    let request = ReadRequest {
+        source: SourceRef {
+            repository,
+            revision: RevisionId::Commit(object.clone()),
+            path: RepoPath(Arc::from("src/lib.rs")),
+        },
+        expected: Some(ContentId::GitBlob(object)),
+    };
+    round_trip(&request);
+}

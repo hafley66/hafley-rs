@@ -78,7 +78,7 @@ pub fn enumerate(
             _ => {
                 let bytes = std::fs::read(entry.path())
                     .with_context(|| format!("read {}", entry.path().display()))?;
-                ContentId::Blake3(*blake3::hash(&bytes).as_bytes())
+                ContentId::blake3(&bytes)
             }
         };
         cache.files.insert(
