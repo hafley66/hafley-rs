@@ -119,6 +119,7 @@ impl Multiplexer for Tmux {
 
     fn pane_pid(&self, socket: Option<&str>, target: &str) -> Option<u32> {
         if !target.contains(':')
+            && !target.starts_with('%')
             && !self
                 .has_session(socket, target)
                 .ok()
@@ -975,6 +976,45 @@ mod tests {
             "resolving `x` must not touch `x2`"
         );
         assert!(mux().pane_pid(Some(&server2.socket), "x2").is_some());
+    }
+
+    #[test]
+    fn pane_pid_resolves_a_percent_pane_target() {
+        let server = TestServer::new();
+        let name = session_name();
+        server.create_session(&name);
+
+        let output = Command::new("tmux")
+            .args([
+                "-L",
+                &server.socket,
+                "list-panes",
+                "-t",
+                &name,
+                "-F",
+                "#{pane_id} #{pane_pid}",
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let line = String::from_utf8(output.stdout).unwrap();
+        let mut fields = line.split_whitespace();
+        let pane = fields.next().expect("tmux returned a pane id");
+        let session_pid: u32 = fields
+            .next()
+            .expect("tmux returned a pane pid")
+            .parse()
+            .unwrap();
+        assert!(pane.starts_with('%'));
+
+        assert_eq!(
+            mux().pane_pid(Some(&server.socket), pane),
+            Some(session_pid)
+        );
+        assert_eq!(
+            mux().pane_pid(Some(&server.socket), &name),
+            Some(session_pid)
+        );
     }
 
     /// RECEIPT (Job 3c). Prune's liveness is a direct per-target probe: a live
