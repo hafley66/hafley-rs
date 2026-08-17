@@ -30,4 +30,4 @@ pub use _4a_git_root::{GitWorktreeRoot, SourceRoot};
 pub use _6_git_batch::GitBatch;
 pub use _7_source_tree::SourceTree;
 pub use _7a_spans::span_slice;
-pub use _8_watch::{DirectoryWatcher, RepositoryWatcher, SourceWatcher};
+pub use _8_watch::{git_dirs, DirectoryWatcher, RepositoryWatcher, SourceWatcher};

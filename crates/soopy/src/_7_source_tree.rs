@@ -166,7 +166,7 @@ impl SourceTree {
                         Some(ContentId::GitBlob(_)) => ContentId::GitBlob(
                             crate::_9_git_files::hash_object(&self.repository, buffer)?,
                         ),
-                        _ => ContentId::Blake3(*blake3::hash(buffer).as_bytes()),
+                        _ => ContentId::blake3(buffer),
                     };
                     (buffer.as_slice(), digest)
                 }
