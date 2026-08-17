@@ -417,10 +417,30 @@ impl LaneChannel for TuiChannel {
             tmux_target = self.target,
             "tui channel closing"
         );
-        if let Err(error) =
-            crate::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, "C-c")
-        {
-            warn!(harness = self.profile.harness, tmux_target = self.target, error = %error, "tui interrupt failed");
+        // C-c interrupts but does not exit the opencode TUI, and a survivor
+        // outlives the lane's route; a still-alive target gets its window killed.
+        for _ in 0..2 {
+            if let Err(error) =
+                crate::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, "C-c")
+            {
+                warn!(harness = self.profile.harness, tmux_target = self.target, error = %error, "tui interrupt failed");
+            }
+            std::thread::sleep(Duration::from_millis(400));
+            if !crate::tmux::mux().target_alive(self.socket.as_deref(), &self.target) {
+                return Ok(());
+            }
+        }
+        match crate::tmux::mux().kill_window(self.socket.as_deref(), &self.target) {
+            Err(error) => {
+                warn!(harness = self.profile.harness, tmux_target = self.target, error = %error, "tui window kill failed");
+            }
+            Ok(()) => {
+                info!(
+                    harness = self.profile.harness,
+                    tmux_target = self.target,
+                    "tui window killed after close escalation"
+                );
+            }
         }
         Ok(())
     }

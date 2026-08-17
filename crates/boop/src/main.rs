@@ -735,8 +735,11 @@ fn main() -> Result<()> {
             parent,
             goal,
             mail_dir,
+        // An adopted pane is an interactive session with no lane supervisor
+        // polling its mailbox; `coordinator` makes hail deliver by pane injection.
         } => run_adopt(
             &name,
+            "coordinator",
             &tmux,
             harness.as_deref(),
             session_id.as_deref(),
@@ -2231,8 +2234,10 @@ fn shell_quote(value: &str) -> String {
 // ---------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn run_adopt(
     name: &str,
+    kind: &str,
     tmux_session: &str,
     harness: Option<&str>,
     session_id: Option<&str>,
@@ -2249,7 +2254,7 @@ fn run_adopt(
     }
     let dir = mail_dir(mail_dir_arg)?;
     let route = Route {
-        kind: "lane".into(),
+        kind: kind.into(),
         harness: harness.map(str::to_owned),
         tmux: Some(tmux_session.to_owned()),
         cwd: cwd.map(str::to_owned),
@@ -4124,6 +4129,7 @@ fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             mail_dir,
         } => run_adopt(
             &lane,
+            "lane",
             &tmux,
             harness.as_deref(),
             session_id.as_deref(),
@@ -4235,9 +4241,13 @@ fn run_lane_list(
 }
 
 fn lane_state(live: &Option<tmux::LiveSessions>, route: &Route) -> &'static str {
+    // An adopted route's target can be a pane (`sprefa:0.0`); liveness is the
+    // session's, and `has` compares whole names.
+    let target = route.tmux.as_deref().unwrap_or("");
+    let session = target.split(':').next().unwrap_or("");
     match live {
         None => "?",
-        Some(sessions) if sessions.has(route.tmux.as_deref().unwrap_or("")) => "live",
+        Some(sessions) if sessions.has(session) => "live",
         Some(_) => "dead",
     }
 }
