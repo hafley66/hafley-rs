@@ -2247,7 +2247,6 @@ fn shell_quote(value: &str) -> String {
 // ---------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
-#[allow(clippy::too_many_arguments)]
 fn run_adopt(
     name: &str,
     kind: &str,
