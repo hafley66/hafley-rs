@@ -21,6 +21,7 @@ pub mod harness;
 pub mod ident;
 pub mod identity;
 pub mod lane;
+pub mod mailwait;
 pub mod proc;
 #[cfg(feature = "agent-read")]
 pub mod query;
