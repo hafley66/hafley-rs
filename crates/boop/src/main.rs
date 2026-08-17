@@ -115,6 +115,8 @@ edge and stay invisible to tracking:
 
 COMPLETION: --parent appends an on-exit hail `lane <id> done rc=$rc` into the
   parent's mailbox. A lane spawned with --parent reports completion; do not poll.
+  A parent whose route is kind=coordinator (what `boop adopt` writes) gets that
+  hail TYPED INTO ITS PANE, mid-turn or idle; no wait needs arming.
   `--wait` blocks on that row and exits with the lane's rc, so spawn-and-join is
   one command; `--wait-timeout <s>` (default 3600, 0 waits forever) exits 124.
   The same wait after the fact is `boop beep lane wait <lane>`.
@@ -142,6 +144,8 @@ HAIL: boop beep hail <lane> --body \"text\" [--from <me>] [--kind <k>]
     kimi      typed into its TUI window, then C-s (Enter alone only QUEUES)
   A harness with no in-flight port would report `nextturn` and the supervisor
   would hold the text for a resume turn; none does today.
+  A kind=coordinator route (an adopted pane) is delivered by literal keystrokes
+  plus Enter into its pane; a kind=lane route is left for its supervisor.
   Proof of delivery is in the store, not in a screenshot:
     boop db \"SELECT * FROM agent_edge\" -- edge kind deliver-midturn/deliver-nextturn
   and the mailbox row's to_timestamp is stamped when the lane takes it.
@@ -444,7 +448,8 @@ enum SubCmd {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Rewrite a registry route only; never spawns.
+    /// Register an existing interactive pane as a coordinator route; never
+    /// spawns. Hails and lane-completion results are typed into its pane.
     #[command(hide = true)]
     Adopt {
         #[arg(long)]
@@ -743,8 +748,11 @@ fn main() -> Result<()> {
             parent,
             goal,
             mail_dir,
+        // An adopted pane is an interactive session with no lane supervisor
+        // polling its mailbox; `coordinator` makes hail deliver by pane injection.
         } => run_adopt(
             &name,
+            "coordinator",
             &tmux,
             harness.as_deref(),
             session_id.as_deref(),
@@ -2240,8 +2248,10 @@ fn shell_quote(value: &str) -> String {
 // ---------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn run_adopt(
     name: &str,
+    kind: &str,
     tmux_session: &str,
     harness: Option<&str>,
     session_id: Option<&str>,
@@ -2258,7 +2268,7 @@ fn run_adopt(
     }
     let dir = mail_dir(mail_dir_arg)?;
     let route = Route {
-        kind: "lane".into(),
+        kind: kind.into(),
         harness: harness.map(str::to_owned),
         tmux: Some(tmux_session.to_owned()),
         cwd: cwd.map(str::to_owned),
@@ -4133,6 +4143,7 @@ fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             mail_dir,
         } => run_adopt(
             &lane,
+            "lane",
             &tmux,
             harness.as_deref(),
             session_id.as_deref(),
@@ -4244,9 +4255,13 @@ fn run_lane_list(
 }
 
 fn lane_state(live: &Option<tmux::LiveSessions>, route: &Route) -> &'static str {
+    // An adopted route's target can be a pane (`sprefa:0.0`); liveness is the
+    // session's, and `has` compares whole names.
+    let target = route.tmux.as_deref().unwrap_or("");
+    let session = target.split(':').next().unwrap_or("");
     match live {
         None => "?",
-        Some(sessions) if sessions.has(route.tmux.as_deref().unwrap_or("")) => "live",
+        Some(sessions) if sessions.has(session) => "live",
         Some(_) => "dead",
     }
 }
