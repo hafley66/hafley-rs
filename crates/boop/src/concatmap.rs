@@ -192,6 +192,7 @@ impl Rewriter {
                     model: Some(args.model.clone()),
                     cwd: args.state_dir.clone(),
                     resume: None,
+                    lane: None,
                 };
                 let channel = adapter
                     .open_channel(&spec)
@@ -1282,6 +1283,7 @@ mod tests {
             model: Some("fake-model".into()),
             cwd: temp_dir("chat_cwd"),
             resume: None,
+            lane: None,
         };
         let turns = Arc::new(Mutex::new(Vec::new()));
         let mut rewriter = Rewriter::Chat {
@@ -1362,6 +1364,7 @@ mod tests {
             model: Some("fake-model".into()),
             cwd: temp_dir("subject_cwd"),
             resume: None,
+            lane: None,
         };
         let delivered = Arc::new(Mutex::new(Vec::new()));
         let events = Arc::new(AtomicUsize::new(0));

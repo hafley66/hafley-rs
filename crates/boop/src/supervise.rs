@@ -36,7 +36,9 @@ fn resume_text(conversation: Option<String>, brief: &str) -> String {
     }
 }
 
-/// What one lane run needs.
+/// What one lane run needs. Cloned into the signal thread, which owns nothing
+/// else and must still address the lane's result row.
+#[derive(Clone)]
 pub struct LaneRun {
     pub lane: String,
     pub brief: PathBuf,
@@ -104,7 +106,19 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
         resume = lane.resume.as_deref().unwrap_or_default(),
     )
     .entered();
-    let ended = supervise(&lane, channel);
+    // A panic unwinds past `record_result`, and the pane epilogue that would
+    // have covered it dies with the pane.
+    let ended =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| supervise(&lane, channel)));
+    let ended = match ended {
+        Err(payload) => {
+            let text = panic_text(&payload);
+            error!(lane = lane.lane, panic = text, "lane supervisor panicked");
+            record_result(&lane, PANIC_EXIT, Some(&format!("panic: {text}")));
+            anyhow::bail!("supervisor panic: {text}");
+        }
+        Ok(ended) => ended,
+    };
     let ended = match ended {
         Ok(ended) => ended,
         Err(error) => {
@@ -114,6 +128,61 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
     };
     record_result(&lane, ended.exit_code, ended.detail.as_deref());
     Ok(ended.exit_code)
+}
+
+/// What rustc's own runtime exits with on an unwinding panic.
+const PANIC_EXIT: i32 = 101;
+
+/// The panic payload as text. `panic!` carries either of these two shapes and
+/// nothing else reaches here.
+fn panic_text(payload: &Box<dyn std::any::Any + Send>) -> String {
+    if let Some(text) = payload.downcast_ref::<&str>() {
+        return (*text).to_owned();
+    }
+    if let Some(text) = payload.downcast_ref::<String>() {
+        return text.clone();
+    }
+    "unknown panic payload".to_owned()
+}
+
+/// The signals a killed pane sends. A default disposition ends the process
+/// with no result row and no line in the trail.
+const TRAILED_SIGNALS: [i32; 3] = [
+    signal_hook::consts::SIGHUP,
+    signal_hook::consts::SIGTERM,
+    signal_hook::consts::SIGINT,
+];
+
+/// Write the result row for a signal death and return the exit code. Split out
+/// of the handler thread so the row's shape is tested without ending the test
+/// process.
+fn signal_exit(lane: &LaneRun, signal: i32) -> i32 {
+    let name = signal_hook::low_level::signal_name(signal).unwrap_or("unknown");
+    warn!(lane = lane.lane, signal, name, "lane supervisor signalled");
+    record_result(lane, 128 + signal, Some(&format!("killed by {name}")));
+    128 + signal
+}
+
+/// Take over SIGHUP/SIGTERM/SIGINT for the rest of the process, then exit
+/// through the result row instead of the default disposition. Process-global,
+/// so the binary arms it once around `run` and `run` itself stays testable.
+/// A failure to register is logged and never fatal.
+pub fn arm_signal_trail(lane: &LaneRun) {
+    let mut signals = match signal_hook::iterator::Signals::new(TRAILED_SIGNALS) {
+        Ok(signals) => signals,
+        Err(error) => {
+            warn!(lane = lane.lane, error = %error, "lane signal trail not armed");
+            return;
+        }
+    };
+    let lane = lane.clone();
+    std::thread::spawn(move || {
+        // The first signal is the last: the row is written and the process
+        // ends, so nothing here iterates twice.
+        if let Some(signal) = signals.forever().next() {
+            std::process::exit(signal_exit(&lane, signal));
+        }
+    });
 }
 
 fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
@@ -670,6 +739,28 @@ mod tests {
         }
     }
 
+    /// A channel that panics the moment the first turn opens. The panic path
+    /// out of `run`, which no `Result` arm ever sees.
+    struct PanicChannel;
+
+    impl LaneChannel for PanicChannel {
+        fn conversation_id(&self) -> Option<String> {
+            None
+        }
+        fn start_turn(&mut self, _text: &str) -> Result<()> {
+            panic!("harness stream vanished mid-frame")
+        }
+        fn steer(&mut self, _text: &str) -> Result<Delivery> {
+            unreachable!("the turn never opened")
+        }
+        fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
+            unreachable!("the turn never opened")
+        }
+        fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
     // FAIL-PRE-FIX: Codex app-server returns a thread id during channel open,
     // before any turn contains the brief. The supervisor used the presence of
     // that id as resume evidence and sent RESUME_NUDGE as the first turn.
@@ -692,6 +783,46 @@ mod tests {
 
         assert_eq!(run(lane, &mut channel).unwrap(), 0);
         assert_eq!(channel.turns, [RESUME_NUDGE]);
+    }
+
+    // FAIL-PRE-FIX: a panic inside the supervisor unwound straight past
+    // `record_result`, so the waiter sat until its timeout with no row.
+    // SABOTAGE RECEIPT: call `supervise(&lane, channel)` directly instead of
+    // wrapping it in `catch_unwind` and this test aborts on the escaped panic.
+    #[test]
+    fn a_supervisor_panic_still_writes_the_lane_s_result_row() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let error = run(lane, &mut PanicChannel).unwrap_err().to_string();
+        assert!(error.contains("supervisor panic"), "{error}");
+        let rows = result_rows(&dir);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].body,
+            "lane mine done rc=101 (panic: harness stream vanished mid-frame)"
+        );
+    }
+
+    // FAIL-PRE-FIX: a killed pane sent SIGHUP and the default disposition ended
+    // the supervisor with no row at all; `boop wait` then hung for its full
+    // timeout. SABOTAGE RECEIPT: drop `SIGTERM` from `TRAILED_SIGNALS` and the
+    // raise below terminates the test binary instead of being caught.
+    #[test]
+    fn a_signalled_supervisor_writes_a_typed_result_row() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let mut signals =
+            signal_hook::iterator::Signals::new(TRAILED_SIGNALS).expect("register the signals");
+        signal_hook::low_level::raise(signal_hook::consts::SIGTERM).unwrap();
+        let caught = signals
+            .forever()
+            .next()
+            .expect("the raised signal reaches the iterator");
+        assert_eq!(caught, signal_hook::consts::SIGTERM);
+        assert_eq!(signal_exit(&lane, caught), 143);
+        let rows = result_rows(&dir);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].body, "lane mine done rc=143 (killed by SIGTERM)");
     }
 
     fn tempdir() -> PathBuf {

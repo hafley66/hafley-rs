@@ -17,6 +17,7 @@ pub struct OpencodeChannel {
     /// Epoch millis the current turn started; the session-id lookup only
     /// accepts an opencode session created at or after it.
     turn_started_ms: u64,
+    lane: Option<String>,
 }
 
 impl OpencodeChannel {
@@ -27,6 +28,7 @@ impl OpencodeChannel {
             session: spec.resume.clone(),
             turn: None,
             turn_started_ms: 0,
+            lane: spec.lane.clone(),
         })
     }
 }
@@ -65,6 +67,7 @@ impl LaneChannel for OpencodeChannel {
             command
                 .current_dir(&self.cwd)
                 .stdin(Stdio::null())
+                .stderr(crate::trail::child_stderr(self.lane.as_deref()))
                 .spawn()
                 .context("spawn opencode run")?,
         );
@@ -268,6 +271,7 @@ mod tests {
             model: Some("openrouter/deepseek/deepseek-v4-flash-0731".to_owned()),
             cwd: std::env::temp_dir(),
             resume: None,
+            lane: None,
         }
     }
 

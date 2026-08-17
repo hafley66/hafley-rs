@@ -128,7 +128,38 @@ fn run_shell(cwd: &PathBuf, command: &str) -> Result<()> {
     Ok(())
 }
 
-/// The two flags a `lane wait`/`lane list` prints when a lane's commits landed
+/// When one lane held the shared main tree, and on which branch. Attribution
+/// compares a commit against every concurrent lane's window, so one lane's
+/// commits never land on another lane's row.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LaneWindow {
+    pub lane: String,
+    /// The branch checked out in the lane's worktree; `None` when git could not
+    /// answer, which makes reachability say nothing about this lane.
+    pub branch: Option<String>,
+    /// Author time (unix seconds) at the lane's spawn.
+    pub start_secs: i64,
+    /// Author time the lane reported its result; `None` while it still runs.
+    pub end_secs: Option<i64>,
+}
+
+impl LaneWindow {
+    /// Author time inside the lane's run. The upper bound is open while the
+    /// lane runs, and closed the moment it reported.
+    fn holds(&self, authored_secs: i64) -> bool {
+        authored_secs >= self.start_secs && self.end_secs.is_none_or(|end| authored_secs <= end)
+    }
+}
+
+/// One main-tree commit no single lane's window claims alone.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AmbiguousCommit {
+    pub sha: String,
+    /// Every lane whose window holds it, this one included.
+    pub lanes: Vec<String>,
+}
+
+/// The flags a `lane wait`/`lane list` prints when a lane's commits landed
 /// outside its registered worktree. Detection only: the coordinator reads these
 /// and decides, so nothing here resets or hard-fails.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -136,40 +167,114 @@ pub struct EscapeFlags {
     /// The registered worktree has zero new commits: its HEAD still equals the
     /// base sha the spawn branched from.
     pub worktree_untouched: bool,
-    /// Short shas on the repo's local `main` that are not on `origin/main` and
-    /// are newer than the lane's spawn.
+    /// Shas on the repo's local `main`, not on `origin/main`, that only this
+    /// lane's window and branch reachability account for.
     pub main_commits: Vec<String>,
+    /// Shas a concurrent lane's window holds too. Naming one lane here would be
+    /// a guess, and a guess is what sent lane extract-module-plane-go the
+    /// commits lane dl6-bytes-target-lowering-2 made.
+    pub ambiguous_main_commits: Vec<AmbiguousCommit>,
 }
 
 impl EscapeFlags {
     pub fn is_empty(&self) -> bool {
-        !self.worktree_untouched && self.main_commits.is_empty()
+        !self.worktree_untouched
+            && self.main_commits.is_empty()
+            && self.ambiguous_main_commits.is_empty()
     }
 }
 
 /// Compare a lane's worktree HEAD against the base sha the spawn recorded, and
 /// scan the repo's local `main` for commits the lane may have left there. A git
 /// failure is never an error: the rail only detects, it never blocks.
+///
+/// `siblings` is every other lane registered against the same repo; without it
+/// the scan cannot tell two lanes sharing one main tree apart.
 pub fn detect_escape(
     worktree: &Path,
     repo: &Path,
     base_sha: &str,
-    spawned_at_ms: u64,
+    run: &LaneWindow,
+    siblings: &[LaneWindow],
 ) -> EscapeFlags {
     let worktree_untouched = match (git_stdout(worktree, &["rev-parse", "HEAD"]), base_sha) {
         (Some(head), base) if !base.is_empty() => head == base,
         _ => false,
     };
-    EscapeFlags {
+    let mut flags = EscapeFlags {
         worktree_untouched,
-        main_commits: suspect_main_commits(repo, (spawned_at_ms / 1000) as i64),
+        ..EscapeFlags::default()
+    };
+    for (sha, authored_secs) in local_main_commits(repo) {
+        match attribute(repo, &sha, authored_secs, run, siblings) {
+            Attribution::Own => flags.main_commits.push(sha),
+            Attribution::Shared(lanes) => flags
+                .ambiguous_main_commits
+                .push(AmbiguousCommit { sha, lanes }),
+            Attribution::Elsewhere => {}
+        }
     }
+    flags
 }
 
-/// Shas on the repo's local `main` that are not on `origin/main` and whose
-/// commit time is newer than `since_secs` (unix seconds).
-fn suspect_main_commits(repo: &Path, since_secs: i64) -> Vec<String> {
-    let Some(output) = git_stdout(repo, &["log", "origin/main..main", "--format=%H %ct"]) else {
+/// Which lane a main-tree commit belongs to.
+enum Attribution {
+    /// This lane's branch reaches it, or this lane's window alone holds it.
+    Own,
+    /// More than one concurrent lane's window holds it; the named lanes.
+    Shared(Vec<String>),
+    /// Another lane's branch reaches it, or no lane's window holds it.
+    Elsewhere,
+}
+
+/// Attribute one sha. Reachability decides first: a branch that contains the
+/// commit witnessed it, and the author-time window is only a guess. Only where
+/// no branch but `main` reaches the commit does the window speak, and a window
+/// two lanes share names both instead of picking one.
+///
+/// Reachability reads git, not the lane roster, so a pruned sibling route still
+/// clears this lane.
+fn attribute(
+    repo: &Path,
+    sha: &str,
+    authored_secs: i64,
+    run: &LaneWindow,
+    siblings: &[LaneWindow],
+) -> Attribution {
+    let containing = branches_containing(repo, sha);
+    let reaches = |window: &LaneWindow| {
+        window
+            .branch
+            .as_deref()
+            .is_some_and(|branch| containing.iter().any(|name| name == branch))
+    };
+    if reaches(run) {
+        return Attribution::Own;
+    }
+    if !containing.is_empty() {
+        return Attribution::Elsewhere;
+    }
+    if !run.holds(authored_secs) {
+        return Attribution::Elsewhere;
+    }
+    let mut lanes: Vec<String> = siblings
+        .iter()
+        .filter(|window| window.lane != run.lane && window.holds(authored_secs))
+        .map(|window| window.lane.clone())
+        .collect();
+    if lanes.is_empty() {
+        return Attribution::Own;
+    }
+    lanes.push(run.lane.clone());
+    lanes.sort();
+    Attribution::Shared(lanes)
+}
+
+/// Every `(sha, author time)` on the repo's local `main` that `origin/main`
+/// does not carry. Author time, not commit time: a rebase or a cherry-pick
+/// rewrites the commit time and would move the commit out of its lane's run.
+fn local_main_commits(repo: &Path) -> Vec<(String, i64)> {
+    let Some(output) = git_stdout(repo, &["log", "origin/main..main", "--format=%H %at"]) else {
         return Vec::new();
     };
     output
@@ -177,10 +282,34 @@ fn suspect_main_commits(repo: &Path, since_secs: i64) -> Vec<String> {
         .filter_map(|line| {
             let mut parts = line.split_whitespace();
             let sha = parts.next()?.to_owned();
-            let committed = parts.next()?.parse::<i64>().ok()?;
-            (committed > since_secs).then_some(sha)
+            let authored = parts.next()?.parse::<i64>().ok()?;
+            Some((sha, authored))
         })
         .collect()
+}
+
+/// The local branches whose tip reaches `sha`. `main` itself is dropped: every
+/// main-tree commit is on main by construction, so it separates no two lanes.
+fn branches_containing(repo: &Path, sha: &str) -> Vec<String> {
+    let Some(output) = git_stdout(
+        repo,
+        &["branch", "--contains", sha, "--format=%(refname:short)"],
+    ) else {
+        return Vec::new();
+    };
+    output
+        .lines()
+        .map(str::trim)
+        .filter(|name| !name.is_empty() && !name.starts_with('('))
+        .filter(|name| !matches!(*name, "main" | "master"))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// The branch checked out in a lane's worktree, for `LaneWindow::branch`.
+pub fn current_branch(worktree: &Path) -> Option<String> {
+    git_stdout(worktree, &["rev-parse", "--abbrev-ref", "HEAD"])
+        .filter(|name| !name.is_empty() && name != "HEAD")
 }
 
 /// The trimmed stdout of `git -C repo <args>`, or `None` when git fails.
@@ -487,12 +616,29 @@ mod tests {
         }
     }
 
+    /// The lane the `EscapeRepo` worktree belongs to, running since the epoch
+    /// and still open.
+    fn window(repo: &EscapeRepo, lane: &str) -> super::LaneWindow {
+        super::LaneWindow {
+            lane: lane.to_owned(),
+            branch: super::current_branch(&repo.worktree),
+            start_secs: 0,
+            end_secs: None,
+        }
+    }
+
     /// RECEIPT. A lane that made no commit in its worktree leaves the worktree
     /// HEAD on the base sha; the rail flags it untouched.
     #[test]
     fn an_untouched_worktree_is_flagged() {
         let repo = EscapeRepo::new("untouched");
-        let flags = super::detect_escape(&repo.worktree, &repo.repo, &repo.base, 0);
+        let flags = super::detect_escape(
+            &repo.worktree,
+            &repo.repo,
+            &repo.base,
+            &window(&repo, "mine"),
+            &[],
+        );
         assert!(flags.worktree_untouched, "flags: {flags:?}");
         assert!(flags.main_commits.is_empty(), "flags: {flags:?}");
     }
@@ -506,7 +652,13 @@ mod tests {
         std::fs::write(repo.repo.join("escape.txt"), "escaped").unwrap();
         git(&repo.repo, &["add", "-A"]);
         git(&repo.repo, &["commit", "-qm", "escaped to main"]);
-        let flags = super::detect_escape(&repo.worktree, &repo.repo, &repo.base, 0);
+        let flags = super::detect_escape(
+            &repo.worktree,
+            &repo.repo,
+            &repo.base,
+            &window(&repo, "mine"),
+            &[],
+        );
         assert_eq!(flags.main_commits.len(), 1, "flags: {flags:?}");
         assert!(flags.worktree_untouched, "flags: {flags:?}");
     }
@@ -519,8 +671,129 @@ mod tests {
         std::fs::write(repo.worktree.join("done.txt"), "done").unwrap();
         git(&repo.worktree, &["add", "-A"]);
         git(&repo.worktree, &["commit", "-qm", "work in the worktree"]);
-        let flags = super::detect_escape(&repo.worktree, &repo.repo, &repo.base, 0);
+        let flags = super::detect_escape(
+            &repo.worktree,
+            &repo.repo,
+            &repo.base,
+            &window(&repo, "mine"),
+            &[],
+        );
         assert!(!flags.worktree_untouched, "flags: {flags:?}");
         assert!(flags.main_commits.is_empty(), "flags: {flags:?}");
+    }
+
+    // FAIL-PRE-FIX: attribution was a one-sided commit-time window with no lane
+    // binding at all, so lane extract-module-plane-go (window opened 03:48:44Z)
+    // was printed as the suspect for cd71912cd and 36f56f008 (authored 03:57:58Z
+    // and 03:49:19Z), which lane dl6-bytes-target-lowering-2 made in the shared
+    // sprefa main tree; `git branch --contains cd71912cd` names that lane's
+    // branch and not the go lane's. The shape below is that incident: a wide
+    // open window over a commit another lane's branch reaches.
+    // SABOTAGE RECEIPT: drop the `!containing.is_empty()` arm from `attribute`
+    // and the first assertion fails with the sibling's commit on this row.
+    #[test]
+    fn a_sibling_lane_s_main_commit_is_not_this_lane_s() {
+        let repo = EscapeRepo::new("sibling");
+        std::fs::write(repo.repo.join("escape.txt"), "escaped").unwrap();
+        git(&repo.repo, &["add", "-A"]);
+        git(&repo.repo, &["commit", "-qm", "escaped to main"]);
+        // The sibling lane's branch witnesses the commit, the same way
+        // feature/dl6-bytes-target-lowering-2 does in sprefa.
+        git(&repo.repo, &["branch", "feature/sibling", "main"]);
+        let mine = super::LaneWindow {
+            lane: "mine".to_owned(),
+            branch: super::current_branch(&repo.worktree),
+            start_secs: 0,
+            end_secs: None,
+        };
+        let sibling = super::LaneWindow {
+            lane: "sibling".to_owned(),
+            branch: Some("feature/sibling".to_owned()),
+            start_secs: 0,
+            end_secs: None,
+        };
+        let flags = super::detect_escape(
+            &repo.worktree,
+            &repo.repo,
+            &repo.base,
+            &mine,
+            std::slice::from_ref(&sibling),
+        );
+        assert!(
+            flags.main_commits.is_empty(),
+            "a commit another lane's branch reaches is not this lane's: {flags:?}"
+        );
+        assert!(
+            flags.ambiguous_main_commits.is_empty(),
+            "reachability settles it, so nothing is ambiguous: {flags:?}"
+        );
+        // The lane whose branch does reach it still gets it, roster or no roster.
+        let flags = super::detect_escape(&repo.worktree, &repo.repo, &repo.base, &sibling, &[]);
+        assert_eq!(flags.main_commits.len(), 1, "flags: {flags:?}");
+    }
+
+    // FAIL-PRE-FIX: two lanes alive in one main tree both got the same sha
+    // printed as their own suspect, with nothing saying the call was a guess.
+    // SABOTAGE RECEIPT: return `Attribution::Own` in place of
+    // `Attribution::Shared(lanes)` and the ambiguous set stays empty here.
+    #[test]
+    fn two_overlapping_lanes_make_a_commit_ambiguous_instead_of_blaming_one() {
+        let repo = EscapeRepo::new("overlap");
+        std::fs::write(repo.repo.join("escape.txt"), "escaped").unwrap();
+        git(&repo.repo, &["add", "-A"]);
+        git(&repo.repo, &["commit", "-qm", "escaped to main"]);
+        let mine = window(&repo, "mine");
+        let sibling = super::LaneWindow {
+            lane: "sibling".to_owned(),
+            branch: Some("feature/sibling".to_owned()),
+            start_secs: 0,
+            end_secs: None,
+        };
+        let flags = super::detect_escape(
+            &repo.worktree,
+            &repo.repo,
+            &repo.base,
+            &mine,
+            std::slice::from_ref(&sibling),
+        );
+        assert!(flags.main_commits.is_empty(), "flags: {flags:?}");
+        assert_eq!(flags.ambiguous_main_commits.len(), 1, "flags: {flags:?}");
+        assert_eq!(
+            flags.ambiguous_main_commits[0].lanes,
+            vec!["mine".to_owned(), "sibling".to_owned()]
+        );
+    }
+
+    /// A commit the lane's own branch reaches is the lane's whatever the clock
+    /// says; reachability is a witness and the window is a guess.
+    /// SABOTAGE RECEIPT: drop the `if reaches(run)` arm from `attribute` and
+    /// the out-of-window commit stops being attributed at all.
+    #[test]
+    fn branch_reachability_beats_the_time_window() {
+        let repo = EscapeRepo::new("reach");
+        std::fs::write(repo.worktree.join("done.txt"), "done").unwrap();
+        git(&repo.worktree, &["add", "-A"]);
+        git(&repo.worktree, &["commit", "-qm", "work in the worktree"]);
+        let head = String::from_utf8_lossy(
+            &Command::new("git")
+                .args([
+                    "-C",
+                    &repo.worktree.display().to_string(),
+                    "rev-parse",
+                    "HEAD",
+                ])
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .trim()
+        .to_owned();
+        // Fast-forward main onto the lane's branch: the commit is now on main
+        // and out of every window, and still reachable from feature/x.
+        git(&repo.repo, &["merge", "--ff-only", &head]);
+        let mut mine = window(&repo, "mine");
+        mine.start_secs = i64::MAX;
+        let flags = super::detect_escape(&repo.worktree, &repo.repo, &repo.base, &mine, &[]);
+        assert_eq!(flags.main_commits, vec![head], "flags: {flags:?}");
     }
 }
