@@ -13,8 +13,6 @@ labels: [domain-boop, component-cli, intent-implementation]
 
 ## Description
 
-## Description
-
 `boop --help` and every verb print nothing about what just went wrong. The
 trail exists (`~/.agent/lanes/<lane>/supervise.log`, `agent_trace_event` rows
 with `kind=error`), but a coordinator only learns of a flake, an aborted
