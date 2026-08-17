@@ -6,6 +6,63 @@ content identities, reads blobs in batches, and reports debounced logical
 filesystem and ref deltas. The crate contains no Sprefa types or runtime
 assumptions.
 
+## Quick start
+
+Build the CLI and inspect a checkout:
+
+```bash
+cargo build -p soopy
+cargo run -p soopy -- --repo . resolve WORK
+cargo run -p soopy -- --repo . files --revision WORK --glob '**/*.rs'
+cargo run -p soopy -- --repo . read --revision HEAD --glob 'src/**/*.rs'
+```
+
+Watch filesystem changes or inspect tracked Git state:
+
+```bash
+cargo run -p soopy -- --repo . watch --format jsonl
+cargo run -p soopy -- --repo . status-metrics
+```
+
+The mutation API separates planning from writing:
+
+```rust
+use soopy::{
+    plan_mutations, CommitEngine, DurableStageStore, SourceRoot, StageRequest,
+    StageStore,
+};
+
+let target = std::path::Path::new("./checkout");
+let mut root = SourceRoot::open_directory(target)?;
+let request: StageRequest = serde_json::from_slice(&request_json)?;
+
+let plan = plan_mutations(&mut root, &request)?;
+let mut stages = DurableStageStore::open("./target/soopy-stages")?;
+let staged = stages.save(plan)?;
+
+println!("{:#?}", staged.previews);
+
+// Call commit only after the application has approved staged.id.
+let engine = CommitEngine::open(target, "./target/soopy-commit-state")?;
+let receipt = engine.commit(&staged)?;
+# Ok::<(), anyhow::Error>(())
+```
+
+`StageRequest` contains typed create, replace, move, and delete actions. Planning
+reads and validates source content without writing. `DurableStageStore` seals
+the plan under its content-derived `StageId`. `CommitEngine` checks the staged
+inputs again, writes the approved result, journals progress, and returns an
+idempotent receipt.
+
+Run the deterministic mutation and repository-scale gates:
+
+```bash
+just test-source-mutations
+just perf-source-mutations-planner
+just test-soopy-multi-repo-refresh
+just perf-soopy-multi-repo-refresh
+```
+
 ## Data model
 
 ```text
