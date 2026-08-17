@@ -1,6 +1,6 @@
 ---
 created: 2026-08-14
-updated: 2026-08-15
+updated: 2026-08-17
 type: task
 status: open
 priority: high
@@ -54,3 +54,14 @@ Instant owns panel state, terminal layout, and rendering. Boop owns harness acqu
 ### 2026-08-15T16:14:37Z · @codex
 
 Session-graph contract and task split live in crates/boop/plans/2026-08-15-agent-session-graph.md. Replace cass_swarm_status vocabulary and acquisition with boop agent sessions JSON; preserve Instant-owned native-descendant subtraction and pane ownership.
+
+## Decisions
+
+### 2026-08-17T02:25:38Z · @codex
+
+Extend the Instant consumer contract with a Grid-backed agent dependency tree and a Marbler-backed temporal activity waterfall. Reuse the completed boop-session-graph projection for stable nodes and structural edges. Reuse lane-tracing-events and mailbox activity for timestamped spawn, send, receive, work, completion, error, and exit facts. Keep topology, timing, and route adapters outside Boop; Boop emits versioned typed facts and does not prescribe layout or rendering. Cross-repository consumer records: instant/boop-agent-explorer and hafley-rxjs/boop-agent-adapters.
+
+### 2026-08-17T04:33:41Z · @codex
+
+Reconciliation: Instant execution now begins with instant/issues/boop-external-shells, covering %pane attachment, stable tab identity, viewer lifecycle, shortcut migration, Boop-only live-pane correlation, integration coverage, and removal of superseded Bus/CASS shell surfaces. instant/issues/boop-agent-explorer follows it for the Grid dependency tree and Marbler timeline. Boop pane liveness and install regression is tracked by @boop-pane-liveness.
+
