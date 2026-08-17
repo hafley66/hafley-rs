@@ -95,6 +95,79 @@ struct Ended {
     detail: Option<String>,
 }
 
+struct TraceRecorder {
+    lane: String,
+    trace: Option<String>,
+    run_id: String,
+    sequence: u64,
+    store: Option<crate::Store>,
+}
+
+impl TraceRecorder {
+    fn new(lane: &str) -> Self {
+        let store = crate::Store::default_path()
+            .and_then(crate::Store::open)
+            .map_err(|error| {
+                warn!(lane, error = %error, "open trace event store failed");
+            })
+            .ok();
+        let trace = store
+            .as_ref()
+            .and_then(|store| store.trace_of(lane).ok().flatten());
+        Self {
+            lane: lane.to_owned(),
+            trace,
+            run_id: bus::mint_id(),
+            sequence: 0,
+            store,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn record(
+        &mut self,
+        kind: &str,
+        session: Option<String>,
+        started_ts: Option<u64>,
+        finished_ts: Option<u64>,
+        delivery_state: Option<&str>,
+        classification: Option<&str>,
+        from_lane: Option<&str>,
+        to_lane: Option<&str>,
+        detail: &str,
+    ) {
+        self.sequence += 1;
+        let trace_prefix = self.trace.as_deref().unwrap_or("trace-unknown");
+        let event = crate::TraceEvent {
+            event_key: format!(
+                "{trace_prefix}/lane/{}/run/{}/event/{}",
+                self.lane, self.run_id, self.sequence
+            ),
+            lane: self.lane.clone(),
+            trace: self.trace.clone(),
+            session,
+            kind: kind.to_owned(),
+            from_lane: from_lane.map(str::to_owned),
+            to_lane: to_lane.map(str::to_owned),
+            started_ts,
+            finished_ts,
+            delivery_state: delivery_state.map(str::to_owned),
+            classification: classification.map(str::to_owned),
+            detail: detail.to_owned(),
+            created_ts: crate::channel::now_ms(),
+        };
+        if let Some(store) = &self.store {
+            if let Err(error) = store.record_trace_event(&event) {
+                warn!(lane = self.lane, kind, error = %error, "trace event write failed");
+            }
+        }
+    }
+
+    fn session(channel: &dyn LaneChannel) -> Option<String> {
+        channel.conversation_id()
+    }
+}
+
 /// Run the lane to completion and return the exit code the pane re-raises.
 /// Every exit path here writes the result row; the pane epilogue may not run.
 pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
@@ -106,10 +179,23 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
         resume = lane.resume.as_deref().unwrap_or_default(),
     )
     .entered();
+    let mut events = TraceRecorder::new(&lane.lane);
+    events.record(
+        "supervisor-start",
+        TraceRecorder::session(channel),
+        None,
+        None,
+        None,
+        Some("starting"),
+        None,
+        None,
+        "lane supervisor started",
+    );
     // A panic unwinds past `record_result`, and the pane epilogue that would
     // have covered it dies with the pane.
-    let ended =
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| supervise(&lane, channel)));
+    let ended = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        supervise(&lane, channel, &mut events)
+    }));
     let ended = match ended {
         Err(payload) => {
             let text = panic_text(&payload);
@@ -122,10 +208,48 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
     let ended = match ended {
         Ok(ended) => ended,
         Err(error) => {
+            events.record(
+                "error",
+                TraceRecorder::session(channel),
+                None,
+                Some(crate::channel::now_ms()),
+                None,
+                Some("failed"),
+                None,
+                None,
+                "supervisor error",
+            );
+            events.record(
+                "supervisor-exit",
+                TraceRecorder::session(channel),
+                None,
+                Some(crate::channel::now_ms()),
+                None,
+                Some("failed"),
+                None,
+                None,
+                "supervisor exited with error",
+            );
             record_result(&lane, 1, Some(&format!("supervisor error: {error}")));
             return Err(error);
         }
     };
+    let classification = if ended.exit_code == 0 {
+        "completed"
+    } else {
+        "failed"
+    };
+    events.record(
+        "supervisor-exit",
+        TraceRecorder::session(channel),
+        None,
+        Some(crate::channel::now_ms()),
+        None,
+        Some(classification),
+        None,
+        None,
+        ended.detail.as_deref().unwrap_or("supervisor exited"),
+    );
     record_result(&lane, ended.exit_code, ended.detail.as_deref());
     Ok(ended.exit_code)
 }
@@ -185,7 +309,11 @@ pub fn arm_signal_trail(lane: &LaneRun) {
     });
 }
 
-fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
+fn supervise(
+    lane: &LaneRun,
+    channel: &mut dyn LaneChannel,
+    events: &mut TraceRecorder,
+) -> Result<Ended> {
     let brief = std::fs::read_to_string(&lane.brief)
         .with_context(|| format!("read lane brief {}", lane.brief.display()))?;
     info!(brief = %lane.brief.display(), "lane brief loaded");
@@ -210,15 +338,66 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
         None => brief.clone(),
     };
     let mut flake_resumes = 0u32;
+    events.record(
+        "channel-open",
+        TraceRecorder::session(channel),
+        None,
+        None,
+        None,
+        Some("opened"),
+        None,
+        None,
+        "lane channel opened",
+    );
     loop {
         info!(turn_bytes = turn.len(), "lane turn starting");
         let turn_started = crate::channel::now_ms();
-        channel.start_turn(&turn)?;
+        events.record(
+            "turn-start",
+            TraceRecorder::session(channel),
+            Some(turn_started),
+            None,
+            None,
+            Some("started"),
+            None,
+            None,
+            "turn submitted",
+        );
+        if let Err(error) = channel.start_turn(&turn) {
+            events.record(
+                "error",
+                TraceRecorder::session(channel),
+                Some(turn_started),
+                Some(crate::channel::now_ms()),
+                None,
+                Some("failed"),
+                None,
+                None,
+                "pre-turn launch failed",
+            );
+            return Err(error);
+        }
         remember_conversation(lane, channel);
         let end = loop {
-            match channel.next_event(POLL)? {
-                Some(TurnEvent::Started) | None => {}
-                Some(end) => break end,
+            match channel.next_event(POLL) {
+                Err(error) => {
+                    events.record(
+                        "error",
+                        TraceRecorder::session(channel),
+                        Some(turn_started),
+                        Some(crate::channel::now_ms()),
+                        None,
+                        Some("failed"),
+                        None,
+                        None,
+                        "turn event read failed",
+                    );
+                    return Err(error);
+                }
+                Ok(event) => match event {
+                    Some(TurnEvent::Started) | None => {}
+                    Some(end) => break end,
+                },
             }
             let this_turn_activity = channel
                 .last_activity_ms()
@@ -236,9 +415,20 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
             if idle_ms > limit.as_millis() as u64 {
                 warn!(idle_ms, "lane turn stalled; killing the harness child");
                 println!("[boop] turn stalled ({}s idle), retrying", idle_ms / 1000);
-                channel.close().inspect_err(|error| {
-                    error!(error = %error, "stalled lane channel close failed");
-                })?;
+                if let Err(error) = channel.close() {
+                    events.record(
+                        "error",
+                        TraceRecorder::session(channel),
+                        Some(turn_started),
+                        Some(crate::channel::now_ms()),
+                        None,
+                        Some("failed"),
+                        None,
+                        None,
+                        "stalled channel close failed",
+                    );
+                    return Err(error);
+                }
                 break TurnEvent::flaked(format!(
                     "stalled: {}s with no harness activity",
                     idle_ms / 1000
@@ -256,6 +446,17 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
                             "lane hail delivered"
                         );
                         record_delivery(&lane.mail_dir, &lane.lane, &hail, Delivery::MidTurn);
+                        events.record(
+                            "delivery",
+                            TraceRecorder::session(channel),
+                            None,
+                            None,
+                            Some(Delivery::MidTurn.as_str()),
+                            Some("delivered"),
+                            Some(&hail.from),
+                            Some(&lane.lane),
+                            "hail delivered",
+                        );
                     }
                     Delivery::NextTurn => {
                         println!("[boop] hail {} held for the next turn", hail.id);
@@ -271,6 +472,24 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
             }
         };
         println!("[boop] turn ended: {}", end.detail());
+        let finish = crate::channel::now_ms();
+        events.record(
+            "turn-finish",
+            TraceRecorder::session(channel),
+            Some(turn_started),
+            Some(finish),
+            None,
+            Some(if end.is_done() {
+                "completed"
+            } else if end.retryable() {
+                "retryable"
+            } else {
+                "failed"
+            }),
+            None,
+            None,
+            end.detail(),
+        );
         info!(
             turn_end_reason = end.detail(),
             turn_ok = end.is_done(),
@@ -294,9 +513,20 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
             held.push(hail);
         }
         if held.is_empty() {
-            channel.close().inspect_err(|error| {
-                error!(error = %error, "lane channel close failed");
-            })?;
+            if let Err(error) = channel.close() {
+                events.record(
+                    "error",
+                    TraceRecorder::session(channel),
+                    None,
+                    Some(crate::channel::now_ms()),
+                    None,
+                    Some("failed"),
+                    None,
+                    None,
+                    "lane channel close failed",
+                );
+                return Err(error);
+            }
             let exit_code = match end.is_done() {
                 true => 0,
                 false => 1,
@@ -311,6 +541,17 @@ fn supervise(lane: &LaneRun, channel: &mut dyn LaneChannel) -> Result<Ended> {
             .drain(..)
             .map(|hail| {
                 record_delivery(&lane.mail_dir, &lane.lane, &hail, Delivery::NextTurn);
+                events.record(
+                    "delivery",
+                    TraceRecorder::session(channel),
+                    None,
+                    None,
+                    Some(Delivery::NextTurn.as_str()),
+                    Some("queued"),
+                    Some(&hail.from),
+                    Some(&lane.lane),
+                    "hail held for next turn",
+                );
                 hail_text(&hail)
             })
             .collect::<Vec<_>>()

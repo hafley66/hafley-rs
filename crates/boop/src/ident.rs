@@ -12,6 +12,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
+use serde::{Deserialize, Serialize};
 
 use crate::harness::SessionRef;
 
@@ -23,7 +24,10 @@ pub struct Store {
 /// Bumped whenever stored rows mean something different. 8 = agent_pr keyed
 /// (session_id, turn, pr_url_id): a turn with two PRs keeps two rows.
 /// 10 = agent_favorite, user-pinned markdown bodies.
-pub const SCHEMA_VERSION: i64 = 10;
+/// 11 = bounded, lane-addressable supervisor/channel trace events.
+pub const SCHEMA_VERSION: i64 = 11;
+pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
+const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
 /// A row returned to the CLI, joined back from ids to the TEXT the query
 /// surface exposes.
@@ -111,6 +115,45 @@ pub struct LaneSpawn {
     pub ts: u64,
 }
 
+/// One durable supervisor/channel observation. `event_key` is minted by the
+/// producer from trace/lane, a supervisor-run identity, and a monotonic
+/// sequence. Timestamps are payload fields and never identity fields.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TraceEvent {
+    pub event_key: String,
+    pub lane: String,
+    pub trace: Option<String>,
+    pub session: Option<String>,
+    pub kind: String,
+    pub from_lane: Option<String>,
+    pub to_lane: Option<String>,
+    pub started_ts: Option<u64>,
+    pub finished_ts: Option<u64>,
+    pub delivery_state: Option<String>,
+    pub classification: Option<String>,
+    pub detail: String,
+    pub created_ts: u64,
+}
+
+/// A joined trace event returned by the lane query. Endpoint identities are
+/// returned as strings so callers never need dictionary table knowledge.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct TraceEventRow {
+    pub event_key: String,
+    pub lane: String,
+    pub trace: Option<String>,
+    pub session: Option<String>,
+    pub kind: String,
+    pub from_lane: Option<String>,
+    pub to_lane: Option<String>,
+    pub started_ts: Option<u64>,
+    pub finished_ts: Option<u64>,
+    pub delivery_state: Option<String>,
+    pub classification: Option<String>,
+    pub detail: String,
+    pub created_ts: u64,
+}
+
 /// FNV-1a over the body, hex. The digest only has to separate distinct briefs
 /// in one local store; nothing trusts it against an adversary.
 fn markdown_digest(body: &str) -> String {
@@ -140,6 +183,41 @@ fn find(parents: &mut BTreeMap<i64, i64>, node: i64) -> i64 {
         walk = next;
     }
     root
+}
+
+fn bounded_diagnostic(detail: &str) -> String {
+    let mut clean = detail.to_owned();
+    for marker in [
+        "api_key=",
+        "password=",
+        "secret=",
+        "token=",
+        "Bearer ",
+        "sk-",
+    ] {
+        let mut from = 0;
+        while let Some(relative) = clean[from..].find(marker) {
+            let start = from + relative;
+            let value_start = start + marker.len();
+            let value_end = clean[value_start..]
+                .find(|character: char| {
+                    character.is_whitespace() || matches!(character, ',' | '"' | '\'')
+                })
+                .map(|offset| value_start + offset)
+                .unwrap_or(clean.len());
+            clean.replace_range(value_start..value_end, "[redacted]");
+            from = value_start + "[redacted]".len();
+        }
+    }
+    if clean.len() <= 512 {
+        return clean;
+    }
+    let mut end = 512;
+    while !clean.is_char_boundary(end) {
+        end -= 1;
+    }
+    clean.truncate(end);
+    clean
 }
 
 impl Store {
@@ -190,6 +268,31 @@ impl Store {
             }
             if store.schema_version()? < 9 {
                 store.backfill_traces()?;
+            }
+            if store.schema_version()? < 11 {
+                store.connection.execute_batch(
+                    "CREATE TABLE IF NOT EXISTS agent_trace_event (
+                       event_id INTEGER PRIMARY KEY,
+                       event_key TEXT NOT NULL UNIQUE,
+                       lane_id INTEGER NOT NULL REFERENCES dict_session(id),
+                       trace_id INTEGER REFERENCES dict_trace(id),
+                       session_id INTEGER REFERENCES dict_session(id),
+                       from_lane_id INTEGER REFERENCES dict_session(id),
+                       to_lane_id INTEGER REFERENCES dict_session(id),
+                       kind_id INTEGER NOT NULL REFERENCES dict_trace_kind(id),
+                       started_ts INTEGER,
+                       finished_ts INTEGER,
+                       delivery_state_id INTEGER REFERENCES dict_trace_delivery(id),
+                       classification_id INTEGER REFERENCES dict_trace_classification(id),
+                       detail TEXT NOT NULL DEFAULT '',
+                       created_ts INTEGER NOT NULL
+                     );
+                     CREATE INDEX IF NOT EXISTS idx_trace_event_lane_time
+                       ON agent_trace_event(lane_id, created_ts, event_id);
+                     CREATE INDEX IF NOT EXISTS idx_trace_event_trace_time
+                       ON agent_trace_event(trace_id, created_ts, event_id);
+                     PRAGMA user_version = 11;",
+                )?;
             }
             store.stamp_version()?;
         }
@@ -811,6 +914,160 @@ impl Store {
             params![session_id, trace_id, attach_id, ts as i64],
         )?;
         Ok(())
+    }
+
+    /// Persist one supervisor/channel event and prune the global event log in
+    /// the same transaction. Duplicate producer keys resolve to their
+    /// existing internal row, making retries idempotent.
+    pub fn record_trace_event(&self, event: &TraceEvent) -> Result<i64> {
+        self.connection.execute_batch("BEGIN IMMEDIATE")?;
+        let result = (|| {
+            let lane_id = self.session_id(&event.lane)?;
+            let trace_id = event
+                .trace
+                .as_deref()
+                .map(|value| self.intern("dict_trace", value))
+                .transpose()?;
+            let session_id = event
+                .session
+                .as_deref()
+                .map(|value| self.session_id(value))
+                .transpose()?;
+            let from_lane_id = event
+                .from_lane
+                .as_deref()
+                .map(|value| self.session_id(value))
+                .transpose()?;
+            let to_lane_id = event
+                .to_lane
+                .as_deref()
+                .map(|value| self.session_id(value))
+                .transpose()?;
+            let kind_id = self.intern("dict_trace_kind", &event.kind)?;
+            let delivery_state_id = event
+                .delivery_state
+                .as_deref()
+                .map(|value| self.intern("dict_trace_delivery", value))
+                .transpose()?;
+            let classification_id = event
+                .classification
+                .as_deref()
+                .map(|value| self.intern("dict_trace_classification", value))
+                .transpose()?;
+            let detail = bounded_diagnostic(&event.detail);
+            self.connection.execute(
+                "INSERT OR IGNORE INTO agent_trace_event
+                   (event_key, lane_id, trace_id, session_id, from_lane_id, to_lane_id,
+                    kind_id, started_ts, finished_ts, delivery_state_id,
+                    classification_id, detail, created_ts)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                params![
+                    event.event_key,
+                    lane_id,
+                    trace_id,
+                    session_id,
+                    from_lane_id,
+                    to_lane_id,
+                    kind_id,
+                    event.started_ts.map(|value| value as i64),
+                    event.finished_ts.map(|value| value as i64),
+                    delivery_state_id,
+                    classification_id,
+                    detail,
+                    event.created_ts as i64,
+                ],
+            )?;
+            let event_id = self.connection.query_row(
+                "SELECT event_id FROM agent_trace_event WHERE event_key = ?1",
+                params![event.event_key],
+                |row| row.get(0),
+            )?;
+            self.prune_trace_events_in_transaction(TRACE_EVENT_RETENTION_LIMIT)?;
+            Ok(event_id)
+        })();
+        match result {
+            Ok(event_id) => {
+                self.connection.execute_batch("COMMIT")?;
+                Ok(event_id)
+            }
+            Err(error) => {
+                let _ = self.connection.execute_batch("ROLLBACK");
+                Err(error)
+            }
+        }
+    }
+
+    /// Query events for one lane, joining all dictionary identities back to
+    /// strings. A caller cannot request more than the bounded query window.
+    pub fn query_trace_events(&self, lane: Option<&str>, limit: u64) -> Result<Vec<TraceEventRow>> {
+        let limit = limit.min(TRACE_EVENT_QUERY_LIMIT);
+        let mut statement = self.connection.prepare(
+            "SELECT e.event_key, lane.value, trace.value, session.value,
+                    kind.value, from_lane.value, to_lane.value, e.started_ts,
+                    e.finished_ts, delivery.value, classification.value, e.detail,
+                    e.created_ts
+               FROM agent_trace_event e
+               JOIN dict_session lane ON lane.id = e.lane_id
+               LEFT JOIN dict_trace trace ON trace.id = e.trace_id
+               LEFT JOIN dict_session session ON session.id = e.session_id
+               LEFT JOIN dict_session from_lane ON from_lane.id = e.from_lane_id
+               LEFT JOIN dict_session to_lane ON to_lane.id = e.to_lane_id
+               JOIN dict_trace_kind kind ON kind.id = e.kind_id
+               LEFT JOIN dict_trace_delivery delivery ON delivery.id = e.delivery_state_id
+               LEFT JOIN dict_trace_classification classification
+                 ON classification.id = e.classification_id
+              WHERE (?1 IS NULL OR lane.value = ?1)
+              ORDER BY e.created_ts, e.event_id
+              LIMIT ?2",
+        )?;
+        let mut rows = statement.query(params![lane, limit as i64])?;
+        let mut events = Vec::new();
+        while let Some(row) = rows.next()? {
+            events.push(TraceEventRow {
+                event_key: row.get(0)?,
+                lane: row.get(1)?,
+                trace: row.get(2)?,
+                session: row.get(3)?,
+                kind: row.get(4)?,
+                from_lane: row.get(5)?,
+                to_lane: row.get(6)?,
+                started_ts: row.get::<_, Option<i64>>(7)?.map(|value| value as u64),
+                finished_ts: row.get::<_, Option<i64>>(8)?.map(|value| value as u64),
+                delivery_state: row.get(9)?,
+                classification: row.get(10)?,
+                detail: row.get(11)?,
+                created_ts: row.get::<_, i64>(12)? as u64,
+            });
+        }
+        Ok(events)
+    }
+
+    /// Delete the oldest rows beyond `max_rows` in deterministic order.
+    pub fn prune_trace_events(&self, max_rows: u64) -> Result<u64> {
+        self.connection.execute_batch("BEGIN IMMEDIATE")?;
+        let result = self.prune_trace_events_in_transaction(max_rows);
+        match result {
+            Ok(deleted) => {
+                self.connection.execute_batch("COMMIT")?;
+                Ok(deleted)
+            }
+            Err(error) => {
+                let _ = self.connection.execute_batch("ROLLBACK");
+                Err(error)
+            }
+        }
+    }
+
+    fn prune_trace_events_in_transaction(&self, max_rows: u64) -> Result<u64> {
+        Ok(self.connection.execute(
+            "DELETE FROM agent_trace_event
+              WHERE event_id IN (
+                SELECT event_id FROM agent_trace_event
+                 ORDER BY created_ts DESC, event_id DESC
+                 LIMIT -1 OFFSET ?1
+              )",
+            params![max_rows as i64],
+        )? as u64)
     }
 
     /// Every session under one trace, oldest attach first.
@@ -1675,6 +1932,9 @@ CREATE TABLE IF NOT EXISTS dict_request (
 
 CREATE TABLE IF NOT EXISTS dict_trace (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS dict_attach (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
+CREATE TABLE IF NOT EXISTS dict_trace_kind (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
+CREATE TABLE IF NOT EXISTS dict_trace_delivery (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
+CREATE TABLE IF NOT EXISTS dict_trace_classification (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
 
 CREATE TABLE IF NOT EXISTS markdown_cache (
   markdown_id INTEGER PRIMARY KEY,
@@ -1726,6 +1986,27 @@ CREATE TABLE IF NOT EXISTS agent_lane (
 );
 CREATE INDEX IF NOT EXISTS idx_lane_trace ON agent_lane(trace_id);
 CREATE INDEX IF NOT EXISTS idx_lane_lane ON agent_lane(lane_id, spawned_ts);
+
+CREATE TABLE IF NOT EXISTS agent_trace_event (
+  event_id INTEGER PRIMARY KEY,
+  event_key TEXT NOT NULL UNIQUE,
+  lane_id INTEGER NOT NULL REFERENCES dict_session(id),
+  trace_id INTEGER REFERENCES dict_trace(id),
+  session_id INTEGER REFERENCES dict_session(id),
+  from_lane_id INTEGER REFERENCES dict_session(id),
+  to_lane_id INTEGER REFERENCES dict_session(id),
+  kind_id INTEGER NOT NULL REFERENCES dict_trace_kind(id),
+  started_ts INTEGER,
+  finished_ts INTEGER,
+  delivery_state_id INTEGER REFERENCES dict_trace_delivery(id),
+  classification_id INTEGER REFERENCES dict_trace_classification(id),
+  detail TEXT NOT NULL DEFAULT '',
+  created_ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_trace_event_lane_time
+  ON agent_trace_event(lane_id, created_ts, event_id);
+CREATE INDEX IF NOT EXISTS idx_trace_event_trace_time
+  ON agent_trace_event(trace_id, created_ts, event_id);
 
 CREATE TABLE IF NOT EXISTS agent_session (
   session_id INTEGER PRIMARY KEY,
@@ -1893,7 +2174,10 @@ mod tests {
     use rusqlite::params;
     use rusqlite::trace::{TraceEvent, TraceEventCodes};
 
-    use super::{project_transcript, sync_session, sync_session_with_pid, Store};
+    use super::{
+        project_transcript, sync_session, sync_session_with_pid, Store,
+        TraceEvent as LaneTraceEvent,
+    };
 
     static CURSOR_SQL: AtomicUsize = AtomicUsize::new(0);
 
@@ -1914,6 +2198,96 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let store = Store::open(path.clone()).unwrap();
         (path, store)
+    }
+
+    fn trace_event(key: &str, created_ts: u64) -> LaneTraceEvent {
+        LaneTraceEvent {
+            event_key: key.into(),
+            lane: "lane-a".into(),
+            trace: Some("trace-a".into()),
+            session: Some("session-a".into()),
+            kind: "turn-finish".into(),
+            from_lane: Some("parent-a".into()),
+            to_lane: Some("lane-a".into()),
+            started_ts: None,
+            finished_ts: None,
+            delivery_state: Some("nextturn".into()),
+            classification: Some("completed".into()),
+            detail: "diagnostic".into(),
+            created_ts,
+        }
+    }
+
+    #[test]
+    fn trace_events_round_trip_stable_identity_endpoints_and_absent_times() {
+        let (path, store) = fresh_store("trace-events");
+        let event = trace_event("trace-a/lane-a/run-1/event-1", 20);
+        let first_id = store.record_trace_event(&event).unwrap();
+        assert_eq!(store.record_trace_event(&event).unwrap(), first_id);
+        let rows = store.query_trace_events(Some("lane-a"), 20).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].event_key, event.event_key);
+        assert_eq!(rows[0].from_lane.as_deref(), Some("parent-a"));
+        assert_eq!(rows[0].to_lane.as_deref(), Some("lane-a"));
+        assert_eq!(rows[0].started_ts, None);
+        assert_eq!(rows[0].finished_ts, None);
+        assert_eq!(rows[0].delivery_state.as_deref(), Some("nextturn"));
+        assert_eq!(rows[0].classification.as_deref(), Some("completed"));
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn trace_event_diagnostic_is_redacted_and_bounded() {
+        let (path, store) = fresh_store("trace-event-detail");
+        let mut event = trace_event("trace-a/lane-a/run-1/event-2", 20);
+        event.detail = format!("token=secret-value {}", "x".repeat(700));
+        store.record_trace_event(&event).unwrap();
+        let row = store
+            .query_trace_events(Some("lane-a"), 1)
+            .unwrap()
+            .remove(0);
+        assert!(row.detail.len() <= 512);
+        assert!(!row.detail.contains("secret-value"));
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn trace_event_retention_is_deterministic_and_preserves_newest_rows() {
+        let (path, store) = fresh_store("trace-event-retention");
+        for (key, ts) in [("event-a", 10), ("event-b", 10), ("event-c", 11)] {
+            store.record_trace_event(&trace_event(key, ts)).unwrap();
+        }
+        assert_eq!(store.prune_trace_events(2).unwrap(), 1);
+        let rows = store.query_trace_events(Some("lane-a"), 20).unwrap();
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.event_key.as_str())
+                .collect::<Vec<_>>(),
+            vec!["event-b", "event-c"]
+        );
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn v11_open_keeps_existing_rows_when_migration_is_reentered() {
+        let (path, store) = fresh_store("trace-event-migration");
+        store
+            .add_edge_at("old-parent", "old-child", "spawned", 7)
+            .unwrap();
+        store
+            .connection
+            .execute_batch("PRAGMA user_version = 10")
+            .unwrap();
+        drop(store);
+        let migrated = Store::open(path.clone()).unwrap();
+        assert_eq!(migrated.schema_version().unwrap(), super::SCHEMA_VERSION);
+        let edges = migrated.query_edges(None).unwrap();
+        assert_eq!(edges.len(), 1);
+        drop(migrated);
+        let _ = std::fs::remove_file(&path);
     }
 
     /// A resident sync writer holds the write lock in bursts; both open paths

@@ -312,13 +312,16 @@ enum SubCmd {
         #[command(subcommand)]
         cmd: InboxCmd,
     },
-    /// Register this interactive Codex tmux pane as a coordinator route.
+    /// Register this Codex pane, or act on the caller's own conversation.
+    #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
     Me {
         /// Registry name; defaults to codex-<pane id>.
         #[arg(long)]
         name: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
+        #[command(subcommand)]
+        cmd: Option<MeCmd>,
     },
     /// Inspect the boop configuration the CLI reads.
     Config {
@@ -907,7 +910,16 @@ fn main() -> Result<()> {
         ),
         SubCmd::Whoami { json } => run_whoami(json),
         SubCmd::Inbox { cmd } => run_inbox(cmd),
-        SubCmd::Me { name, mail_dir } => run_me(name.as_deref(), mail_dir.as_deref()),
+        SubCmd::Me {
+            name,
+            mail_dir,
+            cmd,
+        } => match cmd {
+            Some(MeCmd::Favorite { index, note }) => {
+                run_me_favorite(&registry, index, note.as_deref())
+            }
+            None => run_me(name.as_deref(), mail_dir.as_deref()),
+        },
         SubCmd::Config { cmd } => run_config(cmd),
     }
 }
@@ -2779,11 +2791,11 @@ mod tests {
 
     use super::{
         after_agent_summary_sync, agent_summary_text, append_message, config, dead_reason,
-        default_preset_for_harness, resolve_dispatch_harness, run_lane_delete, run_lane_prune,
-        session_matches_route, sync_session_pid, write_line, write_route, AgentSummaryCmd, Cli,
-        SubCmd,
+        default_preset_for_harness, lane_state, resolve_dispatch_harness, route_liveness,
+        run_agent, run_lane_delete, run_lane_prune, session_matches_route, sync_session_pid,
+        write_line, write_route, AgentCmd, AgentSummaryCmd, Cli, MeCmd, SubCmd,
     };
-    use boop::bus::{read_routes, Route};
+    use boop::bus::{self, read_routes, Route};
     use boop::proc::SysinfoSnapshot;
     use boop::registry::Registry;
     use boop::{
@@ -2799,6 +2811,32 @@ mod tests {
             cli.command,
             SubCmd::Agent {
                 cmd: AgentSummaryCmd::Summary { .. }
+            }
+        ));
+    }
+
+    #[test]
+    fn me_favorite_defaults_to_the_newest_assistant_message() {
+        let cli = Cli::try_parse_from(["boop", "me", "favorite"])
+            .expect("caller-relative favorite command parses");
+        assert!(matches!(
+            cli.command,
+            SubCmd::Me {
+                cmd: Some(MeCmd::Favorite { index: -1, .. }),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn me_favorite_accepts_an_older_negative_position() {
+        let cli = Cli::try_parse_from(["boop", "me", "favorite", "-2", "--note", "keep"])
+            .expect("negative favorite position parses");
+        assert!(matches!(
+            cli.command,
+            SubCmd::Me {
+                cmd: Some(MeCmd::Favorite { index: -2, .. }),
+                ..
             }
         ));
     }
@@ -2934,6 +2972,56 @@ mod tests {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ))
+    }
+
+    #[test]
+    fn native_registration_stays_live_until_explicit_done_and_done_is_once() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        run_agent(AgentCmd::Register {
+            name: "native-child".into(),
+            kind: "native".into(),
+            parent: Some("coordinator".into()),
+            mail_dir: Some(dir.clone()),
+        })
+        .unwrap();
+
+        let route = read_routes(&dir).unwrap().remove("native-child").unwrap();
+        assert_eq!(
+            lane_state(&Some(boop::tmux::LiveSessions::default()), &route),
+            "live"
+        );
+        assert_eq!(
+            route_liveness(&dir, "native-child"),
+            super::RouteLiveness::Live
+        );
+
+        run_agent(AgentCmd::Done {
+            name: "native-child".into(),
+            rc: 7,
+            mail_dir: Some(dir.clone()),
+        })
+        .unwrap();
+        assert!(!read_routes(&dir).unwrap().contains_key("native-child"));
+
+        let second = run_agent(AgentCmd::Done {
+            name: "native-child".into(),
+            rc: 7,
+            mail_dir: Some(dir.clone()),
+        });
+        assert!(
+            second.is_err(),
+            "a completed native route cannot complete twice"
+        );
+        let messages = bus::read_boxes(&dir)
+            .unwrap()
+            .into_iter()
+            .flat_map(|path| bus::parse_box(&path))
+            .filter(|message| message.kind == "result" && message.from == "native-child")
+            .collect::<Vec<_>>();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].to, "coordinator");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// RECEIPT (Job 3b). A `--route-only` delete drops the lane's registry row
@@ -4325,6 +4413,19 @@ enum SyncCmd {
     },
 }
 
+#[derive(Subcommand)]
+enum MeCmd {
+    /// Save one assistant turn from the caller's conversation as a favorite.
+    Favorite {
+        /// Assistant turn position: -1 is newest, -2 is the one before it.
+        #[arg(default_value_t = -1, allow_hyphen_values = true)]
+        index: i64,
+        /// Why this message is kept.
+        #[arg(long)]
+        note: Option<String>,
+    },
+}
+
 #[cfg(feature = "agent-read")]
 #[derive(Subcommand)]
 enum FavoriteCmd {
@@ -4460,9 +4561,15 @@ fn run_agent(cmd: AgentCmd) -> Result<()> {
         } => {
             let dir = mail_dir(mail_dir_arg.as_deref())?;
             let routes = bus::read_routes(&dir)?;
-            let parent = routes
+            let route = routes
                 .get(&name)
-                .and_then(|route| route.parent.as_deref())
+                .with_context(|| format!("no registered native route for `{name}`"))?;
+            if !matches!(route.kind.as_str(), "coordinator" | "native") {
+                anyhow::bail!("route `{name}` is not a native agent route")
+            }
+            let parent = route
+                .parent
+                .as_deref()
                 .unwrap_or("sprefa-coordinator")
                 .to_owned();
             let message = bus::Message {
@@ -4708,13 +4815,22 @@ fn dead_reason_token(mail_dir: &std::path::Path, lane: &str) -> String {
 }
 
 fn lane_state(live: &Option<tmux::LiveSessions>, route: &Route) -> &'static str {
-    // An adopted route's target can be a pane (`sprefa:0.0`); liveness is the
-    // session's, and `has` compares whole names.
-    let target = route.tmux.as_deref().unwrap_or("");
-    let session = target.split(':').next().unwrap_or("");
+    // Pane-less native registrations are addressable for their entire
+    // registration lifetime. Their completion event is `agent done`, so an
+    // absent tmux or process trail carries no death information.
+    if route.tmux.is_none() && matches!(route.kind.as_str(), "coordinator" | "native") {
+        return "live";
+    }
     match live {
         None => "?",
-        Some(sessions) if sessions.has(session) => "live",
+        Some(_)
+            if route
+                .tmux
+                .as_deref()
+                .is_some_and(|target| tmux::mux().target_alive(None, target)) =>
+        {
+            "live"
+        }
         Some(_) => "dead",
     }
 }
@@ -4911,6 +5027,9 @@ fn route_liveness(dir: &std::path::Path, lane: &str) -> RouteLiveness {
     let Some(route) = routes.get(lane) else {
         return RouteLiveness::Unknown;
     };
+    if route.tmux.is_none() && matches!(route.kind.as_str(), "coordinator" | "native") {
+        return RouteLiveness::Live;
+    }
     if route.tmux.is_none() {
         return RouteLiveness::Unknown;
     }
@@ -5817,6 +5936,46 @@ fn emit_json_rows(rows: &[ident::Row], format: QueryFormat) {
 // ---------------------------------------------------------------------------
 // whoami
 // ---------------------------------------------------------------------------
+
+fn run_me_favorite(registry: &Registry, index: i64, note: Option<&str>) -> Result<()> {
+    anyhow::ensure!(
+        index < 0,
+        "favorite index must be negative; -1 is the newest assistant message"
+    );
+
+    let dir = mail_dir(None)?;
+    let routes = bus::read_routes(&dir).unwrap_or_default();
+    let identity = identity::resolve(&routes)?;
+    let session = identity
+        .session
+        .context("no caller session resolved; run `boop me` once in this tmux pane, then retry")?;
+
+    sync_all(registry, false, false, SyncLiveness::TranscriptOnly)?;
+    let store = open_store()?;
+    let rows = store.turn_rows(&ident::TurnQuery {
+        session: Some(session.clone()),
+        role: Some("assistant".to_owned()),
+        ..Default::default()
+    })?;
+    let offset = index
+        .checked_neg()
+        .and_then(|value| value.checked_sub(1))
+        .context("favorite index is outside the supported range")? as usize;
+    let row = rows.iter().rev().nth(offset).with_context(|| {
+        format!(
+            "session {session} has {} assistant messages; cannot select {index}",
+            rows.len()
+        )
+    })?;
+    anyhow::ensure!(
+        !row.said.trim().is_empty(),
+        "selected assistant message is empty"
+    );
+    let source = format!("{}:{}:assistant:{}", row.harness, session, row.turn);
+    let id = store.favorite_add(&row.said, note.unwrap_or(""), &source, now_ms())?;
+    line(&format!("favorite {id}"));
+    Ok(())
+}
 
 fn run_me(name: Option<&str>, mail_dir_arg: Option<&Path>) -> Result<()> {
     let pane = std::env::var("TMUX_PANE")
