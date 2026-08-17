@@ -1,6 +1,5 @@
 //! Layer 0: process facts, from the OS only. This layer must not know tmux
 //! exists.
-#![allow(dead_code)]
 
 use std::path::PathBuf;
 
@@ -37,7 +36,7 @@ pub trait ProcReader {
     fn descendants(&self, pid: u32) -> Vec<u32>;
 
     /// Total descendants of `pid` (all depths).
-    fn descendent_count(&self, pid: u32) -> usize;
+    fn descendant_count(&self, pid: u32) -> usize;
 }
 
 /// Descendant-tree sums for one root pid: resident set bytes, cpu percent, and
@@ -144,7 +143,7 @@ impl ProcReader for SysinfoSnapshot {
         out
     }
 
-    fn descendent_count(&self, pid: u32) -> usize {
+    fn descendant_count(&self, pid: u32) -> usize {
         self.descendants(pid).len()
     }
 }
@@ -205,7 +204,7 @@ mod tests {
             }
             out
         }
-        fn descendent_count(&self, pid: u32) -> usize {
+        fn descendant_count(&self, pid: u32) -> usize {
             self.descendants(pid).len()
         }
     }
@@ -217,7 +216,7 @@ mod tests {
         let tree = FakeTree::new();
         let sum = tree_sum_of(&tree, 1).unwrap();
         assert_eq!(sum.rss_bytes, 100 + 200 + 400, "all three depths summed");
-        assert_eq!(tree.descendent_count(1), 2);
+        assert_eq!(tree.descendant_count(1), 2);
         let root_only = tree.process(1).unwrap();
         assert!(sum.rss_bytes > root_only.rss_bytes, "tree > pane-only");
         assert!(sum.cpu_percent > root_only.cpu_percent);

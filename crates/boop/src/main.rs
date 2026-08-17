@@ -85,7 +85,11 @@ EXAMPLES:
   #   <ai>{{ai_text}}</ai>
   #   <user>{{user_text}}</user>";
 
-const DOCTRINE: &str = "\
+/// The schema version is interpolated, not literal, so a bump to
+/// `ident::SCHEMA_VERSION` cannot leave this text stale.
+fn doctrine() -> String {
+    format!(
+        "\
 DOCTRINE (this help is the usage contract; agents read it with `boop --help`):
 
 WARMUP: after the worktree exists and before the agent starts, lane create runs
@@ -187,10 +191,10 @@ ever wears hangs under one:
   The brief body is stored AS OF SPAWN. Editing the file afterward does not
   change what the store says the lane was told.
 
-STORE SCHEMA: this build writes version 10. A store written by an older build is
-refused, and `boop db sync create --rebuild` drops every stored row and
-re-projects every transcript from byte 0 (about 18 s over 1.5 GB here). Nothing
-is wiped without that flag.
+STORE SCHEMA: this build writes version {version}. A store written by an older
+build is refused, and `boop db sync create --rebuild` drops every stored row
+and re-projects every transcript from byte 0 (about 18 s over 1.5 GB here).
+Nothing is wiped without that flag.
 
 SQL: the store is SQLite at ~/.agent/boop.db; `boop db \"<sql>\"` queries it
   read-only. sqlite3 dot-commands (.schema, .tables) are NOT supported; the
@@ -198,14 +202,17 @@ SQL: the store is SQLite at ~/.agent/boop.db; `boop db \"<sql>\"` queries it
 
 The pre-split verbs (harnesses, sessions, events, chat, tail, list, measure,
 dispatch, lane, resolve, adopt, sweep, prune, hail, sync, follow) still run as
-hidden aliases for one release. Use `beep` and `db`.";
+hidden aliases for one release. Use `beep` and `db`.",
+        version = ident::SCHEMA_VERSION
+    )
+}
 
 #[derive(Parser)]
 #[command(
     name = "boop",
     version = boop::BUILD,
     about = "Cross-harness agent transcript reader: drive agents with `beep`, read what they did with `db`",
-    after_help = DOCTRINE
+    after_help = doctrine()
 )]
 struct Cli {
     #[command(subcommand)]
@@ -543,8 +550,6 @@ enum SubCmd {
         /// Tail new turns from the db, one NDJSON line per new turn.
         #[arg(long)]
         follow: bool,
-        #[arg(long)]
-        json: bool,
     },
     /// Tail every harness forward from stored offsets into the db.
     #[command(hide = true)]
@@ -659,12 +664,9 @@ fn main() -> Result<()> {
         #[cfg(feature = "agent-read")]
         SubCmd::Agent { cmd } => run_public_agent_command(&registry, cmd),
         SubCmd::Follow {} => run_follow(&registry),
-        SubCmd::Chat {
-            query,
-            all,
-            follow,
-            json,
-        } => run_chat_query(&query, all, follow, json),
+        SubCmd::Chat { query, all, follow } => {
+            run_chat_query(&query, ChatQueryOptions { all, follow })
+        }
         SubCmd::List {
             agent,
             all,
@@ -1039,12 +1041,23 @@ fn run_query(query: &QueryArgs) -> Result<()> {
     Ok(())
 }
 
-/// `boop chat`: like `query` but emits the chat-repr turn shape. `--all`
-/// clears the session filter; `--follow` re-queries in a loop.
-fn run_chat_query(query: &QueryArgs, all: bool, follow: bool, _json: bool) -> Result<()> {
+/// `all` clears the session filter; `follow` re-queries in a loop.
+#[derive(Clone, Copy, Default)]
+struct ChatQueryOptions {
+    all: bool,
+    follow: bool,
+}
+
+/// `boop chat`: like `query` but emits the chat-repr turn shape. `query.format`
+/// already selects NDJSON vs text, so there is no separate JSON flag here.
+fn run_chat_query(query: &QueryArgs, opts: ChatQueryOptions) -> Result<()> {
     let store = ident::Store::open(ident::Store::default_path()?)?;
-    let session = if all { None } else { query.session.clone() };
-    if follow {
+    let session = if opts.all {
+        None
+    } else {
+        query.session.clone()
+    };
+    if opts.follow {
         loop {
             let rows = store.query_turns(&query_from(query, session.clone()))?;
             emit_rows(&rows, QueryFormat::Ndjson);
@@ -1460,9 +1473,15 @@ fn all_messages(dir: &std::path::Path) -> Result<Vec<bus::Message>> {
 // ---------------------------------------------------------------------------
 
 fn run_measure(mail_dir_arg: Option<&Path>) -> Result<()> {
+    let snapshot = proc::SysinfoSnapshot::capture()?;
+    run_measure_with(mail_dir_arg, &snapshot)
+}
+
+/// Takes the `ProcReader` seam rather than the concrete snapshot, so a fake
+/// reader can drive this without a real process tree.
+fn run_measure_with(mail_dir_arg: Option<&Path>, reader: &dyn proc::ProcReader) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
-    let snapshot = proc::SysinfoSnapshot::capture()?;
     line("lane\tpid\trss_kb\tcpu_pct\tuptime_sec\tchildren");
     for (name, route) in &routes {
         let pane_pid = route
@@ -1470,7 +1489,7 @@ fn run_measure(mail_dir_arg: Option<&Path>) -> Result<()> {
             .as_deref()
             .and_then(|target| tmux::mux().pane_pid(None, target))
             .unwrap_or(0);
-        match snapshot.tree_sum(pane_pid) {
+        match proc::tree_sum_of(reader, pane_pid) {
             Some(sum) => {
                 let now = now_unix_secs();
                 let uptime = proc::uptime_secs(sum.start_time_secs, now);
@@ -1481,7 +1500,7 @@ fn run_measure(mail_dir_arg: Option<&Path>) -> Result<()> {
                     sum.rss_bytes / 1024,
                     sum.cpu_percent,
                     uptime,
-                    snapshot.descendent_count(pane_pid),
+                    reader.descendant_count(pane_pid),
                 ));
             }
             None => println!("{}\t{}\t-\t-\t-\t-", name, pane_pid),
@@ -2088,7 +2107,11 @@ fn run_inbox_drain(
     let ledger = inbox::ledger_path(&dir, &name);
     let rows = inbox::undelivered(&all_messages(&dir)?, &name, &inbox::drained(&ledger));
     if rows.is_empty() {
-        debug!(inbox = name, hook = hook.as_str(), "inbox drain found nothing");
+        debug!(
+            inbox = name,
+            hook = hook.as_str(),
+            "inbox drain found nothing"
+        );
         return Ok(());
     }
     let ids: Vec<String> = rows.iter().map(|row| row.id.clone()).collect();
@@ -2340,6 +2363,27 @@ struct LaneArgs {
     wait_timeout: u64,
 }
 
+/// Falls back to a `*coordinator*` name match only when no route declares
+/// `kind == "coordinator"`, so a pre-`kind` registry row still resolves.
+fn resolve_parent_with_legacy_fallback(
+    explicit: Option<&str>,
+    caller_lane: Option<&str>,
+    routes: &BTreeMap<String, Route>,
+) -> lane::ParentPick {
+    let picked = lane::resolve_parent(explicit, caller_lane, routes);
+    if picked.parent.is_some() || routes.values().any(|route| route.kind == "coordinator") {
+        return picked;
+    }
+    let mut legacy = routes.keys().filter(|name| name.contains("coordinator"));
+    match (legacy.next(), legacy.next()) {
+        (Some(only), None) => lane::ParentPick {
+            parent: Some(only.clone()),
+            source: "registry-legacy",
+        },
+        _ => picked,
+    }
+}
+
 /// Register and spawn a lane. No match on harness id here; the adapter's own
 /// `spawn`/`preview_command` decides how `prompt` becomes a real invocation.
 fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
@@ -2425,7 +2469,11 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     let routes = bus::read_routes(&hail_mail_dir)?;
     let caller = identity::resolve(&routes)?;
     let caller_lane = caller.lane.clone().filter(|lane| *lane != identity.lane);
-    let parent = lane::resolve_parent(args.parent.as_deref(), caller_lane.as_deref(), &routes);
+    let parent = resolve_parent_with_legacy_fallback(
+        args.parent.as_deref(),
+        caller_lane.as_deref(),
+        &routes,
+    );
     // The epilogue runs in the lane's pane: the sender is the lane, and the
     // mailbox must be the one this dispatch registered in, never the default.
     let on_exit = parent.parent.as_ref().map(|parent| {
@@ -2787,16 +2835,17 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use clap::Parser;
+    use clap::{CommandFactory, Parser, Subcommand};
 
     use super::{
         after_agent_summary_sync, agent_summary_text, append_message, config, dead_reason,
-        default_preset_for_harness, lane_state, resolve_dispatch_harness, route_liveness,
-        run_agent, run_lane_delete, run_lane_prune, session_matches_route, sync_session_pid,
-        write_line, write_route, AgentCmd, AgentSummaryCmd, Cli, MeCmd, SubCmd,
+        default_preset_for_harness, ident, lane_state, resolve_dispatch_harness,
+        resolve_parent_with_legacy_fallback, route_liveness, run_agent, run_lane_delete,
+        run_lane_prune, run_ps_with, session_matches_route, sync_session_pid, write_line,
+        write_route, AgentCmd, AgentSummaryCmd, Cli, DbCmd, MeCmd, SubCmd,
     };
     use boop::bus::{self, read_routes, Route};
-    use boop::proc::SysinfoSnapshot;
+    use boop::proc::{ProcReader, ProcessInfo, SysinfoSnapshot};
     use boop::registry::Registry;
     use boop::{
         AgentRuntimeRow, AgentSummary, AgentSummaryActivity, AgentSummaryAgent, MailboxCounts,
@@ -3525,7 +3574,7 @@ mod tests {
             .unwrap()
             .contains(".boop-worktrees/lane/"));
         assert_eq!(
-            boop::lane::resolve_parent(None, None, &routes)
+            resolve_parent_with_legacy_fallback(None, None, &routes)
                 .parent
                 .as_deref(),
             Some("sprefa-coordinator"),
@@ -3539,6 +3588,21 @@ mod tests {
             "deleting one old row leaves the others"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT (boop-coordinator-by-kind compat): an explicit coordinator kind must never be shadowed.
+    #[test]
+    fn legacy_fallback_never_overrides_an_explicit_coordinator_kind() {
+        let mut routes = BTreeMap::new();
+        let mut boss = route_with(None);
+        boss.kind = "coordinator".into();
+        routes.insert("boss".into(), boss);
+        let pick = resolve_parent_with_legacy_fallback(None, None, &routes);
+        assert_ne!(
+            pick.parent.as_deref(),
+            Some("boss"),
+            "the fallback must not invent a match the real resolver did not pick"
+        );
     }
 
     /// RECEIPT (job 1). A route written with --goal round-trips through the
@@ -3784,6 +3848,104 @@ mod tests {
         assert!(!text.contains(" -- "), "text:\n{text}");
         let row = &super::render_ndjson(&nodes)[0];
         assert!(row.contains("\"goal\":null"), "row: {row}");
+    }
+
+    /// RECEIPT (boop-db-readonly-open): a store opened `SQLITE_OPEN_READ_ONLY`
+    /// still answers `query_sessions`, the shape every converted `db` verb needs.
+    #[test]
+    fn a_read_verb_succeeds_against_a_readonly_opened_store() {
+        let path = temp_mail_dir().join("ro.db");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        ident::Store::open(path.clone()).unwrap();
+        let store = ident::Store::open_readonly(path).unwrap();
+        assert!(store.query_sessions(None, None).unwrap().is_empty());
+    }
+
+    /// RECEIPT (boop-doctrine-version-const): failed pre-fix against the
+    /// literal "version 10" text once SCHEMA_VERSION moved to 11.
+    #[test]
+    fn help_text_names_the_current_schema_version() {
+        let help = Cli::command().render_long_help().to_string();
+        let needle = format!("writes version {}", ident::SCHEMA_VERSION);
+        assert!(
+            help.contains(&needle),
+            "help text missing {needle:?}:\n{help}"
+        );
+    }
+
+    /// A `ProcReader` that never touches the OS; `queried` proves the caller
+    /// went through the trait instead of a concrete `SysinfoSnapshot`.
+    struct FakeProcReader {
+        queried: std::cell::Cell<bool>,
+    }
+
+    impl ProcReader for FakeProcReader {
+        fn is_alive(&self, _pid: u32) -> bool {
+            self.queried.set(true);
+            true
+        }
+        fn process(&self, pid: u32) -> Option<ProcessInfo> {
+            self.queried.set(true);
+            Some(ProcessInfo {
+                pid,
+                parent: None,
+                name: "fake".into(),
+                rss_bytes: 4096,
+                cpu_percent: 1.5,
+                start_time_secs: 0,
+                cwd: None,
+            })
+        }
+        fn children(&self, _pid: u32) -> Vec<u32> {
+            Vec::new()
+        }
+        fn descendants(&self, _pid: u32) -> Vec<u32> {
+            Vec::new()
+        }
+        fn descendant_count(&self, _pid: u32) -> usize {
+            0
+        }
+    }
+
+    /// RECEIPT (boop-procreader-bypass): failed to compile pre-fix, `run_ps_with` did not exist yet.
+    #[test]
+    fn run_ps_with_drives_the_injected_proc_reader() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        write_route(&dir, "fake-lane", tmux_route("boop-procreader-seam-test")).unwrap();
+        let reader = FakeProcReader {
+            queried: std::cell::Cell::new(false),
+        };
+        run_ps_with(Some(&dir), None, true, &reader).unwrap();
+        assert!(
+            reader.queried.get(),
+            "run_ps_with must query the injected ProcReader"
+        );
+    }
+
+    /// RECEIPT (boop-db-help-blank): failed pre-fix, full blank-about list in commit body.
+    #[test]
+    fn db_subcommand_tree_has_no_blank_help() {
+        fn walk(cmd: &clap::Command, prefix: &str, blank: &mut Vec<String>) {
+            for sub in cmd.get_subcommands() {
+                let path = format!("{prefix} {}", sub.get_name());
+                let empty = sub
+                    .get_about()
+                    .map(|about| about.to_string().trim().is_empty())
+                    .unwrap_or(true);
+                if empty {
+                    blank.push(path.clone());
+                }
+                walk(sub, &path, blank);
+            }
+        }
+        let db = DbCmd::augment_subcommands(clap::Command::new("db"));
+        let mut blank = Vec::new();
+        walk(&db, "db", &mut blank);
+        assert!(
+            blank.is_empty(),
+            "db subcommands with empty about: {blank:?}"
+        );
     }
 }
 
@@ -4177,49 +4339,59 @@ enum DbCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
+    /// Rows from `agent_session`: one row per transcript session.
     #[cfg(feature = "agent-read")]
     Session {
         #[command(subcommand)]
         cmd: SessionCmd,
     },
+    /// Rows from `agent_turn`: one row per user/assistant turn.
     Turn {
         #[command(subcommand)]
         cmd: TurnCmd,
     },
+    /// `agent_turn` projected into NDJSON chat-repr turns.
     Chat {
         #[command(subcommand)]
         cmd: ChatCmd,
     },
+    /// Rows from `agent_touch`: files a session read or edited.
     #[cfg(feature = "agent-read")]
     Touch {
         #[command(subcommand)]
         cmd: FactCmd,
     },
+    /// Rows from `agent_cmd`: shell commands a session ran.
     #[cfg(feature = "agent-read")]
     Command {
         #[command(subcommand)]
         cmd: FactCmd,
     },
+    /// Rows from `agent_fetch`: URLs a session fetched.
     #[cfg(feature = "agent-read")]
     Fetch {
         #[command(subcommand)]
         cmd: FactCmd,
     },
+    /// Rows from `agent_skill`: skills a session invoked.
     #[cfg(feature = "agent-read")]
     Skill {
         #[command(subcommand)]
         cmd: FactCmd,
     },
+    /// Rows from `agent_pr`: pull requests a session touched.
     #[cfg(feature = "agent-read")]
     Pr {
         #[command(subcommand)]
         cmd: FactCmd,
     },
+    /// Rows from `agent_span`: live time spans a session recorded.
     #[cfg(feature = "agent-read")]
     Span {
         #[command(subcommand)]
         cmd: FactCmd,
     },
+    /// Rows from `agent_edge`: parent/child spawn edges between sessions.
     Edge {
         #[command(subcommand)]
         cmd: EdgeCmd,
@@ -4322,6 +4494,7 @@ enum UsageCmd {
 #[cfg(feature = "agent-read")]
 #[derive(Subcommand)]
 enum PriceCmd {
+    /// Every rate row in `model_price`.
     List,
     /// Write one rate row by hand, in USD per million tokens.
     Set {
@@ -4344,6 +4517,7 @@ enum PriceCmd {
 #[cfg(feature = "agent-read")]
 #[derive(Subcommand)]
 enum FactCmd {
+    /// The fact rows for this kind's table, filtered by `FactArgs`.
     List {
         #[command(flatten)]
         args: FactArgs,
@@ -4353,12 +4527,14 @@ enum FactCmd {
 #[cfg(feature = "agent-read")]
 #[derive(Subcommand)]
 enum SessionCmd {
+    /// Every session row from `agent_session`, newest first.
     List {
         #[arg(long)]
         limit: Option<u64>,
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
         format: QueryFormat,
     },
+    /// The one `agent_session` row matching this session id.
     Get {
         session: String,
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
@@ -4368,10 +4544,12 @@ enum SessionCmd {
 
 #[derive(Subcommand)]
 enum TurnCmd {
+    /// Every `agent_turn` row matching `QueryArgs`.
     List {
         #[command(flatten)]
         query: QueryArgs,
     },
+    /// The one `agent_turn` row at this session and turn number.
     Get {
         session: String,
         turn: u64,
@@ -4382,6 +4560,7 @@ enum TurnCmd {
 
 #[derive(Subcommand)]
 enum ChatCmd {
+    /// `agent_turn` rows projected into chat-repr NDJSON turns.
     List {
         #[command(flatten)]
         query: QueryArgs,
@@ -4394,6 +4573,7 @@ enum ChatCmd {
 
 #[derive(Subcommand)]
 enum EdgeCmd {
+    /// Every `agent_edge` row, filtered to one session's edges when given.
     List {
         #[arg(long)]
         session: Option<String>,
@@ -4404,6 +4584,7 @@ enum EdgeCmd {
 
 #[derive(Subcommand)]
 enum SyncCmd {
+    /// Ingest new transcript bytes into the store's `agent_turn` and fact tables.
     Create {
         #[arg(long)]
         rebuild: bool,
@@ -4453,6 +4634,7 @@ enum FavoriteCmd {
 #[cfg(feature = "agent-read")]
 #[derive(Subcommand)]
 enum CursorCmd {
+    /// Every `sync_cursor` row: how far ingest has read each transcript.
     List {
         #[arg(long)]
         limit: Option<u64>,
@@ -5231,9 +5413,20 @@ fn wait_for_outcome(
 
 /// `beep ps`, optionally narrowed to one lane.
 fn run_ps(mail_dir_arg: Option<&Path>, lane: Option<&str>, all: bool) -> Result<()> {
+    let snapshot = proc::SysinfoSnapshot::capture()?;
+    run_ps_with(mail_dir_arg, lane, all, &snapshot)
+}
+
+/// Takes the `ProcReader` seam rather than the concrete snapshot, so a fake
+/// reader can drive this without a real process tree.
+fn run_ps_with(
+    mail_dir_arg: Option<&Path>,
+    lane: Option<&str>,
+    all: bool,
+    reader: &dyn proc::ProcReader,
+) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
-    let snapshot = proc::SysinfoSnapshot::capture()?;
     line("lane\tpid\trss_kb\tcpu_pct\tuptime_sec\tchildren");
     for (name, route) in &routes {
         if let Some(want) = lane {
@@ -5246,7 +5439,7 @@ fn run_ps(mail_dir_arg: Option<&Path>, lane: Option<&str>, all: bool) -> Result<
             .as_deref()
             .and_then(|target| tmux::mux().pane_pid(None, target))
             .unwrap_or(0);
-        match snapshot.tree_sum(pane_pid) {
+        match proc::tree_sum_of(reader, pane_pid) {
             Some(sum) => {
                 let now = now_unix_secs();
                 let uptime = proc::uptime_secs(sum.start_time_secs, now);
@@ -5257,7 +5450,7 @@ fn run_ps(mail_dir_arg: Option<&Path>, lane: Option<&str>, all: bool) -> Result<
                     sum.rss_bytes / 1024,
                     sum.cpu_percent,
                     uptime,
-                    snapshot.descendent_count(pane_pid),
+                    reader.descendant_count(pane_pid),
                 );
             }
             // A dead route prints only when asked for by name or --all.
@@ -5553,12 +5746,12 @@ fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
         #[cfg(feature = "agent-read")]
         DbCmd::Session { cmd } => match cmd {
             SessionCmd::List { limit, format } => {
-                let store = open_store()?;
+                let store = open_ro_store()?;
                 emit_json_rows(&store.query_sessions(None, limit)?, format);
                 Ok(())
             }
             SessionCmd::Get { session, format } => {
-                let store = open_store()?;
+                let store = open_ro_store()?;
                 emit_json_rows(&store.query_sessions(Some(&session), None)?, format);
                 Ok(())
             }
@@ -5570,7 +5763,7 @@ fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
                 turn,
                 format,
             } => {
-                let store = open_store()?;
+                let store = open_ro_store()?;
                 let filter = ident::TurnQuery {
                     session: Some(session),
                     turn_from: Some(turn),
@@ -5582,7 +5775,9 @@ fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
             }
         },
         DbCmd::Chat { cmd } => match cmd {
-            ChatCmd::List { query, all, follow } => run_chat_query(&query, all, follow, false),
+            ChatCmd::List { query, all, follow } => {
+                run_chat_query(&query, ChatQueryOptions { all, follow })
+            }
         },
         #[cfg(feature = "agent-read")]
         DbCmd::Touch { cmd } => run_fact(query::FactKind::Touch, cmd),
@@ -5598,7 +5793,7 @@ fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
         DbCmd::Span { cmd } => run_fact(query::FactKind::Span, cmd),
         DbCmd::Edge { cmd } => match cmd {
             EdgeCmd::List { session, limit } => {
-                let store = open_store()?;
+                let store = open_ro_store()?;
                 emit_edges(&store, session.as_deref(), limit)
             }
         },
@@ -5644,7 +5839,7 @@ fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
                 Ok(())
             }
             FavoriteCmd::List { limit, format } => {
-                let store = open_store()?;
+                let store = open_ro_store()?;
                 emit_json_rows(&store.query_favorites(limit)?, format);
                 Ok(())
             }
@@ -5661,7 +5856,7 @@ fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
         #[cfg(feature = "agent-read")]
         DbCmd::SyncCursor { cmd } => match cmd {
             CursorCmd::List { limit, format } => {
-                let store = open_store()?;
+                let store = open_ro_store()?;
                 emit_json_rows(&store.query_sync_cursors(limit)?, format);
                 Ok(())
             }
@@ -5714,7 +5909,7 @@ fn run_passthrough_at(path: PathBuf, sql: &str, format: QueryFormat) -> Result<(
 #[cfg(feature = "agent-read")]
 fn run_fact(kind: query::FactKind, cmd: FactCmd) -> Result<()> {
     let FactCmd::List { args } = cmd;
-    let store = open_store()?;
+    let store = open_ro_store()?;
     let filter = query::FactQuery {
         session: args.session.clone(),
         since: args.since,
@@ -5730,7 +5925,7 @@ fn run_fact(kind: query::FactKind, cmd: FactCmd) -> Result<()> {
 /// know it and a per-row tmux call would be an N+1.
 #[cfg(feature = "agent-read")]
 fn run_status(window_minutes: u64, format: QueryFormat) -> Result<()> {
-    let store = open_store()?;
+    let store = open_ro_store()?;
     let now = now_ms();
     let mut rows = store.query_status(window_minutes * 60_000, now)?;
     let dir = mail_dir(None)?;
@@ -6132,7 +6327,6 @@ SELECT COUNT(*) AS calls,
 FROM agent_usage AS usage
 LEFT JOIN model_price AS price ON price.model_id = usage.model_id";
 
-#[cfg(feature = "agent-read")]
 fn open_ro_store() -> Result<ident::Store> {
     ident::Store::open_readonly(ident::Store::default_path()?)
 }
