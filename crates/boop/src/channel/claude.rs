@@ -306,8 +306,12 @@ mod tests {
         );
         let channel =
             ClaudeChannel::open_with_binary(&spec(), &binary.display().to_string()).unwrap();
+        // The budget is a deadline, not a fixed 20 polls: the child is a real
+        // `sh` competing with the rest of the suite, and a 1s budget read as a
+        // failure roughly one whole-suite run in four.
         let mut seen = None;
-        for _ in 0..20 {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
             if let Some(ms) = channel.last_activity_ms() {
                 seen = Some(ms);
                 break;
