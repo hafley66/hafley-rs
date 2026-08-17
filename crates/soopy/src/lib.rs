@@ -44,4 +44,4 @@ pub use _7c_edit_producers::*;
 pub use _7d_mutation_plan::*;
 pub use _7e_stage_store::*;
 pub use _7f_commit::*;
-pub use _8_watch::{DirectoryWatcher, RepositoryWatcher, SourceWatcher};
+pub use _8_watch::{git_dirs, DirectoryWatcher, RepositoryWatcher, SourceWatcher};

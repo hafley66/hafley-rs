@@ -576,7 +576,10 @@ fn watch(
         .with_context(|| format!("{action}: {}", path.display()))
 }
 
-fn git_dirs(root: &Path) -> Result<(PathBuf, PathBuf)> {
+/// The repository's own Git directory and its common directory, in that
+/// order. They differ for a linked worktree, where the ref store lives in the
+/// common directory alone.
+pub fn git_dirs(root: &Path) -> Result<(PathBuf, PathBuf)> {
     let output = Command::new("git")
         .arg("-C")
         .arg(root)

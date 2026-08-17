@@ -268,6 +268,14 @@ pub enum ContentId {
     Blake3([u8; 32]),
 }
 
+impl ContentId {
+    /// The one place the worktree hashing expression lives, so a caller
+    /// outside this crate never re-derives it on its own blake3 dependency.
+    pub fn blake3(bytes: &[u8]) -> Self {
+        Self::Blake3(*blake3::hash(bytes).as_bytes())
+    }
+}
+
 /// A stable coordinate for one file at one revision.
 ///
 /// The revision field carries worktree identity for worktree coordinates and
@@ -287,7 +295,7 @@ pub struct SourceEntry {
     pub size: u64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReadRequest {
     pub source: SourceRef,
     pub expected: Option<ContentId>,
