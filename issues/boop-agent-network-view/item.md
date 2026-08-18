@@ -1,6 +1,6 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-08-18
 type: feature
 status: open
 priority: normal
@@ -193,3 +193,9 @@ report (`const SESSION_GRAPH_SQL` at line 103, with
 ## Implementation Notes
 
 Read-only scouting; nothing was changed to produce this card.
+
+## Decisions
+
+### 2026-08-18T13:40:35Z · @chris
+
+Live-follow (2026-08-18): use the existing signals createQuery (packages/signals/src/4_Query.ts), gated on the panel's tab-active state in Instant (several panels per window). No bespoke poll code. Marbler render side untouched for now.
