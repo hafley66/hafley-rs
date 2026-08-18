@@ -381,7 +381,20 @@ pub fn load_agent_session_graph_with_runtime(
         processes: runtime.processes,
     })?;
     for row in rows {
-        if let Some(shell) = shell_from_runtime(row) {
+        if let Some(mut shell) = shell_from_runtime(row) {
+            if let Some(pane) = shell
+                .tmux
+                .as_deref()
+                .filter(|target| target.starts_with('%'))
+            {
+                shell.tmux_pane = Some(pane.to_owned());
+                shell.tmux_session = runtime
+                    .multiplexer
+                    .session_of_pane(runtime.tmux_socket, pane);
+                if runtime.multiplexer.target_alive(runtime.tmux_socket, pane) {
+                    shell.state = "live".to_owned();
+                }
+            }
             if !include_history && shell.state != "live" {
                 continue;
             }
@@ -942,7 +955,7 @@ mod tests {
             Route {
                 kind: "coordinator".into(),
                 harness: Some("claude".into()),
-                tmux: Some("sprefa-5:0.0".into()),
+                tmux: Some("%1206".into()),
                 cwd: Some("/repo".into()),
                 model: None,
                 mode: None,
@@ -955,7 +968,7 @@ mod tests {
                 worktree_dir: None,
             },
         );
-        let mux = FakeMux::available(&["sprefa-5"]);
+        let mux = FakeMux::available(&["sprefa-5"]).with_pane("%1206", "sprefa-5");
         let processes = SysinfoSnapshot::capture().unwrap();
         let graph = load_agent_session_graph_with_runtime(
             &store,
@@ -984,6 +997,9 @@ mod tests {
         );
         assert_eq!(graph.edges.len(), 1);
         assert_eq!(graph.shells.len(), 1);
+        assert_eq!(graph.shells[0].tmux_pane.as_deref(), Some("%1206"));
+        assert_eq!(graph.shells[0].tmux_session.as_deref(), Some("sprefa-5"));
+        assert_eq!(graph.shells[0].state, "live");
         let _ = std::fs::remove_file(path);
     }
 

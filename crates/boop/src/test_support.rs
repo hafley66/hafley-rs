@@ -1,6 +1,6 @@
 //! Shared deterministic fixtures for Boop unit tests.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -76,6 +76,7 @@ impl Drop for TempRepo {
 /// so bounded projection receipts can assert one acquisition for all lanes.
 pub(crate) struct FakeMux {
     sessions: Option<BTreeSet<String>>,
+    panes: BTreeMap<String, String>,
     pub(crate) observations: AtomicUsize,
 }
 
@@ -83,13 +84,20 @@ impl FakeMux {
     pub(crate) fn available(names: &[&str]) -> Self {
         Self {
             sessions: Some(names.iter().map(|name| (*name).to_owned()).collect()),
+            panes: BTreeMap::new(),
             observations: AtomicUsize::new(0),
         }
+    }
+
+    pub(crate) fn with_pane(mut self, pane: &str, session: &str) -> Self {
+        self.panes.insert(pane.to_owned(), session.to_owned());
+        self
     }
 
     pub(crate) fn inaccessible() -> Self {
         Self {
             sessions: None,
+            panes: BTreeMap::new(),
             observations: AtomicUsize::new(0),
         }
     }
@@ -100,8 +108,8 @@ impl Multiplexer for FakeMux {
         None
     }
 
-    fn session_of_pane(&self, _: Option<&str>, _: &str) -> Option<String> {
-        None
+    fn session_of_pane(&self, _: Option<&str>, pane: &str) -> Option<String> {
+        self.panes.get(pane).cloned()
     }
 
     fn pane_pid(&self, _: Option<&str>, _: &str) -> Option<u32> {
@@ -131,8 +139,8 @@ impl Multiplexer for FakeMux {
         Ok(())
     }
 
-    fn target_alive(&self, _: Option<&str>, _: &str) -> bool {
-        false
+    fn target_alive(&self, _: Option<&str>, target: &str) -> bool {
+        self.panes.contains_key(target)
     }
 
     fn capture_pane(&self, _: Option<&str>, _: &str, _: Option<u32>) -> anyhow::Result<String> {
