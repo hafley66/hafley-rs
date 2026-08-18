@@ -13,6 +13,7 @@ use crate::bus::Route;
 pub enum Rung {
     Env,
     Pane,
+    CodexProcess,
     None,
 }
 
@@ -21,6 +22,7 @@ impl Rung {
         match self {
             Rung::Env => "env",
             Rung::Pane => "pane",
+            Rung::CodexProcess => "codex-process",
             Rung::None => "none",
         }
     }
@@ -28,7 +30,7 @@ impl Rung {
     /// Whether the rung observed the identity or inferred it.
     pub fn confidence(self) -> &'static str {
         match self {
-            Rung::Env | Rung::Pane => "exact",
+            Rung::Env | Rung::Pane | Rung::CodexProcess => "exact",
             Rung::None => "unresolved",
         }
     }
@@ -70,9 +72,33 @@ pub fn resolve(routes: &BTreeMap<String, Route>) -> Result<Identity> {
     if let Some(identity) = from_pane(routes) {
         return Ok(identity);
     }
+    if let Some(identity) = from_codex_process() {
+        return Ok(identity);
+    }
     Ok(Identity {
         rung: Some(Rung::None),
         ..Default::default()
+    })
+}
+
+/// Rung 3. Codex exposes its stable thread id and inherited tmux pane to every
+/// tool subprocess. This identifies a fresh spawner before any Boop route has
+/// been registered and does not depend on the transcript's recorded cwd.
+fn from_codex_process() -> Option<Identity> {
+    let session = std::env::var("CODEX_THREAD_ID")
+        .ok()
+        .filter(|value| !value.is_empty())?;
+    let pane = std::env::var("TMUX_PANE")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .or_else(|| crate::tmux::mux().current_pane(None))?;
+    Some(Identity {
+        session: Some(session),
+        lane: Some(format!("codex-{}", pane.trim_start_matches('%'))),
+        parent: None,
+        harness: Some("codex".to_owned()),
+        pane: Some(pane),
+        rung: Some(Rung::CodexProcess),
     })
 }
 
@@ -164,12 +190,35 @@ mod tests {
     #[test]
     fn an_unresolved_caller_says_so() {
         temp_env::with_vars(
-            [("BOOP_SESSION", None::<&str>), ("TMUX_PANE", None::<&str>)],
+            [
+                ("BOOP_SESSION", None::<&str>),
+                ("TMUX_PANE", None::<&str>),
+                ("CODEX_THREAD_ID", None::<&str>),
+            ],
             || {
                 let identity = resolve(&BTreeMap::new()).unwrap();
                 assert_eq!(identity.rung, Some(Rung::None));
                 assert!(identity.session.is_none());
                 assert_eq!(identity.to_json()["confidence"], "unresolved");
+            },
+        );
+    }
+
+    #[test]
+    fn a_fresh_codex_process_identifies_its_spawning_pane_without_a_route() {
+        temp_env::with_vars(
+            [
+                ("BOOP_SESSION", None::<&str>),
+                ("TMUX_PANE", Some("%1206")),
+                ("CODEX_THREAD_ID", Some("thread-7")),
+            ],
+            || {
+                let identity = resolve(&BTreeMap::new()).unwrap();
+                assert_eq!(identity.session.as_deref(), Some("thread-7"));
+                assert_eq!(identity.lane.as_deref(), Some("codex-1206"));
+                assert_eq!(identity.harness.as_deref(), Some("codex"));
+                assert_eq!(identity.pane.as_deref(), Some("%1206"));
+                assert_eq!(identity.rung, Some(Rung::CodexProcess));
             },
         );
     }
