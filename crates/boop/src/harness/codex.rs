@@ -20,6 +20,24 @@ use serde_json::Value;
 pub struct Codex;
 
 impl Harness for Codex {
+    fn identity_process(&self) -> Option<crate::identity::Identity> {
+        let session = std::env::var("CODEX_THREAD_ID")
+            .ok()
+            .filter(|value| !value.is_empty())?;
+        let pane = std::env::var("TMUX_PANE")
+            .ok()
+            .filter(|value| !value.is_empty())
+            .or_else(|| crate::tmux::mux().current_pane(None))?;
+        Some(crate::identity::Identity {
+            session: Some(session),
+            lane: Some(format!("codex-{}", pane.trim_start_matches('%'))),
+            harness: Some(self.id().to_owned()),
+            pane: Some(pane),
+            rung: Some(crate::identity::Rung::CodexProcess),
+            ..Default::default()
+        })
+    }
+
     fn open_channel(
         &self,
         spec: &crate::channel::ChannelSpec,

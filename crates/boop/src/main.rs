@@ -936,9 +936,9 @@ fn main() -> Result<()> {
                 (Some(session), _) => Some(session),
                 (None, true) => {
                     let routes = bus::read_routes(&mail_dir(None)?).unwrap_or_default();
-                    let identity = identity::resolve(&routes)?;
+                    let identity = identity::resolve_with(&registry, &routes)?;
                     Some(identity.session.context(
-                        "--me found no caller session (no BOOP_SESSION, no tmux pane rung); pass --session <id>",
+                        "--me found no caller session (no BOOP_SESSION, no pane or process rung); pass --session <id>",
                     )?)
                 }
                 (None, false) => anyhow::bail!(
