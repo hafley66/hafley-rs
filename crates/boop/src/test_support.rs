@@ -77,6 +77,7 @@ impl Drop for TempRepo {
 pub(crate) struct FakeMux {
     sessions: Option<BTreeSet<String>>,
     panes: BTreeMap<String, String>,
+    pane_pids: BTreeMap<String, u32>,
     pub(crate) observations: AtomicUsize,
 }
 
@@ -85,6 +86,7 @@ impl FakeMux {
         Self {
             sessions: Some(names.iter().map(|name| (*name).to_owned()).collect()),
             panes: BTreeMap::new(),
+            pane_pids: BTreeMap::new(),
             observations: AtomicUsize::new(0),
         }
     }
@@ -94,10 +96,16 @@ impl FakeMux {
         self
     }
 
+    pub(crate) fn with_pane_pid(mut self, target: &str, pid: u32) -> Self {
+        self.pane_pids.insert(target.to_owned(), pid);
+        self
+    }
+
     pub(crate) fn inaccessible() -> Self {
         Self {
             sessions: None,
             panes: BTreeMap::new(),
+            pane_pids: BTreeMap::new(),
             observations: AtomicUsize::new(0),
         }
     }
@@ -112,8 +120,8 @@ impl Multiplexer for FakeMux {
         self.panes.get(pane).cloned()
     }
 
-    fn pane_pid(&self, _: Option<&str>, _: &str) -> Option<u32> {
-        None
+    fn pane_pid(&self, _: Option<&str>, target: &str) -> Option<u32> {
+        self.pane_pids.get(target).copied()
     }
 
     fn live_sessions(&self, _: Option<&str>) -> Option<LiveSessions> {

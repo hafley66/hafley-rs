@@ -2,6 +2,7 @@
 //! exists.
 
 use std::path::PathBuf;
+use std::process::Command;
 
 use anyhow::Result;
 use sysinfo::{Pid, ProcessesToUpdate, System};
@@ -31,6 +32,19 @@ pub trait ProcReader {
 
     /// One process snapshot, `None` if the pid is gone.
     fn process(&self, pid: u32) -> Option<ProcessInfo>;
+
+    /// One exact environment value observed from a live process. Readers that
+    /// cannot expose process environments return `None`.
+    fn environment_variable(&self, _pid: u32, _name: &str) -> Option<String> {
+        None
+    }
+
+    /// File paths currently held open by a process. This is used as exact OS
+    /// ownership evidence when a harness does not retain its thread id in the
+    /// long-lived process environment.
+    fn open_files(&self, _pid: u32) -> Vec<PathBuf> {
+        Vec::new()
+    }
 
     /// Direct children of `pid`, by pid.
     fn children(&self, pid: u32) -> Vec<u32>;
@@ -122,6 +136,34 @@ impl ProcReader for SysinfoSnapshot {
             start_time_secs: process.start_time(),
             cwd: process.cwd().map(PathBuf::from),
         })
+    }
+
+    fn environment_variable(&self, pid: u32, name: &str) -> Option<String> {
+        let prefix = format!("{name}=");
+        self.system
+            .process(Pid::from_u32(pid))?
+            .environ()
+            .iter()
+            .map(|entry| entry.to_string_lossy())
+            .find_map(|entry| entry.strip_prefix(&prefix).map(str::to_owned))
+            .filter(|value| !value.is_empty())
+    }
+
+    fn open_files(&self, pid: u32) -> Vec<PathBuf> {
+        let output = Command::new("lsof")
+            .args(["-Fn", "-p", &pid.to_string()])
+            .output();
+        let Ok(output) = output else {
+            return Vec::new();
+        };
+        if !output.status.success() {
+            return Vec::new();
+        }
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter_map(|line| line.strip_prefix('n'))
+            .map(PathBuf::from)
+            .collect()
     }
 
     fn children(&self, pid: u32) -> Vec<u32> {
