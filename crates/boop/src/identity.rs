@@ -124,18 +124,16 @@ pub(crate) fn from_pane_for(harness: &str, routes: &BTreeMap<String, Route>) -> 
         .filter(|p| !p.is_empty())
         .or_else(|| crate::tmux::mux().current_pane(None))?;
     let tmux_session = crate::tmux::mux().session_of_pane(None, &pane)?;
-    let (lane, route) = routes
-        .iter()
-        .find(|(_, route)| {
-            route
-                .harness
-                .as_deref()
-                .is_none_or(|route_harness| route_harness == harness)
-                && matches!(
-                    route.tmux.as_deref(),
-                    Some(target) if target == pane || target == tmux_session
-                )
-        })?;
+    let (lane, route) = routes.iter().find(|(_, route)| {
+        route
+            .harness
+            .as_deref()
+            .is_none_or(|route_harness| route_harness == harness)
+            && matches!(
+                route.tmux.as_deref(),
+                Some(target) if target == pane || target == tmux_session
+            )
+    })?;
     Some(Identity {
         session: route.session_id.clone().or_else(|| Some(lane.clone())),
         lane: Some(lane.clone()),

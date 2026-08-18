@@ -707,54 +707,34 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     init_tracing(supervised_lane(&cli.command))?;
     let registry = Registry::discover();
-    let needs_startup_sync = !command_owns_sync(&cli.command);
+    let needs_startup_sync = command_needs_startup_sync(&cli.command);
     run_with_startup_sync(
         needs_startup_sync,
         || sync_before_local_command(&registry),
         || match cli.command {
-        SubCmd::Harnesses => run_harnesses(&registry),
-        SubCmd::Sessions { harness } => run_sessions(&registry, harness.as_deref()),
-        SubCmd::Tail {
-            session_id,
-            from,
-            format,
-        } => run_tail(&registry, &session_id, from.unwrap_or(0), format),
-        SubCmd::Events { query } => run_query(&query),
-        SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild),
-        SubCmd::Debug { since, lane, json } => run_debug(&since, lane.as_deref(), json),
-        #[cfg(feature = "agent-read")]
-        SubCmd::Agent { cmd } => run_public_agent_command(cmd),
-        SubCmd::Follow {} => run_follow(&registry),
-        SubCmd::Chat { query, all, follow } => {
-            run_chat_query(&query, ChatQueryOptions { all, follow })
-        }
-        SubCmd::List {
-            agent,
-            all,
-            mail_dir,
-        } => run_list(mail_dir.as_deref(), agent.as_deref(), all),
-        SubCmd::Measure { mail_dir } => run_measure(mail_dir.as_deref()),
-        SubCmd::Dispatch {
-            to,
-            cwd,
-            cmd,
-            from,
-            harness,
-            session_id,
-            model,
-            mode,
-            tmux,
-            socket,
-            body,
-            r#ref,
-            goal,
-            mail_dir,
-            resolve_wait,
-            main_tree,
-            base_sha,
-        } => run_dispatch(
-            &registry,
-            DispatchArgs {
+            SubCmd::Harnesses => run_harnesses(&registry),
+            SubCmd::Sessions { harness } => run_sessions(&registry, harness.as_deref()),
+            SubCmd::Tail {
+                session_id,
+                from,
+                format,
+            } => run_tail(&registry, &session_id, from.unwrap_or(0), format),
+            SubCmd::Events { query } => run_query(&query),
+            SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild),
+            SubCmd::Debug { since, lane, json } => run_debug(&since, lane.as_deref(), json),
+            #[cfg(feature = "agent-read")]
+            SubCmd::Agent { cmd } => run_public_agent_command(cmd),
+            SubCmd::Follow {} => run_follow(&registry),
+            SubCmd::Chat { query, all, follow } => {
+                run_chat_query(&query, ChatQueryOptions { all, follow })
+            }
+            SubCmd::List {
+                agent,
+                all,
+                mail_dir,
+            } => run_list(mail_dir.as_deref(), agent.as_deref(), all),
+            SubCmd::Measure { mail_dir } => run_measure(mail_dir.as_deref()),
+            SubCmd::Dispatch {
                 to,
                 cwd,
                 cmd,
@@ -772,218 +752,238 @@ fn main() -> Result<()> {
                 resolve_wait,
                 main_tree,
                 base_sha,
-                branch: None,
-                worktree_dir: None,
-                parent: None,
-                on_exit: None,
-                warm_start: true,
-                variant: None,
-            },
-        ),
-        SubCmd::Resolve { to, mail_dir } => run_resolve(&to, mail_dir.as_deref()),
-        SubCmd::Hail {
-            to,
-            body,
-            from,
-            kind,
-            box_,
-            socket,
-            wait_timeout,
-            mail_dir,
-        } => run_hail(
-            &registry,
-            &to,
-            &body,
-            from.as_deref(),
-            kind.as_deref(),
-            box_.as_deref(),
-            socket.as_deref(),
-            wait_timeout,
-            mail_dir.as_deref(),
-        ),
-        SubCmd::Sweep {
-            agent,
-            box_,
-            close_routeless,
-            max_age_days,
-            mail_dir,
-        } => run_sweep(
-            mail_dir.as_deref(),
-            box_.as_deref(),
-            agent.as_deref(),
-            close_routeless,
-            max_age_days,
-        ),
-        SubCmd::Lane {
-            name,
-            cwd,
-            harness,
-            brief,
-            model,
-            preset,
-            tmux,
-            parent,
-            branch,
-            base_sha,
-            socket,
-            goal,
-            mail_dir,
-            dry_run,
-        } => run_lane(
-            &registry,
-            LaneArgs {
-                name: Some(name),
-                cwd: Some(cwd),
+            } => run_dispatch(
+                &registry,
+                DispatchArgs {
+                    to,
+                    cwd,
+                    cmd,
+                    from,
+                    harness,
+                    session_id,
+                    model,
+                    mode,
+                    tmux,
+                    socket,
+                    body,
+                    r#ref,
+                    goal,
+                    mail_dir,
+                    resolve_wait,
+                    main_tree,
+                    base_sha,
+                    branch: None,
+                    worktree_dir: None,
+                    parent: None,
+                    on_exit: None,
+                    warm_start: true,
+                    variant: None,
+                },
+            ),
+            SubCmd::Resolve { to, mail_dir } => run_resolve(&to, mail_dir.as_deref()),
+            SubCmd::Hail {
+                to,
+                body,
+                from,
+                kind,
+                box_,
+                socket,
+                wait_timeout,
+                mail_dir,
+            } => run_hail(
+                &registry,
+                &to,
+                &body,
+                from.as_deref(),
+                kind.as_deref(),
+                box_.as_deref(),
+                socket.as_deref(),
+                wait_timeout,
+                mail_dir.as_deref(),
+            ),
+            SubCmd::Sweep {
+                agent,
+                box_,
+                close_routeless,
+                max_age_days,
+                mail_dir,
+            } => run_sweep(
+                mail_dir.as_deref(),
+                box_.as_deref(),
+                agent.as_deref(),
+                close_routeless,
+                max_age_days,
+            ),
+            SubCmd::Lane {
+                name,
+                cwd,
                 harness,
                 brief,
                 model,
                 preset,
-                variant: None,
                 tmux,
                 parent,
                 branch,
                 base_sha,
                 socket,
                 goal,
-                trace: None,
-                no_start: false,
                 mail_dir,
                 dry_run,
-                wait: false,
-                wait_timeout: 0,
-            },
-        ),
-        SubCmd::Adopt {
-            name,
-            tmux,
-            no_hooks,
-            uninstall_hooks,
-            harness,
-            session_id,
-            cwd,
-            model,
-            mode,
-            parent,
-            goal,
-            mail_dir,
-            // An adopted pane is an interactive session with no lane supervisor
-            // polling its mailbox; `coordinator` makes hail deliver by pane injection.
-        } => run_adopt(
-            &name,
-            "coordinator",
-            &tmux,
-            harness.as_deref(),
-            session_id.as_deref(),
-            cwd.as_deref(),
-            model.as_deref(),
-            mode.as_deref(),
-            parent.as_deref(),
-            goal.as_deref(),
-            mail_dir.as_deref(),
-            HookWiring {
+            } => run_lane(
+                &registry,
+                LaneArgs {
+                    name: Some(name),
+                    cwd: Some(cwd),
+                    harness,
+                    brief,
+                    model,
+                    preset,
+                    variant: None,
+                    tmux,
+                    parent,
+                    branch,
+                    base_sha,
+                    socket,
+                    goal,
+                    trace: None,
+                    no_start: false,
+                    mail_dir,
+                    dry_run,
+                    wait: false,
+                    wait_timeout: 0,
+                },
+            ),
+            SubCmd::Adopt {
+                name,
+                tmux,
                 no_hooks,
-                uninstall: uninstall_hooks,
+                uninstall_hooks,
+                harness,
+                session_id,
+                cwd,
+                model,
+                mode,
+                parent,
+                goal,
+                mail_dir,
+                // An adopted pane is an interactive session with no lane supervisor
+                // polling its mailbox; `coordinator` makes hail deliver by pane injection.
+            } => run_adopt(
+                &name,
+                "coordinator",
+                &tmux,
+                harness.as_deref(),
+                session_id.as_deref(),
+                cwd.as_deref(),
+                model.as_deref(),
+                mode.as_deref(),
+                parent.as_deref(),
+                goal.as_deref(),
+                mail_dir.as_deref(),
+                HookWiring {
+                    no_hooks,
+                    uninstall: uninstall_hooks,
+                },
+            ),
+            SubCmd::Prune { mail_dir } => run_prune(mail_dir.as_deref()),
+            SubCmd::Beep { cmd } => run_beep(&registry, cmd),
+            SubCmd::Db { sql, format, cmd } => match cmd {
+                Some(cmd) => run_db(&registry, cmd),
+                None => match sql {
+                    Some(sql) => run_passthrough(&sql, format.unwrap_or_default()),
+                    None => anyhow::bail!(
+                        "boop db needs a SQL string or a subcommand; see `boop db --help`"
+                    ),
+                },
             },
-        ),
-        SubCmd::Prune { mail_dir } => run_prune(mail_dir.as_deref()),
-        SubCmd::Beep { cmd } => run_beep(&registry, cmd),
-        SubCmd::Db { sql, format, cmd } => match cmd {
-            Some(cmd) => run_db(&registry, cmd),
-            None => match sql {
-                Some(sql) => run_passthrough(&sql, format.unwrap_or_default()),
-                None => anyhow::bail!(
-                    "boop db needs a SQL string or a subcommand; see `boop db --help`"
-                ),
-            },
-        },
-        SubCmd::Concatmap {
-            template,
-            mode,
-            model,
-            preset,
-            state,
-            store,
-            poll_secs,
-            from_start,
-            cursor,
-            rules,
-            session,
-            me,
-        } => {
-            // Common model-selection subset: explicit model wins, preset
-            // resolves through config; flash4 is the standing default.
-            let config_path = config::default_path()?;
-            let model = match (model, preset) {
-                (Some(model), _) => model,
-                (None, Some(preset)) => config::resolve_model(&preset, &config_path)?,
-                (None, None) => config::resolve_model("flash4", &config_path)?,
-            };
-            let formula = match &rules {
-                Some(path) => boop::concatmap::Formula::load(path)?,
-                None => boop::concatmap::Formula::oneshot(),
-            };
-            let template = match &template {
-                Some(path) => Some(boop::concatmap::expand_env(&std::fs::read_to_string(path)?)),
-                None => None,
-            };
-            if formula.window.is_none() {
-                anyhow::ensure!(
-                    template.is_some() && mode.is_some(),
-                    "compiled bundling needs --template and --mode; or pass --rules with a window SQL"
-                );
-            }
-            let session = match (session, me) {
-                (Some(session), _) => Some(session),
-                (None, true) => {
-                    let routes = bus::read_routes(&mail_dir(None)?).unwrap_or_default();
-                    let identity = identity::resolve_with(&registry, &routes)?;
-                    Some(identity.session.context(
-                        "--me found no caller session (no BOOP_SESSION, no pane or process rung); pass --session <id>",
-                    )?)
-                }
-                (None, false) => anyhow::bail!(
-                    "name the conversation to map: --session <id>, or --me to take the caller's own"
-                ),
-            };
-            boop::concatmap::run(boop::concatmap::Args {
+            SubCmd::Concatmap {
                 template,
                 mode,
                 model,
-                state_dir: state,
-                store_path: store,
-                poll: std::time::Duration::from_secs(poll_secs),
+                preset,
+                state,
+                store,
+                poll_secs,
                 from_start,
                 cursor,
-                formula,
+                rules,
                 session,
-            })
-        }
-        SubCmd::Wait {
-            id,
-            me,
-            as_name,
-            wait_timeout,
-            mail_dir,
-        } => run_wait(
-            id.as_deref(),
-            me,
-            as_name.as_deref(),
-            wait_timeout,
-            mail_dir.as_deref(),
-        ),
-        SubCmd::Whoami { json } => run_whoami(json),
-        SubCmd::Inbox { cmd } => run_inbox(cmd),
-        SubCmd::Me {
-            name,
-            mail_dir,
-            cmd,
-        } => match cmd {
-            Some(MeCmd::Favorite { index, note }) => {
-                run_me_favorite(index, note.as_deref())
+                me,
+            } => {
+                // Common model-selection subset: explicit model wins, preset
+                // resolves through config; flash4 is the standing default.
+                let config_path = config::default_path()?;
+                let model = match (model, preset) {
+                    (Some(model), _) => model,
+                    (None, Some(preset)) => config::resolve_model(&preset, &config_path)?,
+                    (None, None) => config::resolve_model("flash4", &config_path)?,
+                };
+                let formula = match &rules {
+                    Some(path) => boop::concatmap::Formula::load(path)?,
+                    None => boop::concatmap::Formula::oneshot(),
+                };
+                let template = match &template {
+                    Some(path) => {
+                        Some(boop::concatmap::expand_env(&std::fs::read_to_string(path)?))
+                    }
+                    None => None,
+                };
+                if formula.window.is_none() {
+                    anyhow::ensure!(
+                    template.is_some() && mode.is_some(),
+                    "compiled bundling needs --template and --mode; or pass --rules with a window SQL"
+                );
+                }
+                let session = match (session, me) {
+                    (Some(session), _) => Some(session),
+                    (None, true) => {
+                        let routes = bus::read_routes(&mail_dir(None)?).unwrap_or_default();
+                        let identity = identity::resolve_with(&registry, &routes)?;
+                        Some(identity.session.context(
+                        "--me found no caller session (no BOOP_SESSION, no pane or process rung); pass --session <id>",
+                    )?)
+                    }
+                    (None, false) => anyhow::bail!(
+                    "name the conversation to map: --session <id>, or --me to take the caller's own"
+                ),
+                };
+                boop::concatmap::run(boop::concatmap::Args {
+                    template,
+                    mode,
+                    model,
+                    state_dir: state,
+                    store_path: store,
+                    poll: std::time::Duration::from_secs(poll_secs),
+                    from_start,
+                    cursor,
+                    formula,
+                    session,
+                })
             }
-            None => run_me(name.as_deref(), mail_dir.as_deref()),
-        },
-        SubCmd::Config { cmd } => run_config(cmd),
+            SubCmd::Wait {
+                id,
+                me,
+                as_name,
+                wait_timeout,
+                mail_dir,
+            } => run_wait(
+                id.as_deref(),
+                me,
+                as_name.as_deref(),
+                wait_timeout,
+                mail_dir.as_deref(),
+            ),
+            SubCmd::Whoami { json } => run_whoami(json),
+            SubCmd::Inbox { cmd } => run_inbox(cmd),
+            SubCmd::Me {
+                name,
+                mail_dir,
+                cmd,
+            } => match cmd {
+                Some(MeCmd::Favorite { index, note }) => run_me_favorite(index, note.as_deref()),
+                None => run_me(name.as_deref(), mail_dir.as_deref()),
+            },
+            SubCmd::Config { cmd } => run_config(cmd),
         },
     )
 }
@@ -992,15 +992,18 @@ fn sync_before_local_command(registry: &Registry) -> Result<()> {
     sync_all(registry, false, false, SyncLiveness::TranscriptOnly)
 }
 
-fn command_owns_sync(command: &SubCmd) -> bool {
-    matches!(command, SubCmd::Sync { .. } | SubCmd::Follow { .. })
-        || matches!(
-            command,
-            SubCmd::Db {
-                cmd: Some(DbCmd::Sync { .. }),
+fn command_needs_startup_sync(command: &SubCmd) -> bool {
+    matches!(
+        command,
+        SubCmd::Events { .. }
+            | SubCmd::Chat { .. }
+            | SubCmd::Agent { .. }
+            | SubCmd::Concatmap { .. }
+            | SubCmd::Me {
+                cmd: Some(MeCmd::Favorite { .. }),
                 ..
             }
-        )
+    )
 }
 
 fn run_with_startup_sync<T>(
@@ -1231,14 +1234,11 @@ fn sync_all(
         }
     }
     let routes = match liveness {
-        SyncLiveness::StampLivePid => {
-            Some(bus::read_routes(&mail_dir(None)?).unwrap_or_default())
-        }
+        SyncLiveness::StampLivePid => Some(bus::read_routes(&mail_dir(None)?).unwrap_or_default()),
         SyncLiveness::TranscriptOnly => None,
     };
     let mut stat = ident::SyncStat::default();
     for (adapter, session) in pending {
-        store.project_discovered_session(&session)?;
         tracing::debug!(
             harness = adapter.id(),
             session_id = session.session_id,
@@ -1249,9 +1249,21 @@ fn sync_all(
                 .as_ref()
                 .and_then(|routes| session_route_pid(routes, &session))
         });
-        // Adapter ingestion opens and parses transcript sources. Store writes
-        // autocommit, so no SQLite writer slot spans that external work.
-        stat.add(ident::sync_session_with_pid(&store, adapter, &session, pid)?);
+        store.begin()?;
+        let result = (|| {
+            store.project_discovered_session(&session)?;
+            ident::sync_session_with_pid(&store, adapter, &session, pid)
+        })();
+        match result {
+            Ok(session_stat) => {
+                store.commit()?;
+                stat.add(session_stat);
+            }
+            Err(error) => {
+                let _ = store.rollback();
+                return Err(error);
+            }
+        }
     }
     let elapsed_ms = started.elapsed().as_millis();
     if report {
@@ -1351,7 +1363,15 @@ fn run_follow(registry: &Registry) -> Result<()> {
             }
             let adapter = harness_by_id(registry, harness_id)?;
             let pid = session_route_pid(&routes, session);
-            let _ = ident::sync_session_with_pid(&store, adapter, session, pid)?;
+            store.begin()?;
+            let result = ident::sync_session_with_pid(&store, adapter, session, pid);
+            match result {
+                Ok(_) => store.commit()?,
+                Err(error) => {
+                    let _ = store.rollback();
+                    return Err(error);
+                }
+            }
             last_mtime.insert(session.session_id.clone(), mtime);
         }
         std::thread::sleep(std::time::Duration::from_secs(1));
@@ -2753,8 +2773,21 @@ fn run_adopt(
     let registry = Registry::discover();
     let processes = crate::proc::SysinfoSnapshot::capture()?;
     run_adopt_with(
-        name, kind, tmux_session, harness, session_id, cwd, model, mode, parent, goal,
-        mail_dir_arg, hooks, &registry, tmux::mux(), &processes,
+        name,
+        kind,
+        tmux_session,
+        harness,
+        session_id,
+        cwd,
+        model,
+        mode,
+        parent,
+        goal,
+        mail_dir_arg,
+        hooks,
+        &registry,
+        tmux::mux(),
+        &processes,
     )
 }
 
@@ -2792,9 +2825,9 @@ fn run_adopt_with(
     let existing = bus::read_routes(&dir)?.remove(name);
     let discovered_session = session_id.map(str::to_owned).or_else(|| {
         harness.and_then(|id| {
-            registry
-                .by_id(id)
-                .and_then(|adapter| adapter.session_id_in_pane(multiplexer, processes, tmux_session))
+            registry.by_id(id).and_then(|adapter| {
+                adapter.session_id_in_pane(multiplexer, processes, tmux_session)
+            })
         })
     });
     let route = Route {
@@ -2969,17 +3002,18 @@ fn append_acks(dir: &std::path::Path, messages: &[bus::Message]) -> Result<usize
 
 #[cfg(test)]
 mod tests {
+    use clap::{CommandFactory, Parser, Subcommand};
     use std::collections::{BTreeMap, BTreeSet};
     use std::path::PathBuf;
-    use clap::{CommandFactory, Parser, Subcommand};
 
     use super::{
-        agent_session_graph_query, agent_summary_text, append_message, command_owns_sync,
+        agent_session_graph_query, agent_summary_text, append_message, command_needs_startup_sync,
         completion_recipient, config, dead_reason, default_preset_for_harness, ident, lane_state,
-        register_fresh_codex_spawner, resolve_dispatch_harness, resolve_parent_with_legacy_fallback,
-        route_liveness, run_adopt_with, run_agent, run_lane_delete, run_lane_prune, run_ps_with,
-        run_with_startup_sync, session_matches_route, write_line, write_route, AgentCmd,
-        AgentSessionGraphFormat, AgentSummaryCmd, Cli, DbCmd, HookWiring, MeCmd, SubCmd,
+        register_fresh_codex_spawner, resolve_dispatch_harness,
+        resolve_parent_with_legacy_fallback, route_liveness, run_adopt_with, run_agent,
+        run_lane_delete, run_lane_prune, run_ps_with, run_with_startup_sync, session_matches_route,
+        write_line, write_route, AgentCmd, AgentSessionGraphFormat, AgentSummaryCmd, Cli, DbCmd,
+        HookWiring, MeCmd, SubCmd,
     };
     use boop::bus::{self, read_routes, Route};
     use boop::proc::{ProcReader, ProcessInfo, SysinfoSnapshot};
@@ -3039,36 +3073,113 @@ mod tests {
     struct AdoptMux;
 
     impl Multiplexer for AdoptMux {
-        fn current_pane(&self, _: Option<&str>) -> Option<String> { None }
-        fn session_of_pane(&self, _: Option<&str>, _: &str) -> Option<String> { None }
-        fn pane_pid(&self, _: Option<&str>, _: &str) -> Option<u32> { Some(10) }
-        fn live_sessions(&self, _: Option<&str>) -> Option<LiveSessions> { Some(LiveSessions { names: ["sprefa-5".into()].into_iter().collect() }) }
-        fn has_session(&self, _: Option<&str>, target: &str) -> anyhow::Result<bool> { Ok(target.split(':').next() == Some("sprefa-5")) }
-        fn kill_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> { Ok(()) }
-        fn target_alive(&self, _: Option<&str>, _: &str) -> bool { true }
-        fn capture_pane(&self, _: Option<&str>, _: &str, _: Option<u32>) -> anyhow::Result<String> { Ok(String::new()) }
-        fn new_detached_session(&self, _: Option<&str>, _: &str, _: &str, _: &str) -> anyhow::Result<()> { Ok(()) }
-        fn new_bare_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> { Ok(()) }
-        fn send_keys_literal(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> { Ok(()) }
-        fn send_text(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> { Ok(()) }
-        fn send_key_named(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> { Ok(()) }
-        fn new_window(&self, _: Option<&str>, _: &str, _: &str, _: &str, _: &str) -> anyhow::Result<String> { Ok(String::new()) }
-        fn swap_windows(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> { Ok(()) }
-        fn kill_window(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> { Ok(()) }
+        fn current_pane(&self, _: Option<&str>) -> Option<String> {
+            None
+        }
+        fn session_of_pane(&self, _: Option<&str>, _: &str) -> Option<String> {
+            None
+        }
+        fn pane_pid(&self, _: Option<&str>, _: &str) -> Option<u32> {
+            Some(10)
+        }
+        fn live_sessions(&self, _: Option<&str>) -> Option<LiveSessions> {
+            Some(LiveSessions {
+                names: ["sprefa-5".into()].into_iter().collect(),
+            })
+        }
+        fn has_session(&self, _: Option<&str>, target: &str) -> anyhow::Result<bool> {
+            Ok(target.split(':').next() == Some("sprefa-5"))
+        }
+        fn kill_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn target_alive(&self, _: Option<&str>, _: &str) -> bool {
+            true
+        }
+        fn capture_pane(&self, _: Option<&str>, _: &str, _: Option<u32>) -> anyhow::Result<String> {
+            Ok(String::new())
+        }
+        fn new_detached_session(
+            &self,
+            _: Option<&str>,
+            _: &str,
+            _: &str,
+            _: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn new_bare_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_keys_literal(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_text(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_key_named(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn new_window(
+            &self,
+            _: Option<&str>,
+            _: &str,
+            _: &str,
+            _: &str,
+            _: &str,
+        ) -> anyhow::Result<String> {
+            Ok(String::new())
+        }
+        fn swap_windows(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn kill_window(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
     }
 
     impl ProcReader for ClaudeProcessFixture {
-        fn is_alive(&self, pid: u32) -> bool { pid == 10 || pid == 11 }
+        fn is_alive(&self, pid: u32) -> bool {
+            pid == 10 || pid == 11
+        }
         fn process(&self, pid: u32) -> Option<ProcessInfo> {
             match pid {
-                10 => Some(ProcessInfo { pid, parent: None, name: "shell".into(), command: vec!["zsh".into()], rss_bytes: 0, cpu_percent: 0.0, start_time_secs: 0, cwd: None }),
-                11 => Some(ProcessInfo { pid, parent: Some(10), name: "claude".into(), command: vec!["claude".into(), "--resume".into(), "da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b".into()], rss_bytes: 0, cpu_percent: 0.0, start_time_secs: 0, cwd: None }),
+                10 => Some(ProcessInfo {
+                    pid,
+                    parent: None,
+                    name: "shell".into(),
+                    command: vec!["zsh".into()],
+                    rss_bytes: 0,
+                    cpu_percent: 0.0,
+                    start_time_secs: 0,
+                    cwd: None,
+                }),
+                11 => Some(ProcessInfo {
+                    pid,
+                    parent: Some(10),
+                    name: "claude".into(),
+                    command: vec![
+                        "claude".into(),
+                        "--resume".into(),
+                        "da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b".into(),
+                    ],
+                    rss_bytes: 0,
+                    cpu_percent: 0.0,
+                    start_time_secs: 0,
+                    cwd: None,
+                }),
                 _ => None,
             }
         }
-        fn children(&self, pid: u32) -> Vec<u32> { (pid == 10).then_some(11).into_iter().collect() }
-        fn descendants(&self, pid: u32) -> Vec<u32> { (pid == 10).then_some(11).into_iter().collect() }
-        fn descendant_count(&self, pid: u32) -> usize { usize::from(pid == 10) }
+        fn children(&self, pid: u32) -> Vec<u32> {
+            (pid == 10).then_some(11).into_iter().collect()
+        }
+        fn descendants(&self, pid: u32) -> Vec<u32> {
+            (pid == 10).then_some(11).into_iter().collect()
+        }
+        fn descendant_count(&self, pid: u32) -> usize {
+            usize::from(pid == 10)
+        }
     }
 
     #[test]
@@ -3078,15 +3189,58 @@ mod tests {
         let mux = AdoptMux;
         let processes = ClaudeProcessFixture;
         let registry = Registry::discover();
-        let hooks = || HookWiring { no_hooks: true, uninstall: false };
+        let hooks = || HookWiring {
+            no_hooks: true,
+            uninstall: false,
+        };
 
-        run_adopt_with("sprefa-coordinator", "coordinator", "sprefa-5:0.0", Some("claude"), None, Some("/repo"), None, None, None, None, Some(&dir), hooks(), &registry, &mux, &processes).unwrap();
+        run_adopt_with(
+            "sprefa-coordinator",
+            "coordinator",
+            "sprefa-5:0.0",
+            Some("claude"),
+            None,
+            Some("/repo"),
+            None,
+            None,
+            None,
+            None,
+            Some(&dir),
+            hooks(),
+            &registry,
+            &mux,
+            &processes,
+        )
+        .unwrap();
         let discovered = read_routes(&dir).unwrap();
-        assert_eq!(discovered["sprefa-coordinator"].session_id.as_deref(), Some("da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b"));
+        assert_eq!(
+            discovered["sprefa-coordinator"].session_id.as_deref(),
+            Some("da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b")
+        );
 
-        run_adopt_with("sprefa-coordinator", "coordinator", "sprefa-5:0.0", Some("claude"), Some("explicit-session"), Some("/repo"), None, None, None, None, Some(&dir), hooks(), &registry, &mux, &processes).unwrap();
+        run_adopt_with(
+            "sprefa-coordinator",
+            "coordinator",
+            "sprefa-5:0.0",
+            Some("claude"),
+            Some("explicit-session"),
+            Some("/repo"),
+            None,
+            None,
+            None,
+            None,
+            Some(&dir),
+            hooks(),
+            &registry,
+            &mux,
+            &processes,
+        )
+        .unwrap();
         let explicit = read_routes(&dir).unwrap();
-        assert_eq!(explicit["sprefa-coordinator"].session_id.as_deref(), Some("explicit-session"));
+        assert_eq!(
+            explicit["sprefa-coordinator"].session_id.as_deref(),
+            Some("explicit-session")
+        );
         assert_eq!(explicit.len(), 1);
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -3180,18 +3334,21 @@ mod tests {
     }
 
     #[test]
-    fn startup_sync_policy_reserves_sync_for_sync_commands() {
-        for (argv, owns_sync) in [
-            (["boop", "sync"].as_slice(), true),
-            (["boop", "follow"].as_slice(), true),
-            (["boop", "db", "sync", "create"].as_slice(), true),
-            (["boop", "db", "turn", "list"].as_slice(), false),
-            (["boop", "me", "favorite"].as_slice(), false),
-            (["boop", "agent", "summary"].as_slice(), false),
-        ] {
-            let cli = Cli::try_parse_from(argv).expect("command parses");
-            assert_eq!(command_owns_sync(&cli.command), owns_sync, "{argv:?}");
-        }
+    fn startup_sync_policy_limits_projection_to_transcript_consumers() {
+        let adopt = Cli::try_parse_from(["boop", "adopt", "--name", "root", "--tmux", "root"])
+            .expect("adopt parses");
+        assert!(!command_needs_startup_sync(&adopt.command));
+        let hail = Cli::try_parse_from([
+            "boop", "hail", "--to", "root", "--from", "lane", "--body", "done",
+        ])
+        .expect("hail parses");
+        assert!(!command_needs_startup_sync(&hail.command));
+        let inbox =
+            Cli::try_parse_from(["boop", "inbox", "drain", "--as", "root"]).expect("inbox parses");
+        assert!(!command_needs_startup_sync(&inbox.command));
+        let summary =
+            Cli::try_parse_from(["boop", "agent", "summary"]).expect("agent summary parses");
+        assert!(command_needs_startup_sync(&summary.command));
     }
 
     #[test]

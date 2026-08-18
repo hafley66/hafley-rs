@@ -262,8 +262,7 @@ fn enable_wal(connection: &Connection, path: &std::path::Path) -> Result<()> {
                 std::thread::sleep(std::time::Duration::from_millis(10));
             }
             Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("enable WAL on {}", path.display()));
+                return Err(error).with_context(|| format!("enable WAL on {}", path.display()));
             }
         }
     }
