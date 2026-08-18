@@ -36,13 +36,13 @@ fn stalled(idle_ms: u64) -> bool {
 const RESUME_NUDGE: &str = "The previous turn ended on a provider error you never saw. \
      Re-read your last steps and continue the brief from where you left off.";
 
-/// What the next turn re-opens with after a retryable end. A lane with no
-/// pinned conversation re-feeds the full brief: its TUI window was respawned
-/// blank, so a nudge would tell the harness to continue work it never saw.
-fn resume_text(conversation: Option<String>, brief: &str) -> String {
-    match conversation {
-        Some(_) => RESUME_NUDGE.to_owned(),
-        None => brief.to_owned(),
+/// What the next turn re-opens with after a retryable end. Until the brief
+/// turn has completed, a channel id is insufficient evidence that the
+/// harness saw the brief, so the full brief is re-fed.
+fn resume_text(brief_completed: bool, conversation: Option<String>, brief: &str) -> String {
+    match (brief_completed, conversation) {
+        (true, Some(_)) => RESUME_NUDGE.to_owned(),
+        _ => brief.to_owned(),
     }
 }
 
@@ -336,6 +336,8 @@ fn supervise(
     // app-server returns its new thread id from `thread/start` before the first
     // turn, so only the caller's explicit resume input proves that the thread
     // already holds the brief.
+    let mut brief_completed = lane.resume.is_some();
+    let mut brief_turn_pending = lane.resume.is_none();
     let mut turn = match &lane.resume {
         Some(conversation) => {
             info!(
@@ -498,6 +500,10 @@ fn supervise(
             "lane turn ended"
         );
         remember_conversation(lane, channel);
+        if brief_turn_pending && end.is_done() {
+            brief_completed = true;
+            brief_turn_pending = false;
+        }
         if end.retryable() && flake_resumes < FLAKE_RESUME_CAP {
             flake_resumes += 1;
             println!("[boop] provider flake, resuming ({flake_resumes}/{FLAKE_RESUME_CAP})");
@@ -506,7 +512,7 @@ fn supervise(
                 flake_resume_cap = FLAKE_RESUME_CAP,
                 "lane provider flake; resuming"
             );
-            turn = resume_text(channel.conversation_id(), &brief);
+            turn = resume_text(brief_completed, channel.conversation_id(), &brief);
             continue;
         }
         for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
@@ -528,15 +534,9 @@ fn supervise(
                 );
                 return Err(error);
             }
-            let exit_code = match end.is_done() {
-                true => 0,
-                false => 1,
-            };
+            let (exit_code, detail) = completion_verdict(brief_completed, &end);
             info!(exit_code, "lane supervision complete");
-            return Ok(Ended {
-                exit_code,
-                detail: end.retryable().then(|| end.detail().to_owned()),
-            });
+            return Ok(Ended { exit_code, detail });
         }
         turn = held
             .drain(..)
@@ -558,6 +558,22 @@ fn supervise(
             .collect::<Vec<_>>()
             .join("\n\n");
     }
+}
+
+fn completion_verdict(brief_completed: bool, end: &TurnEvent) -> (i32, Option<String>) {
+    if end.is_done() && brief_completed {
+        return (0, None);
+    }
+    if end.is_done() {
+        return (
+            1,
+            Some("agent stopped before completing the brief".to_owned()),
+        );
+    }
+    if end.retryable() {
+        return (1, Some(end.detail().to_owned()));
+    }
+    (1, None)
 }
 
 /// The lane's parent per the registry. The pane epilogue addresses its result
@@ -969,11 +985,59 @@ mod tests {
     // the brief: the harness was told to continue work it never saw.
     #[test]
     fn a_resume_without_a_pinned_conversation_refeeds_the_brief() {
-        assert_eq!(resume_text(None, "do the work"), "do the work");
         assert_eq!(
-            resume_text(Some("ses_x".into()), "do the work"),
+            resume_text(false, Some("ses_x".into()), "do the work"),
+            "do the work"
+        );
+        assert_eq!(
+            resume_text(true, Some("ses_x".into()), "do the work"),
             RESUME_NUDGE
         );
+    }
+
+    #[derive(Default)]
+    struct BriefFlakesThenCompletesChannel {
+        turns: Vec<String>,
+    }
+
+    impl LaneChannel for BriefFlakesThenCompletesChannel {
+        fn conversation_id(&self) -> Option<String> {
+            Some("fresh-thread-id".to_owned())
+        }
+
+        fn start_turn(&mut self, text: &str) -> Result<()> {
+            self.turns.push(text.to_owned());
+            Ok(())
+        }
+
+        fn steer(&mut self, _text: &str) -> Result<Delivery> {
+            Ok(Delivery::MidTurn)
+        }
+
+        fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
+            Ok(Some(if self.turns.len() == 1 {
+                TurnEvent::flaked("aborted stream")
+            } else {
+                TurnEvent::ok("completed")
+            }))
+        }
+
+        fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    // FAIL-PRE-FIX: the first provider flake saw a conversation id discovered
+    // before the brief turn, so the retry received RESUME_NUDGE and the brief
+    // was absent from the only turn that could act on it.
+    #[test]
+    fn a_flaked_brief_turn_is_refed_even_when_the_channel_has_an_id() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let mut channel = BriefFlakesThenCompletesChannel::default();
+
+        assert_eq!(run(lane, &mut channel).unwrap(), 0);
+        assert_eq!(channel.turns, ["do the work\n", "do the work\n"]);
     }
 
     #[derive(Default)]
@@ -1042,6 +1106,24 @@ mod tests {
 
         assert_eq!(run(lane, &mut channel).unwrap(), 0);
         assert_eq!(channel.turns, ["do the work\n"]);
+    }
+
+    // FAIL-PRE-FIX: a nudge-only clean stop returned rc=0 even though the
+    // brief turn had flaked before any completed brief activity.
+    // SABOTAGE RECEIPT: restore the `end.is_done() => 0` exit rule or this
+    // assertion reports the fake completion as success.
+    #[test]
+    fn a_nudge_only_completion_is_a_named_failure() {
+        let (exit_code, detail) = completion_verdict(false, &TurnEvent::ok("opencode_stop"));
+        assert_eq!(exit_code, 1);
+        assert_eq!(
+            detail.as_deref(),
+            Some("agent stopped before completing the brief")
+        );
+        assert_eq!(
+            result_body("mine", exit_code, detail.as_deref()),
+            "lane mine done rc=1 (agent stopped before completing the brief)"
+        );
     }
 
     #[test]
