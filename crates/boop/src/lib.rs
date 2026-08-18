@@ -28,6 +28,7 @@ pub mod config;
 pub mod debug;
 pub mod event;
 pub mod harness;
+pub mod host;
 pub mod ident;
 pub mod identity;
 pub mod inbox;
@@ -38,7 +39,6 @@ pub mod proc;
 pub mod query;
 pub mod registry;
 pub mod rows;
-pub mod runner;
 pub mod runtime;
 #[cfg(feature = "agent-read")]
 pub mod summary;
