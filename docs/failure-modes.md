@@ -5,10 +5,40 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 5 | 2026-08-17 | every lane completion arrived twice in the coordinator inbox |
 | 4 | 2026-08-17 | coordinator mail is typed into a pane a model is driving |
 | 3 | 2026-08-17 | ~/.cargo/bin/boop is whatever the last session built, and nothing printed says which |
 | 2 | 2026-08-17 | a respawned agent window is re-fed a brief it cannot place, or the wrong text entirely |
 | 1 | 2026-08-17 | a lane can die with no result row, no log, no trace |
+
+---
+
+## 5. every lane completion arrived twice in the coordinator inbox
+
+**Incident.** `boop inbox drain --as sprefa-coordinator` printed each lane's
+completion twice, 4 ms apart, differing only in `id` and `from_timestamp`
+(`~/.agent/mail/bus.ndjson:1774` and `:1775`).
+
+**RCA.** Two unconditional writers and no dedupe. Entry 1 added the in-process
+supervisor row (`supervise.rs` `record_result`, on every exit path) on top of
+the pane epilogue's `boop hail --kind result`, and left both armed. Ids come
+from `bus::mint_id`, so the two rows never collide, and the drain filters by id
+alone (`inbox.rs` `undelivered`). `lane wait` folds a pair back to one rc, which
+is why the pair survived: the test that blessed it reasoned about `lane wait`
+and never about the inbox.
+
+**Fix.** The epilogue keeps `boop beep lane delete --route-only` and writes no
+row (`lane::pane_epilogue`, composed at `main.rs` `run_lane_create`). The
+supervisor is the writer that survives a killed pane; the epilogue is the one
+that is lost, so the epilogue is the half that goes.
+
+**Fail-pre-fix test.** `one_lane_exit_writes_exactly_one_result_row`
+(`crates/boop/tests/lane_completion_row.rs`) runs the supervisor to completion
+and then the pane epilogue against one mailbox. On the pre-fix shape it counted
+`["lane mine done rc=0", "lane mine done rc=0"]`.
+
+**Rail.** One writer. A second `kind=result` row for one lane is a defect, and
+the test counts rows rather than folding them.
 
 ---
 
