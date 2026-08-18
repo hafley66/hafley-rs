@@ -153,7 +153,7 @@ struct FormulaFile {
 
 /// The rewrite surface: one enum value per feed, chosen once at boot from the
 /// formula. `rewrite` is the whole contract.
-enum Rewriter {
+pub(crate) enum Rewriter {
     OneShot {
         adapter: &'static dyn Harness,
         model: String,
@@ -180,6 +180,32 @@ const CHAT_TURN_TIMEOUT: Duration = Duration::from_secs(600);
 const CHAT_POLL: Duration = Duration::from_secs(5);
 
 impl Rewriter {
+    pub(crate) fn open_chat(
+        adapter: &'static dyn Harness,
+        model: String,
+        cwd: PathBuf,
+        resume: Option<String>,
+        goal: Option<String>,
+        compact_tokens: usize,
+    ) -> Result<Rewriter> {
+        let spec = ChannelSpec {
+            model: Some(model),
+            cwd,
+            resume,
+            lane: None,
+        };
+        let channel = adapter
+            .open_channel(&spec)
+            .context("open the resident chat")?;
+        Ok(Rewriter::Chat {
+            adapter,
+            spec,
+            channel,
+            pending_goal: goal,
+            compact_tokens,
+        })
+    }
+
     fn open(formula: &Formula, adapter: &'static dyn Harness, args: &Args) -> Result<Rewriter> {
         match formula.feed {
             Feed::OneShot => Ok(Rewriter::OneShot {
@@ -187,28 +213,18 @@ impl Rewriter {
                 model: args.model.clone(),
                 timeout: ONESHOT_TIMEOUT,
             }),
-            Feed::Chat => {
-                let spec = ChannelSpec {
-                    model: Some(args.model.clone()),
-                    cwd: args.state_dir.clone(),
-                    resume: None,
-                    lane: None,
-                };
-                let channel = adapter
-                    .open_channel(&spec)
-                    .context("open the resident chat")?;
-                Ok(Rewriter::Chat {
-                    adapter,
-                    spec,
-                    channel,
-                    pending_goal: formula.goal.clone(),
-                    compact_tokens: formula.compact_tokens,
-                })
-            }
+            Feed::Chat => Rewriter::open_chat(
+                adapter,
+                args.model.clone(),
+                args.state_dir.clone(),
+                None,
+                formula.goal.clone(),
+                formula.compact_tokens,
+            ),
         }
     }
 
-    fn rewrite(&mut self, store: &crate::Store, msg: &str) -> Result<String> {
+    pub(crate) fn rewrite(&mut self, store: &crate::Store, msg: &str) -> Result<String> {
         match self {
             Rewriter::OneShot {
                 adapter,
@@ -249,6 +265,17 @@ impl Rewriter {
                 // them, so there is no reply text to return.
                 Ok(String::new())
             }
+        }
+    }
+
+    pub(crate) fn chat_state(&self) -> Option<(Option<String>, Option<String>)> {
+        match self {
+            Rewriter::Chat {
+                channel,
+                pending_goal,
+                ..
+            } => Some((channel.conversation_id(), pending_goal.clone())),
+            Rewriter::OneShot { .. } => None,
         }
     }
 }

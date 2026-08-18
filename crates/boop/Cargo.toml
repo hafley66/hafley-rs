@@ -50,13 +50,6 @@ signal-hook = "0.4"
 # Deadline on a synchronous std::process::Child without pulling in an async
 # runtime: one method, wait_timeout, on the same Child this file already spawns.
 wait-timeout = "0.2.1"
-# HTTP over the compiled program's socket file. libcurl is the only candidate
-# that speaks unix sockets from synchronous code without dragging tokio into a
-# crate that has no async: `curl` adds 4 crates against hyperlocal's 33 and
-# reqwest's 99, and `default-features = false` drops openssl-sys because the
-# socket carries plain HTTP. The C build step is already here through rusqlite
-# `bundled`.
-curl = { version = "0.4", default-features = false }
 
 [dev-dependencies]
 # Peak-bytes-allocated counter for tests/bench_grid.rs's own #[global_allocator].
