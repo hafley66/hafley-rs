@@ -1608,8 +1608,6 @@ struct DispatchArgs {
 
 fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
     let adapter = resolve_dispatch_harness(registry, args.harness.as_deref())?;
-    // The caller is the PARENT of the lane being born, never its identity.
-    let caller = identity::resolve(&bus::read_routes(&mail_dir(args.mail_dir.as_deref())?)?)?;
     let harness_id = adapter.id().to_owned();
     info!(
         lane = args.to,
@@ -1661,7 +1659,7 @@ fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
         env_stamp: Some(spawn_env_stamp(
             &args.to,
             &harness_id,
-            caller.session.as_deref(),
+            args.parent.as_deref(),
         )),
         model: args.model.clone(),
         variant: args.variant.clone(),
@@ -1715,11 +1713,11 @@ fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
 
 /// The environment a spawn's command carries: a UTF-8 locale, then the child's
 /// own identity. The pane's inherited locale is the tmux server's, not a shell's.
-fn spawn_env_stamp(lane_id: &str, harness_id: &str, caller_session: Option<&str>) -> String {
+fn spawn_env_stamp(lane_id: &str, harness_id: &str, parent_lane: Option<&str>) -> String {
     format!(
         "{} {}",
         lane::locale_stamp(),
-        identity::child_stamp(lane_id, lane_id, harness_id, caller_session)
+        identity::child_stamp(lane_id, lane_id, harness_id, parent_lane)
     )
 }
 
@@ -2561,7 +2559,7 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             env_stamp: Some(spawn_env_stamp(
                 &identity.lane,
                 &harness_id,
-                caller.session.as_deref(),
+                parent.parent.as_deref(),
             )),
             model: model.clone(),
             variant: variant.clone(),
