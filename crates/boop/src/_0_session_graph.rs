@@ -27,6 +27,13 @@ const AGENT_SESSION_GRAPH_TRACE_EVENT_LIMIT: u64 = 1_000;
 pub struct AgentSessionGraphQuery {
     pub cwd: Option<PathBuf>,
     pub include_history: bool,
+    /// Exact tmux session or pane evidence for one focused shell. This is an
+    /// observed transport identity, never a cwd or transcript-path heuristic.
+    pub tmux: Option<String>,
+    /// Include completed family members whose lifecycle activity is at or
+    /// after this epoch-millisecond boundary. Roots remain present to keep the
+    /// returned family connected.
+    pub history_since_ts: Option<u64>,
 }
 
 /// Function type for the pure durable graph projection.
@@ -61,7 +68,15 @@ pub struct AgentSessionNode {
     pub cwd: Option<PathBuf>,
     pub tmux: Option<String>,
     pub state: Option<String>,
+    #[serde(default)]
+    pub trace: Option<String>,
+    #[serde(default)]
+    pub trace_attached_ts: Option<u64>,
+    #[serde(default)]
+    pub started_ts: Option<u64>,
     pub last_activity_ts: Option<u64>,
+    #[serde(default)]
+    pub finished_ts: Option<u64>,
 }
 
 /// One native parent-child session relation.
@@ -70,6 +85,10 @@ pub struct AgentSessionEdge {
     pub parent: AgentSessionIdentity,
     pub child: AgentSessionIdentity,
     pub kind: String,
+    #[serde(default)]
+    pub first_ts: Option<u64>,
+    #[serde(default)]
+    pub last_ts: Option<u64>,
 }
 
 /// One registered lane with no harness transcript session.
@@ -80,10 +99,24 @@ pub struct AgentShellNode {
     pub harness: Option<String>,
     pub mode: Option<String>,
     pub session_id: Option<String>,
+    /// The stable native identity named by a harness-backed route. It is a
+    /// reference to `sessions`, rather than a second session record.
+    #[serde(default)]
+    pub session: Option<AgentSessionIdentity>,
+    #[serde(default)]
+    pub trace: Option<String>,
     pub cwd: Option<PathBuf>,
     pub tmux: Option<String>,
+    #[serde(default)]
+    pub tmux_session: Option<String>,
+    #[serde(default)]
+    pub tmux_pane: Option<String>,
     pub pid: Option<u32>,
     pub state: String,
+    #[serde(default)]
+    pub started_ts: Option<u64>,
+    #[serde(default)]
+    pub registered_at: Option<String>,
 }
 
 /// Runtime inputs for the production projection. The process table and tmux
@@ -107,7 +140,13 @@ WITH scoped_sessions AS MATERIALIZED (
            h.value AS harness,
            c.value AS cwd,
            p.value AS tmux,
-           st.value AS state
+           st.value AS state,
+           trace.value AS trace,
+           span.attached_ts,
+           a.started_ts,
+           (SELECT MAX(dead.from_ts) FROM agent_live_span dead
+             JOIN dict_status dead_status ON dead_status.id = dead.status_id
+            WHERE dead.session_id = a.session_id AND dead_status.value = 'dead') AS finished_ts
       FROM agent_session a
       JOIN dict_session s ON s.id = a.session_id
       JOIN dict_harness h ON h.id = a.harness_id
@@ -115,6 +154,8 @@ WITH scoped_sessions AS MATERIALIZED (
       LEFT JOIN agent_live live ON live.session_id = a.session_id
       LEFT JOIN dict_pane p ON p.id = live.tmux_pane_id
       LEFT JOIN dict_status st ON st.id = live.status_id
+      LEFT JOIN agent_trace_span span ON span.session_id = a.session_id
+      LEFT JOIN dict_trace trace ON trace.id = span.trace_id
      WHERE (?1 IS NULL OR c.value = ?1)
        AND (?2 OR st.value IS NULL OR st.value <> 'dead')
 ),
@@ -138,7 +179,8 @@ SELECT scoped.session,
        CASE WHEN turns.last_ts IS NULL AND usage.last_ts IS NULL
             THEN NULL
             ELSE MAX(COALESCE(turns.last_ts, 0), COALESCE(usage.last_ts, 0))
-       END AS last_ts
+       END AS last_ts,
+       scoped.trace, scoped.attached_ts, scoped.started_ts, scoped.finished_ts
   FROM scoped_sessions scoped
   LEFT JOIN turns ON turns.session_id = scoped.session_id
   LEFT JOIN usage ON usage.session_id = scoped.session_id
@@ -152,10 +194,12 @@ pub fn load_agent_session_graph(
     query: AgentSessionGraphQuery,
 ) -> Result<AgentSessionGraph> {
     let cwd = query
-        .cwd
-        .as_ref()
+        .tmux
+        .is_none()
+        .then_some(query.cwd.as_ref())
+        .flatten()
         .map(|path| path.to_string_lossy().into_owned());
-    let history = query.include_history;
+    let history = query.include_history || query.history_since_ts.is_some();
     let mut statement = store.connection().prepare(SESSION_GRAPH_SQL)?;
     let rows = statement.query_map(rusqlite::params![cwd, history], |row| {
         Ok(AgentSessionNode {
@@ -166,8 +210,18 @@ pub fn load_agent_session_graph(
             cwd: row.get::<_, Option<String>>(2)?.map(PathBuf::from),
             tmux: row.get(3)?,
             state: row.get(4)?,
+            trace: row.get(6)?,
+            trace_attached_ts: row
+                .get::<_, Option<i64>>(7)?
+                .and_then(|value| u64::try_from(value).ok()),
+            started_ts: row
+                .get::<_, Option<i64>>(8)?
+                .and_then(|value| u64::try_from(value).ok()),
             last_activity_ts: row
                 .get::<_, Option<i64>>(5)?
+                .and_then(|value| u64::try_from(value).ok()),
+            finished_ts: row
+                .get::<_, Option<i64>>(9)?
                 .and_then(|value| u64::try_from(value).ok()),
         })
     })?;
@@ -176,7 +230,7 @@ pub fn load_agent_session_graph(
         .iter()
         .map(|session| session.session.id.as_str())
         .collect::<BTreeSet<_>>();
-    let edge_sql = "SELECT p.value, c.value, hp.value, hc.value, k.value
+    let edge_sql = "SELECT p.value, c.value, hp.value, hc.value, k.value, e.first_ts, e.last_ts
                       FROM agent_edge e
                       JOIN dict_session p ON p.id = e.parent_session_id
                       JOIN dict_session c ON c.id = e.child_session_id
@@ -199,6 +253,12 @@ pub fn load_agent_session_graph(
                     harness: row.get(3)?,
                 },
                 kind: row.get(4)?,
+                first_ts: row
+                    .get::<_, Option<i64>>(5)?
+                    .and_then(|value| u64::try_from(value).ok()),
+                last_ts: row
+                    .get::<_, Option<i64>>(6)?
+                    .and_then(|value| u64::try_from(value).ok()),
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?
@@ -208,11 +268,12 @@ pub fn load_agent_session_graph(
         })
         .collect::<Vec<_>>();
 
-    let shell_sql = "SELECT lane.value, parent.value, cwd.value, pane.value,
-                            live.pid, COALESCE(status.value, 'unknown')
+    let shell_sql = "SELECT lane.value, parent.value, trace.value, cwd.value, pane.value,
+                            live.pid, COALESCE(status.value, 'unknown'), lane_row.spawned_ts
                        FROM agent_lane lane_row
                        JOIN dict_session lane ON lane.id = lane_row.lane_id
                        LEFT JOIN dict_session parent ON parent.id = lane_row.parent_lane_id
+                       LEFT JOIN dict_trace trace ON trace.id = lane_row.trace_id
                        LEFT JOIN dict_cwd cwd ON cwd.id = lane_row.cwd_id
                        LEFT JOIN agent_live live ON live.session_id = lane_row.lane_id
                        LEFT JOIN dict_pane pane ON pane.id = live.tmux_pane_id
@@ -231,12 +292,20 @@ pub fn load_agent_session_graph(
             harness: None,
             mode: None,
             session_id: None,
-            cwd: row.get::<_, Option<String>>(2)?.map(PathBuf::from),
-            tmux: row.get(3)?,
+            session: None,
+            trace: row.get(2)?,
+            cwd: row.get::<_, Option<String>>(3)?.map(PathBuf::from),
+            tmux: row.get(4)?,
+            tmux_session: None,
+            tmux_pane: None,
             pid: row
-                .get::<_, Option<i64>>(4)?
+                .get::<_, Option<i64>>(5)?
                 .and_then(|pid| u32::try_from(pid).ok()),
-            state: row.get(5)?,
+            state: row.get(6)?,
+            started_ts: row
+                .get::<_, Option<i64>>(7)?
+                .and_then(|value| u64::try_from(value).ok()),
+            registered_at: None,
         })
     })? {
         let shell = row?;
@@ -245,15 +314,16 @@ pub fn load_agent_session_graph(
         }
     }
 
-    let trace_events = query_trace_events(store, &sessions, &shells)?;
-
-    Ok(AgentSessionGraph {
+    let mut graph = AgentSessionGraph {
         schema_version: AGENT_SESSION_GRAPH_SCHEMA_VERSION,
         sessions,
         edges,
         shells,
-        trace_events,
-    })
+        trace_events: Vec::new(),
+    };
+    focus_graph(&mut graph, &query);
+    graph.trace_events = query_trace_events(store, &graph.sessions, &graph.shells)?;
+    Ok(graph)
 }
 
 /// Query the bounded event surface for exactly the lanes selected by the
@@ -289,17 +359,14 @@ pub fn load_agent_session_graph_with_runtime(
     query: AgentSessionGraphQuery,
     runtime: AgentSessionGraphRuntime<'_>,
 ) -> Result<AgentSessionGraph> {
-    let include_history = query.include_history;
+    let include_history = query.include_history || query.history_since_ts.is_some();
     let cwd = query
-        .cwd
-        .as_ref()
+        .tmux
+        .is_none()
+        .then_some(query.cwd.as_ref())
+        .flatten()
         .map(|path| path.to_string_lossy().into_owned());
-    let mut graph = load_agent_session_graph(store, query)?;
-    let session_keys = graph
-        .sessions
-        .iter()
-        .map(|session| session_key(&session.session))
-        .collect::<BTreeSet<_>>();
+    let mut graph = load_agent_session_graph(store, query.clone())?;
     let rows = runtime_snapshot(RuntimeSnapshotInput {
         store,
         routes: runtime.routes,
@@ -309,9 +376,6 @@ pub fn load_agent_session_graph_with_runtime(
         processes: runtime.processes,
     })?;
     for row in rows {
-        if runtime_row_is_native(&row, &session_keys) {
-            continue;
-        }
         if let Some(shell) = shell_from_runtime(row) {
             if !include_history && shell.state != "live" {
                 continue;
@@ -340,13 +404,14 @@ pub fn load_agent_session_graph_with_runtime(
     graph
         .shells
         .sort_by(|left, right| left.lane.cmp(&right.lane));
+    focus_graph(&mut graph, &query);
     graph.trace_events = query_trace_events(store, &graph.sessions, &graph.shells)?;
     Ok(graph)
 }
 
 fn shell_from_runtime(row: AgentRuntimeRow) -> Option<AgentShellNode> {
     let route = row.route?;
-    let tmux = row.tmux_target.or(row.tmux_pane)?;
+    let tmux = row.tmux_target.clone().or(row.tmux_pane.clone())?;
     let state = if matches!(row.liveness.process, crate::runtime::ProcessLiveness::Live)
         || matches!(row.liveness.tmux, crate::runtime::TmuxLiveness::Live)
     {
@@ -363,30 +428,128 @@ fn shell_from_runtime(row: AgentRuntimeRow) -> Option<AgentShellNode> {
         parent_lane: route.parent,
         harness: route.harness.clone(),
         mode: route.mode.clone(),
+        session: route
+            .session_id
+            .as_ref()
+            .zip(route.harness.as_ref())
+            .map(|(id, harness)| AgentSessionIdentity {
+                harness: harness.clone(),
+                id: id.clone(),
+            }),
         session_id: route.session_id,
+        trace: row.trace,
         cwd: row.cwd.map(PathBuf::from),
         tmux: Some(tmux),
+        tmux_session: row.tmux_target.filter(|target| !target.starts_with('%')),
+        tmux_pane: row.tmux_pane.filter(|target| target.starts_with('%')),
         pid: row.pid.and_then(|pid| u32::try_from(pid).ok()),
         state: state.to_owned(),
+        started_ts: None,
+        registered_at: route.registered_at,
     })
 }
 
-fn session_key(identity: &AgentSessionIdentity) -> String {
-    format!("{}\0{}", identity.harness, identity.id)
-}
-
-fn runtime_row_is_native(row: &AgentRuntimeRow, session_keys: &BTreeSet<String>) -> bool {
-    let Some(session) = row.session.as_deref() else {
-        return false;
+/// Reduce a broad durable projection to the rooted family selected by exact
+/// tmux evidence. `spawned` is the only edge kind used as parenthood: hail and
+/// delivery edges stay visible when both endpoints are in the family but never
+/// create ancestry.
+fn focus_graph(graph: &mut AgentSessionGraph, query: &AgentSessionGraphQuery) {
+    let Some(tmux) = query.tmux.as_deref() else {
+        return;
     };
-    let Some(route) = row.route.as_ref() else {
-        return false;
-    };
-    route
-        .harness
-        .as_ref()
-        .map(|harness| session_keys.contains(&format!("{harness}\0{session}")))
-        .unwrap_or(false)
+    let mut lanes = graph
+        .shells
+        .iter()
+        .filter(|shell| {
+            shell.tmux.as_deref() == Some(tmux)
+                || shell.tmux_session.as_deref() == Some(tmux)
+                || shell.tmux_pane.as_deref() == Some(tmux)
+        })
+        .map(|shell| shell.lane.clone())
+        .collect::<BTreeSet<_>>();
+    let mut sessions = graph
+        .sessions
+        .iter()
+        .filter(|session| session.tmux.as_deref() == Some(tmux))
+        .map(|session| session.session.clone())
+        .collect::<BTreeSet<_>>();
+    for shell in &graph.shells {
+        if lanes.contains(&shell.lane) {
+            if let Some(session) = &shell.session {
+                sessions.insert(session.clone());
+            }
+        }
+    }
+    loop {
+        let mut changed = false;
+        for shell in &graph.shells {
+            if lanes.contains(&shell.lane) {
+                if let Some(parent) = &shell.parent_lane {
+                    changed |= lanes.insert(parent.clone());
+                }
+            }
+            if shell
+                .parent_lane
+                .as_ref()
+                .is_some_and(|parent| lanes.contains(parent))
+            {
+                changed |= lanes.insert(shell.lane.clone());
+            }
+        }
+        for edge in graph.edges.iter().filter(|edge| edge.kind == "spawned") {
+            if sessions.contains(&edge.child) {
+                changed |= sessions.insert(edge.parent.clone());
+            }
+            if sessions.contains(&edge.parent) {
+                changed |= sessions.insert(edge.child.clone());
+            }
+        }
+        for shell in &graph.shells {
+            if lanes.contains(&shell.lane) {
+                if let Some(session) = &shell.session {
+                    changed |= sessions.insert(session.clone());
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    if let Some(since) = query.history_since_ts {
+        let roots = sessions
+            .iter()
+            .filter(|identity| {
+                !graph.edges.iter().any(|edge| {
+                    edge.kind == "spawned"
+                        && edge.child == **identity
+                        && sessions.contains(&edge.parent)
+                })
+            })
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        sessions.retain(|identity| {
+            graph
+                .sessions
+                .iter()
+                .find(|node| &node.session == identity)
+                .map(|node| {
+                    roots.contains(identity)
+                        || node
+                            .last_activity_ts
+                            .or(node.finished_ts)
+                            .or(node.started_ts)
+                            .is_some_and(|ts| ts >= since)
+                })
+                .unwrap_or(false)
+        });
+    }
+    graph
+        .sessions
+        .retain(|node| sessions.contains(&node.session));
+    graph.shells.retain(|shell| lanes.contains(&shell.lane));
+    graph
+        .edges
+        .retain(|edge| sessions.contains(&edge.parent) && sessions.contains(&edge.child));
 }
 
 #[cfg(test)]
@@ -410,6 +573,7 @@ pub(crate) fn assert_fixture_sessions_project(
         AgentSessionGraphQuery {
             cwd: None,
             include_history: true,
+            ..AgentSessionGraphQuery::default()
         },
     )
     .unwrap();
@@ -459,6 +623,7 @@ mod tests {
             AgentSessionGraphQuery {
                 cwd: None,
                 include_history: true,
+                ..AgentSessionGraphQuery::default()
             },
         )
         .unwrap();
@@ -491,6 +656,7 @@ mod tests {
             AgentSessionGraphQuery {
                 cwd: None,
                 include_history: false,
+                ..AgentSessionGraphQuery::default()
             },
         )
         .unwrap();
@@ -686,6 +852,7 @@ mod tests {
             AgentSessionGraphQuery {
                 cwd: None,
                 include_history: false,
+                ..AgentSessionGraphQuery::default()
             },
             AgentSessionGraphRuntime {
                 routes: &routes,
@@ -706,10 +873,16 @@ mod tests {
                 "harness": "codex",
                 "mode": "interactive",
                 "session_id": "thread-codex-parent",
+                "session": {"harness": "codex", "id": "thread-codex-parent"},
+                "trace": null,
                 "cwd": "/repo",
                 "tmux": "codex-parent",
+                "tmux_session": "codex-parent",
+                "tmux_pane": null,
                 "pid": null,
-                "state": "live"
+                "state": "live",
+                "started_ts": null,
+                "registered_at": "2026-08-18T00:00:00Z"
             }])
         );
         let _ = std::fs::remove_file(path);
@@ -772,6 +945,7 @@ mod tests {
             AgentSessionGraphQuery {
                 cwd: None,
                 include_history: true,
+                ..AgentSessionGraphQuery::default()
             },
         )
         .unwrap();
@@ -879,6 +1053,7 @@ mod tests {
             AgentSessionGraphQuery {
                 cwd: Some("/repo".into()),
                 include_history: false,
+                ..AgentSessionGraphQuery::default()
             },
         )
         .unwrap();
@@ -956,6 +1131,7 @@ mod tests {
             AgentSessionGraphQuery {
                 cwd: Some("/repo".into()),
                 include_history: true,
+                ..AgentSessionGraphQuery::default()
             },
         )
         .unwrap();
@@ -986,5 +1162,177 @@ mod tests {
                 .unwrap();
         assert_eq!(graph.schema_version, AGENT_SESSION_GRAPH_SCHEMA_VERSION);
         assert!(graph.trace_events.is_empty());
+    }
+
+    #[test]
+    fn focused_tmux_shell_serializes_its_rooted_family_without_cwd_inference() {
+        let path =
+            std::env::temp_dir().join(format!("boop-session-family-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        let codex = store.intern_public("dict_harness", "codex").unwrap();
+        let claude = store.intern_public("dict_harness", "claude").unwrap();
+        for (id, harness, started) in [
+            ("codex-coordinator-root", codex, 10),
+            ("dispatched-child", codex, 20),
+            ("native-subagent", codex, 30),
+            ("completed-descendant", codex, 40),
+            ("claude-coordinator-root", claude, 50),
+        ] {
+            let session = store.intern_public("dict_session", id).unwrap();
+            store.connection().execute(
+                "INSERT INTO agent_session(session_id, harness_id, started_ts) VALUES (?1, ?2, ?3)",
+                rusqlite::params![session, harness, started],
+            ).unwrap();
+        }
+        store
+            .record_status(
+                "codex-coordinator-root",
+                60,
+                "live",
+                Some(7),
+                Some("%focused"),
+            )
+            .unwrap();
+        store
+            .record_status("dispatched-child", 70, "live", Some(8), Some("%child"))
+            .unwrap();
+        store
+            .record_status("native-subagent", 80, "live", None, None)
+            .unwrap();
+        store
+            .record_status("completed-descendant", 90, "dead", None, None)
+            .unwrap();
+        store
+            .record_status(
+                "claude-coordinator-root",
+                100,
+                "live",
+                Some(9),
+                Some("%unrelated"),
+            )
+            .unwrap();
+        store
+            .add_edge_at("codex-coordinator-root", "dispatched-child", "spawned", 21)
+            .unwrap();
+        store
+            .add_edge_at("dispatched-child", "native-subagent", "spawned", 31)
+            .unwrap();
+        store
+            .add_edge_at("native-subagent", "completed-descendant", "spawned", 41)
+            .unwrap();
+        for id in [
+            "codex-coordinator-root",
+            "dispatched-child",
+            "native-subagent",
+            "completed-descendant",
+        ] {
+            store
+                .attach_trace(id, "trace-focused", "fixture", 61)
+                .unwrap();
+        }
+        store
+            .attach_trace("claude-coordinator-root", "trace-unrelated", "fixture", 101)
+            .unwrap();
+        let mut routes = BTreeMap::new();
+        for (lane, session_id, tmux, parent) in [
+            (
+                "codex-coordinator",
+                "codex-coordinator-root",
+                "%focused",
+                None,
+            ),
+            (
+                "dispatch-lane",
+                "dispatched-child",
+                "%child",
+                Some("codex-coordinator"),
+            ),
+            (
+                "claude-coordinator",
+                "claude-coordinator-root",
+                "%unrelated",
+                None,
+            ),
+        ] {
+            routes.insert(
+                lane.into(),
+                Route {
+                    kind: "coordinator".into(),
+                    harness: Some(
+                        if lane.starts_with("claude") {
+                            "claude"
+                        } else {
+                            "codex"
+                        }
+                        .into(),
+                    ),
+                    tmux: Some(tmux.into()),
+                    cwd: Some("/same-cwd-for-all".into()),
+                    model: None,
+                    mode: Some("interactive".into()),
+                    session_id: Some(session_id.into()),
+                    source_path: None,
+                    parent: parent.map(str::to_owned),
+                    goal: None,
+                    registered_at: Some("2026-08-18T00:00:00Z".into()),
+                    base_sha: None,
+                    worktree_dir: None,
+                },
+            );
+        }
+        let mux = FakeMux::available(&[]);
+        let processes = SysinfoSnapshot::capture().unwrap();
+        let graph = load_agent_session_graph_with_runtime(
+            &store,
+            AgentSessionGraphQuery {
+                tmux: Some("%focused".into()),
+                include_history: true,
+                ..AgentSessionGraphQuery::default()
+            },
+            AgentSessionGraphRuntime {
+                routes: &routes,
+                messages: &[],
+                multiplexer: &mux,
+                tmux_socket: None,
+                processes: &processes,
+            },
+        )
+        .unwrap();
+        let receipt = serde_json::to_value(&graph).unwrap();
+        assert_eq!(
+            receipt["shells"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|shell| shell["lane"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            vec!["codex-coordinator", "dispatch-lane"]
+        );
+        assert_eq!(
+            receipt["sessions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|node| node["session"]["id"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            vec![
+                "codex-coordinator-root",
+                "completed-descendant",
+                "dispatched-child",
+                "native-subagent"
+            ]
+        );
+        assert_eq!(receipt["sessions"][0]["trace"], "trace-focused");
+        assert_eq!(receipt["sessions"][1]["finished_ts"], 90);
+        assert_eq!(receipt["edges"][0]["first_ts"], 21);
+        assert_eq!(
+            receipt["shells"][0]["session"],
+            serde_json::json!({"harness":"codex","id":"codex-coordinator-root"})
+        );
+        assert_eq!(receipt["shells"][0]["tmux_pane"], "%focused");
+        assert!(!receipt.to_string().contains("claude-coordinator-root"));
+        drop(store);
+        let _ = std::fs::remove_file(path);
     }
 }

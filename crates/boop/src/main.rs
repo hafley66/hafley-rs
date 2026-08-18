@@ -6141,6 +6141,7 @@ fn run_agent_sessions(
         boop::AgentSessionGraphQuery {
             cwd,
             include_history,
+            ..boop::AgentSessionGraphQuery::default()
         },
         boop::AgentSessionGraphRuntime {
             routes: &routes,
