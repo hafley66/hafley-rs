@@ -2965,12 +2965,12 @@ mod tests {
     use clap::{CommandFactory, Parser, Subcommand};
 
     use super::{
-        agent_summary_text, append_message, command_owns_sync, completion_recipient, config,
-        dead_reason, default_preset_for_harness, ident, lane_state, register_fresh_codex_spawner,
-        resolve_dispatch_harness, resolve_parent_with_legacy_fallback, route_liveness, run_agent,
-        run_lane_delete, run_lane_prune, run_ps_with, run_with_startup_sync,
-        session_matches_route, write_line, write_route, AgentCmd, AgentSummaryCmd, Cli, DbCmd, MeCmd,
-        SubCmd,
+        agent_session_graph_query, agent_summary_text, append_message, command_owns_sync,
+        completion_recipient, config, dead_reason, default_preset_for_harness, ident, lane_state,
+        register_fresh_codex_spawner, resolve_dispatch_harness, resolve_parent_with_legacy_fallback,
+        route_liveness, run_agent, run_lane_delete, run_lane_prune, run_ps_with,
+        run_with_startup_sync, session_matches_route, write_line, write_route, AgentCmd,
+        AgentSessionGraphFormat, AgentSummaryCmd, Cli, DbCmd, MeCmd, SubCmd,
     };
     use boop::bus::{self, read_routes, Route};
     use boop::proc::{ProcReader, ProcessInfo, SysinfoSnapshot};
@@ -3034,6 +3034,56 @@ mod tests {
                 cmd: AgentSummaryCmd::Summary { .. }
             }
         ));
+    }
+
+    /// RECEIPT (instant-focused-family-cli): Instant's argv reaches the graph query unchanged.
+    #[test]
+    fn public_agent_sessions_accepts_focused_family_filters() {
+        let cli = Cli::try_parse_from([
+            "boop",
+            "agent",
+            "sessions",
+            "--history",
+            "--tmux",
+            "sprefa-5",
+            "--history-since-ts",
+            "1735689600000",
+            "--format",
+            "json",
+        ])
+        .expect("Instant focused-family command parses");
+        let SubCmd::Agent {
+            cmd:
+                AgentSummaryCmd::Sessions {
+                    cwd,
+                    history,
+                    tmux,
+                    history_since_ts,
+                    format: AgentSessionGraphFormat::Json,
+                    ..
+                },
+        } = cli.command
+        else {
+            panic!("expected public agent sessions command");
+        };
+
+        let query = agent_session_graph_query(cwd, history, tmux, history_since_ts);
+        assert_eq!(query.tmux.as_deref(), Some("sprefa-5"));
+        assert_eq!(query.history_since_ts, Some(1_735_689_600_000));
+        assert!(query.include_history);
+
+        let mut command = Cli::command();
+        let sessions = command
+            .find_subcommand_mut("agent")
+            .expect("agent command")
+            .find_subcommand_mut("sessions")
+            .expect("sessions command");
+        let help = sessions.render_long_help().to_string();
+        assert!(help.contains("--tmux <TMUX>"), "sessions help:\n{help}");
+        assert!(
+            help.contains("--history-since-ts <HISTORY_SINCE_TS>"),
+            "sessions help:\n{help}"
+        );
     }
 
     #[test]
@@ -4419,6 +4469,12 @@ enum AgentSummaryCmd {
         /// Include historical and inactive rows.
         #[arg(long)]
         history: bool,
+        /// Restrict the graph to the family connected to this tmux session or pane.
+        #[arg(long)]
+        tmux: Option<String>,
+        /// Include historical family rows active at or after this Unix timestamp in milliseconds.
+        #[arg(long)]
+        history_since_ts: Option<u64>,
         /// The public graph contract currently emits JSON.
         #[arg(long, value_enum, default_value_t = AgentSessionGraphFormat::Json)]
         format: AgentSessionGraphFormat,
@@ -6155,9 +6211,11 @@ fn run_public_agent_command(cmd: AgentSummaryCmd) -> Result<()> {
         AgentSummaryCmd::Sessions {
             cwd,
             history,
+            tmux,
+            history_since_ts,
             format: AgentSessionGraphFormat::Json,
             mail_dir,
-        } => run_agent_sessions(cwd, history, mail_dir.as_deref()),
+        } => run_agent_sessions(cwd, history, tmux, history_since_ts, mail_dir.as_deref()),
     }
 }
 
@@ -6165,6 +6223,8 @@ fn run_public_agent_command(cmd: AgentSummaryCmd) -> Result<()> {
 fn run_agent_sessions(
     cwd: Option<PathBuf>,
     include_history: bool,
+    tmux: Option<String>,
+    history_since_ts: Option<u64>,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
     let store = open_ro_store()?;
@@ -6177,11 +6237,7 @@ fn run_agent_sessions(
     let processes = boop::proc::SysinfoSnapshot::capture()?;
     let graph = boop::load_agent_session_graph_with_runtime(
         &store,
-        boop::AgentSessionGraphQuery {
-            cwd,
-            include_history,
-            ..boop::AgentSessionGraphQuery::default()
-        },
+        agent_session_graph_query(cwd, include_history, tmux, history_since_ts),
         boop::AgentSessionGraphRuntime {
             routes: &routes,
             messages: &messages,
@@ -6192,6 +6248,21 @@ fn run_agent_sessions(
     )?;
     line(&serde_json::to_string(&graph)?);
     Ok(())
+}
+
+#[cfg(feature = "agent-read")]
+fn agent_session_graph_query(
+    cwd: Option<PathBuf>,
+    include_history: bool,
+    tmux: Option<String>,
+    history_since_ts: Option<u64>,
+) -> boop::AgentSessionGraphQuery {
+    boop::AgentSessionGraphQuery {
+        cwd,
+        include_history,
+        tmux,
+        history_since_ts,
+    }
 }
 
 #[cfg(feature = "agent-read")]
