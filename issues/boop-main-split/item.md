@@ -1,0 +1,45 @@
+---
+created: 2026-08-17
+updated: 2026-08-17
+type: improvement
+status: open
+priority: normal
+epic: boop-lane-observability
+labels: [domain-boop, intent-implementation]
+size: M
+---
+
+# main.rs is 6061 lines with 930 inline test lines and 120 free functions
+
+## Description
+
+`main.rs` is 6061 lines, 930 of them an inline `mod tests` (`:2772-3701`), leaving ~5130 production lines and 120 free functions. Section-marker comments already mark the seams to cut on.
+
+| field | value |
+|---|---|
+| audit row | section 9, row 6 |
+| cost | M |
+| needs Chris | no |
+
+Sites:
+
+- `crates/boop/src/main.rs`
+
+## Fork
+
+Do this AFTER the small fixes land, or it conflicts with every one of them.
+
+## Acceptance Criteria
+
+- [ ] Split follows the module table in audit section 7 (`cli/beep.rs`, `cli/db.rs`, `cli/spawn.rs`, `cli/mail.rs`, `cli/route.rs`, `cli/supervisor.rs`, `cli/read.rs`, `cli/ps.rs`, `cli/config.rs`, `cli/doctrine.rs`).
+- [ ] The 930 inline test lines move to `tests/cli_*.rs`.
+- [ ] `main.rs` keeps only the clap tree and `main()`.
+- [ ] Pure move: no behavior change, `cargo test -p boop -j4` green with the same test count.
+
+## Tests Run
+
+## Implementation Notes
+
+Source: crates/boop/docs/audit-2026-08-17.md sections 9 and 10 (audit branch `audit/boop-review`, origin/main 49aca76).
+
+Style laws apply: comment budget (no change-log narrative), no `eprintln!` in `src/**` (`tracing` only), no em dashes, banned identifiers `provenance`/`substrate`/`load-bearing`/`regime`.
