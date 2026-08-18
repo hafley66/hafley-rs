@@ -117,15 +117,23 @@ edge and stay invisible to tracking:
   One shot: worktree at base sha + spawn + route registration.
   Always --dry-run first; the printed `cmd:` line is the literal spawn.
 
-COMPLETION: --parent appends an on-exit hail `lane <id> done rc=$rc` into the
-  parent's mailbox. A lane spawned with --parent reports completion; do not poll.
+COMPLETION: the supervisor writes ONE row `lane <id> done rc=<n>` into the
+  parent's mailbox on every exit path, including a signalled pane; the pane's
+  own epilogue only drops the lane's route.
+  A lane spawned with --parent reports completion; do not poll.
   A parent whose route is kind=coordinator (what `boop adopt` writes) gets that
   hail TYPED INTO ITS PANE, mid-turn or idle; no wait needs arming.
   `--wait` blocks on that row and exits with the lane's rc, so spawn-and-join is
   one command; `--wait-timeout <s>` (default 3600, 0 waits forever) exits 124.
   The same wait after the fact is `boop beep lane wait <lane>`.
-  The supervisor writes that row itself on every exit path, and a wait whose
-  lane route goes dead with no row exits 3 instead of blocking.
+  A wait whose lane route goes dead with no row exits 3 instead of blocking.
+
+DEBUG: what just went wrong, without opening a log:
+    boop debug [--since 2m] [--lane <id>] [--json]
+  The WARN/ERROR tail of every ~/.agent/lanes/<lane>/supervise.log plus the
+  store's kind=error trace events, grouped by lane, oldest first inside a lane.
+  `boop --help` prints a one-line banner when that window is non-empty, and
+  nothing when it is clean.
 
 LIVENESS: a lane can die silently, producing nothing. Liveness is TWO checks:
     1. process alive:    boop beep ps <lane>
@@ -238,6 +246,19 @@ enum SubCmd {
         format: Option<QueryFormat>,
         #[command(subcommand)]
         cmd: Option<DbCmd>,
+    },
+    /// What just went wrong: recent WARN/ERROR across the lane trails and the
+    /// store's error events, grouped by lane.
+    Debug {
+        /// Window to read back, as `Ns`, `Nm`, `Nh` or a count of seconds.
+        #[arg(long, default_value = "2m")]
+        since: String,
+        /// One lane only.
+        #[arg(long)]
+        lane: Option<String>,
+        /// One JSON array instead of the grouped text.
+        #[arg(long)]
+        json: bool,
     },
     /// Freshly synchronize and summarize Boop agent/runtime/activity facts.
     #[cfg(feature = "agent-read")]
@@ -630,6 +651,35 @@ enum ConfigCmd {
 
 /// Write one line, treating a closed pipe as a normal end. Rust masks SIGPIPE,
 /// so a bare `println!` panics the moment output is piped into `head`.
+/// Whether this invocation is asking for help, whatever verb it names.
+fn help_wanted() -> bool {
+    std::env::args().any(|argument| argument == "--help" || argument == "-h")
+}
+
+/// `boop debug`: the WARN/ERROR window, trail plus store.
+fn run_debug(since: &str, lane: Option<&str>, json: bool) -> Result<()> {
+    let window = boop::debug::parse_window(since)?;
+    let since_ms = now_ms().saturating_sub(window.as_millis() as u64);
+    let root = boop::trail::lanes_root()?;
+    let mut alerts = boop::debug::trail_alerts(&root, since_ms, lane);
+    match open_ro_store().and_then(|store| boop::debug::store_alerts(&store, since_ms, lane)) {
+        Ok(rows) => alerts.extend(rows),
+        Err(error) => warn!(error = %error, "trace error events unreadable"),
+    }
+    alerts.sort_by(|left, right| {
+        left.lane
+            .cmp(&right.lane)
+            .then(left.at_ms.cmp(&right.at_ms))
+    });
+    match json {
+        true => line(&serde_json::to_string_pretty(&boop::debug::as_json(
+            &alerts,
+        ))?),
+        false => line(&boop::debug::report(&alerts, window)),
+    }
+    Ok(())
+}
+
 fn line(text: &str) {
     use std::io::Write;
     let mut out = std::io::stdout().lock();
@@ -648,6 +698,12 @@ fn write_line(output: &mut impl std::io::Write, text: &str) -> std::io::Result<(
 }
 
 fn main() -> Result<()> {
+    // Only a help invocation pays for the trail read the banner needs.
+    if help_wanted() {
+        if let Some(banner) = boop::debug::help_banner(now_ms()) {
+            line(&banner);
+        }
+    }
     let cli = Cli::parse();
     init_tracing(supervised_lane(&cli.command))?;
     let registry = Registry::discover();
@@ -661,6 +717,7 @@ fn main() -> Result<()> {
         } => run_tail(&registry, &session_id, from.unwrap_or(0), format),
         SubCmd::Events { query } => run_query(&query),
         SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild),
+        SubCmd::Debug { since, lane, json } => run_debug(&since, lane.as_deref(), json),
         #[cfg(feature = "agent-read")]
         SubCmd::Agent { cmd } => run_public_agent_command(&registry, cmd),
         SubCmd::Follow {} => run_follow(&registry),
@@ -1919,7 +1976,7 @@ fn deliver_hail(
 }
 
 /// Drive one lane to completion inside its pane, then exit with the harness's
-/// own code so the on-exit epilogue reports a true rc.
+/// own code so the pane re-raises a true rc.
 #[allow(clippy::too_many_arguments)]
 fn run_lane_supervisor(
     registry: &Registry,
@@ -2474,19 +2531,12 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         caller_lane.as_deref(),
         &routes,
     );
-    // The epilogue runs in the lane's pane: the sender is the lane, and the
-    // mailbox must be the one this dispatch registered in, never the default.
-    let on_exit = parent.parent.as_ref().map(|parent| {
-        format!(
-            "boop hail --to {} --from {} --mail-dir {} --kind result --body \"lane {} done rc=$__rc\" ; boop beep lane delete {} --route-only --mail-dir {}",
-            shell_quote(parent),
-            shell_quote(&identity.lane),
-            shell_quote(&hail_mail_dir.display().to_string()),
-            identity.lane,
-            shell_quote(&identity.lane),
-            shell_quote(&hail_mail_dir.display().to_string()),
-        )
-    });
+    // The mailbox must be the one this dispatch registered in, never the
+    // default; a lane with no parent leaves its route for `lane delete` to drop.
+    let on_exit = parent
+        .parent
+        .as_ref()
+        .map(|_| lane::pane_epilogue(&identity.lane, &hail_mail_dir));
 
     if args.dry_run {
         info!(
@@ -3378,10 +3428,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// RECEIPT. The on-exit epilogue hails `--to <parent> --from <lane>`, so a
+    /// RECEIPT. The completion row is hailed `--to <parent> --from <lane>`, so a
     /// wait keyed on the recipient never saw the row it exists to wait for.
     #[test]
-    fn wait_matches_the_row_the_on_exit_epilogue_actually_writes() {
+    fn wait_matches_the_row_the_supervisor_actually_writes() {
         let dir = temp_mail_dir();
         std::fs::create_dir_all(&dir).unwrap();
         let mut message = result_message("m-3", "feature-schema-emit", 0);
@@ -3449,8 +3499,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// The supervisor writes the result row and the pane epilogue writes a
-    /// second one; the wait answers the same rc, so the pair costs nothing.
+    /// Only the supervisor writes the row now, and a mailbox holding a pair
+    /// from an older build still answers one rc.
     #[test]
     fn a_duplicate_result_row_leaves_the_wait_unchanged() {
         let dir = temp_mail_dir();
@@ -3459,9 +3509,9 @@ mod tests {
         supervisor.to = "sprefa-coordinator".into();
         append_message(&dir, &supervisor).unwrap();
         assert_eq!(super::lane_result_rc(&dir, "l"), Some(2));
-        let mut epilogue = result_message("m-epilogue", "l", 2);
-        epilogue.to = "sprefa-coordinator".into();
-        append_message(&dir, &epilogue).unwrap();
+        let mut older_build = result_message("m-epilogue", "l", 2);
+        older_build.to = "sprefa-coordinator".into();
+        append_message(&dir, &older_build).unwrap();
         assert_eq!(super::lane_result_rc(&dir, "l"), Some(2));
         assert_eq!(
             super::wait_for_outcome(
@@ -3476,8 +3526,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// A lane that reported is unaffected by the liveness probe: its pane is
-    /// already gone by the time the epilogue's row is read.
+    /// A lane that reported is unaffected by the liveness check: its pane is
+    /// already gone by the time its row is read.
     #[test]
     fn a_result_row_beats_a_dead_route() {
         let dir = temp_mail_dir();
@@ -5241,8 +5291,8 @@ fn lane_result_rc_since(dir: &std::path::Path, lane: &str, since: Option<u64>) -
     folded
         .iter()
         .rev()
-        // The on-exit epilogue hails `--to <parent> --from <lane>`, so the
-        // lane that finished is the sender; `to` matches a hand-addressed row.
+        // The supervisor hails `--to <parent> --from <lane>`, so the lane that
+        // finished is the sender; `to` matches a hand-addressed row.
         .find(|message| {
             if message.kind != "result" || (message.from != lane && message.to != lane) {
                 return false;

@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
@@ -14,6 +15,10 @@ use serde_json::{json, Value};
 /// Responses keyed by request id, plus the condvar the waiter parks on.
 type Replies = Arc<(Mutex<HashMap<i64, Value>>, Condvar)>;
 
+/// What a write to a peer that is already gone reports. The supervisor's retry
+/// path reads this instead of killing a child that is no longer there.
+pub const SESSION_CLOSED: &str = "rpc session closed";
+
 /// A JSON-RPC peer running as a child process. The reader thread owns stdout
 /// and splits replies from notifications; nothing else reads the pipe.
 pub struct RpcChild {
@@ -22,6 +27,9 @@ pub struct RpcChild {
     next_id: i64,
     replies: Replies,
     notifications: Receiver<Value>,
+    /// Epoch millis of the newest line off the peer's stdout; 0 until one
+    /// arrives. Every byte the peer writes is evidence its session is alive.
+    last_read_ms: Arc<AtomicU64>,
 }
 
 impl RpcChild {
@@ -35,9 +43,12 @@ impl RpcChild {
         let (sender, notifications): (Sender<Value>, Receiver<Value>) = channel();
         let reader_replies = Arc::clone(&replies);
         let reply_writer = Arc::clone(&stdin);
+        let last_read_ms = Arc::new(AtomicU64::new(0));
+        let reader_clock = Arc::clone(&last_read_ms);
         std::thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
                 let Ok(line) = line else { break };
+                reader_clock.store(crate::channel::now_ms(), Ordering::Relaxed);
                 let Ok(value) = serde_json::from_str::<Value>(&line) else {
                     continue;
                 };
@@ -68,7 +79,16 @@ impl RpcChild {
             next_id: 0,
             replies,
             notifications,
+            last_read_ms,
         })
+    }
+
+    /// When the peer last wrote a line, or `None` before its first one.
+    pub fn last_read_ms(&self) -> Option<u64> {
+        match self.last_read_ms.load(Ordering::Relaxed) {
+            0 => None,
+            written => Some(written),
+        }
     }
 
     fn write_frame(&self, frame: &Value) -> Result<()> {
@@ -76,8 +96,9 @@ impl RpcChild {
             .stdin
             .lock()
             .map_err(|_| anyhow::anyhow!("rpc stdin lock poisoned"))?;
-        writeln!(pipe, "{frame}")?;
-        pipe.flush()?;
+        writeln!(pipe, "{frame}").map_err(|error| anyhow::anyhow!("{SESSION_CLOSED}: {error}"))?;
+        pipe.flush()
+            .map_err(|error| anyhow::anyhow!("{SESSION_CLOSED}: {error}"))?;
         Ok(())
     }
 
@@ -196,6 +217,50 @@ mod tests {
         let mut rpc = RpcChild::attach(child).unwrap();
         let note = rpc.next_notification(Duration::from_secs(5)).unwrap();
         assert_eq!(note["method"], Value::String("turn/completed".into()));
+        rpc.close().unwrap();
+    }
+
+    // FAIL-PRE-FIX: the supervisor closes the channel on a stall and then opens
+    // the retry turn on it, so `turn/start` wrote into a dead peer's stdin and
+    // surfaced as a bare `write rpc turn/start` io error.
+    #[test]
+    fn a_write_to_a_closed_session_names_the_session() {
+        // The peer closes its own end of stdin and stays alive, which is the
+        // state a killed-and-reopened turn writes into.
+        let child = std::process::Command::new("sh")
+            .args(["-c", "exec 0<&-; exec sleep 30"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut rpc = RpcChild::attach(child).unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+        let error = format!(
+            "{:#}",
+            rpc.call("turn/start", json!({}), Duration::from_millis(200))
+                .unwrap_err()
+        );
+        assert!(error.contains(SESSION_CLOSED), "{error}");
+        assert!(error.contains("write rpc turn/start"), "{error}");
+        rpc.close().unwrap();
+    }
+
+    /// Every line off the peer is activity: the supervisor measures its stall
+    /// window from this clock.
+    #[test]
+    fn a_peer_line_stamps_the_activity_clock() {
+        let script = r#"printf '{"jsonrpc":"2.0","method":"turn/started","params":{}}\n'; sleep 5"#;
+        let child = std::process::Command::new("sh")
+            .args(["-c", script])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut rpc = RpcChild::attach(child).unwrap();
+        assert!(rpc.next_notification(Duration::from_secs(5)).is_some());
+        let written = rpc.last_read_ms().expect("the peer wrote one line");
+        assert!(written > 0);
+        assert!(written <= crate::channel::now_ms());
         rpc.close().unwrap();
     }
 

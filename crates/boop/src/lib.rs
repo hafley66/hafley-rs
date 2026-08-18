@@ -25,6 +25,7 @@ pub mod channel;
 pub mod chat;
 pub mod concatmap;
 pub mod config;
+pub mod debug;
 pub mod event;
 pub mod harness;
 pub mod ident;
@@ -58,7 +59,9 @@ pub use _0_session_graph::{
 };
 #[cfg(feature = "agent-read")]
 pub use activity::{ActivityCount, ActivityScope, ToolResultAvailability};
-pub use ident::{Store, SyncStat, TraceEvent, TraceEventRow, TRACE_EVENT_RETENTION_LIMIT};
+pub use ident::{
+    Store, SyncStat, TraceErrorRow, TraceEvent, TraceEventRow, TRACE_EVENT_RETENTION_LIMIT,
+};
 #[cfg(feature = "agent-read")]
 pub use query::{FactKind, FactQuery};
 pub use registry::Registry;

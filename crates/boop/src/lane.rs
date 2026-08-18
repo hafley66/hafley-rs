@@ -263,6 +263,16 @@ fn shell_word(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
 }
 
+/// The shell line a lane pane runs once its supervisor has exited: the route
+/// drop only. The completion row is `supervise::record_result`'s to write.
+pub fn pane_epilogue(lane: &str, mail_dir: &Path) -> String {
+    format!(
+        "boop beep lane delete {} --route-only --mail-dir {}",
+        shell_word(lane),
+        shell_word(&mail_dir.display().to_string()),
+    )
+}
+
 /// The codex reasoning efforts; the only spellings an `@` suffix takes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Effort {
