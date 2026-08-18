@@ -1,9 +1,76 @@
 //! Shared deterministic fixtures for Boop unit tests.
 
 use std::collections::BTreeSet;
+use std::path::PathBuf;
+use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::tmux::{LiveSessions, Multiplexer};
+
+/// A throwaway git repo (one seed commit) plus a worktree path; harness
+/// adapter tests spawn against it and tear both down on drop.
+pub(crate) struct TempRepo {
+    pub(crate) dir: PathBuf,
+    pub(crate) sha: String,
+    pub(crate) worktree: PathBuf,
+}
+
+/// `std::process::id()` is one PID for the whole test binary; adapter test
+/// modules run in parallel threads, so a monotonic counter is the real
+/// differentiator that keeps two callers' temp dirs from colliding.
+static NEXT_TEMP_REPO: AtomicUsize = AtomicUsize::new(0);
+
+impl TempRepo {
+    pub(crate) fn new() -> TempRepo {
+        let unique = NEXT_TEMP_REPO.fetch_add(1, Ordering::Relaxed);
+        let pid = std::process::id();
+        let dir = std::env::temp_dir().join(format!("boop-temprepo-{pid}-{unique}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let worktree = std::env::temp_dir().join(format!("boop-temprepo-wt-{pid}-{unique}"));
+        let _ = std::fs::remove_dir_all(&worktree);
+        Command::new("git")
+            .arg("init")
+            .arg("-q")
+            .arg(&dir)
+            .status()
+            .unwrap();
+        let d = dir.display().to_string();
+        Command::new("git")
+            .args(["-C", &d, "config", "user.email", "t@t"])
+            .status()
+            .unwrap();
+        Command::new("git")
+            .args(["-C", &d, "config", "user.name", "t"])
+            .status()
+            .unwrap();
+        std::fs::write(dir.join("seed.txt"), "s").unwrap();
+        Command::new("git")
+            .args(["-C", &d, "add", "-A"])
+            .status()
+            .unwrap();
+        Command::new("git")
+            .args(["-C", &d, "commit", "-qm", "seed"])
+            .status()
+            .unwrap();
+        let sha = String::from_utf8_lossy(
+            &Command::new("git")
+                .args(["-C", &d, "rev-parse", "HEAD"])
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .trim()
+        .to_owned();
+        TempRepo { dir, sha, worktree }
+    }
+}
+
+impl Drop for TempRepo {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+        let _ = std::fs::remove_dir_all(&self.worktree);
+    }
+}
 
 /// A single-observation tmux fixture. It records each `live_sessions` request
 /// so bounded projection receipts can assert one acquisition for all lanes.

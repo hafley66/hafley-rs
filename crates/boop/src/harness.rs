@@ -1,5 +1,4 @@
 //! The trait every harness adapter implements; the CLI never names a harness.
-#![allow(dead_code)]
 
 use std::path::PathBuf;
 

@@ -263,10 +263,78 @@ fn shell_word(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
 }
 
+/// The codex reasoning efforts; the only spellings an `@` suffix takes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Effort {
+    Low,
+    Medium,
+    High,
+}
+
+impl Effort {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Effort::Low => "low",
+            Effort::Medium => "medium",
+            Effort::High => "high",
+        }
+    }
+}
+
+impl std::str::FromStr for Effort {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<Effort> {
+        match value {
+            "low" => Ok(Effort::Low),
+            "medium" => Ok(Effort::Medium),
+            "high" => Ok(Effort::High),
+            other => {
+                anyhow::bail!("effort `{other}` is not one of low, medium, high")
+            }
+        }
+    }
+}
+
+/// A model spelling, split on the last `@`. `name@effort` names a reasoning
+/// effort; a bare name carries none. An `@` present with no recognized effort
+/// after it is a parse error, never a silently-kept model name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModelSpec {
+    pub name: String,
+    pub effort: Option<Effort>,
+}
+
+impl std::str::FromStr for ModelSpec {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<ModelSpec> {
+        match value.rsplit_once('@') {
+            Some((name, suffix)) => {
+                let effort = suffix.parse::<Effort>().with_context(|| {
+                    format!(
+                        "model `{value}` has an `@` suffix that names no reasoning effort \
+                         (only low, medium, high are recognized)"
+                    )
+                })?;
+                Ok(ModelSpec {
+                    name: name.to_owned(),
+                    effort: Some(effort),
+                })
+            }
+            None => Ok(ModelSpec {
+                name: value.to_owned(),
+                effort: None,
+            }),
+        }
+    }
+}
+
 /// The harness a model spelling names, or `None` when it names none. Config's
 /// `model-harness` wins when non-empty; otherwise the compiled table decides.
 pub fn harness_for_model(model: &str) -> Result<Option<Cow<'static, str>>> {
-    let name = model.split('@').next().unwrap_or(model).trim();
+    let spec: ModelSpec = model.parse()?;
+    let name = spec.name.trim();
     if name.is_empty() {
         return Ok(None);
     }
@@ -291,8 +359,9 @@ pub fn harness_for_model(model: &str) -> Result<Option<Cow<'static, str>>> {
 /// A model family whose own harness runs on a flat-rate plan; opencode would
 /// pay metered credit for it, so spawn refuses with no override.
 fn plan_harness_family(model: &str) -> Result<Option<Cow<'static, str>>> {
-    let lowered = model.to_ascii_lowercase();
-    let name = lowered.split('@').next().unwrap_or(&lowered).trim();
+    let spec: ModelSpec = model.parse()?;
+    let lowered = spec.name.to_ascii_lowercase();
+    let name = lowered.trim();
     let bare = name.rsplit('/').next().unwrap_or(name);
     let config = config::loaded()?;
     Ok(config
@@ -370,7 +439,10 @@ pub fn resolve_parent(
             source: "caller",
         };
     }
-    let mut coordinators = routes.keys().filter(|lane| lane.contains("coordinator"));
+    let mut coordinators = routes
+        .iter()
+        .filter(|(_, route)| route.kind == "coordinator")
+        .map(|(lane, _)| lane);
     let (Some(only), None) = (coordinators.next(), coordinators.next()) else {
         return ParentPick {
             parent: None,
@@ -393,7 +465,7 @@ mod tests {
 
     use super::{
         default_base_sha, derive, harness_for_model, harness_for_spawn, kind_of, repo_root,
-        resolve_parent, rev_parse, slug, LaneIdentity, FALLBACK_LOCALE,
+        resolve_parent, rev_parse, slug, LaneIdentity, ModelSpec, FALLBACK_LOCALE,
     };
 
     fn repo() -> PathBuf {
@@ -616,8 +688,12 @@ mod tests {
     }
 
     fn route(tmux: &str) -> Route {
+        route_of_kind("lane", tmux)
+    }
+
+    fn route_of_kind(kind: &str, tmux: &str) -> Route {
         Route {
-            kind: "lane".into(),
+            kind: kind.into(),
             harness: Some("opencode".into()),
             tmux: Some(tmux.into()),
             cwd: None,
@@ -638,7 +714,10 @@ mod tests {
     #[test]
     fn the_parent_ladder_stops_at_the_first_rung_that_answers() {
         let mut routes = BTreeMap::new();
-        routes.insert("sprefa-coordinator".to_owned(), route("shell:0.0"));
+        routes.insert(
+            "sprefa-coordinator".to_owned(),
+            route_of_kind("coordinator", "shell:0.0"),
+        );
         routes.insert("boop-sql".to_owned(), route("boop-sql"));
 
         let flagged = resolve_parent(Some("named"), Some("caller"), &routes);
@@ -652,6 +731,35 @@ mod tests {
         let from_registry = resolve_parent(None, None, &routes);
         assert_eq!(from_registry.parent.as_deref(), Some("sprefa-coordinator"));
         assert_eq!(from_registry.source, "registry");
+    }
+
+    /// RECEIPT. A lane named `coordinator-*` but not kind=coordinator is
+    /// never picked; the name substring named nothing.
+    #[test]
+    fn a_lane_named_coordinator_but_not_kind_coordinator_is_not_selected() {
+        let mut routes = BTreeMap::new();
+        routes.insert(
+            "coordinator-imposter".to_owned(),
+            route_of_kind("lane", "shell:0.1"),
+        );
+        let pick = resolve_parent(None, None, &routes);
+        assert_eq!(pick.parent, None);
+        assert_eq!(pick.source, "none");
+    }
+
+    /// RECEIPT. A kind=coordinator route named without the word is still the
+    /// lone coordinator picked.
+    #[test]
+    fn a_kind_coordinator_route_named_without_the_word_is_selected() {
+        let mut routes = BTreeMap::new();
+        routes.insert(
+            "terra".to_owned(),
+            route_of_kind("coordinator", "shell:0.2"),
+        );
+        routes.insert("boop-sql".to_owned(), route("boop-sql"));
+        let pick = resolve_parent(None, None, &routes);
+        assert_eq!(pick.parent.as_deref(), Some("terra"));
+        assert_eq!(pick.source, "registry");
     }
 
     /// RECEIPT (field, 2026-08-10). `--model gpt-5.6-luna@medium` with no
@@ -791,11 +899,36 @@ mod tests {
     #[test]
     fn two_coordinators_default_to_no_parent() {
         let mut routes = BTreeMap::new();
-        routes.insert("sprefa-coordinator".to_owned(), route("a"));
-        routes.insert("instant-coordinator".to_owned(), route("b"));
+        routes.insert(
+            "sprefa-coordinator".to_owned(),
+            route_of_kind("coordinator", "a"),
+        );
+        routes.insert(
+            "instant-coordinator".to_owned(),
+            route_of_kind("coordinator", "b"),
+        );
         let pick = resolve_parent(None, None, &routes);
         assert_eq!(pick.parent, None);
         assert_eq!(pick.source, "none");
         assert_eq!(resolve_parent(None, None, &BTreeMap::new()).source, "none");
+    }
+
+    /// RECEIPT. `ModelSpec` splits on the last `@`; a bad effort fails at
+    /// parse naming the allowlist, not silently downstream as a literal model
+    /// name.
+    #[test]
+    fn model_spec_splits_the_last_at_and_rejects_a_bad_effort() {
+        let spec: ModelSpec = "gpt-5.6-luna@medium".parse().unwrap();
+        assert_eq!(spec.name, "gpt-5.6-luna");
+        assert_eq!(spec.effort, Some(super::Effort::Medium));
+
+        let bare: ModelSpec = "gpt-5.6-sol".parse().unwrap();
+        assert_eq!(bare.name, "gpt-5.6-sol");
+        assert_eq!(bare.effort, None);
+
+        let error = "x@turbo".parse::<ModelSpec>().unwrap_err().to_string();
+        assert!(error.contains("low"), "message: {error}");
+        assert!(error.contains("medium"), "message: {error}");
+        assert!(error.contains("high"), "message: {error}");
     }
 }
