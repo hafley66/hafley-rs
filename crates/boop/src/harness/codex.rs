@@ -21,6 +21,18 @@ use crate::tail;
 pub struct Codex;
 
 impl Harness for Codex {
+    fn identity_process(&self) -> Option<crate::identity::Identity> {
+        let session = std::env::var("CODEX_THREAD_ID")
+            .ok()
+            .filter(|value| !value.is_empty())?;
+        Some(crate::identity::Identity {
+            session: Some(session),
+            harness: Some(self.id().to_owned()),
+            rung: Some(crate::identity::Rung::CodexProcess),
+            ..Default::default()
+        })
+    }
+
     fn open_channel(
         &self,
         spec: &crate::channel::ChannelSpec,

@@ -1,5 +1,9 @@
 //! The kimi adapter: transcripts under
 //! `~/.kimi-code/sessions/wd_<slug>/session_<uuid>/agents/{main,agent-N}/wire.jsonl`.
+//!
+//! Kimi currently exposes no process identity variable to tool subprocesses.
+//! Kimi-code follow-up: export `KIMI_SESSION_ID=<active session uuid>` to tool
+//! subprocesses.
 #![allow(dead_code)]
 
 use std::fs::File;
@@ -18,6 +22,18 @@ use crate::tail;
 pub struct Kimi;
 
 impl Harness for Kimi {
+    fn identity_process(&self) -> Option<crate::identity::Identity> {
+        let session = std::env::var("KIMI_SESSION_ID")
+            .ok()
+            .filter(|value| !value.is_empty())?;
+        Some(crate::identity::Identity {
+            session: Some(session),
+            harness: Some(self.id().to_owned()),
+            rung: Some(crate::identity::Rung::KimiProcess),
+            ..Default::default()
+        })
+    }
+
     fn open_channel(
         &self,
         spec: &crate::channel::ChannelSpec,

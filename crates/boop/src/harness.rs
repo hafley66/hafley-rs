@@ -15,6 +15,24 @@ pub trait Harness: Send + Sync {
     /// Stable short id used in CLI output and as the `--harness` filter value.
     fn id(&self) -> &'static str;
 
+    /// Resolve the caller identity from the stamp boop puts in a child.
+    fn identity_env(&self) -> Option<crate::identity::Identity> {
+        crate::identity::from_env_for(self.id())
+    }
+
+    /// Resolve a caller pane from routes registered for this harness.
+    fn identity_pane(
+        &self,
+        routes: &std::collections::BTreeMap<String, crate::bus::Route>,
+    ) -> Option<crate::identity::Identity> {
+        crate::identity::from_pane_for(self.id(), routes)
+    }
+
+    /// Resolve a caller using a process tell exposed by this harness.
+    fn identity_process(&self) -> Option<crate::identity::Identity> {
+        None
+    }
+
     /// Every session this harness has on disk, newest last. No cap.
     fn sessions(&self) -> anyhow::Result<Vec<SessionRef>>;
 

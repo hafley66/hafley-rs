@@ -13,6 +13,8 @@ use crate::bus::Route;
 pub enum Rung {
     Env,
     Pane,
+    CodexProcess,
+    KimiProcess,
     None,
 }
 
@@ -21,6 +23,8 @@ impl Rung {
         match self {
             Rung::Env => "env",
             Rung::Pane => "pane",
+            Rung::CodexProcess => "codex-process",
+            Rung::KimiProcess => "kimi-process",
             Rung::None => "none",
         }
     }
@@ -28,7 +32,7 @@ impl Rung {
     /// Whether the rung observed the identity or inferred it.
     pub fn confidence(self) -> &'static str {
         match self {
-            Rung::Env | Rung::Pane => "exact",
+            Rung::Env | Rung::Pane | Rung::CodexProcess | Rung::KimiProcess => "exact",
             Rung::None => "unresolved",
         }
     }
@@ -61,14 +65,34 @@ impl Identity {
     }
 }
 
-/// Resolve the caller. Rungs are tried in order and the first hit wins; a miss
-/// falls through and nothing is guessed.
+/// Resolve the caller. Rungs are tried in order and the first hit wins:
+/// stamped env, registered pane, harness process tell, then unresolved.
+/// A miss falls through and nothing is guessed.
 pub fn resolve(routes: &BTreeMap<String, Route>) -> Result<Identity> {
-    if let Some(identity) = from_env() {
-        return Ok(identity);
+    let registry = crate::registry::Registry::discover();
+    resolve_with(&registry, routes)
+}
+
+/// Resolve through the registered harness adapters. The ladder order is
+/// global; each rung's implementation belongs to the adapter that owns it.
+pub fn resolve_with(
+    registry: &crate::registry::Registry,
+    routes: &BTreeMap<String, Route>,
+) -> Result<Identity> {
+    if let Some(harness) = registry.all().first() {
+        if let Some(identity) = harness.identity_env() {
+            return Ok(identity);
+        }
     }
-    if let Some(identity) = from_pane(routes) {
-        return Ok(identity);
+    for harness in registry.all() {
+        if let Some(identity) = harness.identity_pane(routes) {
+            return Ok(identity);
+        }
+    }
+    for harness in registry.all() {
+        if let Some(identity) = harness.identity_process() {
+            return Ok(identity);
+        }
     }
     Ok(Identity {
         rung: Some(Rung::None),
@@ -77,7 +101,7 @@ pub fn resolve(routes: &BTreeMap<String, Route>) -> Result<Identity> {
 }
 
 /// Rung 1. The stamp a boop spawn wrote into the child's own environment.
-fn from_env() -> Option<Identity> {
+pub(crate) fn from_env_for(_harness: &str) -> Option<Identity> {
     let session = std::env::var("BOOP_SESSION")
         .ok()
         .filter(|s| !s.is_empty())?;
@@ -94,7 +118,7 @@ fn from_env() -> Option<Identity> {
 /// Rung 2. `$TMUX_PANE` names interactive shells directly. Codex tool
 /// subprocesses omit it while retaining `TMUX`, so tmux resolves the calling
 /// client's selected pane. The registry may own that pane or its whole session.
-fn from_pane(routes: &BTreeMap<String, Route>) -> Option<Identity> {
+pub(crate) fn from_pane_for(harness: &str, routes: &BTreeMap<String, Route>) -> Option<Identity> {
     let pane = std::env::var("TMUX_PANE")
         .ok()
         .filter(|p| !p.is_empty())
@@ -103,7 +127,11 @@ fn from_pane(routes: &BTreeMap<String, Route>) -> Option<Identity> {
     let (lane, route) = routes
         .iter()
         .find(|(_, route)| {
-            matches!(route.tmux.as_deref(), Some(target) if target == pane || target == tmux_session)
+            route.harness.as_deref() == Some(harness)
+                && matches!(
+                    route.tmux.as_deref(),
+                    Some(target) if target == pane || target == tmux_session
+                )
         })?;
     Some(Identity {
         session: route.session_id.clone().or_else(|| Some(lane.clone())),
@@ -164,12 +192,53 @@ mod tests {
     #[test]
     fn an_unresolved_caller_says_so() {
         temp_env::with_vars(
-            [("BOOP_SESSION", None::<&str>), ("TMUX_PANE", None::<&str>)],
+            [
+                ("BOOP_SESSION", None::<&str>),
+                ("TMUX_PANE", None::<&str>),
+                ("CODEX_THREAD_ID", None::<&str>),
+                ("KIMI_SESSION_ID", None::<&str>),
+            ],
             || {
                 let identity = resolve(&BTreeMap::new()).unwrap();
                 assert_eq!(identity.rung, Some(Rung::None));
                 assert!(identity.session.is_none());
                 assert_eq!(identity.to_json()["confidence"], "unresolved");
+            },
+        );
+    }
+
+    #[test]
+    fn codex_process_rung_uses_the_harness_process_tell() {
+        temp_env::with_vars(
+            [
+                ("BOOP_SESSION", None::<&str>),
+                ("TMUX_PANE", None::<&str>),
+                ("CODEX_THREAD_ID", Some("thread-7")),
+                ("KIMI_SESSION_ID", None::<&str>),
+            ],
+            || {
+                let identity = resolve(&BTreeMap::new()).unwrap();
+                assert_eq!(identity.session.as_deref(), Some("thread-7"));
+                assert_eq!(identity.harness.as_deref(), Some("codex"));
+                assert_eq!(identity.rung, Some(Rung::CodexProcess));
+            },
+        );
+    }
+
+    #[test]
+    fn kimi_process_rung_uses_the_follow_up_contract() {
+        temp_env::with_vars(
+            [
+                ("BOOP_SESSION", None::<&str>),
+                ("TMUX_PANE", None::<&str>),
+                ("CODEX_THREAD_ID", None::<&str>),
+                ("KIMI_SESSION_ID", Some("session-8")),
+            ],
+            || {
+                let identity = resolve(&BTreeMap::new()).unwrap();
+                assert_eq!(identity.session.as_deref(), Some("session-8"));
+                assert_eq!(identity.harness.as_deref(), Some("kimi"));
+                assert_eq!(identity.rung, Some(Rung::KimiProcess));
             },
         );
     }
