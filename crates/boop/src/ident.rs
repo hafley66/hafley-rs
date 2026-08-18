@@ -154,6 +154,14 @@ pub struct TraceEventRow {
     pub created_ts: u64,
 }
 
+/// One `kind=error` trace event, flattened for the `boop debug` report.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct TraceErrorRow {
+    pub lane: String,
+    pub created_ts: u64,
+    pub detail: String,
+}
+
 /// FNV-1a over the body, hex. The digest only has to separate distinct briefs
 /// in one local store; nothing trusts it against an adversary.
 fn markdown_digest(body: &str) -> String {
@@ -1037,6 +1045,40 @@ impl Store {
                 classification: row.get(10)?,
                 detail: row.get(11)?,
                 created_ts: row.get::<_, i64>(12)? as u64,
+            });
+        }
+        Ok(events)
+    }
+
+    /// The `kind=error` trace events at or after `since_ms`, oldest first. The
+    /// canned read behind `boop debug`.
+    pub fn error_events_since(
+        &self,
+        since_ms: u64,
+        lane: Option<&str>,
+    ) -> Result<Vec<TraceErrorRow>> {
+        let mut statement = self.connection.prepare(
+            "SELECT lane.value, e.created_ts, e.detail
+               FROM agent_trace_event e
+               JOIN dict_session lane ON lane.id = e.lane_id
+               JOIN dict_trace_kind kind ON kind.id = e.kind_id
+              WHERE kind.value = 'error'
+                AND e.created_ts >= ?1
+                AND (?2 IS NULL OR lane.value = ?2)
+              ORDER BY e.created_ts, e.event_id
+              LIMIT ?3",
+        )?;
+        let mut rows = statement.query(params![
+            since_ms as i64,
+            lane,
+            TRACE_EVENT_QUERY_LIMIT as i64
+        ])?;
+        let mut events = Vec::new();
+        while let Some(row) = rows.next()? {
+            events.push(TraceErrorRow {
+                lane: row.get(0)?,
+                created_ts: row.get::<_, i64>(1)? as u64,
+                detail: row.get(2)?,
             });
         }
         Ok(events)

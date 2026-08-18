@@ -128,6 +128,13 @@ COMPLETION: the supervisor writes ONE row `lane <id> done rc=<n>` into the
   The same wait after the fact is `boop beep lane wait <lane>`.
   A wait whose lane route goes dead with no row exits 3 instead of blocking.
 
+DEBUG: what just went wrong, without opening a log:
+    boop debug [--since 2m] [--lane <id>] [--json]
+  The WARN/ERROR tail of every ~/.agent/lanes/<lane>/supervise.log plus the
+  store's kind=error trace events, grouped by lane, oldest first inside a lane.
+  `boop --help` prints a one-line banner when that window is non-empty, and
+  nothing when it is clean.
+
 LIVENESS: a lane can die silently, producing nothing. Liveness is TWO checks:
     1. process alive:    boop beep ps <lane>
     2. worktree changed: git -C <worktree> status --short
@@ -239,6 +246,19 @@ enum SubCmd {
         format: Option<QueryFormat>,
         #[command(subcommand)]
         cmd: Option<DbCmd>,
+    },
+    /// What just went wrong: recent WARN/ERROR across the lane trails and the
+    /// store's error events, grouped by lane.
+    Debug {
+        /// Window to read back, as `Ns`, `Nm`, `Nh` or a count of seconds.
+        #[arg(long, default_value = "2m")]
+        since: String,
+        /// One lane only.
+        #[arg(long)]
+        lane: Option<String>,
+        /// One JSON array instead of the grouped text.
+        #[arg(long)]
+        json: bool,
     },
     /// Freshly synchronize and summarize Boop agent/runtime/activity facts.
     #[cfg(feature = "agent-read")]
@@ -631,6 +651,35 @@ enum ConfigCmd {
 
 /// Write one line, treating a closed pipe as a normal end. Rust masks SIGPIPE,
 /// so a bare `println!` panics the moment output is piped into `head`.
+/// Whether this invocation is asking for help, whatever verb it names.
+fn help_wanted() -> bool {
+    std::env::args().any(|argument| argument == "--help" || argument == "-h")
+}
+
+/// `boop debug`: the WARN/ERROR window, trail plus store.
+fn run_debug(since: &str, lane: Option<&str>, json: bool) -> Result<()> {
+    let window = boop::debug::parse_window(since)?;
+    let since_ms = now_ms().saturating_sub(window.as_millis() as u64);
+    let root = boop::trail::lanes_root()?;
+    let mut alerts = boop::debug::trail_alerts(&root, since_ms, lane);
+    match open_ro_store().and_then(|store| boop::debug::store_alerts(&store, since_ms, lane)) {
+        Ok(rows) => alerts.extend(rows),
+        Err(error) => warn!(error = %error, "trace error events unreadable"),
+    }
+    alerts.sort_by(|left, right| {
+        left.lane
+            .cmp(&right.lane)
+            .then(left.at_ms.cmp(&right.at_ms))
+    });
+    match json {
+        true => line(&serde_json::to_string_pretty(&boop::debug::as_json(
+            &alerts,
+        ))?),
+        false => line(&boop::debug::report(&alerts, window)),
+    }
+    Ok(())
+}
+
 fn line(text: &str) {
     use std::io::Write;
     let mut out = std::io::stdout().lock();
@@ -649,6 +698,12 @@ fn write_line(output: &mut impl std::io::Write, text: &str) -> std::io::Result<(
 }
 
 fn main() -> Result<()> {
+    // Only a help invocation pays for the trail read the banner needs.
+    if help_wanted() {
+        if let Some(banner) = boop::debug::help_banner(now_ms()) {
+            line(&banner);
+        }
+    }
     let cli = Cli::parse();
     init_tracing(supervised_lane(&cli.command))?;
     let registry = Registry::discover();
@@ -662,6 +717,7 @@ fn main() -> Result<()> {
         } => run_tail(&registry, &session_id, from.unwrap_or(0), format),
         SubCmd::Events { query } => run_query(&query),
         SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild),
+        SubCmd::Debug { since, lane, json } => run_debug(&since, lane.as_deref(), json),
         #[cfg(feature = "agent-read")]
         SubCmd::Agent { cmd } => run_public_agent_command(&registry, cmd),
         SubCmd::Follow {} => run_follow(&registry),
