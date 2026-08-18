@@ -267,7 +267,8 @@ enum SubCmd {
         cmd: AgentSummaryCmd,
     },
     /// Refinement loop: map each new (assistant, user) contact pair through
-    /// a model pass and write the rewrite per turn (see examples below).
+    /// a model pass and write the rewrite per turn. For a resident DL6
+    /// coroutine, use `boop run <program.dl6>`.
     #[command(after_help = CONCATMAP_EXAMPLES)]
     Concatmap {
         /// Prompt template file; substitutes {{mode}}, {{ai_text}} (the
@@ -311,6 +312,26 @@ enum SubCmd {
         /// Map the caller's own session (the `whoami` ladder resolves it).
         #[arg(long, conflicts_with = "session")]
         me: bool,
+    },
+    /// Run a DL6 resident coroutine against one source-session transcript.
+    Run {
+        /// DL6 program compiled and held resident by the sprefa harness.
+        program: PathBuf,
+        /// Source session whose turns arrive as `turn` rows.
+        #[arg(long)]
+        session: String,
+        /// Model for the single resident chat channel.
+        #[arg(long = "resident-model")]
+        resident_model: String,
+        /// Opening instruction text, or @path to read it from a file.
+        #[arg(long)]
+        goal: Option<String>,
+        /// Poll interval, for example 5s or 250ms.
+        #[arg(long, default_value = "5s")]
+        poll: String,
+        /// Run directory name under ~/.agent/run.
+        #[arg(long)]
+        name: Option<String>,
     },
     /// Report the caller's own identity and the rung that resolved it.
     Whoami {
@@ -960,6 +981,35 @@ fn main() -> Result<()> {
                     session,
                 })
             }
+            SubCmd::Run {
+                program,
+                session,
+                resident_model,
+                goal,
+                poll,
+                name,
+            } => {
+                let poll = parse_run_poll(&poll)?;
+                let name = name.unwrap_or_else(|| {
+                    program
+                        .file_stem()
+                        .and_then(|stem| stem.to_str())
+                        .unwrap_or("resident")
+                        .to_owned()
+                });
+                let goal = goal.map(read_run_goal).transpose()?;
+                boop::runner::run(boop::runner::Args {
+                    program,
+                    session,
+                    model: resident_model,
+                    goal,
+                    poll,
+                    run_dir: boop::runner::default_run_dir(&name)?,
+                    sprefa_root: boop::runner::default_sprefa_root()?,
+                    store_path: None,
+                    compact_tokens: 100_000,
+                })
+            }
             SubCmd::Wait {
                 id,
                 me,
@@ -992,6 +1042,29 @@ fn sync_before_local_command(registry: &Registry) -> Result<()> {
     sync_all(registry, false, false, SyncLiveness::TranscriptOnly)
 }
 
+fn read_run_goal(goal: String) -> Result<String> {
+    match goal.strip_prefix('@') {
+        Some(path) => {
+            std::fs::read_to_string(path).with_context(|| format!("read run goal {path}"))
+        }
+        None => Ok(goal),
+    }
+}
+
+fn parse_run_poll(value: &str) -> Result<std::time::Duration> {
+    let millis = match value.strip_suffix("ms") {
+        Some(number) => number.parse::<u64>()?,
+        None => value
+            .strip_suffix('s')
+            .context("--poll needs a duration such as 5s or 250ms")?
+            .parse::<u64>()?
+            .checked_mul(1_000)
+            .context("--poll is too large")?,
+    };
+    anyhow::ensure!(millis > 0, "--poll must be greater than zero");
+    Ok(std::time::Duration::from_millis(millis))
+}
+
 fn command_needs_startup_sync(command: &SubCmd) -> bool {
     matches!(
         command,
@@ -999,6 +1072,7 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
             | SubCmd::Chat { .. }
             | SubCmd::Agent { .. }
             | SubCmd::Concatmap { .. }
+            | SubCmd::Run { .. }
             | SubCmd::Me {
                 cmd: Some(MeCmd::Favorite { .. }),
                 ..

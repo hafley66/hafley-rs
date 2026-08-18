@@ -171,7 +171,7 @@ enum Rewriter {
 
 /// The goal a compacted resident receives: it re-reads the artifact it owns
 /// (which already carries the folded history) and keeps going.
-const COMPACT_RESUME_GOAL: &str =
+pub(crate) const COMPACT_RESUME_GOAL: &str =
     "Your context was compacted. Read seq.d2 first (it holds your folded history), then continue.";
 
 /// Turn-done budget for the chat feed: each bundle blocks until the model's
@@ -236,7 +236,7 @@ impl Rewriter {
                     let session = lane.conversation_id();
                     let over = session
                         .as_deref()
-                        .and_then(|id| mapper_context_tokens(store, id))
+                        .and_then(|id| context_tokens(store, id))
                         .unwrap_or(0)
                         >= *compact_tokens as i64;
                     if over {
@@ -255,7 +255,7 @@ impl Rewriter {
 
 /// The resident chat's current context size in tokens: its latest turn's fresh
 /// input plus the cached prior context, read from the store the sync ingests.
-fn mapper_context_tokens(store: &crate::Store, session: &str) -> Option<i64> {
+pub(crate) fn context_tokens(store: &crate::Store, session: &str) -> Option<i64> {
     const SQL: &str = "SELECT input_tokens + cache_read_tokens AS ctx FROM agent_usage
          JOIN dict_session s ON s.id = agent_usage.session_id
          WHERE s.value = ?1 ORDER BY ts DESC LIMIT 1";
@@ -266,7 +266,7 @@ fn mapper_context_tokens(store: &crate::Store, session: &str) -> Option<i64> {
         Ok(ctx) => Some(ctx),
         Err(rusqlite::Error::QueryReturnedNoRows) => None,
         Err(err) => {
-            tracing::warn!(session, %err, "mapper_context_tokens query failed");
+            tracing::warn!(session, %err, "resident context_tokens query failed");
             None
         }
     }
@@ -274,7 +274,7 @@ fn mapper_context_tokens(store: &crate::Store, session: &str) -> Option<i64> {
 
 /// Block until the running turn completes (the model's reply finished), so the
 /// feed fires the next bundle only after the fold has consumed the last one.
-fn wait_done(channel: &mut dyn LaneChannel) -> Result<()> {
+pub(crate) fn wait_done(channel: &mut dyn LaneChannel) -> Result<()> {
     let deadline = Instant::now() + CHAT_TURN_TIMEOUT;
     while Instant::now() < deadline {
         match channel.next_event(CHAT_POLL)? {
@@ -1030,7 +1030,7 @@ mod tests {
     // RECEIPT: unfixed tree returned `Err(near "Reilly": syntax error (1))`,
     // swallowed by `.ok()` into `None`, for this exact session id.
     #[test]
-    fn mapper_context_tokens_handles_a_quote_in_the_session_id() {
+    fn context_tokens_handles_a_quote_in_the_session_id() {
         let (store, path) = store();
         let session = "O'Reilly";
         let session_id = store.intern_public("dict_session", session).unwrap();
@@ -1043,7 +1043,7 @@ mod tests {
                 rusqlite::params![session_id],
             )
             .unwrap();
-        assert_eq!(mapper_context_tokens(&store, session), Some(100));
+        assert_eq!(context_tokens(&store, session), Some(100));
         drop(store);
         let _ = std::fs::remove_file(&path);
     }
