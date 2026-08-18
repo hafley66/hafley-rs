@@ -2930,11 +2930,10 @@ mod tests {
 
     use super::{
         after_agent_summary_sync, agent_summary_text, append_message, completion_recipient, config,
-        dead_reason, default_preset_for_harness, ident, lane_state, resolve_dispatch_harness,
-        resolve_parent_with_legacy_fallback, route_liveness, run_agent, run_lane_delete,
-        run_lane_prune, run_ps_with, session_matches_route, sync_session_pid, write_line,
-        write_route, AgentCmd, AgentSummaryCmd, Cli, DbCmd, MeCmd, SubCmd,
-        register_fresh_codex_spawner,
+        dead_reason, default_preset_for_harness, ident, lane_state, register_fresh_codex_spawner,
+        resolve_dispatch_harness, resolve_parent_with_legacy_fallback, route_liveness, run_agent,
+        run_lane_delete, run_lane_prune, run_ps_with, session_matches_route, sync_session_pid,
+        write_line, write_route, AgentCmd, AgentSummaryCmd, Cli, DbCmd, MeCmd, SubCmd,
     };
     use boop::bus::{self, read_routes, Route};
     use boop::proc::{ProcReader, ProcessInfo, SysinfoSnapshot};
@@ -3726,19 +3725,18 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// RECEIPT (boop-coordinator-by-kind compat): an explicit coordinator kind must never be shadowed.
+    /// RECEIPT (boop-coordinator-by-kind compat): a pane-less coordinator is
+    /// not inferred, and the legacy fallback cannot replace that decision.
     #[test]
     fn legacy_fallback_never_overrides_an_explicit_coordinator_kind() {
         let mut routes = BTreeMap::new();
         let mut boss = route_with(None);
         boss.kind = "coordinator".into();
+        boss.tmux = None;
         routes.insert("boss".into(), boss);
         let pick = resolve_parent_with_legacy_fallback(None, None, &routes);
-        assert_ne!(
-            pick.parent.as_deref(),
-            Some("boss"),
-            "the fallback must not invent a match the real resolver did not pick"
-        );
+        assert_eq!(pick.parent, None);
+        assert_eq!(pick.source, "none");
     }
 
     /// RECEIPT (job 1). A route written with --goal round-trips through the
