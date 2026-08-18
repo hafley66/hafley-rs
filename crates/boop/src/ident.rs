@@ -16,6 +16,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::harness::{KnownSession, KnownSessions, SessionRef};
 
+/// Every SQLite connection waits for a contending reader or the one WAL writer
+/// for the same bounded interval.
+const BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// The relational store.
 pub struct Store {
     connection: Connection,
@@ -228,35 +232,90 @@ fn bounded_diagnostic(detail: &str) -> String {
     clean
 }
 
+fn configure_connection(connection: &Connection, path: &std::path::Path) -> Result<()> {
+    connection
+        .busy_timeout(BUSY_TIMEOUT)
+        .with_context(|| format!("set busy_timeout on {}", path.display()))?;
+    // synchronous is connection-local. WAL itself is set only by initialization
+    // or migration below, never by a current-schema hot-path open.
+    connection
+        .pragma_update(None, "synchronous", "NORMAL")
+        .with_context(|| format!("set WAL synchronous mode on {}", path.display()))?;
+    Ok(())
+}
+
+fn schema_version_of(connection: &Connection) -> Result<i64> {
+    Ok(connection.query_row("PRAGMA user_version", [], |row| row.get(0))?)
+}
+
 impl Store {
     pub fn open(path: PathBuf) -> Result<Self> {
         let connection = Connection::open(&path)
             .with_context(|| format!("open boop.db at {}", path.display()))?;
-        connection
-            .busy_timeout(std::time::Duration::from_secs(5))
-            .with_context(|| format!("set busy_timeout on {}", path.display()))?;
-        connection
+        configure_connection(&connection, &path)?;
+        let store = Store { connection };
+        if store.schema_version()? < SCHEMA_VERSION {
+            store.initialise_or_migrate(&path)?;
+        }
+        Ok(store)
+    }
+
+    /// Open the store read-only for the raw-SQL surface. No schema projection
+    /// runs here: a read-only connection cannot write, so it must not appear
+    /// to migrate a stale store.
+    pub fn open_readonly(path: PathBuf) -> Result<Self> {
+        let connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .with_context(|| format!("open boop.db read-only at {}", path.display()))?;
+        configure_connection(&connection, &path)?;
+        Ok(Store { connection })
+    }
+
+    fn stamp_version(&self) -> Result<()> {
+        self.connection
+            .execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))?;
+        Ok(())
+    }
+
+    pub fn schema_version(&self) -> Result<i64> {
+        schema_version_of(&self.connection)
+    }
+
+    /// True when the rows on disk predate this schema version. Reading them is
+    /// safe; appending dense ordinals beside sparse ones is not.
+    pub fn is_stale(&self) -> Result<bool> {
+        if self.schema_version()? >= SCHEMA_VERSION {
+            return Ok(false);
+        }
+        let turns: i64 =
+            self.connection
+                .query_row("SELECT COUNT(*) FROM agent_turn", [], |row| row.get(0))?;
+        Ok(turns > 0)
+    }
+
+    /// Change persistent journal mode and migrate only when this open observed
+    /// an uninitialized or stale database. `BEGIN IMMEDIATE` serializes the
+    /// check and migration; a process that waited behind another migrator sees
+    /// the stamped version and commits without replaying DDL.
+    fn initialise_or_migrate(&self, path: &std::path::Path) -> Result<()> {
+        self.connection
             .pragma_update(None, "journal_mode", "WAL")
             .with_context(|| format!("enable WAL on {}", path.display()))?;
-        connection
-            .pragma_update(None, "synchronous", "NORMAL")
-            .with_context(|| format!("set WAL synchronous mode on {}", path.display()))?;
-        let tables_before: i64 = connection.query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
-            [],
-            |row| row.get(0),
-        )?;
-        connection
-            .execute_batch(SCHEMA)
-            .with_context(|| format!("initialise boop.db schema at {}", path.display()))?;
-        let store = Store { connection };
-        if tables_before == 0 {
-            store.stamp_version()?;
-        } else if store.schema_version()? < SCHEMA_VERSION {
+        self.connection.execute_batch("BEGIN IMMEDIATE")?;
+        let result = (|| {
+            if self.schema_version()? >= SCHEMA_VERSION {
+                return Ok(());
+            }
+            self.connection
+                .execute_batch(SCHEMA)
+                .with_context(|| format!("initialise boop.db schema at {}", path.display()))?;
+            if self.schema_version()? == 0 {
+                self.stamp_version()?;
+                return Ok(());
+            }
             // Each step runs only from the version it leaves, so a store that
             // already migrated 6->7 never re-runs those ALTERs.
-            if store.schema_version()? < 7 {
-                store.connection.execute_batch(
+            if self.schema_version()? < 7 {
+                self.connection.execute_batch(
                     "CREATE TABLE IF NOT EXISTS dict_record
                        (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
                      ALTER TABLE sync_cursor ADD COLUMN record_id_id INTEGER;
@@ -265,8 +324,8 @@ impl Store {
                      PRAGMA user_version = 7;",
                 )?;
             }
-            if store.schema_version()? < 8 {
-                store.connection.execute_batch(
+            if self.schema_version()? < 8 {
+                self.connection.execute_batch(
                     "CREATE TABLE agent_pr_new (
                    session_id INTEGER NOT NULL,
                    turn INTEGER NOT NULL,
@@ -280,11 +339,11 @@ impl Store {
                  PRAGMA user_version = 8;",
                 )?;
             }
-            if store.schema_version()? < 9 {
-                store.backfill_traces()?;
+            if self.schema_version()? < 9 {
+                self.backfill_traces()?;
             }
-            if store.schema_version()? < 11 {
-                store.connection.execute_batch(
+            if self.schema_version()? < 11 {
+                self.connection.execute_batch(
                     "CREATE TABLE IF NOT EXISTS agent_trace_event (
                        event_id INTEGER PRIMARY KEY,
                        event_key TEXT NOT NULL UNIQUE,
@@ -308,47 +367,17 @@ impl Store {
                      PRAGMA user_version = 11;",
                 )?;
             }
-            store.stamp_version()?;
+            self.stamp_version()?;
+            Ok(())
+        })();
+        match result {
+            Ok(()) => self.connection.execute_batch("COMMIT")?,
+            Err(error) => {
+                let _ = self.connection.execute_batch("ROLLBACK");
+                return Err(error);
+            }
         }
-        Ok(store)
-    }
-
-    /// Open the store read-only for the raw-SQL surface. No schema projection
-    /// runs here: a read-only connection cannot write, so it must not appear
-    /// to migrate a stale store.
-    pub fn open_readonly(path: PathBuf) -> Result<Self> {
-        let connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-            .with_context(|| format!("open boop.db read-only at {}", path.display()))?;
-        // A resident sync writer holds the write lock in bursts; a reader
-        // waits it out instead of surfacing "database is locked".
-        connection
-            .busy_timeout(std::time::Duration::from_secs(5))
-            .with_context(|| format!("set busy_timeout on {}", path.display()))?;
-        Ok(Store { connection })
-    }
-
-    fn stamp_version(&self) -> Result<()> {
-        self.connection
-            .execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))?;
         Ok(())
-    }
-
-    pub fn schema_version(&self) -> Result<i64> {
-        Ok(self
-            .connection
-            .query_row("PRAGMA user_version", [], |row| row.get(0))?)
-    }
-
-    /// True when the rows on disk predate this schema version. Reading them is
-    /// safe; appending dense ordinals beside sparse ones is not.
-    pub fn is_stale(&self) -> Result<bool> {
-        if self.schema_version()? >= SCHEMA_VERSION {
-            return Ok(false);
-        }
-        let turns: i64 =
-            self.connection
-                .query_row("SELECT COUNT(*) FROM agent_turn", [], |row| row.get(0))?;
-        Ok(turns > 0)
     }
 
     /// Drop every table, recreate the schema, stamp the version; the caller
@@ -2241,6 +2270,8 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{mpsc, Arc, Barrier};
+    use std::time::Duration;
 
     use crate::harness::SessionRef;
 
@@ -2249,7 +2280,7 @@ mod tests {
 
     use super::{
         project_transcript, sync_session, sync_session_with_pid, Store,
-        TraceEvent as LaneTraceEvent,
+        TraceEvent as LaneTraceEvent, BUSY_TIMEOUT, SCHEMA_VERSION,
     };
 
     static CURSOR_SQL: AtomicUsize = AtomicUsize::new(0);
@@ -2376,8 +2407,111 @@ mod tests {
                 .connection
                 .query_row("PRAGMA busy_timeout", [], |row| row.get(0))
                 .unwrap();
-            assert_eq!(ms, 5000);
+            assert_eq!(ms, BUSY_TIMEOUT.as_millis() as i64);
         }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn current_schema_open_and_readonly_query_do_not_wait_for_a_wal_writer() {
+        let (path, writer) = fresh_store("current-open-during-writer");
+        writer.begin().unwrap();
+        let (opened_tx, opened_rx) = mpsc::channel();
+        let open_path = path.clone();
+        std::thread::spawn(move || opened_tx.send(Store::open(open_path)).unwrap());
+        let opened = opened_rx
+            .recv_timeout(Duration::from_millis(250))
+            .expect("current-schema open must not mutate schema or journal")
+            .unwrap();
+        drop(opened);
+
+        let read_only = Store::open_readonly(path.clone()).unwrap();
+        let count: i64 = read_only
+            .connection()
+            .query_row("SELECT COUNT(*) FROM agent_turn", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+        writer.rollback().unwrap();
+        drop(read_only);
+        drop(writer);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn concurrent_first_open_converges_on_one_current_schema() {
+        let path = temp_path("concurrent-first-open");
+        let _ = std::fs::remove_file(&path);
+        let barrier = Arc::new(Barrier::new(3));
+        let mut workers = Vec::new();
+        for _ in 0..2 {
+            let path = path.clone();
+            let barrier = Arc::clone(&barrier);
+            workers.push(std::thread::spawn(move || {
+                barrier.wait();
+                Store::open(path)
+            }));
+        }
+        barrier.wait();
+        for worker in workers {
+            assert_eq!(
+                worker.join().unwrap().unwrap().schema_version().unwrap(),
+                SCHEMA_VERSION
+            );
+        }
+        let store = Store::open(path.clone()).unwrap();
+        let tables: i64 = store
+            .connection()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='agent_turn'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(tables, 1);
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn trace_and_transcript_style_writers_complete_with_all_rows() {
+        let path = temp_path("concurrent-trace-sync-writers");
+        let _ = std::fs::remove_file(&path);
+        Store::open(path.clone()).unwrap();
+        let barrier = Arc::new(Barrier::new(3));
+        let trace_path = path.clone();
+        let trace_barrier = Arc::clone(&barrier);
+        let trace_writer = std::thread::spawn(move || -> anyhow::Result<()> {
+            let store = Store::open(trace_path)?;
+            trace_barrier.wait();
+            for index in 0..16 {
+                store.record_trace_event(&trace_event(&format!("trace-event-{index}"), index))?;
+            }
+            Ok(())
+        });
+        let sync_path = path.clone();
+        let sync_barrier = Arc::clone(&barrier);
+        let sync_writer = std::thread::spawn(move || -> anyhow::Result<()> {
+            let store = Store::open(sync_path)?;
+            sync_barrier.wait();
+            for turn in 1..=16 {
+                store.write_turn("sync-session", turn, turn, "assistant", "fact")?;
+            }
+            Ok(())
+        });
+        barrier.wait();
+        trace_writer.join().unwrap().unwrap();
+        sync_writer.join().unwrap().unwrap();
+        let store = Store::open_readonly(path.clone()).unwrap();
+        let counts: (i64, i64) = store
+            .connection()
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM agent_trace_event), (SELECT COUNT(*) FROM agent_turn)",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(counts, (16, 16));
+        drop(store);
         let _ = std::fs::remove_file(&path);
     }
 

@@ -1122,7 +1122,7 @@ fn query_from(q: &QueryArgs, session: Option<String>) -> ident::TurnQuery {
 /// Query the db with the shared filter set; emit raw rows, no interpretation.
 /// Turns first, then any spawn edges touching the filtered session.
 fn run_query(query: &QueryArgs) -> Result<()> {
-    let store = ident::Store::open(ident::Store::default_path()?)?;
+    let store = ident::Store::open_readonly(ident::Store::default_path()?)?;
     let rows = store.query_turns(&query_from(query, query.session.clone()))?;
     emit_rows(&rows, query.format);
     emit_edges(&store, query.session.as_deref(), query.limit)?;
@@ -1139,7 +1139,7 @@ struct ChatQueryOptions {
 /// `boop chat`: like `query` but emits the chat-repr turn shape. `query.format`
 /// already selects NDJSON vs text, so there is no separate JSON flag here.
 fn run_chat_query(query: &QueryArgs, opts: ChatQueryOptions) -> Result<()> {
-    let store = ident::Store::open(ident::Store::default_path()?)?;
+    let store = ident::Store::open_readonly(ident::Store::default_path()?)?;
     let session = if opts.all {
         None
     } else {
@@ -1236,72 +1236,49 @@ fn sync_all(
         }
         SyncLiveness::TranscriptOnly => None,
     };
-    let has_writes = !pending.is_empty();
-    if has_writes {
-        store.begin()?;
+    let mut stat = ident::SyncStat::default();
+    for (adapter, session) in pending {
+        store.project_discovered_session(&session)?;
+        tracing::debug!(
+            harness = adapter.id(),
+            session_id = session.session_id,
+            "transcript session sync started"
+        );
+        let pid = sync_session_pid(liveness, || {
+            routes
+                .as_ref()
+                .and_then(|routes| session_route_pid(routes, &session))
+        });
+        // Adapter ingestion opens and parses transcript sources. Store writes
+        // autocommit, so no SQLite writer slot spans that external work.
+        stat.add(ident::sync_session_with_pid(&store, adapter, &session, pid)?);
     }
-    let result = (|| {
-        let mut stat = ident::SyncStat::default();
-        for (adapter, session) in pending {
-            store.project_discovered_session(&session)?;
-            tracing::debug!(
-                harness = adapter.id(),
-                session_id = session.session_id,
-                "transcript session sync started"
-            );
-            let pid = sync_session_pid(liveness, || {
-                routes
-                    .as_ref()
-                    .and_then(|routes| session_route_pid(routes, &session))
-            });
-            stat.add(ident::sync_session_with_pid(
-                &store, adapter, &session, pid,
-            )?);
-        }
-        Ok::<ident::SyncStat, anyhow::Error>(stat)
-    })();
-    match result {
-        Ok(stat) => {
-            if has_writes {
-                store.commit()?;
-            }
-            let elapsed_ms = started.elapsed().as_millis();
-            if report {
-                let counts = store.counts()?;
-                let db_bytes = store.db_bytes()?;
-                let sparse = store.sparse_sessions()?.len();
-                let rate = (stat.written as u128)
-                    .saturating_mul(1000)
-                    .checked_div(elapsed_ms.max(1))
-                    .unwrap_or(0) as u64;
-                println!(
-                    "events={} dropped={} usage_new={} usage_updated={} sparse_sessions={sparse} elapsed_ms={elapsed_ms} rate={rate}/s db_bytes={db_bytes} counts={}",
-                    stat.written,
-                    stat.dropped,
-                    stat.usage_written,
-                    stat.usage_updated,
-                    serde_json::to_string(&counts)?
-                );
-                info!(
-                    events = stat.written,
-                    dropped = stat.dropped,
-                    usage_new = stat.usage_written,
-                    usage_updated = stat.usage_updated,
-                    elapsed_ms,
-                    rate,
-                    "transcript sync finished"
-                );
-            }
-        }
-        Err(error) => {
-            error!(error = %error, "transcript sync failed; rolling back");
-            if has_writes {
-                if let Err(rollback_error) = store.rollback() {
-                    error!(error = %rollback_error, "transcript sync rollback failed");
-                }
-            }
-            return Err(error);
-        }
+    let elapsed_ms = started.elapsed().as_millis();
+    if report {
+        let counts = store.counts()?;
+        let db_bytes = store.db_bytes()?;
+        let sparse = store.sparse_sessions()?.len();
+        let rate = (stat.written as u128)
+            .saturating_mul(1000)
+            .checked_div(elapsed_ms.max(1))
+            .unwrap_or(0) as u64;
+        println!(
+            "events={} dropped={} usage_new={} usage_updated={} sparse_sessions={sparse} elapsed_ms={elapsed_ms} rate={rate}/s db_bytes={db_bytes} counts={}",
+            stat.written,
+            stat.dropped,
+            stat.usage_written,
+            stat.usage_updated,
+            serde_json::to_string(&counts)?
+        );
+        info!(
+            events = stat.written,
+            dropped = stat.dropped,
+            usage_new = stat.usage_written,
+            usage_updated = stat.usage_updated,
+            elapsed_ms,
+            rate,
+            "transcript sync finished"
+        );
     }
     Ok(())
 }
@@ -1357,7 +1334,6 @@ fn run_follow(registry: &Registry) -> Result<()> {
     let routes = bus::read_routes(&mail_dir(None)?).unwrap_or_default();
     loop {
         let store = ident::Store::open(ident::Store::default_path()?)?;
-        store.begin()?;
         // Rebuild the list every tick: a conversation opened after boot (the
         // concatmap mapper's) is otherwise invisible to this resident forever.
         sessions.clear();
@@ -1378,7 +1354,6 @@ fn run_follow(registry: &Registry) -> Result<()> {
             let _ = ident::sync_session_with_pid(&store, adapter, session, pid)?;
             last_mtime.insert(session.session_id.clone(), mtime);
         }
-        store.commit()?;
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }

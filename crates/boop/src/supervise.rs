@@ -448,7 +448,7 @@ fn supervise(
                             delivery = "midturn",
                             "lane hail delivered"
                         );
-                        record_delivery(&lane.mail_dir, &lane.lane, &hail, Delivery::MidTurn);
+                        record_delivery(events, &lane.mail_dir, &hail, Delivery::MidTurn);
                         events.record(
                             "delivery",
                             TraceRecorder::session(channel),
@@ -541,7 +541,7 @@ fn supervise(
         turn = held
             .drain(..)
             .map(|hail| {
-                record_delivery(&lane.mail_dir, &lane.lane, &hail, Delivery::NextTurn);
+                record_delivery(events, &lane.mail_dir, &hail, Delivery::NextTurn);
                 events.record(
                     "delivery",
                     TraceRecorder::session(channel),
@@ -744,22 +744,18 @@ pub fn ack(dir: &Path, hail: &Hail) {
 
 /// Ack plus a store edge naming the tier, so `boop db` answers "did the lane
 /// get it, and did it land mid-turn".
-fn record_delivery(dir: &Path, lane: &str, hail: &Hail, tier: Delivery) {
+fn record_delivery(events: &TraceRecorder, dir: &Path, hail: &Hail, tier: Delivery) {
     ack(dir, hail);
-    let store = match crate::Store::default_path().and_then(crate::Store::open) {
-        Ok(store) => store,
-        Err(error) => {
-            warn!(lane, hail_id = hail.id, error = %error, "open store for delivery edge failed");
-            return;
-        }
+    let Some(store) = &events.store else {
+        return;
     };
     if let Err(error) = store.add_edge_at(
         &hail.from,
-        lane,
+        &events.lane,
         &format!("deliver-{}", tier.as_str()),
         crate::channel::now_ms(),
     ) {
-        warn!(lane, hail_id = hail.id, delivery = tier.as_str(), error = %error, "delivery edge write failed");
+        warn!(lane = events.lane, hail_id = hail.id, delivery = tier.as_str(), error = %error, "delivery edge write failed");
     }
 }
 
