@@ -16,12 +16,22 @@ const POLL: Duration = Duration::from_millis(700);
 /// Provider-flake resumes per lane; deepinfra measured ~98% per-request uptime,
 /// so a multi-hundred-request lane sees several drops.
 const FLAKE_RESUME_CAP: u32 = 5;
-/// A turn with no store write AT ALL by this deadline is the silent-stall
-/// class (repro: empty stdout+stderr forever); healthy turns write in seconds.
-const FIRST_SIGNAL_LIMIT: Duration = Duration::from_secs(30);
-/// Mid-turn quiet bound. Measured over a week of healthy traffic: 261
-/// in-message gaps over 120s (long tool calls), so 30s here would false-kill.
+/// Quiet bound for a whole turn, opening gap included. Measured over a week of
+/// healthy traffic: 261 in-message gaps over 120s, so 30s here would false-kill.
 const STALL_LIMIT: Duration = Duration::from_secs(5 * 60);
+
+/// How long this turn has been quiet. `activity` is the newest harness write of
+/// this turn; without one the clock runs from the turn's own start.
+fn idle_ms(now_ms: u64, turn_started: u64, activity: Option<u64>) -> u64 {
+    now_ms.saturating_sub(activity.unwrap_or(turn_started))
+}
+
+/// Whether a quiet turn is past the point where its child is treated as gone.
+/// A reasoning model is alive and silent until its first tool call.
+fn stalled(idle_ms: u64) -> bool {
+    idle_ms > STALL_LIMIT.as_millis() as u64
+}
+
 /// The text a resumed conversation opens with instead of the full brief.
 const RESUME_NUDGE: &str = "The previous turn ended on a provider error you never saw. \
      Re-read your last steps and continue the brief from where you left off.";
@@ -402,17 +412,8 @@ fn supervise(
             let this_turn_activity = channel
                 .last_activity_ms()
                 .filter(|written| *written >= turn_started);
-            let (idle_ms, limit) = match this_turn_activity {
-                Some(written) => (
-                    crate::channel::now_ms().saturating_sub(written),
-                    STALL_LIMIT,
-                ),
-                None => (
-                    crate::channel::now_ms().saturating_sub(turn_started),
-                    FIRST_SIGNAL_LIMIT,
-                ),
-            };
-            if idle_ms > limit.as_millis() as u64 {
+            let idle_ms = idle_ms(crate::channel::now_ms(), turn_started, this_turn_activity);
+            if stalled(idle_ms) {
                 warn!(idle_ms, "lane turn stalled; killing the harness child");
                 println!("[boop] turn stalled ({}s idle), retrying", idle_ms / 1000);
                 if let Err(error) = channel.close() {
@@ -814,6 +815,25 @@ mod tests {
         write_box(&dir, &[message("m1", "mine", "request")]);
         let seen: BTreeSet<String> = ["m1".to_owned()].into_iter().collect();
         assert!(pending(&dir, "mine", &seen).unwrap().is_empty());
+    }
+
+    // FAIL-PRE-FIX: a 30 s first-signal window killed a healthy child that had
+    // not spoken yet. A codex lane on a reasoning model emits nothing until its
+    // first tool call, so it died at ~70 s and the retry wrote to dead stdin.
+    #[test]
+    fn a_quiet_opening_gap_is_not_a_stall() {
+        assert!(!stalled(idle_ms(90_000, 0, None)), "90 s of opening quiet");
+        assert!(stalled(idle_ms(301_000, 0, None)));
+        assert!(!stalled(idle_ms(400_000, 0, Some(399_000))));
+        assert!(stalled(idle_ms(700_000, 0, Some(399_000))));
+    }
+
+    /// Activity before this turn opened is not this turn's; the clock then runs
+    /// from the turn's own start.
+    #[test]
+    fn activity_from_an_earlier_turn_does_not_reset_the_clock() {
+        assert_eq!(idle_ms(90_000, 60_000, None), 30_000);
+        assert_eq!(idle_ms(90_000, 60_000, Some(80_000)), 10_000);
     }
 
     #[test]

@@ -147,6 +147,10 @@ impl LaneChannel for CodexChannel {
         }
     }
 
+    fn last_activity_ms(&self) -> Option<u64> {
+        self.rpc.last_read_ms()
+    }
+
     fn close(&mut self) -> Result<()> {
         self.rpc.close()
     }
