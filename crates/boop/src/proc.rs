@@ -12,6 +12,9 @@ pub struct ProcessInfo {
     pub pid: u32,
     pub parent: Option<u32>,
     pub name: String,
+    /// argv observed from the operating system. Harness adapters use this only
+    /// for their documented native identity flags.
+    pub command: Vec<String>,
     /// Resident set size in bytes.
     pub rss_bytes: u64,
     pub cpu_percent: f32,
@@ -109,6 +112,11 @@ impl ProcReader for SysinfoSnapshot {
             pid,
             parent: process.parent().map(|parent| parent.as_u32()),
             name: process.name().to_string_lossy().into_owned(),
+            command: process
+                .cmd()
+                .iter()
+                .map(|argument| argument.to_string_lossy().into_owned())
+                .collect(),
             rss_bytes: process.memory(),
             cpu_percent: process.cpu_usage(),
             start_time_secs: process.start_time(),
@@ -179,6 +187,7 @@ mod tests {
                 pid,
                 parent: (parent != 0).then_some(parent),
                 name: "fake".into(),
+                command: Vec::new(),
                 rss_bytes: rss,
                 cpu_percent: cpu,
                 start_time_secs: start,

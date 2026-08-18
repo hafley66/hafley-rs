@@ -1086,6 +1086,7 @@ mod tests {
                         pid,
                         parent: None,
                         name: "fixture".into(),
+                        command: Vec::new(),
                         rss_bytes: 0,
                         cpu_percent: 0.0,
                         start_time_secs: 0,

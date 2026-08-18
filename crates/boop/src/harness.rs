@@ -34,6 +34,17 @@ pub trait Harness: Send + Sync {
         None
     }
 
+    /// Read this harness's native session identity from the live process tree
+    /// rooted at an adopted tmux pane. `None` leaves the route anonymous.
+    fn session_id_in_pane(
+        &self,
+        _multiplexer: &dyn crate::tmux::Multiplexer,
+        _processes: &dyn crate::proc::ProcReader,
+        _tmux_target: &str,
+    ) -> Option<String> {
+        None
+    }
+
     /// Every session this harness has on disk, newest last. No cap.
     fn sessions(&self) -> anyhow::Result<Vec<SessionRef>>;
 

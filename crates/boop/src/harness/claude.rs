@@ -18,6 +18,30 @@ use serde_json::Value;
 pub struct Claude;
 
 impl Harness for Claude {
+    fn session_id_in_pane(
+        &self,
+        multiplexer: &dyn crate::tmux::Multiplexer,
+        processes: &dyn crate::proc::ProcReader,
+        tmux_target: &str,
+    ) -> Option<String> {
+        let root = multiplexer.pane_pid(None, tmux_target)?;
+        std::iter::once(root)
+            .chain(processes.descendants(root))
+            .filter_map(|pid| processes.process(pid))
+            .find_map(|process| {
+                process
+                    .command
+                    .first()
+                    .is_some_and(|program| {
+                        std::path::Path::new(program)
+                            .file_name()
+                            .is_some_and(|name| name == "claude")
+                    })
+                    .then(|| claude_resume_id(&process.command))
+                    .flatten()
+            })
+    }
+
     fn open_channel(
         &self,
         spec: &crate::channel::ChannelSpec,
@@ -124,6 +148,15 @@ impl Harness for Claude {
         }
         Ok(())
     }
+}
+
+/// The interactive Claude CLI names the resumed transcript in argv. The flag
+/// and its following value are a direct harness identity tell.
+fn claude_resume_id(command: &[String]) -> Option<String> {
+    command
+        .windows(2)
+        .find_map(|arguments| (arguments[0] == "--resume").then(|| arguments[1].clone()))
+        .filter(|id| !id.is_empty())
 }
 
 /// The claude command line a spawn runs. Resuming an existing session wins

@@ -440,7 +440,11 @@ fn shell_from_runtime(row: AgentRuntimeRow) -> Option<AgentShellNode> {
         trace: row.trace,
         cwd: row.cwd.map(PathBuf::from),
         tmux: Some(tmux),
-        tmux_session: row.tmux_target.filter(|target| !target.starts_with('%')),
+        tmux_session: row
+            .tmux_target
+            .as_deref()
+            .and_then(tmux_session_anchor)
+            .map(str::to_owned),
         tmux_pane: row.tmux_pane.filter(|target| target.starts_with('%')),
         pid: row.pid.and_then(|pid| u32::try_from(pid).ok()),
         state: state.to_owned(),
@@ -457,6 +461,7 @@ fn focus_graph(graph: &mut AgentSessionGraph, query: &AgentSessionGraphQuery) {
     let Some(tmux) = query.tmux.as_deref() else {
         return;
     };
+    let query_session = tmux_session_anchor(tmux);
     let mut lanes = graph
         .shells
         .iter()
@@ -464,13 +469,22 @@ fn focus_graph(graph: &mut AgentSessionGraph, query: &AgentSessionGraphQuery) {
             shell.tmux.as_deref() == Some(tmux)
                 || shell.tmux_session.as_deref() == Some(tmux)
                 || shell.tmux_pane.as_deref() == Some(tmux)
+                || query_session.is_some_and(|session| {
+                    shell.tmux_session.as_deref() == Some(session)
+                        || shell.tmux.as_deref().and_then(tmux_session_anchor) == Some(session)
+                })
         })
         .map(|shell| shell.lane.clone())
         .collect::<BTreeSet<_>>();
     let mut sessions = graph
         .sessions
         .iter()
-        .filter(|session| session.tmux.as_deref() == Some(tmux))
+        .filter(|session| {
+            session.tmux.as_deref() == Some(tmux)
+                || query_session.is_some_and(|anchor| {
+                    session.tmux.as_deref().and_then(tmux_session_anchor) == Some(anchor)
+                })
+        })
         .map(|session| session.session.clone())
         .collect::<BTreeSet<_>>();
     for shell in &graph.shells {
@@ -550,6 +564,12 @@ fn focus_graph(graph: &mut AgentSessionGraph, query: &AgentSessionGraphQuery) {
     graph
         .edges
         .retain(|edge| sessions.contains(&edge.parent) && sessions.contains(&edge.child));
+}
+
+/// The session component of a tmux target. `%pane` remains a distinct exact
+/// identity because its owning session is runtime evidence, not syntax.
+fn tmux_session_anchor(target: &str) -> Option<&str> {
+    (!target.starts_with('%')).then(|| target.split(':').next().unwrap_or(target))
 }
 
 #[cfg(test)]
@@ -1162,6 +1182,47 @@ mod tests {
                 .unwrap();
         assert_eq!(graph.schema_version, AGENT_SESSION_GRAPH_SCHEMA_VERSION);
         assert!(graph.trace_events.is_empty());
+    }
+
+    #[test]
+    fn tmux_session_window_and_pane_evidence_select_the_same_shell() {
+        for target in ["sprefa-5", "sprefa-5:0.0", "sprefa-5:0.0.0", "%1205"] {
+            let mut graph = AgentSessionGraph {
+                schema_version: AGENT_SESSION_GRAPH_SCHEMA_VERSION,
+                sessions: Vec::new(),
+                edges: Vec::new(),
+                shells: vec![AgentShellNode {
+                    lane: "sprefa-coordinator".into(),
+                    parent_lane: None,
+                    harness: Some("claude".into()),
+                    mode: None,
+                    session_id: Some("da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b".into()),
+                    session: Some(AgentSessionIdentity {
+                        harness: "claude".into(),
+                        id: "da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b".into(),
+                    }),
+                    trace: None,
+                    cwd: Some("/same-cwd".into()),
+                    tmux: Some("sprefa-5:0.0".into()),
+                    tmux_session: Some("sprefa-5".into()),
+                    tmux_pane: Some("%1205".into()),
+                    pid: Some(10),
+                    state: "live".into(),
+                    started_ts: None,
+                    registered_at: None,
+                }],
+                trace_events: Vec::new(),
+            };
+            focus_graph(
+                &mut graph,
+                &AgentSessionGraphQuery {
+                    tmux: Some(target.into()),
+                    ..AgentSessionGraphQuery::default()
+                },
+            );
+            assert_eq!(graph.shells.len(), 1, "target {target}");
+            assert_eq!(graph.shells[0].lane, "sprefa-coordinator");
+        }
     }
 
     #[test]
