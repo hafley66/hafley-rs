@@ -58,6 +58,10 @@ impl Harness for Claude {
         sessions_in(&base)
     }
 
+    fn session_roots(&self) -> anyhow::Result<Vec<PathBuf>> {
+        Ok(vec![claude_projects_dir()?])
+    }
+
     fn sync_candidates(&self, known: &KnownSessions) -> anyhow::Result<Vec<SessionRef>> {
         let base = claude_projects_dir()?;
         sessions_in_with_known(&base, known)

@@ -112,6 +112,10 @@ impl Harness for Kimi {
         sessions_in(&kimi_sessions_dir()?)
     }
 
+    fn session_roots(&self) -> anyhow::Result<Vec<PathBuf>> {
+        Ok(vec![kimi_sessions_dir()?])
+    }
+
     fn read_from(&self, session: &SessionRef, offset: u64) -> anyhow::Result<ReadChunk> {
         let mut file = File::open(&session.path)
             .with_context(|| format!("open transcript {}", session.path.display()))?;
