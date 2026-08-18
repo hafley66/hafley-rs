@@ -410,6 +410,10 @@ fn a_drain_without_a_name_uses_the_identity_ladder() {
         .arg(coord.mail())
         .env("BOOP_DB", coord.root.join("boop.db"))
         .env("BOOP_SESSION", &coord.name)
+        .env_remove("BOOP_LANE")
+        .env_remove("BOOP_PARENT")
+        .env_remove("BOOP_HARNESS")
+        .env_remove("CODEX_THREAD_ID")
         .output()
         .unwrap();
     assert!(

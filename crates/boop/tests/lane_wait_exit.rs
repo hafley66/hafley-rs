@@ -163,6 +163,33 @@ impl CreateFixture {
             .args(["--no-start", "--wait", "--wait-timeout", timeout]);
         command
     }
+
+    fn codex_caller_command(&self) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_boop"));
+        command
+            .env_clear()
+            .env("HOME", &self.root)
+            .env("XDG_CONFIG_HOME", self.root.join("config"))
+            .env("PATH", &self.bin)
+            .env("CODEX_THREAD_ID", "thread-codex-parent")
+            .env("TMUX_PANE", "%1206")
+            .args(["beep", "lane", "create"])
+            .arg("--lane")
+            .arg(&self.lane)
+            .arg("--cwd")
+            .arg(&self.repo)
+            .arg("--brief")
+            .arg(&self.brief)
+            .args(["--harness", "codex", "--model", "gpt-test"])
+            .arg("--tmux")
+            .arg(&self.tmux)
+            .arg("--socket")
+            .arg(&self.socket)
+            .arg("--mail-dir")
+            .arg(&self.mail)
+            .args(["--no-start", "--wait", "--wait-timeout", "30", "--dry-run"]);
+        command
+    }
 }
 
 impl Drop for CreateFixture {
@@ -275,6 +302,43 @@ fn create_dry_run_with_wait_does_not_block() {
         .status()
         .unwrap()
         .success());
+}
+
+/// RECEIPT. A fresh Codex tool subprocess has a runtime thread id and an
+/// inherited pane before Boop has a registry row. `lane create --wait` must
+/// first persist that evidence as a coordinator route, then derive the
+/// completion parent from it without requiring `boop me`.
+#[test]
+fn a_fresh_codex_caller_registers_and_parents_a_waiting_lane() {
+    let fixture = CreateFixture::new("fresh-codex-parent");
+    let output = fixture.codex_caller_command().output().unwrap();
+    assert!(
+        output.status.success(),
+        "stdout={}\\nstderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("parent: codex-1206 (from caller; completion hail appended on exit)"),
+        "{stdout}"
+    );
+
+    let registry: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(fixture.mail.join("registry.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        registry["codex-1206"],
+        serde_json::json!({
+            "kind": "coordinator",
+            "harness": "codex",
+            "tmux": "%1206",
+            "cwd": fixture.repo.display().to_string(),
+            "mode": "interactive",
+            "sessionId": "thread-codex-parent",
+            "registeredAt": registry["codex-1206"]["registeredAt"],
+        })
+    );
 }
 
 /// RECEIPT. Codex app-server returns a fresh thread id before its first turn.

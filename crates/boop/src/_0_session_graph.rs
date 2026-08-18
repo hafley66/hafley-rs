@@ -346,9 +346,6 @@ pub fn load_agent_session_graph_with_runtime(
 
 fn shell_from_runtime(row: AgentRuntimeRow) -> Option<AgentShellNode> {
     let route = row.route?;
-    if route.kind != "shell" && route.harness.is_some() {
-        return None;
-    }
     let tmux = row.tmux_target.or(row.tmux_pane)?;
     let state = if matches!(row.liveness.process, crate::runtime::ProcessLiveness::Live)
         || matches!(row.liveness.tmux, crate::runtime::TmuxLiveness::Live)
@@ -423,9 +420,13 @@ pub(crate) fn assert_fixture_sessions_project(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
     use crate::ident::{LaneSpawn, TraceEvent};
+    use crate::proc::SysinfoSnapshot;
     use crate::runtime::{ProcessLiveness, ResolvedRoute, RuntimeLiveness, TmuxLiveness};
+    use crate::test_support::FakeMux;
 
     #[test]
     fn graph_projects_sessions_edges_and_shells_from_setwise_relations() {
@@ -594,7 +595,7 @@ mod tests {
     }
 
     #[test]
-    fn only_shell_routes_project_as_shell_nodes() {
+    fn unmatched_harness_routes_project_as_shell_nodes() {
         let route = ResolvedRoute {
             lane: "lane".into(),
             kind: "lane".into(),
@@ -630,7 +631,11 @@ mod tests {
             worktree: Default::default(),
             diagnostics: Vec::new(),
         };
-        assert!(shell_from_runtime(native).is_none());
+        let shell = shell_from_runtime(native).unwrap();
+        assert_eq!(shell.lane, "lane");
+        assert_eq!(shell.harness.as_deref(), Some("codex"));
+        assert_eq!(shell.tmux.as_deref(), Some("lane"));
+        assert_eq!(shell.session_id.as_deref(), Some("native"));
         let mut shell_route = route;
         shell_route.kind = "shell".into();
         shell_route.harness = None;
@@ -644,6 +649,70 @@ mod tests {
         assert_eq!(shell.mode.as_deref(), Some("auto"));
         assert_eq!(shell.harness, None);
         assert_eq!(shell.session_id.as_deref(), Some("native"));
+    }
+
+    #[test]
+    fn public_graph_projects_a_live_harness_coordinator_without_a_transcript() {
+        let path = std::env::temp_dir().join(format!(
+            "boop-session-graph-route-only-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        let mut routes = BTreeMap::new();
+        routes.insert(
+            "codex-1206".into(),
+            Route {
+                kind: "coordinator".into(),
+                harness: Some("codex".into()),
+                tmux: Some("codex-parent".into()),
+                cwd: Some("/repo".into()),
+                model: None,
+                mode: Some("interactive".into()),
+                session_id: Some("thread-codex-parent".into()),
+                source_path: None,
+                parent: None,
+                goal: None,
+                registered_at: Some("2026-08-18T00:00:00Z".into()),
+                base_sha: None,
+                worktree_dir: None,
+            },
+        );
+        let mux = FakeMux::available(&["codex-parent"]);
+        let processes = SysinfoSnapshot::capture().unwrap();
+
+        let graph = load_agent_session_graph_with_runtime(
+            &store,
+            AgentSessionGraphQuery {
+                cwd: None,
+                include_history: false,
+            },
+            AgentSessionGraphRuntime {
+                routes: &routes,
+                messages: &[],
+                multiplexer: &mux,
+                tmux_socket: None,
+                processes: &processes,
+            },
+        )
+        .unwrap();
+
+        assert!(graph.sessions.is_empty());
+        assert_eq!(
+            serde_json::to_value(&graph).unwrap()["shells"],
+            serde_json::json!([{
+                "lane": "codex-1206",
+                "parent_lane": null,
+                "harness": "codex",
+                "mode": "interactive",
+                "session_id": "thread-codex-parent",
+                "cwd": "/repo",
+                "tmux": "codex-parent",
+                "pid": null,
+                "state": "live"
+            }])
+        );
+        let _ = std::fs::remove_file(path);
     }
 
     fn native_for_shell() -> AgentRuntimeRow {
