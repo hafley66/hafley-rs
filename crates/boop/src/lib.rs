@@ -38,6 +38,7 @@ pub mod proc;
 pub mod query;
 pub mod registry;
 pub mod rows;
+pub mod runner;
 pub mod runtime;
 #[cfg(feature = "agent-read")]
 pub mod summary;
