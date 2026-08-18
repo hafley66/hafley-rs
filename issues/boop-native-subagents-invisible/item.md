@@ -46,7 +46,7 @@ boop cannot see the native subagents either.
 - Its one reconcile against reality is liveness: `tmux::mux().live_sessions` at `main.rs:4781`, `lane_state` at `main.rs:4842`. Pane-less `coordinator` and `native` routes are hardcoded live forever at `main.rs:4847`.
 - No union with tmux sessions, with `~/.agent/lanes`, or with the store.
 - `agent_lane` is written by exactly one path: `record_lane_purpose` (`main.rs:1968`), called once from lane create (`main.rs:2524`).
-- Native Claude Code subagents DO reach `agent_session` / `agent_edge` (327 sessions with cwd under `sprefa/.claude/worktrees/agent-%`), but only through `boop db sync`, run by launchd every 600 s (`~/Library/LaunchAgents/com.hafley.agentperf.sync.plist`), whose last exit was `-9`.
+- Native Claude Code subagents DO reach `agent_session` / `agent_edge` (327 sessions with cwd under `sprefa/.claude/worktrees/agent-%`), but only through `boop db sync`, which today runs only when a launchd job fires (600 s) or a subset of verbs pre-sync (`command_needs_startup_sync`, `main.rs:1068`). Chris 2026-08-18: NO daemon, NO server, NO launchd; every read verb syncs the new bytes first, incrementally, sub-second (lane `fix/boop-sync-on-read`). Do not propose a background job here.
 - `boop adopt` (`main.rs:2600`) requires a live tmux session (`main.rs:2622`), so it cannot take a pane-less native subagent.
 - `boop agent register --kind native` (`main.rs:4549`, CLI decl `main.rs:4068`) can take one, and writes a route only, never `agent_lane`.
 
@@ -60,7 +60,7 @@ boop cannot see the native subagents either.
 | Claude Code PostToolUse hook on the `Agent` tool calling `boop agent register --kind native`, plus a done-side hook | `~/.claude/settings.json` (3 hook entries today, none boop); verbs at `main.rs:4551` and `main.rs:4592` | S |
 | relax adopt's tmux requirement so it accepts a pane-less agent | `main.rs:2622` | S, weakens the guard |
 | make `agent register` also write `agent_lane` | call `record_lane_spawn` (`crates/boop/src/ident.rs:1092`) from `main.rs:4551`, the way `main.rs:2524` does | M |
-| fix the sync job (last exit -9) so the store-derived views are current | `com.hafley.agentperf.sync.plist`, `StartInterval 600` | unknown until the kill cause is read |
+| store-derived views are current because every read verb syncs first (sync-on-read, `fix/boop-sync-on-read`); no launchd job in the fix | `main.rs:1068` | S once that lane lands |
 
 ## Acceptance Criteria
 
@@ -68,7 +68,7 @@ boop cannot see the native subagents either.
 - [ ] A native Claude Code subagent with a `.claude/worktrees/agent-*` tree appears in that output while it is alive.
 - [ ] A live tmux session with no boop route is reported, not silently absent.
 - [ ] Pane-less `coordinator` / `native` routes stop being hardcoded live (`main.rs:4847`); liveness comes from something measurable.
-- [ ] The `boop db sync` launchd job's `-9` exit is diagnosed and recorded, or the fix does not depend on that job.
+- [ ] The fix does not depend on any launchd job or daemon; freshness comes from sync-on-read.
 - [ ] Which option above is taken is Chris's call; this card is triage.
 
 ## Tests Run
