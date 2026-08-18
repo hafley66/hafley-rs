@@ -5,13 +5,14 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
+use crate::event::{Access, AgentEvent, ToolPath};
+use crate::harness::{
+    jsonl_files, Capabilities, Harness, KnownSessions, ReadChunk, SendOutcome, SessionRef,
+    SpawnSpec,
+};
+use crate::tail;
 use anyhow::Context;
 use serde_json::Value;
-use walkdir::WalkDir;
-
-use crate::event::{Access, AgentEvent, ToolPath};
-use crate::harness::{Capabilities, Harness, ReadChunk, SendOutcome, SessionRef, SpawnSpec};
-use crate::tail;
 
 /// The claude harness. Stateless; the trait methods read straight from disk.
 pub struct Claude;
@@ -31,6 +32,11 @@ impl Harness for Claude {
     fn sessions(&self) -> anyhow::Result<Vec<SessionRef>> {
         let base = claude_projects_dir()?;
         sessions_in(&base)
+    }
+
+    fn sync_candidates(&self, known: &KnownSessions) -> anyhow::Result<Vec<SessionRef>> {
+        let base = claude_projects_dir()?;
+        sessions_in_with_known(&base, known)
     }
 
     fn read_from(&self, session: &SessionRef, offset: u64) -> anyhow::Result<ReadChunk> {
@@ -161,16 +167,16 @@ fn claude_projects_dir() -> anyhow::Result<PathBuf> {
 /// from the containing folder's name, which is how claude writes the spawn
 /// edge.
 fn sessions_in(base: &std::path::Path) -> anyhow::Result<Vec<SessionRef>> {
+    sessions_in_with_known(base, &KnownSessions::new())
+}
+
+fn sessions_in_with_known(
+    base: &std::path::Path,
+    known: &KnownSessions,
+) -> anyhow::Result<Vec<SessionRef>> {
     let mut sessions = Vec::new();
-    for entry in WalkDir::new(base)
-        .into_iter()
-        .filter_map(|entry| entry.ok())
-    {
-        if !entry.file_type().is_file() || entry.path().extension().is_none_or(|ext| ext != "jsonl")
-        {
-            continue;
-        }
-        let path = entry.path();
+    for file in jsonl_files(base)? {
+        let path = &file.path;
         let nickname = path
             .file_stem()
             .and_then(|stem| stem.to_str())
@@ -181,14 +187,25 @@ fn sessions_in(base: &std::path::Path) -> anyhow::Result<Vec<SessionRef>> {
             Some(parent) => format!("{parent}/{nickname}"),
             None => nickname.clone(),
         };
-        let metadata = path.metadata().ok();
-        let modified_ms = metadata
-            .as_ref()
-            .and_then(|meta| meta.modified().ok())
-            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|duration| duration.as_millis() as u64)
-            .unwrap_or(0);
-        let size = metadata.map(|meta| meta.len()).unwrap_or(0);
+        let modified_ms = file.modified_ms;
+        let size = file.size;
+
+        if let Some(known) = known.get(path) {
+            sessions.push(SessionRef {
+                harness: "claude",
+                session_id: known.session_id.clone(),
+                nickname: known.nickname.clone(),
+                path: path.to_path_buf(),
+                cwd: known.cwd.clone(),
+                git_branch: known.git_branch.clone(),
+                modified_ms,
+                size,
+                tmux: None,
+                tmux_socket: None,
+                parent: known.parent.clone(),
+            });
+            continue;
+        }
 
         let (cwd, git_branch) = first_record_context(path);
         sessions.push(SessionRef {

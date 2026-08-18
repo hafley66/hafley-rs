@@ -707,7 +707,11 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     init_tracing(supervised_lane(&cli.command))?;
     let registry = Registry::discover();
-    match cli.command {
+    let needs_startup_sync = !command_owns_sync(&cli.command);
+    run_with_startup_sync(
+        needs_startup_sync,
+        || sync_before_local_command(&registry),
+        || match cli.command {
         SubCmd::Harnesses => run_harnesses(&registry),
         SubCmd::Sessions { harness } => run_sessions(&registry, harness.as_deref()),
         SubCmd::Tail {
@@ -719,7 +723,7 @@ fn main() -> Result<()> {
         SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild),
         SubCmd::Debug { since, lane, json } => run_debug(&since, lane.as_deref(), json),
         #[cfg(feature = "agent-read")]
-        SubCmd::Agent { cmd } => run_public_agent_command(&registry, cmd),
+        SubCmd::Agent { cmd } => run_public_agent_command(cmd),
         SubCmd::Follow {} => run_follow(&registry),
         SubCmd::Chat { query, all, follow } => {
             run_chat_query(&query, ChatQueryOptions { all, follow })
@@ -975,12 +979,39 @@ fn main() -> Result<()> {
             cmd,
         } => match cmd {
             Some(MeCmd::Favorite { index, note }) => {
-                run_me_favorite(&registry, index, note.as_deref())
+                run_me_favorite(index, note.as_deref())
             }
             None => run_me(name.as_deref(), mail_dir.as_deref()),
         },
         SubCmd::Config { cmd } => run_config(cmd),
+        },
+    )
+}
+
+fn sync_before_local_command(registry: &Registry) -> Result<()> {
+    sync_all(registry, false, false, SyncLiveness::TranscriptOnly)
+}
+
+fn command_owns_sync(command: &SubCmd) -> bool {
+    matches!(command, SubCmd::Sync { .. } | SubCmd::Follow { .. })
+        || matches!(
+            command,
+            SubCmd::Db {
+                cmd: Some(DbCmd::Sync { .. }),
+                ..
+            }
+        )
+}
+
+fn run_with_startup_sync<T>(
+    needs_sync: bool,
+    sync: impl FnOnce() -> Result<()>,
+    run: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    if needs_sync {
+        sync()?;
     }
+    run()
 }
 
 /// Install the one subscriber for the CLI. Libraries emit spans and events
@@ -1181,64 +1212,68 @@ fn sync_all(
     liveness: SyncLiveness,
 ) -> Result<()> {
     let started = std::time::Instant::now();
-    info!(rebuild, "transcript sync started");
+    if report {
+        info!(rebuild, "transcript sync started");
+    }
     let store = ident::Store::open(ident::Store::default_path()?)?;
     if rebuild {
         store.rebuild()?;
     } else {
         refuse_stale(&store)?;
     }
-    let routes = bus::read_routes(&mail_dir(None)?).unwrap_or_default();
-    store.begin()?;
+    let known = store.known_sessions()?;
+    let mut pending = Vec::new();
+    for adapter in registry.all() {
+        for session in adapter.sync_candidates(&known)? {
+            if session_needs_sync(&session, &known) {
+                pending.push((adapter.as_ref(), session));
+            }
+        }
+    }
+    let routes = match liveness {
+        SyncLiveness::StampLivePid => {
+            Some(bus::read_routes(&mail_dir(None)?).unwrap_or_default())
+        }
+        SyncLiveness::TranscriptOnly => None,
+    };
+    let has_writes = !pending.is_empty();
+    if has_writes {
+        store.begin()?;
+    }
     let result = (|| {
         let mut stat = ident::SyncStat::default();
-        let offsets = store.all_cursor_offsets()?;
-        for adapter in registry.all() {
-            for session in adapter.sessions()? {
-                store.project_discovered_session(&session)?;
-                // Freshness gate: a transcript whose length still equals its
-                // consumed cursor needs no re-read (walking+stat-ing all files
-                // costs ~0.02s; opening every 2.86 GB corpus does not). A
-                // shorter file is the existing truncation path, left to sync.
-                let key = session.path.display().to_string();
-                let at_cursor = offsets
-                    .get(&(session.session_id.clone(), key))
-                    .copied()
-                    .unwrap_or(0);
-                let unchanged = std::fs::metadata(&session.path)
-                    .map(|meta| meta.len() == at_cursor)
-                    .unwrap_or(false);
-                if unchanged {
-                    continue;
-                }
-                tracing::debug!(
-                    harness = adapter.id(),
-                    session_id = session.session_id,
-                    "transcript session sync started"
-                );
-                let pid = sync_session_pid(liveness, || session_route_pid(&routes, &session));
-                stat.add(ident::sync_session_with_pid(
-                    &store,
-                    adapter.as_ref(),
-                    &session,
-                    pid,
-                )?);
-            }
+        for (adapter, session) in pending {
+            store.project_discovered_session(&session)?;
+            tracing::debug!(
+                harness = adapter.id(),
+                session_id = session.session_id,
+                "transcript session sync started"
+            );
+            let pid = sync_session_pid(liveness, || {
+                routes
+                    .as_ref()
+                    .and_then(|routes| session_route_pid(routes, &session))
+            });
+            stat.add(ident::sync_session_with_pid(
+                &store, adapter, &session, pid,
+            )?);
         }
         Ok::<ident::SyncStat, anyhow::Error>(stat)
     })();
     match result {
         Ok(stat) => {
-            store.commit()?;
+            if has_writes {
+                store.commit()?;
+            }
             let elapsed_ms = started.elapsed().as_millis();
-            let counts = store.counts()?;
-            let db_bytes = store.db_bytes()?;
-            let sparse = store.sparse_sessions()?.len();
-            let rate = (stat.written as u128)
-                .saturating_mul(1000)
-                .checked_div(elapsed_ms.max(1))
-                .unwrap_or(0) as u64;
             if report {
+                let counts = store.counts()?;
+                let db_bytes = store.db_bytes()?;
+                let sparse = store.sparse_sessions()?.len();
+                let rate = (stat.written as u128)
+                    .saturating_mul(1000)
+                    .checked_div(elapsed_ms.max(1))
+                    .unwrap_or(0) as u64;
                 println!(
                     "events={} dropped={} usage_new={} usage_updated={} sparse_sessions={sparse} elapsed_ms={elapsed_ms} rate={rate}/s db_bytes={db_bytes} counts={}",
                     stat.written,
@@ -1247,26 +1282,37 @@ fn sync_all(
                     stat.usage_updated,
                     serde_json::to_string(&counts)?
                 );
+                info!(
+                    events = stat.written,
+                    dropped = stat.dropped,
+                    usage_new = stat.usage_written,
+                    usage_updated = stat.usage_updated,
+                    elapsed_ms,
+                    rate,
+                    "transcript sync finished"
+                );
             }
-            info!(
-                events = stat.written,
-                dropped = stat.dropped,
-                usage_new = stat.usage_written,
-                usage_updated = stat.usage_updated,
-                elapsed_ms,
-                rate,
-                "transcript sync finished"
-            );
         }
         Err(error) => {
             error!(error = %error, "transcript sync failed; rolling back");
-            if let Err(rollback_error) = store.rollback() {
-                error!(error = %rollback_error, "transcript sync rollback failed");
+            if has_writes {
+                if let Err(rollback_error) = store.rollback() {
+                    error!(error = %rollback_error, "transcript sync rollback failed");
+                }
             }
             return Err(error);
         }
     }
     Ok(())
+}
+
+fn session_needs_sync(
+    session: &boop::harness::SessionRef,
+    known: &boop::harness::KnownSessions,
+) -> bool {
+    known
+        .get_session(&session.path, &session.session_id)
+        .is_none_or(|known| known.cursor != session.size)
 }
 
 fn sync_session_pid(liveness: SyncLiveness, acquire: impl FnOnce() -> Option<i64>) -> Option<i64> {
@@ -1278,14 +1324,6 @@ fn sync_session_pid(liveness: SyncLiveness, acquire: impl FnOnce() -> Option<i64
 
 /// The public summary command first refreshes transcript facts without
 /// per-session liveness probes, then performs its one bounded runtime summary.
-fn after_agent_summary_sync<T>(
-    sync: impl FnOnce(SyncLiveness) -> Result<()>,
-    summary: impl FnOnce() -> Result<T>,
-) -> Result<T> {
-    sync(SyncLiveness::TranscriptOnly)?;
-    summary()
-}
-
 /// A store written before dense ordinals is readable but not appendable, so
 /// the refusal names the one command that fixes it.
 fn refuse_stale(store: &ident::Store) -> Result<()> {
@@ -1305,7 +1343,7 @@ fn refuse_stale(store: &ident::Store) -> Result<()> {
 /// mtimes are discovered once, and a file is only re-read when its mtime
 /// changed, so steady-state idle is a stat per file plus a sleep.
 fn run_follow(registry: &Registry) -> Result<()> {
-    refuse_stale(&ident::Store::open(ident::Store::default_path()?)?)?;
+    sync_all(registry, false, false, SyncLiveness::TranscriptOnly)?;
     let mut sessions = Vec::new();
     for adapter in registry.all() {
         for session in adapter.sessions()? {
@@ -2924,16 +2962,15 @@ fn append_acks(dir: &std::path::Path, messages: &[bus::Message]) -> Result<usize
 mod tests {
     use std::collections::{BTreeMap, BTreeSet};
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
     use clap::{CommandFactory, Parser, Subcommand};
 
     use super::{
-        after_agent_summary_sync, agent_summary_text, append_message, completion_recipient, config,
+        agent_summary_text, append_message, command_owns_sync, completion_recipient, config,
         dead_reason, default_preset_for_harness, ident, lane_state, register_fresh_codex_spawner,
         resolve_dispatch_harness, resolve_parent_with_legacy_fallback, route_liveness, run_agent,
-        run_lane_delete, run_lane_prune, run_ps_with, session_matches_route, sync_session_pid,
-        write_line, write_route, AgentCmd, AgentSummaryCmd, Cli, DbCmd, MeCmd, SubCmd,
+        run_lane_delete, run_lane_prune, run_ps_with, run_with_startup_sync,
+        session_matches_route, write_line, write_route, AgentCmd, AgentSummaryCmd, Cli, DbCmd, MeCmd,
+        SubCmd,
     };
     use boop::bus::{self, read_routes, Route};
     use boop::proc::{ProcReader, ProcessInfo, SysinfoSnapshot};
@@ -3026,28 +3063,36 @@ mod tests {
     }
 
     #[test]
-    fn public_summary_freshness_defers_liveness_to_the_summary_observation() {
-        let tmux_acquisitions = AtomicUsize::new(0);
-        let summary_observations = AtomicUsize::new(0);
-        after_agent_summary_sync(
-            |liveness| {
-                for _ in 0..2 {
-                    let pid = sync_session_pid(liveness, || {
-                        tmux_acquisitions.fetch_add(1, Ordering::SeqCst);
-                        Some(1)
-                    });
-                    assert_eq!(pid, None);
-                }
+    fn startup_sync_policy_reserves_sync_for_sync_commands() {
+        for (argv, owns_sync) in [
+            (["boop", "sync"].as_slice(), true),
+            (["boop", "follow"].as_slice(), true),
+            (["boop", "db", "sync", "create"].as_slice(), true),
+            (["boop", "db", "turn", "list"].as_slice(), false),
+            (["boop", "me", "favorite"].as_slice(), false),
+            (["boop", "agent", "summary"].as_slice(), false),
+        ] {
+            let cli = Cli::try_parse_from(argv).expect("command parses");
+            assert_eq!(command_owns_sync(&cli.command), owns_sync, "{argv:?}");
+        }
+    }
+
+    #[test]
+    fn startup_sync_runs_once_before_the_command() {
+        let calls = std::cell::RefCell::new(Vec::new());
+        run_with_startup_sync(
+            true,
+            || {
+                calls.borrow_mut().push("sync");
                 Ok(())
             },
             || {
-                summary_observations.fetch_add(1, Ordering::SeqCst);
+                calls.borrow_mut().push("run");
                 Ok(())
             },
         )
-        .expect("public summary orchestration");
-        assert_eq!(tmux_acquisitions.load(Ordering::SeqCst), 0);
-        assert_eq!(summary_observations.load(Ordering::SeqCst), 1);
+        .expect("startup sync orchestration");
+        assert_eq!(*calls.borrow(), ["sync", "run"]);
     }
 
     #[test]
@@ -6102,21 +6147,17 @@ fn run_agent_summary(format: AgentSummaryFormat, mail_dir_arg: Option<&Path>) ->
 }
 
 #[cfg(feature = "agent-read")]
-fn run_public_agent_command(registry: &Registry, cmd: AgentSummaryCmd) -> Result<()> {
+fn run_public_agent_command(cmd: AgentSummaryCmd) -> Result<()> {
     match cmd {
-        AgentSummaryCmd::Summary { format, mail_dir } => after_agent_summary_sync(
-            |liveness| sync_all(registry, false, false, liveness),
-            || run_agent_summary(format, mail_dir.as_deref()),
-        ),
+        AgentSummaryCmd::Summary { format, mail_dir } => {
+            run_agent_summary(format, mail_dir.as_deref())
+        }
         AgentSummaryCmd::Sessions {
             cwd,
             history,
             format: AgentSessionGraphFormat::Json,
             mail_dir,
-        } => after_agent_summary_sync(
-            |liveness| sync_all(registry, false, false, liveness),
-            || run_agent_sessions(cwd, history, mail_dir.as_deref()),
-        ),
+        } => run_agent_sessions(cwd, history, mail_dir.as_deref()),
     }
 }
 
@@ -6267,7 +6308,7 @@ fn emit_json_rows(rows: &[ident::Row], format: QueryFormat) {
 // whoami
 // ---------------------------------------------------------------------------
 
-fn run_me_favorite(registry: &Registry, index: i64, note: Option<&str>) -> Result<()> {
+fn run_me_favorite(index: i64, note: Option<&str>) -> Result<()> {
     anyhow::ensure!(
         index < 0,
         "favorite index must be negative; -1 is the newest assistant message"
@@ -6280,7 +6321,6 @@ fn run_me_favorite(registry: &Registry, index: i64, note: Option<&str>) -> Resul
         .session
         .context("no caller session resolved; run `boop me` once in this tmux pane, then retry")?;
 
-    sync_all(registry, false, false, SyncLiveness::TranscriptOnly)?;
     let store = open_store()?;
     let rows = store.turn_rows(&ident::TurnQuery {
         session: Some(session.clone()),

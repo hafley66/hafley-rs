@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
-use crate::harness::SessionRef;
+use crate::harness::{KnownSession, KnownSessions, SessionRef};
 
 /// The relational store.
 pub struct Store {
@@ -235,6 +235,12 @@ impl Store {
         connection
             .busy_timeout(std::time::Duration::from_secs(5))
             .with_context(|| format!("set busy_timeout on {}", path.display()))?;
+        connection
+            .pragma_update(None, "journal_mode", "WAL")
+            .with_context(|| format!("enable WAL on {}", path.display()))?;
+        connection
+            .pragma_update(None, "synchronous", "NORMAL")
+            .with_context(|| format!("set WAL synchronous mode on {}", path.display()))?;
         let tables_before: i64 = connection.query_row(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
             [],
@@ -408,7 +414,7 @@ impl Store {
     /// Wrap the next writes in one transaction so a batch of per-fact INSERTs
     /// commits once instead of once per row (rusqlite autocommits otherwise).
     pub fn begin(&self) -> Result<()> {
-        self.connection.execute_batch("BEGIN")?;
+        self.connection.execute_batch("BEGIN IMMEDIATE")?;
         Ok(())
     }
 
@@ -771,26 +777,51 @@ impl Store {
         self.get_cursor(session, path)
     }
 
-    /// Every (session, transcript) cursor offset, keyed so the freshness gate
-    /// does one read instead of interning a path per session.
-    pub fn all_cursor_offsets(&self) -> Result<std::collections::HashMap<(String, String), u64>> {
+    /// Metadata for transcript paths already projected into this store. A
+    /// harness uses it to construct candidates from a filesystem stat instead
+    /// of reopening each historical transcript just to parse its first record.
+    pub fn known_sessions(&self) -> Result<KnownSessions> {
         let mut statement = self.connection.prepare(
-            "SELECT ds.value, dp.value, sc.offset
+            "SELECT dp.value, ds.value, COALESCE(s.nickname, ds.value), cwd.value, branch.value,
+                    (SELECT parent.value
+                       FROM agent_edge edge
+                       JOIN dict_edekind kind ON kind.id = edge.edge_kind_id
+                       JOIN dict_session parent ON parent.id = edge.parent_session_id
+                      WHERE edge.child_session_id = sc.session_id AND kind.value = 'spawned'
+                      LIMIT 1),
+                    sc.offset
              FROM sync_cursor sc
              JOIN dict_session ds ON ds.id = sc.session_id
-             JOIN dict_path dp ON dp.id = sc.path_id",
+             JOIN dict_path dp ON dp.id = sc.path_id
+             JOIN agent_session s ON s.session_id = sc.session_id
+             LEFT JOIN dict_cwd cwd ON cwd.id = s.cwd_id
+             LEFT JOIN dict_branch branch ON branch.id = s.branch_id",
         )?;
-        let mut out = std::collections::HashMap::new();
+        let mut out = KnownSessions::new();
         let rows = statement.query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
-                row.get::<_, i64>(2)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, i64>(6)?,
             ))
         })?;
         for row in rows {
-            let (session, path, offset) = row?;
-            out.insert((session, path), offset as u64);
+            let (path, session_id, nickname, cwd, git_branch, parent, cursor) = row?;
+            out.insert(
+                PathBuf::from(path),
+                KnownSession {
+                    session_id,
+                    nickname,
+                    cwd,
+                    git_branch,
+                    parent,
+                    cursor: cursor as u64,
+                },
+            );
         }
         Ok(out)
     }
@@ -2350,6 +2381,26 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
+    #[test]
+    fn writable_store_persists_wal_mode() {
+        let (path, store) = fresh_store("wal");
+        let mode: String = store
+            .connection
+            .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(mode, "wal");
+        drop(store);
+
+        let read_only = Store::open_readonly(path.clone()).unwrap();
+        let reopened_mode: String = read_only
+            .connection
+            .query_row("PRAGMA journal_mode", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(reopened_mode, "wal");
+        drop(read_only);
+        let _ = std::fs::remove_file(&path);
+    }
+
     /// The user's word: "markdown_cache is own table for reason". Twenty lanes
     /// reading one brief must leave one row.
     #[test]
@@ -2585,6 +2636,40 @@ mod tests {
         assert_eq!(graph_row, 1);
         assert_eq!(store.edge_rows(Some("empty-child")).unwrap().len(), 1);
         let _ = std::fs::remove_file(transcript);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn known_sessions_restore_candidate_metadata_and_cursor() {
+        let (path, store) = fresh_store("known-sessions");
+        let transcript = temp_path("known-sessions.jsonl");
+        let session = SessionRef {
+            harness: "claude",
+            session_id: "known-child".into(),
+            nickname: "known-name".into(),
+            path: transcript.clone(),
+            cwd: Some("/repo".into()),
+            git_branch: Some("main".into()),
+            modified_ms: 7,
+            size: 12,
+            tmux: None,
+            tmux_socket: None,
+            parent: Some("known-parent".into()),
+        };
+        store.project_discovered_session(&session).unwrap();
+        store
+            .set_cursor(&session.session_id, &transcript.display().to_string(), 12)
+            .unwrap();
+
+        let known = store.known_sessions().unwrap();
+        let candidate = known.get(&transcript).expect("persisted candidate");
+        assert_eq!(candidate.session_id, "known-child");
+        assert_eq!(candidate.nickname, "known-name");
+        assert_eq!(candidate.cwd.as_deref(), Some("/repo"));
+        assert_eq!(candidate.git_branch.as_deref(), Some("main"));
+        assert_eq!(candidate.parent.as_deref(), Some("known-parent"));
+        assert_eq!(candidate.cursor, 12);
+        drop(store);
         let _ = std::fs::remove_file(path);
     }
 

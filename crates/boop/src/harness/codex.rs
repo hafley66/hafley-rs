@@ -6,17 +6,16 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-use anyhow::Context;
-use serde_json::Value;
-use walkdir::WalkDir;
-
 use crate::event::AgentEvent;
 use crate::harness::{
-    Capabilities, Harness, Ingested, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
+    jsonl_files, Capabilities, Harness, Ingested, KnownSessions, ReadChunk, SendOutcome,
+    SessionRef, SpawnSpec,
 };
 use crate::ident::{Store, SyncStat, UsageRow};
 use crate::lane::ModelSpec;
 use crate::tail;
+use anyhow::Context;
+use serde_json::Value;
 
 pub struct Codex;
 
@@ -99,6 +98,10 @@ impl Harness for Codex {
 
     fn sessions(&self) -> anyhow::Result<Vec<SessionRef>> {
         sessions_in(&codex_sessions_dir()?)
+    }
+
+    fn sync_candidates(&self, known: &KnownSessions) -> anyhow::Result<Vec<SessionRef>> {
+        sessions_in_with_known(&codex_sessions_dir()?, known)
     }
 
     fn read_from(&self, session: &SessionRef, offset: u64) -> anyhow::Result<ReadChunk> {
@@ -250,27 +253,36 @@ fn first_session_meta(path: &Path) -> Option<SessionMeta> {
 }
 
 fn sessions_in(base: &Path) -> anyhow::Result<Vec<SessionRef>> {
+    sessions_in_with_known(base, &KnownSessions::new())
+}
+
+fn sessions_in_with_known(base: &Path, known: &KnownSessions) -> anyhow::Result<Vec<SessionRef>> {
     let mut sessions = Vec::new();
-    for entry in WalkDir::new(base)
-        .into_iter()
-        .filter_map(|entry| entry.ok())
-    {
-        if !entry.file_type().is_file() || entry.path().extension().is_none_or(|ext| ext != "jsonl")
-        {
+    for file in jsonl_files(base)? {
+        let path = &file.path;
+        let modified_ms = file.modified_ms;
+        let size = file.size;
+
+        if let Some(known) = known.get(path) {
+            sessions.push(SessionRef {
+                harness: "codex",
+                session_id: known.session_id.clone(),
+                nickname: known.nickname.clone(),
+                path: path.to_path_buf(),
+                cwd: known.cwd.clone(),
+                git_branch: known.git_branch.clone(),
+                modified_ms,
+                size,
+                tmux: None,
+                tmux_socket: None,
+                parent: known.parent.clone(),
+            });
             continue;
         }
-        let path = entry.path();
+
         let Some(meta) = first_session_meta(path) else {
             continue;
         };
-        let metadata = path.metadata().ok();
-        let modified_ms = metadata
-            .as_ref()
-            .and_then(|meta| meta.modified().ok())
-            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|duration| duration.as_millis() as u64)
-            .unwrap_or(0);
-        let size = metadata.map(|meta| meta.len()).unwrap_or(0);
 
         sessions.push(SessionRef {
             harness: "codex",
@@ -568,11 +580,11 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
 
-    use crate::harness::{claude, Harness, SessionRef};
+    use crate::harness::{claude, Harness, KnownSession, KnownSessions, SessionRef};
     use crate::test_support::TempRepo;
     use crate::Store;
 
-    use super::{sessions_in, Codex};
+    use super::{sessions_in, sessions_in_with_known, Codex};
 
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("boop_codex_{}_{}", std::process::id(), name))
@@ -887,6 +899,45 @@ mod tests {
             .find(|session| session.parent.as_deref() == Some(root.session_id.as_str()))
             .expect("a forked session naming the root as its parent");
         assert_ne!(root.session_id, child.session_id);
+    }
+
+    #[test]
+    fn known_transcript_uses_persisted_metadata_without_parsing_its_first_record() {
+        let base = temp_path("known-candidate");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let known_path = base.join("known.jsonl");
+        let new_path = base.join("new.jsonl");
+        write_lines(&known_path, &["not a codex session record"]);
+        write_lines(
+            &new_path,
+            &[r#"{"type":"session_meta","payload":{"id":"new-session","cwd":"/tmp/new"}}"#],
+        );
+        let mut known = KnownSessions::new();
+        known.insert(
+            known_path.clone(),
+            KnownSession {
+                session_id: "known-session".into(),
+                nickname: "known-name".into(),
+                cwd: Some("/tmp/known".into()),
+                git_branch: None,
+                parent: None,
+                cursor: 23,
+            },
+        );
+
+        let sessions = sessions_in_with_known(&base, &known).unwrap();
+        assert_eq!(sessions.len(), 2);
+        let known = sessions
+            .iter()
+            .find(|session| session.path == known_path)
+            .expect("known transcript candidate");
+        assert_eq!(known.session_id, "known-session");
+        assert_eq!(known.cwd.as_deref(), Some("/tmp/known"));
+        assert!(sessions
+            .iter()
+            .any(|session| session.session_id == "new-session"));
+        std::fs::remove_dir_all(base).unwrap();
     }
 
     #[test]

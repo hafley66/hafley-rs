@@ -117,6 +117,7 @@ dependencies = [
  "boop-mux",
  "clap",
  "dirs",
+ "ignore",
  "peak_alloc",
  "rusqlite",
  "serde",
@@ -127,7 +128,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wait-timeout",
- "walkdir",
 ]
 
 [[package]]

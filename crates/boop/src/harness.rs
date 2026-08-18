@@ -1,6 +1,7 @@
 //! The trait every harness adapter implements; the CLI never names a harness.
 
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use crate::event::AgentEvent;
 
@@ -17,6 +18,14 @@ pub trait Harness: Send + Sync {
 
     /// Every session this harness has on disk, newest last. No cap.
     fn sessions(&self) -> anyhow::Result<Vec<SessionRef>>;
+
+    /// Candidates for incremental sync. The store supplies metadata for paths
+    /// it has already projected, so a file-backed harness can stat those
+    /// paths without reopening and parsing their first record. New paths keep
+    /// the harness's full discovery path.
+    fn sync_candidates(&self, _known: &KnownSessions) -> anyhow::Result<Vec<SessionRef>> {
+        self.sessions()
+    }
 
     /// Read forward from `offset` bytes. Returns the events decoded and the
     /// new offset to resume from. A partial trailing line is NOT consumed and
@@ -146,6 +155,99 @@ pub struct SessionRef {
     pub tmux_socket: Option<String>,
     /// The session id that spawned this one, when the harness records it.
     pub parent: Option<String>,
+}
+
+/// Session metadata retained by the store for a transcript path it has
+/// already projected. Adapters update file size and mtime from the filesystem.
+#[derive(Clone, Debug)]
+pub struct KnownSession {
+    pub session_id: String,
+    pub nickname: String,
+    pub cwd: Option<String>,
+    pub git_branch: Option<String>,
+    pub parent: Option<String>,
+    pub cursor: u64,
+}
+
+/// Persisted transcript metadata grouped by source path. File-backed
+/// harnesses normally have one session per path; database-backed harnesses can
+/// retain many session cursors in one file without collapsing them.
+#[derive(Default)]
+pub struct KnownSessions(HashMap<PathBuf, Vec<KnownSession>>);
+
+impl KnownSessions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn insert(&mut self, path: PathBuf, session: KnownSession) {
+        self.0.entry(path).or_default().push(session);
+    }
+
+    pub fn get(&self, path: &Path) -> Option<&KnownSession> {
+        let sessions = self.0.get(path)?;
+        (sessions.len() == 1).then(|| &sessions[0])
+    }
+
+    pub fn get_session(&self, path: &Path, session_id: &str) -> Option<&KnownSession> {
+        self.0
+            .get(path)?
+            .iter()
+            .find(|session| session.session_id == session_id)
+    }
+}
+
+pub(crate) struct TranscriptFile {
+    pub path: PathBuf,
+    pub modified_ms: u64,
+    pub size: u64,
+}
+
+pub(crate) fn jsonl_files(base: &Path) -> anyhow::Result<Vec<TranscriptFile>> {
+    let files = std::sync::Mutex::new(Vec::new());
+    ignore::WalkBuilder::new(base)
+        .hidden(false)
+        .git_ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .build_parallel()
+        .run(|| {
+            let files = &files;
+            Box::new(move |entry| {
+                let Ok(entry) = entry else {
+                    return ignore::WalkState::Continue;
+                };
+                let path = entry.path();
+                if !entry.file_type().is_some_and(|kind| kind.is_file())
+                    || path
+                        .extension()
+                        .is_none_or(|extension| extension != "jsonl")
+                {
+                    return ignore::WalkState::Continue;
+                }
+                let Ok(metadata) = entry.metadata() else {
+                    return ignore::WalkState::Continue;
+                };
+                let modified_ms = metadata
+                    .modified()
+                    .ok()
+                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|duration| duration.as_millis() as u64)
+                    .unwrap_or(0);
+                files
+                    .lock()
+                    .expect("transcript file collector")
+                    .push(TranscriptFile {
+                        path: path.to_path_buf(),
+                        modified_ms,
+                        size: metadata.len(),
+                    });
+                ignore::WalkState::Continue
+            })
+        });
+    let mut files = files.into_inner().expect("transcript file collector");
+    files.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(files)
 }
 
 /// The decoded events from one forward read, plus where to resume.

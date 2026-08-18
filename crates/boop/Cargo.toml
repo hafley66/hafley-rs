@@ -27,8 +27,9 @@ serde_json = { version = "1", features = ["preserve_order"] }
 anyhow = "1"
 # Resolve the claude home dir without XDG project-dir machinery.
 dirs = "5"
-# Walk ~/.claude/projects/{encoded-cwd}/*.jsonl; can skip subtrees.
-walkdir = "2"
+# Parallel filesystem acquisition for transcript candidates. Harness adapters
+# retain their own roots and transcript identity parsing.
+ignore = "0.4"
 # Layer 0: process tree, cpu, rss, cwd in one cross-platform API.
 sysinfo = "0.39"
 # Layer 3: the SQLite store at ~/.agent/boop.db. `bundled` compiles SQLite in,
