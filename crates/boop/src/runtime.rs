@@ -1109,7 +1109,7 @@ mod tests {
         fn descendants(&self, _: u32) -> Vec<u32> {
             Vec::new()
         }
-        fn descendent_count(&self, _: u32) -> usize {
+        fn descendant_count(&self, _: u32) -> usize {
             0
         }
     }
