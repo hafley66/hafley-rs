@@ -46,6 +46,9 @@ tracing-subscriber.workspace = true
 # opening a file: work no async-signal-safe handler may do. signal-hook's
 # handler only writes a self-pipe byte and the work runs on a normal thread.
 signal-hook = "0.4"
+# Deadline on a synchronous std::process::Child without pulling in an async
+# runtime: one method, wait_timeout, on the same Child this file already spawns.
+wait-timeout = "0.2.1"
 
 [dev-dependencies]
 # Peak-bytes-allocated counter for tests/bench_grid.rs's own #[global_allocator].

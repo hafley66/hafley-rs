@@ -256,13 +256,20 @@ impl Rewriter {
 /// The resident chat's current context size in tokens: its latest turn's fresh
 /// input plus the cached prior context, read from the store the sync ingests.
 fn mapper_context_tokens(store: &crate::Store, session: &str) -> Option<i64> {
-    let sql = format!(
-        "SELECT input_tokens + cache_read_tokens AS ctx FROM agent_usage
+    const SQL: &str = "SELECT input_tokens + cache_read_tokens AS ctx FROM agent_usage
          JOIN dict_session s ON s.id = agent_usage.session_id
-         WHERE s.value = '{session}' ORDER BY ts DESC LIMIT 1"
-    );
-    let (_, rows) = store.passthrough(&sql).ok()?;
-    rows.first()?.get("ctx")?.as_i64()
+         WHERE s.value = ?1 ORDER BY ts DESC LIMIT 1";
+    match store
+        .connection()
+        .query_row(SQL, rusqlite::params![session], |row| row.get::<_, i64>(0))
+    {
+        Ok(ctx) => Some(ctx),
+        Err(rusqlite::Error::QueryReturnedNoRows) => None,
+        Err(err) => {
+            tracing::warn!(session, %err, "mapper_context_tokens query failed");
+            None
+        }
+    }
 }
 
 /// Block until the running turn completes (the model's reply finished), so the
@@ -1018,6 +1025,27 @@ mod tests {
         ));
         let _ = std::fs::remove_file(&path);
         (crate::Store::open(path.clone()).unwrap(), path)
+    }
+
+    // RECEIPT: unfixed tree returned `Err(near "Reilly": syntax error (1))`,
+    // swallowed by `.ok()` into `None`, for this exact session id.
+    #[test]
+    fn mapper_context_tokens_handles_a_quote_in_the_session_id() {
+        let (store, path) = store();
+        let session = "O'Reilly";
+        let session_id = store.intern_public("dict_session", session).unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO agent_usage
+                   (session_id, turn, ts, request_ref, model_id, input_tokens, cache_read_tokens)
+                 VALUES (?1, 1, 1, 1, 1, 40, 60)",
+                rusqlite::params![session_id],
+            )
+            .unwrap();
+        assert_eq!(mapper_context_tokens(&store, session), Some(100));
+        drop(store);
+        let _ = std::fs::remove_file(&path);
     }
 
     fn temp_dir(tag: &str) -> PathBuf {
