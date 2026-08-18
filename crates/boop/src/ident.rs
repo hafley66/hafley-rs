@@ -248,6 +248,27 @@ fn schema_version_of(connection: &Connection) -> Result<i64> {
     Ok(connection.query_row("PRAGMA user_version", [], |row| row.get(0))?)
 }
 
+fn enable_wal(connection: &Connection, path: &std::path::Path) -> Result<()> {
+    let deadline = std::time::Instant::now() + BUSY_TIMEOUT;
+    loop {
+        match connection.pragma_update(None, "journal_mode", "WAL") {
+            Ok(()) => return Ok(()),
+            Err(rusqlite::Error::SqliteFailure(code, _))
+                if matches!(
+                    code.code,
+                    rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+                ) && std::time::Instant::now() < deadline =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("enable WAL on {}", path.display()));
+            }
+        }
+    }
+}
+
 impl Store {
     pub fn open(path: PathBuf) -> Result<Self> {
         let connection = Connection::open(&path)
@@ -297,9 +318,9 @@ impl Store {
     /// check and migration; a process that waited behind another migrator sees
     /// the stamped version and commits without replaying DDL.
     fn initialise_or_migrate(&self, path: &std::path::Path) -> Result<()> {
-        self.connection
-            .pragma_update(None, "journal_mode", "WAL")
-            .with_context(|| format!("enable WAL on {}", path.display()))?;
+        // SQLite does not apply busy_timeout while changing journal mode, so
+        // concurrent first opens retry this one initialization-only pragma.
+        enable_wal(&self.connection, path)?;
         self.connection.execute_batch("BEGIN IMMEDIATE")?;
         let result = (|| {
             if self.schema_version()? >= SCHEMA_VERSION {
