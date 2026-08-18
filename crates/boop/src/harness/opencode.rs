@@ -39,6 +39,14 @@ impl Harness for Opencode {
         sessions_from(&path)
     }
 
+    fn session_roots(&self) -> Result<Vec<PathBuf>> {
+        Ok(store_path().into_iter().collect())
+    }
+
+    fn known_paths_can_move(&self) -> bool {
+        false
+    }
+
     fn read_from(&self, session: &SessionRef, offset: u64) -> Result<ReadChunk> {
         let connection = open_read_only(&session.path)?;
         let mut events = Vec::new();

@@ -48,6 +48,16 @@ pub trait Harness: Send + Sync {
     /// Every session this harness has on disk, newest last. No cap.
     fn sessions(&self) -> anyhow::Result<Vec<SessionRef>>;
 
+    /// Directories or stores whose mtimes cover discovery for this harness.
+    /// A pass stats these before walking the session tree.
+    fn session_roots(&self) -> anyhow::Result<Vec<PathBuf>> {
+        Ok(Vec::new())
+    }
+
+    fn known_paths_can_move(&self) -> bool {
+        true
+    }
+
     /// Candidates for incremental sync. The store supplies metadata for paths
     /// it has already projected, so a file-backed harness can stat those
     /// paths without reopening and parsing their first record. New paths keep
@@ -190,12 +200,14 @@ pub struct SessionRef {
 /// already projected. Adapters update file size and mtime from the filesystem.
 #[derive(Clone, Debug)]
 pub struct KnownSession {
+    pub harness: String,
     pub session_id: String,
     pub nickname: String,
     pub cwd: Option<String>,
     pub git_branch: Option<String>,
     pub parent: Option<String>,
     pub cursor: u64,
+    pub modified_ms: u64,
 }
 
 /// Persisted transcript metadata grouped by source path. File-backed
@@ -223,6 +235,20 @@ impl KnownSessions {
             .get(path)?
             .iter()
             .find(|session| session.session_id == session_id)
+    }
+
+    pub fn has_moved(&self, harness: &str) -> bool {
+        self.0.iter().any(|(path, sessions)| {
+            sessions.iter().any(|session| {
+                session.harness == harness
+                    && std::fs::metadata(path)
+                        .and_then(|metadata| metadata.modified())
+                        .ok()
+                        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|duration| duration.as_millis() as u64)
+                        .is_some_and(|modified_ms| modified_ms != session.modified_ms)
+            })
+        })
     }
 }
 

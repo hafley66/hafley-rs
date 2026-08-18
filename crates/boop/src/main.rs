@@ -1019,14 +1019,35 @@ fn sync_before_local_command(registry: &Registry) -> Result<()> {
 fn command_needs_startup_sync(command: &SubCmd) -> bool {
     matches!(
         command,
-        SubCmd::Events { .. }
+        SubCmd::Db { cmd: None, .. }
+            | SubCmd::Db { cmd: Some(DbCmd::SyncCursor { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Status { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Session { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Turn { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Chat { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Edge { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Usage { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Price { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Favorite { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Touch { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Command { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Fetch { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Skill { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Pr { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::Span { .. }), .. }
+            | SubCmd::Db { cmd: Some(DbCmd::AgentSummary { .. }), .. }
+            | SubCmd::Events { .. }
             | SubCmd::Chat { .. }
             | SubCmd::Agent { .. }
             | SubCmd::Concatmap { .. }
-            | SubCmd::Me {
-                cmd: Some(MeCmd::Favorite { .. }),
-                ..
-            }
+            | SubCmd::Me { .. }
+            | SubCmd::Debug { .. }
+            | SubCmd::Harnesses
+            | SubCmd::Sessions { .. }
+            | SubCmd::Tail { .. }
+            | SubCmd::Adopt { .. }
+            | SubCmd::Beep { cmd: BeepCmd::Agent { .. } }
+            | SubCmd::Beep { cmd: BeepCmd::Lane { cmd: LaneCmd::List { .. } } }
     )
 }
 
@@ -1250,11 +1271,33 @@ fn sync_all(
     }
     let known = store.known_sessions()?;
     let mut pending = Vec::new();
+    let mut roots_to_stamp = Vec::new();
     for adapter in registry.all() {
-        for session in adapter.sync_candidates(&known)? {
+        let roots = adapter.session_roots()?;
+        let root_stamps_match = !roots.is_empty()
+            && roots.iter().all(|root| {
+                let mtime_ms = path_modified_ms(root);
+                store.root_stamp_matches(adapter.id(), root, mtime_ms).unwrap_or(false)
+            });
+        if root_stamps_match
+            && (!adapter.known_paths_can_move() || !known.has_moved(adapter.id()))
+        {
+            continue;
+        }
+        let candidates = adapter.sync_candidates(&known)?;
+        let had_candidates = !candidates.is_empty();
+        for session in candidates {
+            store.backfill_cursor_modified(
+                &session.session_id,
+                &session.path.display().to_string(),
+                session.modified_ms,
+            )?;
             if session_needs_sync(&session, &known) {
                 pending.push((adapter.as_ref(), session));
             }
+        }
+        if had_candidates {
+            roots_to_stamp.push((adapter.id(), roots));
         }
     }
     let routes = match liveness {
@@ -1289,6 +1332,11 @@ fn sync_all(
             }
         }
     }
+    for (harness, roots) in roots_to_stamp {
+        for root in roots {
+            store.stamp_root(harness, &root, path_modified_ms(&root))?;
+        }
+    }
     let elapsed_ms = started.elapsed().as_millis();
     if report {
         let counts = store.counts()?;
@@ -1317,6 +1365,15 @@ fn sync_all(
         );
     }
     Ok(())
+}
+
+fn path_modified_ms(path: &std::path::Path) -> u64 {
+    std::fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 fn session_needs_sync(
@@ -1356,48 +1413,8 @@ fn refuse_stale(store: &ident::Store) -> Result<()> {
 /// mtimes are discovered once, and a file is only re-read when its mtime
 /// changed, so steady-state idle is a stat per file plus a sleep.
 fn run_follow(registry: &Registry) -> Result<()> {
-    sync_all(registry, false, false, SyncLiveness::TranscriptOnly)?;
-    let mut sessions = Vec::new();
-    for adapter in registry.all() {
-        for session in adapter.sessions()? {
-            sessions.push((adapter.id().to_owned(), session));
-        }
-    }
-    let mut last_mtime: std::collections::HashMap<String, u64> = sessions
-        .iter()
-        .map(|(_, session)| (session.session_id.clone(), session.modified_ms))
-        .collect();
-    let routes = bus::read_routes(&mail_dir(None)?).unwrap_or_default();
     loop {
-        let store = ident::Store::open(ident::Store::default_path()?)?;
-        // Rebuild the list every tick: a conversation opened after boot (the
-        // concatmap mapper's) is otherwise invisible to this resident forever.
-        sessions.clear();
-        for adapter in registry.all() {
-            for session in adapter.sessions()? {
-                sessions.push((adapter.id().to_owned(), session));
-            }
-        }
-        for (harness_id, session) in &sessions {
-            // `modified_ms` is each adapter's source of truth; a shared sqlite
-            // main file never moves under WAL writes, so file mtime starved opencode.
-            let mtime = session.modified_ms;
-            if last_mtime.get(&session.session_id).copied().unwrap_or(0) == mtime {
-                continue;
-            }
-            let adapter = harness_by_id(registry, harness_id)?;
-            let pid = session_route_pid(&routes, session);
-            store.begin()?;
-            let result = ident::sync_session_with_pid(&store, adapter, session, pid);
-            match result {
-                Ok(_) => store.commit()?,
-                Err(error) => {
-                    let _ = store.rollback();
-                    return Err(error);
-                }
-            }
-            last_mtime.insert(session.session_id.clone(), mtime);
-        }
+        sync_all(registry, false, false, SyncLiveness::StampLivePid)?;
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }
@@ -3361,7 +3378,7 @@ mod tests {
     fn startup_sync_policy_limits_projection_to_transcript_consumers() {
         let adopt = Cli::try_parse_from(["boop", "adopt", "--name", "root", "--tmux", "root"])
             .expect("adopt parses");
-        assert!(!command_needs_startup_sync(&adopt.command));
+        assert!(command_needs_startup_sync(&adopt.command));
         let hail = Cli::try_parse_from([
             "boop", "hail", "--to", "root", "--from", "lane", "--body", "done",
         ])

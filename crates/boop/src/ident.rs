@@ -29,7 +29,7 @@ pub struct Store {
 /// (session_id, turn, pr_url_id): a turn with two PRs keeps two rows.
 /// 10 = agent_favorite, user-pinned markdown bodies.
 /// 11 = bounded, lane-addressable supervisor/channel trace events.
-pub const SCHEMA_VERSION: i64 = 11;
+pub const SCHEMA_VERSION: i64 = 12;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -386,6 +386,28 @@ impl Store {
                        ON agent_trace_event(trace_id, created_ts, event_id);
                      PRAGMA user_version = 11;",
                 )?;
+            }
+            if self.schema_version()? < 12 {
+                self.connection.execute_batch(
+                    "CREATE TABLE IF NOT EXISTS sync_root_stamp (
+                       harness_id INTEGER NOT NULL,
+                       root_path_id INTEGER NOT NULL,
+                       mtime_ms INTEGER NOT NULL,
+                       PRIMARY KEY (harness_id, root_path_id)
+                     ) WITHOUT ROWID;
+                     ",
+                )?;
+                let has_modified_ms = self.connection.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM pragma_table_info('sync_cursor') WHERE name = 'modified_ms')",
+                    [],
+                    |row| row.get::<_, bool>(0),
+                )?;
+                if !has_modified_ms {
+                    self.connection.execute_batch(
+                        "ALTER TABLE sync_cursor ADD COLUMN modified_ms INTEGER NOT NULL DEFAULT 0;",
+                    )?;
+                }
+                self.connection.execute_batch("PRAGMA user_version = 12;")?;
             }
             self.stamp_version()?;
             Ok(())
@@ -806,6 +828,51 @@ impl Store {
         Ok(())
     }
 
+    fn set_cursor_modified(&self, session: &str, path: &str, offset: u64, modified_ms: u64) -> Result<()> {
+        let sid = self.session_id(session)?;
+        let path_id = self.intern("dict_path", path)?;
+        self.connection.execute(
+            "INSERT INTO sync_cursor (session_id, path_id, offset, modified_ms) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(session_id, path_id) DO UPDATE SET offset=excluded.offset, modified_ms=excluded.modified_ms",
+            params![sid, path_id, offset as i64, modified_ms as i64],
+        )?;
+        Ok(())
+    }
+
+    pub fn root_stamp_matches(&self, harness: &str, root: &std::path::Path, mtime_ms: u64) -> Result<bool> {
+        Ok(self.connection.query_row(
+            "SELECT stamp.mtime_ms
+             FROM sync_root_stamp stamp
+             JOIN dict_harness harness_id ON harness_id.id = stamp.harness_id
+             JOIN dict_path root_path ON root_path.id = stamp.root_path_id
+             WHERE harness_id.value = ?1 AND root_path.value = ?2",
+            params![harness, root.display().to_string()],
+            |row| row.get::<_, i64>(0),
+        ).optional()?.is_some_and(|stamp| stamp as u64 == mtime_ms))
+    }
+
+    pub fn stamp_root(&self, harness: &str, root: &std::path::Path, mtime_ms: u64) -> Result<()> {
+        let harness_id = self.intern("dict_harness", harness)?;
+        let root_path_id = self.intern("dict_path", &root.display().to_string())?;
+        self.connection.execute(
+            "INSERT INTO sync_root_stamp (harness_id, root_path_id, mtime_ms) VALUES (?1, ?2, ?3)
+             ON CONFLICT(harness_id, root_path_id) DO UPDATE SET mtime_ms=excluded.mtime_ms",
+            params![harness_id, root_path_id, mtime_ms as i64],
+        )?;
+        Ok(())
+    }
+
+    pub fn backfill_cursor_modified(&self, session: &str, path: &str, modified_ms: u64) -> Result<()> {
+        let sid = self.session_id(session)?;
+        let path_id = self.intern("dict_path", path)?;
+        self.connection.execute(
+            "UPDATE sync_cursor SET modified_ms = ?3
+             WHERE session_id = ?1 AND path_id = ?2 AND modified_ms = 0",
+            params![sid, path_id, modified_ms as i64],
+        )?;
+        Ok(())
+    }
+
     fn get_cursor(&self, session: &str, path: &str) -> Result<u64> {
         let sid = self.session_id(session)?;
         let path_id = self.intern("dict_path", path)?;
@@ -831,18 +898,19 @@ impl Store {
     /// of reopening each historical transcript just to parse its first record.
     pub fn known_sessions(&self) -> Result<KnownSessions> {
         let mut statement = self.connection.prepare(
-            "SELECT dp.value, ds.value, COALESCE(s.nickname, ds.value), cwd.value, branch.value,
+            "SELECT dp.value, ds.value, COALESCE(s.nickname, ds.value), cwd.value, branch.value, harness.value,
                     (SELECT parent.value
                        FROM agent_edge edge
                        JOIN dict_edekind kind ON kind.id = edge.edge_kind_id
                        JOIN dict_session parent ON parent.id = edge.parent_session_id
                       WHERE edge.child_session_id = sc.session_id AND kind.value = 'spawned'
                       LIMIT 1),
-                    sc.offset
+                    sc.offset, sc.modified_ms
              FROM sync_cursor sc
              JOIN dict_session ds ON ds.id = sc.session_id
              JOIN dict_path dp ON dp.id = sc.path_id
              JOIN agent_session s ON s.session_id = sc.session_id
+             JOIN dict_harness harness ON harness.id = s.harness_id
              LEFT JOIN dict_cwd cwd ON cwd.id = s.cwd_id
              LEFT JOIN dict_branch branch ON branch.id = s.branch_id",
         )?;
@@ -854,21 +922,25 @@ impl Store {
                 row.get::<_, String>(2)?,
                 row.get::<_, Option<String>>(3)?,
                 row.get::<_, Option<String>>(4)?,
-                row.get::<_, Option<String>>(5)?,
-                row.get::<_, i64>(6)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, i64>(7)?,
+                row.get::<_, i64>(8)?,
             ))
         })?;
         for row in rows {
-            let (path, session_id, nickname, cwd, git_branch, parent, cursor) = row?;
+            let (path, session_id, nickname, cwd, git_branch, harness, parent, cursor, modified_ms) = row?;
             out.insert(
                 PathBuf::from(path),
                 KnownSession {
+                    harness,
                     session_id,
                     nickname,
                     cwd,
                     git_branch,
                     parent,
                     cursor: cursor as u64,
+                    modified_ms: modified_ms as u64,
                 },
             );
         }
@@ -1661,7 +1733,7 @@ pub fn sync_session_with_pid(
         session.tmux.as_deref(),
     )?;
     store.project_discovered_session(session)?;
-    store.set_cursor(&session.session_id, &key, ingested.next_cursor)?;
+    store.set_cursor_modified(&session.session_id, &key, ingested.next_cursor, session.modified_ms)?;
     Ok(ingested.stat)
 }
 
@@ -2280,7 +2352,15 @@ CREATE TABLE IF NOT EXISTS sync_cursor (
   record_id_id INTEGER,
   turn INTEGER NOT NULL DEFAULT 0,
   timestamp INTEGER NOT NULL DEFAULT 0,
+  modified_ms INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (session_id, path_id)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS sync_root_stamp (
+  harness_id INTEGER NOT NULL,
+  root_path_id INTEGER NOT NULL,
+  mtime_ms INTEGER NOT NULL,
+  PRIMARY KEY (harness_id, root_path_id)
 ) WITHOUT ROWID;
 ";
 

@@ -118,6 +118,10 @@ impl Harness for Codex {
         sessions_in(&codex_sessions_dir()?)
     }
 
+    fn session_roots(&self) -> anyhow::Result<Vec<PathBuf>> {
+        Ok(vec![codex_sessions_dir()?])
+    }
+
     fn sync_candidates(&self, known: &KnownSessions) -> anyhow::Result<Vec<SessionRef>> {
         sessions_in_with_known(&codex_sessions_dir()?, known)
     }
@@ -935,12 +939,14 @@ mod tests {
         known.insert(
             known_path.clone(),
             KnownSession {
+                harness: "codex".into(),
                 session_id: "known-session".into(),
                 nickname: "known-name".into(),
                 cwd: Some("/tmp/known".into()),
                 git_branch: None,
                 parent: None,
                 cursor: 23,
+                modified_ms: 0,
             },
         );
 
