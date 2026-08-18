@@ -366,7 +366,12 @@ pub fn load_agent_session_graph_with_runtime(
         .then_some(query.cwd.as_ref())
         .flatten()
         .map(|path| path.to_string_lossy().into_owned());
-    let mut graph = load_agent_session_graph(store, query.clone())?;
+    // Runtime routes carry the tmux-to-native-session anchor. Keep the durable
+    // component intact until those route shells have been merged, then focus
+    // exactly once below.
+    let mut durable_query = query.clone();
+    durable_query.tmux = None;
+    let mut graph = load_agent_session_graph(store, durable_query)?;
     let rows = runtime_snapshot(RuntimeSnapshotInput {
         store,
         routes: runtime.routes,
@@ -905,6 +910,80 @@ mod tests {
                 "registered_at": "2026-08-18T00:00:00Z"
             }])
         );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn focused_runtime_route_seeds_its_native_session_component() {
+        let path = std::env::temp_dir().join(format!(
+            "boop-session-graph-runtime-anchor-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        let harness = store.intern_public("dict_harness", "claude").unwrap();
+        let parent = store
+            .intern_public("dict_session", "claude-parent")
+            .unwrap();
+        let child = store.intern_public("dict_session", "claude-child").unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?3), (?2, ?3)",
+                rusqlite::params![parent, child, harness],
+            )
+            .unwrap();
+        store
+            .add_edge_at("claude-parent", "claude-child", "spawned", 10)
+            .unwrap();
+        let mut routes = BTreeMap::new();
+        routes.insert(
+            "claude-coordinator".into(),
+            Route {
+                kind: "coordinator".into(),
+                harness: Some("claude".into()),
+                tmux: Some("sprefa-5:0.0".into()),
+                cwd: Some("/repo".into()),
+                model: None,
+                mode: None,
+                session_id: Some("claude-parent".into()),
+                source_path: None,
+                parent: None,
+                goal: None,
+                registered_at: None,
+                base_sha: None,
+                worktree_dir: None,
+            },
+        );
+        let mux = FakeMux::available(&["sprefa-5"]);
+        let processes = SysinfoSnapshot::capture().unwrap();
+        let graph = load_agent_session_graph_with_runtime(
+            &store,
+            AgentSessionGraphQuery {
+                tmux: Some("sprefa-5".into()),
+                include_history: true,
+                ..AgentSessionGraphQuery::default()
+            },
+            AgentSessionGraphRuntime {
+                routes: &routes,
+                messages: &[],
+                multiplexer: &mux,
+                tmux_socket: None,
+                processes: &processes,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            graph
+                .sessions
+                .iter()
+                .map(|node| node.session.id.as_str())
+                .collect::<Vec<_>>(),
+            ["claude-child", "claude-parent"]
+        );
+        assert_eq!(graph.edges.len(), 1);
+        assert_eq!(graph.shells.len(), 1);
         let _ = std::fs::remove_file(path);
     }
 
