@@ -17,6 +17,7 @@ use boop::event::AgentEvent;
 use boop::mailwait::Watch;
 use boop::proc::ProcReader;
 use boop::registry::Registry;
+use boop::supervise::ParentDeathPolicy;
 use boop::{bus, config, ident, identity, inbox, lane, mailwait, proc, tmux};
 #[cfg(feature = "agent-read")]
 use boop::{query, usage};
@@ -3827,6 +3828,7 @@ mod tests {
             name: "native-child".into(),
             kind: "native".into(),
             parent: Some("coordinator".into()),
+            on_parent_death: crate::ParentDeathPolicy::Orphan,
             mail_dir: Some(dir.clone()),
         })
         .unwrap();
@@ -4870,6 +4872,9 @@ enum LaneCmd {
         /// Defaults to the caller, then to the one registered coordinator.
         #[arg(long)]
         parent: Option<String>,
+        /// What this lane does when its parent route stops answering.
+        #[arg(long, value_enum, default_value_t = ParentDeathPolicy::Orphan)]
+        on_parent_death: ParentDeathPolicy,
         /// Defaults to the harness the model spelling names.
         #[arg(long)]
         harness: Option<String>,
@@ -5022,6 +5027,10 @@ enum AgentCmd {
         kind: String,
         #[arg(long)]
         parent: Option<String>,
+        /// Recorded for this row; a pane-less agent runs no supervisor of its
+        /// own, so nothing polls on its behalf.
+        #[arg(long, value_enum, default_value_t = ParentDeathPolicy::Orphan)]
+        on_parent_death: ParentDeathPolicy,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -5541,12 +5550,14 @@ fn run_agent(cmd: AgentCmd) -> Result<()> {
             name,
             kind,
             parent,
+            on_parent_death,
             mail_dir: mail_dir_arg,
         } => {
             if !matches!(kind.as_str(), "coordinator" | "native") {
                 anyhow::bail!("agent kind must be coordinator or native")
             }
             let dir = mail_dir(mail_dir_arg.as_deref())?;
+            boop::supervise::record_parent_policy(&dir, &name, on_parent_death)?;
             write_route(
                 &dir,
                 &name,
@@ -5641,32 +5652,45 @@ fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             wait_timeout,
             mood,
             reclaim,
-        } => run_lane(
-            registry,
-            LaneArgs {
-                name: lane,
-                cwd,
-                harness,
-                brief,
-                model,
-                preset,
-                variant,
-                tmux,
-                parent,
-                branch,
-                base_sha,
-                socket,
-                goal,
-                mood,
-                trace,
-                no_start,
-                mail_dir,
-                dry_run,
-                wait,
-                wait_timeout,
-                reclaim,
-            },
-        ),
+            on_parent_death,
+        } => {
+            // Recorded before the spawn: the route the dispatch writes replaces
+            // whatever is under this lane's key.
+            if !dry_run {
+                boop::supervise::record_spawn_policy(
+                    &crate::mail_dir(mail_dir.as_deref())?,
+                    branch.as_deref(),
+                    lane.as_deref(),
+                    on_parent_death,
+                )?;
+            }
+            run_lane(
+                registry,
+                LaneArgs {
+                    name: lane,
+                    cwd,
+                    harness,
+                    brief,
+                    model,
+                    preset,
+                    variant,
+                    tmux,
+                    parent,
+                    branch,
+                    base_sha,
+                    socket,
+                    goal,
+                    mood,
+                    trace,
+                    no_start,
+                    mail_dir,
+                    dry_run,
+                    wait,
+                    wait_timeout,
+                    reclaim,
+                },
+            )
+        }
         LaneCmd::Run {
             lane,
             harness,
@@ -5792,6 +5816,9 @@ fn run_lane_list(
         if state == "dead" {
             suffix.push_str(&format!(" DEAD={}", dead_reason_token(&dir, name)));
         }
+        if let Some(gone) = gone_parent(&routes, &live, route) {
+            suffix.push_str(&format!(" PARENT-GONE={gone}"));
+        }
         if let Some(flags) = &flags {
             if flags.worktree_untouched {
                 suffix.push_str(" WORKTREE-UNTOUCHED");
@@ -5824,6 +5851,20 @@ fn run_lane_list(
         ));
     }
     Ok(())
+}
+
+/// The parent edge that answers nobody, so a surviving orphan says so on its
+/// own row. `None` while the parent route is still addressable.
+fn gone_parent<'a>(
+    routes: &BTreeMap<String, Route>,
+    live: &Option<tmux::LiveSessions>,
+    route: &'a Route,
+) -> Option<&'a str> {
+    let parent = route.parent.as_deref()?;
+    match routes.get(parent) {
+        Some(parent_route) if lane_state(live, parent_route) != "dead" => None,
+        _ => Some(parent),
+    }
 }
 
 /// Why a dead lane is dead, as one token. A missing home directory is itself an

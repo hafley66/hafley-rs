@@ -86,12 +86,24 @@ pub fn lane_writer(lane_log: Option<File>) -> BoxMakeWriter {
     }
 }
 
+/// The `detail` a parent-death kill writes ahead of the parent's name, read
+/// back by `dead_reason` as a typed variant rather than as free text.
+pub const PARENT_DIED: &str = "parent-died";
+
+/// The mailbox `kind` a lane writes when its parent edge is rewritten.
+pub const REPARENTED: &str = "reparented";
+
 /// Why a lane whose tmux session is gone is gone. Every variant renders to a
 /// token, so a dead row is never blank.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DeadReason {
     /// The supervisor reached an exit path and wrote its result row.
     Reported { rc: i32, detail: Option<String> },
+    /// The supervisor ended the lane because `parent` stopped answering.
+    ParentDied { parent: String },
+    /// The parent edge was rewritten to `parent` and the lane kept running.
+    /// No result row followed, so this is the last thing known about it.
+    Reparented { parent: String },
     /// A trail exists and no result row does: the supervisor died before any
     /// exit path ran, and the trail files are what is left to read.
     DiedBeforeResult,
@@ -108,14 +120,24 @@ impl DeadReason {
                 detail: Some(detail),
             } => format!("rc={rc} ({detail})"),
             DeadReason::Reported { rc, detail: None } => format!("rc={rc}"),
+            DeadReason::ParentDied { parent } => format!("{PARENT_DIED}={parent}"),
+            DeadReason::Reparented { parent } => format!("{REPARENTED}={parent}"),
             DeadReason::DiedBeforeResult => "died-before-result".to_owned(),
             DeadReason::NoTrail => "no-trail".to_owned(),
         }
     }
 }
 
-/// The typed reason for a dead lane: its newest result row if one exists, else
-/// what the trail directory says about how far the supervisor got.
+/// The parent named by a `parent-died` result detail.
+fn parent_died_edge(detail: Option<&str>) -> Option<String> {
+    detail?
+        .strip_prefix(PARENT_DIED)?
+        .strip_prefix(": ")
+        .map(str::to_owned)
+}
+
+/// The typed reason for a dead lane: its newest result row, then a parent
+/// rewrite it never reported after, then what the trail directory says.
 pub fn dead_reason(mail_dir: &Path, lanes_root: &Path, lane: &str) -> DeadReason {
     let mut rows = Vec::new();
     for path in crate::bus::read_boxes(mail_dir).unwrap_or_default() {
@@ -126,11 +148,25 @@ pub fn dead_reason(mail_dir: &Path, lanes_root: &Path, lane: &str) -> DeadReason
         .rev()
         .find(|row| row.kind == "result" && row.from == lane)
         .and_then(|row| row.rc.map(|rc| (rc, row.detail.clone())));
-    match reported {
-        Some((rc, detail)) => DeadReason::Reported { rc, detail },
+    if let Some((rc, detail)) = reported {
+        return match parent_died_edge(detail.as_deref()) {
+            Some(parent) => DeadReason::ParentDied { parent },
+            None => DeadReason::Reported { rc, detail },
+        };
+    }
+    match reparented_to(&rows, lane) {
+        Some(parent) => DeadReason::Reparented { parent },
         None if lane_dir_in(lanes_root, lane).exists() => DeadReason::DiedBeforeResult,
         None => DeadReason::NoTrail,
     }
+}
+
+/// The parent this lane was last rewritten onto, from its own mailbox rows.
+pub fn reparented_to(rows: &[crate::bus::Message], lane: &str) -> Option<String> {
+    rows.iter()
+        .rev()
+        .find(|row| row.kind == REPARENTED && row.from == lane)
+        .map(|row| row.to.clone())
 }
 
 #[cfg(test)]
@@ -250,6 +286,98 @@ mod tests {
         );
         assert_eq!(dead_reason(&mail, &root, "ghost"), DeadReason::NoTrail);
         assert_eq!(dead_reason(&mail, &root, "ghost").token(), "no-trail");
+        let _ = std::fs::remove_dir_all(&mail);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    fn row(id: &str, from: &str, to: &str, kind: &str, body: &str) -> crate::bus::Message {
+        crate::bus::Message {
+            id: id.into(),
+            from: from.into(),
+            to: to.into(),
+            from_timestamp: "2026-08-19T00:00:00.000Z".into(),
+            to_timestamp: None,
+            kind: kind.into(),
+            reply_to: None,
+            body: body.into(),
+            r#ref: None,
+            rc: None,
+            detail: None,
+        }
+    }
+
+    fn write_rows(dir: &Path, rows: &[crate::bus::Message]) {
+        let mut file = std::fs::File::create(dir.join("bus.ndjson")).unwrap();
+        for row in rows {
+            writeln!(file, "{}", crate::bus::message_line(row)).unwrap();
+        }
+    }
+
+    /// A parent-death kill and a rewritten edge are their own answers: reading
+    /// either as `rc=1` or as `died-before-result` loses which one happened.
+    #[test]
+    fn a_parent_death_and_a_rewritten_edge_are_typed_reasons_of_their_own() {
+        let mail = tempdir("parentmail");
+        let root = tempdir("parenttrail");
+        let mut killed = row(
+            "m1",
+            "killed",
+            "coordinator",
+            "result",
+            "lane killed done rc=1 (parent-died: coordinator)",
+        );
+        killed.rc = Some(1);
+        killed.detail = Some("parent-died: coordinator".into());
+        write_rows(
+            &mail,
+            &[
+                killed,
+                row(
+                    "m2",
+                    "moved",
+                    "sprefa-coordinator",
+                    REPARENTED,
+                    "lane moved reparented to sprefa-coordinator",
+                ),
+            ],
+        );
+        assert_eq!(
+            dead_reason(&mail, &root, "killed"),
+            DeadReason::ParentDied {
+                parent: "coordinator".to_owned()
+            }
+        );
+        assert_eq!(
+            dead_reason(&mail, &root, "killed").token(),
+            "parent-died=coordinator"
+        );
+        assert_eq!(
+            dead_reason(&mail, &root, "moved").token(),
+            "reparented=sprefa-coordinator"
+        );
+        let _ = std::fs::remove_dir_all(&mail);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// An ordinary rc detail is never mistaken for a parent death.
+    #[test]
+    fn an_ordinary_detail_stays_a_reported_rc() {
+        let mail = tempdir("plainmail");
+        let root = tempdir("plaintrail");
+        let mut reported = row(
+            "m1",
+            "mine",
+            "coordinator",
+            "result",
+            "lane mine done rc=1 (stalled: 300s with no harness activity)",
+        );
+        reported.rc = Some(1);
+        reported.detail = Some("stalled: 300s with no harness activity".into());
+        write_rows(&mail, &[reported]);
+        assert_eq!(
+            dead_reason(&mail, &root, "mine").token(),
+            "rc=1 (stalled: 300s with no harness activity)"
+        );
         let _ = std::fs::remove_dir_all(&mail);
         let _ = std::fs::remove_dir_all(&root);
     }

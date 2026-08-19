@@ -46,6 +46,84 @@ fn resume_text(brief_completed: bool, conversation: Option<String>, brief: &str)
     }
 }
 
+/// What a lane does when its registered parent stops being addressable.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum ParentDeathPolicy {
+    /// End the lane the way a stall kill does, reporting `parent-died`.
+    Kill,
+    /// Rewrite the parent edge onto the one registered coordinator, keep going.
+    Reparent,
+    /// Keep running with the dead edge, which is what every spawn did before
+    /// the policy existed.
+    #[default]
+    Orphan,
+}
+
+impl ParentDeathPolicy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ParentDeathPolicy::Kill => "kill",
+            ParentDeathPolicy::Reparent => "reparent",
+            ParentDeathPolicy::Orphan => "orphan",
+        }
+    }
+}
+
+impl std::str::FromStr for ParentDeathPolicy {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<ParentDeathPolicy> {
+        match value {
+            "kill" => Ok(ParentDeathPolicy::Kill),
+            "reparent" => Ok(ParentDeathPolicy::Reparent),
+            "orphan" => Ok(ParentDeathPolicy::Orphan),
+            other => anyhow::bail!("on-parent-death must be kill, reparent or orphan: `{other}`"),
+        }
+    }
+}
+
+/// The lane-to-policy map beside the registry. Not a registry route field: the
+/// spawn rewrites a route wholesale, dropping anything recorded before it.
+const PARENT_POLICY_FILE: &str = "parent-policy.json";
+
+/// Record one lane's parent-death policy, so its supervisor reads back the
+/// spelling the spawn was given.
+pub fn record_parent_policy(dir: &Path, lane: &str, policy: ParentDeathPolicy) -> Result<()> {
+    std::fs::create_dir_all(dir).context("create mail dir")?;
+    let lane = lane.to_owned();
+    bus::cas_update_json(&dir.join(PARENT_POLICY_FILE), |map| {
+        map.insert(
+            lane.clone(),
+            serde_json::Value::String(policy.as_str().to_owned()),
+        );
+        Ok(())
+    })
+}
+
+/// Record the policy under the lane id `lane create` derives. The repo path
+/// only shapes a worktree directory this call never reads.
+pub fn record_spawn_policy(
+    dir: &Path,
+    branch: Option<&str>,
+    lane: Option<&str>,
+    policy: ParentDeathPolicy,
+) -> Result<()> {
+    let identity = crate::lane::derive(Path::new(""), branch, lane, None)?;
+    record_parent_policy(dir, &identity.lane, policy)
+}
+
+/// The policy the spawn recorded. An absent or unreadable file is `Orphan`,
+/// today's behavior for every lane.
+pub fn parent_policy(dir: &Path, lane: &str) -> ParentDeathPolicy {
+    let Ok(raw) = std::fs::read_to_string(dir.join(PARENT_POLICY_FILE)) else {
+        return ParentDeathPolicy::Orphan;
+    };
+    serde_json::from_str::<serde_json::Value>(&raw)
+        .ok()
+        .and_then(|map| map.get(lane)?.as_str()?.parse().ok())
+        .unwrap_or_default()
+}
+
 /// What one lane run needs. Cloned into the signal thread, which owns nothing
 /// else and must still address the lane's result row.
 #[derive(Clone)]
@@ -128,6 +206,138 @@ struct Ended {
     /// The last turn's reason, carried out when the lane ended on a provider
     /// flake so the result row names what killed it.
     detail: Option<String>,
+}
+
+/// What a lane exits with when its parent died under the `kill` policy. The
+/// typed reason rides `detail`; nothing new is asked of the rc.
+const PARENT_DIED_EXIT: i32 = 1;
+
+/// Whether `parent` is still addressable: a registry route, and for a
+/// pane-backed one a live pane or a live recorded pid.
+fn parent_alive(dir: &Path, parent: &str, multiplexer: &dyn crate::tmux::Multiplexer) -> bool {
+    // An unreadable registry is not evidence that anyone died.
+    let Ok(routes) = bus::read_routes(dir) else {
+        return true;
+    };
+    let Some(route) = routes.get(parent) else {
+        return false;
+    };
+    let Some(target) = route.tmux.as_deref() else {
+        // A pane-less coordinator or native row is addressable for its whole
+        // registration; its death is `agent done`, never a missing pane.
+        return matches!(route.kind.as_str(), "coordinator" | "native");
+    };
+    if multiplexer.target_alive(None, target) {
+        return true;
+    }
+    match multiplexer.pane_pid(None, target) {
+        Some(pid) => crate::proc::SysinfoSnapshot::capture()
+            .map(|snapshot| crate::proc::ProcReader::is_alive(&snapshot, pid))
+            .unwrap_or(true),
+        None => false,
+    }
+}
+
+/// Rewrite the lane's parent edge onto the one registered coordinator and mail
+/// it. `None` leaves the lane orphaned: no live coordinator answered.
+fn reparent(lane: &LaneRun, dead: &str) -> Option<String> {
+    let routes = bus::read_routes(&lane.mail_dir).ok()?;
+    let adopter = crate::lane::resolve_parent(None, None, &routes).parent?;
+    if adopter == dead || !parent_alive(&lane.mail_dir, &adopter, crate::tmux::mux()) {
+        warn!(
+            lane = lane.lane,
+            dead, "no live coordinator to reparent onto"
+        );
+        return None;
+    }
+    let lane_id = lane.lane.clone();
+    let edge = adopter.clone();
+    if let Err(error) = bus::cas_update_json(&lane.mail_dir.join("registry.json"), |map| {
+        if let Some(object) = map
+            .get_mut(&lane_id)
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            object.insert("parent".into(), serde_json::Value::String(edge.clone()));
+        }
+        Ok(())
+    }) {
+        warn!(lane = lane.lane, adopter, error = %error, "parent edge rewrite failed");
+        return None;
+    }
+    let row = bus::Message {
+        id: bus::mint_id(),
+        from: lane.lane.clone(),
+        to: adopter.clone(),
+        from_timestamp: bus::now_iso(),
+        to_timestamp: None,
+        kind: crate::trail::REPARENTED.to_owned(),
+        reply_to: None,
+        body: format!("lane {} reparented to {adopter}: {dead} is gone", lane.lane),
+        r#ref: None,
+        rc: None,
+        detail: None,
+    };
+    if let Err(error) = append_row(&lane.mail_dir, &row) {
+        warn!(lane = lane.lane, adopter, error = %error, "reparent row write failed");
+    }
+    info!(
+        lane = lane.lane,
+        adopter, dead, "lane parent edge rewritten"
+    );
+    println!("[boop] parent {dead} is gone; reparented to {adopter}");
+    Some(adopter)
+}
+
+/// One lane's parent watch: whom it watches, and what it does when that route
+/// stops answering.
+struct ParentWatch {
+    policy: ParentDeathPolicy,
+    parent: Option<String>,
+}
+
+impl ParentWatch {
+    fn new(dir: &Path, lane: &str) -> Self {
+        ParentWatch {
+            policy: parent_policy(dir, lane),
+            parent: registered_parent(dir, lane),
+        }
+    }
+
+    /// One probe. `Some` ends the lane; the `orphan` default probes nothing, so
+    /// an unchanged spawn pays no tmux call per poll.
+    fn probe(
+        &mut self,
+        lane: &LaneRun,
+        multiplexer: &dyn crate::tmux::Multiplexer,
+    ) -> Option<Ended> {
+        if self.policy == ParentDeathPolicy::Orphan {
+            return None;
+        }
+        let parent = self.parent.clone()?;
+        if parent_alive(&lane.mail_dir, &parent, multiplexer) {
+            return None;
+        }
+        match self.policy {
+            ParentDeathPolicy::Kill => {
+                warn!(lane = lane.lane, parent, "parent gone; ending the lane");
+                println!("[boop] parent {parent} is gone; ending the lane");
+                Some(Ended {
+                    exit_code: PARENT_DIED_EXIT,
+                    detail: Some(format!("{}: {parent}", crate::trail::PARENT_DIED)),
+                })
+            }
+            ParentDeathPolicy::Reparent => {
+                match reparent(lane, &parent) {
+                    Some(adopter) => self.parent = Some(adopter),
+                    // Nobody to adopt it: stop probing rather than re-reading a
+                    // dead route every poll.
+                    None => self.policy = ParentDeathPolicy::Orphan,
+                }
+                None
+            }
+            ParentDeathPolicy::Orphan => None,
+        }
+    }
 }
 
 struct TraceRecorder {
@@ -360,6 +570,7 @@ fn supervise(
     // Resolved once: a lane's mood is a spawn-time attribute, and re-reading it
     // per hail would open the store inside the delivery path.
     let mood = mood_template(&lane.lane);
+    let mut watch = ParentWatch::new(&lane.mail_dir, &lane.lane);
     // `conversation_id` may already exist for a freshly opened channel. Codex
     // app-server returns its new thread id from `thread/start` before the first
     // turn, so only the caller's explicit resume input proves that the thread
@@ -465,6 +676,23 @@ fn supervise(
                     idle_ms / 1000
                 ));
             }
+            if let Some(ended) = watch.probe(lane, crate::tmux::mux()) {
+                if let Err(error) = channel.close() {
+                    warn!(lane = lane.lane, error = %error, "close after parent death failed");
+                }
+                events.record(
+                    "parent-death",
+                    TraceRecorder::session(channel),
+                    Some(turn_started),
+                    Some(crate::channel::now_ms()),
+                    None,
+                    Some("failed"),
+                    None,
+                    None,
+                    ended.detail.as_deref().unwrap_or(crate::trail::PARENT_DIED),
+                );
+                return Ok(ended);
+            }
             for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
                 seen.insert(hail.id.clone());
                 match channel.steer(&hail_text(&hail, &mood))? {
@@ -540,8 +768,12 @@ fn supervise(
                 flake_resume_cap = FLAKE_RESUME_CAP,
                 "lane provider flake; resuming"
             );
+            hail_parent_once(lane, RETRYING, flake_resumes, end.detail());
             turn = resume_text(brief_completed, channel.conversation_id(), &brief);
             continue;
+        }
+        if end.retryable() {
+            hail_parent_once(lane, RETRY_BUDGET_EXHAUSTED, flake_resumes, end.detail());
         }
         for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
             seen.insert(hail.id.clone());
@@ -653,6 +885,84 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
         Err(error) => {
             error!(lane = lane.lane, parent, error = %error, "lane result row write failed");
             println!("[boop] result row write failed: {error}");
+        }
+    }
+    if exit_code != 0 && !ended_on_parent_death(detail) {
+        hail_parent_once(
+            lane,
+            EXITED_WITHOUT_COMPLETION,
+            exit_code as u32,
+            detail.unwrap_or("no completion reported"),
+        );
+    }
+}
+
+/// A lane killed because its parent died: the one nonzero exit whose parent is
+/// gone, so a failure hail addressed to it would reach nobody.
+fn ended_on_parent_death(detail: Option<&str>) -> bool {
+    detail.is_some_and(|detail| detail.starts_with(crate::trail::PARENT_DIED))
+}
+
+/// The three actionable transitions a parent is told about, each at most once
+/// per lane. The completion row stays the only place an rc is written.
+pub const RETRYING: &str = "retrying";
+pub const RETRY_BUDGET_EXHAUSTED: &str = "retry_budget_exhausted";
+pub const EXITED_WITHOUT_COMPLETION: &str = "exited_without_completion";
+
+/// What the parent needs to act on: which lane, on what model, how far in, why,
+/// and the command that reads the rest.
+fn failure_body(lane: &LaneRun, kind: &str, attempt: u32, reason: &str) -> String {
+    format!(
+        "lane {} {kind}: {reason} (attempt {attempt}/{FLAKE_RESUME_CAP}, model {}); read: boop beep lane pane {}",
+        lane.lane,
+        lane.model.as_deref().unwrap_or("-"),
+        lane.lane,
+    )
+}
+
+/// Whether this lane already sent that kind. The mailbox is the dedup store, so
+/// a respawned supervisor never re-sends what a previous run already said.
+fn already_hailed(dir: &Path, lane: &str, kind: &str) -> bool {
+    let mut rows = Vec::new();
+    for path in bus::read_boxes(dir).unwrap_or_default() {
+        rows.extend(bus::parse_box(&path));
+    }
+    rows.iter().any(|row| row.from == lane && row.kind == kind)
+}
+
+/// Mail the registered parent one typed failure row. A parentless lane and a
+/// repeat of the same kind both write nothing.
+fn hail_parent_once(lane: &LaneRun, kind: &str, attempt: u32, reason: &str) {
+    let Some(parent) = registered_parent(&lane.mail_dir, &lane.lane) else {
+        debug!(
+            lane = lane.lane,
+            kind, "no registered parent; no failure hail"
+        );
+        return;
+    };
+    if already_hailed(&lane.mail_dir, &lane.lane, kind) {
+        return;
+    }
+    let row = bus::Message {
+        id: bus::mint_id(),
+        from: lane.lane.clone(),
+        to: parent.clone(),
+        from_timestamp: bus::now_iso(),
+        to_timestamp: None,
+        kind: kind.to_owned(),
+        reply_to: None,
+        body: failure_body(lane, kind, attempt, reason),
+        r#ref: None,
+        rc: None,
+        detail: Some(reason.to_owned()),
+    };
+    match append_row(&lane.mail_dir, &row) {
+        Ok(()) => {
+            info!(lane = lane.lane, parent, kind, "lane failure hail written");
+            println!("[boop] {kind} hailed to {parent}");
+        }
+        Err(error) => {
+            error!(lane = lane.lane, parent, kind, error = %error, "failure hail write failed");
         }
     }
 }
