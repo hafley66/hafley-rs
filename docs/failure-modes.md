@@ -5,6 +5,7 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 10 | 2026-08-19 | 90% of the live store's trace events were test fixture lanes, written by unit tests inside src/ |
 | 9 | 2026-08-17 | a coordinator restart left every child running with an edge that answered nobody |
 | 8 | 2026-08-17 | four lane spawns died in minutes on two error strings that were one bug |
 | 7 | 2026-08-17 | a dead-on-arrival spawn left a worktree no boop command could clear |
@@ -16,6 +17,75 @@ without the fix, the rail that stops it recurring. Newest first.
 | 1 | 2026-08-17 | a lane can die with no result row, no log, no trace |
 
 ---
+
+## 10. 90% of the live store's trace events were test fixture lanes, written by unit tests inside src/
+
+**Incident.** Measured 2026-08-19 on `~/.agent/boop.db`: `agent_trace_event`
+held 5774 rows, of which 5217 named a lane no human ever spawned. 5052 for
+`mine` and 165 for `lane-test`, spread over three days. `boop debug` reported
+`lane-test` supervisor errors at 13:22:55 that day as if a real lane had
+flaked. PR #32 had already pointed every `tests/*.rs` at a temp `HOME` and
+`BOOP_DB`, and the leak went on anyway.
+
+**RCA.** Two roots, both inside `#[cfg(test)]` modules under `src/`, both
+invisible to the rail #32 shipped.
+
+| leak | path | why the temp HOME missed it |
+|---|---|---|
+| `~/.agent/boop.db` grows `mine` rows | `supervise.rs` `remember_conversation` calls `Store::default_path()`, which reads `BOOP_DB` and otherwise `dirs::home_dir()` (`ident.rs:526`). Seven `supervise::tests::*` reach it. | the lib test binary never sets `BOOP_DB`; #32 set it per `tests/*.rs` file only |
+| `~/.agent/lanes/lane-test/supervise.log` grows | the `spec()` fixture in `harness/claude.rs:556`, `harness/codex.rs:715`, `harness/opencode.rs:862` sets `env_stamp: None`, so the `boop beep lane run` that `supervisor_command` builds inherits the test process `HOME` and resolves `trail::lanes_root()` to the real one | tmux runs the supervisor, so the test text never contains `CARGO_BIN_EXE_boop`, which is the only marker the #32 rail matched |
+
+Attribution, counting `agent_trace_event` and the log size around each cargo
+target on 2672085:
+
+| target | `mine` rows | `supervise.log` bytes |
+|---|---|---|
+| `--lib` | +37 | +663 |
+| `--lib supervise::` | +37 | 0 |
+| `--lib harness::claude` | 0 | +215 |
+| `--lib harness::codex` | 0 | +233 |
+| `--lib harness::opencode` | 0 | +218 |
+| every `tests/*.rs` target, each run alone | 0 | 0 |
+
+The seven writers: `a_flaked_brief_turn_is_refed_even_when_the_channel_has_an_id`
+(+7), `a_parentless_lane_writes_no_result_row` (+6),
+`a_supervisor_error_still_writes_the_lane_s_result_row` (+6),
+`a_fresh_identified_channel_receives_the_full_brief` (+5),
+`an_explicit_resume_receives_the_resume_nudge` (+5),
+`the_brief_reaches_the_channel_before_a_resume_nudge_opens_the_lane` (+5),
+`a_supervisor_panic_still_writes_the_lane_s_result_row` (+3).
+
+**Fix.**
+
+| # | change | file |
+|---|---|---|
+| 1 | a named SQL report counts fixture lane rows in any store | `crates/boop/sql/fixture_lanes.sql` |
+| 2 | the scan that #32 shipped gains a second pass over `src/**`, matching the two shapes that reach the real root | `crates/boop/tests/temp_home_rail.rs` |
+
+Still open, because this lane may not edit `supervise.rs` or `harness/**`:
+`spec()` in the three harness test modules needs
+`env_stamp: Some(format!("HOME={temp} BOOP_DB={temp}/boop.db"))`, and the
+`supervise::tests` module needs `BOOP_DB` pointed at a temp store before it
+calls anything that reaches `remember_conversation`. Both are waived by name in
+the rail, so neither can be joined by a third.
+
+**Fail-pre-fix tests.** `no_new_src_unit_test_reaches_the_machine_s_own_agent_root`
+in `tests/temp_home_rail.rs`. Sabotage 1, delete `"harness/claude.rs"` from
+`SPAWN_WAIVED`: `these src modules spawn a SpawnSpec with env_stamp: None, so
+the supervisor inherits the real HOME: ["harness/claude.rs"]`. Sabotage 2, add
+an unmatched `"channel.rs"` to `STORE_WAIVED`: `these waivers no longer match
+anything and must be deleted: ["channel.rs"]`.
+
+**Rail.** The waiver lists are the ratchet. A new `SpawnSpec` spawned with
+`env_stamp: None`, or a new module that opens the default store while naming a
+fixture lane, fails the rail by name. A waiver that stops matching also fails,
+so the lists shrink to zero and cannot rot in place.
+
+**What is not answered yet.** The purge itself. `crates/boop/sql/fixture_lanes.sql`
+counts; the matching delete script and its one run against `~/.agent/boop.db`
+did not land with this change. A backup of the store as it stood sits at
+`~/.agent/boop.db.bak-2026-08-19` (sqlite3 `.backup`, `PRAGMA integrity_check`
+ok), and `~/.agent/lanes/lane-test/` is still on disk.
 
 ## 9. a coordinator restart left every child running with an edge that answered nobody
 
