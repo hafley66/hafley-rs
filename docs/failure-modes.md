@@ -5,6 +5,7 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 11 | 2026-08-19 | OpenCode lanes classified provider stream failures from tmux pane text |
 | 10 | 2026-08-19 | 90% of the live store's trace events were test fixture lanes, written by unit tests inside src/ |
 | 9 | 2026-08-17 | a coordinator restart left every child running with an edge that answered nobody |
 | 8 | 2026-08-17 | four lane spawns died in minutes on two error strings that were one bug |
@@ -15,6 +16,28 @@ without the fix, the rail that stops it recurring. Newest first.
 | 3 | 2026-08-17 | ~/.cargo/bin/boop is whatever the last session built, and nothing printed says which |
 | 2 | 2026-08-17 | a respawned agent window is re-fed a brief it cannot place, or the wrong text entirely |
 | 1 | 2026-08-17 | a lane can die with no result row, no log, no trace |
+
+---
+
+## 11. OpenCode lanes classified provider stream failures from tmux pane text
+
+**Incident.** `agent_trace_event` recorded 0 completed turns from 32 OpenCode
+attempts in the preceding 24 hours. Twenty-four rows used a pane-derived stream
+failure reason and six stayed active for 300 seconds.
+
+**RCA.** The OpenCode adapter typed into a tmux pane and inspected a captured
+screen plus the OpenCode SQLite message row to decide the result. That path had
+no request, cancellation, or terminal response channel.
+
+**Fail-pre-fix test.**
+`channel::acp::tests::an_early_provider_error_is_the_turn_end_reason_verbatim`
+feeds a fake ACP server an early prompt error and requires its message as the
+turn-end reason.
+
+**Rail.** `rg -n -i 'opencode message aborted' crates/boop/src` returns no
+matches. ACP now uses `initialize`, `session/new` or `session/load`,
+`session/set_config_option`, `session/prompt`, `session/update`, and
+`session/cancel`; the `session/prompt` response provides the stop reason.
 
 ---
 

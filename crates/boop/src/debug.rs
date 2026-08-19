@@ -1,6 +1,7 @@
 //! What just went wrong, read back off the trail: the WARN/ERROR tail of every
 //! `~/.agent/lanes/<lane>/supervise.log` plus the store's `kind=error` events.
 
+use std::collections::BTreeMap;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use std::time::Duration;
@@ -23,6 +24,57 @@ pub struct Alert {
     pub at_ms: u64,
     pub level: String,
     pub text: String,
+}
+
+/// Completion counts from `turn-finish` trace rows in the requested window.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProviderCount {
+    pub model: String,
+    pub completed: u64,
+    pub failed: u64,
+}
+
+pub fn provider_counts(store: &crate::Store, since_ms: u64) -> Result<Vec<ProviderCount>> {
+    let routes = crate::bus::read_routes(&crate::bus::default_mail_dir()?)?;
+    let models: BTreeMap<String, String> = routes
+        .into_iter()
+        .filter_map(|(lane, route)| route.model.map(|model| (lane, model)))
+        .collect();
+    let mut counts: BTreeMap<String, ProviderCount> = BTreeMap::new();
+    for row in store.query_trace_events(None, u64::MAX)? {
+        if row.kind != "turn-finish" || row.created_ts < since_ms {
+            continue;
+        }
+        let Some(model) = models.get(&row.lane) else {
+            continue;
+        };
+        let count = counts
+            .entry(model.clone())
+            .or_insert_with(|| ProviderCount {
+                model: model.clone(),
+                completed: 0,
+                failed: 0,
+            });
+        if row.classification.as_deref() == Some("completed") {
+            count.completed += 1;
+        } else {
+            count.failed += 1;
+        }
+    }
+    Ok(counts.into_values().collect())
+}
+
+pub fn provider_report(counts: &[ProviderCount]) -> String {
+    counts
+        .iter()
+        .map(|count| {
+            format!(
+                "provider: {} completed {} / failed {}",
+                count.model, count.completed, count.failed
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// `30s`, `2m`, `1h`, or a bare count of seconds.

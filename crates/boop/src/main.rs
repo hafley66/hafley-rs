@@ -6,6 +6,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
@@ -702,11 +703,28 @@ fn run_debug(since: &str, lane: Option<&str>, json: bool) -> Result<()> {
             .cmp(&right.lane)
             .then(left.at_ms.cmp(&right.at_ms))
     });
+    let providers = open_ro_store()
+        .and_then(|store| {
+            boop::debug::provider_counts(
+                &store,
+                now_ms().saturating_sub(Duration::from_secs(3600).as_millis() as u64),
+            )
+        })
+        .unwrap_or_default();
     match json {
         true => line(&serde_json::to_string_pretty(&boop::debug::as_json(
             &alerts,
         ))?),
-        false => line(&boop::debug::report(&alerts, window)),
+        false => line(
+            &[
+                boop::debug::report(&alerts, window),
+                boop::debug::provider_report(&providers),
+            ]
+            .into_iter()
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        ),
     }
     Ok(())
 }

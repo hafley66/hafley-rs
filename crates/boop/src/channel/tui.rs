@@ -71,7 +71,6 @@ impl TuiChannel {
             resume = spec.resume.as_deref().unwrap_or_default(),
         )
         .entered();
-        let opened_ms = crate::channel::now_ms();
         let session = host_session(socket.as_deref())?;
         let cwd = spec.cwd.display().to_string();
         let target = crate::tmux::mux()
@@ -98,17 +97,6 @@ impl TuiChannel {
             started_emitted: false,
         };
         channel.wait_for_boot()?;
-        if channel.profile.harness == "opencode" && channel.conversation.is_none() {
-            channel.conversation = crate::channel::opencode::newest_session(&spec.cwd, opened_ms);
-            if channel.conversation.is_none() {
-                warn!(
-                    harness = channel.profile.harness,
-                    cwd = %spec.cwd.display(),
-                    tmux_target = channel.target,
-                    "opencode session unresolved at boot; a respawn will re-feed the brief"
-                );
-            }
-        }
         info!(
             harness = channel.profile.harness,
             tmux_target = channel.target,
@@ -350,57 +338,6 @@ impl LaneChannel for TuiChannel {
                         (format!("{hash:016x}"), since.elapsed().as_millis() as u64)
                     })
                     .unwrap_or_default();
-                if self.profile.harness == "opencode" {
-                    if self.conversation.is_none() {
-                        self.conversation = crate::channel::opencode::newest_session(
-                            &self.cwd,
-                            self.turn_started_ms,
-                        );
-                    }
-                    let Some(conversation_id) = self.conversation.as_deref() else {
-                        warn!(
-                            tmux_target = self.target,
-                            cwd = %self.cwd.display(),
-                            since_ms = self.turn_started_ms,
-                            "opencode pane is idle but its session is unresolved"
-                        );
-                        self.settled_since = None;
-                        continue;
-                    };
-                    let Some(state) = crate::channel::opencode::last_message_state(conversation_id)
-                    else {
-                        self.settled_since = None;
-                        continue;
-                    };
-                    if state.aborted() {
-                        self.turn_open = false;
-                        warn!(
-                            conversation_id,
-                            last_opencode_finish = state.finish.as_deref().unwrap_or_default(),
-                            last_opencode_error = state.error.as_deref().unwrap_or_default(),
-                            "opencode tui turn ended with an aborted stream"
-                        );
-                        return Ok(Some(TurnEvent::flaked("opencode message aborted")));
-                    }
-                    if !state.completed() {
-                        debug!(
-                            conversation_id,
-                            last_opencode_finish = state.finish.as_deref().unwrap_or_default(),
-                            "opencode pane is idle while its message remains nonterminal"
-                        );
-                        self.settled_since = None;
-                        continue;
-                    }
-                    self.turn_open = false;
-                    info!(
-                        conversation_id,
-                        pane_hash,
-                        pane_unchanged_ms = unchanged_ms,
-                        turn_end_reason = "opencode_stop",
-                        "opencode tui turn completed"
-                    );
-                    return Ok(Some(TurnEvent::ok("opencode stop")));
-                }
                 self.turn_open = false;
                 warn!(
                     harness = self.profile.harness,
@@ -417,19 +354,6 @@ impl LaneChannel for TuiChannel {
             }
             std::thread::sleep(Duration::from_millis(500));
         }
-    }
-
-    /// Pane repaint is no durable signal; opencode's store write times are,
-    /// exactly as the run channel reports them.
-    fn last_activity_ms(&self) -> Option<u64> {
-        if self.profile.harness != "opencode" {
-            return None;
-        }
-        let session = match self.conversation.clone() {
-            Some(session) => session,
-            None => crate::channel::opencode::newest_session(&self.cwd, self.turn_started_ms)?,
-        };
-        crate::channel::opencode::newest_activity(&session)
     }
 
     fn close(&mut self) -> Result<()> {
@@ -499,25 +423,6 @@ fn hash(body: &str) -> u64 {
     value
 }
 
-/// `opencode` takes plain Enter as a steer; its own pane shows the new turn
-/// starting mid-work with no extra key.
-pub fn opencode_profile(spec: &ChannelSpec) -> TuiProfile {
-    let mut command = String::from("opencode --auto");
-    if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
-        command.push_str(&format!(" -m {}", quote(model)));
-    }
-    if let Some(session) = &spec.resume {
-        command.push_str(&format!(" -s {}", quote(session)));
-    }
-    TuiProfile {
-        harness: "opencode",
-        command,
-        steer_key: None,
-        boot_keys: Vec::new(),
-        resume_flag: Some("-s"),
-    }
-}
-
 /// `kimi` QUEUES on Enter and steers only on ctrl-s. Its per-folder trust
 /// dialog fires on every fresh worktree.
 pub fn kimi_profile(spec: &ChannelSpec) -> TuiProfile {
@@ -578,8 +483,7 @@ mod tests {
     }
 
     #[test]
-    fn opencode_takes_enter_as_its_steer_and_kimi_needs_ctrl_s() {
-        assert_eq!(opencode_profile(&spec(None)).steer_key, None);
+    fn kimi_requires_ctrl_s_to_steer() {
         assert_eq!(kimi_profile(&spec(None)).steer_key, Some("C-s"));
     }
 
@@ -588,24 +492,10 @@ mod tests {
     #[test]
     fn kimi_boots_through_its_trust_dialog() {
         assert_eq!(kimi_profile(&spec(None)).boot_keys, vec!["Enter"]);
-        assert!(opencode_profile(&spec(None)).boot_keys.is_empty());
     }
 
     #[test]
     fn both_profiles_run_auto_and_carry_the_model() {
-        let opencode = opencode_profile(&spec(Some("openrouter/deepseek/deepseek-v4-flash-0731")));
-        assert!(
-            opencode.command.starts_with("opencode --auto"),
-            "{}",
-            opencode.command
-        );
-        assert!(
-            opencode
-                .command
-                .contains("-m 'openrouter/deepseek/deepseek-v4-flash-0731'"),
-            "{}",
-            opencode.command
-        );
         let kimi = kimi_profile(&spec(Some("kimi-code/k3")));
         assert!(kimi.command.starts_with("kimi --auto"), "{}", kimi.command);
         assert!(
@@ -616,10 +506,9 @@ mod tests {
     }
 
     #[test]
-    fn a_resume_uses_each_harness_own_session_flag() {
+    fn a_resume_uses_kimi_session_flag() {
         let mut request = spec(None);
         request.resume = Some("ses_abc".to_owned());
-        assert!(opencode_profile(&request).command.contains("-s 'ses_abc'"));
         assert!(kimi_profile(&request).command.contains("-S 'ses_abc'"));
     }
 
@@ -652,8 +541,7 @@ mod tests {
     }
 
     #[test]
-    fn each_tui_declares_its_resume_flag() {
-        assert_eq!(opencode_profile(&spec(None)).resume_flag, Some("-s"));
+    fn kimi_declares_its_resume_flag() {
         assert_eq!(kimi_profile(&spec(None)).resume_flag, Some("-S"));
     }
 

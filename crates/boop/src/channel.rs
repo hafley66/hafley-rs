@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
+pub mod acp;
 pub mod claude;
 pub mod codex;
 pub mod jsonrpc;
