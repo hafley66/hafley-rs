@@ -42,6 +42,8 @@ Sites:
 - [x] `worktree::tests::worktree_spawn_creates_a_branch_at_the_base` ... ok
 - [x] `worktree::tests::setup_steps_run_in_order_in_the_worktree` ... ok
 - [x] `worktree::tests::main_tree_spawn_refuses_a_non_fast_forward` ... ok
+- [x] `cargo test -p boop --test install_rail`: `test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s`
+- [x] `cargo clippy -p boop --all-targets`: exit 0, one warning, `needless_borrow` at `crates/boop/tests/host_chat.rs:44`, outside both owned files
 
 ## Implementation Notes
 

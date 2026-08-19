@@ -37,6 +37,8 @@ Sites:
 
 - [x] `cargo test -p boop --no-fail-fast`, lib binary: `test result: ok. 312 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.87s`
 - [x] `concatmap::tests::context_tokens_handles_a_quote_in_the_session_id` ... ok
+- [x] `cargo test -p boop --test install_rail`: `test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s`
+- [x] `cargo clippy -p boop --all-targets`: exit 0, one warning, `needless_borrow` at `crates/boop/tests/host_chat.rs:44`, outside both owned files
 
 ## Implementation Notes
 
