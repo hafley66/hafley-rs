@@ -875,6 +875,7 @@ fn main() -> Result<()> {
                     dry_run,
                     wait: false,
                     wait_timeout: 0,
+                    reclaim: false,
                 },
             ),
             SubCmd::Adopt {
@@ -2571,6 +2572,7 @@ struct LaneArgs {
     dry_run: bool,
     wait: bool,
     wait_timeout: u64,
+    reclaim: bool,
 }
 
 /// Falls back to a `*coordinator*` name match only when no route declares
@@ -2767,7 +2769,18 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
                 identity.lane, args.wait_timeout
             );
         }
+        if args.reclaim {
+            println!("reclaim: worktree and branch removed first, if the name is dead");
+        }
         return Ok(());
+    }
+    if args.reclaim {
+        let removed = lane::reclaim_for_spawn(&repo, &identity, &routes, |target| {
+            tmux::mux().target_alive(None, target)
+        })?;
+        for line in removed.lines() {
+            println!("reclaim: {line}");
+        }
     }
     let lane_id = identity.lane.clone();
     let trace = args
@@ -4712,6 +4725,10 @@ enum LaneCmd {
         mail_dir: Option<PathBuf>,
         #[arg(long)]
         dry_run: bool,
+        /// Remove a dead lane's worktree and branch before spawning. A live
+        /// route or a live pane on the name refuses.
+        #[arg(long)]
+        reclaim: bool,
     },
     /// Drive one lane conversation. This is what a lane pane runs; a human
     /// calls `lane create`, never this.
@@ -5445,6 +5462,7 @@ fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             wait,
             wait_timeout,
             mood,
+            reclaim,
         } => run_lane(
             registry,
             LaneArgs {
@@ -5468,6 +5486,7 @@ fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
                 dry_run,
                 wait,
                 wait_timeout,
+                reclaim,
             },
         ),
         LaneCmd::Run {
@@ -5688,7 +5707,10 @@ fn run_lane_delete(mail_dir_arg: Option<&Path>, lane: &str, route_only: bool) ->
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
     let Some(route) = routes.get(lane) else {
-        anyhow::bail!("no registry route for lane `{lane}`")
+        if route_only {
+            anyhow::bail!("no registry route for lane `{lane}`")
+        }
+        return run_lane_delete_carcass(lane);
     };
     if !route_only {
         if let Some(session) = route.tmux.as_deref() {
@@ -5706,6 +5728,23 @@ fn run_lane_delete(mail_dir_arg: Option<&Path>, lane: &str, route_only: bool) ->
     })?;
     info!(lane, route_only, "lane route deleted");
     println!("deleted {lane}");
+    Ok(())
+}
+
+/// A DOA spawn's epilogue drops the route before the driver can delete the
+/// lane, so the worktree and branch are all that is left to remove.
+fn run_lane_delete_carcass(lane: &str) -> Result<()> {
+    let here = std::env::current_dir().context("read the current directory")?;
+    let repo = lane::repo_root(&here)?;
+    let removed =
+        lane::delete_carcass(&repo, lane, |target| tmux::mux().target_alive(None, target))?;
+    for line in removed.lines() {
+        println!("deleted {lane}: {line}");
+    }
+    if removed.nothing_removed() {
+        println!("deleted {lane}: nothing left to remove");
+    }
+    info!(lane, "lane carcass deleted");
     Ok(())
 }
 
