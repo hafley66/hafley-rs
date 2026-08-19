@@ -162,6 +162,9 @@ HAIL: boop beep hail <lane> --body \"text\" [--from <me>] [--kind <k>]
     boop db \"SELECT * FROM agent_edge\" -- edge kind deliver-midturn/deliver-nextturn
   and the mailbox row's to_timestamp is stamped when the lane takes it.
 
+TELL: boop tell-parent [--kind completion|yield|note] [--body \"t\"] mails the
+  caller's parent edge; boop tell-children --body \"t\" mails every live child.
+
 WAIT: every agent can background a shell, so the universal push is a block:
     boop wait <message-id>          the reply to what you just sent
     boop wait --me [--as <name>]    the next unread mail addressed to you
@@ -317,6 +320,27 @@ enum SubCmd {
     Host {
         #[command(subcommand)]
         cmd: HostCmd,
+    },
+    /// Mail the caller's own parent. The identity ladder names the sender and
+    /// the registered parent edge names the recipient, so neither is spelled.
+    TellParent {
+        /// What the row says it is. `yield` carries a default body.
+        #[arg(long, default_value = "note", value_parser = ["completion", "yield", "note"])]
+        kind: String,
+        /// The message. Required for every kind but `yield`.
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Mail one body to every live child of the caller, resolved from the same
+    /// parent edges, with a landed/dead line per target.
+    TellChildren {
+        /// The message every child gets.
+        #[arg(long)]
+        body: String,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
     },
     /// Report the caller's own identity and the rung that resolved it.
     Whoami {
@@ -998,6 +1022,14 @@ fn main() -> Result<()> {
                 wait_timeout,
                 mail_dir.as_deref(),
             ),
+            SubCmd::TellParent {
+                kind,
+                body,
+                mail_dir,
+            } => run_tell_parent(&registry, &kind, body.as_deref(), mail_dir.as_deref()),
+            SubCmd::TellChildren { body, mail_dir } => {
+                run_tell_children(&registry, &body, mail_dir.as_deref())
+            }
             SubCmd::Whoami { json } => run_whoami(json),
             SubCmd::Inbox { cmd } => run_inbox(cmd),
             SubCmd::Me {
@@ -2079,15 +2111,36 @@ fn deliver_hail(
         println!("{to} has no tmux pane: message stays queued, to_timestamp null");
         return Ok(());
     };
-    let line = boop::supervise::render_mail(
+    match inject_mail(registry, route, message, pane, socket)? {
+        boop::harness::SendOutcome::Injected => println!("injected into tmux {pane}"),
+        boop::harness::SendOutcome::QueuedForNextSpawn => {
+            println!("queued for next spawn -> {to}");
+        }
+        boop::harness::SendOutcome::Unsupported => {
+            println!("{to} harness has no send support: message stays queued");
+        }
+    }
+    Ok(())
+}
+
+/// Type one queued row into a live pane, rendered through the receiver's mood.
+/// The send goes through the harness control facet; tmux is a transport detail
+/// inside the impl, and the session carries the pane handle spawn gave it.
+fn inject_mail(
+    registry: &Registry,
+    route: &Route,
+    message: &bus::Message,
+    pane: &str,
+    socket: Option<&str>,
+) -> Result<boop::harness::SendOutcome> {
+    let to = message.to.as_str();
+    let rendered = boop::supervise::render_mail(
         &boop::supervise::mood_template(to),
         &message.kind,
         &message.id,
         &message.from,
         &message.body,
     );
-    // Route the send through the harness control facet; tmux is a transport
-    // detail inside the impl. The session carries the pane handle spawn gave it.
     let harness_id = route.harness.as_deref().unwrap_or("claude");
     let adapter = harness_by_id(registry, harness_id)?;
     let session = boop::harness::SessionRef {
@@ -2103,17 +2156,142 @@ fn deliver_hail(
         tmux_socket: socket.map(str::to_owned),
         parent: None,
     };
-    let outcome = adapter.send(&session, &line)?;
-    match outcome {
-        boop::harness::SendOutcome::Injected => println!("injected into tmux {pane}"),
-        boop::harness::SendOutcome::QueuedForNextSpawn => {
-            println!("queued for next spawn -> {to}");
+    adapter.send(&session, &rendered)
+}
+
+/// `tell-parent`: one row from the caller to the parent its registration
+/// recorded. The caller spells neither end of the edge.
+fn run_tell_parent(
+    registry: &Registry,
+    kind: &str,
+    body: Option<&str>,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let routes = bus::read_routes(&dir)?;
+    let identity = identity::resolve_with(registry, &routes)?;
+    let (caller, route) = lane::caller_route(&identity, &routes)?;
+    let pick = lane::tell_parent_target(&caller, route, &routes)?;
+    let parent = pick
+        .parent
+        .clone()
+        .context("no parent edge resolved for the caller")?;
+    let body = match (body, kind) {
+        (Some(body), _) => body.to_owned(),
+        (None, "yield") => {
+            let tree = route
+                .worktree_dir
+                .as_deref()
+                .or(route.cwd.as_deref())
+                .map(Path::new);
+            lane::yield_body(&caller, tree)
         }
-        boop::harness::SendOutcome::Unsupported => {
-            println!("{to} harness has no send support: message stays queued");
+        (None, kind) => anyhow::bail!(
+            "--body is required with --kind {kind}; only `yield` carries a default body"
+        ),
+    };
+    let message = bus::Message {
+        id: bus::mint_id(),
+        from: caller.clone(),
+        to: parent.clone(),
+        from_timestamp: bus::now_iso(),
+        to_timestamp: None,
+        kind: kind.to_owned(),
+        reply_to: None,
+        body,
+        r#ref: None,
+        rc: None,
+        detail: None,
+    };
+    append_message(&dir, &message)?;
+    record_control_edge(&message)?;
+    println!("{caller} -> {parent} (parent from {})", pick.source);
+    deliver_hail(registry, &dir, &message, None)?;
+    line(&message.id);
+    Ok(())
+}
+
+/// `tell-children`: one body to every child the registry records under the
+/// caller. A child nothing drains is reported dead and gets no row.
+fn run_tell_children(registry: &Registry, body: &str, mail_dir_arg: Option<&Path>) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let routes = bus::read_routes(&dir)?;
+    let identity = identity::resolve_with(registry, &routes)?;
+    let (caller, _) = lane::caller_route(&identity, &routes)?;
+    let children = lane::children_of(&caller, &routes);
+    if children.is_empty() {
+        println!("no child of {caller} is registered");
+        return Ok(());
+    }
+    for (name, route) in children {
+        let Some(reach) = child_reach(route, name, None) else {
+            println!("dead {name}");
+            continue;
+        };
+        let message = bus::Message {
+            id: bus::mint_id(),
+            from: caller.clone(),
+            to: name.to_owned(),
+            from_timestamp: bus::now_iso(),
+            to_timestamp: None,
+            kind: "note".to_owned(),
+            reply_to: None,
+            body: body.to_owned(),
+            r#ref: None,
+            rc: None,
+            detail: None,
+        };
+        append_message(&dir, &message)?;
+        record_control_edge(&message)?;
+        match reach {
+            ChildReach::Hook => println!("landed {name} {} (hook inbox)", message.id),
+            ChildReach::Supervisor => {
+                println!("landed {name} {} (lane supervisor)", message.id)
+            }
+            ChildReach::Pane(pane) => match inject_mail(registry, route, &message, &pane, None)? {
+                boop::harness::SendOutcome::Injected => {
+                    println!("landed {name} {} (pane {pane})", message.id)
+                }
+                boop::harness::SendOutcome::QueuedForNextSpawn => {
+                    println!("landed {name} {} (next spawn)", message.id)
+                }
+                boop::harness::SendOutcome::Unsupported => {
+                    println!("dead {name} (harness takes no send)")
+                }
+            },
         }
     }
     Ok(())
+}
+
+/// What would take a row addressed to a child.
+enum ChildReach {
+    /// An installed hook drains the child's mailbox at its turn boundary.
+    Hook,
+    /// The lane's own supervisor reads the mailbox.
+    Supervisor,
+    /// A live pane takes the keystrokes.
+    Pane(String),
+}
+
+/// How a queued row reaches a child, or `None` when nothing would take it: no
+/// hook drains its project and its pane is gone.
+fn child_reach(route: &Route, name: &str, socket: Option<&str>) -> Option<ChildReach> {
+    if route
+        .cwd
+        .as_deref()
+        .is_some_and(|cwd| inbox::installed_for(Path::new(cwd), name))
+    {
+        return Some(ChildReach::Hook);
+    }
+    let target = route.tmux.as_deref().filter(|target| !target.is_empty())?;
+    if !tmux::mux().target_alive(socket, target) {
+        return None;
+    }
+    match route.kind.as_str() {
+        "lane" => Some(ChildReach::Supervisor),
+        _ => Some(ChildReach::Pane(target.to_owned())),
+    }
 }
 
 /// Drive one lane to completion inside its pane, then exit with the harness's

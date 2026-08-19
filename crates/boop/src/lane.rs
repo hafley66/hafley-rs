@@ -9,6 +9,7 @@ use anyhow::{Context, Result};
 
 use crate::bus::Route;
 use crate::config;
+use crate::identity::Identity;
 
 /// The worktree parent directory, relative to the repo root.
 pub const WORKTREE_ROOT: &str = ".boop-worktrees";
@@ -430,6 +431,89 @@ pub fn harness_for_spawn(explicit: Option<&str>, model: Option<&str>) -> Result<
     Ok(harness.into_owned())
 }
 
+/// The caller's own registered route. The identity ladder names a lane
+/// outright; without one the caller's session must match exactly one route,
+/// because two matches name two different senders.
+pub fn caller_route<'a>(
+    identity: &Identity,
+    routes: &'a BTreeMap<String, Route>,
+) -> Result<(String, &'a Route)> {
+    if let Some(lane) = identity.lane.as_deref().filter(|lane| !lane.is_empty()) {
+        let route = routes.get(lane).with_context(|| {
+            format!(
+                "unknown caller: identity names lane `{lane}`, which the registry does not carry"
+            )
+        })?;
+        return Ok((lane.to_owned(), route));
+    }
+    let session = identity
+        .session
+        .as_deref()
+        .filter(|session| !session.is_empty())
+        .context(
+            "unknown caller: no lane and no session resolved (boop whoami shows the ladder)",
+        )?;
+    let mut hits = routes
+        .iter()
+        .filter(|(_, route)| route.session_id.as_deref() == Some(session));
+    match (hits.next(), hits.next()) {
+        (Some((name, route)), None) => Ok((name.clone(), route)),
+        (Some((first, _)), Some((second, _))) => anyhow::bail!(
+            "ambiguous caller: session `{session}` is registered as both `{first}` and `{second}`"
+        ),
+        (None, _) => {
+            anyhow::bail!("unknown caller: no registered route carries session `{session}`")
+        }
+    }
+}
+
+/// Where a child's own mail goes: the parent edge its registration recorded,
+/// else the one registered coordinator. A caller that would address itself has
+/// no parent.
+pub fn tell_parent_target(
+    caller: &str,
+    route: &Route,
+    routes: &BTreeMap<String, Route>,
+) -> Result<ParentPick> {
+    if let Some(parent) = route.parent.as_deref().filter(|parent| !parent.is_empty()) {
+        return Ok(ParentPick {
+            parent: Some(parent.to_owned()),
+            source: "edge",
+        });
+    }
+    let pick = resolve_parent(None, None, routes);
+    match pick.parent.as_deref() {
+        Some(parent) if parent != caller => Ok(pick),
+        _ => anyhow::bail!(
+            "no parent edge: `{caller}` registered no parent and the registry holds no single other coordinator to fall back to; respawn with `--parent <route>` or register one"
+        ),
+    }
+}
+
+/// Every route the registry records as a child of `parent`.
+pub fn children_of<'a>(
+    parent: &str,
+    routes: &'a BTreeMap<String, Route>,
+) -> Vec<(&'a str, &'a Route)> {
+    routes
+        .iter()
+        .filter(|(name, route)| route.parent.as_deref() == Some(parent) && name.as_str() != parent)
+        .map(|(name, route)| (name.as_str(), route))
+        .collect()
+}
+
+/// What a `yield` says when the caller names no body: the lane, a clean exit,
+/// and the branch and head of the tree it worked in.
+pub fn yield_body(lane: &str, tree: Option<&Path>) -> String {
+    let branch = tree
+        .and_then(|tree| git_line(tree, &["rev-parse", "--abbrev-ref", "HEAD"]))
+        .unwrap_or_else(|| "-".to_owned());
+    let head = tree
+        .and_then(|tree| rev_parse(tree, "HEAD"))
+        .unwrap_or_else(|| "-".to_owned());
+    format!("yield {lane} rc=0 branch={branch} head={head}")
+}
+
 /// Who gets the completion hail: the flag, else the caller (a spawner is the
 /// parent of what it spawns), else a lone pane-backed registered coordinator.
 pub fn resolve_parent(
@@ -480,8 +564,9 @@ mod tests {
     use crate::bus::Route;
 
     use super::{
-        default_base_sha, derive, harness_for_model, harness_for_spawn, kind_of, repo_root,
-        resolve_parent, rev_parse, slug, LaneIdentity, ModelSpec, FALLBACK_LOCALE,
+        caller_route, children_of, default_base_sha, derive, harness_for_model, harness_for_spawn,
+        kind_of, repo_root, resolve_parent, rev_parse, slug, tell_parent_target, yield_body,
+        Identity, LaneIdentity, ModelSpec, FALLBACK_LOCALE,
     };
 
     fn repo() -> PathBuf {
@@ -776,6 +861,114 @@ mod tests {
         let pick = resolve_parent(None, None, &routes);
         assert_eq!(pick.parent.as_deref(), Some("terra"));
         assert_eq!(pick.source, "registry");
+    }
+
+    fn identity_of(lane: Option<&str>, session: Option<&str>) -> Identity {
+        Identity {
+            session: session.map(str::to_owned),
+            lane: lane.map(str::to_owned),
+            ..Identity::default()
+        }
+    }
+
+    /// RECEIPT. The ladder's lane wins outright, and a lane the registry does
+    /// not carry is named in the error rather than treated as unregistered
+    /// mail with no sender.
+    #[test]
+    fn the_caller_is_the_lane_the_ladder_names() {
+        let mut routes = BTreeMap::new();
+        routes.insert("boop-sql".to_owned(), route("boop-sql"));
+
+        let (name, _) = caller_route(&identity_of(Some("boop-sql"), None), &routes).unwrap();
+        assert_eq!(name, "boop-sql");
+
+        let error = caller_route(&identity_of(Some("ghost"), None), &routes).unwrap_err();
+        assert!(
+            error.to_string().contains("unknown caller") && error.to_string().contains("ghost"),
+            "{error}"
+        );
+    }
+
+    /// RECEIPT. Two routes on one session name two senders, so the caller is
+    /// reported ambiguous instead of picking the first key in the map.
+    #[test]
+    fn a_session_on_two_routes_is_an_ambiguous_caller() {
+        let mut routes = BTreeMap::new();
+        let mut first = route("one");
+        first.session_id = Some("ses-7".to_owned());
+        let mut second = route("two");
+        second.session_id = Some("ses-7".to_owned());
+        routes.insert("lane-one".to_owned(), first);
+        routes.insert("lane-two".to_owned(), second);
+
+        let error = caller_route(&identity_of(None, Some("ses-7")), &routes).unwrap_err();
+        assert!(error.to_string().contains("ambiguous caller"), "{error}");
+
+        routes.remove("lane-two");
+        let (name, _) = caller_route(&identity_of(None, Some("ses-7")), &routes).unwrap();
+        assert_eq!(name, "lane-one");
+    }
+
+    /// RECEIPT. The recorded edge outranks the registry rung, and a caller
+    /// that is itself the lone coordinator has no parent to tell.
+    #[test]
+    fn the_recorded_edge_outranks_the_lone_coordinator() {
+        let mut routes = BTreeMap::new();
+        routes.insert(
+            "terra".to_owned(),
+            route_of_kind("coordinator", "shell:0.3"),
+        );
+        let mut child = route("boop-sql");
+        child.parent = Some("luna".to_owned());
+        routes.insert("boop-sql".to_owned(), child.clone());
+
+        let edge = tell_parent_target("boop-sql", &child, &routes).unwrap();
+        assert_eq!(edge.parent.as_deref(), Some("luna"));
+        assert_eq!(edge.source, "edge");
+
+        let mut orphan = route("boop-sql");
+        orphan.parent = None;
+        let fallback = tell_parent_target("boop-sql", &orphan, &routes).unwrap();
+        assert_eq!(fallback.parent.as_deref(), Some("terra"));
+        assert_eq!(fallback.source, "registry");
+
+        let coordinator = routes.get("terra").unwrap().clone();
+        let error = tell_parent_target("terra", &coordinator, &routes).unwrap_err();
+        assert!(error.to_string().contains("no parent edge"), "{error}");
+    }
+
+    /// RECEIPT. Children are the recorded edges pointing at the caller, and a
+    /// route naming itself as its own parent is not one of them.
+    #[test]
+    fn children_are_the_routes_recording_the_caller_as_parent() {
+        let mut routes = BTreeMap::new();
+        let mut child = route("child");
+        child.parent = Some("terra".to_owned());
+        let mut stranger = route("stranger");
+        stranger.parent = Some("luna".to_owned());
+        let mut looped = route_of_kind("coordinator", "shell:0.4");
+        looped.parent = Some("terra".to_owned());
+        routes.insert("boop-sql".to_owned(), child);
+        routes.insert("other-lane".to_owned(), stranger);
+        routes.insert("terra".to_owned(), looped);
+
+        let children: Vec<&str> = children_of("terra", &routes)
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        assert_eq!(children, vec!["boop-sql"]);
+    }
+
+    /// RECEIPT. A yield from a route with no tree still says what it is; git
+    /// answering nothing prints a dash, never an empty field.
+    #[test]
+    fn a_yield_body_with_no_tree_reads_as_dashes() {
+        assert_eq!(
+            yield_body("feature-a", None),
+            "yield feature-a rc=0 branch=- head=-"
+        );
+        let body = yield_body("feature-a", Some(Path::new("/nonexistent-tree")));
+        assert_eq!(body, "yield feature-a rc=0 branch=- head=-");
     }
 
     /// RECEIPT (field, 2026-08-10). `--model gpt-5.6-luna@medium` with no
