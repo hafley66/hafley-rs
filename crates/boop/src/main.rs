@@ -868,6 +868,7 @@ fn main() -> Result<()> {
                     base_sha,
                     socket,
                     goal,
+                    mood: None,
                     trace: None,
                     no_start: false,
                     mail_dir,
@@ -1004,6 +1005,16 @@ fn main() -> Result<()> {
                 mail_dir,
                 cmd,
             } => match cmd {
+                Some(MeCmd::Mood {
+                    name: mood,
+                    clear,
+                    as_name,
+                }) => run_me_mood(
+                    mood.as_deref(),
+                    clear,
+                    as_name.as_deref(),
+                    mail_dir.as_deref(),
+                ),
                 Some(MeCmd::Favorite { index, note }) => run_me_favorite(index, note.as_deref()),
                 None => run_me(name.as_deref(), mail_dir.as_deref()),
             },
@@ -2016,7 +2027,13 @@ fn deliver_hail(
         println!("{to} has no tmux pane: message stays queued, to_timestamp null");
         return Ok(());
     };
-    let line = bus::injected_line(message);
+    let line = boop::supervise::render_mail(
+        &boop::supervise::mood_template(to),
+        &message.kind,
+        &message.id,
+        &message.from,
+        &message.body,
+    );
     // Route the send through the harness control facet; tmux is a transport
     // detail inside the impl. The session carries the pane handle spawn gave it.
     let harness_id = route.harness.as_deref().unwrap_or("claude");
@@ -2146,6 +2163,14 @@ fn record_lane_purpose(
     let _ = store.attach_trace(lane, trace, "lane-create", boop::channel::now_ms());
 }
 
+/// Set the child's mood at spawn. No `agent_session` row exists yet: the
+/// transcript sync writes that later, so the attribute is keyed on the lane
+/// name's `dict_session` id, which is the same id `agent_lane` records.
+fn record_lane_mood(lane: &str, mood: &str) -> Result<()> {
+    let store = boop::Store::open(boop::Store::default_path()?)?;
+    store.set_session_mood(lane, mood, boop::channel::now_ms())
+}
+
 fn record_control_edge(message: &boop::bus::Message) -> Result<()> {
     if !matches!(
         message.kind.as_str(),
@@ -2252,7 +2277,10 @@ fn run_inbox_drain(
         rows = rows.len(),
         "inbox drained"
     );
-    line(&hook.payload(&inbox::batch_text(&rows)));
+    line(&hook.payload(&inbox::batch_text(
+        &rows,
+        &boop::supervise::mood_template(&name),
+    )));
     Ok(())
 }
 
@@ -2484,6 +2512,7 @@ struct LaneArgs {
     base_sha: Option<String>,
     socket: Option<String>,
     goal: Option<String>,
+    mood: Option<String>,
     trace: Option<String>,
     no_start: bool,
     mail_dir: Option<PathBuf>,
@@ -2553,6 +2582,11 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     }
     if !brief.exists() {
         anyhow::bail!("brief path does not exist: {}", brief.display());
+    }
+    // A mood name is checked before anything spawns: a typo must not reach a
+    // pane that then mails its coordinator in the default shape.
+    if let Some(mood) = args.mood.as_deref() {
+        boop::Store::open(boop::Store::default_path()?)?.check_mood_name(mood)?;
     }
     let default_preset = default_preset_for_harness(&config, &config_path, &harness_id)?;
     let model = config::resolve_spawn_model(
@@ -2672,6 +2706,9 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         if let Some(goal) = &args.goal {
             println!("goal: {goal}");
         }
+        if let Some(mood) = &args.mood {
+            println!("mood: {mood}");
+        }
         if args.wait {
             println!(
                 "wait: for {} result, timeout {}s",
@@ -2696,6 +2733,9 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         args.goal.as_deref(),
         &brief,
     );
+    if let Some(mood) = args.mood.as_deref() {
+        record_lane_mood(&identity.lane, mood)?;
+    }
     run_dispatch(
         registry,
         DispatchArgs {
@@ -4545,6 +4585,10 @@ enum LaneCmd {
         /// What the lane is running toward.
         #[arg(long)]
         goal: Option<String>,
+        /// The format the lane's mail is rendered in; it inherits the parent's
+        /// when absent.
+        #[arg(long)]
+        mood: Option<String>,
         /// Continue an existing trace instead of opening one named for the
         /// lane. Every session this lane runs joins it.
         #[arg(long)]
@@ -5103,6 +5147,19 @@ enum SyncCmd {
 
 #[derive(Subcommand)]
 enum MeCmd {
+    /// Read or set the format agents mail this session in. No name prints the
+    /// effective mood and the session that set it.
+    Mood {
+        /// A stored mood name; `boop db "select * from mood"` lists them.
+        #[arg(conflicts_with = "clear")]
+        name: Option<String>,
+        /// Drop this session's own mood row, so it inherits again.
+        #[arg(long)]
+        clear: bool,
+        /// The session to act on; defaults to the caller.
+        #[arg(long = "as", value_name = "SESSION")]
+        as_name: Option<String>,
+    },
     /// Save one assistant turn from the caller's conversation as a favorite.
     Favorite {
         /// Assistant turn position: -1 is newest, -2 is the one before it.
@@ -5311,6 +5368,7 @@ fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             dry_run,
             wait,
             wait_timeout,
+            mood,
         } => run_lane(
             registry,
             LaneArgs {
@@ -5327,6 +5385,7 @@ fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
                 base_sha,
                 socket,
                 goal,
+                mood,
                 trace,
                 no_start,
                 mail_dir,
@@ -6722,6 +6781,41 @@ fn run_me(name: Option<&str>, mail_dir_arg: Option<&Path>) -> Result<()> {
         },
     )?;
     println!("registered {name} -> {pane} codex {}", session.session_id);
+    if let Ok(mood) = boop::Store::default_path()
+        .and_then(boop::Store::open)
+        .and_then(|store| store.effective_mood(name))
+    {
+        println!("{}", mood.line());
+    }
+    Ok(())
+}
+
+/// Read or write the caller's mood. Writing validates the name against the
+/// stored moods, so a typo never reaches a delivery path.
+fn run_me_mood(
+    mood: Option<&str>,
+    clear: bool,
+    as_name: Option<&str>,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let session = waiting_as(&dir, as_name)?;
+    let store = boop::Store::open(boop::Store::default_path()?)?;
+    match (mood, clear) {
+        (Some(mood), _) => {
+            store.set_session_mood(&session, mood, boop::channel::now_ms())?;
+            println!("mood: {mood} (set on {session})");
+        }
+        (None, true) => {
+            let had = store.clear_session_attr(&session, boop::ident::MOOD_ATTR_KEY)?;
+            match had {
+                true => println!("mood cleared on {session}"),
+                false => println!("{session} had no mood of its own"),
+            }
+            println!("{}", store.effective_mood(&session)?.line());
+        }
+        (None, false) => println!("{}", store.effective_mood(&session)?.line()),
+    }
     Ok(())
 }
 

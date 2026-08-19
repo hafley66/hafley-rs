@@ -29,9 +29,30 @@ pub struct Store {
 /// (session_id, turn, pr_url_id): a turn with two PRs keeps two rows.
 /// 10 = agent_favorite, user-pinned markdown bodies.
 /// 11 = bounded, lane-addressable supervisor/channel trace events.
-pub const SCHEMA_VERSION: i64 = 12;
+/// 13 = per-session attributes and the mood rows mail renders through.
+pub const SCHEMA_VERSION: i64 = 13;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
+
+/// The attribute key a session's mood is stored under.
+pub const MOOD_ATTR_KEY: &str = "mood";
+/// The mood every session falls back to, and the template used when the store
+/// holds no row for it.
+pub const DEFAULT_MOOD: &str = "plain";
+pub const DEFAULT_MOOD_TEMPLATE: &str = "[boop {id} from {from}] {body}";
+/// An ancestry walk longer than this is a cycle in the lane tree.
+const MOOD_ANCESTRY_LIMIT: i64 = 64;
+
+/// The moods a store is born with. A row edited afterwards is never rewritten:
+/// seeding is `INSERT OR IGNORE`.
+const MOOD_SEEDS: [(&str, &str); 3] = [
+    (DEFAULT_MOOD, DEFAULT_MOOD_TEMPLATE),
+    (
+        "unga",
+        "unga: lists/tables/mermaid only, no prose\n{from} -> {id}\n{body}",
+    ),
+    ("board", "| {from} | {id} | {body} |"),
+];
 
 /// A row returned to the CLI, joined back from ids to the TEXT the query
 /// surface exposes.
@@ -117,6 +138,33 @@ pub struct LaneSpawn {
     pub brief_path: Option<String>,
     pub brief_body: Option<String>,
     pub ts: u64,
+}
+
+/// The mood one session's mail renders through. `set_by` names the session
+/// whose attribute row decided it, `None` when the default applied.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EffectiveMood {
+    pub name: String,
+    pub template: String,
+    pub set_by: Option<String>,
+}
+
+impl EffectiveMood {
+    fn default_mood() -> Self {
+        EffectiveMood {
+            name: DEFAULT_MOOD.to_owned(),
+            template: DEFAULT_MOOD_TEMPLATE.to_owned(),
+            set_by: None,
+        }
+    }
+
+    /// The line `boop me` prints.
+    pub fn line(&self) -> String {
+        match &self.set_by {
+            Some(setter) => format!("mood: {} (set by {setter})", self.name),
+            None => format!("mood: {} (set by default)", self.name),
+        }
+    }
 }
 
 /// One durable supervisor/channel observation. `event_key` is minted by the
@@ -328,6 +376,7 @@ impl Store {
             self.connection
                 .execute_batch(SCHEMA)
                 .with_context(|| format!("initialise boop.db schema at {}", path.display()))?;
+            self.seed_moods()?;
             if self.schema_version()? == 0 {
                 self.stamp_version()?;
                 return Ok(());
@@ -461,6 +510,7 @@ impl Store {
                 .execute_batch(&format!("DROP TABLE IF EXISTS \"{name}\""))?;
         }
         self.connection.execute_batch(SCHEMA)?;
+        self.seed_moods()?;
         self.stamp_version()?;
         for (body, note, source, created_ts, first_ts) in favorites {
             let markdown_id = self.intern_markdown(&body, first_ts as u64)?;
@@ -1337,6 +1387,132 @@ impl Store {
             ],
         )?;
         Ok(self.connection.last_insert_rowid())
+    }
+
+    /// Write the moods a store is born with. Reentrant: an edited template
+    /// survives every later open.
+    fn seed_moods(&self) -> Result<()> {
+        for (name, template) in MOOD_SEEDS {
+            self.connection.execute(
+                "INSERT OR IGNORE INTO dict_mood_name (id, value) VALUES (NULL, ?1)",
+                params![name],
+            )?;
+            self.connection.execute(
+                "INSERT OR IGNORE INTO mood (name_id, template)
+                   SELECT id, ?2 FROM dict_mood_name WHERE value = ?1",
+                params![name, template],
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Every mood a session may be set to, alphabetical.
+    pub fn mood_names(&self) -> Result<Vec<String>> {
+        let mut statement = self.connection.prepare(
+            "SELECT name.value FROM mood
+               JOIN dict_mood_name name ON name.id = mood.name_id
+              ORDER BY name.value",
+        )?;
+        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+        let mut names = Vec::new();
+        for row in rows {
+            names.push(row?);
+        }
+        Ok(names)
+    }
+
+    /// One session attribute, last write wins.
+    pub fn set_session_attr(&self, session: &str, key: &str, value: &str, ts: u64) -> Result<()> {
+        let session_id = self.session_id(session)?;
+        let key_id = self.intern("dict_attr_key", key)?;
+        self.connection.execute(
+            "INSERT INTO agent_session_attr (session_id, key_id, value, set_ts)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT (session_id, key_id)
+               DO UPDATE SET value = excluded.value, set_ts = excluded.set_ts",
+            params![session_id, key_id, value, ts as i64],
+        )?;
+        Ok(())
+    }
+
+    /// Drop one session attribute. False when the session had none.
+    pub fn clear_session_attr(&self, session: &str, key: &str) -> Result<bool> {
+        let removed = self.connection.execute(
+            "DELETE FROM agent_session_attr
+              WHERE session_id = (SELECT id FROM dict_session WHERE value = ?1)
+                AND key_id = (SELECT id FROM dict_attr_key WHERE value = ?2)",
+            params![session, key],
+        )?;
+        Ok(removed > 0)
+    }
+
+    /// Set one session's mood. An unknown name names the known ones.
+    pub fn set_session_mood(&self, session: &str, mood: &str, ts: u64) -> Result<()> {
+        self.check_mood_name(mood)?;
+        self.set_session_attr(session, MOOD_ATTR_KEY, mood, ts)
+    }
+
+    /// Error unless `mood` is a stored mood.
+    pub fn check_mood_name(&self, mood: &str) -> Result<()> {
+        let known = self.mood_names()?;
+        if known.iter().any(|name| name == mood) {
+            return Ok(());
+        }
+        anyhow::bail!("unknown mood {mood}; known moods: {}", known.join(", "))
+    }
+
+    /// The mood mail addressed to `session` renders through: the session's own
+    /// attribute row, else the nearest ancestor's up the lane tree, else the
+    /// default. One statement, whatever the depth.
+    pub fn effective_mood(&self, session: &str) -> Result<EffectiveMood> {
+        let resolved = self
+            .connection
+            .query_row(
+                "WITH RECURSIVE ancestry(session_id, depth) AS (
+                     SELECT id, 0 FROM dict_session WHERE value = ?1
+                     UNION
+                     SELECT lane.parent_lane_id, ancestry.depth + 1
+                       FROM ancestry
+                       JOIN agent_lane lane ON lane.lane_id = ancestry.session_id
+                      WHERE lane.parent_lane_id IS NOT NULL
+                        AND ancestry.depth < ?4
+                 )
+                 SELECT name, template, set_by FROM (
+                     SELECT mood_name.value AS name,
+                            mood.template AS template,
+                            setter.value AS set_by,
+                            ancestry.depth AS rank
+                       FROM ancestry
+                       JOIN agent_session_attr attr ON attr.session_id = ancestry.session_id
+                       JOIN dict_attr_key attr_key
+                         ON attr_key.id = attr.key_id AND attr_key.value = ?2
+                       JOIN dict_mood_name mood_name ON mood_name.value = attr.value
+                       JOIN mood ON mood.name_id = mood_name.id
+                       JOIN dict_session setter ON setter.id = ancestry.session_id
+                     UNION ALL
+                     SELECT mood_name.value, mood.template, NULL, ?4 + 1
+                       FROM mood
+                       JOIN dict_mood_name mood_name ON mood_name.id = mood.name_id
+                      WHERE mood_name.value = ?3
+                 )
+                 ORDER BY rank, set_by
+                 LIMIT 1",
+                params![
+                    session,
+                    MOOD_ATTR_KEY,
+                    DEFAULT_MOOD,
+                    MOOD_ANCESTRY_LIMIT
+                ],
+                |row| {
+                    Ok(EffectiveMood {
+                        name: row.get(0)?,
+                        template: row.get(1)?,
+                        set_by: row.get(2)?,
+                    })
+                },
+            )
+            .optional()?;
+        Ok(resolved.unwrap_or_else(EffectiveMood::default_mood))
     }
 
     /// Give every connected component of `spawned` edges one trace, named for
@@ -2362,6 +2538,23 @@ CREATE TABLE IF NOT EXISTS sync_root_stamp (
   mtime_ms INTEGER NOT NULL,
   PRIMARY KEY (harness_id, root_path_id)
 ) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS dict_attr_key (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
+CREATE TABLE IF NOT EXISTS dict_mood_name (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
+
+CREATE TABLE IF NOT EXISTS agent_session_attr (
+  session_id INTEGER NOT NULL,
+  key_id INTEGER NOT NULL,
+  value TEXT NOT NULL,
+  set_ts INTEGER NOT NULL,
+  PRIMARY KEY (session_id, key_id)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS mood (
+  id INTEGER PRIMARY KEY,
+  name_id INTEGER NOT NULL UNIQUE,
+  template TEXT NOT NULL
+);
 ";
 
 #[cfg(test)]
@@ -2384,6 +2577,16 @@ mod tests {
     };
 
     static CURSOR_SQL: AtomicUsize = AtomicUsize::new(0);
+    static MOOD_SQL: AtomicUsize = AtomicUsize::new(0);
+
+    /// Every statement that reads the attribute rows, whatever else it names.
+    fn count_mood_sql(event: TraceEvent<'_>) {
+        if let TraceEvent::Stmt(_, sql) = event {
+            if sql.contains("agent_session_attr") {
+                MOOD_SQL.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
 
     fn count_cursor_sql(event: TraceEvent<'_>) {
         if let TraceEvent::Stmt(_, sql) = event {
@@ -2490,6 +2693,176 @@ mod tests {
         assert_eq!(migrated.schema_version().unwrap(), super::SCHEMA_VERSION);
         let edges = migrated.query_edges(None).unwrap();
         assert_eq!(edges.len(), 1);
+        drop(migrated);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Spawn `lane` under `parent`, which is all the mood cascade reads.
+    fn spawn_under(store: &Store, lane: &str, parent: Option<&str>) {
+        store
+            .record_lane_spawn(&super::LaneSpawn {
+                lane: lane.to_owned(),
+                parent: parent.map(str::to_owned),
+                ts: 1,
+                ..Default::default()
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn a_fresh_store_carries_the_seed_moods() {
+        let (path, store) = fresh_store("mood-seeds");
+        assert_eq!(store.mood_names().unwrap(), vec!["board", "plain", "unga"]);
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_session_with_no_attr_row_anywhere_takes_the_default() {
+        let (path, store) = fresh_store("mood-default");
+        let mood = store.effective_mood("lonely").unwrap();
+        assert_eq!(mood.name, super::DEFAULT_MOOD);
+        assert_eq!(mood.template, super::DEFAULT_MOOD_TEMPLATE);
+        assert_eq!(mood.set_by, None);
+        assert_eq!(mood.line(), "mood: plain (set by default)");
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_session_mood_round_trips_and_clears() {
+        let (path, store) = fresh_store("mood-round-trip");
+        store.set_session_mood("coord", "unga", 10).unwrap();
+        let set = store.effective_mood("coord").unwrap();
+        assert_eq!(set.name, "unga");
+        assert_eq!(set.set_by.as_deref(), Some("coord"));
+        assert_eq!(set.line(), "mood: unga (set by coord)");
+        // Last write wins on one row, never a second row.
+        store.set_session_mood("coord", "board", 11).unwrap();
+        let rows: i64 = store
+            .connection
+            .query_row("SELECT COUNT(*) FROM agent_session_attr", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(rows, 1);
+        assert_eq!(store.effective_mood("coord").unwrap().name, "board");
+        assert!(store
+            .clear_session_attr("coord", super::MOOD_ATTR_KEY)
+            .unwrap());
+        assert_eq!(
+            store.effective_mood("coord").unwrap().name,
+            super::DEFAULT_MOOD
+        );
+        assert!(!store
+            .clear_session_attr("coord", super::MOOD_ATTR_KEY)
+            .unwrap());
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn an_unknown_mood_name_names_the_known_ones() {
+        let (path, store) = fresh_store("mood-unknown");
+        let error = store.set_session_mood("coord", "shouty", 10).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "unknown mood shouty; known moods: board, plain, unga"
+        );
+        assert_eq!(
+            store.effective_mood("coord").unwrap().name,
+            super::DEFAULT_MOOD
+        );
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A mood set at the root reaches every lane under it, and a lane that
+    /// sets its own takes it back from there down.
+    #[test]
+    fn a_lane_takes_the_nearest_ancestor_mood() {
+        let (path, store) = fresh_store("mood-cascade");
+        spawn_under(&store, "middle", Some("root"));
+        spawn_under(&store, "leaf", Some("middle"));
+        store.set_session_mood("root", "unga", 10).unwrap();
+
+        for session in ["root", "middle", "leaf"] {
+            let mood = store.effective_mood(session).unwrap();
+            assert_eq!(mood.name, "unga", "{session} lost the root mood");
+            assert_eq!(mood.set_by.as_deref(), Some("root"));
+        }
+
+        store.set_session_mood("middle", "board", 11).unwrap();
+        assert_eq!(store.effective_mood("root").unwrap().name, "unga");
+        for session in ["middle", "leaf"] {
+            let mood = store.effective_mood(session).unwrap();
+            assert_eq!(mood.name, "board", "{session} missed the nearer mood");
+            assert_eq!(mood.set_by.as_deref(), Some("middle"));
+        }
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// COUNT, not end state: the walk is one recursive CTE, so a chain twice as
+    /// deep still costs one statement.
+    #[test]
+    fn resolving_the_effective_mood_is_one_statement() {
+        let (path, store) = fresh_store("mood-statement-count");
+        let mut parent = "root".to_owned();
+        for step in 0..8 {
+            let child = format!("lane-{step}");
+            spawn_under(&store, &child, Some(&parent));
+            parent = child;
+        }
+        store.set_session_mood("root", "unga", 10).unwrap();
+
+        MOOD_SQL.store(0, Ordering::Relaxed);
+        store
+            .connection()
+            .trace_v2(TraceEventCodes::SQLITE_TRACE_STMT, Some(count_mood_sql));
+        let mood = store.effective_mood(&parent).unwrap();
+        store.connection().trace_v2(TraceEventCodes::empty(), None);
+
+        assert_eq!(mood.name, "unga");
+        assert_eq!(MOOD_SQL.load(Ordering::Relaxed), 1);
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A cycle in the lane tree is a bounded walk, never a hang.
+    #[test]
+    fn a_cycle_in_the_lane_tree_still_answers() {
+        let (path, store) = fresh_store("mood-cycle");
+        spawn_under(&store, "one", Some("two"));
+        spawn_under(&store, "two", Some("one"));
+        assert_eq!(
+            store.effective_mood("one").unwrap().name,
+            super::DEFAULT_MOOD
+        );
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn v13_open_seeds_moods_once_and_keeps_an_edited_template() {
+        let (path, store) = fresh_store("mood-migration");
+        store.set_session_mood("coord", "unga", 10).unwrap();
+        store
+            .connection
+            .execute_batch(
+                "UPDATE mood SET template = 'edited {body}'
+                   WHERE name_id = (SELECT id FROM dict_mood_name WHERE value = 'unga');
+                 PRAGMA user_version = 12;",
+            )
+            .unwrap();
+        drop(store);
+
+        let migrated = Store::open(path.clone()).unwrap();
+        assert_eq!(migrated.schema_version().unwrap(), SCHEMA_VERSION);
+        assert_eq!(migrated.mood_names().unwrap(), vec!["board", "plain", "unga"]);
+        let mood = migrated.effective_mood("coord").unwrap();
+        assert_eq!(mood.name, "unga");
+        assert_eq!(mood.template, "edited {body}");
         drop(migrated);
         let _ = std::fs::remove_file(&path);
     }
