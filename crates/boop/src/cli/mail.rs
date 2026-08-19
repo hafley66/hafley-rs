@@ -97,6 +97,10 @@ pub(crate) fn all_messages(dir: &std::path::Path) -> Result<Vec<bus::Message>> {
     Ok(messages)
 }
 
+// ---------------------------------------------------------------------------
+// hail
+// ---------------------------------------------------------------------------
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_hail(
     registry: &Registry,
