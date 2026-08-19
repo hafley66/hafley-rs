@@ -1,4 +1,5 @@
 pub(crate) mod db;
+pub(crate) mod job;
 pub(crate) mod mail;
 pub(crate) mod me;
 

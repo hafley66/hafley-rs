@@ -8,8 +8,9 @@ use boop::mailwait::Watch;
 use boop::registry::Registry;
 use boop::{bus, identity, inbox, lane, tmux};
 
+use crate::cli::job::{harness_by_id, wait_and_exit, waiting_as};
 use crate::cli::{append_acks, append_message, append_message_to, line, mail_dir, pad};
-use crate::{harness_by_id, wait_and_exit, waiting_as, InboxCmd};
+use crate::InboxCmd;
 
 // ---------------------------------------------------------------------------
 // list

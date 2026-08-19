@@ -9,11 +9,12 @@ use boop::{bus, ident, tmux};
 #[cfg(feature = "agent-read")]
 use boop::{query, usage};
 
+use crate::cli::job::lane_state;
 use crate::cli::{emit_event, line, mail_dir, now_ms};
 use crate::{
-    lane_state, AgentSessionGraphFormat, AgentSummaryCmd, AgentSummaryFormat, ChatCmd, CursorCmd,
-    DbCmd, EdgeCmd, FactCmd, FavoriteCmd, OutputFormat, PriceCmd, QueryArgs, QueryFormat,
-    SessionCmd, SyncCmd, TurnCmd, UsageArgs, UsageCmd,
+    AgentSessionGraphFormat, AgentSummaryCmd, AgentSummaryFormat, ChatCmd, CursorCmd, DbCmd,
+    EdgeCmd, FactCmd, FavoriteCmd, OutputFormat, PriceCmd, QueryArgs, QueryFormat, SessionCmd,
+    SyncCmd, TurnCmd, UsageArgs, UsageCmd,
 };
 
 // ---------------------------------------------------------------------------

@@ -8,9 +8,9 @@ use boop::registry::Registry;
 use boop::{bus, ident, identity, tmux};
 
 use crate::cli::db::open_store;
+use crate::cli::job::waiting_as;
 use crate::cli::mail::{report_inbox_hooks, write_inbox_hooks};
 use crate::cli::{line, mail_dir, now_ms, write_route};
-use crate::waiting_as;
 
 // ---------------------------------------------------------------------------
 // adopt / prune
