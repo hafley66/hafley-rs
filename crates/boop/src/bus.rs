@@ -34,6 +34,8 @@ pub struct Route {
     pub tmux: Option<String>,
     pub cwd: Option<String>,
     pub model: Option<String>,
+    /// Named model preset selected at spawn, when model resolution used one.
+    pub preset: Option<String>,
     pub mode: Option<String>,
     pub session_id: Option<String>,
     pub source_path: Option<String>,
@@ -91,6 +93,7 @@ fn route_from_value(entry: &Value) -> Route {
         tmux: string_field(object, "tmux"),
         cwd: string_field(object, "cwd"),
         model: string_field(object, "model"),
+        preset: string_field(object, "preset"),
         mode: string_field(object, "mode"),
         session_id: string_field(object, "sessionId")
             .or_else(|| string_field(object, "session_id")),
@@ -107,13 +110,14 @@ fn route_from_value(entry: &Value) -> Route {
 }
 
 impl Route {
-    fn unset() -> Self {
+    pub fn new(kind: impl Into<String>) -> Self {
         Route {
-            kind: "lane".into(),
+            kind: kind.into(),
             harness: None,
             tmux: None,
             cwd: None,
             model: None,
+            preset: None,
             mode: None,
             session_id: None,
             source_path: None,
@@ -123,6 +127,16 @@ impl Route {
             base_sha: None,
             worktree_dir: None,
         }
+    }
+
+    fn unset() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for Route {
+    fn default() -> Self {
+        Self::new("lane")
     }
 }
 fn string_field(object: &Map<String, Value>, key: &str) -> Option<String> {

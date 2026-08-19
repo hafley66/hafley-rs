@@ -714,6 +714,7 @@ mod tests {
             tmux: Some(tmux.into()),
             cwd: None,
             model: None,
+            preset: None,
             mode: None,
             session_id: None,
             source_path: None,

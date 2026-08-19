@@ -70,6 +70,11 @@ pub fn resolve_model(preset: &str, path: &Path) -> Result<String> {
     Ok(resolve_preset(preset, path)?.model)
 }
 
+/// Provider segment carried by a canonical `provider/model` model id.
+pub fn provider_from_model(model: &str) -> Option<&str> {
+    model.split_once('/').map(|(provider, _)| provider)
+}
+
 /// The opencode variant a named preset carries, if any. A preset that names
 /// no variant resolves to `None`, meaning the CLI flag decides alone.
 pub fn resolve_variant(preset: &str, path: &Path) -> Result<Option<String>> {

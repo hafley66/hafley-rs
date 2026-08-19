@@ -98,6 +98,12 @@ pub struct AgentShellNode {
     pub parent_lane: Option<String>,
     pub harness: Option<String>,
     pub mode: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub preset: Option<String>,
     pub session_id: Option<String>,
     /// The stable native identity named by a harness-backed route. It is a
     /// reference to `sessions`, rather than a second session record.
@@ -291,6 +297,9 @@ pub fn load_agent_session_graph(
             parent_lane: row.get(1)?,
             harness: None,
             mode: None,
+            model: None,
+            provider: None,
+            preset: None,
             session_id: None,
             session: None,
             trace: row.get(2)?,
@@ -489,6 +498,9 @@ fn native_codex_shell_for_focus(
         parent_lane: None,
         harness: Some("codex".to_owned()),
         mode: Some("interactive".to_owned()),
+        model: None,
+        provider: None,
+        preset: None,
         session_id: Some(session_id.clone()),
         session: Some(AgentSessionIdentity {
             harness: "codex".to_owned(),
@@ -580,6 +592,13 @@ fn shell_from_runtime(row: AgentRuntimeRow) -> Option<AgentShellNode> {
         parent_lane: route.parent,
         harness: route.harness.clone(),
         mode: route.mode.clone(),
+        model: route.model.clone(),
+        provider: route
+            .model
+            .as_deref()
+            .and_then(crate::config::provider_from_model)
+            .map(str::to_owned),
+        preset: route.preset.clone(),
         session: route
             .session_id
             .as_ref()
@@ -1138,6 +1157,7 @@ mod tests {
             tmux: Some("lane".into()),
             cwd: Some("/repo".into()),
             model: None,
+            preset: None,
             mode: Some("auto".into()),
             session_id: Some("native".into()),
             source_path: None,
@@ -1202,7 +1222,8 @@ mod tests {
                 harness: Some("codex".into()),
                 tmux: Some("codex-parent".into()),
                 cwd: Some("/repo".into()),
-                model: None,
+                model: Some("openrouter/qwen3.8-27b".into()),
+                preset: Some("q38".into()),
                 mode: Some("interactive".into()),
                 session_id: Some("thread-codex-parent".into()),
                 source_path: None,
@@ -1241,6 +1262,9 @@ mod tests {
                 "parent_lane": null,
                 "harness": "codex",
                 "mode": "interactive",
+                "model": "openrouter/qwen3.8-27b",
+                "provider": "openrouter",
+                "preset": "q38",
                 "session_id": "thread-codex-parent",
                 "session": {"harness": "codex", "id": "thread-codex-parent"},
                 "trace": null,
@@ -1289,6 +1313,7 @@ mod tests {
                 tmux: Some("%1206".into()),
                 cwd: Some("/repo".into()),
                 model: None,
+                preset: None,
                 mode: None,
                 session_id: Some("claude-parent".into()),
                 source_path: None,
@@ -1622,6 +1647,9 @@ mod tests {
                     parent_lane: None,
                     harness: Some("claude".into()),
                     mode: None,
+                    model: None,
+                    provider: None,
+                    preset: None,
                     session_id: Some("da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b".into()),
                     session: Some(AgentSessionIdentity {
                         harness: "claude".into(),
@@ -1757,6 +1785,7 @@ mod tests {
                     tmux: Some(tmux.into()),
                     cwd: Some("/same-cwd-for-all".into()),
                     model: None,
+                    preset: None,
                     mode: Some("interactive".into()),
                     session_id: Some(session_id.into()),
                     source_path: None,

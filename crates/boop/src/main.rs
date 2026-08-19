@@ -785,6 +785,7 @@ fn main() -> Result<()> {
                     harness,
                     session_id,
                     model,
+                    preset: None,
                     mode,
                     tmux,
                     socket,
@@ -1652,6 +1653,7 @@ struct DispatchArgs {
     harness: Option<String>,
     session_id: Option<String>,
     model: Option<String>,
+    preset: Option<String>,
     mode: Option<String>,
     tmux: Option<String>,
     socket: Option<String>,
@@ -1748,14 +1750,13 @@ fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
     // The route's cwd is where the harness actually runs (the worktree when
     // one was made): session-id resolution joins opencode.db on directory.
     let route = Route {
-        kind: "lane".into(),
         harness: Some(harness_id),
         tmux: session.tmux.clone(),
         cwd: session.cwd.clone().or_else(|| Some(args.cwd.clone())),
         model: args.model.clone(),
+        preset: args.preset.clone(),
         mode: args.mode.clone(),
         session_id: args.session_id.clone(),
-        source_path: None,
         parent: args.parent.clone(),
         goal: args.goal.clone(),
         registered_at: Some(bus::now_iso()),
@@ -1764,6 +1765,7 @@ fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
             .worktree_dir
             .clone()
             .map(|dir| dir.display().to_string()),
+        ..Route::new("lane")
     };
     write_route(&dir, &args.to, route)?;
     append_message(&dir, &message)?;
@@ -2706,6 +2708,7 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             harness: Some(harness_id.clone()),
             session_id: None,
             model,
+            preset: preset_name.map(str::to_owned),
             mode: Some("auto".into()),
             tmux: Some(identity.tmux),
             socket: args.socket,
@@ -2756,19 +2759,13 @@ fn register_fresh_codex_spawner(
         return Ok(());
     }
     let route = Route {
-        kind: "coordinator".to_owned(),
         harness: Some("codex".to_owned()),
         tmux: caller.pane.clone(),
         cwd: Some(cwd.display().to_string()),
-        model: None,
         mode: Some("interactive".to_owned()),
         session_id: caller.session.clone(),
-        source_path: None,
-        parent: None,
-        goal: None,
         registered_at: Some(bus::now_iso()),
-        base_sha: None,
-        worktree_dir: None,
+        ..Route::new("coordinator")
     };
     write_route(mail_dir, lane, route.clone())?;
     routes.insert(lane.to_owned(), route);
@@ -2872,19 +2869,18 @@ fn run_adopt_with(
         })
     });
     let route = Route {
-        kind: kind.into(),
         harness: harness.map(str::to_owned),
         tmux: Some(tmux_session.to_owned()),
         cwd: cwd.map(str::to_owned),
         model: model.map(str::to_owned),
+        preset: existing.as_ref().and_then(|route| route.preset.clone()),
         mode: mode.map(str::to_owned),
-        session_id: discovered_session.or_else(|| existing.and_then(|route| route.session_id)),
-        source_path: None,
+        session_id: discovered_session
+            .or_else(|| existing.as_ref().and_then(|route| route.session_id.clone())),
         parent: parent.map(str::to_owned),
         goal: goal.map(str::to_owned),
         registered_at: Some(bus::now_iso()),
-        base_sha: None,
-        worktree_dir: None,
+        ..Route::new(kind)
     };
     write_route(&dir, name, route)?;
     println!("adopted {name} -> tmux {tmux_session}");
@@ -2960,6 +2956,9 @@ fn route_to_json(route: &Route) -> serde_json::Value {
     }
     if let Some(model) = &route.model {
         object.insert("model".into(), serde_json::json!(model));
+    }
+    if let Some(preset) = &route.preset {
+        object.insert("preset".into(), serde_json::json!(preset));
     }
     if let Some(mode) = &route.mode {
         object.insert("mode".into(), serde_json::json!(mode));
@@ -3577,19 +3576,9 @@ mod tests {
             &dir,
             "l",
             Route {
-                kind: "lane".into(),
                 harness: Some("claude".into()),
                 tmux: Some("somesession".into()),
-                cwd: None,
-                model: None,
-                mode: None,
-                session_id: None,
-                source_path: None,
-                parent: None,
-                goal: None,
-                registered_at: None,
-                base_sha: None,
-                worktree_dir: None,
+                ..Route::new("lane")
             },
         )
         .unwrap();
@@ -3614,19 +3603,9 @@ mod tests {
 
     fn tmux_route(tmux_name: &str) -> Route {
         Route {
-            kind: "lane".into(),
             harness: Some("claude".into()),
             tmux: Some(tmux_name.to_owned()),
-            cwd: None,
-            model: None,
-            mode: None,
-            session_id: None,
-            source_path: None,
-            parent: None,
-            goal: None,
-            registered_at: None,
-            base_sha: None,
-            worktree_dir: None,
+            ..Route::new("lane")
         }
     }
 
@@ -3726,19 +3705,8 @@ mod tests {
     fn dead_reason_names_no_recorded_session_when_tmux_is_absent() {
         let snapshot = SysinfoSnapshot::capture().unwrap();
         let route = Route {
-            kind: "lane".into(),
             harness: Some("claude".into()),
-            tmux: None,
-            cwd: None,
-            model: None,
-            mode: None,
-            session_id: None,
-            source_path: None,
-            parent: None,
-            goal: None,
-            registered_at: None,
-            base_sha: None,
-            worktree_dir: None,
+            ..Route::new("lane")
         };
         assert_eq!(
             dead_reason(&route, &snapshot).as_deref(),
@@ -3762,19 +3730,10 @@ mod tests {
 
     fn registered_route(ts: &str) -> Route {
         Route {
-            kind: "lane".into(),
             harness: Some("claude".into()),
             tmux: Some("l".into()),
-            cwd: None,
-            model: None,
-            mode: None,
-            session_id: None,
-            source_path: None,
-            parent: None,
-            goal: None,
             registered_at: Some(ts.into()),
-            base_sha: None,
-            worktree_dir: None,
+            ..Route::new("lane")
         }
     }
 
@@ -4105,19 +4064,10 @@ mod tests {
     fn route_goal_round_trips() {
         let dir = temp_mail_dir();
         let route = Route {
-            kind: "lane".into(),
             harness: Some("opencode".into()),
             tmux: Some("lane-x".into()),
-            cwd: None,
-            model: None,
-            mode: None,
-            session_id: None,
-            source_path: None,
-            parent: None,
             goal: Some("ship the edge".into()),
-            registered_at: None,
-            base_sha: None,
-            worktree_dir: None,
+            ..Route::new("lane")
         };
         write_route(&dir, "child", route).unwrap();
         let routes = read_routes(&dir).unwrap();
@@ -4174,19 +4124,10 @@ mod tests {
 
     fn route_with(parent: Option<&str>) -> Route {
         Route {
-            kind: "lane".into(),
             harness: Some("opencode".into()),
             tmux: Some("lane-x".into()),
-            cwd: None,
-            model: None,
-            mode: None,
-            session_id: None,
-            source_path: None,
             parent: parent.map(str::to_owned),
-            goal: None,
-            registered_at: None,
-            base_sha: None,
-            worktree_dir: None,
+            ..Route::new("lane")
         }
     }
 
@@ -4294,19 +4235,10 @@ mod tests {
         routes.insert(
             "child".into(),
             Route {
-                kind: "lane".into(),
                 harness: Some("opencode".into()),
                 tmux: Some("lane-x".into()),
-                cwd: None,
-                model: None,
-                mode: None,
-                session_id: None,
-                source_path: None,
-                parent: None,
                 goal: Some("ship the edge".into()),
-                registered_at: None,
-                base_sha: None,
-                worktree_dir: None,
+                ..Route::new("lane")
             },
         );
         let messages = vec![dispatch("coordinator", "child")];
@@ -5230,6 +5162,7 @@ fn run_agent(cmd: AgentCmd) -> Result<()> {
                     tmux: None,
                     cwd: None,
                     model: None,
+                    preset: None,
                     mode: None,
                     session_id: None,
                     source_path: None,
@@ -6711,6 +6644,7 @@ fn run_me(name: Option<&str>, mail_dir_arg: Option<&Path>) -> Result<()> {
             tmux: Some(pane.clone()),
             cwd: Some(cwd.display().to_string()),
             model: None,
+            preset: None,
             mode: Some("interactive".into()),
             session_id: Some(session.session_id.clone()),
             source_path: Some(session.path.display().to_string()),
