@@ -12,7 +12,7 @@ use wait_timeout::ChildExt;
 
 use crate::harness::SpawnSpec;
 
-/// Every spawn-path child (`just --show`, `just boop-start`, the setup shell)
+/// Every spawn-path child (`just --dump`, `just boop-start`, the setup shell)
 /// dies on this one deadline; a hang here must not hang the whole spawn.
 const SPAWN_CHILD_TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -72,7 +72,9 @@ pub fn prepare_spawn_dir(spec: &SpawnSpec) -> Result<PathBuf> {
     )?;
     merge_ff_only(&worktree, &spec.base_sha)?;
     if spec.warm_start {
-        warm_start(&worktree)?;
+        let outcome = warm_start(&worktree)?;
+        println!("{}", outcome.status);
+        crate::lane::record_start_status(&spec.mail_dir, &spec.lane, &outcome.status)?;
     }
     for command in &spec.setup {
         run_shell(&worktree, command)?;
@@ -80,19 +82,40 @@ pub fn prepare_spawn_dir(spec: &SpawnSpec) -> Result<PathBuf> {
     Ok(worktree)
 }
 
-/// Run the repo's `boop-start` recipe in a fresh worktree. A repo without one
-/// needs no warmup and is skipped in silence.
+/// The recipe every repo boop spawns into is expected to declare.
+pub const START_RECIPE: &str = "boop-start";
+
+/// A tree's `boop-start` recipe and the justfile that declares it.
+#[derive(Clone, Debug)]
+pub struct StartRecipe {
+    pub justfile: PathBuf,
+}
+
+/// What the warm-up did, in the one line the spawned agent reads about setup.
+#[derive(Clone, Debug)]
+pub struct StartOutcome {
+    /// False when the tree declares no recipe; the status line says so.
+    pub ran: bool,
+    pub status: String,
+}
+
+/// Run the repo's `boop-start` recipe in a fresh worktree. A tree without one
+/// is not warmed and says so in one line, which is not an error.
 ///
 /// A failure BLOCKS the spawn. The recipe exists because a worktree missing the
 /// pre-commit hook's inputs makes every `git commit` abort, and a lane reads
 /// that abort as success; warning instead would reproduce the loss it prevents.
-pub fn warm_start(worktree: &Path) -> Result<()> {
-    if !has_recipe(worktree, "boop-start")? {
-        return Ok(());
-    }
+pub fn warm_start(worktree: &Path) -> Result<StartOutcome> {
+    let Some(recipe) = find_start_recipe(worktree)? else {
+        let status = format!(
+            "boop-start: no recipe in {}, nothing to warm",
+            worktree.display()
+        );
+        return Ok(StartOutcome { ran: false, status });
+    };
     let started = std::time::Instant::now();
     let mut cmd = Command::new("just");
-    cmd.arg("boop-start").current_dir(worktree);
+    cmd.arg(START_RECIPE).current_dir(worktree);
     let output = run_captured_with_deadline(cmd, "just boop-start", SPAWN_CHILD_TIMEOUT)?;
     let text = String::from_utf8_lossy(&output.stdout);
     for line in text.lines() {
@@ -107,20 +130,59 @@ pub fn warm_start(worktree: &Path) -> Result<()> {
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
-    println!("boop-start: {:.1}s", started.elapsed().as_secs_f64());
-    Ok(())
+    let status = format!(
+        "boop-start: ready in {:.1}s ({})",
+        started.elapsed().as_secs_f64(),
+        recipe_summary(&text, &recipe)
+    );
+    Ok(StartOutcome { ran: true, status })
 }
 
-/// True when `just` is on PATH and this tree declares `name`. A timeout is a
-/// real failure and propagates; `just` missing or the recipe absent stays `false`.
-fn has_recipe(worktree: &Path, name: &str) -> Result<bool> {
-    let mut cmd = Command::new("just");
-    cmd.args(["--show", name]).current_dir(worktree);
-    match run_captured_with_deadline(cmd, "just --show", SPAWN_CHILD_TIMEOUT) {
-        Ok(output) => Ok(output.status.success()),
-        Err(err) if err.downcast_ref::<SpawnChildTimedOut>().is_some() => Err(err),
-        Err(_) => Ok(false),
+/// The recipe's own summary, one line. A recipe that printed nothing is named
+/// by its justfile instead, so the status line never reads as empty parentheses.
+fn recipe_summary(stdout: &str, recipe: &StartRecipe) -> String {
+    let summary = stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("; ");
+    if summary.is_empty() {
+        format!("{} printed no summary", recipe.justfile.display())
+    } else {
+        summary
     }
+}
+
+/// The `boop-start` recipe this tree declares; `just --dump` names the recipes
+/// and their justfile in one child. Absent `just` or dump reads as no recipe.
+pub fn find_start_recipe(dir: &Path) -> Result<Option<StartRecipe>> {
+    let mut cmd = Command::new("just");
+    cmd.args(["--dump", "--dump-format", "json"])
+        .current_dir(dir);
+    let output = match run_captured_with_deadline(cmd, "just --dump", SPAWN_CHILD_TIMEOUT) {
+        Ok(output) if output.status.success() => output,
+        Ok(_) => return Ok(None),
+        Err(err) if err.downcast_ref::<SpawnChildTimedOut>().is_some() => return Err(err),
+        Err(_) => return Ok(None),
+    };
+    let Ok(dump) = serde_json::from_slice::<JustDump>(&output.stdout) else {
+        return Ok(None);
+    };
+    if !dump.recipes.contains_key(START_RECIPE) {
+        return Ok(None);
+    }
+    Ok(Some(StartRecipe {
+        justfile: PathBuf::from(dump.source),
+    }))
+}
+
+/// The two fields `just --dump --dump-format json` is read for; every recipe
+/// body is discarded on the way past.
+#[derive(serde::Deserialize)]
+struct JustDump {
+    source: String,
+    recipes: std::collections::BTreeMap<String, serde::de::IgnoredAny>,
 }
 
 /// Put `cmd` in its own process group so a timeout kill takes any grandchildren
@@ -572,8 +634,14 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("boop-nostart-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        assert!(!super::has_recipe(&dir, "boop-start").unwrap());
-        super::warm_start(&dir).expect("no recipe means no work");
+        assert!(super::find_start_recipe(&dir).unwrap().is_none());
+        let outcome = super::warm_start(&dir).expect("no recipe means no work");
+        assert!(!outcome.ran);
+        assert!(
+            outcome.status.contains("nothing to warm"),
+            "{}",
+            outcome.status
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -584,7 +652,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("justfile"), "boop-start:\n    @exit 3\n").unwrap();
-        assert!(super::has_recipe(&dir, "boop-start").unwrap());
+        assert!(super::find_start_recipe(&dir).unwrap().is_some());
         let error = super::warm_start(&dir).unwrap_err().to_string();
         assert!(error.contains("could not commit"), "{error}");
         let _ = std::fs::remove_dir_all(&dir);

@@ -264,6 +264,53 @@ fn shell_word(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
 }
 
+/// The sentence a spawned agent reads about setup, after the warm-up's own
+/// status line. Verbatim in the preamble; nothing reformats it.
+pub const SETUP_SENTENCE: &str =
+    "setup is done; do not run installs or builds to get started; build only what you change.";
+
+/// Where a spawn leaves its warm-up status for the lane's own process, which
+/// starts later, elsewhere, and cannot see the spawning process's stdout.
+pub fn start_status_path(mail_dir: &Path, lane: &str) -> PathBuf {
+    mail_dir
+        .join("start")
+        .join(format!("{}.status", lane.replace('/', "-")))
+}
+
+/// Persist the warm-up status line for `lane`.
+pub fn record_start_status(mail_dir: &Path, lane: &str, status: &str) -> Result<()> {
+    let path = start_status_path(mail_dir, lane);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).context("create the start status directory")?;
+    }
+    std::fs::write(&path, format!("{status}\n"))
+        .with_context(|| format!("write {}", path.display()))
+}
+
+/// The two lines a spawned agent reads before its brief.
+pub fn start_preamble(status: &str) -> String {
+    format!("{}\n{SETUP_SENTENCE}\n", status.trim_end())
+}
+
+/// The brief the lane opens with: the preamble ahead of the brief's own text,
+/// written beside the status. Unreadable inputs fall back to the brief itself.
+pub fn brief_with_preamble(mail_dir: &Path, lane: &str, brief: &Path) -> PathBuf {
+    let status_path = start_status_path(mail_dir, lane);
+    let composed = status_path.with_extension("brief.md");
+    let write = || -> std::io::Result<()> {
+        let status = std::fs::read_to_string(&status_path)?;
+        let text = std::fs::read_to_string(brief)?;
+        std::fs::write(&composed, format!("{}\n{text}", start_preamble(&status)))
+    };
+    match write() {
+        Ok(()) => composed,
+        Err(error) => {
+            tracing::warn!(lane, error = %error, "lane brief preamble skipped");
+            brief.to_path_buf()
+        }
+    }
+}
+
 /// The shell line a lane pane runs once its supervisor has exited: the route
 /// drop only. The completion row is `supervise::record_result`'s to write.
 pub fn pane_epilogue(lane: &str, mail_dir: &Path) -> String {

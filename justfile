@@ -53,3 +53,16 @@ perf-git-status-smoke:
 
 perf-git-status repo:
     bash crates/soopy/bench/1_git_status.sh repo "{{repo}}"
+
+# Bring a worktree to the level a lane needs before it edits: the crate index
+# fetched, the boop test binaries built into the target every worktree shares.
+boop-start:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    started=$SECONDS
+    cache="${BOOP_START_CACHE:-$HOME/.cache/boop}"
+    shared="${BOOP_CARGO_TARGET_DIR:-$cache/cargo-target}"
+    export CARGO_TARGET_DIR="$shared"
+    cargo fetch --quiet
+    cargo build -p boop --tests --quiet
+    echo "boop-start: cargo fetch and boop tests into $shared, $((SECONDS - started))s"
