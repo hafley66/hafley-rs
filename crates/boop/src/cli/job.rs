@@ -12,13 +12,11 @@ use boop::{bus, config, identity, lane, mailwait, proc, tmux};
 use tracing::{error, info, warn};
 
 use crate::cli::db::{resolve_harness, run_harnesses};
+use crate::cli::debug::default_preset_for_harness;
 use crate::cli::mail::{all_messages, run_hail, run_list};
 use crate::cli::me::{run_adopt, run_prune, HookWiring};
 use crate::cli::{append_ack, append_message, line, mail_dir, pad, route_to_json, write_route};
-use crate::{
-    default_preset_for_harness, AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd,
-    PstreeFormat,
-};
+use crate::{AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat};
 
 // ---------------------------------------------------------------------------
 // measure (layer 0)
