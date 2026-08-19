@@ -1,4 +1,5 @@
 pub(crate) mod db;
+pub(crate) mod mail;
 
 use std::path::{Path, PathBuf};
 
