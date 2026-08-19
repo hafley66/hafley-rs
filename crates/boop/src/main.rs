@@ -2338,7 +2338,8 @@ fn run_lane_supervisor(
     })?;
     let run = boop::supervise::LaneRun {
         lane: lane.to_owned(),
-        brief: brief.to_owned(),
+        // The warm-up's outcome and the setup sentence lead the first turn.
+        brief: boop::lane::brief_with_preamble(&dir, lane, brief),
         mail_dir: dir,
         cwd,
         model: model.map(str::to_owned),
@@ -2775,6 +2776,19 @@ fn resolve_parent_with_legacy_fallback(
     }
 }
 
+/// What the warm-up will do to a fresh worktree of `repo`, for `--dry-run`.
+fn start_plan(repo: &Path, no_start: bool) -> Result<String> {
+    let recipe = boop::worktree::find_start_recipe(repo)?;
+    Ok(match (no_start, recipe) {
+        (true, _) => "boop-start: skipped (--no-start)".to_owned(),
+        (false, Some(recipe)) => format!("boop-start: will run from {}", recipe.justfile.display()),
+        (false, None) => format!(
+            "boop-start: no recipe in {}, nothing to warm",
+            repo.display()
+        ),
+    })
+}
+
 /// Register and spawn a lane. No match on harness id here; the adapter's own
 /// `spawn`/`preview_command` decides how `prompt` becomes a real invocation.
 fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
@@ -2924,6 +2938,7 @@ fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         if let Some(worktree_dir) = &identity.worktree_dir {
             println!("worktree: {}", worktree_dir.display());
         }
+        println!("{}", start_plan(&repo, args.no_start)?);
         println!("base-sha: {} (from {})", base.sha, base.rev);
         println!("tmux: {}", identity.tmux);
         match &parent.parent {
@@ -3829,6 +3844,7 @@ mod tests {
             kind: "native".into(),
             parent: Some("coordinator".into()),
             on_parent_death: crate::ParentDeathPolicy::Orphan,
+            worktree: None,
             mail_dir: Some(dir.clone()),
         })
         .unwrap();
@@ -5031,6 +5047,10 @@ enum AgentCmd {
         /// own, so nothing polls on its behalf.
         #[arg(long, value_enum, default_value_t = ParentDeathPolicy::Orphan)]
         on_parent_death: ParentDeathPolicy,
+        /// The tree this agent works in. Warmed like a lane spawn's worktree,
+        /// with the preamble printed here: a native has no injected first turn.
+        #[arg(long)]
+        worktree: Option<PathBuf>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -5551,13 +5571,21 @@ fn run_agent(cmd: AgentCmd) -> Result<()> {
             kind,
             parent,
             on_parent_death,
+            worktree,
             mail_dir: mail_dir_arg,
         } => {
             if !matches!(kind.as_str(), "coordinator" | "native") {
                 anyhow::bail!("agent kind must be coordinator or native")
             }
+            if let Some(tree) = worktree.as_deref().filter(|tree| !tree.is_dir()) {
+                anyhow::bail!("no worktree at {}", tree.display());
+            }
             let dir = mail_dir(mail_dir_arg.as_deref())?;
             boop::supervise::record_parent_policy(&dir, &name, on_parent_death)?;
+            let started = worktree
+                .as_deref()
+                .map(boop::worktree::warm_start)
+                .transpose()?;
             write_route(
                 &dir,
                 &name,
@@ -5565,7 +5593,7 @@ fn run_agent(cmd: AgentCmd) -> Result<()> {
                     kind,
                     harness: None,
                     tmux: None,
-                    cwd: None,
+                    cwd: worktree.as_ref().map(|dir| dir.display().to_string()),
                     model: None,
                     mode: None,
                     session_id: None,
@@ -5574,10 +5602,13 @@ fn run_agent(cmd: AgentCmd) -> Result<()> {
                     goal: None,
                     registered_at: Some(bus::now_iso()),
                     base_sha: None,
-                    worktree_dir: None,
+                    worktree_dir: worktree.as_ref().map(|dir| dir.display().to_string()),
                 },
             )?;
             println!("registered {name}");
+            if let Some(outcome) = started {
+                print!("{}", boop::lane::start_preamble(&outcome.status));
+            }
             Ok(())
         }
         AgentCmd::Done {
