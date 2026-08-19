@@ -1,6 +1,7 @@
 //! One live conversation per lane, driven the same way whatever the harness.
 //! `Harness::open_channel` mints one; `crate::supervise` is the only caller.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -30,6 +31,32 @@ impl Delivery {
     }
 }
 
+/// The layer named by raw failure evidence. Classification is independent of
+/// retry policy: an unknown watchdog stall may still receive a bounded retry,
+/// while a harness configuration error does not.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FailureClass {
+    Unknown,
+    Transport,
+    Harness,
+    Provider,
+}
+
+impl FailureClass {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FailureClass::Unknown => "unknown",
+            FailureClass::Transport => "transport",
+            FailureClass::Harness => "harness",
+            FailureClass::Provider => "provider",
+        }
+    }
+}
+
+/// Raw fields cited by a failure classification. The ordered map gives logs,
+/// mailbox bodies, and pane artifacts one deterministic rendering.
+pub type RawEvidence = BTreeMap<String, String>;
+
 /// One turn-lifecycle event from a live conversation. A channel emits these;
 /// the supervisor and the concatmap feed subscribe to them.
 #[derive(Clone, Debug)]
@@ -41,9 +68,17 @@ pub enum TurnEvent {
     /// The turn completed cleanly.
     Done { detail: String },
     /// The turn failed hard (not retryable).
-    Failed { detail: String },
-    /// The turn died on a provider flake the agent never saw; retryable.
-    Flaked { detail: String },
+    Failed {
+        detail: String,
+        classification: FailureClass,
+        evidence: RawEvidence,
+    },
+    /// The turn failed before the agent could handle it; bounded retry allowed.
+    Retryable {
+        detail: String,
+        classification: FailureClass,
+        evidence: RawEvidence,
+    },
 }
 
 impl TurnEvent {
@@ -56,12 +91,42 @@ impl TurnEvent {
     pub fn failed(detail: impl Into<String>) -> TurnEvent {
         TurnEvent::Failed {
             detail: detail.into(),
+            classification: FailureClass::Harness,
+            evidence: RawEvidence::new(),
         }
     }
 
+    /// Compatibility constructor for test channels without richer evidence.
+    /// Its classification is explicitly unknown, never provider.
     pub fn flaked(detail: impl Into<String>) -> TurnEvent {
-        TurnEvent::Flaked {
+        TurnEvent::Retryable {
             detail: detail.into(),
+            classification: FailureClass::Unknown,
+            evidence: RawEvidence::new(),
+        }
+    }
+
+    pub fn failure(
+        detail: impl Into<String>,
+        classification: FailureClass,
+        evidence: RawEvidence,
+    ) -> TurnEvent {
+        TurnEvent::Failed {
+            detail: detail.into(),
+            classification,
+            evidence,
+        }
+    }
+
+    pub fn retryable_failure(
+        detail: impl Into<String>,
+        classification: FailureClass,
+        evidence: RawEvidence,
+    ) -> TurnEvent {
+        TurnEvent::Retryable {
+            detail: detail.into(),
+            classification,
+            evidence,
         }
     }
 
@@ -70,8 +135,8 @@ impl TurnEvent {
         match self {
             TurnEvent::Started => "started",
             TurnEvent::Done { detail }
-            | TurnEvent::Failed { detail }
-            | TurnEvent::Flaked { detail } => detail,
+            | TurnEvent::Failed { detail, .. }
+            | TurnEvent::Retryable { detail, .. } => detail,
         }
     }
 
@@ -80,9 +145,28 @@ impl TurnEvent {
         matches!(self, TurnEvent::Done { .. })
     }
 
-    /// True only for a provider flake the agent never saw.
+    /// True only when the channel/supervisor granted a bounded retry.
     pub fn retryable(&self) -> bool {
-        matches!(self, TurnEvent::Flaked { .. })
+        matches!(self, TurnEvent::Retryable { .. })
+    }
+
+    pub fn classification(&self) -> Option<FailureClass> {
+        match self {
+            TurnEvent::Failed { classification, .. }
+            | TurnEvent::Retryable { classification, .. } => Some(*classification),
+            TurnEvent::Started | TurnEvent::Done { .. } => None,
+        }
+    }
+
+    pub fn evidence(&self) -> &RawEvidence {
+        match self {
+            TurnEvent::Failed { evidence, .. } | TurnEvent::Retryable { evidence, .. } => evidence,
+            TurnEvent::Started | TurnEvent::Done { .. } => {
+                static EMPTY: std::sync::LazyLock<RawEvidence> =
+                    std::sync::LazyLock::new(RawEvidence::new);
+                &EMPTY
+            }
+        }
     }
 }
 
@@ -110,6 +194,20 @@ pub trait LaneChannel: Send {
     /// transport target while a harness session id is not yet resolved.
     fn conversation_id_kind(&self) -> &'static str {
         "harness_session"
+    }
+
+    /// Pane carrying the harness itself, when the channel owns one.
+    fn tmux_target(&self) -> Option<&str> {
+        None
+    }
+
+    fn tmux_socket(&self) -> Option<&str> {
+        None
+    }
+
+    /// Strongest raw state still available after a turn or watchdog event.
+    fn raw_evidence(&self) -> RawEvidence {
+        RawEvidence::new()
     }
 
     /// Hand the lane's brief over before the first turn. A transport that can

@@ -7,9 +7,7 @@ use std::sync::Once;
 use std::time::Duration;
 
 use boop::channel::{Delivery, LaneChannel, TurnEvent};
-use boop::supervise::{
-    LaneRun, EXITED_WITHOUT_COMPLETION, RETRYING, RETRY_BUDGET_EXHAUSTED,
-};
+use boop::supervise::{LaneRun, EXITED_WITHOUT_COMPLETION, RETRYING, RETRY_BUDGET_EXHAUSTED};
 
 /// One temp HOME and store for this whole binary, so the mood lookup inside a
 /// lane run never opens the machine's own store.
@@ -31,7 +29,7 @@ fn mail_dir(tag: &str) -> PathBuf {
     dir
 }
 
-/// A harness whose every turn dies on a provider flake.
+/// A harness whose every turn reports a retryable failure with unknown origin.
 #[derive(Default)]
 struct FlakingChannel {
     turns: usize,
@@ -82,6 +80,7 @@ fn lane_run(dir: &Path) -> LaneRun {
     std::fs::write(&brief, "do the work\n").unwrap();
     LaneRun {
         lane: "mine".to_owned(),
+        harness: "test".to_owned(),
         brief,
         mail_dir: dir.to_owned(),
         cwd: dir.to_owned(),
@@ -110,7 +109,7 @@ fn parented(dir: &Path) {
 
 /// COUNT. Five flakes are one warning, not five: the retry budget is a single
 /// transition and so is spending it.
-/// SABOTAGE RECEIPT: drop the `already_hailed` check from `hail_parent_once`
+/// SABOTAGE RECEIPT: drop the mailbox dedup check from `hail_parent_once`
 /// and the retrying count reads 5.
 #[test]
 fn each_failure_kind_reaches_the_parent_exactly_once() {
@@ -141,7 +140,7 @@ fn a_second_supervisor_run_repeats_none_of_them() {
     assert_eq!(count(&dir, RETRYING), 1);
     assert_eq!(count(&dir, RETRY_BUDGET_EXHAUSTED), 1);
     assert_eq!(count(&dir, EXITED_WITHOUT_COMPLETION), 1);
-    assert_eq!(count(&dir, "result"), 2, "each run reports its own rc");
+    assert_eq!(count(&dir, "result"), 1, "one spawn reports one logical rc");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -197,8 +196,148 @@ fn a_failure_row_names_the_lane_the_model_the_attempt_and_the_command() {
     assert_eq!(retrying.to, "coordinator");
     assert_eq!(
         retrying.body,
-        "lane mine retrying: aborted stream (attempt 1/5, model test-model); \
-         read: boop beep lane pane mine"
+        "lane mine retrying: aborted stream (attempt 1/5, model test-model, \
+         classification=unknown evidence=[]); read: boop debug --lane mine"
     );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn folded_rows(dir: &Path) -> Vec<boop::bus::Message> {
+    let mut rows = Vec::new();
+    for path in boop::bus::read_boxes(dir).unwrap_or_default() {
+        rows.extend(boop::bus::parse_box(&path));
+    }
+    boop::bus::fold(&rows)
+}
+
+struct TmuxSession(String);
+
+impl TmuxSession {
+    fn new() -> Self {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let name = format!(
+            "boop-parent-delivery-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        );
+        let _ = std::process::Command::new("tmux")
+            .args(["kill-session", "-t", &name])
+            .status();
+        let output = std::process::Command::new("tmux")
+            .args(["new-session", "-d", "-s", &name])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "tmux new-session: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        TmuxSession(name)
+    }
+
+    fn capture(&self) -> String {
+        let output = std::process::Command::new("tmux")
+            .args(["capture-pane", "-p", "-t", &self.0])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    }
+}
+
+impl Drop for TmuxSession {
+    fn drop(&mut self) {
+        let _ = std::process::Command::new("tmux")
+            .args(["kill-session", "-t", &self.0])
+            .status();
+    }
+}
+
+#[test]
+fn durable_result_is_delivered_to_parent_and_duplicate_suppressed() {
+    let dir = mail_dir("delivery");
+    let parent = TmuxSession::new();
+    std::fs::write(
+        dir.join("registry.json"),
+        serde_json::json!({
+            "mine": { "kind": "lane", "parent": "coordinator" },
+            "coordinator": {
+                "kind": "coordinator",
+                "harness": "codex",
+                "tmux": parent.0.clone(),
+                "cwd": dir,
+            }
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        boop::supervise::run(lane_run(&dir), &mut DoneChannel).unwrap(),
+        0
+    );
+    std::thread::sleep(Duration::from_millis(250));
+    assert!(parent.capture().contains("lane mine done rc=0"));
+    let rows = folded_rows(&dir);
+    let result = rows.iter().find(|row| row.kind == "result").unwrap();
+    assert!(
+        result.to_timestamp.is_some(),
+        "delivered result is acknowledged"
+    );
+
+    assert_eq!(
+        boop::supervise::run(lane_run(&dir), &mut DoneChannel).unwrap(),
+        0
+    );
+    assert_eq!(
+        folded_rows(&dir)
+            .iter()
+            .filter(|row| row.kind == "result" && row.from == "mine")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn retry_exhaustion_result_and_exit_rows_reach_the_parent() {
+    let dir = mail_dir("failure-delivery");
+    let parent = TmuxSession::new();
+    std::fs::write(
+        dir.join("registry.json"),
+        serde_json::json!({
+            "mine": { "kind": "lane", "parent": "coordinator" },
+            "coordinator": {
+                "kind": "coordinator",
+                "harness": "codex",
+                "tmux": parent.0.clone(),
+                "cwd": dir,
+            }
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        boop::supervise::run(lane_run(&dir), &mut FlakingChannel::default()).unwrap(),
+        1
+    );
+    std::thread::sleep(Duration::from_millis(250));
+    let pane = parent.capture();
+    for text in [
+        "mine retry_budget_exhausted",
+        "mine done rc=1",
+        "mine exited_without_completion",
+    ] {
+        assert!(pane.contains(text), "missing {text}: {pane}");
+    }
+    let rows = folded_rows(&dir);
+    for kind in [
+        RETRYING,
+        RETRY_BUDGET_EXHAUSTED,
+        "result",
+        EXITED_WITHOUT_COMPLETION,
+    ] {
+        let row = rows.iter().find(|row| row.kind == kind).unwrap();
+        assert!(row.to_timestamp.is_some(), "{kind} was not delivered");
+    }
 }

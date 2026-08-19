@@ -702,11 +702,17 @@ fn run_debug(since: &str, lane: Option<&str>, json: bool) -> Result<()> {
             .cmp(&right.lane)
             .then(left.at_ms.cmp(&right.at_ms))
     });
+    let artifacts = boop::debug::artifact_summaries(&root, lane);
     match json {
-        true => line(&serde_json::to_string_pretty(&boop::debug::as_json(
-            &alerts,
-        ))?),
-        false => line(&boop::debug::report(&alerts, window)),
+        true => line(&serde_json::to_string_pretty(&serde_json::json!({
+            "alerts": boop::debug::as_json(&alerts),
+            "artifacts": artifacts,
+        }))?),
+        false => line(&format!(
+            "{}\n\n{}",
+            boop::debug::report(&alerts, window),
+            boop::debug::artifact_report(&artifacts)
+        )),
     }
     Ok(())
 }
@@ -2338,6 +2344,7 @@ fn run_lane_supervisor(
     })?;
     let run = boop::supervise::LaneRun {
         lane: lane.to_owned(),
+        harness: harness_id.to_owned(),
         // The warm-up's outcome and the setup sentence lead the first turn.
         brief: boop::lane::brief_with_preamble(&dir, lane, brief),
         mail_dir: dir,
@@ -3226,6 +3233,11 @@ fn run_prune(mail_dir_arg: Option<&Path>) -> Result<()> {
         .map(|(name, _)| name.clone())
         .collect();
     let path = dir.join("registry.json");
+    for name in &dead {
+        if let Some(route) = routes.get(name) {
+            capture_route_deletion(&dir, name, route, "prune-dead-route")?;
+        }
+    }
     bus::cas_update_json(&path, |current| {
         for name in &dead {
             current.remove(name);
@@ -3300,6 +3312,7 @@ fn append_message_to(dir: &std::path::Path, filename: &str, message: &bus::Messa
         .open(&path)
         .context("open ndjson box")?;
     writeln!(file, "{}", bus::message_line(message)).context("append ndjson box")?;
+    file.sync_data().context("sync ndjson box")?;
     Ok(())
 }
 
@@ -3337,6 +3350,7 @@ fn append_acks(dir: &std::path::Path, messages: &[bus::Message]) -> Result<usize
         .context("open ndjson box")?;
     file.write_all(batch.as_bytes())
         .context("append ndjson box")?;
+    file.sync_data().context("sync ndjson box")?;
     Ok(messages.len())
 }
 
@@ -3918,6 +3932,11 @@ mod tests {
             !routes.contains_key("l"),
             "a finished lane must leave no registry row"
         );
+        let artifact = boop::trail::lane_dir_in(&boop::trail::lanes_root_for_mail(&dir), "l")
+            .join(boop::trail::ROUTE_DELETE_PANE);
+        let artifact = std::fs::read_to_string(artifact).unwrap();
+        assert!(artifact.contains("reason=lane-delete\n"));
+        assert!(artifact.contains("capture_status=pane-already-gone\n"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -5962,6 +5981,7 @@ fn run_lane_delete(mail_dir_arg: Option<&Path>, lane: &str, route_only: bool) ->
         }
         return run_lane_delete_carcass(lane);
     };
+    capture_route_deletion(&dir, lane, route, "lane-delete")?;
     if !route_only {
         if let Some(session) = route.tmux.as_deref() {
             match tmux::mux().has_session(None, session) {
@@ -6025,6 +6045,11 @@ fn run_lane_prune(mail_dir_arg: Option<&Path>, dry_run: bool) -> Result<()> {
         line(&format!("{} lane(s) would be pruned (dry run)", dead.len()));
         return Ok(());
     }
+    for (name, _, _) in &dead {
+        if let Some(route) = routes.get(name) {
+            capture_route_deletion(&dir, name, route, "lane-prune-dead-route")?;
+        }
+    }
     let path = dir.join("registry.json");
     bus::cas_update_json(&path, |current| {
         for (name, _, _) in &dead {
@@ -6033,6 +6058,41 @@ fn run_lane_prune(mail_dir_arg: Option<&Path>, dry_run: bool) -> Result<()> {
         Ok(())
     })?;
     line(&format!("{} lane(s) pruned", dead.len()));
+    Ok(())
+}
+
+fn capture_route_deletion(dir: &Path, lane: &str, route: &Route, reason: &str) -> Result<()> {
+    let evidence = boop::channel::RawEvidence::from([
+        ("source".into(), "registry-route".into()),
+        ("route_kind".into(), route.kind.clone()),
+        (
+            "route_registered_at".into(),
+            route
+                .registered_at
+                .clone()
+                .unwrap_or_else(|| "<missing>".into()),
+        ),
+    ]);
+    let root = boop::trail::lanes_root_for_mail(dir);
+    let context = boop::trail::PaneArtifactContext {
+        lane,
+        harness: route.harness.as_deref().unwrap_or("unknown"),
+        model: route.model.as_deref(),
+        conversation_id: route.session_id.as_deref(),
+        reason,
+        classification: Some(boop::channel::FailureClass::Unknown),
+        raw_evidence: &evidence,
+        tmux_target: route.tmux.as_deref(),
+        tmux_socket: None,
+        name: boop::trail::PaneArtifactName::RouteDeletion,
+    };
+    let artifact = boop::trail::capture_pane_artifact(&root, &context, tmux::mux())?;
+    info!(
+        lane,
+        path = %artifact.path.display(),
+        capture_status = artifact.capture_status,
+        "route deletion pane artifact written"
+    );
     Ok(())
 }
 

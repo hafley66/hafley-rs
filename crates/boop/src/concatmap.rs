@@ -306,11 +306,11 @@ pub(crate) fn wait_done(channel: &mut dyn LaneChannel) -> Result<()> {
     while Instant::now() < deadline {
         match channel.next_event(CHAT_POLL)? {
             Some(TurnEvent::Done { .. }) => return Ok(()),
-            Some(TurnEvent::Flaked { detail }) => {
+            Some(TurnEvent::Retryable { detail, .. }) => {
                 channel.interrupt()?;
                 bail!("resident chat turn flaked: {detail}");
             }
-            Some(TurnEvent::Failed { detail }) => {
+            Some(TurnEvent::Failed { detail, .. }) => {
                 bail!("resident chat turn failed: {detail}");
             }
             Some(TurnEvent::Started) | None => continue,

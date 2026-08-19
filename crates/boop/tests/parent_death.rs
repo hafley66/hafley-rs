@@ -110,6 +110,7 @@ fn lane_run(dir: &Path) -> LaneRun {
     std::fs::write(&brief, "do the work\n").unwrap();
     LaneRun {
         lane: "mine".to_owned(),
+        harness: "test".to_owned(),
         brief,
         mail_dir: dir.to_owned(),
         cwd: dir.to_owned(),
@@ -123,7 +124,7 @@ fn rows(dir: &Path) -> Vec<boop::bus::Message> {
     for path in boop::bus::read_boxes(dir).unwrap_or_default() {
         rows.extend(boop::bus::parse_box(&path));
     }
-    rows
+    boop::bus::fold(&rows)
 }
 
 fn of_kind(dir: &Path, kind: &str) -> Vec<boop::bus::Message> {

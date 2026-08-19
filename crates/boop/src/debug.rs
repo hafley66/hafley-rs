@@ -25,6 +25,86 @@ pub struct Alert {
     pub text: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ArtifactSummary {
+    pub lane: String,
+    pub path: String,
+    pub capture_status: String,
+    pub classification: String,
+    pub reason: String,
+    pub finish: String,
+    pub error: String,
+    pub raw_evidence: String,
+}
+
+/// Deterministic pane evidence files for one lane or every lane under `root`.
+pub fn artifact_summaries(root: &Path, lane: Option<&str>) -> Vec<ArtifactSummary> {
+    let mut summaries = Vec::new();
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return summaries;
+    };
+    for entry in entries.flatten() {
+        let lane_name = entry.file_name().to_string_lossy().into_owned();
+        if lane.is_some_and(|wanted| wanted != lane_name) {
+            continue;
+        }
+        let Ok(files) = std::fs::read_dir(entry.path()) else {
+            continue;
+        };
+        for file in files.flatten() {
+            let name = file.file_name().to_string_lossy().into_owned();
+            if !(name.starts_with("attempt-") && name.ends_with("-pane.txt"))
+                && name != trail::FAILURE_PANE
+                && name != trail::ROUTE_DELETE_PANE
+            {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(file.path()) else {
+                continue;
+            };
+            summaries.push(ArtifactSummary {
+                lane: lane_name.clone(),
+                path: file.path().display().to_string(),
+                capture_status: header(&text, "capture_status"),
+                classification: header(&text, "classification"),
+                reason: header(&text, "reason"),
+                finish: header(&text, "finish"),
+                error: header(&text, "error"),
+                raw_evidence: header(&text, "raw_evidence"),
+            });
+        }
+    }
+    summaries.sort_by(|left, right| left.lane.cmp(&right.lane).then(left.path.cmp(&right.path)));
+    summaries
+}
+
+fn header(text: &str, field: &str) -> String {
+    text.lines()
+        .find_map(|line| line.strip_prefix(&format!("{field}=")))
+        .unwrap_or("<missing>")
+        .to_owned()
+}
+
+pub fn artifact_report(artifacts: &[ArtifactSummary]) -> String {
+    if artifacts.is_empty() {
+        return "pane artifacts: none".to_owned();
+    }
+    let mut out = String::from("pane artifacts:\n");
+    for artifact in artifacts {
+        out.push_str(&format!(
+            "  {}\n    capture_status={} classification={} reason={}\n    finish={} error={}\n    raw_evidence={}\n",
+            artifact.path,
+            artifact.capture_status,
+            artifact.classification,
+            artifact.reason,
+            artifact.finish,
+            artifact.error,
+            artifact.raw_evidence,
+        ));
+    }
+    out.trim_end().to_owned()
+}
+
 /// `30s`, `2m`, `1h`, or a bare count of seconds.
 pub fn parse_window(text: &str) -> Result<Duration> {
     let text = text.trim();
@@ -260,7 +340,7 @@ mod tests {
             &[
                 &format!("{OUTSIDE}  WARN lane.supervise{{lane=\"lane-one\"}}: boop::supervise: old flake"),
                 &format!("{INSIDE}  INFO lane.supervise{{lane=\"lane-one\"}}: boop::supervise: a healthy turn"),
-                &format!("{INSIDE}  WARN lane.supervise{{lane=\"lane-one\"}}: boop::supervise: lane provider flake; resuming"),
+                &format!("{INSIDE}  WARN lane.supervise{{lane=\"lane-one\"}}: boop::supervise: lane retryable failure; classification=transport; resuming"),
                 &format!("{INSIDE} ERROR lane.supervise{{lane=\"lane-one\"}}: boop::supervise: lane result row write failed"),
             ],
         );
@@ -285,7 +365,7 @@ mod tests {
                 (
                     "lane-one",
                     "WARN",
-                    "boop::supervise: lane provider flake; resuming"
+                    "boop::supervise: lane retryable failure; classification=transport; resuming"
                 ),
                 (
                     "lane-one",
@@ -367,6 +447,28 @@ mod tests {
             "!! 3 warn/error lines in the last 2m across 2 lanes: run boop debug"
         );
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn artifact_report_prints_paths_and_raw_evidence() {
+        let root = tempdir("artifacts");
+        let lane_dir = trail::lane_dir_in(&root, "lane-one");
+        std::fs::create_dir_all(&lane_dir).unwrap();
+        let path = lane_dir.join("attempt-3-pane.txt");
+        std::fs::write(
+            &path,
+            "reason=watchdog stall\nclassification=unknown\nfinish=<missing>\nerror=<missing>\ncapture_status=pane-already-gone\nraw_evidence={\"idle_ms\":\"300571\"}\n--- pane-history ---\n",
+        )
+        .unwrap();
+        let summaries = artifact_summaries(&root, Some("lane-one"));
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].path, path.display().to_string());
+        assert_eq!(summaries[0].classification, "unknown");
+        assert_eq!(summaries[0].raw_evidence, r#"{"idle_ms":"300571"}"#);
+        let report = artifact_report(&summaries);
+        assert!(report.contains(&path.display().to_string()));
+        assert!(report.contains("capture_status=pane-already-gone classification=unknown"));
+        assert!(report.contains(r#"raw_evidence={"idle_ms":"300571"}"#));
     }
 
     #[test]

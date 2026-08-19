@@ -3,6 +3,7 @@
 //! event and every harness child's stderr is written here as well.
 
 use std::fs::File;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Mutex;
@@ -14,6 +15,10 @@ use tracing_subscriber::fmt::writer::{BoxMakeWriter, MakeWriterExt};
 pub const SUPERVISE_LOG: &str = "supervise.log";
 /// Whatever the harness child wrote to fd 2.
 pub const CHILD_STDERR: &str = "child.stderr";
+pub const FAILURE_PANE: &str = "failure-pane.txt";
+pub const ROUTE_DELETE_PANE: &str = "route-delete-pane.txt";
+
+const ARTIFACT_TAIL_BYTES: u64 = 16 * 1024;
 
 /// `~/.agent/lanes`.
 pub fn lanes_root() -> Result<PathBuf> {
@@ -34,6 +39,195 @@ pub fn lane_dir_in(root: &Path, lane: &str) -> PathBuf {
 /// The trail directory for one lane under `~/.agent/lanes`.
 pub fn lane_dir(lane: &str) -> Result<PathBuf> {
     Ok(lane_dir_in(&lanes_root()?, lane))
+}
+
+/// Artifact root paired with a mailbox. The production mailbox is
+/// `~/.agent/mail`, yielding `~/.agent/lanes`; an explicit test/custom mailbox
+/// retains its artifacts below that directory.
+pub fn lanes_root_for_mail(mail_dir: &Path) -> PathBuf {
+    match mail_dir.file_name().and_then(|name| name.to_str()) {
+        Some("mail") => mail_dir.parent().unwrap_or(mail_dir).join("lanes"),
+        _ => mail_dir.join("lanes"),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PaneArtifactName {
+    Attempt { attempt: u32, final_attempt: bool },
+    RouteDeletion,
+}
+
+impl PaneArtifactName {
+    fn filename(self) -> String {
+        match self {
+            PaneArtifactName::Attempt { attempt, .. } => format!("attempt-{attempt}-pane.txt"),
+            PaneArtifactName::RouteDeletion => ROUTE_DELETE_PANE.to_owned(),
+        }
+    }
+
+    fn final_attempt(self) -> bool {
+        matches!(
+            self,
+            PaneArtifactName::Attempt {
+                final_attempt: true,
+                ..
+            }
+        )
+    }
+}
+
+pub struct PaneArtifactContext<'a> {
+    pub lane: &'a str,
+    pub harness: &'a str,
+    pub model: Option<&'a str>,
+    pub conversation_id: Option<&'a str>,
+    pub reason: &'a str,
+    pub classification: Option<crate::channel::FailureClass>,
+    pub raw_evidence: &'a crate::channel::RawEvidence,
+    pub tmux_target: Option<&'a str>,
+    pub tmux_socket: Option<&'a str>,
+    pub name: PaneArtifactName,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PaneArtifact {
+    pub path: PathBuf,
+    pub capture_status: String,
+}
+
+/// Capture complete scrollback and durable raw trail tails before destructive
+/// pane work. Capture errors become artifact content and do not mask the lane's
+/// original failure.
+pub fn capture_pane_artifact(
+    root: &Path,
+    context: &PaneArtifactContext<'_>,
+    multiplexer: &dyn crate::tmux::Multiplexer,
+) -> Result<PaneArtifact> {
+    capture_pane_artifact_with(
+        root,
+        context,
+        |target| multiplexer.target_alive(context.tmux_socket, target),
+        |target| multiplexer.capture_pane_history(context.tmux_socket, target),
+    )
+}
+
+fn capture_pane_artifact_with(
+    root: &Path,
+    context: &PaneArtifactContext<'_>,
+    target_alive: impl Fn(&str) -> bool,
+    capture: impl Fn(&str) -> Result<String>,
+) -> Result<PaneArtifact> {
+    let dir = lane_dir_in(root, context.lane);
+    std::fs::create_dir_all(&dir).context("create pane artifact directory")?;
+    let supervise = dir.join(SUPERVISE_LOG);
+    let child = dir.join(CHILD_STDERR);
+    let supervise_start = file_len(&supervise);
+    let child_start = file_len(&child);
+    let (capture_status, pane) = match context.tmux_target {
+        None => ("pane-unavailable".to_owned(), String::new()),
+        Some(target) if !target_alive(target) => ("pane-already-gone".to_owned(), String::new()),
+        Some(target) => match capture(target) {
+            Ok(pane) => ("ok".to_owned(), pane),
+            Err(error) => (format!("capture-failed: {error:#}"), String::new()),
+        },
+    };
+    let supervise_end = file_len(&supervise);
+    let child_end = file_len(&child);
+    let raw = serde_json::to_string(context.raw_evidence)
+        .unwrap_or_else(|error| format!(r#"{{"evidence_serialization_error":"{error}"}}"#));
+    let attempt = match context.name {
+        PaneArtifactName::Attempt { attempt, .. } => attempt.to_string(),
+        PaneArtifactName::RouteDeletion => "-".to_owned(),
+    };
+    let finish = context
+        .raw_evidence
+        .get("finish")
+        .map(String::as_str)
+        .unwrap_or("<unavailable>");
+    let error = context
+        .raw_evidence
+        .get("error")
+        .map(String::as_str)
+        .unwrap_or("<unavailable>");
+    let body = format!(
+        "timestamp={}\n\
+lane={}\n\
+attempt={}\n\
+final_attempt={}\n\
+harness={}\n\
+model={}\n\
+conversation_id={}\n\
+reason={}\n\
+classification={}\n\
+finish={}\n\
+error={}\n\
+tmux_target={}\n\
+capture_status={}\n\
+supervise_log_offsets={}..{}\n\
+child_stderr_offsets={}..{}\n\
+raw_evidence={}\n\
+--- supervisor-tail ---\n{}\n\
+--- child-stderr-tail ---\n{}\n\
+--- pane-history ---\n{}",
+        crate::bus::now_iso(),
+        context.lane,
+        attempt,
+        context.name.final_attempt(),
+        context.harness,
+        context.model.unwrap_or("-"),
+        context.conversation_id.unwrap_or("-"),
+        context.reason,
+        context
+            .classification
+            .map(crate::channel::FailureClass::as_str)
+            .unwrap_or("none"),
+        finish,
+        error,
+        context.tmux_target.unwrap_or("-"),
+        capture_status,
+        supervise_start,
+        supervise_end,
+        child_start,
+        child_end,
+        raw,
+        file_tail(&supervise, ARTIFACT_TAIL_BYTES),
+        file_tail(&child, ARTIFACT_TAIL_BYTES),
+        pane,
+    );
+    let path = dir.join(context.name.filename());
+    write_durable(&path, body.as_bytes())?;
+    if context.name.final_attempt() {
+        write_durable(&dir.join(FAILURE_PANE), body.as_bytes())?;
+    }
+    Ok(PaneArtifact {
+        path,
+        capture_status,
+    })
+}
+
+fn file_len(path: &Path) -> u64 {
+    std::fs::metadata(path)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0)
+}
+
+fn file_tail(path: &Path, limit: u64) -> String {
+    let Ok(mut file) = File::open(path) else {
+        return String::new();
+    };
+    let size = file.metadata().map(|metadata| metadata.len()).unwrap_or(0);
+    let _ = file.seek(SeekFrom::Start(size.saturating_sub(limit)));
+    let mut bytes = Vec::new();
+    let _ = file.read_to_end(&mut bytes);
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+fn write_durable(path: &Path, bytes: &[u8]) -> Result<()> {
+    let mut file = File::create(path).with_context(|| format!("create {}", path.display()))?;
+    file.write_all(bytes)
+        .with_context(|| format!("write {}", path.display()))?;
+    file.sync_all()
+        .with_context(|| format!("sync {}", path.display()))
 }
 
 /// Open `<root>/<lane>/<name>` for append, creating the directory.
@@ -183,6 +377,84 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    fn artifact_context<'a>(evidence: &'a crate::channel::RawEvidence) -> PaneArtifactContext<'a> {
+        PaneArtifactContext {
+            lane: "mine",
+            harness: "opencode",
+            model: Some("openrouter/model"),
+            conversation_id: Some("ses-1"),
+            reason: "watchdog-stall",
+            classification: Some(crate::channel::FailureClass::Unknown),
+            raw_evidence: evidence,
+            tmux_target: Some("mine:@1"),
+            tmux_socket: None,
+            name: PaneArtifactName::Attempt {
+                attempt: 2,
+                final_attempt: true,
+            },
+        }
+    }
+
+    #[test]
+    fn pane_capture_success_writes_attempt_and_final_artifacts() {
+        let root = tempdir("pane-ok");
+        let evidence = crate::channel::RawEvidence::from([
+            ("finish".into(), "<missing>".into()),
+            ("error".into(), "MessageAbortedError".into()),
+        ]);
+        let artifact = capture_pane_artifact_with(
+            &root,
+            &artifact_context(&evidence),
+            |_| true,
+            |_| Ok("oldest\nnewest\n".into()),
+        )
+        .unwrap();
+        assert_eq!(artifact.capture_status, "ok");
+        let body = std::fs::read_to_string(&artifact.path).unwrap();
+        assert!(body.contains("capture_status=ok\n"));
+        assert!(body.contains("classification=unknown\n"));
+        assert!(body.contains("--- pane-history ---\noldest\nnewest\n"));
+        assert_eq!(
+            body,
+            std::fs::read_to_string(lane_dir_in(&root, "mine").join(FAILURE_PANE)).unwrap()
+        );
+    }
+
+    #[test]
+    fn pane_already_gone_is_written_without_calling_capture() {
+        let root = tempdir("pane-gone");
+        let evidence = crate::channel::RawEvidence::new();
+        let artifact = capture_pane_artifact_with(
+            &root,
+            &artifact_context(&evidence),
+            |_| false,
+            |_| -> Result<String> { panic!("gone panes are not captured") },
+        )
+        .unwrap();
+        assert_eq!(artifact.capture_status, "pane-already-gone");
+        let body = std::fs::read_to_string(artifact.path).unwrap();
+        assert!(body.contains("capture_status=pane-already-gone\n"));
+    }
+
+    #[test]
+    fn failed_capture_is_the_artifact_content() {
+        let root = tempdir("pane-failed");
+        let evidence = crate::channel::RawEvidence::new();
+        let artifact = capture_pane_artifact_with(
+            &root,
+            &artifact_context(&evidence),
+            |_| true,
+            |_| anyhow::bail!("tmux server disconnected"),
+        )
+        .unwrap();
+        assert_eq!(
+            artifact.capture_status,
+            "capture-failed: tmux server disconnected"
+        );
+        let body = std::fs::read_to_string(artifact.path).unwrap();
+        assert!(body.contains("capture_status=capture-failed: tmux server disconnected\n"));
     }
 
     // FAIL-PRE-FIX: the supervisor logged only to the pane's stderr, so a lane

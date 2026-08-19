@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use tracing::{debug, info, warn};
 
-use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
+use crate::channel::{ChannelSpec, Delivery, FailureClass, LaneChannel, RawEvidence, TurnEvent};
 
 /// A TUI stops repainting when it stops working, so an unchanged pane body is
 /// the turn-end signal.
@@ -55,6 +55,7 @@ pub struct TuiChannel {
     turn_open: bool,
     /// Whether this turn has already emitted `TurnEvent::Started`.
     started_emitted: bool,
+    last_opencode_state: Option<crate::channel::opencode::LastMessageState>,
 }
 
 impl TuiChannel {
@@ -96,6 +97,7 @@ impl TuiChannel {
             settled_since: None,
             turn_open: false,
             started_emitted: false,
+            last_opencode_state: None,
         };
         channel.wait_for_boot()?;
         if channel.profile.harness == "opencode" && channel.conversation.is_none() {
@@ -275,6 +277,29 @@ impl LaneChannel for TuiChannel {
         }
     }
 
+    fn tmux_target(&self) -> Option<&str> {
+        Some(&self.target)
+    }
+
+    fn tmux_socket(&self) -> Option<&str> {
+        self.socket.as_deref()
+    }
+
+    fn raw_evidence(&self) -> RawEvidence {
+        let mut evidence = self
+            .last_opencode_state
+            .as_ref()
+            .map(crate::channel::opencode::LastMessageState::evidence)
+            .unwrap_or_default();
+        if self.profile.harness == "opencode" {
+            evidence.insert(
+                "process_exit_status".into(),
+                "<unavailable:tui-pane-owned>".into(),
+            );
+        }
+        evidence
+    }
+
     fn set_brief(&mut self, brief: &str) {
         self.brief = Some(brief.to_owned());
     }
@@ -339,7 +364,15 @@ impl LaneChannel for TuiChannel {
                 Ok(settled) => settled,
                 Err(error) if window_is_gone(&error) => {
                     self.turn_open = false;
-                    return Ok(Some(TurnEvent::flaked("tui window died mid-turn")));
+                    return Ok(Some(TurnEvent::retryable_failure(
+                        "tui window died mid-turn",
+                        FailureClass::Transport,
+                        RawEvidence::from([
+                            ("source".into(), "tmux capture-pane".into()),
+                            ("tmux_target".into(), self.target.clone()),
+                            ("tmux_error".into(), format!("{error:#}")),
+                        ]),
+                    )));
                 }
                 Err(error) => return Err(error),
             };
@@ -367,25 +400,36 @@ impl LaneChannel for TuiChannel {
                         self.settled_since = None;
                         continue;
                     };
-                    let Some(state) = crate::channel::opencode::last_message_state(conversation_id)
-                    else {
+                    let Some(state) = crate::channel::opencode::last_message_state(
+                        conversation_id,
+                        self.turn_started_ms,
+                    ) else {
                         self.settled_since = None;
                         continue;
                     };
-                    if state.aborted() {
+                    self.last_opencode_state = Some(state.clone());
+                    if let Some((classification, reason)) = state.failure() {
                         self.turn_open = false;
                         warn!(
                             conversation_id,
-                            last_opencode_finish = state.finish.as_deref().unwrap_or_default(),
-                            last_opencode_error = state.error.as_deref().unwrap_or_default(),
-                            "opencode tui turn ended with an aborted stream"
+                            last_opencode_finish = state.finish.as_deref().unwrap_or("<missing>"),
+                            last_opencode_error = state.error.as_deref().unwrap_or("<missing>"),
+                            failure_classification = classification.as_str(),
+                            raw_evidence = %evidence_summary(&state.evidence()),
+                            "opencode tui turn ended with explicit failure evidence"
                         );
-                        return Ok(Some(TurnEvent::flaked("opencode message aborted")));
+                        return Ok(Some(TurnEvent::retryable_failure(
+                            reason,
+                            classification,
+                            state.evidence(),
+                        )));
                     }
                     if !state.completed() {
                         debug!(
                             conversation_id,
-                            last_opencode_finish = state.finish.as_deref().unwrap_or_default(),
+                            last_opencode_finish = state.finish.as_deref().unwrap_or("<missing>"),
+                            last_opencode_error = state.error.as_deref().unwrap_or("<missing>"),
+                            raw_evidence = %evidence_summary(&state.evidence()),
                             "opencode pane is idle while its message remains nonterminal"
                         );
                         self.settled_since = None;
@@ -497,6 +541,26 @@ fn hash(body: &str) -> u64 {
         value = value.wrapping_mul(0x0000_0100_0000_01b3);
     }
     value
+}
+
+fn evidence_summary(evidence: &RawEvidence) -> String {
+    evidence
+        .iter()
+        .filter(|(field, _)| {
+            matches!(
+                field.as_str(),
+                "source"
+                    | "message_id"
+                    | "finish"
+                    | "error"
+                    | "classification_basis"
+                    | "provider_id"
+                    | "model_id"
+            ) || field.starts_with("part_event_")
+        })
+        .map(|(field, value)| format!("{field}={value}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// `opencode` takes plain Enter as a steer; its own pane shows the new turn

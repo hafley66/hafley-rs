@@ -77,6 +77,7 @@ fn one_lane_exit_writes_exactly_one_result_row() {
     let rc = boop::supervise::run(
         boop::supervise::LaneRun {
             lane: "mine".to_owned(),
+            harness: "test".to_owned(),
             brief,
             mail_dir: dir.clone(),
             cwd: dir.clone(),

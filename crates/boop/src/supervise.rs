@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use tracing::{debug, error, info, warn};
 
 use crate::bus;
-use crate::channel::{Delivery, LaneChannel, TurnEvent};
+use crate::channel::{Delivery, FailureClass, LaneChannel, RawEvidence, TurnEvent};
 
 /// How often the inbox is re-read while a turn runs.
 const POLL: Duration = Duration::from_millis(700);
@@ -28,8 +28,8 @@ fn idle_ms(now_ms: u64, turn_started: u64, activity: Option<u64>) -> u64 {
 
 /// Whether a quiet turn is past the point where its child is treated as gone.
 /// A reasoning model is alive and silent until its first tool call.
-fn stalled(idle_ms: u64) -> bool {
-    idle_ms > STALL_LIMIT.as_millis() as u64
+fn stalled(idle_ms: u64, limit: Duration) -> bool {
+    idle_ms > limit.as_millis() as u64
 }
 
 /// The text a resumed conversation opens with instead of the full brief.
@@ -129,6 +129,7 @@ pub fn parent_policy(dir: &Path, lane: &str) -> ParentDeathPolicy {
 #[derive(Clone)]
 pub struct LaneRun {
     pub lane: String,
+    pub harness: String,
     pub brief: PathBuf,
     pub mail_dir: PathBuf,
     pub cwd: PathBuf,
@@ -206,6 +207,8 @@ struct Ended {
     /// The last turn's reason, carried out when the lane ended on a provider
     /// flake so the result row names what killed it.
     detail: Option<String>,
+    classification: Option<FailureClass>,
+    evidence: RawEvidence,
 }
 
 /// What a lane exits with when its parent died under the `kill` policy. The
@@ -324,6 +327,8 @@ impl ParentWatch {
                 Some(Ended {
                     exit_code: PARENT_DIED_EXIT,
                     detail: Some(format!("{}: {parent}", crate::trail::PARENT_DIED)),
+                    classification: Some(FailureClass::Harness),
+                    evidence: RawEvidence::from([("parent".into(), parent)]),
                 })
             }
             ParentDeathPolicy::Reparent => {
@@ -445,7 +450,13 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
         Err(payload) => {
             let text = panic_text(&payload);
             error!(lane = lane.lane, panic = text, "lane supervisor panicked");
-            record_result(&lane, PANIC_EXIT, Some(&format!("panic: {text}")));
+            record_result(
+                &lane,
+                PANIC_EXIT,
+                Some(&format!("panic: {text}")),
+                Some(FailureClass::Harness),
+                &RawEvidence::from([("panic".into(), text.to_owned())]),
+            );
             anyhow::bail!("supervisor panic: {text}");
         }
         Ok(ended) => ended,
@@ -475,7 +486,13 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
                 None,
                 "supervisor exited with error",
             );
-            record_result(&lane, 1, Some(&format!("supervisor error: {error}")));
+            record_result(
+                &lane,
+                1,
+                Some(&format!("supervisor error: {error}")),
+                Some(FailureClass::Harness),
+                &RawEvidence::from([("supervisor_error".into(), format!("{error:#}"))]),
+            );
             return Err(error);
         }
     };
@@ -495,7 +512,13 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
         None,
         ended.detail.as_deref().unwrap_or("supervisor exited"),
     );
-    record_result(&lane, ended.exit_code, ended.detail.as_deref());
+    record_result(
+        &lane,
+        ended.exit_code,
+        ended.detail.as_deref(),
+        ended.classification,
+        &ended.evidence,
+    );
     Ok(ended.exit_code)
 }
 
@@ -528,7 +551,16 @@ const TRAILED_SIGNALS: [i32; 3] = [
 fn signal_exit(lane: &LaneRun, signal: i32) -> i32 {
     let name = signal_hook::low_level::signal_name(signal).unwrap_or("unknown");
     warn!(lane = lane.lane, signal, name, "lane supervisor signalled");
-    record_result(lane, 128 + signal, Some(&format!("killed by {name}")));
+    record_result(
+        lane,
+        128 + signal,
+        Some(&format!("killed by {name}")),
+        Some(FailureClass::Transport),
+        &RawEvidence::from([
+            ("signal".into(), signal.to_string()),
+            ("signal_name".into(), name.to_owned()),
+        ]),
+    );
     128 + signal
 }
 
@@ -554,10 +586,68 @@ pub fn arm_signal_trail(lane: &LaneRun) {
     });
 }
 
+fn capture_attempt(
+    lane: &LaneRun,
+    channel: &dyn LaneChannel,
+    attempt: u32,
+    reason: &str,
+    classification: Option<FailureClass>,
+    event_evidence: &RawEvidence,
+    final_attempt: bool,
+) {
+    let mut evidence = channel.raw_evidence();
+    evidence.extend(event_evidence.clone());
+    let route_target = bus::read_routes(&lane.mail_dir)
+        .ok()
+        .and_then(|routes| routes.get(&lane.lane).and_then(|route| route.tmux.clone()));
+    let target = channel.tmux_target().or(route_target.as_deref());
+    let conversation = channel.conversation_id();
+    let root = crate::trail::lanes_root_for_mail(&lane.mail_dir);
+    let context = crate::trail::PaneArtifactContext {
+        lane: &lane.lane,
+        harness: &lane.harness,
+        model: lane.model.as_deref(),
+        conversation_id: conversation.as_deref(),
+        reason,
+        classification,
+        raw_evidence: &evidence,
+        tmux_target: target,
+        tmux_socket: channel.tmux_socket(),
+        name: crate::trail::PaneArtifactName::Attempt {
+            attempt,
+            final_attempt,
+        },
+    };
+    match crate::trail::capture_pane_artifact(&root, &context, crate::tmux::mux()) {
+        Ok(artifact) => info!(
+            lane = lane.lane,
+            attempt,
+            path = %artifact.path.display(),
+            capture_status = artifact.capture_status,
+            "lane pane artifact written"
+        ),
+        Err(error) => error!(
+            lane = lane.lane,
+            attempt,
+            error = %error,
+            "lane pane artifact write failed"
+        ),
+    }
+}
+
 fn supervise(
     lane: &LaneRun,
     channel: &mut dyn LaneChannel,
     events: &mut TraceRecorder,
+) -> Result<Ended> {
+    supervise_with_stall_limit(lane, channel, events, STALL_LIMIT)
+}
+
+fn supervise_with_stall_limit(
+    lane: &LaneRun,
+    channel: &mut dyn LaneChannel,
+    events: &mut TraceRecorder,
+    stall_limit: Duration,
 ) -> Result<Ended> {
     let brief = std::fs::read_to_string(&lane.brief)
         .with_context(|| format!("read lane brief {}", lane.brief.display()))?;
@@ -601,6 +691,7 @@ fn supervise(
         "lane channel opened",
     );
     loop {
+        let attempt = flake_resumes + 1;
         info!(turn_bytes = turn.len(), "lane turn starting");
         let turn_started = crate::channel::now_ms();
         events.record(
@@ -629,6 +720,7 @@ fn supervise(
             return Err(error);
         }
         remember_conversation(lane, channel);
+        let mut attempt_captured = false;
         let end = loop {
             match channel.next_event(POLL) {
                 Err(error) => {
@@ -654,9 +746,36 @@ fn supervise(
                 .last_activity_ms()
                 .filter(|written| *written >= turn_started);
             let idle_ms = idle_ms(crate::channel::now_ms(), turn_started, this_turn_activity);
-            if stalled(idle_ms) {
-                warn!(idle_ms, "lane turn stalled; killing the harness child");
+            if stalled(idle_ms, stall_limit) {
+                let evidence = RawEvidence::from([
+                    ("source".into(), "supervisor-watchdog".into()),
+                    ("idle_ms".into(), idle_ms.to_string()),
+                    ("turn_started_ms".into(), turn_started.to_string()),
+                    (
+                        "last_activity_ms".into(),
+                        this_turn_activity
+                            .map(|value| value.to_string())
+                            .unwrap_or_else(|| "<missing>".into()),
+                    ),
+                ]);
+                let reason = format!("stalled: {}s with no harness activity", idle_ms / 1000);
+                warn!(
+                    idle_ms,
+                    attempt,
+                    failure_classification = FailureClass::Unknown.as_str(),
+                    "lane turn stalled; killing the harness child"
+                );
                 println!("[boop] turn stalled ({}s idle), retrying", idle_ms / 1000);
+                capture_attempt(
+                    lane,
+                    channel,
+                    attempt,
+                    &reason,
+                    Some(FailureClass::Unknown),
+                    &evidence,
+                    flake_resumes >= FLAKE_RESUME_CAP,
+                );
+                attempt_captured = true;
                 if let Err(error) = channel.close() {
                     events.record(
                         "error",
@@ -671,12 +790,18 @@ fn supervise(
                     );
                     return Err(error);
                 }
-                break TurnEvent::flaked(format!(
-                    "stalled: {}s with no harness activity",
-                    idle_ms / 1000
-                ));
+                break TurnEvent::retryable_failure(reason, FailureClass::Unknown, evidence);
             }
             if let Some(ended) = watch.probe(lane, crate::tmux::mux()) {
+                capture_attempt(
+                    lane,
+                    channel,
+                    attempt,
+                    ended.detail.as_deref().unwrap_or(crate::trail::PARENT_DIED),
+                    ended.classification,
+                    &ended.evidence,
+                    true,
+                );
                 if let Err(error) = channel.close() {
                     warn!(lane = lane.lane, error = %error, "close after parent death failed");
                 }
@@ -753,6 +878,10 @@ fn supervise(
             turn_end_reason = end.detail(),
             turn_ok = end.is_done(),
             retryable = end.retryable(),
+            failure_classification = end
+                .classification()
+                .map(FailureClass::as_str)
+                .unwrap_or("none"),
             "lane turn ended"
         );
         remember_conversation(lane, channel);
@@ -761,25 +890,77 @@ fn supervise(
             brief_turn_pending = false;
         }
         if end.retryable() && flake_resumes < FLAKE_RESUME_CAP {
+            if !attempt_captured {
+                capture_attempt(
+                    lane,
+                    channel,
+                    attempt,
+                    end.detail(),
+                    end.classification(),
+                    end.evidence(),
+                    false,
+                );
+            }
             flake_resumes += 1;
-            println!("[boop] provider flake, resuming ({flake_resumes}/{FLAKE_RESUME_CAP})");
+            println!("[boop] retryable failure, resuming ({flake_resumes}/{FLAKE_RESUME_CAP})");
             warn!(
                 flake_resumes,
                 flake_resume_cap = FLAKE_RESUME_CAP,
-                "lane provider flake; resuming"
+                failure_classification = end
+                    .classification()
+                    .map(FailureClass::as_str)
+                    .unwrap_or("unknown"),
+                "lane retryable failure; resuming"
             );
-            hail_parent_once(lane, RETRYING, flake_resumes, end.detail());
+            hail_parent_once(
+                lane,
+                RETRYING,
+                flake_resumes,
+                end.detail(),
+                end.classification(),
+                end.evidence(),
+            );
             turn = resume_text(brief_completed, channel.conversation_id(), &brief);
             continue;
         }
         if end.retryable() {
-            hail_parent_once(lane, RETRY_BUDGET_EXHAUSTED, flake_resumes, end.detail());
+            if !attempt_captured {
+                capture_attempt(
+                    lane,
+                    channel,
+                    attempt,
+                    end.detail(),
+                    end.classification(),
+                    end.evidence(),
+                    true,
+                );
+                attempt_captured = true;
+            }
+            hail_parent_once(
+                lane,
+                RETRY_BUDGET_EXHAUSTED,
+                flake_resumes,
+                end.detail(),
+                end.classification(),
+                end.evidence(),
+            );
         }
         for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
             seen.insert(hail.id.clone());
             held.push(hail);
         }
         if held.is_empty() {
+            if !end.is_done() && !attempt_captured {
+                capture_attempt(
+                    lane,
+                    channel,
+                    attempt,
+                    end.detail(),
+                    end.classification(),
+                    end.evidence(),
+                    true,
+                );
+            }
             if let Err(error) = channel.close() {
                 events.record(
                     "error",
@@ -796,7 +977,12 @@ fn supervise(
             }
             let (exit_code, detail) = completion_verdict(brief_completed, &end);
             info!(exit_code, "lane supervision complete");
-            return Ok(Ended { exit_code, detail });
+            return Ok(Ended {
+                exit_code,
+                detail,
+                classification: end.classification(),
+                evidence: end.evidence().clone(),
+            });
         }
         turn = held
             .drain(..)
@@ -830,10 +1016,7 @@ fn completion_verdict(brief_completed: bool, end: &TurnEvent) -> (i32, Option<St
             Some("agent stopped before completing the brief".to_owned()),
         );
     }
-    if end.retryable() {
-        return (1, Some(end.detail().to_owned()));
-    }
-    (1, None)
+    (1, Some(end.detail().to_owned()))
 }
 
 /// The lane's parent per the registry. The pane epilogue addresses its result
@@ -853,13 +1036,40 @@ fn result_body(lane: &str, exit_code: i32, detail: Option<&str>) -> String {
 
 /// Write the lane's result row before the pane can evaporate: a killed pane
 /// never runs its epilogue, and the waiter reads only this mailbox.
-fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
+fn record_result(
+    lane: &LaneRun,
+    exit_code: i32,
+    detail: Option<&str>,
+    classification: Option<FailureClass>,
+    evidence: &RawEvidence,
+) {
     let Some(parent) = registered_parent(&lane.mail_dir, &lane.lane) else {
         debug!(
             lane = lane.lane,
             exit_code, "lane has no registered parent; no result row written"
         );
         return;
+    };
+    if let Some(row) = hailed_row(&lane.mail_dir, &lane.lane, "result") {
+        deliver_parent_row(&lane.mail_dir, &row);
+        if exit_code != 0 && !ended_on_parent_death(detail) {
+            hail_parent_once(
+                lane,
+                EXITED_WITHOUT_COMPLETION,
+                exit_code as u32,
+                detail.unwrap_or("no completion reported"),
+                classification,
+                evidence,
+            );
+        }
+        return;
+    }
+    let diagnostic = diagnostic_citation(classification, evidence);
+    let body_detail = match (detail, diagnostic.is_empty()) {
+        (Some(detail), false) => Some(format!("{detail}; {diagnostic}")),
+        (Some(detail), true) => Some(detail.to_owned()),
+        (None, false) if exit_code != 0 => Some(diagnostic),
+        (None, _) => None,
     };
     let row = bus::Message {
         id: bus::mint_id(),
@@ -869,7 +1079,7 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
         to_timestamp: None,
         kind: "result".into(),
         reply_to: None,
-        body: result_body(&lane.lane, exit_code, detail),
+        body: result_body(&lane.lane, exit_code, body_detail.as_deref()),
         r#ref: None,
         rc: Some(exit_code),
         detail: detail.map(str::to_owned),
@@ -878,9 +1088,13 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
         Ok(()) => {
             info!(
                 lane = lane.lane,
-                parent, exit_code, "lane result row written"
+                parent,
+                exit_code,
+                message_id = row.id,
+                "lane result row written"
             );
             println!("[boop] result rc={exit_code} hailed to {parent}");
+            deliver_parent_row(&lane.mail_dir, &row);
         }
         Err(error) => {
             error!(lane = lane.lane, parent, error = %error, "lane result row write failed");
@@ -893,6 +1107,8 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
             EXITED_WITHOUT_COMPLETION,
             exit_code as u32,
             detail.unwrap_or("no completion reported"),
+            classification,
+            evidence,
         );
     }
 }
@@ -911,9 +1127,17 @@ pub const EXITED_WITHOUT_COMPLETION: &str = "exited_without_completion";
 
 /// What the parent needs to act on: which lane, on what model, how far in, why,
 /// and the command that reads the rest.
-fn failure_body(lane: &LaneRun, kind: &str, attempt: u32, reason: &str) -> String {
+fn failure_body(
+    lane: &LaneRun,
+    kind: &str,
+    attempt: u32,
+    reason: &str,
+    classification: Option<FailureClass>,
+    evidence: &RawEvidence,
+) -> String {
+    let diagnostic = diagnostic_citation(classification, evidence);
     format!(
-        "lane {} {kind}: {reason} (attempt {attempt}/{FLAKE_RESUME_CAP}, model {}); read: boop beep lane pane {}",
+        "lane {} {kind}: {reason} (attempt {attempt}/{FLAKE_RESUME_CAP}, model {}, {diagnostic}); read: boop debug --lane {}",
         lane.lane,
         lane.model.as_deref().unwrap_or("-"),
         lane.lane,
@@ -922,17 +1146,35 @@ fn failure_body(lane: &LaneRun, kind: &str, attempt: u32, reason: &str) -> Strin
 
 /// Whether this lane already sent that kind. The mailbox is the dedup store, so
 /// a respawned supervisor never re-sends what a previous run already said.
-fn already_hailed(dir: &Path, lane: &str, kind: &str) -> bool {
+fn hailed_row(dir: &Path, lane: &str, kind: &str) -> Option<bus::Message> {
     let mut rows = Vec::new();
     for path in bus::read_boxes(dir).unwrap_or_default() {
         rows.extend(bus::parse_box(&path));
     }
-    rows.iter().any(|row| row.from == lane && row.kind == kind)
+    let registered_ms = bus::read_routes(dir)
+        .ok()
+        .and_then(|routes| routes.get(lane)?.registered_at.clone())
+        .and_then(|stamp| crate::harness::claude::parse_iso_ms(&stamp));
+    rows.into_iter().rev().find(|row| {
+        row.from == lane
+            && row.kind == kind
+            && registered_ms.is_none_or(|since| {
+                crate::harness::claude::parse_iso_ms(&row.from_timestamp)
+                    .is_some_and(|written| written >= since)
+            })
+    })
 }
 
 /// Mail the registered parent one typed failure row. A parentless lane and a
 /// repeat of the same kind both write nothing.
-fn hail_parent_once(lane: &LaneRun, kind: &str, attempt: u32, reason: &str) {
+fn hail_parent_once(
+    lane: &LaneRun,
+    kind: &str,
+    attempt: u32,
+    reason: &str,
+    classification: Option<FailureClass>,
+    evidence: &RawEvidence,
+) {
     let Some(parent) = registered_parent(&lane.mail_dir, &lane.lane) else {
         debug!(
             lane = lane.lane,
@@ -940,7 +1182,8 @@ fn hail_parent_once(lane: &LaneRun, kind: &str, attempt: u32, reason: &str) {
         );
         return;
     };
-    if already_hailed(&lane.mail_dir, &lane.lane, kind) {
+    if let Some(row) = hailed_row(&lane.mail_dir, &lane.lane, kind) {
+        deliver_parent_row(&lane.mail_dir, &row);
         return;
     }
     let row = bus::Message {
@@ -951,15 +1194,22 @@ fn hail_parent_once(lane: &LaneRun, kind: &str, attempt: u32, reason: &str) {
         to_timestamp: None,
         kind: kind.to_owned(),
         reply_to: None,
-        body: failure_body(lane, kind, attempt, reason),
+        body: failure_body(lane, kind, attempt, reason, classification, evidence),
         r#ref: None,
         rc: None,
         detail: Some(reason.to_owned()),
     };
     match append_row(&lane.mail_dir, &row) {
         Ok(()) => {
-            info!(lane = lane.lane, parent, kind, "lane failure hail written");
+            info!(
+                lane = lane.lane,
+                parent,
+                kind,
+                message_id = row.id,
+                "lane failure hail written"
+            );
             println!("[boop] {kind} hailed to {parent}");
+            deliver_parent_row(&lane.mail_dir, &row);
         }
         Err(error) => {
             error!(lane = lane.lane, parent, kind, error = %error, "failure hail write failed");
@@ -976,7 +1226,149 @@ fn append_row(dir: &Path, row: &bus::Message) -> std::io::Result<()> {
         .create(true)
         .append(true)
         .open(dir.join("bus.ndjson"))?;
-    writeln!(file, "{}", bus::message_line(row))
+    writeln!(file, "{}", bus::message_line(row))?;
+    file.sync_data()
+}
+
+fn diagnostic_citation(classification: Option<FailureClass>, evidence: &RawEvidence) -> String {
+    let fields = evidence
+        .iter()
+        .filter(|(field, _)| {
+            matches!(
+                field.as_str(),
+                "source"
+                    | "message_id"
+                    | "finish"
+                    | "error"
+                    | "classification_basis"
+                    | "process_exit_status"
+                    | "idle_ms"
+                    | "tmux_error"
+            )
+        })
+        .take(6)
+        .map(|(field, value)| format!("{field}={}", value.replace(['\n', '\r'], " ")))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "classification={} evidence=[{fields}]",
+        classification
+            .map(FailureClass::as_str)
+            .unwrap_or("unknown")
+    )
+}
+
+/// The durable append happens before this delivery leg. Successful pane
+/// injection is acknowledged with a second durable row; failed delivery leaves
+/// the original row unread for the coordinator's inbox drain.
+fn deliver_parent_row(dir: &Path, row: &bus::Message) {
+    let folded = bus::read_boxes(dir)
+        .unwrap_or_default()
+        .into_iter()
+        .flat_map(|path| bus::parse_box(&path))
+        .collect::<Vec<_>>();
+    if bus::fold(&folded)
+        .into_iter()
+        .find(|candidate| candidate.id == row.id)
+        .is_some_and(|candidate| candidate.to_timestamp.is_some())
+    {
+        return;
+    }
+    let Some(route) = bus::read_routes(dir)
+        .ok()
+        .and_then(|routes| routes.get(&row.to).cloned())
+    else {
+        warn!(
+            message_id = row.id,
+            parent = row.to,
+            "parent delivery route missing; row remains queued"
+        );
+        return;
+    };
+    if route
+        .cwd
+        .as_deref()
+        .is_some_and(|cwd| crate::inbox::installed_for(Path::new(cwd), &row.to))
+    {
+        info!(
+            message_id = row.id,
+            parent = row.to,
+            delivery = "hook",
+            "parent row queued for inbox hook"
+        );
+        return;
+    }
+    let Some(target) = route.tmux.as_deref() else {
+        warn!(
+            message_id = row.id,
+            parent = row.to,
+            "parent has no tmux target; row remains queued"
+        );
+        return;
+    };
+    if !crate::tmux::mux().target_alive(None, target) {
+        warn!(
+            message_id = row.id,
+            parent = row.to,
+            tmux_target = target,
+            "parent tmux target is gone; row remains queued"
+        );
+        return;
+    }
+    let registry = crate::Registry::discover();
+    let harness_id = route.harness.as_deref().unwrap_or("claude");
+    let Some(adapter) = registry.by_id(harness_id) else {
+        warn!(
+            message_id = row.id,
+            parent = row.to,
+            harness = harness_id,
+            "parent harness unavailable; row remains queued"
+        );
+        return;
+    };
+    let rendered = render_mail(
+        &mood_template(&row.to),
+        &row.kind,
+        &row.id,
+        &row.from,
+        &row.body,
+    );
+    let session = crate::harness::SessionRef {
+        harness: adapter.id(),
+        session_id: route.session_id.clone().unwrap_or_else(|| row.to.clone()),
+        nickname: row.to.clone(),
+        path: PathBuf::from("/tmp/boop-parent-delivery"),
+        cwd: route.cwd.clone(),
+        git_branch: None,
+        modified_ms: 0,
+        size: 0,
+        tmux: Some(target.to_owned()),
+        tmux_socket: None,
+        parent: None,
+    };
+    match adapter.send(&session, &rendered) {
+        Ok(crate::harness::SendOutcome::Injected) => {
+            let mut ack = row.clone();
+            ack.to_timestamp = Some(bus::now_iso());
+            match append_row(dir, &ack) {
+                Ok(()) => info!(
+                    message_id = row.id,
+                    parent = row.to,
+                    tmux_target = target,
+                    "parent row delivered and acknowledged"
+                ),
+                Err(error) => {
+                    error!(message_id = row.id, parent = row.to, error = %error, "parent delivery acknowledgement failed")
+                }
+            }
+        }
+        Ok(outcome) => {
+            warn!(message_id = row.id, parent = row.to, outcome = ?outcome, "parent harness did not inject; row remains queued")
+        }
+        Err(error) => {
+            warn!(message_id = row.id, parent = row.to, error = %error, "parent pane delivery failed; row remains queued")
+        }
+    }
 }
 
 /// Pin the harness's current conversation to the lane route and to the lane's
@@ -1176,10 +1568,13 @@ mod tests {
     // first tool call, so it died at ~70 s and the retry wrote to dead stdin.
     #[test]
     fn a_quiet_opening_gap_is_not_a_stall() {
-        assert!(!stalled(idle_ms(90_000, 0, None)), "90 s of opening quiet");
-        assert!(stalled(idle_ms(301_000, 0, None)));
-        assert!(!stalled(idle_ms(400_000, 0, Some(399_000))));
-        assert!(stalled(idle_ms(700_000, 0, Some(399_000))));
+        assert!(
+            !stalled(idle_ms(90_000, 0, None), STALL_LIMIT),
+            "90 s of opening quiet"
+        );
+        assert!(stalled(idle_ms(301_000, 0, None), STALL_LIMIT));
+        assert!(!stalled(idle_ms(400_000, 0, Some(399_000)), STALL_LIMIT));
+        assert!(stalled(idle_ms(700_000, 0, Some(399_000)), STALL_LIMIT));
     }
 
     /// Activity before this turn opened is not this turn's; the clock then runs
@@ -1188,6 +1583,83 @@ mod tests {
     fn activity_from_an_earlier_turn_does_not_reset_the_clock() {
         assert_eq!(idle_ms(90_000, 60_000, None), 30_000);
         assert_eq!(idle_ms(90_000, 60_000, Some(80_000)), 10_000);
+    }
+
+    #[derive(Default)]
+    struct WatchdogChannel {
+        turns: u32,
+        closes: u32,
+        evidence_reads: std::sync::atomic::AtomicU32,
+    }
+
+    impl LaneChannel for WatchdogChannel {
+        fn conversation_id(&self) -> Option<String> {
+            Some("watchdog-session".into())
+        }
+
+        fn start_turn(&mut self, _text: &str) -> Result<()> {
+            self.turns += 1;
+            Ok(())
+        }
+
+        fn steer(&mut self, _text: &str) -> Result<Delivery> {
+            Ok(Delivery::MidTurn)
+        }
+
+        fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
+            Ok(None)
+        }
+
+        fn raw_evidence(&self) -> RawEvidence {
+            RawEvidence::from([(
+                "capture_sequence".into(),
+                (self
+                    .evidence_reads
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    + 1)
+                .to_string(),
+            )])
+        }
+
+        fn close(&mut self) -> Result<()> {
+            self.closes += 1;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn watchdog_kill_captures_every_attempt_and_exhausts_retries() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let mut channel = WatchdogChannel::default();
+        let mut events = TraceRecorder {
+            lane: "mine".into(),
+            trace: None,
+            run_id: "watchdog-test".into(),
+            sequence: 0,
+            store: None,
+        };
+
+        let ended =
+            supervise_with_stall_limit(&lane, &mut channel, &mut events, Duration::ZERO).unwrap();
+
+        assert_eq!(ended.exit_code, 1);
+        assert_eq!(ended.classification, Some(FailureClass::Unknown));
+        assert_eq!(channel.turns, 6);
+        assert_eq!(channel.closes, 7);
+        assert_eq!(
+            channel
+                .evidence_reads
+                .load(std::sync::atomic::Ordering::Relaxed),
+            6,
+            "each attempt is captured once before its first destructive boundary"
+        );
+        let artifacts = crate::trail::lane_dir_in(&crate::trail::lanes_root_for_mail(&dir), "mine");
+        assert!(artifacts.join("attempt-1-pane.txt").is_file());
+        assert!(artifacts.join("attempt-6-pane.txt").is_file());
+        let failure = std::fs::read_to_string(artifacts.join(crate::trail::FAILURE_PANE)).unwrap();
+        assert!(failure.contains("classification=unknown\n"));
+        assert!(failure.contains("\"source\":\"supervisor-watchdog\""));
     }
 
     fn hail(kind: &str) -> Hail {
@@ -1274,6 +1746,7 @@ mod tests {
         std::fs::write(&brief, "do the work\n").unwrap();
         LaneRun {
             lane: lane.to_owned(),
+            harness: "test".to_owned(),
             brief,
             mail_dir: dir.to_owned(),
             cwd: dir.to_owned(),
@@ -1387,7 +1860,7 @@ mod tests {
         }
     }
 
-    // FAIL-PRE-FIX: the first provider flake saw a conversation id discovered
+    // FAIL-PRE-FIX: the first retryable failure saw a conversation id discovered
     // before the brief turn, so the retry received RESUME_NUDGE and the brief
     // was absent from the only turn that could act on it.
     #[test]
@@ -1511,7 +1984,7 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(
             rows[0].body,
-            "lane mine done rc=101 (panic: harness stream vanished mid-frame)"
+            "lane mine done rc=101 (panic: harness stream vanished mid-frame; classification=harness evidence=[])"
         );
     }
 
@@ -1534,7 +2007,10 @@ mod tests {
         assert_eq!(signal_exit(&lane, caught), 143);
         let rows = result_rows(&dir);
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].body, "lane mine done rc=143 (killed by SIGTERM)");
+        assert_eq!(
+            rows[0].body,
+            "lane mine done rc=143 (killed by SIGTERM; classification=transport evidence=[])"
+        );
     }
 
     // FAIL-PRE-FIX: the brief reached the channel only as turn one's text, so a

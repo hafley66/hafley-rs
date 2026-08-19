@@ -7,7 +7,7 @@ use std::process::{Child, Command, Stdio};
 use anyhow::{Context, Result};
 use tracing::{debug, info, warn};
 
-use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
+use crate::channel::{ChannelSpec, Delivery, FailureClass, LaneChannel, RawEvidence, TurnEvent};
 
 pub struct OpencodeChannel {
     cwd: PathBuf,
@@ -18,6 +18,8 @@ pub struct OpencodeChannel {
     /// accepts an opencode session created at or after it.
     turn_started_ms: u64,
     lane: Option<String>,
+    last_status: Option<i32>,
+    last_state: Option<LastMessageState>,
 }
 
 impl OpencodeChannel {
@@ -29,6 +31,8 @@ impl OpencodeChannel {
             turn: None,
             turn_started_ms: 0,
             lane: spec.lane.clone(),
+            last_status: None,
+            last_state: None,
         })
     }
 }
@@ -40,6 +44,18 @@ impl LaneChannel for OpencodeChannel {
 
     fn conversation_id_kind(&self) -> &'static str {
         "opencode_session"
+    }
+
+    fn raw_evidence(&self) -> RawEvidence {
+        let mut evidence = self
+            .last_state
+            .as_ref()
+            .map(LastMessageState::evidence)
+            .unwrap_or_default();
+        if let Some(status) = self.last_status {
+            evidence.insert("process_exit_status".into(), status.to_string());
+        }
+        evidence
     }
 
     fn start_turn(&mut self, text: &str) -> Result<()> {
@@ -85,6 +101,7 @@ impl LaneChannel for OpencodeChannel {
         let Some(status) = wait_for(turn, timeout).context("wait opencode run")? else {
             return Ok(None);
         };
+        self.last_status = Some(status);
         self.turn = None;
         if self.session.is_none() {
             self.session = newest_session(&self.cwd, self.turn_started_ms);
@@ -99,24 +116,49 @@ impl LaneChannel for OpencodeChannel {
                 }
             }
         }
-        let state = self.session.as_deref().and_then(last_message_state);
+        let state = self
+            .session
+            .as_deref()
+            .and_then(|session| last_message_state(session, self.turn_started_ms));
+        self.last_state = state.clone();
         if let Some(state) = &state {
             info!(
                 conversation_id = self.session.as_deref().unwrap_or_default(),
-                last_opencode_finish = state.finish.as_deref().unwrap_or_default(),
-                last_opencode_error = state.error.as_deref().unwrap_or_default(),
+                last_opencode_finish = state.finish.as_deref().unwrap_or("<missing>"),
+                last_opencode_error = state.error.as_deref().unwrap_or("<missing>"),
                 "opencode trailing message state"
             );
         }
-        Ok(Some(match status {
-            // `opencode run` exits 0 when the provider drops the stream; the
-            // db's trailing MessageAbortedError is the only tell.
-            0 => match state.as_ref().map(LastMessageState::aborted) {
-                Some(true) => TurnEvent::flaked("rc=0 with an aborted stream"),
-                _ => TurnEvent::ok("rc=0"),
+        let mut evidence = state
+            .as_ref()
+            .map(LastMessageState::evidence)
+            .unwrap_or_default();
+        evidence.insert("process_exit_status".into(), status.to_string());
+        Ok(Some(
+            match (status, state.as_ref().and_then(LastMessageState::failure)) {
+                (0, Some((classification, reason))) => {
+                    TurnEvent::retryable_failure(reason, classification, evidence)
+                }
+                (0, None) if state.as_ref().is_some_and(LastMessageState::completed) => {
+                    TurnEvent::ok("rc=0; opencode finish=stop")
+                }
+                (0, None) => TurnEvent::failure(
+                    "opencode exited rc=0 without terminal assistant evidence",
+                    FailureClass::Unknown,
+                    evidence,
+                ),
+                (other, Some((classification, reason))) => TurnEvent::failure(
+                    format!("{reason}; process exited rc={other}"),
+                    classification,
+                    evidence,
+                ),
+                (other, _) => TurnEvent::failure(
+                    format!("opencode process exited rc={other}"),
+                    FailureClass::Harness,
+                    evidence,
+                ),
             },
-            other => TurnEvent::failed(format!("rc={other}")),
-        }))
+        ))
     }
 
     fn last_activity_ms(&self) -> Option<u64> {
@@ -152,7 +194,7 @@ pub(crate) fn newest_activity(session: &str) -> Option<u64> {
             "SELECT max(newest) FROM (
                SELECT max(time_updated) AS newest FROM message WHERE session_id = ?1
                UNION ALL
-               SELECT max(time_created) FROM part WHERE session_id = ?1)",
+               SELECT max(time_updated) FROM part WHERE session_id = ?1)",
             rusqlite::params![session],
             |row| row.get::<_, Option<i64>>(0),
         )
@@ -175,27 +217,105 @@ pub(crate) fn wait_for(child: &mut Child, timeout: std::time::Duration) -> Resul
     }
 }
 
-/// The finish/error fields on OpenCode's newest message row. A missing finish
-/// or an error means the stream was aborted.
+/// OpenCode's newest assistant message plus a compact tail of its part-event
+/// stream. User messages intentionally never enter this state: they do not
+/// carry finish/error fields and were the source of the empty abort report.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LastMessageState {
+    pub(crate) message_id: String,
+    pub(crate) role: String,
     pub(crate) finish: Option<String>,
     pub(crate) error: Option<String>,
+    pub(crate) error_json: Option<String>,
+    pub(crate) provider_id: Option<String>,
+    pub(crate) model_id: Option<String>,
+    pub(crate) created_ms: u64,
+    pub(crate) updated_ms: u64,
+    pub(crate) completed_ms: Option<u64>,
+    pub(crate) part_events: Vec<String>,
 }
 
 impl LastMessageState {
-    pub(crate) fn aborted(&self) -> bool {
-        self.finish.is_none() || self.error.is_some()
+    /// A missing finish and missing error is in-progress/unknown state. Only an
+    /// explicit error object produces a failure classification.
+    pub(crate) fn failure(&self) -> Option<(FailureClass, String)> {
+        let error = self.error.as_deref()?;
+        let lower = error.to_ascii_lowercase();
+        let raw = self.error_json.as_deref().unwrap_or_default();
+        let provider_cited = ["statusCode", "responseBody", "providerError", "upstream"]
+            .iter()
+            .any(|field| raw.contains(field));
+        let classification = if provider_cited {
+            FailureClass::Provider
+        } else if ["abort", "stream", "connection", "timeout", "network"]
+            .iter()
+            .any(|word| lower.contains(word))
+        {
+            FailureClass::Transport
+        } else {
+            FailureClass::Harness
+        };
+        Some((classification, format!("opencode assistant error={error}")))
     }
 
     pub(crate) fn completed(&self) -> bool {
         self.finish.as_deref() == Some("stop") && self.error.is_none()
     }
+
+    pub(crate) fn evidence(&self) -> RawEvidence {
+        let mut evidence = RawEvidence::from([
+            ("source".into(), "opencode.db message+part".into()),
+            ("message_id".into(), self.message_id.clone()),
+            ("message_role".into(), self.role.clone()),
+            ("message_created_ms".into(), self.created_ms.to_string()),
+            ("message_updated_ms".into(), self.updated_ms.to_string()),
+            (
+                "finish".into(),
+                self.finish.clone().unwrap_or_else(|| "<missing>".into()),
+            ),
+            (
+                "error".into(),
+                self.error.clone().unwrap_or_else(|| "<missing>".into()),
+            ),
+        ]);
+        if let Some(value) = self.error_json.as_ref() {
+            evidence.insert("error_json".into(), value.clone());
+        }
+        if let Some(error) = self.error.as_deref() {
+            let raw = self.error_json.as_deref().unwrap_or_default();
+            let basis = ["statusCode", "responseBody", "providerError", "upstream"]
+                .iter()
+                .find(|field| raw.contains(**field))
+                .map(|field| format!("error_json.{field}"))
+                .or_else(|| {
+                    let lower = error.to_ascii_lowercase();
+                    ["abort", "stream", "connection", "timeout", "network"]
+                        .iter()
+                        .find(|word| lower.contains(**word))
+                        .map(|word| format!("error.name contains {word}"))
+                })
+                .unwrap_or_else(|| "error.name".into());
+            evidence.insert("classification_basis".into(), basis);
+        }
+        if let Some(value) = self.provider_id.as_ref() {
+            evidence.insert("provider_id".into(), value.clone());
+        }
+        if let Some(value) = self.model_id.as_ref() {
+            evidence.insert("model_id".into(), value.clone());
+        }
+        if let Some(value) = self.completed_ms {
+            evidence.insert("message_completed_ms".into(), value.to_string());
+        }
+        for (index, event) in self.part_events.iter().enumerate() {
+            evidence.insert(format!("part_event_{index}"), event.clone());
+        }
+        evidence
+    }
 }
 
 /// The newest message state for a conversation. OpenCode owns this database;
 /// lookup failures leave the existing process exit-code behavior unchanged.
-pub(crate) fn last_message_state(session: &str) -> Option<LastMessageState> {
+pub(crate) fn last_message_state(session: &str, since_ms: u64) -> Option<LastMessageState> {
     let Some(path) = crate::harness::opencode::store_path() else {
         debug!(
             conversation_id = session,
@@ -213,17 +333,45 @@ pub(crate) fn last_message_state(session: &str) -> Option<LastMessageState> {
             return None;
         }
     };
-    connection
+    last_message_state_from_connection(&connection, session, since_ms)
+}
+
+fn last_message_state_from_connection(
+    connection: &rusqlite::Connection,
+    session: &str,
+    since_ms: u64,
+) -> Option<LastMessageState> {
+    let mut state = connection
         .query_row(
-            "SELECT json_extract(data, '$.finish'), json_extract(data, '$.error.name')
+            "SELECT id,
+                    json_extract(data, '$.role'),
+                    json_extract(data, '$.finish'),
+                    json_extract(data, '$.error.name'),
+                    json_extract(data, '$.error'),
+                    json_extract(data, '$.providerID'),
+                    json_extract(data, '$.modelID'),
+                    time_created,
+                    time_updated,
+                    json_extract(data, '$.time.completed')
               FROM message
               WHERE session_id = ?1
+                AND json_extract(data, '$.role') = 'assistant'
+                AND time_created >= ?2
               ORDER BY time_created DESC LIMIT 1",
-            rusqlite::params![session],
+            rusqlite::params![session, since_ms as i64],
             |row| {
                 Ok(LastMessageState {
-                    finish: row.get(0)?,
-                    error: row.get(1)?,
+                    message_id: row.get(0)?,
+                    role: row.get(1)?,
+                    finish: row.get(2)?,
+                    error: row.get(3)?,
+                    error_json: row.get(4)?,
+                    provider_id: row.get(5)?,
+                    model_id: row.get(6)?,
+                    created_ms: row.get::<_, i64>(7)? as u64,
+                    updated_ms: row.get::<_, i64>(8)? as u64,
+                    completed_ms: row.get::<_, Option<i64>>(9)?.map(|value| value as u64),
+                    part_events: Vec::new(),
                 })
             },
         )
@@ -231,7 +379,41 @@ pub(crate) fn last_message_state(session: &str) -> Option<LastMessageState> {
             debug!(conversation_id = session, error = %error, "opencode trailing message lookup returned no row");
             error
         })
-        .ok()
+        .ok()?;
+    let mut statement = connection
+        .prepare(
+            "SELECT id, time_created, time_updated, data
+               FROM part
+              WHERE session_id = ?1 AND message_id = ?2
+              ORDER BY time_updated DESC, id DESC LIMIT 8",
+        )
+        .ok()?;
+    state.part_events = statement
+        .query_map(rusqlite::params![session, state.message_id], |row| {
+            let id: String = row.get(0)?;
+            let created: i64 = row.get(1)?;
+            let updated: i64 = row.get(2)?;
+            let raw: String = row.get(3)?;
+            let data: serde_json::Value = serde_json::from_str(&raw).unwrap_or_default();
+            let event_type = data.get("type").and_then(serde_json::Value::as_str).unwrap_or("-");
+            let reason = data.get("reason").and_then(serde_json::Value::as_str).unwrap_or("-");
+            let status = data
+                .pointer("/state/status")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("-");
+            let error = data
+                .pointer("/state/error")
+                .or_else(|| data.get("error"))
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "-".into());
+            Ok(format!(
+                "id={id} type={event_type} status={status} reason={reason} error={error} created_ms={created} updated_ms={updated}"
+            ))
+        })
+        .ok()?
+        .filter_map(Result::ok)
+        .collect();
+    Some(state)
 }
 
 /// The newest opencode session under `cwd` created at or after `since_ms`.
@@ -265,6 +447,22 @@ pub(crate) fn newest_session(cwd: &Path, since_ms: u64) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn state(finish: Option<&str>, error: Option<&str>) -> LastMessageState {
+        LastMessageState {
+            message_id: "msg-assistant".into(),
+            role: "assistant".into(),
+            finish: finish.map(str::to_owned),
+            error: error.map(str::to_owned),
+            error_json: error.map(|error| format!(r#"{{"name":"{error}"}}"#)),
+            provider_id: Some("openrouter".into()),
+            model_id: Some("provider/model".into()),
+            created_ms: 10,
+            updated_ms: 20,
+            completed_ms: finish.map(|_| 20),
+            part_events: vec!["id=part-1 type=step-start status=- reason=- error=-".into()],
+        }
+    }
 
     fn spec() -> ChannelSpec {
         ChannelSpec {
@@ -300,40 +498,87 @@ mod tests {
     }
 
     #[test]
-    fn missing_finish_or_error_marks_a_trailing_message_aborted() {
-        assert!(LastMessageState {
-            finish: None,
-            error: None,
-        }
-        .aborted());
-        assert!(LastMessageState {
-            finish: Some("stop".into()),
-            error: Some("MessageAbortedError".into()),
-        }
-        .aborted());
-        assert!(!LastMessageState {
-            finish: Some("stop".into()),
-            error: None,
-        }
-        .aborted());
+    fn empty_structured_fields_are_unknown_in_progress_state() {
+        let empty = state(None, None);
+        assert_eq!(empty.failure(), None);
+        assert!(!empty.completed());
+        assert_eq!(empty.evidence()["finish"], "<missing>");
+        assert_eq!(empty.evidence()["error"], "<missing>");
+
+        let aborted = state(None, Some("MessageAbortedError"));
+        assert_eq!(
+            aborted.failure().map(|failure| failure.0),
+            Some(FailureClass::Transport)
+        );
+
+        let mut provider = state(None, Some("APIError"));
+        provider.error_json = Some(r#"{"name":"APIError","statusCode":503}"#.into());
+        assert_eq!(
+            provider.failure().map(|failure| failure.0),
+            Some(FailureClass::Provider),
+            "provider classification cites a provider response field"
+        );
+        assert_eq!(
+            provider.evidence()["classification_basis"],
+            "error_json.statusCode"
+        );
     }
 
     #[test]
     fn only_a_clean_stop_is_terminal_success() {
-        assert!(LastMessageState {
-            finish: Some("stop".into()),
-            error: None,
-        }
-        .completed());
-        assert!(!LastMessageState {
-            finish: Some("tool-calls".into()),
-            error: None,
-        }
-        .completed());
-        assert!(!LastMessageState {
-            finish: None,
-            error: Some("MessageAbortedError".into()),
-        }
-        .completed());
+        assert!(state(Some("stop"), None).completed());
+        assert!(!state(Some("tool-calls"), None).completed());
+        assert!(!state(None, Some("MessageAbortedError")).completed());
+    }
+
+    #[test]
+    fn trailing_state_selects_the_assistant_instead_of_a_newer_user_message() {
+        let connection = rusqlite::Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE message (
+                    id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER,
+                    time_updated INTEGER, data TEXT
+                 );
+                 CREATE TABLE part (
+                    id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT,
+                    time_created INTEGER, time_updated INTEGER, data TEXT
+                 );",
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO message VALUES (?1, 'ses-1', 10, 11, ?2)",
+                rusqlite::params![
+                    "msg-assistant",
+                    r#"{"role":"assistant","providerID":"openrouter","modelID":"m","time":{"created":10}}"#
+                ],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO message VALUES (?1, 'ses-1', 20, 21, ?2)",
+                rusqlite::params!["msg-user", r#"{"role":"user","time":{"created":20}}"#],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO part VALUES ('part-1', 'msg-assistant', 'ses-1', 12, 13, ?1)",
+                [r#"{"type":"step-start"}"#],
+            )
+            .unwrap();
+
+        let state = last_message_state_from_connection(&connection, "ses-1", 0).unwrap();
+        assert_eq!(state.message_id, "msg-assistant");
+        assert_eq!(state.role, "assistant");
+        assert_eq!(state.finish, None);
+        assert_eq!(state.error, None);
+        assert_eq!(state.failure(), None);
+        assert_eq!(state.part_events.len(), 1);
+        assert_eq!(
+            last_message_state_from_connection(&connection, "ses-1", 15),
+            None,
+            "an assistant from the previous turn cannot finish the new user turn"
+        );
     }
 }

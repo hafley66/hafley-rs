@@ -44,6 +44,12 @@ pub trait Multiplexer {
         target: &str,
         lines: Option<u32>,
     ) -> Result<String>;
+    /// Capture the complete pane history, from the oldest retained scrollback
+    /// row through the visible region. Diagnostic artifacts use this before a
+    /// pane can be interrupted or removed.
+    fn capture_pane_history(&self, socket: Option<&str>, target: &str) -> Result<String> {
+        self.capture_pane(socket, target, Some(u32::MAX))
+    }
     /// Spawn a detached tmux session with a shell command.
     fn new_detached_session(
         &self,
@@ -251,6 +257,24 @@ impl Multiplexer for Tmux {
             );
             anyhow::bail!(
                 "capture-pane {target}: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    }
+
+    fn capture_pane_history(&self, socket: Option<&str>, target: &str) -> Result<String> {
+        let mut builder = Command::new("tmux");
+        if let Some(socket) = socket {
+            builder.arg("-L").arg(socket);
+        }
+        let output = builder
+            .args(["capture-pane", "-p", "-S", "-", "-t", target])
+            .output()
+            .context("tmux capture-pane full history")?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "capture-pane history {target}: {}",
                 String::from_utf8_lossy(&output.stderr).trim()
             );
         }
@@ -952,6 +976,33 @@ mod tests {
         let server = TestServer::new();
         server.create_session(&session_name());
         assert!(mux().live_sessions(Some(&server.socket)).is_some());
+    }
+
+    #[test]
+    fn full_history_capture_includes_scrollback_above_the_visible_pane() {
+        let server = TestServer::new();
+        let name = session_name();
+        server.create_session(&name);
+        mux()
+            .send_keys_literal(
+                Some(&server.socket),
+                &name,
+                "i=1; while [ $i -le 80 ]; do echo HISTORY-$i; i=$((i+1)); done",
+            )
+            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        let visible = mux()
+            .capture_pane(Some(&server.socket), &name, None)
+            .unwrap();
+        let history = mux()
+            .capture_pane_history(Some(&server.socket), &name)
+            .unwrap();
+        assert!(
+            !visible.contains("HISTORY-1\n"),
+            "visible pane unexpectedly retained the oldest line"
+        );
+        assert!(history.contains("HISTORY-1\n"), "history: {history}");
+        assert!(history.contains("HISTORY-80\n"), "history: {history}");
     }
 
     /// RECEIPT (Job 3a). The exact `has-session =` gate pins a session-name
