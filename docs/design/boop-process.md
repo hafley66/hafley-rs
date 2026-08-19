@@ -129,3 +129,32 @@ Closest relatives are hcom (hooks -> SQLite -> hooks, messaging, mid-turn inject
 | `take`, `skip`, `timeout`, `retry`, `debounce`, `merge`, `switchMap`, `&` / `wait` / `kill` as words | absent | language forks for Chris |
 
 The boop-job-namespace card builds the CLI half; the dl6 half is a sprefa arc (lifecycle words + the missing controls), gated on Chris, and lands after `/jobs /mail /me` exists as rows so each control has a concrete stream to test against.
+
+## 7. After ACP (Chris 2026-08-19): each card and crate defended or changed
+
+Decision: agents are driven over ACP (one typed channel for every harness); mail / hail / hooks / tui scrape go away; transcripts -> rows stays; tmux is view only (`attach` = window running the harness's `--resume <session>`, closed on detach); harness processes still run per live job.
+
+| card | verdict | why |
+|---|---|---|
+| boop-main-split (M) | keep, first | a 7383-line main.rs cannot lose four channels cleanly; split by namespace first, then delete |
+| boop-crate-split (L) | keep, crates renamed: `boop-store`, `boop-harness` (transcript ingest only), `boop-acp` (the one channel, replaces `boop-mail`), `boop-proc` (job rows, supervise, worktree, parent policy, attach), `boop-cli` | mail crate has no reason to exist once delivery is `session/prompt`; the channel becomes the second biggest surface and deserves its own crate and tests |
+| boop-job-namespace (M) | keep, verbs change: `boop job create\|list\|get\|wait\|kill\|rm\|send <job> <text>\|attach`; `boop mail *` deleted; `tell-parent` = `job send --parent`; `me` keeps `whoami\|mood\|favorite` | `send` is `session/prompt`; no inbox, no drain, no hook |
+| boop-mail-dir-global-flag (S) | delete the card | the flag's 34 sites go with mail |
+| boop-hidden-verbs-retire (S) | keep | still 16 hidden verbs after the fold |
+| boop-opencode-acp-channel (high, PR #38 open) | keep as the seed of `boop-acp`, scope widens from opencode to all harnesses after #38 proves one | measured 0/32 opencode turns; ACP is the only typed door opencode has |
+| boop-session-mood (done) | keep, render at `job send` time | still the one place agents' format is set |
+| boop-parent-failure-hail / parent-death (done) | keep, mail kind -> `session/prompt` to the parent's session, policy unchanged | |
+| boop-tell-parent / tell-children (done) | fold into `job send --parent / --children` | |
+| boop-start-warm-detect (done) | keep; the preamble becomes the first `session/prompt` | |
+| boop-registry-into-sqlite, kind-enums, spawn-one-shape, result-rc-typed | keep, all land inside `boop-proc` / `boop-store` | |
+| instant-boop-migration, boop-agent-network-view | keep; they read `boop-store` only | |
+
+Crate table, revised:
+
+| crate | owns | the one sentence |
+|---|---|---|
+| boop-store | schema, migrations, sync cursors, transcript ingest, typed queries, `sql/**` | the database |
+| boop-harness | per-harness transcript formats, session roots, identity ladder, `--resume` command per harness | how to read and re-open what each harness wrote |
+| boop-acp | ACP client over stdio child, session map job -> session id, prompt / cancel / permission policy, event -> trace rows | how to talk to any agent |
+| boop-proc | job rows, spawn (worktree + boop-start), supervise (stall, parent policy, typed rc), attach window, trail | process control |
+| boop-cli | clap per namespace | the binary |
