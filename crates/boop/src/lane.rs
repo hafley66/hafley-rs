@@ -471,6 +471,101 @@ pub fn resolve_parent(
     }
 }
 
+/// A worktree and branch a lane left behind after its registry route was
+/// already torn down.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LaneCarcass {
+    pub worktree: PathBuf,
+    pub branch: String,
+}
+
+/// The carcass a lane id names. A carcass carries no route, so the repo's own
+/// worktree list is where its branch and path come from.
+pub fn find_carcass(repo: &Path, lane: &str) -> Option<LaneCarcass> {
+    let listing = git_line(repo, &["worktree", "list", "--porcelain"])?;
+    carcass_in_listing(repo, &listing, lane)
+}
+
+/// The `git worktree list --porcelain` entry whose branch slugs to `lane`, or
+/// whose directory is named `lane`. The repo's own worktree never matches.
+fn carcass_in_listing(repo: &Path, listing: &str, lane: &str) -> Option<LaneCarcass> {
+    let mut path: Option<PathBuf> = None;
+    for line in listing.lines() {
+        if let Some(rest) = line.strip_prefix("worktree ") {
+            path = Some(PathBuf::from(rest));
+            continue;
+        }
+        let Some(branch) = line.strip_prefix("branch refs/heads/") else {
+            continue;
+        };
+        let Some(worktree) = path.clone() else {
+            continue;
+        };
+        if worktree == repo {
+            continue;
+        }
+        let named = worktree
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name == lane);
+        if slug(branch) == lane || named {
+            return Some(LaneCarcass {
+                worktree,
+                branch: branch.to_owned(),
+            });
+        }
+    }
+    None
+}
+
+/// `lane delete` on a lane whose route is gone: the DOA case, where the on-exit
+/// epilogue dropped the route and left the worktree and branch standing.
+pub fn delete_carcass(
+    repo: &Path,
+    lane: &str,
+    pane_alive: impl Fn(&str) -> bool,
+) -> Result<crate::worktree::Reclaimed> {
+    let Some(carcass) = find_carcass(repo, lane) else {
+        anyhow::bail!(
+            "no registry route for lane `{lane}`, and no worktree under {} answers to it",
+            repo.display()
+        )
+    };
+    if pane_alive(lane) {
+        anyhow::bail!(
+            "lane `{lane}` has no route but its tmux session is alive; \
+             `boop beep lane patch` re-routes it, delete takes dead lanes only"
+        );
+    }
+    crate::worktree::reclaim_carcass(repo, &carcass.branch, &carcass.worktree)
+}
+
+/// `lane create --reclaim`: clear a dead lane's worktree and branch before the
+/// spawn. A live route or a live pane refuses.
+pub fn reclaim_for_spawn(
+    repo: &Path,
+    identity: &LaneIdentity,
+    routes: &BTreeMap<String, Route>,
+    pane_alive: impl Fn(&str) -> bool,
+) -> Result<crate::worktree::Reclaimed> {
+    let Some(worktree) = identity.worktree_dir.as_deref() else {
+        anyhow::bail!("--reclaim needs a worktree spawn; name one with --branch");
+    };
+    // A tmux target that is gone has no pane pid left to read, so one liveness
+    // question answers both.
+    let target = routes
+        .get(&identity.lane)
+        .and_then(|route| route.tmux.clone())
+        .unwrap_or_else(|| identity.tmux.clone());
+    if pane_alive(&target) {
+        anyhow::bail!(
+            "lane `{}` is live on tmux target {target}; --reclaim takes dead lanes only",
+            identity.lane
+        );
+    }
+    crate::worktree::reclaim_carcass(repo, &identity.branch, worktree)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -946,6 +1041,46 @@ mod tests {
         assert!(error.contains("low"), "message: {error}");
         assert!(error.contains("medium"), "message: {error}");
         assert!(error.contains("high"), "message: {error}");
+    }
+
+    /// RECEIPT. A lane id names its carcass through the branch slug, and the
+    /// repo's own worktree never answers, whatever it is named.
+    #[test]
+    fn a_carcass_is_found_by_the_slug_of_its_branch() {
+        let listing = concat!(
+            "worktree /repo\nHEAD aaa\nbranch refs/heads/main\n\n",
+            "worktree /repo/.boop-worktrees/feature/schema-emit\n",
+            "HEAD bbb\nbranch refs/heads/feature/schema-emit\n"
+        );
+        let found = super::carcass_in_listing(&repo(), listing, "feature-schema-emit").unwrap();
+        assert_eq!(
+            found,
+            super::LaneCarcass {
+                worktree: PathBuf::from("/repo/.boop-worktrees/feature/schema-emit"),
+                branch: "feature/schema-emit".to_owned(),
+            }
+        );
+        assert_eq!(
+            super::carcass_in_listing(&repo(), listing, "main"),
+            None,
+            "the repo's own worktree is never a carcass"
+        );
+        assert_eq!(
+            super::carcass_in_listing(&repo(), listing, "feature-other"),
+            None
+        );
+    }
+
+    /// RECEIPT. `--reclaim` destroys git state, so a name whose pane still
+    /// answers refuses before any git runs.
+    #[test]
+    fn a_reclaim_refuses_while_the_pane_is_alive() {
+        let identity = derive(&repo(), Some("feature/schema-emit"), None, None).unwrap();
+        let error = super::reclaim_for_spawn(&repo(), &identity, &BTreeMap::new(), |_| true)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("is live on tmux target"), "{error}");
+        assert!(error.contains("dead lanes only"), "{error}");
     }
 
     /// A pane-less coordinator cannot receive the completion injection that

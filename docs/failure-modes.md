@@ -5,12 +5,119 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 8 | 2026-08-17 | four lane spawns died in minutes on two error strings that were one bug |
+| 7 | 2026-08-17 | a dead-on-arrival spawn left a worktree no boop command could clear |
 | 6 | 2026-08-18 | a registry-only verb re-parsed 4.2 GB of transcripts, and cargo test -p boop took 8.7 minutes |
 | 5 | 2026-08-17 | every lane completion arrived twice in the coordinator inbox |
 | 4 | 2026-08-17 | coordinator mail is typed into a pane a model is driving |
 | 3 | 2026-08-17 | ~/.cargo/bin/boop is whatever the last session built, and nothing printed says which |
 | 2 | 2026-08-17 | a respawned agent window is re-fed a brief it cannot place, or the wrong text entirely |
 | 1 | 2026-08-17 | a lane can die with no result row, no log, no trace |
+
+---
+
+## 8. four lane spawns died in minutes on two error strings that were one bug
+
+**Incident.** 2026-08-17 03:00-03:15, four spawns died across two drivers with
+two signatures: codex lanes rc=1 `supervisor error: write rpc turn/start`
+(`feature-extract-module-plane-rust` twice, `feature-shell-v2-terra-wait`,
+`feature-dl6-bytes-target-lowering`), opencode lanes rc=1 `stalled: 30s with no
+harness activity` (`chore-soopy-public-seams`,
+`feature-extract-flow-cli-dispatch`). It was read as two bugs and as codex
+lane spawning being dead. It recurred at 14:46 and 22:24-22:28 the same day,
+17 `write rpc turn/start` result rows and 6 `stalled: 30s` rows in total.
+
+**RCA.** One kill, two exits. `~/.agent/lanes/<lane>/supervise.log` for the
+seven incidents whose lane directory survives shows the same chain every time,
+for example `feature-agent-network-frames/supervise.log:6-15`:
+
+| step | line |
+|---|---|
+| 1 | `lane turn starting turn_bytes=<n>` |
+| 2 | `lane turn stalled; killing the harness child idle_ms=30453..30559` |
+| 3 | `turn_end_reason="stalled: 30s with no harness activity" retryable=true` |
+| 4 | `lane provider flake; resuming flake_resumes=1` |
+| 5 | `lane supervisor failed harness="codex" error=write rpc turn/start` |
+
+The stall window was 30s and the model had not spoken yet. A codex reasoning
+model emits nothing until its first tool call, so a healthy child was killed at
+~30s; the flake resume then opened a new turn on the channel the kill had
+closed, and `RpcChild::call` reported the write into dead stdin as
+`write rpc turn/start` (`channel/jsonrpc.rs:111`). opencode has no rpc turn to
+re-open, so the same kill exits on the stall string alone. Corroboration: the
+codex rollout for `01a00db1-c222-7ad0-b5d4-bbf903c70c2f` ends mid-`reasoning`
+at 03:09:38.001Z, 29.3s after its `session_meta`, with no error of its own;
+seven other rollouts from that night end the same way at 27.4-30.0s. Not the
+harness, not machine load: 12 spawns in the 15-minute window is ordinary.
+`tmux send-keys failed socket=` and `tui agent window respawned after death`
+appear only inside a driver's own bus message (`~/.agent/mail/bus.ndjson:1104`,
+`:1114`); `agent_trace_event` has zero rows matching either, so no keystroke
+loss is evidenced.
+
+**Fix.** Already landed on this base, which is why no code changes here.
+`STALL_LIMIT` is 300s (`supervise.rs:21`), sized off a week of healthy traffic
+where 261 in-message gaps ran past 120s. The rpc write names its own state,
+`rpc session closed: <io error>` (`channel/jsonrpc.rs:20,99`), so a driver
+reading the string learns the peer was gone rather than that a turn failed.
+
+**Fail-pre-fix tests.** `a_quiet_opening_gap_is_not_a_stall`
+(`supervise.rs:868`) pins 90s of opening quiet as alive and its header records
+the ~70s death and the retry into dead stdin.
+`a_write_to_a_closed_session_names_the_session` (`channel/jsonrpc.rs:227`)
+holds a peer with a closed stdin and asserts both `rpc session closed` and
+`write rpc turn/start`. `a_child_s_stderr_lands_in_the_lane_trail`
+(`trail.rs:190`) keeps the child's own complaint out of the dead pane.
+
+**Rail.** `~/.agent/lanes/<lane>/supervise.log` is why this RCA is answerable
+at all: seven independent chains, each with `idle_ms` on the kill line. A lane
+whose directory is already gone leaves only its driver's narrative, which is
+what made this look like two bugs for a day.
+
+---
+
+## 7. a dead-on-arrival spawn left a worktree no boop command could clear
+
+**Incident.** 2026-08-17 ~03:05, after the spawns in entry 8 died, respawning
+the same lane name was blocked in both directions. `boop beep lane create`
+bailed `worktree path already exists`; `boop beep lane delete <lane>` bailed
+`no registry route for lane`. Two drivers hit it on four lanes the same night,
+and each dug out with `git worktree remove --force` plus `git branch -D`.
+
+**RCA.** A DOA lane is exactly half-dead. The pane epilogue runs
+`beep lane delete --route-only`, so the registry row is gone within seconds,
+but the worktree and branch that `prepare_spawn_dir` created are still on disk.
+`prepare_spawn_dir` refused a path it had made itself
+(`worktree.rs`, the `worktree.exists()` bail) and `run_lane_delete` refused a
+lane it could not find a route for, so the one state a driver most wants to
+retry from was the one state neither verb answered.
+
+**Fix.**
+
+| # | change | file |
+|---|---|---|
+| 1 | `lane create --reclaim` removes the dead lane's worktree and branch, then spawns | `main.rs` (flag), `lane.rs` `reclaim_for_spawn` |
+| 2 | `lane delete <lane>` with no route finds the carcass by branch slug and removes it | `main.rs` `run_lane_delete_carcass`, `lane.rs` `delete_carcass`, `find_carcass` |
+| 3 | the git surgery, and what stops it | `worktree.rs` `reclaim_carcass` |
+| 4 | the plain bail names the flag and the delete verb | `worktree.rs` `prepare_spawn_dir` |
+
+Neither verb destroys a live lane or unreachable work. A live tmux target on
+the name refuses (a dead target has no pane pid left, so one question answers
+liveness), a worktree with uncommitted changes refuses, and a branch carrying
+commits no other ref has refuses and prints them.
+
+**Fail-pre-fix tests.** `crates/boop/tests/lane_carcass.rs` spawns a real DOA
+lane, with the harness absent from a throwaway PATH, and waits for the route to
+be dropped. `a_reclaim_respawns_the_name_a_dead_lane_left_behind` asserts the
+plain respawn bails naming `--reclaim` and the flagged one rebuilds the
+worktree; `lane_delete_clears_a_carcass_and_names_what_it_removed` asserts the
+delete works with no route and prints both removals;
+`a_reclaim_refuses_a_worktree_that_still_holds_work` asserts the dirty case.
+On the pre-fix binary `--reclaim` is `unexpected argument '--reclaim' found`.
+
+**Rail.** One command returns a dead lane name to spawnable, and it says what
+it destroyed. A carcass that still holds work is not reclaimable by boop at
+all; boop quotes the dirt or the commits and leaves the manual dig to a
+human who can read them.
 
 ---
 

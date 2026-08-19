@@ -49,7 +49,12 @@ pub fn prepare_spawn_dir(spec: &SpawnSpec) -> Result<PathBuf> {
         anyhow::bail!("worktree spawn requires a worktree_dir");
     };
     if worktree.exists() {
-        anyhow::bail!("worktree path already exists: {}", worktree.display());
+        anyhow::bail!(
+            "worktree path already exists: {}\n\
+             a dead lane left it behind; respawn with --reclaim, or `boop beep lane delete {}`",
+            worktree.display(),
+            spec.lane
+        );
     }
     if let Some(parent) = worktree.parent() {
         std::fs::create_dir_all(parent).context("create worktree parent")?;
@@ -244,6 +249,120 @@ fn run_shell(cwd: &PathBuf, command: &str) -> Result<()> {
         anyhow::bail!("setup step failed in {}: {command}", cwd.display());
     }
     Ok(())
+}
+
+/// What a reclaim removed, so the caller prints exactly what it destroyed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Reclaimed {
+    pub worktree: Option<PathBuf>,
+    pub branch: Option<String>,
+}
+
+impl Reclaimed {
+    /// True when the lane name was already free.
+    pub fn nothing_removed(&self) -> bool {
+        self.worktree.is_none() && self.branch.is_none()
+    }
+
+    /// One line per removed thing, in removal order.
+    pub fn lines(&self) -> Vec<String> {
+        let mut lines = Vec::new();
+        if let Some(worktree) = &self.worktree {
+            lines.push(format!("removed worktree {}", worktree.display()));
+        }
+        if let Some(branch) = &self.branch {
+            lines.push(format!("removed branch {branch}"));
+        }
+        lines
+    }
+}
+
+/// Remove a dead lane's worktree and branch so the name spawns again. Liveness
+/// is the caller's; this refuses only on work git cannot get back.
+pub fn reclaim_carcass(repo: &Path, branch: &str, worktree: &Path) -> Result<Reclaimed> {
+    let mut removed = Reclaimed::default();
+    if worktree.exists() {
+        if let Some(dirt) = worktree_dirt(worktree) {
+            anyhow::bail!(
+                "worktree {} has uncommitted work, refusing to remove it:\n{dirt}",
+                worktree.display()
+            );
+        }
+    }
+    let branch_present = branch_exists(repo, branch);
+    if branch_present {
+        if let Some(commits) = unique_commits(repo, branch) {
+            anyhow::bail!(
+                "branch {branch} carries commits no other ref has, refusing to delete it:\n{commits}"
+            );
+        }
+    }
+    if worktree.exists() {
+        // --force, since a worktree carrying only ignored build output is
+        // clean by `status` and still refused by a plain `worktree remove`.
+        run_git(
+            &repo.to_path_buf(),
+            &[
+                "worktree",
+                "remove",
+                "--force",
+                &worktree.display().to_string(),
+            ],
+        )?;
+        removed.worktree = Some(worktree.to_path_buf());
+    }
+    // A worktree directory deleted by hand leaves an admin entry that keeps
+    // `worktree add` refusing the same path.
+    run_git(&repo.to_path_buf(), &["worktree", "prune"])?;
+    if branch_present {
+        run_git(&repo.to_path_buf(), &["branch", "-D", branch])?;
+        removed.branch = Some(branch.to_owned());
+    }
+    Ok(removed)
+}
+
+/// `git status --porcelain` output when the worktree holds changes, `None`
+/// when it is clean or is not a worktree at all.
+fn worktree_dirt(worktree: &Path) -> Option<String> {
+    let status = git_stdout(worktree, &["status", "--porcelain"])?;
+    (!status.is_empty()).then_some(status)
+}
+
+/// True when `refs/heads/<branch>` resolves in `repo`.
+pub fn branch_exists(repo: &Path, branch: &str) -> bool {
+    git_stdout(
+        repo,
+        &[
+            "rev-parse",
+            "--verify",
+            "-q",
+            &format!("refs/heads/{branch}"),
+        ],
+    )
+    .is_some()
+}
+
+/// The commits on `branch` that no other ref contains, `None` when every
+/// commit on it is reachable from somewhere else.
+fn unique_commits(repo: &Path, branch: &str) -> Option<String> {
+    let reference = format!("refs/heads/{branch}");
+    // Without --single-worktree, --all reads every linked worktree's HEAD,
+    // including the one being reclaimed, so nothing ever looks unique.
+    let log = git_stdout(
+        repo,
+        &[
+            "log",
+            "--oneline",
+            "--max-count=20",
+            "--single-worktree",
+            &reference,
+            "--not",
+            "--exclude",
+            &reference,
+            "--all",
+        ],
+    )?;
+    (!log.is_empty()).then_some(log)
 }
 
 /// When one lane held the shared main tree, and on which branch. Attribution
@@ -984,5 +1103,43 @@ mod tests {
         mine.start_secs = i64::MAX;
         let flags = super::detect_escape(&repo.worktree, &repo.repo, &repo.base, &mine, &[]);
         assert_eq!(flags.main_commits, vec![head], "flags: {flags:?}");
+    }
+
+    /// RECEIPT. A carcass sitting at its base sha costs one call to clear, and
+    /// the return says exactly what was destroyed.
+    #[test]
+    fn a_reclaim_clears_a_clean_worktree_and_its_branch() {
+        let repo = EscapeRepo::new("reclaim-clean");
+        let removed = super::reclaim_carcass(&repo.repo, "feature/x", &repo.worktree).unwrap();
+        assert_eq!(removed.worktree.as_deref(), Some(repo.worktree.as_path()));
+        assert_eq!(removed.branch.as_deref(), Some("feature/x"));
+        assert_eq!(
+            removed.lines().len(),
+            2,
+            "one line per removed thing: {:?}",
+            removed.lines()
+        );
+        assert!(!repo.worktree.exists());
+        assert!(!super::branch_exists(&repo.repo, "feature/x"));
+    }
+
+    /// RECEIPT. A lane that committed before it died is not a carcass; the
+    /// commit no other ref carries stops the reclaim before any removal.
+    #[test]
+    fn a_reclaim_refuses_a_branch_no_other_ref_carries() {
+        let repo = EscapeRepo::new("reclaim-unique");
+        std::fs::write(repo.worktree.join("lane.txt"), "work").unwrap();
+        git(&repo.worktree, &["add", "-A"]);
+        git(&repo.worktree, &["commit", "-qm", "lane work"]);
+        let error = super::reclaim_carcass(&repo.repo, "feature/x", &repo.worktree)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("lane work"), "{error}");
+        assert!(error.contains("no other ref has"), "{error}");
+        assert!(
+            repo.worktree.exists(),
+            "the worktree survives the refused reclaim"
+        );
+        assert!(super::branch_exists(&repo.repo, "feature/x"));
     }
 }
