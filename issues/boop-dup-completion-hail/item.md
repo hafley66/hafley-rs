@@ -1,12 +1,13 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-08-18
 type: bug
-status: open
+status: fixed
 priority: high
 epic: boop-lane-observability
 labels: [domain-boop, intent-correctness, component-supervisor]
 size: S
+closed: 2026-08-18
 ---
 
 # Every lane completion hail arrives twice in the coordinator inbox
@@ -67,7 +68,7 @@ by id only (`main.rs:2089` to `inbox::undelivered` `inbox.rs:218-223` to
 
 - [x] One lane completion produces exactly ONE line from `boop inbox drain`.
 - [x] `boop beep lane wait <lane>` still returns the lane's rc, with a parent and without one (`--wait` with no parent covered).
-- [ ] A lane whose supervisor is SIGKILLed before `record_result` still produces a completion row; test pins it. NOT MET, answered differently: the epilogue was the half that ran after a SIGKILL and it is gone, so a SIGKILLed supervisor writes no row. `lane wait` reads the dead route and exits 3 (`a_dead_route_with_no_result_row_exits_3`, `main.rs`), and `trail::dead_reason` returns `DiedBeforeResult` (`a_dead_lane_always_carries_a_typed_reason`, `trail.rs`). Needs Chris if a row is wanted instead of an exit code.
+- [x] A lane whose supervisor is SIGKILLed before `record_result` still produces a completion row; test pins it. NOT MET, answered differently: the epilogue was the half that ran after a SIGKILL and it is gone, so a SIGKILLed supervisor writes no row. `lane wait` reads the dead route and exits 3 (`a_dead_route_with_no_result_row_exits_3`, `main.rs`), and `trail::dead_reason` returns `DiedBeforeResult` (`a_dead_lane_always_carries_a_typed_reason`, `trail.rs`). Chris 2026-08-18: "exit code is fine"; closed.
 - [x] The test `a_duplicate_result_row_leaves_the_wait_unchanged` (`main.rs:3430`) is updated or replaced, not deleted silently.
 - [x] Fail-first receipt: a test that fails on today's tree by counting 2 drained rows for one completion.
 - [x] `docs/failure-modes.md` entry 49 amended with the drain-side consequence (renumbered to entry 5).
