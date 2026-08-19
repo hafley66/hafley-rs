@@ -515,7 +515,7 @@ pub fn run(args: Args) -> Result<()> {
             // A transient store error (a locked read, a stalled query) kills
             // no resident; the next tick retries from the same cursor.
             Err(error) => {
-                eprintln!("concatmap: tick failed at cursor {cursor}, retrying: {error:#}")
+                tracing::warn!(cursor, detail = %format!("{error:#}"), "concatmap tick failed, retrying")
             }
         }
         std::thread::sleep(args.poll);
@@ -618,24 +618,33 @@ fn poll_once(
                 Err(error) if error.downcast_ref::<OneshotTimeout>().is_some() => {
                     // A hang is not transient: mark it failed and move on
                     // rather than burn the retry ladder on a stuck child.
-                    eprintln!(
-                        "concatmap: rewrite timed out for {}-{}: {error:#}",
-                        key.0, key.1
+                    tracing::error!(
+                        session = %key.0,
+                        turn = key.1,
+                        detail = %format!("{error:#}"),
+                        "concatmap rewrite timed out"
                     );
                     let _ = write_done_marker(args, &key.0, key.1, done);
                     break;
                 }
                 Err(error) if attempt < REWRITE_ATTEMPTS => {
-                    eprintln!(
-                        "concatmap: rewrite failed for {}-{} (attempt {attempt}/{}), retrying in {}s: {error:#}",
-                        key.0, key.1, REWRITE_ATTEMPTS, REWRITE_BACKOFF.as_secs()
+                    tracing::warn!(
+                        session = %key.0,
+                        turn = key.1,
+                        attempt,
+                        attempts = REWRITE_ATTEMPTS,
+                        backoff_secs = REWRITE_BACKOFF.as_secs(),
+                        detail = %format!("{error:#}"),
+                        "concatmap rewrite failed, retrying"
                     );
                     std::thread::sleep(REWRITE_BACKOFF);
                 }
                 Err(error) => {
-                    eprintln!(
-                        "concatmap: rewrite failed for {}-{}: {error:#}",
-                        key.0, key.1
+                    tracing::error!(
+                        session = %key.0,
+                        turn = key.1,
+                        detail = %format!("{error:#}"),
+                        "concatmap rewrite failed"
                     );
                     // A permanently-failed bundle is marked so a poisoned
                     // window cannot re-hang the resident on a later tick.

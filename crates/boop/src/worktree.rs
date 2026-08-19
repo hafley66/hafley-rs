@@ -167,12 +167,15 @@ fn wait_with_deadline(
 }
 
 /// Deadline-bounded equivalent of `Command::output`: stdout/stderr are read on
-/// their own threads so a full pipe can never block the deadline wait.
+/// their own threads so a full pipe can never block the deadline wait, and
+/// stdin is null as `Command::output` makes it, so no captured child can sit
+/// on a prompt the spawn has no terminal to answer.
 fn run_captured_with_deadline(
     mut cmd: Command,
     what: &'static str,
     deadline: Duration,
 ) -> Result<std::process::Output> {
+    cmd.stdin(std::process::Stdio::null());
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
     let mut child = spawn_grouped(&mut cmd)?;
@@ -213,12 +216,13 @@ fn merge_ff_only(repo: &PathBuf, sha: &str) -> Result<()> {
     run_git(repo, &["merge", "--ff-only", sha])
 }
 
+/// The spawn path's git children (`worktree add`, `merge --ff-only`) share the
+/// one child deadline: a stale `index.lock` would otherwise hang the whole
+/// spawn with nothing to kill it.
 fn run_git(repo: &PathBuf, args: &[&str]) -> Result<()> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(args)
-        .output()
+    let mut cmd = Command::new("git");
+    cmd.arg("-C").arg(repo).args(args);
+    let output = run_captured_with_deadline(cmd, "git", SPAWN_CHILD_TIMEOUT)
         .with_context(|| format!("run git in {}", repo.display()))?;
     if !output.status.success() {
         anyhow::bail!(
@@ -486,6 +490,23 @@ mod tests {
             "{error}"
         );
         assert!(elapsed < std::time::Duration::from_secs(10), "{elapsed:?}");
+    }
+
+    // RECEIPT: run from a terminal against an inherited stdin, `sh -c cat`
+    // read the pane instead of seeing EOF and the call sat there until the
+    // deadline killed it.
+    #[test]
+    fn a_captured_child_reads_eof_instead_of_a_prompt() {
+        let mut cmd = std::process::Command::new("sh");
+        cmd.arg("-c").arg("cat");
+        let output = super::run_captured_with_deadline(
+            cmd,
+            "sh -c <setup>",
+            std::time::Duration::from_secs(5),
+        )
+        .expect("a closed stdin ends `cat` at once");
+        assert!(output.status.success(), "{:?}", output.status);
+        assert!(output.stdout.is_empty(), "{:?}", output.stdout);
     }
 
     /// The killed child's whole process group dies too, not just the `sh` pid:
