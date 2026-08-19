@@ -5,6 +5,7 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 9 | 2026-08-17 | a coordinator restart left every child running with an edge that answered nobody |
 | 8 | 2026-08-17 | four lane spawns died in minutes on two error strings that were one bug |
 | 7 | 2026-08-17 | a dead-on-arrival spawn left a worktree no boop command could clear |
 | 6 | 2026-08-18 | a registry-only verb re-parsed 4.2 GB of transcripts, and cargo test -p boop took 8.7 minutes |
@@ -16,6 +17,20 @@ without the fix, the rail that stops it recurring. Newest first.
 
 ---
 
+## 9. a coordinator restart left every child running with an edge that answered nobody
+
+**Incident.** On 2026-08-17 the sprefa coordinator process restarted. Two native
+opus drivers and their rigs died silently, three flash4 lanes were already
+dead. Nothing told the survivors and nothing reaped them.
+
+**RCA.** Every reader of the parent edge on a registry route used it as an
+address and never as a fact to check. `crates/boop/src/supervise.rs`
+`record_result` reads it to address the completion row;
+`crates/boop/src/main.rs` `run_pstree` reads it to render an orphan under a
+`[gone]` root. No poll, anywhere, asked whether the parent was still
+addressable. A lane therefore ran to its own end against a parent that had
+stopped existing, and its completion row was appended to a mailbox nobody was
+reading.
 ## 8. four lane spawns died in minutes on two error strings that were one bug
 
 **Incident.** 2026-08-17 03:00-03:15, four spawns died across two drivers with
@@ -95,6 +110,36 @@ retry from was the one state neither verb answered.
 
 | # | change | file |
 |---|---|---|
+| 1 | a lane records an on-parent-death policy at spawn: kill, reparent, or orphan (the default, which is what every lane did before) | `crates/boop/src/supervise.rs` `ParentDeathPolicy`, `record_parent_policy`, declared by `main.rs` `--on-parent-death` on `beep lane create` and `beep agent register` |
+| 2 | the supervisor checks parent liveness on its existing poll interval and applies the policy within one interval | `crates/boop/src/supervise.rs` `ParentWatch::probe`, `parent_alive` |
+| 3 | `kill` ends the lane the way a stall kill does, with the typed detail `parent-died: <parent>` on its result row | `crates/boop/src/supervise.rs` `ParentWatch::probe`, `PARENT_DIED_EXIT` |
+| 4 | `reparent` rewrites the parent edge onto the one registered coordinator and mails it a `kind=reparented` row | `crates/boop/src/supervise.rs` `reparent` |
+| 5 | a dead lane's reason and a surviving orphan's row both name the edge: `DEAD=parent-died=<parent>`, `DEAD=reparented=<parent>`, and `PARENT-GONE=<parent>` on any row whose parent route is gone | `crates/boop/src/trail.rs` `DeadReason`, `main.rs` `run_lane_list`, `gone_parent` |
+
+**Fail-pre-fix tests.**
+
+| test | file |
+|---|---|
+| `a_parent_death_and_a_rewritten_edge_are_typed_reasons_of_their_own` | `trail.rs` |
+| `a_kill_policy_ends_the_lane_when_the_parent_pane_dies` | `tests/parent_death.rs` |
+| `a_reparent_policy_moves_the_edge_onto_the_registered_coordinator` | `tests/parent_death.rs` |
+| `an_orphan_policy_leaves_the_lane_and_its_edge_alone` | `tests/parent_death.rs` |
+| `each_failure_kind_reaches_the_parent_exactly_once` | `tests/parent_failure_hail.rs` |
+
+**Rail.** The policy is `orphan` unless the spawn asked for another one, so no
+existing spawn changes behavior. `boop beep lane list` names a gone parent on
+every row it appears on, so a survivor is visible without asking. The same PR
+also has the supervisor send the parent one typed row per actionable
+transition, `retrying`, `retry_budget_exhausted` and
+`exited_without_completion`, each at most once per lane, deduplicated against
+the mailbox itself so a respawned supervisor is quiet.
+
+**What still cannot be answered.** A pane-less native agent
+(`beep agent register`) runs no supervisor of its own, so its recorded policy
+is stored and nothing polls on its behalf; only a lane with a supervisor
+process enforces kill or reparent. And `reparent` needs exactly one
+pane-backed registered coordinator to adopt the lane; when the coordinator is
+itself the dead parent, the lane stays orphaned.
 | 1 | `lane create --reclaim` removes the dead lane's worktree and branch, then spawns | `main.rs` (flag), `lane.rs` `reclaim_for_spawn` |
 | 2 | `lane delete <lane>` with no route finds the carcass by branch slug and removes it | `main.rs` `run_lane_delete_carcass`, `lane.rs` `delete_carcass`, `find_carcass` |
 | 3 | the git surgery, and what stops it | `worktree.rs` `reclaim_carcass` |
