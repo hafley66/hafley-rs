@@ -32,12 +32,16 @@ Related: `@boop-db-wal-lock`.
 
 ## Acceptance Criteria
 
-- [ ] All eight move to `open_ro_store`.
-- [ ] A test asserts a read verb succeeds against a store file opened read-only (or on a read-only filesystem path).
-- [ ] No DDL batch runs on a read path.
-- [ ] `cargo test -p boop -j4` green.
+- [x] All eight move to `open_ro_store`.
+- [x] A test asserts a read verb succeeds against a store file opened read-only (or on a read-only filesystem path).
+- [x] No DDL batch runs on a read path.
+- [x] `cargo test -p boop -j4` green.
 
 ## Tests Run
+
+`cargo test -p boop --no-fail-fast` on fix/boop-main-fixes, exit 0, 420 passed
+/ 0 failed / 1 ignored, 26.84s wall. `cargo clippy -p boop --all-targets` -> 1
+warning, `tests/host_chat.rs:44` `needless_borrow`, present at daa2b0a.
 
 ## Implementation Notes
 

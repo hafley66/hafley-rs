@@ -5,11 +5,55 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 6 | 2026-08-18 | a registry-only verb re-parsed 4.2 GB of transcripts, and cargo test -p boop took 8.7 minutes |
 | 5 | 2026-08-17 | every lane completion arrived twice in the coordinator inbox |
 | 4 | 2026-08-17 | coordinator mail is typed into a pane a model is driving |
 | 3 | 2026-08-17 | ~/.cargo/bin/boop is whatever the last session built, and nothing printed says which |
 | 2 | 2026-08-17 | a respawned agent window is re-fed a brief it cannot place, or the wrong text entirely |
 | 1 | 2026-08-17 | a lane can die with no result row, no log, no trace |
+
+---
+
+## 6. a registry-only verb re-parsed 4.2 GB of transcripts, and cargo test -p boop took 8.7 minutes
+
+**Incident.** `cargo test -p boop --no-fail-fast` on `daa2b0a` took 520.66s.
+Two integration binaries owned almost all of it: `coordinator_ping` 233.94s for
+3 tests, `inbox_hooks` 266.32s for 8. Every one of those seconds was spent
+inside `serde_json::from_slice`, parsing transcript files no assertion reads.
+The 10-second law says a single operation over 10s is a defect to investigate
+now; a whole suite is not a single operation, but a 234s `boop adopt` is.
+
+**RCA.** Two independent causes multiplying.
+
+| # | cause | site |
+|---|---|---|
+| A | verbs that read no `agent_*` row asked for a full projection first | `main.rs` `command_needs_startup_sync` listed `Adopt`, `Beep agent register|done`, `Beep lane list` |
+| B | tests pointed `BOOP_DB` at a temp file and left `HOME` alone | `coordinator_ping.rs`, `inbox_hooks.rs`, `wait_mail.rs`, `registry_kinds.rs`, `native_agent_liveness.rs`, `lane_wait_exit.rs`, `install_rail.rs`, `host_chat.rs` |
+
+A fresh `BOOP_DB` starts every sync cursor at zero. `dirs::home_dir()` reads
+`$HOME`, so with the real one inherited each adapter root resolved to the live
+tree: `~/.codex/sessions` (2.5 GB, ~1034 `.jsonl`) and `~/.claude/projects`
+(1.7 GB, ~1620 `.jsonl`), re-read from offset 0, once per `boop` invocation,
+eight binaries in parallel, debug build.
+
+**Fix.** `command_needs_startup_sync` keeps only the verbs whose answer comes
+out of an `agent_*` table. Every test that spawns the binary sets `HOME` to a
+directory under its own temp root beside its `BOOP_DB`, so no test can reach
+the machine's transcripts at all.
+
+**Fail-pre-fix test.** `startup_sync_policy_limits_projection_to_transcript_consumers`
+(`crates/boop/src/main.rs`) asserts each registry-only verb returns false; on
+the pre-fix tree four of those assertions failed. Timing receipt, same tree,
+same machine, pre-fix binaries run directly:
+
+| target | before | after |
+|---|---|---|
+| `coordinator_ping` | 233.94s | 1.19s |
+| `inbox_hooks` | 266.32s | 1.56s |
+
+**Rail.** `crates/boop/tests/temp_home_rail.rs` reads every `tests/*.rs` file
+and fails when one spawns the binary without redirecting both `HOME` and
+`BOOP_DB`.
 
 ---
 

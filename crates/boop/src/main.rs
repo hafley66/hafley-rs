@@ -1027,26 +1027,76 @@ fn sync_before_local_command(registry: &Registry) -> Result<()> {
     sync_all(registry, false, false, SyncLiveness::TranscriptOnly)
 }
 
+/// Verbs that read `agent_*` rows. A registry, mailbox, tmux or live-process
+/// verb stays off: a cold cursor re-parses every transcript root from offset 0.
 fn command_needs_startup_sync(command: &SubCmd) -> bool {
     matches!(
         command,
         SubCmd::Db { cmd: None, .. }
-            | SubCmd::Db { cmd: Some(DbCmd::SyncCursor { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Status { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Session { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Turn { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Chat { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Edge { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Usage { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Price { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Favorite { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Touch { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Command { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Fetch { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Skill { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Pr { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::Span { .. }), .. }
-            | SubCmd::Db { cmd: Some(DbCmd::AgentSummary { .. }), .. }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::SyncCursor { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Status { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Session { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Turn { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Chat { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Edge { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Usage { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Price { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Favorite { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Touch { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Command { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Fetch { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Skill { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Pr { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Span { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::AgentSummary { .. }),
+                ..
+            }
             | SubCmd::Events { .. }
             | SubCmd::Chat { .. }
             | SubCmd::Agent { .. }
@@ -1056,9 +1106,6 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
             | SubCmd::Harnesses
             | SubCmd::Sessions { .. }
             | SubCmd::Tail { .. }
-            | SubCmd::Adopt { .. }
-            | SubCmd::Beep { cmd: BeepCmd::Agent { .. } }
-            | SubCmd::Beep { cmd: BeepCmd::Lane { cmd: LaneCmd::List { .. } } }
     )
 }
 
@@ -1288,10 +1335,11 @@ fn sync_all(
         let root_stamps_match = !roots.is_empty()
             && roots.iter().all(|root| {
                 let mtime_ms = path_modified_ms(root);
-                store.root_stamp_matches(adapter.id(), root, mtime_ms).unwrap_or(false)
+                store
+                    .root_stamp_matches(adapter.id(), root, mtime_ms)
+                    .unwrap_or(false)
             });
-        if root_stamps_match
-            && (!adapter.known_paths_can_move() || !known.has_moved(adapter.id()))
+        if root_stamps_match && (!adapter.known_paths_can_move() || !known.has_moved(adapter.id()))
         {
             continue;
         }
@@ -1728,6 +1776,8 @@ fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
         reply_to: None,
         body,
         r#ref: args.r#ref.clone(),
+        rc: None,
+        detail: None,
     };
 
     let spec = boop::harness::SpawnSpec {
@@ -1955,6 +2005,8 @@ fn run_hail(
         reply_to: None,
         body: body.to_owned(),
         r#ref: None,
+        rc: None,
+        detail: None,
     };
     append_message_to(&dir, box_name.unwrap_or("bus.ndjson"), &message)?;
     record_control_edge(&message)?;
@@ -3414,22 +3466,40 @@ mod tests {
         ));
     }
 
+    /// FAIL-PRE-FIX: `adopt`, `beep agent register|done` and `beep lane list`
+    /// synced and read no `agent_*` row; the four `!` lines below then failed.
     #[test]
     fn startup_sync_policy_limits_projection_to_transcript_consumers() {
-        let adopt = Cli::try_parse_from(["boop", "adopt", "--name", "root", "--tmux", "root"])
-            .expect("adopt parses");
-        assert!(command_needs_startup_sync(&adopt.command));
-        let hail = Cli::try_parse_from([
-            "boop", "hail", "--to", "root", "--from", "lane", "--body", "done",
-        ])
-        .expect("hail parses");
-        assert!(!command_needs_startup_sync(&hail.command));
-        let inbox =
-            Cli::try_parse_from(["boop", "inbox", "drain", "--as", "root"]).expect("inbox parses");
-        assert!(!command_needs_startup_sync(&inbox.command));
-        let summary =
-            Cli::try_parse_from(["boop", "agent", "summary"]).expect("agent summary parses");
-        assert!(command_needs_startup_sync(&summary.command));
+        let registry_only = [
+            vec!["boop", "adopt", "--name", "root", "--tmux", "root"],
+            vec![
+                "boop", "hail", "--to", "root", "--from", "lane", "--body", "done",
+            ],
+            vec!["boop", "inbox", "drain", "--as", "root"],
+            vec!["boop", "beep", "agent", "register", "worker"],
+            vec!["boop", "beep", "agent", "done", "worker"],
+            vec!["boop", "beep", "lane", "list"],
+            vec!["boop", "beep", "lane", "create", "--branch", "fix/x"],
+        ];
+        for argv in registry_only {
+            let cli = Cli::try_parse_from(&argv).unwrap_or_else(|e| panic!("{argv:?}: {e}"));
+            assert!(
+                !command_needs_startup_sync(&cli.command),
+                "{argv:?} reads no agent_* row and must not sync"
+            );
+        }
+        let transcript_readers = [
+            vec!["boop", "agent", "summary"],
+            vec!["boop", "db", "turn", "list"],
+            vec!["boop", "db", "status"],
+        ];
+        for argv in transcript_readers {
+            let cli = Cli::try_parse_from(&argv).unwrap_or_else(|e| panic!("{argv:?}: {e}"));
+            assert!(
+                command_needs_startup_sync(&cli.command),
+                "{argv:?} reads agent_* rows and must sync first"
+            );
+        }
     }
 
     #[test]
@@ -3797,6 +3867,8 @@ mod tests {
             reply_to: None,
             body: format!("lane {lane} done rc={rc}"),
             r#ref: None,
+            rc: Some(rc),
+            detail: None,
         }
     }
 
@@ -4241,6 +4313,8 @@ mod tests {
             reply_to: None,
             body: "".into(),
             r#ref: None,
+            rc: None,
+            detail: None,
         }
     }
 
@@ -5328,6 +5402,8 @@ fn run_agent(cmd: AgentCmd) -> Result<()> {
                 reply_to: None,
                 body: format!("lane {name} done rc={rc}"),
                 r#ref: None,
+                rc: Some(rc),
+                detail: None,
             };
             append_message(&dir, &message)?;
             let path = dir.join("registry.json");
@@ -5818,7 +5894,7 @@ fn lane_result_rc_since(dir: &std::path::Path, lane: &str, since: Option<u64>) -
                 None => true,
             }
         })
-        .and_then(|message| parse_result_rc(&message.body))
+        .and_then(|message| message.rc)
 }
 
 /// The lane's registration timestamp (ms since epoch) for the spawn that
@@ -5920,14 +5996,6 @@ fn print_escape_flags(lane: &str, flags: &boop::worktree::EscapeFlags) {
             commit.lanes.join(" ")
         );
     }
-}
-
-fn parse_result_rc(body: &str) -> Option<i32> {
-    body.split_whitespace().find_map(|token| {
-        token
-            .strip_prefix("rc=")
-            .and_then(|value| value.parse().ok())
-    })
 }
 
 /// Poll `lane_result_rc` every `interval` until a result appears or `deadline`

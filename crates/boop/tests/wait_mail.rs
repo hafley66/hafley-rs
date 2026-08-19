@@ -30,6 +30,7 @@ impl Fixture {
         command
             .env_clear()
             .env("HOME", &self.home)
+            .env("BOOP_DB", self.home.join("boop.db"))
             .env("PATH", "/usr/bin:/bin")
             .args(args)
             .arg("--mail-dir")

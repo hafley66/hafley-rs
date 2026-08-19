@@ -114,18 +114,6 @@ impl DeadReason {
     }
 }
 
-/// Split `lane mine done rc=1 (supervisor error: x)` into its code and reason.
-pub fn parse_result_body(body: &str) -> Option<(i32, Option<String>)> {
-    let rc = body
-        .split_whitespace()
-        .find_map(|token| token.strip_prefix("rc=")?.parse::<i32>().ok())?;
-    let detail = body
-        .split_once('(')
-        .and_then(|(_, rest)| rest.rsplit_once(')'))
-        .map(|(inner, _)| inner.to_owned());
-    Some((rc, detail))
-}
-
 /// The typed reason for a dead lane: its newest result row if one exists, else
 /// what the trail directory says about how far the supervisor got.
 pub fn dead_reason(mail_dir: &Path, lanes_root: &Path, lane: &str) -> DeadReason {
@@ -137,7 +125,7 @@ pub fn dead_reason(mail_dir: &Path, lanes_root: &Path, lane: &str) -> DeadReason
         .iter()
         .rev()
         .find(|row| row.kind == "result" && row.from == lane)
-        .and_then(|row| parse_result_body(&row.body));
+        .and_then(|row| row.rc.map(|rc| (rc, row.detail.clone())));
     match reported {
         Some((rc, detail)) => DeadReason::Reported { rc, detail },
         None if lane_dir_in(lanes_root, lane).exists() => DeadReason::DiedBeforeResult,
@@ -224,16 +212,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    #[test]
-    fn a_result_body_splits_into_a_code_and_a_reason() {
-        assert_eq!(
-            parse_result_body("lane mine done rc=1 (supervisor error: write rpc turn/start)"),
-            Some((1, Some("supervisor error: write rpc turn/start".to_owned())))
-        );
-        assert_eq!(parse_result_body("lane mine done rc=0"), Some((0, None)));
-        assert_eq!(parse_result_body("lane mine still running"), None);
-    }
-
     // FAIL-PRE-FIX: `lane list` printed `dead` with nothing after it, so a lane
     // that vanished and a lane that reported rc=0 looked the same.
     // SABOTAGE RECEIPT: make `dead_reason` return `DeadReason::NoTrail`
@@ -252,6 +230,8 @@ mod tests {
             reply_to: None,
             body: "lane reported done rc=1 (supervisor error: write rpc turn/start)".into(),
             r#ref: None,
+            rc: None,
+            detail: None,
         };
         writeln!(
             std::fs::File::create(mail.join("bus.ndjson")).unwrap(),

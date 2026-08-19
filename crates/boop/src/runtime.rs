@@ -371,7 +371,7 @@ fn mailbox_projection(
                 to: message.to.clone(),
                 timestamp: message.from_timestamp.clone(),
                 body: message.body.clone(),
-                exit_code: parse_exit_code(&message.body),
+                exit_code: message.rc,
             };
             for lane in [&message.from, &message.to] {
                 let replace = completions.get(lane).is_none_or(|current| {
@@ -795,21 +795,7 @@ fn latest_completion(messages: &[Message], lane: &str) -> Option<CompletionRecor
             to: message.to.clone(),
             timestamp: message.from_timestamp.clone(),
             body: message.body.clone(),
-            exit_code: parse_exit_code(&message.body),
-        })
-}
-
-fn parse_exit_code(body: &str) -> Option<i32> {
-    body.split_whitespace()
-        .find_map(|word| {
-            word.strip_prefix("rc=")
-                .or_else(|| word.strip_prefix("rc:"))
-        })
-        .and_then(|value| {
-            value
-                .trim_end_matches(|ch: char| !ch.is_ascii_digit() && ch != '-')
-                .parse()
-                .ok()
+            exit_code: message.rc,
         })
 }
 
@@ -1068,9 +1054,8 @@ mod tests {
     use crate::Store;
 
     use super::{
-        parse_exit_code, runtime_lane_traces_sql, runtime_snapshot, runtime_snapshot_query_count,
-        ProcessLiveness, RuntimeDiagnostic, RuntimeSnapshotInput, TmuxLiveness,
-        RUNTIME_ATTACHED_SESSIONS_SQL,
+        runtime_lane_traces_sql, runtime_snapshot, runtime_snapshot_query_count, ProcessLiveness,
+        RuntimeDiagnostic, RuntimeSnapshotInput, TmuxLiveness, RUNTIME_ATTACHED_SESSIONS_SQL,
     };
 
     struct FakeProcesses {
@@ -1184,13 +1169,6 @@ mod tests {
     }
 
     #[test]
-    fn parses_completion_exit_codes() {
-        assert_eq!(parse_exit_code("lane x done rc=0"), Some(0));
-        assert_eq!(parse_exit_code("lane x done rc:17"), Some(17));
-        assert_eq!(parse_exit_code("lane x done"), None);
-    }
-
-    #[test]
     fn diagnostics_are_typed_and_serializable() {
         let diagnostic = RuntimeDiagnostic::AmbiguousCurrentSession {
             trace: "trace-a".into(),
@@ -1232,6 +1210,8 @@ mod tests {
             reply_to: None,
             body: "lane lane-a done rc=0".into(),
             r#ref: None,
+            rc: Some(0),
+            detail: None,
         }];
         let runtime = store
             .resolve_lane_runtime_with_messages("lane-a", &routes, &messages)
@@ -1349,6 +1329,8 @@ mod tests {
                 reply_to: None,
                 body: "work".into(),
                 r#ref: None,
+                rc: None,
+                detail: None,
             },
             Message {
                 id: "result".into(),
@@ -1360,6 +1342,8 @@ mod tests {
                 reply_to: None,
                 body: "lane lane-live done rc=0".into(),
                 r#ref: None,
+                rc: Some(0),
+                detail: None,
             },
             // This later row acknowledges the first envelope. The fold keeps
             // one inbox row and its acknowledgement.
@@ -1373,6 +1357,8 @@ mod tests {
                 reply_to: None,
                 body: "work".into(),
                 r#ref: None,
+                rc: None,
+                detail: None,
             },
         ];
         let mux = FakeMux::available(&["live-tmux", "shell-tmux"]);

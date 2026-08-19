@@ -165,8 +165,12 @@ fn failure_is_a_row() {
 
 #[test]
 fn command_failure_prints_a_row_and_exits_zero() {
+    let root = temp_dir("command-failure");
+    std::fs::create_dir_all(root.join("home")).unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_boop"))
         .args(["host", "chat"])
+        .env("HOME", root.join("home"))
+        .env("BOOP_DB", root.join("boop.db"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
@@ -184,4 +188,5 @@ fn command_failure_prints_a_row_and_exits_zero() {
         String::from_utf8(output.stdout).unwrap(),
         "{\"outcome\":\"failed\",\"detail\":\"model `` names no harness\"}\n"
     );
+    let _ = std::fs::remove_dir_all(root);
 }
