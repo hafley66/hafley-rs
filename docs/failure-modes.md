@@ -29,7 +29,7 @@ lane spawning being dead. It recurred at 14:46 and 22:24-22:28 the same day,
 
 **RCA.** One kill, two exits. `~/.agent/lanes/<lane>/supervise.log` for the
 seven incidents whose lane directory survives shows the same chain every time,
-for example `feature-agent-network-frames/supervise.log:14-22`:
+for example `feature-agent-network-frames/supervise.log:6-15`:
 
 | step | line |
 |---|---|
