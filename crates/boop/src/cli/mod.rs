@@ -402,3 +402,76 @@ pub(crate) fn now_ms() -> u64 {
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
 }
+
+#[cfg(test)]
+pub(crate) mod testkit {
+    use std::path::PathBuf;
+
+    use boop::bus::Route;
+
+    pub(crate) fn temp_mail_dir() -> PathBuf {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        std::env::temp_dir().join(format!(
+            "boop_mail_{}_{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ))
+    }
+
+    pub(crate) fn route_with(parent: Option<&str>) -> Route {
+        Route {
+            kind: "lane".into(),
+            harness: Some("opencode".into()),
+            tmux: Some("lane-x".into()),
+            cwd: None,
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: parent.map(str::to_owned),
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::testkit::temp_mail_dir;
+    use boop::bus::{read_routes, Route};
+
+    /// RECEIPT (job 1). A route written with --goal round-trips through the
+    /// registry.
+    #[test]
+    fn route_goal_round_trips() {
+        let dir = temp_mail_dir();
+        let route = Route {
+            kind: "lane".into(),
+            harness: Some("opencode".into()),
+            tmux: Some("lane-x".into()),
+            cwd: None,
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: None,
+            goal: Some("ship the edge".into()),
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+        };
+        write_route(&dir, "child", route).unwrap();
+        let routes = read_routes(&dir).unwrap();
+        assert_eq!(
+            routes["child"].goal.as_deref(),
+            Some("ship the edge"),
+            "registry: {:#?}",
+            routes
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

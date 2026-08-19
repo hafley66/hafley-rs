@@ -133,3 +133,32 @@ pub(crate) fn presets_table() -> Result<String> {
         .join("\n");
     Ok(table)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Sabotage receipt: dropping the harness-fit guard makes this assert the
+    /// codex arm, spelling `codex exec -m openrouter/...`, which cannot run.
+    #[test]
+    fn the_default_preset_reaches_only_its_own_harness() {
+        let dir = std::env::temp_dir().join("boop-default-preset-fit");
+        std::fs::create_dir_all(&dir).expect("create the probe directory");
+        let path = dir.join("config.json");
+        std::fs::write(
+            &path,
+            r#"{ "default-model-preset": "flash4",
+                 "model-presets": { "flash4": "openrouter/deepseek/deepseek-v4-flash-0731" } }"#,
+        )
+        .expect("write the probe config");
+        let config = config::load(&path).expect("load the probe config");
+        assert_eq!(
+            default_preset_for_harness(&config, &path, "opencode").unwrap(),
+            Some("flash4".to_owned())
+        );
+        assert_eq!(
+            default_preset_for_harness(&config, &path, "codex").unwrap(),
+            None
+        );
+    }
+}

@@ -899,3 +899,178 @@ pub(crate) fn run_price(cmd: PriceCmd) -> Result<()> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::testkit::{route_with, temp_mail_dir};
+    use crate::cli::write_line;
+    use crate::{AgentSessionGraphFormat, Cli, SubCmd};
+    use boop::{
+        AgentRuntimeRow, AgentSummary, AgentSummaryActivity, AgentSummaryAgent, MailboxCounts,
+        ProcessLiveness, RuntimeLiveness, TmuxLiveness, WorktreeCoordinates,
+    };
+    use clap::{CommandFactory, Parser};
+
+    /// RECEIPT (instant-focused-family-cli): Instant's argv reaches the graph query unchanged.
+    #[test]
+    fn public_agent_sessions_accepts_focused_family_filters() {
+        let cli = Cli::try_parse_from([
+            "boop",
+            "agent",
+            "sessions",
+            "--history",
+            "--tmux",
+            "sprefa-5",
+            "--history-since-ts",
+            "1735689600000",
+            "--format",
+            "json",
+        ])
+        .expect("Instant focused-family command parses");
+        let SubCmd::Agent {
+            cmd:
+                AgentSummaryCmd::Sessions {
+                    cwd,
+                    history,
+                    tmux,
+                    history_since_ts,
+                    format: AgentSessionGraphFormat::Json,
+                    ..
+                },
+        } = cli.command
+        else {
+            panic!("expected public agent sessions command");
+        };
+
+        let query = agent_session_graph_query(cwd, history, tmux, history_since_ts);
+        assert_eq!(query.tmux.as_deref(), Some("sprefa-5"));
+        assert_eq!(query.history_since_ts, Some(1_735_689_600_000));
+        assert!(query.include_history);
+
+        let mut command = Cli::command();
+        let sessions = command
+            .find_subcommand_mut("agent")
+            .expect("agent command")
+            .find_subcommand_mut("sessions")
+            .expect("sessions command");
+        let help = sessions.render_long_help().to_string();
+        assert!(help.contains("--tmux <TMUX>"), "sessions help:\n{help}");
+        assert!(
+            help.contains("--history-since-ts <HISTORY_SINCE_TS>"),
+            "sessions help:\n{help}"
+        );
+    }
+
+    #[test]
+    fn agent_summary_text_fixture_has_fixed_columns() {
+        let summary = AgentSummary {
+            schema_version: 1,
+            active_agents: 1,
+            agents: vec![AgentSummaryAgent {
+                runtime: AgentRuntimeRow {
+                    lane: "lane-a".into(),
+                    trace: Some("trace-a".into()),
+                    root_session: None,
+                    session: Some("session-a".into()),
+                    parent: None,
+                    route: None,
+                    cwd: None,
+                    tmux_target: None,
+                    tmux_pane: None,
+                    pid: None,
+                    reported_status: None,
+                    liveness: RuntimeLiveness {
+                        tmux: TmuxLiveness::Live,
+                        process: ProcessLiveness::Unknown,
+                    },
+                    completion: None,
+                    mailbox: MailboxCounts {
+                        inbox: 2,
+                        outbox: 3,
+                        unacknowledged: 1,
+                    },
+                    worktree: WorktreeCoordinates::default(),
+                    diagnostics: Vec::new(),
+                },
+                activity: AgentSummaryActivity {
+                    user: 4,
+                    assistant: 5,
+                    tool_call: 6,
+                    total: 15,
+                    calls: 7,
+                    input_tokens: 8,
+                    output_tokens: 9,
+                    cache_create_5m_tokens: 10,
+                    cache_create_1h_tokens: 11,
+                    cache_read_tokens: 12,
+                    first_activity_ts: None,
+                    last_activity_ts: None,
+                    tool_result_availability: boop::ToolResultAvailability::Unavailable,
+                },
+            }],
+        };
+        let rendered = agent_summary_text(&summary);
+        assert_eq!(
+            rendered,
+            "schema_version\t1\nactive_agents\t1\nlane\ttrace\troot_session\tsession\tparent\troute\tcwd\ttmux_target\ttmux_pane\tpid\treported_status\ttmux_liveness\tprocess_liveness\tcompletion\tinbox\toutbox\tunacknowledged\tworktree_route_cwd\tworktree_process_cwd\tdiagnostics\tuser\tassistant\ttool_call\ttotal\tcalls\tinput_tokens\toutput_tokens\tcache_create_5m_tokens\tcache_create_1h_tokens\tcache_read_tokens\nlane-a\ttrace-a\t-\tsession-a\t-\tnull\t-\t-\t-\t-\t-\tlive\tunknown\tnull\t2\t3\t1\t-\t-\t[]\t4\t5\t6\t15\t7\t8\t9\t10\t11\t12"
+        );
+        let mut output = Vec::new();
+        write_line(&mut output, &rendered).expect("write summary output");
+        assert_eq!(output, format!("{rendered}\n").as_bytes());
+        assert!(!output.ends_with(b"\n\n"));
+    }
+
+    fn session_with_cwd(cwd: Option<&str>) -> boop::harness::SessionRef {
+        boop::harness::SessionRef {
+            harness: "opencode",
+            session_id: "ses-1".into(),
+            nickname: "ses-1".into(),
+            path: std::path::PathBuf::from("/tmp/x.jsonl"),
+            cwd: cwd.map(str::to_owned),
+            git_branch: None,
+            modified_ms: 0,
+            size: 0,
+            tmux: None,
+            tmux_socket: None,
+            parent: None,
+        }
+    }
+
+    #[test]
+    fn none_cwd_on_both_sides_is_not_a_route_match() {
+        let mut route = route_with(None);
+        route.cwd = None;
+        assert!(!session_matches_route(&route, &session_with_cwd(None)));
+    }
+
+    #[test]
+    fn shared_concrete_cwd_matches_and_none_session_cwd_does_not() {
+        let mut route = route_with(None);
+        route.cwd = Some("/repo/wt".into());
+        assert!(session_matches_route(
+            &route,
+            &session_with_cwd(Some("/repo/wt"))
+        ));
+        assert!(!session_matches_route(&route, &session_with_cwd(None)));
+    }
+
+    #[test]
+    fn session_id_match_needs_no_cwd() {
+        let mut route = route_with(None);
+        route.session_id = Some("ses-1".into());
+        route.cwd = None;
+        assert!(session_matches_route(&route, &session_with_cwd(None)));
+    }
+
+    /// RECEIPT (boop-db-readonly-open): a store opened `SQLITE_OPEN_READ_ONLY`
+    /// still answers `query_sessions`, the shape every converted `db` verb needs.
+    #[test]
+    fn a_read_verb_succeeds_against_a_readonly_opened_store() {
+        let path = temp_mail_dir().join("ro.db");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        ident::Store::open(path.clone()).unwrap();
+        let store = ident::Store::open_readonly(path).unwrap();
+        assert!(store.query_sessions(None, None).unwrap().is_empty());
+    }
+}

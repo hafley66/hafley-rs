@@ -295,3 +295,218 @@ pub(crate) fn run_whoami(json: bool) -> Result<()> {
     println!("rung     {} ({})", rung.as_str(), rung.confidence());
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    use crate::cli::testkit::temp_mail_dir;
+    use crate::{Cli, MeCmd, SubCmd};
+    use boop::bus::read_routes;
+    use boop::proc::{ProcReader, ProcessInfo};
+    use boop::tmux::{LiveSessions, Multiplexer};
+
+    struct ClaudeProcessFixture;
+
+    struct AdoptMux;
+
+    impl Multiplexer for AdoptMux {
+        fn current_pane(&self, _: Option<&str>) -> Option<String> {
+            None
+        }
+        fn session_of_pane(&self, _: Option<&str>, _: &str) -> Option<String> {
+            None
+        }
+        fn pane_pid(&self, _: Option<&str>, _: &str) -> Option<u32> {
+            Some(10)
+        }
+        fn live_sessions(&self, _: Option<&str>) -> Option<LiveSessions> {
+            Some(LiveSessions {
+                names: ["sprefa-5".into()].into_iter().collect(),
+            })
+        }
+        fn has_session(&self, _: Option<&str>, target: &str) -> anyhow::Result<bool> {
+            Ok(target.split(':').next() == Some("sprefa-5"))
+        }
+        fn kill_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn target_alive(&self, _: Option<&str>, _: &str) -> bool {
+            true
+        }
+        fn capture_pane(&self, _: Option<&str>, _: &str, _: Option<u32>) -> anyhow::Result<String> {
+            Ok(String::new())
+        }
+        fn new_detached_session(
+            &self,
+            _: Option<&str>,
+            _: &str,
+            _: &str,
+            _: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn new_bare_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_keys_literal(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_text(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_key_named(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn new_window(
+            &self,
+            _: Option<&str>,
+            _: &str,
+            _: &str,
+            _: &str,
+            _: &str,
+        ) -> anyhow::Result<String> {
+            Ok(String::new())
+        }
+        fn swap_windows(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn kill_window(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl ProcReader for ClaudeProcessFixture {
+        fn is_alive(&self, pid: u32) -> bool {
+            pid == 10 || pid == 11
+        }
+        fn process(&self, pid: u32) -> Option<ProcessInfo> {
+            match pid {
+                10 => Some(ProcessInfo {
+                    pid,
+                    parent: None,
+                    name: "shell".into(),
+                    command: vec!["zsh".into()],
+                    rss_bytes: 0,
+                    cpu_percent: 0.0,
+                    start_time_secs: 0,
+                    cwd: None,
+                }),
+                11 => Some(ProcessInfo {
+                    pid,
+                    parent: Some(10),
+                    name: "claude".into(),
+                    command: vec![
+                        "claude".into(),
+                        "--resume".into(),
+                        "da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b".into(),
+                    ],
+                    rss_bytes: 0,
+                    cpu_percent: 0.0,
+                    start_time_secs: 0,
+                    cwd: None,
+                }),
+                _ => None,
+            }
+        }
+        fn children(&self, pid: u32) -> Vec<u32> {
+            (pid == 10).then_some(11).into_iter().collect()
+        }
+        fn descendants(&self, pid: u32) -> Vec<u32> {
+            (pid == 10).then_some(11).into_iter().collect()
+        }
+        fn descendant_count(&self, pid: u32) -> usize {
+            usize::from(pid == 10)
+        }
+    }
+
+    #[test]
+    fn adopt_discovers_claude_resume_identity_and_explicit_id_wins() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let mux = AdoptMux;
+        let processes = ClaudeProcessFixture;
+        let registry = Registry::discover();
+        let hooks = || HookWiring {
+            no_hooks: true,
+            uninstall: false,
+        };
+
+        run_adopt_with(
+            "sprefa-coordinator",
+            "coordinator",
+            "sprefa-5:0.0",
+            Some("claude"),
+            None,
+            Some("/repo"),
+            None,
+            None,
+            None,
+            None,
+            Some(&dir),
+            hooks(),
+            &registry,
+            &mux,
+            &processes,
+        )
+        .unwrap();
+        let discovered = read_routes(&dir).unwrap();
+        assert_eq!(
+            discovered["sprefa-coordinator"].session_id.as_deref(),
+            Some("da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b")
+        );
+
+        run_adopt_with(
+            "sprefa-coordinator",
+            "coordinator",
+            "sprefa-5:0.0",
+            Some("claude"),
+            Some("explicit-session"),
+            Some("/repo"),
+            None,
+            None,
+            None,
+            None,
+            Some(&dir),
+            hooks(),
+            &registry,
+            &mux,
+            &processes,
+        )
+        .unwrap();
+        let explicit = read_routes(&dir).unwrap();
+        assert_eq!(
+            explicit["sprefa-coordinator"].session_id.as_deref(),
+            Some("explicit-session")
+        );
+        assert_eq!(explicit.len(), 1);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn me_favorite_defaults_to_the_newest_assistant_message() {
+        let cli = Cli::try_parse_from(["boop", "me", "favorite"])
+            .expect("caller-relative favorite command parses");
+        assert!(matches!(
+            cli.command,
+            SubCmd::Me {
+                cmd: Some(MeCmd::Favorite { index: -1, .. }),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn me_favorite_accepts_an_older_negative_position() {
+        let cli = Cli::try_parse_from(["boop", "me", "favorite", "-2", "--note", "keep"])
+            .expect("negative favorite position parses");
+        assert!(matches!(
+            cli.command,
+            SubCmd::Me {
+                cmd: Some(MeCmd::Favorite { index: -2, .. }),
+                ..
+            }
+        ));
+    }
+}

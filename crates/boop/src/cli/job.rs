@@ -2194,3 +2194,864 @@ pub(crate) fn render_ndjson(nodes: &[LaneNode]) -> Vec<String> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::testkit::{route_with, temp_mail_dir};
+    use boop::bus::{self, read_routes, Route};
+    use boop::proc::{ProcReader, ProcessInfo, SysinfoSnapshot};
+    use boop::registry::Registry;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    #[test]
+    fn foreground_wait_owns_a_result_recipient_without_a_parent() {
+        assert_eq!(
+            completion_recipient(None, true, "feature-a"),
+            Some("__wait__feature-a".into())
+        );
+        assert_eq!(
+            completion_recipient(Some("coordinator"), true, "feature-a"),
+            Some("coordinator".into())
+        );
+        assert_eq!(completion_recipient(None, false, "feature-a"), None);
+    }
+
+    #[test]
+    fn a_first_codex_spawn_registers_its_observed_pane_as_the_parent_route() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).expect("mail dir");
+        let cwd = std::path::Path::new("/tmp/unrecorded-worktree");
+        let caller = boop::identity::Identity {
+            session: Some("thread-7".to_owned()),
+            lane: Some("codex-1206".to_owned()),
+            parent: None,
+            harness: Some("codex".to_owned()),
+            pane: Some("%1206".to_owned()),
+            rung: Some(boop::identity::Rung::CodexProcess),
+        };
+        let mut routes = BTreeMap::new();
+
+        register_fresh_codex_spawner(&dir, cwd, &caller, &mut routes).expect("register caller");
+        let persisted = read_routes(&dir).expect("persisted routes");
+        let memory = routes.get("codex-1206").expect("memory route");
+        let disk = persisted.get("codex-1206").expect("disk route");
+
+        for route in [memory, disk] {
+            assert_eq!(route.kind, "coordinator");
+            assert_eq!(route.harness.as_deref(), Some("codex"));
+            assert_eq!(route.tmux.as_deref(), Some("%1206"));
+            assert_eq!(route.cwd.as_deref(), Some("/tmp/unrecorded-worktree"));
+            assert_eq!(route.mode.as_deref(), Some("interactive"));
+            assert_eq!(route.session_id.as_deref(), Some("thread-7"));
+        }
+        std::fs::remove_dir_all(dir).expect("remove mail dir");
+    }
+
+    /// A named harness that is not registered must be refused, never quietly
+    /// swapped for the first adapter, which would be a capability lie.
+    #[test]
+    fn dispatch_refuses_an_unregistered_harness() {
+        let registry = Registry::discover();
+        let error = match resolve_dispatch_harness(&registry, Some("gemini-cli")) {
+            Ok(_) => panic!("unregistered harness must be refused"),
+            Err(error) => error,
+        };
+        let message = error.to_string();
+        assert!(message.contains("gemini-cli"), "message: {message}");
+        assert!(message.contains("claude"), "registered set: {message}");
+        assert!(message.contains("opencode"), "registered set: {message}");
+    }
+
+    #[test]
+    fn native_registration_stays_live_until_explicit_done_and_done_is_once() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        run_agent(AgentCmd::Register {
+            name: "native-child".into(),
+            kind: "native".into(),
+            parent: Some("coordinator".into()),
+            on_parent_death: crate::ParentDeathPolicy::Orphan,
+            worktree: None,
+            mail_dir: Some(dir.clone()),
+        })
+        .unwrap();
+
+        let route = read_routes(&dir).unwrap().remove("native-child").unwrap();
+        assert_eq!(
+            lane_state(&Some(boop::tmux::LiveSessions::default()), &route),
+            "live"
+        );
+        assert_eq!(
+            route_liveness(&dir, "native-child"),
+            super::RouteLiveness::Live
+        );
+
+        run_agent(AgentCmd::Done {
+            name: "native-child".into(),
+            rc: 7,
+            mail_dir: Some(dir.clone()),
+        })
+        .unwrap();
+        assert!(!read_routes(&dir).unwrap().contains_key("native-child"));
+
+        let second = run_agent(AgentCmd::Done {
+            name: "native-child".into(),
+            rc: 7,
+            mail_dir: Some(dir.clone()),
+        });
+        assert!(
+            second.is_err(),
+            "a completed native route cannot complete twice"
+        );
+        let messages = bus::read_boxes(&dir)
+            .unwrap()
+            .into_iter()
+            .flat_map(|path| bus::parse_box(&path))
+            .filter(|message| message.kind == "result" && message.from == "native-child")
+            .collect::<Vec<_>>();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].to, "coordinator");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT (Job 3b). A `--route-only` delete drops the lane's registry row
+    /// without touching pane or tmux, so the on-exit epilogue cleans up in-pane.
+    #[test]
+    fn route_only_delete_drops_the_registry_row_without_tmux() {
+        let dir = temp_mail_dir();
+        write_route(
+            &dir,
+            "l",
+            Route {
+                kind: "lane".into(),
+                harness: Some("claude".into()),
+                tmux: Some("somesession".into()),
+                cwd: None,
+                model: None,
+                mode: None,
+                session_id: None,
+                source_path: None,
+                parent: None,
+                goal: None,
+                registered_at: None,
+                base_sha: None,
+                worktree_dir: None,
+            },
+        )
+        .unwrap();
+        run_lane_delete(Some(&dir), "l", true).unwrap();
+        let routes = read_routes(&dir).unwrap();
+        assert!(
+            !routes.contains_key("l"),
+            "a finished lane must leave no registry row"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn unique_name(prefix: &str) -> String {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        format!(
+            "{prefix}-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        )
+    }
+
+    fn tmux_route(tmux_name: &str) -> Route {
+        Route {
+            kind: "lane".into(),
+            harness: Some("claude".into()),
+            tmux: Some(tmux_name.to_owned()),
+            cwd: None,
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: None,
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+        }
+    }
+
+    /// A real session on the default tmux server, killed on drop; `lane
+    /// prune` hardcodes the default server, so a "live" fixture needs one.
+    struct LiveTmuxSession {
+        name: String,
+    }
+
+    impl LiveTmuxSession {
+        fn new(name: &str) -> Self {
+            tmux::mux()
+                .new_bare_session(None, name)
+                .expect("tmux installed and reachable");
+            LiveTmuxSession {
+                name: name.to_owned(),
+            }
+        }
+    }
+
+    impl Drop for LiveTmuxSession {
+        fn drop(&mut self) {
+            let _ = tmux::mux().kill_session(None, &self.name);
+        }
+    }
+
+    /// FAIL-FIRST. Before `run_lane_prune` existed this had no callee to
+    /// assert against; now: a dead row is gone, a live row survives.
+    #[test]
+    fn prune_removes_a_dead_row_and_keeps_a_live_one() {
+        let dir = temp_mail_dir();
+        let live_name = unique_name("boop-prune-live");
+        let _session = LiveTmuxSession::new(&live_name);
+        write_route(
+            &dir,
+            "dead-lane",
+            tmux_route(&unique_name("boop-prune-dead")),
+        )
+        .unwrap();
+        write_route(&dir, "live-lane", tmux_route(&live_name)).unwrap();
+
+        run_lane_prune(Some(&dir), false).unwrap();
+
+        let routes = read_routes(&dir).unwrap();
+        assert!(
+            !routes.contains_key("dead-lane"),
+            "a dead row must be pruned"
+        );
+        assert!(
+            routes.contains_key("live-lane"),
+            "a live row must survive prune"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. `--dry-run` reports the same rows a real run would prune but
+    /// removes nothing.
+    #[test]
+    fn prune_dry_run_removes_nothing() {
+        let dir = temp_mail_dir();
+        write_route(
+            &dir,
+            "dead-lane",
+            tmux_route(&unique_name("boop-prune-dead")),
+        )
+        .unwrap();
+
+        run_lane_prune(Some(&dir), true).unwrap();
+
+        let routes = read_routes(&dir).unwrap();
+        assert!(
+            routes.contains_key("dead-lane"),
+            "--dry-run must remove nothing"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dead_reason_names_a_gone_session_with_no_pid() {
+        let snapshot = SysinfoSnapshot::capture().unwrap();
+        let route = tmux_route(&unique_name("boop-prune-nonexistent"));
+        assert_eq!(
+            dead_reason(&route, &snapshot).as_deref(),
+            Some("tmux session gone, no pid recorded")
+        );
+    }
+
+    #[test]
+    fn dead_reason_is_none_for_a_live_session() {
+        let name = unique_name("boop-prune-alive");
+        let _session = LiveTmuxSession::new(&name);
+        let snapshot = SysinfoSnapshot::capture().unwrap();
+        assert_eq!(dead_reason(&tmux_route(&name), &snapshot), None);
+    }
+
+    #[test]
+    fn dead_reason_names_no_recorded_session_when_tmux_is_absent() {
+        let snapshot = SysinfoSnapshot::capture().unwrap();
+        let route = Route {
+            kind: "lane".into(),
+            harness: Some("claude".into()),
+            tmux: None,
+            cwd: None,
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: None,
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+        };
+        assert_eq!(
+            dead_reason(&route, &snapshot).as_deref(),
+            Some("no tmux session recorded")
+        );
+    }
+
+    fn result_message(id: &str, lane: &str, rc: i32) -> boop::bus::Message {
+        boop::bus::Message {
+            id: id.into(),
+            from: lane.into(),
+            to: lane.into(),
+            from_timestamp: "2026-08-01T00:00:00.000Z".into(),
+            to_timestamp: None,
+            kind: "result".into(),
+            reply_to: None,
+            body: format!("lane {lane} done rc={rc}"),
+            r#ref: None,
+            rc: Some(rc),
+            detail: None,
+        }
+    }
+
+    fn registered_route(ts: &str) -> Route {
+        Route {
+            kind: "lane".into(),
+            harness: Some("claude".into()),
+            tmux: Some("l".into()),
+            cwd: None,
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: None,
+            goal: None,
+            registered_at: Some(ts.into()),
+            base_sha: None,
+            worktree_dir: None,
+        }
+    }
+
+    /// RECEIPT (was wait_returns_rc_from_a_preexisting_result_row; pre-fix
+    /// rc=0). Older than the spawn's registration: skipped, times out (124).
+    #[test]
+    fn wait_skips_a_result_row_older_than_the_current_spawn() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        append_message(&dir, &result_message("m-1", "l", 5)).unwrap();
+        write_route(&dir, "l", registered_route("2026-08-02T00:00:00.000Z")).unwrap();
+        assert_eq!(
+            super::wait_for_result(
+                &dir,
+                "l",
+                Some(std::time::Duration::from_millis(60)),
+                std::time::Duration::from_millis(10),
+            ),
+            None,
+            "an older row is skipped, so the wait times out (exits 124)"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A result row at or after the current spawn's registration satisfies the
+    /// wait immediately with the rc its body names.
+    #[test]
+    fn wait_accepts_a_result_row_after_the_current_spawn() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        write_route(&dir, "l", registered_route("2026-08-01T00:00:00.000Z")).unwrap();
+        let mut message = result_message("m-2", "l", 7);
+        message.from_timestamp = "2026-08-02T00:00:00.000Z".into();
+        append_message(&dir, &message).unwrap();
+        assert_eq!(
+            super::wait_for_result(
+                &dir,
+                "l",
+                Some(std::time::Duration::from_secs(2)),
+                std::time::Duration::from_millis(10),
+            ),
+            Some(7)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT (contract 3). No route row survives, so any result row
+    /// satisfies: the after-the-fact read.
+    #[test]
+    fn wait_accepts_a_result_row_with_no_route_registered() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut message = result_message("m-3", "l", 4);
+        message.from_timestamp = "2026-07-01T00:00:00.000Z".into();
+        append_message(&dir, &message).unwrap();
+        assert_eq!(
+            super::wait_for_result(
+                &dir,
+                "l",
+                Some(std::time::Duration::from_secs(2)),
+                std::time::Duration::from_millis(10),
+            ),
+            Some(4)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT (Job 3). An empty mailbox times out to `None`, which the verb
+    /// maps to exit code 124.
+    #[test]
+    fn wait_times_out_when_no_result_row_arrives() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let outcome = super::wait_for_result(
+            &dir,
+            "l",
+            Some(std::time::Duration::from_millis(60)),
+            std::time::Duration::from_millis(10),
+        );
+        assert_eq!(
+            outcome, None,
+            "timeout returns the None the verb exits 124 on"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A non-result row for the lane never satisfies the wait.
+    #[test]
+    fn a_non_result_row_does_not_satisfy_the_wait() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut message = result_message("m-2", "l", 3);
+        message.kind = "note".into();
+        append_message(&dir, &message).unwrap();
+        assert_eq!(super::lane_result_rc(&dir, "l"), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. The completion row is hailed `--to <parent> --from <lane>`, so a
+    /// wait keyed on the recipient never saw the row it exists to wait for.
+    #[test]
+    fn wait_matches_the_row_the_supervisor_actually_writes() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut message = result_message("m-3", "feature-schema-emit", 0);
+        message.to = "sprefa-coordinator".into();
+        append_message(&dir, &message).unwrap();
+        assert_eq!(super::lane_result_rc(&dir, "feature-schema-emit"), Some(0));
+        assert_eq!(
+            super::wait_for_result(
+                &dir,
+                "feature-schema-emit",
+                Some(std::time::Duration::from_secs(2)),
+                std::time::Duration::from_millis(10),
+            ),
+            Some(0)
+        );
+        assert_eq!(
+            super::lane_result_rc(&dir, "some-other-lane"),
+            None,
+            "another lane's completion never satisfies this wait"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. A lane that fails hands its rc back through the same row, and
+    /// an absent row is the 124 timeout `--wait-timeout` exits on.
+    #[test]
+    fn wait_propagates_a_failing_rc_and_times_out_otherwise() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(
+            super::wait_for_result(
+                &dir,
+                "feature-schema-emit",
+                Some(std::time::Duration::from_millis(40)),
+                std::time::Duration::from_millis(10),
+            ),
+            None,
+            "no result row yet: the verb exits 124 on this None"
+        );
+        let mut message = result_message("m-4", "feature-schema-emit", 17);
+        message.to = "sprefa-coordinator".into();
+        append_message(&dir, &message).unwrap();
+        assert_eq!(super::lane_result_rc(&dir, "feature-schema-emit"), Some(17));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// FAIL-PRE-FIX: a lane whose pane evaporated left `lane wait` polling a
+    /// mailbox nothing would write to, forever under `--timeout 0`.
+    #[test]
+    fn wait_calls_a_lane_dead_when_its_route_stops_being_live() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        write_route(&dir, "l", registered_route("2026-08-01T00:00:00.000Z")).unwrap();
+        assert_eq!(
+            super::wait_for_outcome(
+                &dir,
+                "l",
+                None,
+                std::time::Duration::from_millis(1),
+                &|_, _| super::RouteLiveness::Dead,
+            ),
+            super::WaitOutcome::Died,
+            "a dead route with no result row exits 3, never blocks"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Only the supervisor writes the row now, and a mailbox holding a pair
+    /// from an older build still answers one rc.
+    #[test]
+    fn a_duplicate_result_row_leaves_the_wait_unchanged() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut supervisor = result_message("m-supervisor", "l", 2);
+        supervisor.to = "sprefa-coordinator".into();
+        append_message(&dir, &supervisor).unwrap();
+        assert_eq!(super::lane_result_rc(&dir, "l"), Some(2));
+        let mut older_build = result_message("m-epilogue", "l", 2);
+        older_build.to = "sprefa-coordinator".into();
+        append_message(&dir, &older_build).unwrap();
+        assert_eq!(super::lane_result_rc(&dir, "l"), Some(2));
+        assert_eq!(
+            super::wait_for_outcome(
+                &dir,
+                "l",
+                Some(std::time::Duration::from_secs(2)),
+                std::time::Duration::from_millis(1),
+                &|_, _| super::RouteLiveness::Unknown,
+            ),
+            super::WaitOutcome::Result(2)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A lane that reported is unaffected by the liveness check: its pane is
+    /// already gone by the time its row is read.
+    #[test]
+    fn a_result_row_beats_a_dead_route() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut message = result_message("m-5", "l", 9);
+        message.to = "sprefa-coordinator".into();
+        append_message(&dir, &message).unwrap();
+        assert_eq!(
+            super::wait_for_outcome(
+                &dir,
+                "l",
+                Some(std::time::Duration::from_secs(2)),
+                std::time::Duration::from_millis(1),
+                &|_, _| super::RouteLiveness::Dead,
+            ),
+            super::WaitOutcome::Result(9)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An unreachable tmux, a lane with no route and a live lane all read the
+    /// same to the wait: keep polling until the deadline.
+    #[test]
+    fn an_undecidable_route_still_times_out_rather_than_reporting_death() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        for liveness in [super::RouteLiveness::Unknown, super::RouteLiveness::Live] {
+            assert_eq!(
+                super::wait_for_outcome(
+                    &dir,
+                    "l",
+                    Some(std::time::Duration::from_millis(40)),
+                    std::time::Duration::from_millis(10),
+                    &|_, _| liveness,
+                ),
+                super::WaitOutcome::TimedOut,
+                "{liveness:?} is not evidence of death"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A route reads dead for the poll or two between registration and the
+    /// session answering, which must not end the wait.
+    #[test]
+    fn a_single_dead_observation_does_not_end_the_wait() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let polls = std::sync::atomic::AtomicU32::new(0);
+        assert_eq!(
+            super::wait_for_outcome(
+                &dir,
+                "l",
+                Some(std::time::Duration::from_millis(60)),
+                std::time::Duration::from_millis(10),
+                &|_, _| match polls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) {
+                    0 => super::RouteLiveness::Dead,
+                    _ => super::RouteLiveness::Live,
+                },
+            ),
+            super::WaitOutcome::TimedOut
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. A registry row written before the branch-derived names (lane id
+    /// with no kind, `lane/*` worktree cwd) still reads, resolves and deletes.
+    #[test]
+    fn a_pre_branch_registry_row_still_reads_and_deletes() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("registry.json"),
+            r#"{
+  "boop-sql": {
+    "harness": "opencode",
+    "tmux": "boop-sql",
+    "cwd": "/Users/x/projects/sprefa/.boop-worktrees/lane/boop-sql",
+    "model": "openrouter/deepseek/deepseek-v4-flash-0731",
+    "mode": "auto",
+    "sessionId": "ses_0167"
+  },
+  "sprefa-coordinator": { "harness": "claude", "tmux": "shell:0.0" }
+}"#,
+        )
+        .unwrap();
+        let routes = read_routes(&dir).unwrap();
+        let old = &routes["boop-sql"];
+        assert_eq!(old.session_id.as_deref(), Some("ses_0167"));
+        assert_eq!(old.tmux.as_deref(), Some("boop-sql"));
+        assert!(old
+            .cwd
+            .as_deref()
+            .unwrap()
+            .contains(".boop-worktrees/lane/"));
+        assert_eq!(
+            resolve_parent_with_legacy_fallback(None, None, &routes)
+                .parent
+                .as_deref(),
+            Some("sprefa-coordinator"),
+            "an old row is still a usable parent default"
+        );
+        run_lane_delete(Some(&dir), "boop-sql", true).unwrap();
+        let after = read_routes(&dir).unwrap();
+        assert!(!after.contains_key("boop-sql"));
+        assert!(
+            after.contains_key("sprefa-coordinator"),
+            "deleting one old row leaves the others"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT (boop-coordinator-by-kind compat): a pane-less coordinator is
+    /// not inferred, and the legacy fallback cannot replace that decision.
+    #[test]
+    fn legacy_fallback_never_overrides_an_explicit_coordinator_kind() {
+        let mut routes = BTreeMap::new();
+        let mut boss = route_with(None);
+        boss.kind = "coordinator".into();
+        boss.tmux = None;
+        routes.insert("boss".into(), boss);
+        let pick = resolve_parent_with_legacy_fallback(None, None, &routes);
+        assert_eq!(pick.parent, None);
+        assert_eq!(pick.source, "none");
+    }
+
+    fn dispatch(from: &str, to: &str) -> boop::bus::Message {
+        boop::bus::Message {
+            id: format!("m-{from}-{to}"),
+            from: from.into(),
+            to: to.into(),
+            from_timestamp: "2026-01-01T00:00:00.000Z".into(),
+            to_timestamp: None,
+            kind: "dispatch".into(),
+            reply_to: None,
+            body: "".into(),
+            r#ref: None,
+            rc: None,
+            detail: None,
+        }
+    }
+
+    fn live_meta(pid: u32) -> super::LaneMeta {
+        super::LaneMeta {
+            pid,
+            state: "live",
+            descendants: vec![],
+        }
+    }
+
+    /// RECEIPT (pstree). A route's explicit `--parent` wins over a mailbox
+    /// dispatch edge that names a different summoner.
+    #[test]
+    fn explicit_parent_beats_inferred_dispatch() {
+        let mut routes = BTreeMap::new();
+        routes.insert("child".into(), route_with(Some("explicit")));
+        let messages = vec![dispatch("mailbox", "child")];
+        let edges = super::resolve_edges(&routes, &messages);
+        let edge = &edges["child"];
+        assert_eq!(edge.parent.as_deref(), Some("explicit"));
+        assert!(!edge.inferred);
+    }
+
+    /// RECEIPT (pstree). An orphaned route infers its summoner from the FIRST
+    /// dispatch row addressed to it, later rows ignored.
+    #[test]
+    fn orphan_infers_summoner_from_first_dispatch() {
+        let mut routes = BTreeMap::new();
+        routes.insert("child".into(), route_with(None));
+        let messages = vec![
+            dispatch("summoner1", "child"),
+            dispatch("summoner2", "child"),
+        ];
+        let edges = super::resolve_edges(&routes, &messages);
+        let edge = &edges["child"];
+        assert_eq!(edge.parent.as_deref(), Some("summoner1"));
+        assert!(edge.inferred);
+    }
+
+    /// RECEIPT (pstree). A summoner absent from the registry renders as a
+    /// `[gone]` root with the orphan lane hung beneath it.
+    #[test]
+    fn orphan_root_prints_gone_summoner() {
+        let mut routes = BTreeMap::new();
+        routes.insert("child".into(), route_with(None));
+        let messages = vec![dispatch("coordinator", "child")];
+        let edges = super::resolve_edges(&routes, &messages);
+        let mut meta = BTreeMap::new();
+        meta.insert("child".into(), live_meta(4242));
+        let mut include = BTreeSet::new();
+        include.insert("child".into());
+        let nodes = super::build_lane_nodes(&routes, &edges, &meta, &include);
+        let text = super::render_text(&nodes);
+        let joined = text.join("\n");
+        assert!(joined.contains("coordinator [gone]"), "text:\n{joined}");
+        assert!(
+            joined.contains("child (4242) [live] [inferred]"),
+            "text:\n{joined}"
+        );
+        let ndjson = super::render_ndjson(&nodes);
+        let gone = ndjson
+            .iter()
+            .find(|row| row.contains("\"lane\":\"coordinator\""))
+            .unwrap();
+        assert!(gone.contains("\"state\":\"gone\""), "row: {gone}");
+        assert!(gone.contains("\"pid\":null"), "row: {gone}");
+    }
+
+    /// RECEIPT (pstree). A true root with no parent edge stays a root and is
+    /// never inferred from a non-dispatch message.
+    #[test]
+    fn a_lane_with_no_dispatch_shadow_is_a_root() {
+        let mut routes = BTreeMap::new();
+        routes.insert("loner".into(), route_with(None));
+        let messages = vec![boop::bus::Message {
+            kind: "note".into(),
+            ..dispatch("whoever", "loner")
+        }];
+        let edges = super::resolve_edges(&routes, &messages);
+        let edge = &edges["loner"];
+        assert_eq!(edge.parent, None);
+        assert!(!edge.inferred);
+    }
+
+    /// RECEIPT (job 2). A route's goal rides the lane line as a ` -- <goal>`
+    /// suffix and the ndjson row as a `goal` string.
+    #[test]
+    fn pstree_carries_the_goal() {
+        let mut routes = BTreeMap::new();
+        routes.insert(
+            "child".into(),
+            Route {
+                kind: "lane".into(),
+                harness: Some("opencode".into()),
+                tmux: Some("lane-x".into()),
+                cwd: None,
+                model: None,
+                mode: None,
+                session_id: None,
+                source_path: None,
+                parent: None,
+                goal: Some("ship the edge".into()),
+                registered_at: None,
+                base_sha: None,
+                worktree_dir: None,
+            },
+        );
+        let messages = vec![dispatch("coordinator", "child")];
+        let edges = super::resolve_edges(&routes, &messages);
+        let mut meta = BTreeMap::new();
+        meta.insert("child".into(), live_meta(4242));
+        let mut include = BTreeSet::new();
+        include.insert("child".into());
+        let nodes = super::build_lane_nodes(&routes, &edges, &meta, &include);
+        let text = super::render_text(&nodes).join("\n");
+        assert!(
+            text.contains("child (4242) [live] [inferred] -- ship the edge"),
+            "text:\n{text}"
+        );
+        let ndjson = super::render_ndjson(&nodes);
+        let row = &ndjson[0];
+        assert!(row.contains("\"goal\":\"ship the edge\""), "row: {row}");
+    }
+
+    /// RECEIPT (job 2). A lane without a goal renders no text suffix and a
+    /// null ndjson goal.
+    #[test]
+    fn pstree_goal_null_when_absent() {
+        let mut routes = BTreeMap::new();
+        routes.insert("loner".into(), route_with(None));
+        let edges = super::resolve_edges(&routes, &[]);
+        let mut meta = BTreeMap::new();
+        meta.insert("loner".into(), live_meta(7));
+        let mut include = BTreeSet::new();
+        include.insert("loner".into());
+        let nodes = super::build_lane_nodes(&routes, &edges, &meta, &include);
+        let text = super::render_text(&nodes).join("\n");
+        assert!(!text.contains(" -- "), "text:\n{text}");
+        let row = &super::render_ndjson(&nodes)[0];
+        assert!(row.contains("\"goal\":null"), "row: {row}");
+    }
+
+    /// A `ProcReader` that never touches the OS; `queried` proves the caller
+    /// went through the trait instead of a concrete `SysinfoSnapshot`.
+    struct FakeProcReader {
+        queried: std::cell::Cell<bool>,
+    }
+
+    impl ProcReader for FakeProcReader {
+        fn is_alive(&self, _pid: u32) -> bool {
+            self.queried.set(true);
+            true
+        }
+        fn process(&self, pid: u32) -> Option<ProcessInfo> {
+            self.queried.set(true);
+            Some(ProcessInfo {
+                pid,
+                parent: None,
+                name: "fake".into(),
+                command: Vec::new(),
+                rss_bytes: 4096,
+                cpu_percent: 1.5,
+                start_time_secs: 0,
+                cwd: None,
+            })
+        }
+        fn children(&self, _pid: u32) -> Vec<u32> {
+            Vec::new()
+        }
+        fn descendants(&self, _pid: u32) -> Vec<u32> {
+            Vec::new()
+        }
+        fn descendant_count(&self, _pid: u32) -> usize {
+            0
+        }
+    }
+
+    /// RECEIPT (boop-procreader-bypass): failed to compile pre-fix, `run_ps_with` did not exist yet.
+    #[test]
+    fn run_ps_with_drives_the_injected_proc_reader() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        write_route(&dir, "fake-lane", tmux_route("boop-procreader-seam-test")).unwrap();
+        let reader = FakeProcReader {
+            queried: std::cell::Cell::new(false),
+        };
+        run_ps_with(Some(&dir), None, true, &reader).unwrap();
+        assert!(
+            reader.queried.get(),
+            "run_ps_with must query the injected ProcReader"
+        );
+    }
+}
