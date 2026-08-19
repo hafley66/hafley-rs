@@ -36,10 +36,11 @@ const SPAWN_WAIVED: &[&str] = &[
 ];
 
 /// Files under `src/` reaching `Store::default_path()` that also name a
-/// fixture lane. `supervise.rs` is the measured offender. `main.rs` matches on
-/// route and tmux names its own test binary wrote 0 rows for, measured
-/// 2026-08-19 by counting `agent_trace_event` around each target.
-const STORE_WAIVED: &[&str] = &["main.rs", "supervise.rs"];
+/// fixture lane. `supervise.rs` is the measured offender. `cli/db.rs` and
+/// `cli/job.rs` match on route and tmux names their own test binary wrote 0
+/// rows for, measured 2026-08-19 by counting `agent_trace_event` around each
+/// target.
+const STORE_WAIVED: &[&str] = &["cli/db.rs", "cli/job.rs", "supervise.rs"];
 
 #[test]
 fn every_boop_subprocess_site_redirects_home_and_boop_db() {
