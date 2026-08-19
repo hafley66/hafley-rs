@@ -67,3 +67,33 @@ Rules for the split: each crate's `lib.rs` lists its public surface; no crate re
 | 3 | `boop-job-namespace` (new): `boop job *` + `boop mail *` + `boop me *`, old spellings hidden aliases, `wait` for all, `kill` vs `rm`, `signal --children`, `attach`, per-job `--timeout` | M | 2 | the verb table in section 2 |
 | 4 | `boop-mail-dir-global-flag` (existing) + `boop-hidden-verbs-retire` (existing) | S | 3 | delete the aliases and the 34 flags after one release |
 | 5 | sprefa `boop-hosted-in-dl6`: the OpenAPI for `/jobs /mail /me` generated from dl6 | - | 3 | the generated surface replaces the hand one |
+
+## 5. Why this shape, and the neighbours
+
+### Reasoning
+
+| decision | why |
+|---|---|
+| bash job control as the verb model | every agent and every human already carries `&`, `jobs`, `wait`, `kill`, `$?`, pipes, `trap`; a model never has to learn boop's nouns, it maps them. A closed verb set is also what a generated surface needs: `/jobs`, `/mail`, `/me` is the whole API |
+| mail is the pipe, not stdin | agents run in panes or hooks, not in a pipeline; a row addressed to a job, delivered by pane injection or hook drain, is the only delivery that reaches a model mid-turn. Four spellings today (hail, tell-parent, tell-children, inbox) say one thing |
+| `kill` and `rm` split | today `lane delete` both stops and forgets; job control keeps the exit row after the kill, and `jobs` shows it until `rm` |
+| `wait` with no args | a coordinator's last line is "wait for all my children"; today it waits one lane at a time or arms `lane wait &` per lane |
+| crate split before verb rename | `crates/boop` is 33363 lines, `main.rs` 7383; three of today's four lanes collided on `main.rs`; compile-time boundaries make the next lanes disjoint by construction, and the libs (`boop-store`, `boop-mail`, `boop-proc`) are what a dl6 program or another tool links without clap |
+| no server, no daemon (Chris 2026-08-18) | freshness is sync-on-read at rust speed (0.2s); the reactive layer is dl6's, so boop stays a CLI over a SQLite file |
+
+### Neighbours, measured from their own docs (2026-08-19)
+
+| tool | lang | shape | verbs that overlap | what it has that boop lacks | what boop has that it lacks |
+|---|---|---|---|---|---|
+| herdr | Rust, single binary, headless server + TUI client | tmux-for-agents: workspaces, tabs, panes, status detection (blocked / working / done / idle) by screen matching or agent extension; `HERDR_ENV` socket injected into every session | `herdr worktree create`, `herdr agent send`, `herdr agent wait`, `herdr pane split`, `herdr agent explain` | attach/detach TUI, persistent panes across terminal death, screen-state detection, `explain` for how a state was inferred | transcript rows in SQLite + SQL surface, byte-cursor sync, parent edges + death policy, typed rc + failure mail, mood, `--reclaim` carcass handling, no server by rule |
+| cmux | Swift on Ghostty, macOS app | terminal with vertical tabs, per-workspace git/PR/ports, notifications, embedded browser; CLI + Unix socket for create/split/send input/read screen/screenshot | create workspace, send input, read screen (= `pane`) | native UI, browser, notifications ring | everything above; cmux stores no transcripts and has no job/wait/rc model |
+| hcom | Rust, single binary, hooks -> SQLite -> hooks | agents message, watch, spawn, fork, resume, kill each other; mid-turn injection between tool calls; MQTT relay cross-machine | `hcom send -b @name`, `hcom kill <name\|tag\|all>`, `hcom list`, `hcom events --wait`, `hcom f` (fork), `hcom r` (resume), `hcom term` | fork/resume of a session, `events --wait` with filters, cross-device relay, tags as broadcast groups | relational transcript store with SQL, parent policy, typed rc/exit codes, worktree lifecycle, mood; hcom's inbox is the closest thing to `boop mail` |
+| guild | Go, single binary, SQLite + MCP | shared context/memory + task claims with atomic locks, BM25 + vector search | task claim ~ `job create`, nothing for wait/kill | semantic search over shared memory, MCP server | process control, transcripts, mail, worktrees |
+| agent-console | Rust TUI | finds Codex/Claude sessions from the providers' own transcripts and resumes their native UI | reads the same files boop syncs | resume into native UI | the store, sync cursor, everything after read |
+| claude-squad, dmux, amux | Go / TS / Rust | one worktree per agent over tmux, detached sessions | `create`, `list`, attach | attach | store, mail, parent model, rc |
+
+Sources: awesome-agent-orchestrators (andyrewlee), herdr posts (coles.codes, dotzlaw.com, mer.vin), cmux (manaflow-ai/cmux README), hcom (aannoo/hcom README), guild (mathomhaus/guild README).
+
+### Where that leaves boop
+
+Closest relatives are hcom (hooks -> SQLite -> hooks, messaging, mid-turn injection) and herdr (panes, wait, worktrees). boop's distinct bets: the store is relational and SQL-queryable (not an event log), the sync is a byte cursor over the harnesses' own transcripts (no hook needed to record), jobs carry parent edges with a death policy and a typed exit row, and the reactive layer is dl6 over that store. What boop should take from them, in this order: `wait` with filters (hcom `events --wait`), `attach` (herdr), `fork`/`resume` of a job's session (hcom), `explain` for how a liveness state was inferred (herdr).
