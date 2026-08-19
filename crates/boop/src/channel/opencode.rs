@@ -1,140 +1,22 @@
-//! The opencode lane channel: one `opencode run` child per turn. That child
-//! binds no control port, so steer text lands on the next turn.
+//! The opencode lane channel: one `opencode acp` child per conversation. The
+//! `opencode run` + store-scrape path is gone; the store readers below stay
+//! because `channel/tui.rs` still calls them.
 
-use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::path::Path;
+use std::process::Child;
 
-use anyhow::{Context, Result};
-use tracing::{debug, info, warn};
+use anyhow::Result;
+use tracing::{debug, warn};
 
-use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
+use crate::channel::acp::AcpChannel;
+use crate::channel::ChannelSpec;
 
-pub struct OpencodeChannel {
-    cwd: PathBuf,
-    model: Option<String>,
-    session: Option<String>,
-    turn: Option<Child>,
-    /// Epoch millis the current turn started; the session-id lookup only
-    /// accepts an opencode session created at or after it.
-    turn_started_ms: u64,
-    lane: Option<String>,
-}
+pub struct OpencodeChannel;
 
 impl OpencodeChannel {
-    pub fn open(spec: &ChannelSpec) -> Result<OpencodeChannel> {
-        Ok(OpencodeChannel {
-            cwd: spec.cwd.clone(),
-            model: spec.model.clone(),
-            session: spec.resume.clone(),
-            turn: None,
-            turn_started_ms: 0,
-            lane: spec.lane.clone(),
-        })
-    }
-}
-
-impl LaneChannel for OpencodeChannel {
-    fn conversation_id(&self) -> Option<String> {
-        self.session.clone()
-    }
-
-    fn conversation_id_kind(&self) -> &'static str {
-        "opencode_session"
-    }
-
-    fn start_turn(&mut self, text: &str) -> Result<()> {
-        if self.turn.is_some() {
-            anyhow::bail!("an opencode turn is already running");
-        }
-        let mut command = Command::new("opencode");
-        command.arg("run").arg("--auto");
-        if let Some(model) = self.model.as_deref().filter(|value| !value.is_empty()) {
-            command.args(["-m", model]);
-        }
-        if let Some(session) = &self.session {
-            command.args(["-s", session]);
-        }
-        command.arg(text);
-        self.turn_started_ms = crate::channel::now_ms();
-        info!(
-            cwd = %self.cwd.display(),
-            model = self.model.as_deref().unwrap_or_default(),
-            conversation_id = self.session.as_deref().unwrap_or_default(),
-            text_bytes = text.len(),
-            "opencode process turn starting"
-        );
-        self.turn = Some(
-            command
-                .current_dir(&self.cwd)
-                .stdin(Stdio::null())
-                .stderr(crate::trail::child_stderr(self.lane.as_deref()))
-                .spawn()
-                .context("spawn opencode run")?,
-        );
-        Ok(())
-    }
-
-    fn steer(&mut self, _text: &str) -> Result<Delivery> {
-        Ok(Delivery::NextTurn)
-    }
-
-    fn next_event(&mut self, timeout: std::time::Duration) -> Result<Option<TurnEvent>> {
-        let Some(turn) = self.turn.as_mut() else {
-            return Ok(Some(TurnEvent::failed("no opencode turn to join")));
-        };
-        let Some(status) = wait_for(turn, timeout).context("wait opencode run")? else {
-            return Ok(None);
-        };
-        self.turn = None;
-        if self.session.is_none() {
-            self.session = newest_session(&self.cwd, self.turn_started_ms);
-            match self.session.as_deref() {
-                Some(conversation_id) => info!(
-                    conversation_id,
-                    conversation_id_kind = "opencode_session",
-                    "opencode session resolved"
-                ),
-                None => {
-                    warn!(cwd = %self.cwd.display(), since_ms = self.turn_started_ms, "opencode session lookup returned no session")
-                }
-            }
-        }
-        let state = self.session.as_deref().and_then(last_message_state);
-        if let Some(state) = &state {
-            info!(
-                conversation_id = self.session.as_deref().unwrap_or_default(),
-                last_opencode_finish = state.finish.as_deref().unwrap_or_default(),
-                last_opencode_error = state.error.as_deref().unwrap_or_default(),
-                "opencode trailing message state"
-            );
-        }
-        Ok(Some(match status {
-            // `opencode run` exits 0 when the provider drops the stream; the
-            // db's trailing MessageAbortedError is the only tell.
-            0 => match state.as_ref().map(LastMessageState::aborted) {
-                Some(true) => TurnEvent::flaked("rc=0 with an aborted stream"),
-                _ => TurnEvent::ok("rc=0"),
-            },
-            other => TurnEvent::failed(format!("rc={other}")),
-        }))
-    }
-
-    fn last_activity_ms(&self) -> Option<u64> {
-        // The first turn's session id is only pinned at turn end, so a live
-        // lookup keeps the stall watchdog from seeing a healthy turn as silent.
-        let session = match self.session.clone() {
-            Some(session) => session,
-            None => newest_session(&self.cwd, self.turn_started_ms)?,
-        };
-        newest_activity(&session)
-    }
-
-    fn close(&mut self) -> Result<()> {
-        if let Some(mut turn) = self.turn.take() {
-            let _ = turn.kill();
-            let _ = turn.wait();
-        }
-        Ok(())
+    /// Open the opencode conversation over ACP.
+    pub fn open(spec: &ChannelSpec) -> Result<AcpChannel> {
+        AcpChannel::open(spec, &["opencode".to_owned(), "acp".to_owned()])
     }
 }
 
@@ -265,39 +147,6 @@ pub(crate) fn newest_session(cwd: &Path, since_ms: u64) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn spec() -> ChannelSpec {
-        ChannelSpec {
-            model: Some("openrouter/deepseek/deepseek-v4-flash-0731".to_owned()),
-            cwd: std::env::temp_dir(),
-            resume: None,
-            lane: None,
-        }
-    }
-
-    #[test]
-    fn steer_reports_the_next_turn_tier() {
-        let mut channel = OpencodeChannel::open(&spec()).unwrap();
-        assert_eq!(channel.steer("hello").unwrap(), Delivery::NextTurn);
-    }
-
-    #[test]
-    fn polling_without_a_turn_is_a_failed_end_not_a_panic() {
-        let mut channel = OpencodeChannel::open(&spec()).unwrap();
-        let end = channel
-            .next_event(std::time::Duration::from_millis(10))
-            .unwrap()
-            .unwrap();
-        assert!(!end.is_done());
-    }
-
-    #[test]
-    fn a_resumed_channel_reports_its_conversation_before_the_first_turn() {
-        let mut request = spec();
-        request.resume = Some("ses_abc".to_owned());
-        let channel = OpencodeChannel::open(&request).unwrap();
-        assert_eq!(channel.conversation_id().as_deref(), Some("ses_abc"));
-    }
 
     #[test]
     fn missing_finish_or_error_marks_a_trailing_message_aborted() {
