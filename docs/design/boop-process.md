@@ -97,3 +97,35 @@ Sources: awesome-agent-orchestrators (andyrewlee), herdr posts (coles.codes, dot
 ### Where that leaves boop
 
 Closest relatives are hcom (hooks -> SQLite -> hooks, messaging, mid-turn injection) and herdr (panes, wait, worktrees). boop's distinct bets: the store is relational and SQL-queryable (not an event log), the sync is a byte cursor over the harnesses' own transcripts (no hook needed to record), jobs carry parent edges with a death policy and a typed exit row, and the reactive layer is dl6 over that store. What boop should take from them, in this order: `wait` with filters (hcom `events --wait`), `attach` (herdr), `fork`/`resume` of a job's session (hcom), `explain` for how a liveness state was inferred (herdr).
+
+## 6. dl6 on top: the rx model for agents (Chris 2026-08-19)
+
+"dl6 is on top of this, we will effectively have an rx model for agents; i also wanted dl6 to have stream controls to be bash/rx like." Recorded as the target; language design stays with Chris (sprefa CLAUDE.md).
+
+### Jobs as subscriptions
+
+| job control | rx | dl6 today | boop row |
+|---|---|---|---|
+| `job create` | `subscribe()` | base rel arrival (`POST /arrive`) / `sh` demand row | `agent_lane` |
+| `jobs` | live subscriptions | `GET /rel/job` | `lane list` |
+| `wait <job>` / `$?` | `lastValueFrom`, `finalize` | `finalize/1` (live), `complete/1` (reserved) | result row, typed rc (#32) |
+| `wait` (all) | `forkJoin(children$)` | `combine/variadic` (live) | new verb |
+| `kill` | `unsubscribe()` | `unsubscribe/1` (reserved) | `lane delete` -> `job kill` |
+| `--on-parent-death kill` | `takeUntil(parent$)` | rule over the parent edge + liveness rel | #34 policy |
+| mail | `Subject` | base rel fed from outside; `latest/1`, `next/1` | `boop mail` rows, mood render |
+| stall / `--timeout` | `timeout(300s)` | clock annotation (`technique(throttle)`), no `timeout` word | supervisor constant |
+| retries | `retry(n)` | none | `retrying` / `retry_budget_exhausted` mail (#34) |
+| concatmap coroutine | `bufferWhile + pairwise + concatMap` | `resident-coroutine.dl6` (#369) | `host chat` (#27) |
+
+### Stream controls the language has vs lacks (registry `surface/5` rows, `registry.pl:33-193`)
+
+| rx / bash control | status | where |
+|---|---|---|
+| `latest`, `pre` (sample), `next`, `finalize`, `combine` | live | `registry.pl:33,38,39,40,69` |
+| `seq`, `group_concat`, `concat_fold`, `pairwise`, `repeat` | live (manifest `compiled`) | `compile/out/manifest.json` |
+| `subscribe`, `unsubscribe`, `complete`, `error` (lifecycle) | reserved, refuse(lifecycle) | `registry.pl:43-46` |
+| `zip` | reserved | `registry.pl:41` |
+| `scan` | removed word | `registry.pl:190` |
+| `take`, `skip`, `timeout`, `retry`, `debounce`, `merge`, `switchMap`, `&` / `wait` / `kill` as words | absent | language forks for Chris |
+
+The boop-job-namespace card builds the CLI half; the dl6 half is a sprefa arc (lifecycle words + the missing controls), gated on Chris, and lands after `/jobs /mail /me` exists as rows so each control has a concrete stream to test against.
