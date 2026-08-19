@@ -1,12 +1,13 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-08-19
 type: improvement
 status: open
 priority: normal
-epic: boop-lane-observability
+epic: boop-process
 labels: [domain-boop, intent-implementation, needs-chris]
-size: M
+size: S
+blocked_by: ['@boop-job-namespace']
 ---
 
 # 16 hidden pre-split verbs, three of them not aliases

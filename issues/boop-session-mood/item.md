@@ -1,3 +1,14 @@
+---
+created: 2026-08-18
+updated: 2026-08-18
+type: feature
+status: open
+priority: normal
+related: ['@boop-hosted-in-dl6']
+---
+
+# boop: per-session mood attribute, cascading message format for agent-to-agent mail
+
 ## Description
 
 ## Description
@@ -21,8 +32,8 @@ A mood is one attribute row on a session node in the session graph. It names the
 
 ## Acceptance Criteria
 
-- [x] `agent_session_attr` + `dict_attr_key` tables, migration, schema test.
-- [x] `boop me mood <name>` writes; `boop me` shows the effective mood and which ancestor set it.
-- [x] `boop beep lane create --mood` sets the child; a child with no mood resolves to the parent's.
-- [x] hail / inbox drain / lane completion mail render through the receiver's effective mood; one test per delivery path with a fixture mood.
-- [x] COUNT test: resolving the effective mood is one query (recursive CTE), not one per ancestor.
+- [ ] `agent_session_attr` + `dict_attr_key` tables, migration, schema test.
+- [ ] `boop me mood <name>` writes; `boop me` shows the effective mood and which ancestor set it.
+- [ ] `boop beep lane create --mood` sets the child; a child with no mood resolves to the parent's.
+- [ ] hail / inbox drain / lane completion mail render through the receiver's effective mood; one test per delivery path with a fixture mood.
+- [ ] COUNT test: resolving the effective mood is one query (recursive CTE), not one per ancestor.

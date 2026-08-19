@@ -1,10 +1,10 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-08-19
 type: improvement
 status: open
 priority: normal
-epic: boop-lane-observability
+epic: boop-process
 labels: [domain-boop, intent-implementation]
 size: M
 ---
@@ -43,3 +43,9 @@ Do this AFTER the small fixes land, or it conflicts with every one of them.
 Source: crates/boop/docs/audit-2026-08-17.md sections 9 and 10 (audit branch `audit/boop-review`, origin/main 49aca76).
 
 Style laws apply: comment budget (no change-log narrative), no `eprintln!` in `src/**` (`tracing` only), no em dashes, banned identifiers `provenance`/`substrate`/`load-bearing`/`regime`.
+
+## Comments
+
+### 2026-08-19T14:35:33Z · @sprefa-coordinator
+
+Re-scoped under epic boop-process (2026-08-19): main.rs -> cli/{job,mail,me,db,debug}.rs by namespace, zero behavior change, byte-identical --help per verb pinned; first card of docs/design/boop-process.md section 4.
