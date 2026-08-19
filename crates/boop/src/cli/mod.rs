@@ -1,3 +1,5 @@
+pub(crate) mod db;
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
