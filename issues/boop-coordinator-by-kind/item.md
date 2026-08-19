@@ -1,6 +1,6 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-08-18
 type: bug
 status: open
 priority: normal
@@ -27,12 +27,35 @@ Sites:
 
 ## Acceptance Criteria
 
-- [ ] `resolve_parent` selects on `Route.kind == coordinator` (typed, see `@boop-kind-enums`), never on a name substring.
-- [ ] A lane named `coordinator-something` that is NOT kind=coordinator is not selected; test pins it.
-- [ ] A kind=coordinator route named without the word IS selected; test pins it.
-- [ ] `cargo test -p boop -j4` green.
+- [x] `resolve_parent` selects on `Route.kind == coordinator` (typed, see `@boop-kind-enums`), never on a name substring.
+- [x] A lane named `coordinator-something` that is NOT kind=coordinator is not selected; test pins it.
+- [x] A kind=coordinator route named without the word IS selected; test pins it.
+- [x] `cargo test -p boop -j4` green.
 
 ## Tests Run
+
+`cargo test -p boop -j4 --no-fail-fast` at 69f00c1, exit 0, 402 passed / 0
+failed / 1 ignored, zero build warnings:
+
+| target | result |
+|---|---|
+| lib | 311 passed, 0 failed |
+| bin | 47 passed, 0 failed |
+| 0_sqlite_contention | 1 passed |
+| bench_grid | 2 passed |
+| concatmap_e2e | 0 passed, 1 ignored |
+| coordinator_ping | 3 passed |
+| host_chat | 3 passed |
+| inbox_hooks | 8 passed |
+| install_rail | 8 passed |
+| lane_completion_row | 1 passed |
+| lane_wait_exit | 7 passed |
+| native_agent_liveness | 1 passed |
+| registry_kinds | 3 passed |
+| wait_mail | 7 passed |
+| doc-tests | 0 passed |
+
+`cargo test -p boop -j4 --lib -- lane::tests` -> 22 passed, 0 failed.
 
 ## Implementation Notes
 
