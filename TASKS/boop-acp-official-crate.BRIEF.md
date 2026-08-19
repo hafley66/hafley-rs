@@ -6,7 +6,7 @@ again.
 
 ## Base
 - repo `~/projects/hafley-rs`, worktree branch `fix/boop-acp-official-crate`
-- first action: `git merge --ff-only 2f6871d` (origin/main). Failure = STOP.
+- first action: `git merge --ff-only 446f0ae` (origin/main). Failure = STOP.
 
 ## Own
 - `crates/boop/src/channel/acp.rs` (new), `crates/boop/src/channel.rs`
