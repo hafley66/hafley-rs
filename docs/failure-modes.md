@@ -5,6 +5,7 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 11 | 2026-08-19 | an opencode ACP session starts on a dead model endpoint and retries forever in silence |
 | 10 | 2026-08-19 | 90% of the live store's trace events were test fixture lanes, written by unit tests inside src/ |
 | 9 | 2026-08-17 | a coordinator restart left every child running with an edge that answered nobody |
 | 8 | 2026-08-17 | four lane spawns died in minutes on two error strings that were one bug |
@@ -17,6 +18,49 @@ without the fix, the rail that stops it recurring. Newest first.
 | 1 | 2026-08-17 | a lane can die with no result row, no log, no trace |
 
 ---
+
+## 11. an opencode ACP session starts on a dead model endpoint and retries forever in silence
+
+**Incident.** Measured in `~/projects/labs/acp-lab` on 2026-08-19. `opencode
+acp`, prompted `reply with the single word pong`, answered `end_turn` in 4s
+when the client sent `session/set_config_option {configId:"model"}` and hung to
+the 180s cap when it did not. Nothing was written to the child's stdout or
+stderr for those 180s. The one line naming the cause sat in opencode's own
+`~/.local/share/opencode/log/opencode.log`: `AI_APICallError: Upstream request
+failed: Endpoint is unavailable.`
+
+**RCA.** Two roots.
+
+| root | detail |
+|---|---|
+| opencode's ACP path reads neither `~/.config/opencode/opencode.json` nor `OPENCODE_MODEL` | every ACP session starts on the built-in default `opencode/big-pickle`, whose endpoint is down. ACP `session/set_config_option` is the only model lever the protocol gives a client. |
+| the old channel could not see a provider failure at all | `OpencodeChannel` ran one `opencode run` child per turn and read the verdict out of opencode's SQLite store. `opencode run` exits 0 when the provider drops the stream, so `rc=0` plus a trailing `MessageAbortedError` row was the whole signal, and a turn that never produced a row read as healthy. |
+
+**Fix.**
+
+| # | change | file |
+|---|---|---|
+| 1 | the lane channel speaks ACP through the official `agent-client-protocol` crate: `initialize`, `session/new` with an absolute cwd, then `session/set_config_option {model}` whenever the spec names a model | `crates/boop/src/channel/acp.rs` `AcpChannel::open`, `handshake` |
+| 2 | a JSON-RPC error on `session/prompt` becomes `TurnEvent::Flaked` carrying the peer's message verbatim, so the supervisor retries instead of grading the lane failed | `crates/boop/src/channel/acp.rs` `turn_verdict` |
+| 3 | `opencode run` and the store scrape are gone from the opencode channel | `crates/boop/src/channel/opencode.rs` `OpencodeChannel::open` |
+
+**Fail-pre-fix test.**
+
+| test | file |
+|---|---|
+| `a_prompt_error_frame_is_a_retryable_flake` | `channel/acp.rs` |
+| `a_real_opencode_acp_turn_ends_the_turn` (`#[ignore]`, the live leg) | `channel/acp.rs` |
+
+**Rail.** Every `session/update` stamps `AcpChannel::last_activity_ms`, so a
+session that goes quiet is visible to the stall watchdog within one poll rather
+than at a 180s cap. Agent stderr is forwarded into `tracing` and lands in the
+lane trail through `trail::lane_writer`.
+
+**What still cannot be answered.** ACP has no `error` kind in the
+`SessionUpdate` union, so a provider failure that neither fails the
+`session/prompt` request nor fails a specific tool call has no protocol-level
+channel; each agent invents its own convention. A silent mid-turn stall is
+still only detectable as silence.
 
 ## 10. 90% of the live store's trace events were test fixture lanes, written by unit tests inside src/
 

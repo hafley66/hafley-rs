@@ -50,6 +50,16 @@ signal-hook = "0.4"
 # Deadline on a synchronous std::process::Child without pulling in an async
 # runtime: one method, wait_timeout, on the same Child this file already spawns.
 wait-timeout = "0.2.1"
+# The ACP client. Every lane channel that talks a coding agent over stdio
+# speaks this crate's JSON-RPC, never a hand-rolled frame. The sibling
+# `agent-client-protocol-tokio` 0.11.1 is pinned to agent-client-protocol
+# 0.11.1 and its `AcpAgent`/`Stdio` were absorbed into 2.0.0, so 2.0.0 alone
+# is the whole transport.
+agent-client-protocol = "2.0.0"
+# The ACP connection is async and `LaneChannel` is sync, so one current-thread
+# runtime per channel drives it on its own thread. `rt` and `sync` only: the
+# reactor under the ACP crate is async-io's, not tokio's.
+tokio = { version = "1", features = ["rt", "sync"] }
 
 [dev-dependencies]
 # Peak-bytes-allocated counter for tests/bench_grid.rs's own #[global_allocator].
