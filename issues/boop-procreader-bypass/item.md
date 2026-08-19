@@ -28,12 +28,16 @@ Sites:
 
 ## Acceptance Criteria
 
-- [ ] Both call sites go through `ProcReader`.
-- [ ] `descendent_count` renamed to `descendant_count` everywhere; grep receipt in the PR body.
-- [ ] A test uses a fake `ProcReader` to drive one of the two call sites, proving the seam is real.
-- [ ] `cargo test -p boop -j4` green.
+- [x] Both call sites go through `ProcReader`.
+- [x] `descendent_count` renamed to `descendant_count` everywhere; grep receipt in the PR body.
+- [x] A test uses a fake `ProcReader` to drive one of the two call sites, proving the seam is real.
+- [x] `cargo test -p boop -j4` green.
 
 ## Tests Run
+
+`cargo test -p boop --no-fail-fast` on fix/boop-main-fixes, exit 0, 420 passed
+/ 0 failed / 1 ignored, 26.84s wall. `cargo clippy -p boop --all-targets` -> 1
+warning, `tests/host_chat.rs:44` `needless_borrow`, present at daa2b0a.
 
 ## Implementation Notes
 

@@ -28,11 +28,15 @@ Sites:
 
 ## Acceptance Criteria
 
-- [ ] Every `db` subcommand has a one-line doc that says what it returns and against which table.
-- [ ] `db turn list` and `db chat list` carry their own help, naming no hidden verb.
-- [ ] A test walks the clap command tree and fails on any subcommand with an empty `about`.
+- [x] Every `db` subcommand has a one-line doc that says what it returns and against which table.
+- [x] `db turn list` and `db chat list` carry their own help, naming no hidden verb.
+- [x] A test walks the clap command tree and fails on any subcommand with an empty `about`.
 
 ## Tests Run
+
+`cargo test -p boop --no-fail-fast` on fix/boop-main-fixes, exit 0, 420 passed
+/ 0 failed / 1 ignored, 26.84s wall. `cargo clippy -p boop --all-targets` -> 1
+warning, `tests/host_chat.rs:44` `needless_borrow`, present at daa2b0a.
 
 ## Implementation Notes
 

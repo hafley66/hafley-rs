@@ -12,6 +12,7 @@ fn mail_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("boop-ping-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(dir.join("home")).unwrap();
     dir
 }
 
@@ -26,6 +27,7 @@ fn boop(dir: &Path, args: &[&str]) -> std::process::Output {
         // of 5 whole-suite runs: 374MB, `journal_mode=delete`, a 5s busy_timeout
         // and writers holding longer than that.
         .env("BOOP_DB", dir.join("boop.db"))
+        .env("HOME", dir.join("home"))
         .output()
         .unwrap()
 }

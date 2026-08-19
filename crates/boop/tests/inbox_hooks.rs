@@ -32,6 +32,7 @@ impl Coordinator {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("mail")).unwrap();
         std::fs::create_dir_all(root.join("project")).unwrap();
+        std::fs::create_dir_all(root.join("home")).unwrap();
         let session = format!("boop-inbox-{}-{tag}", std::process::id());
         let _ = tmux(&["kill-session", "-t", &session]);
         let started = tmux(&["new-session", "-d", "-s", &session]);
@@ -71,6 +72,7 @@ impl Coordinator {
             // with `journal_mode=delete`, and live boop processes hold write
             // locks past the 5s busy_timeout.
             .env("BOOP_DB", self.root.join("boop.db"))
+            .env("HOME", self.root.join("home"))
             .output()
             .unwrap()
     }
@@ -81,6 +83,7 @@ impl Coordinator {
         Command::new(BOOP)
             .args(args)
             .env("BOOP_DB", self.root.join("boop.db"))
+            .env("HOME", self.root.join("home"))
             .output()
             .unwrap()
     }
@@ -415,6 +418,7 @@ fn a_drain_without_a_name_uses_the_identity_ladder() {
         .arg("--mail-dir")
         .arg(coord.mail())
         .env("BOOP_DB", coord.root.join("boop.db"))
+        .env("HOME", coord.root.join("home"))
         .env("BOOP_SESSION", &coord.name)
         .env_remove("BOOP_LANE")
         .env_remove("BOOP_PARENT")

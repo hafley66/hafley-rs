@@ -12,6 +12,7 @@ fn mail_dir(name: &str) -> PathBuf {
     ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(dir.join("home")).unwrap();
     dir
 }
 
@@ -20,6 +21,8 @@ fn boop(dir: &Path, args: &[&str]) -> std::process::Output {
         .args(args)
         .arg("--mail-dir")
         .arg(dir)
+        .env("HOME", dir.join("home"))
+        .env("BOOP_DB", dir.join("boop.db"))
         .output()
         .unwrap()
 }
@@ -60,6 +63,8 @@ fn native_route_stays_live_until_done_and_wait_me_consumes_one_completion() {
             "--mail-dir",
         ])
         .arg(&dir)
+        .env("HOME", dir.join("home"))
+        .env("BOOP_DB", dir.join("boop.db"))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -78,6 +83,8 @@ fn native_route_stays_live_until_done_and_wait_me_consumes_one_completion() {
             "--mail-dir",
         ])
         .arg(&dir)
+        .env("HOME", dir.join("home"))
+        .env("BOOP_DB", dir.join("boop.db"))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

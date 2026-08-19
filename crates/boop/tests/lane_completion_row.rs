@@ -12,6 +12,7 @@ fn tempdir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("boop-completion-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(dir.join("home")).unwrap();
     dir
 }
 
@@ -92,6 +93,8 @@ fn one_lane_exit_writes_exactly_one_result_row() {
         .arg("-c")
         .arg(format!("__rc=0; {epilogue}"))
         .env("PATH", path_with_boop(&dir))
+        .env("HOME", dir.join("home"))
+        .env("BOOP_DB", dir.join("boop.db"))
         .status()
         .unwrap();
     assert!(status.success(), "the epilogue itself must succeed");

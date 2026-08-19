@@ -28,7 +28,7 @@ Sites:
 
 ## Acceptance Criteria
 
-- [ ] Both blanket allows removed. (`harness.rs` half done; `proc.rs` half is another lane's file.)
+- [x] Both blanket allows removed.
 - [x] Every resulting warning is either fixed by deleting the dead item or narrowed to a per-item `#[allow(dead_code)]` with a one-line reason.
 - [x] The list of items that turned out to be dead is in the PR body.
 - [x] `cargo test -p boop -j4` green and `cargo build -p boop` warning-free for `harness.rs`.

@@ -111,6 +111,8 @@ mod tests {
             reply_to: None,
             body: format!("body of {id}"),
             r#ref: None,
+            rc: None,
+            detail: None,
         }
     }
 

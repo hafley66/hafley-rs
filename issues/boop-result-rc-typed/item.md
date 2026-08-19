@@ -29,12 +29,16 @@ Sites:
 
 ## Acceptance Criteria
 
-- [ ] `bus::Message` carries typed `rc: Option<i32>` and `detail` fields.
-- [ ] The three prose parsers are deleted; no call site re-derives rc from a message body.
-- [ ] Existing on-disk messages without the typed fields still read (serde default), pinned by a test over a fixture line captured from the live `bus.ndjson`.
-- [ ] `cargo test -p boop -j4` green.
+- [x] `bus::Message` carries typed `rc: Option<i32>` and `detail` fields.
+- [x] The three prose parsers are deleted; no call site re-derives rc from a message body.
+- [x] Existing on-disk messages without the typed fields still read (serde default), pinned by a test over a fixture line captured from the live `bus.ndjson`.
+- [x] `cargo test -p boop -j4` green.
 
 ## Tests Run
+
+`cargo test -p boop --no-fail-fast` on fix/boop-main-fixes, exit 0, 420 passed
+/ 0 failed / 1 ignored, 26.84s wall. `cargo clippy -p boop --all-targets` -> 1
+warning, `tests/host_chat.rs:44` `needless_borrow`, present at daa2b0a.
 
 ## Implementation Notes
 

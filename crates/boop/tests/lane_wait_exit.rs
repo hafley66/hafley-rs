@@ -10,6 +10,7 @@ fn mail_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("boop-wait-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(dir.join("home")).unwrap();
     dir
 }
 
@@ -143,6 +144,7 @@ impl CreateFixture {
         command
             .env_clear()
             .env("HOME", &self.root)
+            .env("BOOP_DB", self.root.join("boop.db"))
             .env("XDG_CONFIG_HOME", self.root.join("config"))
             .env("PATH", &self.bin)
             .args(["beep", "lane", "create"])
@@ -169,6 +171,7 @@ impl CreateFixture {
         command
             .env_clear()
             .env("HOME", &self.root)
+            .env("BOOP_DB", self.root.join("boop.db"))
             .env("XDG_CONFIG_HOME", self.root.join("config"))
             .env("PATH", &self.bin)
             .env("CODEX_THREAD_ID", "thread-codex-parent")
@@ -208,6 +211,8 @@ fn wait_exit(dir: &std::path::Path, lane: &str, timeout: &str) -> i32 {
         .args(["beep", "lane", "wait", lane, "--timeout", timeout])
         .arg("--mail-dir")
         .arg(dir)
+        .env("HOME", dir.join("home"))
+        .env("BOOP_DB", dir.join("boop.db"))
         .status()
         .unwrap()
         .code()
@@ -388,6 +393,8 @@ done
     let path = format!("{}:/usr/bin:/bin", bin.display());
     let output = Command::new(env!("CARGO_BIN_EXE_boop"))
         .env("PATH", path)
+        .env("HOME", root.join("home"))
+        .env("BOOP_DB", root.join("boop.db"))
         .env("BOOP_TEST_CODEX_LOG", &log)
         .current_dir(&repo)
         .args([

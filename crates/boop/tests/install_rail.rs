@@ -172,10 +172,16 @@ fn a_path_that_is_not_a_repo_refuses_the_install() {
 // a version string with no parenthesised commit.
 #[test]
 fn the_version_string_carries_the_commit_it_was_built_from() {
+    let home =
+        std::env::temp_dir().join(format!("boop-install-rail-version-{}", std::process::id()));
+    std::fs::create_dir_all(&home).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_boop"))
         .arg("--version")
+        .env("HOME", &home)
+        .env("BOOP_DB", home.join("boop.db"))
         .output()
         .expect("run boop --version");
+    let _ = std::fs::remove_dir_all(&home);
     assert!(out.status.success());
     let printed = String::from_utf8_lossy(&out.stdout).trim().to_owned();
     let stamp = printed
@@ -219,6 +225,8 @@ fn a_lane_spawn_names_the_binary_that_ran_it() {
     std::fs::write(&brief, "do the work\n").unwrap();
     let mail = repo.root.join("mail");
     std::fs::create_dir_all(&mail).unwrap();
+    let home = repo.root.join("home");
+    std::fs::create_dir_all(&home).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_boop"))
         .args(["beep", "lane", "create"])
         .arg("--cwd")
@@ -228,6 +236,8 @@ fn a_lane_spawn_names_the_binary_that_ran_it() {
         .arg("--mail-dir")
         .arg(&mail)
         .args(["--branch", "fix/install-rail-probe", "--dry-run"])
+        .env("HOME", &home)
+        .env("BOOP_DB", repo.root.join("boop.db"))
         .output()
         .expect("run boop beep lane create --dry-run");
     let stdout = String::from_utf8_lossy(&out.stdout);

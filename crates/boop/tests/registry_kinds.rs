@@ -7,6 +7,7 @@ fn mail_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("boop-kinds-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(dir.join("home")).unwrap();
     dir
 }
 
@@ -15,6 +16,8 @@ fn run(dir: &Path, args: &[&str]) -> std::process::Output {
         .args(args)
         .arg("--mail-dir")
         .arg(dir)
+        .env("HOME", dir.join("home"))
+        .env("BOOP_DB", dir.join("boop.db"))
         .output()
         .unwrap()
 }

@@ -28,12 +28,16 @@ Sites:
 
 ## Acceptance Criteria
 
-- [ ] `.gitignore` ignores `target/` at any depth.
-- [ ] `crates/boop/target/bench-grid.md` is `git rm --cached`-ed out of the index.
-- [ ] `cargo test -p boop -j4` followed by `git status --porcelain` prints nothing.
-- [ ] If the bench grid is wanted as an artifact, it writes somewhere outside `target/` and that path is named.
+- [x] `.gitignore` ignores `target/` at any depth.
+- [x] `crates/boop/target/bench-grid.md` is `git rm --cached`-ed out of the index.
+- [x] `cargo test -p boop -j4` followed by `git status --porcelain` prints nothing.
+- [x] If the bench grid is wanted as an artifact, it writes somewhere outside `target/` and that path is named.
 
 ## Tests Run
+
+`cargo test -p boop --no-fail-fast` on fix/boop-main-fixes, exit 0, 420 passed
+/ 0 failed / 1 ignored, 26.84s wall. `cargo clippy -p boop --all-targets` -> 1
+warning, `tests/host_chat.rs:44` `needless_borrow`, present at daa2b0a.
 
 ## Implementation Notes
 

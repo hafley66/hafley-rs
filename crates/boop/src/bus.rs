@@ -24,6 +24,10 @@ pub struct Message {
     pub reply_to: Option<String>,
     pub body: String,
     pub r#ref: Option<String>,
+    /// A lane's exit code, carried on `kind=result` rows only.
+    pub rc: Option<i32>,
+    /// Why a lane exited the way it did, when the supervisor knows a reason.
+    pub detail: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -129,6 +133,13 @@ fn string_field(object: &Map<String, Value>, key: &str) -> Option<String> {
     object.get(key).and_then(Value::as_str).map(str::to_owned)
 }
 
+fn int_field(object: &Map<String, Value>, key: &str) -> Option<i32> {
+    object
+        .get(key)
+        .and_then(Value::as_i64)
+        .map(|value| value as i32)
+}
+
 /// Read every `.ndjson` mailbox file, newest file first is not needed; callers
 /// fold across all of them.
 pub fn read_boxes(dir: &Path) -> Result<Vec<PathBuf>> {
@@ -163,6 +174,12 @@ pub fn parse_line(line: &str) -> Option<Message> {
     let object = value.as_object()?;
     let id = string_field(object, "id")?;
     let to = string_field(object, "to")?;
+    let body = string_field(object, "body").unwrap_or_default();
+    let kind = string_field(object, "kind").unwrap_or_else(|| "note".into());
+    let (legacy_rc, legacy_detail) = match kind == "result" {
+        true => rc_from_body(&body),
+        false => (None, None),
+    };
     Some(Message {
         id,
         to,
@@ -171,11 +188,33 @@ pub fn parse_line(line: &str) -> Option<Message> {
             .or_else(|| string_field(object, "ts"))
             .unwrap_or_default(),
         to_timestamp: string_field(object, "to_timestamp"),
-        kind: string_field(object, "kind").unwrap_or_else(|| "note".into()),
         reply_to: string_field(object, "reply_to"),
-        body: string_field(object, "body").unwrap_or_default(),
         r#ref: string_field(object, "ref"),
+        rc: int_field(object, "rc").or(legacy_rc),
+        detail: string_field(object, "detail").or(legacy_detail),
+        kind,
+        body,
     })
+}
+
+/// The one reader of `lane <id> done rc=N (why)` prose, for result rows
+/// appended before `rc` and `detail` were columns. No other site parses a body.
+fn rc_from_body(body: &str) -> (Option<i32>, Option<String>) {
+    let rc = body.split_whitespace().find_map(|token| {
+        token
+            .strip_prefix("rc=")
+            .or_else(|| token.strip_prefix("rc:"))?
+            .parse::<i32>()
+            .ok()
+    });
+    let detail = body
+        .split_once('(')
+        .and_then(|(_, rest)| rest.rsplit_once(')'))
+        .map(|(inner, _)| inner.to_owned());
+    match rc {
+        Some(rc) => (Some(rc), detail),
+        None => (None, None),
+    }
 }
 
 /// Fold rows: the last row per id wins, but an ack survives a later resend of
@@ -224,6 +263,11 @@ pub fn message_line(message: &Message) -> String {
         body: &'a str,
         #[serde(rename = "ref")]
         r#ref: Option<&'a str>,
+        // A row that carries no exit code keeps the byte shape `bus` reads.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        rc: Option<i32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        detail: Option<&'a str>,
     }
     let line = Line {
         id: &message.id,
@@ -235,6 +279,8 @@ pub fn message_line(message: &Message) -> String {
         reply_to: message.reply_to.as_deref(),
         body: &message.body,
         r#ref: message.r#ref.as_deref(),
+        rc: message.rc,
+        detail: message.detail.as_deref(),
     };
     serde_json::to_string(&line).unwrap_or_default()
 }
@@ -365,7 +411,49 @@ mod tests {
             reply_to: None,
             body: "hello".into(),
             r#ref: None,
+            rc: None,
+            detail: None,
         }
+    }
+
+    /// A row appended before `rc` and `detail` were columns, copied byte for
+    /// byte out of `~/.agent/mail/bus.ndjson`.
+    #[test]
+    fn a_row_written_before_the_typed_columns_still_carries_its_code() {
+        let captured = r#"{"id":"m-74400d60","from":"feature-boop-tell-parent-pro4","to":"codex-147","from_timestamp":"2026-08-19T01:33:06.894997Z","to_timestamp":null,"kind":"result","reply_to":null,"body":"lane feature-boop-tell-parent-pro4 done rc=1 (stalled: 300s with no harness activity)","ref":null}"#;
+        let row = parse_line(captured).expect("a live bus row still parses");
+        assert_eq!(row.rc, Some(1));
+        assert_eq!(
+            row.detail.as_deref(),
+            Some("stalled: 300s with no harness activity")
+        );
+    }
+
+    /// A non-result body mentioning `rc=` is prose, never an exit code.
+    #[test]
+    fn only_a_result_row_takes_a_code_from_its_body() {
+        let mut note = send("m-abcdef02");
+        note.kind = "note".into();
+        note.body = "grep for rc=0 in the log".into();
+        let parsed = parse_line(&super::message_line(&note)).unwrap();
+        assert_eq!(parsed.rc, None);
+    }
+
+    /// The typed columns round-trip, and a row with neither keeps the byte
+    /// shape `bus` reads.
+    #[test]
+    fn a_typed_result_row_round_trips_and_a_plain_row_grows_no_keys() {
+        let mut result = send("m-abcdef03");
+        result.kind = "result".into();
+        result.body = "lane mine done rc=7 (killed by SIGTERM)".into();
+        result.rc = Some(7);
+        result.detail = Some("killed by SIGTERM".into());
+        let line = super::message_line(&result);
+        assert!(line.contains(r#""rc":7"#), "{line}");
+        assert_eq!(parse_line(&line).unwrap(), result);
+        let plain = super::message_line(&send("m-abcdef04"));
+        assert!(!plain.contains("\"rc\""), "{plain}");
+        assert!(!plain.contains("\"detail\""), "{plain}");
     }
 
     #[test]

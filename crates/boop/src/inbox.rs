@@ -267,6 +267,8 @@ mod tests {
             reply_to: None,
             body: body.into(),
             r#ref: None,
+            rc: None,
+            detail: None,
         }
     }
 

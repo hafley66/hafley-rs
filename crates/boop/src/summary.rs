@@ -294,6 +294,8 @@ mod tests {
             reply_to: None,
             body: "lane lane-a done rc=0".into(),
             r#ref: None,
+            rc: Some(0),
+            detail: None,
         }];
         let mux = FakeMux::available(&["lane-a"]);
         let processes = FixedProcesses::default();

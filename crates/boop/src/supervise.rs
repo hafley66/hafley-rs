@@ -610,8 +610,8 @@ fn registered_parent(dir: &Path, lane: &str) -> Option<String> {
     bus::read_routes(dir).ok()?.get(lane)?.parent.clone()
 }
 
-/// The result row body. `rc=<code>` is the token `lane wait` parses out; the
-/// flake reason rides behind it for a human reading the mailbox.
+/// The result row body, for a human reading the mailbox. The exit code every
+/// caller acts on is the row's typed `rc`, never this text.
 fn result_body(lane: &str, exit_code: i32, detail: Option<&str>) -> String {
     match detail {
         Some(detail) => format!("lane {lane} done rc={exit_code} ({detail})"),
@@ -639,6 +639,8 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
         reply_to: None,
         body: result_body(&lane.lane, exit_code, detail),
         r#ref: None,
+        rc: Some(exit_code),
+        detail: detail.map(str::to_owned),
     };
     match append_row(&lane.mail_dir, &row) {
         Ok(()) => {
@@ -810,6 +812,8 @@ mod tests {
             reply_to: None,
             body: format!("body of {id}"),
             r#ref: None,
+            rc: None,
+            detail: None,
         }
     }
 
