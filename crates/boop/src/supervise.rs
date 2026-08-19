@@ -63,6 +63,7 @@ pub struct LaneRun {
 pub struct Hail {
     pub id: String,
     pub from: String,
+    pub kind: String,
     pub body: String,
 }
 
@@ -81,6 +82,7 @@ pub fn pending(dir: &Path, lane: &str, seen: &BTreeSet<String>) -> Result<Vec<Ha
         .map(|row| Hail {
             id: row.id,
             from: row.from,
+            kind: row.kind,
             body: row.body,
         })
         .collect())
@@ -92,9 +94,32 @@ fn deliverable(kind: &str) -> bool {
     matches!(kind, "request" | "hail" | "note" | "retry" | "resume")
 }
 
+/// One piece of mail as its receiver reads it. The template is the receiver's
+/// effective mood; the four placeholders are all a mood may name.
+pub fn render_mail(template: &str, kind: &str, id: &str, from: &str, body: &str) -> String {
+    template
+        .replace("{kind}", kind)
+        .replace("{id}", id)
+        .replace("{from}", from)
+        .replace("{body}", body)
+}
+
+/// The template mail addressed to `receiver` renders through. A store that
+/// cannot open leaves the default shape rather than dropping the mail.
+pub fn mood_template(receiver: &str) -> String {
+    crate::Store::default_path()
+        .and_then(crate::Store::open)
+        .and_then(|store| store.effective_mood(receiver))
+        .map(|mood| mood.template)
+        .unwrap_or_else(|error| {
+            warn!(receiver, error = %error, "effective mood unresolved");
+            crate::ident::DEFAULT_MOOD_TEMPLATE.to_owned()
+        })
+}
+
 /// The text one hail becomes inside the agent's conversation.
-pub fn hail_text(hail: &Hail) -> String {
-    format!("[boop hail {} from {}] {}", hail.id, hail.from, hail.body)
+pub fn hail_text(hail: &Hail, template: &str) -> String {
+    render_mail(template, &hail.kind, &hail.id, &hail.from, &hail.body)
 }
 
 /// How one lane's supervision ended.
@@ -332,6 +357,9 @@ fn supervise(
     channel.set_brief(&brief);
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut held: Vec<Hail> = Vec::new();
+    // Resolved once: a lane's mood is a spawn-time attribute, and re-reading it
+    // per hail would open the store inside the delivery path.
+    let mood = mood_template(&lane.lane);
     // `conversation_id` may already exist for a freshly opened channel. Codex
     // app-server returns its new thread id from `thread/start` before the first
     // turn, so only the caller's explicit resume input proves that the thread
@@ -439,7 +467,7 @@ fn supervise(
             }
             for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
                 seen.insert(hail.id.clone());
-                match channel.steer(&hail_text(&hail))? {
+                match channel.steer(&hail_text(&hail, &mood))? {
                     Delivery::MidTurn => {
                         println!("[boop] hail {} delivered midturn", hail.id);
                         info!(
@@ -553,7 +581,7 @@ fn supervise(
                     Some(&lane.lane),
                     "hail held for next turn",
                 );
-                hail_text(&hail)
+                hail_text(&hail, &mood)
             })
             .collect::<Vec<_>>()
             .join("\n\n");
@@ -848,16 +876,38 @@ mod tests {
         assert_eq!(idle_ms(90_000, 60_000, Some(80_000)), 10_000);
     }
 
-    #[test]
-    fn hail_text_names_the_id_and_the_sender() {
-        let text = hail_text(&Hail {
+    fn hail(kind: &str) -> Hail {
+        Hail {
             id: "m1".into(),
             from: "coordinator".into(),
+            kind: kind.into(),
             body: "stop and write /tmp/x".into(),
-        });
+        }
+    }
+
+    #[test]
+    fn hail_text_names_the_id_and_the_sender() {
+        let text = hail_text(&hail("hail"), crate::ident::DEFAULT_MOOD_TEMPLATE);
+        assert_eq!(text, "[boop m1 from coordinator] stop and write /tmp/x");
+    }
+
+    /// The lane pane is one of the three delivery paths a mood reaches; the
+    /// kind is a placeholder like the other three.
+    #[test]
+    fn a_hail_into_a_lane_pane_renders_through_the_lane_mood() {
+        let text = hail_text(&hail("request"), "{kind} {from} -> {id}\n{body}");
+        assert_eq!(text, "request coordinator -> m1\nstop and write /tmp/x");
+    }
+
+    /// A body naming a placeholder is payload, never a second pass: the
+    /// substitutions never read their own output.
+    #[test]
+    fn a_body_that_names_a_placeholder_is_left_alone() {
+        let mut row = hail("hail");
+        row.body = "{from} is not substituted".into();
         assert_eq!(
-            text,
-            "[boop hail m1 from coordinator] stop and write /tmp/x"
+            hail_text(&row, crate::ident::DEFAULT_MOOD_TEMPLATE),
+            "[boop m1 from coordinator] {from} is not substituted"
         );
     }
 

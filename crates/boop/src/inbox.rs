@@ -169,11 +169,13 @@ pub fn installed_for(cwd: &Path, name: &str) -> bool {
         .any(|settings| drains_by_hook(&settings, name))
 }
 
-/// One drained batch as the agent reads it. The id and the sender ride each
-/// entry so a reply can name what it answers.
-pub fn batch_text(rows: &[Message]) -> String {
+/// One drained batch as the agent reads it, each row rendered through the
+/// draining session's effective mood.
+pub fn batch_text(rows: &[Message], template: &str) -> String {
     rows.iter()
-        .map(|row| format!("[boop {} from {}] {}", row.id, row.from, row.body))
+        .map(|row| {
+            crate::supervise::render_mail(template, &row.kind, &row.id, &row.from, &row.body)
+        })
         .collect::<Vec<_>>()
         .join("\n\n")
 }
@@ -266,6 +268,14 @@ mod tests {
             body: body.into(),
             r#ref: None,
         }
+    }
+
+    /// A mood that shares no shape with the default, so a render test cannot
+    /// pass by accident.
+    const FIXTURE_MOOD: &str = "{kind} {from} -> {id}\n{body}";
+
+    fn plain(rows: &[Message]) -> String {
+        batch_text(rows, crate::ident::DEFAULT_MOOD_TEMPLATE)
     }
 
     fn settings(name: &str) -> Map<String, Value> {
@@ -361,7 +371,7 @@ mod tests {
 
     #[test]
     fn a_batch_names_the_id_and_the_sender_of_every_row() {
-        let text = batch_text(&[
+        let text = plain(&[
             message("m1", "coord", "first"),
             message("m2", "coord", "second"),
         ]);
@@ -369,14 +379,14 @@ mod tests {
             text,
             "[boop m1 from coordinator] first\n\n[boop m2 from coordinator] second"
         );
-        assert_eq!(batch_text(&[]), "");
+        assert_eq!(plain(&[]), "");
     }
 
     // FAIL-PRE-FIX: a hand-formatted JSON string broke on a quote or a newline
     // in the mail body, and the hook's output stopped parsing.
     #[test]
     fn the_stop_payload_is_json_whatever_the_body_holds() {
-        let text = batch_text(&[message("m1", "coord", "say \"stop\"\nnow")]);
+        let text = plain(&[message("m1", "coord", "say \"stop\"\nnow")]);
         let payload: Value = serde_json::from_str(&Hook::Stop.payload(&text)).unwrap();
         assert_eq!(payload["decision"], "block");
         assert_eq!(
@@ -387,12 +397,29 @@ mod tests {
 
     #[test]
     fn the_prompt_payload_is_the_mail_as_plain_context() {
-        let text = batch_text(&[message("m1", "coord", "read me")]);
+        let text = plain(&[message("m1", "coord", "read me")]);
         assert_eq!(
             Hook::Prompt.payload(&text),
             "boop inbox:\n\n[boop m1 from coordinator] read me"
         );
         assert_eq!(Hook::Plain.payload(&text), Hook::Prompt.payload(&text));
+    }
+
+    /// The drain is one of the three delivery paths a mood reaches. Every row
+    /// of the batch takes the shape, and the batch separator survives it.
+    #[test]
+    fn a_drained_batch_renders_through_the_draining_session_mood() {
+        let text = batch_text(
+            &[
+                message("m1", "coord", "first"),
+                message("m2", "coord", "second"),
+            ],
+            FIXTURE_MOOD,
+        );
+        assert_eq!(
+            text,
+            "hail coordinator -> m1\nfirst\n\nhail coordinator -> m2\nsecond"
+        );
     }
 
     // FAIL-PRE-FIX: the ledger is what makes a drain idempotent when the bus ack

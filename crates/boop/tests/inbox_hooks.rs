@@ -277,8 +277,14 @@ fn a_hail_during_a_long_turn_arrives_once_at_the_next_stop_and_never_as_keystrok
         !pane.contains("second hail"),
         "the pane was typed at: {pane}"
     );
+    // Mail is rendered through the receiver's mood, so no fixed prefix marks an
+    // injected line; the id every mood may name is what survives that.
+    let queued_id = queued
+        .split_whitespace()
+        .find(|word| word.starts_with("m-"))
+        .expect("the queue line names the message id");
     assert!(
-        !pane.contains("[bus "),
+        !pane.contains(queued_id),
         "an injected line reached the pane: {pane}"
     );
 }
