@@ -204,6 +204,9 @@ SQL: the store is SQLite at ~/.agent/boop.db; `boop db \"<sql>\"` queries it
   read-only. sqlite3 dot-commands (.schema, .tables) are NOT supported; the
   passthrough takes plain SQL only.
 
+BOOP_NO_SYNC=1 in the environment skips the startup transcript sync for every
+  verb, so a read hits the store as it stands instead of paying a cold sync.
+
 The pre-split verbs (harnesses, sessions, events, chat, tail, list, measure,
 dispatch, lane, resolve, adopt, sweep, prune, hail, sync, follow) still run as
 hidden aliases for one release. Use `beep` and `db`.",
