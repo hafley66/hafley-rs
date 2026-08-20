@@ -78,12 +78,21 @@ Rules for the split, as landed: each crate's `lib.rs` lists its public surface;
 feature; integration tests moved with their crate; `tests/temp_home_rail.rs`
 walks every `boop*` crate's `src/` and `tests/` rather than one crate's.
 
-Two SQL-string reaches across a crate seam are marked `// TODO(crate-seam):`
-rather than redesigned: `concatmap.rs`'s `context_tokens` (reads `agent_usage`,
-`dict_session`) and `cli/db.rs`'s `USAGE_TOTALS_SQL` (reads `agent_usage`,
-`model_price`, and `--show-sql` prints it verbatim). Two more are in
-`#[cfg(test)]` blocks of `harness/{codex,kimi}.rs`. Everything else reaching
-another crate's tables goes through a typed `boop-store` fn.
+No crate reaches another's tables by SQL string. `summary.rs` moved into
+`boop-store` with its three raw queries, and four typed functions took the
+rest:
+
+| caller | calls |
+|---|---|
+| `concatmap::context_tokens` | `Store::context_tokens` |
+| `cli/db.rs` `run_usage` | `Store::usage_totals`, printing `usage::USAGE_TOTALS_SQL` for `--show-sql` |
+| `harness/codex.rs`, `harness/kimi.rs` ingest tests | `testing::usage_totals_at` |
+
+`USAGE_TOTALS_SQL` is one const in `boop-store`, beside the `agent_usage` and
+`model_price` tables it names, so the SQL `--show-sql` prints and the SQL
+`usage_totals` runs are the same string. The only SQL text outside `boop-store`
+is `#[cfg(test)]` fixture seeding in `concatmap.rs` and the caller-owned window
+example printed by `boop concatmap --help`.
 
 ## 4. Order of work
 

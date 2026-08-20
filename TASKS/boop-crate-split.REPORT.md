@@ -3,7 +3,7 @@
 `crates/boop` was 33363 lines in one crate. It is now five crates, 34105 lines
 of `src/` in all, in a strict dependency order with no cycle. `cargo test
 --workspace` passes the same 607 as base `f3d5123`, and all 84 `--help` screens
-are byte-identical.
+are byte-identical. No crate reaches another crate's tables by SQL string.
 
 ## Contents
 
@@ -12,7 +12,7 @@ are byte-identical.
 3. [Seams that moved](#seams-that-moved)
 4. [Gates](#gates)
 5. [Deviations from the brief](#deviations-from-the-brief)
-6. [Crate-seam TODOs](#crate-seam-todos)
+6. [The crate seam, closed](#the-crate-seam-closed)
 7. [Commits](#commits)
 
 ## The five crates
@@ -85,6 +85,7 @@ without a redesign.
 | `SETUP_SENTENCE`, `start_status_path`, `record_start_status`, `start_preamble`, `brief_with_preamble` | `lane.rs` | `worktree.rs` | `prepare_spawn_dir` records the warm-up status and every adapter's `spawn` calls it |
 | `assert_fixture_sessions_project` | `_0_session_graph.rs` | `harness.rs` | a `#[cfg(test)]` helper the four adapter fixture tests call |
 | `summary.rs` (whole module) | `crates/boop` | `boop-store` | it ran three raw queries against the store's own tables; in-crate they are not a seam violation |
+| `USAGE_TOTALS_SQL` + `Store::usage_totals`, `Store::context_tokens`, `testing::usage_totals_at` | `cli/db.rs`, `concatmap.rs`, `harness/{codex,kimi}.rs` | `boop_store::{usage, testing}` | the last four SQL reaches across a crate seam; see [The crate seam, closed](#the-crate-seam-closed) |
 | `test_support.rs` | `crates/boop` | `boop-store/src/testing.rs`, `testing` feature | as the card asks |
 
 ## Gates
@@ -178,7 +179,21 @@ $ cargo test -p boop --test temp_home_rail
 test result: ok. 2 passed; 0 failed
 ```
 
-### 6. eprintln
+### 6. After the crate-seam fix, re-measured
+
+```
+cargo test --workspace:                        607 passed, 0 failed, 2 ignored
+cargo clippy --workspace -- -D warnings:       rc=0
+cargo clippy --workspace --all-targets:        1 warning, crates/boop/tests/host_chat.rs:44, the same pre-existing one
+diff help-before.txt help-after.txt:           empty, 1385 lines, 84 screens
+diff show-sql-base.txt show-sql-after.txt:     empty
+issuectl ready boop-crate-split:               ready: true, 5 of 5
+```
+
+One clippy finding the seam fix introduced was fixed, not excluded: an
+`empty_line_after_doc_comment` at `crates/boop-store/src/usage.rs:141`.
+
+### 7. eprintln
 
 No `eprintln!` was added or moved. The five in `cli/db.rs` and `cli/job.rs` are
 the same five the main-split report recorded.
@@ -200,21 +215,47 @@ Cross-crate test fixture paths: `boop-store`'s cursor test and
 `boop-harness`, as `../boop-harness/tests/fixtures/...`. The corpus is not
 duplicated.
 
-## Crate-seam TODOs
+## The crate seam, closed
 
-Two production sites still name another crate's tables by SQL string. Both are
-marked `// TODO(crate-seam):` rather than redesigned, per the brief.
+The first pass left two production SQL reaches as `// TODO(crate-seam):`, which
+the brief allowed. Chris's word was to fix them on this branch instead, so both
+markers are gone and four typed `boop-store` functions took their place.
 
-| site | tables | why it is not a move |
+| caller | was | now calls |
 |---|---|---|
-| `crates/boop-proc/src/concatmap.rs` `context_tokens` | `agent_usage`, `dict_session` | needs a typed `Store` fn; naming one is a design call |
-| `crates/boop/src/cli/db.rs` `USAGE_TOTALS_SQL` | `agent_usage`, `model_price` | `--show-sql` prints the const verbatim, so a typed fn has to decide what it prints |
+| `crates/boop-proc/src/concatmap.rs` `context_tokens` | inline `SELECT ... FROM agent_usage JOIN dict_session` on `store.connection()` | `Store::context_tokens(session) -> Result<Option<i64>>` |
+| `crates/boop/src/cli/db.rs` `run_usage` | its own `USAGE_TOTALS_SQL` const, run through `run_passthrough` | `Store::usage_totals() -> Result<(Vec<String>, Vec<Row>)>`, printing `boop_store::usage::USAGE_TOTALS_SQL` for `--show-sql` |
+| `crates/boop-harness/src/harness/codex.rs` ingest test | inline `SELECT COUNT(*), SUM(...) FROM agent_usage` | `boop_store::testing::usage_totals_at(path) -> UsageTotals` |
+| `crates/boop-harness/src/harness/kimi.rs` ingest test | the same inline query | the same `usage_totals_at` |
 
-Two more are `#[cfg(test)]` assertions in
-`crates/boop-harness/src/harness/{codex,kimi}.rs`, each a
-`SELECT COUNT(*), SUM(...) FROM agent_usage` checking what an ingest wrote.
+One source of truth for the printed SQL: `USAGE_TOTALS_SQL` is a `pub const` in
+`boop-store`'s `usage.rs`, beside the `agent_usage` and `model_price` tables it
+names. `Store::usage_totals` runs that const and `boop db usage --show-sql`
+prints that const, so the two cannot drift.
 
-`boop-proc` links no clap: `grep -rn clap crates/boop-proc` is empty.
+`run_passthrough_at`'s printing half split out as `emit_named_rows(&names,
+&rows, format)` so `run_usage` prints exactly what a passthrough prints; the
+match arms are the same code, moved.
+
+Behavior receipt, against the const as it stood at base `f3d5123`:
+
+```
+$ boop db usage --show-sql > show-sql-after.txt
+$ diff show-sql-base.txt show-sql-after.txt
+$ echo $?
+0
+```
+
+The only SQL text left outside `boop-store` is `#[cfg(test)]` fixture seeding
+in `concatmap.rs` (`INSERT INTO agent_usage`, seeding a row its own test then
+reads) and the caller-owned window example printed in `boop concatmap --help`,
+which is help text, never executed.
+
+```
+$ grep -rn 'TODO(crate-seam)' crates/
+$ echo $?
+1
+```
 
 ## Commits
 
@@ -225,3 +266,4 @@ Two more are `#[cfg(test)]` assertions in
 | `dcb3e2f` | `boop-harness` |
 | `5ac9b37` | `boop-proc` |
 | `refactor(boop): reduce crates/boop to the cli` | `boop` reduced to the cli, docs, CI, card |
+| `refactor(boop): close the crate seam with typed store fns` | the four SQL reaches, both TODO markers deleted |

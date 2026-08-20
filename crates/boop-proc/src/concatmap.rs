@@ -282,19 +282,9 @@ impl Rewriter {
 
 /// The resident chat's current context size in tokens: its latest turn's fresh
 /// input plus the cached prior context, read from the store the sync ingests.
-// TODO(crate-seam): this reads boop-store's `agent_usage` and `dict_session` by
-// SQL string. It needs a typed `Store` fn; naming one is a design call, not a
-// move.
 pub(crate) fn context_tokens(store: &boop_store::Store, session: &str) -> Option<i64> {
-    const SQL: &str = "SELECT input_tokens + cache_read_tokens AS ctx FROM agent_usage
-         JOIN dict_session s ON s.id = agent_usage.session_id
-         WHERE s.value = ?1 ORDER BY ts DESC LIMIT 1";
-    match store
-        .connection()
-        .query_row(SQL, rusqlite::params![session], |row| row.get::<_, i64>(0))
-    {
-        Ok(ctx) => Some(ctx),
-        Err(rusqlite::Error::QueryReturnedNoRows) => None,
+    match store.context_tokens(session) {
+        Ok(ctx) => ctx,
         Err(err) => {
             tracing::warn!(session, %err, "resident context_tokens query failed");
             None

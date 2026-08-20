@@ -91,7 +91,53 @@ const SUMS: &str = "
     MIN(usage.ts) AS first_ts,
     MAX(usage.ts) AS last_ts";
 
+/// The `db usage` totals report: calls, tokens by kind, and cost as a join
+/// against the rate table. The text lives here, beside the tables it names, and
+/// `Store::usage_totals` is the only thing that runs it; `boop db usage
+/// --show-sql` prints this const so the printed SQL and the run SQL cannot
+/// drift apart.
+pub const USAGE_TOTALS_SQL: &str = "
+SELECT COUNT(*) AS calls,
+       COALESCE(SUM(usage.input_tokens), 0) AS input_tokens,
+       COALESCE(SUM(usage.output_tokens), 0) AS output_tokens,
+       COALESCE(SUM(usage.cache_create_5m_tokens), 0) AS cache_create_5m_tokens,
+       COALESCE(SUM(usage.cache_create_1h_tokens), 0) AS cache_create_1h_tokens,
+       COALESCE(SUM(usage.cache_read_tokens), 0) AS cache_read_tokens,
+       SUM(usage.input_tokens / 1e6 * price.input_per_mtok
+         + usage.output_tokens / 1e6 * price.output_per_mtok
+         + usage.cache_create_5m_tokens / 1e6 * price.cache_write_5m_per_mtok
+         + usage.cache_create_1h_tokens / 1e6 * price.cache_write_1h_per_mtok
+         + usage.cache_read_tokens / 1e6 * price.cache_read_per_mtok) AS cost_usd
+FROM agent_usage AS usage
+LEFT JOIN model_price AS price ON price.model_id = usage.model_id";
+
+/// One session's latest usage row, newest first: the fresh input plus the
+/// cached prior context that row carried.
+const CONTEXT_TOKENS_SQL: &str = "SELECT input_tokens + cache_read_tokens AS ctx FROM agent_usage
+         JOIN dict_session s ON s.id = agent_usage.session_id
+         WHERE s.value = ?1 ORDER BY ts DESC LIMIT 1";
+
 impl Store {
+    /// The `db usage` totals report, column names and rows in SELECT order.
+    pub fn usage_totals(&self) -> Result<(Vec<String>, Vec<Row>)> {
+        self.passthrough(USAGE_TOTALS_SQL)
+    }
+
+    /// One session's current context size in tokens: its latest turn's fresh
+    /// input plus the cached prior context. `None` where the session has no
+    /// usage row yet.
+    pub fn context_tokens(&self, session: &str) -> Result<Option<i64>> {
+        match self.connection().query_row(
+            CONTEXT_TOKENS_SQL,
+            rusqlite::params![session],
+            |row| row.get::<_, i64>(0),
+        ) {
+            Ok(tokens) => Ok(Some(tokens)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(error) => Err(error.into()),
+        }
+    }
+
     /// Totals, or one row per bucket when `group_by` is given.
     pub fn usage_report(&self, group_by: Option<GroupBy>, filter: &UsageQuery) -> Result<Vec<Row>> {
         let rows = self.usage_report_rows(group_by, filter)?;

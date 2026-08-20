@@ -1,7 +1,7 @@
 //! Shared deterministic fixtures for Boop unit tests.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -191,5 +191,35 @@ impl Multiplexer for FakeMux {
 
     fn swap_windows(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
         Ok(())
+    }
+}
+
+/// What one ingest pass wrote into `agent_usage`, read back from a closed
+/// store file: row count, then input, output and cache-read token sums. The
+/// harness adapters' ingest tests assert against this rather than opening the
+/// store's tables themselves.
+pub struct UsageTotals {
+    pub row_count: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cache_read_tokens: i64,
+}
+
+/// Read `agent_usage` totals from the store at `path`.
+pub fn usage_totals_at(path: &Path) -> UsageTotals {
+    let connection = rusqlite::Connection::open(path).expect("open the store under test");
+    let (row_count, input_tokens, output_tokens, cache_read_tokens) = connection
+        .query_row(
+            "SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens),
+               SUM(cache_read_tokens) FROM agent_usage",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .expect("agent_usage totals");
+    UsageTotals {
+        row_count,
+        input_tokens,
+        output_tokens,
+        cache_read_tokens,
     }
 }

@@ -830,16 +830,13 @@ mod tests {
         assert_eq!(ingested.stat.usage_written, 1);
         assert_eq!(ingested.stat.usage_updated, 2);
         drop(store);
-        let connection = rusqlite::Connection::open(&db_path).unwrap();
-        let (row_count, input_tokens, output_tokens, cache_read_tokens): (i64, i64, i64, i64) =
-            connection
-                .query_row(
-                    "SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens),
-                       SUM(cache_read_tokens) FROM agent_usage",
-                    [],
-                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-                )
-                .unwrap();
+        let totals = boop_store::testing::usage_totals_at(&db_path);
+        let (row_count, input_tokens, output_tokens, cache_read_tokens) = (
+            totals.row_count,
+            totals.input_tokens,
+            totals.output_tokens,
+            totals.cache_read_tokens,
+        );
         assert_eq!(row_count, 1);
         assert_eq!(input_tokens, 110);
         assert_eq!(output_tokens, 16);

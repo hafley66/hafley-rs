@@ -17,7 +17,7 @@ blocked_by: ['@boop-main-split']
 Split `crates/boop` (33363 lines) into `boop-store`, `boop-harness`, `boop-mail`, `boop-proc`, `boop-cli` per `docs/design/boop-process.md` section 3. One PR per crate extraction in dependency order: store, harness, mail, proc, cli. Zero behavior change; `boop --help` per verb byte-identical before and after (pinned test); `cargo test` wall time unchanged or better.
 ## Acceptance Criteria
 - [x] workspace has the five crates; `crates/boop` is gone or is the bin crate only.
-- [ ] no crate runs SQL against another crate's tables by string; `boop-store` exposes typed fns; `boop-proc` does not depend on clap.
+- [x] no crate runs SQL against another crate's tables by string; `boop-store` exposes typed fns; `boop-proc` does not depend on clap.
 - [x] `test_support` becomes `boop-store`'s `testing` feature; every integration test moves with its crate; `tests/temp_home_rail.rs` still covers all of them.
 - [x] `cargo-semver-checks` on CI covers each new lib crate.
 - [x] `docs/design/boop-process.md` section 3 table updated to the real file list after the move.
@@ -25,6 +25,7 @@ Split `crates/boop` (33363 lines) into `boop-store`, `boop-harness`, `boop-mail`
 ## Tests Run
 
 - [x] `cargo test --workspace`: 607 passed, 0 failed, 2 ignored, the same as base `f3d5123`.
+- [x] `boop db usage --show-sql`: `diff` against the base const empty.
 - [x] `cargo clippy --workspace -- -D warnings`: rc=0.
 - [x] 84 `--help` screens, base binary against branch binary: `diff` empty.
 - [x] `cargo test -p boop --test temp_home_rail`: 2 passed, now walking every `boop*` crate.
@@ -50,15 +51,23 @@ Three things differ from the card as written:
    crate plus a facade lib that re-exports the four libraries at their old
    paths, which is what keeps the behavior change at zero.
 
-The SQL-seam criterion is left unchecked: `summary.rs` moved into `boop-store`
-so its three raw queries are in-crate, but two production sites still name
-another crate's tables by string and are marked `// TODO(crate-seam):` rather
-than redesigned, per the brief:
-`crates/boop-proc/src/concatmap.rs` `context_tokens` (`agent_usage`,
-`dict_session`) and `crates/boop/src/cli/db.rs` `USAGE_TOTALS_SQL`
-(`agent_usage`, `model_price`, printed verbatim by `--show-sql`). Two more are
-in `#[cfg(test)]` blocks of `crates/boop-harness/src/harness/{codex,kimi}.rs`.
-`boop-proc` links no clap.
+The SQL seam is closed, on Chris's word rather than with the TODO markers the
+brief allowed. `summary.rs` moved into `boop-store`, and four typed functions
+took the remaining reaches:
+
+| caller | now calls |
+|---|---|
+| `boop-proc` `concatmap::context_tokens` | `boop_store::Store::context_tokens` |
+| `boop` `cli/db.rs` `run_usage` | `boop_store::Store::usage_totals`, printing `boop_store::usage::USAGE_TOTALS_SQL` for `--show-sql` |
+| `boop-harness` `harness/codex.rs` test | `boop_store::testing::usage_totals_at` |
+| `boop-harness` `harness/kimi.rs` test | `boop_store::testing::usage_totals_at` |
+
+`USAGE_TOTALS_SQL` is one const in `boop-store`, so the SQL `--show-sql` prints
+and the SQL `usage_totals` runs cannot drift apart; `boop db usage --show-sql`
+is byte-identical to base. `boop-proc` links no clap. No `TODO(crate-seam)`
+marker remains. The only SQL text left outside `boop-store` is `#[cfg(test)]`
+fixture seeding in `concatmap.rs` and the caller-owned window example printed
+in `boop concatmap --help`.
 
 ## Comments
 
@@ -76,3 +85,10 @@ Gates:
 - tests/temp_home_rail.rs now walks every boop* crate's src/ and tests/.
 
 Receipts: TASKS/boop-crate-split.REPORT.md.
+
+### 2026-08-20T14:11:16Z · @claude-lane
+
+Crate seam closed on Chris's word, no TODO markers merged. Four typed boop-store fns took the reaches: Store::context_tokens (concatmap), Store::usage_totals + pub const usage::USAGE_TOTALS_SQL (cli/db.rs run_usage, --show-sql prints the same const the call runs), testing::usage_totals_at (harness codex + kimi ingest tests). run_passthrough_at's printing half split out as emit_named_rows so run_usage prints what a passthrough prints.
+
+Re-measured: cargo test --workspace 607 passed / 0 failed / 2 ignored; cargo clippy --workspace -- -D warnings rc=0 (--all-targets still the one pre-existing host_chat.rs:44); help diff empty across 84 screens; boop db usage --show-sql diffs empty against the base const; grep TODO(crate-seam) over crates/ returns nothing. issuectl ready: 5 of 5.
+
