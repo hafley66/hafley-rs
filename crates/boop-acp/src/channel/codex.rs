@@ -1,5 +1,10 @@
 //! The codex lane channel: a `codex app-server` child spoken to over
 //! newline JSON-RPC. `turn/steer` puts text into the turn already running.
+//!
+//! RETIRED as a lane transport: `Codex::open_channel` mints an `AcpChannel`
+//! on `CODEX_ADAPTER`. Kept unwired this arc as the rollback door; nothing
+//! outside its own tests constructs it. `codex app-server` is not ACP, so the
+//! two doors share no frames.
 
 use std::process::{Command, Stdio};
 use std::time::Duration;

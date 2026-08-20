@@ -35,7 +35,7 @@ pub struct OpencodeChannel;
 impl OpencodeChannel {
     /// Open the opencode conversation over ACP.
     pub fn open(spec: &ChannelSpec) -> Result<AcpChannel> {
-        AcpChannel::open(spec, &["opencode".to_owned(), "acp".to_owned()])
+        AcpChannel::open_adapter(spec, crate::channel::acp::OPENCODE_ADAPTER)
     }
 }
 

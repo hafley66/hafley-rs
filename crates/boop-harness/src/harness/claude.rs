@@ -46,7 +46,10 @@ impl Harness for Claude {
         &self,
         spec: &boop_acp::channel::ChannelSpec,
     ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
-        Ok(Box::new(boop_acp::channel::claude::ClaudeChannel::open(spec)?))
+        Ok(Box::new(boop_acp::channel::acp::AcpChannel::open_adapter(
+            spec,
+            boop_acp::channel::acp::CLAUDE_ADAPTER,
+        )?))
     }
 
     fn id(&self) -> &'static str {
@@ -89,9 +92,12 @@ impl Harness for Claude {
         })
     }
 
+    /// `send_midflight` is false since the lane channel became ACP:
+    /// `session/prompt` is one request per turn and a second one before the
+    /// first resolves is out of protocol.
     fn capabilities(&self) -> crate::harness::Capabilities {
         Capabilities {
-            send_midflight: true,
+            send_midflight: false,
             resume: true,
             spawn: true,
             subagent_visible: true,
@@ -558,7 +564,7 @@ mod tests {
     #[test]
     fn claude_capabilities_are_measured() {
         let caps = Claude.capabilities();
-        assert!(caps.send_midflight);
+        assert!(!caps.send_midflight, "acp takes one prompt per turn");
         assert!(caps.resume);
         assert!(caps.spawn);
         assert!(caps.subagent_visible);
