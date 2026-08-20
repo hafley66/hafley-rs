@@ -1,8 +1,8 @@
 ---
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-20
 type: task
-status: open
+status: testing
 priority: high
 epic: boop-process
 size: L
@@ -59,3 +59,20 @@ than redesigned, per the brief:
 (`agent_usage`, `model_price`, printed verbatim by `--show-sql`). Two more are
 in `#[cfg(test)]` blocks of `crates/boop-harness/src/harness/{codex,kimi}.rs`.
 `boop-proc` links no clap.
+
+## Comments
+
+### 2026-08-20T13:49:05Z · @claude-lane
+
+PR https://github.com/hafley66/hafley-rs/pull/41 (do not merge yet).
+
+Five crates on one branch, one commit per extraction: boop-store, boop-acp, boop-harness, boop-proc, boop (bin + facade lib). Order landed store -> acp -> harness -> proc -> cli, not store -> harness -> acp -> proc: Harness::open_channel returns a Box<dyn LaneChannel> and every adapter constructs its own channel, so the channel crate is below the adapters. The one 8-module SCC at f3d5123 (channel, harness, ident, identity, lane, registry, supervise, worktree) broke through nine code moves, each re-exported at its old path.
+
+Gates:
+- cargo test --workspace: base f3d5123 607 passed / 0 failed / 2 ignored; branch identical. The 4 tests the brief named as known-red all passed on base here.
+- boop --help, 84 screens: diff of base binary against branch binary empty, 1385 lines each.
+- cargo clippy --workspace -- -D warnings: rc=0. --all-targets is rc=101 on base AND branch on the same pre-existing crates/boop/tests/host_chat.rs:44 needless_borrow.
+- cargo semver-checks: not installed on this machine; .github/workflows/ci.yml:34 package list widened to the four new crates.
+- tests/temp_home_rail.rs now walks every boop* crate's src/ and tests/.
+
+Receipts: TASKS/boop-crate-split.REPORT.md.
