@@ -17,6 +17,12 @@ jobs:
         uses: actions/checkout@v6
       - name: install rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: install just
+        # `boop-start` warm-up is a just recipe, and the tests that pin it
+        # assert `just` is on PATH rather than skipping themselves.
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
       - name: test workspace
         run: cargo test --workspace --locked
 
