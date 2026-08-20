@@ -13,7 +13,8 @@ are byte-identical. No crate reaches another crate's tables by SQL string.
 4. [Gates](#gates)
 5. [Deviations from the brief](#deviations-from-the-brief)
 6. [The crate seam, closed](#the-crate-seam-closed)
-7. [Commits](#commits)
+7. [CI reds, and what caused them](#ci-reds-and-what-caused-them)
+8. [Commits](#commits)
 
 ## The five crates
 
@@ -154,17 +155,10 @@ an unused `test_support` re-export in `crates/boop/src/lib.rs` (deleted).
 Not run locally: `cargo semver-checks` is not installed on this machine
 (`error: no such command: 'semver-checks'`).
 
-`.github/workflows/ci.yml:34` pins an explicit package list, so it needed the
-edit:
-
-```diff
--          package: boop, boop-mux
-+          package: boop, boop-mux, boop-store, boop-acp, boop-harness, boop-proc
-```
-
-Caveat for this PR only: the four new packages do not exist at
-`baseline-rev`, so the semver job has no baseline to compare them against on
-this PR. Every later PR has one.
+`.github/workflows/ci.yml` pinned an explicit `package: boop, boop-mux` list.
+Naming the four new crates in it turned the job red, because they have no
+baseline to compare against; the list is now computed from what exists at
+`baseline-rev`. See [CI reds](#semver-job).
 
 ### 5. `tests/temp_home_rail.rs` still covers every subprocess site
 
@@ -257,6 +251,79 @@ $ echo $?
 1
 ```
 
+## CI reds, and what caused them
+
+The first PR run (32378631411) went red in both jobs. Neither red was visible
+locally, and one of them was never a regression.
+
+### test job: `cli::job::tests::prune_dry_run_removes_nothing`
+
+`run_lane_prune` bails at `crates/boop/src/cli/job.rs:1526` when
+`tmux::mux().live_sessions(None)` is `None`, which is any host with no tmux
+server answering the default socket. The test wrote a route and called
+`run_lane_prune` without starting one, so it only ever passed on a host where
+some OTHER test's `LiveTmuxSession` happened to be alive at that moment, or
+where the developer was already sitting in tmux. A CI runner is neither.
+
+This machine hid it twice over: `$TMUX` is set in every shell here, so tmux
+resolves the inherited socket and answers no matter what the test does.
+Reproduced by removing both:
+
+```
+$ env -u TMUX TMUX_TMPDIR=<empty dir> cargo test -p boop --bin boop     -- --exact cli::job::tests::prune_dry_run_removes_nothing
+thread '...' panicked at crates/boop/src/cli/job.rs:2444:42
+test result: FAILED. 0 passed; 1 failed
+```
+
+That is the runner's line and the runner's message. The fix gives the test its
+own `LiveTmuxSession`, the way its sibling
+`prune_removes_a_dead_row_and_keeps_a_live_one` already does, so the server is
+the test's own and not the host's:
+
+```
+$ env -u TMUX TMUX_TMPDIR=<empty dir> cargo test -p boop --bin boop     -- --exact cli::job::tests::prune_dry_run_removes_nothing
+test result: ok. 1 passed; 0 failed
+```
+
+`crates/boop/src/cli/job.rs` is otherwise byte-identical to base
+(`git diff f3d5123 -- crates/boop/src/cli/job.rs` was empty before this fix),
+so the test is not something this branch broke. What the branch changed is
+which target fails FIRST. On base, `cargo test --workspace` dies in the `boop`
+lib target after 1016s on 4 known-red tests and never reaches the bin target;
+run 32371247357 on `f3d5123` shows exactly that. On this branch those 4 moved
+into `boop-harness`, the `boop` bin target now runs on its own, and the latent
+race surfaced.
+
+### semver job
+
+`cargo-semver-checks` compares two sides. The four new crates do not exist at
+`baseline-rev`, so naming them errored the whole run:
+
+```
+error: failed to retrieve local crate data from git revision
+Caused by:
+    2: package `boop-acp` not found in .../git-f3d51235.../
+```
+
+A hand-maintained package list cannot express "check it once it has a
+baseline", so the list is now computed: a step walks `crates/boop*/Cargo.toml`,
+keeps every package `git cat-file -e "$BASE:$manifest"` already finds, and
+prints the ones it skipped. Coverage is wider than the static list it replaces,
+because a crate added later joins by itself with no workflow edit. On this PR
+the four new crates print as skipped; on every PR after this one they are
+checked.
+
+### Still red on this branch, and red on main for the same reason
+
+Four tests fail on the runner and are pre-existing, proved by base run
+32371247357 on `f3d5123`: `harness::codex::tests::codex_spawn_returns_handle_and_stop_tears_down`
+and the three `worktree::tests::*` (`a_failing_boop_start_blocks_the_spawn`,
+`a_hung_setup_step_fails_within_its_deadline_instead_of_hanging`,
+`the_killed_child_leaves_no_orphan`). They assert on a `just` recipe and a
+codex spawn the runner image does not provide. They are the 4 the brief named
+as known-red, they pass on this machine, and this branch only moved their file
+from `crates/boop` to `crates/boop-harness`.
+
 ## Commits
 
 | commit | crate |
@@ -267,3 +334,4 @@ $ echo $?
 | `5ac9b37` | `boop-proc` |
 | `refactor(boop): reduce crates/boop to the cli` | `boop` reduced to the cli, docs, CI, card |
 | `refactor(boop): close the crate seam with typed store fns` | the four SQL reaches, both TODO markers deleted |
+| `ci: pin the prune dry-run test's tmux server, compute the semver baseline list` | the two CI reds |

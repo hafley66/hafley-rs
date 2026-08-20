@@ -2431,9 +2431,14 @@ mod tests {
 
     /// RECEIPT. `--dry-run` reports the same rows a real run would prune but
     /// removes nothing.
+    ///
+    /// The live session is the tmux server, not the subject: `run_lane_prune`
+    /// bails before reading a single route when no server answers, and a host
+    /// with none running (a CI runner) would otherwise decide this test.
     #[test]
     fn prune_dry_run_removes_nothing() {
         let dir = temp_mail_dir();
+        let _session = LiveTmuxSession::new(&unique_name("boop-prune-dryrun"));
         write_route(
             &dir,
             "dead-lane",

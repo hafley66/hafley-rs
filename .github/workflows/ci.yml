@@ -28,8 +28,28 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - name: boop packages that exist at the baseline
+        id: baseline
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # A semver check compares two sides. A crate this PR adds has no
+          # baseline, and naming it errors the whole run, so the list is every
+          # boop crate git can already find at BASE. A new crate joins the list
+          # by itself on the PR after the one that adds it; nothing to edit.
+          packages=""
+          for manifest in crates/boop*/Cargo.toml; do
+            name=$(sed -n 's/^name = "\(.*\)"$/\1/p' "$manifest" | head -1)
+            if git cat-file -e "$BASE:$manifest" 2>/dev/null; then
+              packages="${packages:+$packages, }$name"
+            else
+              echo "no baseline at $BASE, skipped: $name"
+            fi
+          done
+          echo "checking: $packages"
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
       - name: check public api compatibility
         uses: obi1kenobi/cargo-semver-checks-action@v2
         with:
-          package: boop, boop-mux, boop-store, boop-acp, boop-harness, boop-proc
+          package: ${{ steps.baseline.outputs.packages }}
           baseline-rev: ${{ github.event.pull_request.base.sha }}
