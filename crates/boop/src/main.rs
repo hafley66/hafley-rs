@@ -592,7 +592,7 @@ fn main() -> Result<()> {
     let command = cli.command.context("a command or --preset is required")?;
     init_tracing(supervised_lane(&command))?;
     let registry = Registry::discover();
-    let needs_startup_sync = command_needs_startup_sync(&command);
+    let needs_startup_sync = startup_sync_wanted(&command, sync_suppressed());
     run_with_startup_sync(
         needs_startup_sync,
         || sync_before_local_command(&registry),
@@ -942,6 +942,25 @@ fn main() -> Result<()> {
 
 fn sync_before_local_command(registry: &Registry) -> Result<()> {
     sync_all(registry, false, false, SyncLiveness::TranscriptOnly)
+}
+
+/// The name of the escape hatch that suppresses the startup transcript sync.
+const NO_SYNC_ENV: &str = "BOOP_NO_SYNC";
+
+/// Whether the caller suppressed the startup sync. `instant`, hooks and shell
+/// loops spawn boop as a subprocess and cannot thread a clap flag through, so
+/// the hatch is an environment variable; `0` and the empty value keep syncing.
+fn sync_suppressed() -> bool {
+    match std::env::var(NO_SYNC_ENV) {
+        Ok(value) => !value.is_empty() && value != "0",
+        Err(_) => false,
+    }
+}
+
+/// The startup-sync decision: the verb's own need, minus the caller's hatch.
+/// The hatch never widens the set of verbs that sync.
+fn startup_sync_wanted(command: &SubCmd, suppressed: bool) -> bool {
+    !suppressed && command_needs_startup_sync(command)
 }
 
 /// Verbs that read `agent_*` rows. A registry, mailbox, tmux or live-process
@@ -1861,6 +1880,45 @@ mod tests {
                 "{argv:?} reads agent_* rows and must sync first"
             );
         }
+    }
+
+    /// RECEIPT (boop-db-convoy): failed pre-fix, no hatch existed and every
+    /// read verb paid the cold sync.
+    #[test]
+    fn the_no_sync_hatch_clears_every_verb_that_would_sync() {
+        let syncing = [
+            vec!["boop", "db", "SELECT 1"],
+            vec!["boop", "db", "turn", "list"],
+            vec!["boop", "debug"],
+            vec!["boop", "sessions"],
+        ];
+        for argv in syncing {
+            let cli = Cli::try_parse_from(&argv).unwrap_or_else(|e| panic!("{argv:?}: {e}"));
+            assert!(
+                startup_sync_wanted(cli.command.as_ref().unwrap(), false),
+                "{argv:?} syncs by default"
+            );
+            assert!(
+                !startup_sync_wanted(cli.command.as_ref().unwrap(), true),
+                "{argv:?} must skip the sync under the hatch"
+            );
+        }
+    }
+
+    #[test]
+    fn the_no_sync_hatch_never_makes_a_registry_verb_sync() {
+        let cli = Cli::try_parse_from(["boop", "beep", "lane", "list"]).expect("parse");
+        assert!(!startup_sync_wanted(cli.command.as_ref().unwrap(), false));
+        assert!(!startup_sync_wanted(cli.command.as_ref().unwrap(), true));
+    }
+
+    #[test]
+    fn help_text_names_the_no_sync_hatch() {
+        let help = Cli::command().render_long_help().to_string();
+        assert!(
+            help.contains(NO_SYNC_ENV),
+            "help text missing {NO_SYNC_ENV}:\n{help}"
+        );
     }
 
     #[test]
