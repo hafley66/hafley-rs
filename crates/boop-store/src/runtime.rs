@@ -1050,7 +1050,7 @@ mod tests {
     use crate::bus::{Message, Route};
     use crate::ident::LaneSpawn;
     use crate::proc::{ProcReader, ProcessInfo};
-    use crate::test_support::FakeMux;
+    use crate::testing::FakeMux;
     use crate::Store;
 
     use super::{

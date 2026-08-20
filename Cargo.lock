@@ -295,6 +295,7 @@ dependencies = [
  "agent-client-protocol",
  "anyhow",
  "boop-mux",
+ "boop-store",
  "clap",
  "dirs",
  "ignore",
@@ -318,6 +319,23 @@ dependencies = [
  "anyhow",
  "tmux_interface",
  "tracing",
+]
+
+[[package]]
+name = "boop-store"
+version = "0.0.2"
+dependencies = [
+ "anyhow",
+ "boop-mux",
+ "clap",
+ "dirs",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "time",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

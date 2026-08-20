@@ -9,10 +9,10 @@ use crate::tmux::{LiveSessions, Multiplexer};
 
 /// A throwaway git repo (one seed commit) plus a worktree path; harness
 /// adapter tests spawn against it and tear both down on drop.
-pub(crate) struct TempRepo {
-    pub(crate) dir: PathBuf,
-    pub(crate) sha: String,
-    pub(crate) worktree: PathBuf,
+pub struct TempRepo {
+    pub dir: PathBuf,
+    pub sha: String,
+    pub worktree: PathBuf,
 }
 
 /// `std::process::id()` is one PID for the whole test binary; adapter test
@@ -21,7 +21,7 @@ pub(crate) struct TempRepo {
 static NEXT_TEMP_REPO: AtomicUsize = AtomicUsize::new(0);
 
 impl TempRepo {
-    pub(crate) fn new() -> TempRepo {
+    pub fn new() -> TempRepo {
         let unique = NEXT_TEMP_REPO.fetch_add(1, Ordering::Relaxed);
         let pid = std::process::id();
         let dir = std::env::temp_dir().join(format!("boop-temprepo-{pid}-{unique}"));
@@ -74,15 +74,15 @@ impl Drop for TempRepo {
 
 /// A single-observation tmux fixture. It records each `live_sessions` request
 /// so bounded projection receipts can assert one acquisition for all lanes.
-pub(crate) struct FakeMux {
+pub struct FakeMux {
     sessions: Option<BTreeSet<String>>,
     panes: BTreeMap<String, String>,
     pane_pids: BTreeMap<String, u32>,
-    pub(crate) observations: AtomicUsize,
+    pub observations: AtomicUsize,
 }
 
 impl FakeMux {
-    pub(crate) fn available(names: &[&str]) -> Self {
+    pub fn available(names: &[&str]) -> Self {
         Self {
             sessions: Some(names.iter().map(|name| (*name).to_owned()).collect()),
             panes: BTreeMap::new(),
@@ -91,17 +91,17 @@ impl FakeMux {
         }
     }
 
-    pub(crate) fn with_pane(mut self, pane: &str, session: &str) -> Self {
+    pub fn with_pane(mut self, pane: &str, session: &str) -> Self {
         self.panes.insert(pane.to_owned(), session.to_owned());
         self
     }
 
-    pub(crate) fn with_pane_pid(mut self, target: &str, pid: u32) -> Self {
+    pub fn with_pane_pid(mut self, target: &str, pid: u32) -> Self {
         self.pane_pids.insert(target.to_owned(), pid);
         self
     }
 
-    pub(crate) fn inaccessible() -> Self {
+    pub fn inaccessible() -> Self {
         Self {
             sessions: None,
             panes: BTreeMap::new(),

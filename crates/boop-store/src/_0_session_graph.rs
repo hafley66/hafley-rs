@@ -725,36 +725,6 @@ fn tmux_session_anchor(target: &str) -> Option<&str> {
 }
 
 #[cfg(test)]
-pub(crate) fn assert_fixture_sessions_project(
-    adapter: &dyn crate::harness::Harness,
-    sessions: &[crate::harness::SessionRef],
-    expected_edges: usize,
-) {
-    let path = std::env::temp_dir().join(format!(
-        "boop-session-graph-fixture-{}-{}.db",
-        std::process::id(),
-        adapter.id()
-    ));
-    let _ = std::fs::remove_file(&path);
-    let store = Store::open(path.clone()).unwrap();
-    for session in sessions {
-        crate::ident::sync_session(&store, adapter, session).unwrap();
-    }
-    let graph = load_agent_session_graph(
-        &store,
-        AgentSessionGraphQuery {
-            cwd: None,
-            include_history: true,
-            ..AgentSessionGraphQuery::default()
-        },
-    )
-    .unwrap();
-    assert_eq!(graph.sessions.len(), sessions.len());
-    assert!(graph.edges.len() >= expected_edges);
-    let _ = std::fs::remove_file(path);
-}
-
-#[cfg(test)]
 mod tests {
     use std::collections::{BTreeMap, HashMap};
 
@@ -762,7 +732,7 @@ mod tests {
     use crate::ident::{LaneSpawn, TraceEvent};
     use crate::proc::{ProcReader, ProcessInfo, SysinfoSnapshot};
     use crate::runtime::{ProcessLiveness, ResolvedRoute, RuntimeLiveness, TmuxLiveness};
-    use crate::test_support::FakeMux;
+    use crate::testing::FakeMux;
 
     struct CodexProcessFixture {
         rows: HashMap<u32, ProcessInfo>,

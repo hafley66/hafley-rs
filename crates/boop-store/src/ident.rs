@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
-use crate::harness::{KnownSession, KnownSessions, SessionRef};
+use crate::session::{Ingested, KnownSession, KnownSessions, SessionRef};
 
 /// Every SQLite connection waits for a contending reader or the one WAL writer
 /// for the same bounded interval.
@@ -685,12 +685,12 @@ impl Store {
         Ok(max as u64)
     }
 
-    pub(crate) fn connection(&self) -> &Connection {
+    pub fn connection(&self) -> &Connection {
         &self.connection
     }
 
     /// Intern a natural key into a dictionary, for callers outside this module.
-    pub(crate) fn intern_public(&self, table: &str, value: &str) -> Result<i64> {
+    pub fn intern_public(&self, table: &str, value: &str) -> Result<i64> {
         self.intern(table, value)
     }
 
@@ -727,7 +727,7 @@ impl Store {
 
     /// Run a SELECT and hand back one JSON object per row, keyed by column
     /// name, so a read surface never restates the column list twice.
-    pub(crate) fn rows(&self, sql: &str, values: Vec<rusqlite::types::Value>) -> Result<Vec<Row>> {
+    pub fn rows(&self, sql: &str, values: Vec<rusqlite::types::Value>) -> Result<Vec<Row>> {
         let mut statement = self.connection.prepare(sql)?;
         let names: Vec<String> = statement
             .column_names()
@@ -1868,29 +1868,19 @@ impl Store {
     }
 }
 
-/// Project one transcript file forward from its stored cursor, writing session,
-/// turn, touch, cmd, fetch, skill, pr facts. Returns the new offset. A second
-/// run with nothing appended after the cursor writes nothing.
-pub fn sync_session(
+/// Advance one session's cursor across whatever `ingest` wrote, and record the
+/// session as observed. The caller supplies the projection because only the
+/// harness layer above knows which adapter owns this transcript.
+pub fn sync_session_with(
     store: &Store,
-    adapter: &dyn crate::harness::Harness,
-    session: &SessionRef,
-) -> Result<SyncStat> {
-    sync_session_with_pid(store, adapter, session, None)
-}
-
-/// The pid-observing variant. The observation path (a lane route's pane pid)
-/// names this session's process, so agent_live.pid can link session to process.
-pub fn sync_session_with_pid(
-    store: &Store,
-    adapter: &dyn crate::harness::Harness,
     session: &SessionRef,
     pid: Option<i64>,
+    ingest: impl FnOnce(&Store, &SessionRef, u64) -> Result<Ingested>,
 ) -> Result<SyncStat> {
     let key = session.path.display().to_string();
     let from = store.get_cursor(&session.session_id, &key)?;
     store.set_cursor(&session.session_id, &key, from)?;
-    let ingested = adapter.ingest(store, session, from)?;
+    let ingested = ingest(store, session, from)?;
     let observed_ts = session.modified_ms.max(
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -1918,12 +1908,12 @@ pub fn project_transcript(
     store: &Store,
     session: &SessionRef,
     from: u64,
-) -> Result<crate::harness::Ingested> {
+) -> Result<Ingested> {
     let mut file = std::fs::File::open(&session.path)
         .map_err(|error| anyhow::anyhow!("open {}: {error}", session.path.display()))?;
     let result = crate::tail::read_complete_lines(&mut file, from)?;
     if result.lines.is_empty() {
-        return Ok(crate::harness::Ingested {
+        return Ok(Ingested {
             stat: SyncStat::default(),
             next_cursor: from,
         });
@@ -1961,11 +1951,11 @@ pub fn project_transcript(
             value
                 .get("timestamp")
                 .and_then(serde_json::Value::as_str)
-                .and_then(crate::harness::claude::parse_iso_ms)
+                .and_then(crate::session::parse_iso_ms)
                 .unwrap_or(0) as i64,
         ])?;
     }
-    Ok(crate::harness::Ingested {
+    Ok(Ingested {
         stat: walk.stat,
         next_cursor: result.next_offset,
     })
@@ -1973,7 +1963,7 @@ pub fn project_transcript(
 
 /// The pieces an adapter needs to write turns and facts of its own.
 impl Store {
-    pub(crate) fn begin_walk(&self, session: &str) -> Result<u64> {
+    pub fn begin_walk(&self, session: &str) -> Result<u64> {
         self.max_turn(session)
     }
 
@@ -1992,7 +1982,7 @@ impl Store {
         self.add_turn(session, turn, ts, role, said)
     }
 
-    pub(crate) fn write_tool_fact(
+    pub fn write_tool_fact(
         &self,
         session: &str,
         turn: u64,
@@ -2003,7 +1993,7 @@ impl Store {
         emit_tool_fact(self, session, turn, ts, name, input)
     }
 
-    pub(crate) fn write_usage(
+    pub fn write_usage(
         &self,
         session: &str,
         turn: u64,
@@ -2033,7 +2023,7 @@ fn project_line(
     let ts = object
         .get("timestamp")
         .and_then(serde_json::Value::as_str)
-        .and_then(crate::harness::claude::parse_iso_ms)
+        .and_then(crate::session::parse_iso_ms)
         .unwrap_or(0);
     let sid = session.session_id.clone();
     let record_type = object
@@ -2566,14 +2556,14 @@ mod tests {
     use std::sync::{mpsc, Arc, Barrier};
     use std::time::Duration;
 
-    use crate::harness::SessionRef;
+    use crate::session::SessionRef;
 
     use rusqlite::params;
     use rusqlite::trace::{TraceEvent, TraceEventCodes};
 
     use super::{
-        project_transcript, sync_session, sync_session_with_pid, Store,
-        TraceEvent as LaneTraceEvent, BUSY_TIMEOUT, SCHEMA_VERSION,
+        project_transcript, sync_session_with, Store, TraceEvent as LaneTraceEvent, BUSY_TIMEOUT,
+        SCHEMA_VERSION,
     };
 
     static CURSOR_SQL: AtomicUsize = AtomicUsize::new(0);
@@ -3298,7 +3288,7 @@ mod tests {
         drop(file);
 
         let session = session_for(&lines_path);
-        let first = sync_session(&store, &crate::harness::claude::Claude, &session).unwrap();
+        let first = sync_session_with(&store, &session, None, project_transcript).unwrap();
         assert_eq!(first.written, 3, "user text, tool Read, tool Bash");
         assert_eq!(first.dropped, 0);
 
@@ -3309,7 +3299,7 @@ mod tests {
         assert_eq!(counts["agent_session"], 1);
 
         // second sync with nothing new carries the cursor and writes nothing
-        let noop = sync_session(&store, &crate::harness::claude::Claude, &session).unwrap();
+        let noop = sync_session_with(&store, &session, None, project_transcript).unwrap();
         assert_eq!(noop.written, 0);
         let counts2 = store.counts().unwrap();
         assert_eq!(counts2["agent_turn"], 3);
@@ -3337,10 +3327,10 @@ mod tests {
         let _ = std::fs::remove_file(&db_path);
         let store = Store::open(db_path.clone()).unwrap();
         let fixture_paths = [
-            "tests/fixtures/claude/bench/bench-claude-0001.jsonl",
-            "tests/fixtures/claude/bench/bench-claude-0002.jsonl",
-            "tests/fixtures/claude/bench/bench-claude-0003.jsonl",
-            "tests/fixtures/claude/bench/bench-claude-0004.jsonl",
+            "../boop/tests/fixtures/claude/bench/bench-claude-0001.jsonl",
+            "../boop/tests/fixtures/claude/bench/bench-claude-0002.jsonl",
+            "../boop/tests/fixtures/claude/bench/bench-claude-0003.jsonl",
+            "../boop/tests/fixtures/claude/bench/bench-claude-0004.jsonl",
         ];
         let total_lines: usize = fixture_paths
             .iter()
@@ -3398,7 +3388,7 @@ mod tests {
         session.session_id = "child".to_owned();
         session.parent = Some("parent".to_owned());
         drop(file);
-        sync_session(&store, &crate::harness::claude::Claude, &session).unwrap();
+        sync_session_with(&store, &session, None, project_transcript).unwrap();
 
         let edges = store.query_edges(Some("child")).unwrap();
         assert_eq!(edges.len(), 1);
@@ -3432,14 +3422,14 @@ mod tests {
         drop(file);
 
         let session = session_for(&lines_path);
-        sync_session(&store, &crate::harness::claude::Claude, &session).unwrap();
+        sync_session_with(&store, &session, None, project_transcript).unwrap();
 
         let mut file = OpenOptions::new().append(true).open(&lines_path).unwrap();
         writeln!(file, r#"{{"type":"user","sessionId":"ses-1","timestamp":"2026-08-01T00:00:00.300Z","message":"three"}}"#).unwrap();
         writeln!(file, r#"{{"type":"user","sessionId":"ses-1","timestamp":"2026-08-01T00:00:00.400Z","message":"four"}}"#).unwrap();
         drop(file);
 
-        sync_session(&store, &crate::harness::claude::Claude, &session).unwrap();
+        sync_session_with(&store, &session, None, project_transcript).unwrap();
 
         let counts = store.counts().unwrap();
         assert_eq!(counts["agent_turn"], 4, "all four turns stored");
@@ -3467,7 +3457,7 @@ mod tests {
         drop(file);
 
         let session = session_for(&lines_path);
-        sync_session(&store, &crate::harness::claude::Claude, &session).unwrap();
+        sync_session_with(&store, &session, None, project_transcript).unwrap();
 
         let filter = super::TurnQuery {
             session: Some("ses-1".to_owned()),
@@ -3554,12 +3544,8 @@ mod tests {
             writeln!(file, "{line}").unwrap();
         }
         drop(file);
-        let stat = sync_session(
-            store,
-            &crate::harness::claude::Claude,
-            &session_for(&lines_path),
-        )
-        .unwrap();
+        let stat = sync_session_with(store, &session_for(&lines_path), None, project_transcript)
+            .unwrap();
         let _ = std::fs::remove_file(&lines_path);
         stat
     }
@@ -3859,13 +3845,7 @@ mod tests {
         .unwrap();
         drop(file);
         let session = session_for(&lines_path);
-        sync_session_with_pid(
-            &store,
-            &crate::harness::claude::Claude,
-            &session,
-            Some(4242),
-        )
-        .unwrap();
+        sync_session_with(&store, &session, Some(4242), project_transcript).unwrap();
         let pid: Option<i64> = store
             .connection
             .query_row(
@@ -3988,12 +3968,7 @@ mod tests {
             .unwrap();
         writeln!(file, r#"{{"type":"assistant","sessionId":"ses-1","timestamp":"2026-08-01T00:00:01.000Z","gitBranch":"main","message":{{"content":[{{"type":"tool_use","name":"Read","input":{{"file_path":"/tmp/a.rs"}}}},{{"type":"tool_use","name":"Write","input":{{"file_path":"/tmp/b.rs"}}}}]}}}}"#).unwrap();
         drop(file);
-        sync_session(
-            &store,
-            &crate::harness::claude::Claude,
-            &session_for(&lines_path),
-        )
-        .unwrap();
+        sync_session_with(&store, &session_for(&lines_path), None, project_transcript).unwrap();
 
         // A second adapter (opencode/codex path) funnels through the same
         // canonical write site with lowercase verbs.
@@ -4067,12 +4042,7 @@ mod tests {
             .unwrap();
         writeln!(file, r#"{{"type":"user","sessionId":"ses-1","timestamp":"2026-08-01T00:00:00.100Z","message":"hello"}}"#).unwrap();
         drop(file);
-        sync_session(
-            &store,
-            &crate::harness::claude::Claude,
-            &session_for(&lines_path),
-        )
-        .unwrap();
+        sync_session_with(&store, &session_for(&lines_path), None, project_transcript).unwrap();
 
         let cursors = store.query_cursors(Some("ses-1")).unwrap();
         assert_eq!(cursors.len(), 1);

@@ -15,75 +15,62 @@ pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("BOOP_BUIL
 /// Just the commit stamp half of `BUILD`.
 pub const BUILD_SHA: &str = env!("BOOP_BUILD_SHA");
 
+// The store's modules keep their old paths so a library caller (and this
+// crate's own `crate::ident::...` spellings) is unchanged by the crate split.
 #[cfg(feature = "agent-read")]
-pub mod _0_session_graph;
+pub use boop_store::_0_session_graph;
 #[cfg(feature = "agent-read")]
-pub mod activity;
-pub mod bus;
+pub use boop_store::activity;
+pub use boop_store::{bus, event, proc, rows, runtime, session, tail, tmux, trail};
+#[cfg(feature = "agent-read")]
+pub use boop_store::{query, usage};
+#[cfg(test)]
+pub(crate) use boop_store::testing as test_support;
+
+/// The store's ident module plus the two harness-driven sync entry points,
+/// which need an adapter and so live one crate up.
+pub mod ident {
+    pub use boop_store::ident::*;
+
+    pub use crate::harness::{sync_session, sync_session_with_pid};
+}
+
 pub mod channel;
 #[cfg(feature = "agent-read")]
 pub mod chat;
 pub mod concatmap;
 pub mod config;
 pub mod debug;
-pub mod event;
 pub mod harness;
 pub mod host;
-pub mod ident;
 pub mod identity;
 pub mod inbox;
 pub mod lane;
 pub mod mailwait;
-pub mod proc;
-#[cfg(feature = "agent-read")]
-pub mod query;
 pub mod registry;
-pub mod rows;
-pub mod runtime;
 #[cfg(feature = "agent-read")]
 pub mod summary;
 pub mod supervise;
-pub mod tail;
-#[cfg(test)]
-pub(crate) mod test_support;
-pub mod tmux;
-pub mod trail;
-#[cfg(feature = "agent-read")]
-pub mod usage;
 pub mod worktree;
 
+pub use boop_store::open_default;
 #[cfg(feature = "agent-read")]
-pub use _0_session_graph::{
-    load_agent_session_graph, load_agent_session_graph_with_runtime, AgentSessionEdge,
-    AgentSessionGraph, AgentSessionGraphQuery, AgentSessionGraphRuntime, AgentSessionIdentity,
-    AgentSessionNode, AgentShellNode, LoadAgentSessionGraph, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
+pub use boop_store::{
+    load_agent_session_graph, load_agent_session_graph_with_runtime, ActivityCount, ActivityScope,
+    AgentSessionEdge, AgentSessionGraph, AgentSessionGraphQuery, AgentSessionGraphRuntime,
+    AgentSessionIdentity, AgentSessionNode, AgentShellNode, FactKind, FactQuery, GroupBy,
+    LoadAgentSessionGraph, ToolResultAvailability, UsageQuery, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
 };
-#[cfg(feature = "agent-read")]
-pub use activity::{ActivityCount, ActivityScope, ToolResultAvailability};
-pub use ident::{
-    Store, SyncStat, TraceErrorRow, TraceEvent, TraceEventRow, TRACE_EVENT_RETENTION_LIMIT,
+pub use boop_store::{
+    AgentRuntimeRow, CommandRow, CompletionRecord, EdgeRow, FactCursor, FetchRow, LaneRuntime,
+    LiveSpanRow, MailboxCounts, ProcessIdentity, ProcessLiveness, ResolvedRoute, RuntimeDiagnostic,
+    RuntimeLiveness, RuntimeSnapshotInput, SessionRow, StatusRow, Store, SyncStat, TmuxLiveness,
+    TouchRow, TraceErrorRow, TraceEvent, TraceEventRow, TurnRow, UsageRow, WorktreeCoordinates,
+    TRACE_EVENT_RETENTION_LIMIT,
 };
-#[cfg(feature = "agent-read")]
-pub use query::{FactKind, FactQuery};
 pub use registry::Registry;
-pub use rows::{
-    CommandRow, EdgeRow, FactCursor, FetchRow, LiveSpanRow, SessionRow, StatusRow, TouchRow,
-    TurnRow, UsageRow,
-};
-pub use runtime::{
-    runtime_snapshot, runtime_snapshot_now, AgentRuntimeRow, CompletionRecord, LaneRuntime,
-    MailboxCounts, ProcessIdentity, ProcessLiveness, ResolvedRoute, RuntimeDiagnostic,
-    RuntimeLiveness, RuntimeSnapshotInput, TmuxLiveness, WorktreeCoordinates,
-};
 #[cfg(feature = "agent-read")]
 pub use summary::{
     agent_summary, agent_summary_now, AgentSummary, AgentSummaryActivity, AgentSummaryAgent,
     AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION,
 };
-#[cfg(feature = "agent-read")]
-pub use usage::{GroupBy, UsageQuery};
-
-/// Open the default store at `~/.agent/boop.db`.
-pub fn open_default() -> anyhow::Result<Store> {
-    Store::open(Store::default_path()?)
-}

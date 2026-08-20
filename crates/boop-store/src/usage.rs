@@ -7,7 +7,8 @@ use crate::ident::{Row, Store};
 use crate::rows::UsageRow;
 
 /// The bucket a `--group-by` asks for. `None` is the totals row.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum GroupBy {
     Model,
     Session,
@@ -433,7 +434,7 @@ mod tests {
     /// prints and carry a bucket when grouped.
     #[test]
     fn typed_usage_rows_carry_bucket_and_calls() {
-        use crate::ident::{sync_session, Store};
+        use crate::ident::Store;
         use std::io::Write;
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -452,7 +453,7 @@ mod tests {
         )
         .unwrap();
         drop(file);
-        let session = crate::harness::SessionRef {
+        let session = crate::session::SessionRef {
             harness: "claude",
             session_id: "s".to_owned(),
             nickname: "s".to_owned(),
@@ -465,7 +466,7 @@ mod tests {
             tmux_socket: None,
             parent: None,
         };
-        sync_session(&store, &crate::harness::claude::Claude, &session).unwrap();
+        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript).unwrap();
 
         let totals = store
             .usage_report_rows(None, &UsageQuery::default())
@@ -565,7 +566,7 @@ mod tests {
 #[cfg(test)]
 mod cte_equality {
     use super::{fold_blocks, UsageQuery};
-    use crate::ident::{sync_session, Store};
+    use crate::ident::Store;
 
     /// The recursive CTE from plans/2026-08-09-boop-analytics-PLAN.md section 6.
     /// It is the spec; the Rust fold is the implementation, and they must agree.
@@ -623,7 +624,7 @@ mod cte_equality {
             .unwrap();
         }
         drop(file);
-        let session = crate::harness::SessionRef {
+        let session = crate::session::SessionRef {
             harness: "claude",
             session_id: "s".to_owned(),
             nickname: "s".to_owned(),
@@ -636,7 +637,7 @@ mod cte_equality {
             tmux_socket: None,
             parent: None,
         };
-        sync_session(&store, &crate::harness::claude::Claude, &session).unwrap();
+        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript).unwrap();
         (store, db_path, log_path)
     }
 

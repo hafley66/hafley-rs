@@ -403,16 +403,7 @@ fn collect_tool_use(
 }
 
 /// Parse an ISO-8601 UTC timestamp into ms since the epoch.
-pub(crate) fn parse_iso_ms(text: &str) -> Option<u64> {
-    use time::format_description::well_known::Rfc3339;
-    use time::OffsetDateTime;
-    let parsed = OffsetDateTime::parse(text, &Rfc3339).ok()?;
-    let seconds = parsed.unix_timestamp();
-    u64::try_from(seconds)
-        .ok()?
-        .checked_mul(1000)?
-        .checked_add(parsed.millisecond() as u64)
-}
+pub use boop_store::session::parse_iso_ms;
 
 #[cfg(test)]
 mod tests {
@@ -667,7 +658,7 @@ mod tests {
     fn claude_fixture_projects_through_the_graph_query() {
         use super::sessions_in;
         let sessions = sessions_in(&std::path::PathBuf::from("tests/fixtures/claude")).unwrap();
-        crate::_0_session_graph::assert_fixture_sessions_project(&super::Claude, &sessions, 0);
+        crate::harness::assert_fixture_sessions_project(&super::Claude, &sessions, 0);
     }
 
     /// FAIL-FIRST (D4). 52 of 1318 live transcript stems name two different
