@@ -1,0 +1,44 @@
+[package]
+name = "boop-harness"
+version = "0.0.2"
+edition.workspace = true
+description = "the per-harness half of boop: transcript formats, session roots, the identity ladder, and the worktree a spawn runs in"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+# The lane channel each adapter's `open_channel` mints.
+boop-acp = { version = "0.0.2", path = "../boop-acp" }
+# The database an ingest pass writes into, and the session types it shares.
+boop-store = { version = "0.0.2", path = "../boop-store", default-features = false }
+# The transcripts are JSONL; this is the credible reader.
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+# Application-level errors.
+anyhow = "1"
+# Resolve the claude home dir without XDG project-dir machinery.
+dirs = "5"
+# Parallel filesystem acquisition for transcript candidates. Harness adapters
+# retain their own roots and transcript identity parsing.
+ignore = "0.4"
+# Some harnesses keep their sessions in SQLite rather than JSONL.
+rusqlite = { version = "0.40", features = ["bundled", "trace"] }
+# Transcript timestamps parse against Rfc3339; hand-rolled date math is gone.
+time = { version = "0.3", features = ["parsing", "formatting"] }
+# Deadline on a synchronous std::process::Child without pulling in an async
+# runtime: one method, wait_timeout, on the same Child this file already spawns.
+wait-timeout = "0.2.1"
+# Process-wide diagnostics. The binary installs the subscriber; library code
+# only emits conventional tracing events and spans.
+tracing.workspace = true
+
+[dev-dependencies]
+# The store's deterministic fixtures (throwaway git repo, fake multiplexer).
+boop-store = { version = "0.0.2", path = "../boop-store", features = ["testing"] }
+# Peak-bytes-allocated counter for tests/bench_grid.rs's own #[global_allocator].
+peak_alloc = "0.3"
+
+[lib]
+name = "boop_harness"
+path = "src/lib.rs"

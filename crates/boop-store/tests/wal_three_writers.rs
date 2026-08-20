@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
-use boop::{Store, TraceEvent};
+use boop_store::{Store, TraceEvent};
 
 static SEQUENCE: AtomicU64 = AtomicU64::new(0);
 

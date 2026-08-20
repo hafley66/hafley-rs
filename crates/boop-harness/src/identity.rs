@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use anyhow::Result;
 
-use crate::bus::Route;
+use boop_store::bus::Route;
 
 /// The rung of the ladder that produced an identity. Ordered most trustworthy
 /// first; `Env` is self-reported, so a consumer needing certainty checks this.
@@ -122,8 +122,8 @@ pub(crate) fn from_pane_for(harness: &str, routes: &BTreeMap<String, Route>) -> 
     let pane = std::env::var("TMUX_PANE")
         .ok()
         .filter(|p| !p.is_empty())
-        .or_else(|| crate::tmux::mux().current_pane(None))?;
-    let tmux_session = crate::tmux::mux().session_of_pane(None, &pane)?;
+        .or_else(|| boop_store::tmux::mux().current_pane(None))?;
+    let tmux_session = boop_store::tmux::mux().session_of_pane(None, &pane)?;
     let (lane, route) = routes.iter().find(|(_, route)| {
         route
             .harness

@@ -9,20 +9,20 @@ use anyhow::{Context, Result};
 use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
 
-use crate::event::AgentEvent;
+use boop_store::event::AgentEvent;
 use crate::harness::{
     Capabilities, Harness, Ingested, OneShotSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
-use crate::ident::{Store, SyncStat, UsageRow};
+use boop_store::ident::{Store, SyncStat, UsageRow};
 
 pub struct Opencode;
 
 impl Harness for Opencode {
     fn open_channel(
         &self,
-        spec: &crate::channel::ChannelSpec,
-    ) -> anyhow::Result<Box<dyn crate::channel::LaneChannel>> {
-        Ok(Box::new(crate::channel::opencode::OpencodeChannel::open(
+        spec: &boop_acp::channel::ChannelSpec,
+    ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
+        Ok(Box::new(boop_acp::channel::opencode::OpencodeChannel::open(
             spec,
         )?))
     }
@@ -136,7 +136,7 @@ impl Harness for Opencode {
             .unwrap_or_else(|| format!("boop-{session_id}"));
         let cwd = crate::worktree::prepare_spawn_dir(spec)?;
         let command = crate::harness::supervisor_command(spec);
-        crate::tmux::mux().new_detached_session(
+        boop_store::tmux::mux().new_detached_session(
             spec.socket.as_deref(),
             &tmux_name,
             &cwd.display().to_string(),
@@ -160,7 +160,7 @@ impl Harness for Opencode {
     fn send(&self, session: &SessionRef, text: &str) -> Result<SendOutcome> {
         match &session.tmux {
             Some(tmux) => {
-                crate::tmux::mux().send_keys_literal(session.tmux_socket.as_deref(), tmux, text)?;
+                boop_store::tmux::mux().send_keys_literal(session.tmux_socket.as_deref(), tmux, text)?;
                 Ok(SendOutcome::Injected)
             }
             None => Ok(SendOutcome::QueuedForNextSpawn),
@@ -169,8 +169,8 @@ impl Harness for Opencode {
 
     fn stop(&self, session: &SessionRef) -> Result<()> {
         if let Some(tmux) = &session.tmux {
-            if crate::tmux::mux().has_session(session.tmux_socket.as_deref(), tmux)? {
-                crate::tmux::mux().kill_session(session.tmux_socket.as_deref(), tmux)?;
+            if boop_store::tmux::mux().has_session(session.tmux_socket.as_deref(), tmux)? {
+                boop_store::tmux::mux().kill_session(session.tmux_socket.as_deref(), tmux)?;
             }
         }
         Ok(())
@@ -621,7 +621,7 @@ mod tests {
         launch_command, messages_after, sessions_from, visit_parts_for_messages, Opencode, Part,
     };
     use crate::harness::{Harness, SpawnSpec};
-    use crate::test_support::TempRepo;
+    use boop_store::testing::TempRepo;
 
     static PART_SELECTS: AtomicUsize = AtomicUsize::new(0);
 
@@ -821,14 +821,14 @@ mod tests {
                 std::process::id(),
                 NEXT_SOCKET.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             );
-            crate::tmux::kill_test_server(&socket);
+            boop_store::tmux::kill_test_server(&socket);
             TmuxGuard { socket }
         }
     }
 
     impl Drop for TmuxGuard {
         fn drop(&mut self) {
-            crate::tmux::kill_test_server(&self.socket);
+            boop_store::tmux::kill_test_server(&self.socket);
         }
     }
 
@@ -949,7 +949,7 @@ mod tests {
     fn opencode_send_injects_into_a_live_pane() {
         let guard = TmuxGuard::new();
         let name = format!("ctl-{}", std::process::id());
-        crate::tmux::mux()
+        boop_store::tmux::mux()
             .new_bare_session(Some(&guard.socket), &name)
             .unwrap();
         let session = crate::harness::SessionRef {
@@ -968,7 +968,7 @@ mod tests {
         let opencode = Opencode;
         let outcome = opencode.send(&session, "hello from boop").unwrap();
         assert_eq!(outcome, crate::harness::SendOutcome::Injected);
-        let pane = crate::tmux::mux()
+        let pane = boop_store::tmux::mux()
             .capture_pane(Some(&guard.socket), &name, None)
             .unwrap();
         assert!(
@@ -978,7 +978,7 @@ mod tests {
     }
 
     fn has_session_on(guard: &TmuxGuard, name: &str) -> bool {
-        crate::tmux::mux()
+        boop_store::tmux::mux()
             .has_session(Some(&guard.socket), name)
             .unwrap_or(false)
     }

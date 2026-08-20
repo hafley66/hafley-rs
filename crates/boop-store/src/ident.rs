@@ -3327,10 +3327,10 @@ mod tests {
         let _ = std::fs::remove_file(&db_path);
         let store = Store::open(db_path.clone()).unwrap();
         let fixture_paths = [
-            "../boop/tests/fixtures/claude/bench/bench-claude-0001.jsonl",
-            "../boop/tests/fixtures/claude/bench/bench-claude-0002.jsonl",
-            "../boop/tests/fixtures/claude/bench/bench-claude-0003.jsonl",
-            "../boop/tests/fixtures/claude/bench/bench-claude-0004.jsonl",
+            "../boop-harness/tests/fixtures/claude/bench/bench-claude-0001.jsonl",
+            "../boop-harness/tests/fixtures/claude/bench/bench-claude-0002.jsonl",
+            "../boop-harness/tests/fixtures/claude/bench/bench-claude-0003.jsonl",
+            "../boop-harness/tests/fixtures/claude/bench/bench-claude-0004.jsonl",
         ];
         let total_lines: usize = fixture_paths
             .iter()

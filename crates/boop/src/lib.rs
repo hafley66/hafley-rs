@@ -32,26 +32,23 @@ pub(crate) use boop_store::testing as test_support;
 pub mod ident {
     pub use boop_store::ident::*;
 
-    pub use crate::harness::{sync_session, sync_session_with_pid};
+    pub use boop_harness::harness::{sync_session, sync_session_with_pid};
 }
 
 pub use boop_acp::channel;
+pub use boop_harness::{harness, identity, registry, worktree};
 #[cfg(feature = "agent-read")]
 pub mod chat;
 pub mod concatmap;
 pub mod config;
 pub mod debug;
-pub mod harness;
 pub mod host;
-pub mod identity;
 pub mod inbox;
 pub mod lane;
 pub mod mailwait;
-pub mod registry;
 #[cfg(feature = "agent-read")]
 pub mod summary;
 pub mod supervise;
-pub mod worktree;
 
 pub use boop_store::open_default;
 #[cfg(feature = "agent-read")]
@@ -68,7 +65,7 @@ pub use boop_store::{
     TouchRow, TraceErrorRow, TraceEvent, TraceEventRow, TurnRow, UsageRow, WorktreeCoordinates,
     TRACE_EVENT_RETENTION_LIMIT,
 };
-pub use registry::Registry;
+pub use boop_harness::Registry;
 #[cfg(feature = "agent-read")]
 pub use summary::{
     agent_summary, agent_summary_now, AgentSummary, AgentSummaryActivity, AgentSummaryAgent,

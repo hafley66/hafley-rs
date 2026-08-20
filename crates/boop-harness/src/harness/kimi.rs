@@ -12,12 +12,12 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use serde_json::Value;
 
-use crate::event::AgentEvent;
+use boop_store::event::AgentEvent;
 use crate::harness::{
     Capabilities, Harness, Ingested, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
-use crate::ident::{Store, SyncStat, UsageRow};
-use crate::tail;
+use boop_store::ident::{Store, SyncStat, UsageRow};
+use boop_store::tail;
 
 pub struct Kimi;
 
@@ -36,10 +36,10 @@ impl Harness for Kimi {
 
     fn open_channel(
         &self,
-        spec: &crate::channel::ChannelSpec,
-    ) -> anyhow::Result<Box<dyn crate::channel::LaneChannel>> {
-        let profile = crate::channel::tui::kimi_profile(spec);
-        Ok(Box::new(crate::channel::tui::TuiChannel::open(
+        spec: &boop_acp::channel::ChannelSpec,
+    ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
+        let profile = boop_acp::channel::tui::kimi_profile(spec);
+        Ok(Box::new(boop_acp::channel::tui::TuiChannel::open(
             profile, spec, None,
         )?))
     }
@@ -68,7 +68,7 @@ impl Harness for Kimi {
             .unwrap_or_else(|| format!("boop-{}", spec.lane));
         let cwd = crate::worktree::prepare_spawn_dir(spec)?;
         let command = crate::harness::supervisor_command(spec);
-        crate::tmux::mux().new_detached_session(
+        boop_store::tmux::mux().new_detached_session(
             spec.socket.as_deref(),
             &tmux_name,
             &cwd.display().to_string(),
@@ -81,7 +81,7 @@ impl Harness for Kimi {
             path: kimi_sessions_dir().unwrap_or_else(|_| cwd.join(".kimi-sessions")),
             cwd: Some(cwd.display().to_string()),
             git_branch: Some(spec.branch.clone()),
-            modified_ms: crate::channel::now_ms(),
+            modified_ms: boop_acp::channel::now_ms(),
             size: 0,
             tmux: Some(tmux_name),
             tmux_socket: spec.socket.clone(),
@@ -92,7 +92,7 @@ impl Harness for Kimi {
     fn send(&self, session: &SessionRef, text: &str) -> anyhow::Result<SendOutcome> {
         match &session.tmux {
             Some(tmux) => {
-                crate::tmux::mux().send_keys_literal(session.tmux_socket.as_deref(), tmux, text)?;
+                boop_store::tmux::mux().send_keys_literal(session.tmux_socket.as_deref(), tmux, text)?;
                 Ok(SendOutcome::Injected)
             }
             None => Ok(SendOutcome::QueuedForNextSpawn),
@@ -101,8 +101,8 @@ impl Harness for Kimi {
 
     fn stop(&self, session: &SessionRef) -> anyhow::Result<()> {
         if let Some(tmux) = &session.tmux {
-            if crate::tmux::mux().has_session(session.tmux_socket.as_deref(), tmux)? {
-                crate::tmux::mux().kill_session(session.tmux_socket.as_deref(), tmux)?;
+            if boop_store::tmux::mux().has_session(session.tmux_socket.as_deref(), tmux)? {
+                boop_store::tmux::mux().kill_session(session.tmux_socket.as_deref(), tmux)?;
             }
         }
         Ok(())
@@ -293,11 +293,11 @@ fn parse_line(session: &SessionRef, line: &tail::CompleteLine) -> Option<AgentEv
                 .and_then(Value::as_str)
             {
                 let access = if tool_name.as_deref() == Some("Read") {
-                    crate::event::Access::Read
+                    boop_store::event::Access::Read
                 } else {
-                    crate::event::Access::Write
+                    boop_store::event::Access::Write
                 };
-                paths.push(crate::event::ToolPath {
+                paths.push(boop_store::event::ToolPath {
                     path: path.to_owned(),
                     access,
                 });
@@ -509,7 +509,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::harness::{Harness, SessionRef};
-    use crate::Store;
+    use boop_store::Store;
 
     use super::{sessions_in, Kimi};
 

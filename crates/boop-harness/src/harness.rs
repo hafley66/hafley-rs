@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::ident::{Store, SyncStat};
+use boop_store::ident::{Store, SyncStat};
 
 pub use boop_store::session::{
     Capabilities, Ingested, KnownSession, KnownSessions, OneShotSpec, ReadChunk, SendOutcome,
@@ -31,7 +31,7 @@ pub fn sync_session_with_pid(
     session: &SessionRef,
     pid: Option<i64>,
 ) -> Result<SyncStat> {
-    crate::ident::sync_session_with(store, session, pid, |store, session, from| {
+    boop_store::ident::sync_session_with(store, session, pid, |store, session, from| {
         adapter.ingest(store, session, from)
     })
 }
@@ -50,7 +50,7 @@ pub trait Harness: Send + Sync {
     /// Resolve a caller pane from routes registered for this harness.
     fn identity_pane(
         &self,
-        routes: &std::collections::BTreeMap<String, crate::bus::Route>,
+        routes: &std::collections::BTreeMap<String, boop_store::bus::Route>,
     ) -> Option<crate::identity::Identity> {
         crate::identity::from_pane_for(self.id(), routes)
     }
@@ -64,8 +64,8 @@ pub trait Harness: Send + Sync {
     /// rooted at an adopted tmux pane. `None` leaves the route anonymous.
     fn session_id_in_pane(
         &self,
-        _multiplexer: &dyn crate::tmux::Multiplexer,
-        _processes: &dyn crate::proc::ProcReader,
+        _multiplexer: &dyn boop_store::tmux::Multiplexer,
+        _processes: &dyn boop_store::proc::ProcReader,
         _tmux_target: &str,
     ) -> Option<String> {
         None
@@ -102,11 +102,11 @@ pub trait Harness: Send + Sync {
     /// for a transcript, a rowid for a SQL store.
     fn ingest(
         &self,
-        store: &crate::ident::Store,
+        store: &boop_store::ident::Store,
         session: &SessionRef,
         from: u64,
     ) -> anyhow::Result<Ingested> {
-        crate::ident::project_transcript(store, session, from)
+        boop_store::ident::project_transcript(store, session, from)
     }
 
     // facet 3: control. Defaults are the honest all-false / Unsupported shape,
@@ -147,8 +147,8 @@ pub trait Harness: Send + Sync {
     /// this, and no caller learns which harness answered.
     fn open_channel(
         &self,
-        _spec: &crate::channel::ChannelSpec,
-    ) -> anyhow::Result<Box<dyn crate::channel::LaneChannel>> {
+        _spec: &boop_acp::channel::ChannelSpec,
+    ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
         anyhow::bail!("harness `{}` has no lane channel", self.id())
     }
 }
@@ -250,16 +250,16 @@ pub(crate) fn assert_fixture_sessions_project(
         adapter.id()
     ));
     let _ = std::fs::remove_file(&path);
-    let store = crate::ident::Store::open(path.clone()).unwrap();
+    let store = boop_store::ident::Store::open(path.clone()).unwrap();
     for session in sessions {
         sync_session(&store, adapter, session).unwrap();
     }
-    let graph = crate::_0_session_graph::load_agent_session_graph(
+    let graph = boop_store::_0_session_graph::load_agent_session_graph(
         &store,
-        crate::_0_session_graph::AgentSessionGraphQuery {
+        boop_store::_0_session_graph::AgentSessionGraphQuery {
             cwd: None,
             include_history: true,
-            ..crate::_0_session_graph::AgentSessionGraphQuery::default()
+            ..boop_store::_0_session_graph::AgentSessionGraphQuery::default()
         },
     )
     .unwrap();

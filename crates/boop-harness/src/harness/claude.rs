@@ -5,12 +5,12 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-use crate::event::{Access, AgentEvent, ToolPath};
+use boop_store::event::{Access, AgentEvent, ToolPath};
 use crate::harness::{
     jsonl_files, Capabilities, Harness, KnownSessions, ReadChunk, SendOutcome, SessionRef,
     SpawnSpec,
 };
-use crate::tail;
+use boop_store::tail;
 use anyhow::Context;
 use serde_json::Value;
 
@@ -20,8 +20,8 @@ pub struct Claude;
 impl Harness for Claude {
     fn session_id_in_pane(
         &self,
-        multiplexer: &dyn crate::tmux::Multiplexer,
-        processes: &dyn crate::proc::ProcReader,
+        multiplexer: &dyn boop_store::tmux::Multiplexer,
+        processes: &dyn boop_store::proc::ProcReader,
         tmux_target: &str,
     ) -> Option<String> {
         let root = multiplexer.pane_pid(None, tmux_target)?;
@@ -44,9 +44,9 @@ impl Harness for Claude {
 
     fn open_channel(
         &self,
-        spec: &crate::channel::ChannelSpec,
-    ) -> anyhow::Result<Box<dyn crate::channel::LaneChannel>> {
-        Ok(Box::new(crate::channel::claude::ClaudeChannel::open(spec)?))
+        spec: &boop_acp::channel::ChannelSpec,
+    ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
+        Ok(Box::new(boop_acp::channel::claude::ClaudeChannel::open(spec)?))
     }
 
     fn id(&self) -> &'static str {
@@ -110,7 +110,7 @@ impl Harness for Claude {
             .unwrap_or_else(|| format!("boop-{session_id}"));
         let cwd = crate::worktree::prepare_spawn_dir(spec)?;
         let command = crate::harness::supervisor_command(spec);
-        crate::tmux::mux().new_detached_session(
+        boop_store::tmux::mux().new_detached_session(
             spec.socket.as_deref(),
             &tmux_name,
             &cwd.display().to_string(),
@@ -137,7 +137,7 @@ impl Harness for Claude {
     fn send(&self, session: &SessionRef, text: &str) -> anyhow::Result<SendOutcome> {
         match &session.tmux {
             Some(tmux) => {
-                crate::tmux::mux().send_keys_literal(session.tmux_socket.as_deref(), tmux, text)?;
+                boop_store::tmux::mux().send_keys_literal(session.tmux_socket.as_deref(), tmux, text)?;
                 Ok(SendOutcome::Injected)
             }
             None => Ok(SendOutcome::QueuedForNextSpawn),
@@ -146,8 +146,8 @@ impl Harness for Claude {
 
     fn stop(&self, session: &SessionRef) -> anyhow::Result<()> {
         if let Some(tmux) = &session.tmux {
-            if crate::tmux::mux().has_session(session.tmux_socket.as_deref(), tmux)? {
-                crate::tmux::mux().kill_session(session.tmux_socket.as_deref(), tmux)?;
+            if boop_store::tmux::mux().has_session(session.tmux_socket.as_deref(), tmux)? {
+                boop_store::tmux::mux().kill_session(session.tmux_socket.as_deref(), tmux)?;
             }
         }
         Ok(())
@@ -413,7 +413,7 @@ mod tests {
 
     use crate::harness::Harness;
     use crate::harness::SessionRef;
-    use crate::test_support::TempRepo;
+    use boop_store::testing::TempRepo;
 
     use super::{launch_command, parse_iso_ms, Claude};
 
@@ -521,14 +521,14 @@ mod tests {
                 std::process::id(),
                 NEXT_SOCKET.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             );
-            crate::tmux::kill_test_server(&socket);
+            boop_store::tmux::kill_test_server(&socket);
             TmuxGuard { socket }
         }
     }
 
     impl Drop for TmuxGuard {
         fn drop(&mut self) {
-            crate::tmux::kill_test_server(&self.socket);
+            boop_store::tmux::kill_test_server(&self.socket);
         }
     }
 
@@ -600,7 +600,7 @@ mod tests {
         // A plain shell session stays alive so the injected text can be read
         // back; the transport is what this capability proves.
         let name = format!("ctl-{}", std::process::id());
-        crate::tmux::mux()
+        boop_store::tmux::mux()
             .new_bare_session(Some(&guard.socket), &name)
             .unwrap();
         let session = SessionRef {
@@ -619,7 +619,7 @@ mod tests {
         let claude = Claude;
         let outcome = claude.send(&session, "hello from boop").unwrap();
         assert_eq!(outcome, crate::harness::SendOutcome::Injected);
-        let pane = crate::tmux::mux()
+        let pane = boop_store::tmux::mux()
             .capture_pane(Some(&guard.socket), &name, None)
             .unwrap();
         assert!(
@@ -694,7 +694,7 @@ mod tests {
     }
 
     fn has_session_on(guard: &TmuxGuard, name: &str) -> bool {
-        crate::tmux::mux()
+        boop_store::tmux::mux()
             .has_session(Some(&guard.socket), name)
             .unwrap_or(false)
     }

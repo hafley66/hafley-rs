@@ -15,6 +15,8 @@ agent-read = ["boop-store/agent-read"]
 [dependencies]
 # The tmux multiplexer seam: one trait, one implementation, in its own crate.
 boop-mux = { version = "0.0.2", path = "../boop-mux" }
+# The per-harness transcript formats, identity ladder and spawn worktree.
+boop-harness = { version = "0.0.2", path = "../boop-harness" }
 # The lane channel: the ACP client and the tmux TUI driver.
 boop-acp = { version = "0.0.2", path = "../boop-acp" }
 # The database: schema, migrations, transcript projection, typed queries.

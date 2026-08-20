@@ -7,9 +7,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use boop::harness::{Harness, SessionRef};
-use boop::ident::{sync_session, Store};
-use boop::registry::Registry;
+use boop_harness::harness::{Harness, SessionRef};
+use boop_harness::registry::Registry;
+use boop_harness::sync_session;
+use boop_store::Store;
 use peak_alloc::PeakAlloc;
 use serde::Deserialize;
 

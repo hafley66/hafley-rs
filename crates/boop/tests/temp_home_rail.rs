@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 const EXEMPT: &[&str] = &["concatmap_e2e.rs"];
 
 /// Lane names only test code spawns. Same list as
-/// `crates/boop/sql/fixture_lanes.sql`; keep the two equal.
+/// `crates/boop-store/sql/fixture_lanes.sql`; keep the two equal.
 const FIXTURE_LANES: &[&str] = &[
     "mine",
     "lane-test",
@@ -44,7 +44,6 @@ const STORE_WAIVED: &[&str] = &["cli/db.rs", "cli/job.rs", "supervise.rs"];
 
 #[test]
 fn every_boop_subprocess_site_redirects_home_and_boop_db() {
-    let tests_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     let this_file = Path::new(file!())
         .file_name()
         .unwrap()
@@ -53,22 +52,24 @@ fn every_boop_subprocess_site_redirects_home_and_boop_db() {
         .to_owned();
 
     let mut offenders = Vec::new();
-    for entry in std::fs::read_dir(&tests_dir).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
-            continue;
-        }
-        let name = path.file_name().unwrap().to_str().unwrap().to_owned();
-        if name == this_file || EXEMPT.contains(&name.as_str()) {
-            continue;
-        }
-        let text = std::fs::read_to_string(&path).unwrap();
-        if !text.contains("CARGO_BIN_EXE_boop") {
-            continue;
-        }
-        if !text.contains(".env(\"HOME\"") || !text.contains(".env(\"BOOP_DB\"") {
-            offenders.push(name);
+    for tests_dir in boop_crate_dirs("tests") {
+        for entry in std::fs::read_dir(&tests_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+                continue;
+            }
+            let name = path.file_name().unwrap().to_str().unwrap().to_owned();
+            if name == this_file || EXEMPT.contains(&name.as_str()) {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            if !text.contains("CARGO_BIN_EXE_boop") {
+                continue;
+            }
+            if !text.contains(".env(\"HOME\"") || !text.contains(".env(\"BOOP_DB\"") {
+                offenders.push(name);
+            }
         }
     }
 
@@ -78,7 +79,30 @@ fn every_boop_subprocess_site_redirects_home_and_boop_db() {
     );
 }
 
-/// Every `*.rs` under `src/`, path relative to `src/`.
+/// Each `boop*` crate's `<sub>` directory that exists, so the split into
+/// `boop-store` / `boop-acp` / `boop-harness` / `boop-proc` cannot drop a file
+/// out of this rail's reach.
+fn boop_crate_dirs(sub: &str) -> Vec<PathBuf> {
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(crates).unwrap() {
+        let path = entry.unwrap().path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !name.starts_with("boop") {
+            continue;
+        }
+        let dir = path.join(sub);
+        if dir.is_dir() {
+            out.push(dir);
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Every `*.rs` under a boop crate's `src/`, path relative to that `src/`.
 fn src_modules() -> Vec<(String, PathBuf)> {
     fn walk(dir: &Path, root: &Path, out: &mut Vec<(String, PathBuf)>) {
         for entry in std::fs::read_dir(dir).unwrap() {
@@ -95,9 +119,10 @@ fn src_modules() -> Vec<(String, PathBuf)> {
             }
         }
     }
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut out = Vec::new();
-    walk(&root, &root, &mut out);
+    for root in boop_crate_dirs("src") {
+        walk(&root, &root, &mut out);
+    }
     out.sort();
     out
 }

@@ -6,14 +6,14 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-use crate::event::AgentEvent;
+use boop_store::event::AgentEvent;
 use crate::harness::{
     jsonl_files, Capabilities, Harness, Ingested, KnownSessions, ReadChunk, SendOutcome,
     SessionRef, SpawnSpec,
 };
-use crate::ident::{Store, SyncStat, UsageRow};
-use crate::lane::ModelSpec;
-use crate::tail;
+use boop_store::ident::{Store, SyncStat, UsageRow};
+use boop_store::session::ModelSpec;
+use boop_store::tail;
 use anyhow::Context;
 use serde_json::Value;
 
@@ -27,7 +27,7 @@ impl Harness for Codex {
         let pane = std::env::var("TMUX_PANE")
             .ok()
             .filter(|value| !value.is_empty())
-            .or_else(|| crate::tmux::mux().current_pane(None))?;
+            .or_else(|| boop_store::tmux::mux().current_pane(None))?;
         Some(crate::identity::Identity {
             session: Some(session),
             lane: Some(format!("codex-{}", pane.trim_start_matches('%'))),
@@ -40,9 +40,9 @@ impl Harness for Codex {
 
     fn open_channel(
         &self,
-        spec: &crate::channel::ChannelSpec,
-    ) -> anyhow::Result<Box<dyn crate::channel::LaneChannel>> {
-        Ok(Box::new(crate::channel::codex::CodexChannel::open(spec)?))
+        spec: &boop_acp::channel::ChannelSpec,
+    ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
+        Ok(Box::new(boop_acp::channel::codex::CodexChannel::open(spec)?))
     }
 
     fn id(&self) -> &'static str {
@@ -72,7 +72,7 @@ impl Harness for Codex {
             .unwrap_or_else(|| format!("boop-{session_id}"));
         let cwd = crate::worktree::prepare_spawn_dir(spec)?;
         let command = crate::harness::supervisor_command(spec);
-        crate::tmux::mux().new_detached_session(
+        boop_store::tmux::mux().new_detached_session(
             spec.socket.as_deref(),
             &tmux_name,
             &cwd.display().to_string(),
@@ -98,7 +98,7 @@ impl Harness for Codex {
     fn send(&self, session: &SessionRef, text: &str) -> anyhow::Result<SendOutcome> {
         match &session.tmux {
             Some(tmux) => {
-                crate::tmux::mux().send_keys_literal(session.tmux_socket.as_deref(), tmux, text)?;
+                boop_store::tmux::mux().send_keys_literal(session.tmux_socket.as_deref(), tmux, text)?;
                 Ok(SendOutcome::Injected)
             }
             None => Ok(SendOutcome::QueuedForNextSpawn),
@@ -107,8 +107,8 @@ impl Harness for Codex {
 
     fn stop(&self, session: &SessionRef) -> anyhow::Result<()> {
         if let Some(tmux) = &session.tmux {
-            if crate::tmux::mux().has_session(session.tmux_socket.as_deref(), tmux)? {
-                crate::tmux::mux().kill_session(session.tmux_socket.as_deref(), tmux)?;
+            if boop_store::tmux::mux().has_session(session.tmux_socket.as_deref(), tmux)? {
+                boop_store::tmux::mux().kill_session(session.tmux_socket.as_deref(), tmux)?;
             }
         }
         Ok(())
@@ -375,7 +375,7 @@ fn parse_line(session: &SessionRef, line: &tail::CompleteLine) -> Option<AgentEv
             "patch_apply_end" => {
                 if let Some(changes) = payload.get("changes").and_then(Value::as_object) {
                     for (path, change) in changes {
-                        paths.push(crate::event::ToolPath {
+                        paths.push(boop_store::event::ToolPath {
                             path: path.clone(),
                             access: access_for_change(change),
                         });
@@ -402,11 +402,11 @@ fn parse_line(session: &SessionRef, line: &tail::CompleteLine) -> Option<AgentEv
     })
 }
 
-fn access_for_change(change: &Value) -> crate::event::Access {
+fn access_for_change(change: &Value) -> boop_store::event::Access {
     match change.get("type").and_then(Value::as_str) {
-        Some("add") => crate::event::Access::Create,
-        Some("delete") => crate::event::Access::Delete,
-        _ => crate::event::Access::Write,
+        Some("add") => boop_store::event::Access::Create,
+        Some("delete") => boop_store::event::Access::Delete,
+        _ => boop_store::event::Access::Write,
     }
 }
 
@@ -603,8 +603,8 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::harness::{claude, Harness, KnownSession, KnownSessions, SessionRef};
-    use crate::test_support::TempRepo;
-    use crate::Store;
+    use boop_store::testing::TempRepo;
+    use boop_store::Store;
 
     use super::{sessions_in, sessions_in_with_known, Codex};
 
@@ -738,19 +738,19 @@ mod tests {
                 std::process::id(),
                 NEXT_SOCKET.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             );
-            crate::tmux::kill_test_server(&socket);
+            boop_store::tmux::kill_test_server(&socket);
             TmuxGuard { socket }
         }
     }
 
     impl Drop for TmuxGuard {
         fn drop(&mut self) {
-            crate::tmux::kill_test_server(&self.socket);
+            boop_store::tmux::kill_test_server(&self.socket);
         }
     }
 
     fn has_session_on(guard: &TmuxGuard, name: &str) -> bool {
-        crate::tmux::mux()
+        boop_store::tmux::mux()
             .has_session(Some(&guard.socket), name)
             .unwrap_or(false)
     }

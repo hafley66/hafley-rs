@@ -294,6 +294,7 @@ version = "0.0.2"
 dependencies = [
  "anyhow",
  "boop-acp",
+ "boop-harness",
  "boop-mux",
  "boop-store",
  "clap",
@@ -324,6 +325,24 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "boop-harness"
+version = "0.0.2"
+dependencies = [
+ "anyhow",
+ "boop-acp",
+ "boop-store",
+ "dirs",
+ "ignore",
+ "peak_alloc",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "time",
+ "tracing",
+ "wait-timeout",
 ]
 
 [[package]]
