@@ -156,6 +156,8 @@ enum SubCmd {
     Whoami {
         #[arg(long)]
         json: bool,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
     },
     /// Block until mail lands: the reply to <id>, or the next unread row
     /// addressed to you with --me. Every exit prints the next command to run.
@@ -781,7 +783,7 @@ fn main() -> Result<()> {
             SubCmd::TellChildren { body, mail_dir } => {
                 run_tell_children(&registry, &body, mail_dir.as_deref())
             }
-            SubCmd::Whoami { json } => run_whoami(json),
+            SubCmd::Whoami { json, mail_dir } => run_whoami(json, mail_dir.as_deref()),
             SubCmd::Inbox { cmd } => run_inbox(cmd),
             SubCmd::Me {
                 name,

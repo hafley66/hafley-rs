@@ -1,6 +1,6 @@
 //! Pins `boop tell-parent` (parent-edge resolution through the identity
 //! ladder's env rung, the registered-coordinator fallback, the `yield`
-//! default body) and `boop tell-children` (per-child hook/dead reporting).
+//! default body) and `boop tell-children` (per-child landed/no-route/dead).
 
 use std::path::PathBuf;
 use std::process::{Command, Output};
@@ -180,8 +180,7 @@ fn kind_yield_with_no_body_mints_the_default_body() {
     assert_eq!(rows.len(), 1, "bus rows: {rows:?}");
     assert_eq!(rows[0]["kind"], "yield", "row: {}", rows[0]);
     assert_eq!(
-        rows[0]["body"],
-        "yield feature-a rc=0 branch=- head=-",
+        rows[0]["body"], "yield feature-a rc=0 branch=- head=-",
         "row: {}",
         rows[0]
     );
@@ -201,7 +200,7 @@ fn kind_completion_with_no_body_is_an_error_naming_the_flag() {
 }
 
 #[test]
-fn tell_children_lands_on_the_hook_child_and_reports_the_pane_less_dead_child_dead() {
+fn tell_children_lands_on_the_hook_child_and_reports_the_routeless_child_as_no_route() {
     let fixture = Fixture::new("children");
     let hook_child_cwd = fixture.root.join("hook-child-project");
     std::fs::create_dir_all(hook_child_cwd.join(".claude")).unwrap();
@@ -223,7 +222,7 @@ fn tell_children_lands_on_the_hook_child_and_reports_the_pane_less_dead_child_de
     .unwrap();
     fixture.write_registry(serde_json::json!({
         "coord-3": {"kind": "coordinator"},
-        // Pane-less: no cwd hook and no tmux, the way `child_reach` reports dead.
+        // Pane-less: no cwd hook and no tmux, so nothing ever addressed it.
         "dead-child": {"kind": "lane", "parent": "coord-3"},
         "hook-child": {
             "kind": "lane",
@@ -235,13 +234,17 @@ fn tell_children_lands_on_the_hook_child_and_reports_the_pane_less_dead_child_de
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
-    assert_eq!(lines.len(), 2, "stdout: {text}");
+    assert_eq!(lines.len(), 3, "stdout: {text}");
     // BTreeMap order: "dead-child" sorts before "hook-child".
-    assert_eq!(lines[0], "dead dead-child", "stdout: {text}");
+    assert_eq!(
+        lines[0], "no-route dead-child (no hook, no pane)",
+        "stdout: {text}"
+    );
     assert!(
         lines[1].starts_with("landed hook-child ") && lines[1].ends_with("(hook inbox)"),
         "stdout: {text}"
     );
+    assert_eq!(lines[2], "1 landed, 1 no-route, 0 dead", "stdout: {text}");
 
     let rows = fixture.bus_rows();
     assert_eq!(rows.len(), 1, "bus rows: {rows:?}");
@@ -271,7 +274,43 @@ fn tell_children_with_no_children_at_all_says_so_and_exits_clean() {
         "stdout: {}",
         stdout(&output)
     );
-    assert!(fixture.bus_rows().is_empty(), "rows: {:?}", fixture.bus_rows());
+    assert!(
+        fixture.bus_rows().is_empty(),
+        "rows: {:?}",
+        fixture.bus_rows()
+    );
+}
+
+/// A claude Agent-tool child owns no pane and no route, so the row has nowhere
+/// to land. The verb says so per target instead of exiting clean on an empty
+/// registry child list.
+#[test]
+fn tell_children_names_a_native_subagent_child_as_no_route() {
+    let fixture = Fixture::new("native");
+    fixture.write_registry(serde_json::json!({
+        "coord-6": {"kind": "coordinator", "sessionId": "coord-6"},
+    }));
+    let store = boop::Store::open(fixture.root.join("boop.db")).unwrap();
+    store
+        .add_edge_at("coord-6", "coord-6/agent-a1b2", "spawned", 7)
+        .unwrap();
+    drop(store);
+
+    let output = fixture.boop_as("coord-6", &["tell-children", "--body", "ping"]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let text = stdout(&output);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 2, "stdout: {text}");
+    assert!(
+        lines[0].starts_with("no-route coord-6/agent-a1b2 (native subagent"),
+        "stdout: {text}"
+    );
+    assert_eq!(lines[1], "0 landed, 1 no-route, 0 dead", "stdout: {text}");
+    assert!(
+        fixture.bus_rows().is_empty(),
+        "rows: {:?}",
+        fixture.bus_rows()
+    );
 }
 
 #[test]

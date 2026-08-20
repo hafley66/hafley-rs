@@ -278,8 +278,8 @@ pub(crate) fn run_me_mood(
     Ok(())
 }
 
-pub(crate) fn run_whoami(json: bool) -> Result<()> {
-    let dir = mail_dir(None)?;
+pub(crate) fn run_whoami(json: bool, mail_dir_arg: Option<&Path>) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir).unwrap_or_default();
     let identity = identity::resolve(&routes)?;
     if json {
@@ -316,6 +316,9 @@ mod tests {
             None
         }
         fn session_of_pane(&self, _: Option<&str>, _: &str) -> Option<String> {
+            None
+        }
+        fn pane_id(&self, _: Option<&str>, _: &str) -> Option<String> {
             None
         }
         fn pane_pid(&self, _: Option<&str>, _: &str) -> Option<u32> {

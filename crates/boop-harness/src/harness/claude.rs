@@ -5,19 +5,46 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-use boop_store::event::{Access, AgentEvent, ToolPath};
 use crate::harness::{
     jsonl_files, Capabilities, Harness, KnownSessions, ReadChunk, SendOutcome, SessionRef,
     SpawnSpec,
 };
-use boop_store::tail;
 use anyhow::Context;
+use boop_store::event::{Access, AgentEvent, ToolPath};
+use boop_store::tail;
 use serde_json::Value;
 
 /// The claude harness. Stateless; the trait methods read straight from disk.
 pub struct Claude;
 
 impl Harness for Claude {
+    /// Claude stamps its session id into every process it runs, and a sidechain
+    /// record carries the same `sessionId` as the root that spawned it, so a
+    /// subagent's shell resolves the session hosting it rather than nothing.
+    fn identity_process(&self) -> Option<crate::identity::Identity> {
+        let session = std::env::var("CLAUDE_CODE_SESSION_ID")
+            .ok()
+            .filter(|value| !value.is_empty())?;
+        Some(crate::identity::Identity {
+            session: Some(session),
+            harness: Some(self.id().to_owned()),
+            pane: std::env::var("TMUX_PANE").ok().filter(|p| !p.is_empty()),
+            rung: Some(crate::identity::Rung::ClaudeProcess),
+            ..Default::default()
+        })
+    }
+
+    /// Transcripts live under one directory per cwd, so only that directory is
+    /// read; the recorded cwd is still checked, because the directory name is a
+    /// lossy encoding of the path.
+    fn root_sessions_for_cwd(&self, cwd: &str) -> anyhow::Result<Vec<SessionRef>> {
+        let dir = claude_projects_dir()?.join(encode_project_dir(cwd));
+        if !dir.is_dir() {
+            return Ok(Vec::new());
+        }
+        root_sessions_in(&dir, cwd)
+    }
+
     fn session_id_in_pane(
         &self,
         multiplexer: &dyn boop_store::tmux::Multiplexer,
@@ -143,7 +170,11 @@ impl Harness for Claude {
     fn send(&self, session: &SessionRef, text: &str) -> anyhow::Result<SendOutcome> {
         match &session.tmux {
             Some(tmux) => {
-                boop_store::tmux::mux().send_keys_literal(session.tmux_socket.as_deref(), tmux, text)?;
+                boop_store::tmux::mux().send_keys_literal(
+                    session.tmux_socket.as_deref(),
+                    tmux,
+                    text,
+                )?;
                 Ok(SendOutcome::Injected)
             }
             None => Ok(SendOutcome::QueuedForNextSpawn),
@@ -198,6 +229,28 @@ fn random_hex() -> String {
         .unwrap_or(0);
     let mixed = (nanos as u64) ^ ((std::process::id() as u64) << 48) ^ (nanos >> 64) as u64;
     format!("{mixed:016x}")
+}
+
+/// Root sessions under one project directory whose own record says `cwd`. A
+/// sidechain carries a parent and answers for no pane.
+fn root_sessions_in(base: &std::path::Path, cwd: &str) -> anyhow::Result<Vec<SessionRef>> {
+    Ok(sessions_in(base)?
+        .into_iter()
+        .filter(|session| session.cwd.as_deref() == Some(cwd) && session.parent.is_none())
+        .collect())
+}
+
+/// The directory name claude gives a cwd: every byte outside `[A-Za-z0-9_]`
+/// becomes `-`, so `/a/b/.c` becomes `-a-b--c`.
+fn encode_project_dir(cwd: &str) -> String {
+    cwd.chars()
+        .map(
+            |character| match character.is_ascii_alphanumeric() || character == '_' {
+                true => character,
+                false => '-',
+            },
+        )
+        .collect()
 }
 
 fn claude_projects_dir() -> anyhow::Result<PathBuf> {
@@ -284,26 +337,36 @@ fn parent_for(path: &std::path::Path) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// Read the first complete line to recover the session cwd and git branch,
-/// which some claude records omit.
+/// Read the head of the transcript for the session cwd and git branch. The
+/// first record is a `queue-operation`/`mode`/`ai-title` metadata line that
+/// carries neither, so the scan runs until a record has them. A line that
+/// fails to parse is a partial write and is skipped, never trusted.
+const CONTEXT_SCAN_LINES: usize = 16;
+
 fn first_record_context(path: &std::path::Path) -> (Option<String>, Option<String>) {
     let Ok(file) = File::open(path) else {
         return (None, None);
     };
     let mut reader = BufReader::new(file);
-    let Ok(Some(first)) = tail::read_first_complete_line(&mut reader) else {
-        return (None, None);
-    };
-    let Ok(value) = serde_json::from_slice::<Value>(&first.bytes) else {
-        return (None, None);
-    };
-    (
-        value.get("cwd").and_then(Value::as_str).map(str::to_owned),
-        value
-            .get("gitBranch")
-            .and_then(Value::as_str)
-            .map(str::to_owned),
-    )
+    for _ in 0..CONTEXT_SCAN_LINES {
+        let Ok(Some(line)) = tail::read_first_complete_line(&mut reader) else {
+            return (None, None);
+        };
+        let Ok(value) = serde_json::from_slice::<Value>(&line.bytes) else {
+            continue;
+        };
+        let Some(cwd) = value.get("cwd").and_then(Value::as_str) else {
+            continue;
+        };
+        return (
+            Some(cwd.to_owned()),
+            value
+                .get("gitBranch")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        );
+    }
+    (None, None)
 }
 
 /// Decode one JSONL line into an `AgentEvent`. An unrecognized record shape is
@@ -453,6 +516,57 @@ mod tests {
             tmux_socket: None,
             parent: None,
         }
+    }
+
+    /// FAIL-PRE-FIX. Current claude transcripts open with a metadata record
+    /// (`queue-operation`, `mode`, `ai-title`), so reading only line 1 for the
+    /// cwd returned `None` for every one of them, and a cwd lookup could
+    /// answer nothing.
+    #[test]
+    fn a_transcript_whose_head_is_metadata_still_reports_its_cwd() {
+        let base = temp_path("cwdscan");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("subagents")).unwrap();
+        write_lines(
+            &base.join("root-a.jsonl"),
+            &[
+                r#"{"type":"queue-operation"}"#,
+                r#"{"type":"mode"}"#,
+                r#"{"type":"user","sessionId":"root-a","cwd":"/repo","gitBranch":"main"}"#,
+            ],
+        );
+        write_lines(
+            &base.join("root-b.jsonl"),
+            &[r#"{"type":"user","sessionId":"root-b","cwd":"/elsewhere"}"#],
+        );
+        write_lines(
+            &base.join("subagents").join("agent-x.jsonl"),
+            &[r#"{"type":"user","sessionId":"agent-x","cwd":"/repo"}"#],
+        );
+
+        let roots = super::root_sessions_in(&base, "/repo").unwrap();
+        let names: Vec<&str> = roots
+            .iter()
+            .map(|session| session.session_id.as_str())
+            .collect();
+        assert_eq!(names, vec!["root-a"], "roots: {names:?}");
+        assert_eq!(roots[0].git_branch.as_deref(), Some("main"));
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
+    /// The project directory name is the cwd with every byte outside
+    /// `[A-Za-z0-9_]` replaced, which is why a lookup still checks the
+    /// recorded cwd.
+    #[test]
+    fn the_project_directory_name_encodes_the_cwd() {
+        assert_eq!(
+            super::encode_project_dir("/Users/c/projects/sprefa"),
+            "-Users-c-projects-sprefa"
+        );
+        assert_eq!(
+            super::encode_project_dir("/a/b/.boop-worktrees/fix/x"),
+            "-a-b--boop-worktrees-fix-x"
+        );
     }
 
     #[test]
