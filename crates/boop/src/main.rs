@@ -17,7 +17,7 @@ mod cli;
 
 use cli::db::{
     run_chat_query, run_db, run_follow, run_harnesses, run_passthrough, run_public_agent_command,
-    run_query, run_sessions, run_sync_all, run_tail, sync_all, ChatQueryOptions, SyncLiveness,
+    run_query, run_sessions, run_sync_all, run_tail, sync_before_read, ChatQueryOptions,
 };
 use cli::debug::{run_config, run_debug, run_host};
 use cli::job::{
@@ -69,7 +69,7 @@ enum SubCmd {
         /// One lane only.
         #[arg(long)]
         lane: Option<String>,
-        /// One JSON array instead of the grouped text.
+        /// One JSON document, `alerts` and `sync`, instead of the grouped text.
         #[arg(long)]
         json: bool,
     },
@@ -809,7 +809,7 @@ fn main() -> Result<()> {
 }
 
 fn sync_before_local_command(registry: &Registry) -> Result<()> {
-    sync_all(registry, false, false, SyncLiveness::TranscriptOnly)
+    sync_before_read(registry)
 }
 
 /// The name of the escape hatch that suppresses the startup transcript sync.

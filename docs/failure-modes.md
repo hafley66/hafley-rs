@@ -5,6 +5,7 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 12 | 2026-08-20 | 512 concurrent `boop db` reads each ran their own transcript sync, and the machine stopped |
 | 11 | 2026-08-19 | an opencode ACP session starts on a dead model endpoint and retries forever in silence |
 | 10 | 2026-08-19 | 90% of the live store's trace events were test fixture lanes, written by unit tests inside src/ |
 | 9 | 2026-08-17 | a coordinator restart left every child running with an edge that answered nobody |
@@ -18,6 +19,91 @@ without the fix, the rail that stops it recurring. Newest first.
 | 1 | 2026-08-17 | a lane can die with no result row, no log, no trace |
 
 ---
+
+## 12. 512 concurrent `boop db` reads each ran their own transcript sync, and the machine stopped
+
+**Incident.** `target/debug/instant` under `just dev` spawns
+`boop db turn list --session <id> --format ndjson` once per read. Two
+observations on 2026-08-20 caught 512 and 511 of them alive at once. Load
+average went 13 to 47 with only 4 to 8 threads runnable, so the machine was
+blocked, not computing, and killing the binary did not stick because tauri
+respawns it. On the same machine, `boop db "SELECT 1"` alone measured 43.96s
+real against 0.34s user and 0.65s sys.
+
+**RCA.** Four causes, each multiplying the next.
+
+| # | cause | site |
+|---|---|---|
+| A | every read verb ran a full `sync_all` first, and nothing coordinated the passes | `crates/boop/src/cli/db.rs` `sync_all`, reached from `main.rs` `sync_before_local_command` |
+| B | `backfill_cursor_modified` ran once per candidate in autocommit: 3893 write transactions per pass whose `WHERE modified_ms = 0` matched zero rows | `crates/boop-store/src/ident.rs` `backfill_cursor_modified` |
+| C | the opencode adapter reported `size: 0` for every session while its cursor is a message rowid, so `session_needs_sync` was true for all 962 already-synced sessions on every pass | `crates/boop-harness/src/harness/opencode.rs` `sessions_from`, `crates/boop/src/cli/db.rs` `session_needs_sync` |
+| D | a pass had no budget and no trail, so a 43.96s pass reported nothing at all, and `boop debug` paid its own cold sync before it could say so | `crates/boop/src/cli/db.rs` `sync_all` |
+
+B and C are per-pass write amplification; A turns one pass into N. 512 callers
+times 3893 no-op writes is 1.99M write transactions queued on one SQLite writer
+lock, which is why the threads were blocked rather than busy.
+
+The coordinator's first hypothesis, that `backfill_cursor_modified` outside a
+transaction was itself the 43s, was tested and disproved: 400 replayed no-op
+backfills against a copy of the 446 MB store cost 0.01s. It is not the wall on
+one pass. It is the amplifier across 512.
+
+**Same incident, a discovery defect found while building the rail.** A
+transcript the store had never seen, written into a claude project directory
+the store already knew, was invisible to sync. `root_stamps_match` compared the
+mtime of `~/.claude/projects` itself, which does not move when a file is
+created inside a child directory, and `KnownSessions::has_moved` only stats
+paths the store already holds. The early-out was simultaneously too eager, since
+an append to any known transcript re-walked every adapter, and too lazy, since a
+new session beside a known one was never found.
+
+**Fix.**
+
+| # | change | file |
+|---|---|---|
+| 1 | one pass across all callers: `std::fs::File::try_lock` on `<db>.sync.lock`, a caller that finds it held reads without syncing | `crates/boop/src/cli/db.rs` `claim_sync`, `SyncFlight`, `SyncContention` |
+| 2 | the v12 cursor backfill runs only while a cursor still carries `modified_ms = 0`, and then inside one transaction per adapter | `crates/boop-store/src/ident.rs` `cursors_missing_modified`, `crates/boop/src/cli/db.rs` `sync_all_budgeted` |
+| 3 | the opencode adapter reports its per-session max message rowid as `size` | `crates/boop-harness/src/harness/opencode.rs` `last_message_rowid` |
+| 4 | the startup sync yields at `STARTUP_SYNC_BUDGET` and says what it was doing; every session commits on its own, so the next pass resumes | `crates/boop/src/cli/db.rs` `SyncPhases::spent` |
+| 5 | every pass appends `start` then `done` with its phase table to `~/.agent/sync-trail.ndjson`, and `boop debug` reads it back | `crates/boop-store/src/trail.rs` `append_sync_trail`, `crates/boop/src/debug.rs` `sync_report` |
+| 6 | the root-stamp early-out is deleted; discovery walks, which measured 12ms for 1700 claude transcripts | `crates/boop/src/cli/db.rs` `sync_all_budgeted` |
+| 7 | `BOOP_NO_SYNC=1` skips the startup sync for any caller that wants the store as it stands | `crates/boop/src/main.rs` `sync_suppressed` |
+
+`BOOP_NO_SYNC` is a workaround, not the fix. A diagnostic verb that is as slow
+as the thing it diagnoses is its own defect, and the answer to it is 1, 4 and 5.
+
+**Fail-pre-fix tests.** Each carries its sabotage receipt in its header. Run
+against a worktree at `898be94`:
+
+| test | file | pre-fix |
+|---|---|---|
+| `concurrent_reads_perform_one_sync_pass_between_them` | `tests/sync_convoy.rs` | `24 concurrent reads took 4.393911042s, over the 1.5s budget` |
+| `a_caller_that_finds_the_sync_lock_held_reads_without_syncing` | `tests/sync_convoy.rs` | `and must record why it did not: left 0, right 1` |
+| `a_new_session_in_a_known_project_directory_is_discovered` | `tests/sync_discovery.rs` | `left: 2, right: 4` |
+| `the_no_sync_hatch_skips_the_startup_sync_and_still_reads_rows` | `tests/no_sync_hatch.rs` | `left: 4, right: 2` |
+
+**Receipts.** Same machine, a copy of the live 446 MB store, cursors cold:
+
+| condition | 898be94 | after |
+|---|---|---|
+| cold cursors | 1.20s | 0.27s |
+| second | 0.22s | 0.17s |
+| warm | 0.22s | 0.18s |
+| 24 concurrent | 1.81s, 24 passes | 0.20s, 1 pass and 23 deferrals |
+
+**Rail.** `crates/boop/tests/sync_convoy.rs` spawns 24 concurrent invocations
+against a 4000-transcript fixture and asserts the count first: every invocation
+records either a pass or a deferral, and fewer passes than invocations. The
+wall budget behind it is the incident itself, and no count expresses it,
+because a pass that wrote nothing leaves no row in the store.
+
+**What still cannot be answered.** The 43.96s was never reproduced on demand.
+Every measurement here ran with the transcript roots already in the page cache,
+where the same pass costs 1.20s; the 43.96s reading was taken minutes after the
+transcript trees had moved on disk, and nothing in the trail from that run
+survived, because the trail did not exist yet. A pass killed by SIGKILL now
+leaves a `start` with no `done`, which `boop debug` prints as
+`started and never finished`.
 
 ## 11. an opencode ACP session starts on a dead model endpoint and retries forever in silence
 
