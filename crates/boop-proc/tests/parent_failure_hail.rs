@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Once;
 use std::time::Duration;
 
-use boop::channel::{Delivery, LaneChannel, TurnEvent};
-use boop::supervise::{
+use boop_acp::channel::{Delivery, LaneChannel, TurnEvent};
+use boop_proc::supervise::{
     LaneRun, EXITED_WITHOUT_COMPLETION, RETRYING, RETRY_BUDGET_EXHAUSTED,
 };
 
@@ -92,8 +92,8 @@ fn lane_run(dir: &Path) -> LaneRun {
 
 fn count(dir: &Path, kind: &str) -> usize {
     let mut rows = Vec::new();
-    for path in boop::bus::read_boxes(dir).unwrap_or_default() {
-        rows.extend(boop::bus::parse_box(&path));
+    for path in boop_store::bus::read_boxes(dir).unwrap_or_default() {
+        rows.extend(boop_store::bus::parse_box(&path));
     }
     rows.iter()
         .filter(|row| row.kind == kind && row.from == "mine")
@@ -118,7 +118,7 @@ fn each_failure_kind_reaches_the_parent_exactly_once() {
     parented(&dir);
     let mut channel = FlakingChannel::default();
 
-    let exit_code = boop::supervise::run(lane_run(&dir), &mut channel).unwrap();
+    let exit_code = boop_proc::supervise::run(lane_run(&dir), &mut channel).unwrap();
 
     assert_eq!(exit_code, 1);
     assert_eq!(channel.turns, 6, "the brief turn plus five resumes");
@@ -135,8 +135,8 @@ fn each_failure_kind_reaches_the_parent_exactly_once() {
 fn a_second_supervisor_run_repeats_none_of_them() {
     let dir = mail_dir("respawn");
     parented(&dir);
-    boop::supervise::run(lane_run(&dir), &mut FlakingChannel::default()).unwrap();
-    boop::supervise::run(lane_run(&dir), &mut FlakingChannel::default()).unwrap();
+    boop_proc::supervise::run(lane_run(&dir), &mut FlakingChannel::default()).unwrap();
+    boop_proc::supervise::run(lane_run(&dir), &mut FlakingChannel::default()).unwrap();
 
     assert_eq!(count(&dir, RETRYING), 1);
     assert_eq!(count(&dir, RETRY_BUDGET_EXHAUSTED), 1);
@@ -151,7 +151,7 @@ fn a_clean_completion_hails_nothing_but_its_rc() {
     let dir = mail_dir("clean");
     parented(&dir);
 
-    let exit_code = boop::supervise::run(lane_run(&dir), &mut DoneChannel).unwrap();
+    let exit_code = boop_proc::supervise::run(lane_run(&dir), &mut DoneChannel).unwrap();
 
     assert_eq!(exit_code, 0);
     assert_eq!(count(&dir, RETRYING), 0);
@@ -172,7 +172,7 @@ fn a_parentless_lane_writes_no_failure_row() {
     )
     .unwrap();
 
-    let exit_code = boop::supervise::run(lane_run(&dir), &mut FlakingChannel::default()).unwrap();
+    let exit_code = boop_proc::supervise::run(lane_run(&dir), &mut FlakingChannel::default()).unwrap();
 
     assert_eq!(exit_code, 1);
     assert_eq!(count(&dir, RETRYING), 0);
@@ -187,11 +187,11 @@ fn a_parentless_lane_writes_no_failure_row() {
 fn a_failure_row_names_the_lane_the_model_the_attempt_and_the_command() {
     let dir = mail_dir("body");
     parented(&dir);
-    boop::supervise::run(lane_run(&dir), &mut FlakingChannel::default()).unwrap();
+    boop_proc::supervise::run(lane_run(&dir), &mut FlakingChannel::default()).unwrap();
 
     let mut rows = Vec::new();
-    for path in boop::bus::read_boxes(&dir).unwrap_or_default() {
-        rows.extend(boop::bus::parse_box(&path));
+    for path in boop_store::bus::read_boxes(&dir).unwrap_or_default() {
+        rows.extend(boop_store::bus::parse_box(&path));
     }
     let retrying = rows.iter().find(|row| row.kind == RETRYING).unwrap();
     assert_eq!(retrying.to, "coordinator");

@@ -8,8 +8,8 @@ use std::process::Command;
 use std::sync::Once;
 use std::time::Duration;
 
-use boop::channel::{Delivery, LaneChannel, TurnEvent};
-use boop::supervise::{record_parent_policy, LaneRun, ParentDeathPolicy};
+use boop_acp::channel::{Delivery, LaneChannel, TurnEvent};
+use boop_proc::supervise::{record_parent_policy, LaneRun, ParentDeathPolicy};
 
 /// One temp HOME and store for this whole binary; the store is opened for a
 /// mood the moment any lane runs, and the machine's own must stay untouched.
@@ -118,15 +118,15 @@ fn lane_run(dir: &Path) -> LaneRun {
     }
 }
 
-fn rows(dir: &Path) -> Vec<boop::bus::Message> {
+fn rows(dir: &Path) -> Vec<boop_store::bus::Message> {
     let mut rows = Vec::new();
-    for path in boop::bus::read_boxes(dir).unwrap_or_default() {
-        rows.extend(boop::bus::parse_box(&path));
+    for path in boop_store::bus::read_boxes(dir).unwrap_or_default() {
+        rows.extend(boop_store::bus::parse_box(&path));
     }
     rows
 }
 
-fn of_kind(dir: &Path, kind: &str) -> Vec<boop::bus::Message> {
+fn of_kind(dir: &Path, kind: &str) -> Vec<boop_store::bus::Message> {
     rows(dir)
         .into_iter()
         .filter(|row| row.kind == kind && row.from == "mine")
@@ -134,7 +134,7 @@ fn of_kind(dir: &Path, kind: &str) -> Vec<boop::bus::Message> {
 }
 
 fn route_parent(dir: &Path, lane: &str) -> Option<String> {
-    boop::bus::read_routes(dir).unwrap().get(lane)?.parent.clone()
+    boop_store::bus::read_routes(dir).unwrap().get(lane)?.parent.clone()
 }
 
 /// SABOTAGE RECEIPT: delete the `watch.probe` call from the supervisor's poll
@@ -155,7 +155,7 @@ fn a_kill_policy_ends_the_lane_when_the_parent_pane_dies() {
     pane.kill();
 
     let mut channel = OpenTurnChannel::default();
-    let exit_code = boop::supervise::run(lane_run(&dir), &mut channel).unwrap();
+    let exit_code = boop_proc::supervise::run(lane_run(&dir), &mut channel).unwrap();
 
     assert_eq!(exit_code, 1);
     assert!(
@@ -166,7 +166,7 @@ fn a_kill_policy_ends_the_lane_when_the_parent_pane_dies() {
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].detail.as_deref(), Some("parent-died: boss"));
     assert_eq!(
-        boop::trail::dead_reason(&dir, &dir.join("lanes"), "mine").token(),
+        boop_store::trail::dead_reason(&dir, &dir.join("lanes"), "mine").token(),
         "parent-died=boss"
     );
     let _ = std::fs::remove_dir_all(&dir);
@@ -191,7 +191,7 @@ fn a_reparent_policy_moves_the_edge_onto_the_registered_coordinator() {
     boss.kill();
 
     let mut channel = OpenTurnChannel::default();
-    let exit_code = boop::supervise::run(lane_run(&dir), &mut channel).unwrap();
+    let exit_code = boop_proc::supervise::run(lane_run(&dir), &mut channel).unwrap();
 
     assert_eq!(exit_code, 0, "a reparented lane runs on to its own end");
     assert_eq!(
@@ -229,7 +229,7 @@ fn an_orphan_policy_leaves_the_lane_and_its_edge_alone() {
     boss.kill();
 
     let mut channel = OpenTurnChannel::default();
-    let exit_code = boop::supervise::run(lane_run(&dir), &mut channel).unwrap();
+    let exit_code = boop_proc::supervise::run(lane_run(&dir), &mut channel).unwrap();
 
     assert_eq!(exit_code, 0);
     assert_eq!(route_parent(&dir, "mine").as_deref(), Some("boss"));
@@ -243,21 +243,21 @@ fn an_orphan_policy_leaves_the_lane_and_its_edge_alone() {
 fn an_unrecorded_lane_is_orphan() {
     let dir = mail_dir("default");
     assert_eq!(
-        boop::supervise::parent_policy(&dir, "mine"),
+        boop_proc::supervise::parent_policy(&dir, "mine"),
         ParentDeathPolicy::Orphan
     );
     record_parent_policy(&dir, "mine", ParentDeathPolicy::Kill).unwrap();
     record_parent_policy(&dir, "other", ParentDeathPolicy::Reparent).unwrap();
     assert_eq!(
-        boop::supervise::parent_policy(&dir, "mine"),
+        boop_proc::supervise::parent_policy(&dir, "mine"),
         ParentDeathPolicy::Kill
     );
     assert_eq!(
-        boop::supervise::parent_policy(&dir, "other"),
+        boop_proc::supervise::parent_policy(&dir, "other"),
         ParentDeathPolicy::Reparent
     );
     assert_eq!(
-        boop::supervise::parent_policy(&dir, "unnamed"),
+        boop_proc::supervise::parent_policy(&dir, "unnamed"),
         ParentDeathPolicy::Orphan
     );
     let _ = std::fs::remove_dir_all(&dir);

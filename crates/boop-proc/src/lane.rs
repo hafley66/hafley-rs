@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::bus::Route;
+use boop_store::bus::Route;
 use crate::config;
-use crate::identity::Identity;
+use boop_harness::identity::Identity;
 
 /// The worktree parent directory, relative to the repo root.
 pub const WORKTREE_ROOT: &str = ".boop-worktrees";
@@ -264,7 +264,7 @@ fn shell_word(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
 }
 
-pub use crate::worktree::{
+pub use boop_harness::worktree::{
     brief_with_preamble, record_start_status, start_preamble, start_status_path, SETUP_SENTENCE,
 };
 
@@ -547,7 +547,7 @@ pub fn delete_carcass(
     repo: &Path,
     lane: &str,
     pane_alive: impl Fn(&str) -> bool,
-) -> Result<crate::worktree::Reclaimed> {
+) -> Result<boop_harness::worktree::Reclaimed> {
     let Some(carcass) = find_carcass(repo, lane) else {
         anyhow::bail!(
             "no registry route for lane `{lane}`, and no worktree under {} answers to it",
@@ -560,7 +560,7 @@ pub fn delete_carcass(
              `boop beep lane patch` re-routes it, delete takes dead lanes only"
         );
     }
-    crate::worktree::reclaim_carcass(repo, &carcass.branch, &carcass.worktree)
+    boop_harness::worktree::reclaim_carcass(repo, &carcass.branch, &carcass.worktree)
 }
 
 /// `lane create --reclaim`: clear a dead lane's worktree and branch before the
@@ -570,7 +570,7 @@ pub fn reclaim_for_spawn(
     identity: &LaneIdentity,
     routes: &BTreeMap<String, Route>,
     pane_alive: impl Fn(&str) -> bool,
-) -> Result<crate::worktree::Reclaimed> {
+) -> Result<boop_harness::worktree::Reclaimed> {
     let Some(worktree) = identity.worktree_dir.as_deref() else {
         anyhow::bail!("--reclaim needs a worktree spawn; name one with --branch");
     };
@@ -586,7 +586,7 @@ pub fn reclaim_for_spawn(
             identity.lane
         );
     }
-    crate::worktree::reclaim_carcass(repo, &identity.branch, worktree)
+    boop_harness::worktree::reclaim_carcass(repo, &identity.branch, worktree)
 }
 
 #[cfg(test)]
@@ -595,7 +595,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
-    use crate::bus::Route;
+    use boop_store::bus::Route;
 
     use super::{
         caller_route, children_of, default_base_sha, derive, harness_for_model, harness_for_spawn,

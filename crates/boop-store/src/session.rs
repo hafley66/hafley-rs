@@ -268,3 +268,40 @@ impl std::str::FromStr for ModelSpec {
         }
     }
 }
+
+/// What a lane does when its registered parent stops being addressable.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
+pub enum ParentDeathPolicy {
+    /// End the lane the way a stall kill does, reporting `parent-died`.
+    Kill,
+    /// Rewrite the parent edge onto the one registered coordinator, keep going.
+    Reparent,
+    /// Keep running with the dead edge, which is what every spawn did before
+    /// the policy existed.
+    #[default]
+    Orphan,
+}
+
+impl ParentDeathPolicy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ParentDeathPolicy::Kill => "kill",
+            ParentDeathPolicy::Reparent => "reparent",
+            ParentDeathPolicy::Orphan => "orphan",
+        }
+    }
+}
+
+impl std::str::FromStr for ParentDeathPolicy {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<ParentDeathPolicy> {
+        match value {
+            "kill" => Ok(ParentDeathPolicy::Kill),
+            "reparent" => Ok(ParentDeathPolicy::Reparent),
+            "orphan" => Ok(ParentDeathPolicy::Orphan),
+            other => anyhow::bail!("on-parent-death must be kill, reparent or orphan: `{other}`"),
+        }
+    }
+}

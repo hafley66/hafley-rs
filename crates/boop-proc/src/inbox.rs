@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde_json::{json, Map, Value};
 
-use crate::bus::Message;
+use boop_store::bus::Message;
 
 /// Seconds a hook may take. The drain is two small file reads and one append.
 const HOOK_TIMEOUT_SECS: u64 = 10;
@@ -277,7 +277,7 @@ mod tests {
     const FIXTURE_MOOD: &str = "{kind} {from} -> {id}\n{body}";
 
     fn plain(rows: &[Message]) -> String {
-        batch_text(rows, crate::ident::DEFAULT_MOOD_TEMPLATE)
+        batch_text(rows, boop_store::ident::DEFAULT_MOOD_TEMPLATE)
     }
 
     fn settings(name: &str) -> Map<String, Value> {

@@ -8,11 +8,11 @@ use std::time::{Duration, Instant};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
-use crate::channel::{ChannelSpec, LaneChannel, TurnEvent};
-use crate::harness::{Harness, OneShotSpec};
-use crate::ident::TurnQuery;
-use crate::registry::Registry;
-use crate::rows::TurnRow;
+use boop_acp::channel::{ChannelSpec, LaneChannel, TurnEvent};
+use boop_harness::harness::{Harness, OneShotSpec};
+use boop_store::ident::TurnQuery;
+use boop_harness::registry::Registry;
+use boop_store::rows::TurnRow;
 
 /// A failed rewrite is retried this many times, then the pair is dropped.
 const REWRITE_ATTEMPTS: u32 = 3;
@@ -224,7 +224,7 @@ impl Rewriter {
         }
     }
 
-    pub(crate) fn rewrite(&mut self, store: &crate::Store, msg: &str) -> Result<String> {
+    pub(crate) fn rewrite(&mut self, store: &boop_store::Store, msg: &str) -> Result<String> {
         match self {
             Rewriter::OneShot {
                 adapter,
@@ -282,7 +282,7 @@ impl Rewriter {
 
 /// The resident chat's current context size in tokens: its latest turn's fresh
 /// input plus the cached prior context, read from the store the sync ingests.
-pub(crate) fn context_tokens(store: &crate::Store, session: &str) -> Option<i64> {
+pub(crate) fn context_tokens(store: &boop_store::Store, session: &str) -> Option<i64> {
     const SQL: &str = "SELECT input_tokens + cache_read_tokens AS ctx FROM agent_usage
          JOIN dict_session s ON s.id = agent_usage.session_id
          WHERE s.value = ?1 ORDER BY ts DESC LIMIT 1";
@@ -414,7 +414,7 @@ pub fn bundle_runs(rows: &[TurnRow]) -> Vec<Pair> {
 
 /// The newest assistant turn in `pair`'s session strictly before its ts, or
 /// `None` when the session had none (its first turn; nothing to rewrite).
-fn last_assistant_before(store: &crate::Store, pair: &Pair) -> Option<String> {
+fn last_assistant_before(store: &boop_store::Store, pair: &Pair) -> Option<String> {
     let query = TurnQuery {
         session: Some(pair.session.clone()),
         role: Some("assistant".to_owned()),
@@ -482,10 +482,10 @@ pub fn run(args: Args) -> Result<()> {
     // never fights the resident `db sync` writer for the write lock.
     let store_path = match &args.store_path {
         Some(path) => path.clone(),
-        None => crate::ident::Store::default_path().context("resolve the default boop store")?,
+        None => boop_store::ident::Store::default_path().context("resolve the default boop store")?,
     };
     let store =
-        crate::ident::Store::open_readonly(store_path).context("open boop store read-only")?;
+        boop_store::ident::Store::open_readonly(store_path).context("open boop store read-only")?;
     // Leak the registry so the adapter is 'static: the oneshot feed bounds a
     // model pass on its own thread. The resident never returns, so the leak is
     // one small fixed allocation.
@@ -524,7 +524,7 @@ pub fn run(args: Args) -> Result<()> {
 
 /// One tick: query new pairs, coalesce, process serially, advance the cursor.
 fn poll_once(
-    store: &crate::Store,
+    store: &boop_store::Store,
     rewriter: &mut Rewriter,
     args: &Args,
     template: Option<&str>,
@@ -664,7 +664,7 @@ fn poll_once(
 enum Job {
     Window {
         session: String,
-        row: crate::query::WindowRow,
+        row: boop_store::query::WindowRow,
     },
     Pair(Pair),
 }
@@ -689,7 +689,7 @@ fn coalesce_jobs(mut jobs: Vec<Job>, cap: usize) -> Vec<Job> {
 }
 
 /// First run seeds at the store's newest ts so only post-launch pairs map.
-fn load_or_seed_cursor(state_dir: &Path, store: &crate::Store) -> Result<i64> {
+fn load_or_seed_cursor(state_dir: &Path, store: &boop_store::Store) -> Result<i64> {
     let path = state_dir.join("cursor");
     if let Ok(text) = std::fs::read_to_string(&path) {
         return text
@@ -706,7 +706,7 @@ fn load_or_seed_cursor(state_dir: &Path, store: &crate::Store) -> Result<i64> {
 
 /// The starting cursor: `--from-start` is 0, `--cursor N` is N, otherwise the
 /// persisted cursor (seeding at the newest ts on first run).
-fn seed_cursor(args: &Args, store: &crate::Store) -> Result<i64> {
+fn seed_cursor(args: &Args, store: &boop_store::Store) -> Result<i64> {
     if args.from_start {
         return Ok(0);
     }
@@ -744,7 +744,7 @@ fn load_done(state_dir: &Path) -> Result<BTreeSet<(String, i64)>> {
 
 fn process_job(
     job: &Job,
-    store: &crate::Store,
+    store: &boop_store::Store,
     rewriter: &mut Rewriter,
     args: &Args,
     template: Option<&str>,
@@ -762,7 +762,7 @@ fn process_job(
             let mut msg = render_template(template, mode, &pair.ai_text, &pair.user_text);
             if args.formula.references {
                 msg.push_str("\n\n<references>\n");
-                let query = crate::query::FactQuery {
+                let query = boop_store::query::FactQuery {
                     session: Some(pair.session.clone()),
                     until: Some(pair.ts as u64),
                     ..Default::default()
@@ -861,8 +861,8 @@ fn one_shot_bounded(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channel::{Delivery, TurnEvent};
-    use crate::harness::{Harness, OneShotSpec, ReadChunk, SessionRef};
+    use boop_acp::channel::{Delivery, TurnEvent};
+    use boop_harness::harness::{Harness, OneShotSpec, ReadChunk, SessionRef};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
@@ -1050,7 +1050,7 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
-    fn store() -> (crate::Store, PathBuf) {
+    fn store() -> (boop_store::Store, PathBuf) {
         let path = std::env::temp_dir().join(format!(
             "boop_cm_{}_{}",
             std::process::id(),
@@ -1060,7 +1060,7 @@ mod tests {
                 .unwrap_or(0)
         ));
         let _ = std::fs::remove_file(&path);
-        (crate::Store::open(path.clone()).unwrap(), path)
+        (boop_store::Store::open(path.clone()).unwrap(), path)
     }
 
     // RECEIPT: unfixed tree returned `Err(near "Reilly": syntax error (1))`,
@@ -1170,7 +1170,7 @@ mod tests {
         }
         fn start_turn(&mut self, text: &str) -> Result<()> {
             self.turns.lock().unwrap().push(text.to_owned());
-            let store = crate::Store::open(self.db.clone())?;
+            let store = boop_store::Store::open(self.db.clone())?;
             store.write_turn(
                 &self.session,
                 self.next_ts as u64,

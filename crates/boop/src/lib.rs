@@ -37,18 +37,12 @@ pub mod ident {
 
 pub use boop_acp::channel;
 pub use boop_harness::{harness, identity, registry, worktree};
+pub use boop_proc::{concatmap, config, host, inbox, lane, mailwait, supervise};
 #[cfg(feature = "agent-read")]
 pub mod chat;
-pub mod concatmap;
-pub mod config;
 pub mod debug;
-pub mod host;
-pub mod inbox;
-pub mod lane;
-pub mod mailwait;
 #[cfg(feature = "agent-read")]
 pub mod summary;
-pub mod supervise;
 
 pub use boop_store::open_default;
 #[cfg(feature = "agent-read")]

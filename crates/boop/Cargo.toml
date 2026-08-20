@@ -10,11 +10,13 @@ license.workspace = true
 # chat-repr modules. Default on; `--no-default-features` keeps the lane/bus/mux
 # verbs with no transcript reader in the graph.
 default = ["agent-read"]
-agent-read = ["boop-store/agent-read"]
+agent-read = ["boop-store/agent-read", "boop-proc/agent-read"]
 
 [dependencies]
 # The tmux multiplexer seam: one trait, one implementation, in its own crate.
 boop-mux = { version = "0.0.2", path = "../boop-mux" }
+# Process control: lane spawn, supervision, the mailbox, the coroutine host.
+boop-proc = { version = "0.0.2", path = "../boop-proc", default-features = false }
 # The per-harness transcript formats, identity ladder and spawn worktree.
 boop-harness = { version = "0.0.2", path = "../boop-harness" }
 # The lane channel: the ACP client and the tmux TUI driver.

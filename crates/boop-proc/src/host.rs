@@ -5,10 +5,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::harness::Harness;
-use crate::ident::TurnQuery;
-use crate::registry::Registry;
-use crate::rows::TurnRow;
+use boop_harness::harness::Harness;
+use boop_store::ident::TurnQuery;
+use boop_harness::registry::Registry;
+use boop_store::rows::TurnRow;
 
 const COMPACT_TOKENS: usize = 100_000;
 
@@ -59,7 +59,7 @@ fn chat_with_registry(request: ChatRequest, registry: &'static Registry) -> Resu
         .by_id(&harness)
         .with_context(|| format!("no adapter registered for harness `{harness}`"))?;
     let root = default_run_dir(&request.resident)?;
-    let store_path = crate::Store::default_path().context("resolve the default boop store")?;
+    let store_path = boop_store::Store::default_path().context("resolve the default boop store")?;
     run_chat_with_adapter(request, adapter, &root, &store_path)
 }
 
@@ -72,7 +72,7 @@ pub fn run_chat_with_adapter(
     std::fs::create_dir_all(root).with_context(|| format!("create {}", root.display()))?;
     let state_path = root.join("chat.json");
     let saved = read_saved(&state_path)?;
-    let store = crate::Store::open(store_path.to_path_buf()).context("open boop store")?;
+    let store = boop_store::Store::open(store_path.to_path_buf()).context("open boop store")?;
     sync_conversation(adapter, &store, saved.conversation.as_deref())?;
     let seen_turn = newest_assistant(&store, saved.conversation.as_deref())?.map(|row| row.turn);
     let goal = saved.pending_goal.or_else(|| {
@@ -146,7 +146,7 @@ fn write_saved(path: &Path, saved: &SavedChat) -> Result<()> {
 
 fn sync_conversation(
     adapter: &dyn Harness,
-    store: &crate::Store,
+    store: &boop_store::Store,
     conversation: Option<&str>,
 ) -> Result<()> {
     let Some(conversation) = conversation else {
@@ -159,12 +159,12 @@ fn sync_conversation(
     else {
         return Ok(());
     };
-    crate::ident::sync_session(store, adapter, &session)
+    boop_harness::sync_session(store, adapter, &session)
         .map(|_| ())
         .context("ingest the resident transcript")
 }
 
-fn newest_assistant(store: &crate::Store, conversation: Option<&str>) -> Result<Option<TurnRow>> {
+fn newest_assistant(store: &boop_store::Store, conversation: Option<&str>) -> Result<Option<TurnRow>> {
     let Some(conversation) = conversation else {
         return Ok(None);
     };

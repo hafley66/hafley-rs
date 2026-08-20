@@ -2,7 +2,7 @@
 //! of its exits prints. The loop, the clock and the exit code live in the CLI;
 //! this module is the selection over bus rows.
 
-use crate::bus::{fold, unacked, Message};
+use boop_store::bus::{fold, unacked, Message};
 
 /// Seconds a wait blocks before exiting 124. Under the 10-minute cap a
 /// background shell gives an agent, so the re-run line is always reachable.

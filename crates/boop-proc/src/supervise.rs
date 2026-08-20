@@ -8,8 +8,8 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use tracing::{debug, error, info, warn};
 
-use crate::bus;
-use crate::channel::{Delivery, LaneChannel, TurnEvent};
+use boop_store::bus;
+use boop_acp::channel::{Delivery, LaneChannel, TurnEvent};
 
 /// How often the inbox is re-read while a turn runs.
 const POLL: Duration = Duration::from_millis(700);
@@ -46,41 +46,7 @@ fn resume_text(brief_completed: bool, conversation: Option<String>, brief: &str)
     }
 }
 
-/// What a lane does when its registered parent stops being addressable.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
-pub enum ParentDeathPolicy {
-    /// End the lane the way a stall kill does, reporting `parent-died`.
-    Kill,
-    /// Rewrite the parent edge onto the one registered coordinator, keep going.
-    Reparent,
-    /// Keep running with the dead edge, which is what every spawn did before
-    /// the policy existed.
-    #[default]
-    Orphan,
-}
-
-impl ParentDeathPolicy {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            ParentDeathPolicy::Kill => "kill",
-            ParentDeathPolicy::Reparent => "reparent",
-            ParentDeathPolicy::Orphan => "orphan",
-        }
-    }
-}
-
-impl std::str::FromStr for ParentDeathPolicy {
-    type Err = anyhow::Error;
-
-    fn from_str(value: &str) -> Result<ParentDeathPolicy> {
-        match value {
-            "kill" => Ok(ParentDeathPolicy::Kill),
-            "reparent" => Ok(ParentDeathPolicy::Reparent),
-            "orphan" => Ok(ParentDeathPolicy::Orphan),
-            other => anyhow::bail!("on-parent-death must be kill, reparent or orphan: `{other}`"),
-        }
-    }
-}
+pub use boop_store::session::ParentDeathPolicy;
 
 /// The lane-to-policy map beside the registry. Not a registry route field: the
 /// spawn rewrites a route wholesale, dropping anything recorded before it.
@@ -185,13 +151,13 @@ pub fn render_mail(template: &str, kind: &str, id: &str, from: &str, body: &str)
 /// The template mail addressed to `receiver` renders through. A store that
 /// cannot open leaves the default shape rather than dropping the mail.
 pub fn mood_template(receiver: &str) -> String {
-    crate::Store::default_path()
-        .and_then(crate::Store::open)
+    boop_store::Store::default_path()
+        .and_then(boop_store::Store::open)
         .and_then(|store| store.effective_mood(receiver))
         .map(|mood| mood.template)
         .unwrap_or_else(|error| {
             warn!(receiver, error = %error, "effective mood unresolved");
-            crate::ident::DEFAULT_MOOD_TEMPLATE.to_owned()
+            boop_store::ident::DEFAULT_MOOD_TEMPLATE.to_owned()
         })
 }
 
@@ -214,7 +180,7 @@ const PARENT_DIED_EXIT: i32 = 1;
 
 /// Whether `parent` is still addressable: a registry route, and for a
 /// pane-backed one a live pane or a live recorded pid.
-fn parent_alive(dir: &Path, parent: &str, multiplexer: &dyn crate::tmux::Multiplexer) -> bool {
+fn parent_alive(dir: &Path, parent: &str, multiplexer: &dyn boop_store::tmux::Multiplexer) -> bool {
     // An unreadable registry is not evidence that anyone died.
     let Ok(routes) = bus::read_routes(dir) else {
         return true;
@@ -231,8 +197,8 @@ fn parent_alive(dir: &Path, parent: &str, multiplexer: &dyn crate::tmux::Multipl
         return true;
     }
     match multiplexer.pane_pid(None, target) {
-        Some(pid) => crate::proc::SysinfoSnapshot::capture()
-            .map(|snapshot| crate::proc::ProcReader::is_alive(&snapshot, pid))
+        Some(pid) => boop_store::proc::SysinfoSnapshot::capture()
+            .map(|snapshot| boop_store::proc::ProcReader::is_alive(&snapshot, pid))
             .unwrap_or(true),
         None => false,
     }
@@ -243,7 +209,7 @@ fn parent_alive(dir: &Path, parent: &str, multiplexer: &dyn crate::tmux::Multipl
 fn reparent(lane: &LaneRun, dead: &str) -> Option<String> {
     let routes = bus::read_routes(&lane.mail_dir).ok()?;
     let adopter = crate::lane::resolve_parent(None, None, &routes).parent?;
-    if adopter == dead || !parent_alive(&lane.mail_dir, &adopter, crate::tmux::mux()) {
+    if adopter == dead || !parent_alive(&lane.mail_dir, &adopter, boop_store::tmux::mux()) {
         warn!(
             lane = lane.lane,
             dead, "no live coordinator to reparent onto"
@@ -270,7 +236,7 @@ fn reparent(lane: &LaneRun, dead: &str) -> Option<String> {
         to: adopter.clone(),
         from_timestamp: bus::now_iso(),
         to_timestamp: None,
-        kind: crate::trail::REPARENTED.to_owned(),
+        kind: boop_store::trail::REPARENTED.to_owned(),
         reply_to: None,
         body: format!("lane {} reparented to {adopter}: {dead} is gone", lane.lane),
         r#ref: None,
@@ -308,7 +274,7 @@ impl ParentWatch {
     fn probe(
         &mut self,
         lane: &LaneRun,
-        multiplexer: &dyn crate::tmux::Multiplexer,
+        multiplexer: &dyn boop_store::tmux::Multiplexer,
     ) -> Option<Ended> {
         if self.policy == ParentDeathPolicy::Orphan {
             return None;
@@ -323,7 +289,7 @@ impl ParentWatch {
                 println!("[boop] parent {parent} is gone; ending the lane");
                 Some(Ended {
                     exit_code: PARENT_DIED_EXIT,
-                    detail: Some(format!("{}: {parent}", crate::trail::PARENT_DIED)),
+                    detail: Some(format!("{}: {parent}", boop_store::trail::PARENT_DIED)),
                 })
             }
             ParentDeathPolicy::Reparent => {
@@ -345,13 +311,13 @@ struct TraceRecorder {
     trace: Option<String>,
     run_id: String,
     sequence: u64,
-    store: Option<crate::Store>,
+    store: Option<boop_store::Store>,
 }
 
 impl TraceRecorder {
     fn new(lane: &str) -> Self {
-        let store = crate::Store::default_path()
-            .and_then(crate::Store::open)
+        let store = boop_store::Store::default_path()
+            .and_then(boop_store::Store::open)
             .map_err(|error| {
                 warn!(lane, error = %error, "open trace event store failed");
             })
@@ -383,7 +349,7 @@ impl TraceRecorder {
     ) {
         self.sequence += 1;
         let trace_prefix = self.trace.as_deref().unwrap_or("trace-unknown");
-        let event = crate::TraceEvent {
+        let event = boop_store::TraceEvent {
             event_key: format!(
                 "{trace_prefix}/lane/{}/run/{}/event/{}",
                 self.lane, self.run_id, self.sequence
@@ -399,7 +365,7 @@ impl TraceRecorder {
             delivery_state: delivery_state.map(str::to_owned),
             classification: classification.map(str::to_owned),
             detail: detail.to_owned(),
-            created_ts: crate::channel::now_ms(),
+            created_ts: boop_acp::channel::now_ms(),
         };
         if let Some(store) = &self.store {
             if let Err(error) = store.record_trace_event(&event) {
@@ -457,7 +423,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
                 "error",
                 TraceRecorder::session(channel),
                 None,
-                Some(crate::channel::now_ms()),
+                Some(boop_acp::channel::now_ms()),
                 None,
                 Some("failed"),
                 None,
@@ -468,7 +434,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
                 "supervisor-exit",
                 TraceRecorder::session(channel),
                 None,
-                Some(crate::channel::now_ms()),
+                Some(boop_acp::channel::now_ms()),
                 None,
                 Some("failed"),
                 None,
@@ -488,7 +454,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
         "supervisor-exit",
         TraceRecorder::session(channel),
         None,
-        Some(crate::channel::now_ms()),
+        Some(boop_acp::channel::now_ms()),
         None,
         Some(classification),
         None,
@@ -602,7 +568,7 @@ fn supervise(
     );
     loop {
         info!(turn_bytes = turn.len(), "lane turn starting");
-        let turn_started = crate::channel::now_ms();
+        let turn_started = boop_acp::channel::now_ms();
         events.record(
             "turn-start",
             TraceRecorder::session(channel),
@@ -619,7 +585,7 @@ fn supervise(
                 "error",
                 TraceRecorder::session(channel),
                 Some(turn_started),
-                Some(crate::channel::now_ms()),
+                Some(boop_acp::channel::now_ms()),
                 None,
                 Some("failed"),
                 None,
@@ -636,7 +602,7 @@ fn supervise(
                         "error",
                         TraceRecorder::session(channel),
                         Some(turn_started),
-                        Some(crate::channel::now_ms()),
+                        Some(boop_acp::channel::now_ms()),
                         None,
                         Some("failed"),
                         None,
@@ -653,7 +619,7 @@ fn supervise(
             let this_turn_activity = channel
                 .last_activity_ms()
                 .filter(|written| *written >= turn_started);
-            let idle_ms = idle_ms(crate::channel::now_ms(), turn_started, this_turn_activity);
+            let idle_ms = idle_ms(boop_acp::channel::now_ms(), turn_started, this_turn_activity);
             if stalled(idle_ms) {
                 warn!(idle_ms, "lane turn stalled; killing the harness child");
                 println!("[boop] turn stalled ({}s idle), retrying", idle_ms / 1000);
@@ -662,7 +628,7 @@ fn supervise(
                         "error",
                         TraceRecorder::session(channel),
                         Some(turn_started),
-                        Some(crate::channel::now_ms()),
+                        Some(boop_acp::channel::now_ms()),
                         None,
                         Some("failed"),
                         None,
@@ -676,7 +642,7 @@ fn supervise(
                     idle_ms / 1000
                 ));
             }
-            if let Some(ended) = watch.probe(lane, crate::tmux::mux()) {
+            if let Some(ended) = watch.probe(lane, boop_store::tmux::mux()) {
                 if let Err(error) = channel.close() {
                     warn!(lane = lane.lane, error = %error, "close after parent death failed");
                 }
@@ -684,12 +650,12 @@ fn supervise(
                     "parent-death",
                     TraceRecorder::session(channel),
                     Some(turn_started),
-                    Some(crate::channel::now_ms()),
+                    Some(boop_acp::channel::now_ms()),
                     None,
                     Some("failed"),
                     None,
                     None,
-                    ended.detail.as_deref().unwrap_or(crate::trail::PARENT_DIED),
+                    ended.detail.as_deref().unwrap_or(boop_store::trail::PARENT_DIED),
                 );
                 return Ok(ended);
             }
@@ -731,7 +697,7 @@ fn supervise(
             }
         };
         println!("[boop] turn ended: {}", end.detail());
-        let finish = crate::channel::now_ms();
+        let finish = boop_acp::channel::now_ms();
         events.record(
             "turn-finish",
             TraceRecorder::session(channel),
@@ -785,7 +751,7 @@ fn supervise(
                     "error",
                     TraceRecorder::session(channel),
                     None,
-                    Some(crate::channel::now_ms()),
+                    Some(boop_acp::channel::now_ms()),
                     None,
                     Some("failed"),
                     None,
@@ -900,7 +866,7 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
 /// A lane killed because its parent died: the one nonzero exit whose parent is
 /// gone, so a failure hail addressed to it would reach nobody.
 fn ended_on_parent_death(detail: Option<&str>) -> bool {
-    detail.is_some_and(|detail| detail.starts_with(crate::trail::PARENT_DIED))
+    detail.is_some_and(|detail| detail.starts_with(boop_store::trail::PARENT_DIED))
 }
 
 /// The three actionable transitions a parent is told about, each at most once
@@ -994,7 +960,7 @@ fn remember_conversation(lane: &LaneRun, channel: &dyn LaneChannel) {
         "lane conversation resolved"
     );
     record_conversation(&lane.mail_dir, &lane.lane, &id);
-    let store = match crate::Store::default_path().and_then(crate::Store::open) {
+    let store = match boop_store::Store::default_path().and_then(boop_store::Store::open) {
         Ok(store) => store,
         Err(error) => {
             warn!(lane = lane.lane, error = %error, "open trace store failed");
@@ -1006,7 +972,7 @@ fn remember_conversation(lane: &LaneRun, channel: &dyn LaneChannel) {
         .ok()
         .flatten()
         .unwrap_or_else(|| format!("trace-{}", lane.lane));
-    if let Err(error) = store.attach_trace(&lane.lane, &trace, "lane-run", crate::channel::now_ms())
+    if let Err(error) = store.attach_trace(&lane.lane, &trace, "lane-run", boop_acp::channel::now_ms())
     {
         warn!(lane = lane.lane, trace, error = %error, "lane trace attachment failed");
     }
@@ -1014,7 +980,7 @@ fn remember_conversation(lane: &LaneRun, channel: &dyn LaneChannel) {
         &id,
         &trace,
         "supervisor-conversation",
-        crate::channel::now_ms(),
+        boop_acp::channel::now_ms(),
     ) {
         warn!(lane = lane.lane, conversation_id = id, trace, error = %error, "conversation trace attachment failed");
     } else {
@@ -1093,7 +1059,7 @@ fn record_delivery(events: &TraceRecorder, dir: &Path, hail: &Hail, tier: Delive
         &hail.from,
         &events.lane,
         &format!("deliver-{}", tier.as_str()),
-        crate::channel::now_ms(),
+        boop_acp::channel::now_ms(),
     ) {
         warn!(lane = events.lane, hail_id = hail.id, delivery = tier.as_str(), error = %error, "delivery edge write failed");
     }
@@ -1201,7 +1167,7 @@ mod tests {
 
     #[test]
     fn hail_text_names_the_id_and_the_sender() {
-        let text = hail_text(&hail("hail"), crate::ident::DEFAULT_MOOD_TEMPLATE);
+        let text = hail_text(&hail("hail"), boop_store::ident::DEFAULT_MOOD_TEMPLATE);
         assert_eq!(text, "[boop m1 from coordinator] stop and write /tmp/x");
     }
 
@@ -1220,7 +1186,7 @@ mod tests {
         let mut row = hail("hail");
         row.body = "{from} is not substituted".into();
         assert_eq!(
-            hail_text(&row, crate::ident::DEFAULT_MOOD_TEMPLATE),
+            hail_text(&row, boop_store::ident::DEFAULT_MOOD_TEMPLATE),
             "[boop m1 from coordinator] {from} is not substituted"
         );
     }
