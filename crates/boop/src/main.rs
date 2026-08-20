@@ -1,7 +1,8 @@
-//! `boop`: the cross-harness agent-event reader, 1-1 with `bus` plus the four
-//! verbs `bus` cannot do (read what an agent did, and measure what its
-//! processes cost). The CLI routes to layers 0-3; it contains no `match` on
-//! harness id and no direct `Command::new("tmux")` beyond the layer-1 helpers.
+//! The `boop` CLI: two verb trees over five library crates. `beep` drives
+//! agents, `db` reads what they did.
+//!
+//! No `match` on harness id and no direct `Command::new("tmux")` live here;
+//! both belong to boop-harness and boop-mux.
 
 use std::path::PathBuf;
 
@@ -42,14 +43,31 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum SubCmd {
-    /// Drive agents: harnesses, lanes, mail, processes.
+    /// Drive agents: spawn lanes, hail them, register coordinators, measure them.
+    ///
+    /// Every verb that CHANGES something lives here. A coordinator calls
+    /// `beep lane create` to spawn, `beep hail` to talk, `beep ps`/`beep pstree`
+    /// to see what is alive. Reading what an agent DID is `boop db`.
     Beep {
         #[command(subcommand)]
         cmd: BeepCmd,
     },
-    /// Run raw SQL read-only against the store (the default `db` form), or
-    /// read/count what agents did through a `db` subcommand.
-    #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
+    /// Read what agents did: raw SQL over ~/.agent/boop.db, or a typed row reader.
+    ///
+    /// Two forms. `boop db "<sql>"` runs one read-only statement; sqlite3
+    /// dot-commands (.schema, .tables) are not accepted, plain SQL only.
+    /// `boop db <sub>` is a named reader over the same tables.
+    ///
+    /// This store holds transcripts, facts and traces. It is NOT the mailbox:
+    /// mail is NDJSON at ~/.agent/mail/bus.ndjson with routes in registry.json.
+    #[command(
+        args_conflicts_with_subcommands = true,
+        subcommand_negates_reqs = true,
+        after_help = "EXAMPLES:
+  boop db \"SELECT name FROM sqlite_master WHERE type='table'\"
+  boop db turn list --limit 5 --format text
+  boop db status --window 10"
+    )]
     Db {
         /// The SQL to run against ~/.agent/boop.db.
         #[arg(value_name = "SQL")]
@@ -60,8 +78,15 @@ enum SubCmd {
         #[command(subcommand)]
         cmd: Option<DbCmd>,
     },
-    /// What just went wrong: recent WARN/ERROR across the lane trails and the
-    /// store's error events, grouped by lane.
+    /// What just went wrong: WARN/ERROR from every lane trail and the store.
+    ///
+    /// Reads the tail of every ~/.agent/lanes/<lane>/supervise.log plus the
+    /// store's kind=error trace rows, grouped by lane, oldest first inside a
+    /// lane. `boop --help` prints a one-line banner when this window is
+    /// non-empty and nothing when it is clean.
+    #[command(after_help = "EXAMPLES:
+  boop debug --since 10m
+  boop debug --lane fix-help-sweep --json")]
     Debug {
         /// Window to read back, as `Ns`, `Nm`, `Nh` or a count of seconds.
         #[arg(long, default_value = "2m")]
@@ -73,15 +98,23 @@ enum SubCmd {
         #[arg(long)]
         json: bool,
     },
-    /// Freshly synchronize and summarize Boop agent/runtime/activity facts.
+    /// Sync transcripts, then print the CASS-compatible agent/runtime summary.
+    ///
+    /// A read verb for a dashboard or another tool, not for driving agents.
+    /// The spawn/register verbs are `boop beep agent`.
+    #[command(after_help = "EXAMPLES:
+  boop agent summary --format text
+  boop agent sessions --cwd ~/projects/hafley-rs")]
     #[cfg(feature = "agent-read")]
     Agent {
         #[command(subcommand)]
         cmd: AgentSummaryCmd,
     },
-    /// Refinement loop: map each new (assistant, user) contact pair through
-    /// a model pass and write the rewrite per turn. For a resident DL6
-    /// coroutine, use `boop host chat`.
+    /// Refinement loop: map each new (assistant, user) pair through a model pass.
+    ///
+    /// Runs in the foreground and writes one rewrite per turn. For a resident
+    /// DL6 coroutine instead, use `boop host chat`. This page's TEMPLATE,
+    /// STATE and RULES blocks define the three file inputs.
     #[command(after_help = CONCATMAP_EXAMPLES)]
     Concatmap {
         /// Prompt template file; substitutes {{mode}}, {{ai_text}} (the
@@ -126,13 +159,22 @@ enum SubCmd {
         #[arg(long, conflicts_with = "session")]
         me: bool,
     },
-    /// Typed stdin/stdout host boundary for compiled DL6 programs.
+    /// Typed stdin/stdout boundary a compiled DL6 program calls a model through.
+    ///
+    /// The program writes one JSON request on stdin and reads one JSON
+    /// response on stdout. Nothing else reads or writes the pipe.
     Host {
         #[command(subcommand)]
         cmd: HostCmd,
     },
-    /// Mail the caller's own parent. The identity ladder names the sender and
-    /// the registered parent edge names the recipient, so neither is spelled.
+    /// Mail your own parent; the ladder names both ends, so neither is typed.
+    ///
+    /// Called BY a lane or a subagent, never at one. The identity ladder names
+    /// the sender and the route's `parent` edge names the recipient. The row is
+    /// appended and then handed to the same delivery ladder `beep hail` uses.
+    #[command(after_help = "EXAMPLES:
+  boop tell-parent --kind completion --body \"PR #44 posted, gate green\"
+  boop tell-parent --kind yield")]
     TellParent {
         /// What the row says it is. `yield` carries a default body.
         #[arg(long, default_value = "note", value_parser = ["completion", "yield", "note"])]
@@ -140,27 +182,50 @@ enum SubCmd {
         /// The message. Required for every kind but `yield`.
         #[arg(long)]
         body: Option<String>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Mail one body to every live child of the caller, resolved from the same
-    /// parent edges, with a landed/dead line per target.
+    /// Mail one body to every live child of the caller, one line per target.
+    ///
+    /// Children come from the registry's `parent` edges plus the store's
+    /// `spawned` edges for the caller's session. Each target reports landed or
+    /// dead and the run ends in a tally, so a run that reached nobody cannot
+    /// read as success.
+    #[command(after_help = "EXAMPLES:
+  boop tell-children --body \"stop and report where you are\"")]
     TellChildren {
         /// The message every child gets.
         #[arg(long)]
         body: String,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Report the caller's own identity and the rung that resolved it.
+    /// Print the caller's own name and which rung of the ladder resolved it.
+    ///
+    /// The ladder, in order: $BOOP_SESSION, the tmux pane the caller sits in,
+    /// then the process tree. The name it prints is what `--as` and `--from`
+    /// take everywhere else. An empty answer means nothing can address you.
     Whoami {
+        /// One JSON object instead of the text lines.
         #[arg(long)]
         json: bool,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Block until mail lands: the reply to <id>, or the next unread row
-    /// addressed to you with --me. Every exit prints the next command to run.
+    /// Block until mail lands: the reply to <id>, or your next unread row.
+    ///
+    /// The universal pull. Every agent can background a shell, so a block is
+    /// the one transport that works from any harness with no route, no pane
+    /// and no hook. A reply is a row naming your id in `reply_to`, or the
+    /// recipient's next mail back to you. Every arrival is printed and stamped
+    /// delivered, so a second wait on the same id blocks instead of replaying.
+    /// A timeout exits 124. The LAST line of every exit is the next command.
+    #[command(after_help = "EXAMPLES:
+  boop wait <message-id>
+  boop wait --me --wait-timeout 120")]
     Wait {
         /// The id `boop beep hail` printed. Omit it and pass --me instead.
         #[arg(value_name = "MESSAGE-ID", required_unless_present = "me")]
@@ -174,26 +239,54 @@ enum SubCmd {
         /// Seconds to block before exiting 124.
         #[arg(long, default_value_t = mailwait::DEFAULT_TIMEOUT_SECS)]
         wait_timeout: u64,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Mail a claude coordinator reads at a turn boundary: the hook inbox.
+    /// The pull side of mail: what a claude coordinator drains at a turn edge.
+    ///
+    /// With the two hooks installed, `deliver_hail` pushes NOTHING at that
+    /// name: the receiver's own Stop and UserPromptSubmit hooks run
+    /// `boop inbox drain` and the mail arrives as part of a turn. Removing the
+    /// hooks restores pane injection for that name.
+    #[command(after_help = "EXAMPLES:
+  boop inbox hooks --name sprefa-coordinator
+  boop inbox drain --as sprefa-coordinator")]
     Inbox {
         #[command(subcommand)]
         cmd: InboxCmd,
     },
-    /// Register this Codex pane, or act on the caller's own conversation.
-    #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
+    /// Register the Codex pane you are sitting in, or act on your conversation.
+    ///
+    /// Bare `boop me` writes a kind=coordinator route for the current tmux
+    /// pane so mail can reach you. It is CODEX ONLY: it fails unless a root
+    /// Codex transcript records this directory, and it stamps harness=codex.
+    /// Any other harness registers through `boop adopt --name <n> --tmux <t>`.
+    /// The subcommands act on whatever conversation the whoami ladder resolves.
+    #[command(
+        args_conflicts_with_subcommands = true,
+        subcommand_negates_reqs = true,
+        after_help = "EXAMPLES:
+  boop me --name codex-main
+  boop me mood unga
+  boop me favorite -1 --note \"the delivery table\""
+    )]
     Me {
-        /// Registry name; defaults to codex-<pane id>.
+        /// Registry name; defaults to `codex-<pane id>` with the leading % cut.
         #[arg(long)]
         name: Option<String>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
         #[command(subcommand)]
         cmd: Option<MeCmd>,
     },
-    /// Inspect the boop configuration the CLI reads.
+    /// Print the boop config the CLI reads: its path, its JSON, its presets.
+    ///
+    /// Read-only. Editing is done in the file `boop config path` prints.
+    #[command(after_help = "EXAMPLES:
+  boop config path
+  boop config presets")]
     Config {
         #[command(subcommand)]
         cmd: ConfigCmd,
@@ -216,6 +309,7 @@ enum SubCmd {
         /// Byte offset to start from. Defaults to 0.
         #[arg(long)]
         from: Option<u64>,
+        /// How each event row is rendered.
         #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
         format: OutputFormat,
     },
@@ -225,147 +319,199 @@ enum SubCmd {
         #[command(flatten)]
         query: QueryArgs,
     },
-    /// List lanes and messages like `bus list`.
+    /// Every route, then every open message. Superseded by `beep lane list`.
     #[command(hide = true)]
     List {
+        /// Only this lane's rows.
         #[arg(long)]
         agent: Option<String>,
+        /// Every message ever, acked included; default is open rows only.
         #[arg(long)]
         all: bool,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
     /// Measure per-lane pid, rss, cpu, uptime, child count.
     #[command(hide = true)]
     Measure {
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
     /// Spawn a lane: tmux new-session + mailbox + registry route.
     #[command(hide = true)]
     Dispatch {
+        /// Lane id to spawn and register.
         #[arg(long)]
         to: String,
+        /// Directory the spawned pane starts in.
         #[arg(long)]
         cwd: String,
+        /// The shell command the pane runs.
         #[arg(long)]
         cmd: String,
+        /// Sender recorded on the opening message.
         #[arg(long)]
         from: Option<String>,
+        /// Harness id recorded on the route.
         #[arg(long)]
         harness: Option<String>,
+        /// Harness conversation id recorded on the route.
         #[arg(long)]
         session_id: Option<String>,
+        /// Model spelling recorded on the route.
         #[arg(long)]
         model: Option<String>,
+        /// Mail-rendering mood recorded on the route.
         #[arg(long)]
         mode: Option<String>,
+        /// tmux session name; defaults to the lane id.
         #[arg(long)]
         tmux: Option<String>,
+        /// tmux socket to spawn on; the default server when absent.
         #[arg(long)]
         socket: Option<String>,
+        /// First message queued for the new lane.
         #[arg(long)]
         body: Option<String>,
+        /// Correlation id copied onto the queued message.
         #[arg(long)]
         r#ref: Option<String>,
+        /// What the lane is running toward.
         #[arg(long)]
         goal: Option<String>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
+        /// Seconds to sleep after the spawn, before returning.
         #[arg(long, default_value_t = 3)]
         resolve_wait: u64,
         /// Spawn in the main tree instead of creating a worktree.
         #[arg(long)]
         main_tree: bool,
+        /// Commit the worktree is cut at.
         #[arg(long)]
         base_sha: Option<String>,
     },
     /// Resolve a lane's harness session id into its registry route.
     #[command(hide = true)]
     Resolve {
+        /// Lane id whose route is resolved.
         #[arg(long)]
         to: String,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
     /// Queue a message and inject it into a live pane.
     #[command(hide = true)]
     Hail {
+        /// Recipient route name.
         #[arg(long)]
         to: String,
+        /// The message text.
         #[arg(long)]
         body: String,
+        /// Sender name; defaults to `coordinator`.
         #[arg(long)]
         from: Option<String>,
+        /// Row kind; defaults to `request`. Only request/hail/note/retry/resume reach a lane.
         #[arg(long)]
         kind: Option<String>,
+        /// NDJSON file inside the mail dir; defaults to bus.ndjson.
         #[arg(long)]
         box_: Option<String>,
+        /// tmux socket the recipient's pane lives on.
         #[arg(long)]
         socket: Option<String>,
         /// Send, then block for the reply exactly as `boop wait <id>` does.
         #[arg(long, value_name = "SECS")]
         wait_timeout: Option<u64>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
     /// Acknowledge unacked lanes via cass and stamp token usage.
     #[command(hide = true)]
     Sweep {
+        /// Only this lane's mail.
         #[arg(long)]
         agent: Option<String>,
+        /// NDJSON file inside the mail dir; defaults to bus.ndjson.
         #[arg(long)]
         box_: Option<String>,
+        /// Also ack mail addressed to names with no registry route.
         #[arg(long)]
         close_routeless: bool,
+        /// Rows older than this are acked outright, as expired.
         #[arg(long, default_value_t = 7)]
         max_age_days: u64,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
     /// Register and spawn a lane (the first-contact verb).
     #[command(hide = true)]
     Lane {
+        /// Lane id and registry key.
         #[arg(long)]
         name: String,
+        /// Repo the lane works in.
         #[arg(long)]
         cwd: String,
+        /// Harness id; defaults to the one the model spelling names.
         #[arg(long)]
         harness: Option<String>,
+        /// Absolute path to the brief the lane reads and executes.
         #[arg(long)]
         brief: Option<PathBuf>,
+        /// Model spelling, in the harness's own flag form.
         #[arg(long)]
         model: Option<String>,
+        /// Named model preset from boop/config.json; `boop config presets` lists them.
         #[arg(long, conflicts_with = "model")]
         preset: Option<String>,
+        /// tmux session name; defaults to the lane id.
         #[arg(long)]
         tmux: Option<String>,
+        /// Route that receives this lane's result row.
         #[arg(long)]
         parent: Option<String>,
         /// New branch name; with `--base-sha`, spawns in a worktree instead
         /// of `--cwd` directly.
         #[arg(long)]
         branch: Option<String>,
+        /// Commit the worktree is cut at.
         #[arg(long)]
         base_sha: Option<String>,
         /// tmux socket to spawn on; a throwaway socket for tests, `None` for
         /// the default server.
         #[arg(long)]
         socket: Option<String>,
+        /// What the lane is running toward.
         #[arg(long)]
         goal: Option<String>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
+        /// Print the spawn line and register nothing.
         #[arg(long)]
         dry_run: bool,
     },
-    /// Register an existing interactive pane as a coordinator route; never
-    /// spawns. A claude session also gets the hook inbox, and reads its mail at
-    /// the next turn boundary; every other harness has it typed into its pane.
+    /// Register an interactive pane as a coordinator route. Never spawns.
+    ///
+    /// `--harness claude` also installs the two drain hooks in the pane's
+    /// project settings, which FLIPS that name from push to pull: hails to it
+    /// stop being typed at the pane and wait for its own `boop inbox drain`
+    /// at a turn boundary. Every other harness keeps pane injection.
+    /// `--no-hooks` keeps injection for a claude pane too.
     #[command(hide = true)]
     Adopt {
+        /// Registry name for the adopted pane.
         #[arg(long)]
         name: String,
+        /// tmux session or pane the route points at.
         #[arg(long)]
         tmux: String,
         /// Keep pane injection: do not install the hook inbox for a claude
@@ -377,21 +523,28 @@ enum SubCmd {
         /// `boop inbox hooks --uninstall` is the same edit without a route.
         #[arg(long)]
         uninstall_hooks: bool,
+        /// Harness running in the pane; `claude` also gets the hook inbox.
         #[arg(long)]
         harness: Option<String>,
+        /// Harness conversation id; discovered from the pane when absent.
         #[arg(long)]
         session_id: Option<String>,
+        /// Project whose .claude/settings.json carries the drain hooks.
         #[arg(long)]
         cwd: Option<String>,
+        /// Model spelling recorded on the route.
         #[arg(long)]
         model: Option<String>,
+        /// Mail-rendering mood recorded on the route.
         #[arg(long)]
         mode: Option<String>,
         /// The lane that summoned this one.
         #[arg(long)]
         parent: Option<String>,
+        /// What this coordinator is working toward.
         #[arg(long)]
         goal: Option<String>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -399,6 +552,7 @@ enum SubCmd {
     /// unreachable because it cannot tell live from dead.
     #[command(hide = true)]
     Prune {
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -430,24 +584,34 @@ enum SubCmd {
 /// The shared read filter, used by `chat` and `events`.
 #[derive(clap::Args, Clone, Default)]
 struct QueryArgs {
+    /// Only rows from this harness id.
     #[arg(long)]
     harness: Option<String>,
+    /// Only rows from this harness session id.
     #[arg(long)]
     session: Option<String>,
+    /// Only rows with this role: user or assistant.
     #[arg(long)]
     role: Option<String>,
+    /// Lower bound on row ts, Unix ms.
     #[arg(long)]
     since: Option<u64>,
+    /// Upper bound on row ts, Unix ms.
     #[arg(long)]
     until: Option<u64>,
+    /// Lower bound on the turn ordinal.
     #[arg(long)]
     turn_from: Option<u64>,
+    /// Upper bound on the turn ordinal.
     #[arg(long)]
     turn_to: Option<u64>,
+    /// Only sessions that touched this path.
     #[arg(long)]
     path: Option<String>,
+    /// Cap the row count.
     #[arg(long)]
     limit: Option<u64>,
+    /// How each row is rendered.
     #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
     format: QueryFormat,
 }
@@ -481,13 +645,11 @@ enum PstreeFormat {
 
 #[derive(Subcommand)]
 enum ConfigCmd {
-    /// Print the resolved config path.
+    /// Print the config file path this machine resolves to.
     Path,
-    /// Print the loaded config as pretty JSON, including the defaults a
-    /// missing file produces.
+    /// Print the loaded config as pretty JSON, defaults included.
     Show,
-    /// One row per model preset: name, model, variant, the harness the model
-    /// spelling names, and which row `default-model-preset` points at.
+    /// One row per `--preset` name: model, variant, harness, and the default.
     Presets,
 }
 
@@ -667,8 +829,8 @@ fn main() -> Result<()> {
                 parent,
                 goal,
                 mail_dir,
-                // An adopted pane is an interactive session with no lane supervisor
-                // polling its mailbox; `coordinator` makes hail deliver by pane injection.
+                // No lane supervisor polls an adopted pane's mailbox, so the
+                // route kind must be one `deliver_hail` pushes to itself.
             } => run_adopt(
                 &name,
                 "coordinator",
@@ -946,59 +1108,90 @@ fn supervised_lane(command: &SubCmd) -> Option<&str> {
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum BeepCmd {
-    /// Harness adapters and what each can do.
+    /// The harness adapters: which ids `--harness` accepts, and what each drives.
     Harness {
         #[command(subcommand)]
         cmd: HarnessCmd,
     },
-    /// Lanes: the agents boop spawns and tracks.
+    /// Lanes: spawn one, list them, hail them, wait on one, tear one down.
+    ///
+    /// A lane is a tmux pane running `beep lane run`, which owns the harness
+    /// conversation and reads the lane's mailbox itself. `lane create` is the
+    /// only spawn door; a bare tmux spawn leaves no route and no parent edge.
     Lane {
         #[command(subcommand)]
         cmd: LaneCmd,
     },
-    /// Register pane-less coordinators and native subagents.
+    /// Register pane-less names: a coordinator, or an Agent-tool subagent.
+    ///
+    /// A `native` row makes the name ADDRESSABLE and mailable-in-principle,
+    /// with no transport behind it: an Agent-tool child has no route of its
+    /// own, no pane, no stdin and no ACP session, so every hail to it takes
+    /// the "queued (no pane)" arm and is read only by `boop wait`.
     Agent {
         #[command(subcommand)]
         cmd: AgentCmd,
     },
-    /// Type into a running agent, and say whether the keystrokes landed.
+    /// Send one message to a running agent, and say how it was delivered.
+    ///
+    /// Appends the row, then picks a transport from the recipient's route:
+    /// a lane is left for its own supervisor, a hook-installed name is left
+    /// for its `boop inbox drain`, an otherwise-live pane is typed into, and
+    /// anything else stays queued for `boop wait`. The printed line names
+    /// which arm ran. `boop --help` carries the whole table.
+    #[command(after_help = "EXAMPLES:
+  boop beep hail fix-parser --body \"rebase onto origin/main first\"
+  boop beep hail fix-parser --body \"status?\" --wait-timeout 120")]
     Hail {
+        /// The lane to hail.
         lane: String,
+        /// The message text.
         #[arg(long)]
         body: String,
+        /// Sender name; defaults to `coordinator`.
         #[arg(long)]
         from: Option<String>,
+        /// Row kind; defaults to `request`. Only request/hail/note/retry/resume reach a lane.
         #[arg(long)]
         kind: Option<String>,
+        /// tmux socket the recipient's pane lives on.
         #[arg(long)]
         socket: Option<String>,
         /// Send, then block for the reply exactly as `boop wait <id>` does.
         #[arg(long, value_name = "SECS")]
         wait_timeout: Option<u64>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Mail across lanes.
+    /// Bulk mail housekeeping. Reading one lane's mail is `beep lane message`.
     Message {
         #[command(subcommand)]
         cmd: MessageCmd,
     },
-    /// pid, rss, cpu, uptime, child count per live lane.
+    /// pid, rss, cpu, uptime and child count per live lane.
+    ///
+    /// Half of the liveness test. The other half is `git -C <worktree> status
+    /// --short`: a lane can hold a live process and change nothing.
     Ps {
+        /// One lane only; every live lane when absent.
         lane: Option<String>,
         /// Include dead routes (no live process behind the pane).
         #[arg(long)]
         all: bool,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Filesystem-style tree of lanes by parent edge.
+    /// Tree of lanes by parent edge, filesystem style.
     Pstree {
         /// Include dead lanes; default is live-only.
         #[arg(long)]
         all: bool,
+        /// How the tree is rendered.
         #[arg(long, value_enum, default_value_t = PstreeFormat::Text)]
         format: PstreeFormat,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -1006,28 +1199,46 @@ enum BeepCmd {
 
 #[derive(Subcommand)]
 enum HarnessCmd {
+    /// One line per registered adapter: the ids `--harness` accepts.
     List,
-    Get { harness: String },
+    /// One adapter's id, transcript root, and what it can be driven with.
+    Get {
+        /// Harness id, as `boop beep harness list` spells it.
+        harness: String,
+    },
 }
 
 #[derive(Subcommand)]
 enum HostCmd {
-    /// Read one JSON request from stdin and emit one JSON response.
+    /// Read one JSON request from stdin, emit one JSON response on stdout.
     Chat,
 }
 
 #[derive(Subcommand)]
 enum LaneCmd {
-    /// Every lane, with live or dead.
+    /// One row per registered lane, with live or dead.
     List {
+        /// Only lanes in this state: `live`, `dead`, or `?` when tmux is unreachable.
         #[arg(long)]
         state: Option<String>,
+        /// Only lanes on this harness id.
         #[arg(long)]
         harness: Option<String>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Make a worktree, spawn the agent, register the route.
+    /// The spawn door: cut a worktree, start the agent, register the route.
+    ///
+    /// ONE derivation from the whole branch name. `feature/schema-emit` gives
+    /// lane id and tmux session `feature-schema-emit` (`/` spelled `-`, the one
+    /// character tmux cannot hold) and worktree
+    /// `.boop-worktrees/feature/schema-emit`. No prefix is dropped, no `lane/`
+    /// prefix is added. Run `--dry-run` first for any shape you have not used;
+    /// the printed `cmd:` line is the literal spawn.
+    #[command(after_help = "EXAMPLES:
+  boop beep lane create --branch fix/parser --brief /abs/BRIEF.md --dry-run
+  boop beep lane create --branch fix/parser --brief /abs/BRIEF.md --preset flash4 --wait")]
     Create {
         /// The lane's whole identity: `feature/<name>`, also fix/, refactor/,
         /// chore/. Lane id and tmux session are the branch with `/` as `-`.
@@ -1065,6 +1276,7 @@ enum LaneCmd {
         /// Defaults to the harness the model spelling names.
         #[arg(long)]
         harness: Option<String>,
+        /// Model spelling, in the harness's own flag form.
         #[arg(long)]
         model: Option<String>,
         /// Resolve a named provider/model entry from the platform Boop config.
@@ -1091,8 +1303,10 @@ enum LaneCmd {
         /// the default server.
         #[arg(long)]
         socket: Option<String>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
+        /// Print the spawn line and register nothing.
         #[arg(long)]
         dry_run: bool,
         /// Remove a dead lane's worktree and branch before spawning. A live
@@ -1100,16 +1314,23 @@ enum LaneCmd {
         #[arg(long)]
         reclaim: bool,
     },
-    /// Drive one lane conversation. This is what a lane pane runs; a human
-    /// calls `lane create`, never this.
+    /// The supervisor a lane pane runs. Spawn with `lane create`, never this.
+    ///
+    /// Owns the harness conversation over ACP and reads the lane's mailbox on
+    /// a 700 ms poll. It opens the conversation with the brief and holds every
+    /// hail for a resume turn, because ACP has no mid-turn prompt. Nothing is
+    /// dropped and no hail needs a human re-dispatch.
     Run {
+        /// Lane id this supervisor owns.
         #[arg(long)]
         lane: String,
+        /// Harness id to open the conversation on.
         #[arg(long)]
         harness: String,
         /// Absolute path to the brief that opens the conversation.
         #[arg(long)]
         brief: PathBuf,
+        /// Model spelling, in the harness's own flag form.
         #[arg(long)]
         model: Option<String>,
         /// Continue an existing harness conversation instead of opening one.
@@ -1118,88 +1339,118 @@ enum LaneCmd {
         /// opencode reasoning-effort variant, threaded from `lane create`.
         #[arg(long)]
         variant: Option<String>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// One lane's route and state.
+    /// One lane's route row and whether it is live.
     Get {
+        /// The lane to report on.
         lane: String,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Point a lane at a pane that already exists.
+    /// Repoint an existing lane's route at a pane that already exists.
     Patch {
+        /// The lane whose route is repointed.
         lane: String,
+        /// tmux session or pane the route points at.
         #[arg(long)]
         tmux: String,
+        /// Harness running in the pane.
         #[arg(long)]
         harness: Option<String>,
+        /// Harness conversation id recorded on the route.
         #[arg(long)]
         session_id: Option<String>,
+        /// Directory recorded on the route; also where a drain hook is looked for.
         #[arg(long)]
         cwd: Option<String>,
+        /// Model spelling recorded on the route.
         #[arg(long)]
         model: Option<String>,
+        /// Mail-rendering mood recorded on the route.
         #[arg(long)]
         mode: Option<String>,
         /// The lane that summoned this one.
         #[arg(long)]
         parent: Option<String>,
+        /// What the lane is running toward.
         #[arg(long)]
         goal: Option<String>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Stop a lane and forget it, or bulk-delete by state.
+    /// Stop one lane and drop its route, or bulk-delete by state.
     Delete {
+        /// The lane to stop and forget; use --state for a bulk delete.
         lane: Option<String>,
         /// Drop only the registry route; never kill the pane. The `--parent`
         /// on-exit epilogue uses this to clean up while still running inside it.
         #[arg(long)]
         route_only: bool,
+        /// Delete every lane in this state instead of one by name.
         #[arg(long)]
         state: Option<String>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Drop routes whose tmux session is gone AND whose recorded pid, if any,
-    /// is not alive. Refuses when tmux is unreachable.
+    /// Drop routes whose pane is gone and whose recorded pid is not alive.
+    ///
+    /// Refuses outright when tmux is unreachable, because it then cannot tell
+    /// live from dead.
     Prune {
         /// Print what would be pruned; remove nothing.
         #[arg(long)]
         dry_run: bool,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Which tmux pane and harness session id.
+    /// One lane's tmux target, harness session id, cwd and parent.
     Route {
+        /// The lane whose route is printed.
         lane: String,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Show the lane's screen.
+    /// Capture the lane's screen. Proof of nothing on its own; see `beep ps`.
     Pane {
+        /// The lane whose pane is captured.
         lane: String,
+        /// How many scrollback lines to capture.
         #[arg(long)]
         lines: Option<u32>,
+        /// tmux socket the pane lives on.
         #[arg(long)]
         socket: Option<String>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// The lane's mailbox.
+    /// One lane's mailbox rows, sent and received.
     Message {
         #[command(subcommand)]
         cmd: LaneMessageCmd,
     },
-    /// Wait for the lane's result row, then exit with the rc it names. `--timeout`
+    /// Block on a lane's result row, then exit with the rc that row names.
+    ///
+    /// A result row is APPEND-ONLY: nothing pushes it anywhere, so a caller
+    /// that wants the rc polls for it here (or, for a claude coordinator with
+    /// the drain hook, reads it at its next turn boundary). `--timeout`
     /// seconds exits 124; a route that dies with no row exits 3.
     Wait {
+        /// The lane to wait on.
         lane: String,
         /// Seconds to wait before exiting 124; 0 waits until the lane reports
         /// or its route dies.
         #[arg(long, default_value_t = 0)]
         timeout: u64,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -1207,11 +1458,16 @@ enum LaneCmd {
 
 #[derive(Subcommand)]
 enum AgentCmd {
-    /// Add a pane-less registry row.
+    /// File a pane-less registry row so the name can be addressed.
+    #[command(after_help = "EXAMPLE:
+  boop beep agent register audit-1 --kind native --parent sprefa-coordinator")]
     Register {
+        /// Registry name the new row is filed under; also the mail address.
         name: String,
+        /// coordinator or native; anything else is refused.
         #[arg(long, default_value = "native")]
         kind: String,
+        /// Route this agent's result row is addressed to.
         #[arg(long)]
         parent: Option<String>,
         /// Recorded for this row; a pane-less agent runs no supervisor of its
@@ -1222,14 +1478,20 @@ enum AgentCmd {
         /// with the preamble printed here: a native has no injected first turn.
         #[arg(long)]
         worktree: Option<PathBuf>,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Append a completion row and remove the registry row.
+    /// Append the agent's result row and drop its registry row.
+    #[command(after_help = "EXAMPLE:
+  boop beep agent done audit-1 --rc 0")]
     Done {
+        /// Registry name of the row to close.
         name: String,
+        /// Exit code the result row reports.
         #[arg(long, default_value_t = 0)]
         rc: i32,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -1241,8 +1503,10 @@ enum AgentSummaryCmd {
     /// Synchronize incremental transcript facts, then emit the versioned
     /// CASS-compatible Boop agent summary.
     Summary {
+        /// How the summary is rendered.
         #[arg(long, value_enum, default_value_t = AgentSummaryFormat::Json)]
         format: AgentSummaryFormat,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -1263,6 +1527,7 @@ enum AgentSummaryCmd {
         /// The public graph contract currently emits JSON.
         #[arg(long, value_enum, default_value_t = AgentSessionGraphFormat::Json)]
         format: AgentSessionGraphFormat,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -1276,8 +1541,11 @@ enum AgentSessionGraphFormat {
 
 #[derive(Subcommand)]
 enum LaneMessageCmd {
+    /// Every mailbox row naming this lane, sent or received.
     List {
+        /// The lane whose mailbox is listed.
         lane: String,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -1312,19 +1580,23 @@ enum InboxCmd {
         /// Whose inbox to drain; defaults to the identity ladder's answer.
         #[arg(long = "as", value_name = "NAME")]
         as_name: Option<String>,
+        /// Which Claude Code hook is reading; it shapes the stdout payload.
         #[arg(long, value_enum, default_value_t = HookArg::Plain)]
         hook: HookArg,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
     /// Install (or remove) the two drain hooks in <cwd>/.claude/settings.json.
     /// `boop adopt --harness claude` does this for you.
     Hooks {
+        /// Registry name the installed drain command passes to `--as`.
         #[arg(long)]
         name: String,
         /// The project whose settings carry the hooks; defaults to this dir.
         #[arg(long)]
         cwd: Option<PathBuf>,
+        /// Remove the two hooks instead of adding them.
         #[arg(long)]
         uninstall: bool,
     },
@@ -1332,16 +1604,21 @@ enum InboxCmd {
 
 #[derive(Subcommand)]
 enum MessageCmd {
-    /// Mark mail handled, in bulk.
+    /// Age-based bulk mark-as-handled. NOT proof of read, never of compliance.
     Ack {
+        /// Only this lane's mail.
         #[arg(long)]
         lane: Option<String>,
+        /// NDJSON file inside the mail dir; defaults to bus.ndjson.
         #[arg(long)]
         box_: Option<String>,
+        /// Also ack mail addressed to names with no registry route.
         #[arg(long)]
         close_routeless: bool,
+        /// Rows older than this are acked outright, as expired.
         #[arg(long, default_value_t = 7)]
         max_age_days: u64,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -1354,8 +1631,10 @@ enum DbCmd {
     #[cfg(feature = "agent-read")]
     #[command(hide = true)]
     AgentSummary {
+        /// How the summary is rendered.
         #[arg(long, value_enum, default_value_t = AgentSummaryFormat::Json)]
         format: AgentSummaryFormat,
+        /// Mailbox directory; defaults to ~/.agent/mail (bus.ndjson + registry.json).
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -1416,9 +1695,10 @@ enum DbCmd {
         #[command(subcommand)]
         cmd: EdgeCmd,
     },
-    /// Tokens and cost. A totals report the passthrough powers, and a parent
-    /// of the row computations blocks and burn-rate; clap needs both attributes
-    /// to accept the two forms.
+    /// Tokens and dollars: totals bare, or a windowed report by subcommand.
+    ///
+    /// `--show-sql` prints the SQL a form runs and exits, so the numbers can be
+    /// checked or the query reused through `boop db "<sql>"`.
     #[cfg(feature = "agent-read")]
     #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
     Usage {
@@ -1430,35 +1710,36 @@ enum DbCmd {
         #[command(subcommand)]
         cmd: Option<UsageCmd>,
     },
-    /// The rate table cost is computed from.
+    /// The USD-per-million-token rate rows every cost number is computed from.
     #[cfg(feature = "agent-read")]
     Price {
         #[command(subcommand)]
         cmd: PriceCmd,
     },
-    /// User-pinned markdown: save a message you want to keep, read it back.
+    /// Pinned markdown: save a message worth keeping, read it back later.
     #[cfg(feature = "agent-read")]
     Favorite {
         #[command(subcommand)]
         cmd: FavoriteCmd,
     },
-    /// Ingest new transcript bytes.
+    /// Ingest new transcript bytes. Every read verb already syncs first.
     Sync {
         #[command(subcommand)]
         cmd: SyncCmd,
     },
-    /// How far ingest has read each transcript.
+    /// The byte offset ingest has reached in each transcript file.
     #[cfg(feature = "agent-read")]
     SyncCursor {
         #[command(subcommand)]
         cmd: CursorCmd,
     },
-    /// Who is alive, who moved recently, and what it cost.
+    /// One row per session: alive or not, last movement, tokens and cost.
     #[cfg(feature = "agent-read")]
     Status {
         /// Window in minutes.
         #[arg(long, default_value_t = 10)]
         window: u64,
+        /// How each row is rendered.
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
         format: QueryFormat,
     },
@@ -1467,6 +1748,7 @@ enum DbCmd {
 #[cfg(feature = "agent-read")]
 #[derive(clap::Args, Clone, Default)]
 struct UsageArgs {
+    /// How each row is rendered.
     #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
     format: QueryFormat,
 }
@@ -1474,17 +1756,22 @@ struct UsageArgs {
 #[cfg(feature = "agent-read")]
 #[derive(clap::Args, Clone, Default)]
 struct FactArgs {
+    /// Only rows from this harness session id.
     #[arg(long)]
     session: Option<String>,
+    /// Lower bound on row ts, Unix ms.
     #[arg(long)]
     since: Option<u64>,
+    /// Upper bound on row ts, Unix ms.
     #[arg(long)]
     until: Option<u64>,
     /// Prefix match on the row's leading dictionary column.
     #[arg(long)]
     like: Option<String>,
+    /// Cap the row count.
     #[arg(long)]
     limit: Option<u64>,
+    /// How each row is rendered.
     #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
     format: QueryFormat,
 }
@@ -1494,6 +1781,7 @@ struct FactArgs {
 enum UsageCmd {
     /// Gap-aware billing windows.
     Blocks {
+        /// Width of one billing window, in hours.
         #[arg(long, default_value_t = 5)]
         window_hours: u64,
         /// Only the window that is still open.
@@ -1504,6 +1792,7 @@ enum UsageCmd {
     },
     /// Tokens per minute and dollars per hour over a trailing window.
     BurnRate {
+        /// Trailing window, in minutes.
         #[arg(long, default_value_t = 60)]
         window_minutes: u64,
         #[command(flatten)]
@@ -1518,17 +1807,24 @@ enum PriceCmd {
     List,
     /// Write one rate row by hand, in USD per million tokens.
     Set {
+        /// Model id the rate row is keyed on.
         model: String,
+        /// USD per million input tokens.
         #[arg(long)]
         input_per_mtok: f64,
+        /// USD per million output tokens.
         #[arg(long)]
         output_per_mtok: f64,
+        /// USD per million tokens written to the 5-minute cache.
         #[arg(long)]
         cache_write_5m_per_mtok: f64,
+        /// USD per million tokens written to the 1-hour cache.
         #[arg(long)]
         cache_write_1h_per_mtok: f64,
+        /// USD per million tokens read from cache.
         #[arg(long)]
         cache_read_per_mtok: f64,
+        /// What wrote this rate row.
         #[arg(long, default_value = "manual")]
         source: String,
     },
@@ -1549,14 +1845,18 @@ enum FactCmd {
 enum SessionCmd {
     /// Every session row from `agent_session`, newest first.
     List {
+        /// Cap the row count.
         #[arg(long)]
         limit: Option<u64>,
+        /// How each row is rendered.
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
         format: QueryFormat,
     },
     /// The one `agent_session` row matching this session id.
     Get {
+        /// The harness session id to fetch.
         session: String,
+        /// How the row is rendered.
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
         format: QueryFormat,
     },
@@ -1571,8 +1871,11 @@ enum TurnCmd {
     },
     /// The one `agent_turn` row at this session and turn number.
     Get {
+        /// The harness session id the turn belongs to.
         session: String,
+        /// Turn ordinal inside that session.
         turn: u64,
+        /// How the row is rendered.
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
         format: QueryFormat,
     },
@@ -1584,8 +1887,10 @@ enum ChatCmd {
     List {
         #[command(flatten)]
         query: QueryArgs,
+        /// Project every session the registry knows, not just the filtered set.
         #[arg(long)]
         all: bool,
+        /// Keep tailing, one NDJSON line per new turn.
         #[arg(long)]
         follow: bool,
     },
@@ -1595,8 +1900,10 @@ enum ChatCmd {
 enum EdgeCmd {
     /// Every `agent_edge` row, filtered to one session's edges when given.
     List {
+        /// Only edges touching this session id.
         #[arg(long)]
         session: Option<String>,
+        /// Cap the row count.
         #[arg(long)]
         limit: Option<u64>,
     },
@@ -1606,6 +1913,7 @@ enum EdgeCmd {
 enum SyncCmd {
     /// Ingest new transcript bytes into the store's `agent_turn` and fact tables.
     Create {
+        /// Drop every stored row and re-project every transcript from byte 0.
         #[arg(long)]
         rebuild: bool,
         /// Keep syncing on a poll instead of returning.
@@ -1616,8 +1924,9 @@ enum SyncCmd {
 
 #[derive(Subcommand)]
 enum MeCmd {
-    /// Read or set the format agents mail this session in. No name prints the
-    /// effective mood and the session that set it.
+    /// Read or set the format agents mail this session in.
+    ///
+    /// With no name it prints the effective mood and the session that set it.
     Mood {
         /// A stored mood name; `boop db "select * from mood"` lists them.
         #[arg(conflicts_with = "clear")]
@@ -1629,7 +1938,7 @@ enum MeCmd {
         #[arg(long = "as", value_name = "SESSION")]
         as_name: Option<String>,
     },
-    /// Save one assistant turn from the caller's conversation as a favorite.
+    /// Pin one assistant turn of the caller's own conversation into the store.
     Favorite {
         /// Assistant turn position: -1 is newest, -2 is the one before it.
         #[arg(default_value_t = -1, allow_hyphen_values = true)]
@@ -1657,8 +1966,10 @@ enum FavoriteCmd {
     },
     /// Favorites newest-first, body included.
     List {
+        /// Cap the row count.
         #[arg(long)]
         limit: Option<u64>,
+        /// How each row is rendered.
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
         format: QueryFormat,
     },
@@ -1669,8 +1980,10 @@ enum FavoriteCmd {
 enum CursorCmd {
     /// Every `sync_cursor` row: how far ingest has read each transcript.
     List {
+        /// Cap the row count.
         #[arg(long)]
         limit: Option<u64>,
+        /// How each row is rendered.
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
         format: QueryFormat,
     },
@@ -1759,6 +2072,93 @@ mod tests {
             help.contains(&needle),
             "help text missing {needle:?}:\n{help}"
         );
+    }
+
+    /// Every `boop ...` line the help prints, as one argv apiece. A page that
+    /// shows a command an agent cannot run is worse than a page with none.
+    const HELP_EXAMPLES: [&str; 26] = [
+        "boop db \"SELECT name FROM sqlite_master WHERE type='table'\"",
+        "boop db turn list --limit 5 --format text",
+        "boop db status --window 10",
+        "boop debug --since 10m",
+        "boop debug --lane fix-help-sweep --json",
+        "boop agent summary --format text",
+        "boop agent sessions --cwd ~/projects/hafley-rs",
+        "boop tell-parent --kind completion --body \"PR #44 posted, gate green\"",
+        "boop tell-parent --kind yield",
+        "boop tell-children --body \"stop and report where you are\"",
+        "boop wait <message-id>",
+        "boop wait --me --wait-timeout 120",
+        "boop inbox hooks --name sprefa-coordinator",
+        "boop inbox drain --as sprefa-coordinator",
+        "boop me --name codex-main",
+        "boop me mood unga",
+        "boop me favorite -1 --note \"the delivery table\"",
+        "boop config path",
+        "boop config presets",
+        "boop beep hail fix-parser --body \"rebase onto origin/main first\"",
+        "boop beep lane create --branch fix/parser --brief /abs/BRIEF.md --dry-run",
+        "boop beep agent done audit-1 --rc 0",
+        "boop concatmap --session ses_abc123 --mode tighten --template tighten.md \
+         --state ~/.agent/concatmap/tighten/state",
+        "boop concatmap --me --mode tighten --template tighten.md --state s",
+        "boop concatmap --me --rules rules.json --mode tighten --template tighten.md --state s",
+        "boop concatmap --me --rules rules.json --state s",
+    ];
+
+    /// Split on whitespace, keeping a double-quoted run whole.
+    fn argv(line: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut word = String::new();
+        let mut quoted = false;
+        for character in line.chars() {
+            match character {
+                '"' => quoted = !quoted,
+                c if c.is_whitespace() && !quoted => {
+                    if !word.is_empty() {
+                        out.push(std::mem::take(&mut word));
+                    }
+                }
+                c => word.push(c),
+            }
+        }
+        if !word.is_empty() {
+            out.push(word);
+        }
+        out
+    }
+
+    /// RECEIPT (boop-help-sweep): failed pre-fix on `boop wait 01J8XYZ...`,
+    /// which the parser rejects as an unknown positional shape.
+    #[test]
+    fn every_help_example_parses() {
+        for line in HELP_EXAMPLES {
+            let words = argv(line);
+            Cli::try_parse_from(&words).unwrap_or_else(|error| panic!("{line}: {error}"));
+        }
+    }
+
+    /// The list above cannot drift from the pages: every entry must be printed
+    /// somewhere in the tree's long help.
+    #[test]
+    fn every_help_example_is_printed_somewhere() {
+        fn pages(cmd: &clap::Command, into: &mut String) {
+            into.push_str(&cmd.clone().render_long_help().to_string());
+            for sub in cmd.get_subcommands() {
+                pages(sub, into);
+            }
+        }
+        let mut text = String::new();
+        pages(&Cli::command(), &mut text);
+        let flat: String = text
+            .split_whitespace()
+            .filter(|word| *word != "\\")
+            .collect::<Vec<_>>()
+            .join(" ");
+        for line in HELP_EXAMPLES {
+            let needle = line.split_whitespace().collect::<Vec<_>>().join(" ");
+            assert!(flat.contains(&needle), "help prints no example {line:?}");
+        }
     }
 
     /// RECEIPT (boop-db-help-blank): failed pre-fix, full blank-about list in commit body.

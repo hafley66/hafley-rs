@@ -85,41 +85,108 @@ pub(crate) fn doctrine() -> String {
         "\
 DOCTRINE (this help is the usage contract; agents read it with `boop --help`):
 
+SHAPE: six crates behind one binary.
+    boop-store    ~/.agent/boop.db: transcripts, facts, traces, prices
+    boop-harness  the four adapters: claude, codex, kimi, opencode
+    boop-acp      the ACP channel every adapter opens
+    boop-mux      tmux behind one `Multiplexer` trait
+    boop-proc     lane spawn, the lane supervisor, the hook inbox, mailwait
+    boop          this CLI
+  TWO trees of verbs: `beep` CHANGES things, `db` READS what agents did.
+  TWO stores, never conflated:
+    mail   ~/.agent/mail/bus.ndjson, routes in ~/.agent/mail/registry.json (NDJSON)
+    facts  ~/.agent/boop.db (SQLite)
+
+DELIVERY: hail X, and X sees it how, and when? `deliver_hail` takes exactly ONE
+arm, first match wins (crates/boop/src/cli/mail.rs:152-211):
+
+    #  X's route                     transport                     X sees it
+    1  no registry route             none, row stays queued        never
+    2  kind=lane                     X's own supervisor reads      next turn
+                                     the mailbox, 700 ms poll
+    3  drain hook installed in       none pushed; X's own Stop /   next turn
+       the route's cwd (or in        UserPromptSubmit hook runs    boundary
+       ~/.claude/settings.json)      `boop inbox drain`
+    4  live pane, no drain hook      tmux paste-buffer + Enter     at once, at
+                                     into the pane                 the keyboard
+    5  kind=coordinator|native,      none, row stays queued        never
+       no live pane
+
+  NOTHING lands MID-TURN. `AcpChannel::steer` returns `NextTurn` unconditionally
+  (crates/boop-acp/src/channel/acp.rs:177-180), so a lane supervisor holds every
+  hail for a resume turn, on all four harnesses. A `deliver-midturn` edge is
+  reachable only from a test fake.
+
+  A `result` row (a lane's `done rc=<n>`) takes NO arm: it is appended and never
+  handed to `deliver_hail`. Read it with `boop beep lane wait <lane>`, with
+  `boop beep lane create --wait`, or, at a name whose drain hook is installed,
+  at that agent's next turn boundary.
+
+  Arm 2 is gated on row kind: only request|hail|note|retry|resume are handed to
+  a lane. Any other `--kind` sits in the file until something polls for it.
+
+  An Agent-tool subagent has no route of its own, no pane, no stdin and no ACP
+  session. `boop beep agent register --kind native` makes the NAME addressable
+  and nothing more: every hail to it takes arm 5, and only `boop wait` reads it.
+
+  Proof of delivery is a store row, never a screenshot:
+    boop db \"SELECT * FROM agent_edge\"   -- kind deliver-nextturn per landed hail
+  and the mailbox row's to_timestamp is stamped when the recipient takes it.
+
+ACP: every harness runs the same channel, `agent-client-protocol` 2.0.
+    claude    crates/boop-harness/src/harness/claude.rs:76
+    codex     crates/boop-harness/src/harness/codex.rs:45
+    kimi      crates/boop-harness/src/harness/kimi.rs:41
+    opencode  crates/boop-acp/src/channel/opencode.rs:37
+  A delivered message IS a real user-role turn: one `session/prompt` request
+  carrying one text content block. That request is one per turn by protocol,
+  which is the whole reason steer reports nextturn.
+
+SPAWN: every lane spawn goes through lane create; a bare tmux spawn leaves no
+route and no parent edge, and stays invisible to every verb here:
+    boop beep lane create --branch feature/<name> --brief <abs-path> \\
+      [--goal <text>] [--preset <name>] [--wait] [--dry-run]
+  ONE derivation, from the whole branch name: `feature/schema-emit` gives lane
+  id and tmux session `feature-schema-emit` (`/` spelled `-`, the one character
+  tmux cannot hold) and worktree `.boop-worktrees/feature/schema-emit` (the same
+  name as a path). No prefix is dropped and no `lane/` prefix is added.
+  Kinds are feature/fix/refactor/chore, a convention the CLI prints, not a gate.
+  Defaults: --cwd the repo you stand in, --base-sha origin/main's head (resolved
+  at spawn and printed), --parent you, then the one registered coordinator.
+  --harness is inferred from the model spelling
+  (crates/boop-proc/src/lane.rs:22): a name with `/` is opencode, gpt/codex/o3/o4
+  prefixes are codex, kimi is kimi, claude/opus/sonnet/haiku are claude.
+  A claude model REFUSES to spawn as a tmux lane unless --harness claude is
+  passed outright, because Claude workers run as the coordinator's own
+  Agent-tool subagents (crates/boop-proc/src/lane.rs:367). A flat-rate-plan
+  model family under opencode refuses the same way.
+  Overrides: --lane <id>, --tmux <name>, --base-sha <sha>, --harness <id>.
+  Model preset: --preset <name> resolves through the platform config directory's
+  boop/config.json; `boop config presets` lists every name with its model and harness.
+  Always --dry-run first; the printed `cmd:` line is the literal spawn.
+
 WARMUP: after the worktree exists and before the agent starts, lane create runs
   the repo's `boop-start` just recipe if it declares one, and a repo that does
   not is skipped in silence. A FAILING recipe blocks the spawn: the pre-commit
   hook needs what it installs, and a lane that cannot commit reads the abort as
   success. `--no-start` opts out.
 
-SPAWN: every lane spawn goes through lane create; bare tmux spawns leave no
-edge and stay invisible to tracking:
-    boop beep lane create --branch feature/<name> --brief <abs-path> \\
-      [--goal <text>] [--model <m>] [--wait] [--mail-dir <d>] [--dry-run]
-  ONE derivation, from the whole branch name: `feature/schema-emit` gives lane
-  id and tmux session `feature-schema-emit` (`/` spelled `-`, the one character
-  tmux cannot hold) and worktree `.boop-worktrees/feature/schema-emit` (the same
-  name as a path). No prefix is dropped and no `lane/` prefix is added.
-  Kinds are feature/fix/refactor/chore, a convention the CLI prints, not a gate.
-  --cwd defaults to the repo you stand in, --base-sha to origin/main's head
-  (resolved at spawn and printed), --parent to you then to the one registered
-  coordinator, --harness to the one the model spelling names (gpt-* codex,
-  provider/model opencode, kimi-* kimi).
-  Overrides: --lane <id>, --tmux <name>, --base-sha <sha>, --harness <id>.
-  Model preset: --preset flash4 resolves through the platform config directory's
-  boop/config.json; `boop config presets` lists every name with its model and harness.
-  One shot: worktree at base sha + spawn + route registration.
-  Always --dry-run first; the printed `cmd:` line is the literal spawn.
-
 COMPLETION: the supervisor writes ONE row `lane <id> done rc=<n>` into the
   parent's mailbox on every exit path, including a signalled pane; the pane's
   own epilogue only drops the lane's route.
-  A lane spawned with --parent reports completion; do not poll.
-  A parent whose route is kind=coordinator (what `boop adopt` writes) gets that
-  hail TYPED INTO ITS PANE, mid-turn or idle; no wait needs arming.
+  That row is APPENDED, never pushed: see DELIVERY. A parent that wants the rc
+  either blocks on it or drains it at a turn boundary.
   `--wait` blocks on that row and exits with the lane's rc, so spawn-and-join is
   one command; `--wait-timeout <s>` (default 3600, 0 waits forever) exits 124.
   The same wait after the fact is `boop beep lane wait <lane>`.
   A wait whose lane route goes dead with no row exits 3 instead of blocking.
+
+LIVENESS: a lane can die silently, producing nothing. Liveness is TWO checks:
+    1. process alive:    boop beep ps <lane>
+    2. worktree changed: git -C <worktree> status --short
+  A REPORT.md at the root alone proves nothing; check its mtime and first line
+  against the lane you dispatched. A lane's rc=0 proves nothing either: a
+  harness can exit 0 on a provider error with zero tokens emitted.
 
 DEBUG: what just went wrong, without opening a log:
     boop debug [--since 2m] [--lane <id>] [--json]
@@ -128,37 +195,18 @@ DEBUG: what just went wrong, without opening a log:
   `boop --help` prints a one-line banner when that window is non-empty, and
   nothing when it is clean.
 
-LIVENESS: a lane can die silently, producing nothing. Liveness is TWO checks:
-    1. process alive:    boop beep ps <lane>
-    2. worktree changed: git -C <worktree> status --short
-  A REPORT.md at the root alone proves nothing; check its mtime and first line
-  against the lane you dispatched.
-
 TRANSPORT: every lane pane runs ONE command, whatever the harness:
     boop beep lane run --lane <id> --harness <h> --brief <abs> --model <m>
   That supervisor owns the harness conversation and the lane's inbox. It opens
   the conversation with the brief, drains the inbox every 700 ms, and starts a
-  resume turn for anything the harness would not take mid-turn. Nothing is ever
-  dropped and no hail needs a human re-dispatch.
-
-HAIL: boop beep hail <lane> --body \"text\" [--from <me>] [--kind <k>]
-  Reaches a running lane MID-TURN on all four harnesses:
-    claude    stream-json user line on the child's stdin
-    codex     app-server turn/steer against the live turn id
-    opencode  typed into its TUI window; plain Enter is the steer
-    kimi      typed into its TUI window, then C-s (Enter alone only QUEUES)
-  A harness with no in-flight port would report `nextturn` and the supervisor
-  would hold the text for a resume turn; none does today.
-  A kind=coordinator route (an adopted pane) is delivered by literal keystrokes
-  plus Enter into its pane; a kind=lane route is left for its supervisor.
-  Proof of delivery is in the store, not in a screenshot:
-    boop db \"SELECT * FROM agent_edge\" -- edge kind deliver-midturn/deliver-nextturn
-  and the mailbox row's to_timestamp is stamped when the lane takes it.
+  resume turn for every hail. Nothing is dropped and no hail needs a human
+  re-dispatch.
 
 TELL: boop tell-parent [--kind completion|yield|note] [--body \"t\"] mails the
   caller's parent edge; boop tell-children --body \"t\" mails every live child.
+  Both name the sender from the identity ladder, so neither end is typed.
 
-WAIT: every agent can background a shell, so the universal push is a block:
+WAIT: every agent can background a shell, so the universal pull is a block:
     boop wait <message-id>          the reply to what you just sent
     boop wait --me [--as <name>]    the next unread mail addressed to you
     boop beep hail <lane> --body \"...\" --wait-timeout <s>   send, then block
@@ -197,16 +245,15 @@ ever wears hangs under one:
 
 STORE SCHEMA: this build writes version {version}. A store written by an older
 build is refused, and `boop db sync create --rebuild` drops every stored row
-and re-projects every transcript from byte 0 (about 18 s over 1.5 GB here).
-Nothing is wiped without that flag.
+and re-projects every transcript from byte 0. Nothing is wiped without that flag.
 
 SQL: the store is SQLite at ~/.agent/boop.db; `boop db \"<sql>\"` queries it
   read-only. sqlite3 dot-commands (.schema, .tables) are NOT supported; the
-  passthrough takes plain SQL only.
+  passthrough takes plain SQL only. The mailbox is NOT in this file.
 
 The pre-split verbs (harnesses, sessions, events, chat, tail, list, measure,
-dispatch, lane, resolve, adopt, sweep, prune, hail, sync, follow) still run as
-hidden aliases for one release. Use `beep` and `db`.",
+dispatch, lane, resolve, adopt, sweep, prune, hail, sync, follow) still parse as
+hidden aliases. Use `beep` and `db`.",
         version = ident::SCHEMA_VERSION
     )
 }
