@@ -166,10 +166,6 @@ pub trait Harness: Send + Sync {
         Ok(Vec::new())
     }
 
-    fn known_paths_can_move(&self) -> bool {
-        true
-    }
-
     /// Candidates for incremental sync. The store supplies metadata for paths
     /// it has already projected, so a file-backed harness can stat those
     /// paths without reopening and parsing their first record. New paths keep
