@@ -2,12 +2,13 @@
 created: 2026-08-17
 updated: 2026-08-19
 type: improvement
-status: open
+status: done
 priority: normal
 epic: boop-process
 labels: [domain-boop, intent-implementation]
 size: S
 blocked_by: ['@boop-job-namespace']
+closed: 2026-08-19
 ---
 
 # 34 --mail-dir declarations, three --format enums, two timeout spellings

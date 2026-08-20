@@ -88,3 +88,9 @@ and stored result rows should expose the same distinction.
 Keep assertions bounded to the lane worktree and resolved base SHA. Do not infer
 completion from `REPORT.md`, transcript wording, acknowledgement rows, or a
 clean harness exit.
+
+## Agent Runs
+
+### 2026-08-17T22:17:20Z · @root
+
+Commit afaf0e7 decouples foreground lane waits from coordinator routes and prevents pane-less coordinators from becoming inferred parents. Focused wait tests, coordinator tmux tests, and strict clippy pass. Artifact assertions remain open acceptance work.
