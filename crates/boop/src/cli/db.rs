@@ -794,6 +794,9 @@ pub(crate) fn emit_json_rows(rows: &[ident::Row], format: QueryFormat) {
 
 /// The `db usage` alias's report SQL: totals with cost over the whole store.
 /// The passthrough is the engine; `--show-sql` prints this const.
+// TODO(crate-seam): this names boop-store's `agent_usage` and `model_price` by
+// SQL string, and `--show-sql` prints it verbatim, so it cannot become a typed
+// fn without deciding what that fn prints.
 #[cfg(feature = "agent-read")]
 pub(crate) const USAGE_TOTALS_SQL: &str = "
 SELECT COUNT(*) AS calls,

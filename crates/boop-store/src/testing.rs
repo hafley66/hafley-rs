@@ -21,6 +21,7 @@ pub struct TempRepo {
 static NEXT_TEMP_REPO: AtomicUsize = AtomicUsize::new(0);
 
 impl TempRepo {
+    #[allow(clippy::new_without_default)] // a fixture repo is minted, never defaulted
     pub fn new() -> TempRepo {
         let unique = NEXT_TEMP_REPO.fetch_add(1, Ordering::Relaxed);
         let pid = std::process::id();

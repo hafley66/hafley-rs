@@ -282,6 +282,9 @@ impl Rewriter {
 
 /// The resident chat's current context size in tokens: its latest turn's fresh
 /// input plus the cached prior context, read from the store the sync ingests.
+// TODO(crate-seam): this reads boop-store's `agent_usage` and `dict_session` by
+// SQL string. It needs a typed `Store` fn; naming one is a design call, not a
+// move.
 pub(crate) fn context_tokens(store: &boop_store::Store, session: &str) -> Option<i64> {
     const SQL: &str = "SELECT input_tokens + cache_read_tokens AS ctx FROM agent_usage
          JOIN dict_session s ON s.id = agent_usage.session_id

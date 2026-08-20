@@ -19,6 +19,8 @@ pub mod query;
 pub mod rows;
 pub mod runtime;
 pub mod session;
+#[cfg(feature = "agent-read")]
+pub mod summary;
 pub mod tail;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
@@ -48,6 +50,11 @@ pub use runtime::{
     runtime_snapshot, runtime_snapshot_now, AgentRuntimeRow, CompletionRecord, LaneRuntime,
     MailboxCounts, ProcessIdentity, ProcessLiveness, ResolvedRoute, RuntimeDiagnostic,
     RuntimeLiveness, RuntimeSnapshotInput, TmuxLiveness, WorktreeCoordinates,
+};
+#[cfg(feature = "agent-read")]
+pub use summary::{
+    agent_summary, agent_summary_now, AgentSummary, AgentSummaryActivity, AgentSummaryAgent,
+    AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION,
 };
 #[cfg(feature = "agent-read")]
 pub use usage::{GroupBy, UsageQuery};

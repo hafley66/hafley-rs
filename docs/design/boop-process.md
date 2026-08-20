@@ -45,25 +45,52 @@ This is the surface a dl6-generated OpenAPI describes as `/jobs`, `/mail`, `/me`
 
 ## 3. Crate split
 
-`crates/boop` today: 33363 lines, `main.rs` 7383 (930 inline test lines, 120 free functions), `ident.rs` 4089. Sibling crates: `boop-mux` (tmux, 1173 lines), `soopy`.
+Landed on `refactor/boop-crate-split`. `crates/boop` was 33363 lines in one
+crate; it is now five, 34105 lines of `src/` in all (the growth is the crate
+headers and the re-export facade).
 
-| crate | owns (today's files) | depends on | the one sentence |
+| crate | owns (real files, after the move) | lines | depends on | the one sentence |
+|---|---|---|---|---|
+| `boop-store` | `ident.rs`, `rows.rs`, `session.rs`, `query.rs`, `usage.rs`, `activity.rs`, `summary.rs`, `_0_session_graph.rs`, `runtime.rs`, `tail.rs`, `proc.rs`, `bus.rs`, `trail.rs`, `tmux.rs`, `event.rs`, `testing.rs` (`testing` feature), `sql/**`, `tests/wal_three_writers.rs` | 12330 | boop-mux, rusqlite | the database: `~/.agent/boop.db`, its schema, and how transcript bytes become rows |
+| `boop-acp` | `channel.rs`, `channel/{acp,jsonrpc,claude,codex,kimi,opencode,tui}.rs` | 2786 | boop-store | how to talk to any agent: an ACP client on a stdio child, or a tmux TUI driver where there is no ACP door |
+| `boop-harness` | `harness.rs`, `harness/{claude,codex,kimi,opencode}.rs`, `identity.rs`, `registry.rs`, `worktree.rs`, `tests/fixtures/**`, `tests/bench_grid.rs` | 5232 | boop-store, boop-acp | how to read and re-open what each harness wrote, and the worktree a spawn runs in |
+| `boop-proc` | `lane.rs`, `supervise.rs`, `inbox.rs`, `mailwait.rs`, `config.rs`, `host.rs`, `concatmap.rs`, `tests/{parent_death,parent_failure_hail}.rs` | 5421 | boop-store, boop-acp, boop-harness | process control: spawn, supervise, wait, kill, parent policy, the lane mailbox, the embeddable coroutine host |
+| `boop` (bin `boop`, the CLI) | `main.rs`, `cli/{mod,job,db,me,mail,debug}.rs`, `debug.rs`, `chat.rs`, `lib.rs` (a facade re-exporting the four above at their old paths), the remaining `tests/*.rs` | 8336 | all four | clap only, plus the one linkable facade a Rust host binds |
+
+**Dependency order is store -> acp -> harness -> proc -> cli**, not the
+store -> harness -> acp -> proc this section first guessed. `Harness::open_channel`
+returns a `Box<dyn LaneChannel>` and each adapter constructs its own channel, so
+the channel is below the adapters, never above them.
+
+Four seams had to move for that order to be acyclic. Each is a move of existing
+code, re-exported at its old path:
+
+| seam | from | to | why |
 |---|---|---|---|
-| `boop-store` | `ident.rs` (schema, migrations, sync cursors, `sync_session`), `rows.rs`, `query.rs`, `usage.rs`, `activity.rs`, `_0_session_graph.rs`, `sql/**` | rusqlite | the database: `~/.agent/boop.db`, its schema, and how transcript bytes become rows |
-| `boop-harness` | `harness.rs`, `harness/{claude,codex,opencode,kimi}.rs`, `channel.rs`, `channel/**`, `identity.rs` | boop-store (row types only) | each harness's transcript format, session roots, identity ladder, and the rpc channel that drives one |
-| `boop-proc` | `lane.rs`, `worktree.rs`, `supervise.rs`, `trail.rs`, `proc.rs`, `runtime.rs`, `host.rs` | boop-store, boop-harness, boop-mux | process control: spawn, supervise, wait, kill, parent policy, boop-start, the per-lane trail |
-| `boop-mail` | `bus.rs`, `inbox.rs`, `mailwait.rs`, `event.rs`, routes | boop-store | the pipe: rows addressed to jobs, delivered by pane injection or hook drain, rendered through mood |
-| `boop-cli` (bin `boop`) | `main.rs` split per namespace: `cli/job.rs`, `cli/mail.rs`, `cli/me.rs`, `cli/db.rs`, `cli/debug.rs`, `config.rs`, `debug.rs`, `summary.rs`, `chat.rs`, `tail.rs` | all of the above | clap only; no logic that a library caller could want |
-| deleted | `concatmap.rs` (1457 lines) once the dl6 coroutine runs (sprefa Phase 3) | | |
+| `SessionRef`, `KnownSession(s)`, `Ingested`, `ReadChunk`, `Capabilities`, `SendOutcome`, `SpawnSpec`, `OneShotSpec`, `parse_iso_ms` | `harness.rs`, `harness/claude.rs` | `boop_store::session` | `ident.rs` writes rows for a `SessionRef` and cannot depend on the crate above it |
+| `sync_session`, `sync_session_with_pid` | `ident.rs` | `harness.rs` | they take a `&dyn Harness`; the cursor half stayed as `ident::sync_session_with`, which takes the projection as a closure |
+| `ModelSpec`, `Effort`, `ParentDeathPolicy` | `lane.rs`, `supervise.rs` | `boop_store::session` | `channel/codex.rs` parses a model spelling, and `boop-proc` may not link clap, so the `ValueEnum` derive sits behind the store's optional `clap` feature |
+| `opencode::store_path`, `opencode_db_path` | `harness/opencode.rs` | `channel/opencode.rs` | both the adapter and the channel read the opencode store; the channel is the lower of the two |
+| `SETUP_SENTENCE`, `start_status_path`, `record_start_status`, `start_preamble`, `brief_with_preamble` | `lane.rs` | `worktree.rs` | `prepare_spawn_dir` records the warm-up status, and every adapter's `spawn` calls it |
 
-Rules for the split: each crate's `lib.rs` lists its public surface; no crate reaches into another's tables by SQL string (store exposes typed fns); `boop-proc` never imports clap; integration tests move with their crate; `test_support.rs` becomes `boop-store`'s `testing` feature. `cargo-semver-checks` stays on CI.
+Rules for the split, as landed: each crate's `lib.rs` lists its public surface;
+`boop-proc` links no clap; `test_support.rs` is `boop-store`'s `testing`
+feature; integration tests moved with their crate; `tests/temp_home_rail.rs`
+walks every `boop*` crate's `src/` and `tests/` rather than one crate's.
+
+Two SQL-string reaches across a crate seam are marked `// TODO(crate-seam):`
+rather than redesigned: `concatmap.rs`'s `context_tokens` (reads `agent_usage`,
+`dict_session`) and `cli/db.rs`'s `USAGE_TOTALS_SQL` (reads `agent_usage`,
+`model_price`, and `--show-sql` prints it verbatim). Two more are in
+`#[cfg(test)]` blocks of `harness/{codex,kimi}.rs`. Everything else reaching
+another crate's tables goes through a typed `boop-store` fn.
 
 ## 4. Order of work
 
 | # | card | size | blocked_by | why this order |
 |---|---|---|---|---|
 | 1 | `boop-main-split` (existing, re-scoped): `main.rs` -> `cli/*.rs` by namespace, zero behavior change, byte-identical `--help` per verb pinned | M | - | every later move is a file move; do it while the surface is frozen |
-| 2 | `boop-crate-split` (new): the five crates above, workspace, one PR per crate extraction in dependency order (store, harness, mail, proc, cli) | L | 1 | compile-time boundaries before renaming verbs |
+| 2 | `boop-crate-split` (DONE): the five crates above, one commit per crate extraction in dependency order (store, acp, harness, proc, cli), one PR | L | 1 | compile-time boundaries before renaming verbs |
 | 3 | `boop-job-namespace` (new): `boop job *` + `boop mail *` + `boop me *`, old spellings hidden aliases, `wait` for all, `kill` vs `rm`, `signal --children`, `attach`, per-job `--timeout` | M | 2 | the verb table in section 2 |
 | 4 | `boop-mail-dir-global-flag` (existing) + `boop-hidden-verbs-retire` (existing) | S | 3 | delete the aliases and the 34 flags after one release |
 | 5 | sprefa `boop-hosted-in-dl6`: the OpenAPI for `/jobs /mail /me` generated from dl6 | - | 3 | the generated surface replaces the hand one |

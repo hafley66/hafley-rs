@@ -1,6 +1,7 @@
-//! boop as a library: the relational store over `~/.agent/boop.db` plus the
-//! harness adapters that fill it. Linkable from a Rust host (the tauri side of
-//! instant) so a caller runs the queries in-process instead of shelling out.
+//! boop as a library: one facade over `boop-store`, `boop-acp`,
+//! `boop-harness` and `boop-proc`, re-exported at the paths a caller already
+//! links. Linkable from a Rust host (the tauri side of instant) so a caller
+//! runs the queries in-process instead of shelling out.
 //!
 //! The four reads a host needs are `Store::query_status`, `Store::query_facts`,
 //! `Store::query_sessions` and `Store::usage_report`; `plans/boop-instant-v2-contract.md`
@@ -23,9 +24,7 @@ pub use boop_store::_0_session_graph;
 pub use boop_store::activity;
 pub use boop_store::{bus, event, proc, rows, runtime, session, tail, tmux, trail};
 #[cfg(feature = "agent-read")]
-pub use boop_store::{query, usage};
-#[cfg(test)]
-pub(crate) use boop_store::testing as test_support;
+pub use boop_store::{query, summary, usage};
 
 /// The store's ident module plus the two harness-driven sync entry points,
 /// which need an adapter and so live one crate up.
@@ -41,8 +40,6 @@ pub use boop_proc::{concatmap, config, host, inbox, lane, mailwait, supervise};
 #[cfg(feature = "agent-read")]
 pub mod chat;
 pub mod debug;
-#[cfg(feature = "agent-read")]
-pub mod summary;
 
 pub use boop_store::open_default;
 #[cfg(feature = "agent-read")]
@@ -61,7 +58,7 @@ pub use boop_store::{
 };
 pub use boop_harness::Registry;
 #[cfg(feature = "agent-read")]
-pub use summary::{
+pub use boop_store::{
     agent_summary, agent_summary_now, AgentSummary, AgentSummaryActivity, AgentSummaryAgent,
     AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION,
 };

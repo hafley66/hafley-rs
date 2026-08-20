@@ -31,5 +31,5 @@ jobs:
       - name: check public api compatibility
         uses: obi1kenobi/cargo-semver-checks-action@v2
         with:
-          package: boop, boop-mux
+          package: boop, boop-mux, boop-store, boop-acp, boop-harness, boop-proc
           baseline-rev: ${{ github.event.pull_request.base.sha }}
