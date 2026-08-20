@@ -92,3 +92,15 @@ Crate seam closed on Chris's word, no TODO markers merged. Four typed boop-store
 
 Re-measured: cargo test --workspace 607 passed / 0 failed / 2 ignored; cargo clippy --workspace -- -D warnings rc=0 (--all-targets still the one pre-existing host_chat.rs:44); help diff empty across 84 screens; boop db usage --show-sql diffs empty against the base const; grep TODO(crate-seam) over crates/ returns nothing. issuectl ready: 5 of 5.
 
+### 2026-08-20T14:55:04Z · @claude-lane
+
+CI on PR #41: semver PASS, test down to 3 known-red.
+
+Run 32380792479 (head f4a7325) fails exactly 3, a strict subset of what base f3d5123 fails (run 32371247357, 4 failures): codex_spawn_returns_handle_and_stop_tears_down (needs the codex CLI, not installable on the runner) and two worktree tests that are real Linux-only defects (the setup-step deadline never fires, elapsed 999.00216605s; the process group survives the kill). Filed as @worktree-deadline-linux rather than fixed here.
+
+Fixed on this branch, three runner-only gaps that base CI never reached because it dies in the boop lib target after 1016s:
+- prune_dry_run_removes_nothing and registry_kinds' prune test depended on an ambient tmux server; each now owns one. Found in one pass with 'env -u TMUX TMUX_TMPDIR=<empty> cargo test --workspace --no-fail-fast': 606/1 before, 607/0 after.
+- boop_start_warm and the boop-start worktree tests assert 'just' is on PATH; the test job installs it now.
+- semver named four crates absent at baseline-rev; the package list is computed from what git finds at the base sha, so a crate added later joins by itself.
+
+

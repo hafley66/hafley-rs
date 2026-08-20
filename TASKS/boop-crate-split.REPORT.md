@@ -342,15 +342,29 @@ was unmeasured. This branch moved those 4 into `boop-harness`, which is why
 three separate runner-environment gaps surfaced in a row: they had simply never
 run.
 
-### Known-red on the runner
+### Known-red on the runner, and what became of the brief's four
 
-`harness::codex::tests::codex_spawn_returns_handle_and_stop_tears_down` needs
-the `codex` CLI, which the runner image has not got and this lane cannot
-install. It is one of the 4 the brief named as known-red, it fails on base run
-32371247357 at `crates/boop/src/harness/codex.rs:782`
-(`assertion failed: has_session_on(...)`), it passes on this machine, and this
-branch only moved its file from `crates/boop` to `crates/boop-harness`.
-Skipping it on a host without codex is a call for the user, not this card.
+The brief named 4 known-red tests. After the three fixes above, CI run
+32380792479 on this branch fails 3, a strict subset of what base run
+32371247357 fails on `f3d5123`:
+
+| test | base `f3d5123` | this branch | why |
+|---|---|---|---|
+| `worktree::tests::a_failing_boop_start_blocks_the_spawn` | FAILED | passes | the `just` install fixed it |
+| `worktree::tests::a_hung_setup_step_fails_within_its_deadline_instead_of_hanging` | FAILED | FAILED | the deadline never fires on Linux: elapsed `999.00216605s` |
+| `worktree::tests::the_killed_child_leaves_no_orphan` | FAILED | FAILED | the process group survives the kill on Linux |
+| `harness::codex::tests::codex_spawn_returns_handle_and_stop_tears_down` | FAILED | FAILED | needs the `codex` CLI, which the runner image has not got |
+
+The two `worktree` reds are production behaviour on Linux, not test
+scaffolding, and this branch only moved their file from `crates/boop` to
+`crates/boop-harness`. Filed as `issues/worktree-deadline-linux` (bug, high,
+epic `boop-process`) rather than fixed here: bounding a setup step and killing
+its process group is spawn behaviour, and this card is a zero-behaviour-change
+refactor. That card also carries the wall-time receipt, because the hung
+deadline is why the `boop-harness` target takes ~1000s of CI's ~18 minutes.
+
+The codex red cannot be fixed from CI: the binary is not installable on the
+runner. Skipping the test on a host without codex is a call for the user.
 
 ## Commits
 
@@ -365,3 +379,4 @@ Skipping it on a host without codex is a call for the user, not this card.
 | `ci: pin the prune dry-run test's tmux server, compute the semver baseline list` | the two CI reds |
 | `ci: install just on the test runner` | `boop_start_warm` and the boop-start worktree tests |
 | `test: registry_kinds prune owns its tmux server` | the last ambient-tmux dependency |
+| `issues: worktree-deadline-linux` | the two Linux-only worktree reds, filed not fixed |
