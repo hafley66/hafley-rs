@@ -15,6 +15,7 @@ use boop::{bus, config, identity, mailwait, proc};
 
 mod cli;
 
+use cli::acp::{run_acp_agents, run_acp_attach, run_acp_host, run_acp_list};
 use cli::db::{
     run_chat_query, run_db, run_follow, run_harnesses, run_passthrough, run_public_agent_command,
     run_query, run_sessions, run_sync_all, run_tail, sync_all, ChatQueryOptions, SyncLiveness,
@@ -193,6 +194,12 @@ enum SubCmd {
         #[command(subcommand)]
         cmd: Option<MeCmd>,
     },
+    /// Own or attach to one route's ACP session.
+    Acp {
+        #[command(subcommand)]
+        cmd: AcpCmd,
+    },
+
     /// Inspect the boop configuration the CLI reads.
     Config {
         #[command(subcommand)]
@@ -477,6 +484,54 @@ enum PstreeFormat {
     #[default]
     Text,
     Ndjson,
+}
+
+#[derive(Subcommand)]
+enum AcpCmd {
+    /// Own one route's ACP session: bind its socket, spawn the adapter, and
+    /// turn every mail row addressed to the route into a `session/prompt`.
+    Host {
+        route: String,
+        /// The adapter to spawn; taken from the route when omitted.
+        #[arg(long)]
+        harness: Option<String>,
+        #[arg(long)]
+        model: Option<String>,
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+        /// An ACP session id to `session/load` instead of opening a new one;
+        /// taken from the route's `sessionId` when omitted.
+        #[arg(long)]
+        resume: Option<String>,
+        /// How often the mailbox is read, in milliseconds.
+        #[arg(long)]
+        poll_ms: Option<u64>,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Pump this process's stdio onto a route's host socket, so an unmodified
+    /// ACP client can spawn `boop acp attach <ROUTE>` as its agent command.
+    Attach {
+        route: String,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// One row per route: kind, whether a host answers, and its socket.
+    List {
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// The vendored ACP agent registry: one row per agent, id, version,
+    /// distribution and argv.
+    Agents {
+        /// A file, a URL, or `upstream` for the published registry. Off by
+        /// default: no boop verb touches the network on its own.
+        #[arg(long = "refresh-from")]
+        refresh_from: Option<String>,
+        /// Where a refresh is written. Without it the fetch is only validated.
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -804,6 +859,32 @@ fn main() -> Result<()> {
                 None => run_me(name.as_deref(), mail_dir.as_deref()),
             },
             SubCmd::Config { cmd } => run_config(cmd),
+            SubCmd::Acp { cmd } => match cmd {
+                AcpCmd::Host {
+                    route,
+                    harness,
+                    model,
+                    cwd,
+                    resume,
+                    poll_ms,
+                    mail_dir,
+                } => run_acp_host(
+                    &route,
+                    harness.as_deref(),
+                    model.as_deref(),
+                    cwd.as_deref(),
+                    resume.as_deref(),
+                    poll_ms,
+                    mail_dir.as_deref(),
+                ),
+                AcpCmd::Attach { route, mail_dir } => {
+                    run_acp_attach(&route, mail_dir.as_deref())
+                }
+                AcpCmd::List { mail_dir } => run_acp_list(mail_dir.as_deref()),
+                AcpCmd::Agents { refresh_from, out } => {
+                    run_acp_agents(refresh_from.as_deref(), out.as_deref())
+                }
+            },
         },
     )
 }

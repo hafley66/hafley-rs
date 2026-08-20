@@ -157,6 +157,17 @@ pub(crate) fn deliver_hail(
     socket: Option<&str>,
 ) -> Result<()> {
     let to = message.to.as_str();
+    // A live host owns this route's session and reads this mailbox itself.
+    if boop_acp::host::route_host_alive(dir, to) {
+        println!("queued {} -> {to} (acp host delivers it)", message.id);
+        info!(
+            to,
+            message_id = message.id,
+            delivery = "acp-host",
+            "hail queued for a live acp host"
+        );
+        return Ok(());
+    }
     let routes = bus::read_routes(dir)?;
     let Some(route) = routes.get(to) else {
         println!("queued {} -> {to}", message.id);

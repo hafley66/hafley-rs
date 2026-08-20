@@ -1,3 +1,4 @@
+pub(crate) mod acp;
 pub(crate) mod db;
 pub(crate) mod debug;
 pub(crate) mod job;

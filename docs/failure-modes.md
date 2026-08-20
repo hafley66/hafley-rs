@@ -5,6 +5,7 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 12 | 2026-08-20 | an ACP stub answered every frame with a null rpc id, and the handshake died on a parse error |
 | 11 | 2026-08-19 | an opencode ACP session starts on a dead model endpoint and retries forever in silence |
 | 10 | 2026-08-19 | 90% of the live store's trace events were test fixture lanes, written by unit tests inside src/ |
 | 9 | 2026-08-17 | a coordinator restart left every child running with an edge that answered nobody |
@@ -16,6 +17,45 @@ without the fix, the rail that stops it recurring. Newest first.
 | 3 | 2026-08-17 | ~/.cargo/bin/boop is whatever the last session built, and nothing printed says which |
 | 2 | 2026-08-17 | a respawned agent window is re-fed a brief it cannot place, or the wrong text entirely |
 | 1 | 2026-08-17 | a lane can die with no result row, no log, no trace |
+
+---
+
+## 12. an ACP stub answered every frame with a null rpc id, and the handshake died on a parse error
+
+**Incident.** The first run of `cargo test -p boop --test acp_host` hung to its
+400s cap with no output. The fixture's own rpc log held two lines: the host's
+`initialize`, and the adapter answering
+`{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error",
+"data":{"line":"{\"jsonrpc\":\"2.0\",\"id\":,\"result\":..."}}}`. The
+literal `"id":,` is the whole bug.
+
+**RCA.** The stub was a shell script that read the rpc id with
+`sed -n 's/.*"id":\([0-9]*\).*/\1/p'`, copied from
+`crates/boop/tests/lane_wait_exit.rs:377`. The `agent-client-protocol` 2.0.0
+SDK mints **string** ids (`"id":"2e9e09ba-f1fb-428b-93b8-0c74daf9c5c5"`), so
+the numeric pattern matched nothing and `printf '...,"id":%s,...'` emitted an
+empty field. Every reply was unparseable, no response ever routed, and the test
+waited on a `JoinHandle` with no cap.
+
+**Fix.**
+
+| # | change | file |
+|---|---|---|
+| 1 | the stub parses and re-emits JSON instead of pattern-matching it, so the id goes back in whatever form it arrived | `crates/boop/tests/acp_host.rs` `write_stub` |
+| 2 | every wait in the file is bounded by one 10s cap, including the shim read, which was an unbounded `JoinHandle::join` | `crates/boop/tests/acp_host.rs` `CAP`, `wait_for`, `through_the_shim` |
+
+**Fail-pre-fix test.** `a_host_and_an_attached_shim_exchange_a_prompt` fails in
+under 10s with an empty answer vector against the sed-based stub, instead of
+hanging.
+
+**Rail.** No test in this crate joins a thread or reads a pipe without a cap.
+An ACP stub that pattern-matches wire JSON is the defect; the stub speaks the
+protocol or it is not a stub.
+
+**What still cannot be answered.** Nothing here proves a real adapter answers
+the same way; the stub is a shape, not a vendor. The measured per-adapter table
+in `~/projects/hafley-rs-worktrees/acp-lab/plans/2026-08-20-acp-one-send-path.PLAN.md`
+section 3 is the only source for real adapter behavior.
 
 ---
 

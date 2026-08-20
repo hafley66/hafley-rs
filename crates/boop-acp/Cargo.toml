@@ -32,7 +32,14 @@ agent-client-protocol = "2.0.0"
 # The ACP connection is async and `LaneChannel` is sync, so one current-thread
 # runtime per channel drives it on its own thread. `rt` and `sync` only: the
 # reactor under the ACP crate is async-io's, not tokio's.
-tokio = { version = "1", features = ["rt", "sync"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time"] }
+# The host's downstream door. `ByteStreams` wants futures `AsyncRead`/`AsyncWrite`
+# and the reactor under the ACP crate is async-io's, so the unix listener comes
+# from async-io's own socket crate rather than tokio's.
+async-net = "2"
+# `AsyncWriteExt` on the socket halves, and the io traits `ByteStreams` is
+# generic over.
+futures = "0.3"
 
 [lib]
 name = "boop_acp"

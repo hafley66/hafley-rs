@@ -10,11 +10,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_client_protocol::schema::v1::{
-    CancelNotification, InitializeRequest, LoadSessionRequest, NewSessionRequest,
-    PermissionOptionKind, PromptRequest, RequestPermissionOutcome, RequestPermissionRequest,
-    RequestPermissionResponse, SelectedPermissionOutcome, SessionConfigKind, SessionConfigOption,
-    SessionConfigOptionValue, SessionConfigSelectOptions, SessionId, SessionNotification,
-    SessionUpdate, SetSessionConfigOptionRequest, StopReason,
+    AgentCapabilities, CancelNotification, InitializeRequest, InitializeResponse,
+    LoadSessionRequest, NewSessionRequest, PermissionOptionKind, PromptRequest,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
+    SelectedPermissionOutcome, SessionConfigKind, SessionConfigOption, SessionConfigOptionValue,
+    SessionConfigSelectOptions, SessionId, SessionNotification, SessionUpdate,
+    SetSessionConfigOptionRequest, StopReason,
 };
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Agent, ConnectionTo, LineDirection};
@@ -40,6 +41,80 @@ pub const OPENCODE_ADAPTER: &[&str] = &["opencode", "acp"];
 /// How long the opening handshake (spawn, `initialize`, session) may take.
 const OPEN_TIMEOUT: Duration = Duration::from_secs(120);
 
+/// The `_meta` key an adapter advertises prompt queueing under. Vendor-scoped
+/// by the protocol, so the vendor object is found by this leaf key rather than
+/// by a compiled-in vendor name: `claudeCode` on claude-agent-acp 0.70.0 is one
+/// spelling among the four adapters in the roster, and the other three
+/// advertise nothing at all.
+const PROMPT_QUEUEING_KEY: &str = "promptQueueing";
+
+/// What an adapter puts in `data.code` when a turn is already running. Kimi
+/// 0.37.2 is the one adapter on this machine that answers this way, with
+/// JSON-RPC code -32600.
+const BUSY_DATA_CODE: &str = "turn.agent_busy";
+
+/// Whether this adapter takes a second `session/prompt` before the first
+/// resolves. Read off `initialize`, demoted on a typed error, never assumed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PromptQueueing {
+    /// `agentCapabilities._meta.<vendor>.promptQueueing == true`.
+    Advertised,
+    /// A prompt came back with the typed busy code.
+    Rejects,
+    /// Nothing advertised and nothing refused yet.
+    Unknown,
+}
+
+impl PromptQueueing {
+    /// The word logged and printed; never parsed.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PromptQueueing::Advertised => "advertised",
+            PromptQueueing::Rejects => "rejects",
+            PromptQueueing::Unknown => "unknown",
+        }
+    }
+
+    /// Read the capability off one `initialize` reply.
+    pub fn read(capabilities: &AgentCapabilities) -> PromptQueueing {
+        let Some(meta) = capabilities.meta.as_ref() else {
+            return PromptQueueing::Unknown;
+        };
+        let Ok(value) = serde_json::to_value(meta) else {
+            return PromptQueueing::Unknown;
+        };
+        match advertises_queueing(&value) {
+            true => PromptQueueing::Advertised,
+            false => PromptQueueing::Unknown,
+        }
+    }
+}
+
+/// Whether any vendor object under `_meta` carries `promptQueueing: true`.
+fn advertises_queueing(meta: &serde_json::Value) -> bool {
+    let Some(object) = meta.as_object() else {
+        return false;
+    };
+    object.values().any(|vendor| {
+        vendor
+            .get(PROMPT_QUEUEING_KEY)
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    })
+}
+
+/// Whether a JSON-RPC error is the adapter saying a turn is already running.
+/// The typed `data.code` is the machine-readable half; the message text is
+/// per-adapter prose and is never matched on.
+pub fn busy(error: &agent_client_protocol::Error) -> bool {
+    error
+        .data
+        .as_ref()
+        .and_then(|data| data.get("code"))
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|code| code == BUSY_DATA_CODE)
+}
+
 /// What the sync side asks the connection thread to do.
 #[derive(Debug)]
 enum Command {
@@ -51,8 +126,12 @@ enum Command {
 /// What the connection thread reports back.
 #[derive(Debug)]
 enum Note {
-    /// The session exists; the value is its ACP `sessionId`.
-    Opened(String),
+    /// The session exists, with its ACP `sessionId` and the queueing
+    /// capability its `initialize` reply advertised.
+    Opened {
+        session: String,
+        queueing: PromptQueueing,
+    },
     /// The handshake never reached a session.
     OpenFailed(String),
     /// A turn reached a verdict.
@@ -67,6 +146,7 @@ pub struct AcpChannel {
     /// Epoch millis of the newest `session/update`; 0 before the first one.
     last_update_ms: Arc<AtomicU64>,
     turn_running: bool,
+    queueing: PromptQueueing,
 }
 
 impl AcpChannel {
@@ -117,15 +197,18 @@ impl AcpChannel {
             session: None,
             last_update_ms,
             turn_running: false,
+            queueing: PromptQueueing::Unknown,
         };
         match channel.notes.recv_timeout(OPEN_TIMEOUT) {
-            Ok(Note::Opened(session)) => {
+            Ok(Note::Opened { session, queueing }) => {
                 info!(
                     conversation_id = session,
                     conversation_id_kind = "acp_session",
+                    prompt_queueing = queueing.as_str(),
                     "acp session opened"
                 );
                 channel.session = Some(session);
+                channel.queueing = queueing;
                 Ok(channel)
             }
             Ok(Note::OpenFailed(detail)) => anyhow::bail!("acp handshake failed: {detail}"),
@@ -146,6 +229,12 @@ impl AcpChannel {
     pub fn open_adapter(spec: &ChannelSpec, adapter: &[&str]) -> Result<AcpChannel> {
         let command: Vec<String> = adapter.iter().map(|part| (*part).to_owned()).collect();
         AcpChannel::open(spec, &command)
+    }
+
+    /// What this adapter's `initialize` said about a second `session/prompt`
+    /// during a running turn.
+    pub fn queueing(&self) -> PromptQueueing {
+        self.queueing
     }
 }
 
@@ -175,8 +264,15 @@ impl LaneChannel for AcpChannel {
     }
 
     fn steer(&mut self, _text: &str) -> Result<Delivery> {
-        // ACP has no mid-turn prompt: `session/prompt` is one request per turn
-        // and a second one before the first resolves is out of protocol.
+        // Three of the four roster adapters accept a second `session/prompt`
+        // during a running turn and kimi 0.37.2 answers `turn.agent_busy`, so
+        // the capability is read and carried. Which policy the delivery timing
+        // follows is the user's call; until it is made, every offer waits for
+        // the turn boundary, which is what every lane has always done.
+        debug!(
+            prompt_queueing = self.queueing.as_str(),
+            "acp steer held for the turn boundary"
+        );
         Ok(Delivery::NextTurn)
     }
 
@@ -190,7 +286,10 @@ impl LaneChannel for AcpChannel {
                     self.turn_running = false;
                     return Ok(Some(event));
                 }
-                Ok(Note::Opened(session)) => self.session = Some(session),
+                Ok(Note::Opened { session, queueing }) => {
+                    self.session = Some(session);
+                    self.queueing = queueing;
+                }
                 Ok(Note::OpenFailed(detail)) => {
                     self.turn_running = false;
                     return Ok(Some(TurnEvent::flaked(detail)));
@@ -229,11 +328,11 @@ impl LaneChannel for AcpChannel {
 }
 
 /// What the connection thread needs beyond the transport.
-struct SessionPlan {
-    cwd: PathBuf,
-    model: Option<String>,
-    resume: Option<String>,
-    clock: Arc<AtomicU64>,
+pub(crate) struct SessionPlan {
+    pub(crate) cwd: PathBuf,
+    pub(crate) model: Option<String>,
+    pub(crate) resume: Option<String>,
+    pub(crate) clock: Arc<AtomicU64>,
 }
 
 /// Own one ACP connection for the channel's life.
@@ -305,8 +404,12 @@ async fn connect(
             agent_client_protocol::on_receive_request!(),
         )
         .connect_with(agent, async move |connection: ConnectionTo<Agent>| {
-            let session = handshake(&connection, &plan).await?;
-            let _ = notes.send(Note::Opened(session.0.to_string()));
+            let opened = handshake(&connection, &plan).await?;
+            let session = opened.session;
+            let _ = notes.send(Note::Opened {
+                session: session.0.to_string(),
+                queueing: PromptQueueing::read(&opened.initialized.agent_capabilities),
+            });
             while let Some(command) = commands.recv().await {
                 match command {
                     Command::Prompt(text) => {
@@ -336,10 +439,17 @@ async fn connect(
 /// `initialize`, session, then model. Under ACP opencode ignores
 /// `opencode.json` and `OPENCODE_MODEL` and hangs on its dead default, so the
 /// config-option call is the only model lever.
-async fn handshake(
+pub(crate) struct Handshake {
+    pub(crate) session: SessionId,
+    /// Cached so a proxy answers a downstream `initialize` with the upstream's
+    /// own capabilities instead of inventing a second set.
+    pub(crate) initialized: InitializeResponse,
+}
+
+pub(crate) async fn handshake(
     connection: &ConnectionTo<Agent>,
     plan: &SessionPlan,
-) -> Result<agent_client_protocol::schema::v1::SessionId, agent_client_protocol::Error> {
+) -> Result<Handshake, agent_client_protocol::Error> {
     let initialized = connection
         .send_request(InitializeRequest::new(ProtocolVersion::V1))
         .block_task()
@@ -348,6 +458,7 @@ async fn handshake(
         agent = ?initialized.agent_info,
         protocol_version = ?initialized.protocol_version,
         load_session = initialized.agent_capabilities.load_session,
+        prompt_queueing = PromptQueueing::read(&initialized.agent_capabilities).as_str(),
         "acp agent initialized"
     );
 
@@ -389,7 +500,10 @@ async fn handshake(
         )
         .await?;
     }
-    Ok(session)
+    Ok(Handshake {
+        session,
+        initialized,
+    })
 }
 
 /// Name the model. The spelling is the harness's own and is sent through
@@ -669,7 +783,88 @@ mod tests {
             session: Some("ses_1".to_owned()),
             last_update_ms: Arc::new(AtomicU64::new(0)),
             turn_running: false,
+            queueing: PromptQueueing::Unknown,
         }
+    }
+
+    fn capabilities(meta: serde_json::Value) -> AgentCapabilities {
+        let mut capabilities = AgentCapabilities::new();
+        capabilities.meta = serde_json::from_value(meta).unwrap();
+        capabilities
+    }
+
+    /// RECEIPT: claude-agent-acp 0.70.0 advertises exactly this shape
+    /// (PLAN section 13, probe 1).
+    #[test]
+    fn a_vendor_meta_flag_reads_as_advertised() {
+        let capabilities = capabilities(serde_json::json!({
+            "claudeCode": { "promptQueueing": true }
+        }));
+        assert_eq!(
+            PromptQueueing::read(&capabilities),
+            PromptQueueing::Advertised
+        );
+    }
+
+    /// The vendor key is the adapter's own, so a second spelling reads the
+    /// same rather than needing a roster row.
+    #[test]
+    fn any_vendor_key_carries_the_flag() {
+        let capabilities = capabilities(serde_json::json!({
+            "someOtherVendor": { "promptQueueing": true }
+        }));
+        assert_eq!(
+            PromptQueueing::read(&capabilities),
+            PromptQueueing::Advertised
+        );
+    }
+
+    /// codex 1.6.2, kimi 0.37.2 and opencode 1.18.18 advertise nothing, and
+    /// silence is never read as a yes.
+    #[test]
+    fn silence_is_unknown_and_never_advertised() {
+        assert_eq!(
+            PromptQueueing::read(&AgentCapabilities::new()),
+            PromptQueueing::Unknown
+        );
+        let capabilities = capabilities(serde_json::json!({
+            "claudeCode": { "promptQueueing": false }
+        }));
+        assert_eq!(PromptQueueing::read(&capabilities), PromptQueueing::Unknown);
+    }
+
+    /// RECEIPT: kimi 0.37.2's typed refusal, verbatim off the wire.
+    #[test]
+    fn the_typed_busy_code_is_what_demotes_an_adapter() {
+        let refused = agent_client_protocol::Error::new(
+            -32600,
+            "Invalid request: another turn is already in progress",
+        )
+        .data(serde_json::json!({ "code": "turn.agent_busy" }));
+        assert!(busy(&refused));
+    }
+
+    /// Prose is never matched on: the same message with no typed code is not
+    /// evidence of a busy turn.
+    #[test]
+    fn an_untyped_error_is_not_a_busy_turn() {
+        let error = agent_client_protocol::Error::new(
+            -32600,
+            "Invalid request: another turn is already in progress",
+        );
+        assert!(!busy(&error));
+        let other = agent_client_protocol::Error::new(-32602, "Invalid params")
+            .data(serde_json::json!({ "code": "model.rejected" }));
+        assert!(!busy(&other));
+    }
+
+    /// The delivery timing is unchanged while the policy is unsettled, even on
+    /// an adapter that advertises queueing.
+    #[test]
+    fn steer_still_waits_for_the_turn_boundary() {
+        let mut channel = idle_channel();
+        channel.queueing = PromptQueueing::Advertised;
+        assert_eq!(channel.steer("anything").unwrap(), Delivery::NextTurn);
     }
 
     /// Each harness names its adapter once, and every row is a program plus
