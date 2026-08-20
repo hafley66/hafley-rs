@@ -2,7 +2,7 @@
 created: 2026-08-17
 updated: 2026-08-19
 type: improvement
-status: open
+status: closed
 priority: normal
 epic: boop-process
 labels: [domain-boop, intent-implementation]
@@ -49,3 +49,7 @@ Style laws apply: comment budget (no change-log narrative), no `eprintln!` in `s
 ### 2026-08-19T14:35:33Z · @sprefa-coordinator
 
 Re-scoped under epic boop-process (2026-08-19): main.rs -> cli/{job,mail,me,db,debug}.rs by namespace, zero behavior change, byte-identical --help per verb pinned; first card of docs/design/boop-process.md section 4.
+
+### 2026-08-20 · @sprefa-coordinator
+
+Landed as #40 (4c3c490): main.rs 7383 -> 1786, cli/{mod,job,mail,me,db,debug}.rs, help byte-identical (84 screens), 461 tests unchanged, clippy rc=0. Tests stayed as #[cfg(test)] mods beside their code (bin-crate privates unreachable from tests/). temp_home_rail.rs STORE_WAIVED renamed to the cli paths.
