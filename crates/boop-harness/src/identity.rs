@@ -1,0 +1,294 @@
+//! Who is calling. Env inference answers "who am I", never "who is the child I
+//! am spawning" (agent-bus, two incidents, 2026-08-07).
+
+use std::collections::BTreeMap;
+
+use anyhow::Result;
+
+use boop_store::bus::Route;
+
+/// The rung of the ladder that produced an identity. Ordered most trustworthy
+/// first; `Env` is self-reported, so a consumer needing certainty checks this.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Rung {
+    Env,
+    Pane,
+    CodexProcess,
+    KimiProcess,
+    None,
+}
+
+impl Rung {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Rung::Env => "env",
+            Rung::Pane => "pane",
+            Rung::CodexProcess => "codex-process",
+            Rung::KimiProcess => "kimi-process",
+            Rung::None => "none",
+        }
+    }
+
+    /// Whether the rung observed the identity or inferred it.
+    pub fn confidence(self) -> &'static str {
+        match self {
+            Rung::Env | Rung::Pane | Rung::CodexProcess | Rung::KimiProcess => "exact",
+            Rung::None => "unresolved",
+        }
+    }
+}
+
+/// The caller's own identity. Every field is optional because an unresolved
+/// caller is a real answer.
+#[derive(Clone, Debug, Default)]
+pub struct Identity {
+    pub session: Option<String>,
+    pub lane: Option<String>,
+    pub parent: Option<String>,
+    pub harness: Option<String>,
+    pub pane: Option<String>,
+    pub rung: Option<Rung>,
+}
+
+impl Identity {
+    pub fn to_json(&self) -> serde_json::Value {
+        let rung = self.rung.unwrap_or(Rung::None);
+        serde_json::json!({
+            "session": self.session,
+            "lane": self.lane,
+            "parent": self.parent,
+            "harness": self.harness,
+            "pane": self.pane,
+            "rung": rung.as_str(),
+            "confidence": rung.confidence(),
+        })
+    }
+}
+
+/// Resolve the caller. Rungs are tried in order and the first hit wins:
+/// stamped env, registered pane, harness process tell, then unresolved.
+/// A miss falls through and nothing is guessed.
+pub fn resolve(routes: &BTreeMap<String, Route>) -> Result<Identity> {
+    let registry = crate::registry::Registry::discover();
+    resolve_with(&registry, routes)
+}
+
+/// Resolve through the registered harness adapters. The ladder order is
+/// global; each rung's implementation belongs to the adapter that owns it.
+pub fn resolve_with(
+    registry: &crate::registry::Registry,
+    routes: &BTreeMap<String, Route>,
+) -> Result<Identity> {
+    if let Some(harness) = registry.all().first() {
+        if let Some(identity) = harness.identity_env() {
+            return Ok(identity);
+        }
+    }
+    for harness in registry.all() {
+        if let Some(identity) = harness.identity_pane(routes) {
+            return Ok(identity);
+        }
+    }
+    for harness in registry.all() {
+        if let Some(identity) = harness.identity_process() {
+            return Ok(identity);
+        }
+    }
+    Ok(Identity {
+        rung: Some(Rung::None),
+        ..Default::default()
+    })
+}
+
+/// Rung 1. The stamp a boop spawn wrote into the child's own environment.
+pub(crate) fn from_env_for(_harness: &str) -> Option<Identity> {
+    let session = std::env::var("BOOP_SESSION")
+        .ok()
+        .filter(|s| !s.is_empty())?;
+    Some(Identity {
+        session: Some(session),
+        lane: std::env::var("BOOP_LANE").ok().filter(|s| !s.is_empty()),
+        parent: std::env::var("BOOP_PARENT").ok().filter(|s| !s.is_empty()),
+        harness: std::env::var("BOOP_HARNESS").ok().filter(|s| !s.is_empty()),
+        pane: std::env::var("TMUX_PANE").ok(),
+        rung: Some(Rung::Env),
+    })
+}
+
+/// Rung 2. `$TMUX_PANE` names interactive shells directly. Codex tool
+/// subprocesses omit it while retaining `TMUX`, so tmux resolves the calling
+/// client's selected pane. The registry may own that pane or its whole session.
+pub(crate) fn from_pane_for(harness: &str, routes: &BTreeMap<String, Route>) -> Option<Identity> {
+    let pane = std::env::var("TMUX_PANE")
+        .ok()
+        .filter(|p| !p.is_empty())
+        .or_else(|| boop_store::tmux::mux().current_pane(None))?;
+    let tmux_session = boop_store::tmux::mux().session_of_pane(None, &pane)?;
+    let (lane, route) = routes.iter().find(|(_, route)| {
+        route
+            .harness
+            .as_deref()
+            .is_none_or(|route_harness| route_harness == harness)
+            && matches!(
+                route.tmux.as_deref(),
+                Some(target) if target == pane || target == tmux_session
+            )
+    })?;
+    Some(Identity {
+        session: route.session_id.clone().or_else(|| Some(lane.clone())),
+        lane: Some(lane.clone()),
+        parent: None,
+        harness: route.harness.clone(),
+        pane: Some(pane),
+        rung: Some(Rung::Pane),
+    })
+}
+
+/// The env stamp a spawn writes into its CHILD. Every value describes the
+/// child; the spawner appears only as `BOOP_PARENT`.
+pub fn child_stamp(session: &str, lane: &str, harness: &str, parent: Option<&str>) -> String {
+    let mut stamp = format!(
+        "BOOP_SESSION={} BOOP_LANE={} BOOP_HARNESS={}",
+        shell_word(session),
+        shell_word(lane),
+        shell_word(harness)
+    );
+    if let Some(parent) = parent {
+        stamp.push_str(&format!(" BOOP_PARENT={}", shell_word(parent)));
+    }
+    stamp
+}
+
+fn shell_word(value: &str) -> String {
+    format!("'{}'", value.replace('\'', r"'\''"))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::{child_stamp, resolve, Rung};
+
+    /// The bus incident, in one assertion: the stamp describes the CHILD, and
+    /// the spawner appears only as the parent.
+    #[test]
+    fn the_child_stamp_never_carries_the_spawners_session_as_its_own() {
+        let stamp = child_stamp("child-1", "lane-a", "opencode", Some("coordinator-9"));
+        assert!(stamp.contains("BOOP_SESSION='child-1'"));
+        assert!(stamp.contains("BOOP_LANE='lane-a'"));
+        assert!(stamp.contains("BOOP_PARENT='coordinator-9'"));
+        assert!(
+            !stamp.contains("BOOP_SESSION='coordinator-9'"),
+            "the spawner's id must never become the child's own: {stamp}"
+        );
+    }
+
+    #[test]
+    fn a_stamp_with_no_parent_omits_the_variable() {
+        let stamp = child_stamp("child-1", "lane-a", "claude", None);
+        assert!(!stamp.contains("BOOP_PARENT"), "{stamp}");
+    }
+
+    /// An unresolved caller is reported, never defaulted to something plausible.
+    #[test]
+    fn an_unresolved_caller_says_so() {
+        temp_env::with_vars(
+            [
+                ("BOOP_SESSION", None::<&str>),
+                ("TMUX_PANE", None::<&str>),
+                ("CODEX_THREAD_ID", None::<&str>),
+                ("KIMI_SESSION_ID", None::<&str>),
+            ],
+            || {
+                let identity = resolve(&BTreeMap::new()).unwrap();
+                assert_eq!(identity.rung, Some(Rung::None));
+                assert!(identity.session.is_none());
+                assert_eq!(identity.to_json()["confidence"], "unresolved");
+            },
+        );
+    }
+
+    #[test]
+    fn a_fresh_codex_process_identifies_its_spawning_pane_without_a_route() {
+        temp_env::with_vars(
+            [
+                ("BOOP_SESSION", None::<&str>),
+                ("TMUX_PANE", Some("%1206")),
+                ("CODEX_THREAD_ID", Some("thread-7")),
+                ("KIMI_SESSION_ID", None::<&str>),
+            ],
+            || {
+                let identity = resolve(&BTreeMap::new()).unwrap();
+                assert_eq!(identity.session.as_deref(), Some("thread-7"));
+                assert_eq!(identity.lane.as_deref(), Some("codex-1206"));
+                assert_eq!(identity.harness.as_deref(), Some("codex"));
+                assert_eq!(identity.pane.as_deref(), Some("%1206"));
+                assert_eq!(identity.rung, Some(Rung::CodexProcess));
+            },
+        );
+    }
+
+    #[test]
+    fn kimi_process_rung_uses_the_follow_up_contract() {
+        temp_env::with_vars(
+            [
+                ("BOOP_SESSION", None::<&str>),
+                ("TMUX_PANE", None::<&str>),
+                ("CODEX_THREAD_ID", None::<&str>),
+                ("KIMI_SESSION_ID", Some("session-8")),
+            ],
+            || {
+                let identity = resolve(&BTreeMap::new()).unwrap();
+                assert_eq!(identity.session.as_deref(), Some("session-8"));
+                assert_eq!(identity.harness.as_deref(), Some("kimi"));
+                assert_eq!(identity.rung, Some(Rung::KimiProcess));
+            },
+        );
+    }
+    /// The env rung is self-reported, so it must say so rather than pass as
+    /// verified: the bus incident was a self-reported id trusted blindly.
+    #[test]
+    fn the_env_rung_is_labelled() {
+        temp_env::with_vars(
+            [
+                ("BOOP_SESSION", Some("s-1")),
+                ("BOOP_LANE", Some("lane-a")),
+                ("BOOP_PARENT", Some("coord")),
+            ],
+            || {
+                let identity = resolve(&BTreeMap::new()).unwrap();
+                assert_eq!(identity.rung, Some(Rung::Env));
+                assert_eq!(identity.session.as_deref(), Some("s-1"));
+                assert_eq!(identity.parent.as_deref(), Some("coord"));
+                assert_eq!(identity.to_json()["rung"], "env");
+            },
+        );
+    }
+
+    mod temp_env {
+        /// Env is process-global; these tests set and restore it around one
+        /// closure and are marked serial by running inside a single mutex.
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+        pub fn with_vars<const N: usize>(vars: [(&str, Option<&str>); N], body: impl FnOnce()) {
+            let _guard = LOCK.lock().unwrap_or_else(|error| error.into_inner());
+            let saved: Vec<(String, Option<String>)> = vars
+                .iter()
+                .map(|(key, _)| ((*key).to_owned(), std::env::var(key).ok()))
+                .collect();
+            for (key, value) in &vars {
+                match value {
+                    Some(value) => std::env::set_var(key, value),
+                    None => std::env::remove_var(key),
+                }
+            }
+            body();
+            for (key, value) in saved {
+                match value {
+                    Some(value) => std::env::set_var(&key, value),
+                    None => std::env::remove_var(&key),
+                }
+            }
+        }
+    }
+}

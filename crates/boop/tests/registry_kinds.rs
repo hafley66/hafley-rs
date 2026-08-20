@@ -22,9 +22,34 @@ fn run(dir: &Path, args: &[&str]) -> std::process::Output {
         .unwrap()
 }
 
+/// A tmux session for as long as the value lives. `beep lane prune` refuses to
+/// guess when no server answers at all, so a host with none running (a CI
+/// runner) would otherwise decide the test below.
+struct LiveTmuxSession(String);
+
+impl LiveTmuxSession {
+    fn new(name: &str) -> Self {
+        let status = Command::new("tmux")
+            .args(["new-session", "-d", "-s", name])
+            .status()
+            .expect("tmux installed");
+        assert!(status.success(), "tmux must start {name}");
+        LiveTmuxSession(name.to_owned())
+    }
+}
+
+impl Drop for LiveTmuxSession {
+    fn drop(&mut self) {
+        let _ = Command::new("tmux")
+            .args(["kill-session", "-t", &self.0])
+            .status();
+    }
+}
+
 #[test]
 fn prune_skips_a_dead_coordinator_and_legacy_rows_still_prune() {
     let dir = mail_dir("prune");
+    let _session = LiveTmuxSession::new(&format!("boop-kinds-live-{}", std::process::id()));
     std::fs::write(
         dir.join("registry.json"),
         r#"{

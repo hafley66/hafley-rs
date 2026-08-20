@@ -1,0 +1,53 @@
+[package]
+name = "boop-store"
+version = "0.0.2"
+edition.workspace = true
+description = "the boop database: the schema at ~/.agent/boop.db, its migrations, and how transcript bytes become rows"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = ["agent-read"]
+# Transcript reading and its store-facing read surface: the query, usage,
+# activity, chat-repr and session-graph modules.
+agent-read = []
+# The deterministic fixtures the store's own tests use (a throwaway git repo, a
+# fake multiplexer). Crates above the store turn this on as a dev-dependency.
+testing = []
+# The CLI arg derives on the store's query enums. Only the binary turns this
+# on; the store itself never links clap.
+clap = ["dep:clap"]
+
+[dependencies]
+# Optional, off by default: `--group-by` parses straight into `usage::GroupBy`,
+# so the one enum carries its own value list.
+clap = { version = "4", features = ["derive"], optional = true }
+# The tmux multiplexer seam: one trait, one implementation, in its own crate.
+boop-mux = { version = "0.0.2", path = "../boop-mux" }
+# The transcripts are JSONL; this is the credible reader.
+serde = { version = "1", features = ["derive"] }
+# preserve_order: a row's column order is its SELECT order, so `--format text`
+# has one column order per kind defined where the query is, never a second list.
+serde_json = { version = "1", features = ["preserve_order"] }
+# Application-level errors; this is a binary, not a library API.
+anyhow = "1"
+# Resolve the claude home dir without XDG project-dir machinery.
+dirs = "5"
+# Layer 0: process tree, cpu, rss, cwd in one cross-platform API.
+sysinfo = "0.39"
+# Layer 3: the SQLite store at ~/.agent/boop.db. `bundled` compiles SQLite in,
+# so no system SQLite version can disagree with it. Applies the repo's
+# surrogate-key law (interning natural TEXT keys to INTEGER ids).
+rusqlite = { version = "0.40", features = ["bundled", "trace"] }
+# Transcript timestamps parse against Rfc3339; hand-rolled date math is gone.
+time = { version = "0.3", features = ["parsing", "formatting"] }
+# Process-wide diagnostics. The binary installs the subscriber; library code
+# only emits conventional tracing events and spans.
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+
+[lib]
+name = "boop_store"
+path = "src/lib.rs"

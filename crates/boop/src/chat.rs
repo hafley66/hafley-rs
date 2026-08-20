@@ -246,7 +246,7 @@ mod tests {
             harness: "claude",
             session_id: "fixture-session".to_owned(),
             nickname: "fixture-session".to_owned(),
-            path: PathBuf::from("tests/fixtures/chat_fixture.jsonl"),
+            path: PathBuf::from("../boop-harness/tests/fixtures/chat_fixture.jsonl"),
             cwd: Some("/w".to_owned()),
             git_branch: Some("main".to_owned()),
             modified_ms: 0,

@@ -1,0 +1,39 @@
+[package]
+name = "boop-acp"
+version = "0.0.2"
+edition.workspace = true
+description = "the boop lane channel: one ACP client per agent conversation, plus the tmux TUI driver for harnesses without one"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+# The database: the trail files a channel child writes its stderr into, and the
+# tmux seam the TUI driver targets.
+boop-store = { version = "0.0.2", path = "../boop-store", default-features = false }
+# The transcripts and rpc frames are JSON; this is the credible reader.
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+# Application-level errors.
+anyhow = "1"
+# Resolve the opencode store path without XDG project-dir machinery.
+dirs = "5"
+# The opencode store is SQLite; the TUI driver reads it to see a turn land.
+rusqlite = { version = "0.40", features = ["bundled", "trace"] }
+# Process-wide diagnostics. The binary installs the subscriber; library code
+# only emits conventional tracing events and spans.
+tracing.workspace = true
+# The ACP client. Every lane channel that talks a coding agent over stdio
+# speaks this crate's JSON-RPC, never a hand-rolled frame. The sibling
+# `agent-client-protocol-tokio` 0.11.1 is pinned to agent-client-protocol
+# 0.11.1 and its `AcpAgent`/`Stdio` were absorbed into 2.0.0, so 2.0.0 alone
+# is the whole transport.
+agent-client-protocol = "2.0.0"
+# The ACP connection is async and `LaneChannel` is sync, so one current-thread
+# runtime per channel drives it on its own thread. `rt` and `sync` only: the
+# reactor under the ACP crate is async-io's, not tokio's.
+tokio = { version = "1", features = ["rt", "sync"] }
+
+[lib]
+name = "boop_acp"
+path = "src/lib.rs"

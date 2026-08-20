@@ -536,15 +536,25 @@ pub(crate) fn run_passthrough(sql: &str, format: QueryFormat) -> Result<()> {
 pub(crate) fn run_passthrough_at(path: PathBuf, sql: &str, format: QueryFormat) -> Result<()> {
     let store = ident::Store::open_readonly(path)?;
     let (names, rows) = store.passthrough(sql)?;
+    emit_named_rows(&names, &rows, format)
+}
+
+/// Print column names and rows the way every passthrough report does: one
+/// JSON object per line, or a tab-separated table led by the column names.
+pub(crate) fn emit_named_rows(
+    names: &[String],
+    rows: &[ident::Row],
+    format: QueryFormat,
+) -> Result<()> {
     match format {
         QueryFormat::Ndjson => {
-            for row in &rows {
+            for row in rows {
                 line(&serde_json::to_string(row)?);
             }
         }
         QueryFormat::Text => {
             line(&names.join("\t"));
-            for row in &rows {
+            for row in rows {
                 let Some(object) = row.as_object() else {
                     continue;
                 };
@@ -792,37 +802,21 @@ pub(crate) fn emit_json_rows(rows: &[ident::Row], format: QueryFormat) {
     }
 }
 
-/// The `db usage` alias's report SQL: totals with cost over the whole store.
-/// The passthrough is the engine; `--show-sql` prints this const.
-#[cfg(feature = "agent-read")]
-pub(crate) const USAGE_TOTALS_SQL: &str = "
-SELECT COUNT(*) AS calls,
-       COALESCE(SUM(usage.input_tokens), 0) AS input_tokens,
-       COALESCE(SUM(usage.output_tokens), 0) AS output_tokens,
-       COALESCE(SUM(usage.cache_create_5m_tokens), 0) AS cache_create_5m_tokens,
-       COALESCE(SUM(usage.cache_create_1h_tokens), 0) AS cache_create_1h_tokens,
-       COALESCE(SUM(usage.cache_read_tokens), 0) AS cache_read_tokens,
-       SUM(usage.input_tokens / 1e6 * price.input_per_mtok
-         + usage.output_tokens / 1e6 * price.output_per_mtok
-         + usage.cache_create_5m_tokens / 1e6 * price.cache_write_5m_per_mtok
-         + usage.cache_create_1h_tokens / 1e6 * price.cache_write_1h_per_mtok
-         + usage.cache_read_tokens / 1e6 * price.cache_read_per_mtok) AS cost_usd
-FROM agent_usage AS usage
-LEFT JOIN model_price AS price ON price.model_id = usage.model_id";
-
 pub(crate) fn open_ro_store() -> Result<ident::Store> {
     ident::Store::open_readonly(ident::Store::default_path()?)
 }
 
-/// `db usage`: the totals report, a thin alias over USAGE_TOTALS_SQL. `--show-sql`
-/// prints that const and exits; otherwise it runs through the read-only passthrough.
+/// `db usage`: the totals report, a thin alias over `Store::usage_totals`.
+/// `--show-sql` prints the store's own const, the same text that call runs, and
+/// exits; otherwise it prints the rows.
 #[cfg(feature = "agent-read")]
 pub(crate) fn run_usage(args: &UsageArgs, show_sql: bool) -> Result<()> {
     if show_sql {
-        line(USAGE_TOTALS_SQL.trim());
+        line(usage::USAGE_TOTALS_SQL.trim());
         return Ok(());
     }
-    run_passthrough(USAGE_TOTALS_SQL, args.format)
+    let (names, rows) = open_ro_store()?.usage_totals()?;
+    emit_named_rows(&names, &rows, args.format)
 }
 
 #[cfg(feature = "agent-read")]

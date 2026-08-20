@@ -1,0 +1,54 @@
+[package]
+name = "boop-proc"
+version = "0.0.2"
+edition.workspace = true
+description = "boop process control: lane spawn, supervision, parent policy, the lane mailbox and the embeddable coroutine host"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = ["agent-read"]
+# The store's read surface, which the coroutine host queries.
+agent-read = ["boop-store/agent-read"]
+
+[dependencies]
+# The lane channel the supervisor drives.
+boop-acp = { version = "0.0.2", path = "../boop-acp" }
+# The per-harness adapters a spawn picks from, and the spawn worktree.
+boop-harness = { version = "0.0.2", path = "../boop-harness" }
+# The database: lane rows, trace events, the trail and the mail routes.
+boop-store = { version = "0.0.2", path = "../boop-store", default-features = false }
+# The transcripts and mail rows are JSON; this is the credible reader.
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+# Application-level errors.
+anyhow = "1"
+# Resolve the config home dir without XDG project-dir machinery.
+dirs = "5"
+# Layer 0: process tree, cpu, rss, cwd in one cross-platform API.
+sysinfo = "0.39"
+# Read-only opens of the store from the coroutine host.
+rusqlite = { version = "0.40", features = ["bundled", "trace"] }
+# Timestamps parse against Rfc3339; hand-rolled date math is gone.
+time = { version = "0.3", features = ["parsing", "formatting"] }
+# Process-wide diagnostics. The binary installs the subscriber; library code
+# only emits conventional tracing events and spans.
+tracing.workspace = true
+tracing-subscriber.workspace = true
+# Signal delivery off the handler. A lane pane is killed with SIGHUP/SIGTERM and
+# the supervisor must still write its result row, which means allocating and
+# opening a file: work no async-signal-safe handler may do. signal-hook's
+# handler only writes a self-pipe byte and the work runs on a normal thread.
+signal-hook = "0.4"
+# Deadline on a synchronous std::process::Child without pulling in an async
+# runtime: one method, wait_timeout, on the same Child this file already spawns.
+wait-timeout = "0.2.1"
+
+[dev-dependencies]
+# The store's deterministic fixtures (throwaway git repo, fake multiplexer).
+boop-store = { version = "0.0.2", path = "../boop-store", features = ["testing"] }
+
+[lib]
+name = "boop_proc"
+path = "src/lib.rs"
