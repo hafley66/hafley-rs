@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -298,8 +299,10 @@ pub(crate) fn run_tell_parent(
     Ok(())
 }
 
-/// `tell-children`: one body to every child the registry records under the
-/// caller. A child nothing drains is reported dead and gets no row.
+/// `tell-children`: one body to every child of the caller, from the registry's
+/// parent edges and from the store's `spawned` edges for the caller's session.
+/// Every target reports its own outcome and the run ends in a tally, so a run
+/// that reached nobody cannot read as success.
 pub(crate) fn run_tell_children(
     registry: &Registry,
     body: &str,
@@ -310,15 +313,27 @@ pub(crate) fn run_tell_children(
     let identity = identity::resolve_with(registry, &routes)?;
     let (caller, _) = lane::caller_route(&identity, &routes)?;
     let children = lane::children_of(&caller, &routes);
-    if children.is_empty() {
+    let spawned = spawned_children(identity.session.as_deref(), &routes);
+    if children.is_empty() && spawned.is_empty() {
         println!("no child of {caller} is registered");
         return Ok(());
     }
+    let (mut landed, mut unreachable, mut dead) = (0usize, 0usize, 0usize);
     for (name, route) in children {
-        let Some(reach) = child_reach(route, name, None) else {
-            println!("dead {name}");
-            continue;
-        };
+        let reach = child_reach(route, name, None);
+        match &reach {
+            ChildReach::NoRoute(why) => {
+                unreachable += 1;
+                println!("no-route {name} ({why})");
+                continue;
+            }
+            ChildReach::Dead(target) => {
+                dead += 1;
+                println!("dead {name} (tmux {target} is gone)");
+                continue;
+            }
+            _ => {}
+        }
         let message = bus::Message {
             id: bus::mint_id(),
             from: caller.clone(),
@@ -335,24 +350,73 @@ pub(crate) fn run_tell_children(
         append_message(&dir, &message)?;
         record_control_edge(&message)?;
         match reach {
-            ChildReach::Hook => println!("landed {name} {} (hook inbox)", message.id),
+            ChildReach::Hook => {
+                landed += 1;
+                println!("landed {name} {} (hook inbox)", message.id);
+            }
             ChildReach::Supervisor => {
-                println!("landed {name} {} (lane supervisor)", message.id)
+                landed += 1;
+                println!("landed {name} {} (lane supervisor)", message.id);
             }
             ChildReach::Pane(pane) => match inject_mail(registry, route, &message, &pane, None)? {
                 boop::harness::SendOutcome::Injected => {
-                    println!("landed {name} {} (pane {pane})", message.id)
+                    landed += 1;
+                    println!("landed {name} {} (pane {pane})", message.id);
                 }
                 boop::harness::SendOutcome::QueuedForNextSpawn => {
-                    println!("landed {name} {} (next spawn)", message.id)
+                    landed += 1;
+                    println!("landed {name} {} (next spawn)", message.id);
                 }
                 boop::harness::SendOutcome::Unsupported => {
-                    println!("dead {name} (harness takes no send)")
+                    unreachable += 1;
+                    println!("no-route {name} (harness takes no send)");
                 }
             },
+            ChildReach::NoRoute(_) | ChildReach::Dead(_) => unreachable!("reported above"),
         }
     }
+    for session in spawned {
+        unreachable += 1;
+        println!("no-route {session} ({NATIVE_CHILD_REASON})");
+    }
+    println!("{landed} landed, {unreachable} no-route, {dead} dead");
     Ok(())
+}
+
+/// A claude Agent-tool child runs inside its parent's process. It owns no pane,
+/// no stdin and no registry route, so no delivery path in boop addresses one.
+const NATIVE_CHILD_REASON: &str = "native subagent: no pane, no route, nothing drains its mailbox";
+
+/// Children the store's `spawned` edges name under the caller's session, minus
+/// the ones a registry route already carries. A store that will not open costs
+/// the store-derived half of the list and nothing else.
+fn spawned_children(session: Option<&str>, routes: &BTreeMap<String, Route>) -> Vec<String> {
+    let Some(session) = session else {
+        return Vec::new();
+    };
+    let rows = boop::Store::default_path()
+        .and_then(boop::Store::open)
+        .and_then(|store| store.edge_rows(Some(session)));
+    let rows = match rows {
+        Ok(rows) => rows,
+        Err(error) => {
+            debug!(%error, session, "spawn edges unread; registry children only");
+            return Vec::new();
+        }
+    };
+    let mut children: Vec<String> = rows
+        .into_iter()
+        .filter(|row| row.edge == "spawned" && row.parent == session)
+        .map(|row| row.child)
+        .filter(|child| {
+            !routes
+                .values()
+                .any(|route| route.session_id.as_deref() == Some(child.as_str()))
+        })
+        .collect();
+    children.sort();
+    children.dedup();
+    children
 }
 
 /// What would take a row addressed to a child.
@@ -363,25 +427,32 @@ pub(crate) enum ChildReach {
     Supervisor,
     /// A live pane takes the keystrokes.
     Pane(String),
+    /// Nothing addresses this child at all, and the reason why.
+    NoRoute(&'static str),
+    /// The child named a tmux target and tmux no longer has it.
+    Dead(String),
 }
 
-/// How a queued row reaches a child, or `None` when nothing would take it: no
-/// hook drains its project and its pane is gone.
-pub(crate) fn child_reach(route: &Route, name: &str, socket: Option<&str>) -> Option<ChildReach> {
+/// How a queued row reaches a child. A route with no hook and no tmux target
+/// was never reachable; a route whose target tmux has dropped went dead. The
+/// two are different facts and are reported apart.
+pub(crate) fn child_reach(route: &Route, name: &str, socket: Option<&str>) -> ChildReach {
     if route
         .cwd
         .as_deref()
         .is_some_and(|cwd| inbox::installed_for(Path::new(cwd), name))
     {
-        return Some(ChildReach::Hook);
+        return ChildReach::Hook;
     }
-    let target = route.tmux.as_deref().filter(|target| !target.is_empty())?;
+    let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) else {
+        return ChildReach::NoRoute("no hook, no pane");
+    };
     if !tmux::mux().target_alive(socket, target) {
-        return None;
+        return ChildReach::Dead(target.to_owned());
     }
     match route.kind.as_str() {
-        "lane" => Some(ChildReach::Supervisor),
-        _ => Some(ChildReach::Pane(target.to_owned())),
+        "lane" => ChildReach::Supervisor,
+        _ => ChildReach::Pane(target.to_owned()),
     }
 }
 
