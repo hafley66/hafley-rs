@@ -285,6 +285,20 @@ $ env -u TMUX TMUX_TMPDIR=<empty dir> cargo test -p boop --bin boop     -- --exa
 test result: ok. 1 passed; 0 failed
 ```
 
+A second test had the same dependency and surfaced one CI round later:
+`crates/boop/tests/registry_kinds.rs`
+`prune_skips_a_dead_coordinator_and_legacy_rows_still_prune` spawns
+`boop beep lane prune` as a subprocess and hit the same bail. It now owns a
+tmux session for the length of the test. Both were then found in one pass
+rather than one CI round each, by running the whole suite the way the runner
+does:
+
+```
+$ env -u TMUX TMUX_TMPDIR=<empty dir> cargo test --workspace --no-fail-fast
+before: 606 passed, 1 failed, 2 ignored
+after:  607 passed, 0 failed, 2 ignored
+```
+
 `crates/boop/src/cli/job.rs` is otherwise byte-identical to base
 (`git diff f3d5123 -- crates/boop/src/cli/job.rs` was empty before this fix),
 so the test is not something this branch broke. What the branch changed is
@@ -313,16 +327,30 @@ because a crate added later joins by itself with no workflow edit. On this PR
 the four new crates print as skipped; on every PR after this one they are
 checked.
 
-### Still red on this branch, and red on main for the same reason
+### test job: `just` was not on the runner
 
-Four tests fail on the runner and are pre-existing, proved by base run
-32371247357 on `f3d5123`: `harness::codex::tests::codex_spawn_returns_handle_and_stop_tears_down`
-and the three `worktree::tests::*` (`a_failing_boop_start_blocks_the_spawn`,
-`a_hung_setup_step_fails_within_its_deadline_instead_of_hanging`,
-`the_killed_child_leaves_no_orphan`). They assert on a `just` recipe and a
-codex spawn the runner image does not provide. They are the 4 the brief named
-as known-red, they pass on this machine, and this branch only moved their file
-from `crates/boop` to `crates/boop-harness`.
+`crates/boop/tests/boop_start_warm.rs:14` asserts `just` is on PATH rather than
+skipping itself, and the three `worktree::tests::*` boop-start tests resolve a
+recipe through it. The runner image ships no `just`, so four tests failed on
+`just is required by this test` and `cargo ran 0 times`. The test job installs
+it now (`taiki-e/install-action@v2`, `tool: just`), which is the tool the tests
+already demand; no test was weakened to get there.
+
+Base CI never reached any of this. On `f3d5123`, `cargo test --workspace` dies
+in the `boop` lib target after 1016s on 4 known-red tests, so every later target
+was unmeasured. This branch moved those 4 into `boop-harness`, which is why
+three separate runner-environment gaps surfaced in a row: they had simply never
+run.
+
+### Known-red on the runner
+
+`harness::codex::tests::codex_spawn_returns_handle_and_stop_tears_down` needs
+the `codex` CLI, which the runner image has not got and this lane cannot
+install. It is one of the 4 the brief named as known-red, it fails on base run
+32371247357 at `crates/boop/src/harness/codex.rs:782`
+(`assertion failed: has_session_on(...)`), it passes on this machine, and this
+branch only moved its file from `crates/boop` to `crates/boop-harness`.
+Skipping it on a host without codex is a call for the user, not this card.
 
 ## Commits
 
@@ -335,3 +363,5 @@ from `crates/boop` to `crates/boop-harness`.
 | `refactor(boop): reduce crates/boop to the cli` | `boop` reduced to the cli, docs, CI, card |
 | `refactor(boop): close the crate seam with typed store fns` | the four SQL reaches, both TODO markers deleted |
 | `ci: pin the prune dry-run test's tmux server, compute the semver baseline list` | the two CI reds |
+| `ci: install just on the test runner` | `boop_start_warm` and the boop-start worktree tests |
+| `test: registry_kinds prune owns its tmux server` | the last ambient-tmux dependency |
