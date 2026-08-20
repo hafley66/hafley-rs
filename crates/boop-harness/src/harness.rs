@@ -19,7 +19,11 @@ pub mod opencode;
 /// Project one transcript file forward from its stored cursor, writing session,
 /// turn, touch, cmd, fetch, skill, pr facts. Returns the new offset. A second
 /// run with nothing appended after the cursor writes nothing.
-pub fn sync_session(store: &Store, adapter: &dyn Harness, session: &SessionRef) -> Result<SyncStat> {
+pub fn sync_session(
+    store: &Store,
+    adapter: &dyn Harness,
+    session: &SessionRef,
+) -> Result<SyncStat> {
     sync_session_with_pid(store, adapter, session, None)
 }
 
@@ -58,6 +62,17 @@ pub trait Harness: Send + Sync {
     /// Resolve a caller using a process tell exposed by this harness.
     fn identity_process(&self) -> Option<crate::identity::Identity> {
         None
+    }
+
+    /// Root sessions this harness recorded for `cwd`. A sidechain or subagent
+    /// transcript carries a parent and never answers for a pane, so only roots
+    /// come back.
+    fn root_sessions_for_cwd(&self, cwd: &str) -> Result<Vec<SessionRef>> {
+        Ok(self
+            .sessions()?
+            .into_iter()
+            .filter(|session| session.cwd.as_deref() == Some(cwd) && session.parent.is_none())
+            .collect())
     }
 
     /// Read this harness's native session identity from the live process tree
@@ -182,7 +197,6 @@ fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
 }
 
-
 pub(crate) struct TranscriptFile {
     pub path: PathBuf,
     pub modified_ms: u64,
@@ -267,4 +281,3 @@ pub(crate) fn assert_fixture_sessions_project(
     assert!(graph.edges.len() >= expected_edges);
     let _ = std::fs::remove_file(path);
 }
-
