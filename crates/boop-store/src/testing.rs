@@ -121,6 +121,17 @@ impl Multiplexer for FakeMux {
         self.panes.get(pane).cloned()
     }
 
+    /// Emulates tmux target resolution: a pane id names itself, and a
+    /// `session` or `session:window.pane` target names that session's pane.
+    fn pane_id(&self, _: Option<&str>, target: &str) -> Option<String> {
+        if self.panes.contains_key(target) {
+            return Some(target.to_owned());
+        }
+        self.panes.iter().find_map(|(pane, session)| {
+            (target == session || target.starts_with(&format!("{session}:"))).then(|| pane.clone())
+        })
+    }
+
     fn pane_pid(&self, _: Option<&str>, target: &str) -> Option<u32> {
         self.pane_pids.get(target).copied()
     }

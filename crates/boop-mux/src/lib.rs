@@ -25,6 +25,10 @@ pub trait Multiplexer {
     /// The tmux session that owns a pane. `None` when tmux is unreachable or
     /// the pane is unknown.
     fn session_of_pane(&self, socket: Option<&str>, pane: &str) -> Option<String>;
+    /// The pane id a target names. `boop adopt` records `session:window.pane`,
+    /// which equals neither a pane id nor a session name, so a caller comparing
+    /// raw target strings never matches its own pane.
+    fn pane_id(&self, socket: Option<&str>, target: &str) -> Option<String>;
     /// The pid of the shell in the first pane of `target`.
     fn pane_pid(&self, socket: Option<&str>, target: &str) -> Option<u32>;
     /// One-shot `tmux list-sessions`. `None` means tmux itself is unreachable,
@@ -117,6 +121,20 @@ impl Multiplexer for Tmux {
         (!name.is_empty()).then_some(name)
     }
 
+    fn pane_id(&self, socket: Option<&str>, target: &str) -> Option<String> {
+        let mut builder = Command::new("tmux");
+        if let Some(socket) = socket {
+            builder.arg("-L").arg(socket);
+        }
+        builder.args(["display-message", "-p", "-t", target, "#{pane_id}"]);
+        let output = builder.output().ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let pane = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        (!pane.is_empty()).then_some(pane)
+    }
+
     fn pane_pid(&self, socket: Option<&str>, target: &str) -> Option<u32> {
         if !target.contains(':')
             && !target.starts_with('%')
@@ -170,17 +188,21 @@ impl Multiplexer for Tmux {
             Some(socket) => builder.socket_name(socket),
             None => builder,
         };
-        let status = builder
+        // `output` and not `status`: a miss makes tmux print `can't find
+        // session` on the inherited stderr, and a liveness probe must not
+        // write to the caller's terminal.
+        let output = builder
             .add_command(HasSession::new().target_session(exact_target(session)))
-            .status()
+            .output()
             .context("tmux has-session")?;
+        let alive = output.status().success();
         debug!(
             session,
             socket = socket.unwrap_or_default(),
-            alive = status.success(),
+            alive,
             "tmux has-session completed"
         );
-        Ok(status.success())
+        Ok(alive)
     }
 
     fn kill_session(&self, socket: Option<&str>, session: &str) -> Result<()> {

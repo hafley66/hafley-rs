@@ -318,6 +318,9 @@ mod tests {
         fn session_of_pane(&self, _: Option<&str>, _: &str) -> Option<String> {
             None
         }
+        fn pane_id(&self, _: Option<&str>, _: &str) -> Option<String> {
+            None
+        }
         fn pane_pid(&self, _: Option<&str>, _: &str) -> Option<u32> {
             Some(10)
         }
