@@ -157,4 +157,11 @@ clap accepted the shape.
 
 ## Worktree state
 
-Filled in at commit time.
+`~/projects/hafley-rs-worktrees/boop-help-sweep`, branch `docs/boop-help-sweep`,
+pushed to `origin`. No PR opened.
+
+| | |
+|---|---|
+| content commit | `4924b49 docs(boop): make --help the delivery contract it claims to be` |
+| trailing commit | this file's own state block |
+| `git status --short` | empty, tree clean |
