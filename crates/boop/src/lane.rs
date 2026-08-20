@@ -321,72 +321,7 @@ pub fn pane_epilogue(lane: &str, mail_dir: &Path) -> String {
     )
 }
 
-/// The codex reasoning efforts; the only spellings an `@` suffix takes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Effort {
-    Low,
-    Medium,
-    High,
-}
-
-impl Effort {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Effort::Low => "low",
-            Effort::Medium => "medium",
-            Effort::High => "high",
-        }
-    }
-}
-
-impl std::str::FromStr for Effort {
-    type Err = anyhow::Error;
-
-    fn from_str(value: &str) -> Result<Effort> {
-        match value {
-            "low" => Ok(Effort::Low),
-            "medium" => Ok(Effort::Medium),
-            "high" => Ok(Effort::High),
-            other => {
-                anyhow::bail!("effort `{other}` is not one of low, medium, high")
-            }
-        }
-    }
-}
-
-/// A model spelling, split on the last `@`. `name@effort` names a reasoning
-/// effort; a bare name carries none. An `@` present with no recognized effort
-/// after it is a parse error, never a silently-kept model name.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ModelSpec {
-    pub name: String,
-    pub effort: Option<Effort>,
-}
-
-impl std::str::FromStr for ModelSpec {
-    type Err = anyhow::Error;
-
-    fn from_str(value: &str) -> Result<ModelSpec> {
-        match value.rsplit_once('@') {
-            Some((name, suffix)) => {
-                let effort = suffix.parse::<Effort>().with_context(|| {
-                    format!(
-                        "model `{value}` has an `@` suffix that names no reasoning effort \
-                         (only low, medium, high are recognized)"
-                    )
-                })?;
-                Ok(ModelSpec {
-                    name: name.to_owned(),
-                    effort: Some(effort),
-                })
-            }
-            None => Ok(ModelSpec {
-                name: value.to_owned(),
-                effort: None,
-            }),
-        }
-    }
-}
+pub use boop_store::session::{Effort, ModelSpec};
 
 /// The harness a model spelling names, or `None` when it names none. Config's
 /// `model-harness` wins when non-empty; otherwise the compiled table decides.

@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 
 use crate::channel::jsonrpc::RpcChild;
 use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
-use crate::lane::ModelSpec;
+use boop_store::session::ModelSpec;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -27,7 +27,7 @@ impl CodexChannel {
             .current_dir(&spec.cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(crate::trail::child_stderr(spec.lane.as_deref()))
+            .stderr(boop_store::trail::child_stderr(spec.lane.as_deref()))
             .spawn()
             .context("spawn codex app-server")?;
         let mut rpc = RpcChild::attach(child)?;

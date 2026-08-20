@@ -74,7 +74,7 @@ impl TuiChannel {
         let opened_ms = crate::channel::now_ms();
         let session = host_session(socket.as_deref())?;
         let cwd = spec.cwd.display().to_string();
-        let target = crate::tmux::mux()
+        let target = boop_store::tmux::mux()
             .new_window(
                 socket.as_deref(),
                 &session,
@@ -134,7 +134,7 @@ impl TuiChannel {
                 command.push_str(&format!(" {flag} {}", quote(conversation)));
             }
         }
-        let target = crate::tmux::mux()
+        let target = boop_store::tmux::mux()
             .new_window(
                 self.socket.as_deref(),
                 &self.session,
@@ -166,7 +166,7 @@ impl TuiChannel {
             }
             // A send failure from a still-live target is a wedged pane, not a
             // death; respawning would discard a live-but-slow turn.
-            if crate::tmux::mux().target_alive(self.socket.as_deref(), &self.target) {
+            if boop_store::tmux::mux().target_alive(self.socket.as_deref(), &self.target) {
                 return Err(error);
             }
             self.reopen_window()?;
@@ -221,7 +221,7 @@ impl TuiChannel {
             std::thread::sleep(Duration::from_millis(500));
         }
         for key in self.profile.boot_keys.clone() {
-            crate::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, key)?;
+            boop_store::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, key)?;
             std::thread::sleep(Duration::from_millis(1200));
         }
         self.settled_since = None;
@@ -234,7 +234,7 @@ impl TuiChannel {
     }
 
     fn body(&self) -> Result<String> {
-        let pane = crate::tmux::mux().capture_pane(self.socket.as_deref(), &self.target, None)?;
+        let pane = boop_store::tmux::mux().capture_pane(self.socket.as_deref(), &self.target, None)?;
         let lines: Vec<&str> = pane.lines().collect();
         let keep = lines.len().saturating_sub(FOOTER_LINES);
         Ok(lines[..keep].join("\n"))
@@ -255,7 +255,7 @@ impl TuiChannel {
     /// `send-keys -l` writes LF for an embedded newline and only a named Enter
     /// sends CR, so a multi-line brief lands whole instead of line by line.
     fn type_and_submit(&self, text: &str) -> Result<()> {
-        let mux = crate::tmux::mux();
+        let mux = boop_store::tmux::mux();
         mux.send_text(self.socket.as_deref(), &self.target, text)?;
         std::thread::sleep(Duration::from_millis(300));
         mux.send_key_named(self.socket.as_deref(), &self.target, "Enter")?;
@@ -303,7 +303,7 @@ impl LaneChannel for TuiChannel {
             tmux_target = self.target,
             "tui interrupt clearing a wedged turn"
         );
-        crate::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, "Escape")?;
+        boop_store::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, "Escape")?;
         self.turn_open = false;
         self.settled_since = None;
         self.started_emitted = false;
@@ -320,7 +320,7 @@ impl LaneChannel for TuiChannel {
         self.type_and_submit_or_respawn(text)?;
         if let Some(key) = self.profile.steer_key {
             std::thread::sleep(Duration::from_millis(400));
-            crate::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, key)?;
+            boop_store::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, key)?;
         }
         self.settled_since = None;
         Ok(Delivery::MidTurn)
@@ -442,16 +442,16 @@ impl LaneChannel for TuiChannel {
         // outlives the lane's route; a still-alive target gets its window killed.
         for _ in 0..2 {
             if let Err(error) =
-                crate::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, "C-c")
+                boop_store::tmux::mux().send_key_named(self.socket.as_deref(), &self.target, "C-c")
             {
                 warn!(harness = self.profile.harness, tmux_target = self.target, error = %error, "tui interrupt failed");
             }
             std::thread::sleep(Duration::from_millis(400));
-            if !crate::tmux::mux().target_alive(self.socket.as_deref(), &self.target) {
+            if !boop_store::tmux::mux().target_alive(self.socket.as_deref(), &self.target) {
                 return Ok(());
             }
         }
-        match crate::tmux::mux().kill_window(self.socket.as_deref(), &self.target) {
+        match boop_store::tmux::mux().kill_window(self.socket.as_deref(), &self.target) {
             Err(error) => {
                 warn!(harness = self.profile.harness, tmux_target = self.target, error = %error, "tui window kill failed");
             }
@@ -471,13 +471,13 @@ impl LaneChannel for TuiChannel {
 /// outside tmux gets one of its own so the TUI still has a pane.
 fn host_session(socket: Option<&str>) -> Result<String> {
     if let Ok(pane) = std::env::var("TMUX_PANE") {
-        if let Some(session) = crate::tmux::mux().session_of_pane(socket, &pane) {
+        if let Some(session) = boop_store::tmux::mux().session_of_pane(socket, &pane) {
             return Ok(session);
         }
     }
     let name = format!("boop-tui-{}", std::process::id());
-    if !crate::tmux::mux().has_session(socket, &name)? {
-        crate::tmux::mux().new_detached_session(
+    if !boop_store::tmux::mux().has_session(socket, &name)? {
+        boop_store::tmux::mux().new_detached_session(
             socket,
             &name,
             &std::env::current_dir()
@@ -551,7 +551,7 @@ fn hold_at_zero(socket: Option<&str>, session: &str, target: String) -> Result<S
     {
         Some(index) if index > 0 => {
             let zero = format!("{session}:0");
-            crate::tmux::mux().swap_windows(socket, &target, &zero)?;
+            boop_store::tmux::mux().swap_windows(socket, &target, &zero)?;
             Ok(zero)
         }
         _ => Ok(target),
@@ -664,14 +664,14 @@ mod tests {
     impl TmuxGuard {
         fn new(tag: &str) -> TmuxGuard {
             let socket = format!("boop-test-{}-tui-{tag}", std::process::id());
-            crate::tmux::kill_test_server(&socket);
+            boop_store::tmux::kill_test_server(&socket);
             TmuxGuard { socket }
         }
     }
 
     impl Drop for TmuxGuard {
         fn drop(&mut self) {
-            crate::tmux::kill_test_server(&self.socket);
+            boop_store::tmux::kill_test_server(&self.socket);
         }
     }
 
@@ -690,11 +690,11 @@ mod tests {
         let mut channel =
             TuiChannel::open(profile, &spec(None), Some(guard.socket.clone())).unwrap();
         let dead = channel.target().to_owned();
-        crate::tmux::mux()
+        boop_store::tmux::mux()
             .kill_window(Some(&guard.socket), &dead)
             .unwrap();
         channel.start_turn("hello-after-death").unwrap();
-        let pane = crate::tmux::mux()
+        let pane = boop_store::tmux::mux()
             .capture_pane(Some(&guard.socket), channel.target(), None)
             .unwrap();
         assert!(
@@ -720,11 +720,11 @@ mod tests {
             TuiChannel::open(profile, &spec(None), Some(guard.socket.clone())).unwrap();
         channel.start_turn("BRIEF-TEXT").unwrap();
         let dead = channel.target().to_owned();
-        crate::tmux::mux()
+        boop_store::tmux::mux()
             .kill_window(Some(&guard.socket), &dead)
             .unwrap();
         channel.steer("nudge-text").unwrap();
-        let pane = crate::tmux::mux()
+        let pane = boop_store::tmux::mux()
             .capture_pane(Some(&guard.socket), channel.target(), None)
             .unwrap();
         assert!(
@@ -755,11 +755,11 @@ mod tests {
             TuiChannel::open(profile, &spec(None), Some(guard.socket.clone())).unwrap();
         channel.start_turn("BRIEF-TEXT").unwrap();
         let dead = channel.target().to_owned();
-        crate::tmux::mux()
+        boop_store::tmux::mux()
             .kill_window(Some(&guard.socket), &dead)
             .unwrap();
         channel.steer("nudge-text").unwrap();
-        let pane = crate::tmux::mux()
+        let pane = boop_store::tmux::mux()
             .capture_pane(Some(&guard.socket), channel.target(), None)
             .unwrap();
         assert!(
@@ -788,11 +788,11 @@ mod tests {
         channel.set_brief("BRIEF-TEXT");
         channel.start_turn("RESUME-NUDGE").unwrap();
         let dead = channel.target().to_owned();
-        crate::tmux::mux()
+        boop_store::tmux::mux()
             .kill_window(Some(&guard.socket), &dead)
             .unwrap();
         channel.steer("nudge-text").unwrap();
-        let pane = crate::tmux::mux()
+        let pane = boop_store::tmux::mux()
             .capture_pane(Some(&guard.socket), channel.target(), None)
             .unwrap();
         assert!(
@@ -833,11 +833,11 @@ mod tests {
         let mut channel = TuiChannel::open(profile, &request, Some(guard.socket.clone())).unwrap();
         channel.start_turn("BRIEF-TEXT").unwrap();
         let dead = channel.target().to_owned();
-        crate::tmux::mux()
+        boop_store::tmux::mux()
             .kill_window(Some(&guard.socket), &dead)
             .unwrap();
         channel.steer("nudge-text").unwrap();
-        let pane = crate::tmux::mux()
+        let pane = boop_store::tmux::mux()
             .capture_pane(Some(&guard.socket), channel.target(), None)
             .unwrap();
         assert!(

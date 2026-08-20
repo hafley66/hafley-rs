@@ -1,5 +1,5 @@
 //! One live conversation per lane, driven the same way whatever the harness.
-//! `Harness::open_channel` mints one; `crate::supervise` is the only caller.
+//! `Harness::open_channel` mints one; boop-proc's supervisor is the only caller.
 
 use std::path::PathBuf;
 

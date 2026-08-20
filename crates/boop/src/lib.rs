@@ -35,7 +35,7 @@ pub mod ident {
     pub use crate::harness::{sync_session, sync_session_with_pid};
 }
 
-pub mod channel;
+pub use boop_acp::channel;
 #[cfg(feature = "agent-read")]
 pub mod chat;
 pub mod concatmap;

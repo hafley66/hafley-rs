@@ -8,8 +8,27 @@ use std::process::Child;
 use anyhow::Result;
 use tracing::{debug, warn};
 
+use std::path::PathBuf;
+
 use crate::channel::acp::AcpChannel;
 use crate::channel::ChannelSpec;
+
+/// The opencode store on this machine, `None` until opencode has created it.
+pub fn store_path() -> Option<PathBuf> {
+    opencode_db_path().filter(|path| path.exists())
+}
+
+/// The db path regardless of existence; a spawn writes its command before
+/// opencode has ever created the file.
+pub fn opencode_db_path() -> Option<PathBuf> {
+    Some(
+        dirs::home_dir()?
+            .join(".local")
+            .join("share")
+            .join("opencode")
+            .join("opencode.db"),
+    )
+}
 
 pub struct OpencodeChannel;
 
@@ -23,7 +42,7 @@ impl OpencodeChannel {
 /// The newest message/part write for a session. A live turn streams part rows,
 /// so a flat-lined value under a running child is a stalled provider stream.
 pub(crate) fn newest_activity(session: &str) -> Option<u64> {
-    let path = crate::harness::opencode::store_path()?;
+    let path = store_path()?;
     let connection = rusqlite::Connection::open_with_flags(
         &path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -78,7 +97,7 @@ impl LastMessageState {
 /// The newest message state for a conversation. OpenCode owns this database;
 /// lookup failures leave the existing process exit-code behavior unchanged.
 pub(crate) fn last_message_state(session: &str) -> Option<LastMessageState> {
-    let Some(path) = crate::harness::opencode::store_path() else {
+    let Some(path) = store_path() else {
         debug!(
             conversation_id = session,
             "opencode store path unavailable for trailing message lookup"
@@ -119,7 +138,7 @@ pub(crate) fn last_message_state(session: &str) -> Option<LastMessageState> {
 /// The newest opencode session under `cwd` created at or after `since_ms`.
 /// opencode owns this store; boop only reads it.
 pub(crate) fn newest_session(cwd: &Path, since_ms: u64) -> Option<String> {
-    let path = crate::harness::opencode::store_path()?;
+    let path = store_path()?;
     let connection = rusqlite::Connection::open_with_flags(
         &path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,

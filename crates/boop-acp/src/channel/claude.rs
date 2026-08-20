@@ -53,7 +53,7 @@ impl ClaudeChannel {
             .current_dir(&spec.cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(crate::trail::child_stderr(spec.lane.as_deref()))
+            .stderr(boop_store::trail::child_stderr(spec.lane.as_deref()))
             .spawn()
             .context("spawn claude stream-json child")?;
         let stdin = child.stdin.take().context("claude child has no stdin")?;

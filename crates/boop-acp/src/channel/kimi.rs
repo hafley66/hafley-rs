@@ -55,7 +55,7 @@ impl LaneChannel for KimiChannel {
             .current_dir(&self.cwd)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(crate::trail::child_stderr(self.lane.as_deref()))
+            .stderr(boop_store::trail::child_stderr(self.lane.as_deref()))
             .spawn()
             .context("spawn kimi prompt turn")?;
         let stdout = child.stdout.take().context("kimi child has no stdout")?;

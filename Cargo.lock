@@ -292,8 +292,8 @@ dependencies = [
 name = "boop"
 version = "0.0.2"
 dependencies = [
- "agent-client-protocol",
  "anyhow",
+ "boop-acp",
  "boop-mux",
  "boop-store",
  "clap",
@@ -306,10 +306,24 @@ dependencies = [
  "signal-hook",
  "sysinfo",
  "time",
- "tokio",
  "tracing",
  "tracing-subscriber",
  "wait-timeout",
+]
+
+[[package]]
+name = "boop-acp"
+version = "0.0.2"
+dependencies = [
+ "agent-client-protocol",
+ "anyhow",
+ "boop-store",
+ "dirs",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
