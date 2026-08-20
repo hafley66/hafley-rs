@@ -346,11 +346,12 @@ fn a_fresh_codex_caller_registers_and_parents_a_waiting_lane() {
     );
 }
 
-/// RECEIPT. Codex app-server returns a fresh thread id before its first turn.
-/// The lane must still receive the complete brief; a thread id alone carries
-/// no evidence that any prior turn saw it.
+/// RECEIPT. A codex ACP session id arrives before the first turn. The lane
+/// must still receive the complete brief; a session id alone carries no
+/// evidence that any prior turn saw it. The fake shadows `npx`, which is what
+/// `CODEX_ADAPTER` spawns.
 #[test]
-fn a_fresh_codex_app_server_thread_receives_the_lane_brief() {
+fn a_fresh_codex_acp_session_receives_the_lane_brief() {
     let root = mail_dir("fresh-codex-brief");
     let repo = root.join("repo");
     let mail = root.join("mail");
@@ -369,21 +370,23 @@ fn a_fresh_codex_app_server_thread_receives_the_lane_brief() {
     std::fs::write(&brief, brief_text).unwrap();
 
     write_executable(
-        &bin.join("codex"),
+        &bin.join("npx"),
         r#"#!/bin/sh
 while IFS= read -r line; do
   printf '%s\n' "$line" >> "$BOOP_TEST_CODEX_LOG"
-  id=$(printf '%s\n' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
+  id=$(printf '%s\n' "$line" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
   case "$line" in
     *'"method":"initialize"'*)
-      printf '{"jsonrpc":"2.0","id":%s,"result":{}}\n' "$id"
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"protocolVersion":1,"agentCapabilities":{},"authMethods":[]}}\n' "$id"
       ;;
-    *'"method":"thread/start"'*)
-      printf '{"jsonrpc":"2.0","id":%s,"result":{"thread":{"id":"fresh-thread-id"}}}\n' "$id"
+    *'"method":"session/new"'*)
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"sessionId":"fresh-acp-session"}}\n' "$id"
       ;;
-    *'"method":"turn/start"'*)
-      printf '{"jsonrpc":"2.0","id":%s,"result":{"turn":{"id":"turn-1"}}}\n' "$id"
-      printf '{"jsonrpc":"2.0","method":"turn/completed","params":{"turn":{"id":"turn-1","status":"completed"}}}\n'
+    *'"method":"session/set_config_option"'*)
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"configOptions":[]}}\n' "$id"
+      ;;
+    *'"method":"session/prompt"'*)
+      printf '{"jsonrpc":"2.0","id":"%s","result":{"stopReason":"end_turn"}}\n' "$id"
       ;;
   esac
 done

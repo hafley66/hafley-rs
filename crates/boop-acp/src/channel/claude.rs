@@ -1,5 +1,9 @@
 //! The claude lane channel: one long-lived `claude -p` child in stream-json
 //! mode. Extra user lines written to its stdin land inside the running turn.
+//!
+//! RETIRED as a lane transport: `Claude::open_channel` mints an `AcpChannel`
+//! on `CLAUDE_ADAPTER`. Kept unwired this arc as the rollback door; nothing
+//! outside its own tests constructs it.
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};

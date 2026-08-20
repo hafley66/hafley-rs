@@ -42,7 +42,10 @@ impl Harness for Codex {
         &self,
         spec: &boop_acp::channel::ChannelSpec,
     ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
-        Ok(Box::new(boop_acp::channel::codex::CodexChannel::open(spec)?))
+        Ok(Box::new(boop_acp::channel::acp::AcpChannel::open_adapter(
+            spec,
+            boop_acp::channel::acp::CODEX_ADAPTER,
+        )?))
     }
 
     fn id(&self) -> &'static str {

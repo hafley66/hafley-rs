@@ -12,8 +12,9 @@ use std::time::Duration;
 use agent_client_protocol::schema::v1::{
     CancelNotification, InitializeRequest, LoadSessionRequest, NewSessionRequest,
     PermissionOptionKind, PromptRequest, RequestPermissionOutcome, RequestPermissionRequest,
-    RequestPermissionResponse, SelectedPermissionOutcome, SessionConfigOptionValue,
-    SessionNotification, SessionUpdate, SetSessionConfigOptionRequest, StopReason,
+    RequestPermissionResponse, SelectedPermissionOutcome, SessionConfigKind, SessionConfigOption,
+    SessionConfigOptionValue, SessionConfigSelectOptions, SessionId, SessionNotification,
+    SessionUpdate, SetSessionConfigOptionRequest, StopReason,
 };
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Agent, ConnectionTo, LineDirection};
@@ -24,6 +25,17 @@ use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
 
 /// The config option every ACP agent names its model with.
 const MODEL_CONFIG_ID: &str = "model";
+
+/// The command that speaks ACP, one row per harness. Compiled in rather than
+/// read from `config.json`: that file is parsed by boop-proc, which depends on
+/// this crate, so a lookup here would invert the crate order. The npx rows
+/// float on the npm dist-tag; the versions that answered `end_turn` on this
+/// machine were `claude-agent-acp@0.70.0` and `codex-acp@1.4.0`
+/// (`~/projects/labs/acp-lab/README.md`, 2026-08-19).
+pub const CLAUDE_ADAPTER: &[&str] = &["npx", "-y", "@agentclientprotocol/claude-agent-acp"];
+pub const CODEX_ADAPTER: &[&str] = &["npx", "-y", "@agentclientprotocol/codex-acp"];
+pub const KIMI_ADAPTER: &[&str] = &["kimi", "acp"];
+pub const OPENCODE_ADAPTER: &[&str] = &["opencode", "acp"];
 
 /// How long the opening handshake (spawn, `initialize`, session) may take.
 const OPEN_TIMEOUT: Duration = Duration::from_secs(120);
@@ -127,6 +139,13 @@ impl AcpChannel {
                 anyhow::bail!("the acp connection thread died during the handshake")
             }
         }
+    }
+
+    /// Open one of the roster adapters. The roster rows are `&[&str]`, so a
+    /// caller names a const instead of building a `Vec<String>`.
+    pub fn open_adapter(spec: &ChannelSpec, adapter: &[&str]) -> Result<AcpChannel> {
+        let command: Vec<String> = adapter.iter().map(|part| (*part).to_owned()).collect();
+        AcpChannel::open(spec, &command)
     }
 }
 
@@ -332,47 +351,107 @@ async fn handshake(
         "acp agent initialized"
     );
 
-    let session = match plan.resume.as_deref() {
+    let (session, config_options) = match plan.resume.as_deref() {
         Some(resume) if initialized.agent_capabilities.load_session => {
-            let session = agent_client_protocol::schema::v1::SessionId::new(resume);
-            connection
+            let session = SessionId::new(resume);
+            let loaded = connection
                 .send_request(LoadSessionRequest::new(session.clone(), plan.cwd.clone()))
                 .block_task()
                 .await?;
-            session
+            (session, loaded.config_options)
         }
         Some(resume) => {
             warn!(
                 conversation_id = resume,
                 "acp agent does not advertise loadSession; opening a new session"
             );
-            connection
+            let opened = connection
                 .send_request(NewSessionRequest::new(plan.cwd.clone()))
                 .block_task()
-                .await?
-                .session_id
+                .await?;
+            (opened.session_id, opened.config_options)
         }
         None => {
-            connection
+            let opened = connection
                 .send_request(NewSessionRequest::new(plan.cwd.clone()))
                 .block_task()
-                .await?
-                .session_id
+                .await?;
+            (opened.session_id, opened.config_options)
         }
     };
 
     if let Some(model) = plan.model.as_deref() {
-        connection
-            .send_request(SetSessionConfigOptionRequest::new(
-                session.clone(),
-                MODEL_CONFIG_ID,
-                SessionConfigOptionValue::value_id(model.to_owned()),
-            ))
-            .block_task()
-            .await?;
-        info!(model, "acp session model set");
+        select_model(
+            connection,
+            &session,
+            model,
+            config_options.as_deref().unwrap_or_default(),
+        )
+        .await?;
     }
     Ok(session)
+}
+
+/// Name the model. The spelling is the harness's own and is sent through
+/// untouched: an id the agent rejects is a loud open failure, never a silent
+/// fall back to its default model.
+async fn select_model(
+    connection: &ConnectionTo<Agent>,
+    session: &SessionId,
+    model: &str,
+    config_options: &[SessionConfigOption],
+) -> Result<(), agent_client_protocol::Error> {
+    match connection
+        .send_request(SetSessionConfigOptionRequest::new(
+            session.clone(),
+            MODEL_CONFIG_ID,
+            SessionConfigOptionValue::value_id(model.to_owned()),
+        ))
+        .block_task()
+        .await
+    {
+        Ok(_) => {
+            info!(model, "acp session model set");
+            Ok(())
+        }
+        Err(error) => Err(agent_client_protocol::Error::new(
+            i32::from(error.code),
+            model_rejection(&error.message, model, config_options),
+        )),
+    }
+}
+
+/// A rejected model id reaches the wire as a bare "Invalid params". The agent
+/// listed what it does take on its session reply, so the open failure carries
+/// those ids instead of leaving the reader to probe for them.
+fn model_rejection(message: &str, model: &str, config_options: &[SessionConfigOption]) -> String {
+    match offered_models(config_options) {
+        Some(offered) => format!("{message}: model `{model}` (this agent takes: {offered})"),
+        None => format!("{message}: model `{model}`"),
+    }
+}
+
+/// The value ids of the agent's `model` config option, comma joined.
+fn offered_models(config_options: &[SessionConfigOption]) -> Option<String> {
+    let select = config_options
+        .iter()
+        .find(|option| option.id.0.as_ref() == MODEL_CONFIG_ID)
+        .and_then(|option| match &option.kind {
+            SessionConfigKind::Select(select) => Some(select),
+            _ => None,
+        })?;
+    let values: Vec<&str> = match &select.options {
+        SessionConfigSelectOptions::Ungrouped(options) => {
+            options.iter().map(|option| option.value.0.as_ref()).collect()
+        }
+        SessionConfigSelectOptions::Grouped(groups) => groups
+            .iter()
+            .flat_map(|group| group.options.iter())
+            .map(|option| option.value.0.as_ref())
+            .collect(),
+        _ => return None,
+    };
+    Some(values.join(", "))
 }
 
 /// The turn verdict for one `session/prompt` outcome. A JSON-RPC error is a
@@ -437,7 +516,8 @@ fn update_kind(update: &SessionUpdate) -> &'static str {
 mod tests {
     use super::*;
     use agent_client_protocol::schema::v1::{
-        PermissionOption, PermissionOptionId, ToolCallUpdate, ToolCallUpdateFields,
+        PermissionOption, PermissionOptionId, SessionConfigId, SessionConfigSelectOption,
+        SessionConfigValueId, ToolCallUpdate, ToolCallUpdateFields,
     };
 
     /// The `error` member of a JSON-RPC error response, as written on the wire.
@@ -528,23 +608,137 @@ mod tests {
         assert!(allow_option(&request).is_none());
     }
 
-    /// The live leg. Needs `opencode` on PATH and a working provider, so it
-    /// stays off the default run: `cargo test -p boop --lib channel::acp --
-    /// --ignored --nocapture`.
+    /// RECEIPT. codex-acp answers a model id it does not offer with a bare
+    /// "Invalid params"; the ids it does offer are on its session reply, so
+    /// the open failure names them. Measured 2026-08-20, codex-acp 1.6.2:
+    /// its `model` option takes the family alone and carries the effort on a
+    /// separate `reasoning_effort` option, so boop's `gpt-5.6-luna@medium`
+    /// spelling reaches no option value.
     #[test]
-    #[ignore]
-    fn a_real_opencode_acp_turn_ends_the_turn() {
+    fn a_rejected_model_id_names_what_the_agent_does_take() {
+        let options = vec![
+            SessionConfigOption::select(
+                SessionConfigId::new("mode"),
+                "Mode",
+                SessionConfigValueId::new("agent"),
+                vec![SessionConfigSelectOption::new(
+                    SessionConfigValueId::new("agent"),
+                    "Agent",
+                )],
+            ),
+            SessionConfigOption::select(
+                SessionConfigId::new(MODEL_CONFIG_ID),
+                "Model",
+                SessionConfigValueId::new("gpt-5.6-sol"),
+                vec![
+                    SessionConfigSelectOption::new(
+                        SessionConfigValueId::new("gpt-5.6-sol"),
+                        "GPT-5.6-Sol",
+                    ),
+                    SessionConfigSelectOption::new(
+                        SessionConfigValueId::new("gpt-5.6-luna"),
+                        "GPT-5.6-Luna",
+                    ),
+                ],
+            ),
+        ];
+        let message = model_rejection("Invalid params", "gpt-5.6-luna@medium", &options);
+        assert_eq!(
+            message,
+            "Invalid params: model `gpt-5.6-luna@medium` (this agent takes: gpt-5.6-sol, gpt-5.6-luna)"
+        );
+    }
+
+    /// An agent that lists no model option leaves the message unadorned.
+    #[test]
+    fn a_rejection_without_a_model_option_says_only_the_id() {
+        assert_eq!(
+            model_rejection("Invalid params", "whatever", &[]),
+            "Invalid params: model `whatever`"
+        );
+    }
+
+    /// A channel with no connection behind it, for the sync-side mapping.
+    fn idle_channel() -> AcpChannel {
+        let (commands, _commands_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_notes_tx, notes) = std::sync::mpsc::channel();
+        AcpChannel {
+            commands,
+            notes,
+            driver: None,
+            session: Some("ses_1".to_owned()),
+            last_update_ms: Arc::new(AtomicU64::new(0)),
+            turn_running: false,
+        }
+    }
+
+    /// Each harness names its adapter once, and every row is a program plus
+    /// the argument that puts it in ACP server mode.
+    #[test]
+    fn every_roster_row_spawns_something_in_acp_mode() {
+        for adapter in [
+            CLAUDE_ADAPTER,
+            CODEX_ADAPTER,
+            KIMI_ADAPTER,
+            OPENCODE_ADAPTER,
+        ] {
+            assert!(adapter.len() >= 2, "{adapter:?}");
+            assert!(!adapter[0].is_empty(), "{adapter:?}");
+            assert!(
+                adapter.iter().any(|part| part.contains("acp")),
+                "{adapter:?}"
+            );
+        }
+        assert_eq!(CLAUDE_ADAPTER[0], "npx");
+        assert_eq!(CODEX_ADAPTER[0], "npx");
+        assert_eq!(KIMI_ADAPTER, ["kimi", "acp"]);
+    }
+
+    /// RECEIPT for the capability flip: claude and kimi advertised
+    /// `send_midflight` on their old transports and cannot on this one, so
+    /// every steer is held for the next turn.
+    #[test]
+    fn no_text_reaches_a_turn_already_in_flight() {
+        let mut channel = idle_channel();
+        assert_eq!(channel.steer("more context").unwrap(), Delivery::NextTurn);
+    }
+
+    /// The stall watchdog reads `last_activity_ms`; an unwritten clock must
+    /// read as no signal rather than as the epoch.
+    #[test]
+    fn an_unwritten_update_clock_is_no_signal() {
+        let channel = idle_channel();
+        assert_eq!(channel.last_activity_ms(), None);
+        channel.last_update_ms.store(1_700_000_000_000, Ordering::Relaxed);
+        assert_eq!(channel.last_activity_ms(), Some(1_700_000_000_000));
+    }
+
+    /// A join with no turn running is answered, never blocked on.
+    #[test]
+    fn a_join_without_a_running_turn_answers_at_once() {
+        let mut channel = idle_channel();
+        let event = channel
+            .next_event(Duration::from_millis(1))
+            .unwrap()
+            .expect("an idle channel answers a join");
+        assert!(!event.is_done(), "{event:?}");
+        assert_eq!(event.detail(), "no acp turn to join");
+    }
+
+    /// One live pong turn against a real adapter. The caller asserts, so a
+    /// failure names its harness through the test name.
+    fn live_pong_turn(adapter: &[&str], model: Option<&str>, cap: Duration) -> TurnEvent {
         let spec = ChannelSpec {
-            model: Some("openrouter/deepseek/deepseek-v4-flash-0731".to_owned()),
+            model: model.map(str::to_owned),
             cwd: std::env::temp_dir(),
             resume: None,
             lane: None,
         };
         let opened = std::time::Instant::now();
-        let mut channel =
-            AcpChannel::open(&spec, &["opencode".to_owned(), "acp".to_owned()]).unwrap();
+        let mut channel = AcpChannel::open_adapter(&spec, adapter).unwrap();
         println!(
-            "session {:?} in {:?}",
+            "{} session {:?} in {:?}",
+            adapter.join(" "),
             channel.conversation_id(),
             opened.elapsed()
         );
@@ -554,24 +748,122 @@ mod tests {
         channel
             .start_turn("reply with the single word pong")
             .unwrap();
-        let deadline = started + Duration::from_secs(30);
+        let deadline = started + cap;
         let verdict = loop {
-            if let Some(event) = channel
-                .next_event(Duration::from_millis(200))
-                .unwrap()
-            {
+            if let Some(event) = channel.next_event(Duration::from_millis(200)).unwrap() {
                 break event;
             }
             assert!(
                 std::time::Instant::now() < deadline,
-                "no turn verdict within 30s"
+                "no turn verdict within {cap:?}"
             );
         };
         println!("verdict {verdict:?} in {:?}", started.elapsed());
         println!("last_activity_ms {:?}", channel.last_activity_ms());
         channel.close().unwrap();
+        verdict
+    }
+
+    /// The live legs. Each needs its adapter reachable and a working provider,
+    /// so they stay off the default run: `cargo test -p boop-acp --lib
+    /// channel::acp -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn a_real_opencode_acp_turn_ends_the_turn() {
+        let verdict = live_pong_turn(
+            OPENCODE_ADAPTER,
+            // Under ACP opencode ignores its own config and hangs on a dead
+            // default, so this one names its model.
+            Some("openrouter/deepseek/deepseek-v4-flash-0731"),
+            Duration::from_secs(60),
+        );
         assert!(verdict.is_done(), "{verdict:?}");
         assert_eq!(verdict.detail(), "end_turn");
+    }
+
+    /// Each model id is the adapter's own spelling, read off its session
+    /// reply, so these legs measure the model lever as well as the transport.
+    #[test]
+    #[ignore]
+    fn a_real_claude_acp_turn_ends_the_turn() {
+        let verdict = live_pong_turn(CLAUDE_ADAPTER, Some("sonnet"), Duration::from_secs(60));
+        assert!(verdict.is_done(), "{verdict:?}");
+        assert_eq!(verdict.detail(), "end_turn");
+    }
+
+    /// codex-acp's `model` option takes the family alone; the effort rides a
+    /// separate `reasoning_effort` option, so boop's `gpt-5.6-luna@medium`
+    /// spelling reaches no value here.
+    #[test]
+    #[ignore]
+    fn a_real_codex_acp_turn_ends_the_turn() {
+        let verdict = live_pong_turn(CODEX_ADAPTER, Some("gpt-5.6-luna"), Duration::from_secs(60));
+        assert!(verdict.is_done(), "{verdict:?}");
+        assert_eq!(verdict.detail(), "end_turn");
+    }
+
+    #[test]
+    #[ignore]
+    fn a_real_kimi_acp_turn_ends_the_turn() {
+        let verdict = live_pong_turn(KIMI_ADAPTER, Some("kimi-code/k3"), Duration::from_secs(60));
+        assert!(verdict.is_done(), "{verdict:?}");
+        assert_eq!(verdict.detail(), "end_turn");
+    }
+
+    /// The resume leg. Every adapter on the roster advertises `loadSession`,
+    /// so a second child takes the first one's session id back over
+    /// `session/load` and keeps it as the conversation id.
+    fn live_resumed_turn(adapter: &[&str], model: Option<&str>) -> (String, String) {
+        let spec = ChannelSpec {
+            model: model.map(str::to_owned),
+            cwd: std::env::temp_dir(),
+            resume: None,
+            lane: None,
+        };
+        let mut first = AcpChannel::open_adapter(&spec, adapter).unwrap();
+        let session = first.conversation_id().expect("a session id");
+        first.start_turn("remember the number 41").unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(60);
+        while first.next_event(Duration::from_millis(200)).unwrap().is_none() {
+            assert!(std::time::Instant::now() < deadline, "first turn never ended");
+        }
+        first.close().unwrap();
+
+        let resumed = ChannelSpec {
+            resume: Some(session.clone()),
+            ..spec
+        };
+        let mut second = AcpChannel::open_adapter(&resumed, adapter).unwrap();
+        let carried = second.conversation_id().expect("a resumed session id");
+        second
+            .start_turn("reply with the single word pong")
+            .unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(60);
+        let verdict = loop {
+            if let Some(event) = second.next_event(Duration::from_millis(200)).unwrap() {
+                break event;
+            }
+            assert!(std::time::Instant::now() < deadline, "resumed turn never ended");
+        };
+        second.close().unwrap();
+        assert!(verdict.is_done(), "{verdict:?}");
+        (session, carried)
+    }
+
+    #[test]
+    #[ignore]
+    fn a_real_claude_acp_session_is_resumed_by_a_second_child() {
+        let (session, carried) = live_resumed_turn(CLAUDE_ADAPTER, Some("sonnet"));
+        println!("claude session {session} resumed as {carried}");
+        assert_eq!(session, carried);
+    }
+
+    #[test]
+    #[ignore]
+    fn a_real_kimi_acp_session_is_resumed_by_a_second_child() {
+        let (session, carried) = live_resumed_turn(KIMI_ADAPTER, Some("kimi-code/k3"));
+        println!("kimi session {session} resumed as {carried}");
+        assert_eq!(session, carried);
     }
 
     #[test]

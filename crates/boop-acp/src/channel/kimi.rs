@@ -1,5 +1,9 @@
 //! The kimi lane channel: one `kimi -p` child per turn. `kimi -p` reads its
 //! prompt from the flag and never reads stdin, so steer text lands next turn.
+//!
+//! RETIRED as a lane transport: `Kimi::open_channel` mints an `AcpChannel` on
+//! `KIMI_ADAPTER`. Kept unwired this arc as the rollback door; nothing outside
+//! its own tests constructs it.
 
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;

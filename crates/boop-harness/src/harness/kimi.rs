@@ -38,9 +38,9 @@ impl Harness for Kimi {
         &self,
         spec: &boop_acp::channel::ChannelSpec,
     ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
-        let profile = boop_acp::channel::tui::kimi_profile(spec);
-        Ok(Box::new(boop_acp::channel::tui::TuiChannel::open(
-            profile, spec, None,
+        Ok(Box::new(boop_acp::channel::acp::AcpChannel::open_adapter(
+            spec,
+            boop_acp::channel::acp::KIMI_ADAPTER,
         )?))
     }
 
@@ -48,9 +48,12 @@ impl Harness for Kimi {
         "kimi"
     }
 
+    /// `send_midflight` is false since the lane channel became ACP: the
+    /// ctrl-s steer key belonged to the tui path, and `session/prompt` takes
+    /// one prompt per turn.
     fn capabilities(&self) -> Capabilities {
         Capabilities {
-            send_midflight: true,
+            send_midflight: false,
             resume: true,
             spawn: true,
             subagent_visible: true,
@@ -548,7 +551,7 @@ mod tests {
     #[test]
     fn kimi_spawns_and_resumes_like_every_other_harness() {
         let caps = Kimi.capabilities();
-        assert!(caps.send_midflight);
+        assert!(!caps.send_midflight, "acp takes one prompt per turn");
         assert!(caps.resume);
         assert!(caps.spawn);
         assert!(caps.subagent_visible);

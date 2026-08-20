@@ -1,5 +1,10 @@
 //! A harness driven through its own terminal UI in a tmux window: the brief is
 //! typed, and so is every later hail.
+//!
+//! RETIRED as a lane transport: kimi was the last harness on it and
+//! `Kimi::open_channel` now mints an `AcpChannel` on `KIMI_ADAPTER`. Both
+//! profiles are kept unwired this arc as the rollback door; nothing outside
+//! these tests constructs a `TuiChannel`.
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
