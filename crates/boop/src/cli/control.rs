@@ -86,6 +86,18 @@ pub(crate) fn run_native_tui(
     );
     let socket = daemon_socket_from_start(&String::from_utf8_lossy(&output.stdout))
         .context("Codex remote-control start did not report an app-server socket")?;
+    let (requested_thread, forwarded_args) = explicit_resume(tui_args)?;
+    let spec = ChannelSpec {
+        model: None,
+        cwd: cwd.to_path_buf(),
+        resume: requested_thread,
+        lane: None,
+    };
+    let mut channel = CodexChannel::open_proxy(&spec, Path::new(&socket))?;
+    let thread = channel
+        .conversation_id()
+        .context("Codex app-server did not return the native TUI thread id")?;
+    channel.close()?;
     let dir = mail_dir(mail_dir_arg)?;
     write_route(
         &dir,
@@ -97,8 +109,8 @@ pub(crate) fn run_native_tui(
             cwd: Some(cwd.display().to_string()),
             model: None,
             mode: Some("native-remote".into()),
-            session_id: None,
-            source_path: None,
+            session_id: Some(thread.clone()),
+            source_path: Some(format!("managed-app-server={socket}")),
             parent: None,
             goal: None,
             registered_at: Some(boop::bus::now_iso()),
@@ -108,15 +120,28 @@ pub(crate) fn run_native_tui(
         },
     )?;
     let status = Command::new("codex")
+        .arg("resume")
+        .arg(&thread)
         .arg("--remote")
         .arg(format!("unix://{socket}"))
         .arg("--cd")
         .arg(cwd)
-        .args(tui_args)
+        .args(forwarded_args)
         .status()
         .context("start native Codex TUI through managed daemon")?;
     anyhow::ensure!(status.success(), "native Codex TUI exited with {status}");
     Ok(())
+}
+
+fn explicit_resume(tui_args: &[String]) -> Result<(Option<String>, &[String])> {
+    if tui_args.first().map(String::as_str) != Some("resume") {
+        return Ok((None, tui_args));
+    }
+    let thread = tui_args
+        .get(1)
+        .filter(|value| !value.starts_with('-'))
+        .context("`boop codex -- resume` requires an explicit thread id")?;
+    Ok((Some(thread.clone()), &tui_args[2..]))
 }
 
 fn daemon_socket_from_start(text: &str) -> Option<String> {
@@ -211,5 +236,28 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("verified thread id"));
+    }
+
+    #[test]
+    fn explicit_resume_is_registered_before_the_tui_starts() {
+        let args = vec![
+            "resume".to_string(),
+            "019ffb9b-51cb-7e92-be44-4eb469f46d95".to_string(),
+            "--no-alt-screen".to_string(),
+        ];
+        let (thread, forwarded) = explicit_resume(&args).expect("explicit resume");
+        assert_eq!(
+            thread.as_deref(),
+            Some("019ffb9b-51cb-7e92-be44-4eb469f46d95")
+        );
+        assert_eq!(forwarded, ["--no-alt-screen"]);
+    }
+
+    #[test]
+    fn a_fresh_launch_reserves_a_thread_before_the_tui_starts() {
+        let args = vec!["--no-alt-screen".to_string()];
+        let (thread, forwarded) = explicit_resume(&args).expect("fresh launch");
+        assert_eq!(thread, None);
+        assert_eq!(forwarded, args);
     }
 }
