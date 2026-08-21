@@ -12,8 +12,6 @@ use crate::harness::{
     ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
 use anyhow::Context;
-use boop_acp::channel::codex::CodexChannel;
-use boop_acp::channel::{ChannelSpec, LaneChannel};
 use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
 use boop_store::session::ModelSpec;
@@ -79,34 +77,17 @@ impl Harness for Codex {
         let socket = daemon_socket_from_start(&String::from_utf8_lossy(&output.stdout))
             .context("Codex remote-control start did not report an app-server socket")?;
         let (requested_thread, forwarded_args) = explicit_resume(&spec.args)?;
-        let channel_spec = ChannelSpec {
-            model: None,
-            cwd: spec.cwd.clone(),
-            resume: requested_thread,
-            lane: None,
-        };
-        let mut channel = CodexChannel::open_proxy(&channel_spec, Path::new(&socket))?;
-        let thread = channel
-            .conversation_id()
-            .context("Codex app-server did not return the native TUI thread id")?;
-        channel.close()?;
-        let args = [
-            vec![
-                "resume".into(),
-                thread.clone().into(),
-                "--remote".into(),
-                format!("unix://{socket}").into(),
-                "--cd".into(),
-                spec.cwd.as_os_str().to_owned(),
-            ],
-            forwarded_args.iter().map(Into::into).collect(),
-        ]
-        .concat();
+        let args = native_tui_args(
+            requested_thread.as_deref(),
+            &socket,
+            &spec.cwd,
+            forwarded_args,
+        );
         Ok(NativeTuiPlan {
             program: spec.executable.clone(),
             args,
             mode: "native-remote".into(),
-            session_id: Some(thread),
+            session_id: requested_thread,
             source_path: Some(format!("managed-app-server={socket}")),
             app_server_socket: Some(socket),
         })
@@ -236,6 +217,27 @@ impl Harness for Codex {
             next_cursor: result.next_offset,
         })
     }
+}
+
+fn native_tui_args(
+    thread: Option<&str>,
+    socket: &str,
+    cwd: &Path,
+    forwarded: &[String],
+) -> Vec<std::ffi::OsString> {
+    let mut args = Vec::new();
+    if let Some(thread) = thread {
+        args.push("resume".into());
+        args.push(thread.into());
+    }
+    args.extend([
+        "--remote".into(),
+        format!("unix://{socket}").into(),
+        "--cd".into(),
+        cwd.as_os_str().to_owned(),
+    ]);
+    args.extend(forwarded.iter().map(Into::into));
+    args
 }
 
 fn explicit_resume(tui_args: &[String]) -> anyhow::Result<(Option<String>, &[String])> {
@@ -694,7 +696,8 @@ mod tests {
     use boop_store::Store;
 
     use super::{
-        daemon_socket_from_start, explicit_resume, sessions_in, sessions_in_with_known, Codex,
+        daemon_socket_from_start, explicit_resume, native_tui_args, sessions_in,
+        sessions_in_with_known, Codex,
     };
 
     #[test]
@@ -728,6 +731,28 @@ mod tests {
         let (thread, forwarded) = explicit_resume(&args).expect("fresh launch");
         assert_eq!(thread, None);
         assert_eq!(forwarded, args);
+    }
+
+    #[test]
+    fn explicit_and_fresh_native_launches_use_the_supported_remote_tui() {
+        let cwd = PathBuf::from("/tmp/project");
+        let explicit = native_tui_args(Some("thread-1"), "/tmp/codex.sock", &cwd, &[]);
+        assert_eq!(
+            explicit,
+            [
+                "resume",
+                "thread-1",
+                "--remote",
+                "unix:///tmp/codex.sock",
+                "--cd",
+                "/tmp/project"
+            ]
+        );
+        let fresh = native_tui_args(None, "/tmp/codex.sock", &cwd, &[]);
+        assert_eq!(
+            fresh,
+            ["--remote", "unix:///tmp/codex.sock", "--cd", "/tmp/project"]
+        );
     }
 
     fn temp_path(name: &str) -> PathBuf {

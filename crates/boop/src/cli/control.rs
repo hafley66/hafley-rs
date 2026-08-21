@@ -5,27 +5,17 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 use boop::bus::Route;
-use boop::channel::codex::CodexChannel;
-use boop::channel::{ChannelSpec, Delivery, LaneChannel};
 use boop::harness::{Harness, NativeTuiSpec};
 
 use crate::cli::{mail_dir, write_route};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum DeliveryReceipt {
-    Steered,
-    Started,
+    Queued,
 }
 
-fn receipt_for_delivery(delivery: Delivery) -> DeliveryReceipt {
-    match delivery {
-        Delivery::MidTurn => DeliveryReceipt::Steered,
-        Delivery::NextTurn => DeliveryReceipt::Started,
-    }
-}
-
-/// Use only the daemon socket recorded by `boop codex`. The proxy subprocess
-/// is a stdio bridge, not an app-server instance.
+/// Use Codex's supported remote queue command against the daemon socket
+/// recorded by `boop tui codex`.
 pub(crate) fn deliver(route: &Route, body: &str) -> Result<DeliveryReceipt> {
     let socket = route.app_server_socket.as_deref().context(
         "native Codex route has no managed app-server socket; start it with `boop codex`",
@@ -34,28 +24,17 @@ pub(crate) fn deliver(route: &Route, body: &str) -> Result<DeliveryReceipt> {
         .session_id
         .as_deref()
         .context("native Codex route has no verified thread id")?;
-    let cwd = route
-        .cwd
-        .as_deref()
-        .context("native Codex route has no cwd")?;
-    let spec = ChannelSpec {
-        model: route.model.clone(),
-        cwd: cwd.into(),
-        resume: Some(thread.into()),
-        lane: None,
-    };
-    let mut channel = CodexChannel::open_proxy(&spec, Path::new(socket))?;
+    let output = Command::new("codex")
+        .args(["queue", "--thread", thread, "--message", body, "--remote"])
+        .arg(format!("unix://{socket}"))
+        .output()
+        .context("queue message through Codex remote control")?;
     anyhow::ensure!(
-        channel.conversation_id().as_deref() == Some(thread),
-        "Codex proxy resumed another thread"
+        output.status.success(),
+        "Codex remote queue failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
     );
-    let delivery = channel.steer(body)?;
-    if delivery == Delivery::NextTurn {
-        channel.start_turn(body)?;
-    }
-    let receipt = receipt_for_delivery(delivery);
-    channel.close()?;
-    Ok(receipt)
+    Ok(DeliveryReceipt::Queued)
 }
 
 /// Ask the selected harness adapter to prepare its native process, register
@@ -124,7 +103,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_native_route_requires_socket_thread_and_cwd_before_proxy_spawn() {
+    fn a_native_route_requires_a_socket_before_remote_queue() {
         let route = Route {
             kind: "coordinator".into(),
             harness: Some("codex".into()),
@@ -145,18 +124,6 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("managed app-server socket"));
-    }
-
-    #[test]
-    fn idle_and_active_turns_choose_start_and_steer() {
-        assert_eq!(
-            receipt_for_delivery(Delivery::NextTurn),
-            DeliveryReceipt::Started
-        );
-        assert_eq!(
-            receipt_for_delivery(Delivery::MidTurn),
-            DeliveryReceipt::Steered
-        );
     }
 
     #[test]

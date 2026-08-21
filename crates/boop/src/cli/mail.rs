@@ -176,15 +176,15 @@ pub(crate) fn deliver_hail(
     if route.harness.as_deref() == Some("codex")
         && matches!(route.kind.as_str(), "coordinator" | "native")
         && route.app_server_socket.is_some()
+        && route.session_id.is_some()
     {
         let receipt = control::deliver(route, &message.body)?;
         append_acks(dir, std::slice::from_ref(message))?;
         let action = match receipt {
-            DeliveryReceipt::Steered => "steered",
-            DeliveryReceipt::Started => "started",
+            DeliveryReceipt::Queued => "queued",
         };
         println!(
-            "delivered {} -> {to} ({action} through Codex proxy)",
+            "delivered {} -> {to} ({action} through Codex remote control)",
             message.id
         );
         return Ok(());
