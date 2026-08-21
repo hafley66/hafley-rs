@@ -37,7 +37,7 @@ pub use _2_repository::{discover, open};
 pub use _2a_directory::DirectoryRoot;
 pub use _4a_git_root::{GitWorktreeRoot, SourceRoot};
 pub use _6_git_batch::GitBatch;
-pub use _9_git_files::hash_object;
+pub use _9_git_files::{enumerate, hash_object};
 pub use _7_source_tree::SourceTree;
 pub use _7a_spans::span_slice;
 pub use _7b_source_actions::*;
