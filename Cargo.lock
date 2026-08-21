@@ -379,6 +379,7 @@ dependencies = [
  "boop-mux",
  "clap",
  "dirs",
+ "fs4",
  "rusqlite",
  "serde",
  "serde_json",

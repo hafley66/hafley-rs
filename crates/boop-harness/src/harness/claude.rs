@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::harness::{
-    jsonl_files, Capabilities, ChildAddress, ChildKind, ControlEndpoint, DeliveryReceipt, Harness,
+    jsonl_files, Capabilities, ChildAddress, ControlEndpoint, DeliveryReceipt, Harness,
     HarnessSession, HarnessSessionId, KnownSessions, NativeSessionRef, ProcessObservation,
     ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
@@ -108,16 +108,9 @@ impl Harness for Claude {
     }
 
     fn send_child(&self, child: &ChildAddress, _message: &str) -> anyhow::Result<DeliveryReceipt> {
-        Ok(match child.kind {
-            ChildKind::ParentMediated => DeliveryReceipt::ParentMediated {
-                parent: child.parent.clone(),
-            },
-            ChildKind::Direct => DeliveryReceipt::Unsupported {
-                capability: "child_send",
-            },
-            ChildKind::ObservableOnly => DeliveryReceipt::Unsupported {
-                capability: "child_send",
-            },
+        let _ = child;
+        Ok(DeliveryReceipt::Unsupported {
+            capability: "child_send",
         })
     }
 
@@ -237,7 +230,7 @@ impl Harness for Claude {
     fn control_capabilities(&self) -> crate::harness::ControlCapabilities {
         crate::harness::ControlCapabilities {
             session_send: true,
-            child_send: crate::harness::ChildSendCapability::ParentMediated,
+            child_send: crate::harness::ChildSendCapability::ObservableOnly,
             endpoint_refresh: true,
         }
     }

@@ -169,17 +169,9 @@ pub trait Harness: Send + Sync {
         })
     }
 
-    fn send_child(&self, child: &ChildAddress, _message: &str) -> anyhow::Result<DeliveryReceipt> {
-        Ok(match child.kind {
-            ChildKind::ParentMediated => DeliveryReceipt::ParentMediated {
-                parent: child.parent.clone(),
-            },
-            ChildKind::Direct => DeliveryReceipt::Unsupported {
-                capability: "child_send",
-            },
-            ChildKind::ObservableOnly => DeliveryReceipt::Unsupported {
-                capability: "child_send",
-            },
+    fn send_child(&self, _child: &ChildAddress, _message: &str) -> anyhow::Result<DeliveryReceipt> {
+        Ok(DeliveryReceipt::Unsupported {
+            capability: "child_send",
         })
     }
 
@@ -252,15 +244,10 @@ pub trait Harness: Send + Sync {
     }
 
     fn control_capabilities(&self) -> ControlCapabilities {
-        let legacy = self.capabilities();
         ControlCapabilities {
-            session_send: legacy.send_midflight,
-            child_send: if legacy.subagent_visible {
-                ChildSendCapability::ParentMediated
-            } else {
-                ChildSendCapability::ObservableOnly
-            },
-            endpoint_refresh: legacy.resume,
+            session_send: false,
+            child_send: ChildSendCapability::ObservableOnly,
+            endpoint_refresh: false,
         }
     }
 
@@ -426,4 +413,55 @@ pub(crate) fn assert_fixture_sessions_project(
     assert_eq!(graph.sessions.len(), sessions.len());
     assert!(graph.edges.len() >= expected_edges);
     let _ = std::fs::remove_file(path);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct UnimplementedChildHarness;
+
+    impl Harness for UnimplementedChildHarness {
+        fn id(&self) -> &'static str {
+            "fixture"
+        }
+
+        fn sessions(&self) -> anyhow::Result<Vec<SessionRef>> {
+            Ok(Vec::new())
+        }
+
+        fn read_from(&self, _session: &SessionRef, _offset: u64) -> anyhow::Result<ReadChunk> {
+            Ok(ReadChunk {
+                events: Vec::new(),
+                next_offset: 0,
+                reset: false,
+                skipped: 0,
+            })
+        }
+    }
+
+    #[test]
+    fn unimplemented_parent_mediated_child_is_unsupported_and_not_delivered() {
+        let child = ChildAddress {
+            parent: HarnessSessionId {
+                harness: "fixture".into(),
+                value: "parent".into(),
+            },
+            child_id: "haiku".into(),
+            kind: ChildKind::ParentMediated,
+        };
+        let receipt = UnimplementedChildHarness
+            .send_child(&child, "nonce")
+            .unwrap();
+        assert_eq!(
+            receipt,
+            DeliveryReceipt::Unsupported {
+                capability: "child_send"
+            }
+        );
+        assert_eq!(
+            UnimplementedChildHarness.control_capabilities().child_send,
+            ChildSendCapability::ObservableOnly
+        );
+    }
 }

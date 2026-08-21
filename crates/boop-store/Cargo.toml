@@ -34,6 +34,8 @@ serde_json = { version = "1", features = ["preserve_order"] }
 anyhow = "1"
 # Resolve the claude home dir without XDG project-dir machinery.
 dirs = "5"
+# Cross-process lock for the sessions read-modify-write transaction.
+fs4 = "0.12"
 # Layer 0: process tree, cpu, rss, cwd in one cross-platform API.
 sysinfo = "0.39"
 # Layer 3: the SQLite store at ~/.agent/boop.db. `bundled` compiles SQLite in,

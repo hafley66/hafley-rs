@@ -4,10 +4,12 @@
 //! provider conversation behind a route, independently of a pane or process.
 
 use std::collections::BTreeMap;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use fs4::fs_std::FileExt;
 use serde::{Deserialize, Serialize};
 
 use crate::proc::ProcessInfo;
@@ -143,24 +145,72 @@ pub fn read_sessions(dir: &Path) -> Result<SessionMap> {
 /// Atomically replace the session registry. Rows are sorted by the typed key
 /// through `BTreeMap`, making writes deterministic.
 pub fn write_sessions(dir: &Path, sessions: &SessionMap) -> Result<()> {
-    fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
-    let rows: Vec<&HarnessSession> = sessions.values().collect();
-    let bytes = serde_json::to_vec_pretty(&rows).context("serialize sessions")?;
-    atomic_replace(&sessions_path(dir), &bytes)
+    with_session_lock(dir, || write_sessions_unlocked(dir, sessions))
 }
 
 pub fn upsert_session(dir: &Path, session: HarnessSession) -> Result<()> {
-    let mut sessions = read_sessions(dir)?;
-    sessions.insert(session.id.clone(), session);
-    write_sessions(dir, &sessions)
+    with_session_lock(dir, || {
+        let mut sessions = read_sessions(dir)?;
+        sessions.insert(session.id.clone(), session);
+        write_sessions_unlocked(dir, &sessions)
+    })
+}
+
+fn write_sessions_unlocked(dir: &Path, sessions: &SessionMap) -> Result<()> {
+    fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
+    let rows: Vec<&HarnessSession> = sessions.values().collect();
+    let mut bytes = serde_json::to_vec_pretty(&rows).context("serialize sessions")?;
+    bytes.push(b'\n');
+    atomic_replace(&sessions_path(dir), &bytes)
+}
+
+fn with_session_lock<T>(dir: &Path, operation: impl FnOnce() -> Result<T>) -> Result<T> {
+    fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
+    let lock_path = dir.join("sessions.lock");
+    let lock = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("open {}", lock_path.display()))?;
+    lock.lock_exclusive().context("lock sessions registry")?;
+    let result = operation();
+    lock.unlock().context("unlock sessions registry")?;
+    result
 }
 
 fn atomic_replace(path: &Path, bytes: &[u8]) -> Result<()> {
-    let tmp = path.with_extension(format!("tmp-{}", std::process::id()));
-    let mut output = bytes.to_vec();
-    output.push(b'\n');
-    fs::write(&tmp, output).with_context(|| format!("write {}", tmp.display()))?;
-    fs::rename(&tmp, path).with_context(|| format!("replace {}", path.display()))?;
+    static NEXT_TEMP: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let parent = path.parent().context("session path has no parent")?;
+    let stem = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("sessions.json");
+    let mut temp = None;
+    for _ in 0..100 {
+        let serial = NEXT_TEMP.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let candidate = parent.join(format!(".{stem}.tmp-{}-{serial}", std::process::id()));
+        match OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&candidate)
+        {
+            Ok(mut file) => {
+                file.write_all(bytes)
+                    .with_context(|| format!("write {}", candidate.display()))?;
+                file.sync_all()
+                    .with_context(|| format!("sync {}", candidate.display()))?;
+                temp = Some(candidate);
+                break;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(error).with_context(|| format!("create {}", candidate.display()))
+            }
+        }
+    }
+    let temp = temp.context("allocate unique sessions temp file")?;
+    fs::rename(&temp, path).with_context(|| format!("replace {}", path.display()))?;
     Ok(())
 }
 
@@ -232,5 +282,25 @@ mod tests {
             ..child_a.clone()
         };
         assert_ne!(child_a, child_b);
+    }
+
+    #[test]
+    fn concurrent_upserts_retain_every_distinct_session() {
+        let dir = temp_dir("concurrent");
+        let mut workers = Vec::new();
+        for index in 0..16u32 {
+            let dir = dir.clone();
+            workers.push(std::thread::spawn(move || {
+                upsert_session(
+                    &dir,
+                    session("codex", &format!("thread-{index}"), "/socket"),
+                )
+                .unwrap();
+            }));
+        }
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        assert_eq!(read_sessions(&dir).unwrap().len(), 16);
     }
 }
