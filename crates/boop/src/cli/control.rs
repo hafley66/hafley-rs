@@ -9,34 +9,6 @@ use boop::harness::{Harness, NativeTuiSpec};
 
 use crate::cli::{mail_dir, write_route};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum DeliveryReceipt {
-    Queued,
-}
-
-/// Use Codex's supported remote queue command against the daemon socket
-/// recorded by `boop tui codex`.
-pub(crate) fn deliver(route: &Route, body: &str) -> Result<DeliveryReceipt> {
-    let socket = route.app_server_socket.as_deref().context(
-        "native Codex route has no managed app-server socket; start it with `boop codex`",
-    )?;
-    let thread = route
-        .session_id
-        .as_deref()
-        .context("native Codex route has no verified thread id")?;
-    let output = Command::new("codex")
-        .args(["queue", "--thread", thread, "--message", body, "--remote"])
-        .arg(format!("unix://{socket}"))
-        .output()
-        .context("queue message through Codex remote control")?;
-    anyhow::ensure!(
-        output.status.success(),
-        "Codex remote queue failed: {}",
-        String::from_utf8_lossy(&output.stderr).trim()
-    );
-    Ok(DeliveryReceipt::Queued)
-}
-
 /// Ask the selected harness adapter to prepare its native process, register
 /// this pane as its coordinator, then run the ordinary interactive TUI.
 pub(crate) fn run_native_tui(
@@ -96,57 +68,4 @@ pub(crate) fn run_native_tui(
         adapter.id()
     );
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_native_route_requires_a_socket_before_remote_queue() {
-        let route = Route {
-            kind: "coordinator".into(),
-            harness: Some("codex".into()),
-            tmux: None,
-            cwd: None,
-            model: None,
-            mode: None,
-            session_id: None,
-            source_path: None,
-            parent: None,
-            goal: None,
-            registered_at: None,
-            base_sha: None,
-            worktree_dir: None,
-            app_server_socket: None,
-        };
-        assert!(deliver(&route, "mail")
-            .unwrap_err()
-            .to_string()
-            .contains("managed app-server socket"));
-    }
-
-    #[test]
-    fn concurrent_native_sessions_in_one_cwd_require_their_own_thread_evidence() {
-        let route = Route {
-            kind: "coordinator".into(),
-            harness: Some("codex".into()),
-            tmux: Some("%12".into()),
-            cwd: Some("/shared".into()),
-            model: None,
-            mode: Some("native-remote".into()),
-            session_id: None,
-            source_path: None,
-            parent: None,
-            goal: None,
-            registered_at: None,
-            base_sha: None,
-            worktree_dir: None,
-            app_server_socket: Some("/tmp/codex.sock".into()),
-        };
-        assert!(deliver(&route, "mail")
-            .unwrap_err()
-            .to_string()
-            .contains("verified thread id"));
-    }
 }

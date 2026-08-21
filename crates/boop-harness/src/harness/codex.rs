@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::harness::{
-    jsonl_files, Capabilities, Harness, Ingested, KnownSessions, NativeTuiPlan, NativeTuiSpec,
-    ReadChunk, SendOutcome, SessionRef, SpawnSpec,
+    jsonl_files, Capabilities, Harness, Ingested, KnownSessions, NativeSessionRef, NativeTuiPlan,
+    NativeTuiSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
 use anyhow::Context;
 use boop_store::event::AgentEvent;
@@ -93,6 +93,31 @@ impl Harness for Codex {
         })
     }
 
+    fn send_native(&self, session: &NativeSessionRef, text: &str) -> anyhow::Result<SendOutcome> {
+        let socket = session
+            .app_server_socket
+            .as_deref()
+            .context("native Codex session has no app-server socket")?;
+        let output = Command::new("codex")
+            .args([
+                "queue",
+                "--thread",
+                &session.session_id,
+                "--message",
+                text,
+                "--remote",
+            ])
+            .arg(format!("unix://{}", socket.display()))
+            .output()
+            .context("queue message through Codex remote control")?;
+        anyhow::ensure!(
+            output.status.success(),
+            "Codex remote queue failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+        Ok(SendOutcome::Injected)
+    }
+
     fn preview_command(&self, spec: &SpawnSpec) -> Option<String> {
         Some(crate::harness::supervisor_command(spec))
     }
@@ -126,20 +151,6 @@ impl Harness for Codex {
             tmux_socket: spec.socket.clone(),
             parent: None,
         })
-    }
-
-    fn send(&self, session: &SessionRef, text: &str) -> anyhow::Result<SendOutcome> {
-        match &session.tmux {
-            Some(tmux) => {
-                boop_store::tmux::mux().send_keys_literal(
-                    session.tmux_socket.as_deref(),
-                    tmux,
-                    text,
-                )?;
-                Ok(SendOutcome::Injected)
-            }
-            None => Ok(SendOutcome::QueuedForNextSpawn),
-        }
     }
 
     fn stop(&self, session: &SessionRef) -> anyhow::Result<()> {

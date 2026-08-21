@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use tracing::{debug, info};
@@ -9,7 +9,6 @@ use boop::mailwait::Watch;
 use boop::registry::Registry;
 use boop::{bus, identity, inbox, lane, tmux};
 
-use crate::cli::control::{self, DeliveryReceipt};
 use crate::cli::job::{harness_by_id, wait_and_exit, waiting_as};
 use crate::cli::{append_acks, append_message, append_message_to, line, mail_dir, pad};
 use crate::InboxCmd;
@@ -155,7 +154,7 @@ pub(crate) fn deliver_hail(
     registry: &Registry,
     dir: &Path,
     message: &bus::Message,
-    socket: Option<&str>,
+    _socket: Option<&str>,
 ) -> Result<()> {
     let to = message.to.as_str();
     let routes = bus::read_routes(dir)?;
@@ -173,20 +172,26 @@ pub(crate) fn deliver_hail(
         println!("delivered {} -> {to} (acpx queue)", message.id);
         return Ok(());
     }
-    if route.harness.as_deref() == Some("codex")
-        && matches!(route.kind.as_str(), "coordinator" | "native")
-        && route.app_server_socket.is_some()
-        && route.session_id.is_some()
-    {
-        let receipt = control::deliver(route, &message.body)?;
-        append_acks(dir, std::slice::from_ref(message))?;
-        let action = match receipt {
-            DeliveryReceipt::Queued => "queued",
-        };
-        println!(
-            "delivered {} -> {to} ({action} through Codex remote control)",
-            message.id
-        );
+    if matches!(route.kind.as_str(), "coordinator" | "native") {
+        let harness_id = route.harness.as_deref().unwrap_or("claude");
+        match send_native_route(registry, route, &message.body)? {
+            boop::harness::SendOutcome::Injected => {
+                append_acks(dir, std::slice::from_ref(message))?;
+                println!(
+                    "delivered {} -> {to} through {harness_id} native control",
+                    message.id
+                );
+            }
+            boop::harness::SendOutcome::QueuedForNextSpawn => {
+                println!("queued {} -> {to} for native control", message.id);
+            }
+            boop::harness::SendOutcome::Unsupported => {
+                println!(
+                    "queued {} -> {to} ({harness_id} has no native control)",
+                    message.id
+                );
+            }
+        }
         return Ok(());
     }
     // A lane pane runs the supervisor, which reads this mailbox directly;
@@ -198,9 +203,7 @@ pub(crate) fn deliver_hail(
         );
         return Ok(());
     }
-    // A session that drains its own mail at a turn boundary must never be typed
-    // at: the keystrokes would land mid-turn, mid-dialog, or in a tool call. The
-    // installed hook is the routing decision, so removing it restores injection.
+    // A hook-backed session consumes the queued row at its turn boundary.
     if let Some(cwd) = route.cwd.as_deref() {
         if inbox::installed_for(Path::new(cwd), to) {
             println!("queued {} -> {to} (hook inbox drains it)", message.id);
@@ -213,64 +216,9 @@ pub(crate) fn deliver_hail(
             return Ok(());
         }
     }
-    let pane = route.tmux.as_deref();
-    let no_pane =
-        pane.is_none() || pane.is_some_and(|target| !tmux::mux().target_alive(socket, target));
-    if no_pane && matches!(route.kind.as_str(), "coordinator" | "native") {
-        println!("queued {} -> {to} (no pane)", message.id);
-        return Ok(());
-    }
-    let Some(pane) = pane else {
-        println!("queued {} -> {to}", message.id);
-        println!("{to} has no tmux pane: message stays queued, to_timestamp null");
-        return Ok(());
-    };
-    match inject_mail(registry, route, message, pane, socket)? {
-        boop::harness::SendOutcome::Injected => println!("injected into tmux {pane}"),
-        boop::harness::SendOutcome::QueuedForNextSpawn => {
-            println!("queued for next spawn -> {to}");
-        }
-        boop::harness::SendOutcome::Unsupported => {
-            println!("{to} harness has no send support: message stays queued");
-        }
-    }
+    println!("queued {} -> {to}", message.id);
+    println!("{to} has no native or supervisor transport: message stays queued");
     Ok(())
-}
-
-/// Type one queued row into a live pane, rendered through the receiver's mood.
-/// The send goes through the harness control facet; tmux is a transport detail
-/// inside the impl, and the session carries the pane handle spawn gave it.
-pub(crate) fn inject_mail(
-    registry: &Registry,
-    route: &Route,
-    message: &bus::Message,
-    pane: &str,
-    socket: Option<&str>,
-) -> Result<boop::harness::SendOutcome> {
-    let to = message.to.as_str();
-    let rendered = boop::supervise::render_mail(
-        &boop::supervise::mood_template(to),
-        &message.kind,
-        &message.id,
-        &message.from,
-        &message.body,
-    );
-    let harness_id = route.harness.as_deref().unwrap_or("claude");
-    let adapter = harness_by_id(registry, harness_id)?;
-    let session = boop::harness::SessionRef {
-        harness: adapter.id(),
-        session_id: to.to_owned(),
-        nickname: to.to_owned(),
-        path: std::path::PathBuf::from("/tmp/hail.jsonl"),
-        cwd: route.cwd.clone(),
-        git_branch: None,
-        modified_ms: 0,
-        size: 0,
-        tmux: Some(pane.to_owned()),
-        tmux_socket: socket.map(str::to_owned),
-        parent: None,
-    };
-    adapter.send(&session, &rendered)
 }
 
 /// `tell-parent`: one row from the caller to the parent its registration
@@ -384,10 +332,10 @@ pub(crate) fn run_tell_children(
                 landed += 1;
                 println!("landed {name} {} (lane supervisor)", message.id);
             }
-            ChildReach::Pane(pane) => match inject_mail(registry, route, &message, &pane, None)? {
+            ChildReach::Pane => match send_native_route(registry, route, &message.body)? {
                 boop::harness::SendOutcome::Injected => {
                     landed += 1;
-                    println!("landed {name} {} (pane {pane})", message.id);
+                    println!("landed {name} {} (native control)", message.id);
                 }
                 boop::harness::SendOutcome::QueuedForNextSpawn => {
                     landed += 1;
@@ -407,6 +355,35 @@ pub(crate) fn run_tell_children(
     }
     println!("{landed} landed, {unreachable} no-route, {dead} dead");
     Ok(())
+}
+
+fn send_native_route(
+    registry: &Registry,
+    route: &Route,
+    body: &str,
+) -> Result<boop::harness::SendOutcome> {
+    let adapter = harness_by_id(registry, route.harness.as_deref().unwrap_or("claude"))?;
+    let discovered;
+    let session_id = if let Some(session_id) = route.session_id.as_deref() {
+        session_id
+    } else if let Some(target) = route.tmux.as_deref() {
+        let processes = boop::proc::SysinfoSnapshot::capture()?;
+        discovered = adapter.session_id_in_pane(tmux::mux(), &processes, target);
+        let Some(session_id) = discovered.as_deref() else {
+            return Ok(boop::harness::SendOutcome::Unsupported);
+        };
+        session_id
+    } else {
+        return Ok(boop::harness::SendOutcome::Unsupported);
+    };
+    adapter.send_native(
+        &boop::harness::NativeSessionRef {
+            session_id: session_id.to_owned(),
+            cwd: route.cwd.as_deref().map(PathBuf::from),
+            app_server_socket: route.app_server_socket.as_deref().map(PathBuf::from),
+        },
+        body,
+    )
 }
 
 /// A claude Agent-tool child runs inside its parent's process. It owns no pane,
@@ -451,8 +428,8 @@ pub(crate) enum ChildReach {
     Hook,
     /// The lane's own supervisor reads the mailbox.
     Supervisor,
-    /// A live pane takes the keystrokes.
-    Pane(String),
+    /// A live native session may accept harness control.
+    Pane,
     /// Nothing addresses this child at all, and the reason why.
     NoRoute(&'static str),
     /// The child named a tmux target and tmux no longer has it.
@@ -478,7 +455,7 @@ pub(crate) fn child_reach(route: &Route, name: &str, socket: Option<&str>) -> Ch
     }
     match route.kind.as_str() {
         "lane" => ChildReach::Supervisor,
-        _ => ChildReach::Pane(target.to_owned()),
+        _ => ChildReach::Pane,
     }
 }
 

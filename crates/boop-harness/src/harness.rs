@@ -39,6 +39,13 @@ pub struct NativeTuiPlan {
     pub app_server_socket: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeSessionRef {
+    pub session_id: String,
+    pub cwd: Option<PathBuf>,
+    pub app_server_socket: Option<PathBuf>,
+}
+
 impl NativeTuiPlan {
     pub fn direct(spec: &NativeTuiSpec) -> Self {
         Self {
@@ -174,6 +181,12 @@ pub trait Harness: Send + Sync {
         Ok(NativeTuiPlan::direct(spec))
     }
 
+    /// Deliver one message to an interactive session through the harness's
+    /// native control plane. A coordinator must never fall back to PTY keys.
+    fn send_native(&self, _session: &NativeSessionRef, _text: &str) -> anyhow::Result<SendOutcome> {
+        Ok(SendOutcome::Unsupported)
+    }
+
     /// The literal command a spawn would run for `spec`, with nothing
     /// actually spawned. `None` means no accurate preview for this adapter.
     fn preview_command(&self, _spec: &SpawnSpec) -> Option<String> {
@@ -188,11 +201,6 @@ pub trait Harness: Send + Sync {
     /// Spawn a session per `spec`, returning a handle to it.
     fn spawn(&self, _spec: &SpawnSpec) -> anyhow::Result<SessionRef> {
         anyhow::bail!("harness `{}` has no spawn support", self.id())
-    }
-
-    /// Send `text` to a live session.
-    fn send(&self, _session: &SessionRef, _text: &str) -> anyhow::Result<SendOutcome> {
-        Ok(SendOutcome::Unsupported)
     }
 
     /// Stop a live session.

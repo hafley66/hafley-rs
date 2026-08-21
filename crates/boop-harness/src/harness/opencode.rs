@@ -10,7 +10,7 @@ use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
 
 use crate::harness::{
-    Capabilities, Harness, Ingested, OneShotSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
+    Capabilities, Harness, Ingested, OneShotSpec, ReadChunk, SessionRef, SpawnSpec,
 };
 use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
@@ -155,20 +155,6 @@ impl Harness for Opencode {
             tmux_socket: spec.socket.clone(),
             parent: None,
         })
-    }
-
-    fn send(&self, session: &SessionRef, text: &str) -> Result<SendOutcome> {
-        match &session.tmux {
-            Some(tmux) => {
-                boop_store::tmux::mux().send_keys_literal(
-                    session.tmux_socket.as_deref(),
-                    tmux,
-                    text,
-                )?;
-                Ok(SendOutcome::Injected)
-            }
-            None => Ok(SendOutcome::QueuedForNextSpawn),
-        }
     }
 
     fn stop(&self, session: &SessionRef) -> Result<()> {
@@ -647,29 +633,6 @@ mod tests {
         assert!(caps.subagent_visible, "session.parent_id names the parent");
     }
 
-    /// A hail with no live pane cannot land, so the outcome says queued
-    /// rather than injected.
-    #[test]
-    fn a_send_is_queued_not_injected() {
-        let session = crate::harness::SessionRef {
-            harness: "opencode",
-            session_id: "ses_x".to_owned(),
-            nickname: "ses_x".to_owned(),
-            path: std::path::PathBuf::from("/tmp/none.db"),
-            cwd: None,
-            git_branch: None,
-            modified_ms: 0,
-            size: 0,
-            tmux: None,
-            tmux_socket: None,
-            parent: None,
-        };
-        assert_eq!(
-            Opencode.send(&session, "hello").unwrap(),
-            crate::harness::SendOutcome::QueuedForNextSpawn
-        );
-    }
-
     /// A missing opencode store is no sessions, never an error and never a
     /// store this process created.
     #[test]
@@ -947,38 +910,6 @@ mod tests {
         );
         opencode.stop(&session).unwrap();
         assert!(!has_session_on(&guard, session.tmux.as_deref().unwrap()));
-    }
-
-    #[test]
-    fn opencode_send_injects_into_a_live_pane() {
-        let guard = TmuxGuard::new();
-        let name = format!("ctl-{}", std::process::id());
-        boop_store::tmux::mux()
-            .new_bare_session(Some(&guard.socket), &name)
-            .unwrap();
-        let session = crate::harness::SessionRef {
-            harness: "opencode",
-            session_id: "ctl".to_owned(),
-            nickname: "ctl".to_owned(),
-            path: std::path::PathBuf::from("/tmp/ctl.db"),
-            cwd: None,
-            git_branch: None,
-            modified_ms: 0,
-            size: 0,
-            tmux: Some(name.clone()),
-            tmux_socket: Some(guard.socket.clone()),
-            parent: None,
-        };
-        let opencode = Opencode;
-        let outcome = opencode.send(&session, "hello from boop").unwrap();
-        assert_eq!(outcome, crate::harness::SendOutcome::Injected);
-        let pane = boop_store::tmux::mux()
-            .capture_pane(Some(&guard.socket), &name, None)
-            .unwrap();
-        assert!(
-            pane.contains("hello from boop"),
-            "injected text not found in pane"
-        );
     }
 
     fn has_session_on(guard: &TmuxGuard, name: &str) -> bool {

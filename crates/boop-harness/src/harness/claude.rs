@@ -3,11 +3,15 @@
 
 use std::fs::File;
 use std::io::BufReader;
+use std::io::Write;
+#[cfg(unix)]
+use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use crate::harness::{
-    jsonl_files, Capabilities, Harness, KnownSessions, ReadChunk, SendOutcome, SessionRef,
-    SpawnSpec,
+    jsonl_files, Capabilities, Harness, KnownSessions, NativeSessionRef, ReadChunk, SendOutcome,
+    SessionRef, SpawnSpec,
 };
 use anyhow::Context;
 use boop_store::event::{Access, AgentEvent, ToolPath};
@@ -131,6 +135,11 @@ impl Harness for Claude {
         }
     }
 
+    fn send_native(&self, session: &NativeSessionRef, text: &str) -> anyhow::Result<SendOutcome> {
+        send_peer_message(&session.session_id, text)?;
+        Ok(SendOutcome::Injected)
+    }
+
     fn preview_command(&self, spec: &SpawnSpec) -> Option<String> {
         Some(crate::harness::supervisor_command(spec))
     }
@@ -167,20 +176,6 @@ impl Harness for Claude {
         })
     }
 
-    fn send(&self, session: &SessionRef, text: &str) -> anyhow::Result<SendOutcome> {
-        match &session.tmux {
-            Some(tmux) => {
-                boop_store::tmux::mux().send_keys_literal(
-                    session.tmux_socket.as_deref(),
-                    tmux,
-                    text,
-                )?;
-                Ok(SendOutcome::Injected)
-            }
-            None => Ok(SendOutcome::QueuedForNextSpawn),
-        }
-    }
-
     fn stop(&self, session: &SessionRef) -> anyhow::Result<()> {
         if let Some(tmux) = &session.tmux {
             if boop_store::tmux::mux().has_session(session.tmux_socket.as_deref(), tmux)? {
@@ -189,6 +184,120 @@ impl Harness for Claude {
         }
         Ok(())
     }
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LivePeer {
+    pid: u32,
+    session_id: String,
+    proc_start: String,
+    messaging_socket_path: PathBuf,
+    #[serde(default)]
+    updated_at: u64,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PeerKey {
+    peer_token: String,
+    proc_start: String,
+}
+
+#[cfg(unix)]
+fn send_peer_message(session_id: &str, text: &str) -> anyhow::Result<()> {
+    let (peer, token) = resolve_live_peer(session_id)?;
+    let mut stream = UnixStream::connect(&peer.messaging_socket_path).with_context(|| {
+        format!(
+            "connect Claude peer socket {}",
+            peer.messaging_socket_path.display()
+        )
+    })?;
+    stream.set_write_timeout(Some(Duration::from_secs(3)))?;
+    let msg_id = format!(
+        "boop-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    );
+    serde_json::to_writer(
+        &mut stream,
+        &serde_json::json!({"type": "auth", "token": token}),
+    )?;
+    stream.write_all(b"\n")?;
+    serde_json::to_writer(
+        &mut stream,
+        &serde_json::json!({
+            "type": "user",
+            "message": {"role": "user", "content": text},
+            "msg_id": msg_id,
+            "from": format!("boop:pid-{}", std::process::id())
+        }),
+    )?;
+    stream.write_all(b"\n")?;
+    stream.flush()?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn send_peer_message(_session_id: &str, _text: &str) -> anyhow::Result<()> {
+    anyhow::bail!("Claude native peer messaging requires Unix sockets")
+}
+
+fn resolve_live_peer(session_id: &str) -> anyhow::Result<(LivePeer, String)> {
+    let dir = dirs::home_dir()
+        .context("resolve home directory")?
+        .join(".claude/sessions");
+    let mut peers = Vec::new();
+    for entry in std::fs::read_dir(&dir).with_context(|| format!("read {}", dir.display()))? {
+        let path = entry?.path();
+        if path.extension().and_then(|value| value.to_str()) != Some("json") {
+            continue;
+        }
+        let Ok(peer) = std::fs::read(&path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<LivePeer>(&bytes).ok())
+            .ok_or(())
+        else {
+            continue;
+        };
+        if peer.session_id == session_id && peer.messaging_socket_path.exists() {
+            peers.push(peer);
+        }
+    }
+    peers.sort_by_key(|peer| std::cmp::Reverse(peer.updated_at));
+    let peer = peers
+        .into_iter()
+        .next()
+        .with_context(|| format!("no live Claude peer socket for session {session_id}"))?;
+    let prefix = format!("{}.", peer.pid);
+    let mut keys = Vec::new();
+    for entry in std::fs::read_dir(&dir)? {
+        let path = entry?.path();
+        let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        if name.starts_with(&prefix) && name.ends_with(".key") {
+            if let Ok(key) = std::fs::read(&path)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<PeerKey>(&bytes).ok())
+                .ok_or(())
+            {
+                if key.proc_start == peer.proc_start {
+                    keys.push(key.peer_token);
+                }
+            }
+        }
+    }
+    anyhow::ensure!(
+        keys.len() == 1,
+        "Claude peer {} has {} matching keys",
+        peer.pid,
+        keys.len()
+    );
+    Ok((peer, keys.pop().expect("one matching peer key")))
 }
 
 /// The interactive Claude CLI names the resumed transcript in argv. The flag
@@ -712,40 +821,6 @@ mod tests {
         // The spawned session (a shell claude runs under) must be gone after
         // stop; the guard also kills the whole server regardless.
         assert!(!has_session_on(&guard, session.tmux.as_deref().unwrap()));
-    }
-
-    #[test]
-    fn claude_send_injects_into_a_live_pane() {
-        let guard = TmuxGuard::new();
-        // A plain shell session stays alive so the injected text can be read
-        // back; the transport is what this capability proves.
-        let name = format!("ctl-{}", std::process::id());
-        boop_store::tmux::mux()
-            .new_bare_session(Some(&guard.socket), &name)
-            .unwrap();
-        let session = SessionRef {
-            harness: "claude",
-            session_id: "ctl".to_owned(),
-            nickname: "ctl".to_owned(),
-            path: PathBuf::from("/tmp/ctl.jsonl"),
-            cwd: None,
-            git_branch: None,
-            modified_ms: 0,
-            size: 0,
-            tmux: Some(name.clone()),
-            tmux_socket: Some(guard.socket.clone()),
-            parent: None,
-        };
-        let claude = Claude;
-        let outcome = claude.send(&session, "hello from boop").unwrap();
-        assert_eq!(outcome, crate::harness::SendOutcome::Injected);
-        let pane = boop_store::tmux::mux()
-            .capture_pane(Some(&guard.socket), &name, None)
-            .unwrap();
-        assert!(
-            pane.contains("hello from boop"),
-            "injected text not found in pane"
-        );
     }
 
     #[test]
