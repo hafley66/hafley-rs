@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use boop::bus::Route;
 use boop::channel::codex::CodexChannel;
 use boop::channel::{ChannelSpec, Delivery, LaneChannel};
+use boop::harness::{Harness, NativeTuiSpec};
 
 use crate::cli::{mail_dir, write_route};
 
@@ -57,111 +58,65 @@ pub(crate) fn deliver(route: &Route, body: &str) -> Result<DeliveryReceipt> {
     Ok(receipt)
 }
 
-/// Start Codex's managed remote-control daemon, register its socket, then run
-/// the ordinary TUI against it. No Codex executable or symlink is modified.
+/// Ask the selected harness adapter to prepare its native process, register
+/// this pane as its coordinator, then run the ordinary interactive TUI.
 pub(crate) fn run_native_tui(
+    adapter: &dyn Harness,
     name: Option<&str>,
     cwd: &Path,
     mail_dir_arg: Option<&Path>,
+    executable: Option<&str>,
     tui_args: &[String],
 ) -> Result<()> {
     let pane = std::env::var("TMUX_PANE")
         .ok()
         .filter(|pane| !pane.is_empty())
-        .context("`boop codex` requires TMUX_PANE so its route matches Codex identity")?;
-    let default_name = format!("codex-{}", pane.trim_start_matches('%'));
+        .context("`boop tui` requires TMUX_PANE so its route matches harness identity")?;
+    let default_name = format!("{}-{}", adapter.id(), pane.trim_start_matches('%'));
     let name = name.unwrap_or(&default_name);
     anyhow::ensure!(
         name == default_name,
-        "native Codex route name must be {default_name} for its TMUX_PANE"
+        "native {} route name must be {default_name} for its TMUX_PANE",
+        adapter.id()
     );
-    let output = Command::new("codex")
-        .args(["remote-control", "start", "--json"])
-        .output()
-        .context("start managed Codex remote-control daemon")?;
-    anyhow::ensure!(
-        output.status.success(),
-        "Codex remote-control start failed: {}",
-        String::from_utf8_lossy(&output.stderr).trim()
-    );
-    let socket = daemon_socket_from_start(&String::from_utf8_lossy(&output.stdout))
-        .context("Codex remote-control start did not report an app-server socket")?;
-    let (requested_thread, forwarded_args) = explicit_resume(tui_args)?;
-    let spec = ChannelSpec {
-        model: None,
+    let executable = executable.unwrap_or(adapter.id());
+    let plan = adapter.prepare_native_tui(&NativeTuiSpec {
+        executable: executable.into(),
         cwd: cwd.to_path_buf(),
-        resume: requested_thread,
-        lane: None,
-    };
-    let mut channel = CodexChannel::open_proxy(&spec, Path::new(&socket))?;
-    let thread = channel
-        .conversation_id()
-        .context("Codex app-server did not return the native TUI thread id")?;
-    channel.close()?;
+        args: tui_args.to_vec(),
+    })?;
     let dir = mail_dir(mail_dir_arg)?;
     write_route(
         &dir,
         name,
         Route {
             kind: "coordinator".into(),
-            harness: Some("codex".into()),
+            harness: Some(adapter.id().into()),
             tmux: Some(pane),
             cwd: Some(cwd.display().to_string()),
             model: None,
-            mode: Some("native-remote".into()),
-            session_id: Some(thread.clone()),
-            source_path: Some(format!("managed-app-server={socket}")),
+            mode: Some(plan.mode.clone()),
+            session_id: plan.session_id.clone(),
+            source_path: plan.source_path.clone(),
             parent: None,
             goal: None,
             registered_at: Some(boop::bus::now_iso()),
             base_sha: None,
             worktree_dir: None,
-            app_server_socket: Some(socket.clone()),
+            app_server_socket: plan.app_server_socket.clone(),
         },
     )?;
-    let status = Command::new("codex")
-        .arg("resume")
-        .arg(&thread)
-        .arg("--remote")
-        .arg(format!("unix://{socket}"))
-        .arg("--cd")
-        .arg(cwd)
-        .args(forwarded_args)
+    let status = Command::new(&plan.program)
+        .args(&plan.args)
+        .current_dir(cwd)
         .status()
-        .context("start native Codex TUI through managed daemon")?;
-    anyhow::ensure!(status.success(), "native Codex TUI exited with {status}");
+        .with_context(|| format!("start native {} TUI", adapter.id()))?;
+    anyhow::ensure!(
+        status.success(),
+        "native {} TUI exited with {status}",
+        adapter.id()
+    );
     Ok(())
-}
-
-fn explicit_resume(tui_args: &[String]) -> Result<(Option<String>, &[String])> {
-    if tui_args.first().map(String::as_str) != Some("resume") {
-        return Ok((None, tui_args));
-    }
-    let thread = tui_args
-        .get(1)
-        .filter(|value| !value.starts_with('-'))
-        .context("`boop codex -- resume` requires an explicit thread id")?;
-    Ok((Some(thread.clone()), &tui_args[2..]))
-}
-
-fn daemon_socket_from_start(text: &str) -> Option<String> {
-    let value: serde_json::Value = serde_json::from_str(text.trim()).ok()?;
-    value
-        .get("daemon")
-        .and_then(|daemon| daemon.get("socketPath"))
-        .and_then(serde_json::Value::as_str)
-        .filter(|socket| socket.ends_with(".sock"))
-        .map(str::to_owned)
-        .or_else(|| find_socket(&value))
-}
-
-fn find_socket(value: &serde_json::Value) -> Option<String> {
-    match value {
-        serde_json::Value::String(value) if value.ends_with(".sock") => Some(value.clone()),
-        serde_json::Value::Array(values) => values.iter().find_map(find_socket),
-        serde_json::Value::Object(values) => values.values().find_map(find_socket),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
@@ -190,16 +145,6 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("managed app-server socket"));
-    }
-
-    #[test]
-    fn remote_control_start_socket_is_read_without_assuming_its_json_key() {
-        let output =
-            r#"{"daemon":{"socketPath":"/tmp/codex.sock","otherSocket":"/tmp/wrong.sock"}}"#;
-        assert_eq!(
-            daemon_socket_from_start(output).as_deref(),
-            Some("/tmp/codex.sock")
-        );
     }
 
     #[test]
@@ -236,28 +181,5 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("verified thread id"));
-    }
-
-    #[test]
-    fn explicit_resume_is_registered_before_the_tui_starts() {
-        let args = vec![
-            "resume".to_string(),
-            "019ffb9b-51cb-7e92-be44-4eb469f46d95".to_string(),
-            "--no-alt-screen".to_string(),
-        ];
-        let (thread, forwarded) = explicit_resume(&args).expect("explicit resume");
-        assert_eq!(
-            thread.as_deref(),
-            Some("019ffb9b-51cb-7e92-be44-4eb469f46d95")
-        );
-        assert_eq!(forwarded, ["--no-alt-screen"]);
-    }
-
-    #[test]
-    fn a_fresh_launch_reserves_a_thread_before_the_tui_starts() {
-        let args = vec!["--no-alt-screen".to_string()];
-        let (thread, forwarded) = explicit_resume(&args).expect("fresh launch");
-        assert_eq!(thread, None);
-        assert_eq!(forwarded, args);
     }
 }

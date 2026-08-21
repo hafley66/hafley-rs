@@ -5,12 +5,15 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use crate::harness::{
-    jsonl_files, Capabilities, Harness, Ingested, KnownSessions, ReadChunk, SendOutcome,
-    SessionRef, SpawnSpec,
+    jsonl_files, Capabilities, Harness, Ingested, KnownSessions, NativeTuiPlan, NativeTuiSpec,
+    ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
 use anyhow::Context;
+use boop_acp::channel::codex::CodexChannel;
+use boop_acp::channel::{ChannelSpec, LaneChannel};
 use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
 use boop_store::session::ModelSpec;
@@ -61,6 +64,52 @@ impl Harness for Codex {
             spawn: true,
             subagent_visible: true,
         }
+    }
+
+    fn prepare_native_tui(&self, spec: &NativeTuiSpec) -> anyhow::Result<NativeTuiPlan> {
+        let output = Command::new(&spec.executable)
+            .args(["remote-control", "start", "--json"])
+            .output()
+            .context("start managed Codex remote-control daemon")?;
+        anyhow::ensure!(
+            output.status.success(),
+            "Codex remote-control start failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+        let socket = daemon_socket_from_start(&String::from_utf8_lossy(&output.stdout))
+            .context("Codex remote-control start did not report an app-server socket")?;
+        let (requested_thread, forwarded_args) = explicit_resume(&spec.args)?;
+        let channel_spec = ChannelSpec {
+            model: None,
+            cwd: spec.cwd.clone(),
+            resume: requested_thread,
+            lane: None,
+        };
+        let mut channel = CodexChannel::open_proxy(&channel_spec, Path::new(&socket))?;
+        let thread = channel
+            .conversation_id()
+            .context("Codex app-server did not return the native TUI thread id")?;
+        channel.close()?;
+        let args = [
+            vec![
+                "resume".into(),
+                thread.clone().into(),
+                "--remote".into(),
+                format!("unix://{socket}").into(),
+                "--cd".into(),
+                spec.cwd.as_os_str().to_owned(),
+            ],
+            forwarded_args.iter().map(Into::into).collect(),
+        ]
+        .concat();
+        Ok(NativeTuiPlan {
+            program: spec.executable.clone(),
+            args,
+            mode: "native-remote".into(),
+            session_id: Some(thread),
+            source_path: Some(format!("managed-app-server={socket}")),
+            app_server_socket: Some(socket),
+        })
     }
 
     fn preview_command(&self, spec: &SpawnSpec) -> Option<String> {
@@ -186,6 +235,37 @@ impl Harness for Codex {
             stat,
             next_cursor: result.next_offset,
         })
+    }
+}
+
+fn explicit_resume(tui_args: &[String]) -> anyhow::Result<(Option<String>, &[String])> {
+    if tui_args.first().map(String::as_str) != Some("resume") {
+        return Ok((None, tui_args));
+    }
+    let thread = tui_args
+        .get(1)
+        .filter(|value| !value.starts_with('-'))
+        .context("`boop tui codex -- resume` requires an explicit thread id")?;
+    Ok((Some(thread.clone()), &tui_args[2..]))
+}
+
+fn daemon_socket_from_start(text: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(text.trim()).ok()?;
+    value
+        .get("daemon")
+        .and_then(|daemon| daemon.get("socketPath"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|socket| socket.ends_with(".sock"))
+        .map(str::to_owned)
+        .or_else(|| find_socket(&value))
+}
+
+fn find_socket(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(value) if value.ends_with(".sock") => Some(value.clone()),
+        serde_json::Value::Array(values) => values.iter().find_map(find_socket),
+        serde_json::Value::Object(values) => values.values().find_map(find_socket),
+        _ => None,
     }
 }
 
@@ -613,7 +693,42 @@ mod tests {
     use boop_store::testing::TempRepo;
     use boop_store::Store;
 
-    use super::{sessions_in, sessions_in_with_known, Codex};
+    use super::{
+        daemon_socket_from_start, explicit_resume, sessions_in, sessions_in_with_known, Codex,
+    };
+
+    #[test]
+    fn remote_control_start_socket_is_read_without_assuming_its_json_key() {
+        let output =
+            r#"{"daemon":{"socketPath":"/tmp/codex.sock","otherSocket":"/tmp/wrong.sock"}}"#;
+        assert_eq!(
+            daemon_socket_from_start(output).as_deref(),
+            Some("/tmp/codex.sock")
+        );
+    }
+
+    #[test]
+    fn explicit_resume_is_separated_from_forwarded_tui_arguments() {
+        let args = vec![
+            "resume".to_string(),
+            "019ffb9b-51cb-7e92-be44-4eb469f46d95".to_string(),
+            "--no-alt-screen".to_string(),
+        ];
+        let (thread, forwarded) = explicit_resume(&args).expect("explicit resume");
+        assert_eq!(
+            thread.as_deref(),
+            Some("019ffb9b-51cb-7e92-be44-4eb469f46d95")
+        );
+        assert_eq!(forwarded, ["--no-alt-screen"]);
+    }
+
+    #[test]
+    fn a_fresh_launch_forwards_every_tui_argument() {
+        let args = vec!["--no-alt-screen".to_string()];
+        let (thread, forwarded) = explicit_resume(&args).expect("fresh launch");
+        assert_eq!(thread, None);
+        assert_eq!(forwarded, args);
+    }
 
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("boop_codex_{}_{}", std::process::id(), name))

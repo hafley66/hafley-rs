@@ -53,6 +53,23 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum SubCmd {
+    /// Launch an ordinary interactive harness TUI and register this pane.
+    Tui {
+        /// Registered harness adapter: claude, codex, kimi, or opencode.
+        harness: String,
+        /// Executable override, for example ccz with the Claude adapter.
+        #[arg(long = "bin")]
+        executable: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+        /// Arguments forwarded to the ordinary harness TUI.
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
     /// Launch a native Codex TUI attached to a Boop-owned managed app-server.
     Codex {
         /// Registry name. Defaults to the current tmux pane's Codex identity.
@@ -551,7 +568,38 @@ fn main() -> Result<()> {
                 args,
             } => {
                 let cwd = cwd.unwrap_or(std::env::current_dir().context("read current directory")?);
-                run_native_tui(name.as_deref(), &cwd, mail_dir.as_deref(), &args)
+                let adapter = registry
+                    .by_id("codex")
+                    .context("Codex harness is not registered")?;
+                run_native_tui(
+                    adapter,
+                    name.as_deref(),
+                    &cwd,
+                    mail_dir.as_deref(),
+                    None,
+                    &args,
+                )
+            }
+            SubCmd::Tui {
+                harness,
+                executable,
+                name,
+                cwd,
+                mail_dir,
+                args,
+            } => {
+                let cwd = cwd.unwrap_or(std::env::current_dir()?);
+                let adapter = registry
+                    .by_id(&harness)
+                    .with_context(|| format!("no harness registered with id `{harness}`"))?;
+                run_native_tui(
+                    adapter,
+                    name.as_deref(),
+                    &cwd,
+                    mail_dir.as_deref(),
+                    executable.as_deref(),
+                    &args,
+                )
             }
             SubCmd::Harnesses => run_harnesses(&registry),
             SubCmd::Sessions { harness } => run_sessions(&registry, harness.as_deref()),

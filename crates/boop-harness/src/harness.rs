@@ -1,5 +1,6 @@
 //! The trait every harness adapter implements; the CLI never names a harness.
 
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
@@ -15,6 +16,41 @@ pub mod claude;
 pub mod codex;
 pub mod kimi;
 pub mod opencode;
+
+/// User-facing interactive launch request. The CLI supplies the executable so
+/// aliases such as `ccz` can use the Claude adapter without inventing another
+/// harness identity.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeTuiSpec {
+    pub executable: String,
+    pub cwd: PathBuf,
+    pub args: Vec<String>,
+}
+
+/// Prepared native process plus the evidence recorded in its coordinator
+/// route before the process takes over the terminal.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeTuiPlan {
+    pub program: String,
+    pub args: Vec<OsString>,
+    pub mode: String,
+    pub session_id: Option<String>,
+    pub source_path: Option<String>,
+    pub app_server_socket: Option<String>,
+}
+
+impl NativeTuiPlan {
+    pub fn direct(spec: &NativeTuiSpec) -> Self {
+        Self {
+            program: spec.executable.clone(),
+            args: spec.args.iter().map(OsString::from).collect(),
+            mode: "interactive".into(),
+            session_id: None,
+            source_path: Some(format!("native-executable={}", spec.executable)),
+            app_server_socket: None,
+        }
+    }
+}
 
 /// Project one transcript file forward from its stored cursor, writing session,
 /// turn, touch, cmd, fetch, skill, pr facts. Returns the new offset. A second
@@ -130,6 +166,12 @@ pub trait Harness: Send + Sync {
     /// What this harness can control. `true` only where a test confirms it.
     fn capabilities(&self) -> Capabilities {
         Capabilities::default()
+    }
+
+    /// Prepare the ordinary interactive TUI for this harness. Transcript and
+    /// control adapters stay colocated in the same harness implementation.
+    fn prepare_native_tui(&self, spec: &NativeTuiSpec) -> anyhow::Result<NativeTuiPlan> {
+        Ok(NativeTuiPlan::direct(spec))
     }
 
     /// The literal command a spawn would run for `spec`, with nothing
