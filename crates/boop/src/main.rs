@@ -53,6 +53,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum SubCmd {
+    /// Print shell functions that route interactive harnesses through Boop.
+    ShellInit {
+        #[arg(value_enum)]
+        shell: ShellKind,
+    },
     /// Launch an ordinary interactive harness TUI and register this pane.
     Tui {
         /// Registered harness adapter: claude, codex, kimi, or opencode.
@@ -533,6 +538,37 @@ enum ConfigCmd {
     Presets,
 }
 
+#[derive(Clone, Copy, ValueEnum)]
+enum ShellKind {
+    Bash,
+}
+
+const BASH_SHELL_INIT: &str = r#"codex() {
+  command boop tui codex --cwd "$PWD" -- "$@"
+}
+
+claude() {
+  command boop tui claude --cwd "$PWD" -- "$@"
+}
+
+ccz() {
+  command boop tui claude --bin ccz --cwd "$PWD" -- "$@"
+}
+
+kimi() {
+  command boop tui kimi --cwd "$PWD" -- "$@"
+}
+
+opencode() {
+  command boop tui opencode --cwd "$PWD" -- "$@"
+}"#;
+
+fn print_shell_init(shell: ShellKind) {
+    match shell {
+        ShellKind::Bash => println!("{BASH_SHELL_INIT}"),
+    }
+}
+
 /// Whether this invocation is asking for help, whatever verb it names.
 fn help_wanted() -> bool {
     std::env::args().any(|argument| argument == "--help" || argument == "-h")
@@ -561,6 +597,10 @@ fn main() -> Result<()> {
         needs_startup_sync,
         || sync_before_local_command(&registry),
         || match command {
+            SubCmd::ShellInit { shell } => {
+                print_shell_init(shell);
+                Ok(())
+            }
             SubCmd::Codex {
                 name,
                 cwd,
