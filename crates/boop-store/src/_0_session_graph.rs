@@ -1181,6 +1181,7 @@ mod tests {
                 registered_at: Some("2026-08-18T00:00:00Z".into()),
                 base_sha: None,
                 worktree_dir: None,
+                app_server_socket: None,
             },
         );
         let mux = FakeMux::available(&["codex-parent"]);
@@ -1267,6 +1268,7 @@ mod tests {
                 registered_at: None,
                 base_sha: None,
                 worktree_dir: None,
+                app_server_socket: None,
             },
         );
         let mux = FakeMux::available(&["sprefa-5"]).with_pane("%1206", "sprefa-5");
@@ -1735,6 +1737,7 @@ mod tests {
                     registered_at: Some("2026-08-18T00:00:00Z".into()),
                     base_sha: None,
                     worktree_dir: None,
+                    app_server_socket: None,
                 },
             );
         }

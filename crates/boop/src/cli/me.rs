@@ -112,6 +112,7 @@ pub(crate) fn run_adopt_with(
         registered_at: Some(bus::now_iso()),
         base_sha: None,
         worktree_dir: None,
+        app_server_socket: None,
     };
     write_route(&dir, name, route)?;
     println!("adopted {name} -> tmux {tmux_session}");
@@ -237,6 +238,7 @@ pub(crate) fn run_me(name: Option<&str>, mail_dir_arg: Option<&Path>) -> Result<
             registered_at: Some(bus::now_iso()),
             base_sha: None,
             worktree_dir: None,
+            app_server_socket: None,
         },
     )?;
     println!("registered {name} -> {pane} codex {}", session.session_id);

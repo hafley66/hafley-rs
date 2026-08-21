@@ -15,6 +15,7 @@ use boop::{bus, config, identity, mailwait, proc};
 
 mod cli;
 
+use cli::control::run_native_tui;
 use cli::db::{
     run_chat_query, run_db, run_follow, run_harnesses, run_passthrough, run_public_agent_command,
     run_query, run_sessions, run_sync_all, run_tail, sync_all, ChatQueryOptions, SyncLiveness,
@@ -52,6 +53,20 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum SubCmd {
+    /// Launch a native Codex TUI attached to a Boop-owned managed app-server.
+    Codex {
+        /// Registry name. Defaults to the current tmux pane's Codex identity.
+        #[arg(long)]
+        name: Option<String>,
+        /// Working directory for the native TUI.
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+        /// Arguments forwarded to the ordinary Codex TUI.
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
     /// Drive agents: harnesses, lanes, mail, processes.
     Beep {
         #[command(subcommand)]
@@ -529,6 +544,15 @@ fn main() -> Result<()> {
         needs_startup_sync,
         || sync_before_local_command(&registry),
         || match command {
+            SubCmd::Codex {
+                name,
+                cwd,
+                mail_dir,
+                args,
+            } => {
+                let cwd = cwd.unwrap_or(std::env::current_dir().context("read current directory")?);
+                run_native_tui(name.as_deref(), &cwd, mail_dir.as_deref(), &args)
+            }
             SubCmd::Harnesses => run_harnesses(&registry),
             SubCmd::Sessions { harness } => run_sessions(&registry, harness.as_deref()),
             SubCmd::Tail {

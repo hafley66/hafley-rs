@@ -6,6 +6,7 @@
 //! outside its own tests constructs it. `codex app-server` is not ACP, so the
 //! two doors share no frames.
 
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -27,14 +28,25 @@ pub struct CodexChannel {
 
 impl CodexChannel {
     pub fn open(spec: &ChannelSpec) -> Result<CodexChannel> {
-        let child = Command::new("codex")
-            .arg("app-server")
+        let mut command = Command::new("codex");
+        command.arg("app-server");
+        Self::open_command(spec, command)
+    }
+
+    /// Connect to the daemon already owned by the native TUI. This never
+    /// starts a second app-server.
+    pub fn open_proxy(spec: &ChannelSpec, socket: &Path) -> Result<CodexChannel> {
+        Self::open_command(spec, proxy_command(socket))
+    }
+
+    fn open_command(spec: &ChannelSpec, mut command: Command) -> Result<CodexChannel> {
+        let child = command
             .current_dir(&spec.cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(boop_store::trail::child_stderr(spec.lane.as_deref()))
             .spawn()
-            .context("spawn codex app-server")?;
+            .context("connect to Codex app-server")?;
         let mut rpc = RpcChild::attach(child)?;
         rpc.call(
             "initialize",
@@ -56,26 +68,63 @@ impl CodexChannel {
         if let Some(spec) = &model_spec {
             params["model"] = Value::String(spec.name.clone());
         }
-        let thread = match &spec.resume {
+        let (thread, turn) = match &spec.resume {
             Some(id) => {
                 params["threadId"] = Value::String(id.clone());
                 let reply = rpc.call("thread/resume", params, CALL_TIMEOUT)?;
-                thread_id(&reply).unwrap_or_else(|| id.clone())
+                let resumed =
+                    thread_id(&reply).context("Codex thread/resume returned no thread id")?;
+                verify_resumed_thread(id, &resumed)?;
+                (resumed, active_turn_id(&reply))
             }
             None => {
                 let reply = rpc.call("thread/start", params, CALL_TIMEOUT)?;
-                thread_id(&reply).context("codex thread/start returned no thread id")?
+                (
+                    thread_id(&reply).context("codex thread/start returned no thread id")?,
+                    None,
+                )
             }
         };
         Ok(CodexChannel {
             rpc,
             thread,
-            turn: None,
+            turn,
             effort: model_spec
                 .and_then(|spec| spec.effort)
                 .map(|effort| effort.as_str().to_owned()),
         })
     }
+}
+
+fn proxy_command(socket: &Path) -> Command {
+    let mut command = Command::new("codex");
+    command.args(["app-server", "proxy", "--sock"]).arg(socket);
+    command
+}
+
+fn verify_resumed_thread(expected: &str, actual: &str) -> Result<()> {
+    anyhow::ensure!(
+        actual == expected,
+        "Codex thread/resume returned {actual}, expected {expected}"
+    );
+    Ok(())
+}
+
+fn active_turn_id(reply: &Value) -> Option<String> {
+    reply
+        .get("thread")?
+        .get("turns")?
+        .as_array()?
+        .iter()
+        .rev()
+        .find_map(|turn| {
+            matches!(
+                turn.get("status").and_then(Value::as_str),
+                Some("inProgress" | "in_progress")
+            )
+            .then(|| turn.get("id").and_then(Value::as_str).map(str::to_owned))
+            .flatten()
+        })
 }
 
 impl LaneChannel for CodexChannel {
@@ -178,5 +227,31 @@ mod tests {
         let reply = json!({"thread": {"id": "019f-abc"}});
         assert_eq!(thread_id(&reply).as_deref(), Some("019f-abc"));
         assert_eq!(thread_id(&json!({})), None);
+    }
+
+    #[test]
+    fn resumed_active_turn_is_recovered_for_steering() {
+        let reply = json!({"thread": {"turns": [
+            {"id": "completed", "status": "completed"},
+            {"id": "active", "status": "inProgress"}
+        ]}});
+        assert_eq!(active_turn_id(&reply).as_deref(), Some("active"));
+        assert_eq!(active_turn_id(&json!({"thread": {"turns": []}})), None);
+    }
+
+    #[test]
+    fn resume_rejects_a_thread_other_than_the_transcript_thread() {
+        assert!(verify_resumed_thread("transcript-thread", "other-thread").is_err());
+        assert!(verify_resumed_thread("transcript-thread", "transcript-thread").is_ok());
+    }
+
+    #[test]
+    fn proxy_command_uses_the_managed_daemon_socket() {
+        let command = proxy_command(Path::new("/run/boop/codex.sock"));
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(
+            args,
+            ["app-server", "proxy", "--sock", "/run/boop/codex.sock"]
+        );
     }
 }

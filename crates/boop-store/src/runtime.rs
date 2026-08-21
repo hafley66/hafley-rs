@@ -1115,6 +1115,7 @@ mod tests {
             registered_at: Some("2026-08-14T00:00:00Z".into()),
             base_sha: None,
             worktree_dir: None,
+            app_server_socket: None,
         }
     }
 

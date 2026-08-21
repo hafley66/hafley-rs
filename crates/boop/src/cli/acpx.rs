@@ -144,6 +144,7 @@ pub(crate) fn run_foreground(
             registered_at: Some(boop::bus::now_iso()),
             base_sha: None,
             worktree_dir: None,
+            app_server_socket: None,
         },
     )?;
 
@@ -187,6 +188,7 @@ mod tests {
             registered_at: None,
             base_sha: None,
             worktree_dir: None,
+            app_server_socket: None,
         }
     }
 

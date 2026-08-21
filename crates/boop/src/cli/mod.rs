@@ -1,4 +1,5 @@
 pub(crate) mod acpx;
+pub(crate) mod control;
 pub(crate) mod db;
 pub(crate) mod debug;
 pub(crate) mod job;
@@ -340,6 +341,9 @@ pub(crate) fn route_to_json(route: &Route) -> serde_json::Value {
     if let Some(worktree_dir) = &route.worktree_dir {
         object.insert("worktreeDir".into(), serde_json::json!(worktree_dir));
     }
+    if let Some(socket) = &route.app_server_socket {
+        object.insert("appServerSocket".into(), serde_json::json!(socket));
+    }
     serde_json::Value::Object(object)
 }
 
@@ -442,6 +446,7 @@ pub(crate) mod testkit {
             registered_at: None,
             base_sha: None,
             worktree_dir: None,
+            app_server_socket: None,
         }
     }
 }
@@ -471,6 +476,7 @@ mod tests {
             registered_at: None,
             base_sha: None,
             worktree_dir: None,
+            app_server_socket: None,
         };
         write_route(&dir, "child", route).unwrap();
         let routes = read_routes(&dir).unwrap();

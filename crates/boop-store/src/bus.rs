@@ -54,6 +54,8 @@ pub struct Route {
     /// The worktree the spawn should have worked in; `None` for a main-tree
     /// spawn (no worktree was created).
     pub worktree_dir: Option<String>,
+    /// The managed Codex app-server socket shared by a native TUI and Boop.
+    pub app_server_socket: Option<String>,
 }
 
 /// Read the route map out of the `--mail-dir` registry. Corrupt JSON is an
@@ -107,6 +109,7 @@ fn route_from_value(entry: &Value) -> Route {
         base_sha: string_field(object, "baseSha").or_else(|| string_field(object, "base_sha")),
         worktree_dir: string_field(object, "worktreeDir")
             .or_else(|| string_field(object, "worktree_dir")),
+        app_server_socket: string_field(object, "appServerSocket"),
     }
 }
 
@@ -126,6 +129,7 @@ impl Route {
             registered_at: None,
             base_sha: None,
             worktree_dir: None,
+            app_server_socket: None,
         }
     }
 }

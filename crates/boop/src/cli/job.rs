@@ -188,6 +188,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             .worktree_dir
             .clone()
             .map(|dir| dir.display().to_string()),
+        app_server_socket: None,
     };
     write_route(&dir, &args.to, route)?;
     append_message(&dir, &message)?;
@@ -990,23 +991,43 @@ pub(crate) fn register_fresh_codex_spawner(
         return Ok(());
     }
     let lane = caller.lane.as_deref().context("Codex caller lane")?;
-    if routes.contains_key(lane) {
+    let thread = caller
+        .session
+        .as_deref()
+        .context("Codex caller has no CODEX_THREAD_ID")?;
+    let pane = caller
+        .pane
+        .as_deref()
+        .context("Codex caller has no TMUX_PANE")?;
+    if let Some(existing) = routes.get(lane) {
+        if existing.mode.as_deref() == Some("native-remote") && existing.session_id.is_none() {
+            anyhow::ensure!(
+                existing.tmux.as_deref() == Some(pane),
+                "native Codex route {lane} is registered for another tmux pane"
+            );
+            let mut enriched = existing.clone();
+            enriched.session_id = Some(thread.into());
+            enriched.source_path = Some(format!("CODEX_THREAD_ID={thread};TMUX_PANE={pane}"));
+            write_route(mail_dir, lane, enriched.clone())?;
+            routes.insert(lane.to_owned(), enriched);
+        }
         return Ok(());
     }
     let route = Route {
         kind: "coordinator".to_owned(),
         harness: Some("codex".to_owned()),
-        tmux: caller.pane.clone(),
+        tmux: Some(pane.into()),
         cwd: Some(cwd.display().to_string()),
         model: None,
         mode: Some("interactive".to_owned()),
-        session_id: caller.session.clone(),
-        source_path: None,
+        session_id: Some(thread.into()),
+        source_path: Some(format!("CODEX_THREAD_ID={thread};TMUX_PANE={pane}")),
         parent: None,
         goal: None,
         registered_at: Some(bus::now_iso()),
         base_sha: None,
         worktree_dir: None,
+        app_server_socket: None,
     };
     write_route(mail_dir, lane, route.clone())?;
     routes.insert(lane.to_owned(), route);
@@ -1121,6 +1142,7 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
                     registered_at: Some(bus::now_iso()),
                     base_sha: None,
                     worktree_dir: worktree.as_ref().map(|dir| dir.display().to_string()),
+                    app_server_socket: None,
                 },
             )?;
             println!("registered {name}");
@@ -2248,6 +2270,53 @@ mod tests {
         std::fs::remove_dir_all(dir).expect("remove mail dir");
     }
 
+    #[test]
+    fn native_remote_route_is_enriched_only_by_its_matching_pane_thread() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).expect("mail dir");
+        let mut routes = BTreeMap::new();
+        let route = Route {
+            kind: "coordinator".into(),
+            harness: Some("codex".into()),
+            tmux: Some("%1206".into()),
+            cwd: Some("/shared-cwd".into()),
+            model: None,
+            mode: Some("native-remote".into()),
+            session_id: None,
+            source_path: None,
+            parent: None,
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+            app_server_socket: Some("/tmp/codex.sock".into()),
+        };
+        write_route(&dir, "codex-1206", route.clone()).expect("write route");
+        routes.insert("codex-1206".into(), route);
+        let caller = boop::identity::Identity {
+            session: Some("thread-pane-1206".into()),
+            lane: Some("codex-1206".into()),
+            parent: None,
+            harness: Some("codex".into()),
+            pane: Some("%1206".into()),
+            rung: Some(boop::identity::Rung::CodexProcess),
+        };
+        register_fresh_codex_spawner(
+            &dir,
+            std::path::Path::new("/shared-cwd"),
+            &caller,
+            &mut routes,
+        )
+        .expect("enrich exact pane route");
+        let route = routes.get("codex-1206").expect("route");
+        assert_eq!(route.session_id.as_deref(), Some("thread-pane-1206"));
+        assert_eq!(
+            route.source_path.as_deref(),
+            Some("CODEX_THREAD_ID=thread-pane-1206;TMUX_PANE=%1206")
+        );
+        std::fs::remove_dir_all(dir).expect("remove mail dir");
+    }
+
     /// A named harness that is not registered must be refused, never quietly
     /// swapped for the first adapter, which would be a capability lie.
     #[test]
@@ -2337,6 +2406,7 @@ mod tests {
                 registered_at: None,
                 base_sha: None,
                 worktree_dir: None,
+                app_server_socket: None,
             },
         )
         .unwrap();
@@ -2374,6 +2444,7 @@ mod tests {
             registered_at: None,
             base_sha: None,
             worktree_dir: None,
+            app_server_socket: None,
         }
     }
 
@@ -2491,6 +2562,7 @@ mod tests {
             registered_at: None,
             base_sha: None,
             worktree_dir: None,
+            app_server_socket: None,
         };
         assert_eq!(
             dead_reason(&route, &snapshot).as_deref(),
@@ -2529,6 +2601,7 @@ mod tests {
             registered_at: Some(ts.into()),
             base_sha: None,
             worktree_dir: None,
+            app_server_socket: None,
         }
     }
 
@@ -2972,6 +3045,7 @@ mod tests {
                 registered_at: None,
                 base_sha: None,
                 worktree_dir: None,
+                app_server_socket: None,
             },
         );
         let messages = vec![dispatch("coordinator", "child")];

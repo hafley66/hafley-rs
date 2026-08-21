@@ -9,6 +9,7 @@ use boop::mailwait::Watch;
 use boop::registry::Registry;
 use boop::{bus, identity, inbox, lane, tmux};
 
+use crate::cli::control::{self, DeliveryReceipt};
 use crate::cli::job::{harness_by_id, wait_and_exit, waiting_as};
 use crate::cli::{append_acks, append_message, append_message_to, line, mail_dir, pad};
 use crate::InboxCmd;
@@ -170,6 +171,22 @@ pub(crate) fn deliver_hail(
             println!("{}", response.trim_end());
         }
         println!("delivered {} -> {to} (acpx queue)", message.id);
+        return Ok(());
+    }
+    if route.harness.as_deref() == Some("codex")
+        && matches!(route.kind.as_str(), "coordinator" | "native")
+        && route.app_server_socket.is_some()
+    {
+        let receipt = control::deliver(route, &message.body)?;
+        append_acks(dir, std::slice::from_ref(message))?;
+        let action = match receipt {
+            DeliveryReceipt::Steered => "steered",
+            DeliveryReceipt::Started => "started",
+        };
+        println!(
+            "delivered {} -> {to} ({action} through Codex proxy)",
+            message.id
+        );
         return Ok(());
     }
     // A lane pane runs the supervisor, which reads this mailbox directly;
