@@ -10,8 +10,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::harness::{
-    jsonl_files, Capabilities, Harness, KnownSessions, NativeSessionRef, ReadChunk, SendOutcome,
-    SessionRef, SpawnSpec,
+    jsonl_files, Capabilities, ChildAddress, ChildKind, ControlEndpoint, DeliveryReceipt, Harness,
+    HarnessSession, HarnessSessionId, KnownSessions, NativeSessionRef, ProcessObservation,
+    ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
 use anyhow::Context;
 use boop_store::event::{Access, AgentEvent, ToolPath};
@@ -22,6 +23,104 @@ use serde_json::Value;
 pub struct Claude;
 
 impl Harness for Claude {
+    fn discover_session(
+        &self,
+        observation: &ProcessObservation,
+    ) -> anyhow::Result<Option<HarnessSession>> {
+        let session_id = std::env::var("CLAUDE_CODE_SESSION_ID")
+            .ok()
+            .filter(|value| !value.is_empty())
+            .or_else(|| {
+                observation
+                    .descendants
+                    .iter()
+                    .find_map(|process| claude_resume_id(&process.command))
+            });
+        let Some(value) = session_id else {
+            return Ok(None);
+        };
+        let control = resolve_live_peer(&value)
+            .ok()
+            .map(|(peer, _)| ControlEndpoint::ClaudePeer {
+                socket: peer.messaging_socket_path,
+                pid: peer.pid,
+                proc_start: peer.proc_start,
+            });
+        Ok(Some(HarnessSession {
+            id: HarnessSessionId {
+                harness: self.id().into(),
+                value,
+            },
+            cwd: observation.cwd.clone(),
+            control,
+            observed_process: observation.pane_pid,
+            observed_at_ms: now_ms(),
+        }))
+    }
+
+    fn refresh_session(
+        &self,
+        known: &HarnessSession,
+        observation: Option<&ProcessObservation>,
+    ) -> anyhow::Result<Option<HarnessSession>> {
+        let mut refreshed = known.clone();
+        if let Ok((peer, _)) = resolve_live_peer(&known.id.value) {
+            refreshed.control = Some(ControlEndpoint::ClaudePeer {
+                socket: peer.messaging_socket_path,
+                pid: peer.pid,
+                proc_start: peer.proc_start,
+            });
+        } else {
+            refreshed.control = None;
+        }
+        refreshed.observed_process = observation
+            .and_then(|value| value.pane_pid)
+            .or(known.observed_process);
+        refreshed.observed_at_ms = now_ms();
+        Ok(Some(refreshed))
+    }
+
+    fn send_session(
+        &self,
+        session: &HarnessSession,
+        message: &str,
+    ) -> anyhow::Result<DeliveryReceipt> {
+        let Some(ControlEndpoint::ClaudePeer {
+            socket,
+            pid,
+            proc_start,
+        }) = session.control.as_ref()
+        else {
+            return Ok(DeliveryReceipt::Queued {
+                reason: crate::harness::QueueReason::MissingControlEndpoint,
+            });
+        };
+        let (peer, token) = resolve_live_peer(&session.id.value)?;
+        anyhow::ensure!(
+            peer.pid == *pid
+                && peer.proc_start == *proc_start
+                && peer.messaging_socket_path == *socket,
+            "Claude peer descriptor changed for session {}",
+            session.id.value
+        );
+        send_peer_frame(socket, &token, message)?;
+        Ok(DeliveryReceipt::Accepted)
+    }
+
+    fn send_child(&self, child: &ChildAddress, _message: &str) -> anyhow::Result<DeliveryReceipt> {
+        Ok(match child.kind {
+            ChildKind::ParentMediated => DeliveryReceipt::ParentMediated {
+                parent: child.parent.clone(),
+            },
+            ChildKind::Direct => DeliveryReceipt::Unsupported {
+                capability: "child_send",
+            },
+            ChildKind::ObservableOnly => DeliveryReceipt::Unsupported {
+                capability: "child_send",
+            },
+        })
+    }
+
     /// Claude stamps its session id into every process it runs, and a sidechain
     /// record carries the same `sessionId` as the root that spawned it, so a
     /// subagent's shell resolves the session hosting it rather than nothing.
@@ -135,6 +234,14 @@ impl Harness for Claude {
         }
     }
 
+    fn control_capabilities(&self) -> crate::harness::ControlCapabilities {
+        crate::harness::ControlCapabilities {
+            session_send: true,
+            child_send: crate::harness::ChildSendCapability::ParentMediated,
+            endpoint_refresh: true,
+        }
+    }
+
     fn send_native(&self, session: &NativeSessionRef, text: &str) -> anyhow::Result<SendOutcome> {
         send_peer_message(&session.session_id, text)?;
         Ok(SendOutcome::Injected)
@@ -207,12 +314,13 @@ struct PeerKey {
 #[cfg(unix)]
 fn send_peer_message(session_id: &str, text: &str) -> anyhow::Result<()> {
     let (peer, token) = resolve_live_peer(session_id)?;
-    let mut stream = UnixStream::connect(&peer.messaging_socket_path).with_context(|| {
-        format!(
-            "connect Claude peer socket {}",
-            peer.messaging_socket_path.display()
-        )
-    })?;
+    send_peer_frame(&peer.messaging_socket_path, &token, text)
+}
+
+#[cfg(unix)]
+fn send_peer_frame(socket: &std::path::Path, token: &str, text: &str) -> anyhow::Result<()> {
+    let mut stream = UnixStream::connect(socket)
+        .with_context(|| format!("connect Claude peer socket {}", socket.display()))?;
     stream.set_write_timeout(Some(Duration::from_secs(3)))?;
     let msg_id = format!(
         "boop-{}-{}",
@@ -246,6 +354,11 @@ fn send_peer_message(_session_id: &str, _text: &str) -> anyhow::Result<()> {
     anyhow::bail!("Claude native peer messaging requires Unix sockets")
 }
 
+#[cfg(not(unix))]
+fn send_peer_frame(_socket: &std::path::Path, _token: &str, _text: &str) -> anyhow::Result<()> {
+    anyhow::bail!("Claude native peer messaging requires Unix sockets")
+}
+
 fn resolve_live_peer(session_id: &str) -> anyhow::Result<(LivePeer, String)> {
     let dir = dirs::home_dir()
         .context("resolve home directory")?
@@ -267,10 +380,7 @@ fn resolve_live_peer(session_id: &str) -> anyhow::Result<(LivePeer, String)> {
             peers.push(peer);
         }
     }
-    peers.sort_by_key(|peer| std::cmp::Reverse(peer.updated_at));
-    let peer = peers
-        .into_iter()
-        .next()
+    let peer = select_live_peer(peers)
         .with_context(|| format!("no live Claude peer socket for session {session_id}"))?;
     let prefix = format!("{}.", peer.pid);
     let mut keys = Vec::new();
@@ -285,9 +395,11 @@ fn resolve_live_peer(session_id: &str) -> anyhow::Result<(LivePeer, String)> {
                 .and_then(|bytes| serde_json::from_slice::<PeerKey>(&bytes).ok())
                 .ok_or(())
             {
-                if key.proc_start == peer.proc_start {
-                    keys.push(key.peer_token);
-                }
+                keys.extend(matching_peer_tokens(
+                    std::slice::from_ref(&key),
+                    peer.pid,
+                    &peer.proc_start,
+                ));
             }
         }
     }
@@ -298,6 +410,20 @@ fn resolve_live_peer(session_id: &str) -> anyhow::Result<(LivePeer, String)> {
         keys.len()
     );
     Ok((peer, keys.pop().expect("one matching peer key")))
+}
+
+fn select_live_peer(mut peers: Vec<LivePeer>) -> Option<LivePeer> {
+    peers.retain(|peer| peer.messaging_socket_path.exists());
+    peers.sort_by_key(|peer| std::cmp::Reverse(peer.updated_at));
+    peers.into_iter().next()
+}
+
+fn matching_peer_tokens(keys: &[PeerKey], pid: u32, proc_start: &str) -> Vec<String> {
+    keys.iter()
+        .filter(|key| key.proc_start == proc_start && pid > 0)
+        .map(|key| key.peer_token.clone())
+        .filter(|token| !token.is_empty())
+        .collect()
 }
 
 /// The interactive Claude CLI names the resumed transcript in argv. The flag
@@ -338,6 +464,13 @@ fn random_hex() -> String {
         .unwrap_or(0);
     let mixed = (nanos as u64) ^ ((std::process::id() as u64) << 48) ^ (nanos >> 64) as u64;
     format!("{mixed:016x}")
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// Root sessions under one project directory whose own record says `cwd`. A

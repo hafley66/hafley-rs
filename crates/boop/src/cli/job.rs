@@ -189,6 +189,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             .clone()
             .map(|dir| dir.display().to_string()),
         app_server_socket: None,
+        address: None,
     };
     write_route(&dir, &args.to, route)?;
     append_message(&dir, &message)?;
@@ -1028,6 +1029,7 @@ pub(crate) fn register_fresh_codex_spawner(
         base_sha: None,
         worktree_dir: None,
         app_server_socket: None,
+        address: None,
     };
     write_route(mail_dir, lane, route.clone())?;
     routes.insert(lane.to_owned(), route);
@@ -1143,6 +1145,7 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
                     base_sha: None,
                     worktree_dir: worktree.as_ref().map(|dir| dir.display().to_string()),
                     app_server_socket: None,
+                    address: None,
                 },
             )?;
             println!("registered {name}");
@@ -2290,6 +2293,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: Some("/tmp/codex.sock".into()),
+            address: None,
         };
         write_route(&dir, "codex-1206", route.clone()).expect("write route");
         routes.insert("codex-1206".into(), route);
@@ -2407,6 +2411,7 @@ mod tests {
                 base_sha: None,
                 worktree_dir: None,
                 app_server_socket: None,
+                address: None,
             },
         )
         .unwrap();
@@ -2445,6 +2450,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            address: None,
         }
     }
 
@@ -2563,6 +2569,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            address: None,
         };
         assert_eq!(
             dead_reason(&route, &snapshot).as_deref(),
@@ -2602,6 +2609,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            address: None,
         }
     }
 
@@ -3046,6 +3054,7 @@ mod tests {
                 base_sha: None,
                 worktree_dir: None,
                 app_server_socket: None,
+                address: None,
             },
         );
         let messages = vec![dispatch("coordinator", "child")];

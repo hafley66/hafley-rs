@@ -10,7 +10,13 @@
 pub mod _0_session_graph;
 #[cfg(feature = "agent-read")]
 pub mod activity;
+#[path = "_0_address.rs"]
+pub mod address;
 pub mod bus;
+pub use address::{
+    AgentAddress, ChildAddress, ChildKind, ControlEndpoint, DeliveryReceipt, HarnessSession,
+    HarnessSessionId, ProcessObservation, QueueReason, SessionRegistry,
+};
 pub mod event;
 pub mod ident;
 pub mod proc;

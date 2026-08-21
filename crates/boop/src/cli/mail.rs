@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{Context, Result};
-use tracing::{debug, info};
+use tracing::debug;
 
 use boop::bus::Route;
 use boop::mailwait::Watch;
 use boop::registry::Registry;
-use boop::{bus, identity, inbox, lane, tmux};
+use boop::{bus, identity, lane, tmux};
 
 use crate::cli::job::{harness_by_id, wait_and_exit, waiting_as};
 use crate::cli::{append_acks, append_message, append_message_to, line, mail_dir, pad};
@@ -23,6 +23,7 @@ pub(crate) fn run_list(mail_dir_arg: Option<&Path>, agent: Option<&str>, all: bo
         None => {
             let routes = bus::read_routes(&dir)?;
             let live = tmux::mux().live_sessions(None);
+            let harnesses = Registry::discover();
             for (name, route) in &routes {
                 let state = match &live {
                     None => "?",
@@ -45,6 +46,18 @@ pub(crate) fn run_list(mail_dir_arg: Option<&Path>, agent: Option<&str>, all: bo
                     padded_tmux,
                     route.cwd.as_deref().unwrap_or("-"),
                 ));
+                let address = route
+                    .address
+                    .as_ref()
+                    .map(|value| format!("{value:?}"))
+                    .unwrap_or_else(|| "-".into());
+                let capabilities = route
+                    .harness
+                    .as_deref()
+                    .and_then(|id| harnesses.by_id(id))
+                    .map(|harness| format!("{:?}", harness.control_capabilities()))
+                    .unwrap_or_else(|| "-".into());
+                line(&format!("  address={address} capabilities={capabilities}"));
             }
             let messages = all_messages(&dir)?;
             let rows = if all {
@@ -163,39 +176,7 @@ pub(crate) fn deliver_hail(
         println!("no registry route for {to}: message stays queued, to_timestamp null");
         return Ok(());
     };
-    if route.mode.as_deref() == Some("acpx") {
-        let response = crate::cli::acpx::deliver(route, &message.body)?;
-        append_acks(dir, std::slice::from_ref(message))?;
-        if !response.trim().is_empty() {
-            println!("{}", response.trim_end());
-        }
-        println!("delivered {} -> {to} (acpx queue)", message.id);
-        return Ok(());
-    }
-    if matches!(route.kind.as_str(), "coordinator" | "native") {
-        let harness_id = route.harness.as_deref().unwrap_or("claude");
-        match send_native_route(registry, route, &message.body)? {
-            boop::harness::SendOutcome::Injected => {
-                append_acks(dir, std::slice::from_ref(message))?;
-                println!(
-                    "delivered {} -> {to} through {harness_id} native control",
-                    message.id
-                );
-            }
-            boop::harness::SendOutcome::QueuedForNextSpawn => {
-                println!("queued {} -> {to} for native control", message.id);
-            }
-            boop::harness::SendOutcome::Unsupported => {
-                println!(
-                    "queued {} -> {to} ({harness_id} has no native control)",
-                    message.id
-                );
-            }
-        }
-        return Ok(());
-    }
-    // A lane pane runs the supervisor, which reads this mailbox directly;
-    // typing at its stdout would reach no agent.
+    // A lane supervisor reads this mailbox directly.
     if route.kind == "lane" {
         println!(
             "queued {} -> {to} (lane supervisor delivers it)",
@@ -203,22 +184,31 @@ pub(crate) fn deliver_hail(
         );
         return Ok(());
     }
-    // A hook-backed session consumes the queued row at its turn boundary.
-    if let Some(cwd) = route.cwd.as_deref() {
-        if inbox::installed_for(Path::new(cwd), to) {
-            println!("queued {} -> {to} (hook inbox drains it)", message.id);
-            info!(
-                to,
-                message_id = message.id,
-                delivery = "hook",
-                "hail queued for a hook inbox"
-            );
-            return Ok(());
+    if route.address.is_some() || route.session_id.is_some() {
+        let envelope = dispatch_envelope(message);
+        match send_address_route(registry, dir, route, &envelope)? {
+            boop::harness::DeliveryReceipt::Accepted
+            | boop::harness::DeliveryReceipt::Delivered
+            | boop::harness::DeliveryReceipt::ParentMediated { .. } => {
+                append_acks(dir, std::slice::from_ref(message))?;
+                println!("delivered {} -> {to}", message.id);
+            }
+            boop::harness::DeliveryReceipt::Queued { reason } => {
+                println!("queued {} -> {to} ({reason:?})", message.id);
+            }
+            boop::harness::DeliveryReceipt::Unsupported { capability } => {
+                println!("queued {} -> {to} (unsupported {capability})", message.id);
+            }
         }
+        return Ok(());
     }
     println!("queued {} -> {to}", message.id);
     println!("{to} has no native or supervisor transport: message stays queued");
     Ok(())
+}
+
+fn dispatch_envelope(message: &bus::Message) -> String {
+    format!("[boop-message-id:{}]\n{}", message.id, message.body)
 }
 
 /// `tell-parent`: one row from the caller to the parent its registration
@@ -292,22 +282,8 @@ pub(crate) fn run_tell_children(
         println!("no child of {caller} is registered");
         return Ok(());
     }
-    let (mut landed, mut unreachable, mut dead) = (0usize, 0usize, 0usize);
+    let (mut landed, mut unreachable) = (0usize, 0usize);
     for (name, route) in children {
-        let reach = child_reach(route, name, None);
-        match &reach {
-            ChildReach::NoRoute(why) => {
-                unreachable += 1;
-                println!("no-route {name} ({why})");
-                continue;
-            }
-            ChildReach::Dead(target) => {
-                dead += 1;
-                println!("dead {name} (tmux {target} is gone)");
-                continue;
-            }
-            _ => {}
-        }
         let message = bus::Message {
             id: bus::mint_id(),
             from: caller.clone(),
@@ -323,72 +299,85 @@ pub(crate) fn run_tell_children(
         };
         append_message(&dir, &message)?;
         record_control_edge(&message)?;
-        match reach {
-            ChildReach::Hook => {
+        match send_address_route(registry, &dir, route, &dispatch_envelope(&message))? {
+            boop::harness::DeliveryReceipt::Accepted
+            | boop::harness::DeliveryReceipt::Delivered
+            | boop::harness::DeliveryReceipt::ParentMediated { .. } => {
                 landed += 1;
-                println!("landed {name} {} (hook inbox)", message.id);
+                println!("landed {name} {} (harness control)", message.id);
             }
-            ChildReach::Supervisor => {
-                landed += 1;
-                println!("landed {name} {} (lane supervisor)", message.id);
+            boop::harness::DeliveryReceipt::Queued { .. }
+            | boop::harness::DeliveryReceipt::Unsupported { .. } => {
+                unreachable += 1;
+                println!("no-route {name} (harness control unavailable)");
             }
-            ChildReach::Pane => match send_native_route(registry, route, &message.body)? {
-                boop::harness::SendOutcome::Injected => {
-                    landed += 1;
-                    println!("landed {name} {} (native control)", message.id);
-                }
-                boop::harness::SendOutcome::QueuedForNextSpawn => {
-                    landed += 1;
-                    println!("landed {name} {} (next spawn)", message.id);
-                }
-                boop::harness::SendOutcome::Unsupported => {
-                    unreachable += 1;
-                    println!("no-route {name} (harness takes no send)");
-                }
-            },
-            ChildReach::NoRoute(_) | ChildReach::Dead(_) => unreachable!("reported above"),
         }
     }
     for session in spawned {
         unreachable += 1;
-        println!("no-route {session} ({NATIVE_CHILD_REASON})");
+        println!("no-route {session} (child has no registered address)");
     }
-    println!("{landed} landed, {unreachable} no-route, {dead} dead");
+    println!("{landed} landed, {unreachable} no-route");
     Ok(())
 }
 
-fn send_native_route(
+fn send_address_route(
     registry: &Registry,
+    dir: &Path,
     route: &Route,
     body: &str,
-) -> Result<boop::harness::SendOutcome> {
-    let adapter = harness_by_id(registry, route.harness.as_deref().unwrap_or("claude"))?;
-    let discovered;
-    let session_id = if let Some(session_id) = route.session_id.as_deref() {
-        session_id
-    } else if let Some(target) = route.tmux.as_deref() {
-        let processes = boop::proc::SysinfoSnapshot::capture()?;
-        discovered = adapter.session_id_in_pane(tmux::mux(), &processes, target);
-        let Some(session_id) = discovered.as_deref() else {
-            return Ok(boop::harness::SendOutcome::Unsupported);
-        };
-        session_id
-    } else {
-        return Ok(boop::harness::SendOutcome::Unsupported);
+) -> Result<boop::harness::DeliveryReceipt> {
+    let adapter = harness_by_id(registry, route.harness.as_deref().unwrap_or(""))?;
+    let address = route.address.clone().or_else(|| {
+        route.session_id.as_ref().map(|value| {
+            boop::harness::AgentAddress::Session(boop::harness::HarnessSessionId {
+                harness: route.harness.clone().unwrap_or_default(),
+                value: value.clone(),
+            })
+        })
+    });
+    let Some(address) = address else {
+        return Ok(boop::harness::DeliveryReceipt::Queued {
+            reason: boop::harness::QueueReason::MissingSession,
+        });
     };
-    adapter.send_native(
-        &boop::harness::NativeSessionRef {
-            session_id: session_id.to_owned(),
-            cwd: route.cwd.as_deref().map(PathBuf::from),
-            app_server_socket: route.app_server_socket.as_deref().map(PathBuf::from),
-        },
-        body,
-    )
+    let sessions = boop::address::read_sessions(dir)?;
+    match address {
+        boop::harness::AgentAddress::Session(id) => {
+            let Some(known) = sessions.get(&id).cloned() else {
+                return Ok(boop::harness::DeliveryReceipt::Queued {
+                    reason: boop::harness::QueueReason::MissingSession,
+                });
+            };
+            let session = if known.control.is_some() {
+                known
+            } else {
+                adapter.refresh_session(&known, None)?.unwrap_or(known)
+            };
+            let receipt = adapter.send_session(&session, body)?;
+            if !matches!(
+                receipt,
+                boop::harness::DeliveryReceipt::Queued { .. }
+                    | boop::harness::DeliveryReceipt::Unsupported { .. }
+            ) {
+                boop::address::upsert_session(dir, session)?;
+            }
+            Ok(receipt)
+        }
+        boop::harness::AgentAddress::Child(child) => {
+            if child.parent.harness != adapter.id() || !sessions.contains_key(&child.parent) {
+                return Ok(boop::harness::DeliveryReceipt::Queued {
+                    reason: boop::harness::QueueReason::MissingSession,
+                });
+            }
+            let receipt = adapter.send_child(&child, body)?;
+            Ok(receipt)
+        }
+        boop::harness::AgentAddress::Lane { .. } => Ok(boop::harness::DeliveryReceipt::Queued {
+            reason: boop::harness::QueueReason::MissingControlEndpoint,
+        }),
+    }
 }
-
-/// A claude Agent-tool child runs inside its parent's process. It owns no pane,
-/// no stdin and no registry route, so no delivery path in boop addresses one.
-const NATIVE_CHILD_REASON: &str = "native subagent: no pane, no route, nothing drains its mailbox";
 
 /// Children the store's `spawned` edges name under the caller's session, minus
 /// the ones a registry route already carries. A store that will not open costs
@@ -420,43 +409,6 @@ fn spawned_children(session: Option<&str>, routes: &BTreeMap<String, Route>) -> 
     children.sort();
     children.dedup();
     children
-}
-
-/// What would take a row addressed to a child.
-pub(crate) enum ChildReach {
-    /// An installed hook drains the child's mailbox at its turn boundary.
-    Hook,
-    /// The lane's own supervisor reads the mailbox.
-    Supervisor,
-    /// A live native session may accept harness control.
-    Pane,
-    /// Nothing addresses this child at all, and the reason why.
-    NoRoute(&'static str),
-    /// The child named a tmux target and tmux no longer has it.
-    Dead(String),
-}
-
-/// How a queued row reaches a child. A route with no hook and no tmux target
-/// was never reachable; a route whose target tmux has dropped went dead. The
-/// two are different facts and are reported apart.
-pub(crate) fn child_reach(route: &Route, name: &str, socket: Option<&str>) -> ChildReach {
-    if route
-        .cwd
-        .as_deref()
-        .is_some_and(|cwd| inbox::installed_for(Path::new(cwd), name))
-    {
-        return ChildReach::Hook;
-    }
-    let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) else {
-        return ChildReach::NoRoute("no hook, no pane");
-    };
-    if !tmux::mux().target_alive(socket, target) {
-        return ChildReach::Dead(target.to_owned());
-    }
-    match route.kind.as_str() {
-        "lane" => ChildReach::Supervisor,
-        _ => ChildReach::Pane,
-    }
 }
 
 pub(crate) fn record_control_edge(message: &boop::bus::Message) -> Result<()> {
@@ -498,9 +450,8 @@ pub(crate) fn run_inbox(cmd: InboxCmd) -> Result<()> {
     }
 }
 
-/// Hand over every unread row addressed to `name`, once. The bus ack and the
-/// drained-id ledger are both written before anything is printed: a batch this
-/// process printed and then died on must never be printed twice.
+/// Legacy command retained as a diagnostic. Prompt hooks do not consume Boop
+/// mail; native control or a lane supervisor owns delivery.
 pub(crate) fn run_inbox_drain(
     as_name: Option<&str>,
     hook: boop::inbox::Hook,
@@ -508,66 +459,30 @@ pub(crate) fn run_inbox_drain(
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let name = waiting_as(&dir, as_name)?;
-    let ledger = inbox::ledger_path(&dir, &name);
-    let rows = inbox::undelivered(&all_messages(&dir)?, &name, &inbox::drained(&ledger));
+    let rows: Vec<_> = bus::unacked(&all_messages(&dir)?)
+        .into_iter()
+        .filter(|row| row.to == name)
+        .collect();
     if rows.is_empty() {
-        debug!(
-            inbox = name,
-            hook = hook.as_str(),
-            "inbox drain found nothing"
-        );
+        debug!(inbox = name, "inbox drain found nothing");
         return Ok(());
     }
-    let ids: Vec<String> = rows.iter().map(|row| row.id.clone()).collect();
-    inbox::record_drained(&ledger, &ids)?;
-    append_acks(&dir, &rows)?;
-    info!(
-        inbox = name,
-        hook = hook.as_str(),
-        rows = rows.len(),
-        "inbox drained"
+    let _ = hook;
+    println!(
+        "{} queued row(s) for {name}; prompt hooks are disabled",
+        rows.len()
     );
-    line(&hook.payload(&inbox::batch_text(
-        &rows,
-        &boop::supervise::mood_template(&name),
-    )));
     Ok(())
 }
 
 /// Write the coordinator's hooks into its project settings, or take them out.
 /// Returns how many hook entries changed; 0 means the file already said this.
 pub(crate) fn write_inbox_hooks(cwd: &Path, name: &str, uninstall: bool) -> Result<usize> {
-    let path = inbox::settings_path(cwd);
-    if uninstall && !path.exists() {
-        return Ok(0);
-    }
-    // The CAS closure is `Fn` and may run more than once, so the count comes
-    // out through a cell rather than by assignment.
-    let changed = std::cell::Cell::new(0);
-    bus::cas_update_json(&path, |settings| {
-        changed.set(match uninstall {
-            true => inbox::uninstall(settings, name),
-            false => inbox::install(settings, name),
-        });
-        Ok(())
-    })?;
-    Ok(changed.get())
+    let _ = (cwd, name, uninstall);
+    Ok(0)
 }
 
 pub(crate) fn report_inbox_hooks(cwd: &Path, name: &str, uninstall: bool, changed: usize) {
-    let path = inbox::settings_path(cwd);
-    let verb = match (uninstall, changed) {
-        (false, 0) => "already installed for",
-        (false, _) => "installed for",
-        (true, 0) => "nothing to remove for",
-        (true, _) => "removed for",
-    };
-    println!("inbox hooks {verb} {name} in {}", path.display());
-    if !uninstall {
-        for hook in boop::inbox::Hook::installed() {
-            if let Some(event) = hook.event() {
-                println!("  {event}: {}", inbox::drain_command(name, hook));
-            }
-        }
-    }
+    let _ = (cwd, name, uninstall, changed);
+    println!("prompt hooks are disabled; use native harness control or queued mail");
 }

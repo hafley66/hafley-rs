@@ -37,6 +37,25 @@ pub(crate) fn run_native_tui(
         args: tui_args.to_vec(),
     })?;
     let dir = mail_dir(mail_dir_arg)?;
+    let session = plan
+        .session_id
+        .clone()
+        .map(|value| boop::harness::HarnessSession {
+            id: boop::harness::HarnessSessionId {
+                harness: adapter.id().into(),
+                value,
+            },
+            cwd: Some(cwd.to_path_buf()),
+            control: plan.control.clone(),
+            observed_process: None,
+            observed_at_ms: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_millis() as u64)
+                .unwrap_or(0),
+        });
+    if let Some(session) = &session {
+        boop::address::upsert_session(&dir, session.clone())?;
+    }
     write_route(
         &dir,
         name,
@@ -55,6 +74,7 @@ pub(crate) fn run_native_tui(
             base_sha: None,
             worktree_dir: None,
             app_server_socket: plan.app_server_socket.clone(),
+            address: None,
         },
     )?;
     let status = Command::new(&plan.program)

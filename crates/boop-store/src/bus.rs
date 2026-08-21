@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde_json::{Map, Value};
 
+use crate::address::AgentAddress;
+
 /// A mailbox envelope as it appears on disk.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Message {
@@ -56,6 +58,9 @@ pub struct Route {
     pub worktree_dir: Option<String>,
     /// The managed Codex app-server socket shared by a native TUI and Boop.
     pub app_server_socket: Option<String>,
+    /// Typed durable address. Old registry rows synthesize this from
+    /// `harness` and `sessionId` while retaining compatibility fields.
+    pub address: Option<AgentAddress>,
 }
 
 /// Read the route map out of the `--mail-dir` registry. Corrupt JSON is an
@@ -78,6 +83,75 @@ pub fn read_routes(dir: &Path) -> Result<BTreeMap<String, Route>> {
     Ok(routes)
 }
 
+/// Encode a route with stable camelCase registry keys. Typed addresses are
+/// additive, so readers that predate them continue to consume the legacy
+/// fields above.
+pub fn route_to_value(route: &Route) -> Value {
+    let mut object = Map::new();
+    object.insert("kind".into(), Value::String(route.kind.clone()));
+    macro_rules! field {
+        ($name:literal, $value:expr) => {
+            if let Some(value) = $value {
+                object.insert($name.into(), Value::String(value.clone()));
+            }
+        };
+    }
+    field!("harness", route.harness.as_ref());
+    field!("tmux", route.tmux.as_ref());
+    field!("cwd", route.cwd.as_ref());
+    field!("model", route.model.as_ref());
+    field!("mode", route.mode.as_ref());
+    let address = route.address.clone().or_else(|| {
+        route
+            .session_id
+            .as_ref()
+            .zip(route.harness.as_ref())
+            .map(|(value, harness)| {
+                AgentAddress::Session(crate::address::HarnessSessionId {
+                    harness: harness.clone(),
+                    value: value.clone(),
+                })
+            })
+    });
+    if address.is_none() {
+        field!("sessionId", route.session_id.as_ref());
+    }
+    field!("sourcePath", route.source_path.as_ref());
+    field!("parent", route.parent.as_ref());
+    field!("goal", route.goal.as_ref());
+    field!("registeredAt", route.registered_at.as_ref());
+    field!("baseSha", route.base_sha.as_ref());
+    field!("worktreeDir", route.worktree_dir.as_ref());
+    if address.is_none() {
+        field!("appServerSocket", route.app_server_socket.as_ref());
+    }
+    if let Some(address) = &address {
+        object.insert(
+            "address".into(),
+            serde_json::to_value(address).unwrap_or(Value::Null),
+        );
+    }
+    Value::Object(object)
+}
+
+/// Commit a route and its session observation in dependency order. The route
+/// is written last, so a route never references a session row absent from the
+/// session file after a successful operation.
+pub fn write_route_and_session(
+    dir: &Path,
+    route_name: &str,
+    route: &Route,
+    session: Option<&crate::address::HarnessSession>,
+) -> Result<()> {
+    if let Some(session) = session {
+        crate::address::upsert_session(dir, session.clone())?;
+    }
+    cas_update_json(&dir.join("registry.json"), |current| {
+        current.insert(route_name.to_owned(), route_to_value(route));
+        Ok(())
+    })
+}
+
 fn route_from_value(entry: &Value) -> Route {
     let object = match entry.as_object() {
         Some(object) => object,
@@ -86,20 +160,43 @@ fn route_from_value(entry: &Value) -> Route {
             return Route {
                 kind: "lane".into(),
                 session_id: entry.as_str().map(str::to_owned),
+                address: entry.as_str().map(|value| {
+                    AgentAddress::Session(crate::address::HarnessSessionId {
+                        harness: "lane".into(),
+                        value: value.into(),
+                    })
+                }),
                 ..Route::unset()
             };
         }
         None => return Route::unset(),
     };
+    let harness = string_field(object, "harness");
+    let session_id =
+        string_field(object, "sessionId").or_else(|| string_field(object, "session_id"));
+    let address = object
+        .get("address")
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+        .or_else(|| match (harness.as_deref(), session_id.as_deref()) {
+            (Some(harness), Some(value)) => {
+                Some(AgentAddress::Session(crate::address::HarnessSessionId {
+                    harness: harness.into(),
+                    value: value.into(),
+                }))
+            }
+            _ => None,
+        });
     Route {
         kind: string_field(object, "kind").unwrap_or_else(|| "lane".into()),
-        harness: string_field(object, "harness"),
+        harness,
         tmux: string_field(object, "tmux"),
         cwd: string_field(object, "cwd"),
         model: string_field(object, "model"),
         mode: string_field(object, "mode"),
-        session_id: string_field(object, "sessionId")
-            .or_else(|| string_field(object, "session_id")),
+        session_id: session_id.or_else(|| match &address {
+            Some(AgentAddress::Session(id)) => Some(id.value.clone()),
+            _ => None,
+        }),
         source_path: string_field(object, "sourcePath")
             .or_else(|| string_field(object, "source_path")),
         parent: string_field(object, "parent"),
@@ -110,6 +207,7 @@ fn route_from_value(entry: &Value) -> Route {
         worktree_dir: string_field(object, "worktreeDir")
             .or_else(|| string_field(object, "worktree_dir")),
         app_server_socket: string_field(object, "appServerSocket"),
+        address,
     }
 }
 
@@ -130,6 +228,7 @@ impl Route {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            address: None,
         }
     }
 }
@@ -563,6 +662,28 @@ mod tests {
         let child = routes.get("child").unwrap();
         assert_eq!(child.goal, None);
         assert_eq!(child.harness.as_deref(), Some("opencode"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn newly_written_session_route_uses_typed_address_without_legacy_locator_keys() {
+        let mut route = super::Route::unset();
+        route.harness = Some("codex".into());
+        route.session_id = Some("thread-1".into());
+        route.app_server_socket = Some("/tmp/stale.sock".into());
+        let value = super::route_to_value(&route);
+        let object = value.as_object().unwrap();
+        assert!(object.get("address").is_some());
+        assert!(object.get("sessionId").is_none());
+        assert!(object.get("appServerSocket").is_none());
+        let dir = temp_dir("typed-address");
+        std::fs::write(
+            dir.join("registry.json"),
+            serde_json::json!({"r": value}).to_string(),
+        )
+        .unwrap();
+        let read = super::read_routes(&dir).unwrap();
+        assert_eq!(read["r"].session_id.as_deref(), Some("thread-1"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -9,7 +9,6 @@ use boop::{bus, ident, identity, tmux};
 
 use crate::cli::db::open_store;
 use crate::cli::job::waiting_as;
-use crate::cli::mail::{report_inbox_hooks, write_inbox_hooks};
 use crate::cli::{line, mail_dir, now_ms, write_route};
 
 // ---------------------------------------------------------------------------
@@ -77,12 +76,9 @@ pub(crate) fn run_adopt_with(
     multiplexer: &dyn tmux::Multiplexer,
     processes: &dyn crate::proc::ProcReader,
 ) -> Result<()> {
-    // Taking the hooks out is about a project directory, not about a pane, and
-    // the pane is usually already gone by the time anyone wants that.
+    // Compatibility flags are accepted without changing project settings.
     if hooks.uninstall {
-        let project = adopt_cwd(cwd)?;
-        let changed = write_inbox_hooks(&project, name, true)?;
-        report_inbox_hooks(&project, name, true, changed);
+        println!("route {name} retained; native harness delivery has no hook state");
         return Ok(());
     }
     if !multiplexer.has_session(None, tmux_session)? {
@@ -113,18 +109,27 @@ pub(crate) fn run_adopt_with(
         base_sha: None,
         worktree_dir: None,
         app_server_socket: None,
+        address: None,
     };
+    let session_observation = route
+        .session_id
+        .clone()
+        .map(|value| boop::harness::HarnessSession {
+            id: boop::harness::HarnessSessionId {
+                harness: route.harness.clone().unwrap_or_default(),
+                value,
+            },
+            cwd: route.cwd.clone().map(PathBuf::from),
+            control: None,
+            observed_process: None,
+            observed_at_ms: now_ms(),
+        });
+    if let Some(session) = session_observation {
+        boop::address::upsert_session(&dir, session)?;
+    }
     write_route(&dir, name, route)?;
     println!("adopted {name} -> tmux {tmux_session}");
-    // A claude pane is driven by a model between turns, so mail belongs at a
-    // turn boundary; every other harness keeps pane injection.
-    let claude = harness == Some("claude");
-    if claude && !hooks.no_hooks {
-        let project = adopt_cwd(cwd)?;
-        let changed = write_inbox_hooks(&project, name, false)?;
-        report_inbox_hooks(&project, name, false, changed);
-        println!("hails to {name} now queue for the hook inbox, never its keyboard");
-    }
+    println!("hails to {name} use the harness session endpoint or remain queued");
     Ok(())
 }
 
@@ -221,6 +226,19 @@ pub(crate) fn run_me(name: Option<&str>, mail_dir_arg: Option<&Path>) -> Result<
     let generated = format!("codex-{}", pane.trim_start_matches('%'));
     let name = name.unwrap_or(&generated);
     let dir = mail_dir(mail_dir_arg)?;
+    boop::address::upsert_session(
+        &dir,
+        boop::harness::HarnessSession {
+            id: boop::harness::HarnessSessionId {
+                harness: "codex".into(),
+                value: session.session_id.clone(),
+            },
+            cwd: Some(cwd.clone()),
+            control: None,
+            observed_process: None,
+            observed_at_ms: now_ms(),
+        },
+    )?;
     write_route(
         &dir,
         name,
@@ -239,6 +257,7 @@ pub(crate) fn run_me(name: Option<&str>, mail_dir_arg: Option<&Path>) -> Result<
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            address: None,
         },
     )?;
     println!("registered {name} -> {pane} codex {}", session.session_id);

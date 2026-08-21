@@ -224,7 +224,7 @@ enum SubCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Mail a claude coordinator reads at a turn boundary: the hook inbox.
+    /// Inspect durable mailbox rows and legacy inbox maintenance state.
     Inbox {
         #[command(subcommand)]
         cmd: InboxCmd,
@@ -335,7 +335,7 @@ enum SubCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Queue a message and inject it into a live pane.
+    /// Queue a message and dispatch it through the registered harness or lane supervisor.
     #[command(hide = true)]
     Hail {
         #[arg(long)]
@@ -406,22 +406,20 @@ enum SubCmd {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Register an existing interactive pane as a coordinator route; never
-    /// spawns. A claude session also gets the hook inbox, and reads its mail at
-    /// the next turn boundary; every other harness has it typed into its pane.
+    /// Register an existing interactive process as a coordinator route; never
+    /// spawns. Delivery uses the harness control endpoint or remains queued.
     #[command(hide = true)]
     Adopt {
         #[arg(long)]
         name: String,
         #[arg(long)]
         tmux: String,
-        /// Keep pane injection: do not install the hook inbox for a claude
-        /// coordinator.
+        /// Compatibility flag retained for old scripts; native routes do not
+        /// use pane input.
         #[arg(long)]
         no_hooks: bool,
-        /// Take the hook inbox back out of the project settings and leave the
-        /// route alone. The pane is not checked, so a dead one is fine;
-        /// `boop inbox hooks --uninstall` is the same edit without a route.
+        /// Compatibility flag retained for old scripts; route state is left
+        /// unchanged.
         #[arg(long)]
         uninstall_hooks: bool,
         #[arg(long)]
@@ -797,8 +795,7 @@ fn main() -> Result<()> {
                 parent,
                 goal,
                 mail_dir,
-                // An adopted pane is an interactive session with no lane supervisor
-                // polling its mailbox; `coordinator` makes hail deliver by pane injection.
+                // An adopted process is addressed by its harness session endpoint.
             } => run_adopt(
                 &name,
                 "coordinator",

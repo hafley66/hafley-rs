@@ -12,8 +12,8 @@ boop tell-children --body TEXT
 |---|---|
 | the sender | the identity ladder (`boop whoami`): `BOOP_LANE`/`BOOP_SESSION`, else the registered pane, else the harness process |
 | the recipient | the caller's registry route `parent`, written by `lane create --parent` and `agent register --parent` |
-| the fallback | the one registered coordinator with a pane, when the route records no parent |
-| delivery | the path `beep hail` uses: pane injection for a coordinator, inbox drain for a hook, the mailbox for a lane supervisor |
+| the fallback | the one registered coordinator route, when the route records no parent |
+| delivery | a harness-native session or child endpoint; lane mail remains in the durable mailbox for its supervisor |
 
 `--kind` is the mail row's kind. `--body` is required for `completion` and
 `note`. `yield` alone has a default, `yield <lane> rc=0 branch=<branch>
@@ -28,10 +28,11 @@ writes a row.
 caller and prints one line per target:
 
 ```
-landed feature-a m-02be8593 (hook inbox)
-dead   feature-b
+landed feature-a m-02be8593 (harness control)
+no-route feature-b (unsupported child control)
 ```
 
-A child is reachable when a boop drain hook is installed in its project or its
-tmux target is alive. A dead child gets a line and no row, so nothing queues up
-for a lane that will never read it.
+A child is reachable when its parent session and typed child address are
+registered. Missing, completed, and unsupported children retain their mailbox
+row with a typed queued reason. A pane identifies a process for observation;
+it never carries this mail.

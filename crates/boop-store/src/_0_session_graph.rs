@@ -1182,6 +1182,7 @@ mod tests {
                 base_sha: None,
                 worktree_dir: None,
                 app_server_socket: None,
+                address: None,
             },
         );
         let mux = FakeMux::available(&["codex-parent"]);
@@ -1269,6 +1270,7 @@ mod tests {
                 base_sha: None,
                 worktree_dir: None,
                 app_server_socket: None,
+                address: None,
             },
         );
         let mux = FakeMux::available(&["sprefa-5"]).with_pane("%1206", "sprefa-5");
@@ -1738,6 +1740,7 @@ mod tests {
                     base_sha: None,
                     worktree_dir: None,
                     app_server_socket: None,
+                    address: None,
                 },
             );
         }

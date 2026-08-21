@@ -123,8 +123,8 @@ COMPLETION: the supervisor writes ONE row `lane <id> done rc=<n>` into the
   parent's mailbox on every exit path, including a signalled pane; the pane's
   own epilogue only drops the lane's route.
   A lane spawned with --parent reports completion; do not poll.
-  A parent whose route is kind=coordinator (what `boop adopt` writes) gets that
-  hail TYPED INTO ITS PANE, mid-turn or idle; no wait needs arming.
+  A parent whose route is kind=coordinator (what `boop adopt` writes) receives
+  hail through its harness session endpoint; absent control remains queued.
   `--wait` blocks on that row and exits with the lane's rc, so spawn-and-join is
   one command; `--wait-timeout <s>` (default 3600, 0 waits forever) exits 124.
   The same wait after the fact is `boop beep lane wait <lane>`.
@@ -151,15 +151,10 @@ TRANSPORT: every lane pane runs ONE command, whatever the harness:
   dropped and no hail needs a human re-dispatch.
 
 HAIL: boop beep hail <lane> --body \"text\" [--from <me>] [--kind <k>]
-  Reaches a running lane MID-TURN on all four harnesses:
-    claude    stream-json user line on the child's stdin
-    codex     app-server turn/steer against the live turn id
-    opencode  typed into its TUI window; plain Enter is the steer
-    kimi      typed into its TUI window, then C-s (Enter alone only QUEUES)
-  A harness with no in-flight port would report `nextturn` and the supervisor
-  would hold the text for a resume turn; none does today.
-  A kind=coordinator route (an adopted pane) is delivered by literal keystrokes
-  plus Enter into its pane; a kind=lane route is left for its supervisor.
+  Resolves the route address, loads the provider session observation, refreshes
+  its replaceable endpoint, and calls the harness control adapter. A lane
+  supervisor receives queued mail from the durable mailbox. Unsupported or
+  stale control remains queued with a typed reason.
   Proof of delivery is in the store, not in a screenshot:
     boop db \"SELECT * FROM agent_edge\" -- edge kind deliver-midturn/deliver-nextturn
   and the mailbox row's to_timestamp is stamped when the lane takes it.
@@ -306,45 +301,7 @@ pub(crate) fn write_route(dir: &std::path::Path, lane_id: &str, route: Route) ->
 }
 
 pub(crate) fn route_to_json(route: &Route) -> serde_json::Value {
-    let mut object = serde_json::Map::new();
-    object.insert("kind".into(), serde_json::json!(route.kind));
-    if let Some(harness) = &route.harness {
-        object.insert("harness".into(), serde_json::json!(harness));
-    }
-    if let Some(tmux) = &route.tmux {
-        object.insert("tmux".into(), serde_json::json!(tmux));
-    }
-    if let Some(cwd) = &route.cwd {
-        object.insert("cwd".into(), serde_json::json!(cwd));
-    }
-    if let Some(model) = &route.model {
-        object.insert("model".into(), serde_json::json!(model));
-    }
-    if let Some(mode) = &route.mode {
-        object.insert("mode".into(), serde_json::json!(mode));
-    }
-    if let Some(session_id) = &route.session_id {
-        object.insert("sessionId".into(), serde_json::json!(session_id));
-    }
-    if let Some(parent) = &route.parent {
-        object.insert("parent".into(), serde_json::json!(parent));
-    }
-    if let Some(goal) = &route.goal {
-        object.insert("goal".into(), serde_json::json!(goal));
-    }
-    if let Some(registered_at) = &route.registered_at {
-        object.insert("registeredAt".into(), serde_json::json!(registered_at));
-    }
-    if let Some(base_sha) = &route.base_sha {
-        object.insert("baseSha".into(), serde_json::json!(base_sha));
-    }
-    if let Some(worktree_dir) = &route.worktree_dir {
-        object.insert("worktreeDir".into(), serde_json::json!(worktree_dir));
-    }
-    if let Some(socket) = &route.app_server_socket {
-        object.insert("appServerSocket".into(), serde_json::json!(socket));
-    }
-    serde_json::Value::Object(object)
+    bus::route_to_value(route)
 }
 
 pub(crate) fn append_message(dir: &std::path::Path, message: &bus::Message) -> Result<()> {
@@ -447,6 +404,7 @@ pub(crate) mod testkit {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            address: None,
         }
     }
 }
@@ -477,6 +435,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            address: None,
         };
         write_route(&dir, "child", route).unwrap();
         let routes = read_routes(&dir).unwrap();

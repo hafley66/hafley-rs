@@ -8,9 +8,11 @@ pub mod registry;
 pub mod worktree;
 
 pub use harness::{
-    supervisor_command, sync_session, sync_session_with_pid, Capabilities, Harness, Ingested,
-    KnownSession, KnownSessions, NativeSessionRef, NativeTuiPlan, NativeTuiSpec, OneShotSpec,
-    ReadChunk, SendOutcome, SessionRef, SpawnSpec,
+    supervisor_command, sync_session, sync_session_with_pid, AgentAddress, Capabilities,
+    ChildAddress, ChildKind, ChildSendCapability, ControlCapabilities, ControlEndpoint,
+    DeliveryReceipt, Harness, HarnessSession, HarnessSessionId, Ingested, KnownSession,
+    KnownSessions, NativeSessionRef, NativeTuiPlan, NativeTuiSpec, OneShotSpec, ProcessObservation,
+    QueueReason, ReadChunk, SendOutcome, SessionRef, SessionRegistry, SpawnSpec,
 };
 pub use identity::Identity;
 pub use registry::Registry;

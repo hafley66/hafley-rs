@@ -22,6 +22,7 @@ pub const BUILD_SHA: &str = env!("BOOP_BUILD_SHA");
 pub use boop_store::_0_session_graph;
 #[cfg(feature = "agent-read")]
 pub use boop_store::activity;
+pub use boop_store::address;
 pub use boop_store::{bus, event, proc, rows, runtime, session, tail, tmux, trail};
 #[cfg(feature = "agent-read")]
 pub use boop_store::{query, summary, usage};

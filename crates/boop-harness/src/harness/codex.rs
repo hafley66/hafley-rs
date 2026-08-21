@@ -8,8 +8,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::harness::{
-    jsonl_files, Capabilities, Harness, Ingested, KnownSessions, NativeSessionRef, NativeTuiPlan,
-    NativeTuiSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
+    jsonl_files, Capabilities, ChildAddress, ChildKind, ControlEndpoint, DeliveryReceipt, Harness,
+    HarnessSession, HarnessSessionId, Ingested, KnownSessions, NativeSessionRef, NativeTuiPlan,
+    NativeTuiSpec, ProcessObservation, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
 use anyhow::Context;
 use boop_store::event::AgentEvent;
@@ -21,6 +22,90 @@ use serde_json::Value;
 pub struct Codex;
 
 impl Harness for Codex {
+    fn discover_session(
+        &self,
+        observation: &ProcessObservation,
+    ) -> anyhow::Result<Option<HarnessSession>> {
+        let session_id = std::env::var("CODEX_THREAD_ID")
+            .ok()
+            .filter(|value| !value.is_empty())
+            .or_else(|| {
+                observation
+                    .descendants
+                    .iter()
+                    .find_map(|process| codex_thread_from_command(&process.command))
+            });
+        let Some(value) = session_id else {
+            return Ok(None);
+        };
+        let socket = std::env::var("CODEX_APP_SERVER_SOCKET")
+            .ok()
+            .filter(|socket| !socket.is_empty())
+            .map(PathBuf::from);
+        Ok(Some(HarnessSession {
+            id: HarnessSessionId {
+                harness: self.id().into(),
+                value,
+            },
+            cwd: observation.cwd.clone(),
+            control: socket.map(|socket| ControlEndpoint::CodexRemote { socket }),
+            observed_process: observation.pane_pid,
+            observed_at_ms: now_ms(),
+        }))
+    }
+
+    fn refresh_session(
+        &self,
+        known: &HarnessSession,
+        observation: Option<&ProcessObservation>,
+    ) -> anyhow::Result<Option<HarnessSession>> {
+        let socket = std::env::var("CODEX_APP_SERVER_SOCKET")
+            .ok()
+            .filter(|socket| !socket.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| match &known.control {
+                Some(ControlEndpoint::CodexRemote { socket }) if socket.exists() => {
+                    Some(socket.clone())
+                }
+                _ => None,
+            });
+        let mut refreshed = known.clone();
+        refreshed.control = socket.map(|socket| ControlEndpoint::CodexRemote { socket });
+        refreshed.observed_process = observation
+            .and_then(|value| value.pane_pid)
+            .or(known.observed_process);
+        refreshed.observed_at_ms = now_ms();
+        Ok(Some(refreshed))
+    }
+
+    fn send_session(
+        &self,
+        session: &HarnessSession,
+        message: &str,
+    ) -> anyhow::Result<DeliveryReceipt> {
+        let Some(ControlEndpoint::CodexRemote { socket }) = session.control.as_ref() else {
+            return Ok(DeliveryReceipt::Queued {
+                reason: crate::harness::QueueReason::MissingControlEndpoint,
+            });
+        };
+        send_remote(socket, &session.id.value, message)?;
+        Ok(DeliveryReceipt::Accepted)
+    }
+
+    fn send_child(&self, child: &ChildAddress, _message: &str) -> anyhow::Result<DeliveryReceipt> {
+        Ok(match child.kind {
+            ChildKind::ParentMediated => DeliveryReceipt::ParentMediated {
+                parent: child.parent.clone(),
+            },
+            ChildKind::Direct => DeliveryReceipt::Unsupported {
+                capability: "child_send",
+            },
+            ChildKind::ObservableOnly => DeliveryReceipt::Unsupported {
+                capability: "child_send",
+            },
+        })
+    }
+
     fn identity_process(&self) -> Option<crate::identity::Identity> {
         let session = std::env::var("CODEX_THREAD_ID")
             .ok()
@@ -64,6 +149,14 @@ impl Harness for Codex {
         }
     }
 
+    fn control_capabilities(&self) -> crate::harness::ControlCapabilities {
+        crate::harness::ControlCapabilities {
+            session_send: true,
+            child_send: crate::harness::ChildSendCapability::ParentMediated,
+            endpoint_refresh: true,
+        }
+    }
+
     fn prepare_native_tui(&self, spec: &NativeTuiSpec) -> anyhow::Result<NativeTuiPlan> {
         let output = Command::new(&spec.executable)
             .args(["remote-control", "start", "--json"])
@@ -89,7 +182,10 @@ impl Harness for Codex {
             mode: "native-remote".into(),
             session_id: requested_thread,
             source_path: Some(format!("managed-app-server={socket}")),
-            app_server_socket: Some(socket),
+            app_server_socket: Some(socket.clone()),
+            control: Some(ControlEndpoint::CodexRemote {
+                socket: PathBuf::from(socket),
+            }),
         })
     }
 
@@ -98,23 +194,7 @@ impl Harness for Codex {
             .app_server_socket
             .as_deref()
             .context("native Codex session has no app-server socket")?;
-        let output = Command::new("codex")
-            .args([
-                "queue",
-                "--thread",
-                &session.session_id,
-                "--message",
-                text,
-                "--remote",
-            ])
-            .arg(format!("unix://{}", socket.display()))
-            .output()
-            .context("queue message through Codex remote control")?;
-        anyhow::ensure!(
-            output.status.success(),
-            "Codex remote queue failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
+        send_remote(socket, &session.session_id, text)?;
         Ok(SendOutcome::Injected)
     }
 
@@ -260,6 +340,28 @@ fn explicit_resume(tui_args: &[String]) -> anyhow::Result<(Option<String>, &[Str
         .filter(|value| !value.starts_with('-'))
         .context("`boop tui codex -- resume` requires an explicit thread id")?;
     Ok((Some(thread.clone()), &tui_args[2..]))
+}
+
+fn codex_thread_from_command(command: &[String]) -> Option<String> {
+    command
+        .windows(2)
+        .find_map(|args| (args[0] == "resume" || args[0] == "--thread").then(|| args[1].clone()))
+        .filter(|value| !value.starts_with('-') && !value.is_empty())
+}
+
+fn send_remote(socket: &Path, thread: &str, text: &str) -> anyhow::Result<()> {
+    let socket = socket.to_string_lossy().into_owned();
+    let output = Command::new("codex")
+        .args(["queue", "--thread", thread, "--message", text, "--remote"])
+        .arg(format!("unix://{socket}"))
+        .output()
+        .context("queue message through Codex remote control")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "Codex remote queue failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    Ok(())
 }
 
 fn daemon_socket_from_start(text: &str) -> Option<String> {

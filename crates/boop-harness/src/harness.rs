@@ -7,6 +7,10 @@ use anyhow::Result;
 
 use boop_store::ident::{Store, SyncStat};
 
+pub use boop_store::address::{
+    AgentAddress, ChildAddress, ChildKind, ControlEndpoint, DeliveryReceipt, HarnessSession,
+    HarnessSessionId, ProcessObservation, QueueReason, SessionRegistry,
+};
 pub use boop_store::session::{
     Capabilities, Ingested, KnownSession, KnownSessions, OneShotSpec, ReadChunk, SendOutcome,
     SessionRef, SpawnSpec,
@@ -37,6 +41,7 @@ pub struct NativeTuiPlan {
     pub session_id: Option<String>,
     pub source_path: Option<String>,
     pub app_server_socket: Option<String>,
+    pub control: Option<ControlEndpoint>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,6 +49,20 @@ pub struct NativeSessionRef {
     pub session_id: String,
     pub cwd: Option<PathBuf>,
     pub app_server_socket: Option<PathBuf>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChildSendCapability {
+    Direct,
+    ParentMediated,
+    ObservableOnly,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ControlCapabilities {
+    pub session_send: bool,
+    pub child_send: ChildSendCapability,
+    pub endpoint_refresh: bool,
 }
 
 impl NativeTuiPlan {
@@ -55,6 +74,7 @@ impl NativeTuiPlan {
             session_id: None,
             source_path: Some(format!("native-executable={}", spec.executable)),
             app_server_socket: None,
+            control: None,
         }
     }
 }
@@ -105,6 +125,62 @@ pub trait Harness: Send + Sync {
     /// Resolve a caller using a process tell exposed by this harness.
     fn identity_process(&self) -> Option<crate::identity::Identity> {
         None
+    }
+
+    /// Discover a durable provider session from process and filesystem
+    /// evidence. Provider-specific parsing stays in the adapter.
+    fn discover_session(
+        &self,
+        observation: &ProcessObservation,
+    ) -> anyhow::Result<Option<HarnessSession>> {
+        let cwd = observation.cwd.as_deref().and_then(|path| path.to_str());
+        let session = match cwd {
+            Some(cwd) => self.root_sessions_for_cwd(cwd)?.into_iter().next(),
+            None => None,
+        };
+        Ok(session.map(|session| HarnessSession {
+            id: HarnessSessionId {
+                harness: session.harness.to_owned(),
+                value: session.session_id,
+            },
+            cwd: session.cwd.map(PathBuf::from),
+            control: None,
+            observed_process: observation.pane_pid,
+            observed_at_ms: now_ms(),
+        }))
+    }
+
+    /// Refresh replaceable endpoint observations while retaining session id.
+    fn refresh_session(
+        &self,
+        known: &HarnessSession,
+        _observation: Option<&ProcessObservation>,
+    ) -> anyhow::Result<Option<HarnessSession>> {
+        Ok(Some(known.clone()))
+    }
+
+    fn send_session(
+        &self,
+        _session: &HarnessSession,
+        _message: &str,
+    ) -> anyhow::Result<DeliveryReceipt> {
+        Ok(DeliveryReceipt::Unsupported {
+            capability: "session_send",
+        })
+    }
+
+    fn send_child(&self, child: &ChildAddress, _message: &str) -> anyhow::Result<DeliveryReceipt> {
+        Ok(match child.kind {
+            ChildKind::ParentMediated => DeliveryReceipt::ParentMediated {
+                parent: child.parent.clone(),
+            },
+            ChildKind::Direct => DeliveryReceipt::Unsupported {
+                capability: "child_send",
+            },
+            ChildKind::ObservableOnly => DeliveryReceipt::Unsupported {
+                capability: "child_send",
+            },
+        })
     }
 
     /// Root sessions this harness recorded for `cwd`. A sidechain or subagent
@@ -173,6 +249,19 @@ pub trait Harness: Send + Sync {
     /// What this harness can control. `true` only where a test confirms it.
     fn capabilities(&self) -> Capabilities {
         Capabilities::default()
+    }
+
+    fn control_capabilities(&self) -> ControlCapabilities {
+        let legacy = self.capabilities();
+        ControlCapabilities {
+            session_send: legacy.send_midflight,
+            child_send: if legacy.subagent_visible {
+                ChildSendCapability::ParentMediated
+            } else {
+                ChildSendCapability::ObservableOnly
+            },
+            endpoint_refresh: legacy.resume,
+        }
     }
 
     /// Prepare the ordinary interactive TUI for this harness. Transcript and
@@ -245,6 +334,13 @@ pub fn supervisor_command(spec: &SpawnSpec) -> String {
 
 fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 pub(crate) struct TranscriptFile {
