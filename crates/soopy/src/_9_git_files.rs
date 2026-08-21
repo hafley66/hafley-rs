@@ -224,7 +224,7 @@ fn entry(
 /// Hash arbitrary bytes as a Git blob and return its object ID, matching the
 /// `git hash-object` OID that the tracked-file surface emits for worktree
 /// content. Used by `read_many` to round-trip a `GitBlob` identity.
-pub(crate) fn hash_object(repository: &Repository, bytes: &[u8]) -> Result<ObjectId> {
+pub fn hash_object(repository: &Repository, bytes: &[u8]) -> Result<ObjectId> {
     let mut child = Command::new("git")
         .arg("-C")
         .arg(&repository.root)
