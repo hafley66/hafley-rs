@@ -84,7 +84,10 @@ impl AcpChannel {
         let agent = AcpAgent::new(AcpAgentConfig::new(program).args(args.to_vec())).with_debug(
             move |line, direction| match direction {
                 LineDirection::Stderr => {
-                    debug!(lane = lane.as_deref().unwrap_or_default(), line, "acp agent stderr")
+                    debug!(
+                        lane = lane.as_deref().unwrap_or_default(),
+                        line, "acp agent stderr"
+                    )
                 }
                 _ => debug!(?direction, line, "acp wire"),
             },
@@ -441,9 +444,10 @@ fn offered_models(config_options: &[SessionConfigOption]) -> Option<String> {
             _ => None,
         })?;
     let values: Vec<&str> = match &select.options {
-        SessionConfigSelectOptions::Ungrouped(options) => {
-            options.iter().map(|option| option.value.0.as_ref()).collect()
-        }
+        SessionConfigSelectOptions::Ungrouped(options) => options
+            .iter()
+            .map(|option| option.value.0.as_ref())
+            .collect(),
         SessionConfigSelectOptions::Grouped(groups) => groups
             .iter()
             .flat_map(|group| group.options.iter())
@@ -456,9 +460,7 @@ fn offered_models(config_options: &[SessionConfigOption]) -> Option<String> {
 
 /// The turn verdict for one `session/prompt` outcome. A JSON-RPC error is a
 /// flake the agent never saw; a non-`end_turn` stop reason is its own answer.
-fn turn_verdict(
-    outcome: Result<StopReason, agent_client_protocol::Error>,
-) -> TurnEvent {
+fn turn_verdict(outcome: Result<StopReason, agent_client_protocol::Error>) -> TurnEvent {
     match outcome {
         Ok(StopReason::EndTurn) => TurnEvent::ok("end_turn"),
         Ok(other) => TurnEvent::failed(format!("stop_reason={}", stop_reason_name(other))),
@@ -709,7 +711,9 @@ mod tests {
     fn an_unwritten_update_clock_is_no_signal() {
         let channel = idle_channel();
         assert_eq!(channel.last_activity_ms(), None);
-        channel.last_update_ms.store(1_700_000_000_000, Ordering::Relaxed);
+        channel
+            .last_update_ms
+            .store(1_700_000_000_000, Ordering::Relaxed);
         assert_eq!(channel.last_activity_ms(), Some(1_700_000_000_000));
     }
 
@@ -824,8 +828,15 @@ mod tests {
         let session = first.conversation_id().expect("a session id");
         first.start_turn("remember the number 41").unwrap();
         let deadline = std::time::Instant::now() + Duration::from_secs(60);
-        while first.next_event(Duration::from_millis(200)).unwrap().is_none() {
-            assert!(std::time::Instant::now() < deadline, "first turn never ended");
+        while first
+            .next_event(Duration::from_millis(200))
+            .unwrap()
+            .is_none()
+        {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "first turn never ended"
+            );
         }
         first.close().unwrap();
 
@@ -843,7 +854,10 @@ mod tests {
             if let Some(event) = second.next_event(Duration::from_millis(200)).unwrap() {
                 break event;
             }
-            assert!(std::time::Instant::now() < deadline, "resumed turn never ended");
+            assert!(
+                std::time::Instant::now() < deadline,
+                "resumed turn never ended"
+            );
         };
         second.close().unwrap();
         assert!(verdict.is_done(), "{verdict:?}");

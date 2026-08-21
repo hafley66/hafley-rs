@@ -239,7 +239,8 @@ impl TuiChannel {
     }
 
     fn body(&self) -> Result<String> {
-        let pane = boop_store::tmux::mux().capture_pane(self.socket.as_deref(), &self.target, None)?;
+        let pane =
+            boop_store::tmux::mux().capture_pane(self.socket.as_deref(), &self.target, None)?;
         let lines: Vec<&str> = pane.lines().collect();
         let keep = lines.len().saturating_sub(FOOTER_LINES);
         Ok(lines[..keep].join("\n"))

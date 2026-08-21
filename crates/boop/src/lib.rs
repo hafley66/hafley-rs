@@ -41,7 +41,13 @@ pub use boop_proc::{concatmap, config, host, inbox, lane, mailwait, supervise};
 pub mod chat;
 pub mod debug;
 
+pub use boop_harness::Registry;
 pub use boop_store::open_default;
+#[cfg(feature = "agent-read")]
+pub use boop_store::{
+    agent_summary, agent_summary_now, AgentSummary, AgentSummaryActivity, AgentSummaryAgent,
+    AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION,
+};
 #[cfg(feature = "agent-read")]
 pub use boop_store::{
     load_agent_session_graph, load_agent_session_graph_with_runtime, ActivityCount, ActivityScope,
@@ -55,10 +61,4 @@ pub use boop_store::{
     RuntimeLiveness, RuntimeSnapshotInput, SessionRow, StatusRow, Store, SyncStat, TmuxLiveness,
     TouchRow, TraceErrorRow, TraceEvent, TraceEventRow, TurnRow, UsageRow, WorktreeCoordinates,
     TRACE_EVENT_RETENTION_LIMIT,
-};
-pub use boop_harness::Registry;
-#[cfg(feature = "agent-read")]
-pub use boop_store::{
-    agent_summary, agent_summary_now, AgentSummary, AgentSummaryActivity, AgentSummaryAgent,
-    AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION,
 };

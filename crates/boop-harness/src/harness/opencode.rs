@@ -9,10 +9,10 @@ use anyhow::{Context, Result};
 use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
 
-use boop_store::event::AgentEvent;
 use crate::harness::{
     Capabilities, Harness, Ingested, OneShotSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
+use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
 
 pub struct Opencode;
@@ -22,9 +22,9 @@ impl Harness for Opencode {
         &self,
         spec: &boop_acp::channel::ChannelSpec,
     ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
-        Ok(Box::new(boop_acp::channel::opencode::OpencodeChannel::open(
-            spec,
-        )?))
+        Ok(Box::new(
+            boop_acp::channel::opencode::OpencodeChannel::open(spec)?,
+        ))
     }
 
     fn id(&self) -> &'static str {
@@ -160,7 +160,11 @@ impl Harness for Opencode {
     fn send(&self, session: &SessionRef, text: &str) -> Result<SendOutcome> {
         match &session.tmux {
             Some(tmux) => {
-                boop_store::tmux::mux().send_keys_literal(session.tmux_socket.as_deref(), tmux, text)?;
+                boop_store::tmux::mux().send_keys_literal(
+                    session.tmux_socket.as_deref(),
+                    tmux,
+                    text,
+                )?;
                 Ok(SendOutcome::Injected)
             }
             None => Ok(SendOutcome::QueuedForNextSpawn),

@@ -18,7 +18,6 @@ pub struct OneShotSpec {
     pub prompt: String,
 }
 
-
 /// What one ingest pass wrote, plus where the next pass resumes.
 pub struct Ingested {
     pub stat: crate::ident::SyncStat,

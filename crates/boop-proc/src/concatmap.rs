@@ -10,8 +10,8 @@ use serde::Deserialize;
 
 use boop_acp::channel::{ChannelSpec, LaneChannel, TurnEvent};
 use boop_harness::harness::{Harness, OneShotSpec};
-use boop_store::ident::TurnQuery;
 use boop_harness::registry::Registry;
+use boop_store::ident::TurnQuery;
 use boop_store::rows::TurnRow;
 
 /// A failed rewrite is retried this many times, then the pair is dropped.
@@ -475,7 +475,9 @@ pub fn run(args: Args) -> Result<()> {
     // never fights the resident `db sync` writer for the write lock.
     let store_path = match &args.store_path {
         Some(path) => path.clone(),
-        None => boop_store::ident::Store::default_path().context("resolve the default boop store")?,
+        None => {
+            boop_store::ident::Store::default_path().context("resolve the default boop store")?
+        }
     };
     let store =
         boop_store::ident::Store::open_readonly(store_path).context("open boop store read-only")?;

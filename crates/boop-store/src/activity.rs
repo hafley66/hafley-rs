@@ -279,10 +279,7 @@ impl Store {
     /// Aggregate only the selected trace identities. Agent summary uses this
     /// internal projection after its runtime pass establishes the trace
     /// boundary, so unrelated transcript tables are never aggregated.
-    pub fn activity_counts_for_traces(
-        &self,
-        traces: &[String],
-    ) -> Result<Vec<ActivityCount>> {
+    pub fn activity_counts_for_traces(&self, traces: &[String]) -> Result<Vec<ActivityCount>> {
         if traces.is_empty() {
             return Ok(Vec::new());
         }

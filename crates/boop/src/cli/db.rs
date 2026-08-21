@@ -922,7 +922,7 @@ mod tests {
             "json",
         ])
         .expect("Instant focused-family command parses");
-        let SubCmd::Agent {
+        let Some(SubCmd::Agent {
             cmd:
                 AgentSummaryCmd::Sessions {
                     cwd,
@@ -932,7 +932,7 @@ mod tests {
                     format: AgentSessionGraphFormat::Json,
                     ..
                 },
-        } = cli.command
+        }) = cli.command
         else {
             panic!("expected public agent sessions command");
         };

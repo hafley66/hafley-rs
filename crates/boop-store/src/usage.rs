@@ -127,11 +127,11 @@ impl Store {
     /// input plus the cached prior context. `None` where the session has no
     /// usage row yet.
     pub fn context_tokens(&self, session: &str) -> Result<Option<i64>> {
-        match self.connection().query_row(
-            CONTEXT_TOKENS_SQL,
-            rusqlite::params![session],
-            |row| row.get::<_, i64>(0),
-        ) {
+        match self
+            .connection()
+            .query_row(CONTEXT_TOKENS_SQL, rusqlite::params![session], |row| {
+                row.get::<_, i64>(0)
+            }) {
             Ok(tokens) => Ok(Some(tokens)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(error) => Err(error.into()),
@@ -512,7 +512,8 @@ mod tests {
             tmux_socket: None,
             parent: None,
         };
-        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript).unwrap();
+        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript)
+            .unwrap();
 
         let totals = store
             .usage_report_rows(None, &UsageQuery::default())
@@ -683,7 +684,8 @@ mod cte_equality {
             tmux_socket: None,
             parent: None,
         };
-        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript).unwrap();
+        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript)
+            .unwrap();
         (store, db_path, log_path)
     }
 

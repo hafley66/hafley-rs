@@ -6,8 +6,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use boop_harness::harness::Harness;
-use boop_store::ident::TurnQuery;
 use boop_harness::registry::Registry;
+use boop_store::ident::TurnQuery;
 use boop_store::rows::TurnRow;
 
 const COMPACT_TOKENS: usize = 100_000;
@@ -164,7 +164,10 @@ fn sync_conversation(
         .context("ingest the resident transcript")
 }
 
-fn newest_assistant(store: &boop_store::Store, conversation: Option<&str>) -> Result<Option<TurnRow>> {
+fn newest_assistant(
+    store: &boop_store::Store,
+    conversation: Option<&str>,
+) -> Result<Option<TurnRow>> {
     let Some(conversation) = conversation else {
         return Ok(None);
     };

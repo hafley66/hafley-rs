@@ -8,8 +8,8 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use tracing::{debug, error, info, warn};
 
-use boop_store::bus;
 use boop_acp::channel::{Delivery, LaneChannel, TurnEvent};
+use boop_store::bus;
 
 /// How often the inbox is re-read while a turn runs.
 const POLL: Duration = Duration::from_millis(700);
@@ -619,7 +619,11 @@ fn supervise(
             let this_turn_activity = channel
                 .last_activity_ms()
                 .filter(|written| *written >= turn_started);
-            let idle_ms = idle_ms(boop_acp::channel::now_ms(), turn_started, this_turn_activity);
+            let idle_ms = idle_ms(
+                boop_acp::channel::now_ms(),
+                turn_started,
+                this_turn_activity,
+            );
             if stalled(idle_ms) {
                 warn!(idle_ms, "lane turn stalled; killing the harness child");
                 println!("[boop] turn stalled ({}s idle), retrying", idle_ms / 1000);
@@ -655,7 +659,10 @@ fn supervise(
                     Some("failed"),
                     None,
                     None,
-                    ended.detail.as_deref().unwrap_or(boop_store::trail::PARENT_DIED),
+                    ended
+                        .detail
+                        .as_deref()
+                        .unwrap_or(boop_store::trail::PARENT_DIED),
                 );
                 return Ok(ended);
             }
@@ -972,7 +979,8 @@ fn remember_conversation(lane: &LaneRun, channel: &dyn LaneChannel) {
         .ok()
         .flatten()
         .unwrap_or_else(|| format!("trace-{}", lane.lane));
-    if let Err(error) = store.attach_trace(&lane.lane, &trace, "lane-run", boop_acp::channel::now_ms())
+    if let Err(error) =
+        store.attach_trace(&lane.lane, &trace, "lane-run", boop_acp::channel::now_ms())
     {
         warn!(lane = lane.lane, trace, error = %error, "lane trace attachment failed");
     }

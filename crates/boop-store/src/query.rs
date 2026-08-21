@@ -723,8 +723,8 @@ mod tests {
     /// session, its first turn, and its touch's canonical verb with raw kept.
     #[test]
     fn typed_rows_populate_for_a_real_session() {
-        use crate::session::SessionRef;
         use crate::ident::TurnQuery;
+        use crate::session::SessionRef;
         use std::io::Write;
 
         let (store, db_path) = store();
@@ -753,7 +753,8 @@ mod tests {
             tmux_socket: None,
             parent: None,
         };
-        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript).unwrap();
+        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript)
+            .unwrap();
 
         let sessions = store.session_rows(Some("ses-1"), None).unwrap();
         assert_eq!(sessions.len(), 1);
@@ -816,7 +817,8 @@ mod tests {
             tmux_socket: None,
             parent: None,
         };
-        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript).unwrap();
+        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript)
+            .unwrap();
 
         let now_ms = crate::proc::sys_now_secs() * 1000;
         store

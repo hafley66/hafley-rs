@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use boop_store::bus::Route;
 use crate::config;
 use boop_harness::identity::Identity;
+use boop_store::bus::Route;
 
 /// The worktree parent directory, relative to the repo root.
 pub const WORKTREE_ROOT: &str = ".boop-worktrees";

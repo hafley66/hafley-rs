@@ -163,6 +163,15 @@ pub(crate) fn deliver_hail(
         println!("no registry route for {to}: message stays queued, to_timestamp null");
         return Ok(());
     };
+    if route.mode.as_deref() == Some("acpx") {
+        let response = crate::cli::acpx::deliver(route, &message.body)?;
+        append_acks(dir, std::slice::from_ref(message))?;
+        if !response.trim().is_empty() {
+            println!("{}", response.trim_end());
+        }
+        println!("delivered {} -> {to} (acpx queue)", message.id);
+        return Ok(());
+    }
     // A lane pane runs the supervisor, which reads this mailbox directly;
     // typing at its stdout would reach no agent.
     if route.kind == "lane" {

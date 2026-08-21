@@ -12,10 +12,10 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use serde_json::Value;
 
-use boop_store::event::AgentEvent;
 use crate::harness::{
     Capabilities, Harness, Ingested, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
+use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
 use boop_store::tail;
 
@@ -95,7 +95,11 @@ impl Harness for Kimi {
     fn send(&self, session: &SessionRef, text: &str) -> anyhow::Result<SendOutcome> {
         match &session.tmux {
             Some(tmux) => {
-                boop_store::tmux::mux().send_keys_literal(session.tmux_socket.as_deref(), tmux, text)?;
+                boop_store::tmux::mux().send_keys_literal(
+                    session.tmux_socket.as_deref(),
+                    tmux,
+                    text,
+                )?;
                 Ok(SendOutcome::Injected)
             }
             None => Ok(SendOutcome::QueuedForNextSpawn),

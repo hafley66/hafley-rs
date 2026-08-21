@@ -493,10 +493,10 @@ mod tests {
             .expect("caller-relative favorite command parses");
         assert!(matches!(
             cli.command,
-            SubCmd::Me {
+            Some(SubCmd::Me {
                 cmd: Some(MeCmd::Favorite { index: -1, .. }),
                 ..
-            }
+            })
         ));
     }
 
@@ -506,10 +506,10 @@ mod tests {
             .expect("negative favorite position parses");
         assert!(matches!(
             cli.command,
-            SubCmd::Me {
+            Some(SubCmd::Me {
                 cmd: Some(MeCmd::Favorite { index: -2, .. }),
                 ..
-            }
+            })
         ));
     }
 }

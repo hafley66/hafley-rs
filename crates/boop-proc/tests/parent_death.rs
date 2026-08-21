@@ -134,7 +134,11 @@ fn of_kind(dir: &Path, kind: &str) -> Vec<boop_store::bus::Message> {
 }
 
 fn route_parent(dir: &Path, lane: &str) -> Option<String> {
-    boop_store::bus::read_routes(dir).unwrap().get(lane)?.parent.clone()
+    boop_store::bus::read_routes(dir)
+        .unwrap()
+        .get(lane)?
+        .parent
+        .clone()
 }
 
 /// SABOTAGE RECEIPT: delete the `watch.probe` call from the supervisor's poll

@@ -7,9 +7,7 @@ use std::sync::Once;
 use std::time::Duration;
 
 use boop_acp::channel::{Delivery, LaneChannel, TurnEvent};
-use boop_proc::supervise::{
-    LaneRun, EXITED_WITHOUT_COMPLETION, RETRYING, RETRY_BUDGET_EXHAUSTED,
-};
+use boop_proc::supervise::{LaneRun, EXITED_WITHOUT_COMPLETION, RETRYING, RETRY_BUDGET_EXHAUSTED};
 
 /// One temp HOME and store for this whole binary, so the mood lookup inside a
 /// lane run never opens the machine's own store.
@@ -172,7 +170,8 @@ fn a_parentless_lane_writes_no_failure_row() {
     )
     .unwrap();
 
-    let exit_code = boop_proc::supervise::run(lane_run(&dir), &mut FlakingChannel::default()).unwrap();
+    let exit_code =
+        boop_proc::supervise::run(lane_run(&dir), &mut FlakingChannel::default()).unwrap();
 
     assert_eq!(exit_code, 1);
     assert_eq!(count(&dir, RETRYING), 0);

@@ -1,3 +1,4 @@
+pub(crate) mod acpx;
 pub(crate) mod db;
 pub(crate) mod debug;
 pub(crate) mod job;
@@ -84,6 +85,13 @@ pub(crate) fn doctrine() -> String {
     format!(
         "\
 DOCTRINE (this help is the usage contract; agents read it with `boop --help`):
+
+COORDINATOR: `boop --preset codex` opens a named persistent ACPX session and
+  registers it as `coordinator`. Standard input is one prompt per line. Worker
+  hails enter the same ACPX queue with `--no-wait`; successful queue admission
+  stamps the mailbox row. A configured model preset such as `terra` may replace
+  the direct agent name. `BOOP_ACPX_BIN` selects an installed acpx executable;
+  absent that, Boop runs the pinned published ACPX package.
 
 WARMUP: after the worktree exists and before the agent starts, lane create runs
   the repo's `boop-start` just recipe if it declares one, and a repo that does

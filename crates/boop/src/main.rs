@@ -36,8 +36,18 @@ use cli::{doctrine, line, mail_dir, now_ms, CONCATMAP_EXAMPLES};
     after_help = doctrine()
 )]
 struct Cli {
+    /// Run a persistent foreground ACP coordinator. Agent names such as
+    /// `codex` work directly; model preset names resolve through config.
+    #[arg(long)]
+    preset: Option<String>,
+    /// Registry and ACPX session name for the foreground coordinator.
+    #[arg(long, requires = "preset")]
+    name: Option<String>,
+    /// Mail registry for the foreground coordinator.
+    #[arg(long, requires = "preset")]
+    mail_dir: Option<PathBuf>,
     #[command(subcommand)]
-    command: SubCmd,
+    command: Option<SubCmd>,
 }
 
 #[derive(Subcommand)]
@@ -504,13 +514,21 @@ fn main() -> Result<()> {
         }
     }
     let cli = Cli::parse();
-    init_tracing(supervised_lane(&cli.command))?;
+    if let Some(preset) = cli.preset.as_deref() {
+        anyhow::ensure!(
+            cli.command.is_none(),
+            "--preset cannot be combined with a subcommand"
+        );
+        return cli::acpx::run_foreground(preset, cli.name.as_deref(), cli.mail_dir.as_deref());
+    }
+    let command = cli.command.context("a command or --preset is required")?;
+    init_tracing(supervised_lane(&command))?;
     let registry = Registry::discover();
-    let needs_startup_sync = command_needs_startup_sync(&cli.command);
+    let needs_startup_sync = command_needs_startup_sync(&command);
     run_with_startup_sync(
         needs_startup_sync,
         || sync_before_local_command(&registry),
-        || match cli.command {
+        || match command {
             SubCmd::Harnesses => run_harnesses(&registry),
             SubCmd::Sessions { harness } => run_sessions(&registry, harness.as_deref()),
             SubCmd::Tail {
@@ -1689,9 +1707,9 @@ mod tests {
             .expect("public agent summary command parses");
         assert!(matches!(
             cli.command,
-            SubCmd::Agent {
+            Some(SubCmd::Agent {
                 cmd: AgentSummaryCmd::Summary { .. }
-            }
+            })
         ));
     }
 
@@ -1713,7 +1731,7 @@ mod tests {
         for argv in registry_only {
             let cli = Cli::try_parse_from(&argv).unwrap_or_else(|e| panic!("{argv:?}: {e}"));
             assert!(
-                !command_needs_startup_sync(&cli.command),
+                !command_needs_startup_sync(cli.command.as_ref().unwrap()),
                 "{argv:?} reads no agent_* row and must not sync"
             );
         }
@@ -1725,7 +1743,7 @@ mod tests {
         for argv in transcript_readers {
             let cli = Cli::try_parse_from(&argv).unwrap_or_else(|e| panic!("{argv:?}: {e}"));
             assert!(
-                command_needs_startup_sync(&cli.command),
+                command_needs_startup_sync(cli.command.as_ref().unwrap()),
                 "{argv:?} reads agent_* rows and must sync first"
             );
         }
@@ -1784,5 +1802,14 @@ mod tests {
             blank.is_empty(),
             "db subcommands with empty about: {blank:?}"
         );
+    }
+
+    #[test]
+    fn foreground_acp_coordinator_parses_without_a_subcommand() {
+        let cli = Cli::try_parse_from(["boop", "--preset", "codex", "--name", "root"]).unwrap();
+        assert_eq!(cli.preset.as_deref(), Some("codex"));
+        assert_eq!(cli.name.as_deref(), Some("root"));
+        assert!(cli.mail_dir.is_none());
+        assert!(cli.command.is_none());
     }
 }

@@ -2,6 +2,13 @@
 
 all notable changes to `boop` and `boop-mux` are recorded here. versions follow semantic versioning.
 
+## unreleased
+
+### added
+
+- `boop --preset codex` runs a foreground coordinator on a persistent ACPX session.
+- coordinator hails enter the same ACPX prompt queue and receive a mailbox acknowledgment after queue admission.
+
 ## [0.0.2] - 2026-08-13
 
 ### fixed

@@ -6,15 +6,15 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-use boop_store::event::AgentEvent;
 use crate::harness::{
     jsonl_files, Capabilities, Harness, Ingested, KnownSessions, ReadChunk, SendOutcome,
     SessionRef, SpawnSpec,
 };
+use anyhow::Context;
+use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
 use boop_store::session::ModelSpec;
 use boop_store::tail;
-use anyhow::Context;
 use serde_json::Value;
 
 pub struct Codex;
@@ -101,7 +101,11 @@ impl Harness for Codex {
     fn send(&self, session: &SessionRef, text: &str) -> anyhow::Result<SendOutcome> {
         match &session.tmux {
             Some(tmux) => {
-                boop_store::tmux::mux().send_keys_literal(session.tmux_socket.as_deref(), tmux, text)?;
+                boop_store::tmux::mux().send_keys_literal(
+                    session.tmux_socket.as_deref(),
+                    tmux,
+                    text,
+                )?;
                 Ok(SendOutcome::Injected)
             }
             None => Ok(SendOutcome::QueuedForNextSpawn),

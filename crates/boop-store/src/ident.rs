@@ -878,7 +878,13 @@ impl Store {
         Ok(())
     }
 
-    fn set_cursor_modified(&self, session: &str, path: &str, offset: u64, modified_ms: u64) -> Result<()> {
+    fn set_cursor_modified(
+        &self,
+        session: &str,
+        path: &str,
+        offset: u64,
+        modified_ms: u64,
+    ) -> Result<()> {
         let sid = self.session_id(session)?;
         let path_id = self.intern("dict_path", path)?;
         self.connection.execute(
@@ -889,16 +895,25 @@ impl Store {
         Ok(())
     }
 
-    pub fn root_stamp_matches(&self, harness: &str, root: &std::path::Path, mtime_ms: u64) -> Result<bool> {
-        Ok(self.connection.query_row(
-            "SELECT stamp.mtime_ms
+    pub fn root_stamp_matches(
+        &self,
+        harness: &str,
+        root: &std::path::Path,
+        mtime_ms: u64,
+    ) -> Result<bool> {
+        Ok(self
+            .connection
+            .query_row(
+                "SELECT stamp.mtime_ms
              FROM sync_root_stamp stamp
              JOIN dict_harness harness_id ON harness_id.id = stamp.harness_id
              JOIN dict_path root_path ON root_path.id = stamp.root_path_id
              WHERE harness_id.value = ?1 AND root_path.value = ?2",
-            params![harness, root.display().to_string()],
-            |row| row.get::<_, i64>(0),
-        ).optional()?.is_some_and(|stamp| stamp as u64 == mtime_ms))
+                params![harness, root.display().to_string()],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?
+            .is_some_and(|stamp| stamp as u64 == mtime_ms))
     }
 
     pub fn stamp_root(&self, harness: &str, root: &std::path::Path, mtime_ms: u64) -> Result<()> {
@@ -912,7 +927,12 @@ impl Store {
         Ok(())
     }
 
-    pub fn backfill_cursor_modified(&self, session: &str, path: &str, modified_ms: u64) -> Result<()> {
+    pub fn backfill_cursor_modified(
+        &self,
+        session: &str,
+        path: &str,
+        modified_ms: u64,
+    ) -> Result<()> {
         let sid = self.session_id(session)?;
         let path_id = self.intern("dict_path", path)?;
         self.connection.execute(
@@ -979,7 +999,8 @@ impl Store {
             ))
         })?;
         for row in rows {
-            let (path, session_id, nickname, cwd, git_branch, harness, parent, cursor, modified_ms) = row?;
+            let (path, session_id, nickname, cwd, git_branch, harness, parent, cursor, modified_ms) =
+                row?;
             out.insert(
                 PathBuf::from(path),
                 KnownSession {
@@ -1497,12 +1518,7 @@ impl Store {
                  )
                  ORDER BY rank, set_by
                  LIMIT 1",
-                params![
-                    session,
-                    MOOD_ATTR_KEY,
-                    DEFAULT_MOOD,
-                    MOOD_ANCESTRY_LIMIT
-                ],
+                params![session, MOOD_ATTR_KEY, DEFAULT_MOOD, MOOD_ANCESTRY_LIMIT],
                 |row| {
                     Ok(EffectiveMood {
                         name: row.get(0)?,
@@ -1899,16 +1915,17 @@ pub fn sync_session_with(
         session.tmux.as_deref(),
     )?;
     store.project_discovered_session(session)?;
-    store.set_cursor_modified(&session.session_id, &key, ingested.next_cursor, session.modified_ms)?;
+    store.set_cursor_modified(
+        &session.session_id,
+        &key,
+        ingested.next_cursor,
+        session.modified_ms,
+    )?;
     Ok(ingested.stat)
 }
 
 /// The byte-offset transcript projection, which is every file-backed harness.
-pub fn project_transcript(
-    store: &Store,
-    session: &SessionRef,
-    from: u64,
-) -> Result<Ingested> {
+pub fn project_transcript(store: &Store, session: &SessionRef, from: u64) -> Result<Ingested> {
     let mut file = std::fs::File::open(&session.path)
         .map_err(|error| anyhow::anyhow!("open {}: {error}", session.path.display()))?;
     let result = crate::tail::read_complete_lines(&mut file, from)?;
@@ -1993,12 +2010,7 @@ impl Store {
         emit_tool_fact(self, session, turn, ts, name, input)
     }
 
-    pub fn write_usage(
-        &self,
-        session: &str,
-        turn: u64,
-        usage: &UsageRow,
-    ) -> Result<(bool, bool)> {
+    pub fn write_usage(&self, session: &str, turn: u64, usage: &UsageRow) -> Result<(bool, bool)> {
         let (request_ref, is_new) = self.intern_request(usage.message_id, usage.request_id)?;
         let changed = self.add_usage(session, turn, request_ref, is_new, usage)?;
         Ok((is_new, changed))
@@ -2849,7 +2861,10 @@ mod tests {
 
         let migrated = Store::open(path.clone()).unwrap();
         assert_eq!(migrated.schema_version().unwrap(), SCHEMA_VERSION);
-        assert_eq!(migrated.mood_names().unwrap(), vec!["board", "plain", "unga"]);
+        assert_eq!(
+            migrated.mood_names().unwrap(),
+            vec!["board", "plain", "unga"]
+        );
         let mood = migrated.effective_mood("coord").unwrap();
         assert_eq!(mood.name, "unga");
         assert_eq!(mood.template, "edited {body}");
@@ -3544,8 +3559,8 @@ mod tests {
             writeln!(file, "{line}").unwrap();
         }
         drop(file);
-        let stat = sync_session_with(store, &session_for(&lines_path), None, project_transcript)
-            .unwrap();
+        let stat =
+            sync_session_with(store, &session_for(&lines_path), None, project_transcript).unwrap();
         let _ = std::fs::remove_file(&lines_path);
         stat
     }
