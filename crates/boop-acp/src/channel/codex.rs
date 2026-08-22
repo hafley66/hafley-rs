@@ -14,6 +14,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 
 use crate::channel::jsonrpc::RpcChild;
@@ -47,7 +48,13 @@ impl InspectingProxy {
         std::thread::Builder::new()
             .name("boop-codex-inspecting-proxy".into())
             .spawn(move || {
-                let result = relay_inspecting(listener, &upstream, &send, &released);
+                let result = tokio::runtime::Builder::new_current_thread()
+                    .enable_io()
+                    .build()
+                    .context("build Codex inspecting proxy runtime")
+                    .and_then(|runtime| {
+                        runtime.block_on(relay_inspecting(listener, &upstream, &send, &released))
+                    });
                 if let Err(error) = result {
                     let _ = send.try_send(Err(format!("{error:#}")));
                 }
@@ -85,40 +92,41 @@ impl Drop for InspectingProxy {
     }
 }
 
-fn relay_inspecting(
+async fn relay_inspecting(
     listener: UnixListener,
     upstream: &Path,
     identity: &mpsc::SyncSender<Result<String, String>>,
     released: &Receiver<()>,
 ) -> Result<()> {
-    let (client_stream, _) = listener.accept().context("accept Codex TUI WebSocket")?;
-    let mut client = tungstenite::accept(client_stream).context("accept Codex TUI handshake")?;
-    let upstream_stream = UnixStream::connect(upstream)
+    listener.set_nonblocking(true)?;
+    let listener = tokio::net::UnixListener::from_std(listener)?;
+    let (client_stream, _) = listener
+        .accept()
+        .await
+        .context("accept Codex TUI WebSocket")?;
+    let mut client = tokio_tungstenite::accept_async(client_stream)
+        .await
+        .context("accept Codex TUI handshake")?;
+    let upstream_stream = tokio::net::UnixStream::connect(upstream)
+        .await
         .with_context(|| format!("connect upstream Codex socket {}", upstream.display()))?;
-    let (mut server, _) = tungstenite::client("ws://localhost/", upstream_stream)
+    let (mut server, _) = tokio_tungstenite::client_async("ws://localhost/", upstream_stream)
+        .await
         .context("upgrade upstream Codex WebSocket")?;
-    client.get_mut().set_nonblocking(true)?;
-    server.get_mut().set_nonblocking(true)?;
     let mut pending = HashMap::<String, String>::new();
     let mut reported = false;
     loop {
-        let mut progressed = false;
-        match client.read() {
-            Ok(message) => {
-                progressed = true;
+        tokio::select! {
+            message = client.next() => match message {
+            Some(Ok(message)) => {
                 inspect_request(&message, &mut pending);
-                server.send(message).context("relay Codex TUI request")?;
+                server.send(message).await.context("relay Codex TUI request")?;
             }
-            Err(tungstenite::Error::Io(error))
-                if error.kind() == std::io::ErrorKind::WouldBlock => {}
-            Err(tungstenite::Error::ConnectionClosed) | Err(tungstenite::Error::AlreadyClosed) => {
-                return Ok(())
-            }
-            Err(error) => return Err(error).context("read Codex TUI WebSocket"),
-        }
-        match server.read() {
-            Ok(message) => {
-                progressed = true;
+            Some(Err(error)) => return Err(error).context("read Codex TUI WebSocket"),
+            None => return Ok(()),
+        },
+            message = server.next() => match message {
+            Some(Ok(message)) => {
                 if !reported {
                     if let Some(thread) = inspect_response(&message, &mut pending) {
                         let _ = identity.try_send(Ok(thread));
@@ -130,17 +138,12 @@ fn relay_inspecting(
                 }
                 client
                     .send(message)
+                    .await
                     .context("relay Codex server response")?;
             }
-            Err(tungstenite::Error::Io(error))
-                if error.kind() == std::io::ErrorKind::WouldBlock => {}
-            Err(tungstenite::Error::ConnectionClosed) | Err(tungstenite::Error::AlreadyClosed) => {
-                return Ok(())
-            }
-            Err(error) => return Err(error).context("read upstream Codex WebSocket"),
+            Some(Err(error)) => return Err(error).context("read upstream Codex WebSocket"),
+            None => return Ok(()),
         }
-        if !progressed {
-            std::thread::sleep(Duration::from_millis(2));
         }
     }
 }
