@@ -4209,4 +4209,59 @@ mod tests {
         let _ = std::fs::remove_file(&db_path);
         let _ = std::fs::remove_file(&lines_path);
     }
+
+    /// RECEIPT (review of 8d821db, defect 1). A store written by an older
+    /// binary holds `gemini` in `dict_harness`, a value `HarnessId` never
+    /// named. Every read that crosses that column stays text, so the session
+    /// rows, the cursors, the status rows, the session graph and the
+    /// known-session map return instead of erroring, and a registry route
+    /// naming it resolves with `harness: None`.
+    #[test]
+    fn a_foreign_dict_harness_value_reads_back_without_error() {
+        use crate::_0_session_graph::{load_agent_session_graph, AgentSessionGraphQuery};
+
+        let (db_path, store) = fresh_store("foreign_harness");
+        store
+            .upsert_session_row("gem-1", "gemini", "gem-1", Some("/w"), None, 1)
+            .unwrap();
+        assert_eq!(HarnessId::parse("gemini"), None);
+
+        let rows = store.session_rows(None, None).unwrap();
+        assert!(rows
+            .iter()
+            .any(|row| row.session == "gem-1" && row.harness == "gemini"));
+        store.query_cursors(None).unwrap();
+        store.status_rows(60_000, 2).unwrap();
+        store.known_sessions().unwrap();
+        let graph = load_agent_session_graph(
+            &store,
+            AgentSessionGraphQuery {
+                cwd: None,
+                include_history: true,
+                tmux: None,
+                history_since_ts: None,
+            },
+        )
+        .unwrap();
+        assert!(graph
+            .sessions
+            .iter()
+            .any(|node| node.session.id == "gem-1" && node.session.harness == "gemini"));
+
+        let mail_dir = temp_path("foreign_harness_mail");
+        let _ = std::fs::remove_dir_all(&mail_dir);
+        std::fs::create_dir_all(&mail_dir).unwrap();
+        std::fs::write(
+            mail_dir.join("registry.json"),
+            r#"{"gem-coord": {"kind": "coordinator", "harness": "gemini", "sessionId": "gem-1"}}"#,
+        )
+        .unwrap();
+        let routes = crate::bus::read_routes(&mail_dir).unwrap();
+        assert_eq!(routes["gem-coord"].harness, None);
+        store.resolve_lane_runtime("gem-coord", &routes).unwrap();
+
+        drop(store);
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_dir_all(&mail_dir);
+    }
 }

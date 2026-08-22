@@ -24,13 +24,11 @@ pub struct Kimi;
 
 /// The kimi TUI takes no variant flag and exposes no control plane.
 static CAPABILITIES: Capabilities = Capabilities {
-    model_prefixes: &["kimi-"],
     bans_plan_family_models: false,
     lanes: LanePolicy::Allowed,
     variant: VariantSupport::None,
     mail: MailPolicy::Keystrokes,
     native_tui_projector: false,
-    process_names: HarnessId::Kimi.process_names(),
 };
 
 impl Harness for Kimi {

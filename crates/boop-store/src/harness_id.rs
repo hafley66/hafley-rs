@@ -1,11 +1,13 @@
-//! The one name a harness has: `SessionRef`, `Route`, `dict_harness` and every
-//! `--harness` argument carry this enum, never text.
+//! The one name a harness has: `SessionRef`, `Route` and every `--harness`
+//! argument carry this enum. `dict_harness` stays text on the way out: a store
+//! written by an older binary holds values this enum never named (`gemini`
+//! from the acpx preset), so no SQL read maps that column into `HarnessId`;
+//! readers keep `String` and call `HarnessId::parse` where a variant matters.
 
 use std::fmt;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Error, Result};
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 
 use crate::session::ModelSpec;
 
@@ -56,7 +58,6 @@ impl HarnessId {
     }
 
     /// The executable names this harness's own process runs under.
-    /// `boop_harness::Capabilities::process_names` is this list.
     pub const fn process_names(self) -> &'static [&'static str] {
         match self {
             HarnessId::Claude => &["claude"],
@@ -116,24 +117,6 @@ impl FromStr for HarnessId {
                     .map(HarnessId::as_str)
                     .collect::<Vec<_>>()
                     .join(", ")
-            )
-        })
-    }
-}
-
-impl ToSql for HarnessId {
-    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::from(self.as_str()))
-    }
-}
-
-impl FromSql for HarnessId {
-    fn column_result(value: ValueRef<'_>) -> FromSqlResult<HarnessId> {
-        let text = value.as_str()?;
-        HarnessId::parse(text).ok_or_else(|| {
-            FromSqlError::Other(
-                anyhow!("dict_harness carries `{text}`, which names no registered harness")
-                    .into_boxed_dyn_error(),
             )
         })
     }

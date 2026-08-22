@@ -624,9 +624,11 @@ mod tests {
             }
         });
         let mut proxy = InspectingProxy::start(&upstream_socket).unwrap();
-        let (mut first, _) =
-            tungstenite::client("ws://localhost/", UnixStream::connect(proxy.socket()).unwrap())
-                .unwrap();
+        let (mut first, _) = tungstenite::client(
+            "ws://localhost/",
+            UnixStream::connect(proxy.socket()).unwrap(),
+        )
+        .unwrap();
         first
             .send(tungstenite::Message::Text(
                 json!({"jsonrpc": "2.0", "id": 1, "method": "thread/start", "params": {}})

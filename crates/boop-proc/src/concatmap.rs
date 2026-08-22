@@ -1122,13 +1122,11 @@ mod tests {
     }
 
     static CAPABILITIES: Capabilities = Capabilities {
-        model_prefixes: &["fake-"],
         bans_plan_family_models: false,
         lanes: LanePolicy::Allowed,
         variant: VariantSupport::None,
         mail: MailPolicy::Keystrokes,
         native_tui_projector: false,
-        process_names: &["fake"],
     };
 
     impl Harness for FakeHarness {

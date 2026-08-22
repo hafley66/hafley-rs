@@ -59,23 +59,22 @@ mod tests {
         VariantSupport,
     };
 
-    /// The add-a-harness drill. `Echo` is a whole harness: one `impl Harness`
-    /// and one `static CAPABILITIES`, with no other file edited.
+    /// The replace-a-harness drill. `Echo` is a whole harness: one `impl
+    /// Harness` and one `static CAPABILITIES`. It registers under the closed
+    /// enum's `Kimi` variant, so what it proves is that the shared rails read
+    /// the registered impl and nothing else; a fifth harness would add a
+    /// variant first.
     struct Echo;
 
     static CAPABILITIES: Capabilities = Capabilities {
-        model_prefixes: &["echo-"],
         bans_plan_family_models: true,
         lanes: LanePolicy::CoordinatorSubagentsOnly,
         variant: VariantSupport::Flag,
         mail: MailPolicy::Door,
         native_tui_projector: true,
-        process_names: &["echo"],
     };
 
     impl Harness for Echo {
-        /// A real fifth harness would add a fifth `HarnessId` variant, which is
-        /// the one edit outside this file the drill cannot avoid.
         fn id(&self) -> HarnessId {
             HarnessId::Kimi
         }
@@ -112,14 +111,13 @@ mod tests {
         refusals
     }
 
-    /// RECEIPT. A harness swapped into the registry changes what the shared
-    /// rails do, with nothing else in the tree edited.
+    /// RECEIPT. A harness swapped in under an existing variant changes what
+    /// the shared rails do, with nothing else in the tree edited.
     #[test]
-    fn one_impl_and_one_static_are_a_whole_harness() {
+    fn a_swapped_in_impl_drives_the_shared_rails_under_its_variant() {
         let registry = Registry::with(vec![Box::new(Echo)]);
         let echo = registry.get(HarnessId::Kimi);
         assert_eq!(echo.id(), HarnessId::Kimi);
-        assert_eq!(echo.capabilities().model_prefixes, &["echo-"]);
         assert_eq!(echo.capabilities().mail, MailPolicy::Door);
         assert_eq!(
             spawn_refusals(&registry, HarnessId::Kimi, true),

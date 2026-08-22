@@ -16,9 +16,6 @@ pub use boop_store::session::{
 /// The declared behaviour every former harness-name comparison now reads. One
 /// `static CAPABILITIES` per harness module is the whole table.
 pub struct Capabilities {
-    /// Bare model-name prefixes this harness claims. `""` is opencode, which
-    /// takes the `provider/model` form. `HarnessId::for_model` is the lookup.
-    pub model_prefixes: &'static [&'static str],
     /// Refuse a model whose own harness runs on a flat-rate plan. Was
     /// `boop-proc/src/lane.rs:343,360`.
     pub bans_plan_family_models: bool,
@@ -31,9 +28,6 @@ pub struct Capabilities {
     /// Whether the native TUI wrapper runs the store projector alongside it.
     /// Was `boop/src/cli/control.rs:44`.
     pub native_tui_projector: bool,
-    /// Executable names this harness's own process runs under. Was
-    /// `boop-store/src/_0_session_graph.rs:464` and `harness/claude.rs:69`.
-    pub process_names: &'static [&'static str],
 }
 
 /// Whether workers of this harness run as tmux lanes.

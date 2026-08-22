@@ -24,13 +24,11 @@ pub struct Codex;
 /// Reasoning effort rides the `model@effort` suffix, so `--variant` has no
 /// spelling here; the native TUI needs the store projector beside it.
 static CAPABILITIES: Capabilities = Capabilities {
-    model_prefixes: &["gpt-"],
     bans_plan_family_models: false,
     lanes: LanePolicy::Allowed,
     variant: VariantSupport::ModelSuffixEffort,
     mail: MailPolicy::Keystrokes,
     native_tui_projector: true,
-    process_names: HarnessId::Codex.process_names(),
 };
 
 impl Harness for Codex {

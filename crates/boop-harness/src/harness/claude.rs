@@ -24,13 +24,11 @@ pub struct Claude;
 /// Claude workers are the coordinator's own Agent-tool subagents, and its
 /// mail lands at a turn boundary rather than on the keyboard.
 static CAPABILITIES: Capabilities = Capabilities {
-    model_prefixes: &["claude-"],
     bans_plan_family_models: false,
     lanes: LanePolicy::CoordinatorSubagentsOnly,
     variant: VariantSupport::None,
     mail: MailPolicy::TurnBoundaryHook,
     native_tui_projector: false,
-    process_names: HarnessId::Claude.process_names(),
 };
 
 impl Harness for Claude {
@@ -79,7 +77,7 @@ impl Harness for Claude {
                         std::path::Path::new(program)
                             .file_name()
                             .and_then(|name| name.to_str())
-                            .is_some_and(|name| CAPABILITIES.process_names.contains(&name))
+                            .is_some_and(|name| HarnessId::Claude.owns_process_name(name))
                     })
                     .then(|| claude_resume_id(&process.command))
                     .flatten()

@@ -18,13 +18,11 @@ struct EchoHarness {
 }
 
 static CAPABILITIES: Capabilities = Capabilities {
-    model_prefixes: &["echo-"],
     bans_plan_family_models: false,
     lanes: LanePolicy::Allowed,
     variant: VariantSupport::None,
     mail: MailPolicy::Keystrokes,
     native_tui_projector: false,
-    process_names: &["echo"],
 };
 
 impl Harness for EchoHarness {

@@ -21,13 +21,11 @@ pub struct Opencode;
 /// The `provider/model` form is opencode's, so its prefix list is the empty
 /// prefix; plan-family models would bill metered credit and are refused.
 static CAPABILITIES: Capabilities = Capabilities {
-    model_prefixes: &[""],
     bans_plan_family_models: true,
     lanes: LanePolicy::Allowed,
     variant: VariantSupport::Flag,
     mail: MailPolicy::Keystrokes,
     native_tui_projector: false,
-    process_names: HarnessId::Opencode.process_names(),
 };
 
 impl Harness for Opencode {
