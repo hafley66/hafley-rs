@@ -170,6 +170,45 @@ impl Harness for Codex {
         Ok(vec![codex_sessions_dir()?])
     }
 
+    /// The remote-control daemon owns a control socket, but the TUI starts a
+    /// distinct thread. Read the thread from the `codex` process in this
+    /// pane's live process tree. The wrapper process can retain an earlier
+    /// daemon environment and is deliberately not an identity source.
+    fn session_id_in_pane(
+        &self,
+        multiplexer: &dyn boop_store::tmux::Multiplexer,
+        processes: &dyn boop_store::proc::ProcReader,
+        tmux_target: &str,
+    ) -> Option<String> {
+        let root = multiplexer.pane_pid(None, tmux_target)?;
+        let codex_processes = std::iter::once(root)
+            .chain(processes.descendants(root))
+            .filter_map(|pid| processes.process(pid))
+            .filter(|process| {
+                process.command.first().is_some_and(|program| {
+                    Path::new(program)
+                        .file_name()
+                        .is_some_and(|name| name == "codex")
+                })
+            });
+
+        // An open rollout is OS-level ownership evidence for the actual TUI
+        // transcript and takes precedence over an inherited environment stamp.
+        let mut environment = None;
+        for process in codex_processes {
+            if let Some(session) = processes
+                .open_files(process.pid)
+                .into_iter()
+                .find_map(|path| codex_rollout_session(&path))
+            {
+                return Some(session);
+            }
+            environment = environment
+                .or_else(|| processes.environment_variable(process.pid, "CODEX_THREAD_ID"));
+        }
+        environment
+    }
+
     fn sync_candidates(&self, known: &KnownSessions) -> anyhow::Result<Vec<SessionRef>> {
         sessions_in_with_known(&codex_sessions_dir()?, known)
     }
@@ -278,6 +317,18 @@ fn explicit_resume(tui_args: &[String]) -> anyhow::Result<(Option<String>, &[Str
         .filter(|value| !value.starts_with('-'))
         .context("`boop tui codex -- resume` requires an explicit thread id")?;
     Ok((Some(thread.clone()), &tui_args[2..]))
+}
+
+/// The exact UUID in a live Codex rollout file name. `lsof` exposes this path
+/// for the TUI that owns the transcript, which binds a wrapper pane to its
+/// actual thread without consulting another wrapper's cwd.
+fn codex_rollout_session(path: &Path) -> Option<String> {
+    let name = path.file_name()?.to_str()?;
+    name.strip_prefix("rollout-")?.strip_suffix(".jsonl")?;
+    let fields = name.strip_suffix(".jsonl")?.split('-').collect::<Vec<_>>();
+    (fields.len() >= 9)
+        .then(|| fields[fields.len() - 5..].join("-"))
+        .filter(|value| value.len() == 36)
 }
 
 fn daemon_socket_from_start(text: &str) -> Option<String> {
@@ -766,18 +817,140 @@ fn project_line(
 
 #[cfg(test)]
 mod tests {
-    use std::fs::OpenOptions;
-    use std::io::Write;
     use std::path::PathBuf;
 
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
     use crate::harness::{claude, Harness, KnownSession, KnownSessions, SessionRef};
+    use boop_store::proc::{ProcReader, ProcessInfo};
     use boop_store::testing::TempRepo;
+    use boop_store::tmux::{LiveSessions, Multiplexer};
     use boop_store::Store;
 
     use super::{
         daemon_socket_from_start, explicit_resume, native_child_events_from_lines, native_tui_args,
         sessions_in, sessions_in_with_known, Codex,
     };
+
+    struct PaneFixture;
+
+    impl Multiplexer for PaneFixture {
+        fn current_pane(&self, _: Option<&str>) -> Option<String> {
+            None
+        }
+        fn session_of_pane(&self, _: Option<&str>, _: &str) -> Option<String> {
+            None
+        }
+        fn pane_id(&self, _: Option<&str>, _: &str) -> Option<String> {
+            None
+        }
+        fn pane_pid(&self, _: Option<&str>, target: &str) -> Option<u32> {
+            (target == "%3357").then_some(10)
+        }
+        fn live_sessions(&self, _: Option<&str>) -> Option<LiveSessions> {
+            None
+        }
+        fn has_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<bool> {
+            Ok(false)
+        }
+        fn kill_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn target_alive(&self, _: Option<&str>, _: &str) -> bool {
+            false
+        }
+        fn capture_pane(&self, _: Option<&str>, _: &str, _: Option<u32>) -> anyhow::Result<String> {
+            Ok(String::new())
+        }
+        fn new_detached_session(
+            &self,
+            _: Option<&str>,
+            _: &str,
+            _: &str,
+            _: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn new_bare_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_keys_literal(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_text(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_key_named(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn new_window(
+            &self,
+            _: Option<&str>,
+            _: &str,
+            _: &str,
+            _: &str,
+            _: &str,
+        ) -> anyhow::Result<String> {
+            Ok(String::new())
+        }
+        fn swap_windows(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn kill_window(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    struct ProcessFixture;
+
+    impl ProcReader for ProcessFixture {
+        fn is_alive(&self, pid: u32) -> bool {
+            pid == 10 || pid == 11
+        }
+        fn process(&self, pid: u32) -> Option<ProcessInfo> {
+            let (name, command, parent) = match pid {
+                10 => ("boop", vec!["boop".into(), "tui".into()], None),
+                11 => (
+                    "codex",
+                    vec!["/opt/homebrew/bin/codex".into(), "--remote".into()],
+                    Some(10),
+                ),
+                _ => return None,
+            };
+            Some(ProcessInfo {
+                pid,
+                parent,
+                name: name.into(),
+                command,
+                rss_bytes: 0,
+                cpu_percent: 0.0,
+                start_time_secs: 0,
+                cwd: None,
+            })
+        }
+        fn environment_variable(&self, pid: u32, name: &str) -> Option<String> {
+            (pid == 11 && name == "CODEX_THREAD_ID")
+                .then_some("019ffd56-e77d-7e73-b6eb-e987e3d2ae1c".into())
+        }
+        fn open_files(&self, pid: u32) -> Vec<PathBuf> {
+            (pid == 11)
+                .then_some(PathBuf::from(
+                    "/tmp/rollout-2026-08-21T03-33-00-01a02786-98b2-7752-86c3-7f52e46a9b50.jsonl",
+                ))
+                .into_iter()
+                .collect()
+        }
+        fn children(&self, pid: u32) -> Vec<u32> {
+            (pid == 10).then_some(11).into_iter().collect()
+        }
+        fn descendants(&self, pid: u32) -> Vec<u32> {
+            (pid == 10).then_some(11).into_iter().collect()
+        }
+        fn descendant_count(&self, pid: u32) -> usize {
+            usize::from(pid == 10)
+        }
+    }
 
     #[test]
     fn remote_control_start_socket_is_read_without_assuming_its_json_key() {
@@ -786,6 +959,14 @@ mod tests {
         assert_eq!(
             daemon_socket_from_start(output).as_deref(),
             Some("/tmp/codex.sock")
+        );
+    }
+
+    #[test]
+    fn pane_rollout_ownership_wins_over_the_daemon_environment_thread() {
+        assert_eq!(
+            Codex.session_id_in_pane(&PaneFixture, &ProcessFixture, "%3357"),
+            Some("01a02786-98b2-7752-86c3-7f52e46a9b50".into())
         );
     }
 

@@ -84,7 +84,6 @@ pub(crate) fn run_native_tui(
                 adapter,
                 name,
                 &dir,
-                cwd,
                 |message| crate::cli::mail::deliver_hail(registry, &dir, message, None),
             ) {
                 warn!(%error, route = name, "native child projector pass failed");

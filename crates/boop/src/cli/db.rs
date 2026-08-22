@@ -466,14 +466,48 @@ pub(crate) fn run_follow(registry: &Registry) -> Result<()> {
 /// One bounded resident-wrapper pass for a native parent route. It discovers
 /// only that route's child transcripts, advances their stored cursors, and
 /// flushes the committed completion outbox through the supplied native
-/// delivery callback. A route with no session id learns it from its first
-/// child transcript's recorded parent, never from a cwd-only guess.
+/// delivery callback. The route accepts a parent only when the live TUI in
+/// its own pane identifies that parent; a child transcript never claims a
+/// wrapper merely because both share a cwd.
 pub(crate) fn sync_native_child_route_once(
     store: &ident::Store,
     adapter: &dyn Harness,
     route_name: &str,
     dir: &Path,
-    cwd: &Path,
+    deliver: impl FnMut(&bus::Message) -> Result<()>,
+) -> Result<()> {
+    let routes = bus::read_routes(dir)?;
+    let route = routes
+        .get(route_name)
+        .cloned()
+        .with_context(|| format!("native route `{route_name}` is not registered"))?;
+    let parent_session = live_native_parent_session(adapter, &route)?;
+    let Some(parent_session) = parent_session else {
+        return Ok(());
+    };
+    sync_native_child_route_with_parent(store, adapter, route_name, dir, parent_session, deliver)
+}
+
+/// Read the session from the TUI process tree anchored to this route's pane.
+/// The adapter owns the harness-specific process tell. A stale route stamp,
+/// including an app-server daemon thread, has no authority here.
+fn live_native_parent_session(adapter: &dyn Harness, route: &bus::Route) -> Result<Option<String>> {
+    let Some(target) = route.tmux.as_deref() else {
+        return Ok(None);
+    };
+    let processes = boop::proc::SysinfoSnapshot::capture()?;
+    Ok(adapter.session_id_in_pane(tmux::mux(), &processes, target))
+}
+
+/// Project the children belonging to one parent whose ownership has already
+/// been established from that wrapper's live pane. Kept separate so the
+/// process identity boundary is testable without a tmux server.
+fn sync_native_child_route_with_parent(
+    store: &ident::Store,
+    adapter: &dyn Harness,
+    route_name: &str,
+    dir: &Path,
+    parent_session: String,
     mut deliver: impl FnMut(&bus::Message) -> Result<()>,
 ) -> Result<()> {
     let mut routes = bus::read_routes(dir)?;
@@ -483,22 +517,10 @@ pub(crate) fn sync_native_child_route_once(
         .with_context(|| format!("native route `{route_name}` is not registered"))?;
     let known = store.known_sessions()?;
     let candidates = adapter.sync_candidates(&known)?;
-    let parent_session = route.session_id.clone().or_else(|| {
-        candidates
-            .iter()
-            .find(|session| {
-                session.cwd.as_deref() == Some(cwd.to_string_lossy().as_ref())
-                    && session.parent.is_some()
-            })
-            .and_then(|session| session.parent.clone())
-    });
-    let Some(parent_session) = parent_session else {
-        return Ok(());
-    };
-    if route.session_id.is_none() {
+    if route.session_id.as_deref() != Some(parent_session.as_str()) {
         let mut enriched = route;
         enriched.session_id = Some(parent_session.clone());
-        enriched.source_path = Some(format!("native-child-parent={parent_session}"));
+        enriched.source_path = Some(format!("native-live-pane={parent_session}"));
         write_route(dir, route_name, enriched.clone())?;
         routes.insert(route_name.into(), enriched);
     }
@@ -1204,6 +1226,55 @@ mod tests {
         }
     }
 
+    struct CodexFixtureHarness {
+        session: SessionRef,
+    }
+
+    impl Harness for CodexFixtureHarness {
+        fn id(&self) -> &'static str {
+            "codex"
+        }
+
+        fn sessions(&self) -> Result<Vec<SessionRef>> {
+            Ok(vec![self.session.clone()])
+        }
+
+        fn sync_candidates(
+            &self,
+            _known: &boop::harness::KnownSessions,
+        ) -> Result<Vec<SessionRef>> {
+            let mut session = self.session.clone();
+            session.size = std::fs::metadata(&session.path)?.len();
+            Ok(vec![session])
+        }
+
+        fn read_from(&self, session: &SessionRef, offset: u64) -> Result<boop::harness::ReadChunk> {
+            boop::harness::codex::Codex.read_from(session, offset)
+        }
+
+        fn ingest(
+            &self,
+            _store: &ident::Store,
+            session: &SessionRef,
+            from: u64,
+        ) -> Result<boop::harness::Ingested> {
+            let mut file = std::fs::File::open(&session.path)?;
+            let result = boop::tail::read_complete_lines(&mut file, from)?;
+            Ok(boop::harness::Ingested {
+                stat: ident::SyncStat::default(),
+                next_cursor: result.next_offset,
+            })
+        }
+
+        fn observe_native_children(
+            &self,
+            session: &SessionRef,
+            from: u64,
+        ) -> Result<Vec<NativeChildEvent>> {
+            boop::harness::codex::Codex.observe_native_children(session, from)
+        }
+    }
+
     fn native_child_session(dir: &Path) -> SessionRef {
         SessionRef {
             harness: "fake",
@@ -1414,12 +1485,12 @@ mod tests {
         let worker = std::thread::spawn(move || -> Result<()> {
             let store = ident::Store::open(db_path)?;
             while worker_running.load(Ordering::SeqCst) {
-                sync_native_child_route_once(
+                sync_native_child_route_with_parent(
                     &store,
                     &watcher,
                     "resident-parent",
                     &worker_dir,
-                    Path::new("/resident"),
+                    "parent-session".into(),
                     |message| {
                         append_acks(&worker_dir, std::slice::from_ref(message))?;
                         delivery_tx.send(message.id.clone()).unwrap();
@@ -1456,6 +1527,103 @@ mod tests {
                 .and_then(|route| route.session_id.as_deref()),
             Some("parent-session")
         );
+    }
+
+    #[test]
+    fn live_codex_child_fixture_replaces_a_daemon_thread_with_its_tui_parent() {
+        use std::io::Write;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::{mpsc, Arc};
+        use std::time::Duration;
+
+        const PARENT: &str = "01a02786-98b2-7752-86c3-7f52e46a9b50";
+        const CHILD: &str = "01a02788-2ca2-7fc0-9e26-d03a3c9a7ae6";
+        const DAEMON_THREAD: &str = "019ffd56-e77d-7e73-b6eb-e987e3d2ae1c";
+        let (metadata, completion) =
+            include_str!("../../tests/fixtures/codex_live_native_child.jsonl")
+                .split_once('\n')
+                .expect("metadata and completion fixture records");
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let transcript = dir.join("codex-child.jsonl");
+        std::fs::write(&transcript, format!("{metadata}\n")).unwrap();
+        let mut route = route_with(None);
+        route.kind = "native".into();
+        route.harness = Some("codex".into());
+        route.cwd = Some("/Users/chrishafley/projects/sprefa".into());
+        route.session_id = Some(DAEMON_THREAD.into());
+        route.source_path = Some(format!("managed-app-server={DAEMON_THREAD}"));
+        write_route(&dir, "codex-live-parent", route).unwrap();
+        let watcher = CodexFixtureHarness {
+            session: SessionRef {
+                harness: "codex",
+                session_id: CHILD.into(),
+                nickname: CHILD.into(),
+                path: transcript.clone(),
+                cwd: Some("/Users/chrishafley/projects/sprefa".into()),
+                git_branch: None,
+                modified_ms: 0,
+                size: 0,
+                tmux: None,
+                tmux_socket: None,
+                parent: Some(PARENT.into()),
+            },
+        };
+        let running = Arc::new(AtomicBool::new(true));
+        let worker_running = Arc::clone(&running);
+        let worker_dir = dir.clone();
+        let db_path = dir.join("boop.db");
+        let (tick_tx, tick_rx) = mpsc::channel();
+        let (delivery_tx, delivery_rx) = mpsc::channel();
+        let worker = std::thread::spawn(move || -> Result<()> {
+            let store = ident::Store::open(db_path)?;
+            while worker_running.load(Ordering::SeqCst) {
+                sync_native_child_route_with_parent(
+                    &store,
+                    &watcher,
+                    "codex-live-parent",
+                    &worker_dir,
+                    PARENT.into(),
+                    |message| {
+                        append_acks(&worker_dir, std::slice::from_ref(message))?;
+                        delivery_tx.send(message.id.clone()).unwrap();
+                        Ok(())
+                    },
+                )?;
+                tick_tx.send(()).unwrap();
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            Ok(())
+        });
+        tick_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert!(delivery_rx.recv_timeout(Duration::from_millis(30)).is_err());
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&transcript)
+            .unwrap();
+        writeln!(file, "{completion}").unwrap();
+        drop(file);
+        assert_eq!(
+            delivery_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+            format!("native-child-completion:{PARENT}:{CHILD}")
+        );
+        running.store(false, Ordering::SeqCst);
+        worker.join().unwrap().unwrap();
+        let route = bus::read_routes(&dir)
+            .unwrap()
+            .remove("codex-live-parent")
+            .unwrap();
+        assert_eq!(route.session_id.as_deref(), Some(PARENT));
+        let expected_source = format!("native-live-pane={PARENT}");
+        assert_eq!(route.source_path.as_deref(), Some(expected_source.as_str()));
+        let messages = bus::parse_box(&dir.join("bus.ndjson"))
+            .into_iter()
+            .filter(|message| {
+                message.r#ref.as_deref()
+                    == Some(format!("native-child-completion:{PARENT}:{CHILD}").as_str())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(bus::fold(&messages).len(), 1);
     }
 
     /// RECEIPT (instant-focused-family-cli): Instant's argv reaches the graph query unchanged.
