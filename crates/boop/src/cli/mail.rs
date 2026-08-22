@@ -5,16 +5,14 @@ use anyhow::{Context, Result};
 use tracing::{debug, info};
 
 use boop::bus::Route;
+use boop::door::Delivered;
 use boop::harness::HarnessId;
+use boop::mail::{Landing, Via, DEFAULT_ROUTE_HARNESS};
 use boop::mailwait::Watch;
 use boop::registry::Registry;
 use boop::{bus, identity, inbox, lane, tmux};
 
 use crate::cli::job::{wait_and_exit, waiting_as};
-
-/// A route registered before harnesses were named answers as claude, which is
-/// the only harness whose routes predate the field.
-const DEFAULT_ROUTE_HARNESS: HarnessId = HarnessId::Claude;
 use crate::cli::{append_acks, append_message, append_message_to, line, mail_dir, pad};
 use crate::InboxCmd;
 
@@ -152,9 +150,8 @@ pub(crate) fn run_hail(
     )
 }
 
-/// Put one queued message in front of its recipient, by whatever its route
-/// kind allows. A lane's own supervisor reads the mailbox, so a lane row is
-/// left where it lies.
+/// Put one queued message in front of its recipient, through the door its
+/// harness declares. Every attempt leaves one `agent_delivery` row.
 pub(crate) fn deliver_hail(
     registry: &Registry,
     dir: &Path,
@@ -163,67 +160,62 @@ pub(crate) fn deliver_hail(
 ) -> Result<()> {
     let to = message.to.as_str();
     let routes = bus::read_routes(dir)?;
-    let Some(route) = routes.get(to) else {
-        println!("queued {} -> {to}", message.id);
-        println!("no registry route for {to}: message stays queued, to_timestamp null");
-        return Ok(());
-    };
-    if route.mode.as_deref() == Some("acpx") {
+    let store = boop::Store::open(boop::Store::default_path()?)?;
+    if let Some(route) = routes.get(to).filter(|route| is_acpx(route)) {
         let response = crate::cli::acpx::deliver(route, &message.body)?;
         append_acks(dir, std::slice::from_ref(message))?;
-        if !response.trim().is_empty() {
-            println!("{}", response.trim_end());
+        let landing = Landing::acpx(response.trim_end().to_owned());
+        landing.record(&store, &message.id, to, route.harness)?;
+        if let Some(reply) = landing.reply.as_deref().filter(|text| !text.is_empty()) {
+            println!("{reply}");
         }
         println!("delivered {} -> {to} (acpx queue)", message.id);
         return Ok(());
     }
-    if matches!(route.kind.as_str(), "coordinator" | "native") {
-        let harness_id = route.harness.unwrap_or(DEFAULT_ROUTE_HARNESS);
-        match send_native_route(registry, route, &message.body)? {
-            boop::harness::SendOutcome::Injected => {
-                append_acks(dir, std::slice::from_ref(message))?;
-                println!(
-                    "delivered {} -> {to} through {harness_id} native control",
-                    message.id
-                );
-            }
-            boop::harness::SendOutcome::QueuedForNextSpawn => {
-                println!("queued {} -> {to} for native control", message.id);
-            }
-            boop::harness::SendOutcome::Unsupported => {
-                println!(
-                    "queued {} -> {to} ({harness_id} has no native control)",
-                    message.id
-                );
-            }
-        }
-        return Ok(());
-    }
-    // A lane pane runs the supervisor, which reads this mailbox directly;
-    // typing at its stdout would reach no agent.
-    if route.kind == "lane" {
-        println!(
-            "queued {} -> {to} (lane supervisor delivers it)",
-            message.id
-        );
-        return Ok(());
-    }
-    // A hook-backed session consumes the queued row at its turn boundary.
-    if let Some(cwd) = route.cwd.as_deref() {
-        if inbox::installed_for(Path::new(cwd), to) {
-            println!("queued {} -> {to} (hook inbox drains it)", message.id);
-            info!(
-                to,
-                message_id = message.id,
-                delivery = "hook",
-                "hail queued for a hook inbox"
+    let harness_id = routes
+        .get(to)
+        .and_then(|route| route.harness)
+        .unwrap_or(DEFAULT_ROUTE_HARNESS);
+    let landing = boop::mail::deliver_hail(registry, &store, &routes, message)?;
+    info!(
+        to,
+        message_id = message.id,
+        delivery = landing.via.as_str(),
+        outcome = landing.outcome(),
+        "hail delivery recorded"
+    );
+    match &landing.delivered {
+        Delivered::Injected => {
+            append_acks(dir, std::slice::from_ref(message))?;
+            println!(
+                "delivered {} -> {to} through the {harness_id} door",
+                message.id
             );
-            return Ok(());
+        }
+        Delivered::QueuedForTurnBoundary => match landing.via {
+            Via::HookInbox => println!("queued {} -> {to} (hook inbox drains it)", message.id),
+            Via::LaneSupervisor => {
+                println!(
+                    "queued {} -> {to} (lane supervisor delivers it)",
+                    message.id
+                )
+            }
+            _ => println!(
+                "queued {} -> {to} (the {harness_id} door takes it at the next turn boundary)",
+                message.id
+            ),
+        },
+        Delivered::Unreachable(why) => {
+            println!("queued {} -> {to}", message.id);
+            println!("{to}: {why}: message stays queued, to_timestamp null");
         }
     }
-    println!("queued {} -> {to}", message.id);
-    println!("{to} has no native or supervisor transport: message stays queued");
     Ok(())
+}
+
+/// An acpx route is driven by the caller's own queue, not by a harness door.
+fn is_acpx(route: &Route) -> bool {
+    route.mode.as_deref() == Some("acpx")
 }
 
 /// `tell-parent`: one row from the caller to the parent its registration

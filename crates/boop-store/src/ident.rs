@@ -35,6 +35,17 @@ pub const SCHEMA_VERSION: i64 = 14;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
+/// The current-state `agent_live` row for one session, dict ids joined back
+/// to TEXT: the pane it holds, its last status, and the door it answers on.
+pub struct LiveRow {
+    pub session: String,
+    pub pid: Option<i64>,
+    pub tmux_pane: Option<String>,
+    pub status: Option<String>,
+    pub door_kind: Option<String>,
+    pub door_addr: Option<String>,
+}
+
 /// The attribute key a session's mood is stored under.
 pub const MOOD_ATTR_KEY: &str = "mood";
 /// The mood every session falls back to, and the template used when the store
@@ -480,8 +491,9 @@ impl Store {
                         |row| row.get::<_, bool>(0),
                     )?;
                     if !present {
-                        self.connection
-                            .execute_batch(&format!("ALTER TABLE agent_live ADD COLUMN {column} TEXT;"))?;
+                        self.connection.execute_batch(&format!(
+                            "ALTER TABLE agent_live ADD COLUMN {column} TEXT;"
+                        ))?;
                     }
                 }
                 self.connection.execute_batch("PRAGMA user_version = 14;")?;
@@ -1820,6 +1832,35 @@ impl Store {
             params![sid, door_kind, door_addr],
         )?;
         Ok(())
+    }
+
+    /// The last liveness observation for one session, door included. `None`
+    /// means this session has never been observed running.
+    pub fn live_row(&self, session: &str) -> Result<Option<LiveRow>> {
+        let row = self
+            .connection
+            .query_row(
+                "SELECT dict_session.value, live.pid, pane.value, status.value,
+                        live.door_kind, live.door_addr
+                   FROM agent_live live
+                   JOIN dict_session ON dict_session.id = live.session_id
+                   LEFT JOIN dict_pane pane ON pane.id = live.tmux_pane_id
+                   LEFT JOIN dict_status status ON status.id = live.status_id
+                  WHERE dict_session.value = ?1",
+                params![session],
+                |row| {
+                    Ok(LiveRow {
+                        session: row.get(0)?,
+                        pid: row.get(1)?,
+                        tmux_pane: row.get(2)?,
+                        status: row.get(3)?,
+                        door_kind: row.get(4)?,
+                        door_addr: row.get(5)?,
+                    })
+                },
+            )
+            .optional()?;
+        Ok(row)
     }
 
     /// Record what one hail's door answered. Keyed on (message, route): a

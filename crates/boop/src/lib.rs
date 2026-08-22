@@ -35,11 +35,12 @@ pub mod ident {
 }
 
 pub use boop_acp::channel;
-pub use boop_harness::{harness, identity, registry, worktree};
+pub use boop_harness::{door, harness, identity, live, registry, worktree};
 pub use boop_proc::{concatmap, config, host, inbox, lane, mailwait, supervise};
 #[cfg(feature = "agent-read")]
 pub mod chat;
 pub mod debug;
+pub mod mail;
 
 pub use boop_harness::Registry;
 pub use boop_store::open_default;

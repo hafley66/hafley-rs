@@ -480,7 +480,28 @@ pub(crate) fn run_wait(
             name: waiting_as(&dir, as_name)?,
         },
     };
+    if let Some(id) = id {
+        report_delivery(id);
+    }
     wait_and_exit(&dir, watch, timeout_secs, as_name, mail_dir_arg)
+}
+
+/// What the ledger recorded for the message being waited on, one line per
+/// route it was delivered to. An unreadable store costs the lines and nothing
+/// else: the wait itself reads the mailbox.
+fn report_delivery(message_id: &str) {
+    let rows = boop::Store::default_path()
+        .and_then(boop::Store::open)
+        .and_then(|store| store.delivery_rows(message_id));
+    let Ok(rows) = rows else {
+        return;
+    };
+    for row in rows {
+        line(&format!(
+            "{message_id} -> {}: {} ({})",
+            row.route, row.outcome, row.detail
+        ));
+    }
 }
 
 /// Whose inbox `--me` watches: the name given, else the identity ladder's lane
@@ -594,8 +615,7 @@ pub(crate) fn run_sweep(
             } else {
                 println!(
                     "{} -> {}: no registry route, cannot scope the cass query (--close-routeless expires these)",
-                    message.id,
-                    message.to
+                    message.id, message.to
                 );
             }
             continue;
