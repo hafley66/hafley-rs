@@ -17,6 +17,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 # Application-level errors.
 anyhow = "1"
+# The door address of an HTTP-served harness is parsed once, not re-spliced
+# from strings at each request.
+url = "2"
+# kill(pid, 0): a registry file outlives its process, so every live-session
+# read filters on the existence probe libc already exposes.
+libc = "0.2"
 # Resolve the claude home dir without XDG project-dir machinery.
 dirs = "5"
 # Parallel filesystem acquisition for transcript candidates. Harness adapters

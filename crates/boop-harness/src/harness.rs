@@ -164,6 +164,18 @@ pub trait Harness: Send + Sync {
     /// compare a harness name reads one field here.
     fn capabilities(&self) -> &'static Capabilities;
 
+    /// This harness's own live-session registry: the file, database or server
+    /// it writes when a TUI is running.
+    fn live(&self) -> &dyn crate::live::LiveSessions {
+        &crate::door::UNREACHABLE
+    }
+
+    /// The control plane one message is written to. The default declares the
+    /// harness unreachable rather than guessing a transport.
+    fn door(&self) -> &dyn crate::door::Door {
+        &crate::door::UNREACHABLE
+    }
+
     /// Resolve the caller identity from the stamp boop puts in a child.
     fn identity_env(&self) -> Option<crate::identity::Identity> {
         crate::identity::from_env_for(self.id())

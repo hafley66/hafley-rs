@@ -30,7 +30,8 @@ pub struct Store {
 /// 10 = agent_favorite, user-pinned markdown bodies.
 /// 11 = bounded, lane-addressable supervisor/channel trace events.
 /// 13 = per-session attributes and the mood rows mail renders through.
-pub const SCHEMA_VERSION: i64 = 13;
+/// 14 = the door a live session answers on, and one delivery row per hail.
+pub const SCHEMA_VERSION: i64 = 14;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -468,6 +469,22 @@ impl Store {
                     )?;
                 }
                 self.connection.execute_batch("PRAGMA user_version = 12;")?;
+            }
+            if self.schema_version()? < 14 {
+                // agent_delivery arrives with SCHEMA above; an older
+                // agent_live needs the two columns added.
+                for column in ["door_kind", "door_addr"] {
+                    let present = self.connection.query_row(
+                        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('agent_live') WHERE name = ?1)",
+                        params![column],
+                        |row| row.get::<_, bool>(0),
+                    )?;
+                    if !present {
+                        self.connection
+                            .execute_batch(&format!("ALTER TABLE agent_live ADD COLUMN {column} TEXT;"))?;
+                    }
+                }
+                self.connection.execute_batch("PRAGMA user_version = 14;")?;
             }
             self.stamp_version()?;
             Ok(())
@@ -1785,6 +1802,53 @@ impl Store {
         Ok(())
     }
 
+    /// Record the door this session answers on, beside its liveness row. A
+    /// session with no observation yet gets a row carrying the door alone.
+    pub fn record_live_door(
+        &self,
+        session: &str,
+        door_kind: &str,
+        door_addr: Option<&str>,
+    ) -> Result<()> {
+        let sid = self.session_id(session)?;
+        self.connection.execute(
+            "INSERT INTO agent_live (session_id, door_kind, door_addr)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(session_id) DO UPDATE SET
+               door_kind = excluded.door_kind,
+               door_addr = excluded.door_addr",
+            params![sid, door_kind, door_addr],
+        )?;
+        Ok(())
+    }
+
+    /// Record what one hail's door answered. Keyed on (message, route): a
+    /// second delivery attempt of the same message overwrites its outcome.
+    pub fn record_delivery(
+        &self,
+        message_id: &str,
+        route: &str,
+        harness: Option<crate::harness_id::HarnessId>,
+        outcome: &str,
+        detail: &str,
+        at_ms: u64,
+    ) -> Result<()> {
+        let harness_id = harness
+            .map(|id| self.intern("dict_harness", id.as_str()))
+            .transpose()?;
+        self.connection.execute(
+            "INSERT INTO agent_delivery (message_id, route, harness_id, outcome, detail, at_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(message_id, route) DO UPDATE SET
+               harness_id = excluded.harness_id,
+               outcome = excluded.outcome,
+               detail = excluded.detail,
+               at_ms = excluded.at_ms",
+            params![message_id, route, harness_id, outcome, detail, at_ms as i64],
+        )?;
+        Ok(())
+    }
+
     /// Every liveness interval for one session (or all when `session` is
     /// `None`), joined back to the TEXT status surface.
     pub fn live_span(&self, session: Option<&str>) -> Result<Vec<crate::rows::LiveSpanRow>> {
@@ -2580,12 +2644,31 @@ CREATE TABLE IF NOT EXISTS model_price (
   fetched_ts INTEGER NOT NULL
 );
 
+-- door_kind and door_addr are the address a hail is delivered to: the
+-- harness's own control plane, as its LiveSessions pass observed it. Both
+-- stay TEXT: an address is payload, never a JOIN key.
 CREATE TABLE IF NOT EXISTS agent_live (
   session_id INTEGER PRIMARY KEY,
   pid INTEGER,
   tmux_pane_id INTEGER,
-  status_id INTEGER
+  status_id INTEGER,
+  door_kind TEXT,
+  door_addr TEXT
 );
+
+-- One row per hail put in front of a recipient: what the door answered, keyed
+-- on the message and the route it was addressed to, so a re-delivery of the
+-- same message to the same route overwrites rather than piles up. `detail`
+-- carries an Unreachable reason and is '' for every other outcome.
+CREATE TABLE IF NOT EXISTS agent_delivery (
+  message_id TEXT NOT NULL,
+  route TEXT NOT NULL,
+  harness_id INTEGER,
+  outcome TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT '',
+  at_ms INTEGER NOT NULL,
+  PRIMARY KEY (message_id, route)
+) WITHOUT ROWID;
 
 -- Historical liveness: [from_ts, to_ts) intervals, open when to_ts IS NULL,
 -- folded from observations so a state change closes an interval and repeated

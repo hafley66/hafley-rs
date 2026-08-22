@@ -2,8 +2,10 @@
 //! transcript format per harness, its session roots, the identity ladder that
 //! names the caller, and the worktree a spawn runs in.
 
+pub mod door;
 pub mod harness;
 pub mod identity;
+pub mod live;
 pub mod registry;
 pub mod worktree;
 
@@ -13,5 +15,7 @@ pub use harness::{
     NativeChildEvent, NativeSessionRef, NativeTuiPlan, NativeTuiSpec, OneShotSpec, ReadChunk,
     SendOutcome, SessionRef, SpawnSpec, VariantSupport,
 };
+pub use door::{Delivered, Door, IdleNotice};
 pub use identity::Identity;
+pub use live::{DoorAddress, LiveSession, LiveSessions, LiveStatus};
 pub use registry::Registry;
