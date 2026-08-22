@@ -38,16 +38,22 @@ Two traits with overlapping duties: `Harness` (25 methods: identity rungs, trans
 
 ## 2. Type signatures
 
-All in `crates/boop-harness`. Nothing outside the crate names a harness by string.
+As landed. `HarnessId` lives in `boop-store`, not `boop-harness`: `SessionRef`,
+`Route` and `dict_harness` all name a harness and all live in the store, so the
+store cannot depend on the crate holding the id. `boop-harness` re-exports it
+(`pub use boop_store::harness_id::HarnessId`) and nothing outside names a
+harness by string.
 
 ```rust
-// harness.rs
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, serde::Serialize, serde::Deserialize)]
+// boop-store/src/harness_id.rs
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum HarnessId { Claude, Codex, Kimi, Opencode }
 impl HarnessId {
     pub const ALL: [HarnessId; 4];
-    pub fn as_str(self) -> &'static str;
+    pub const fn as_str(self) -> &'static str;
+    pub const fn process_names(self) -> &'static [&'static str];  // was Capabilities::process_names
+    pub fn owns_process_name(self, name: &str) -> bool;
     pub fn parse(value: &str) -> Option<HarnessId>;
     pub fn for_model(model: &str) -> Option<HarnessId>;   // the one table; replaces lane.rs harness_for_model
 }
@@ -56,26 +62,37 @@ impl std::str::FromStr for HarnessId;
 impl rusqlite::ToSql / FromSql for HarnessId;           // dict_harness.value round-trip
 
 /// Declared once per harness; every former literal branch reads a field here.
+/// `model_prefixes` and `process_names` are not fields: both are facts about
+/// the id itself, not about an adapter, and both are read where no `Harness`
+/// value is in hand (`_0_session_graph.rs`, `HarnessId::for_model`). They are
+/// `HarnessId` methods instead.
 pub struct Capabilities {
-    pub model_prefixes: &'static [&'static str],          // "claude-", "gpt-", "kimi-", "" (provider/model)
     pub bans_plan_family_models: bool,                    // lane.rs:343,360
     pub lanes: LanePolicy,                                // lane.rs:365
     pub variant: VariantSupport,                          // job.rs:798
     pub mail: MailPolicy,                                 // me.rs:121
     pub native_tui_projector: bool,                       // control.rs:44
-    pub process_names: &'static [&'static str],           // session_graph.rs:464, claude.rs:69
 }
 pub enum LanePolicy { Allowed, CoordinatorSubagentsOnly }
 pub enum VariantSupport { Flag, ModelSuffixEffort, None }
-pub enum MailPolicy { Door, TurnBoundaryHook, Keystrokes }
+pub enum MailPolicy { Door, Keystrokes }                 // TurnBoundaryHook retired in P3
 
+/// The facet split of §7 landed for `live()` and `door()` only. `transcripts()`
+/// and `spawner()` did not: `sessions/read_from/ingest/sync_candidates` and
+/// `spawn/stop/open_channel/one_shot/preview_command` are still methods on
+/// `Harness` itself.
 pub trait Harness: Send + Sync {
     fn id(&self) -> HarnessId;
     fn capabilities(&self) -> &'static Capabilities;
-    fn transcripts(&self) -> &dyn TranscriptSource;       // existing sessions/read_from/ingest/sync_candidates, moved
-    fn live(&self) -> &dyn LiveSessions;                   // new
-    fn door(&self) -> &dyn Door;                           // new
-    fn spawner(&self) -> &dyn Spawner;                     // existing spawn/stop/open_channel/one_shot, moved
+    fn live(&self) -> &dyn LiveSessions;                   // default: UNREACHABLE
+    fn door(&self) -> &dyn Door;                           // default: UNREACHABLE
+    fn identity_process(&self) -> Option<Identity>;        // kept, see §6
+    fn observe_native_children(&self, ..) -> Result<Vec<NativeChildEvent>>;      // kept, see §6
+    fn native_child_completion_visible(&self, ..) -> Result<bool>;               // kept, see §6
+    // transcripts: sessions, session_roots, sync_candidates, read_from, ingest,
+    //              known_paths_can_move
+    // spawn:       spawn, stop, one_shot, open_channel, preview_command,
+    //              control_capabilities
 }
 
 // live.rs
@@ -108,6 +125,10 @@ pub trait Door: Send + Sync {
     fn deliver(&self, session: &LiveSession, body: &str) -> Result<Delivered>;
     /// Resolves once when the session next ends a turn with nothing queued.
     fn notify_idle(&self, session: &LiveSession, timeout: Duration) -> Result<IdleNotice>;
+    /// The user's own interactive TUI, attached to this same control plane.
+    /// Replaced `Harness::prepare_native_tui` in P3. Default: run the
+    /// executable as spelled, attached to nothing.
+    fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan>;
 }
 pub struct IdleNotice { pub at_ms: u64, pub status_line: Option<String> }
 
@@ -215,14 +236,29 @@ Read path never scans transcripts; `LiveSessions` reads the harness's own regist
 
 ## 6. Deletions
 
-| gone | replaced by |
-|---|---|
-| `Harness::{identity_env, identity_pane, identity_process, session_id_in_pane, root_sessions_for_cwd, prepare_native_tui, send_native, observe_native_children, native_child_completion_visible}` | `live()`, `door()`, `transcripts()` |
-| `boop-acp/src/channel/tui.rs` (864), `channel/opencode.rs`, `channel/kimi.rs` | `AcpChannel` for lanes; doors for TUIs |
-| `boop-acp/src/channel/codex.rs::InspectingProxy` + `boop codex` proxy launch | codex `LiveSessions` reads `state_5.sqlite`; TUI launched plain with `--remote` to the daemon |
-| `lane.rs::harness_for_model` + 40 literals | `HarnessId::for_model` + `Capabilities` |
-| `me.rs` hook-inbox install for claude | claude `Door` (socket) |
-| instant `0_harness_store.rs` four `HarnessStore` impls | instant links `boop-harness` and calls `registry.get(id).live()` / `.transcripts()` |
+As landed. P3 is `c86832f`, `2ba1860`, `d2ff4c4`, `0de1a46`.
+
+| gone | replaced by | state |
+|---|---|---|
+| `Harness::identity_env` | `identity::from_env()`; the stamp is boop's own | done |
+| `Harness::identity_pane` | `identity::from_pane(routes)` | done |
+| `Harness::session_id_in_pane` | `live().live_session_in_pane(pane)`; `boop adopt` no longer walks a pane's process tree and `run_adopt_with` takes no `ProcReader` | done |
+| `Harness::root_sessions_for_cwd` | `live().live_sessions()` filtered by cwd, in `identity::live_session_for_route`; `Rung::RouteCwd` confidence is now `live-registry` | done |
+| `Harness::send_native` | `door().deliver`; `SendOutcome` and `NativeSessionRef` retired with it | done |
+| `Harness::prepare_native_tui` | `door().tui_launch`; codex argv and daemon start moved into `door/codex.rs` | done |
+| `Harness::identity_process` | nothing | **kept**: a tool subprocess owns no pane and appears in no live registry, so `live()` cannot answer for it. Its own environment (`CLAUDE_CODE_SESSION_ID`, `CODEX_THREAD_ID`, `KIMI_SESSION_ID`) is the only tell it has |
+| `Harness::observe_native_children`, `Harness::native_child_completion_visible` | nothing | **kept**: transcript reads, and §2's `transcripts()` facet never landed, so `Harness` is its own transcript source. Moving them would be a rename, not a cut |
+| `boop-acp/src/channel/tui.rs` (865), `channel/opencode.rs` (207), `channel/kimi.rs` (174) | `AcpChannel` for lanes; doors for TUIs. `store_path`/`opencode_db_path` moved into `harness/opencode.rs` | done |
+| `boop-acp/src/channel/codex.rs::InspectingProxy` + `relay_inspecting` + `relay_connection` + `open_proxy` + `start_interactive_proxy` + `InteractiveThreadStart` (605 lines) | codex `LiveSessions` reads `state_5.sqlite`; TUI launched plain with `--remote unix://<daemon socket>`; the thread id is read afterwards from the live registry (`control.rs::opened_session`), which is what the proxy existed to intercept | done |
+| `Multiplexer::{send_keys_literal, send_text, send_key_named}` + `paste_body` + `send_keys` | nothing: with `send_native` retired, nothing typed at a pane | done, added to §6 by P3 |
+| `MailPolicy::TurnBoundaryHook` | claude declares `Door`; the hook inbox survives as the `Door` arm's fallback when the live registry answers nothing, and `boop inbox hooks` is the one verb that writes it | done |
+| `me.rs` hook-inbox install for claude, and the `--no-hooks` flag opting out of it | claude `Door` (socket) | done |
+| `lane.rs::harness_for_model` + 40 literals | `HarnessId::for_model` + `Capabilities` | done in P1 |
+| instant `0_harness_store.rs` four `HarnessStore` impls | instant links `boop-harness` and calls `registry.get(id).live()` | not started |
+
+Dependencies dropped from `boop-acp` with the channels: `tokio-tungstenite`,
+`futures-util`, `tungstenite`, `rusqlite`, `dirs`, and the tokio `net` and
+`macros` features.
 
 ## 7. Lanes and ownership
 
