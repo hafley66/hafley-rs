@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use boop_harness::harness::{Harness, SessionRef};
+use boop_harness::harness::{Harness, HarnessId, SessionRef};
 use boop_harness::registry::Registry;
 use boop_harness::sync_session;
 use boop_store::Store;
@@ -55,7 +55,7 @@ fn load_manifest(id: &str) -> Option<Vec<FixtureSession>> {
     }))
 }
 
-fn session_ref(id: &'static str, base: &Path, entry: &FixtureSession) -> SessionRef {
+fn session_ref(id: HarnessId, base: &Path, entry: &FixtureSession) -> SessionRef {
     let path = base.join(&entry.path);
     let size = fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
     SessionRef {
@@ -80,8 +80,8 @@ fn scratch_store_path(id: &str) -> PathBuf {
 /// Read-count the corpus untimed, then time the real `sync_session` write
 /// path once per session against a fresh scratch store (never `~/.agent/boop.db`).
 fn measure(harness: &dyn Harness) -> Option<CorpusResult> {
-    let manifest = load_manifest(harness.id())?;
-    let base = fixture_dir(harness.id());
+    let manifest = load_manifest(harness.id().as_str())?;
+    let base = fixture_dir(harness.id().as_str());
     let sessions: Vec<SessionRef> = manifest
         .iter()
         .map(|entry| session_ref(harness.id(), &base, entry))
@@ -99,7 +99,7 @@ fn measure(harness: &dyn Harness) -> Option<CorpusResult> {
         events += chunk.events.len() as u64;
     }
 
-    let db_path = scratch_store_path(harness.id());
+    let db_path = scratch_store_path(harness.id().as_str());
     let _ = fs::remove_file(&db_path);
     let store = Store::open(db_path.clone()).expect("open scratch store");
 
@@ -163,7 +163,7 @@ fn bench_grid() {
 
     let rows: Vec<(&'static str, Option<CorpusResult>)> = harnesses
         .iter()
-        .map(|harness| (harness.id(), measure(harness.as_ref())))
+        .map(|harness| (harness.id().as_str(), measure(harness.as_ref())))
         .collect();
 
     let mut markdown = String::from(

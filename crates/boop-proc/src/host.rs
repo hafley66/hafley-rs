@@ -55,9 +55,7 @@ pub fn run_chat(request: ChatRequest) -> ChatResponse {
 fn chat_with_registry(request: ChatRequest, registry: &'static Registry) -> Result<ChatResponse> {
     let harness = crate::lane::harness_for_model(&request.model)?
         .with_context(|| format!("model `{}` names no harness", request.model))?;
-    let adapter = registry
-        .by_id(&harness)
-        .with_context(|| format!("no adapter registered for harness `{harness}`"))?;
+    let adapter = registry.get(harness);
     let root = default_run_dir(&request.resident)?;
     let store_path = boop_store::Store::default_path().context("resolve the default boop store")?;
     run_chat_with_adapter(request, adapter, &root, &store_path)

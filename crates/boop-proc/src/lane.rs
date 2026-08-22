@@ -9,6 +9,8 @@ use anyhow::{Context, Result};
 
 use crate::config;
 use boop_harness::identity::Identity;
+use boop_harness::registry::Registry;
+use boop_harness::{HarnessId, LanePolicy};
 use boop_store::bus::Route;
 
 /// The worktree parent directory, relative to the repo root.
@@ -17,19 +19,8 @@ pub const WORKTREE_ROOT: &str = ".boop-worktrees";
 /// Conventional prefixes; nothing here rejects another one.
 pub const KINDS: [&str; 4] = ["feature", "fix", "refactor", "chore"];
 
-/// Model spelling -> harness, longest prefix first. `provider/model` is
-/// opencode's; `gpt-5.6-luna@medium` is codex's. config `model-harness` wins.
-const MODEL_HARNESS: [(&str, &str); 9] = [
-    ("gpt", "codex"),
-    ("codex", "codex"),
-    ("o3", "codex"),
-    ("o4", "codex"),
-    ("claude", "claude"),
-    ("opus", "claude"),
-    ("sonnet", "claude"),
-    ("haiku", "claude"),
-    ("kimi", "kimi"),
-];
+/// The harness a spawn runs on when nothing names one: the lane default.
+const DEFAULT_SPAWN_HARNESS: HarnessId = HarnessId::Opencode;
 
 /// Model-family prefix -> owning harness on a flat-rate plan. The default ban
 /// table; config `opencode-banned` wins when set.
@@ -281,29 +272,21 @@ pub fn pane_epilogue(lane: &str, mail_dir: &Path) -> String {
 pub use boop_store::session::{Effort, ModelSpec};
 
 /// The harness a model spelling names, or `None` when it names none. Config's
-/// `model-harness` wins when non-empty; otherwise the compiled table decides.
-pub fn harness_for_model(model: &str) -> Result<Option<Cow<'static, str>>> {
+/// `model-harness` wins for a bare name; otherwise `HarnessId::for_model` does.
+pub fn harness_for_model(model: &str) -> Result<Option<HarnessId>> {
     let spec: ModelSpec = model.parse()?;
     let name = spec.name.trim();
-    if name.is_empty() {
-        return Ok(None);
+    if name.is_empty() || name.contains('/') {
+        return Ok(HarnessId::for_model(model));
     }
-    if name.contains('/') {
-        return Ok(Some(Cow::Borrowed("opencode")));
-    }
-    let name = name.to_ascii_lowercase();
+    let lowered = name.to_ascii_lowercase();
     let config = config::loaded()?;
-    Ok(config
+    let configured = config
         .model_harness
         .iter()
-        .find(|(prefix, _)| name.starts_with(prefix.as_str()))
-        .map(|(_, harness)| Cow::Borrowed(harness.as_str()))
-        .or_else(|| {
-            MODEL_HARNESS
-                .into_iter()
-                .find(|(prefix, _)| name.starts_with(prefix))
-                .map(|(_, harness)| Cow::Borrowed(harness))
-        }))
+        .find(|(prefix, _)| lowered.starts_with(prefix.as_str()))
+        .and_then(|(_, harness)| HarnessId::parse(harness));
+    Ok(configured.or_else(|| HarnessId::for_model(model)))
 }
 
 /// A model family whose own harness runs on a flat-rate plan; opencode would
@@ -336,38 +319,38 @@ fn banned_error(model: &str, owner: &str) -> anyhow::Error {
 }
 
 /// The harness a spawn runs on: `--harness` wins, else the model spelling.
-/// Plan-family models are refused on opencode even with `--harness opencode`.
-pub fn harness_for_spawn(explicit: Option<&str>, model: Option<&str>) -> Result<String> {
+/// Both refusals below read the harness's own declared capabilities.
+pub fn harness_for_spawn(
+    registry: &Registry,
+    explicit: Option<&str>,
+    model: Option<&str>,
+) -> Result<HarnessId> {
     let model_named = model.filter(|model| !model.is_empty());
-    if let Some(harness) = explicit.filter(|harness| !harness.is_empty()) {
-        if harness == "opencode" {
-            if let Some(model) = model_named {
-                if let Some(owner) = plan_harness_family(model)? {
-                    return Err(banned_error(model, &owner));
-                }
+    let explicit = explicit.filter(|harness| !harness.is_empty());
+    let harness = match (explicit, model_named) {
+        (Some(explicit), _) => explicit.parse::<HarnessId>()?,
+        (None, None) => DEFAULT_SPAWN_HARNESS,
+        (None, Some(model)) => harness_for_model(model)?.with_context(|| {
+            format!(
+                "model `{model}` names no harness (gpt-* codex, kimi-* kimi, claude-* claude, provider/model opencode); pass --harness <id>"
+            )
+        })?,
+    };
+    let capabilities = registry.get(harness).capabilities();
+    if capabilities.bans_plan_family_models {
+        if let Some(model) = model_named {
+            if let Some(owner) = plan_harness_family(model)? {
+                return Err(banned_error(model, &owner));
             }
         }
-        return Ok(harness.to_owned());
     }
-    let Some(model) = model_named else {
-        return Ok("opencode".to_owned());
-    };
-    let Some(harness) = harness_for_model(model)? else {
+    if explicit.is_none() && capabilities.lanes == LanePolicy::CoordinatorSubagentsOnly {
+        let model = model_named.unwrap_or_default();
         anyhow::bail!(
-            "model `{model}` names no harness (gpt-* codex, kimi-* kimi, claude-* claude, provider/model opencode); pass --harness <id>"
-        );
-    };
-    if harness == "opencode" {
-        if let Some(owner) = plan_harness_family(model)? {
-            return Err(banned_error(model, &owner));
-        }
-    }
-    if harness == "claude" {
-        anyhow::bail!(
-            "model `{model}` is a Claude model, and Claude workers run as the coordinator's own Agent-tool subagents, never as tmux lanes; pass --harness claude to spawn one anyway"
+            "model `{model}` runs on the `{harness}` harness, whose workers are the coordinator's own Agent-tool subagents, never tmux lanes; pass --harness {harness} to spawn one anyway"
         );
     }
-    Ok(harness.into_owned())
+    Ok(harness)
 }
 
 /// The caller's own registered route. The identity ladder names a lane
@@ -600,7 +583,7 @@ mod tests {
     use super::{
         caller_route, children_of, default_base_sha, derive, harness_for_model, harness_for_spawn,
         kind_of, repo_root, resolve_parent, rev_parse, slug, tell_parent_target, yield_body,
-        Identity, LaneIdentity, ModelSpec, FALLBACK_LOCALE,
+        HarnessId, Identity, LaneIdentity, ModelSpec, Registry, FALLBACK_LOCALE,
     };
 
     fn repo() -> PathBuf {
@@ -829,7 +812,7 @@ mod tests {
     fn route_of_kind(kind: &str, tmux: &str) -> Route {
         Route {
             kind: kind.into(),
-            harness: Some("opencode".into()),
+            harness: Some(HarnessId::Opencode),
             tmux: Some(tmux.into()),
             cwd: None,
             model: None,
@@ -1010,29 +993,23 @@ mod tests {
     /// `--harness` dry-ran as opencode; the spelling names the harness now.
     #[test]
     fn a_gpt_model_names_the_codex_harness() {
+        let registry = Registry::discover();
         assert_eq!(
-            harness_for_model("gpt-5.6-luna@medium").unwrap().as_deref(),
-            Some("codex")
+            harness_for_model("gpt-5.6-luna@medium").unwrap(),
+            Some(HarnessId::Codex)
         );
         assert_eq!(
-            harness_for_spawn(None, Some("gpt-5.6-luna@medium")).unwrap(),
-            "codex"
+            harness_for_spawn(&registry, None, Some("gpt-5.6-luna@medium")).unwrap(),
+            HarnessId::Codex
+        );
+        assert_eq!(harness_for_model("kimi-k2").unwrap(), Some(HarnessId::Kimi));
+        assert_eq!(
+            harness_for_model("openrouter/deepseek/deepseek-v4-flash-0731").unwrap(),
+            Some(HarnessId::Opencode)
         );
         assert_eq!(
-            harness_for_model("kimi-k2").unwrap().as_deref(),
-            Some("kimi")
-        );
-        assert_eq!(
-            harness_for_model("openrouter/deepseek/deepseek-v4-flash-0731")
-                .unwrap()
-                .as_deref(),
-            Some("opencode")
-        );
-        assert_eq!(
-            harness_for_model("zai-coding-plan/glm-4.6")
-                .unwrap()
-                .as_deref(),
-            Some("opencode")
+            harness_for_model("zai-coding-plan/glm-4.6").unwrap(),
+            Some(HarnessId::Opencode)
         );
         assert_eq!(harness_for_model("nothing-known").unwrap(), None);
     }
@@ -1041,30 +1018,36 @@ mod tests {
     /// two dead opencode lanes AND billed openrouter for plan-covered models.
     #[test]
     fn plan_family_models_are_banned_from_opencode() {
-        let err = harness_for_spawn(None, Some("openrouter/openai/gpt-5.6-sol"))
+        let registry = Registry::discover();
+        let err = harness_for_spawn(&registry, None, Some("openrouter/openai/gpt-5.6-sol"))
             .unwrap_err()
             .to_string();
         assert!(err.contains("BANNED from opencode"), "{err}");
         assert!(err.contains("codex"), "{err}");
-        let err = harness_for_spawn(Some("opencode"), Some("openai/gpt-5.6-terra"))
+        let err = harness_for_spawn(&registry, Some("opencode"), Some("openai/gpt-5.6-terra"))
             .unwrap_err()
             .to_string();
         assert!(err.contains("BANNED from opencode"), "{err}");
-        let err = harness_for_spawn(None, Some("anthropic/claude-sonnet-5"))
+        let err = harness_for_spawn(&registry, None, Some("anthropic/claude-sonnet-5"))
             .unwrap_err()
             .to_string();
         assert!(err.contains("claude"), "{err}");
-        let err = harness_for_spawn(Some("opencode"), Some("google/gemini-3-pro"))
+        let err = harness_for_spawn(&registry, Some("opencode"), Some("google/gemini-3-pro"))
             .unwrap_err()
             .to_string();
         assert!(err.contains("gemini"), "{err}");
         assert_eq!(
-            harness_for_spawn(None, Some("openrouter/deepseek/deepseek-v4-flash-0731")).unwrap(),
-            "opencode"
+            harness_for_spawn(
+                &registry,
+                None,
+                Some("openrouter/deepseek/deepseek-v4-flash-0731")
+            )
+            .unwrap(),
+            HarnessId::Opencode
         );
         assert_eq!(
-            harness_for_spawn(None, Some("zai-coding-plan/glm-4.6")).unwrap(),
-            "opencode"
+            harness_for_spawn(&registry, None, Some("zai-coding-plan/glm-4.6")).unwrap(),
+            HarnessId::Opencode
         );
     }
 
@@ -1072,14 +1055,18 @@ mod tests {
     /// the opencode default the flash4 lanes run on.
     #[test]
     fn an_explicit_harness_wins_over_the_model_spelling() {
+        let registry = Registry::discover();
         assert_eq!(
-            harness_for_spawn(Some("kimi"), Some("gpt-5.6-luna")).unwrap(),
-            "kimi"
+            harness_for_spawn(&registry, Some("kimi"), Some("gpt-5.6-luna")).unwrap(),
+            HarnessId::Kimi
         );
-        assert_eq!(harness_for_spawn(None, None).unwrap(), "opencode");
         assert_eq!(
-            harness_for_spawn(Some("claude"), Some("claude-opus-4")).unwrap(),
-            "claude",
+            harness_for_spawn(&registry, None, None).unwrap(),
+            HarnessId::Opencode
+        );
+        assert_eq!(
+            harness_for_spawn(&registry, Some("claude"), Some("claude-opus-4")).unwrap(),
+            HarnessId::Claude,
             "the Agent-tool law is a default, and --harness claude is the way past it"
         );
     }
@@ -1088,11 +1075,12 @@ mod tests {
     /// spelling stops too rather than spawning on the wrong harness.
     #[test]
     fn an_unnamed_harness_never_guesses_opencode() {
-        let claude = harness_for_spawn(None, Some("claude-opus-4"))
+        let registry = Registry::discover();
+        let claude = harness_for_spawn(&registry, None, Some("claude-opus-4"))
             .unwrap_err()
             .to_string();
         assert!(claude.contains("Agent-tool"), "message: {claude}");
-        let unknown = harness_for_spawn(None, Some("nothing-known"))
+        let unknown = harness_for_spawn(&registry, None, Some("nothing-known"))
             .unwrap_err()
             .to_string();
         assert!(unknown.contains("--harness"), "message: {unknown}");

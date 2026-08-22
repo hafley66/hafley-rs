@@ -7,10 +7,59 @@ use anyhow::Result;
 
 use boop_store::ident::{Store, SyncStat};
 
+pub use boop_store::harness_id::HarnessId;
 pub use boop_store::session::{
-    Capabilities, Ingested, KnownSession, KnownSessions, OneShotSpec, ReadChunk, SendOutcome,
-    SessionRef, SpawnSpec,
+    ControlCapabilities, Ingested, KnownSession, KnownSessions, OneShotSpec, ReadChunk,
+    SendOutcome, SessionRef, SpawnSpec,
 };
+
+/// The declared behaviour every former harness-name comparison now reads. One
+/// `static CAPABILITIES` per harness module is the whole table.
+pub struct Capabilities {
+    /// Bare model-name prefixes this harness claims. `""` is opencode, which
+    /// takes the `provider/model` form. `HarnessId::for_model` is the lookup.
+    pub model_prefixes: &'static [&'static str],
+    /// Refuse a model whose own harness runs on a flat-rate plan. Was
+    /// `boop-proc/src/lane.rs:343,360`.
+    pub bans_plan_family_models: bool,
+    /// Whether a worker gets a tmux lane at all. Was `lane.rs:365`.
+    pub lanes: LanePolicy,
+    /// How reasoning effort is spelled at spawn. Was `boop/src/cli/job.rs:798`.
+    pub variant: VariantSupport,
+    /// Where a hail lands. Was `boop/src/cli/me.rs:121`.
+    pub mail: MailPolicy,
+    /// Whether the native TUI wrapper runs the store projector alongside it.
+    /// Was `boop/src/cli/control.rs:44`.
+    pub native_tui_projector: bool,
+    /// Executable names this harness's own process runs under. Was
+    /// `boop-store/src/_0_session_graph.rs:464` and `harness/claude.rs:69`.
+    pub process_names: &'static [&'static str],
+}
+
+/// Whether workers of this harness run as tmux lanes.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum LanePolicy {
+    Allowed,
+    /// Workers are the coordinator's own subagents; a lane spawn needs an
+    /// explicit `--harness` to get past the default.
+    CoordinatorSubagentsOnly,
+}
+
+/// How a spawn spells reasoning effort for this harness.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum VariantSupport {
+    Flag,
+    ModelSuffixEffort,
+    None,
+}
+
+/// Where one hail is delivered.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum MailPolicy {
+    Door,
+    TurnBoundaryHook,
+    Keystrokes,
+}
 
 pub mod claude;
 pub mod codex;
@@ -115,7 +164,11 @@ pub fn sync_session_with_pid(
 /// shareable so a caller can bound a synchronous pass on its own thread.
 pub trait Harness: Send + Sync {
     /// Stable short id used in CLI output and as the `--harness` filter value.
-    fn id(&self) -> &'static str;
+    fn id(&self) -> HarnessId;
+
+    /// What this harness declares about itself. Every branch that used to
+    /// compare a harness name reads one field here.
+    fn capabilities(&self) -> &'static Capabilities;
 
     /// Resolve the caller identity from the stamp boop puts in a child.
     fn identity_env(&self) -> Option<crate::identity::Identity> {
@@ -222,8 +275,8 @@ pub trait Harness: Send + Sync {
     // so any adapter without control support is safe and explicit.
 
     /// What this harness can control. `true` only where a test confirms it.
-    fn capabilities(&self) -> Capabilities {
-        Capabilities::default()
+    fn control_capabilities(&self) -> ControlCapabilities {
+        ControlCapabilities::default()
     }
 
     /// Prepare the ordinary interactive TUI for this harness. Transcript and
@@ -278,7 +331,7 @@ pub fn supervisor_command(spec: &SpawnSpec) -> String {
     let mut command = format!(
         "nice -n 10 boop beep lane run --lane {} --harness {} --brief {} --mail-dir {}",
         quote(&spec.lane),
-        quote(&spec.harness),
+        quote(spec.harness.as_str()),
         quote(&spec.prompt),
         quote(&spec.mail_dir.display().to_string()),
     );

@@ -10,8 +10,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::harness::{
-    jsonl_files, Capabilities, Harness, KnownSessions, NativeSessionRef, ReadChunk, SendOutcome,
-    SessionRef, SpawnSpec,
+    jsonl_files, Capabilities, ControlCapabilities, Harness, HarnessId, KnownSessions, LanePolicy,
+    MailPolicy, NativeSessionRef, ReadChunk, SendOutcome, SessionRef, SpawnSpec, VariantSupport,
 };
 use anyhow::Context;
 use boop_store::event::{Access, AgentEvent, ToolPath};
@@ -20,6 +20,18 @@ use serde_json::Value;
 
 /// The claude harness. Stateless; the trait methods read straight from disk.
 pub struct Claude;
+
+/// Claude workers are the coordinator's own Agent-tool subagents, and its
+/// mail lands at a turn boundary rather than on the keyboard.
+static CAPABILITIES: Capabilities = Capabilities {
+    model_prefixes: &["claude-"],
+    bans_plan_family_models: false,
+    lanes: LanePolicy::CoordinatorSubagentsOnly,
+    variant: VariantSupport::None,
+    mail: MailPolicy::TurnBoundaryHook,
+    native_tui_projector: false,
+    process_names: HarnessId::Claude.process_names(),
+};
 
 impl Harness for Claude {
     /// Claude stamps its session id into every process it runs, and a sidechain
@@ -31,7 +43,7 @@ impl Harness for Claude {
             .filter(|value| !value.is_empty())?;
         Some(crate::identity::Identity {
             session: Some(session),
-            harness: Some(self.id().to_owned()),
+            harness: Some(self.id().to_string()),
             pane: std::env::var("TMUX_PANE").ok().filter(|p| !p.is_empty()),
             rung: Some(crate::identity::Rung::ClaudeProcess),
             ..Default::default()
@@ -66,7 +78,8 @@ impl Harness for Claude {
                     .is_some_and(|program| {
                         std::path::Path::new(program)
                             .file_name()
-                            .is_some_and(|name| name == "claude")
+                            .and_then(|name| name.to_str())
+                            .is_some_and(|name| CAPABILITIES.process_names.contains(&name))
                     })
                     .then(|| claude_resume_id(&process.command))
                     .flatten()
@@ -83,8 +96,12 @@ impl Harness for Claude {
         )?))
     }
 
-    fn id(&self) -> &'static str {
-        "claude"
+    fn id(&self) -> HarnessId {
+        HarnessId::Claude
+    }
+
+    fn capabilities(&self) -> &'static Capabilities {
+        &CAPABILITIES
     }
 
     fn sessions(&self) -> anyhow::Result<Vec<SessionRef>> {
@@ -126,8 +143,8 @@ impl Harness for Claude {
     /// `send_midflight` is false since the lane channel became ACP:
     /// `session/prompt` is one request per turn and a second one before the
     /// first resolves is out of protocol.
-    fn capabilities(&self) -> crate::harness::Capabilities {
-        Capabilities {
+    fn control_capabilities(&self) -> ControlCapabilities {
+        ControlCapabilities {
             send_midflight: false,
             resume: true,
             spawn: true,
@@ -159,7 +176,7 @@ impl Harness for Claude {
             &command,
         )?;
         Ok(SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: session_id.clone(),
             nickname: session_id.clone(),
             path: cwd.join(session_id).with_extension("jsonl"),
@@ -397,7 +414,7 @@ fn sessions_in_with_known(
 
         if let Some(known) = known.get(path) {
             sessions.push(SessionRef {
-                harness: "claude",
+                harness: HarnessId::Claude,
                 session_id: known.session_id.clone(),
                 nickname: known.nickname.clone(),
                 path: path.to_path_buf(),
@@ -414,7 +431,7 @@ fn sessions_in_with_known(
 
         let (cwd, git_branch) = first_record_context(path);
         sessions.push(SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id,
             nickname,
             path: path.to_path_buf(),
@@ -517,7 +534,7 @@ fn parse_line(session: &SessionRef, line: &tail::CompleteLine) -> Option<AgentEv
     collect_tool_use(&value, &mut tool_name, &mut paths, &mut urls);
 
     Some(AgentEvent {
-        harness: session.harness,
+        harness: session.harness.as_str(),
         session_id,
         ts_ms,
         uuid,
@@ -585,6 +602,7 @@ pub use boop_store::session::parse_iso_ms;
 
 #[cfg(test)]
 mod tests {
+    use crate::harness::HarnessId;
     use std::fs::OpenOptions;
     use std::io::Write;
     use std::path::PathBuf;
@@ -613,7 +631,7 @@ mod tests {
 
     fn session_for(path: &std::path::Path, size: u64) -> SessionRef {
         SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: "test-session".to_owned(),
             nickname: "test-session".to_owned(),
             path: path.to_path_buf(),
@@ -763,7 +781,7 @@ mod tests {
 
     fn spec(guard: &TmuxGuard) -> crate::harness::SpawnSpec {
         crate::harness::SpawnSpec {
-            harness: "claude".to_owned(),
+            harness: HarnessId::Claude,
             branch: "lane-test".to_owned(),
             base_sha: "0000000000000000000000000000000000000000".to_owned(),
             main_tree: true,
@@ -786,7 +804,7 @@ mod tests {
 
     #[test]
     fn claude_capabilities_are_measured() {
-        let caps = Claude.capabilities();
+        let caps = Claude.control_capabilities();
         assert!(!caps.send_midflight, "acp takes one prompt per turn");
         assert!(caps.resume);
         assert!(caps.spawn);

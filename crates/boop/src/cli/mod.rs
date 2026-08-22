@@ -423,6 +423,7 @@ pub(crate) mod testkit {
     use std::path::PathBuf;
 
     use boop::bus::Route;
+    use boop::harness::HarnessId;
 
     pub(crate) fn temp_mail_dir() -> PathBuf {
         use std::sync::atomic::{AtomicUsize, Ordering};
@@ -437,7 +438,7 @@ pub(crate) mod testkit {
     pub(crate) fn route_with(parent: Option<&str>) -> Route {
         Route {
             kind: "lane".into(),
-            harness: Some("opencode".into()),
+            harness: Some(HarnessId::Opencode),
             tmux: Some("lane-x".into()),
             cwd: None,
             model: None,
@@ -464,10 +465,11 @@ mod tests {
     /// registry.
     #[test]
     fn route_goal_round_trips() {
+        use boop::harness::HarnessId;
         let dir = temp_mail_dir();
         let route = Route {
             kind: "lane".into(),
-            harness: Some("opencode".into()),
+            harness: Some(HarnessId::Opencode),
             tmux: Some("lane-x".into()),
             cwd: None,
             model: None,

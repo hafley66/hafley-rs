@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 
 use boop_store::bus::Route;
+use boop_store::harness_id::HarnessId;
 
 /// The rung of the ladder that produced an identity. Ordered most trustworthy
 /// first; `Env` is self-reported, so a consumer needing certainty checks this.
@@ -189,12 +190,10 @@ fn live_session_for_route(
     registry: &crate::registry::Registry,
     route: &Route,
 ) -> Result<Option<String>> {
-    let (Some(harness_id), Some(cwd)) = (route.harness.as_deref(), route.cwd.as_deref()) else {
+    let (Some(harness_id), Some(cwd)) = (route.harness, route.cwd.as_deref()) else {
         return Ok(None);
     };
-    let Some(harness) = registry.by_id(harness_id) else {
-        return Ok(None);
-    };
+    let harness = registry.get(harness_id);
     let since = route
         .registered_at
         .as_deref()
@@ -223,7 +222,7 @@ fn live_session_for_route(
 }
 
 /// Rung 1. The stamp a boop spawn wrote into the child's own environment.
-pub(crate) fn from_env_for(_harness: &str) -> Option<Identity> {
+pub(crate) fn from_env_for(_harness: HarnessId) -> Option<Identity> {
     let session = std::env::var("BOOP_SESSION")
         .ok()
         .filter(|s| !s.is_empty())?;
@@ -240,14 +239,16 @@ pub(crate) fn from_env_for(_harness: &str) -> Option<Identity> {
 /// Rung 2. `$TMUX_PANE` names interactive shells directly. Codex tool
 /// subprocesses omit it while retaining `TMUX`, so tmux resolves the calling
 /// client's selected pane. The registry may own that pane or its whole session.
-pub(crate) fn from_pane_for(harness: &str, routes: &BTreeMap<String, Route>) -> Option<Identity> {
+pub(crate) fn from_pane_for(
+    harness: HarnessId,
+    routes: &BTreeMap<String, Route>,
+) -> Option<Identity> {
     let pane = caller_pane()?;
     let multiplexer = boop_store::tmux::mux();
     let tmux_session = multiplexer.session_of_pane(None, &pane);
     let (lane, route) = routes.iter().find(|(_, route)| {
         route
             .harness
-            .as_deref()
             .is_none_or(|route_harness| route_harness == harness)
             && route_owns_pane(multiplexer, route, &pane, tmux_session.as_deref())
     })?;
@@ -255,7 +256,7 @@ pub(crate) fn from_pane_for(harness: &str, routes: &BTreeMap<String, Route>) -> 
         session: route.session_id.clone().or_else(|| Some(lane.clone())),
         lane: Some(lane.clone()),
         parent: None,
-        harness: route.harness.clone(),
+        harness: route.harness.map(|id| id.to_string()),
         pane: Some(pane),
         rung: Some(Rung::Pane),
     })

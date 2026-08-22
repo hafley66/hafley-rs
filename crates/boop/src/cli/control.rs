@@ -34,14 +34,16 @@ pub(crate) fn run_native_tui(
         "native {} route name must be {default_name} for its TMUX_PANE",
         adapter.id()
     );
-    let executable = executable.unwrap_or(adapter.id());
+    let executable = executable.unwrap_or(adapter.id().as_str());
     let mut plan = adapter.prepare_native_tui(&NativeTuiSpec {
         executable: executable.into(),
         cwd: cwd.to_path_buf(),
         args: tui_args.to_vec(),
     })?;
     let dir = mail_dir(mail_dir_arg)?;
-    let store = (adapter.id() == "codex")
+    let store = adapter
+        .capabilities()
+        .native_tui_projector
         .then(|| boop::Store::open(boop::Store::default_path()?))
         .transpose()?;
     let mut child = Command::new(&plan.program)
@@ -69,7 +71,7 @@ pub(crate) fn run_native_tui(
         name,
         Route {
             kind: "coordinator".into(),
-            harness: Some(adapter.id().into()),
+            harness: Some(adapter.id()),
             tmux: Some(pane),
             cwd: Some(cwd.display().to_string()),
             model: None,

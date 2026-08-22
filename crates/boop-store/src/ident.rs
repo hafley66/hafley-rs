@@ -1035,7 +1035,7 @@ impl Store {
     pub fn project_discovered_session(&self, session: &SessionRef) -> Result<()> {
         self.upsert_session_row(
             &session.session_id,
-            session.harness,
+            session.harness.as_str(),
             &session.nickname,
             session.cwd.as_deref(),
             session.git_branch.as_deref(),
@@ -2640,6 +2640,7 @@ CREATE TABLE IF NOT EXISTS mood (
 
 #[cfg(test)]
 mod tests {
+    use crate::harness_id::HarnessId;
     use std::fs::OpenOptions;
     use std::io::Write;
     use std::path::{Path, PathBuf};
@@ -3282,7 +3283,7 @@ mod tests {
 
     fn session_for(path: &std::path::Path) -> SessionRef {
         SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: "ses-1".to_owned(),
             nickname: "ses-1".to_owned(),
             path: path.to_path_buf(),
@@ -3303,7 +3304,7 @@ mod tests {
         let _ = std::fs::remove_file(&transcript);
         std::fs::File::create(&transcript).unwrap();
         let session = SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: "empty-child".into(),
             nickname: "empty-child".into(),
             path: transcript.clone(),
@@ -3335,7 +3336,7 @@ mod tests {
         let (path, store) = fresh_store("known-sessions");
         let transcript = temp_path("known-sessions.jsonl");
         let session = SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: "known-child".into(),
             nickname: "known-name".into(),
             path: transcript.clone(),
@@ -3386,7 +3387,7 @@ mod tests {
             let sid = format!("s-{i}");
             let transcript = format!("/tmp/budget/{sid}.jsonl");
             let session = SessionRef {
-                harness: "codex",
+                harness: HarnessId::Codex,
                 session_id: sid.clone(),
                 nickname: format!("n-{i}"),
                 path: PathBuf::from(&transcript),

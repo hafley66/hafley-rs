@@ -182,6 +182,7 @@ pub fn agent_summary_now(
 
 #[cfg(test)]
 mod tests {
+    use crate::harness_id::HarnessId;
     use std::collections::{BTreeMap, HashMap};
     use std::path::PathBuf;
     use std::sync::atomic::Ordering;
@@ -270,7 +271,7 @@ mod tests {
             "lane-a".into(),
             Route {
                 kind: "lane".into(),
-                harness: Some("codex".into()),
+                harness: Some(HarnessId::Codex),
                 tmux: Some("lane-a:0".into()),
                 cwd: None,
                 model: None,

@@ -5,11 +5,16 @@ use anyhow::{Context, Result};
 use tracing::{debug, info};
 
 use boop::bus::Route;
+use boop::harness::HarnessId;
 use boop::mailwait::Watch;
 use boop::registry::Registry;
 use boop::{bus, identity, inbox, lane, tmux};
 
-use crate::cli::job::{harness_by_id, wait_and_exit, waiting_as};
+use crate::cli::job::{wait_and_exit, waiting_as};
+
+/// A route registered before harnesses were named answers as claude, which is
+/// the only harness whose routes predate the field.
+const DEFAULT_ROUTE_HARNESS: HarnessId = HarnessId::Claude;
 use crate::cli::{append_acks, append_message, append_message_to, line, mail_dir, pad};
 use crate::InboxCmd;
 
@@ -30,7 +35,7 @@ pub(crate) fn run_list(mail_dir_arg: Option<&Path>, agent: Option<&str>, all: bo
                     Some(_) => "dead",
                 };
                 let padded_name = pad(name, 16);
-                let padded_harness = pad(route.harness.as_deref().unwrap_or("-"), 10);
+                let padded_harness = pad(route.harness.map_or("-", HarnessId::as_str), 10);
                 let padded_mode = pad(route.mode.as_deref().unwrap_or("-"), 6);
                 let padded_model = pad(route.model.as_deref().unwrap_or("-"), 46);
                 let padded_tmux = pad(route.tmux.as_deref().unwrap_or("-"), 16);
@@ -173,7 +178,7 @@ pub(crate) fn deliver_hail(
         return Ok(());
     }
     if matches!(route.kind.as_str(), "coordinator" | "native") {
-        let harness_id = route.harness.as_deref().unwrap_or("claude");
+        let harness_id = route.harness.unwrap_or(DEFAULT_ROUTE_HARNESS);
         match send_native_route(registry, route, &message.body)? {
             boop::harness::SendOutcome::Injected => {
                 append_acks(dir, std::slice::from_ref(message))?;
@@ -362,7 +367,7 @@ fn send_native_route(
     route: &Route,
     body: &str,
 ) -> Result<boop::harness::SendOutcome> {
-    let adapter = harness_by_id(registry, route.harness.as_deref().unwrap_or("claude"))?;
+    let adapter = registry.get(route.harness.unwrap_or(DEFAULT_ROUTE_HARNESS));
     let discovered;
     let session_id = if let Some(session_id) = route.session_id.as_deref() {
         session_id

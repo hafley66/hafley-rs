@@ -638,6 +638,7 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::{FactKind, FactQuery};
+    use crate::harness_id::HarnessId;
     use crate::ident::Store;
 
     fn store() -> (Store, std::path::PathBuf) {
@@ -789,7 +790,7 @@ mod tests {
         writeln!(file, r#"{{"type":"assistant","sessionId":"ses-1","timestamp":"2026-08-01T00:00:01.000Z","message":{{"content":[{{"type":"tool_use","name":"Read","input":{{"file_path":"/tmp/a.rs"}}}}]}}}}"#).unwrap();
         drop(file);
         let session = SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: "ses-1".to_owned(),
             nickname: "ses-1".to_owned(),
             path: log_path.clone(),
@@ -853,7 +854,7 @@ mod tests {
         writeln!(file, r#"{{"type":"user","sessionId":"ses-1","timestamp":"2026-08-01T00:00:00.100Z","message":"hello"}}"#).unwrap();
         drop(file);
         let session = SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: "ses-1".to_owned(),
             nickname: "ses-1".to_owned(),
             path: log_path.clone(),

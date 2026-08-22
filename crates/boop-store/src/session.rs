@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use crate::event::AgentEvent;
+use crate::harness_id::HarnessId;
 
 /// One prompt run to completion, reply text returned. The harness owns the
 /// command spelling; no caller learns which binary ran.
@@ -27,7 +28,7 @@ pub struct Ingested {
 /// One transcript on disk that belongs to a harness.
 #[derive(Clone, Debug)]
 pub struct SessionRef {
-    pub harness: &'static str,
+    pub harness: HarnessId,
     /// Unique across every transcript the harness can see; a file stem is not
     /// (52 of 1318 claude stems name two different subagents).
     pub session_id: String,
@@ -120,7 +121,7 @@ pub struct ReadChunk {
 /// What a harness can do, for the control facet. A capability is `true` only
 /// when a test exercises it.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct Capabilities {
+pub struct ControlCapabilities {
     pub send_midflight: bool,
     pub resume: bool,
     pub spawn: bool,
@@ -138,7 +139,7 @@ pub enum SendOutcome {
 /// What a spawn should create.
 #[derive(Clone, Debug)]
 pub struct SpawnSpec {
-    pub harness: String,
+    pub harness: HarnessId,
     pub branch: String,
     pub base_sha: String,
     pub main_tree: bool,

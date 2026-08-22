@@ -608,9 +608,7 @@ fn main() -> Result<()> {
                 args,
             } => {
                 let cwd = cwd.unwrap_or(std::env::current_dir().context("read current directory")?);
-                let adapter = registry
-                    .by_id("codex")
-                    .context("Codex harness is not registered")?;
+                let adapter = registry.get(boop::harness::HarnessId::Codex);
                 run_native_tui(
                     &registry,
                     adapter,
@@ -631,7 +629,7 @@ fn main() -> Result<()> {
             } => {
                 let cwd = cwd.unwrap_or(std::env::current_dir()?);
                 let adapter = registry
-                    .by_id(&harness)
+                    .by_name(&harness)
                     .with_context(|| format!("no harness registered with id `{harness}`"))?;
                 run_native_tui(
                     &registry,

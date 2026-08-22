@@ -8,9 +8,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::harness::{
-    jsonl_files, Capabilities, Harness, Ingested, KnownSessions, NativeChildEvent,
-    NativeSessionRef, NativeSessionResolver, NativeTuiPlan, NativeTuiSpec, ReadChunk, SendOutcome,
-    SessionRef, SpawnSpec,
+    jsonl_files, Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, KnownSessions,
+    LanePolicy, MailPolicy, NativeChildEvent, NativeSessionRef, NativeSessionResolver,
+    NativeTuiPlan, NativeTuiSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec, VariantSupport,
 };
 use anyhow::Context;
 use boop_store::event::AgentEvent;
@@ -20,6 +20,18 @@ use boop_store::tail;
 use serde_json::Value;
 
 pub struct Codex;
+
+/// Reasoning effort rides the `model@effort` suffix, so `--variant` has no
+/// spelling here; the native TUI needs the store projector beside it.
+static CAPABILITIES: Capabilities = Capabilities {
+    model_prefixes: &["gpt-"],
+    bans_plan_family_models: false,
+    lanes: LanePolicy::Allowed,
+    variant: VariantSupport::ModelSuffixEffort,
+    mail: MailPolicy::Keystrokes,
+    native_tui_projector: true,
+    process_names: HarnessId::Codex.process_names(),
+};
 
 impl Harness for Codex {
     fn identity_process(&self) -> Option<crate::identity::Identity> {
@@ -33,7 +45,7 @@ impl Harness for Codex {
         Some(crate::identity::Identity {
             session: Some(session),
             lane: Some(format!("codex-{}", pane.trim_start_matches('%'))),
-            harness: Some(self.id().to_owned()),
+            harness: Some(self.id().to_string()),
             pane: Some(pane),
             rung: Some(crate::identity::Rung::CodexProcess),
             ..Default::default()
@@ -50,14 +62,18 @@ impl Harness for Codex {
         )?))
     }
 
-    fn id(&self) -> &'static str {
-        "codex"
+    fn id(&self) -> HarnessId {
+        HarnessId::Codex
+    }
+
+    fn capabilities(&self) -> &'static Capabilities {
+        &CAPABILITIES
     }
 
     /// `send_midflight` stays false: `codex exec` reads no stdin mid-turn,
     /// and interactive codex never exits, so the on-exit hail never fires.
-    fn capabilities(&self) -> Capabilities {
-        Capabilities {
+    fn control_capabilities(&self) -> ControlCapabilities {
+        ControlCapabilities {
             send_midflight: false,
             resume: true,
             spawn: true,
@@ -143,7 +159,7 @@ impl Harness for Codex {
             &command,
         )?;
         Ok(SessionRef {
-            harness: "codex",
+            harness: HarnessId::Codex,
             session_id: session_id.clone(),
             nickname: session_id,
             // Codex mints its own rollout id; sync discovers the transcript
@@ -584,7 +600,7 @@ fn sessions_in_with_known(base: &Path, known: &KnownSessions) -> anyhow::Result<
 
         if let Some(known) = known.get(path) {
             sessions.push(SessionRef {
-                harness: "codex",
+                harness: HarnessId::Codex,
                 session_id: known.session_id.clone(),
                 nickname: known.nickname.clone(),
                 path: path.to_path_buf(),
@@ -604,7 +620,7 @@ fn sessions_in_with_known(base: &Path, known: &KnownSessions) -> anyhow::Result<
         };
 
         sessions.push(SessionRef {
-            harness: "codex",
+            harness: HarnessId::Codex,
             session_id: meta.session_id,
             nickname: meta.nickname,
             path: path.to_path_buf(),
@@ -684,7 +700,7 @@ fn parse_line(session: &SessionRef, line: &tail::CompleteLine) -> Option<AgentEv
     }
 
     Some(AgentEvent {
-        harness: session.harness,
+        harness: session.harness.as_str(),
         session_id: session.session_id.clone(),
         ts_ms,
         uuid,
@@ -895,6 +911,7 @@ fn project_line(
 
 #[cfg(test)]
 mod tests {
+    use crate::harness::HarnessId;
     use std::path::{Path, PathBuf};
 
     use std::fs::OpenOptions;
@@ -1087,7 +1104,7 @@ mod tests {
 
     fn session_for(path: &std::path::Path, size: u64) -> SessionRef {
         SessionRef {
-            harness: "codex",
+            harness: HarnessId::Codex,
             session_id: "ses-codex-1".to_owned(),
             nickname: "ses-codex-1".to_owned(),
             path: path.to_path_buf(),
@@ -1103,7 +1120,7 @@ mod tests {
 
     #[test]
     fn codex_capabilities_are_measured() {
-        let caps = Codex.capabilities();
+        let caps = Codex.control_capabilities();
         assert!(!caps.send_midflight, "codex exec reads no stdin mid-turn");
         assert!(caps.resume);
         assert!(caps.spawn);
@@ -1163,7 +1180,7 @@ mod tests {
 
     fn spawn_spec(socket: Option<String>) -> crate::harness::SpawnSpec {
         crate::harness::SpawnSpec {
-            harness: "codex".to_owned(),
+            harness: HarnessId::Codex,
             branch: "lane-test".to_owned(),
             base_sha: "0000000000000000000000000000000000000000".to_owned(),
             main_tree: true,
@@ -1483,7 +1500,7 @@ mod tests {
         known.insert(
             known_path.clone(),
             KnownSession {
-                harness: "codex".into(),
+                harness: HarnessId::Codex.as_str().to_owned(),
                 session_id: "known-session".into(),
                 nickname: "known-name".into(),
                 cwd: Some("/tmp/known".into()),

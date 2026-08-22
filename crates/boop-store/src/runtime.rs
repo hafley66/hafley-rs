@@ -14,6 +14,7 @@ use rusqlite::{params_from_iter, OptionalExtension};
 use serde::Serialize;
 
 use crate::bus::{Message, Route};
+use crate::harness_id::HarnessId;
 use crate::ident::Store;
 use crate::proc::{ProcReader, SysinfoSnapshot};
 use crate::tmux::{LiveSessions, Multiplexer};
@@ -50,7 +51,7 @@ pub enum RuntimeDiagnostic {
 pub struct ResolvedRoute {
     pub lane: String,
     pub kind: String,
-    pub harness: Option<String>,
+    pub harness: Option<HarnessId>,
     pub tmux: Option<String>,
     pub cwd: Option<String>,
     pub model: Option<String>,
@@ -67,7 +68,7 @@ impl ResolvedRoute {
         ResolvedRoute {
             lane: lane.to_owned(),
             kind: route.kind.clone(),
-            harness: route.harness.clone(),
+            harness: route.harness,
             tmux: route.tmux.clone(),
             cwd: route.cwd.clone(),
             model: route.model.clone(),
@@ -1043,6 +1044,7 @@ impl Store {
 
 #[cfg(test)]
 mod tests {
+    use crate::harness_id::HarnessId;
     use std::collections::{BTreeMap, HashMap};
     use std::path::PathBuf;
     use std::sync::atomic::Ordering;
@@ -1103,7 +1105,7 @@ mod tests {
     fn route(session_id: Option<&str>) -> Route {
         Route {
             kind: "lane".into(),
-            harness: Some("opencode".into()),
+            harness: Some(HarnessId::Opencode),
             tmux: Some("lane-a".into()),
             cwd: Some("/repo".into()),
             model: None,

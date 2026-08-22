@@ -92,7 +92,7 @@ fn project_line(session: &SessionRef, line: &tail::CompleteLine) -> anyhow::Resu
                 match block {
                     ContentBlock::Text(text) => turns.push(ChatTurn {
                         session: session.session_id.clone(),
-                        harness: session.harness,
+                        harness: session.harness.as_str(),
                         seq: 0,
                         ts_ms,
                         role: "user".into(),
@@ -111,7 +111,7 @@ fn project_line(session: &SessionRef, line: &tail::CompleteLine) -> anyhow::Resu
                 match block {
                     ContentBlock::Text(text) => turns.push(ChatTurn {
                         session: session.session_id.clone(),
-                        harness: session.harness,
+                        harness: session.harness.as_str(),
                         seq: 0,
                         ts_ms,
                         role: "assistant".into(),
@@ -122,7 +122,7 @@ fn project_line(session: &SessionRef, line: &tail::CompleteLine) -> anyhow::Resu
                     ContentBlock::ToolResult => {}
                     ContentBlock::ToolUse { name, input } => turns.push(ChatTurn {
                         session: session.session_id.clone(),
-                        harness: session.harness,
+                        harness: session.harness.as_str(),
                         seq: 0,
                         ts_ms,
                         role: "tool".into(),
@@ -243,7 +243,7 @@ mod tests {
 
     fn fixture_session() -> SessionRef {
         SessionRef {
-            harness: "claude",
+            harness: crate::harness::HarnessId::Claude,
             session_id: "fixture-session".to_owned(),
             nickname: "fixture-session".to_owned(),
             path: PathBuf::from("../boop-harness/tests/fixtures/chat_fixture.jsonl"),

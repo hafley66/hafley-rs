@@ -25,7 +25,7 @@ use crate::{
 
 pub(crate) fn run_harnesses(registry: &Registry) -> Result<()> {
     for harness in registry.all() {
-        line(harness.id());
+        line(harness.id().as_str());
     }
     Ok(())
 }
@@ -206,10 +206,11 @@ pub(crate) fn sync_all(
             && roots.iter().all(|root| {
                 let mtime_ms = path_modified_ms(root);
                 store
-                    .root_stamp_matches(adapter.id(), root, mtime_ms)
+                    .root_stamp_matches(adapter.id().as_str(), root, mtime_ms)
                     .unwrap_or(false)
             });
-        if root_stamps_match && (!adapter.known_paths_can_move() || !known.has_moved(adapter.id()))
+        if root_stamps_match
+            && (!adapter.known_paths_can_move() || !known.has_moved(adapter.id().as_str()))
         {
             continue;
         }
@@ -236,7 +237,7 @@ pub(crate) fn sync_all(
     let mut stat = ident::SyncStat::default();
     for (adapter, session) in pending {
         tracing::debug!(
-            harness = adapter.id(),
+            harness = adapter.id().as_str(),
             session_id = session.session_id,
             "transcript session sync started"
         );
@@ -273,11 +274,13 @@ pub(crate) fn sync_all(
         |parent, child, route_name| {
             let Some(harness) = native_child_routes
                 .get(route_name)
-                .and_then(|route| route.harness.as_deref())
+                .and_then(|route| route.harness)
             else {
                 return Ok(false);
             };
-            resolve_harness(registry, harness)?.native_child_completion_visible(parent, child)
+            registry
+                .get(harness)
+                .native_child_completion_visible(parent, child)
         },
         |message| {
             if let Err(error) = deliver_hail(registry, &native_child_mail_dir, message, None) {
@@ -288,7 +291,7 @@ pub(crate) fn sync_all(
     )?;
     for (harness, roots) in roots_to_stamp {
         for root in roots {
-            store.stamp_root(harness, &root, path_modified_ms(&root))?;
+            store.stamp_root(harness.as_str(), &root, path_modified_ms(&root))?;
         }
     }
     let elapsed_ms = started.elapsed().as_millis();
@@ -601,7 +604,7 @@ pub(crate) fn resolve_harness<'a>(
     id: &str,
 ) -> Result<&'a dyn boop::harness::Harness> {
     registry
-        .by_id(id)
+        .by_name(id)
         .with_context(|| format!("no harness registered with id `{id}`"))
 }
 
@@ -1129,13 +1132,29 @@ mod tests {
     };
     use clap::{CommandFactory, Parser};
 
+    use boop::harness::{Capabilities, HarnessId, LanePolicy, MailPolicy, VariantSupport};
+
+    static CAPABILITIES: Capabilities = Capabilities {
+        model_prefixes: &["fake-"],
+        bans_plan_family_models: false,
+        lanes: LanePolicy::Allowed,
+        variant: VariantSupport::None,
+        mail: MailPolicy::Keystrokes,
+        native_tui_projector: false,
+        process_names: &["fake"],
+    };
+
     struct FakeHarness {
         events: Vec<NativeChildEvent>,
     }
 
     impl Harness for FakeHarness {
-        fn id(&self) -> &'static str {
-            "fake"
+        fn id(&self) -> HarnessId {
+            HarnessId::Kimi
+        }
+
+        fn capabilities(&self) -> &'static Capabilities {
+            &CAPABILITIES
         }
 
         fn sessions(&self) -> Result<Vec<SessionRef>> {
@@ -1164,8 +1183,12 @@ mod tests {
     }
 
     impl Harness for WatchingHarness {
-        fn id(&self) -> &'static str {
-            "fake"
+        fn id(&self) -> HarnessId {
+            HarnessId::Kimi
+        }
+
+        fn capabilities(&self) -> &'static Capabilities {
+            &CAPABILITIES
         }
 
         fn sessions(&self) -> Result<Vec<SessionRef>> {
@@ -1247,8 +1270,12 @@ mod tests {
     }
 
     impl Harness for CodexFixtureHarness {
-        fn id(&self) -> &'static str {
-            "codex"
+        fn id(&self) -> HarnessId {
+            HarnessId::Codex
+        }
+
+        fn capabilities(&self) -> &'static Capabilities {
+            &CAPABILITIES
         }
 
         fn sessions(&self) -> Result<Vec<SessionRef>> {
@@ -1293,7 +1320,7 @@ mod tests {
 
     fn native_child_session(dir: &Path) -> SessionRef {
         SessionRef {
-            harness: "fake",
+            harness: HarnessId::Kimi,
             session_id: "child-session".into(),
             nickname: "child-session".into(),
             path: dir.join("child.transcript"),
@@ -1310,7 +1337,7 @@ mod tests {
     fn native_parent_routes() -> BTreeMap<String, bus::Route> {
         let mut route = route_with(None);
         route.kind = "native".into();
-        route.harness = Some("fake".into());
+        route.harness = Some(HarnessId::Kimi);
         route.session_id = Some("parent-session".into());
         BTreeMap::from([("parent-route".into(), route)])
     }
@@ -1551,14 +1578,14 @@ mod tests {
         .unwrap();
         let mut route = route_with(None);
         route.kind = "native".into();
-        route.harness = Some("fake".into());
+        route.harness = Some(HarnessId::Kimi);
         route.cwd = Some("/resident".into());
         route.session_id = Some("parent-session".into());
         write_route(&dir, "resident-parent", route).unwrap();
         let db_path = dir.join("boop.db");
         let watcher = WatchingHarness {
             session: SessionRef {
-                harness: "fake",
+                harness: HarnessId::Kimi,
                 session_id: "child-session".into(),
                 nickname: "child-session".into(),
                 path: transcript.clone(),
@@ -1641,7 +1668,7 @@ mod tests {
         std::fs::write(&transcript, format!("{metadata}\n")).unwrap();
         let mut route = route_with(None);
         route.kind = "native".into();
-        route.harness = Some("codex".into());
+        route.harness = Some(HarnessId::Codex);
         route.cwd = Some("/Users/chrishafley/projects/sprefa".into());
         route.session_id = Some(PARENT.into());
         route.source_path = Some(format!(
@@ -1650,7 +1677,7 @@ mod tests {
         write_route(&dir, "codex-live-parent", route).unwrap();
         let watcher = CodexFixtureHarness {
             session: SessionRef {
-                harness: "codex",
+                harness: HarnessId::Codex,
                 session_id: CHILD.into(),
                 nickname: CHILD.into(),
                 path: transcript.clone(),
@@ -1830,7 +1857,7 @@ mod tests {
 
     fn session_with_cwd(cwd: Option<&str>) -> boop::harness::SessionRef {
         boop::harness::SessionRef {
-            harness: "opencode",
+            harness: HarnessId::Opencode,
             session_id: "ses-1".into(),
             nickname: "ses-1".into(),
             path: std::path::PathBuf::from("/tmp/x.jsonl"),

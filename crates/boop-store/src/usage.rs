@@ -475,6 +475,7 @@ pub fn p90_ceiling(blocks: &[Block]) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::{fold_blocks, p90_ceiling, Block, GroupBy, UsageQuery};
+    use crate::harness_id::HarnessId;
 
     /// RECEIPT (item 4). The typed usage rows serialize to the JSON the CLI
     /// prints and carry a bucket when grouped.
@@ -500,7 +501,7 @@ mod tests {
         .unwrap();
         drop(file);
         let session = crate::session::SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: "s".to_owned(),
             nickname: "s".to_owned(),
             path: log_path.clone(),
@@ -613,6 +614,7 @@ mod tests {
 #[cfg(test)]
 mod cte_equality {
     use super::{fold_blocks, UsageQuery};
+    use crate::harness_id::HarnessId;
     use crate::ident::Store;
 
     /// The recursive CTE from plans/2026-08-09-boop-analytics-PLAN.md section 6.
@@ -672,7 +674,7 @@ mod cte_equality {
         }
         drop(file);
         let session = crate::session::SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: "s".to_owned(),
             nickname: "s".to_owned(),
             path: log_path.clone(),

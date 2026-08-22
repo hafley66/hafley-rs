@@ -674,6 +674,7 @@ pub fn brief_with_preamble(mail_dir: &Path, lane: &str, brief: &Path) -> PathBuf
 
 #[cfg(test)]
 mod tests {
+    use crate::harness::HarnessId;
     /// A repo with no justfile needs no warmup, so the spawn path stays quiet
     /// instead of failing on a recipe nobody declared.
     #[test]
@@ -840,7 +841,7 @@ mod tests {
         main_tree: bool,
     ) -> SpawnSpec {
         SpawnSpec {
-            harness: "claude".to_owned(),
+            harness: HarnessId::Claude,
             branch: "lane-wt".to_owned(),
             base_sha: base.to_owned(),
             main_tree,

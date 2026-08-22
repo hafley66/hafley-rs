@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use tracing::info;
 
 use boop::bus::Route;
+use boop::harness::{HarnessId, MailPolicy};
 use boop::registry::Registry;
 use boop::{bus, ident, identity, tmux};
 
@@ -91,16 +92,17 @@ pub(crate) fn run_adopt_with(
     }
     let dir = mail_dir(mail_dir_arg)?;
     let existing = bus::read_routes(&dir)?.remove(name);
+    let harness = harness.map(str::parse::<HarnessId>).transpose()?;
     let discovered_session = session_id.map(str::to_owned).or_else(|| {
         harness.and_then(|id| {
-            registry.by_id(id).and_then(|adapter| {
-                adapter.session_id_in_pane(multiplexer, processes, tmux_session)
-            })
+            registry
+                .get(id)
+                .session_id_in_pane(multiplexer, processes, tmux_session)
         })
     });
     let route = Route {
         kind: kind.into(),
-        harness: harness.map(str::to_owned),
+        harness,
         tmux: Some(tmux_session.to_owned()),
         cwd: cwd.map(str::to_owned),
         model: model.map(str::to_owned),
@@ -116,10 +118,11 @@ pub(crate) fn run_adopt_with(
     };
     write_route(&dir, name, route)?;
     println!("adopted {name} -> tmux {tmux_session}");
-    // A claude pane is driven by a model between turns, so mail belongs at a
-    // turn boundary; every other harness keeps pane injection.
-    let claude = harness == Some("claude");
-    if claude && !hooks.no_hooks {
+    // A pane driven by a model between turns takes mail at a turn boundary;
+    // every other harness keeps pane injection.
+    let turn_boundary = harness
+        .is_some_and(|id| registry.get(id).capabilities().mail == MailPolicy::TurnBoundaryHook);
+    if turn_boundary && !hooks.no_hooks {
         let project = adopt_cwd(cwd)?;
         let changed = write_inbox_hooks(&project, name, false)?;
         report_inbox_hooks(&project, name, false, changed);
@@ -226,7 +229,7 @@ pub(crate) fn run_me(name: Option<&str>, mail_dir_arg: Option<&Path>) -> Result<
         name,
         Route {
             kind: "coordinator".into(),
-            harness: Some("codex".into()),
+            harness: Some(HarnessId::Codex),
             tmux: Some(pane.clone()),
             cwd: Some(cwd.display().to_string()),
             model: None,
