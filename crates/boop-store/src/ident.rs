@@ -4059,6 +4059,85 @@ mod tests {
         let _ = std::fs::remove_file(&db_path);
     }
 
+    /// ACCEPTANCE (v14 migration). A store whose agent_live predates the door
+    /// columns gains them and the delivery ledger, keeping its liveness rows.
+    #[test]
+    fn a_v13_store_gains_the_door_columns_and_the_delivery_ledger() {
+        let db_path = temp_path("doormig");
+        let _ = std::fs::remove_file(&db_path);
+        {
+            let conn = rusqlite::Connection::open(&db_path).unwrap();
+            conn.execute_batch(
+                "PRAGMA user_version = 13;
+                 CREATE TABLE dict_session (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
+                 CREATE TABLE agent_live (
+                   session_id INTEGER PRIMARY KEY,
+                   pid INTEGER,
+                   tmux_pane_id INTEGER,
+                   status_id INTEGER);
+                 INSERT INTO dict_session (id, value) VALUES (1, 's1');
+                 INSERT INTO agent_live (session_id, pid) VALUES (1, 4242);",
+            )
+            .unwrap();
+        }
+        let store = Store::open(db_path.clone()).unwrap();
+        assert_eq!(store.schema_version().unwrap(), super::SCHEMA_VERSION);
+        store
+            .record_live_door("s1", "unix-socket", Some("/tmp/claude-4242.sock"))
+            .unwrap();
+        let (_, rows) = store
+            .passthrough("SELECT pid, door_kind, door_addr FROM agent_live WHERE session_id = 1")
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("pid").unwrap(), 4242);
+        assert_eq!(rows[0].get("door_kind").unwrap(), "unix-socket");
+        store
+            .record_delivery(
+                "m-1",
+                "coord",
+                Some(crate::harness_id::HarnessId::Claude),
+                "queued-for-turn-boundary",
+                "",
+                90,
+            )
+            .unwrap();
+        let (_, rows) = store
+            .passthrough("SELECT COUNT(*) AS n FROM agent_delivery")
+            .unwrap();
+        assert_eq!(rows[0].get("n").unwrap(), 1);
+        drop(store);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    /// RECEIPT. Two deliveries of one message to one route leave one row:
+    /// the ledger answers "what happened to this hail", not "how many tries".
+    #[test]
+    fn a_second_delivery_of_one_message_overwrites_its_outcome() {
+        let (path, store) = fresh_store("delivery-ledger");
+        store
+            .record_delivery("m-9", "lane-a", None, "unreachable", "no live session", 10)
+            .unwrap();
+        store
+            .record_delivery(
+                "m-9",
+                "lane-a",
+                Some(crate::harness_id::HarnessId::Codex),
+                "injected",
+                "",
+                20,
+            )
+            .unwrap();
+        let rows = store.delivery_rows("m-9").unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].outcome, "injected");
+        assert_eq!(rows[0].harness.as_deref(), Some("codex"));
+        assert_eq!(rows[0].detail, "");
+        assert_eq!(rows[0].at_ms, 20);
+        assert!(store.delivery_rows("m-nothing").unwrap().is_empty());
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
     /// ACCEPTANCE (Job 4). The pid-observing sync stores the lane pane pid on
     /// the agent_live row, so a session can be linked to its process.
     #[test]
