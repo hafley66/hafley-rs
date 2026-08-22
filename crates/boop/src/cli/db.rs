@@ -466,9 +466,9 @@ pub(crate) fn run_follow(registry: &Registry) -> Result<()> {
 /// One bounded resident-wrapper pass for a native parent route. It discovers
 /// only that route's child transcripts, advances their stored cursors, and
 /// flushes the committed completion outbox through the supplied native
-/// delivery callback. The route accepts a parent only when the live TUI in
-/// its own pane identifies that parent; a child transcript never claims a
-/// wrapper merely because both share a cwd.
+/// delivery callback. Its route carries the exact parent thread obtained from
+/// the managed app-server before the native TUI started. A child transcript
+/// cannot bind or alter a parent route.
 pub(crate) fn sync_native_child_route_once(
     store: &ident::Store,
     adapter: &dyn Harness,
@@ -481,27 +481,14 @@ pub(crate) fn sync_native_child_route_once(
         .get(route_name)
         .cloned()
         .with_context(|| format!("native route `{route_name}` is not registered"))?;
-    let parent_session = live_native_parent_session(adapter, &route)?;
-    let Some(parent_session) = parent_session else {
-        return Ok(());
-    };
+    let parent_session = route
+        .session_id
+        .context("native route has no managed app-server thread id")?;
     sync_native_child_route_with_parent(store, adapter, route_name, dir, parent_session, deliver)
 }
 
-/// Read the session from the TUI process tree anchored to this route's pane.
-/// The adapter owns the harness-specific process tell. A stale route stamp,
-/// including an app-server daemon thread, has no authority here.
-fn live_native_parent_session(adapter: &dyn Harness, route: &bus::Route) -> Result<Option<String>> {
-    let Some(target) = route.tmux.as_deref() else {
-        return Ok(None);
-    };
-    let processes = boop::proc::SysinfoSnapshot::capture()?;
-    Ok(adapter.session_id_in_pane(tmux::mux(), &processes, target))
-}
-
-/// Project the children belonging to one parent whose ownership has already
-/// been established from that wrapper's live pane. Kept separate so the
-/// process identity boundary is testable without a tmux server.
+/// Project the children belonging to one parent whose managed app-server
+/// thread was written to the route before the TUI started.
 fn sync_native_child_route_with_parent(
     store: &ident::Store,
     adapter: &dyn Harness,
@@ -1459,7 +1446,7 @@ mod tests {
         route.kind = "native".into();
         route.harness = Some("fake".into());
         route.cwd = Some("/resident".into());
-        route.session_id = None;
+        route.session_id = Some("parent-session".into());
         write_route(&dir, "resident-parent", route).unwrap();
         let db_path = dir.join("boop.db");
         let watcher = WatchingHarness {
@@ -1485,12 +1472,11 @@ mod tests {
         let worker = std::thread::spawn(move || -> Result<()> {
             let store = ident::Store::open(db_path)?;
             while worker_running.load(Ordering::SeqCst) {
-                sync_native_child_route_with_parent(
+                sync_native_child_route_once(
                     &store,
                     &watcher,
                     "resident-parent",
                     &worker_dir,
-                    "parent-session".into(),
                     |message| {
                         append_acks(&worker_dir, std::slice::from_ref(message))?;
                         delivery_tx.send(message.id.clone()).unwrap();
@@ -1530,7 +1516,7 @@ mod tests {
     }
 
     #[test]
-    fn live_codex_child_fixture_replaces_a_daemon_thread_with_its_tui_parent() {
+    fn precreated_codex_parent_delivers_an_appended_child_completion() {
         use std::io::Write;
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::{mpsc, Arc};
@@ -1538,7 +1524,6 @@ mod tests {
 
         const PARENT: &str = "01a02786-98b2-7752-86c3-7f52e46a9b50";
         const CHILD: &str = "01a02788-2ca2-7fc0-9e26-d03a3c9a7ae6";
-        const DAEMON_THREAD: &str = "019ffd56-e77d-7e73-b6eb-e987e3d2ae1c";
         let (metadata, completion) =
             include_str!("../../tests/fixtures/codex_live_native_child.jsonl")
                 .split_once('\n')
@@ -1551,8 +1536,10 @@ mod tests {
         route.kind = "native".into();
         route.harness = Some("codex".into());
         route.cwd = Some("/Users/chrishafley/projects/sprefa".into());
-        route.session_id = Some(DAEMON_THREAD.into());
-        route.source_path = Some(format!("managed-app-server={DAEMON_THREAD}"));
+        route.session_id = Some(PARENT.into());
+        route.source_path = Some(format!(
+            "managed-app-server=/tmp/codex.sock;thread-start={PARENT}"
+        ));
         write_route(&dir, "codex-live-parent", route).unwrap();
         let watcher = CodexFixtureHarness {
             session: SessionRef {
@@ -1578,12 +1565,11 @@ mod tests {
         let worker = std::thread::spawn(move || -> Result<()> {
             let store = ident::Store::open(db_path)?;
             while worker_running.load(Ordering::SeqCst) {
-                sync_native_child_route_with_parent(
+                sync_native_child_route_once(
                     &store,
                     &watcher,
                     "codex-live-parent",
                     &worker_dir,
-                    PARENT.into(),
                     |message| {
                         append_acks(&worker_dir, std::slice::from_ref(message))?;
                         delivery_tx.send(message.id.clone()).unwrap();
@@ -1614,7 +1600,7 @@ mod tests {
             .remove("codex-live-parent")
             .unwrap();
         assert_eq!(route.session_id.as_deref(), Some(PARENT));
-        let expected_source = format!("native-live-pane={PARENT}");
+        let expected_source = format!("managed-app-server=/tmp/codex.sock;thread-start={PARENT}");
         assert_eq!(route.source_path.as_deref(), Some(expected_source.as_str()));
         let messages = bus::parse_box(&dir.join("bus.ndjson"))
             .into_iter()

@@ -6,7 +6,7 @@
 //! outside its own tests constructs it. `codex app-server` is not ACP, so the
 //! two doors share no frames.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -18,6 +18,18 @@ use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
 use boop_store::session::ModelSpec;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// The subset of `thread/start` settings that the interactive Codex CLI
+/// exposes directly. `None` leaves the managed app-server's configured
+/// default intact.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct InteractiveThreadStart {
+    pub cwd: PathBuf,
+    pub model: Option<String>,
+    pub sandbox: Option<String>,
+    pub approval_policy: Option<String>,
+    pub approvals_reviewer: Option<String>,
+}
 
 pub struct CodexChannel {
     rpc: RpcChild,
@@ -37,6 +49,36 @@ impl CodexChannel {
     /// starts a second app-server.
     pub fn open_proxy(spec: &ChannelSpec, socket: &Path) -> Result<CodexChannel> {
         Self::open_command(spec, proxy_command(socket))
+    }
+
+    /// Start the thread an interactive native TUI will resume through the
+    /// managed app-server. This has no lane defaults: omitted settings retain
+    /// the same configured defaults a normal interactive TUI receives.
+    pub fn start_interactive_proxy(
+        start: &InteractiveThreadStart,
+        socket: &Path,
+    ) -> Result<String> {
+        let mut command = proxy_command(socket);
+        let child = command
+            .current_dir(&start.cwd)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(boop_store::trail::child_stderr(None))
+            .spawn()
+            .context("connect to managed Codex app-server")?;
+        let mut rpc = RpcChild::attach(child)?;
+        rpc.call(
+            "initialize",
+            json!({"clientInfo": {"name": "boop", "version": env!("CARGO_PKG_VERSION")}}),
+            CALL_TIMEOUT,
+        )?;
+        rpc.notify("initialized", json!({}))?;
+        let reply = rpc.call(
+            "thread/start",
+            interactive_thread_params(start),
+            CALL_TIMEOUT,
+        )?;
+        thread_id(&reply).context("Codex interactive thread/start returned no thread id")
     }
 
     fn open_command(spec: &ChannelSpec, mut command: Command) -> Result<CodexChannel> {
@@ -100,6 +142,23 @@ fn proxy_command(socket: &Path) -> Command {
     let mut command = Command::new("codex");
     command.args(["app-server", "proxy", "--sock"]).arg(socket);
     command
+}
+
+fn interactive_thread_params(start: &InteractiveThreadStart) -> Value {
+    let mut params = json!({"cwd": start.cwd.display().to_string()});
+    if let Some(model) = &start.model {
+        params["model"] = Value::String(model.clone());
+    }
+    if let Some(sandbox) = &start.sandbox {
+        params["sandbox"] = Value::String(sandbox.clone());
+    }
+    if let Some(approval_policy) = &start.approval_policy {
+        params["approvalPolicy"] = Value::String(approval_policy.clone());
+    }
+    if let Some(approvals_reviewer) = &start.approvals_reviewer {
+        params["approvalsReviewer"] = Value::String(approvals_reviewer.clone());
+    }
+    params
 }
 
 fn verify_resumed_thread(expected: &str, actual: &str) -> Result<()> {
@@ -252,6 +311,36 @@ mod tests {
         assert_eq!(
             args,
             ["app-server", "proxy", "--sock", "/run/boop/codex.sock"]
+        );
+    }
+
+    #[test]
+    fn interactive_start_uses_server_defaults_when_the_tui_supplies_no_override() {
+        let params = interactive_thread_params(&InteractiveThreadStart {
+            cwd: PathBuf::from("/repo"),
+            ..InteractiveThreadStart::default()
+        });
+        assert_eq!(params, json!({"cwd": "/repo"}));
+    }
+
+    #[test]
+    fn interactive_start_sends_only_explicit_tui_settings() {
+        let params = interactive_thread_params(&InteractiveThreadStart {
+            cwd: PathBuf::from("/repo"),
+            model: Some("gpt-5.6".into()),
+            sandbox: Some("workspace-write".into()),
+            approval_policy: Some("on-request".into()),
+            approvals_reviewer: Some("auto_review".into()),
+        });
+        assert_eq!(
+            params,
+            json!({
+                "cwd": "/repo",
+                "model": "gpt-5.6",
+                "sandbox": "workspace-write",
+                "approvalPolicy": "on-request",
+                "approvalsReviewer": "auto_review",
+            })
         );
     }
 }
