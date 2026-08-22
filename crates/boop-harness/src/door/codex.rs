@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 
 use crate::door::{Delivered, Door, IdleNotice};
-use crate::harness::HarnessId;
+use crate::harness::{HarnessId, NativeTuiPlan, NativeTuiSpec};
 use crate::live::{now_ms, DoorAddress, LiveSession, LiveSessions, LiveStatus};
 
 /// Overrides the state database the thread list is read from.
@@ -147,6 +147,95 @@ impl Door for CodexDoor {
             session.session_id
         )
     }
+
+    /// The TUI attaches to the daemon socket this door queues through, with
+    /// nothing between the two.
+    fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan> {
+        let socket = self.start_daemon(&spec.executable)?;
+        let (requested_thread, forwarded) = explicit_resume(&spec.args)?;
+        Ok(NativeTuiPlan {
+            program: spec.executable.clone(),
+            args: native_tui_args(requested_thread.as_deref(), &socket, &spec.cwd, forwarded),
+            mode: "native-remote".into(),
+            session_id: requested_thread.clone(),
+            source_path: Some(match &requested_thread {
+                Some(thread) => format!("managed-app-server={socket};requested-resume={thread}"),
+                None => format!("managed-app-server={socket}"),
+            }),
+            app_server_socket: Some(socket),
+        })
+    }
+}
+
+
+impl CodexDoor {
+    /// `codex remote-control start` is idempotent: it reports the socket of
+    /// the daemon already running, or starts one and reports that.
+    fn start_daemon(&self, executable: &str) -> Result<String> {
+        let output = Command::new(executable)
+            .args(["remote-control", "start", "--json"])
+            .output()
+            .context("start managed Codex remote-control daemon")?;
+        anyhow::ensure!(
+            output.status.success(),
+            "Codex remote-control start failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+        daemon_socket_from_start(&String::from_utf8_lossy(&output.stdout))
+            .context("Codex remote-control start did not report an app-server socket")
+    }
+}
+
+fn native_tui_args(
+    thread: Option<&str>,
+    socket: &str,
+    cwd: &Path,
+    forwarded: &[String],
+) -> Vec<std::ffi::OsString> {
+    let mut args = Vec::new();
+    if let Some(thread) = thread {
+        args.push("resume".into());
+        args.push(thread.into());
+    }
+    args.extend([
+        "--remote".into(),
+        format!("unix://{socket}").into(),
+        "--cd".into(),
+        cwd.as_os_str().to_owned(),
+    ]);
+    args.extend(forwarded.iter().map(Into::into));
+    args
+}
+
+fn explicit_resume(tui_args: &[String]) -> anyhow::Result<(Option<String>, &[String])> {
+    if tui_args.first().map(String::as_str) != Some("resume") {
+        return Ok((None, tui_args));
+    }
+    let thread = tui_args
+        .get(1)
+        .filter(|value| !value.starts_with('-'))
+        .context("`boop tui codex -- resume` requires an explicit thread id")?;
+    Ok((Some(thread.clone()), &tui_args[2..]))
+}
+
+fn daemon_socket_from_start(text: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(text.trim()).ok()?;
+    value
+        .get("daemon")
+        .and_then(|daemon| daemon.get("socketPath"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|socket| socket.ends_with(".sock"))
+        .map(str::to_owned)
+        .or_else(|| find_socket(&value))
+}
+
+fn find_socket(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(value) if value.ends_with(".sock") => Some(value.clone()),
+        serde_json::Value::Array(values) => values.iter().find_map(find_socket),
+        serde_json::Value::Object(values) => values.values().find_map(find_socket),
+        _ => None,
+    }
 }
 
 /// Queue one message for a thread through the remote-control daemon. This is
@@ -278,6 +367,68 @@ mod tests {
     fn a_missing_state_database_lists_nothing() {
         let door = CodexDoor::at("/nonexistent/state_5.sqlite", "/nonexistent/daemon.sock");
         assert!(door.live_sessions().unwrap().is_empty());
+    }
+
+    #[test]
+    fn remote_control_start_socket_is_read_without_assuming_its_json_key() {
+        let output =
+            r#"{"daemon":{"socketPath":"/tmp/codex.sock","otherSocket":"/tmp/wrong.sock"}}"#;
+        assert_eq!(
+            daemon_socket_from_start(output).as_deref(),
+            Some("/tmp/codex.sock")
+        );
+    }
+
+    #[test]
+    fn explicit_resume_is_separated_from_forwarded_tui_arguments() {
+        let args = vec![
+            "resume".to_string(),
+            "019ffb9b-51cb-7e92-be44-4eb469f46d95".to_string(),
+            "--no-alt-screen".to_string(),
+        ];
+        let (thread, forwarded) = explicit_resume(&args).expect("explicit resume");
+        assert_eq!(
+            thread.as_deref(),
+            Some("019ffb9b-51cb-7e92-be44-4eb469f46d95")
+        );
+        assert_eq!(forwarded, ["--no-alt-screen"]);
+    }
+
+    #[test]
+    fn a_fresh_launch_forwards_every_tui_argument() {
+        let args = vec!["--no-alt-screen".to_string()];
+        let (thread, forwarded) = explicit_resume(&args).expect("fresh launch");
+        assert_eq!(thread, None);
+        assert_eq!(forwarded, args);
+    }
+
+    #[test]
+    fn native_launch_resumes_the_thread_that_was_already_created() {
+        let cwd = PathBuf::from("/tmp/project");
+        let explicit = native_tui_args(Some("thread-1"), "/tmp/codex.sock", &cwd, &[]);
+        assert_eq!(
+            explicit,
+            [
+                "resume",
+                "thread-1",
+                "--remote",
+                "unix:///tmp/codex.sock",
+                "--cd",
+                "/tmp/project"
+            ]
+        );
+        let fresh = native_tui_args(Some("thread-started"), "/tmp/codex.sock", &cwd, &[]);
+        assert_eq!(
+            fresh,
+            [
+                "resume",
+                "thread-started",
+                "--remote",
+                "unix:///tmp/codex.sock",
+                "--cd",
+                "/tmp/project"
+            ]
+        );
     }
 
     /// RECEIPT. A session whose door is not an app-server reports Unreachable

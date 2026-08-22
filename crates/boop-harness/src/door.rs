@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 
+use crate::harness::{NativeTuiPlan, NativeTuiSpec};
 use crate::live::{now_ms, LiveSession, LiveSessions};
 
 pub mod claude;
@@ -48,6 +49,13 @@ pub trait Door: Send + Sync {
 
     /// Resolve once the session next ends a turn with nothing queued.
     fn notify_idle(&self, session: &LiveSession, timeout: Duration) -> Result<IdleNotice>;
+
+    /// The process plan for the user's own interactive TUI, attached to this
+    /// same control plane. The default runs the executable as the user spelled
+    /// it, attached to nothing.
+    fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan> {
+        Ok(NativeTuiPlan::direct(spec))
+    }
 }
 
 /// The harness with no control plane: nothing is running that boop can find,

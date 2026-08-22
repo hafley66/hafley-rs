@@ -5,12 +5,10 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use crate::harness::{
     jsonl_files, Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, KnownSessions,
-    LanePolicy, MailPolicy, NativeChildEvent, NativeSessionRef, NativeTuiPlan, NativeTuiSpec,
-    ReadChunk, SendOutcome, SessionRef, SpawnSpec, VariantSupport,
+    LanePolicy, MailPolicy, NativeChildEvent, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
 };
 use anyhow::Context;
 use boop_store::event::AgentEvent;
@@ -88,53 +86,6 @@ impl Harness for Codex {
             spawn: true,
             subagent_visible: true,
         }
-    }
-
-    /// The daemon is started (the call is idempotent) and the TUI attaches to
-    /// its socket with `--remote`. Nothing sits between the two.
-    fn prepare_native_tui(&self, spec: &NativeTuiSpec) -> anyhow::Result<NativeTuiPlan> {
-        let output = Command::new(&spec.executable)
-            .args(["remote-control", "start", "--json"])
-            .output()
-            .context("start managed Codex remote-control daemon")?;
-        anyhow::ensure!(
-            output.status.success(),
-            "Codex remote-control start failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-        let socket = daemon_socket_from_start(&String::from_utf8_lossy(&output.stdout))
-            .context("Codex remote-control start did not report an app-server socket")?;
-        let (requested_thread, forwarded_args) = explicit_resume(&spec.args)?;
-        let args = native_tui_args(
-            requested_thread.as_deref(),
-            &socket,
-            &spec.cwd,
-            forwarded_args,
-        );
-        Ok(NativeTuiPlan {
-            program: spec.executable.clone(),
-            args,
-            mode: "native-remote".into(),
-            session_id: requested_thread.clone(),
-            source_path: Some(match &requested_thread {
-                Some(thread) => {
-                    format!("managed-app-server={socket};requested-resume={thread}")
-                }
-                None => format!("managed-app-server={socket}"),
-            }),
-            app_server_socket: Some(socket),
-        })
-    }
-
-    /// The queue command itself lives in the codex door; this hands it the
-    /// socket the native plan recorded.
-    fn send_native(&self, session: &NativeSessionRef, text: &str) -> anyhow::Result<SendOutcome> {
-        let socket = session
-            .app_server_socket
-            .as_deref()
-            .context("native Codex session has no app-server socket")?;
-        crate::door::codex::queue_message(socket, &session.session_id, text)?;
-        Ok(SendOutcome::Injected)
     }
 
     fn preview_command(&self, spec: &SpawnSpec) -> Option<String> {
@@ -282,58 +233,6 @@ impl Harness for Codex {
             .with_context(|| format!("open parent transcript {}", parent.path.display()))?;
         let lines = tail::read_complete_lines(&mut file, 0)?.lines;
         Ok(native_completion_satisfies_delivery(&lines, child_session))
-    }
-}
-
-fn native_tui_args(
-    thread: Option<&str>,
-    socket: &str,
-    cwd: &Path,
-    forwarded: &[String],
-) -> Vec<std::ffi::OsString> {
-    let mut args = Vec::new();
-    if let Some(thread) = thread {
-        args.push("resume".into());
-        args.push(thread.into());
-    }
-    args.extend([
-        "--remote".into(),
-        format!("unix://{socket}").into(),
-        "--cd".into(),
-        cwd.as_os_str().to_owned(),
-    ]);
-    args.extend(forwarded.iter().map(Into::into));
-    args
-}
-
-fn explicit_resume(tui_args: &[String]) -> anyhow::Result<(Option<String>, &[String])> {
-    if tui_args.first().map(String::as_str) != Some("resume") {
-        return Ok((None, tui_args));
-    }
-    let thread = tui_args
-        .get(1)
-        .filter(|value| !value.starts_with('-'))
-        .context("`boop tui codex -- resume` requires an explicit thread id")?;
-    Ok((Some(thread.clone()), &tui_args[2..]))
-}
-
-fn daemon_socket_from_start(text: &str) -> Option<String> {
-    let value: serde_json::Value = serde_json::from_str(text.trim()).ok()?;
-    value
-        .get("daemon")
-        .and_then(|daemon| daemon.get("socketPath"))
-        .and_then(serde_json::Value::as_str)
-        .filter(|socket| socket.ends_with(".sock"))
-        .map(str::to_owned)
-        .or_else(|| find_socket(&value))
-}
-
-fn find_socket(value: &serde_json::Value) -> Option<String> {
-    match value {
-        serde_json::Value::String(value) if value.ends_with(".sock") => Some(value.clone()),
-        serde_json::Value::Array(values) => values.iter().find_map(find_socket),
-        serde_json::Value::Object(values) => values.values().find_map(find_socket),
-        _ => None,
     }
 }
 
@@ -864,21 +763,9 @@ mod tests {
     use boop_store::Store;
 
     use super::{
-        daemon_socket_from_start, explicit_resume,
         native_child_events_from_lines, native_completion_notification,
-        native_completion_satisfies_delivery, native_tui_args, sessions_in, sessions_in_with_known,
-        Codex,
+        native_completion_satisfies_delivery, sessions_in, sessions_in_with_known, Codex,
     };
-
-    #[test]
-    fn remote_control_start_socket_is_read_without_assuming_its_json_key() {
-        let output =
-            r#"{"daemon":{"socketPath":"/tmp/codex.sock","otherSocket":"/tmp/wrong.sock"}}"#;
-        assert_eq!(
-            daemon_socket_from_start(output).as_deref(),
-            Some("/tmp/codex.sock")
-        );
-    }
 
     #[test]
     fn native_completion_requires_the_structured_notification_and_exact_child() {
@@ -950,58 +837,6 @@ mod tests {
             &lines,
             "child-session"
         ));
-    }
-
-    #[test]
-    fn explicit_resume_is_separated_from_forwarded_tui_arguments() {
-        let args = vec![
-            "resume".to_string(),
-            "019ffb9b-51cb-7e92-be44-4eb469f46d95".to_string(),
-            "--no-alt-screen".to_string(),
-        ];
-        let (thread, forwarded) = explicit_resume(&args).expect("explicit resume");
-        assert_eq!(
-            thread.as_deref(),
-            Some("019ffb9b-51cb-7e92-be44-4eb469f46d95")
-        );
-        assert_eq!(forwarded, ["--no-alt-screen"]);
-    }
-
-    #[test]
-    fn a_fresh_launch_forwards_every_tui_argument() {
-        let args = vec!["--no-alt-screen".to_string()];
-        let (thread, forwarded) = explicit_resume(&args).expect("fresh launch");
-        assert_eq!(thread, None);
-        assert_eq!(forwarded, args);
-    }
-
-    #[test]
-    fn native_launch_resumes_the_thread_that_was_already_created() {
-        let cwd = PathBuf::from("/tmp/project");
-        let explicit = native_tui_args(Some("thread-1"), "/tmp/codex.sock", &cwd, &[]);
-        assert_eq!(
-            explicit,
-            [
-                "resume",
-                "thread-1",
-                "--remote",
-                "unix:///tmp/codex.sock",
-                "--cd",
-                "/tmp/project"
-            ]
-        );
-        let fresh = native_tui_args(Some("thread-started"), "/tmp/codex.sock", &cwd, &[]);
-        assert_eq!(
-            fresh,
-            [
-                "resume",
-                "thread-started",
-                "--remote",
-                "unix:///tmp/codex.sock",
-                "--cd",
-                "/tmp/project"
-            ]
-        );
     }
 
     fn temp_path(name: &str) -> PathBuf {

@@ -11,7 +11,7 @@ use tracing_subscriber::EnvFilter;
 
 use boop::registry::Registry;
 use boop::supervise::ParentDeathPolicy;
-use boop::{bus, config, identity, mailwait, proc};
+use boop::{bus, config, identity, mailwait};
 
 mod cli;
 

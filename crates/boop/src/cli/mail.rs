@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{Context, Result};
 use tracing::{debug, info};
@@ -331,18 +331,18 @@ pub(crate) fn run_tell_children(
                 landed += 1;
                 println!("landed {name} {} (lane supervisor)", message.id);
             }
-            ChildReach::Pane => match send_native_route(registry, route, &message.body)? {
-                boop::harness::SendOutcome::Injected => {
+            ChildReach::Pane => match deliver_through_door(registry, route, &message.body)? {
+                Delivered::Injected => {
                     landed += 1;
-                    println!("landed {name} {} (native control)", message.id);
+                    println!("landed {name} {} (through the door)", message.id);
                 }
-                boop::harness::SendOutcome::QueuedForNextSpawn => {
+                Delivered::QueuedForTurnBoundary => {
                     landed += 1;
-                    println!("landed {name} {} (next spawn)", message.id);
+                    println!("landed {name} {} (next turn boundary)", message.id);
                 }
-                boop::harness::SendOutcome::Unsupported => {
+                Delivered::Unreachable(why) => {
                     unreachable += 1;
-                    println!("no-route {name} (harness takes no send)");
+                    println!("no-route {name} ({why})");
                 }
             },
             ChildReach::NoRoute(_) | ChildReach::Dead(_) => unreachable!("reported above"),
@@ -356,36 +356,25 @@ pub(crate) fn run_tell_children(
     Ok(())
 }
 
-fn send_native_route(
-    registry: &Registry,
-    route: &Route,
-    body: &str,
-) -> Result<boop::harness::SendOutcome> {
+/// One body to a child that holds a pane, through its harness's own door.
+/// The pane the route names is looked up in that harness's live registry; a
+/// route naming no harness, or a pane no live session holds, is unreachable
+/// rather than typed at.
+fn deliver_through_door(registry: &Registry, route: &Route, body: &str) -> Result<Delivered> {
     let Some(harness) = route.harness else {
-        return Ok(boop::harness::SendOutcome::Unsupported);
+        return Ok(Delivered::Unreachable("route names no harness".into()));
     };
     let adapter = registry.get(harness);
-    let discovered;
-    let session_id = if let Some(session_id) = route.session_id.as_deref() {
-        session_id
-    } else if let Some(target) = route.tmux.as_deref() {
-        let processes = boop::proc::SysinfoSnapshot::capture()?;
-        discovered = adapter.session_id_in_pane(tmux::mux(), &processes, target);
-        let Some(session_id) = discovered.as_deref() else {
-            return Ok(boop::harness::SendOutcome::Unsupported);
-        };
-        session_id
-    } else {
-        return Ok(boop::harness::SendOutcome::Unsupported);
+    let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) else {
+        return Ok(Delivered::Unreachable("route names no pane".into()));
     };
-    adapter.send_native(
-        &boop::harness::NativeSessionRef {
-            session_id: session_id.to_owned(),
-            cwd: route.cwd.as_deref().map(PathBuf::from),
-            app_server_socket: route.app_server_socket.as_deref().map(PathBuf::from),
-        },
-        body,
-    )
+    let pane = boop::live::pane_of_target(target).unwrap_or_else(|| target.to_owned());
+    let Some(live) = adapter.live().live_session_in_pane(&pane)? else {
+        return Ok(Delivered::Unreachable(format!(
+            "no live {harness} session in {pane}"
+        )));
+    };
+    adapter.door().deliver(&live, body)
 }
 
 /// A claude Agent-tool child runs inside its parent's process. It owns no pane,

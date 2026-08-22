@@ -13,8 +13,8 @@ pub use door::{Delivered, Door, IdleNotice};
 pub use harness::{
     supervisor_command, sync_session, sync_session_with_pid, Capabilities, ControlCapabilities,
     Harness, HarnessId, Ingested, KnownSession, KnownSessions, LanePolicy, MailPolicy,
-    NativeChildEvent, NativeSessionRef, NativeTuiPlan, NativeTuiSpec, OneShotSpec, ReadChunk,
-    SendOutcome, SessionRef, SpawnSpec, VariantSupport,
+    NativeChildEvent, NativeTuiPlan, NativeTuiSpec, OneShotSpec, ReadChunk, SessionRef, SpawnSpec,
+    VariantSupport,
 };
 pub use identity::Identity;
 pub use live::{DoorAddress, LiveSession, LiveSessions, LiveStatus};

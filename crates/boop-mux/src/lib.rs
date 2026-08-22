@@ -1,9 +1,8 @@
 //! Layer 1: tmux control behind one trait, `Multiplexer`. The long-lived
 //! control-mode client is built here because no crate on crates.io sells one
 //! (tmux_interface documents CLI-only, no `-C` guard parsing). `tmux_interface`
-//! builds the one-shot command argv it can express; send-keys literal injection
-//! and the control client are raw spawns because tmux_interface exposes no
-//! literal-key mode.
+//! builds the one-shot command argv it can express; the control client is a raw
+//! spawn because tmux_interface exposes no control-mode session.
 //!
 //! The trait is the seam boop binds to; `Tmux` is the one implementation. The
 //! socket is a per-call argument, not trait state, because call sites mix a
@@ -59,16 +58,6 @@ pub trait Multiplexer {
     /// Spawn a detached tmux session with no command and no cwd, for test
     /// scaffolding; production sessions go through `new_detached_session`.
     fn new_bare_session(&self, socket: Option<&str>, name: &str) -> Result<()>;
-
-    /// Send a literal line then Enter into a pane.
-    fn send_keys_literal(&self, socket: Option<&str>, pane: &str, body: &str) -> Result<()>;
-
-    /// Send literal text with NO trailing Enter. A TUI that binds Enter to
-    /// submit needs the text and the submit as separate steps.
-    fn send_text(&self, socket: Option<&str>, pane: &str, body: &str) -> Result<()>;
-
-    /// Send one tmux key name (`Enter`, `C-s`, `Escape`).
-    fn send_key_named(&self, socket: Option<&str>, pane: &str, key: &str) -> Result<()>;
 
     /// Open a window in an existing session and return its target.
     fn new_window(
@@ -336,38 +325,6 @@ impl Multiplexer for Tmux {
         }
         debug!(session = name, "tmux new bare session completed");
         Ok(())
-    }
-
-    fn send_keys_literal(&self, socket: Option<&str>, pane: &str, body: &str) -> Result<()> {
-        debug!(
-            target = pane,
-            socket = socket.unwrap_or_default(),
-            text_bytes = body.len(),
-            "tmux literal text send"
-        );
-        paste_body(socket, pane, body)?;
-        std::thread::sleep(SUBMIT_GAP);
-        send_keys(socket, &["-t", pane, "Enter"])
-    }
-
-    fn send_text(&self, socket: Option<&str>, pane: &str, body: &str) -> Result<()> {
-        debug!(
-            target = pane,
-            socket = socket.unwrap_or_default(),
-            text_bytes = body.len(),
-            "tmux text send"
-        );
-        paste_body(socket, pane, body)
-    }
-
-    fn send_key_named(&self, socket: Option<&str>, pane: &str, key: &str) -> Result<()> {
-        debug!(
-            target = pane,
-            socket = socket.unwrap_or_default(),
-            key,
-            "tmux key send"
-        );
-        send_keys(socket, &["-t", pane, key])
     }
 
     fn new_window(
@@ -716,96 +673,12 @@ pub(crate) fn exact_target(name: &str) -> String {
     format!("={name}")
 }
 
-/// Buffer names are server-global, so two concurrent sends must not collide.
-static PASTE_SEQ: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-
-/// A TUI grouping a burst of input as one paste reads an Enter inside that
-/// window as a newline, which piled several hails into one message.
-const SUBMIT_GAP: std::time::Duration = std::time::Duration::from_millis(400);
-
-/// `send-keys -l` types a body rune by rune (10540 bytes measured ~110s into
-/// an opencode TUI); `-p` brackets only when the pane asked for bracketed paste.
-fn paste_body(socket: Option<&str>, pane: &str, body: &str) -> Result<()> {
-    let buffer = format!(
-        "boop-{}-{}",
-        std::process::id(),
-        PASTE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    );
-    let mut load = tmux_command(socket);
-    load.args(["load-buffer", "-b", &buffer, "-"]);
-    let mut child = load
-        .stdin(Stdio::piped())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("tmux load-buffer")?;
-    child
-        .stdin
-        .take()
-        .context("tmux load-buffer stdin")?
-        .write_all(body.as_bytes())
-        .context("write the paste body to tmux load-buffer")?;
-    let loaded = child
-        .wait_with_output()
-        .context("tmux load-buffer completion")?;
-    if !loaded.status.success() {
-        warn!(
-            socket = socket.unwrap_or_default(),
-            body_bytes = body.len(),
-            "tmux load-buffer failed"
-        );
-        anyhow::bail!(
-            "tmux load-buffer failed: {}",
-            String::from_utf8_lossy(&loaded.stderr).trim()
-        );
-    }
-    let pasted = tmux_command(socket)
-        .args(["paste-buffer", "-d", "-p", "-b", &buffer, "-t", pane])
-        .output()
-        .context("tmux paste-buffer")?;
-    if !pasted.status.success() {
-        let _ = tmux_command(socket)
-            .args(["delete-buffer", "-b", &buffer])
-            .output();
-        warn!(
-            target = pane,
-            socket = socket.unwrap_or_default(),
-            body_bytes = body.len(),
-            "tmux paste-buffer failed"
-        );
-        anyhow::bail!(
-            "tmux paste-buffer failed: {}",
-            String::from_utf8_lossy(&pasted.stderr).trim()
-        );
-    }
-    Ok(())
-}
-
 fn tmux_command(socket: Option<&str>) -> Command {
     let mut builder = Command::new("tmux");
     if let Some(socket) = socket {
         builder.arg("-L").arg(socket);
     }
     builder
-}
-
-fn send_keys(socket: Option<&str>, argv: &[&str]) -> Result<()> {
-    let mut builder = tmux_command(socket);
-    builder.arg("send-keys");
-    builder.args(argv);
-    let output = builder.output().context("tmux send-keys")?;
-    if !output.status.success() {
-        warn!(
-            socket = socket.unwrap_or_default(),
-            argc = argv.len(),
-            "tmux send-keys failed"
-        );
-        anyhow::bail!(
-            "tmux send-keys failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-    Ok(())
 }
 
 /// Kill a throwaway test server AND unlink its socket: tmux leaves the socket
@@ -1131,65 +1004,5 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_file(&self.path);
         }
-    }
-
-    /// FAILS PRE-FIX (2026-08-17). `send-keys -l` typed the body rune by rune
-    /// with no paste markers; a TUI then read it as 10K keystrokes, not a paste.
-    #[test]
-    fn a_multiline_body_reaches_a_pasting_pane_bracketed_and_byte_exact() {
-        let server = TestServer::new();
-        let name = session_name();
-        let pane = sink(&server, &name, true);
-        let body = "# h\nfn f() {\n say \"q\"\n}\n";
-        let want = format!("\u{1b}[200~{body}\u{1b}[201~\n");
-        mux()
-            .send_keys_literal(Some(&server.socket), &name, body)
-            .expect("a multi-line body sends");
-        assert_eq!(
-            pane.received(&want),
-            want,
-            "a pasting pane must receive the body inside paste markers, then the submit key"
-        );
-    }
-
-    /// A brief is thousands of bytes; a typed send delivers one rune per write
-    /// and a TUI needs minutes to drain it.
-    #[test]
-    fn a_brief_sized_body_arrives_whole() {
-        let server = TestServer::new();
-        let name = session_name();
-        let pane = sink(&server, &name, true);
-        let body = "abcdefgh ijklmnop # { \" }\n".repeat(400);
-        let want = format!("\u{1b}[200~{body}\u{1b}[201~\n");
-        let started = std::time::Instant::now();
-        mux()
-            .send_keys_literal(Some(&server.socket), &name, &body)
-            .expect("a brief-sized body sends");
-        let got = pane.received(&want);
-        assert!(
-            got == want,
-            "10K of brief must land whole: {} of {} bytes in {:?}",
-            got.len(),
-            want.len(),
-            started.elapsed()
-        );
-    }
-
-    /// A shell pane never asks for bracketed paste, so the markers must not
-    /// appear in what it receives.
-    #[test]
-    fn a_plain_pane_receives_the_body_unwrapped() {
-        let server = TestServer::new();
-        let name = session_name();
-        let pane = sink(&server, &name, false);
-        let body = "# h\nsay \"q\"\n";
-        mux()
-            .send_text(Some(&server.socket), &name, body)
-            .expect("a body sends to a plain pane");
-        assert_eq!(
-            pane.received(body),
-            body,
-            "a pane that never asked for bracketed paste gets plain bytes"
-        );
     }
 }

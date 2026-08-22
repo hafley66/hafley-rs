@@ -75,7 +75,7 @@ pub(crate) fn run_native_tui(
         adapter.id()
     );
     let executable = executable.unwrap_or(adapter.id().as_str());
-    let mut plan = adapter.prepare_native_tui(&NativeTuiSpec {
+    let mut plan = adapter.door().tui_launch(&NativeTuiSpec {
         executable: executable.into(),
         cwd: cwd.to_path_buf(),
         args: tui_args.to_vec(),

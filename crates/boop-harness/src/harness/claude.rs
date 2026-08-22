@@ -3,15 +3,11 @@
 
 use std::fs::File;
 use std::io::BufReader;
-use std::io::Write;
-#[cfg(unix)]
-use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use crate::harness::{
     jsonl_files, Capabilities, ControlCapabilities, Harness, HarnessId, KnownSessions, LanePolicy,
-    MailPolicy, NativeSessionRef, ReadChunk, SendOutcome, SessionRef, SpawnSpec, VariantSupport,
+    MailPolicy, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
 };
 use anyhow::Context;
 use boop_store::event::{Access, AgentEvent, ToolPath};
@@ -50,42 +46,6 @@ impl Harness for Claude {
             rung: Some(crate::identity::Rung::ClaudeProcess),
             ..Default::default()
         })
-    }
-
-    /// Transcripts live under one directory per cwd, so only that directory is
-    /// read; the recorded cwd is still checked, because the directory name is a
-    /// lossy encoding of the path.
-    fn root_sessions_for_cwd(&self, cwd: &str) -> anyhow::Result<Vec<SessionRef>> {
-        let dir = claude_projects_dir()?.join(encode_project_dir(cwd));
-        if !dir.is_dir() {
-            return Ok(Vec::new());
-        }
-        root_sessions_in(&dir, cwd)
-    }
-
-    fn session_id_in_pane(
-        &self,
-        multiplexer: &dyn boop_store::tmux::Multiplexer,
-        processes: &dyn boop_store::proc::ProcReader,
-        tmux_target: &str,
-    ) -> Option<String> {
-        let root = multiplexer.pane_pid(None, tmux_target)?;
-        std::iter::once(root)
-            .chain(processes.descendants(root))
-            .filter_map(|pid| processes.process(pid))
-            .find_map(|process| {
-                process
-                    .command
-                    .first()
-                    .is_some_and(|program| {
-                        std::path::Path::new(program)
-                            .file_name()
-                            .and_then(|name| name.to_str())
-                            .is_some_and(|name| HarnessId::Claude.owns_process_name(name))
-                    })
-                    .then(|| claude_resume_id(&process.command))
-                    .flatten()
-            })
     }
 
     fn open_channel(
@@ -162,11 +122,6 @@ impl Harness for Claude {
         }
     }
 
-    fn send_native(&self, session: &NativeSessionRef, text: &str) -> anyhow::Result<SendOutcome> {
-        send_peer_message(&session.session_id, text)?;
-        Ok(SendOutcome::Injected)
-    }
-
     fn preview_command(&self, spec: &SpawnSpec) -> Option<String> {
         Some(crate::harness::supervisor_command(spec))
     }
@@ -231,111 +186,6 @@ struct PeerKey {
     proc_start: String,
 }
 
-#[cfg(unix)]
-fn send_peer_message(session_id: &str, text: &str) -> anyhow::Result<()> {
-    let (peer, token) = resolve_live_peer(session_id)?;
-    let mut stream = UnixStream::connect(&peer.messaging_socket_path).with_context(|| {
-        format!(
-            "connect Claude peer socket {}",
-            peer.messaging_socket_path.display()
-        )
-    })?;
-    stream.set_write_timeout(Some(Duration::from_secs(3)))?;
-    let msg_id = format!(
-        "boop-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-    );
-    serde_json::to_writer(
-        &mut stream,
-        &serde_json::json!({"type": "auth", "token": token}),
-    )?;
-    stream.write_all(b"\n")?;
-    serde_json::to_writer(
-        &mut stream,
-        &serde_json::json!({
-            "type": "user",
-            "message": {"role": "user", "content": text},
-            "msg_id": msg_id,
-            "from": format!("boop:pid-{}", std::process::id())
-        }),
-    )?;
-    stream.write_all(b"\n")?;
-    stream.flush()?;
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn send_peer_message(_session_id: &str, _text: &str) -> anyhow::Result<()> {
-    anyhow::bail!("Claude native peer messaging requires Unix sockets")
-}
-
-fn resolve_live_peer(session_id: &str) -> anyhow::Result<(LivePeer, String)> {
-    let dir = dirs::home_dir()
-        .context("resolve home directory")?
-        .join(".claude/sessions");
-    let mut peers = Vec::new();
-    for entry in std::fs::read_dir(&dir).with_context(|| format!("read {}", dir.display()))? {
-        let path = entry?.path();
-        if path.extension().and_then(|value| value.to_str()) != Some("json") {
-            continue;
-        }
-        let Ok(peer) = std::fs::read(&path)
-            .ok()
-            .and_then(|bytes| serde_json::from_slice::<LivePeer>(&bytes).ok())
-            .ok_or(())
-        else {
-            continue;
-        };
-        if peer.session_id == session_id && peer.messaging_socket_path.exists() {
-            peers.push(peer);
-        }
-    }
-    peers.sort_by_key(|peer| std::cmp::Reverse(peer.updated_at));
-    let peer = peers
-        .into_iter()
-        .next()
-        .with_context(|| format!("no live Claude peer socket for session {session_id}"))?;
-    let prefix = format!("{}.", peer.pid);
-    let mut keys = Vec::new();
-    for entry in std::fs::read_dir(&dir)? {
-        let path = entry?.path();
-        let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
-            continue;
-        };
-        if name.starts_with(&prefix) && name.ends_with(".key") {
-            if let Ok(key) = std::fs::read(&path)
-                .ok()
-                .and_then(|bytes| serde_json::from_slice::<PeerKey>(&bytes).ok())
-                .ok_or(())
-            {
-                if key.proc_start == peer.proc_start {
-                    keys.push(key.peer_token);
-                }
-            }
-        }
-    }
-    anyhow::ensure!(
-        keys.len() == 1,
-        "Claude peer {} has {} matching keys",
-        peer.pid,
-        keys.len()
-    );
-    Ok((peer, keys.pop().expect("one matching peer key")))
-}
-
-/// The interactive Claude CLI names the resumed transcript in argv. The flag
-/// and its following value are a direct harness identity tell.
-fn claude_resume_id(command: &[String]) -> Option<String> {
-    command
-        .windows(2)
-        .find_map(|arguments| (arguments[0] == "--resume").then(|| arguments[1].clone()))
-        .filter(|id| !id.is_empty())
-}
-
 /// The claude command line a spawn runs. Resuming an existing session wins
 /// over a fresh prompt.
 fn launch_command(spec: &SpawnSpec) -> String {
@@ -365,28 +215,6 @@ fn random_hex() -> String {
         .unwrap_or(0);
     let mixed = (nanos as u64) ^ ((std::process::id() as u64) << 48) ^ (nanos >> 64) as u64;
     format!("{mixed:016x}")
-}
-
-/// Root sessions under one project directory whose own record says `cwd`. A
-/// sidechain carries a parent and answers for no pane.
-fn root_sessions_in(base: &std::path::Path, cwd: &str) -> anyhow::Result<Vec<SessionRef>> {
-    Ok(sessions_in(base)?
-        .into_iter()
-        .filter(|session| session.cwd.as_deref() == Some(cwd) && session.parent.is_none())
-        .collect())
-}
-
-/// The directory name claude gives a cwd: every byte outside `[A-Za-z0-9_]`
-/// becomes `-`, so `/a/b/.c` becomes `-a-b--c`.
-fn encode_project_dir(cwd: &str) -> String {
-    cwd.chars()
-        .map(
-            |character| match character.is_ascii_alphanumeric() || character == '_' {
-                true => character,
-                false => '-',
-            },
-        )
-        .collect()
 }
 
 fn claude_projects_dir() -> anyhow::Result<PathBuf> {
@@ -681,7 +509,11 @@ mod tests {
             &[r#"{"type":"user","sessionId":"agent-x","cwd":"/repo"}"#],
         );
 
-        let roots = super::root_sessions_in(&base, "/repo").unwrap();
+        let roots: Vec<SessionRef> = super::sessions_in(&base)
+            .unwrap()
+            .into_iter()
+            .filter(|session| session.cwd.as_deref() == Some("/repo") && session.parent.is_none())
+            .collect();
         let names: Vec<&str> = roots
             .iter()
             .map(|session| session.session_id.as_str())
@@ -689,21 +521,6 @@ mod tests {
         assert_eq!(names, vec!["root-a"], "roots: {names:?}");
         assert_eq!(roots[0].git_branch.as_deref(), Some("main"));
         std::fs::remove_dir_all(&base).unwrap();
-    }
-
-    /// The project directory name is the cwd with every byte outside
-    /// `[A-Za-z0-9_]` replaced, which is why a lookup still checks the
-    /// recorded cwd.
-    #[test]
-    fn the_project_directory_name_encodes_the_cwd() {
-        assert_eq!(
-            super::encode_project_dir("/Users/c/projects/sprefa"),
-            "-Users-c-projects-sprefa"
-        );
-        assert_eq!(
-            super::encode_project_dir("/a/b/.boop-worktrees/fix/x"),
-            "-a-b--boop-worktrees-fix-x"
-        );
     }
 
     #[test]

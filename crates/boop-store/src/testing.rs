@@ -177,17 +177,8 @@ impl Multiplexer for FakeMux {
         Ok(())
     }
 
-    fn send_keys_literal(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
-        Ok(())
-    }
 
-    fn send_text(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
-        Ok(())
-    }
 
-    fn send_key_named(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
-        Ok(())
-    }
 
     fn new_window(
         &self,

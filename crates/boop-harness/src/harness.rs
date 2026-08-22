@@ -9,8 +9,8 @@ use boop_store::ident::{Store, SyncStat};
 
 pub use boop_store::harness_id::HarnessId;
 pub use boop_store::session::{
-    ControlCapabilities, Ingested, KnownSession, KnownSessions, OneShotSpec, ReadChunk,
-    SendOutcome, SessionRef, SpawnSpec,
+    ControlCapabilities, Ingested, KnownSession, KnownSessions, OneShotSpec, ReadChunk, SessionRef,
+    SpawnSpec,
 };
 
 /// The declared behaviour every former harness-name comparison now reads. One
@@ -79,13 +79,6 @@ pub struct NativeTuiPlan {
     pub session_id: Option<String>,
     pub source_path: Option<String>,
     pub app_server_socket: Option<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct NativeSessionRef {
-    pub session_id: String,
-    pub cwd: Option<PathBuf>,
-    pub app_server_socket: Option<PathBuf>,
 }
 
 /// A native collaboration child fact observed by one harness from its own
@@ -165,43 +158,12 @@ pub trait Harness: Send + Sync {
         &crate::door::UNREACHABLE
     }
 
-    /// Resolve the caller identity from the stamp boop puts in a child.
-    fn identity_env(&self) -> Option<crate::identity::Identity> {
-        crate::identity::from_env_for(self.id())
-    }
-
-    /// Resolve a caller pane from routes registered for this harness.
-    fn identity_pane(
-        &self,
-        routes: &std::collections::BTreeMap<String, boop_store::bus::Route>,
-    ) -> Option<crate::identity::Identity> {
-        crate::identity::from_pane_for(self.id(), routes)
-    }
-
-    /// Resolve a caller using a process tell exposed by this harness.
+    /// The session id this harness exports to the tool subprocesses it runs.
+    /// A subprocess asking who it is holds its own environment and nothing
+    /// else: it owns no pane of its own and appears in no live registry.
+    // plan §6 row 1: kept because a tool subprocess has no pane to look up,
+    // so `live()` cannot answer for it.
     fn identity_process(&self) -> Option<crate::identity::Identity> {
-        None
-    }
-
-    /// Root sessions this harness recorded for `cwd`. A sidechain or subagent
-    /// transcript carries a parent and never answers for a pane, so only roots
-    /// come back.
-    fn root_sessions_for_cwd(&self, cwd: &str) -> Result<Vec<SessionRef>> {
-        Ok(self
-            .sessions()?
-            .into_iter()
-            .filter(|session| session.cwd.as_deref() == Some(cwd) && session.parent.is_none())
-            .collect())
-    }
-
-    /// Read this harness's native session identity from the live process tree
-    /// rooted at an adopted tmux pane. `None` leaves the route anonymous.
-    fn session_id_in_pane(
-        &self,
-        _multiplexer: &dyn boop_store::tmux::Multiplexer,
-        _processes: &dyn boop_store::proc::ProcReader,
-        _tmux_target: &str,
-    ) -> Option<String> {
         None
     }
 
@@ -247,6 +209,8 @@ pub trait Harness: Send + Sync {
     /// `from`. The shared Boop projector owns edge persistence, mail, and
     /// parent-route control. A harness implementation owns only its source
     /// record decoding.
+    // plan §6 row 1: kept because this is a transcript read and `Harness` is
+    // its own transcript source here; §2's `transcripts()` facet never landed.
     fn observe_native_children(
         &self,
         _session: &SessionRef,
@@ -258,6 +222,7 @@ pub trait Harness: Send + Sync {
     /// Whether the parent transcript already contains this harness's native
     /// completion delivery for the exact child. False preserves Boop's queue
     /// fallback.
+    // plan §6 row 1: kept for the same reason as `observe_native_children`.
     fn native_child_completion_visible(
         &self,
         _parent_session: &str,
@@ -272,18 +237,6 @@ pub trait Harness: Send + Sync {
     /// What this harness can control. `true` only where a test confirms it.
     fn control_capabilities(&self) -> ControlCapabilities {
         ControlCapabilities::default()
-    }
-
-    /// Prepare the ordinary interactive TUI for this harness. Transcript and
-    /// control adapters stay colocated in the same harness implementation.
-    fn prepare_native_tui(&self, spec: &NativeTuiSpec) -> anyhow::Result<NativeTuiPlan> {
-        Ok(NativeTuiPlan::direct(spec))
-    }
-
-    /// Deliver one message to an interactive session through the harness's
-    /// native control plane. A coordinator must never fall back to PTY keys.
-    fn send_native(&self, _session: &NativeSessionRef, _text: &str) -> anyhow::Result<SendOutcome> {
-        Ok(SendOutcome::Unsupported)
     }
 
     /// The literal command a spawn would run for `spec`, with nothing
