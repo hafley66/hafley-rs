@@ -268,9 +268,7 @@ impl Harness for Codex {
         let mut file = File::open(&parent.path)
             .with_context(|| format!("open parent transcript {}", parent.path.display()))?;
         let lines = tail::read_complete_lines(&mut file, 0)?.lines;
-        Ok(lines
-            .iter()
-            .any(|line| native_completion_notification(&line.bytes, child_session)))
+        Ok(native_completion_satisfies_delivery(&lines, child_session))
     }
 }
 
@@ -548,6 +546,29 @@ fn native_completion_notification(line: &[u8], child_session: &str) -> bool {
             notification.get("agent_path").and_then(Value::as_str) == Some(child_session)
                 && notification.pointer("/status/completed").is_some()
         })
+}
+
+fn native_completion_satisfies_delivery(lines: &[tail::CompleteLine], child_session: &str) -> bool {
+    parent_turn_is_active(lines)
+        && lines
+            .iter()
+            .any(|line| native_completion_notification(&line.bytes, child_session))
+}
+
+fn parent_turn_is_active(lines: &[tail::CompleteLine]) -> bool {
+    lines.iter().fold(false, |active, line| {
+        let Ok(value) = serde_json::from_slice::<Value>(&line.bytes) else {
+            return active;
+        };
+        if value.get("type").and_then(Value::as_str) != Some("event_msg") {
+            return active;
+        }
+        match value.pointer("/payload/type").and_then(Value::as_str) {
+            Some("task_started") => true,
+            Some("task_complete") => false,
+            _ => active,
+        }
+    })
 }
 
 fn sessions_in(base: &Path) -> anyhow::Result<Vec<SessionRef>> {
@@ -885,8 +906,9 @@ mod tests {
 
     use super::{
         daemon_socket_from_start, explicit_resume, interactive_thread_start,
-        native_child_events_from_lines, native_completion_notification, native_tui_args,
-        sessions_in, sessions_in_with_known, Codex,
+        native_child_events_from_lines, native_completion_notification,
+        native_completion_satisfies_delivery, native_tui_args, sessions_in, sessions_in_with_known,
+        Codex,
     };
 
     #[test]
@@ -912,6 +934,61 @@ mod tests {
         ));
         assert!(!native_completion_notification(
             ordinary_text,
+            "child-session"
+        ));
+    }
+
+    #[test]
+    fn idle_native_notification_keeps_the_queue_injection_fallback() {
+        let lines = [boop_store::tail::CompleteLine {
+            start: 0,
+            bytes: br#"{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<subagent_notification>\n{\"agent_path\":\"child-session\",\"status\":{\"completed\":\"done\"}}\n</subagent_notification>"}]}}"#.to_vec(),
+        }];
+
+        assert!(!native_completion_satisfies_delivery(
+            &lines,
+            "child-session"
+        ));
+    }
+
+    #[test]
+    fn active_native_notification_satisfies_delivery_without_queue_injection() {
+        let lines = [
+            boop_store::tail::CompleteLine {
+                start: 0,
+                bytes: br#"{"type":"event_msg","payload":{"type":"task_started"}}"#.to_vec(),
+            },
+            boop_store::tail::CompleteLine {
+                start: 1,
+                bytes: br#"{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<subagent_notification>\n{\"agent_path\":\"child-session\",\"status\":{\"completed\":\"done\"}}\n</subagent_notification>"}]}}"#.to_vec(),
+            },
+        ];
+
+        assert!(native_completion_satisfies_delivery(
+            &lines,
+            "child-session"
+        ));
+    }
+
+    #[test]
+    fn completed_parent_turn_keeps_the_queue_injection_fallback() {
+        let lines = [
+            boop_store::tail::CompleteLine {
+                start: 0,
+                bytes: br#"{"type":"event_msg","payload":{"type":"task_started"}}"#.to_vec(),
+            },
+            boop_store::tail::CompleteLine {
+                start: 1,
+                bytes: br#"{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<subagent_notification>\n{\"agent_path\":\"child-session\",\"status\":{\"completed\":\"done\"}}\n</subagent_notification>"}]}}"#.to_vec(),
+            },
+            boop_store::tail::CompleteLine {
+                start: 2,
+                bytes: br#"{"type":"event_msg","payload":{"type":"task_complete"}}"#.to_vec(),
+            },
+        ];
+
+        assert!(!native_completion_satisfies_delivery(
+            &lines,
             "child-session"
         ));
     }
