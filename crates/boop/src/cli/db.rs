@@ -279,7 +279,12 @@ pub(crate) fn sync_all(
             };
             resolve_harness(registry, harness)?.native_child_completion_visible(parent, child)
         },
-        |message| deliver_hail(registry, &native_child_mail_dir, message, None),
+        |message| {
+            if let Err(error) = deliver_hail(registry, &native_child_mail_dir, message, None) {
+                tracing::warn!(error = %error, "deliver native child completion hail failed");
+            }
+            Ok(())
+        },
     )?;
     for (harness, roots) in roots_to_stamp {
         for root in roots {
