@@ -51,7 +51,6 @@ pub enum VariantSupport {
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum MailPolicy {
     Door,
-    TurnBoundaryHook,
     Keystrokes,
 }
 

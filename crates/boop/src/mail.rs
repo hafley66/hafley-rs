@@ -162,7 +162,6 @@ fn land(
     let harness = registry.get(id);
     match harness.capabilities().mail {
         MailPolicy::Keystrokes => Ok(Landing::unreachable("keystroke delivery retired")),
-        MailPolicy::TurnBoundaryHook => Ok(hook_landing(route, to)),
         MailPolicy::Door => {
             let Some(live) = live_session(harness, store, route, id)? else {
                 // A door that answers nothing does not lose the row where the

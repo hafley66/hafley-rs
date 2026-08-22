@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use tracing::info;
 
 use boop::bus::Route;
-use boop::harness::{HarnessId, MailPolicy};
+use boop::harness::HarnessId;
 use boop::registry::Registry;
 use boop::{bus, ident, identity, tmux};
 
@@ -16,13 +16,6 @@ use crate::cli::{line, mail_dir, now_ms, write_route};
 // ---------------------------------------------------------------------------
 // adopt / prune
 // ---------------------------------------------------------------------------
-
-#[allow(clippy::too_many_arguments)]
-/// What an adopt does about the adopted session's hook inbox.
-pub(crate) struct HookWiring {
-    pub(crate) no_hooks: bool,
-    pub(crate) uninstall: bool,
-}
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_adopt(
@@ -37,7 +30,7 @@ pub(crate) fn run_adopt(
     parent: Option<&str>,
     goal: Option<&str>,
     mail_dir_arg: Option<&Path>,
-    hooks: HookWiring,
+    uninstall_hooks: bool,
 ) -> Result<()> {
     let registry = Registry::discover();
     run_adopt_with(
@@ -52,7 +45,7 @@ pub(crate) fn run_adopt(
         parent,
         goal,
         mail_dir_arg,
-        hooks,
+        uninstall_hooks,
         &registry,
         tmux::mux(),
     )
@@ -71,13 +64,13 @@ pub(crate) fn run_adopt_with(
     parent: Option<&str>,
     goal: Option<&str>,
     mail_dir_arg: Option<&Path>,
-    hooks: HookWiring,
+    uninstall_hooks: bool,
     registry: &Registry,
     multiplexer: &dyn tmux::Multiplexer,
 ) -> Result<()> {
     // Taking the hooks out is about a project directory, not about a pane, and
     // the pane is usually already gone by the time anyone wants that.
-    if hooks.uninstall {
+    if uninstall_hooks {
         let project = adopt_cwd(cwd)?;
         let changed = write_inbox_hooks(&project, name, true)?;
         report_inbox_hooks(&project, name, true, changed);
@@ -112,16 +105,6 @@ pub(crate) fn run_adopt_with(
     };
     write_route(&dir, name, route)?;
     println!("adopted {name} -> tmux {tmux_session}");
-    // A pane driven by a model between turns takes mail at a turn boundary;
-    // every other harness keeps pane injection.
-    let turn_boundary = harness
-        .is_some_and(|id| registry.get(id).capabilities().mail == MailPolicy::TurnBoundaryHook);
-    if turn_boundary && !hooks.no_hooks {
-        let project = adopt_cwd(cwd)?;
-        let changed = write_inbox_hooks(&project, name, false)?;
-        report_inbox_hooks(&project, name, false, changed);
-        println!("hails to {name} now queue for the hook inbox, never its keyboard");
-    }
     Ok(())
 }
 
@@ -330,7 +313,7 @@ mod tests {
     use crate::cli::testkit::temp_mail_dir;
     use crate::{Cli, MeCmd, SubCmd};
     use boop::bus::read_routes;
-    use boop::harness::{Capabilities, Harness, LanePolicy, VariantSupport};
+    use boop::harness::{Capabilities, Harness, LanePolicy, MailPolicy, VariantSupport};
     use boop::tmux::{LiveSessions, Multiplexer};
 
     struct AdoptMux;
@@ -462,11 +445,6 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let mux = AdoptMux;
         let registry = Registry::with(vec![Box::new(LiveClaude)]);
-        let hooks = || HookWiring {
-            no_hooks: true,
-            uninstall: false,
-        };
-
         run_adopt_with(
             "sprefa-coordinator",
             "coordinator",
@@ -479,7 +457,7 @@ mod tests {
             None,
             None,
             Some(&dir),
-            hooks(),
+            false,
             &registry,
             &mux,
         )
@@ -502,7 +480,7 @@ mod tests {
             None,
             None,
             Some(&dir),
-            hooks(),
+            false,
             &registry,
             &mux,
         )

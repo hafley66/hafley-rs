@@ -15,7 +15,7 @@ use tracing::{error, info, warn};
 use crate::cli::db::{resolve_harness, run_harnesses};
 use crate::cli::debug::default_preset_for_harness;
 use crate::cli::mail::{all_messages, run_hail, run_list};
-use crate::cli::me::{run_adopt, run_prune, HookWiring};
+use crate::cli::me::{run_adopt, run_prune};
 use crate::cli::{append_ack, append_message, line, mail_dir, pad, route_to_json, write_route};
 use crate::{AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat};
 
@@ -1335,10 +1335,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             parent.as_deref(),
             goal.as_deref(),
             mail_dir.as_deref(),
-            HookWiring {
-                no_hooks: true,
-                uninstall: false,
-            },
+            false,
         ),
         LaneCmd::Delete {
             lane,
