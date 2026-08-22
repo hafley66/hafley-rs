@@ -6,9 +6,11 @@
 //! outside its own tests constructs it. `codex app-server` is not ACP, so the
 //! two doors share no frames.
 
-use std::os::unix::net::UnixStream;
+use std::collections::HashMap;
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -20,6 +22,157 @@ use boop_store::session::ModelSpec;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(120);
 const INTERACTIVE_START_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// A transparent WebSocket relay whose only interpretation is correlating
+/// Codex JSON-RPC thread creation replies with their request ids.
+pub struct InspectingProxy {
+    socket: PathBuf,
+    identity: Receiver<Result<String, String>>,
+    release: mpsc::SyncSender<()>,
+}
+
+impl InspectingProxy {
+    pub fn start(upstream: &Path) -> Result<Self> {
+        let socket = std::env::temp_dir().join(format!(
+            "boop-codex-proxy-{}-{}.sock",
+            std::process::id(),
+            crate::channel::now_ms()
+        ));
+        let listener = UnixListener::bind(&socket)
+            .with_context(|| format!("bind Codex inspecting proxy {}", socket.display()))?;
+        let upstream = upstream.to_path_buf();
+        let cleanup = socket.clone();
+        let (send, identity) = mpsc::sync_channel(1);
+        let (release, released) = mpsc::sync_channel(1);
+        std::thread::Builder::new()
+            .name("boop-codex-inspecting-proxy".into())
+            .spawn(move || {
+                let result = relay_inspecting(listener, &upstream, &send, &released);
+                if let Err(error) = result {
+                    let _ = send.try_send(Err(format!("{error:#}")));
+                }
+                let _ = std::fs::remove_file(cleanup);
+            })
+            .context("start Codex inspecting proxy")?;
+        Ok(Self {
+            socket,
+            identity,
+            release,
+        })
+    }
+
+    pub fn socket(&self) -> &Path {
+        &self.socket
+    }
+
+    pub fn resolve(&mut self, timeout: Duration) -> Result<String> {
+        self.identity
+            .recv_timeout(timeout)
+            .with_context(|| format!("Codex TUI did not establish a thread within {timeout:?}"))?
+            .map_err(anyhow::Error::msg)
+    }
+
+    pub fn route_registered(&mut self) -> Result<()> {
+        self.release
+            .send(())
+            .context("release Codex TUI after route registration")
+    }
+}
+
+impl Drop for InspectingProxy {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.socket);
+    }
+}
+
+fn relay_inspecting(
+    listener: UnixListener,
+    upstream: &Path,
+    identity: &mpsc::SyncSender<Result<String, String>>,
+    released: &Receiver<()>,
+) -> Result<()> {
+    let (client_stream, _) = listener.accept().context("accept Codex TUI WebSocket")?;
+    let mut client = tungstenite::accept(client_stream).context("accept Codex TUI handshake")?;
+    let upstream_stream = UnixStream::connect(upstream)
+        .with_context(|| format!("connect upstream Codex socket {}", upstream.display()))?;
+    let (mut server, _) = tungstenite::client("ws://localhost/", upstream_stream)
+        .context("upgrade upstream Codex WebSocket")?;
+    client.get_mut().set_nonblocking(true)?;
+    server.get_mut().set_nonblocking(true)?;
+    let mut pending = HashMap::<String, String>::new();
+    let mut reported = false;
+    loop {
+        let mut progressed = false;
+        match client.read() {
+            Ok(message) => {
+                progressed = true;
+                inspect_request(&message, &mut pending);
+                server.send(message).context("relay Codex TUI request")?;
+            }
+            Err(tungstenite::Error::Io(error))
+                if error.kind() == std::io::ErrorKind::WouldBlock => {}
+            Err(tungstenite::Error::ConnectionClosed) | Err(tungstenite::Error::AlreadyClosed) => {
+                return Ok(())
+            }
+            Err(error) => return Err(error).context("read Codex TUI WebSocket"),
+        }
+        match server.read() {
+            Ok(message) => {
+                progressed = true;
+                if !reported {
+                    if let Some(thread) = inspect_response(&message, &mut pending) {
+                        let _ = identity.try_send(Ok(thread));
+                        released.recv_timeout(INTERACTIVE_START_TIMEOUT).context(
+                            "route was not registered before Codex thread reply release",
+                        )?;
+                        reported = true;
+                    }
+                }
+                client
+                    .send(message)
+                    .context("relay Codex server response")?;
+            }
+            Err(tungstenite::Error::Io(error))
+                if error.kind() == std::io::ErrorKind::WouldBlock => {}
+            Err(tungstenite::Error::ConnectionClosed) | Err(tungstenite::Error::AlreadyClosed) => {
+                return Ok(())
+            }
+            Err(error) => return Err(error).context("read upstream Codex WebSocket"),
+        }
+        if !progressed {
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+}
+
+fn inspect_request(message: &tungstenite::Message, pending: &mut HashMap<String, String>) {
+    let tungstenite::Message::Text(text) = message else {
+        return;
+    };
+    let Ok(value) = serde_json::from_str::<Value>(text) else {
+        return;
+    };
+    let Some(method @ ("thread/start" | "thread/resume")) =
+        value.get("method").and_then(Value::as_str)
+    else {
+        return;
+    };
+    let Some(id) = value.get("id") else { return };
+    pending.insert(id.to_string(), method.to_owned());
+}
+
+fn inspect_response(
+    message: &tungstenite::Message,
+    pending: &mut HashMap<String, String>,
+) -> Option<String> {
+    let tungstenite::Message::Text(text) = message else {
+        return None;
+    };
+    let value = serde_json::from_str::<Value>(text).ok()?;
+    let id = value.get("id")?.to_string();
+    pending.remove(&id)?;
+    value.get("result").and_then(thread_id)
+}
 
 /// The subset of `thread/start` settings that the interactive Codex CLI
 /// exposes directly. `None` leaves the managed app-server's configured
@@ -334,6 +487,55 @@ fn thread_id(reply: &Value) -> Option<String> {
 mod tests {
     use super::*;
     use std::os::unix::net::UnixListener;
+
+    #[test]
+    fn inspecting_proxy_relays_frames_and_captures_matching_thread_start() {
+        let upstream_socket = std::env::temp_dir().join(format!(
+            "boop-codex-upstream-{}-{}.sock",
+            std::process::id(),
+            crate::channel::now_ms()
+        ));
+        let listener = UnixListener::bind(&upstream_socket).unwrap();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut websocket = tungstenite::accept(stream).unwrap();
+            let request: Value =
+                serde_json::from_str(websocket.read().unwrap().into_text().unwrap().as_str())
+                    .unwrap();
+            assert_eq!(request["method"], "thread/start");
+            websocket
+                .send(tungstenite::Message::Text(
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": request["id"],
+                        "result": {"thread": {"id": "actual-parent"}}
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .unwrap();
+        });
+        let mut proxy = InspectingProxy::start(&upstream_socket).unwrap();
+        let stream = UnixStream::connect(proxy.socket()).unwrap();
+        let (mut client, _) = tungstenite::client("ws://localhost/", stream).unwrap();
+        client
+            .send(tungstenite::Message::Text(
+                json!({"jsonrpc": "2.0", "id": 91, "method": "thread/start", "params": {}})
+                    .to_string()
+                    .into(),
+            ))
+            .unwrap();
+        assert_eq!(
+            proxy.resolve(Duration::from_secs(1)).unwrap(),
+            "actual-parent"
+        );
+        proxy.route_registered().unwrap();
+        let reply: Value =
+            serde_json::from_str(client.read().unwrap().into_text().unwrap().as_str()).unwrap();
+        assert_eq!(reply["result"]["thread"]["id"], "actual-parent");
+        server.join().unwrap();
+        let _ = std::fs::remove_file(upstream_socket);
+    }
 
     #[test]
     fn interactive_start_speaks_websocket_json_rpc_over_uds() {

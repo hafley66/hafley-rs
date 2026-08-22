@@ -29,7 +29,6 @@ pub struct NativeTuiSpec {
 
 /// Prepared native process plus the evidence recorded in its coordinator
 /// route before the process takes over the terminal.
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NativeTuiPlan {
     pub program: String,
     pub args: Vec<OsString>,
@@ -37,6 +36,16 @@ pub struct NativeTuiPlan {
     pub session_id: Option<String>,
     pub source_path: Option<String>,
     pub app_server_socket: Option<String>,
+    pub session_resolver: Option<Box<dyn NativeSessionResolver>>,
+}
+
+pub trait NativeSessionResolver: Send {
+    fn resolve(&mut self, timeout: std::time::Duration) -> anyhow::Result<String>;
+
+    /// Release the harness handshake after the exact route has been written.
+    fn route_registered(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -73,6 +82,7 @@ impl NativeTuiPlan {
             session_id: None,
             source_path: Some(format!("native-executable={}", spec.executable)),
             app_server_socket: None,
+            session_resolver: None,
         }
     }
 }

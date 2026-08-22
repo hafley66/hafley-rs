@@ -9,7 +9,8 @@ use std::process::Command;
 
 use crate::harness::{
     jsonl_files, Capabilities, Harness, Ingested, KnownSessions, NativeChildEvent,
-    NativeSessionRef, NativeTuiPlan, NativeTuiSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
+    NativeSessionRef, NativeSessionResolver, NativeTuiPlan, NativeTuiSpec, ReadChunk, SendOutcome,
+    SessionRef, SpawnSpec,
 };
 use anyhow::Context;
 use boop_store::event::AgentEvent;
@@ -77,26 +78,24 @@ impl Harness for Codex {
         let socket = daemon_socket_from_start(&String::from_utf8_lossy(&output.stdout))
             .context("Codex remote-control start did not report an app-server socket")?;
         let (requested_thread, forwarded_args) = explicit_resume(&spec.args)?;
-        let resumed = requested_thread.is_some();
-        let thread = match requested_thread {
-            Some(thread) => thread,
-            None => boop_acp::channel::codex::CodexChannel::start_interactive_proxy(
-                &interactive_thread_start(&spec.cwd, forwarded_args)?,
-                Path::new(&socket),
-            )?,
-        };
-        let args = native_tui_args(Some(&thread), &socket, &spec.cwd, forwarded_args);
+        let proxy = boop_acp::channel::codex::InspectingProxy::start(Path::new(&socket))?;
+        let local_socket = proxy.socket().display().to_string();
+        let args = native_tui_args(
+            requested_thread.as_deref(),
+            &local_socket,
+            &spec.cwd,
+            forwarded_args,
+        );
         Ok(NativeTuiPlan {
             program: spec.executable.clone(),
             args,
             mode: "native-remote".into(),
-            session_id: Some(thread.clone()),
-            source_path: Some(if resumed {
-                format!("managed-app-server={socket};requested-resume={thread}")
-            } else {
-                format!("managed-app-server={socket};thread-start={thread}")
-            }),
+            session_id: requested_thread.clone(),
+            source_path: requested_thread
+                .as_ref()
+                .map(|thread| format!("managed-app-server={socket};requested-resume={thread}")),
             app_server_socket: Some(socket),
+            session_resolver: Some(Box::new(CodexSessionResolver(proxy))),
         })
     }
 
@@ -252,6 +251,18 @@ impl Harness for Codex {
             &session.session_id,
             &result.lines,
         ))
+    }
+}
+
+struct CodexSessionResolver(boop_acp::channel::codex::InspectingProxy);
+
+impl NativeSessionResolver for CodexSessionResolver {
+    fn resolve(&mut self, timeout: std::time::Duration) -> anyhow::Result<String> {
+        self.0.resolve(timeout)
+    }
+
+    fn route_registered(&mut self) -> anyhow::Result<()> {
+        self.0.route_registered()
     }
 }
 

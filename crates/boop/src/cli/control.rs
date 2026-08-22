@@ -35,12 +35,35 @@ pub(crate) fn run_native_tui(
         adapter.id()
     );
     let executable = executable.unwrap_or(adapter.id());
-    let plan = adapter.prepare_native_tui(&NativeTuiSpec {
+    let mut plan = adapter.prepare_native_tui(&NativeTuiSpec {
         executable: executable.into(),
         cwd: cwd.to_path_buf(),
         args: tui_args.to_vec(),
     })?;
     let dir = mail_dir(mail_dir_arg)?;
+    let store = (adapter.id() == "codex")
+        .then(|| boop::Store::open(boop::Store::default_path()?))
+        .transpose()?;
+    let mut child = Command::new(&plan.program)
+        .args(&plan.args)
+        .current_dir(cwd)
+        .spawn()
+        .with_context(|| format!("start native {} TUI", adapter.id()))?;
+    let mut resolver = plan.session_resolver.take();
+    if let Some(resolver) = resolver.as_mut() {
+        let resolved = resolver.resolve(Duration::from_secs(10));
+        if let Err(error) = resolved {
+            let _ = child.kill();
+            return Err(error.context("resolve native TUI session identity"));
+        }
+        plan.session_id = resolved.ok();
+        if plan.source_path.is_none() {
+            plan.source_path = plan
+                .session_id
+                .as_ref()
+                .map(|session| format!("native-session={session}"));
+        }
+    }
     write_route(
         &dir,
         name,
@@ -61,14 +84,9 @@ pub(crate) fn run_native_tui(
             app_server_socket: plan.app_server_socket.clone(),
         },
     )?;
-    let store = (adapter.id() == "codex")
-        .then(|| boop::Store::open(boop::Store::default_path()?))
-        .transpose()?;
-    let mut child = Command::new(&plan.program)
-        .args(&plan.args)
-        .current_dir(cwd)
-        .spawn()
-        .with_context(|| format!("start native {} TUI", adapter.id()))?;
+    if let Some(resolver) = resolver.as_mut() {
+        resolver.route_registered()?;
+    }
     loop {
         if let Some(status) = child.try_wait().context("observe native TUI exit")? {
             anyhow::ensure!(
