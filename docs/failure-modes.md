@@ -5,6 +5,7 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 12 | 2026-08-21 | a lane that ended its turn to report a finding was closed and read `dead` |
 | 11 | 2026-08-19 | an opencode ACP session starts on a dead model endpoint and retries forever in silence |
 | 10 | 2026-08-19 | 90% of the live store's trace events were test fixture lanes, written by unit tests inside src/ |
 | 9 | 2026-08-17 | a coordinator restart left every child running with an edge that answered nobody |
@@ -18,6 +19,57 @@ without the fix, the rail that stops it recurring. Newest first.
 | 1 | 2026-08-17 | a lane can die with no result row, no log, no trace |
 
 ---
+
+## 12. a lane that ended its turn to report a finding was closed and read `dead`
+
+**Incident.** 2026-08-21, two sprefa lanes each ended a turn to report a
+finding or wait on a background job. `crates/boop-proc/src/supervise.rs`
+closed the channel, wrote a terminal verdict, and returned; `lane run` exited
+and took the tmux session with it. `lane list` then read the lane `dead`, and
+both reports sat unread in a pane that no longer existed. User, verbatim:
+"that is opposite behavior i want out of boop."
+
+**RCA.** `supervise`'s post-turn branch treated "no pending hail" as
+"nothing left to do": `held.is_empty()` closed the channel and returned
+`Ended` unconditionally, whether or not the turn had ended cleanly.
+`completion_verdict` then invented `rc=1 "agent stopped before completing the
+brief"` for a clean turn that had not (yet) finished the brief, so even a
+lane mid-work with nothing queued this instant looked like a named failure.
+Separately, `STALL_LIMIT` was 5 minutes with no config key, so a turn
+legitimately waiting on a background build over that bound was killed and
+retried mid-wait.
+
+**Fix.**
+
+| # | change | file |
+|---|---|---|
+| 1 | a turn that ends cleanly with no pending hail parks instead of ending: the channel stays open, the process stays alive, the supervisor polls the mailbox and `ParentWatch` every 700ms until a hail arrives or the parent dies | `supervise.rs` `supervise` |
+| 2 | `Ended` returns only on an explicit delete (`SIGTERM`/`SIGHUP`/`SIGINT`), a hard failure or exhausted retry budget, or the parent dying under `ParentDeathPolicy::Kill` | `supervise.rs` `supervise`, `completion_verdict` |
+| 3 | `completion_verdict` returns `Option<(i32, Option<String>)>`; a clean turn with the brief not yet done is `None`, no verdict, not a failure | `supervise.rs` `completion_verdict` |
+| 4 | the brief-done result row is written once, inline, the moment the brief is done, not deferred to process exit | `supervise.rs` `supervise` (`result_written`) |
+| 5 | `lane list` gains a third state, `idle`, read from a residency file the supervisor writes each turn boundary; `dead` stays a tmux fact | `supervise.rs` `record_residency`/`read_residency`, `job.rs` `lane_state` |
+| 6 | `STALL_LIMIT` is a config key (`BOOP_STALL_LIMIT_SECS`), default raised 5m -> 30m; a parked lane never calls `stalled()` at all | `supervise.rs` `stall_limit`, `parse_stall_limit` |
+
+**Fail-pre-fix tests.**
+
+| test | file |
+|---|---|
+| `a_turn_with_no_pending_hail_parks_instead_of_ending` | `supervise.rs` |
+| `a_nudge_only_completion_has_no_verdict_yet` | `supervise.rs` |
+| `a_background_wait_survives_the_old_five_minute_bound` | `supervise.rs` |
+| `a_reparent_policy_moves_the_edge_onto_the_registered_coordinator`, `an_orphan_policy_leaves_the_lane_and_its_edge_alone` | `tests/parent_death.rs` |
+| `a_clean_completion_hails_nothing_but_its_rc` | `tests/parent_failure_hail.rs` |
+
+**Rail.** `crates/boop/docs/lane-lifecycle.md` names the three real exits and
+the `live`/`idle`/`dead` state read; a fourth exit path added later without a
+matching row there is a doc that no longer matches the code, not a rail that
+catches it.
+
+**What still cannot be answered.** `LaneChannel` exposes `last_activity_ms`
+only, no tool-call content, so a turn legitimately waiting mid-flight on a
+backgrounded Bash or an `until`-loop still relies on the 30-minute bound
+rather than an exemption tied to the tool call itself; that needs a
+`boop-acp` surface this fix's ownership did not include.
 
 ## 11. an opencode ACP session starts on a dead model endpoint and retries forever in silence
 

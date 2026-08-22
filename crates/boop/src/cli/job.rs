@@ -1371,7 +1371,7 @@ pub(crate) fn run_lane_list(
     let routes = bus::read_routes(&dir)?;
     let live = tmux::mux().live_sessions(None);
     for (name, route) in &routes {
-        let state = lane_state(&live, route);
+        let state = lane_state(&dir, name, &live, route);
         if let Some(want) = state_filter {
             if state != want {
                 continue;
@@ -1387,7 +1387,7 @@ pub(crate) fn run_lane_list(
         if state == "dead" {
             suffix.push_str(&format!(" DEAD={}", dead_reason_token(&dir, name)));
         }
-        if let Some(gone) = gone_parent(&routes, &live, route) {
+        if let Some(gone) = gone_parent(&dir, &routes, &live, route) {
             suffix.push_str(&format!(" PARENT-GONE={gone}"));
         }
         if let Some(flags) = &flags {
@@ -1427,13 +1427,14 @@ pub(crate) fn run_lane_list(
 /// The parent edge that answers nobody, so a surviving orphan says so on its
 /// own row. `None` while the parent route is still addressable.
 pub(crate) fn gone_parent<'a>(
+    dir: &Path,
     routes: &BTreeMap<String, Route>,
     live: &Option<tmux::LiveSessions>,
     route: &'a Route,
 ) -> Option<&'a str> {
     let parent = route.parent.as_deref()?;
     match routes.get(parent) {
-        Some(parent_route) if lane_state(live, parent_route) != "dead" => None,
+        Some(parent_route) if lane_state(dir, parent, live, parent_route) != "dead" => None,
         _ => Some(parent),
     }
 }
@@ -1447,24 +1448,30 @@ pub(crate) fn dead_reason_token(mail_dir: &std::path::Path, lane: &str) -> Strin
     boop::trail::dead_reason(mail_dir, &root, lane).token()
 }
 
-pub(crate) fn lane_state(live: &Option<tmux::LiveSessions>, route: &Route) -> &'static str {
-    // Pane-less native registrations are addressable for their entire
-    // registration lifetime. Their completion event is `agent done`, so an
-    // absent tmux or process trail carries no death information.
+/// `live`/`idle`/`dead`/`?`. `idle` reads the supervisor's residency file; a
+/// lane older than that file reads through as `live`.
+pub(crate) fn lane_state(
+    dir: &Path,
+    name: &str,
+    live: &Option<tmux::LiveSessions>,
+    route: &Route,
+) -> &'static str {
     if route.tmux.is_none() && matches!(route.kind.as_str(), "coordinator" | "native") {
         return "live";
     }
-    match live {
-        None => "?",
-        Some(_)
-            if route
-                .tmux
-                .as_deref()
-                .is_some_and(|target| tmux::mux().target_alive(None, target)) =>
-        {
-            "live"
-        }
-        Some(_) => "dead",
+    let tmux_alive = match live {
+        None => return "?",
+        Some(_) => route
+            .tmux
+            .as_deref()
+            .is_some_and(|target| tmux::mux().target_alive(None, target)),
+    };
+    if !tmux_alive {
+        return "dead";
+    }
+    match boop::supervise::read_residency(dir, name).as_deref() {
+        Some(boop::supervise::RESIDENCY_IDLE) => "idle",
+        _ => "live",
     }
 }
 
@@ -1479,7 +1486,7 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str) -> Result<()
         "{}",
         serde_json::json!({
             "lane": lane,
-            "state": lane_state(&live, route),
+            "state": lane_state(&dir, lane, &live, route),
             "harness": route.harness,
             "tmux": route.tmux,
             "cwd": route.cwd,
@@ -1694,8 +1701,8 @@ pub(crate) fn route_liveness(dir: &std::path::Path, lane: &str) -> RouteLiveness
     if route.tmux.is_none() {
         return RouteLiveness::Unknown;
     }
-    match lane_state(&tmux::mux().live_sessions(None), route) {
-        "live" => RouteLiveness::Live,
+    match lane_state(dir, lane, &tmux::mux().live_sessions(None), route) {
+        "live" | "idle" => RouteLiveness::Live,
         "dead" => RouteLiveness::Dead,
         _ => RouteLiveness::Unknown,
     }
@@ -2348,7 +2355,12 @@ mod tests {
 
         let route = read_routes(&dir).unwrap().remove("native-child").unwrap();
         assert_eq!(
-            lane_state(&Some(boop::tmux::LiveSessions::default()), &route),
+            lane_state(
+                &dir,
+                "native-child",
+                &Some(boop::tmux::LiveSessions::default()),
+                &route
+            ),
             "live"
         );
         assert_eq!(
@@ -2524,6 +2536,30 @@ mod tests {
             routes.contains_key("dead-lane"),
             "--dry-run must remove nothing"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// FAIL-PRE-FIX: `lane_state` only answered `live`/`dead`, so a resident
+    /// lane parked on its mailbox was indistinguishable from mid-turn.
+    #[test]
+    fn a_parked_lane_reads_idle_while_its_pane_stays_live() {
+        let dir = temp_mail_dir();
+        let name = unique_name("boop-idle-lane");
+        let session = LiveTmuxSession::new(&name);
+        write_route(&dir, "mine", tmux_route(&name)).unwrap();
+        let live = Some(boop::tmux::LiveSessions {
+            names: [name.clone()].into_iter().collect(),
+        });
+        let route = read_routes(&dir).unwrap().remove("mine").unwrap();
+
+        assert_eq!(lane_state(&dir, "mine", &live, &route), "live");
+
+        boop::supervise::record_residency(&dir, "mine", boop::supervise::RESIDENCY_IDLE);
+        assert_eq!(lane_state(&dir, "mine", &live, &route), "idle");
+
+        drop(session);
+        let dead_live = tmux::mux().live_sessions(None);
+        assert_eq!(lane_state(&dir, "mine", &dead_live, &route), "dead");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

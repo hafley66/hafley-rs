@@ -16,9 +16,12 @@ const POLL: Duration = Duration::from_millis(700);
 /// Provider-flake resumes per lane; deepinfra measured ~98% per-request uptime,
 /// so a multi-hundred-request lane sees several drops.
 const FLAKE_RESUME_CAP: u32 = 5;
-/// Quiet bound for a whole turn, opening gap included. Measured over a week of
-/// healthy traffic: 261 in-message gaps over 120s, so 30s here would false-kill.
-const STALL_LIMIT: Duration = Duration::from_secs(5 * 60);
+/// Config key: whole-turn quiet bound in seconds. Unset/unparsable falls back
+/// to `DEFAULT_STALL_LIMIT`.
+const STALL_LIMIT_ENV: &str = "BOOP_STALL_LIMIT_SECS";
+/// Raised from 5 minutes: a turn legitimately waiting on a background build
+/// was killed mid-wait at the old bound.
+const DEFAULT_STALL_LIMIT: Duration = Duration::from_secs(30 * 60);
 
 /// How long this turn has been quiet. `activity` is the newest harness write of
 /// this turn; without one the clock runs from the turn's own start.
@@ -26,10 +29,23 @@ fn idle_ms(now_ms: u64, turn_started: u64, activity: Option<u64>) -> u64 {
     now_ms.saturating_sub(activity.unwrap_or(turn_started))
 }
 
-/// Whether a quiet turn is past the point where its child is treated as gone.
-/// A reasoning model is alive and silent until its first tool call.
-fn stalled(idle_ms: u64) -> bool {
-    idle_ms > STALL_LIMIT.as_millis() as u64
+/// `STALL_LIMIT_ENV` parsed, isolated from the process environment so a test
+/// never mutates global state to exercise it.
+fn parse_stall_limit(raw: Option<&str>) -> Duration {
+    raw.and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(DEFAULT_STALL_LIMIT)
+}
+
+/// The stall bound for this process, read once per turn rather than per poll.
+fn stall_limit() -> Duration {
+    parse_stall_limit(std::env::var(STALL_LIMIT_ENV).ok().as_deref())
+}
+
+/// Whether a quiet RUNNING turn is past the point its child is treated as
+/// gone. A parked lane between turns never calls this.
+fn stalled(idle_ms: u64, limit: Duration) -> bool {
+    idle_ms > limit.as_millis() as u64
 }
 
 /// The text a resumed conversation opens with instead of the full brief.
@@ -88,6 +104,39 @@ pub fn parent_policy(dir: &Path, lane: &str) -> ParentDeathPolicy {
         .ok()
         .and_then(|map| map.get(lane)?.as_str()?.parse().ok())
         .unwrap_or_default()
+}
+
+/// The lane-to-residency map beside the registry. A lane this file has never
+/// heard of falls back to tmux-only liveness.
+const RESIDENCY_FILE: &str = "lane-residency.json";
+
+/// One lane's residency between `lane list`'s `live` and `dead`: mid-turn, or
+/// parked waiting on its mailbox. Dead is a tmux fact, never written here.
+pub const RESIDENCY_LIVE: &str = "live";
+pub const RESIDENCY_IDLE: &str = "idle";
+
+/// Record this lane's residency for `lane list` to read back. Best-effort: a
+/// write failure never blocks the turn it is reporting on.
+pub fn record_residency(dir: &Path, lane: &str, state: &str) {
+    let lane_key = lane.to_owned();
+    let state = state.to_owned();
+    if let Err(error) = bus::cas_update_json(&dir.join(RESIDENCY_FILE), |map| {
+        map.insert(lane_key.clone(), serde_json::Value::String(state.clone()));
+        Ok(())
+    }) {
+        warn!(lane, error = %error, "lane residency not recorded");
+    }
+}
+
+/// The residency `lane list` reads back. `None` for a lane this file has
+/// never heard of, or an unreadable file.
+pub fn read_residency(dir: &Path, lane: &str) -> Option<String> {
+    let raw = std::fs::read_to_string(dir.join(RESIDENCY_FILE)).ok()?;
+    serde_json::from_str::<serde_json::Value>(&raw)
+        .ok()?
+        .get(lane)?
+        .as_str()
+        .map(str::to_owned)
 }
 
 /// What one lane run needs. Cloned into the signal thread, which owns nothing
@@ -555,6 +604,7 @@ fn supervise(
         None => brief.clone(),
     };
     let mut flake_resumes = 0u32;
+    let mut result_written = false;
     events.record(
         "channel-open",
         TraceRecorder::session(channel),
@@ -568,6 +618,8 @@ fn supervise(
     );
     loop {
         info!(turn_bytes = turn.len(), "lane turn starting");
+        record_residency(&lane.mail_dir, &lane.lane, RESIDENCY_LIVE);
+        let limit = stall_limit();
         let turn_started = boop_acp::channel::now_ms();
         events.record(
             "turn-start",
@@ -624,7 +676,7 @@ fn supervise(
                 turn_started,
                 this_turn_activity,
             );
-            if stalled(idle_ms) {
+            if stalled(idle_ms, limit) {
                 warn!(idle_ms, "lane turn stalled; killing the harness child");
                 println!("[boop] turn stalled ({}s idle), retrying", idle_ms / 1000);
                 if let Err(error) = channel.close() {
@@ -733,6 +785,14 @@ fn supervise(
             brief_completed = true;
             brief_turn_pending = false;
         }
+        // The marker: a waiter learns the brief is done as soon as it is, not
+        // when the lane eventually exits. Written at most once per lane.
+        if end.is_done() && !result_written {
+            if let Some((exit_code, detail)) = completion_verdict(brief_completed, &end) {
+                record_result(lane, exit_code, detail.as_deref());
+                result_written = true;
+            }
+        }
         if end.retryable() && flake_resumes < FLAKE_RESUME_CAP {
             flake_resumes += 1;
             println!("[boop] provider flake, resuming ({flake_resumes}/{FLAKE_RESUME_CAP})");
@@ -752,7 +812,9 @@ fn supervise(
             seen.insert(hail.id.clone());
             held.push(hail);
         }
-        if held.is_empty() {
+        if held.is_empty() && !end.is_done() {
+            // A hard failure or an exhausted flake budget: the harness is
+            // treated as gone, so this is a real exit, not an idle park.
             if let Err(error) = channel.close() {
                 events.record(
                     "error",
@@ -767,9 +829,46 @@ fn supervise(
                 );
                 return Err(error);
             }
-            let (exit_code, detail) = completion_verdict(brief_completed, &end);
+            let (exit_code, detail) = completion_verdict(brief_completed, &end)
+                .unwrap_or_else(|| (1, Some(end.detail().to_owned())));
             info!(exit_code, "lane supervision complete");
             return Ok(Ended { exit_code, detail });
+        }
+        if held.is_empty() {
+            record_residency(&lane.mail_dir, &lane.lane, RESIDENCY_IDLE);
+            println!("[boop] lane idle, parked on the mailbox");
+            loop {
+                if let Some(ended) = watch.probe(lane, boop_store::tmux::mux()) {
+                    if let Err(error) = channel.close() {
+                        warn!(lane = lane.lane, error = %error, "close while parked failed");
+                    }
+                    events.record(
+                        "parent-death",
+                        TraceRecorder::session(channel),
+                        None,
+                        Some(boop_acp::channel::now_ms()),
+                        None,
+                        Some("failed"),
+                        None,
+                        None,
+                        ended
+                            .detail
+                            .as_deref()
+                            .unwrap_or(boop_store::trail::PARENT_DIED),
+                    );
+                    return Ok(ended);
+                }
+                let arrived = pending(&lane.mail_dir, &lane.lane, &seen)?;
+                if arrived.is_empty() {
+                    std::thread::sleep(POLL);
+                    continue;
+                }
+                for hail in arrived {
+                    seen.insert(hail.id.clone());
+                    held.push(hail);
+                }
+                break;
+            }
         }
         turn = held
             .drain(..)
@@ -793,20 +892,16 @@ fn supervise(
     }
 }
 
-fn completion_verdict(brief_completed: bool, end: &TurnEvent) -> (i32, Option<String>) {
-    if end.is_done() && brief_completed {
-        return (0, None);
-    }
+/// `None` means no verdict yet: a clean turn that has not completed the brief
+/// leaves the lane idle rather than inventing a failure to report.
+fn completion_verdict(brief_completed: bool, end: &TurnEvent) -> Option<(i32, Option<String>)> {
     if end.is_done() {
-        return (
-            1,
-            Some("agent stopped before completing the brief".to_owned()),
-        );
+        return brief_completed.then_some((0, None));
     }
     if end.retryable() {
-        return (1, Some(end.detail().to_owned()));
+        return Some((1, Some(end.detail().to_owned())));
     }
-    (1, None)
+    Some((1, None))
 }
 
 /// The lane's parent per the registry. The pane epilogue addresses its result
@@ -1150,10 +1245,27 @@ mod tests {
     // first tool call, so it died at ~70 s and the retry wrote to dead stdin.
     #[test]
     fn a_quiet_opening_gap_is_not_a_stall() {
-        assert!(!stalled(idle_ms(90_000, 0, None)), "90 s of opening quiet");
-        assert!(stalled(idle_ms(301_000, 0, None)));
-        assert!(!stalled(idle_ms(400_000, 0, Some(399_000))));
-        assert!(stalled(idle_ms(700_000, 0, Some(399_000))));
+        let limit = DEFAULT_STALL_LIMIT;
+        assert!(!stalled(idle_ms(90_000, 0, None), limit), "90 s of opening quiet");
+        assert!(stalled(idle_ms(1_801_000, 0, None), limit));
+        assert!(!stalled(idle_ms(400_000, 0, Some(399_000)), limit));
+        assert!(stalled(idle_ms(2_200_000, 0, Some(399_000)), limit));
+    }
+
+    // A turn waiting on a background build past the old 5 min bound is not
+    // stalled at the new 30 min default; a genuinely quiet 31 min turn is.
+    #[test]
+    fn a_background_wait_survives_the_old_five_minute_bound() {
+        let limit = DEFAULT_STALL_LIMIT;
+        assert!(!stalled(idle_ms(20 * 60_000, 0, None), limit), "20 min quiet, still alive");
+        assert!(stalled(idle_ms(31 * 60_000, 0, None), limit));
+    }
+
+    #[test]
+    fn the_stall_limit_config_key_overrides_the_default() {
+        assert_eq!(parse_stall_limit(None), DEFAULT_STALL_LIMIT);
+        assert_eq!(parse_stall_limit(Some("garbage")), DEFAULT_STALL_LIMIT);
+        assert_eq!(parse_stall_limit(Some("120")), Duration::from_secs(120));
     }
 
     /// Activity before this turn opened is not this turn's; the clock then runs
@@ -1329,9 +1441,19 @@ mod tests {
         );
     }
 
-    #[derive(Default)]
+    /// A clean turn parks `run`, so a caller reads the shared handle from
+    /// another thread and polls; `run` is never joined back.
+    fn wait_for(mut ready: impl FnMut() -> bool, timeout: Duration) {
+        let start = std::time::Instant::now();
+        while !ready() {
+            assert!(start.elapsed() < timeout, "condition never became true");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    #[derive(Clone, Default)]
     struct BriefFlakesThenCompletesChannel {
-        turns: Vec<String>,
+        turns: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
     }
 
     impl LaneChannel for BriefFlakesThenCompletesChannel {
@@ -1340,7 +1462,7 @@ mod tests {
         }
 
         fn start_turn(&mut self, text: &str) -> Result<()> {
-            self.turns.push(text.to_owned());
+            self.turns.lock().unwrap().push(text.to_owned());
             Ok(())
         }
 
@@ -1349,7 +1471,7 @@ mod tests {
         }
 
         fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
-            Ok(Some(if self.turns.len() == 1 {
+            Ok(Some(if self.turns.lock().unwrap().len() == 1 {
                 TurnEvent::flaked("aborted stream")
             } else {
                 TurnEvent::ok("completed")
@@ -1369,15 +1491,20 @@ mod tests {
         let dir = tempdir();
         let lane = parented_lane(&dir, "mine", "coordinator");
         let mut channel = BriefFlakesThenCompletesChannel::default();
+        let turns = channel.turns.clone();
+        std::thread::spawn(move || {
+            let _ = run(lane, &mut channel);
+        });
 
-        assert_eq!(run(lane, &mut channel).unwrap(), 0);
-        assert_eq!(channel.turns, ["do the work\n", "do the work\n"]);
+        wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
+        assert_eq!(*turns.lock().unwrap(), ["do the work\n", "do the work\n"]);
+        assert_eq!(result_rows(&dir)[0].body, "lane mine done rc=0");
     }
 
-    #[derive(Default)]
+    #[derive(Clone, Default)]
     struct FreshIdentifiedChannel {
-        turns: Vec<String>,
-        brief: Option<String>,
+        turns: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+        brief: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     }
 
     impl LaneChannel for FreshIdentifiedChannel {
@@ -1386,11 +1513,11 @@ mod tests {
         }
 
         fn set_brief(&mut self, brief: &str) {
-            self.brief = Some(brief.to_owned());
+            *self.brief.lock().unwrap() = Some(brief.to_owned());
         }
 
         fn start_turn(&mut self, text: &str) -> Result<()> {
-            self.turns.push(text.to_owned());
+            self.turns.lock().unwrap().push(text.to_owned());
             Ok(())
         }
 
@@ -1437,26 +1564,42 @@ mod tests {
         let dir = tempdir();
         let lane = parented_lane(&dir, "mine", "coordinator");
         let mut channel = FreshIdentifiedChannel::default();
+        let turns = channel.turns.clone();
+        std::thread::spawn(move || {
+            let _ = run(lane, &mut channel);
+        });
 
-        assert_eq!(run(lane, &mut channel).unwrap(), 0);
-        assert_eq!(channel.turns, ["do the work\n"]);
+        wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
+        assert_eq!(*turns.lock().unwrap(), ["do the work\n"]);
     }
 
-    // FAIL-PRE-FIX: a nudge-only clean stop returned rc=0 even though the
-    // brief turn had flaked before any completed brief activity.
-    // SABOTAGE RECEIPT: restore the `end.is_done() => 0` exit rule or this
-    // assertion reports the fake completion as success.
+    // SABOTAGE RECEIPT: restore `end.is_done() => Some((0, ..))` unconditionally
+    // here, or a nudge-only stop reads as success before the brief finishes.
     #[test]
-    fn a_nudge_only_completion_is_a_named_failure() {
-        let (exit_code, detail) = completion_verdict(false, &TurnEvent::ok("opencode_stop"));
-        assert_eq!(exit_code, 1);
+    fn a_nudge_only_completion_has_no_verdict_yet() {
         assert_eq!(
-            detail.as_deref(),
-            Some("agent stopped before completing the brief")
+            completion_verdict(false, &TurnEvent::ok("opencode_stop")),
+            None
+        );
+    }
+
+    #[test]
+    fn a_brief_completed_clean_stop_is_verdict_zero() {
+        assert_eq!(
+            completion_verdict(true, &TurnEvent::ok("opencode_stop")),
+            Some((0, None))
+        );
+    }
+
+    #[test]
+    fn a_failed_turn_always_carries_a_verdict() {
+        assert_eq!(
+            completion_verdict(false, &TurnEvent::failed("boom")),
+            Some((1, None))
         );
         assert_eq!(
-            result_body("mine", exit_code, detail.as_deref()),
-            "lane mine done rc=1 (agent stopped before completing the brief)"
+            completion_verdict(true, &TurnEvent::flaked("dropped")),
+            Some((1, Some("dropped".to_owned())))
         );
     }
 
@@ -1466,9 +1609,14 @@ mod tests {
         let mut lane = parented_lane(&dir, "mine", "coordinator");
         lane.resume = Some("existing-thread-id".to_owned());
         let mut channel = FreshIdentifiedChannel::default();
+        let turns = channel.turns.clone();
+        std::thread::spawn(move || {
+            let _ = run(lane, &mut channel);
+        });
 
-        assert_eq!(run(lane, &mut channel).unwrap(), 0);
-        assert_eq!(channel.turns, [RESUME_NUDGE]);
+        wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
+        assert_eq!(*turns.lock().unwrap(), [RESUME_NUDGE]);
+        assert_eq!(result_rows(&dir)[0].body, "lane mine done rc=0");
     }
 
     // FAIL-PRE-FIX: a panic inside the supervisor unwound straight past
@@ -1511,6 +1659,67 @@ mod tests {
         assert_eq!(rows[0].body, "lane mine done rc=143 (killed by SIGTERM)");
     }
 
+    #[derive(Clone, Default)]
+    struct ParksThenWakesChannel {
+        turns: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+        closed: std::sync::Arc<std::sync::Mutex<bool>>,
+    }
+
+    impl LaneChannel for ParksThenWakesChannel {
+        fn conversation_id(&self) -> Option<String> {
+            Some("resident-thread-id".to_owned())
+        }
+
+        fn start_turn(&mut self, text: &str) -> Result<()> {
+            self.turns.lock().unwrap().push(text.to_owned());
+            Ok(())
+        }
+
+        fn steer(&mut self, _text: &str) -> Result<Delivery> {
+            Ok(Delivery::MidTurn)
+        }
+
+        fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
+            Ok(Some(TurnEvent::ok("completed")))
+        }
+
+        fn close(&mut self) -> Result<()> {
+            *self.closed.lock().unwrap() = true;
+            Ok(())
+        }
+    }
+
+    // FAIL-PRE-FIX: a turn with no pending hail closed the channel and
+    // returned `Ended`, so the pane exited and a later hail was lost with it.
+    #[test]
+    fn a_turn_with_no_pending_hail_parks_instead_of_ending() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let mut channel = ParksThenWakesChannel::default();
+        let turns = channel.turns.clone();
+        let closed = channel.closed.clone();
+        std::thread::spawn(move || {
+            let _ = run(lane, &mut channel);
+        });
+
+        wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
+        assert_eq!(*turns.lock().unwrap(), ["do the work\n"]);
+        assert!(!*closed.lock().unwrap(), "a parked lane closed its channel");
+
+        append_row(&dir, &message("wake", "mine", "hail")).unwrap();
+        wait_for(|| turns.lock().unwrap().len() == 2, Duration::from_secs(5));
+        assert!(turns.lock().unwrap()[1].contains("body of wake"));
+        assert!(
+            !*closed.lock().unwrap(),
+            "waking a parked lane closed its channel"
+        );
+        assert_eq!(
+            result_rows(&dir).len(),
+            1,
+            "a follow-up turn writes no second done row"
+        );
+    }
+
     // FAIL-PRE-FIX: the brief reached the channel only as turn one's text, so a
     // lane opened on the resume nudge left a respawned TUI window with the nudge
     // to re-feed and the brief lost. Sabotage receipt: dropping the
@@ -1521,10 +1730,15 @@ mod tests {
         let mut lane = parented_lane(&dir, "mine", "coordinator");
         lane.resume = Some("existing-thread-id".to_owned());
         let mut channel = FreshIdentifiedChannel::default();
+        let turns = channel.turns.clone();
+        let brief = channel.brief.clone();
+        std::thread::spawn(move || {
+            let _ = run(lane, &mut channel);
+        });
 
-        assert_eq!(run(lane, &mut channel).unwrap(), 0);
-        assert_eq!(channel.turns, [RESUME_NUDGE]);
-        assert_eq!(channel.brief.as_deref(), Some("do the work\n"));
+        wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
+        assert_eq!(*turns.lock().unwrap(), [RESUME_NUDGE]);
+        assert_eq!(brief.lock().unwrap().as_deref(), Some("do the work\n"));
     }
 
     fn tempdir() -> PathBuf {
