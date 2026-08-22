@@ -347,37 +347,57 @@ impl Store {
 
     /// Turns as typed rows, filtered like `query_turns`.
     pub fn turn_rows(&self, query: &TurnQuery) -> Result<Vec<TurnRow>> {
-        let sql = "SELECT s.value, h.value, t.turn, t.ts, r.value, t.said
-                   FROM agent_turn t
-                   JOIN dict_session s ON s.id = t.session_id
-                   JOIN dict_harness h ON h.id = (SELECT harness_id FROM agent_session a WHERE a.session_id = t.session_id)
-                   JOIN dict_role r ON r.id = t.role_id
-                   WHERE (?1 IS NULL OR h.value = ?1)
-                     AND (?2 IS NULL OR t.session_id IN (SELECT id FROM dict_session WHERE value = ?2))
-                     AND (?3 IS NULL OR r.value = ?3)
-                     AND (?4 IS NULL OR t.ts >= ?4)
-                     AND (?5 IS NULL OR t.ts <= ?5)
-                     AND (?6 IS NULL OR t.turn >= ?6)
-                     AND (?7 IS NULL OR t.turn <= ?7)
-                     AND (?8 IS NULL OR t.session_id IN (
-                         SELECT DISTINCT tc.session_id FROM agent_touch tc
-                         JOIN dict_path p ON p.id = tc.path_id WHERE p.value LIKE ?8))
-                   ORDER BY t.session_id, t.turn";
+        // Conditions are appended only when set. The earlier `(?n IS NULL OR
+        // col = ?n)` form made SQLite SCAN all of agent_turn (518k rows) even
+        // for a single-session read, since the planner cannot use the
+        // (session_id, turn) primary key behind an OR.
+        let mut sql = String::from(
+            "SELECT s.value, h.value, t.turn, t.ts, r.value, t.said
+               FROM agent_turn t
+               JOIN dict_session s ON s.id = t.session_id
+               JOIN dict_harness h ON h.id = (SELECT harness_id FROM agent_session a WHERE a.session_id = t.session_id)
+               JOIN dict_role r ON r.id = t.role_id
+              WHERE 1 = 1",
+        );
         let mut values: Vec<rusqlite::types::Value> = Vec::new();
-        for value in [
-            query.harness.as_deref(),
-            query.session.as_deref(),
-            query.role.as_deref(),
-        ] {
-            values.push(opt_string(value));
+        let mut push = |clause: &str, value: rusqlite::types::Value| {
+            sql.push_str(" AND ");
+            sql.push_str(clause);
+            values.push(value);
+        };
+        if let Some(harness) = query.harness.as_deref() {
+            push("h.value = ?", opt_string(Some(harness)));
         }
-        values.push(opt_i64(query.since));
-        values.push(opt_i64(query.until));
-        values.push(opt_i64(query.turn_from));
-        values.push(opt_i64(query.turn_to));
-        let like = query.path.as_deref().map(|path| format!("{path}%"));
-        values.push(opt_string(like.as_deref()));
-        let mut statement = self.connection().prepare(sql)?;
+        if let Some(session) = query.session.as_deref() {
+            push(
+                "t.session_id = (SELECT id FROM dict_session WHERE value = ?)",
+                opt_string(Some(session)),
+            );
+        }
+        if let Some(role) = query.role.as_deref() {
+            push("r.value = ?", opt_string(Some(role)));
+        }
+        if let Some(since) = query.since {
+            push("t.ts >= ?", opt_i64(Some(since)));
+        }
+        if let Some(until) = query.until {
+            push("t.ts <= ?", opt_i64(Some(until)));
+        }
+        if let Some(turn_from) = query.turn_from {
+            push("t.turn >= ?", opt_i64(Some(turn_from)));
+        }
+        if let Some(turn_to) = query.turn_to {
+            push("t.turn <= ?", opt_i64(Some(turn_to)));
+        }
+        if let Some(path) = query.path.as_deref() {
+            push(
+                "t.session_id IN (SELECT DISTINCT tc.session_id FROM agent_touch tc
+                                  JOIN dict_path p ON p.id = tc.path_id WHERE p.value LIKE ?)",
+                opt_string(Some(&format!("{path}%"))),
+            );
+        }
+        sql.push_str(" ORDER BY t.session_id, t.turn");
+        let mut statement = self.connection().prepare(&sql)?;
         let limit = query.limit;
         let base = statement.query_map(rusqlite::params_from_iter(values.iter()), |row| {
             Ok(TurnRow {
