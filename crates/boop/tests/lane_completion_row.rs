@@ -37,6 +37,15 @@ impl LaneChannel for DoneChannel {
     }
 }
 
+/// A resident lane's clean completion parks `run` rather than returning it.
+fn wait_for(mut ready: impl FnMut() -> bool, timeout: Duration) {
+    let start = std::time::Instant::now();
+    while !ready() {
+        assert!(start.elapsed() < timeout, "condition never became true");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 fn result_rows(dir: &Path, lane: &str) -> Vec<String> {
     let mut rows = Vec::new();
     for path in boop::bus::read_boxes(dir).unwrap_or_default() {
@@ -74,19 +83,22 @@ fn one_lane_exit_writes_exactly_one_result_row() {
     let brief = dir.join("brief.md");
     std::fs::write(&brief, "do the work\n").unwrap();
 
-    let rc = boop::supervise::run(
-        boop::supervise::LaneRun {
-            lane: "mine".to_owned(),
-            brief,
-            mail_dir: dir.clone(),
-            cwd: dir.clone(),
-            model: None,
-            resume: None,
-        },
-        &mut DoneChannel,
-    )
-    .unwrap();
-    assert_eq!(rc, 0);
+    let lane = boop::supervise::LaneRun {
+        lane: "mine".to_owned(),
+        brief,
+        mail_dir: dir.clone(),
+        cwd: dir.clone(),
+        model: None,
+        resume: None,
+    };
+    std::thread::spawn(move || {
+        let _ = boop::supervise::run(lane, &mut DoneChannel);
+    });
+    wait_for(
+        || !result_rows(&dir, "mine").is_empty(),
+        Duration::from_secs(5),
+    );
+    assert_eq!(result_rows(&dir, "mine"), vec!["lane mine done rc=0".to_owned()]);
 
     let epilogue = boop::lane::pane_epilogue("mine", &dir);
     let status = std::process::Command::new("sh")

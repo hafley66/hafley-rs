@@ -133,6 +133,16 @@ fn of_kind(dir: &Path, kind: &str) -> Vec<boop_store::bus::Message> {
         .collect()
 }
 
+/// A resident lane's clean completion parks `run` rather than returning it,
+/// so a caller polls the result row on disk instead of joining the call.
+fn wait_for(mut ready: impl FnMut() -> bool, timeout: Duration) {
+    let start = std::time::Instant::now();
+    while !ready() {
+        assert!(start.elapsed() < timeout, "condition never became true");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 fn route_parent(dir: &Path, lane: &str) -> Option<String> {
     boop_store::bus::read_routes(dir)
         .unwrap()
@@ -194,10 +204,13 @@ fn a_reparent_policy_moves_the_edge_onto_the_registered_coordinator() {
     record_parent_policy(&dir, "mine", ParentDeathPolicy::Reparent).unwrap();
     boss.kill();
 
-    let mut channel = OpenTurnChannel::default();
-    let exit_code = boop_proc::supervise::run(lane_run(&dir), &mut channel).unwrap();
+    let lane = lane_run(&dir);
+    std::thread::spawn(move || {
+        let mut channel = OpenTurnChannel::default();
+        let _ = boop_proc::supervise::run(lane, &mut channel);
+    });
 
-    assert_eq!(exit_code, 0, "a reparented lane runs on to its own end");
+    wait_for(|| !of_kind(&dir, "result").is_empty(), Duration::from_secs(10));
     assert_eq!(
         route_parent(&dir, "mine").as_deref(),
         Some("sprefa-coordinator")
@@ -207,6 +220,7 @@ fn a_reparent_policy_moves_the_edge_onto_the_registered_coordinator() {
     assert_eq!(moved[0].to, "sprefa-coordinator");
     let results = of_kind(&dir, "result");
     assert_eq!(results.len(), 1);
+    assert_eq!(results[0].rc, Some(0), "a reparented lane runs on to its own end");
     assert_eq!(
         results[0].to, "sprefa-coordinator",
         "the completion answers the new parent"
@@ -232,13 +246,18 @@ fn an_orphan_policy_leaves_the_lane_and_its_edge_alone() {
     record_parent_policy(&dir, "mine", ParentDeathPolicy::Orphan).unwrap();
     boss.kill();
 
-    let mut channel = OpenTurnChannel::default();
-    let exit_code = boop_proc::supervise::run(lane_run(&dir), &mut channel).unwrap();
+    let lane = lane_run(&dir);
+    std::thread::spawn(move || {
+        let mut channel = OpenTurnChannel::default();
+        let _ = boop_proc::supervise::run(lane, &mut channel);
+    });
 
-    assert_eq!(exit_code, 0);
+    wait_for(|| !of_kind(&dir, "result").is_empty(), Duration::from_secs(10));
     assert_eq!(route_parent(&dir, "mine").as_deref(), Some("boss"));
     assert!(of_kind(&dir, "reparented").is_empty());
-    assert_eq!(of_kind(&dir, "result").len(), 1);
+    let results = of_kind(&dir, "result");
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].rc, Some(0));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

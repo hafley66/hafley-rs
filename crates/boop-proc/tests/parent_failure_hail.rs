@@ -98,6 +98,15 @@ fn count(dir: &Path, kind: &str) -> usize {
         .count()
 }
 
+/// A resident lane's clean completion parks `run` rather than returning it.
+fn wait_for(mut ready: impl FnMut() -> bool, timeout: Duration) {
+    let start = std::time::Instant::now();
+    while !ready() {
+        assert!(start.elapsed() < timeout, "condition never became true");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 fn parented(dir: &Path) {
     std::fs::write(
         dir.join("registry.json"),
@@ -148,10 +157,12 @@ fn a_second_supervisor_run_repeats_none_of_them() {
 fn a_clean_completion_hails_nothing_but_its_rc() {
     let dir = mail_dir("clean");
     parented(&dir);
+    let lane = lane_run(&dir);
+    std::thread::spawn(move || {
+        let _ = boop_proc::supervise::run(lane, &mut DoneChannel);
+    });
 
-    let exit_code = boop_proc::supervise::run(lane_run(&dir), &mut DoneChannel).unwrap();
-
-    assert_eq!(exit_code, 0);
+    wait_for(|| count(&dir, "result") == 1, Duration::from_secs(5));
     assert_eq!(count(&dir, RETRYING), 0);
     assert_eq!(count(&dir, RETRY_BUDGET_EXHAUSTED), 0);
     assert_eq!(count(&dir, EXITED_WITHOUT_COMPLETION), 0);

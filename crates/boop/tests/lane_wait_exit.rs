@@ -394,7 +394,7 @@ done
     );
 
     let path = format!("{}:/usr/bin:/bin", bin.display());
-    let output = Command::new(env!("CARGO_BIN_EXE_boop"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_boop"))
         .env("PATH", path)
         .env("HOME", root.join("home"))
         .env("BOOP_DB", root.join("boop.db"))
@@ -413,15 +413,26 @@ done
         .arg(&brief)
         .args(["--model", "gpt-test", "--mail-dir"])
         .arg(&mail)
-        .output()
+        .spawn()
         .unwrap();
 
-    assert!(
-        output.status.success(),
-        "stdout={}\nstderr={}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    // A lane whose turn completes with no pending mail parks instead of
+    // exiting, so this waits for the result row rather than for the process.
+    let bus = mail.join("bus.ndjson");
+    let start = std::time::Instant::now();
+    while !std::fs::read_to_string(&bus)
+        .unwrap_or_default()
+        .contains("lane feature-fresh-codex done rc=0")
+    {
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(10),
+            "no result row within the wait budget"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+
     let rpc = std::fs::read_to_string(&log).unwrap();
     assert!(rpc.contains("FRESH_CODEX_BRIEF_SENTINEL"), "{rpc}");
     assert!(
