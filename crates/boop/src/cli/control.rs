@@ -1,4 +1,5 @@
-//! Delivery to a native Codex TUI through its managed app-server.
+//! `boop tui`: launch a harness's own interactive TUI, register the pane as
+//! that harness's coordinator route, and project while it runs.
 
 use std::path::Path;
 use std::process::Command;
@@ -11,6 +12,45 @@ use boop::registry::Registry;
 use tracing::warn;
 
 use crate::cli::{mail_dir, write_route};
+
+/// How long a fresh TUI is given to appear in its harness's own live-session
+/// registry. The route is written either way; an unresolved session leaves the
+/// `sessionId` field empty rather than carrying a guess.
+const SESSION_WAIT: Duration = Duration::from_secs(10);
+
+/// The session this launch opened, read from the harness's own live registry:
+/// the newest one under `cwd` that the registry first saw after `opened_ms`.
+fn opened_session(
+    adapter: &dyn Harness,
+    cwd: &Path,
+    opened_ms: u64,
+    wait: Duration,
+) -> Option<String> {
+    let canonical = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
+    let deadline = std::time::Instant::now() + wait;
+    loop {
+        let live = adapter.live().live_sessions().unwrap_or_default();
+        let newest = live
+            .into_iter()
+            .filter(|session| {
+                session.observed_ms >= opened_ms
+                    && session
+                        .cwd
+                        .as_ref()
+                        .map(|dir| std::fs::canonicalize(dir).unwrap_or_else(|_| dir.clone()))
+                        .as_deref()
+                        == Some(canonical.as_path())
+            })
+            .max_by_key(|session| session.observed_ms);
+        if let Some(session) = newest {
+            return Some(session.session_id);
+        }
+        if std::time::Instant::now() >= deadline {
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+}
 
 /// Ask the selected harness adapter to prepare its native process, register
 /// this pane as its coordinator, then run the ordinary interactive TUI.
@@ -46,24 +86,16 @@ pub(crate) fn run_native_tui(
         .native_tui_projector
         .then(|| boop::Store::open(boop::Store::default_path()?))
         .transpose()?;
+    let opened_ms = boop::live::now_ms();
     let mut child = Command::new(&plan.program)
         .args(&plan.args)
         .current_dir(cwd)
         .spawn()
         .with_context(|| format!("start native {} TUI", adapter.id()))?;
-    let mut resolver = plan.session_resolver.take();
-    if let Some(resolver) = resolver.as_mut() {
-        let resolved = resolver.resolve(Duration::from_secs(10));
-        if let Err(error) = resolved {
-            let _ = child.kill();
-            return Err(error.context("resolve native TUI session identity"));
-        }
-        plan.session_id = resolved.ok();
-        if plan.source_path.is_none() {
-            plan.source_path = plan
-                .session_id
-                .as_ref()
-                .map(|session| format!("native-session={session}"));
+    if plan.session_id.is_none() {
+        plan.session_id = opened_session(adapter, cwd, opened_ms, SESSION_WAIT);
+        if let Some(session) = plan.session_id.as_deref() {
+            plan.source_path = Some(format!("native-session={session}"));
         }
     }
     write_route(
@@ -86,9 +118,6 @@ pub(crate) fn run_native_tui(
             app_server_socket: plan.app_server_socket.clone(),
         },
     )?;
-    if let Some(resolver) = resolver.as_mut() {
-        resolver.route_registered()?;
-    }
     // The projector pass joins every sync_cursor row (~190ms on a 4k-session
     // store); running it each 250ms tick burned a core per wrapper.
     const EXIT_POLL: Duration = Duration::from_millis(250);

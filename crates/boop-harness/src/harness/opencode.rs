@@ -36,9 +36,10 @@ impl Harness for Opencode {
         &self,
         spec: &boop_acp::channel::ChannelSpec,
     ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
-        Ok(Box::new(
-            boop_acp::channel::opencode::OpencodeChannel::open(spec)?,
-        ))
+        Ok(Box::new(boop_acp::channel::acp::AcpChannel::open_adapter(
+            spec,
+            boop_acp::channel::acp::OPENCODE_ADAPTER,
+        )?))
     }
 
     fn id(&self) -> HarnessId {
@@ -451,7 +452,22 @@ pub struct Part {
     pub input: Option<Value>,
 }
 
-pub use boop_acp::channel::opencode::{opencode_db_path, store_path};
+/// The opencode store on this machine, `None` until opencode has created it.
+pub fn store_path() -> Option<PathBuf> {
+    opencode_db_path().filter(|path| path.exists())
+}
+
+/// The db path regardless of existence; a spawn writes its command before
+/// opencode has ever created the file.
+pub fn opencode_db_path() -> Option<PathBuf> {
+    Some(
+        dirs::home_dir()?
+            .join(".local")
+            .join("share")
+            .join("opencode")
+            .join("opencode.db"),
+    )
+}
 
 /// The opencode command a spawn runs. Opencode has no default model; the
 /// caller resolves one into `spec.model` or the spawn refuses.

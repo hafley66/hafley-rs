@@ -55,7 +55,7 @@ impl Harness for EchoHarness {
         }
         Ok(Box::new(EchoChannel {
             db: self.db.clone(),
-            next_turn: &self.next_turn,
+            next_turn: self.next_turn,
         }))
     }
 }

@@ -9,8 +9,8 @@ use std::process::Command;
 
 use crate::harness::{
     jsonl_files, Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, KnownSessions,
-    LanePolicy, MailPolicy, NativeChildEvent, NativeSessionRef, NativeSessionResolver,
-    NativeTuiPlan, NativeTuiSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec, VariantSupport,
+    LanePolicy, MailPolicy, NativeChildEvent, NativeSessionRef, NativeTuiPlan, NativeTuiSpec,
+    ReadChunk, SendOutcome, SessionRef, SpawnSpec, VariantSupport,
 };
 use anyhow::Context;
 use boop_store::event::AgentEvent;
@@ -90,6 +90,8 @@ impl Harness for Codex {
         }
     }
 
+    /// The daemon is started (the call is idempotent) and the TUI attaches to
+    /// its socket with `--remote`. Nothing sits between the two.
     fn prepare_native_tui(&self, spec: &NativeTuiSpec) -> anyhow::Result<NativeTuiPlan> {
         let output = Command::new(&spec.executable)
             .args(["remote-control", "start", "--json"])
@@ -103,11 +105,9 @@ impl Harness for Codex {
         let socket = daemon_socket_from_start(&String::from_utf8_lossy(&output.stdout))
             .context("Codex remote-control start did not report an app-server socket")?;
         let (requested_thread, forwarded_args) = explicit_resume(&spec.args)?;
-        let proxy = boop_acp::channel::codex::InspectingProxy::start(Path::new(&socket))?;
-        let local_socket = proxy.socket().display().to_string();
         let args = native_tui_args(
             requested_thread.as_deref(),
-            &local_socket,
+            &socket,
             &spec.cwd,
             forwarded_args,
         );
@@ -116,11 +116,13 @@ impl Harness for Codex {
             args,
             mode: "native-remote".into(),
             session_id: requested_thread.clone(),
-            source_path: requested_thread
-                .as_ref()
-                .map(|thread| format!("managed-app-server={socket};requested-resume={thread}")),
+            source_path: Some(match &requested_thread {
+                Some(thread) => {
+                    format!("managed-app-server={socket};requested-resume={thread}")
+                }
+                None => format!("managed-app-server={socket}"),
+            }),
             app_server_socket: Some(socket),
-            session_resolver: Some(Box::new(CodexSessionResolver(proxy))),
         })
     }
 
@@ -283,18 +285,6 @@ impl Harness for Codex {
     }
 }
 
-struct CodexSessionResolver(boop_acp::channel::codex::InspectingProxy);
-
-impl NativeSessionResolver for CodexSessionResolver {
-    fn resolve(&mut self, timeout: std::time::Duration) -> anyhow::Result<String> {
-        self.0.resolve(timeout)
-    }
-
-    fn route_registered(&mut self) -> anyhow::Result<()> {
-        self.0.route_registered()
-    }
-}
-
 fn native_tui_args(
     thread: Option<&str>,
     socket: &str,
@@ -325,49 +315,6 @@ fn explicit_resume(tui_args: &[String]) -> anyhow::Result<(Option<String>, &[Str
         .filter(|value| !value.starts_with('-'))
         .context("`boop tui codex -- resume` requires an explicit thread id")?;
     Ok((Some(thread.clone()), &tui_args[2..]))
-}
-
-/// Interpret only the interactive settings represented by `thread/start`.
-/// All other arguments remain untouched for the native TUI. Omitted fields
-/// deliberately let the managed app-server use its configured defaults.
-fn interactive_thread_start(
-    cwd: &Path,
-    tui_args: &[String],
-) -> anyhow::Result<boop_acp::channel::codex::InteractiveThreadStart> {
-    let mut start = boop_acp::channel::codex::InteractiveThreadStart {
-        cwd: cwd.to_path_buf(),
-        ..Default::default()
-    };
-    let mut args = tui_args.iter();
-    while let Some(argument) = args.next() {
-        let (flag, inline) = argument
-            .split_once('=')
-            .map_or((argument.as_str(), None), |(flag, value)| {
-                (flag, Some(value))
-            });
-        let mut value = |flag: &str| -> anyhow::Result<String> {
-            inline
-                .map(str::to_owned)
-                .or_else(|| args.next().cloned())
-                .filter(|value| !value.starts_with('-'))
-                .with_context(|| format!("{flag} requires a value"))
-        };
-        match flag {
-            "-m" | "--model" => start.model = Some(value(flag)?),
-            "-s" | "--sandbox" => start.sandbox = Some(value(flag)?),
-            "-a" | "--ask-for-approval" => start.approval_policy = Some(value(flag)?),
-            "--approve-for-me" => {
-                start.sandbox = Some("workspace-write".into());
-                start.approvals_reviewer = Some("auto_review".into());
-            }
-            "--dangerously-bypass-approvals-and-sandbox" => {
-                start.sandbox = Some("danger-full-access".into());
-                start.approval_policy = Some("never".into());
-            }
-            _ => {}
-        }
-    }
-    Ok(start)
 }
 
 fn daemon_socket_from_start(text: &str) -> Option<String> {
@@ -907,7 +854,7 @@ fn project_line(
 #[cfg(test)]
 mod tests {
     use crate::harness::HarnessId;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
     use std::fs::OpenOptions;
     use std::io::Write;
@@ -917,7 +864,7 @@ mod tests {
     use boop_store::Store;
 
     use super::{
-        daemon_socket_from_start, explicit_resume, interactive_thread_start,
+        daemon_socket_from_start, explicit_resume,
         native_child_events_from_lines, native_completion_notification,
         native_completion_satisfies_delivery, native_tui_args, sessions_in, sessions_in_with_known,
         Codex,
@@ -1055,30 +1002,6 @@ mod tests {
                 "/tmp/project"
             ]
         );
-    }
-
-    #[test]
-    fn fresh_interactive_start_uses_defaults_unless_the_tui_overrides_them() {
-        let defaults = interactive_thread_start(Path::new("/repo"), &[]).unwrap();
-        assert_eq!(defaults.cwd, PathBuf::from("/repo"));
-        assert_eq!(defaults.model, None);
-        assert_eq!(defaults.sandbox, None);
-        assert_eq!(defaults.approval_policy, None);
-        assert_eq!(defaults.approvals_reviewer, None);
-
-        let explicit = interactive_thread_start(
-            Path::new("/repo"),
-            &[
-                "--model=gpt-5.6".into(),
-                "--sandbox".into(),
-                "workspace-write".into(),
-                "--ask-for-approval=on-request".into(),
-            ],
-        )
-        .unwrap();
-        assert_eq!(explicit.model.as_deref(), Some("gpt-5.6"));
-        assert_eq!(explicit.sandbox.as_deref(), Some("workspace-write"));
-        assert_eq!(explicit.approval_policy.as_deref(), Some("on-request"));
     }
 
     fn temp_path(name: &str) -> PathBuf {
