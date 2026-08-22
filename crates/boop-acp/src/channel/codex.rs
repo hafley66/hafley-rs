@@ -34,10 +34,12 @@ pub struct InspectingProxy {
 
 impl InspectingProxy {
     pub fn start(upstream: &Path) -> Result<Self> {
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let socket = std::env::temp_dir().join(format!(
-            "boop-codex-proxy-{}-{}.sock",
+            "boop-codex-proxy-{}-{}-{}.sock",
             std::process::id(),
-            crate::channel::now_ms()
+            crate::channel::now_ms(),
+            SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         let listener = UnixListener::bind(&socket)
             .with_context(|| format!("bind Codex inspecting proxy {}", socket.display()))?;
@@ -575,6 +577,94 @@ mod tests {
         let reply: Value =
             serde_json::from_str(client.read().unwrap().into_text().unwrap().as_str()).unwrap();
         assert_eq!(reply["result"]["thread"]["id"], "actual-parent");
+        server.join().unwrap();
+        let _ = std::fs::remove_file(upstream_socket);
+    }
+
+    /// Defect receipt 2026-08-22: the proxy accepted one socket, so the
+    /// picker behind `/resume` (a second WebSocket from the same TUI) hung on
+    /// "failed to connect to remote app server" while the first socket kept
+    /// relaying. A later client must get an upstream reply within a second
+    /// while the first client is still connected and idle.
+    #[test]
+    fn inspecting_proxy_serves_a_second_client_while_the_first_stays_open() {
+        let upstream_socket = std::env::temp_dir().join(format!(
+            "boop-codex-upstream-multi-{}-{}.sock",
+            std::process::id(),
+            crate::channel::now_ms()
+        ));
+        let listener = UnixListener::bind(&upstream_socket).unwrap();
+        let server = std::thread::spawn(move || {
+            // Echo server: every upstream connection answers each request
+            // with its own id, so replies prove which socket was served.
+            let mut workers = Vec::new();
+            for _ in 0..2 {
+                let (stream, _) = listener.accept().unwrap();
+                workers.push(std::thread::spawn(move || {
+                    let mut websocket = tungstenite::accept(stream).unwrap();
+                    while let Ok(message) = websocket.read() {
+                        let Ok(text) = message.into_text() else { break };
+                        let request: Value = serde_json::from_str(text.as_str()).unwrap();
+                        let reply = json!({
+                            "jsonrpc": "2.0",
+                            "id": request["id"],
+                            "result": {"thread": {"id": format!("thread-{}", request["id"])}}
+                        });
+                        if websocket
+                            .send(tungstenite::Message::Text(reply.to_string().into()))
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                }));
+            }
+            for worker in workers {
+                let _ = worker.join();
+            }
+        });
+        let mut proxy = InspectingProxy::start(&upstream_socket).unwrap();
+        let (mut first, _) =
+            tungstenite::client("ws://localhost/", UnixStream::connect(proxy.socket()).unwrap())
+                .unwrap();
+        first
+            .send(tungstenite::Message::Text(
+                json!({"jsonrpc": "2.0", "id": 1, "method": "thread/start", "params": {}})
+                    .to_string()
+                    .into(),
+            ))
+            .unwrap();
+        assert_eq!(proxy.resolve(Duration::from_secs(1)).unwrap(), "thread-1");
+        proxy.route_registered().unwrap();
+        let _ = first.read().unwrap();
+
+        // First client stays connected and silent; the picker opens a second.
+        let second_stream = UnixStream::connect(proxy.socket()).unwrap();
+        second_stream
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .unwrap();
+        let (mut second, _) = tungstenite::client("ws://localhost/", second_stream).unwrap();
+        second
+            .send(tungstenite::Message::Text(
+                json!({"jsonrpc": "2.0", "id": 2, "method": "thread/list", "params": {}})
+                    .to_string()
+                    .into(),
+            ))
+            .unwrap();
+        let reply: Value = serde_json::from_str(
+            second
+                .read()
+                .expect("second TUI socket starved: proxy never answered it")
+                .into_text()
+                .unwrap()
+                .as_str(),
+        )
+        .unwrap();
+        assert_eq!(reply["id"], 2);
+        assert_eq!(reply["result"]["thread"]["id"], "thread-2");
+
+        drop(second);
+        drop(first);
         server.join().unwrap();
         let _ = std::fs::remove_file(upstream_socket);
     }
