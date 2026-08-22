@@ -12,7 +12,7 @@ use boop::{query, usage};
 
 use crate::cli::job::lane_state;
 use crate::cli::mail::deliver_hail;
-use crate::cli::{append_message, emit_event, line, mail_dir, now_ms, write_route};
+use crate::cli::{append_acks, append_message, emit_event, line, mail_dir, now_ms, write_route};
 use crate::{
     AgentSessionGraphFormat, AgentSummaryCmd, AgentSummaryFormat, ChatCmd, CursorCmd, DbCmd,
     EdgeCmd, FactCmd, FavoriteCmd, OutputFormat, PriceCmd, QueryArgs, QueryFormat, SessionCmd,
@@ -270,6 +270,15 @@ pub(crate) fn sync_all(
         &store,
         &native_child_routes,
         &native_child_mail_dir,
+        |parent, child, route_name| {
+            let Some(harness) = native_child_routes
+                .get(route_name)
+                .and_then(|route| route.harness.as_deref())
+            else {
+                return Ok(false);
+            };
+            resolve_harness(registry, harness)?.native_child_completion_visible(parent, child)
+        },
         |message| deliver_hail(registry, &native_child_mail_dir, message, None),
     )?;
     for (harness, roots) in roots_to_stamp {
@@ -346,6 +355,7 @@ fn deliver_native_child_completions(
     store: &ident::Store,
     routes: &BTreeMap<String, bus::Route>,
     dir: &Path,
+    mut native_visible: impl FnMut(&str, &str, &str) -> Result<bool>,
     mut deliver: impl FnMut(&bus::Message) -> Result<()>,
 ) -> Result<()> {
     let parent_routes: BTreeMap<String, String> = routes
@@ -376,7 +386,15 @@ fn deliver_native_child_completions(
                 completion.completed_at_ms,
             )?;
         }
-        deliver(&message)?;
+        if native_visible(
+            &completion.parent_session,
+            &completion.child_session,
+            parent_route,
+        )? {
+            append_acks(dir, std::slice::from_ref(&message))?;
+        } else {
+            deliver(&message)?;
+        }
         store.ensure_edge_at(
             &completion.parent_session,
             &completion.child_session,
@@ -539,7 +557,13 @@ fn sync_native_child_route_with_parent(
         .cloned()
         .map(|route| BTreeMap::from([(route_name.into(), route)]))
         .unwrap_or_default();
-    deliver_native_child_completions(store, &focused_routes, dir, |message| deliver(message))
+    deliver_native_child_completions(
+        store,
+        &focused_routes,
+        dir,
+        |parent, child, _| adapter.native_child_completion_visible(parent, child),
+        |message| deliver(message),
+    )
 }
 
 /// The pane pid for a session that maps to a lane route (by session id or cwd).
@@ -1325,16 +1349,28 @@ mod tests {
         let mut delivered = Vec::new();
 
         project_native_children(&store, &fake, &session, 0).unwrap();
-        deliver_native_child_completions(&store, &routes, &dir, |message| {
-            delivered.push(message.clone());
-            append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
-        })
+        deliver_native_child_completions(
+            &store,
+            &routes,
+            &dir,
+            |_, _, _| Ok(false),
+            |message| {
+                delivered.push(message.clone());
+                append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+            },
+        )
         .unwrap();
         project_native_children(&store, &fake, &session, 0).unwrap();
-        deliver_native_child_completions(&store, &routes, &dir, |message| {
-            delivered.push(message.clone());
-            append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
-        })
+        deliver_native_child_completions(
+            &store,
+            &routes,
+            &dir,
+            |_, _, _| Ok(false),
+            |message| {
+                delivered.push(message.clone());
+                append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+            },
+        )
         .unwrap();
 
         let edges = store.edge_rows(None).unwrap();
@@ -1371,6 +1407,52 @@ mod tests {
     }
 
     #[test]
+    fn native_parent_notification_acks_without_duplicate_injection() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = ident::Store::open(dir.join("boop.db")).unwrap();
+        let session = native_child_session(&dir);
+        let fake = fake_child_events();
+        let routes = native_parent_routes();
+        let mut visibility_checks = Vec::new();
+        let mut delivered = Vec::new();
+
+        project_native_children(&store, &fake, &session, 0).unwrap();
+        deliver_native_child_completions(
+            &store,
+            &routes,
+            &dir,
+            |parent, child, route| {
+                visibility_checks.push((parent.to_owned(), child.to_owned(), route.to_owned()));
+                Ok(true)
+            },
+            |message| {
+                delivered.push(message.clone());
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            visibility_checks,
+            [(
+                "parent-session".into(),
+                "child-session".into(),
+                "parent-route".into()
+            )]
+        );
+        assert!(delivered.is_empty());
+        let messages = completion_rows(&dir);
+        assert_eq!(messages.len(), 2);
+        assert!(messages[1].to_timestamp.is_some());
+        assert!(store.edge_rows(None).unwrap().iter().any(|edge| {
+            edge.parent == "parent-session"
+                && edge.child == "child-session"
+                && edge.edge == "completion-delivered"
+        }));
+    }
+
+    #[test]
     fn a_delivery_failure_retries_the_one_persisted_completion_message() {
         let dir = temp_mail_dir();
         std::fs::create_dir_all(&dir).unwrap();
@@ -1380,17 +1462,27 @@ mod tests {
         let routes = native_parent_routes();
         project_native_children(&store, &fake, &session, 0).unwrap();
 
-        let first = deliver_native_child_completions(&store, &routes, &dir, |_message| {
-            anyhow::bail!("native parent unavailable")
-        });
+        let first = deliver_native_child_completions(
+            &store,
+            &routes,
+            &dir,
+            |_, _, _| Ok(false),
+            |_message| anyhow::bail!("native parent unavailable"),
+        );
         assert!(first.is_err());
         assert_eq!(completion_rows(&dir).len(), 1);
 
         let mut delivered = Vec::new();
-        deliver_native_child_completions(&store, &routes, &dir, |message| {
-            delivered.push(message.clone());
-            append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
-        })
+        deliver_native_child_completions(
+            &store,
+            &routes,
+            &dir,
+            |_, _, _| Ok(false),
+            |message| {
+                delivered.push(message.clone());
+                append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+            },
+        )
         .unwrap();
         assert_eq!(completion_rows(&dir).len(), 2);
         assert_eq!(bus::fold(&completion_rows(&dir)).len(), 1);
@@ -1410,17 +1502,27 @@ mod tests {
         let fake = fake_child_events();
         project_native_children(&store, &fake, &session, 0).unwrap();
 
-        deliver_native_child_completions(&store, &BTreeMap::new(), &dir, |_message| {
-            anyhow::bail!("there is no parent route to deliver")
-        })
+        deliver_native_child_completions(
+            &store,
+            &BTreeMap::new(),
+            &dir,
+            |_, _, _| Ok(false),
+            |_message| anyhow::bail!("there is no parent route to deliver"),
+        )
         .unwrap();
         assert!(completion_rows(&dir).is_empty());
 
         let mut delivered = Vec::new();
-        deliver_native_child_completions(&store, &native_parent_routes(), &dir, |message| {
-            delivered.push(message.clone());
-            append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
-        })
+        deliver_native_child_completions(
+            &store,
+            &native_parent_routes(),
+            &dir,
+            |_, _, _| Ok(false),
+            |message| {
+                delivered.push(message.clone());
+                append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+            },
+        )
         .unwrap();
         assert_eq!(completion_rows(&dir).len(), 2);
         assert_eq!(bus::fold(&completion_rows(&dir)).len(), 1);

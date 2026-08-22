@@ -252,6 +252,26 @@ impl Harness for Codex {
             &result.lines,
         ))
     }
+
+    fn native_child_completion_visible(
+        &self,
+        parent_session: &str,
+        child_session: &str,
+    ) -> anyhow::Result<bool> {
+        let Some(parent) = self
+            .sessions()?
+            .into_iter()
+            .find(|session| session.session_id == parent_session)
+        else {
+            return Ok(false);
+        };
+        let mut file = File::open(&parent.path)
+            .with_context(|| format!("open parent transcript {}", parent.path.display()))?;
+        let lines = tail::read_complete_lines(&mut file, 0)?.lines;
+        Ok(lines
+            .iter()
+            .any(|line| native_completion_notification(&line.bytes, child_session)))
+    }
 }
 
 struct CodexSessionResolver(boop_acp::channel::codex::InspectingProxy);
@@ -501,6 +521,33 @@ fn native_child_events_from_lines(
         }
     }
     events
+}
+
+fn native_completion_notification(line: &[u8], child_session: &str) -> bool {
+    let Ok(value) = serde_json::from_slice::<Value>(line) else {
+        return false;
+    };
+    if value.get("type").and_then(Value::as_str) != Some("response_item")
+        || value.pointer("/payload/type").and_then(Value::as_str) != Some("message")
+        || value.pointer("/payload/role").and_then(Value::as_str) != Some("user")
+    {
+        return false;
+    }
+    value
+        .pointer("/payload/content")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.get("text").and_then(Value::as_str))
+        .filter_map(|text| {
+            text.strip_prefix("<subagent_notification>\n")?
+                .strip_suffix("\n</subagent_notification>")
+        })
+        .filter_map(|body| serde_json::from_str::<Value>(body).ok())
+        .any(|notification| {
+            notification.get("agent_path").and_then(Value::as_str) == Some(child_session)
+                && notification.pointer("/status/completed").is_some()
+        })
 }
 
 fn sessions_in(base: &Path) -> anyhow::Result<Vec<SessionRef>> {
@@ -838,8 +885,8 @@ mod tests {
 
     use super::{
         daemon_socket_from_start, explicit_resume, interactive_thread_start,
-        native_child_events_from_lines, native_tui_args, sessions_in, sessions_in_with_known,
-        Codex,
+        native_child_events_from_lines, native_completion_notification, native_tui_args,
+        sessions_in, sessions_in_with_known, Codex,
     };
 
     #[test]
@@ -850,6 +897,23 @@ mod tests {
             daemon_socket_from_start(output).as_deref(),
             Some("/tmp/codex.sock")
         );
+    }
+
+    #[test]
+    fn native_completion_requires_the_structured_notification_and_exact_child() {
+        let exact = br#"{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<subagent_notification>\n{\"agent_path\":\"child-session\",\"status\":{\"completed\":\"done\"}}\n</subagent_notification>"}]}}"#;
+        let wrong_child = br#"{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<subagent_notification>\n{\"agent_path\":\"other-child\",\"status\":{\"completed\":\"done\"}}\n</subagent_notification>"}]}}"#;
+        let ordinary_text = br#"{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"child-session completed"}]}}"#;
+
+        assert!(native_completion_notification(exact, "child-session"));
+        assert!(!native_completion_notification(
+            wrong_child,
+            "child-session"
+        ));
+        assert!(!native_completion_notification(
+            ordinary_text,
+            "child-session"
+        ));
     }
 
     #[test]

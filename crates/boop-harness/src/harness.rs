@@ -207,6 +207,17 @@ pub trait Harness: Send + Sync {
         Ok(Vec::new())
     }
 
+    /// Whether the parent transcript already contains this harness's native
+    /// completion delivery for the exact child. False preserves Boop's queue
+    /// fallback.
+    fn native_child_completion_visible(
+        &self,
+        _parent_session: &str,
+        _child_session: &str,
+    ) -> anyhow::Result<bool> {
+        Ok(false)
+    }
+
     // facet 3: control. Defaults are the honest all-false / Unsupported shape,
     // so any adapter without control support is safe and explicit.
 
