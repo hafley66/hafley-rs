@@ -13,8 +13,7 @@ use std::{
     env,
     error::Error,
     ffi::OsString,
-    fs,
-    io,
+    fs, io,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Output},
@@ -170,10 +169,25 @@ fn main() -> Result<()> {
     println!("same_pane={}", first_receipt.pane_id);
     println!("first_pid={first_pid}");
     println!("second_pid={second_pid}");
-    println!("first_route={}", first_receipt.route_id.as_deref().unwrap_or("unavailable"));
-    println!("second_route={}", second_receipt.route_id.as_deref().unwrap_or("unavailable"));
-    println!("mutation_ps={}", first_receipt.ps_mutation.as_deref().unwrap_or("absent"));
-    println!("mutation_sysinfo={}", first_receipt.sysinfo_mutation.as_deref().unwrap_or("absent"));
+    println!(
+        "first_route={}",
+        first_receipt.route_id.as_deref().unwrap_or("unavailable")
+    );
+    println!(
+        "second_route={}",
+        second_receipt.route_id.as_deref().unwrap_or("unavailable")
+    );
+    println!(
+        "mutation_ps={}",
+        first_receipt.ps_mutation.as_deref().unwrap_or("absent")
+    );
+    println!(
+        "mutation_sysinfo={}",
+        first_receipt
+            .sysinfo_mutation
+            .as_deref()
+            .unwrap_or("absent")
+    );
     Ok(())
 }
 
@@ -203,12 +217,7 @@ fn observe(fixture: &Fixture, phase: &str, harness_pid: u32) -> Result<Receipt> 
         "pid=,ppid=,pgid=,tpgid=,lstart=,command=",
     ])?;
     let tty = pane_tty.trim_start_matches("/dev/");
-    let tty_processes = ps_text([
-        "-t",
-        tty,
-        "-o",
-        "pid=,ppid=,pgid=,tpgid=,state=,command=",
-    ])?;
+    let tty_processes = ps_text(["-t", tty, "-o", "pid=,ppid=,pgid=,tpgid=,state=,command="])?;
     let ps_environment = ps_text(["eww", "-p", &harness_pid_text, "-o", "command="])?;
     let sysinfo_environment = sysinfo_environment(harness_pid)?;
     let process_after = ps_text([
@@ -241,7 +250,10 @@ fn observe(fixture: &Fixture, phase: &str, harness_pid: u32) -> Result<Receipt> 
         return Err(format!("{phase}: ps and sysinfo selected different route ids").into());
     }
     let route_id = sysinfo_route.or(ps_route);
-    println!("route_selection={}", route_id.as_deref().unwrap_or("unavailable"));
+    println!(
+        "route_selection={}",
+        route_id.as_deref().unwrap_or("unavailable")
+    );
 
     Ok(Receipt {
         pane_id,
@@ -351,7 +363,9 @@ fn tmux_text<const N: usize>(args: [&str; N]) -> Result<String> {
 }
 
 fn ps_text<const N: usize>(args: [&str; N]) -> Result<String> {
-    Ok(String::from_utf8(command("ps", args)?.stdout)?.trim().to_owned())
+    Ok(String::from_utf8(command("ps", args)?.stdout)?
+        .trim()
+        .to_owned())
 }
 
 fn command<const N: usize>(program: &str, args: [&str; N]) -> Result<Output> {

@@ -326,6 +326,9 @@ pub(crate) fn route_to_json(route: &Route) -> serde_json::Value {
     if let Some(session_id) = &route.session_id {
         object.insert("sessionId".into(), serde_json::json!(session_id));
     }
+    if let Some(source_path) = &route.source_path {
+        object.insert("sourcePath".into(), serde_json::json!(source_path));
+    }
     if let Some(parent) = &route.parent {
         object.insert("parent".into(), serde_json::json!(parent));
     }

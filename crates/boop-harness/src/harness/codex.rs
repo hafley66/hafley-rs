@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::harness::{
-    jsonl_files, Capabilities, Harness, Ingested, KnownSessions, NativeSessionRef, NativeTuiPlan,
-    NativeTuiSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
+    jsonl_files, Capabilities, Harness, Ingested, KnownSessions, NativeChildEvent,
+    NativeSessionRef, NativeTuiPlan, NativeTuiSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
 use anyhow::Context;
 use boop_store::event::AgentEvent;
@@ -170,6 +170,45 @@ impl Harness for Codex {
         Ok(vec![codex_sessions_dir()?])
     }
 
+    /// The remote-control daemon owns a control socket, but the TUI starts a
+    /// distinct thread. Read the thread from the `codex` process in this
+    /// pane's live process tree. The wrapper process can retain an earlier
+    /// daemon environment and is deliberately not an identity source.
+    fn session_id_in_pane(
+        &self,
+        multiplexer: &dyn boop_store::tmux::Multiplexer,
+        processes: &dyn boop_store::proc::ProcReader,
+        tmux_target: &str,
+    ) -> Option<String> {
+        let root = multiplexer.pane_pid(None, tmux_target)?;
+        let codex_processes = std::iter::once(root)
+            .chain(processes.descendants(root))
+            .filter_map(|pid| processes.process(pid))
+            .filter(|process| {
+                process.command.first().is_some_and(|program| {
+                    Path::new(program)
+                        .file_name()
+                        .is_some_and(|name| name == "codex")
+                })
+            });
+
+        // An open rollout is OS-level ownership evidence for the actual TUI
+        // transcript and takes precedence over an inherited environment stamp.
+        let mut environment = None;
+        for process in codex_processes {
+            if let Some(session) = processes
+                .open_files(process.pid)
+                .into_iter()
+                .find_map(|path| codex_rollout_session(&path))
+            {
+                return Some(session);
+            }
+            environment = environment
+                .or_else(|| processes.environment_variable(process.pid, "CODEX_THREAD_ID"));
+        }
+        environment
+    }
+
     fn sync_candidates(&self, known: &KnownSessions) -> anyhow::Result<Vec<SessionRef>> {
         sessions_in_with_known(&codex_sessions_dir()?, known)
     }
@@ -228,6 +267,24 @@ impl Harness for Codex {
             next_cursor: result.next_offset,
         })
     }
+
+    fn observe_native_children(
+        &self,
+        session: &SessionRef,
+        from: u64,
+    ) -> anyhow::Result<Vec<NativeChildEvent>> {
+        let Some(parent_session) = session.parent.as_deref() else {
+            return Ok(Vec::new());
+        };
+        let mut file = File::open(&session.path)
+            .with_context(|| format!("open transcript {}", session.path.display()))?;
+        let result = tail::read_complete_lines(&mut file, from)?;
+        Ok(native_child_events_from_lines(
+            parent_session,
+            &session.session_id,
+            &result.lines,
+        ))
+    }
 }
 
 fn native_tui_args(
@@ -260,6 +317,18 @@ fn explicit_resume(tui_args: &[String]) -> anyhow::Result<(Option<String>, &[Str
         .filter(|value| !value.starts_with('-'))
         .context("`boop tui codex -- resume` requires an explicit thread id")?;
     Ok((Some(thread.clone()), &tui_args[2..]))
+}
+
+/// The exact UUID in a live Codex rollout file name. `lsof` exposes this path
+/// for the TUI that owns the transcript, which binds a wrapper pane to its
+/// actual thread without consulting another wrapper's cwd.
+fn codex_rollout_session(path: &Path) -> Option<String> {
+    let name = path.file_name()?.to_str()?;
+    name.strip_prefix("rollout-")?.strip_suffix(".jsonl")?;
+    let fields = name.strip_suffix(".jsonl")?.split('-').collect::<Vec<_>>();
+    (fields.len() >= 9)
+        .then(|| fields[fields.len() - 5..].join("-"))
+        .filter(|value| value.len() == 36)
 }
 
 fn daemon_socket_from_start(text: &str) -> Option<String> {
@@ -354,9 +423,15 @@ fn first_session_meta(path: &Path) -> Option<SessionMeta> {
     let payload = value.get("payload")?.as_object()?;
     let session_id = payload.get("id").and_then(Value::as_str)?.to_owned();
     let parent = payload
-        .get("forked_from_id")
+        .get("parent_thread_id")
         .and_then(Value::as_str)
         .map(str::to_owned);
+    let parent = parent.or_else(|| {
+        payload
+            .get("forked_from_id")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+    });
     let cwd = payload
         .get("cwd")
         .and_then(Value::as_str)
@@ -372,6 +447,50 @@ fn first_session_meta(path: &Path) -> Option<SessionMeta> {
         cwd,
         nickname,
     })
+}
+
+/// Codex records subagent parentage in the child's `session_meta` and writes
+/// `task_complete` in that child's transcript. These are durable local events;
+/// app-server remote control is used only later, by the shared projector, to
+/// notify a registered parent route.
+fn native_child_events_from_lines(
+    parent_session: &str,
+    child_session: &str,
+    lines: &[tail::CompleteLine],
+) -> Vec<NativeChildEvent> {
+    let mut events = Vec::new();
+    for line in lines {
+        let Ok(value) = serde_json::from_slice::<Value>(&line.bytes) else {
+            continue;
+        };
+        let at_ms = value
+            .get("timestamp")
+            .and_then(Value::as_str)
+            .and_then(crate::harness::claude::parse_iso_ms)
+            .unwrap_or(0);
+        let outer = value.get("type").and_then(Value::as_str);
+        let record = value
+            .get("payload")
+            .and_then(Value::as_object)
+            .and_then(|payload| payload.get("type"))
+            .and_then(Value::as_str);
+        if outer == Some("session_meta") {
+            events.push(NativeChildEvent::Spawned {
+                parent_session: parent_session.to_owned(),
+                child_session: child_session.to_owned(),
+                at_ms,
+            });
+        }
+        if outer == Some("event_msg") && record == Some("task_complete") {
+            events.push(NativeChildEvent::Completed {
+                parent_session: parent_session.to_owned(),
+                child_session: child_session.to_owned(),
+                outcome: "completed".to_owned(),
+                at_ms,
+            });
+        }
+    }
+    events
 }
 
 fn sessions_in(base: &Path) -> anyhow::Result<Vec<SessionRef>> {
@@ -698,18 +817,140 @@ fn project_line(
 
 #[cfg(test)]
 mod tests {
-    use std::fs::OpenOptions;
-    use std::io::Write;
     use std::path::PathBuf;
 
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
     use crate::harness::{claude, Harness, KnownSession, KnownSessions, SessionRef};
+    use boop_store::proc::{ProcReader, ProcessInfo};
     use boop_store::testing::TempRepo;
+    use boop_store::tmux::{LiveSessions, Multiplexer};
     use boop_store::Store;
 
     use super::{
-        daemon_socket_from_start, explicit_resume, native_tui_args, sessions_in,
-        sessions_in_with_known, Codex,
+        daemon_socket_from_start, explicit_resume, native_child_events_from_lines, native_tui_args,
+        sessions_in, sessions_in_with_known, Codex,
     };
+
+    struct PaneFixture;
+
+    impl Multiplexer for PaneFixture {
+        fn current_pane(&self, _: Option<&str>) -> Option<String> {
+            None
+        }
+        fn session_of_pane(&self, _: Option<&str>, _: &str) -> Option<String> {
+            None
+        }
+        fn pane_id(&self, _: Option<&str>, _: &str) -> Option<String> {
+            None
+        }
+        fn pane_pid(&self, _: Option<&str>, target: &str) -> Option<u32> {
+            (target == "%3357").then_some(10)
+        }
+        fn live_sessions(&self, _: Option<&str>) -> Option<LiveSessions> {
+            None
+        }
+        fn has_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<bool> {
+            Ok(false)
+        }
+        fn kill_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn target_alive(&self, _: Option<&str>, _: &str) -> bool {
+            false
+        }
+        fn capture_pane(&self, _: Option<&str>, _: &str, _: Option<u32>) -> anyhow::Result<String> {
+            Ok(String::new())
+        }
+        fn new_detached_session(
+            &self,
+            _: Option<&str>,
+            _: &str,
+            _: &str,
+            _: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn new_bare_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_keys_literal(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_text(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn send_key_named(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn new_window(
+            &self,
+            _: Option<&str>,
+            _: &str,
+            _: &str,
+            _: &str,
+            _: &str,
+        ) -> anyhow::Result<String> {
+            Ok(String::new())
+        }
+        fn swap_windows(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+        fn kill_window(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    struct ProcessFixture;
+
+    impl ProcReader for ProcessFixture {
+        fn is_alive(&self, pid: u32) -> bool {
+            pid == 10 || pid == 11
+        }
+        fn process(&self, pid: u32) -> Option<ProcessInfo> {
+            let (name, command, parent) = match pid {
+                10 => ("boop", vec!["boop".into(), "tui".into()], None),
+                11 => (
+                    "codex",
+                    vec!["/opt/homebrew/bin/codex".into(), "--remote".into()],
+                    Some(10),
+                ),
+                _ => return None,
+            };
+            Some(ProcessInfo {
+                pid,
+                parent,
+                name: name.into(),
+                command,
+                rss_bytes: 0,
+                cpu_percent: 0.0,
+                start_time_secs: 0,
+                cwd: None,
+            })
+        }
+        fn environment_variable(&self, pid: u32, name: &str) -> Option<String> {
+            (pid == 11 && name == "CODEX_THREAD_ID")
+                .then_some("019ffd56-e77d-7e73-b6eb-e987e3d2ae1c".into())
+        }
+        fn open_files(&self, pid: u32) -> Vec<PathBuf> {
+            (pid == 11)
+                .then_some(PathBuf::from(
+                    "/tmp/rollout-2026-08-21T03-33-00-01a02786-98b2-7752-86c3-7f52e46a9b50.jsonl",
+                ))
+                .into_iter()
+                .collect()
+        }
+        fn children(&self, pid: u32) -> Vec<u32> {
+            (pid == 10).then_some(11).into_iter().collect()
+        }
+        fn descendants(&self, pid: u32) -> Vec<u32> {
+            (pid == 10).then_some(11).into_iter().collect()
+        }
+        fn descendant_count(&self, pid: u32) -> usize {
+            usize::from(pid == 10)
+        }
+    }
 
     #[test]
     fn remote_control_start_socket_is_read_without_assuming_its_json_key() {
@@ -718,6 +959,14 @@ mod tests {
         assert_eq!(
             daemon_socket_from_start(output).as_deref(),
             Some("/tmp/codex.sock")
+        );
+    }
+
+    #[test]
+    fn pane_rollout_ownership_wins_over_the_daemon_environment_thread() {
+        assert_eq!(
+            Codex.session_id_in_pane(&PaneFixture, &ProcessFixture, "%3357"),
+            Some("01a02786-98b2-7752-86c3-7f52e46a9b50".into())
         );
     }
 
@@ -961,6 +1210,92 @@ mod tests {
         assert_eq!(chunk.skipped, 0);
         assert_eq!(chunk.events[0].record_type, "message");
         assert_eq!(chunk.events[1].record_type, "token_count");
+    }
+
+    #[test]
+    fn native_child_observer_reads_session_parent_and_completion_records() {
+        let lines = [
+            boop_store::tail::CompleteLine {
+                start: 0,
+                bytes: br#"{"timestamp":"2026-08-09T17:20:05.152Z","type":"session_meta","payload":{"id":"child-session","parent_thread_id":"parent-session"}}"#.to_vec(),
+            },
+            boop_store::tail::CompleteLine {
+                start: 1,
+                bytes: br#"{"timestamp":"2026-08-09T17:20:06.000Z","type":"event_msg","payload":{"type":"task_complete"}}"#.to_vec(),
+            },
+        ];
+        assert_eq!(
+            native_child_events_from_lines("parent-session", "child-session", &lines),
+            [
+                crate::harness::NativeChildEvent::Spawned {
+                    parent_session: "parent-session".into(),
+                    child_session: "child-session".into(),
+                    at_ms: 1_786_296_005_152,
+                },
+                crate::harness::NativeChildEvent::Completed {
+                    parent_session: "parent-session".into(),
+                    child_session: "child-session".into(),
+                    outcome: "completed".into(),
+                    at_ms: 1_786_296_006_000,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn parent_thread_id_wins_and_forked_from_id_remains_a_legacy_fallback() {
+        let preferred = temp_path("parent-precedence");
+        write_lines(
+            &preferred,
+            &[
+                r#"{"type":"session_meta","payload":{"id":"child","parent_thread_id":"thread-parent","forked_from_id":"fork-parent"}}"#,
+            ],
+        );
+        assert_eq!(
+            super::first_session_meta(&preferred)
+                .and_then(|meta| meta.parent)
+                .as_deref(),
+            Some("thread-parent")
+        );
+
+        let legacy = temp_path("parent-legacy");
+        write_lines(
+            &legacy,
+            &[r#"{"type":"session_meta","payload":{"id":"child","forked_from_id":"fork-parent"}}"#],
+        );
+        assert_eq!(
+            super::first_session_meta(&legacy)
+                .and_then(|meta| meta.parent)
+                .as_deref(),
+            Some("fork-parent")
+        );
+    }
+
+    #[test]
+    fn native_child_observer_projects_the_codex_child_fixture() {
+        let base = std::path::PathBuf::from("tests/fixtures/codex");
+        let child = sessions_in(&base)
+            .unwrap()
+            .into_iter()
+            .find(|session| session.parent.is_some())
+            .expect("Codex child fixture");
+        let events = Codex.observe_native_children(&child, 0).unwrap();
+        assert_eq!(
+            events,
+            [
+                crate::harness::NativeChildEvent::Spawned {
+                    parent_session: "00000000-0000-7000-8000-000000000001".into(),
+                    child_session: "00000000-0000-7000-8000-000000000002".into(),
+                    at_ms: 1_786_284_300_000,
+                },
+                crate::harness::NativeChildEvent::Completed {
+                    parent_session: "00000000-0000-7000-8000-000000000001".into(),
+                    child_session: "00000000-0000-7000-8000-000000000002".into(),
+                    outcome: "completed".into(),
+                    at_ms: 1_786_284_312_000,
+                },
+            ]
+        );
     }
 
     /// Fail-first receipt: pre-fix, same-turn `token_count` snapshots each
