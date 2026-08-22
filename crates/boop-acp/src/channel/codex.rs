@@ -6,12 +6,14 @@
 //! outside its own tests constructs it. `codex app-server` is not ACP, so the
 //! two doors share no frames.
 
-use std::os::unix::net::UnixStream;
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 
 use crate::channel::jsonrpc::RpcChild;
@@ -38,6 +40,113 @@ pub struct CodexChannel {
     thread: String,
     turn: Option<String>,
     effort: Option<String>,
+}
+
+pub struct NativeTuiProxy {
+    pub socket: PathBuf,
+    session: Receiver<std::result::Result<String, String>>,
+}
+
+impl NativeTuiProxy {
+    pub fn start(upstream: &Path) -> Result<Self> {
+        let socket = std::env::temp_dir().join(format!(
+            "boop-codex-tui-{}-{}.sock",
+            std::process::id(),
+            crate::channel::now_ms()
+        ));
+        let listener = UnixListener::bind(&socket)
+            .with_context(|| format!("bind Codex inspecting proxy {}", socket.display()))?;
+        let (sender, session) = mpsc::channel();
+        let socket_for_thread = socket.clone();
+        let upstream = upstream.to_path_buf();
+        std::thread::spawn(move || {
+            let result = tokio::runtime::Builder::new_current_thread()
+                .enable_io()
+                .build()
+                .context("build Codex TUI proxy runtime")
+                .and_then(|runtime| runtime.block_on(run_tui_proxy(listener, &upstream, &sender)));
+            if let Err(error) = result {
+                let _ = sender.send(Err(format!("{error:#}")));
+            }
+            let _ = std::fs::remove_file(socket_for_thread);
+        });
+        Ok(Self { socket, session })
+    }
+
+    pub fn wait_session(&self, timeout: Duration) -> Result<String> {
+        match self.session.recv_timeout(timeout) {
+            Ok(Ok(session)) => Ok(session),
+            Ok(Err(error)) => anyhow::bail!(error),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                anyhow::bail!("Codex native TUI session binding timed out after {timeout:?}")
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                anyhow::bail!("Codex native TUI proxy exited before observing thread/start")
+            }
+        }
+    }
+}
+
+async fn run_tui_proxy(
+    listener: UnixListener,
+    upstream: &Path,
+    session: &mpsc::Sender<std::result::Result<String, String>>,
+) -> Result<()> {
+    listener.set_nonblocking(true)?;
+    let listener = tokio::net::UnixListener::from_std(listener)?;
+    let (client_stream, _) = listener.accept().await.context("accept Codex native TUI")?;
+    let mut client = tokio_tungstenite::accept_async(client_stream)
+        .await
+        .context("accept Codex TUI WebSocket")?;
+    let upstream_stream = tokio::net::UnixStream::connect(upstream)
+        .await
+        .with_context(|| format!("connect Codex daemon socket {}", upstream.display()))?;
+    let (mut server, _) = tokio_tungstenite::client_async("ws://localhost/", upstream_stream)
+        .await
+        .context("upgrade Codex daemon UDS to WebSocket")?;
+    let mut thread_start_id = None;
+    let mut reported = false;
+    loop {
+        tokio::select! {
+            message = client.next() => match message {
+            Some(Ok(message)) => {
+                if let tungstenite::Message::Text(text) = &message {
+                    if let Ok(value) = serde_json::from_str::<Value>(text) {
+                        if value.get("method").and_then(Value::as_str) == Some("thread/start") {
+                            thread_start_id = value.get("id").cloned();
+                        }
+                    }
+                }
+                server.send(message).await?;
+            }
+            Some(Err(error)) => return Err(error).context("read Codex TUI WebSocket"),
+            None => break,
+        },
+            message = server.next() => match message {
+            Some(Ok(message)) => {
+                if !reported {
+                    if let tungstenite::Message::Text(text) = &message {
+                        if let Ok(value) = serde_json::from_str::<Value>(text) {
+                            let matching_reply = thread_start_id
+                                .as_ref()
+                                .is_some_and(|id| value.get("id") == Some(id));
+                            if matching_reply {
+                                if let Some(thread) = thread_id(value.get("result").unwrap_or(&Value::Null)) {
+                                    let _ = session.send(Ok(thread));
+                                    reported = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                client.send(message).await?;
+            }
+            Some(Err(error)) => return Err(error).context("read Codex daemon WebSocket"),
+            None => break,
+        }
+        }
+    }
+    Ok(())
 }
 
 impl CodexChannel {
@@ -334,6 +443,53 @@ fn thread_id(reply: &Value) -> Option<String> {
 mod tests {
     use super::*;
     use std::os::unix::net::UnixListener;
+
+    #[test]
+    fn inspecting_proxy_reports_the_tui_owned_thread_start_reply() {
+        let upstream = std::env::temp_dir().join(format!(
+            "boop-codex-upstream-{}-{}.sock",
+            std::process::id(),
+            crate::channel::now_ms()
+        ));
+        let listener = UnixListener::bind(&upstream).unwrap();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut websocket = tungstenite::accept(stream).unwrap();
+            let request: Value =
+                serde_json::from_str(websocket.read().unwrap().into_text().unwrap().as_str())
+                    .unwrap();
+            websocket
+                .send(tungstenite::Message::Text(
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": request["id"],
+                        "result": {"thread": {"id": "tui-owned-thread"}}
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .unwrap();
+        });
+        let proxy = NativeTuiProxy::start(&upstream).unwrap();
+        let stream = UnixStream::connect(&proxy.socket).unwrap();
+        let (mut tui, _) = tungstenite::client("ws://localhost/", stream).unwrap();
+        tui.send(tungstenite::Message::Text(
+            json!({"jsonrpc":"2.0","id":44,"method":"thread/start","params":{}})
+                .to_string()
+                .into(),
+        ))
+        .unwrap();
+        let reply: Value =
+            serde_json::from_str(tui.read().unwrap().into_text().unwrap().as_str()).unwrap();
+        assert_eq!(reply["result"]["thread"]["id"], "tui-owned-thread");
+        assert_eq!(
+            proxy.wait_session(Duration::from_secs(2)).unwrap(),
+            "tui-owned-thread"
+        );
+        let _ = tui.close(None);
+        server.join().unwrap();
+        std::fs::remove_file(upstream).unwrap();
+    }
 
     #[test]
     fn interactive_start_speaks_websocket_json_rpc_over_uds() {

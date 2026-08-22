@@ -20,6 +20,12 @@ use serde_json::Value;
 
 pub struct Codex;
 
+impl crate::harness::NativeTuiSessionObserver for boop_acp::channel::codex::NativeTuiProxy {
+    fn wait_session(&mut self, timeout: std::time::Duration) -> anyhow::Result<String> {
+        boop_acp::channel::codex::NativeTuiProxy::wait_session(self, timeout)
+    }
+}
+
 impl Harness for Codex {
     fn identity_process(&self) -> Option<crate::identity::Identity> {
         let session = std::env::var("CODEX_THREAD_ID")
@@ -77,26 +83,30 @@ impl Harness for Codex {
         let socket = daemon_socket_from_start(&String::from_utf8_lossy(&output.stdout))
             .context("Codex remote-control start did not report an app-server socket")?;
         let (requested_thread, forwarded_args) = explicit_resume(&spec.args)?;
-        let resumed = requested_thread.is_some();
-        let thread = match requested_thread {
-            Some(thread) => thread,
-            None => boop_acp::channel::codex::CodexChannel::start_interactive_proxy(
-                &interactive_thread_start(&spec.cwd, forwarded_args)?,
-                Path::new(&socket),
-            )?,
+        let (thread, remote_socket, session_observer) = match requested_thread {
+            Some(thread) => (Some(thread), socket.clone(), None),
+            None => {
+                let proxy = boop_acp::channel::codex::NativeTuiProxy::start(Path::new(&socket))?;
+                let proxy_socket = proxy.socket.display().to_string();
+                (
+                    None,
+                    proxy_socket,
+                    Some(Box::new(proxy) as Box<dyn crate::harness::NativeTuiSessionObserver>),
+                )
+            }
         };
-        let args = native_tui_args(Some(&thread), &socket, &spec.cwd, forwarded_args);
+        let args = native_tui_args(thread.as_deref(), &remote_socket, &spec.cwd, forwarded_args);
         Ok(NativeTuiPlan {
             program: spec.executable.clone(),
             args,
             mode: "native-remote".into(),
-            session_id: Some(thread.clone()),
-            source_path: Some(if resumed {
-                format!("managed-app-server={socket};requested-resume={thread}")
-            } else {
-                format!("managed-app-server={socket};thread-start={thread}")
+            session_id: thread.clone(),
+            source_path: Some(match thread {
+                Some(thread) => format!("managed-app-server={socket};requested-resume={thread}"),
+                None => format!("managed-app-server={socket};inspecting-proxy={remote_socket}"),
             }),
             app_server_socket: Some(socket),
+            session_observer,
         })
     }
 

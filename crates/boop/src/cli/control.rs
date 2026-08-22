@@ -35,7 +35,7 @@ pub(crate) fn run_native_tui(
         adapter.id()
     );
     let executable = executable.unwrap_or(adapter.id());
-    let plan = adapter.prepare_native_tui(&NativeTuiSpec {
+    let mut plan = adapter.prepare_native_tui(&NativeTuiSpec {
         executable: executable.into(),
         cwd: cwd.to_path_buf(),
         args: tui_args.to_vec(),
@@ -69,6 +69,32 @@ pub(crate) fn run_native_tui(
         .current_dir(cwd)
         .spawn()
         .with_context(|| format!("start native {} TUI", adapter.id()))?;
+    if let Some(observer) = plan.session_observer.as_mut() {
+        let session_id = observer.wait_session(Duration::from_secs(10))?;
+        write_route(
+            &dir,
+            name,
+            Route {
+                kind: "coordinator".into(),
+                harness: Some(adapter.id().into()),
+                tmux: std::env::var("TMUX_PANE").ok(),
+                cwd: Some(cwd.display().to_string()),
+                model: None,
+                mode: Some(plan.mode.clone()),
+                session_id: Some(session_id.clone()),
+                source_path: Some(format!(
+                    "{};observed-thread-start={session_id}",
+                    plan.source_path.as_deref().unwrap_or("native-session")
+                )),
+                parent: None,
+                goal: None,
+                registered_at: Some(boop::bus::now_iso()),
+                base_sha: None,
+                worktree_dir: None,
+                app_server_socket: plan.app_server_socket.clone(),
+            },
+        )?;
+    }
     loop {
         if let Some(status) = child.try_wait().context("observe native TUI exit")? {
             anyhow::ensure!(
