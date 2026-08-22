@@ -1,1 +1,1 @@
-20260816.0.concatmap-hardening-main-landing.md
+20260822.0.boop-cpu-fixes-harness-interface-plan.md
