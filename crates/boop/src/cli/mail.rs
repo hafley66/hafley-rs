@@ -7,7 +7,7 @@ use tracing::{debug, info};
 use boop::bus::Route;
 use boop::door::Delivered;
 use boop::harness::HarnessId;
-use boop::mail::{Landing, Via, DEFAULT_ROUTE_HARNESS};
+use boop::mail::{Landing, Via};
 use boop::mailwait::Watch;
 use boop::registry::Registry;
 use boop::{bus, identity, inbox, lane, tmux};
@@ -172,10 +172,12 @@ pub(crate) fn deliver_hail(
         println!("delivered {} -> {to} (acpx queue)", message.id);
         return Ok(());
     }
+    // Only a door landing names a harness, and a door landing has one; a route
+    // with no harness never reaches an arm that prints this word.
     let harness_id = routes
         .get(to)
         .and_then(|route| route.harness)
-        .unwrap_or(DEFAULT_ROUTE_HARNESS);
+        .map_or_else(|| "harness".to_owned(), |id| id.to_string());
     let landing = boop::mail::deliver_hail(registry, &store, &routes, message)?;
     info!(
         to,
@@ -359,7 +361,10 @@ fn send_native_route(
     route: &Route,
     body: &str,
 ) -> Result<boop::harness::SendOutcome> {
-    let adapter = registry.get(route.harness.unwrap_or(DEFAULT_ROUTE_HARNESS));
+    let Some(harness) = route.harness else {
+        return Ok(boop::harness::SendOutcome::Unsupported);
+    };
+    let adapter = registry.get(harness);
     let discovered;
     let session_id = if let Some(session_id) = route.session_id.as_deref() {
         session_id

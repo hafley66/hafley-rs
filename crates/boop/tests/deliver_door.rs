@@ -288,3 +288,55 @@ fn a_hail_with_no_route_records_its_own_refusal() {
     assert_eq!(rows[0].harness, None);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// RECEIPT. A route that names no harness has no door to try, so the hail is
+/// one unreachable row rather than a delivery through a guessed default.
+#[test]
+fn a_route_with_no_harness_is_unreachable_and_records_it() {
+    let dir = temp_dir("harnessless");
+    let store = store(&dir);
+    let registry = Registry::with(vec![Box::new(echo(HarnessId::Kimi, &DOOR, &dir))]);
+    let mut native = route(HarnessId::Kimi, Some("%1"), None);
+    native.kind = "native".into();
+    native.harness = None;
+    let routes = routes("native-worker", native);
+    let message = message("m-harnessless", "native-worker", "into the void");
+
+    let landing = deliver_hail(&registry, &store, &routes, &message).unwrap();
+    assert_eq!(
+        landing.delivered,
+        Delivered::Unreachable("route native-worker names no harness".into())
+    );
+    assert!(!dir.join("door.log").exists(), "no door was opened");
+
+    let rows = store.delivery_rows("m-harnessless").unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].outcome, "unreachable");
+    assert_eq!(rows[0].detail, "route native-worker names no harness");
+    assert_eq!(rows[0].harness, None);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// RECEIPT. A lane route lands at its own supervisor before any harness is
+/// looked up, so a lane written without a harness keeps taking mail.
+#[test]
+fn a_lane_route_with_no_harness_still_lands_at_its_supervisor() {
+    let dir = temp_dir("lane");
+    let store = store(&dir);
+    let registry = Registry::with(vec![Box::new(echo(HarnessId::Kimi, &DOOR, &dir))]);
+    let mut lane = route(HarnessId::Kimi, None, None);
+    lane.kind = "lane".into();
+    lane.harness = None;
+    let routes = routes("feature-lane", lane);
+    let message = message("m-lane", "feature-lane", "work this");
+
+    let landing = deliver_hail(&registry, &store, &routes, &message).unwrap();
+    assert_eq!(landing.delivered, Delivered::QueuedForTurnBoundary);
+    assert_eq!(landing.via, Via::LaneSupervisor);
+
+    let rows = store.delivery_rows("m-lane").unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].outcome, "queued-for-turn-boundary");
+    assert_eq!(rows[0].detail, "lane supervisor");
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -13,10 +13,6 @@ use boop_store::bus::{Message, Route};
 use boop_store::harness_id::HarnessId;
 use boop_store::ident::{LiveRow, Store};
 
-/// A route registered before harnesses were named answers as claude, which is
-/// the only harness whose routes predate the field.
-pub const DEFAULT_ROUTE_HARNESS: HarnessId = HarnessId::Claude;
-
 /// What took the text, once something did.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Via {
@@ -158,7 +154,11 @@ fn land(
     if route.kind == "lane" {
         return Ok(Landing::lane_supervisor());
     }
-    let id = route.harness.unwrap_or(DEFAULT_ROUTE_HARNESS);
+    let Some(id) = route.harness else {
+        return Ok(Landing::unreachable(format!(
+            "route {to} names no harness"
+        )));
+    };
     let harness = registry.get(id);
     match harness.capabilities().mail {
         MailPolicy::Keystrokes => Ok(Landing::unreachable("keystroke delivery retired")),
