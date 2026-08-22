@@ -6,6 +6,7 @@
 //! outside its own tests constructs it. `codex app-server` is not ACP, so the
 //! two doors share no frames.
 
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -18,6 +19,7 @@ use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
 use boop_store::session::ModelSpec;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(120);
+const INTERACTIVE_START_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The subset of `thread/start` settings that the interactive Codex CLI
 /// exposes directly. `None` leaves the managed app-server's configured
@@ -58,29 +60,49 @@ impl CodexChannel {
         start: &InteractiveThreadStart,
         socket: &Path,
     ) -> Result<String> {
-        let mut command = proxy_command(socket);
-        let child = command
-            .current_dir(&start.cwd)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(boop_store::trail::child_stderr(None))
-            .spawn()
-            .context("connect to managed Codex app-server")?;
-        let mut rpc = RpcChild::attach(child)?;
-        rpc.call(
-            "initialize",
-            json!({"clientInfo": {"name": "boop", "version": env!("CARGO_PKG_VERSION")}}),
-            CALL_TIMEOUT,
-        )?;
-        rpc.notify("initialized", json!({}))?;
-        let reply = rpc.call(
-            "thread/start",
-            interactive_thread_params(start),
-            CALL_TIMEOUT,
-        )?;
-        thread_id(&reply).context("Codex interactive thread/start returned no thread id")
+        start_interactive_websocket(start, socket, INTERACTIVE_START_TIMEOUT)
     }
+}
 
+fn start_interactive_websocket(
+    start: &InteractiveThreadStart,
+    socket: &Path,
+    timeout: Duration,
+) -> Result<String> {
+    let stream = UnixStream::connect(socket).with_context(|| {
+        format!(
+            "connect to Codex remote-control socket {}",
+            socket.display()
+        )
+    })?;
+    stream.set_read_timeout(Some(timeout))?;
+    stream.set_write_timeout(Some(timeout))?;
+    let (mut websocket, _) = tungstenite::client("ws://localhost/", stream)
+        .context("upgrade Codex remote-control UDS to WebSocket")?;
+    websocket_call(
+        &mut websocket,
+        1,
+        "initialize",
+        json!({"clientInfo": {"name": "boop", "version": env!("CARGO_PKG_VERSION")}}),
+        timeout,
+    )?;
+    websocket.send(tungstenite::Message::Text(
+        json!({"jsonrpc": "2.0", "method": "initialized", "params": {}})
+            .to_string()
+            .into(),
+    ))?;
+    let reply = websocket_call(
+        &mut websocket,
+        2,
+        "thread/start",
+        interactive_thread_params(start),
+        timeout,
+    )?;
+    let _ = websocket.close(None);
+    thread_id(&reply).context("Codex interactive thread/start returned no thread id")
+}
+
+impl CodexChannel {
     fn open_command(spec: &ChannelSpec, mut command: Command) -> Result<CodexChannel> {
         let child = command
             .current_dir(&spec.cwd)
@@ -135,6 +157,37 @@ impl CodexChannel {
                 .and_then(|spec| spec.effort)
                 .map(|effort| effort.as_str().to_owned()),
         })
+    }
+}
+
+fn websocket_call(
+    websocket: &mut tungstenite::WebSocket<UnixStream>,
+    id: i64,
+    method: &str,
+    params: Value,
+    timeout: Duration,
+) -> Result<Value> {
+    websocket.send(tungstenite::Message::Text(
+        json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+            .to_string()
+            .into(),
+    ))?;
+    loop {
+        let message = websocket
+            .read()
+            .with_context(|| format!("Codex WebSocket {method} timed out after {timeout:?}"))?;
+        let tungstenite::Message::Text(text) = message else {
+            continue;
+        };
+        let value: Value = serde_json::from_str(&text)
+            .with_context(|| format!("decode Codex WebSocket {method} reply"))?;
+        if value.get("id").and_then(Value::as_i64) != Some(id) {
+            continue;
+        }
+        if let Some(error) = value.get("error") {
+            anyhow::bail!("Codex WebSocket {method} failed: {error}");
+        }
+        return Ok(value.get("result").cloned().unwrap_or(Value::Null));
     }
 }
 
@@ -280,6 +333,110 @@ fn thread_id(reply: &Value) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::net::UnixListener;
+
+    #[test]
+    fn interactive_start_speaks_websocket_json_rpc_over_uds() {
+        let socket = std::env::temp_dir().join(format!(
+            "boop-codex-websocket-{}-{}.sock",
+            std::process::id(),
+            crate::channel::now_ms()
+        ));
+        let listener = UnixListener::bind(&socket).unwrap();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut websocket = tungstenite::accept(stream).unwrap();
+            let initialize: Value =
+                serde_json::from_str(websocket.read().unwrap().into_text().unwrap().as_str())
+                    .unwrap();
+            assert_eq!(initialize["method"], "initialize");
+            websocket
+                .send(tungstenite::Message::Text(
+                    json!({"jsonrpc":"2.0","id":1,"result":{}})
+                        .to_string()
+                        .into(),
+                ))
+                .unwrap();
+            let initialized: Value =
+                serde_json::from_str(websocket.read().unwrap().into_text().unwrap().as_str())
+                    .unwrap();
+            assert_eq!(initialized["method"], "initialized");
+            let start: Value =
+                serde_json::from_str(websocket.read().unwrap().into_text().unwrap().as_str())
+                    .unwrap();
+            assert_eq!(start["method"], "thread/start");
+            websocket
+                .send(tungstenite::Message::Text(
+                    json!({"jsonrpc":"2.0","id":2,"result":{"thread":{"id":"exact-parent"}}})
+                        .to_string()
+                        .into(),
+                ))
+                .unwrap();
+        });
+        let thread = start_interactive_websocket(
+            &InteractiveThreadStart {
+                cwd: PathBuf::from("/repo"),
+                ..Default::default()
+            },
+            &socket,
+            Duration::from_secs(2),
+        )
+        .unwrap();
+        assert_eq!(thread, "exact-parent");
+        server.join().unwrap();
+        std::fs::remove_file(socket).unwrap();
+    }
+
+    #[test]
+    fn interactive_start_times_out_when_the_websocket_peer_is_silent() {
+        let socket = std::env::temp_dir().join(format!(
+            "boop-codex-websocket-timeout-{}-{}.sock",
+            std::process::id(),
+            crate::channel::now_ms()
+        ));
+        let listener = UnixListener::bind(&socket).unwrap();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut websocket = tungstenite::accept(stream).unwrap();
+            let _ = websocket.read().unwrap();
+            std::thread::sleep(Duration::from_millis(300));
+        });
+        let started = std::time::Instant::now();
+        let error = start_interactive_websocket(
+            &InteractiveThreadStart {
+                cwd: PathBuf::from("/repo"),
+                ..Default::default()
+            },
+            &socket,
+            Duration::from_millis(100),
+        )
+        .unwrap_err();
+        assert!(started.elapsed() < Duration::from_secs(1));
+        assert!(
+            error.to_string().contains("timed out after 100ms"),
+            "{error:#}"
+        );
+        server.join().unwrap();
+        std::fs::remove_file(socket).unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires a running Codex remote-control daemon and BOOP_CODEX_TEST_SOCKET"]
+    fn live_remote_control_starts_an_exact_parent_thread() {
+        let socket = std::env::var_os("BOOP_CODEX_TEST_SOCKET")
+            .map(PathBuf::from)
+            .expect("BOOP_CODEX_TEST_SOCKET");
+        let thread = CodexChannel::start_interactive_proxy(
+            &InteractiveThreadStart {
+                cwd: std::env::current_dir().unwrap(),
+                ..Default::default()
+            },
+            &socket,
+        )
+        .unwrap();
+        assert!(!thread.is_empty());
+        eprintln!("thread={thread}");
+    }
 
     #[test]
     fn thread_id_reads_the_nested_field() {

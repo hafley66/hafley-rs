@@ -1246,7 +1246,10 @@ mod tests {
     #[test]
     fn a_quiet_opening_gap_is_not_a_stall() {
         let limit = DEFAULT_STALL_LIMIT;
-        assert!(!stalled(idle_ms(90_000, 0, None), limit), "90 s of opening quiet");
+        assert!(
+            !stalled(idle_ms(90_000, 0, None), limit),
+            "90 s of opening quiet"
+        );
         assert!(stalled(idle_ms(1_801_000, 0, None), limit));
         assert!(!stalled(idle_ms(400_000, 0, Some(399_000)), limit));
         assert!(stalled(idle_ms(2_200_000, 0, Some(399_000)), limit));
@@ -1257,7 +1260,10 @@ mod tests {
     #[test]
     fn a_background_wait_survives_the_old_five_minute_bound() {
         let limit = DEFAULT_STALL_LIMIT;
-        assert!(!stalled(idle_ms(20 * 60_000, 0, None), limit), "20 min quiet, still alive");
+        assert!(
+            !stalled(idle_ms(20 * 60_000, 0, None), limit),
+            "20 min quiet, still alive"
+        );
         assert!(stalled(idle_ms(31 * 60_000, 0, None), limit));
     }
 

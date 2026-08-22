@@ -98,7 +98,10 @@ fn one_lane_exit_writes_exactly_one_result_row() {
         || !result_rows(&dir, "mine").is_empty(),
         Duration::from_secs(5),
     );
-    assert_eq!(result_rows(&dir, "mine"), vec!["lane mine done rc=0".to_owned()]);
+    assert_eq!(
+        result_rows(&dir, "mine"),
+        vec!["lane mine done rc=0".to_owned()]
+    );
 
     let epilogue = boop::lane::pane_epilogue("mine", &dir);
     let status = std::process::Command::new("sh")

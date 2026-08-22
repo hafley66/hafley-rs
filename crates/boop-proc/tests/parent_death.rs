@@ -210,7 +210,10 @@ fn a_reparent_policy_moves_the_edge_onto_the_registered_coordinator() {
         let _ = boop_proc::supervise::run(lane, &mut channel);
     });
 
-    wait_for(|| !of_kind(&dir, "result").is_empty(), Duration::from_secs(10));
+    wait_for(
+        || !of_kind(&dir, "result").is_empty(),
+        Duration::from_secs(10),
+    );
     assert_eq!(
         route_parent(&dir, "mine").as_deref(),
         Some("sprefa-coordinator")
@@ -220,7 +223,11 @@ fn a_reparent_policy_moves_the_edge_onto_the_registered_coordinator() {
     assert_eq!(moved[0].to, "sprefa-coordinator");
     let results = of_kind(&dir, "result");
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].rc, Some(0), "a reparented lane runs on to its own end");
+    assert_eq!(
+        results[0].rc,
+        Some(0),
+        "a reparented lane runs on to its own end"
+    );
     assert_eq!(
         results[0].to, "sprefa-coordinator",
         "the completion answers the new parent"
@@ -252,7 +259,10 @@ fn an_orphan_policy_leaves_the_lane_and_its_edge_alone() {
         let _ = boop_proc::supervise::run(lane, &mut channel);
     });
 
-    wait_for(|| !of_kind(&dir, "result").is_empty(), Duration::from_secs(10));
+    wait_for(
+        || !of_kind(&dir, "result").is_empty(),
+        Duration::from_secs(10),
+    );
     assert_eq!(route_parent(&dir, "mine").as_deref(), Some("boss"));
     assert!(of_kind(&dir, "reparented").is_empty());
     let results = of_kind(&dir, "result");

@@ -33,6 +33,9 @@ agent-client-protocol = "2.0.0"
 # runtime per channel drives it on its own thread. `rt` and `sync` only: the
 # reactor under the ACP crate is async-io's, not tokio's.
 tokio = { version = "1", features = ["rt", "sync"] }
+# Codex remote-control exposes JSON-RPC as WebSocket text frames over its UDS.
+# The synchronous client fits the one-shot native TUI thread bootstrap.
+tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 
 [lib]
 name = "boop_acp"
