@@ -4,13 +4,15 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use tracing::info;
 
+use boop::harness::{Harness, NativeChildEvent, SessionRef};
 use boop::registry::Registry;
 use boop::{bus, ident, tmux};
 #[cfg(feature = "agent-read")]
 use boop::{query, usage};
 
 use crate::cli::job::lane_state;
-use crate::cli::{emit_event, line, mail_dir, now_ms};
+use crate::cli::mail::deliver_hail;
+use crate::cli::{append_message, emit_event, line, mail_dir, now_ms, write_route};
 use crate::{
     AgentSessionGraphFormat, AgentSummaryCmd, AgentSummaryFormat, ChatCmd, CursorCmd, DbCmd,
     EdgeCmd, FactCmd, FavoriteCmd, OutputFormat, PriceCmd, QueryArgs, QueryFormat, SessionCmd,
@@ -243,10 +245,13 @@ pub(crate) fn sync_all(
                 .as_ref()
                 .and_then(|routes| session_route_pid(routes, &session))
         });
+        let from = store.cursor_offset(&session.session_id, &session.path.display().to_string())?;
         store.begin()?;
         let result = (|| {
             store.project_discovered_session(&session)?;
-            ident::sync_session_with_pid(&store, adapter, &session, pid)
+            let stat = ident::sync_session_with_pid(&store, adapter, &session, pid)?;
+            project_native_children(&store, adapter, &session, from)?;
+            Ok(stat)
         })();
         match result {
             Ok(session_stat) => {
@@ -259,6 +264,14 @@ pub(crate) fn sync_all(
             }
         }
     }
+    let native_child_mail_dir = mail_dir(None)?;
+    let native_child_routes = bus::read_routes(&native_child_mail_dir)?;
+    deliver_native_child_completions(
+        &store,
+        &native_child_routes,
+        &native_child_mail_dir,
+        |message| deliver_hail(registry, &native_child_mail_dir, message, None),
+    )?;
     for (harness, roots) in roots_to_stamp {
         for root in roots {
             store.stamp_root(harness, &root, path_modified_ms(&root))?;
@@ -292,6 +305,107 @@ pub(crate) fn sync_all(
         );
     }
     Ok(())
+}
+
+/// Project harness-native child lifecycle records into graph facts. This runs
+/// inside the transcript transaction; mailbox and native-control effects run
+/// only after that transaction commits.
+fn project_native_children(
+    store: &ident::Store,
+    adapter: &dyn Harness,
+    session: &SessionRef,
+    from: u64,
+) -> Result<()> {
+    for event in adapter.observe_native_children(session, from)? {
+        match event {
+            NativeChildEvent::Spawned {
+                parent_session,
+                child_session,
+                at_ms,
+            } => {
+                store.ensure_edge_at(&parent_session, &child_session, "spawned", at_ms)?;
+            }
+            NativeChildEvent::Completed {
+                parent_session,
+                child_session,
+                at_ms,
+                ..
+            } => {
+                store.ensure_edge_at(&parent_session, &child_session, "completed", at_ms)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Advance committed completion facts through the durable mailbox and the
+/// selected parent route. `completion-mailed` and `completion-delivered` are
+/// idempotent agent-edge receipts, so a failed delivery retries the one stable
+/// envelope on the next sync without a mailbox-history scan.
+fn deliver_native_child_completions(
+    store: &ident::Store,
+    routes: &BTreeMap<String, bus::Route>,
+    dir: &Path,
+    mut deliver: impl FnMut(&bus::Message) -> Result<()>,
+) -> Result<()> {
+    let parent_routes: BTreeMap<String, String> = routes
+        .iter()
+        .filter_map(|(route_name, route)| {
+            route
+                .session_id
+                .as_ref()
+                .map(|session| (session.clone(), route_name.clone()))
+        })
+        .collect();
+    let parents = parent_routes.keys().cloned().collect::<Vec<_>>();
+    for completion in store.native_child_completion_outbox(&parents)? {
+        let parent_route = parent_routes
+            .get(&completion.parent_session)
+            .expect("outbox parents come from registered routes");
+        let message = native_child_completion_message(
+            &completion.parent_session,
+            &completion.child_session,
+            parent_route,
+        );
+        if !completion.mailed {
+            append_message(dir, &message)?;
+            store.ensure_edge_at(
+                &completion.parent_session,
+                &completion.child_session,
+                "completion-mailed",
+                completion.completed_at_ms,
+            )?;
+        }
+        deliver(&message)?;
+        store.ensure_edge_at(
+            &completion.parent_session,
+            &completion.child_session,
+            "completion-delivered",
+            completion.completed_at_ms,
+        )?;
+    }
+    Ok(())
+}
+
+fn native_child_completion_message(
+    parent_session: &str,
+    child_session: &str,
+    parent_route: &str,
+) -> bus::Message {
+    let event_id = format!("native-child-completion:{parent_session}:{child_session}");
+    bus::Message {
+        id: event_id.clone(),
+        from: child_session.into(),
+        to: parent_route.into(),
+        from_timestamp: bus::now_iso(),
+        to_timestamp: None,
+        kind: "completion".into(),
+        reply_to: None,
+        body: "native child completed".into(),
+        r#ref: Some(event_id),
+        rc: None,
+        detail: None,
+    }
 }
 
 pub(crate) fn path_modified_ms(path: &std::path::Path) -> u64 {
@@ -347,6 +461,76 @@ pub(crate) fn run_follow(registry: &Registry) -> Result<()> {
         sync_all(registry, false, false, SyncLiveness::StampLivePid)?;
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
+}
+
+/// One bounded resident-wrapper pass for a native parent route. It discovers
+/// only that route's child transcripts, advances their stored cursors, and
+/// flushes the committed completion outbox through the supplied native
+/// delivery callback. A route with no session id learns it from its first
+/// child transcript's recorded parent, never from a cwd-only guess.
+pub(crate) fn sync_native_child_route_once(
+    store: &ident::Store,
+    adapter: &dyn Harness,
+    route_name: &str,
+    dir: &Path,
+    cwd: &Path,
+    mut deliver: impl FnMut(&bus::Message) -> Result<()>,
+) -> Result<()> {
+    let mut routes = bus::read_routes(dir)?;
+    let route = routes
+        .get(route_name)
+        .cloned()
+        .with_context(|| format!("native route `{route_name}` is not registered"))?;
+    let known = store.known_sessions()?;
+    let candidates = adapter.sync_candidates(&known)?;
+    let parent_session = route.session_id.clone().or_else(|| {
+        candidates
+            .iter()
+            .find(|session| {
+                session.cwd.as_deref() == Some(cwd.to_string_lossy().as_ref())
+                    && session.parent.is_some()
+            })
+            .and_then(|session| session.parent.clone())
+    });
+    let Some(parent_session) = parent_session else {
+        return Ok(());
+    };
+    if route.session_id.is_none() {
+        let mut enriched = route;
+        enriched.session_id = Some(parent_session.clone());
+        enriched.source_path = Some(format!("native-child-parent={parent_session}"));
+        write_route(dir, route_name, enriched.clone())?;
+        routes.insert(route_name.into(), enriched);
+    }
+    for session in candidates
+        .iter()
+        .filter(|session| session.parent.as_deref() == Some(parent_session.as_str()))
+    {
+        if !session_needs_sync(session, &known) {
+            continue;
+        }
+        let from = store.cursor_offset(&session.session_id, &session.path.display().to_string())?;
+        store.begin()?;
+        let result = (|| {
+            store.project_discovered_session(session)?;
+            let stat = ident::sync_session_with_pid(store, adapter, session, None)?;
+            project_native_children(store, adapter, session, from)?;
+            Ok(stat)
+        })();
+        match result {
+            Ok(_) => store.commit()?,
+            Err(error) => {
+                let _ = store.rollback();
+                return Err(error);
+            }
+        }
+    }
+    let focused_routes = routes
+        .get(route_name)
+        .cloned()
+        .map(|route| BTreeMap::from([(route_name.into(), route)]))
+        .unwrap_or_default();
+    deliver_native_child_completions(store, &focused_routes, dir, |message| deliver(message))
 }
 
 /// The pane pid for a session that maps to a lane route (by session id or cwd).
@@ -899,12 +1083,380 @@ mod tests {
     use super::*;
     use crate::cli::testkit::{route_with, temp_mail_dir};
     use crate::cli::write_line;
+    use crate::cli::{append_acks, write_route};
     use crate::{AgentSessionGraphFormat, Cli, SubCmd};
     use boop::{
         AgentRuntimeRow, AgentSummary, AgentSummaryActivity, AgentSummaryAgent, MailboxCounts,
         ProcessLiveness, RuntimeLiveness, TmuxLiveness, WorktreeCoordinates,
     };
     use clap::{CommandFactory, Parser};
+
+    struct FakeHarness {
+        events: Vec<NativeChildEvent>,
+    }
+
+    impl Harness for FakeHarness {
+        fn id(&self) -> &'static str {
+            "fake"
+        }
+
+        fn sessions(&self) -> Result<Vec<SessionRef>> {
+            Ok(Vec::new())
+        }
+
+        fn read_from(
+            &self,
+            _session: &SessionRef,
+            _offset: u64,
+        ) -> Result<boop::harness::ReadChunk> {
+            anyhow::bail!("fake projector harness does not read transcripts")
+        }
+
+        fn observe_native_children(
+            &self,
+            _session: &SessionRef,
+            _from: u64,
+        ) -> Result<Vec<NativeChildEvent>> {
+            Ok(self.events.clone())
+        }
+    }
+
+    struct WatchingHarness {
+        session: SessionRef,
+    }
+
+    impl Harness for WatchingHarness {
+        fn id(&self) -> &'static str {
+            "fake"
+        }
+
+        fn sessions(&self) -> Result<Vec<SessionRef>> {
+            Ok(vec![self.session.clone()])
+        }
+
+        fn sync_candidates(
+            &self,
+            _known: &boop::harness::KnownSessions,
+        ) -> Result<Vec<SessionRef>> {
+            let mut session = self.session.clone();
+            session.size = std::fs::metadata(&session.path)?.len();
+            Ok(vec![session])
+        }
+
+        fn read_from(
+            &self,
+            _session: &SessionRef,
+            _offset: u64,
+        ) -> Result<boop::harness::ReadChunk> {
+            anyhow::bail!("resident test harness uses ingest directly")
+        }
+
+        fn ingest(
+            &self,
+            _store: &ident::Store,
+            session: &SessionRef,
+            from: u64,
+        ) -> Result<boop::harness::Ingested> {
+            let mut file = std::fs::File::open(&session.path)?;
+            let result = boop::tail::read_complete_lines(&mut file, from)?;
+            Ok(boop::harness::Ingested {
+                stat: ident::SyncStat::default(),
+                next_cursor: result.next_offset,
+            })
+        }
+
+        fn observe_native_children(
+            &self,
+            session: &SessionRef,
+            from: u64,
+        ) -> Result<Vec<NativeChildEvent>> {
+            let parent = session.parent.as_deref().expect("test child parent");
+            let mut file = std::fs::File::open(&session.path)?;
+            let result = boop::tail::read_complete_lines(&mut file, from)?;
+            let mut events = Vec::new();
+            for line in result.lines {
+                let value: serde_json::Value = serde_json::from_slice(&line.bytes)?;
+                match (
+                    value.get("type").and_then(serde_json::Value::as_str),
+                    value
+                        .get("payload")
+                        .and_then(serde_json::Value::as_object)
+                        .and_then(|payload| payload.get("type"))
+                        .and_then(serde_json::Value::as_str),
+                ) {
+                    (Some("session_meta"), _) => events.push(NativeChildEvent::Spawned {
+                        parent_session: parent.into(),
+                        child_session: session.session_id.clone(),
+                        at_ms: 1,
+                    }),
+                    (Some("event_msg"), Some("task_complete")) => {
+                        events.push(NativeChildEvent::Completed {
+                            parent_session: parent.into(),
+                            child_session: session.session_id.clone(),
+                            outcome: "completed".into(),
+                            at_ms: 2,
+                        });
+                    }
+                    _ => {}
+                }
+            }
+            Ok(events)
+        }
+    }
+
+    fn native_child_session(dir: &Path) -> SessionRef {
+        SessionRef {
+            harness: "fake",
+            session_id: "child-session".into(),
+            nickname: "child-session".into(),
+            path: dir.join("child.transcript"),
+            cwd: None,
+            git_branch: None,
+            modified_ms: 0,
+            size: 0,
+            tmux: None,
+            tmux_socket: None,
+            parent: Some("parent-session".into()),
+        }
+    }
+
+    fn native_parent_routes() -> BTreeMap<String, bus::Route> {
+        let mut route = route_with(None);
+        route.kind = "native".into();
+        route.harness = Some("fake".into());
+        route.session_id = Some("parent-session".into());
+        BTreeMap::from([("parent-route".into(), route)])
+    }
+
+    fn fake_child_events() -> FakeHarness {
+        FakeHarness {
+            events: vec![
+                NativeChildEvent::Spawned {
+                    parent_session: "parent-session".into(),
+                    child_session: "child-session".into(),
+                    at_ms: 10,
+                },
+                NativeChildEvent::Completed {
+                    parent_session: "parent-session".into(),
+                    child_session: "child-session".into(),
+                    outcome: "done".into(),
+                    at_ms: 20,
+                },
+            ],
+        }
+    }
+
+    fn completion_rows(dir: &Path) -> Vec<bus::Message> {
+        bus::parse_box(&dir.join("bus.ndjson"))
+            .into_iter()
+            .filter(|message| {
+                message.r#ref.as_deref()
+                    == Some("native-child-completion:parent-session:child-session")
+            })
+            .collect()
+    }
+
+    #[test]
+    fn native_child_projector_is_harness_neutral_and_idempotent() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = ident::Store::open(dir.join("boop.db")).unwrap();
+        let session = native_child_session(&dir);
+        let fake = fake_child_events();
+        let routes = native_parent_routes();
+        let mut delivered = Vec::new();
+
+        project_native_children(&store, &fake, &session, 0).unwrap();
+        deliver_native_child_completions(&store, &routes, &dir, |message| {
+            delivered.push(message.clone());
+            append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+        })
+        .unwrap();
+        project_native_children(&store, &fake, &session, 0).unwrap();
+        deliver_native_child_completions(&store, &routes, &dir, |message| {
+            delivered.push(message.clone());
+            append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+        })
+        .unwrap();
+
+        let edges = store.edge_rows(None).unwrap();
+        assert_eq!(
+            edges
+                .iter()
+                .map(|edge| (
+                    edge.parent.as_str(),
+                    edge.child.as_str(),
+                    edge.edge.as_str(),
+                    edge.n
+                ))
+                .collect::<Vec<_>>(),
+            [
+                ("parent-session", "child-session", "spawned", 1),
+                ("parent-session", "child-session", "completed", 1),
+                ("parent-session", "child-session", "completion-mailed", 1),
+                ("parent-session", "child-session", "completion-delivered", 1),
+            ]
+        );
+        let messages = completion_rows(&dir);
+        assert_eq!(messages.len(), 2);
+        assert_eq!(bus::fold(&messages).len(), 1);
+        assert_eq!(messages[0].from, "child-session");
+        assert_eq!(messages[0].to, "parent-route");
+        assert_eq!(messages[0].kind, "completion");
+        assert_eq!(messages[0].body, "native child completed");
+        assert_eq!(
+            messages[0].r#ref.as_deref(),
+            Some("native-child-completion:parent-session:child-session")
+        );
+        assert!(messages[1].to_timestamp.is_some());
+        assert_eq!(delivered.len(), 1);
+    }
+
+    #[test]
+    fn a_delivery_failure_retries_the_one_persisted_completion_message() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = ident::Store::open(dir.join("boop.db")).unwrap();
+        let session = native_child_session(&dir);
+        let fake = fake_child_events();
+        let routes = native_parent_routes();
+        project_native_children(&store, &fake, &session, 0).unwrap();
+
+        let first = deliver_native_child_completions(&store, &routes, &dir, |_message| {
+            anyhow::bail!("native parent unavailable")
+        });
+        assert!(first.is_err());
+        assert_eq!(completion_rows(&dir).len(), 1);
+
+        let mut delivered = Vec::new();
+        deliver_native_child_completions(&store, &routes, &dir, |message| {
+            delivered.push(message.clone());
+            append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+        })
+        .unwrap();
+        assert_eq!(completion_rows(&dir).len(), 2);
+        assert_eq!(bus::fold(&completion_rows(&dir)).len(), 1);
+        assert_eq!(delivered.len(), 1);
+        assert_eq!(
+            delivered[0].id,
+            "native-child-completion:parent-session:child-session"
+        );
+    }
+
+    #[test]
+    fn a_later_parent_route_delivers_an_already_committed_completion() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = ident::Store::open(dir.join("boop.db")).unwrap();
+        let session = native_child_session(&dir);
+        let fake = fake_child_events();
+        project_native_children(&store, &fake, &session, 0).unwrap();
+
+        deliver_native_child_completions(&store, &BTreeMap::new(), &dir, |_message| {
+            anyhow::bail!("there is no parent route to deliver")
+        })
+        .unwrap();
+        assert!(completion_rows(&dir).is_empty());
+
+        let mut delivered = Vec::new();
+        deliver_native_child_completions(&store, &native_parent_routes(), &dir, |message| {
+            delivered.push(message.clone());
+            append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+        })
+        .unwrap();
+        assert_eq!(completion_rows(&dir).len(), 2);
+        assert_eq!(bus::fold(&completion_rows(&dir)).len(), 1);
+        assert_eq!(delivered.len(), 1);
+    }
+
+    #[test]
+    fn resident_child_poller_delivers_an_appended_completion_without_manual_sync() {
+        use std::io::Write;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::{mpsc, Arc};
+        use std::time::Duration;
+
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let transcript = dir.join("child.jsonl");
+        std::fs::write(
+            &transcript,
+            "{\"type\":\"session_meta\",\"payload\":{\"id\":\"child-session\",\"parent_thread_id\":\"parent-session\"}}\n",
+        )
+        .unwrap();
+        let mut route = route_with(None);
+        route.kind = "native".into();
+        route.harness = Some("fake".into());
+        route.cwd = Some("/resident".into());
+        route.session_id = None;
+        write_route(&dir, "resident-parent", route).unwrap();
+        let db_path = dir.join("boop.db");
+        let watcher = WatchingHarness {
+            session: SessionRef {
+                harness: "fake",
+                session_id: "child-session".into(),
+                nickname: "child-session".into(),
+                path: transcript.clone(),
+                cwd: Some("/resident".into()),
+                git_branch: None,
+                modified_ms: 0,
+                size: 0,
+                tmux: None,
+                tmux_socket: None,
+                parent: Some("parent-session".into()),
+            },
+        };
+        let running = Arc::new(AtomicBool::new(true));
+        let worker_running = Arc::clone(&running);
+        let worker_dir = dir.clone();
+        let (tick_tx, tick_rx) = mpsc::channel();
+        let (delivery_tx, delivery_rx) = mpsc::channel();
+        let worker = std::thread::spawn(move || -> Result<()> {
+            let store = ident::Store::open(db_path)?;
+            while worker_running.load(Ordering::SeqCst) {
+                sync_native_child_route_once(
+                    &store,
+                    &watcher,
+                    "resident-parent",
+                    &worker_dir,
+                    Path::new("/resident"),
+                    |message| {
+                        append_acks(&worker_dir, std::slice::from_ref(message))?;
+                        delivery_tx.send(message.id.clone()).unwrap();
+                        Ok(())
+                    },
+                )?;
+                tick_tx.send(()).unwrap();
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            Ok(())
+        });
+        tick_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&transcript)
+            .unwrap();
+        writeln!(
+            file,
+            "{{\"type\":\"event_msg\",\"payload\":{{\"type\":\"task_complete\"}}}}"
+        )
+        .unwrap();
+        drop(file);
+        assert_eq!(
+            delivery_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+            "native-child-completion:parent-session:child-session"
+        );
+        running.store(false, Ordering::SeqCst);
+        worker.join().unwrap().unwrap();
+        assert_eq!(bus::fold(&completion_rows(&dir)).len(), 1);
+        assert_eq!(
+            bus::read_routes(&dir)
+                .unwrap()
+                .get("resident-parent")
+                .and_then(|route| route.session_id.as_deref()),
+            Some("parent-session")
+        );
+    }
 
     /// RECEIPT (instant-focused-family-cli): Instant's argv reaches the graph query unchanged.
     #[test]

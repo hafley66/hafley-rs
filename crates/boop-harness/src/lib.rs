@@ -9,8 +9,8 @@ pub mod worktree;
 
 pub use harness::{
     supervisor_command, sync_session, sync_session_with_pid, Capabilities, Harness, Ingested,
-    KnownSession, KnownSessions, NativeSessionRef, NativeTuiPlan, NativeTuiSpec, OneShotSpec,
-    ReadChunk, SendOutcome, SessionRef, SpawnSpec,
+    KnownSession, KnownSessions, NativeChildEvent, NativeSessionRef, NativeTuiPlan, NativeTuiSpec,
+    OneShotSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
 pub use identity::Identity;
 pub use registry::Registry;

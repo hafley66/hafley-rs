@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::harness::{
-    jsonl_files, Capabilities, Harness, Ingested, KnownSessions, NativeSessionRef, NativeTuiPlan,
-    NativeTuiSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
+    jsonl_files, Capabilities, Harness, Ingested, KnownSessions, NativeChildEvent,
+    NativeSessionRef, NativeTuiPlan, NativeTuiSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
 };
 use anyhow::Context;
 use boop_store::event::AgentEvent;
@@ -228,6 +228,24 @@ impl Harness for Codex {
             next_cursor: result.next_offset,
         })
     }
+
+    fn observe_native_children(
+        &self,
+        session: &SessionRef,
+        from: u64,
+    ) -> anyhow::Result<Vec<NativeChildEvent>> {
+        let Some(parent_session) = session.parent.as_deref() else {
+            return Ok(Vec::new());
+        };
+        let mut file = File::open(&session.path)
+            .with_context(|| format!("open transcript {}", session.path.display()))?;
+        let result = tail::read_complete_lines(&mut file, from)?;
+        Ok(native_child_events_from_lines(
+            parent_session,
+            &session.session_id,
+            &result.lines,
+        ))
+    }
 }
 
 fn native_tui_args(
@@ -354,9 +372,15 @@ fn first_session_meta(path: &Path) -> Option<SessionMeta> {
     let payload = value.get("payload")?.as_object()?;
     let session_id = payload.get("id").and_then(Value::as_str)?.to_owned();
     let parent = payload
-        .get("forked_from_id")
+        .get("parent_thread_id")
         .and_then(Value::as_str)
         .map(str::to_owned);
+    let parent = parent.or_else(|| {
+        payload
+            .get("forked_from_id")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+    });
     let cwd = payload
         .get("cwd")
         .and_then(Value::as_str)
@@ -372,6 +396,50 @@ fn first_session_meta(path: &Path) -> Option<SessionMeta> {
         cwd,
         nickname,
     })
+}
+
+/// Codex records subagent parentage in the child's `session_meta` and writes
+/// `task_complete` in that child's transcript. These are durable local events;
+/// app-server remote control is used only later, by the shared projector, to
+/// notify a registered parent route.
+fn native_child_events_from_lines(
+    parent_session: &str,
+    child_session: &str,
+    lines: &[tail::CompleteLine],
+) -> Vec<NativeChildEvent> {
+    let mut events = Vec::new();
+    for line in lines {
+        let Ok(value) = serde_json::from_slice::<Value>(&line.bytes) else {
+            continue;
+        };
+        let at_ms = value
+            .get("timestamp")
+            .and_then(Value::as_str)
+            .and_then(crate::harness::claude::parse_iso_ms)
+            .unwrap_or(0);
+        let outer = value.get("type").and_then(Value::as_str);
+        let record = value
+            .get("payload")
+            .and_then(Value::as_object)
+            .and_then(|payload| payload.get("type"))
+            .and_then(Value::as_str);
+        if outer == Some("session_meta") {
+            events.push(NativeChildEvent::Spawned {
+                parent_session: parent_session.to_owned(),
+                child_session: child_session.to_owned(),
+                at_ms,
+            });
+        }
+        if outer == Some("event_msg") && record == Some("task_complete") {
+            events.push(NativeChildEvent::Completed {
+                parent_session: parent_session.to_owned(),
+                child_session: child_session.to_owned(),
+                outcome: "completed".to_owned(),
+                at_ms,
+            });
+        }
+    }
+    events
 }
 
 fn sessions_in(base: &Path) -> anyhow::Result<Vec<SessionRef>> {
@@ -707,8 +775,8 @@ mod tests {
     use boop_store::Store;
 
     use super::{
-        daemon_socket_from_start, explicit_resume, native_tui_args, sessions_in,
-        sessions_in_with_known, Codex,
+        daemon_socket_from_start, explicit_resume, native_child_events_from_lines, native_tui_args,
+        sessions_in, sessions_in_with_known, Codex,
     };
 
     #[test]
@@ -961,6 +1029,92 @@ mod tests {
         assert_eq!(chunk.skipped, 0);
         assert_eq!(chunk.events[0].record_type, "message");
         assert_eq!(chunk.events[1].record_type, "token_count");
+    }
+
+    #[test]
+    fn native_child_observer_reads_session_parent_and_completion_records() {
+        let lines = [
+            boop_store::tail::CompleteLine {
+                start: 0,
+                bytes: br#"{"timestamp":"2026-08-09T17:20:05.152Z","type":"session_meta","payload":{"id":"child-session","parent_thread_id":"parent-session"}}"#.to_vec(),
+            },
+            boop_store::tail::CompleteLine {
+                start: 1,
+                bytes: br#"{"timestamp":"2026-08-09T17:20:06.000Z","type":"event_msg","payload":{"type":"task_complete"}}"#.to_vec(),
+            },
+        ];
+        assert_eq!(
+            native_child_events_from_lines("parent-session", "child-session", &lines),
+            [
+                crate::harness::NativeChildEvent::Spawned {
+                    parent_session: "parent-session".into(),
+                    child_session: "child-session".into(),
+                    at_ms: 1_786_296_005_152,
+                },
+                crate::harness::NativeChildEvent::Completed {
+                    parent_session: "parent-session".into(),
+                    child_session: "child-session".into(),
+                    outcome: "completed".into(),
+                    at_ms: 1_786_296_006_000,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn parent_thread_id_wins_and_forked_from_id_remains_a_legacy_fallback() {
+        let preferred = temp_path("parent-precedence");
+        write_lines(
+            &preferred,
+            &[
+                r#"{"type":"session_meta","payload":{"id":"child","parent_thread_id":"thread-parent","forked_from_id":"fork-parent"}}"#,
+            ],
+        );
+        assert_eq!(
+            super::first_session_meta(&preferred)
+                .and_then(|meta| meta.parent)
+                .as_deref(),
+            Some("thread-parent")
+        );
+
+        let legacy = temp_path("parent-legacy");
+        write_lines(
+            &legacy,
+            &[r#"{"type":"session_meta","payload":{"id":"child","forked_from_id":"fork-parent"}}"#],
+        );
+        assert_eq!(
+            super::first_session_meta(&legacy)
+                .and_then(|meta| meta.parent)
+                .as_deref(),
+            Some("fork-parent")
+        );
+    }
+
+    #[test]
+    fn native_child_observer_projects_the_codex_child_fixture() {
+        let base = std::path::PathBuf::from("tests/fixtures/codex");
+        let child = sessions_in(&base)
+            .unwrap()
+            .into_iter()
+            .find(|session| session.parent.is_some())
+            .expect("Codex child fixture");
+        let events = Codex.observe_native_children(&child, 0).unwrap();
+        assert_eq!(
+            events,
+            [
+                crate::harness::NativeChildEvent::Spawned {
+                    parent_session: "00000000-0000-7000-8000-000000000001".into(),
+                    child_session: "00000000-0000-7000-8000-000000000002".into(),
+                    at_ms: 1_786_284_300_000,
+                },
+                crate::harness::NativeChildEvent::Completed {
+                    parent_session: "00000000-0000-7000-8000-000000000001".into(),
+                    child_session: "00000000-0000-7000-8000-000000000002".into(),
+                    outcome: "completed".into(),
+                    at_ms: 1_786_284_312_000,
+                },
+            ]
+        );
     }
 
     /// Fail-first receipt: pre-fix, same-turn `token_count` snapshots each

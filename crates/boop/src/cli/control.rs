@@ -2,16 +2,20 @@
 
 use std::path::Path;
 use std::process::Command;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use boop::bus::Route;
 use boop::harness::{Harness, NativeTuiSpec};
+use boop::registry::Registry;
+use tracing::warn;
 
 use crate::cli::{mail_dir, write_route};
 
 /// Ask the selected harness adapter to prepare its native process, register
 /// this pane as its coordinator, then run the ordinary interactive TUI.
 pub(crate) fn run_native_tui(
+    registry: &Registry,
     adapter: &dyn Harness,
     name: Option<&str>,
     cwd: &Path,
@@ -57,15 +61,35 @@ pub(crate) fn run_native_tui(
             app_server_socket: plan.app_server_socket.clone(),
         },
     )?;
-    let status = Command::new(&plan.program)
+    let store = (adapter.id() == "codex")
+        .then(|| boop::Store::open(boop::Store::default_path()?))
+        .transpose()?;
+    let mut child = Command::new(&plan.program)
         .args(&plan.args)
         .current_dir(cwd)
-        .status()
+        .spawn()
         .with_context(|| format!("start native {} TUI", adapter.id()))?;
-    anyhow::ensure!(
-        status.success(),
-        "native {} TUI exited with {status}",
-        adapter.id()
-    );
-    Ok(())
+    loop {
+        if let Some(status) = child.try_wait().context("observe native TUI exit")? {
+            anyhow::ensure!(
+                status.success(),
+                "native {} TUI exited with {status}",
+                adapter.id()
+            );
+            return Ok(());
+        }
+        if let Some(store) = store.as_ref() {
+            if let Err(error) = crate::cli::db::sync_native_child_route_once(
+                store,
+                adapter,
+                name,
+                &dir,
+                cwd,
+                |message| crate::cli::mail::deliver_hail(registry, &dir, message, None),
+            ) {
+                warn!(%error, route = name, "native child projector pass failed");
+            }
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
 }

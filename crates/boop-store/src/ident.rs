@@ -68,6 +68,17 @@ pub struct SyncStat {
     pub usage_updated: u64,
 }
 
+/// One completed native child whose parent currently has a registered route.
+/// The two outbox lifecycle edges are kept in `agent_edge`, next to the
+/// completion fact they advance.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeChildCompletion {
+    pub parent_session: String,
+    pub child_session: String,
+    pub completed_at_ms: u64,
+    pub mailed: bool,
+}
+
 impl SyncStat {
     pub fn add(&mut self, other: SyncStat) {
         self.written += other.written;
@@ -1066,6 +1077,22 @@ impl Store {
         Ok(())
     }
 
+    /// Record one lifecycle edge once. Returns whether this pass inserted the
+    /// row, for callers that need a first-observation receipt.
+    pub fn ensure_edge_at(&self, parent: &str, child: &str, kind: &str, ts: u64) -> Result<bool> {
+        let parent_id = self.session_id(parent)?;
+        let child_id = self.session_id(child)?;
+        let kind_id = self.intern("dict_edekind", kind)?;
+        let changed = self.connection.execute(
+            "INSERT INTO agent_edge
+               (parent_session_id, child_session_id, edge_kind_id, first_ts, last_ts, n)
+             VALUES (?1, ?2, ?3, ?4, ?4, 1)
+             ON CONFLICT(parent_session_id, child_session_id, edge_kind_id) DO NOTHING",
+            params![parent_id, child_id, kind_id, ts as i64],
+        )?;
+        Ok(changed == 1)
+    }
+
     fn ensure_edge(&self, parent: &str, child: &str, kind: &str) -> Result<()> {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -1646,6 +1673,57 @@ impl Store {
             })
         })?;
         Ok(iter.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Completed native children for registered parent sessions that have not
+    /// reached native delivery. The route count bounds this lookup; it never
+    /// scans mailbox history or unrelated completion edges.
+    pub fn native_child_completion_outbox(
+        &self,
+        parent_sessions: &[String],
+    ) -> Result<Vec<NativeChildCompletion>> {
+        if parent_sessions.is_empty() {
+            return Ok(Vec::new());
+        }
+        let placeholders = std::iter::repeat_n("?", parent_sessions.len())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "SELECT parent.value, child.value, completed.first_ts,
+                    EXISTS(
+                        SELECT 1 FROM agent_edge mailed
+                        JOIN dict_edekind mailed_kind ON mailed_kind.id = mailed.edge_kind_id
+                        WHERE mailed.parent_session_id = completed.parent_session_id
+                          AND mailed.child_session_id = completed.child_session_id
+                          AND mailed_kind.value = 'completion-mailed'
+                    )
+               FROM agent_edge completed
+               JOIN dict_session parent ON parent.id = completed.parent_session_id
+               JOIN dict_session child ON child.id = completed.child_session_id
+               JOIN dict_edekind completed_kind ON completed_kind.id = completed.edge_kind_id
+               WHERE completed_kind.value = 'completed'
+                 AND parent.value IN ({placeholders})
+                 AND NOT EXISTS(
+                    SELECT 1 FROM agent_edge delivered
+                    JOIN dict_edekind delivered_kind ON delivered_kind.id = delivered.edge_kind_id
+                    WHERE delivered.parent_session_id = completed.parent_session_id
+                      AND delivered.child_session_id = completed.child_session_id
+                      AND delivered_kind.value = 'completion-delivered'
+                 )
+               ORDER BY parent.value, child.value"
+        );
+        let mut statement = self.connection.prepare(&sql)?;
+        let rows =
+            statement.query_map(rusqlite::params_from_iter(parent_sessions.iter()), |row| {
+                Ok(NativeChildCompletion {
+                    parent_session: row.get(0)?,
+                    child_session: row.get(1)?,
+                    completed_at_ms: row.get::<_, i64>(2)? as u64,
+                    mailed: row.get(3)?,
+                })
+            })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
     }
 
     /// Record one liveness observation at `ts`. Maintains `agent_live` as the

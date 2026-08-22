@@ -46,6 +46,24 @@ pub struct NativeSessionRef {
     pub app_server_socket: Option<PathBuf>,
 }
 
+/// A native collaboration child fact observed by one harness from its own
+/// durable records. The parent and child are harness session identifiers; the
+/// child never needs a Boop route name or a mailbox parent setting.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NativeChildEvent {
+    Spawned {
+        parent_session: String,
+        child_session: String,
+        at_ms: u64,
+    },
+    Completed {
+        parent_session: String,
+        child_session: String,
+        outcome: String,
+        at_ms: u64,
+    },
+}
+
 impl NativeTuiPlan {
     pub fn direct(spec: &NativeTuiSpec) -> Self {
         Self {
@@ -165,6 +183,18 @@ pub trait Harness: Send + Sync {
         from: u64,
     ) -> anyhow::Result<Ingested> {
         boop_store::ident::project_transcript(store, session, from)
+    }
+
+    /// Observe collaboration child lifecycle facts in transcript bytes after
+    /// `from`. The shared Boop projector owns edge persistence, mail, and
+    /// parent-route control. A harness implementation owns only its source
+    /// record decoding.
+    fn observe_native_children(
+        &self,
+        _session: &SessionRef,
+        _from: u64,
+    ) -> anyhow::Result<Vec<NativeChildEvent>> {
+        Ok(Vec::new())
     }
 
     // facet 3: control. Defaults are the honest all-false / Unsupported shape,

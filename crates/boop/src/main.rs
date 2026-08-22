@@ -612,6 +612,7 @@ fn main() -> Result<()> {
                     .by_id("codex")
                     .context("Codex harness is not registered")?;
                 run_native_tui(
+                    &registry,
                     adapter,
                     name.as_deref(),
                     &cwd,
@@ -633,6 +634,7 @@ fn main() -> Result<()> {
                     .by_id(&harness)
                     .with_context(|| format!("no harness registered with id `{harness}`"))?;
                 run_native_tui(
+                    &registry,
                     adapter,
                     name.as_deref(),
                     &cwd,
