@@ -164,6 +164,234 @@ pub(crate) fn emit_rows(rows: &[ident::Row], format: QueryFormat) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// The sync trail: what a pass was doing, readable after a SIGKILL
+// ---------------------------------------------------------------------------
+
+/// One adapter's leg of a sync pass, in milliseconds.
+pub(crate) struct AdapterPhase {
+    harness: boop::harness::HarnessId,
+    candidates_ms: u128,
+    candidates: usize,
+    backfill_ms: u128,
+    pending: usize,
+}
+
+impl AdapterPhase {
+    fn new(harness: boop::harness::HarnessId) -> Self {
+        AdapterPhase {
+            harness,
+            candidates_ms: 0,
+            candidates: 0,
+            backfill_ms: 0,
+            pending: 0,
+        }
+    }
+
+    fn row(&self) -> serde_json::Value {
+        serde_json::json!({
+            "harness": self.harness,
+            "candidates_ms": self.candidates_ms as u64,
+            "candidates": self.candidates,
+            "backfill_ms": self.backfill_ms as u64,
+            "pending": self.pending,
+        })
+    }
+}
+
+/// One transcript sync pass, phase by phase. The pass appends a `start` record
+/// before it does any work and a `done` record after, so a `start` with no
+/// `done` at the same pid is a pass that was killed, and the phase table says
+/// where the wall went for one that finished.
+pub(crate) struct SyncPhases {
+    pid: u32,
+    at_ms: u64,
+    budget_ms: Option<u128>,
+    open_ms: u128,
+    stale_check_ms: u128,
+    known_ms: u128,
+    known: usize,
+    routes_ms: u128,
+    pending: usize,
+    project_ms: u128,
+    projected: u64,
+    yielded: bool,
+    adapters: Vec<AdapterPhase>,
+}
+
+impl SyncPhases {
+    fn new(budget: Option<std::time::Duration>) -> Self {
+        SyncPhases {
+            pid: std::process::id(),
+            at_ms: now_ms(),
+            budget_ms: budget.map(|budget| budget.as_millis()),
+            open_ms: 0,
+            stale_check_ms: 0,
+            known_ms: 0,
+            known: 0,
+            routes_ms: 0,
+            pending: 0,
+            project_ms: 0,
+            projected: 0,
+            yielded: false,
+            adapters: Vec::new(),
+        }
+    }
+
+    /// Whether the pass has spent its budget. No budget spends nothing.
+    fn spent(&self, started: std::time::Instant) -> bool {
+        self.budget_ms
+            .is_some_and(|budget| started.elapsed().as_millis() >= budget)
+    }
+
+    fn trail(&self) -> Option<PathBuf> {
+        boop::trail::sync_trail_path().ok()
+    }
+
+    /// A pass that found the lock held. The record is the convoy's own
+    /// receipt: N deferrals against one `start` is N callers that would each
+    /// have run the same pass.
+    fn defer(&self) {
+        let Some(path) = self.trail() else {
+            return;
+        };
+        let record = serde_json::json!({
+            "kind": "deferred",
+            "pid": self.pid,
+            "at_ms": self.at_ms,
+        });
+        boop::trail::append_sync_trail(&path, &record.to_string());
+    }
+
+    fn begin(&self) {
+        let Some(path) = self.trail() else {
+            return;
+        };
+        let record = serde_json::json!({
+            "kind": "start",
+            "pid": self.pid,
+            "at_ms": self.at_ms,
+            "budget_ms": self.budget_ms.map(|budget| budget as u64),
+        });
+        boop::trail::append_sync_trail(&path, &record.to_string());
+    }
+
+    fn finish(&self, elapsed_ms: u128) {
+        let record = serde_json::json!({
+            "kind": "done",
+            "pid": self.pid,
+            "at_ms": self.at_ms,
+            "elapsed_ms": elapsed_ms as u64,
+            "yielded": self.yielded,
+            "open_ms": self.open_ms as u64,
+            "stale_check_ms": self.stale_check_ms as u64,
+            "known_ms": self.known_ms as u64,
+            "known": self.known,
+            "routes_ms": self.routes_ms as u64,
+            "pending": self.pending,
+            "project_ms": self.project_ms as u64,
+            "projected": self.projected,
+            "adapters": self.adapters.iter().map(AdapterPhase::row).collect::<Vec<_>>(),
+        });
+        if let Some(path) = self.trail() {
+            boop::trail::append_sync_trail(&path, &record.to_string());
+        }
+        if self.yielded {
+            tracing::warn!(
+                elapsed_ms = elapsed_ms as u64,
+                pending = self.pending,
+                projected = self.projected,
+                "transcript sync yielded on its budget"
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Single-flight
+// ---------------------------------------------------------------------------
+
+/// The advisory lock one sync pass holds, for as long as the guard lives.
+///
+/// `std::fs::File::try_lock` is `flock(LOCK_EX|LOCK_NB)` on unix and
+/// `LockFileEx(LOCKFILE_FAIL_IMMEDIATELY)` on windows, so the kernel drops the
+/// lock when the holder's descriptors close. A SIGKILLed pass leaves no lease
+/// to expire and no owner pid to sweep.
+pub(crate) struct SyncFlight(std::fs::File);
+
+impl Drop for SyncFlight {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
+}
+
+/// What a caller does when another process already holds the sync lock.
+#[derive(Clone, Copy)]
+pub(crate) enum SyncContention {
+    /// Read what the store already has. The pass in flight is writing the
+    /// same rows this caller would have written.
+    Defer,
+    /// Wait for the pass in flight, then take the lock. Past the deadline the
+    /// caller reports instead of syncing twice.
+    Wait(std::time::Duration),
+}
+
+/// The lock file for one store. Two stores (a test fixture and the machine's
+/// own) never contend, because the lock is named after the db it guards.
+pub(crate) fn sync_lock_path(db: &Path) -> PathBuf {
+    PathBuf::from(format!("{}.sync.lock", db.display()))
+}
+
+/// Take the sync lock, or report that a pass is already in flight. A lock file
+/// that cannot be opened at all yields the lock rather than blocking the sync:
+/// the pre-single-flight behaviour is the safe fallback.
+pub(crate) fn claim_sync(path: &Path, contention: SyncContention) -> Result<Option<SyncFlight>> {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let Ok(file) = std::fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(path)
+    else {
+        return Ok(None);
+    };
+    match contention {
+        SyncContention::Defer => match file.try_lock() {
+            Ok(()) => Ok(Some(SyncFlight(file))),
+            Err(_) => Ok(None),
+        },
+        SyncContention::Wait(deadline) => {
+            let until = std::time::Instant::now() + deadline;
+            loop {
+                match file.try_lock() {
+                    Ok(()) => return Ok(Some(SyncFlight(file))),
+                    Err(_) if std::time::Instant::now() < until => {
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                    }
+                    Err(_) => anyhow::bail!(
+                        "another transcript sync has held {} for {}s; \
+                         read the trail with `boop debug`",
+                        path.display(),
+                        deadline.as_secs()
+                    ),
+                }
+            }
+        }
+    }
+}
+
+/// How long a startup sync may run before it reports and yields. Under the
+/// ten-second law, so a read that triggers a cold sync is never the reason a
+/// caller waits past it; the next pass resumes from the cursors this one
+/// committed.
+pub(crate) const STARTUP_SYNC_BUDGET: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// How long an explicit `boop sync` waits for a pass already in flight.
+pub(crate) const EXPLICIT_SYNC_WAIT: std::time::Duration = std::time::Duration::from_secs(120);
+
 /// `boop sync`: tail every harness forward from stored offsets into the db.
 pub(crate) fn run_sync_all(registry: &Registry, rebuild: bool) -> Result<()> {
     sync_all(registry, rebuild, true, SyncLiveness::StampLivePid)
@@ -187,55 +415,114 @@ pub(crate) fn sync_all(
     report: bool,
     liveness: SyncLiveness,
 ) -> Result<()> {
+    sync_all_budgeted(
+        registry,
+        rebuild,
+        report,
+        liveness,
+        None,
+        SyncContention::Wait(EXPLICIT_SYNC_WAIT),
+    )
+}
+
+/// The startup sync every read verb pays: one pass across all callers, bounded
+/// by `STARTUP_SYNC_BUDGET`. A caller that finds a pass in flight reads what
+/// the store has instead of running the same pass again.
+pub(crate) fn sync_before_read(registry: &Registry) -> Result<()> {
+    sync_all_budgeted(
+        registry,
+        false,
+        false,
+        SyncLiveness::TranscriptOnly,
+        Some(STARTUP_SYNC_BUDGET),
+        SyncContention::Defer,
+    )
+}
+
+/// The measured variant. `budget` bounds the per-session projection loop: the
+/// pass stops between sessions once it is spent, writes what it was doing, and
+/// yields. Every session commits on its own, so the next pass resumes from the
+/// cursors this one left.
+pub(crate) fn sync_all_budgeted(
+    registry: &Registry,
+    rebuild: bool,
+    report: bool,
+    liveness: SyncLiveness,
+    budget: Option<std::time::Duration>,
+    contention: SyncContention,
+) -> Result<()> {
     let started = std::time::Instant::now();
+    let mut phases = SyncPhases::new(budget);
+    let db_path = ident::Store::default_path()?;
+    let Some(_flight) = claim_sync(&sync_lock_path(&db_path), contention)? else {
+        phases.defer();
+        return Ok(());
+    };
+    phases.begin();
     if report {
         info!(rebuild, "transcript sync started");
     }
-    let store = ident::Store::open(ident::Store::default_path()?)?;
+    let mark = std::time::Instant::now();
+    let store = ident::Store::open(db_path)?;
+    phases.open_ms = mark.elapsed().as_millis();
+    let mark = std::time::Instant::now();
     if rebuild {
         store.rebuild()?;
     } else {
         refuse_stale(&store)?;
     }
+    phases.stale_check_ms = mark.elapsed().as_millis();
+    let mark = std::time::Instant::now();
     let known = store.known_sessions()?;
+    phases.known_ms = mark.elapsed().as_millis();
+    phases.known = known.len();
     let mut pending = Vec::new();
-    let mut roots_to_stamp = Vec::new();
+    // One read decides whether the v12 cursor backfill has anything left to do.
+    // It is a migration, not a steady-state write: once no row carries
+    // `modified_ms = 0` the per-candidate UPDATE is 3893 no-op write
+    // transactions per pass.
+    let backfill_pending = store.cursors_missing_modified()? > 0;
     for adapter in registry.all() {
-        let roots = adapter.session_roots()?;
-        let root_stamps_match = !roots.is_empty()
-            && roots.iter().all(|root| {
-                let mtime_ms = path_modified_ms(root);
-                store
-                    .root_stamp_matches(adapter.id().as_str(), root, mtime_ms)
-                    .unwrap_or(false)
-            });
-        if root_stamps_match
-            && (!adapter.known_paths_can_move() || !known.has_moved(adapter.id().as_str()))
-        {
-            continue;
-        }
+        let mut leg = AdapterPhase::new(adapter.id());
+        let mark = std::time::Instant::now();
         let candidates = adapter.sync_candidates(&known)?;
-        let had_candidates = !candidates.is_empty();
+        leg.candidates_ms = mark.elapsed().as_millis();
+        leg.candidates = candidates.len();
+        let mark = std::time::Instant::now();
+        if backfill_pending {
+            store.begin()?;
+            for session in &candidates {
+                store.backfill_cursor_modified(
+                    &session.session_id,
+                    &session.path.display().to_string(),
+                    session.modified_ms,
+                )?;
+            }
+            store.commit()?;
+        }
+        leg.backfill_ms = mark.elapsed().as_millis();
         for session in candidates {
-            store.backfill_cursor_modified(
-                &session.session_id,
-                &session.path.display().to_string(),
-                session.modified_ms,
-            )?;
             if session_needs_sync(&session, &known) {
+                leg.pending += 1;
                 pending.push((adapter.as_ref(), session));
             }
         }
-        if had_candidates {
-            roots_to_stamp.push((adapter.id(), roots));
-        }
+        phases.adapters.push(leg);
     }
+    let mark = std::time::Instant::now();
     let routes = match liveness {
         SyncLiveness::StampLivePid => Some(bus::read_routes(&mail_dir(None)?).unwrap_or_default()),
         SyncLiveness::TranscriptOnly => None,
     };
+    phases.routes_ms = mark.elapsed().as_millis();
+    phases.pending = pending.len();
     let mut stat = ident::SyncStat::default();
+    let project_mark = std::time::Instant::now();
     for (adapter, session) in pending {
+        if phases.spent(started) {
+            phases.yielded = true;
+            break;
+        }
         tracing::debug!(
             harness = adapter.id().as_str(),
             session_id = session.session_id,
@@ -265,6 +552,8 @@ pub(crate) fn sync_all(
             }
         }
     }
+    phases.project_ms = project_mark.elapsed().as_millis();
+    phases.projected = stat.written;
     let native_child_mail_dir = mail_dir(None)?;
     let native_child_routes = bus::read_routes(&native_child_mail_dir)?;
     deliver_native_child_completions(
@@ -289,12 +578,8 @@ pub(crate) fn sync_all(
             Ok(())
         },
     )?;
-    for (harness, roots) in roots_to_stamp {
-        for root in roots {
-            store.stamp_root(harness.as_str(), &root, path_modified_ms(&root))?;
-        }
-    }
     let elapsed_ms = started.elapsed().as_millis();
+    phases.finish(elapsed_ms);
     if report {
         let counts = store.counts()?;
         let db_bytes = store.db_bytes()?;
@@ -432,15 +717,6 @@ fn native_child_completion_message(
         rc: None,
         detail: None,
     }
-}
-
-pub(crate) fn path_modified_ms(path: &std::path::Path) -> u64 {
-    std::fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .ok()
-        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
 }
 
 pub(crate) fn session_needs_sync(

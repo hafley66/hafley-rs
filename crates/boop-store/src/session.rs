@@ -91,18 +91,14 @@ impl KnownSessions {
             .find(|session| session.session_id == session_id)
     }
 
-    pub fn has_moved(&self, harness: &str) -> bool {
-        self.0.iter().any(|(path, sessions)| {
-            sessions.iter().any(|session| {
-                session.harness == harness
-                    && std::fs::metadata(path)
-                        .and_then(|metadata| metadata.modified())
-                        .ok()
-                        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map(|duration| duration.as_millis() as u64)
-                        .is_some_and(|modified_ms| modified_ms != session.modified_ms)
-            })
-        })
+    /// How many transcript paths this store already knows; a caller measuring
+    /// a sync pass reports it beside the pass's own wall.
+    pub fn len(&self) -> usize {
+        self.0.values().map(Vec::len).sum()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 

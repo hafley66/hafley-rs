@@ -935,36 +935,14 @@ impl Store {
         Ok(())
     }
 
-    pub fn root_stamp_matches(
-        &self,
-        harness: &str,
-        root: &std::path::Path,
-        mtime_ms: u64,
-    ) -> Result<bool> {
-        Ok(self
-            .connection
-            .query_row(
-                "SELECT stamp.mtime_ms
-             FROM sync_root_stamp stamp
-             JOIN dict_harness harness_id ON harness_id.id = stamp.harness_id
-             JOIN dict_path root_path ON root_path.id = stamp.root_path_id
-             WHERE harness_id.value = ?1 AND root_path.value = ?2",
-                params![harness, root.display().to_string()],
-                |row| row.get::<_, i64>(0),
-            )
-            .optional()?
-            .is_some_and(|stamp| stamp as u64 == mtime_ms))
-    }
-
-    pub fn stamp_root(&self, harness: &str, root: &std::path::Path, mtime_ms: u64) -> Result<()> {
-        let harness_id = self.intern("dict_harness", harness)?;
-        let root_path_id = self.intern("dict_path", &root.display().to_string())?;
-        self.connection.execute(
-            "INSERT INTO sync_root_stamp (harness_id, root_path_id, mtime_ms) VALUES (?1, ?2, ?3)
-             ON CONFLICT(harness_id, root_path_id) DO UPDATE SET mtime_ms=excluded.mtime_ms",
-            params![harness_id, root_path_id, mtime_ms as i64],
-        )?;
-        Ok(())
+    /// How many stored cursors still carry the v12 migration's `modified_ms = 0`.
+    /// Zero means the per-candidate backfill has nothing to write.
+    pub fn cursors_missing_modified(&self) -> Result<i64> {
+        Ok(self.connection.query_row(
+            "SELECT COUNT(*) FROM sync_cursor WHERE modified_ms = 0",
+            [],
+            |row| row.get(0),
+        )?)
     }
 
     pub fn backfill_cursor_modified(

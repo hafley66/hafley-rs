@@ -25,11 +25,19 @@ pub(crate) fn run_debug(since: &str, lane: Option<&str>, json: bool) -> Result<(
             .cmp(&right.lane)
             .then(left.at_ms.cmp(&right.at_ms))
     });
+    let passes = boop::trail::sync_trail_path()
+        .map(|path| boop::trail::read_sync_trail(&path))
+        .unwrap_or_default();
+    let sync = boop::debug::sync_report(&passes, since_ms);
     match json {
-        true => line(&serde_json::to_string_pretty(&boop::debug::as_json(
-            &alerts,
-        ))?),
-        false => line(&boop::debug::report(&alerts, window)),
+        true => line(&serde_json::to_string_pretty(&serde_json::json!({
+            "alerts": boop::debug::as_json(&alerts),
+            "sync": boop::debug::sync_json(&passes, since_ms),
+        }))?),
+        false => {
+            line(&boop::debug::report(&alerts, window));
+            line(&sync);
+        }
     }
     Ok(())
 }

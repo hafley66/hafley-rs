@@ -69,10 +69,6 @@ impl Harness for Opencode {
         Ok(store_path().into_iter().collect())
     }
 
-    fn known_paths_can_move(&self) -> bool {
-        false
-    }
-
     fn read_from(&self, session: &SessionRef, offset: u64) -> Result<ReadChunk> {
         let connection = open_read_only(&session.path)?;
         let mut events = Vec::new();
@@ -289,8 +285,27 @@ impl Harness for Opencode {
     }
 }
 
+/// The last message rowid opencode holds per session. `size` is what the sync
+/// freshness gate compares against the stored cursor, and this harness's
+/// cursor IS a message rowid, so reporting anything else marks every session
+/// that has ever been synced as pending on every pass.
+fn last_message_rowid(connection: &Connection) -> Result<HashMap<String, u64>> {
+    let mut statement =
+        connection.prepare("SELECT session_id, MAX(rowid) FROM message GROUP BY session_id")?;
+    let rows = statement.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+    })?;
+    let mut out = HashMap::new();
+    for row in rows {
+        let (session, rowid) = row?;
+        out.insert(session, rowid as u64);
+    }
+    Ok(out)
+}
+
 fn sessions_from(path: &std::path::Path) -> Result<Vec<SessionRef>> {
     let connection = open_read_only(path)?;
+    let last_rowid = last_message_rowid(&connection)?;
     let mut statement = connection.prepare(
         "SELECT id, directory, parent_id, slug, time_updated FROM session ORDER BY time_updated",
     )?;
@@ -306,6 +321,7 @@ fn sessions_from(path: &std::path::Path) -> Result<Vec<SessionRef>> {
     let mut sessions = Vec::new();
     for row in rows {
         let (id, directory, parent, slug, updated) = row?;
+        let size = last_rowid.get(&id).copied().unwrap_or(0);
         sessions.push(SessionRef {
             harness: HarnessId::Opencode,
             session_id: id.clone(),
@@ -314,7 +330,7 @@ fn sessions_from(path: &std::path::Path) -> Result<Vec<SessionRef>> {
             cwd: directory,
             git_branch: None,
             modified_ms: updated as u64,
-            size: 0,
+            size,
             tmux: None,
             tmux_socket: None,
             parent,
