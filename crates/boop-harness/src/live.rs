@@ -119,11 +119,15 @@ mod tests {
     #[test]
     fn a_pane_lookup_ignores_the_percent_prefix() {
         assert_eq!(
-            Two.live_session_in_pane("%3418").unwrap().map(|s| s.session_id),
+            Two.live_session_in_pane("%3418")
+                .unwrap()
+                .map(|s| s.session_id),
             Some("b".to_string())
         );
         assert_eq!(
-            Two.live_session_in_pane("3418").unwrap().map(|s| s.session_id),
+            Two.live_session_in_pane("3418")
+                .unwrap()
+                .map(|s| s.session_id),
             Some("b".to_string())
         );
         assert!(Two.live_session_in_pane("%9").unwrap().is_none());

@@ -31,6 +31,9 @@ static CAPABILITIES: Capabilities = Capabilities {
     native_tui_projector: false,
 };
 
+/// kimi publishes no door; the impl says so rather than guessing one.
+static DOOR: crate::door::kimi::KimiDoor = crate::door::kimi::KimiDoor;
+
 impl Harness for Kimi {
     fn identity_process(&self) -> Option<crate::identity::Identity> {
         let session = std::env::var("KIMI_SESSION_ID")
@@ -60,6 +63,14 @@ impl Harness for Kimi {
 
     fn capabilities(&self) -> &'static Capabilities {
         &CAPABILITIES
+    }
+
+    fn live(&self) -> &dyn crate::live::LiveSessions {
+        &DOOR
+    }
+
+    fn door(&self) -> &dyn crate::door::Door {
+        &DOOR
     }
 
     /// `send_midflight` is false since the lane channel became ACP: the

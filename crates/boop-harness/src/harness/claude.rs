@@ -27,9 +27,13 @@ static CAPABILITIES: Capabilities = Capabilities {
     bans_plan_family_models: false,
     lanes: LanePolicy::CoordinatorSubagentsOnly,
     variant: VariantSupport::None,
-    mail: MailPolicy::TurnBoundaryHook,
+    mail: MailPolicy::Door,
     native_tui_projector: false,
 };
+
+/// The registry directory and messaging sockets of the claude on this
+/// machine; both the live list and one delivery read it.
+static DOOR: crate::door::claude::ClaudeDoor = crate::door::claude::ClaudeDoor::machine();
 
 impl Harness for Claude {
     /// Claude stamps its session id into every process it runs, and a sidechain
@@ -100,6 +104,14 @@ impl Harness for Claude {
 
     fn capabilities(&self) -> &'static Capabilities {
         &CAPABILITIES
+    }
+
+    fn live(&self) -> &dyn crate::live::LiveSessions {
+        &DOOR
+    }
+
+    fn door(&self) -> &dyn crate::door::Door {
+        &DOOR
     }
 
     fn sessions(&self) -> anyhow::Result<Vec<SessionRef>> {

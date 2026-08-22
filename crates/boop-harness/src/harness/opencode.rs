@@ -24,9 +24,12 @@ static CAPABILITIES: Capabilities = Capabilities {
     bans_plan_family_models: true,
     lanes: LanePolicy::Allowed,
     variant: VariantSupport::Flag,
-    mail: MailPolicy::Keystrokes,
+    mail: MailPolicy::Door,
     native_tui_projector: false,
 };
+
+/// The `opencode serve` this machine's TUIs are clients of.
+static DOOR: crate::door::opencode::OpencodeDoor = crate::door::opencode::OpencodeDoor::machine();
 
 impl Harness for Opencode {
     fn open_channel(
@@ -44,6 +47,14 @@ impl Harness for Opencode {
 
     fn capabilities(&self) -> &'static Capabilities {
         &CAPABILITIES
+    }
+
+    fn live(&self) -> &dyn crate::live::LiveSessions {
+        &DOOR
+    }
+
+    fn door(&self) -> &dyn crate::door::Door {
+        &DOOR
     }
 
     fn sessions(&self) -> Result<Vec<SessionRef>> {

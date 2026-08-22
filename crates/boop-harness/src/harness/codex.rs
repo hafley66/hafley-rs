@@ -27,9 +27,12 @@ static CAPABILITIES: Capabilities = Capabilities {
     bans_plan_family_models: false,
     lanes: LanePolicy::Allowed,
     variant: VariantSupport::ModelSuffixEffort,
-    mail: MailPolicy::Keystrokes,
+    mail: MailPolicy::Door,
     native_tui_projector: true,
 };
+
+/// The state database and remote-control socket of the codex on this machine.
+static DOOR: crate::door::codex::CodexDoor = crate::door::codex::CodexDoor::machine();
 
 impl Harness for Codex {
     fn identity_process(&self) -> Option<crate::identity::Identity> {
@@ -66,6 +69,14 @@ impl Harness for Codex {
 
     fn capabilities(&self) -> &'static Capabilities {
         &CAPABILITIES
+    }
+
+    fn live(&self) -> &dyn crate::live::LiveSessions {
+        &DOOR
+    }
+
+    fn door(&self) -> &dyn crate::door::Door {
+        &DOOR
     }
 
     /// `send_midflight` stays false: `codex exec` reads no stdin mid-turn,
@@ -113,28 +124,14 @@ impl Harness for Codex {
         })
     }
 
+    /// The queue command itself lives in the codex door; this hands it the
+    /// socket the native plan recorded.
     fn send_native(&self, session: &NativeSessionRef, text: &str) -> anyhow::Result<SendOutcome> {
         let socket = session
             .app_server_socket
             .as_deref()
             .context("native Codex session has no app-server socket")?;
-        let output = Command::new("codex")
-            .args([
-                "queue",
-                "--thread",
-                &session.session_id,
-                "--message",
-                text,
-                "--remote",
-            ])
-            .arg(format!("unix://{}", socket.display()))
-            .output()
-            .context("queue message through Codex remote control")?;
-        anyhow::ensure!(
-            output.status.success(),
-            "Codex remote queue failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
+        crate::door::codex::queue_message(socket, &session.session_id, text)?;
         Ok(SendOutcome::Injected)
     }
 
