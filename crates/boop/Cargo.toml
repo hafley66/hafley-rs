@@ -52,6 +52,9 @@ wait-timeout = "0.2.1"
 boop-store = { version = "0.0.2", path = "../boop-store", features = ["testing"] }
 # Peak-bytes-allocated counter for tests/bench_grid.rs's own #[global_allocator].
 peak_alloc = "0.3"
+# The macOS process-environment lab reads the active pane child through the
+# same process library already selected by boop-proc.
+sysinfo = "0.39"
 
 [lib]
 name = "boop"
@@ -69,3 +72,7 @@ required-features = ["agent-read"]
 [[example]]
 name = "typed_rows"
 required-features = ["agent-read"]
+
+[[example]]
+name = "tmux_process_env"
+path = "labs/0_tmux_process_env/probe.rs"
