@@ -87,6 +87,11 @@ pub(crate) fn run_native_tui(
     if let Some(resolver) = resolver.as_mut() {
         resolver.route_registered()?;
     }
+    // The projector pass joins every sync_cursor row (~190ms on a 4k-session
+    // store); running it each 250ms tick burned a core per wrapper.
+    const EXIT_POLL: Duration = Duration::from_millis(250);
+    const PROJECT_EVERY: Duration = Duration::from_secs(2);
+    let mut last_project = std::time::Instant::now() - PROJECT_EVERY;
     loop {
         if let Some(status) = child.try_wait().context("observe native TUI exit")? {
             anyhow::ensure!(
@@ -96,6 +101,11 @@ pub(crate) fn run_native_tui(
             );
             return Ok(());
         }
+        if last_project.elapsed() < PROJECT_EVERY {
+            std::thread::sleep(EXIT_POLL);
+            continue;
+        }
+        last_project = std::time::Instant::now();
         if let Some(store) = store.as_ref() {
             if let Err(error) = crate::cli::db::sync_native_child_route_once(
                 store,
@@ -107,6 +117,6 @@ pub(crate) fn run_native_tui(
                 warn!(%error, route = name, "native child projector pass failed");
             }
         }
-        std::thread::sleep(Duration::from_millis(250));
+        std::thread::sleep(EXIT_POLL);
     }
 }

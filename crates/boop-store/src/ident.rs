@@ -2545,6 +2545,7 @@ CREATE TABLE IF NOT EXISTS agent_edge (
   n INTEGER NOT NULL DEFAULT 1,
   PRIMARY KEY (parent_session_id, child_session_id, edge_kind_id)
 ) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_edge_child ON agent_edge(child_session_id, edge_kind_id);
 
 CREATE TABLE IF NOT EXISTS agent_usage (
   session_id INTEGER NOT NULL,
@@ -2641,7 +2642,7 @@ CREATE TABLE IF NOT EXISTS mood (
 mod tests {
     use std::fs::OpenOptions;
     use std::io::Write;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{mpsc, Arc, Barrier};
     use std::time::Duration;
@@ -3361,6 +3362,64 @@ mod tests {
         assert_eq!(candidate.cursor, 12);
         drop(store);
         let _ = std::fs::remove_file(path);
+    }
+
+    /// Guards the per-tick cost of the native TUI projector pass
+    /// (`boop::cli::control::run_native_tui` calls `known_sessions` on every
+    /// pass). Seeds a store shaped like production (4k sessions, half with a
+    /// spawned parent edge) and runs the query three times. Any run above
+    /// `KNOWN_SESSIONS_BUDGET_MS` fails the test; `cargo test` then exits 1.
+    /// Override the budget with `BOOP_KNOWN_SESSIONS_BUDGET_MS`.
+    #[test]
+    fn known_sessions_stays_under_budget() {
+        const SESSIONS: usize = 4000;
+        const RUNS: usize = 3;
+        const KNOWN_SESSIONS_BUDGET_MS: u128 = 60;
+        let budget_ms: u128 = std::env::var("BOOP_KNOWN_SESSIONS_BUDGET_MS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(KNOWN_SESSIONS_BUDGET_MS);
+
+        let (path, store) = fresh_store("known-sessions-budget");
+        store.begin().unwrap();
+        for i in 0..SESSIONS {
+            let sid = format!("s-{i}");
+            let transcript = format!("/tmp/budget/{sid}.jsonl");
+            let session = SessionRef {
+                harness: "codex",
+                session_id: sid.clone(),
+                nickname: format!("n-{i}"),
+                path: PathBuf::from(&transcript),
+                cwd: Some("/repo".into()),
+                git_branch: Some("main".into()),
+                modified_ms: i as u64,
+                size: 1,
+                tmux: None,
+                tmux_socket: None,
+                parent: (i % 2 == 0).then(|| format!("s-{}", i / 2)),
+            };
+            store.project_discovered_session(&session).unwrap();
+            store.set_cursor(&sid, &transcript, 1).unwrap();
+        }
+        store.commit().unwrap();
+
+        let mut runs_ms = Vec::with_capacity(RUNS);
+        for _ in 0..RUNS {
+            let started = std::time::Instant::now();
+            let known = store.known_sessions().unwrap();
+            runs_ms.push(started.elapsed().as_millis());
+            assert!(known.get(Path::new("/tmp/budget/s-0.jsonl")).is_some());
+        }
+        eprintln!("known_sessions over {SESSIONS} sessions: {runs_ms:?} ms, budget {budget_ms} ms");
+        drop(store);
+        let _ = std::fs::remove_file(path);
+
+        let worst = *runs_ms.iter().max().unwrap();
+        assert!(
+            worst <= budget_ms,
+            "known_sessions took {worst} ms (runs {runs_ms:?}), budget {budget_ms} ms; \
+             the native TUI poll loop calls this every pass, check idx_edge_child"
+        );
     }
 
     #[test]
