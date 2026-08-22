@@ -272,8 +272,11 @@ pub trait Harness: Send + Sync {
 /// The one command a lane pane runs, whatever the harness: the boop
 /// supervisor, which owns the harness child and drains the lane inbox.
 pub fn supervisor_command(spec: &SpawnSpec) -> String {
+    // Lanes and everything they spawn (cargo, node, browsers) inherit this
+    // niceness, so agent builds yield to the interactive UI instead of
+    // pinning every core (load 20.8 on 12 cores measured 2026-08-22).
     let mut command = format!(
-        "boop beep lane run --lane {} --harness {} --brief {} --mail-dir {}",
+        "nice -n 10 boop beep lane run --lane {} --harness {} --brief {} --mail-dir {}",
         quote(&spec.lane),
         quote(&spec.harness),
         quote(&spec.prompt),

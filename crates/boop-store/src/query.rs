@@ -655,6 +655,34 @@ mod tests {
 
     /// The caller's window SQL partitions same-role runs (gaps-and-islands),
     /// concats each island, and honours `:session_id` / `:cursor` binds.
+    /// A single-session turn read must walk the (session_id, turn) primary
+    /// key. The previous `(?n IS NULL OR col = ?n)` form planned as `SCAN t`
+    /// over every agent_turn row (518k in production) on each call.
+    #[test]
+    fn session_turn_read_uses_primary_key_not_scan() {
+        let (store, path) = store();
+        let plan: Vec<String> = store
+            .connection()
+            .prepare(
+                "EXPLAIN QUERY PLAN SELECT t.turn FROM agent_turn t
+                 WHERE t.session_id = (SELECT id FROM dict_session WHERE value = ?1)
+                   AND t.turn >= ?2",
+            )
+            .unwrap()
+            .query_map(rusqlite::params!["s", 0i64], |row| row.get::<_, String>(3))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let joined = plan.join("\n");
+        assert!(
+            joined.contains("SEARCH t USING PRIMARY KEY"),
+            "expected primary-key search, got plan:\n{joined}"
+        );
+        assert!(!joined.contains("SCAN t"), "full scan in plan:\n{joined}");
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
     #[test]
     fn window_sql_partitions_runs_and_binds_params() {
         let (store, path) = store();

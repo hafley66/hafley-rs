@@ -104,6 +104,43 @@ async fn relay_inspecting(
         .accept()
         .await
         .context("accept Codex TUI WebSocket")?;
+    // The TUI's first socket carries thread creation and is inspected for the
+    // thread id. Every later socket (the `/resume` session picker, `/model`,
+    // any other app-server client the TUI opens) is relayed untouched; before
+    // this loop those connections were never accepted and the picker hung on
+    // "failed to connect to remote app server".
+    let extra_upstream = upstream.to_path_buf();
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async {
+            let accept_extra = async {
+                loop {
+                    match listener.accept().await {
+                        Ok((stream, _)) => {
+                            let upstream = extra_upstream.clone();
+                            tokio::task::spawn_local(async move {
+                                let _ = relay_connection(stream, &upstream, None).await;
+                            });
+                        }
+                        Err(_) => return,
+                    }
+                }
+            };
+            tokio::select! {
+                result = relay_connection(client_stream, upstream, Some((identity, released))) => result,
+                _ = accept_extra => Ok(()),
+            }
+        })
+        .await
+}
+
+/// Relay one TUI socket to the upstream app-server. With `inspect` set the
+/// first thread reply is reported and held until the route is registered.
+async fn relay_connection(
+    client_stream: tokio::net::UnixStream,
+    upstream: &Path,
+    inspect: Option<(&mpsc::SyncSender<Result<String, String>>, &Receiver<()>)>,
+) -> Result<()> {
     let mut client = tokio_tungstenite::accept_async(client_stream)
         .await
         .context("accept Codex TUI handshake")?;
@@ -114,7 +151,7 @@ async fn relay_inspecting(
         .await
         .context("upgrade upstream Codex WebSocket")?;
     let mut pending = HashMap::<String, String>::new();
-    let mut reported = false;
+    let mut reported = inspect.is_none();
     loop {
         tokio::select! {
             message = client.next() => match message {
@@ -128,7 +165,9 @@ async fn relay_inspecting(
             message = server.next() => match message {
             Some(Ok(message)) => {
                 if !reported {
-                    if let Some(thread) = inspect_response(&message, &mut pending) {
+                    if let (Some((identity, released)), Some(thread)) =
+                        (inspect, inspect_response(&message, &mut pending))
+                    {
                         let _ = identity.try_send(Ok(thread));
                         released.recv_timeout(INTERACTIVE_START_TIMEOUT).context(
                             "route was not registered before Codex thread reply release",
