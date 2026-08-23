@@ -1,6 +1,6 @@
 ---
 created: 2026-08-22
-updated: 2026-08-22
+updated: 2026-08-23
 type: bug
 status: open
 priority: high
@@ -27,3 +27,9 @@ Every hail to the coordinator then lands in the lane's pane. Same happened at
 `lane create` registers a route for the NEW lane only; the caller's route
 (resolved as `parent: sprefa-coordinator (from caller)` in the dry-run output)
 is read, never written.
+
+## Comments
+
+### 2026-08-23T05:40:07Z · @sprefa-coordinator
+
+Receipt 2026-08-23 05:16: two lane creates repointed the route again; the workaround 'boop adopt --name sprefa-coordinator --tmux <pane>' with no other flags restored tmux but wrote harness=null cwd=null model=null and the NEW LANE's session_id onto the coordinator route. Consequence: 'boop beep hail sprefa-coordinator' from lane ordered-tick-recompute was refused ('route has no harness field'); the lane fell back to the cross-session socket. Adopt must preserve the fields it is not given, and lane create must not write its session_id onto the caller's route.
