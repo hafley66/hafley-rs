@@ -167,7 +167,10 @@ HAIL: boop beep hail <lane> --body \"text\" [--from <me>] [--kind <k>]
 TELL: boop tell-parent [--kind completion|yield|note] [--body \"t\"] mails the
   caller's parent edge; boop tell-children --body \"t\" mails every live child.
 
-WAIT: every agent can background a shell, so the universal push is a block:
+WAIT: every agent can background a shell, so the universal push is a block.
+  A wait on a door-delivered hail also ends when the recipient's turn ends
+  (claude registry status, codex thread/status/changed, opencode session.idle),
+  printing `<route> turn ended (<status>)`; a reply mail ends it sooner.
     boop wait <message-id>          the reply to what you just sent
     boop wait --me [--as <name>]    the next unread mail addressed to you
     boop beep hail <lane> --body \"...\" --wait-timeout <s>   send, then block

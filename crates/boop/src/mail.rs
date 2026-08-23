@@ -191,7 +191,8 @@ fn hook_landing(route: &Route, to: &str) -> Landing {
 
 /// The running session a route addresses: the harness's own registry first,
 /// then the last `agent_live` projection for the session the route names.
-fn live_session(
+/// The running session a route addresses; `deliver_hail` and `boop wait` share it.
+pub fn live_session(
     harness: &dyn Harness,
     store: &Store,
     route: &Route,

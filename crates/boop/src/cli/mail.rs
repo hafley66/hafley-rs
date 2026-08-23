@@ -141,12 +141,14 @@ pub(crate) fn run_hail(
     let Some(timeout_secs) = wait_timeout else {
         return Ok(());
     };
+    let idle = crate::cli::job::watch_turn_end(&dir, &message.id, timeout_secs);
     wait_and_exit(
         &dir,
         Watch::Reply { id: message.id },
         timeout_secs,
         None,
         mail_dir_arg,
+        idle,
     )
 }
 

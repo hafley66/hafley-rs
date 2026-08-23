@@ -480,10 +480,49 @@ pub(crate) fn run_wait(
             name: waiting_as(&dir, as_name)?,
         },
     };
-    if let Some(id) = id {
+    let idle = id.and_then(|id| {
         report_delivery(id);
+        watch_turn_end(&dir, id, timeout_secs)
+    });
+    wait_and_exit(&dir, watch, timeout_secs, as_name, mail_dir_arg, idle)
+}
+
+/// For a message the ledger says went through a door, a receiver that fires
+/// once the recipient's turn ends. A door whose harness reports no idle (kimi)
+/// yields nothing, and the wait stays on the mailbox alone.
+pub(crate) fn watch_turn_end(
+    dir: &Path,
+    message_id: &str,
+    timeout_secs: u64,
+) -> Option<std::sync::mpsc::Receiver<String>> {
+    let store = boop::Store::default_path().and_then(boop::Store::open).ok()?;
+    let rows = store.delivery_rows(message_id).ok()?;
+    let routes = bus::read_routes(dir).ok()?;
+    let registry = std::sync::Arc::new(Registry::discover());
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let mut armed = 0usize;
+    for row in rows {
+        if row.outcome != "injected" && row.outcome != "queued-for-turn-boundary" {
+            continue;
+        }
+        let Some(route) = routes.get(&row.route).cloned() else { continue };
+        let Some(harness_id) = route.harness else { continue };
+        let Ok(Some(live)) = boop::mail::live_session(registry.get(harness_id), &store, &route, harness_id) else {
+            continue;
+        };
+        let registry = registry.clone();
+        let sender = sender.clone();
+        let route_name = row.route.clone();
+        let timeout = std::time::Duration::from_secs(timeout_secs);
+        std::thread::spawn(move || {
+            if let Ok(notice) = registry.get(harness_id).door().notify_idle(&live, timeout) {
+                let status = notice.status_line.unwrap_or_else(|| "idle".into());
+                let _ = sender.send(format!("{route_name} turn ended ({status})"));
+            }
+        });
+        armed += 1;
     }
-    wait_and_exit(&dir, watch, timeout_secs, as_name, mail_dir_arg)
+    (armed > 0).then_some(receiver)
 }
 
 /// What the ledger recorded for the message being waited on, one line per
@@ -525,6 +564,7 @@ pub(crate) fn wait_and_exit(
     timeout_secs: u64,
     as_name: Option<&str>,
     mail_dir_arg: Option<&Path>,
+    idle: Option<std::sync::mpsc::Receiver<String>>,
 ) -> Result<()> {
     let command = watch.command(
         timeout_secs,
@@ -547,6 +587,12 @@ pub(crate) fn wait_and_exit(
                 line(&bus::message_line(message));
                 append_ack(dir, None, message)?;
             }
+            line("re-arm: boop wait --me &");
+            return Ok(());
+        }
+        if let Some(ended) = idle.as_ref().and_then(|receiver| receiver.try_recv().ok()) {
+            info!(watching = watch.what(), "recipient turn ended");
+            line(&ended);
             line("re-arm: boop wait --me &");
             return Ok(());
         }

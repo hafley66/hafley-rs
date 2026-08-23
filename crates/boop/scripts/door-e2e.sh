@@ -27,13 +27,16 @@ for h in $HARNESSES; do
     sleep 1
   done
   sleep 5
-  boop beep hail "$route" --body "door receipt $h: reply with the single word ACK" --from door-e2e >/dev/null 2>&1
-  for _ in $(seq 1 45); do
+  # The hail blocks until the recipient's turn ends (door idle notice) or a
+  # reply mail lands; the "turn ended" line is the push the caller gets.
+  waited=$(boop beep hail "$route" --body "door receipt $h: reply with the single word ACK" --from door-e2e --wait-timeout 90 2>/dev/null | grep -E 'turn ended|->' | tail -1)
+  echo "  wait: ${waited:-timed out}"
+  for _ in $(seq 1 20); do
     tmux capture-pane -p -t "$SESSION:$h" | grep -v 'door receipt' | grep -qE '\bACK\b' && break
     sleep 1
   done
   outcome=$(sqlite3 -readonly "$HOME/.agent/boop.db" "select outcome from agent_delivery where route='$route' order by at_ms desc limit 1")
-  if tmux capture-pane -p -t "$SESSION:$h" | grep -v 'door receipt' | grep -qE '\bACK\b'; then
+  if tmux capture-pane -p -t "$SESSION:$h" | grep -v 'door receipt' | grep -qE '\bACK\b' && [[ "$waited" == *"turn ended"* ]]; then
     echo "PASS $route ledger=$outcome"; pass=$((pass+1))
   else
     echo "FAIL $route ledger=$outcome"; tmux capture-pane -p -t "$SESSION:$h" | grep -v '^\s*$' | tail -8; fail=$((fail+1))

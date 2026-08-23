@@ -142,13 +142,16 @@ impl Door for CodexDoor {
         }
     }
 
-    /// The app-server reports turn end over its notification stream; reading
-    /// that stream is phase 2 and this refuses rather than polling a guess.
-    fn notify_idle(&self, session: &LiveSession, _timeout: Duration) -> Result<IdleNotice> {
-        anyhow::bail!(
-            "codex thread `{}` reports idle over the app-server stream, which boop does not read yet",
-            session.session_id
-        )
+    /// `thread/status/changed` on the daemon's notification stream: the
+    /// notice is the first `idle` for this thread after the subscription.
+    fn notify_idle(&self, session: &LiveSession, timeout: Duration) -> Result<IdleNotice> {
+        let DoorAddress::AppServer { socket, thread } = &session.door else {
+            anyhow::bail!(
+                "codex thread `{}` names no app-server socket",
+                session.session_id
+            );
+        };
+        wait_for_idle(Path::new(socket), thread, timeout)
     }
 
     /// The TUI attaches to the daemon socket this door queues through, with
@@ -189,6 +192,52 @@ impl CodexDoor {
         );
         daemon_socket_from_start(&String::from_utf8_lossy(&output.stdout))
             .context("Codex remote-control start did not report an app-server socket")
+    }
+}
+
+/// One websocket on the remote-control socket, `initialize`, then read
+/// notifications until `thread/status/changed` says `idle` for `thread`.
+fn wait_for_idle(socket: &Path, thread: &str, timeout: Duration) -> Result<IdleNotice> {
+    use std::os::unix::net::UnixStream;
+    use tungstenite::{client::IntoClientRequest, Message};
+    let deadline = std::time::Instant::now() + timeout;
+    let stream = UnixStream::connect(socket)
+        .with_context(|| format!("connect codex remote-control socket {}", socket.display()))?;
+    stream.set_read_timeout(Some(Duration::from_secs(1)))?;
+    let request = "ws://localhost/".into_client_request()?;
+    let (mut ws, _) = tungstenite::client(request, stream)
+        .map_err(|error| anyhow::anyhow!("websocket handshake with codex app-server: {error}"))?;
+    let hello = serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"clientInfo": {"name": "boop", "title": "boop", "version": env!("CARGO_PKG_VERSION")}}
+    });
+    ws.send(Message::Text(hello.to_string().into()))?;
+    loop {
+        if std::time::Instant::now() >= deadline {
+            anyhow::bail!("codex thread `{thread}` stayed active for {timeout:?}");
+        }
+        let message = match ws.read() {
+            Ok(message) => message,
+            Err(tungstenite::Error::Io(error))
+                if matches!(error.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) =>
+            {
+                continue
+            }
+            Err(error) => return Err(error.into()),
+        };
+        let Message::Text(text) = message else { continue };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else { continue };
+        if value.get("method").and_then(serde_json::Value::as_str) != Some("thread/status/changed") {
+            continue;
+        }
+        let params = &value["params"];
+        if params.get("threadId").and_then(serde_json::Value::as_str) != Some(thread) {
+            continue;
+        }
+        let status = params.pointer("/status/type").and_then(serde_json::Value::as_str);
+        if status == Some("idle") {
+            return Ok(IdleNotice::now(Some("idle".into())));
+        }
     }
 }
 
