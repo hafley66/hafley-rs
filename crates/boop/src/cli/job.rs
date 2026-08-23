@@ -807,9 +807,17 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         (None, Some(preset)) => Some(config::resolve_model(preset, &config_path)?),
         (None, None) => None,
     };
+    // A preset names its harness as surely as --harness does: choosing
+    // `--preset opus` is the opt-in a claude tmux lane asks for.
+    let preset_harness = match (model_given, requested_model.as_deref()) {
+        (false, Some(model)) => lane::harness_for_model(model)?,
+        _ => None,
+    };
     let harness_id = lane::harness_for_spawn(
         registry,
-        args.harness.as_deref(),
+        args.harness
+            .as_deref()
+            .or(preset_harness.map(boop::harness::HarnessId::as_str)),
         requested_model.as_deref(),
     )?;
     let adapter = registry.get(harness_id);
