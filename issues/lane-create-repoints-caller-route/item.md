@@ -33,3 +33,8 @@ is read, never written.
 ### 2026-08-23T05:40:07Z · @sprefa-coordinator
 
 Receipt 2026-08-23 05:16: two lane creates repointed the route again; the workaround 'boop adopt --name sprefa-coordinator --tmux <pane>' with no other flags restored tmux but wrote harness=null cwd=null model=null and the NEW LANE's session_id onto the coordinator route. Consequence: 'boop beep hail sprefa-coordinator' from lane ordered-tick-recompute was refused ('route has no harness field'); the lane fell back to the cross-session socket. Adopt must preserve the fields it is not given, and lane create must not write its session_id onto the caller's route.
+
+### 2026-08-23T18:41:57Z · @sprefa-coordinator
+
+2026-08-23 18:38: 'boop beep lane create --harness codex --model gpt-5.6-sol@high' (and the preset 'sol' which expands to the same string) dies at ACP handshake: 'Invalid params: model gpt-5.6-sol@high (this agent takes: gpt-5.6-sol, ...)'. The @effort suffix reaches the codex ACP agent unstripped; boop-acp/src/channel/acp.rs:617 says the split exists for opencode. lane create prints 'dispatched' and exits 0 with no route and no tmux session. Workaround: bare gpt-5.6-sol; ~/.codex/config.toml model_reasoning_effort=high supplies the effort.
+
