@@ -530,6 +530,17 @@ impl Store {
         self.rows(&sql, Vec::new())
     }
 
+    /// One favorite by id, body included; empty when the id names none.
+    pub fn query_favorite(&self, id: i64) -> Result<Vec<Row>> {
+        self.rows(
+            "SELECT f.favorite_id, f.note, f.source, f.created_ts, m.bytes, m.body
+               FROM agent_favorite f
+               JOIN markdown_cache m ON m.markdown_id = f.markdown_id
+              WHERE f.favorite_id = ?1",
+            vec![rusqlite::types::Value::Integer(id)],
+        )
+    }
+
     /// How far ingest has read each transcript.
     pub fn query_sync_cursors(&self, limit: Option<u64>) -> Result<Vec<Row>> {
         let mut sql = String::from(

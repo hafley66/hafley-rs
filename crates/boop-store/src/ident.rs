@@ -1146,6 +1146,27 @@ impl Store {
         Ok(self.connection.last_insert_rowid())
     }
 
+    /// Rewrite a favorite's note and/or source. `None` leaves a field as it
+    /// is. `false` when the id names no favorite.
+    pub fn favorite_edit(&self, id: i64, note: Option<&str>, source: Option<&str>) -> Result<bool> {
+        let changed = self.connection.execute(
+            "UPDATE agent_favorite
+                SET note = COALESCE(?2, note), source = COALESCE(?3, source)
+              WHERE favorite_id = ?1",
+            params![id, note, source],
+        )?;
+        Ok(changed == 1)
+    }
+
+    /// Drop one favorite. The markdown body stays in markdown_cache, which
+    /// other rows may share. `false` when the id names no favorite.
+    pub fn favorite_delete(&self, id: i64) -> Result<bool> {
+        let removed = self
+            .connection
+            .execute("DELETE FROM agent_favorite WHERE favorite_id = ?1", params![id])?;
+        Ok(removed == 1)
+    }
+
     /// The trace a session belongs to, by trace name.
     pub fn trace_of(&self, session: &str) -> Result<Option<String>> {
         Ok(self
@@ -3997,6 +4018,32 @@ mod tests {
 
     /// Favorites are user-authored with no transcript behind them; rebuild
     /// drops every projected row and the favorite comes back intact.
+    #[test]
+    fn a_favorite_is_edited_in_place_and_deleted_by_id() {
+        let db_path = temp_path("fav-crud");
+        let _ = std::fs::remove_file(&db_path);
+        let store = Store::open(db_path).unwrap();
+        let id = store.favorite_add("# keep\n", "first", "src-a", 1).unwrap();
+        assert!(store.favorite_edit(id, Some("second"), None).unwrap());
+        let (note, source): (String, String) = store
+            .connection
+            .query_row(
+                "SELECT note, source FROM agent_favorite WHERE favorite_id = ?1",
+                params![id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((note.as_str(), source.as_str()), ("second", "src-a"));
+        assert!(store.favorite_delete(id).unwrap());
+        assert!(!store.favorite_delete(id).unwrap());
+        assert!(!store.favorite_edit(id, Some("x"), None).unwrap());
+        let bodies: i64 = store
+            .connection
+            .query_row("SELECT COUNT(*) FROM markdown_cache", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(bodies, 1, "the markdown body outlives the favorite row");
+    }
+
     #[test]
     fn a_favorite_survives_rebuild() {
         let db_path = temp_path("fav");

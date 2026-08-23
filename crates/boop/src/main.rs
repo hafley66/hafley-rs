@@ -1803,6 +1803,22 @@ enum FavoriteCmd {
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
         format: QueryFormat,
     },
+    /// One favorite by id, body included.
+    Show {
+        id: i64,
+        #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
+        format: QueryFormat,
+    },
+    /// Rewrite the note and/or source of one favorite; the body is immutable.
+    Edit {
+        id: i64,
+        #[arg(long)]
+        note: Option<String>,
+        #[arg(long)]
+        source: Option<String>,
+    },
+    /// Drop one favorite by id; its markdown body stays cached.
+    Delete { id: i64 },
 }
 
 #[cfg(feature = "agent-read")]

@@ -1001,6 +1001,32 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
                 emit_json_rows(&store.query_favorites(limit)?, format);
                 Ok(())
             }
+            FavoriteCmd::Show { id, format } => {
+                let store = open_ro_store()?;
+                let rows = store.query_favorite(id)?;
+                anyhow::ensure!(!rows.is_empty(), "no favorite {id}");
+                emit_json_rows(&rows, format);
+                Ok(())
+            }
+            FavoriteCmd::Edit { id, note, source } => {
+                anyhow::ensure!(
+                    note.is_some() || source.is_some(),
+                    "edit needs --note and/or --source"
+                );
+                let store = open_store()?;
+                anyhow::ensure!(
+                    store.favorite_edit(id, note.as_deref(), source.as_deref())?,
+                    "no favorite {id}"
+                );
+                line(&format!("favorite {id} edited"));
+                Ok(())
+            }
+            FavoriteCmd::Delete { id } => {
+                let store = open_store()?;
+                anyhow::ensure!(store.favorite_delete(id)?, "no favorite {id}");
+                line(&format!("favorite {id} deleted"));
+                Ok(())
+            }
         },
         DbCmd::Sync { cmd } => match cmd {
             SyncCmd::Create { rebuild, forever } => {
