@@ -1102,7 +1102,7 @@ enum BeepCmd {
         #[command(subcommand)]
         cmd: AgentCmd,
     },
-    /// Type into a running agent, and say whether the keystrokes landed.
+    /// Hand a message to a running agent through its harness door, and say where it landed.
     Hail {
         lane: String,
         #[arg(long)]

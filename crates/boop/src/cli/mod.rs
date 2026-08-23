@@ -124,7 +124,7 @@ COMPLETION: the supervisor writes ONE row `lane <id> done rc=<n>` into the
   own epilogue only drops the lane's route.
   A lane spawned with --parent reports completion; do not poll.
   A parent whose route is kind=coordinator (what `boop adopt` writes) gets that
-  hail TYPED INTO ITS PANE, mid-turn or idle; no wait needs arming.
+  hail through its harness door as its next prompt; no wait needs arming.
   `--wait` blocks on that row and exits with the lane's rc, so spawn-and-join is
   one command; `--wait-timeout <s>` (default 3600, 0 waits forever) exits 124.
   The same wait after the fact is `boop beep lane wait <lane>`.
@@ -151,18 +151,18 @@ TRANSPORT: every lane pane runs ONE command, whatever the harness:
   dropped and no hail needs a human re-dispatch.
 
 HAIL: boop beep hail <lane> --body \"text\" [--from <me>] [--kind <k>]
-  Reaches a running lane MID-TURN on all four harnesses:
-    claude    stream-json user line on the child's stdin
-    codex     app-server turn/steer against the live turn id
-    opencode  typed into its TUI window; plain Enter is the steer
-    kimi      typed into its TUI window, then C-s (Enter alone only QUEUES)
-  A harness with no in-flight port would report `nextturn` and the supervisor
-  would hold the text for a resume turn; none does today.
-  A kind=coordinator route (an adopted pane) is delivered by literal keystrokes
-  plus Enter into its pane; a kind=lane route is left for its supervisor.
-  Proof of delivery is in the store, not in a screenshot:
-    boop db \"SELECT * FROM agent_edge\" -- edge kind deliver-midturn/deliver-nextturn
-  and the mailbox row's to_timestamp is stamped when the lane takes it.
+  A kind=lane route is handed to its supervisor (stream-json stdin for claude,
+  app-server turn/steer for codex). A kind=coordinator route (a pane running
+  `boop tui <harness>`) goes through the harness door; nothing is typed:
+    claude    unix socket `~/.claude/sessions/<pid>.json` names; next turn boundary
+    codex     `codex queue --thread <id> --remote` on the remote-control daemon
+    opencode  `POST /session/<id>/prompt_async` on boop's `opencode serve` (:4097)
+    kimi      no door; spawn a lane instead
+  The recipient takes it as its next prompt; no agent reads a mailbox. A route
+  with no harness, or a session the door cannot find, is refused by name.
+  Proof of delivery is one row per hail:
+    boop db \"SELECT * FROM agent_delivery\" -- outcome injected / queued-for-turn-boundary / unreachable
+  and `boop wait <message-id>` reads that row.
 
 TELL: boop tell-parent [--kind completion|yield|note] [--body \"t\"] mails the
   caller's parent edge; boop tell-children --body \"t\" mails every live child.
