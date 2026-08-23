@@ -33,7 +33,11 @@ fn opened_session(
         let newest = live
             .into_iter()
             .filter(|session| {
-                session.observed_ms >= opened_ms
+                // A harness that records a start time decides by it: a thread
+                // another TUI keeps updating in the same cwd is not this one.
+                session.started_ms.map_or(session.observed_ms >= opened_ms, |started| {
+                    started >= opened_ms
+                })
                     && session
                         .cwd
                         .as_ref()
@@ -98,26 +102,23 @@ pub(crate) fn run_native_tui(
             plan.source_path = Some(format!("native-session={session}"));
         }
     }
-    write_route(
-        &dir,
-        name,
-        Route {
-            kind: "coordinator".into(),
-            harness: Some(adapter.id()),
-            tmux: Some(pane),
-            cwd: Some(cwd.display().to_string()),
-            model: None,
-            mode: Some(plan.mode.clone()),
-            session_id: plan.session_id.clone(),
-            source_path: plan.source_path.clone(),
-            parent: None,
-            goal: None,
-            registered_at: Some(boop::bus::now_iso()),
-            base_sha: None,
-            worktree_dir: None,
-            app_server_socket: plan.app_server_socket.clone(),
-        },
-    )?;
+    let mut route = Route {
+        kind: "coordinator".into(),
+        harness: Some(adapter.id()),
+        tmux: Some(pane),
+        cwd: Some(cwd.display().to_string()),
+        model: None,
+        mode: Some(plan.mode.clone()),
+        session_id: plan.session_id.clone(),
+        source_path: plan.source_path.clone(),
+        parent: None,
+        goal: None,
+        registered_at: Some(boop::bus::now_iso()),
+        base_sha: None,
+        worktree_dir: None,
+        app_server_socket: plan.app_server_socket.clone(),
+    };
+    write_route(&dir, name, route.clone())?;
     // The projector pass joins every sync_cursor row (~190ms on a 4k-session
     // store); running it each 250ms tick burned a core per wrapper.
     const EXIT_POLL: Duration = Duration::from_millis(250);
@@ -137,6 +138,21 @@ pub(crate) fn run_native_tui(
             continue;
         }
         last_project = std::time::Instant::now();
+        // A fresh TUI opens its session at its first prompt, after the route
+        // was written; the route learns the id the first tick it exists.
+        if route.session_id.is_none() {
+            match opened_session(adapter, cwd, opened_ms, Duration::ZERO) {
+                Some(session) => {
+                    route.source_path = Some(format!("native-session={session}"));
+                    route.session_id = Some(session);
+                    write_route(&dir, name, route.clone())?;
+                }
+                None => {
+                    std::thread::sleep(EXIT_POLL);
+                    continue;
+                }
+            }
+        }
         if let Some(store) = store.as_ref() {
             if let Err(error) = crate::cli::db::sync_native_child_route_once(
                 store,

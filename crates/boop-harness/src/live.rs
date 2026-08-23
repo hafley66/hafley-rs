@@ -45,6 +45,9 @@ pub struct LiveSession {
     pub status: LiveStatus,
     pub door: DoorAddress,
     pub observed_ms: u64,
+    /// When the session began, from the harness's own record; `None` where
+    /// the registry keeps no start time.
+    pub started_ms: Option<u64>,
 }
 
 /// The live-session registry of one harness.
@@ -112,6 +115,7 @@ mod tests {
             status: LiveStatus::Unknown,
             door: DoorAddress::None,
             observed_ms: 0,
+            started_ms: None,
         }
     }
 

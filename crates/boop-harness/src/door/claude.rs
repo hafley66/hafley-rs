@@ -127,6 +127,8 @@ struct RegistryFile {
     peer_features: Vec<String>,
     #[serde(default)]
     updated_at: Option<u64>,
+    #[serde(default)]
+    started_at: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -161,6 +163,7 @@ impl RegistryFile {
             status: self.status(),
             door,
             observed_ms: self.updated_at.unwrap_or_else(now_ms),
+            started_ms: self.started_at,
         }
     }
 }

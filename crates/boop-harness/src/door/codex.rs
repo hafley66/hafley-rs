@@ -88,7 +88,8 @@ impl LiveSessions for CodexDoor {
         )
         .with_context(|| format!("open {}", db.display()))?;
         let mut statement = connection.prepare(
-            "SELECT id, cwd, COALESCE(updated_at_ms, updated_at * 1000) \
+            "SELECT id, cwd, COALESCE(updated_at_ms, updated_at * 1000), \
+             COALESCE(created_at_ms, created_at * 1000) \
              FROM threads WHERE archived = 0 ORDER BY updated_at DESC",
         )?;
         let rows = statement.query_map([], |row| {
@@ -96,12 +97,13 @@ impl LiveSessions for CodexDoor {
                 row.get::<_, String>(0)?,
                 row.get::<_, Option<String>>(1)?,
                 row.get::<_, Option<i64>>(2)?.unwrap_or(0) as u64,
+                row.get::<_, Option<i64>>(3)?.map(|ms| ms as u64),
             ))
         })?;
         let floor = now_ms().saturating_sub(RECENT_MS);
         let mut live = Vec::new();
         for row in rows {
-            let (id, cwd, updated_ms) = row?;
+            let (id, cwd, updated_ms, created_ms) = row?;
             if updated_ms < floor {
                 continue;
             }
@@ -119,6 +121,7 @@ impl LiveSessions for CodexDoor {
                     thread: id,
                 },
                 observed_ms: updated_ms,
+                started_ms: created_ms,
             });
         }
         Ok(live)
@@ -153,6 +156,9 @@ impl Door for CodexDoor {
     fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan> {
         let socket = self.start_daemon(&spec.executable)?;
         let (requested_thread, forwarded) = explicit_resume(&spec.args)?;
+        // The TUI opens its thread at its first prompt; `thread/start` on the
+        // daemon makes a thread `codex resume` refuses (no rollout until a
+        // turn), so the wrapper adopts the TUI's thread once it exists.
         Ok(NativeTuiPlan {
             program: spec.executable.clone(),
             args: native_tui_args(requested_thread.as_deref(), &socket, &spec.cwd, forwarded),

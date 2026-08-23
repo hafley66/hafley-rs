@@ -100,6 +100,7 @@ mod tests {
             status: LiveStatus::Unknown,
             door: DoorAddress::None,
             observed_ms: 0,
+            started_ms: None,
         }
     }
 

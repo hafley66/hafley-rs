@@ -206,6 +206,16 @@ fn live_session(
     let Some(session_id) = route.session_id.as_deref() else {
         return Ok(None);
     };
+    // Codex and opencode registries record no pane, so the route's session
+    // id is the match; the registry carries the door the store cannot.
+    if let Some(live) = harness
+        .live()
+        .live_sessions()?
+        .into_iter()
+        .find(|session| session.session_id == session_id)
+    {
+        return Ok(Some(live));
+    }
     Ok(store.live_row(session_id)?.map(|row| projected(id, row)))
 }
 
@@ -225,6 +235,7 @@ fn projected(id: HarnessId, row: LiveRow) -> LiveSession {
         },
         door: door_address(row.door_kind.as_deref(), row.door_addr.as_deref()),
         observed_ms: boop_harness::live::now_ms(),
+        started_ms: None,
     }
 }
 

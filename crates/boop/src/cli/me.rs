@@ -402,6 +402,7 @@ mod tests {
                 status: boop::live::LiveStatus::Idle,
                 door: boop::live::DoorAddress::None,
                 observed_ms: 1,
+                started_ms: None,
             }])
         }
     }
