@@ -160,6 +160,9 @@ pub struct SpawnSpec {
     /// opencode reasoning-effort variant (`--variant low|medium|high`).
     /// `None` emits no flag, keeping opencode's own per-model default.
     pub variant: Option<String>,
+    /// The executable the harness runs as, replacing its own binary (`ccz` is
+    /// claude under the z.ai env). `None` is the harness's own binary.
+    pub bin: Option<String>,
     /// Shell appended after the harness command exits; it may read `$__rc`
     /// (the harness exit code), which the lane re-raises afterwards.
     pub on_exit: Option<String>,

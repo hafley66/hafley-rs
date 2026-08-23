@@ -128,6 +128,7 @@ fn spawn_spec(
         env_stamp: None,
         model: None,
         variant: None,
+        bin: None,
         on_exit: None,
         tmux: None,
         lane: lane.to_owned(),

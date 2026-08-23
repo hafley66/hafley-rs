@@ -703,6 +703,7 @@ fn main() -> Result<()> {
                     on_exit: None,
                     warm_start: true,
                     variant: None,
+                    bin: None,
                 },
             ),
             SubCmd::Resolve { to, mail_dir } => run_resolve(&to, mail_dir.as_deref()),
@@ -764,6 +765,7 @@ fn main() -> Result<()> {
                     model,
                     preset,
                     variant: None,
+                    bin: None,
                     tmux,
                     parent,
                     branch,
@@ -1215,6 +1217,11 @@ enum LaneCmd {
         /// the preset's variant, and opencode's default applies when neither.
         #[arg(long)]
         variant: Option<String>,
+        /// Run the harness as this executable instead of its own binary
+        /// (`ccz` is claude under the z.ai env). CLI wins over the preset's
+        /// `bin`; the harness's own binary applies when neither names one.
+        #[arg(long)]
+        bin: Option<String>,
         /// Block until the lane's on-exit result row lands, then exit with its
         /// rc. Without a parent, the waiter owns a private result recipient.
         #[arg(long)]
@@ -1259,6 +1266,9 @@ enum LaneCmd {
         /// opencode reasoning-effort variant, threaded from `lane create`.
         #[arg(long)]
         variant: Option<String>,
+        /// The executable the harness runs as, threaded from `lane create`.
+        #[arg(long)]
+        bin: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -1908,6 +1918,62 @@ mod tests {
                 !startup_sync_wanted(cli.command.as_ref().unwrap(), true),
                 "{argv:?} must skip the sync under the hatch"
             );
+        }
+    }
+
+    /// RECEIPT. `--bin` reaches both legs of the lane pair: `lane create`
+    /// parses it into the spawn args, and `lane run` (the line the pane runs)
+    /// parses it back out.
+    #[test]
+    fn lane_create_and_lane_run_both_take_a_bin_override() {
+        let cli = Cli::try_parse_from([
+            "boop",
+            "beep",
+            "lane",
+            "create",
+            "--lane",
+            "bin-probe",
+            "--preset",
+            "zfable",
+            "--bin",
+            "ccz",
+        ])
+        .expect("parse lane create --bin");
+        match cli.command {
+            Some(SubCmd::Beep {
+                cmd:
+                    BeepCmd::Lane {
+                        cmd: LaneCmd::Create { bin, preset, .. },
+                    },
+            }) => {
+                assert_eq!(bin.as_deref(), Some("ccz"));
+                assert_eq!(preset.as_deref(), Some("zfable"));
+            }
+            other => panic!("lane create parsed as {:?}", other.is_some()),
+        }
+        let cli = Cli::try_parse_from([
+            "boop",
+            "beep",
+            "lane",
+            "run",
+            "--lane",
+            "bin-probe",
+            "--harness",
+            "claude",
+            "--brief",
+            "/tmp/brief.md",
+            "--bin",
+            "ccz",
+        ])
+        .expect("parse lane run --bin");
+        match cli.command {
+            Some(SubCmd::Beep {
+                cmd:
+                    BeepCmd::Lane {
+                        cmd: LaneCmd::Run { bin, .. },
+                    },
+            }) => assert_eq!(bin.as_deref(), Some("ccz")),
+            other => panic!("lane run parsed as {:?}", other.is_some()),
         }
     }
 

@@ -284,6 +284,9 @@ pub fn supervisor_command(spec: &SpawnSpec) -> String {
     if let Some(variant) = spec.variant.as_deref().filter(|value| !value.is_empty()) {
         command.push_str(&format!(" --variant {}", quote(variant)));
     }
+    if let Some(bin) = spec.bin.as_deref().filter(|value| !value.is_empty()) {
+        command.push_str(&format!(" --bin {}", quote(bin)));
+    }
     if let Some(session) = &spec.resume_session {
         command.push_str(&format!(" --resume {}", quote(session)));
     }
@@ -380,4 +383,53 @@ pub(crate) fn assert_fixture_sessions_project(
     assert_eq!(graph.sessions.len(), sessions.len());
     assert!(graph.edges.len() >= expected_edges);
     let _ = std::fs::remove_file(path);
+}
+
+#[cfg(test)]
+mod supervisor_command_tests {
+    use super::*;
+
+    fn spec() -> SpawnSpec {
+        SpawnSpec {
+            harness: HarnessId::Claude,
+            branch: "lane-test".to_owned(),
+            base_sha: "0".repeat(40),
+            main_tree: true,
+            setup: Vec::new(),
+            prompt: "/tmp/brief.md".to_owned(),
+            resume_session: None,
+            socket: None,
+            worktree_dir: None,
+            repo: std::env::temp_dir(),
+            env_stamp: None,
+            model: Some("claude-fable-5@high".to_owned()),
+            variant: None,
+            bin: None,
+            on_exit: None,
+            tmux: None,
+            lane: "bin-probe".to_owned(),
+            mail_dir: std::env::temp_dir(),
+            warm_start: false,
+        }
+    }
+
+    /// RECEIPT. The executable override rides the pane's own command line, so
+    /// the supervisor the pane starts opens its channel under that binary.
+    /// Sabotage: dropping the `--bin` arm leaves the lane on plain `claude`
+    /// while the preview still claims otherwise.
+    #[test]
+    fn the_spawn_line_carries_the_bin_override() {
+        let plain = supervisor_command(&spec());
+        assert!(!plain.contains("--bin"), "{plain}");
+        let overridden = supervisor_command(&SpawnSpec {
+            bin: Some("ccz".to_owned()),
+            ..spec()
+        });
+        assert!(overridden.contains("--bin 'ccz'"), "{overridden}");
+        let empty = supervisor_command(&SpawnSpec {
+            bin: Some(String::new()),
+            ..spec()
+        });
+        assert!(!empty.contains("--bin"), "{empty}");
+    }
 }
