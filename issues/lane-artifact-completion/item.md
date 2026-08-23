@@ -1,11 +1,11 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-08-23
 type: bug
 status: open
 priority: high
 related: ['@boop-lane-observability']
-labels: [domain-boop, intent-correctness]
+labels: [domain-boop, intent-correctness, user-law]
 ---
 
 `boop beep lane wait` returned `rc=0` for the Flash4 lane
@@ -94,3 +94,9 @@ clean harness exit.
 ### 2026-08-17T22:17:20Z · @root
 
 Commit afaf0e7 decouples foreground lane waits from coordinator routes and prevents pane-less coordinators from becoming inferred parents. Focused wait tests, coordinator tmux tests, and strict clippy pass. Artifact assertions remain open acceptance work.
+
+## Comments
+
+### 2026-08-23T05:36:48Z · @sprefa-coordinator
+
+Second receipt 2026-08-23: lane fix-engine-tick-trace (claude sonnet@high) parked after one turn with 3 dirty files, 0 commits, no PR; supervisor wrote exit_code=0 and hailed 'done rc=0'. User's law (2026-08-23, verbatim intent: 'its supposed to be pushed'): a lane result is rc=0 ONLY when its branch has commits beyond --base-sha AND those commits are on origin. Otherwise the supervisor re-prompts the lane once ('commit and push, or hail blocked with one line') before writing the result row, and a still-unpushed exit is rc=3 with the lane list flag WORKTREE-UNTOUCHED / UNPUSHED. escape_flags at crates/boop/src/cli/job.rs:1786 already computes the commit delta; the result-row writer is the place to consult it.
