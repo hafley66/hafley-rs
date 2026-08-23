@@ -70,6 +70,7 @@ impl LiveSessions for OneSession {
                 token: Some("never-projected".into()),
             },
             observed_ms: 7,
+            started_ms: None,
         }])
     }
 }

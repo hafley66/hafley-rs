@@ -280,6 +280,5 @@ Every lane: no new `&str` harness comparisons (CI grep in §8), no em dashes, no
 | no literal matching | `grep -rnE '== *"(claude|codex|kimi|opencode)"\|"(claude\|codex\|kimi\|opencode)" *=>' crates --include=*.rs \| grep -v tests` | 0 lines |
 | workspace builds and tests | `cargo test --workspace` | green except the pre-existing `inbox_hooks::a_hail_during_a_long_turn…` |
 | replace-a-harness drill | a test-only `impl Harness for Echo` registered in `Registry::with(vec![...])` under `HarnessId::Kimi` | the shared rails answer from `Echo`'s static with no other edit. It is a replace drill, never an add drill: `HarnessId` is a closed enum, so a fifth harness adds a variant before its impl |
-| claude door live | `boop beep hail <claude-route> "ping"` against a real `boop tui claude` pane | message appears in that pane at its next turn boundary |
-| codex door live | same against `boop tui codex` | message queued via `codex queue` |
+| doors live, all three | `crates/boop/scripts/door-e2e.sh` (tmux, real `claude`, `codex`, `opencode` TUIs via `boop tui`, no keystrokes typed; codex resumes the newest thread of the cwd because a thread is resumable only after a turn) | `pass=3 fail=0`; 2026-08-23: PASS claude-4062 (queued-for-turn-boundary), codex-4063 (injected), opencode-4064 (injected) |
 | instant | `cargo check` in `instant/src-tauri` after it points at the new trait | compiles |
