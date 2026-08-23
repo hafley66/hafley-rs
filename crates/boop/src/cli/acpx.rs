@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 
 use boop::bus::Route;
 use boop::config;
+use boop::harness::HarnessId;
 
 use crate::cli::{mail_dir, write_route};
 
@@ -49,7 +50,7 @@ fn checked(args: &[String], cwd: &Path) -> Result<Output> {
 fn prompt_args(route: &Route, body: &str, no_wait: bool) -> Result<Vec<String>> {
     let agent = route
         .harness
-        .as_deref()
+        .map(HarnessId::as_str)
         .context("ACPX route has no agent")?;
     let session = route
         .session_id
@@ -94,7 +95,7 @@ fn resolve_agent_and_model(preset: &str) -> Result<(String, Option<String>)> {
     let model = config::resolve_model(preset, &path)?;
     let agent = boop::lane::harness_for_model(&model)?
         .context("model preset does not select an ACP agent")?;
-    Ok((agent.into_owned(), Some(model)))
+    Ok((agent.as_str().to_owned(), Some(model)))
 }
 
 pub(crate) fn run_foreground(
@@ -110,7 +111,7 @@ pub(crate) fn run_foreground(
     let reusable = routes.get(name).is_some_and(|route| {
         route.kind == "coordinator"
             && route.mode.as_deref() == Some("acpx")
-            && route.harness.as_deref() == Some(agent.as_str())
+            && route.harness.map(HarnessId::as_str) == Some(agent.as_str())
             && route.cwd.as_deref() == Some(cwd.to_string_lossy().as_ref())
     });
     if !reusable {
@@ -132,7 +133,7 @@ pub(crate) fn run_foreground(
         name,
         Route {
             kind: "coordinator".into(),
-            harness: Some(agent.clone()),
+            harness: HarnessId::parse(&agent),
             tmux: std::env::var("TMUX_PANE").ok(),
             cwd: Some(cwd.display().to_string()),
             model,
@@ -176,7 +177,7 @@ mod tests {
     fn route() -> Route {
         Route {
             kind: "coordinator".into(),
-            harness: Some("codex".into()),
+            harness: Some(HarnessId::Codex),
             tmux: None,
             cwd: Some("/tmp/project".into()),
             model: Some("gpt-5.6-terra@medium".into()),

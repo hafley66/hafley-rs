@@ -25,7 +25,7 @@ use crate::{
 
 pub(crate) fn run_harnesses(registry: &Registry) -> Result<()> {
     for harness in registry.all() {
-        line(harness.id());
+        line(harness.id().as_str());
     }
     Ok(())
 }
@@ -169,9 +169,8 @@ pub(crate) fn emit_rows(rows: &[ident::Row], format: QueryFormat) {
 // ---------------------------------------------------------------------------
 
 /// One adapter's leg of a sync pass, in milliseconds.
-#[derive(Default)]
 pub(crate) struct AdapterPhase {
-    harness: &'static str,
+    harness: boop::harness::HarnessId,
     candidates_ms: u128,
     candidates: usize,
     backfill_ms: u128,
@@ -179,10 +178,13 @@ pub(crate) struct AdapterPhase {
 }
 
 impl AdapterPhase {
-    fn new(harness: &'static str) -> Self {
+    fn new(harness: boop::harness::HarnessId) -> Self {
         AdapterPhase {
             harness,
-            ..Default::default()
+            candidates_ms: 0,
+            candidates: 0,
+            backfill_ms: 0,
+            pending: 0,
         }
     }
 
@@ -522,7 +524,7 @@ pub(crate) fn sync_all_budgeted(
             break;
         }
         tracing::debug!(
-            harness = adapter.id(),
+            harness = adapter.id().as_str(),
             session_id = session.session_id,
             "transcript session sync started"
         );
@@ -561,11 +563,13 @@ pub(crate) fn sync_all_budgeted(
         |parent, child, route_name| {
             let Some(harness) = native_child_routes
                 .get(route_name)
-                .and_then(|route| route.harness.as_deref())
+                .and_then(|route| route.harness)
             else {
                 return Ok(false);
             };
-            resolve_harness(registry, harness)?.native_child_completion_visible(parent, child)
+            registry
+                .get(harness)
+                .native_child_completion_visible(parent, child)
         },
         |message| {
             if let Err(error) = deliver_hail(registry, &native_child_mail_dir, message, None) {
@@ -876,7 +880,7 @@ pub(crate) fn resolve_harness<'a>(
     id: &str,
 ) -> Result<&'a dyn boop::harness::Harness> {
     registry
-        .by_id(id)
+        .by_name(id)
         .with_context(|| format!("no harness registered with id `{id}`"))
 }
 
@@ -1404,13 +1408,27 @@ mod tests {
     };
     use clap::{CommandFactory, Parser};
 
+    use boop::harness::{Capabilities, HarnessId, LanePolicy, MailPolicy, VariantSupport};
+
+    static CAPABILITIES: Capabilities = Capabilities {
+        bans_plan_family_models: false,
+        lanes: LanePolicy::Allowed,
+        variant: VariantSupport::None,
+        mail: MailPolicy::Keystrokes,
+        native_tui_projector: false,
+    };
+
     struct FakeHarness {
         events: Vec<NativeChildEvent>,
     }
 
     impl Harness for FakeHarness {
-        fn id(&self) -> &'static str {
-            "fake"
+        fn id(&self) -> HarnessId {
+            HarnessId::Kimi
+        }
+
+        fn capabilities(&self) -> &'static Capabilities {
+            &CAPABILITIES
         }
 
         fn sessions(&self) -> Result<Vec<SessionRef>> {
@@ -1439,8 +1457,12 @@ mod tests {
     }
 
     impl Harness for WatchingHarness {
-        fn id(&self) -> &'static str {
-            "fake"
+        fn id(&self) -> HarnessId {
+            HarnessId::Kimi
+        }
+
+        fn capabilities(&self) -> &'static Capabilities {
+            &CAPABILITIES
         }
 
         fn sessions(&self) -> Result<Vec<SessionRef>> {
@@ -1522,8 +1544,12 @@ mod tests {
     }
 
     impl Harness for CodexFixtureHarness {
-        fn id(&self) -> &'static str {
-            "codex"
+        fn id(&self) -> HarnessId {
+            HarnessId::Codex
+        }
+
+        fn capabilities(&self) -> &'static Capabilities {
+            &CAPABILITIES
         }
 
         fn sessions(&self) -> Result<Vec<SessionRef>> {
@@ -1568,7 +1594,7 @@ mod tests {
 
     fn native_child_session(dir: &Path) -> SessionRef {
         SessionRef {
-            harness: "fake",
+            harness: HarnessId::Kimi,
             session_id: "child-session".into(),
             nickname: "child-session".into(),
             path: dir.join("child.transcript"),
@@ -1585,7 +1611,7 @@ mod tests {
     fn native_parent_routes() -> BTreeMap<String, bus::Route> {
         let mut route = route_with(None);
         route.kind = "native".into();
-        route.harness = Some("fake".into());
+        route.harness = Some(HarnessId::Kimi);
         route.session_id = Some("parent-session".into());
         BTreeMap::from([("parent-route".into(), route)])
     }
@@ -1826,14 +1852,14 @@ mod tests {
         .unwrap();
         let mut route = route_with(None);
         route.kind = "native".into();
-        route.harness = Some("fake".into());
+        route.harness = Some(HarnessId::Kimi);
         route.cwd = Some("/resident".into());
         route.session_id = Some("parent-session".into());
         write_route(&dir, "resident-parent", route).unwrap();
         let db_path = dir.join("boop.db");
         let watcher = WatchingHarness {
             session: SessionRef {
-                harness: "fake",
+                harness: HarnessId::Kimi,
                 session_id: "child-session".into(),
                 nickname: "child-session".into(),
                 path: transcript.clone(),
@@ -1916,7 +1942,7 @@ mod tests {
         std::fs::write(&transcript, format!("{metadata}\n")).unwrap();
         let mut route = route_with(None);
         route.kind = "native".into();
-        route.harness = Some("codex".into());
+        route.harness = Some(HarnessId::Codex);
         route.cwd = Some("/Users/chrishafley/projects/sprefa".into());
         route.session_id = Some(PARENT.into());
         route.source_path = Some(format!(
@@ -1925,7 +1951,7 @@ mod tests {
         write_route(&dir, "codex-live-parent", route).unwrap();
         let watcher = CodexFixtureHarness {
             session: SessionRef {
-                harness: "codex",
+                harness: HarnessId::Codex,
                 session_id: CHILD.into(),
                 nickname: CHILD.into(),
                 path: transcript.clone(),
@@ -2105,7 +2131,7 @@ mod tests {
 
     fn session_with_cwd(cwd: Option<&str>) -> boop::harness::SessionRef {
         boop::harness::SessionRef {
-            harness: "opencode",
+            harness: HarnessId::Opencode,
             session_id: "ses-1".into(),
             nickname: "ses-1".into(),
             path: std::path::PathBuf::from("/tmp/x.jsonl"),

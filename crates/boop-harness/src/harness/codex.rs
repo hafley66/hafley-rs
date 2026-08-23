@@ -5,12 +5,10 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use crate::harness::{
-    jsonl_files, Capabilities, Harness, Ingested, KnownSessions, NativeChildEvent,
-    NativeSessionRef, NativeSessionResolver, NativeTuiPlan, NativeTuiSpec, ReadChunk, SendOutcome,
-    SessionRef, SpawnSpec,
+    jsonl_files, Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, KnownSessions,
+    LanePolicy, MailPolicy, NativeChildEvent, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
 };
 use anyhow::Context;
 use boop_store::event::AgentEvent;
@@ -20,6 +18,19 @@ use boop_store::tail;
 use serde_json::Value;
 
 pub struct Codex;
+
+/// Reasoning effort rides the `model@effort` suffix, so `--variant` has no
+/// spelling here; the native TUI needs the store projector beside it.
+static CAPABILITIES: Capabilities = Capabilities {
+    bans_plan_family_models: false,
+    lanes: LanePolicy::Allowed,
+    variant: VariantSupport::ModelSuffixEffort,
+    mail: MailPolicy::Door,
+    native_tui_projector: true,
+};
+
+/// The state database and remote-control socket of the codex on this machine.
+static DOOR: crate::door::codex::CodexDoor = crate::door::codex::CodexDoor::machine();
 
 impl Harness for Codex {
     fn identity_process(&self) -> Option<crate::identity::Identity> {
@@ -33,7 +44,7 @@ impl Harness for Codex {
         Some(crate::identity::Identity {
             session: Some(session),
             lane: Some(format!("codex-{}", pane.trim_start_matches('%'))),
-            harness: Some(self.id().to_owned()),
+            harness: Some(self.id().to_string()),
             pane: Some(pane),
             rung: Some(crate::identity::Rung::CodexProcess),
             ..Default::default()
@@ -50,78 +61,31 @@ impl Harness for Codex {
         )?))
     }
 
-    fn id(&self) -> &'static str {
-        "codex"
+    fn id(&self) -> HarnessId {
+        HarnessId::Codex
+    }
+
+    fn capabilities(&self) -> &'static Capabilities {
+        &CAPABILITIES
+    }
+
+    fn live(&self) -> &dyn crate::live::LiveSessions {
+        &DOOR
+    }
+
+    fn door(&self) -> &dyn crate::door::Door {
+        &DOOR
     }
 
     /// `send_midflight` stays false: `codex exec` reads no stdin mid-turn,
     /// and interactive codex never exits, so the on-exit hail never fires.
-    fn capabilities(&self) -> Capabilities {
-        Capabilities {
+    fn control_capabilities(&self) -> ControlCapabilities {
+        ControlCapabilities {
             send_midflight: false,
             resume: true,
             spawn: true,
             subagent_visible: true,
         }
-    }
-
-    fn prepare_native_tui(&self, spec: &NativeTuiSpec) -> anyhow::Result<NativeTuiPlan> {
-        let output = Command::new(&spec.executable)
-            .args(["remote-control", "start", "--json"])
-            .output()
-            .context("start managed Codex remote-control daemon")?;
-        anyhow::ensure!(
-            output.status.success(),
-            "Codex remote-control start failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-        let socket = daemon_socket_from_start(&String::from_utf8_lossy(&output.stdout))
-            .context("Codex remote-control start did not report an app-server socket")?;
-        let (requested_thread, forwarded_args) = explicit_resume(&spec.args)?;
-        let proxy = boop_acp::channel::codex::InspectingProxy::start(Path::new(&socket))?;
-        let local_socket = proxy.socket().display().to_string();
-        let args = native_tui_args(
-            requested_thread.as_deref(),
-            &local_socket,
-            &spec.cwd,
-            forwarded_args,
-        );
-        Ok(NativeTuiPlan {
-            program: spec.executable.clone(),
-            args,
-            mode: "native-remote".into(),
-            session_id: requested_thread.clone(),
-            source_path: requested_thread
-                .as_ref()
-                .map(|thread| format!("managed-app-server={socket};requested-resume={thread}")),
-            app_server_socket: Some(socket),
-            session_resolver: Some(Box::new(CodexSessionResolver(proxy))),
-        })
-    }
-
-    fn send_native(&self, session: &NativeSessionRef, text: &str) -> anyhow::Result<SendOutcome> {
-        let socket = session
-            .app_server_socket
-            .as_deref()
-            .context("native Codex session has no app-server socket")?;
-        let output = Command::new("codex")
-            .args([
-                "queue",
-                "--thread",
-                &session.session_id,
-                "--message",
-                text,
-                "--remote",
-            ])
-            .arg(format!("unix://{}", socket.display()))
-            .output()
-            .context("queue message through Codex remote control")?;
-        anyhow::ensure!(
-            output.status.success(),
-            "Codex remote queue failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-        Ok(SendOutcome::Injected)
     }
 
     fn preview_command(&self, spec: &SpawnSpec) -> Option<String> {
@@ -143,7 +107,7 @@ impl Harness for Codex {
             &command,
         )?;
         Ok(SessionRef {
-            harness: "codex",
+            harness: HarnessId::Codex,
             session_id: session_id.clone(),
             nickname: session_id,
             // Codex mints its own rollout id; sync discovers the transcript
@@ -269,113 +233,6 @@ impl Harness for Codex {
             .with_context(|| format!("open parent transcript {}", parent.path.display()))?;
         let lines = tail::read_complete_lines(&mut file, 0)?.lines;
         Ok(native_completion_satisfies_delivery(&lines, child_session))
-    }
-}
-
-struct CodexSessionResolver(boop_acp::channel::codex::InspectingProxy);
-
-impl NativeSessionResolver for CodexSessionResolver {
-    fn resolve(&mut self, timeout: std::time::Duration) -> anyhow::Result<String> {
-        self.0.resolve(timeout)
-    }
-
-    fn route_registered(&mut self) -> anyhow::Result<()> {
-        self.0.route_registered()
-    }
-}
-
-fn native_tui_args(
-    thread: Option<&str>,
-    socket: &str,
-    cwd: &Path,
-    forwarded: &[String],
-) -> Vec<std::ffi::OsString> {
-    let mut args = Vec::new();
-    if let Some(thread) = thread {
-        args.push("resume".into());
-        args.push(thread.into());
-    }
-    args.extend([
-        "--remote".into(),
-        format!("unix://{socket}").into(),
-        "--cd".into(),
-        cwd.as_os_str().to_owned(),
-    ]);
-    args.extend(forwarded.iter().map(Into::into));
-    args
-}
-
-fn explicit_resume(tui_args: &[String]) -> anyhow::Result<(Option<String>, &[String])> {
-    if tui_args.first().map(String::as_str) != Some("resume") {
-        return Ok((None, tui_args));
-    }
-    let thread = tui_args
-        .get(1)
-        .filter(|value| !value.starts_with('-'))
-        .context("`boop tui codex -- resume` requires an explicit thread id")?;
-    Ok((Some(thread.clone()), &tui_args[2..]))
-}
-
-/// Interpret only the interactive settings represented by `thread/start`.
-/// All other arguments remain untouched for the native TUI. Omitted fields
-/// deliberately let the managed app-server use its configured defaults.
-fn interactive_thread_start(
-    cwd: &Path,
-    tui_args: &[String],
-) -> anyhow::Result<boop_acp::channel::codex::InteractiveThreadStart> {
-    let mut start = boop_acp::channel::codex::InteractiveThreadStart {
-        cwd: cwd.to_path_buf(),
-        ..Default::default()
-    };
-    let mut args = tui_args.iter();
-    while let Some(argument) = args.next() {
-        let (flag, inline) = argument
-            .split_once('=')
-            .map_or((argument.as_str(), None), |(flag, value)| {
-                (flag, Some(value))
-            });
-        let mut value = |flag: &str| -> anyhow::Result<String> {
-            inline
-                .map(str::to_owned)
-                .or_else(|| args.next().cloned())
-                .filter(|value| !value.starts_with('-'))
-                .with_context(|| format!("{flag} requires a value"))
-        };
-        match flag {
-            "-m" | "--model" => start.model = Some(value(flag)?),
-            "-s" | "--sandbox" => start.sandbox = Some(value(flag)?),
-            "-a" | "--ask-for-approval" => start.approval_policy = Some(value(flag)?),
-            "--approve-for-me" => {
-                start.sandbox = Some("workspace-write".into());
-                start.approvals_reviewer = Some("auto_review".into());
-            }
-            "--dangerously-bypass-approvals-and-sandbox" => {
-                start.sandbox = Some("danger-full-access".into());
-                start.approval_policy = Some("never".into());
-            }
-            _ => {}
-        }
-    }
-    Ok(start)
-}
-
-fn daemon_socket_from_start(text: &str) -> Option<String> {
-    let value: serde_json::Value = serde_json::from_str(text.trim()).ok()?;
-    value
-        .get("daemon")
-        .and_then(|daemon| daemon.get("socketPath"))
-        .and_then(serde_json::Value::as_str)
-        .filter(|socket| socket.ends_with(".sock"))
-        .map(str::to_owned)
-        .or_else(|| find_socket(&value))
-}
-
-fn find_socket(value: &serde_json::Value) -> Option<String> {
-    match value {
-        serde_json::Value::String(value) if value.ends_with(".sock") => Some(value.clone()),
-        serde_json::Value::Array(values) => values.iter().find_map(find_socket),
-        serde_json::Value::Object(values) => values.values().find_map(find_socket),
-        _ => None,
     }
 }
 
@@ -584,7 +441,7 @@ fn sessions_in_with_known(base: &Path, known: &KnownSessions) -> anyhow::Result<
 
         if let Some(known) = known.get(path) {
             sessions.push(SessionRef {
-                harness: "codex",
+                harness: HarnessId::Codex,
                 session_id: known.session_id.clone(),
                 nickname: known.nickname.clone(),
                 path: path.to_path_buf(),
@@ -604,7 +461,7 @@ fn sessions_in_with_known(base: &Path, known: &KnownSessions) -> anyhow::Result<
         };
 
         sessions.push(SessionRef {
-            harness: "codex",
+            harness: HarnessId::Codex,
             session_id: meta.session_id,
             nickname: meta.nickname,
             path: path.to_path_buf(),
@@ -684,7 +541,7 @@ fn parse_line(session: &SessionRef, line: &tail::CompleteLine) -> Option<AgentEv
     }
 
     Some(AgentEvent {
-        harness: session.harness,
+        harness: session.harness.as_str(),
         session_id: session.session_id.clone(),
         ts_ms,
         uuid,
@@ -895,7 +752,8 @@ fn project_line(
 
 #[cfg(test)]
 mod tests {
-    use std::path::{Path, PathBuf};
+    use crate::harness::HarnessId;
+    use std::path::PathBuf;
 
     use std::fs::OpenOptions;
     use std::io::Write;
@@ -905,21 +763,9 @@ mod tests {
     use boop_store::Store;
 
     use super::{
-        daemon_socket_from_start, explicit_resume, interactive_thread_start,
         native_child_events_from_lines, native_completion_notification,
-        native_completion_satisfies_delivery, native_tui_args, sessions_in, sessions_in_with_known,
-        Codex,
+        native_completion_satisfies_delivery, sessions_in, sessions_in_with_known, Codex,
     };
-
-    #[test]
-    fn remote_control_start_socket_is_read_without_assuming_its_json_key() {
-        let output =
-            r#"{"daemon":{"socketPath":"/tmp/codex.sock","otherSocket":"/tmp/wrong.sock"}}"#;
-        assert_eq!(
-            daemon_socket_from_start(output).as_deref(),
-            Some("/tmp/codex.sock")
-        );
-    }
 
     #[test]
     fn native_completion_requires_the_structured_notification_and_exact_child() {
@@ -993,82 +839,6 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn explicit_resume_is_separated_from_forwarded_tui_arguments() {
-        let args = vec![
-            "resume".to_string(),
-            "019ffb9b-51cb-7e92-be44-4eb469f46d95".to_string(),
-            "--no-alt-screen".to_string(),
-        ];
-        let (thread, forwarded) = explicit_resume(&args).expect("explicit resume");
-        assert_eq!(
-            thread.as_deref(),
-            Some("019ffb9b-51cb-7e92-be44-4eb469f46d95")
-        );
-        assert_eq!(forwarded, ["--no-alt-screen"]);
-    }
-
-    #[test]
-    fn a_fresh_launch_forwards_every_tui_argument() {
-        let args = vec!["--no-alt-screen".to_string()];
-        let (thread, forwarded) = explicit_resume(&args).expect("fresh launch");
-        assert_eq!(thread, None);
-        assert_eq!(forwarded, args);
-    }
-
-    #[test]
-    fn native_launch_resumes_the_thread_that_was_already_created() {
-        let cwd = PathBuf::from("/tmp/project");
-        let explicit = native_tui_args(Some("thread-1"), "/tmp/codex.sock", &cwd, &[]);
-        assert_eq!(
-            explicit,
-            [
-                "resume",
-                "thread-1",
-                "--remote",
-                "unix:///tmp/codex.sock",
-                "--cd",
-                "/tmp/project"
-            ]
-        );
-        let fresh = native_tui_args(Some("thread-started"), "/tmp/codex.sock", &cwd, &[]);
-        assert_eq!(
-            fresh,
-            [
-                "resume",
-                "thread-started",
-                "--remote",
-                "unix:///tmp/codex.sock",
-                "--cd",
-                "/tmp/project"
-            ]
-        );
-    }
-
-    #[test]
-    fn fresh_interactive_start_uses_defaults_unless_the_tui_overrides_them() {
-        let defaults = interactive_thread_start(Path::new("/repo"), &[]).unwrap();
-        assert_eq!(defaults.cwd, PathBuf::from("/repo"));
-        assert_eq!(defaults.model, None);
-        assert_eq!(defaults.sandbox, None);
-        assert_eq!(defaults.approval_policy, None);
-        assert_eq!(defaults.approvals_reviewer, None);
-
-        let explicit = interactive_thread_start(
-            Path::new("/repo"),
-            &[
-                "--model=gpt-5.6".into(),
-                "--sandbox".into(),
-                "workspace-write".into(),
-                "--ask-for-approval=on-request".into(),
-            ],
-        )
-        .unwrap();
-        assert_eq!(explicit.model.as_deref(), Some("gpt-5.6"));
-        assert_eq!(explicit.sandbox.as_deref(), Some("workspace-write"));
-        assert_eq!(explicit.approval_policy.as_deref(), Some("on-request"));
-    }
-
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("boop_codex_{}_{}", std::process::id(), name))
     }
@@ -1087,7 +857,7 @@ mod tests {
 
     fn session_for(path: &std::path::Path, size: u64) -> SessionRef {
         SessionRef {
-            harness: "codex",
+            harness: HarnessId::Codex,
             session_id: "ses-codex-1".to_owned(),
             nickname: "ses-codex-1".to_owned(),
             path: path.to_path_buf(),
@@ -1103,7 +873,7 @@ mod tests {
 
     #[test]
     fn codex_capabilities_are_measured() {
-        let caps = Codex.capabilities();
+        let caps = Codex.control_capabilities();
         assert!(!caps.send_midflight, "codex exec reads no stdin mid-turn");
         assert!(caps.resume);
         assert!(caps.spawn);
@@ -1163,7 +933,7 @@ mod tests {
 
     fn spawn_spec(socket: Option<String>) -> crate::harness::SpawnSpec {
         crate::harness::SpawnSpec {
-            harness: "codex".to_owned(),
+            harness: HarnessId::Codex,
             branch: "lane-test".to_owned(),
             base_sha: "0000000000000000000000000000000000000000".to_owned(),
             main_tree: true,
@@ -1483,7 +1253,7 @@ mod tests {
         known.insert(
             known_path.clone(),
             KnownSession {
-                harness: "codex".into(),
+                harness: HarnessId::Codex.as_str().to_owned(),
                 session_id: "known-session".into(),
                 nickname: "known-name".into(),
                 cwd: Some("/tmp/known".into()),

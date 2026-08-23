@@ -36,6 +36,9 @@ dirs = "5"
 # The `db` verb binds caller SQL to the store's connection; the passthrough
 # is the whole point of the verb.
 rusqlite = { version = "0.40", features = ["bundled", "trace"] }
+# An opencode door address is a base URL; `mail.rs` reads one back out of the
+# two agent_live columns as the same `url::Url` the harness handed over.
+url = "2"
 # `cli/job.rs` parses transcript timestamps against Rfc3339; hand-rolled date
 # math is gone.
 time = { version = "0.3", features = ["parsing", "formatting"] }

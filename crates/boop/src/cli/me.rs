@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use tracing::info;
 
 use boop::bus::Route;
+use boop::harness::HarnessId;
 use boop::registry::Registry;
 use boop::{bus, ident, identity, tmux};
 
@@ -15,13 +16,6 @@ use crate::cli::{line, mail_dir, now_ms, write_route};
 // ---------------------------------------------------------------------------
 // adopt / prune
 // ---------------------------------------------------------------------------
-
-#[allow(clippy::too_many_arguments)]
-/// What an adopt does about the adopted session's hook inbox.
-pub(crate) struct HookWiring {
-    pub(crate) no_hooks: bool,
-    pub(crate) uninstall: bool,
-}
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_adopt(
@@ -36,10 +30,9 @@ pub(crate) fn run_adopt(
     parent: Option<&str>,
     goal: Option<&str>,
     mail_dir_arg: Option<&Path>,
-    hooks: HookWiring,
+    uninstall_hooks: bool,
 ) -> Result<()> {
     let registry = Registry::discover();
-    let processes = crate::proc::SysinfoSnapshot::capture()?;
     run_adopt_with(
         name,
         kind,
@@ -52,10 +45,9 @@ pub(crate) fn run_adopt(
         parent,
         goal,
         mail_dir_arg,
-        hooks,
+        uninstall_hooks,
         &registry,
         tmux::mux(),
-        &processes,
     )
 }
 
@@ -72,14 +64,13 @@ pub(crate) fn run_adopt_with(
     parent: Option<&str>,
     goal: Option<&str>,
     mail_dir_arg: Option<&Path>,
-    hooks: HookWiring,
+    uninstall_hooks: bool,
     registry: &Registry,
     multiplexer: &dyn tmux::Multiplexer,
-    processes: &dyn crate::proc::ProcReader,
 ) -> Result<()> {
     // Taking the hooks out is about a project directory, not about a pane, and
     // the pane is usually already gone by the time anyone wants that.
-    if hooks.uninstall {
+    if uninstall_hooks {
         let project = adopt_cwd(cwd)?;
         let changed = write_inbox_hooks(&project, name, true)?;
         report_inbox_hooks(&project, name, true, changed);
@@ -91,16 +82,14 @@ pub(crate) fn run_adopt_with(
     }
     let dir = mail_dir(mail_dir_arg)?;
     let existing = bus::read_routes(&dir)?.remove(name);
-    let discovered_session = session_id.map(str::to_owned).or_else(|| {
-        harness.and_then(|id| {
-            registry.by_id(id).and_then(|adapter| {
-                adapter.session_id_in_pane(multiplexer, processes, tmux_session)
-            })
-        })
-    });
+    let harness = harness.map(str::parse::<HarnessId>).transpose()?;
+    let discovered_session = match session_id {
+        Some(session_id) => Some(session_id.to_owned()),
+        None => live_session_id(registry, harness, multiplexer, tmux_session)?,
+    };
     let route = Route {
         kind: kind.into(),
-        harness: harness.map(str::to_owned),
+        harness,
         tmux: Some(tmux_session.to_owned()),
         cwd: cwd.map(str::to_owned),
         model: model.map(str::to_owned),
@@ -116,16 +105,34 @@ pub(crate) fn run_adopt_with(
     };
     write_route(&dir, name, route)?;
     println!("adopted {name} -> tmux {tmux_session}");
-    // A claude pane is driven by a model between turns, so mail belongs at a
-    // turn boundary; every other harness keeps pane injection.
-    let claude = harness == Some("claude");
-    if claude && !hooks.no_hooks {
-        let project = adopt_cwd(cwd)?;
-        let changed = write_inbox_hooks(&project, name, false)?;
-        report_inbox_hooks(&project, name, false, changed);
-        println!("hails to {name} now queue for the hook inbox, never its keyboard");
-    }
     Ok(())
+}
+
+/// The session the harness's own live registry reports in the adopted pane.
+/// A target tmux cannot resolve to a pane, or a pane no session holds, leaves
+/// the route anonymous rather than carrying a guess.
+fn live_session_id(
+    registry: &Registry,
+    harness: Option<HarnessId>,
+    multiplexer: &dyn tmux::Multiplexer,
+    tmux_target: &str,
+) -> Result<Option<String>> {
+    let (Some(harness), Some(pane)) = (harness, adopt_pane(multiplexer, tmux_target)) else {
+        return Ok(None);
+    };
+    Ok(registry
+        .get(harness)
+        .live()
+        .live_session_in_pane(&pane)?
+        .map(|session| session.session_id))
+}
+
+/// The pane id an adopt target names: written as one, or resolved by tmux.
+fn adopt_pane(multiplexer: &dyn tmux::Multiplexer, target: &str) -> Option<String> {
+    if target.starts_with('%') {
+        return Some(target.to_owned());
+    }
+    boop::live::pane_of_target(target).or_else(|| multiplexer.pane_id(None, target))
 }
 
 /// The project directory whose settings carry an adopted session's hooks.
@@ -226,7 +233,7 @@ pub(crate) fn run_me(name: Option<&str>, mail_dir_arg: Option<&Path>) -> Result<
         name,
         Route {
             kind: "coordinator".into(),
-            harness: Some("codex".into()),
+            harness: Some(HarnessId::Codex),
             tmux: Some(pane.clone()),
             cwd: Some(cwd.display().to_string()),
             model: None,
@@ -306,10 +313,8 @@ mod tests {
     use crate::cli::testkit::temp_mail_dir;
     use crate::{Cli, MeCmd, SubCmd};
     use boop::bus::read_routes;
-    use boop::proc::{ProcReader, ProcessInfo};
+    use boop::harness::{Capabilities, Harness, LanePolicy, MailPolicy, VariantSupport};
     use boop::tmux::{LiveSessions, Multiplexer};
-
-    struct ClaudeProcessFixture;
 
     struct AdoptMux;
 
@@ -320,8 +325,8 @@ mod tests {
         fn session_of_pane(&self, _: Option<&str>, _: &str) -> Option<String> {
             None
         }
-        fn pane_id(&self, _: Option<&str>, _: &str) -> Option<String> {
-            None
+        fn pane_id(&self, _: Option<&str>, target: &str) -> Option<String> {
+            (target == "sprefa-5:0.0").then(|| "%77".to_owned())
         }
         fn pane_pid(&self, _: Option<&str>, _: &str) -> Option<u32> {
             Some(10)
@@ -355,15 +360,6 @@ mod tests {
         fn new_bare_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
             Ok(())
         }
-        fn send_keys_literal(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
-        fn send_text(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
-        fn send_key_named(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
         fn new_window(
             &self,
             _: Option<&str>,
@@ -382,62 +378,73 @@ mod tests {
         }
     }
 
-    impl ProcReader for ClaudeProcessFixture {
-        fn is_alive(&self, pid: u32) -> bool {
-            pid == 10 || pid == 11
+    /// A claude harness whose live registry holds one session, in one pane.
+    struct LiveClaude;
+
+    static CLAUDE_CAPABILITIES: Capabilities = Capabilities {
+        bans_plan_family_models: false,
+        lanes: LanePolicy::CoordinatorSubagentsOnly,
+        variant: VariantSupport::None,
+        mail: MailPolicy::Door,
+        native_tui_projector: false,
+    };
+
+    struct OnePane;
+
+    impl boop::live::LiveSessions for OnePane {
+        fn live_sessions(&self) -> anyhow::Result<Vec<boop::live::LiveSession>> {
+            Ok(vec![boop::live::LiveSession {
+                harness: HarnessId::Claude,
+                session_id: "da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b".into(),
+                pid: Some(11),
+                cwd: None,
+                tmux_pane: Some("%77".into()),
+                status: boop::live::LiveStatus::Idle,
+                door: boop::live::DoorAddress::None,
+                observed_ms: 1,
+            }])
         }
-        fn process(&self, pid: u32) -> Option<ProcessInfo> {
-            match pid {
-                10 => Some(ProcessInfo {
-                    pid,
-                    parent: None,
-                    name: "shell".into(),
-                    command: vec!["zsh".into()],
-                    rss_bytes: 0,
-                    cpu_percent: 0.0,
-                    start_time_secs: 0,
-                    cwd: None,
-                }),
-                11 => Some(ProcessInfo {
-                    pid,
-                    parent: Some(10),
-                    name: "claude".into(),
-                    command: vec![
-                        "claude".into(),
-                        "--resume".into(),
-                        "da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b".into(),
-                    ],
-                    rss_bytes: 0,
-                    cpu_percent: 0.0,
-                    start_time_secs: 0,
-                    cwd: None,
-                }),
-                _ => None,
-            }
+    }
+
+    impl Harness for LiveClaude {
+        fn id(&self) -> HarnessId {
+            HarnessId::Claude
         }
-        fn children(&self, pid: u32) -> Vec<u32> {
-            (pid == 10).then_some(11).into_iter().collect()
+
+        fn capabilities(&self) -> &'static Capabilities {
+            &CLAUDE_CAPABILITIES
         }
-        fn descendants(&self, pid: u32) -> Vec<u32> {
-            (pid == 10).then_some(11).into_iter().collect()
+
+        fn live(&self) -> &dyn boop::live::LiveSessions {
+            &OnePane
         }
-        fn descendant_count(&self, pid: u32) -> usize {
-            usize::from(pid == 10)
+
+        fn sessions(&self) -> anyhow::Result<Vec<boop::harness::SessionRef>> {
+            Ok(Vec::new())
+        }
+
+        fn read_from(
+            &self,
+            _session: &boop::harness::SessionRef,
+            offset: u64,
+        ) -> anyhow::Result<boop::harness::ReadChunk> {
+            Ok(boop::harness::ReadChunk {
+                events: Vec::new(),
+                next_offset: offset,
+                reset: false,
+                skipped: 0,
+            })
         }
     }
 
     #[test]
-    fn adopt_discovers_claude_resume_identity_and_explicit_id_wins() {
+    /// RECEIPT. Adopt names the session the harness's own live registry
+    /// reports for the adopted pane, and an explicit `--session-id` still wins.
+    fn adopt_reads_the_session_from_the_live_registry_and_explicit_id_wins() {
         let dir = temp_mail_dir();
         std::fs::create_dir_all(&dir).unwrap();
         let mux = AdoptMux;
-        let processes = ClaudeProcessFixture;
-        let registry = Registry::discover();
-        let hooks = || HookWiring {
-            no_hooks: true,
-            uninstall: false,
-        };
-
+        let registry = Registry::with(vec![Box::new(LiveClaude)]);
         run_adopt_with(
             "sprefa-coordinator",
             "coordinator",
@@ -450,10 +457,9 @@ mod tests {
             None,
             None,
             Some(&dir),
-            hooks(),
+            false,
             &registry,
             &mux,
-            &processes,
         )
         .unwrap();
         let discovered = read_routes(&dir).unwrap();
@@ -474,10 +480,9 @@ mod tests {
             None,
             None,
             Some(&dir),
-            hooks(),
+            false,
             &registry,
             &mux,
-            &processes,
         )
         .unwrap();
         let explicit = read_routes(&dir).unwrap();

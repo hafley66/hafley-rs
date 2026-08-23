@@ -11,7 +11,7 @@ use tracing_subscriber::EnvFilter;
 
 use boop::registry::Registry;
 use boop::supervise::ParentDeathPolicy;
-use boop::{bus, config, identity, mailwait, proc};
+use boop::{bus, config, identity, mailwait};
 
 mod cli;
 
@@ -26,7 +26,7 @@ use cli::job::{
     LaneArgs,
 };
 use cli::mail::{run_hail, run_inbox, run_list, run_tell_children, run_tell_parent};
-use cli::me::{run_adopt, run_me, run_me_favorite, run_me_mood, run_prune, run_whoami, HookWiring};
+use cli::me::{run_adopt, run_me, run_me_favorite, run_me_mood, run_prune, run_whoami};
 use cli::{doctrine, line, mail_dir, now_ms, CONCATMAP_EXAMPLES};
 
 #[derive(Parser)]
@@ -407,18 +407,14 @@ enum SubCmd {
         dry_run: bool,
     },
     /// Register an existing interactive pane as a coordinator route; never
-    /// spawns. A claude session also gets the hook inbox, and reads its mail at
-    /// the next turn boundary; every other harness has it typed into its pane.
+    /// spawns. Mail to the adopted route goes through its harness's own door;
+    /// `boop inbox hooks` is the fallback for a session with no live door.
     #[command(hide = true)]
     Adopt {
         #[arg(long)]
         name: String,
         #[arg(long)]
         tmux: String,
-        /// Keep pane injection: do not install the hook inbox for a claude
-        /// coordinator.
-        #[arg(long)]
-        no_hooks: bool,
         /// Take the hook inbox back out of the project settings and leave the
         /// route alone. The pane is not checked, so a dead one is fine;
         /// `boop inbox hooks --uninstall` is the same edit without a route.
@@ -608,9 +604,7 @@ fn main() -> Result<()> {
                 args,
             } => {
                 let cwd = cwd.unwrap_or(std::env::current_dir().context("read current directory")?);
-                let adapter = registry
-                    .by_id("codex")
-                    .context("Codex harness is not registered")?;
+                let adapter = registry.get(boop::harness::HarnessId::Codex);
                 run_native_tui(
                     &registry,
                     adapter,
@@ -631,7 +625,7 @@ fn main() -> Result<()> {
             } => {
                 let cwd = cwd.unwrap_or(std::env::current_dir()?);
                 let adapter = registry
-                    .by_id(&harness)
+                    .by_name(&harness)
                     .with_context(|| format!("no harness registered with id `{harness}`"))?;
                 run_native_tui(
                     &registry,
@@ -789,7 +783,6 @@ fn main() -> Result<()> {
             SubCmd::Adopt {
                 name,
                 tmux,
-                no_hooks,
                 uninstall_hooks,
                 harness,
                 session_id,
@@ -813,10 +806,7 @@ fn main() -> Result<()> {
                 parent.as_deref(),
                 goal.as_deref(),
                 mail_dir.as_deref(),
-                HookWiring {
-                    no_hooks,
-                    uninstall: uninstall_hooks,
-                },
+                uninstall_hooks,
             ),
             SubCmd::Prune { mail_dir } => run_prune(mail_dir.as_deref()),
             SubCmd::Beep { cmd } => run_beep(&registry, cmd),

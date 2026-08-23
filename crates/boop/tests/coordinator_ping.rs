@@ -103,14 +103,14 @@ fn lane_patch_still_writes_a_lane_route() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The full delivery path a finishing lane's epilogue exercises: hail resolves
-/// the coordinator route, the claude harness types the line into the pane.
+/// RECEIPT. A hail to an adopted claude coordinator goes to the claude door.
+/// With no claude session live in that pane and no hook inbox in the project,
+/// nothing takes the row: the refusal is named on stdout, written to the
+/// `agent_delivery` ledger, and the pane is never typed at.
 #[test]
-fn hail_to_an_adopted_coordinator_lands_in_its_pane() {
+fn hail_to_an_adopted_coordinator_with_no_live_session_is_recorded_unreachable() {
     let dir = mail_dir("deliver");
     let session = TestSession::new("deliver");
-    // `--no-hooks` is the point: pane injection is now the opt-out path, since a
-    // claude coordinator with the hook inbox installed is never typed at.
     let adopted = boop(
         &dir,
         &[
@@ -123,7 +123,6 @@ fn hail_to_an_adopted_coordinator_lands_in_its_pane() {
             "claude",
             "--cwd",
             dir.to_str().unwrap(),
-            "--no-hooks",
         ],
     );
     assert!(adopted.status.success(), "stderr: {:?}", adopted.stderr);
@@ -144,15 +143,32 @@ fn hail_to_an_adopted_coordinator_lands_in_its_pane() {
     assert!(hailed.status.success(), "stderr: {:?}", hailed.stderr);
     let stdout = String::from_utf8_lossy(&hailed.stdout);
     assert!(
-        stdout.contains("injected into tmux"),
-        "hail did not inject: {stdout}"
+        stdout.contains("no live claude session for ping-coord"),
+        "the refusal must name the door it tried: {stdout}"
     );
+
+    let ledger = Command::new(BOOP)
+        .args([
+            "db",
+            "select d.route, h.value as harness, d.outcome, d.detail from agent_delivery d \
+             left join dict_harness h on h.id = d.harness_id order by d.at_ms desc limit 1",
+        ])
+        .env("BOOP_DB", dir.join("boop.db"))
+        .env("HOME", dir.join("home"))
+        .output()
+        .unwrap();
+    assert!(ledger.status.success(), "stderr: {:?}", ledger.stderr);
+    let row = String::from_utf8_lossy(&ledger.stdout);
+    assert!(row.contains("ping-coord"), "ledger: {row}");
+    assert!(row.contains("claude"), "ledger: {row}");
+    assert!(row.contains("unreachable"), "ledger: {row}");
+
     std::thread::sleep(std::time::Duration::from_millis(300));
     let captured = tmux(&["capture-pane", "-p", "-t", &session.0]);
     let pane = String::from_utf8_lossy(&captured.stdout);
     assert!(
-        pane.contains("lane fake-lane done rc=0"),
-        "pane never received the ping: {pane}"
+        !pane.contains("lane fake-lane done rc=0"),
+        "the pane received keystrokes: {pane}"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

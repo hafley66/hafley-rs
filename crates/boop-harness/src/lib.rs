@@ -2,15 +2,20 @@
 //! transcript format per harness, its session roots, the identity ladder that
 //! names the caller, and the worktree a spawn runs in.
 
+pub mod door;
 pub mod harness;
 pub mod identity;
+pub mod live;
 pub mod registry;
 pub mod worktree;
 
+pub use door::{Delivered, Door, IdleNotice};
 pub use harness::{
-    supervisor_command, sync_session, sync_session_with_pid, Capabilities, Harness, Ingested,
-    KnownSession, KnownSessions, NativeChildEvent, NativeSessionRef, NativeTuiPlan, NativeTuiSpec,
-    OneShotSpec, ReadChunk, SendOutcome, SessionRef, SpawnSpec,
+    supervisor_command, sync_session, sync_session_with_pid, Capabilities, ControlCapabilities,
+    Harness, HarnessId, Ingested, KnownSession, KnownSessions, LanePolicy, MailPolicy,
+    NativeChildEvent, NativeTuiPlan, NativeTuiSpec, OneShotSpec, ReadChunk, SessionRef, SpawnSpec,
+    VariantSupport,
 };
 pub use identity::Identity;
+pub use live::{DoorAddress, LiveSession, LiveSessions, LiveStatus};
 pub use registry::Registry;

@@ -5,7 +5,9 @@ use std::time::Duration;
 
 use anyhow::Result;
 use boop::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
-use boop::harness::{Harness, ReadChunk, SessionRef};
+use boop::harness::{
+    Capabilities, Harness, HarnessId, LanePolicy, MailPolicy, ReadChunk, SessionRef, VariantSupport,
+};
 use boop::host::{run_chat, run_chat_with_adapter, ChatRequest, ChatResponse};
 
 struct EchoHarness {
@@ -15,9 +17,21 @@ struct EchoHarness {
     next_turn: &'static AtomicI64,
 }
 
+static CAPABILITIES: Capabilities = Capabilities {
+    bans_plan_family_models: false,
+    lanes: LanePolicy::Allowed,
+    variant: VariantSupport::None,
+    mail: MailPolicy::Keystrokes,
+    native_tui_projector: false,
+};
+
 impl Harness for EchoHarness {
-    fn id(&self) -> &'static str {
-        "echo"
+    fn id(&self) -> HarnessId {
+        HarnessId::Kimi
+    }
+
+    fn capabilities(&self) -> &'static Capabilities {
+        &CAPABILITIES
     }
 
     fn sessions(&self) -> Result<Vec<SessionRef>> {
@@ -41,7 +55,7 @@ impl Harness for EchoHarness {
         }
         Ok(Box::new(EchoChannel {
             db: self.db.clone(),
-            next_turn: &self.next_turn,
+            next_turn: self.next_turn,
         }))
     }
 }
@@ -95,7 +109,7 @@ fn two_requests_resume_one_resident_conversation() {
     boop::Store::open(db.clone())
         .unwrap()
         .project_discovered_session(&SessionRef {
-            harness: "echo",
+            harness: HarnessId::Kimi,
             session_id: "echo-session".into(),
             nickname: "echo-session".into(),
             path: PathBuf::new(),

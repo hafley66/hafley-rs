@@ -30,9 +30,21 @@ pub struct Store {
 /// 10 = agent_favorite, user-pinned markdown bodies.
 /// 11 = bounded, lane-addressable supervisor/channel trace events.
 /// 13 = per-session attributes and the mood rows mail renders through.
-pub const SCHEMA_VERSION: i64 = 13;
+/// 14 = the door a live session answers on, and one delivery row per hail.
+pub const SCHEMA_VERSION: i64 = 14;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
+
+/// The current-state `agent_live` row for one session, dict ids joined back
+/// to TEXT: the pane it holds, its last status, and the door it answers on.
+pub struct LiveRow {
+    pub session: String,
+    pub pid: Option<i64>,
+    pub tmux_pane: Option<String>,
+    pub status: Option<String>,
+    pub door_kind: Option<String>,
+    pub door_addr: Option<String>,
+}
 
 /// The attribute key a session's mood is stored under.
 pub const MOOD_ATTR_KEY: &str = "mood";
@@ -468,6 +480,23 @@ impl Store {
                     )?;
                 }
                 self.connection.execute_batch("PRAGMA user_version = 12;")?;
+            }
+            if self.schema_version()? < 14 {
+                // agent_delivery arrives with SCHEMA above; an older
+                // agent_live needs the two columns added.
+                for column in ["door_kind", "door_addr"] {
+                    let present = self.connection.query_row(
+                        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('agent_live') WHERE name = ?1)",
+                        params![column],
+                        |row| row.get::<_, bool>(0),
+                    )?;
+                    if !present {
+                        self.connection.execute_batch(&format!(
+                            "ALTER TABLE agent_live ADD COLUMN {column} TEXT;"
+                        ))?;
+                    }
+                }
+                self.connection.execute_batch("PRAGMA user_version = 14;")?;
             }
             self.stamp_version()?;
             Ok(())
@@ -1013,7 +1042,7 @@ impl Store {
     pub fn project_discovered_session(&self, session: &SessionRef) -> Result<()> {
         self.upsert_session_row(
             &session.session_id,
-            session.harness,
+            session.harness.as_str(),
             &session.nickname,
             session.cwd.as_deref(),
             session.git_branch.as_deref(),
@@ -1759,6 +1788,82 @@ impl Store {
             "INSERT INTO agent_live_span (session_id, from_ts, to_ts, status_id, pid, tmux_pane_id)
              VALUES (?1, ?2, NULL, ?3, ?4, ?5)",
             params![sid, ts as i64, status_id, pid, pane_id],
+        )?;
+        Ok(())
+    }
+
+    /// Record the door this session answers on, beside its liveness row. A
+    /// session with no observation yet gets a row carrying the door alone.
+    pub fn record_live_door(
+        &self,
+        session: &str,
+        door_kind: &str,
+        door_addr: Option<&str>,
+    ) -> Result<()> {
+        let sid = self.session_id(session)?;
+        self.connection.execute(
+            "INSERT INTO agent_live (session_id, door_kind, door_addr)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(session_id) DO UPDATE SET
+               door_kind = excluded.door_kind,
+               door_addr = excluded.door_addr",
+            params![sid, door_kind, door_addr],
+        )?;
+        Ok(())
+    }
+
+    /// The last liveness observation for one session, door included. `None`
+    /// means this session has never been observed running.
+    pub fn live_row(&self, session: &str) -> Result<Option<LiveRow>> {
+        let row = self
+            .connection
+            .query_row(
+                "SELECT dict_session.value, live.pid, pane.value, status.value,
+                        live.door_kind, live.door_addr
+                   FROM agent_live live
+                   JOIN dict_session ON dict_session.id = live.session_id
+                   LEFT JOIN dict_pane pane ON pane.id = live.tmux_pane_id
+                   LEFT JOIN dict_status status ON status.id = live.status_id
+                  WHERE dict_session.value = ?1",
+                params![session],
+                |row| {
+                    Ok(LiveRow {
+                        session: row.get(0)?,
+                        pid: row.get(1)?,
+                        tmux_pane: row.get(2)?,
+                        status: row.get(3)?,
+                        door_kind: row.get(4)?,
+                        door_addr: row.get(5)?,
+                    })
+                },
+            )
+            .optional()?;
+        Ok(row)
+    }
+
+    /// Record what one hail's door answered. Keyed on (message, route): a
+    /// second delivery attempt of the same message overwrites its outcome.
+    pub fn record_delivery(
+        &self,
+        message_id: &str,
+        route: &str,
+        harness: Option<crate::harness_id::HarnessId>,
+        outcome: &str,
+        detail: &str,
+        at_ms: u64,
+    ) -> Result<()> {
+        let harness_id = harness
+            .map(|id| self.intern("dict_harness", id.as_str()))
+            .transpose()?;
+        self.connection.execute(
+            "INSERT INTO agent_delivery (message_id, route, harness_id, outcome, detail, at_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(message_id, route) DO UPDATE SET
+               harness_id = excluded.harness_id,
+               outcome = excluded.outcome,
+               detail = excluded.detail,
+               at_ms = excluded.at_ms",
+            params![message_id, route, harness_id, outcome, detail, at_ms as i64],
         )?;
         Ok(())
     }
@@ -2558,12 +2663,31 @@ CREATE TABLE IF NOT EXISTS model_price (
   fetched_ts INTEGER NOT NULL
 );
 
+-- door_kind and door_addr are the address a hail is delivered to: the
+-- harness's own control plane, as its LiveSessions pass observed it. Both
+-- stay TEXT: an address is payload, never a JOIN key.
 CREATE TABLE IF NOT EXISTS agent_live (
   session_id INTEGER PRIMARY KEY,
   pid INTEGER,
   tmux_pane_id INTEGER,
-  status_id INTEGER
+  status_id INTEGER,
+  door_kind TEXT,
+  door_addr TEXT
 );
+
+-- One row per hail put in front of a recipient: what the door answered, keyed
+-- on the message and the route it was addressed to, so a re-delivery of the
+-- same message to the same route overwrites rather than piles up. `detail`
+-- carries an Unreachable reason and is '' for every other outcome.
+CREATE TABLE IF NOT EXISTS agent_delivery (
+  message_id TEXT NOT NULL,
+  route TEXT NOT NULL,
+  harness_id INTEGER,
+  outcome TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT '',
+  at_ms INTEGER NOT NULL,
+  PRIMARY KEY (message_id, route)
+) WITHOUT ROWID;
 
 -- Historical liveness: [from_ts, to_ts) intervals, open when to_ts IS NULL,
 -- folded from observations so a state change closes an interval and repeated
@@ -2618,6 +2742,7 @@ CREATE TABLE IF NOT EXISTS mood (
 
 #[cfg(test)]
 mod tests {
+    use crate::harness_id::HarnessId;
     use std::fs::OpenOptions;
     use std::io::Write;
     use std::path::{Path, PathBuf};
@@ -3260,7 +3385,7 @@ mod tests {
 
     fn session_for(path: &std::path::Path) -> SessionRef {
         SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: "ses-1".to_owned(),
             nickname: "ses-1".to_owned(),
             path: path.to_path_buf(),
@@ -3281,7 +3406,7 @@ mod tests {
         let _ = std::fs::remove_file(&transcript);
         std::fs::File::create(&transcript).unwrap();
         let session = SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: "empty-child".into(),
             nickname: "empty-child".into(),
             path: transcript.clone(),
@@ -3313,7 +3438,7 @@ mod tests {
         let (path, store) = fresh_store("known-sessions");
         let transcript = temp_path("known-sessions.jsonl");
         let session = SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: "known-child".into(),
             nickname: "known-name".into(),
             path: transcript.clone(),
@@ -3364,7 +3489,7 @@ mod tests {
             let sid = format!("s-{i}");
             let transcript = format!("/tmp/budget/{sid}.jsonl");
             let session = SessionRef {
-                harness: "codex",
+                harness: HarnessId::Codex,
                 session_id: sid.clone(),
                 nickname: format!("n-{i}"),
                 path: PathBuf::from(&transcript),
@@ -3953,6 +4078,85 @@ mod tests {
         let _ = std::fs::remove_file(&db_path);
     }
 
+    /// ACCEPTANCE (v14 migration). A store whose agent_live predates the door
+    /// columns gains them and the delivery ledger, keeping its liveness rows.
+    #[test]
+    fn a_v13_store_gains_the_door_columns_and_the_delivery_ledger() {
+        let db_path = temp_path("doormig");
+        let _ = std::fs::remove_file(&db_path);
+        {
+            let conn = rusqlite::Connection::open(&db_path).unwrap();
+            conn.execute_batch(
+                "PRAGMA user_version = 13;
+                 CREATE TABLE dict_session (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
+                 CREATE TABLE agent_live (
+                   session_id INTEGER PRIMARY KEY,
+                   pid INTEGER,
+                   tmux_pane_id INTEGER,
+                   status_id INTEGER);
+                 INSERT INTO dict_session (id, value) VALUES (1, 's1');
+                 INSERT INTO agent_live (session_id, pid) VALUES (1, 4242);",
+            )
+            .unwrap();
+        }
+        let store = Store::open(db_path.clone()).unwrap();
+        assert_eq!(store.schema_version().unwrap(), super::SCHEMA_VERSION);
+        store
+            .record_live_door("s1", "unix-socket", Some("/tmp/claude-4242.sock"))
+            .unwrap();
+        let (_, rows) = store
+            .passthrough("SELECT pid, door_kind, door_addr FROM agent_live WHERE session_id = 1")
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("pid").unwrap(), 4242);
+        assert_eq!(rows[0].get("door_kind").unwrap(), "unix-socket");
+        store
+            .record_delivery(
+                "m-1",
+                "coord",
+                Some(crate::harness_id::HarnessId::Claude),
+                "queued-for-turn-boundary",
+                "",
+                90,
+            )
+            .unwrap();
+        let (_, rows) = store
+            .passthrough("SELECT COUNT(*) AS n FROM agent_delivery")
+            .unwrap();
+        assert_eq!(rows[0].get("n").unwrap(), 1);
+        drop(store);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    /// RECEIPT. Two deliveries of one message to one route leave one row:
+    /// the ledger answers "what happened to this hail", not "how many tries".
+    #[test]
+    fn a_second_delivery_of_one_message_overwrites_its_outcome() {
+        let (path, store) = fresh_store("delivery-ledger");
+        store
+            .record_delivery("m-9", "lane-a", None, "unreachable", "no live session", 10)
+            .unwrap();
+        store
+            .record_delivery(
+                "m-9",
+                "lane-a",
+                Some(crate::harness_id::HarnessId::Codex),
+                "injected",
+                "",
+                20,
+            )
+            .unwrap();
+        let rows = store.delivery_rows("m-9").unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].outcome, "injected");
+        assert_eq!(rows[0].harness.as_deref(), Some("codex"));
+        assert_eq!(rows[0].detail, "");
+        assert_eq!(rows[0].at_ms, 20);
+        assert!(store.delivery_rows("m-nothing").unwrap().is_empty());
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
     /// ACCEPTANCE (Job 4). The pid-observing sync stores the lane pane pid on
     /// the agent_live row, so a session can be linked to its process.
     #[test]
@@ -4185,5 +4389,60 @@ mod tests {
         drop(store);
         let _ = std::fs::remove_file(&db_path);
         let _ = std::fs::remove_file(&lines_path);
+    }
+
+    /// RECEIPT (review of 8d821db, defect 1). A store written by an older
+    /// binary holds `gemini` in `dict_harness`, a value `HarnessId` never
+    /// named. Every read that crosses that column stays text, so the session
+    /// rows, the cursors, the status rows, the session graph and the
+    /// known-session map return instead of erroring, and a registry route
+    /// naming it resolves with `harness: None`.
+    #[test]
+    fn a_foreign_dict_harness_value_reads_back_without_error() {
+        use crate::_0_session_graph::{load_agent_session_graph, AgentSessionGraphQuery};
+
+        let (db_path, store) = fresh_store("foreign_harness");
+        store
+            .upsert_session_row("gem-1", "gemini", "gem-1", Some("/w"), None, 1)
+            .unwrap();
+        assert_eq!(HarnessId::parse("gemini"), None);
+
+        let rows = store.session_rows(None, None).unwrap();
+        assert!(rows
+            .iter()
+            .any(|row| row.session == "gem-1" && row.harness == "gemini"));
+        store.query_cursors(None).unwrap();
+        store.status_rows(60_000, 2).unwrap();
+        store.known_sessions().unwrap();
+        let graph = load_agent_session_graph(
+            &store,
+            AgentSessionGraphQuery {
+                cwd: None,
+                include_history: true,
+                tmux: None,
+                history_since_ts: None,
+            },
+        )
+        .unwrap();
+        assert!(graph
+            .sessions
+            .iter()
+            .any(|node| node.session.id == "gem-1" && node.session.harness == "gemini"));
+
+        let mail_dir = temp_path("foreign_harness_mail");
+        let _ = std::fs::remove_dir_all(&mail_dir);
+        std::fs::create_dir_all(&mail_dir).unwrap();
+        std::fs::write(
+            mail_dir.join("registry.json"),
+            r#"{"gem-coord": {"kind": "coordinator", "harness": "gemini", "sessionId": "gem-1"}}"#,
+        )
+        .unwrap();
+        let routes = crate::bus::read_routes(&mail_dir).unwrap();
+        assert_eq!(routes["gem-coord"].harness, None);
+        store.resolve_lane_runtime("gem-coord", &routes).unwrap();
+
+        drop(store);
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_dir_all(&mail_dir);
     }
 }

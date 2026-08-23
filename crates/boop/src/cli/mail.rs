@@ -1,15 +1,18 @@
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{Context, Result};
 use tracing::{debug, info};
 
 use boop::bus::Route;
+use boop::door::Delivered;
+use boop::harness::HarnessId;
+use boop::mail::{Landing, Via};
 use boop::mailwait::Watch;
 use boop::registry::Registry;
 use boop::{bus, identity, inbox, lane, tmux};
 
-use crate::cli::job::{harness_by_id, wait_and_exit, waiting_as};
+use crate::cli::job::{wait_and_exit, waiting_as};
 use crate::cli::{append_acks, append_message, append_message_to, line, mail_dir, pad};
 use crate::InboxCmd;
 
@@ -30,7 +33,7 @@ pub(crate) fn run_list(mail_dir_arg: Option<&Path>, agent: Option<&str>, all: bo
                     Some(_) => "dead",
                 };
                 let padded_name = pad(name, 16);
-                let padded_harness = pad(route.harness.as_deref().unwrap_or("-"), 10);
+                let padded_harness = pad(route.harness.map_or("-", HarnessId::as_str), 10);
                 let padded_mode = pad(route.mode.as_deref().unwrap_or("-"), 6);
                 let padded_model = pad(route.model.as_deref().unwrap_or("-"), 46);
                 let padded_tmux = pad(route.tmux.as_deref().unwrap_or("-"), 16);
@@ -147,9 +150,8 @@ pub(crate) fn run_hail(
     )
 }
 
-/// Put one queued message in front of its recipient, by whatever its route
-/// kind allows. A lane's own supervisor reads the mailbox, so a lane row is
-/// left where it lies.
+/// Put one queued message in front of its recipient, through the door its
+/// harness declares. Every attempt leaves one `agent_delivery` row.
 pub(crate) fn deliver_hail(
     registry: &Registry,
     dir: &Path,
@@ -158,67 +160,64 @@ pub(crate) fn deliver_hail(
 ) -> Result<()> {
     let to = message.to.as_str();
     let routes = bus::read_routes(dir)?;
-    let Some(route) = routes.get(to) else {
-        println!("queued {} -> {to}", message.id);
-        println!("no registry route for {to}: message stays queued, to_timestamp null");
-        return Ok(());
-    };
-    if route.mode.as_deref() == Some("acpx") {
+    let store = boop::Store::open(boop::Store::default_path()?)?;
+    if let Some(route) = routes.get(to).filter(|route| is_acpx(route)) {
         let response = crate::cli::acpx::deliver(route, &message.body)?;
         append_acks(dir, std::slice::from_ref(message))?;
-        if !response.trim().is_empty() {
-            println!("{}", response.trim_end());
+        let landing = Landing::acpx(response.trim_end().to_owned());
+        landing.record(&store, &message.id, to, route.harness)?;
+        if let Some(reply) = landing.reply.as_deref().filter(|text| !text.is_empty()) {
+            println!("{reply}");
         }
         println!("delivered {} -> {to} (acpx queue)", message.id);
         return Ok(());
     }
-    if matches!(route.kind.as_str(), "coordinator" | "native") {
-        let harness_id = route.harness.as_deref().unwrap_or("claude");
-        match send_native_route(registry, route, &message.body)? {
-            boop::harness::SendOutcome::Injected => {
-                append_acks(dir, std::slice::from_ref(message))?;
-                println!(
-                    "delivered {} -> {to} through {harness_id} native control",
-                    message.id
-                );
-            }
-            boop::harness::SendOutcome::QueuedForNextSpawn => {
-                println!("queued {} -> {to} for native control", message.id);
-            }
-            boop::harness::SendOutcome::Unsupported => {
-                println!(
-                    "queued {} -> {to} ({harness_id} has no native control)",
-                    message.id
-                );
-            }
-        }
-        return Ok(());
-    }
-    // A lane pane runs the supervisor, which reads this mailbox directly;
-    // typing at its stdout would reach no agent.
-    if route.kind == "lane" {
-        println!(
-            "queued {} -> {to} (lane supervisor delivers it)",
-            message.id
-        );
-        return Ok(());
-    }
-    // A hook-backed session consumes the queued row at its turn boundary.
-    if let Some(cwd) = route.cwd.as_deref() {
-        if inbox::installed_for(Path::new(cwd), to) {
-            println!("queued {} -> {to} (hook inbox drains it)", message.id);
-            info!(
-                to,
-                message_id = message.id,
-                delivery = "hook",
-                "hail queued for a hook inbox"
+    // Only a door landing names a harness, and a door landing has one; a route
+    // with no harness never reaches an arm that prints this word.
+    let harness_id = routes
+        .get(to)
+        .and_then(|route| route.harness)
+        .map_or_else(|| "harness".to_owned(), |id| id.to_string());
+    let landing = boop::mail::deliver_hail(registry, &store, &routes, message)?;
+    info!(
+        to,
+        message_id = message.id,
+        delivery = landing.via.as_str(),
+        outcome = landing.outcome(),
+        "hail delivery recorded"
+    );
+    match &landing.delivered {
+        Delivered::Injected => {
+            append_acks(dir, std::slice::from_ref(message))?;
+            println!(
+                "delivered {} -> {to} through the {harness_id} door",
+                message.id
             );
-            return Ok(());
+        }
+        Delivered::QueuedForTurnBoundary => match landing.via {
+            Via::HookInbox => println!("queued {} -> {to} (hook inbox drains it)", message.id),
+            Via::LaneSupervisor => {
+                println!(
+                    "queued {} -> {to} (lane supervisor delivers it)",
+                    message.id
+                )
+            }
+            _ => println!(
+                "queued {} -> {to} (the {harness_id} door takes it at the next turn boundary)",
+                message.id
+            ),
+        },
+        Delivered::Unreachable(why) => {
+            println!("queued {} -> {to}", message.id);
+            println!("{to}: {why}: message stays queued, to_timestamp null");
         }
     }
-    println!("queued {} -> {to}", message.id);
-    println!("{to} has no native or supervisor transport: message stays queued");
     Ok(())
+}
+
+/// An acpx route is driven by the caller's own queue, not by a harness door.
+fn is_acpx(route: &Route) -> bool {
+    route.mode.as_deref() == Some("acpx")
 }
 
 /// `tell-parent`: one row from the caller to the parent its registration
@@ -332,18 +331,18 @@ pub(crate) fn run_tell_children(
                 landed += 1;
                 println!("landed {name} {} (lane supervisor)", message.id);
             }
-            ChildReach::Pane => match send_native_route(registry, route, &message.body)? {
-                boop::harness::SendOutcome::Injected => {
+            ChildReach::Pane => match deliver_through_door(registry, route, &message.body)? {
+                Delivered::Injected => {
                     landed += 1;
-                    println!("landed {name} {} (native control)", message.id);
+                    println!("landed {name} {} (through the door)", message.id);
                 }
-                boop::harness::SendOutcome::QueuedForNextSpawn => {
+                Delivered::QueuedForTurnBoundary => {
                     landed += 1;
-                    println!("landed {name} {} (next spawn)", message.id);
+                    println!("landed {name} {} (next turn boundary)", message.id);
                 }
-                boop::harness::SendOutcome::Unsupported => {
+                Delivered::Unreachable(why) => {
                     unreachable += 1;
-                    println!("no-route {name} (harness takes no send)");
+                    println!("no-route {name} ({why})");
                 }
             },
             ChildReach::NoRoute(_) | ChildReach::Dead(_) => unreachable!("reported above"),
@@ -357,33 +356,25 @@ pub(crate) fn run_tell_children(
     Ok(())
 }
 
-fn send_native_route(
-    registry: &Registry,
-    route: &Route,
-    body: &str,
-) -> Result<boop::harness::SendOutcome> {
-    let adapter = harness_by_id(registry, route.harness.as_deref().unwrap_or("claude"))?;
-    let discovered;
-    let session_id = if let Some(session_id) = route.session_id.as_deref() {
-        session_id
-    } else if let Some(target) = route.tmux.as_deref() {
-        let processes = boop::proc::SysinfoSnapshot::capture()?;
-        discovered = adapter.session_id_in_pane(tmux::mux(), &processes, target);
-        let Some(session_id) = discovered.as_deref() else {
-            return Ok(boop::harness::SendOutcome::Unsupported);
-        };
-        session_id
-    } else {
-        return Ok(boop::harness::SendOutcome::Unsupported);
+/// One body to a child that holds a pane, through its harness's own door.
+/// The pane the route names is looked up in that harness's live registry; a
+/// route naming no harness, or a pane no live session holds, is unreachable
+/// rather than typed at.
+fn deliver_through_door(registry: &Registry, route: &Route, body: &str) -> Result<Delivered> {
+    let Some(harness) = route.harness else {
+        return Ok(Delivered::Unreachable("route names no harness".into()));
     };
-    adapter.send_native(
-        &boop::harness::NativeSessionRef {
-            session_id: session_id.to_owned(),
-            cwd: route.cwd.as_deref().map(PathBuf::from),
-            app_server_socket: route.app_server_socket.as_deref().map(PathBuf::from),
-        },
-        body,
-    )
+    let adapter = registry.get(harness);
+    let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) else {
+        return Ok(Delivered::Unreachable("route names no pane".into()));
+    };
+    let pane = boop::live::pane_of_target(target).unwrap_or_else(|| target.to_owned());
+    let Some(live) = adapter.live().live_session_in_pane(&pane)? else {
+        return Ok(Delivered::Unreachable(format!(
+            "no live {harness} session in {pane}"
+        )));
+    };
+    adapter.door().deliver(&live, body)
 }
 
 /// A claude Agent-tool child runs inside its parent's process. It owns no pane,

@@ -1,10 +1,7 @@
-//! End-to-end: a hail to a claude coordinator reaches it at the next turn
-//! boundary and never through its keyboard.
-//!
-//! FAIL-PRE-FIX: `boop hail` typed every coordinator-kind route's mail into its
-//! pane, so a hail mid-turn landed in whatever the model had open: a tool call,
-//! a dialog, a half-typed line. The user's word, 2026-08-16: "we need a
-//! different mail system, interrupting the enter key and dialog is a bit noisy".
+//! End-to-end: the hook inbox, which is what drains a claude coordinator's
+//! mail when no claude door answers for its pane. `boop adopt` installs
+//! nothing; `boop inbox hooks` is the one verb that writes the project
+//! settings, and a hail is never typed into a pane whatever the answer.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -88,6 +85,19 @@ impl Coordinator {
             .unwrap()
     }
 
+    /// Write the two hooks into the project settings, the way a coordinator
+    /// with no live claude door does it for itself.
+    fn install_hooks(&self) -> std::process::Output {
+        self.boop_no_mail_dir(&[
+            "inbox",
+            "hooks",
+            "--name",
+            &self.name,
+            "--cwd",
+            self.project().to_str().unwrap(),
+        ])
+    }
+
     fn adopt(&self) -> std::process::Output {
         self.boop(&[
             "adopt",
@@ -167,17 +177,30 @@ fn commands(settings: &serde_json::Value, event: &str) -> Vec<String> {
         .collect()
 }
 
-// FAIL-PRE-FIX: adopting a claude coordinator wrote a route and nothing else, so
-// its mail had no door but the keyboard.
+/// RECEIPT. `boop inbox hooks` writes the Stop and UserPromptSubmit hooks
+/// once, is idempotent (a second Stop hook would deliver every hail twice),
+/// and `--uninstall` takes both back out. Adopting the pane writes the route
+/// and nothing else: the claude door, not the hook inbox, is where mail goes
+/// first, so no adopt touches a project's settings.
 #[test]
-fn adopting_a_claude_coordinator_installs_both_hooks_once() {
+fn the_inbox_hooks_verb_installs_both_hooks_once_and_removes_them() {
     let coord = Coordinator::new("install");
-    let first = coord.adopt();
+    let adopted = coord.adopt();
     assert!(
-        first.status.success(),
+        adopted.status.success(),
         "adopt: {}",
-        String::from_utf8_lossy(&first.stderr)
+        String::from_utf8_lossy(&adopted.stderr)
     );
+    assert!(
+        !coord
+            .project()
+            .join(".claude")
+            .join("settings.json")
+            .exists(),
+        "adopt must not write project settings"
+    );
+
+    assert!(coord.install_hooks().status.success());
     let stop = format!("boop inbox drain --as {} --hook stop", coord.name);
     let prompt = format!("boop inbox drain --as {} --hook prompt", coord.name);
     assert_eq!(commands(&coord.settings(), "Stop"), vec![stop.clone()]);
@@ -186,9 +209,7 @@ fn adopting_a_claude_coordinator_installs_both_hooks_once() {
         vec![prompt.clone()]
     );
 
-    // Idempotent: adopting the same pane twice is the normal case, and a second
-    // Stop hook would deliver every hail twice.
-    assert!(coord.adopt().status.success());
+    assert!(coord.install_hooks().status.success());
     assert_eq!(commands(&coord.settings(), "Stop"), vec![stop]);
     assert_eq!(
         commands(&coord.settings(), "UserPromptSubmit"),
@@ -217,14 +238,14 @@ fn adopting_a_claude_coordinator_installs_both_hooks_once() {
     );
 }
 
-// FAIL-PRE-FIX, the whole card: a hail to an adopted coordinator was typed into
-// its pane mid-turn. Sabotage receipt: removing the `installed_for` branch from
-// `deliver_hail` FAILED this with "injected into tmux" on stdout and the body
-// visible in `capture-pane`.
+/// RECEIPT. With the hook inbox installed and no claude door answering for
+/// the pane, two hails sent during one long turn arrive together at the next
+/// Stop, exactly once, and the pane is never typed at.
 #[test]
 fn a_hail_during_a_long_turn_arrives_once_at_the_next_stop_and_never_as_keystrokes() {
     let coord = Coordinator::new("deliver");
     assert!(coord.adopt().status.success());
+    assert!(coord.install_hooks().status.success());
 
     // The long turn: the pane is busy, nothing drains, two hails land.
     let queued = coord.hail("lane fake-lane done rc=0");
@@ -292,12 +313,13 @@ fn a_hail_during_a_long_turn_arrives_once_at_the_next_stop_and_never_as_keystrok
     );
 }
 
-// The prompt hook prints the same mail as plain context, and one drain is the
-// only drain: whichever hook fires first takes delivery.
+/// The prompt hook prints the same mail as plain context, and one drain is the
+/// only drain: whichever hook fires first takes delivery.
 #[test]
 fn the_prompt_hook_prints_the_mail_as_context_and_takes_delivery() {
     let coord = Coordinator::new("prompt");
     assert!(coord.adopt().status.success());
+    assert!(coord.install_hooks().status.success());
     coord.hail("read this before your next prompt");
     let printed = coord.drain("prompt");
     assert!(printed.starts_with("boop inbox:\n\n"), "{printed}");
@@ -312,12 +334,15 @@ fn the_prompt_hook_prints_the_mail_as_context_and_takes_delivery() {
     assert_eq!(coord.drain("stop"), "", "the prompt hook did not ack");
 }
 
-// FAIL-PRE-FIX: taking the hooks out has to restore pane injection, or a
-// coordinator that opted out would silently stop receiving mail.
+/// RECEIPT. Taking the hooks out of a coordinator whose claude door answers
+/// nothing leaves the hail with nowhere to land: it stays queued on the bus,
+/// the refusal names the missing door, and the pane is still never typed at.
+/// Pane injection was the old fallback and there is no fallback now.
 #[test]
-fn removing_the_hooks_restores_pane_injection() {
+fn removing_the_hooks_leaves_a_hail_queued_with_a_named_refusal() {
     let coord = Coordinator::new("restore");
     assert!(coord.adopt().status.success());
+    assert!(coord.install_hooks().status.success());
     assert!(coord
         .boop_no_mail_dir(&[
             "inbox",
@@ -330,18 +355,24 @@ fn removing_the_hooks_restores_pane_injection() {
         ])
         .status
         .success());
-    let queued = coord.hail("back to the keyboard");
+    let queued = coord.hail("back to nobody");
     assert!(
         !queued.contains("hook inbox drains it"),
         "the removed hook still routed the hail: {queued}"
     );
     assert!(
-        queued.contains("injected into tmux"),
-        "pane injection was not restored: {queued}"
+        queued.contains("no live claude session for"),
+        "the refusal must name the door it tried: {queued}"
     );
     std::thread::sleep(std::time::Duration::from_millis(300));
     let pane = coord.pane();
-    assert!(pane.contains("back to the keyboard"), "pane: {pane}");
+    assert!(!pane.contains("back to nobody"), "pane: {pane}");
+    assert!(
+        std::fs::read_to_string(coord.mail().join("bus.ndjson"))
+            .unwrap()
+            .contains("back to nobody"),
+        "an unreachable hail must stay on the bus"
+    );
 }
 
 // A lane keeps the mailbox poll: its supervisor reads the bus directly, and no
@@ -374,36 +405,6 @@ fn a_lane_patch_installs_no_hooks() {
             .exists(),
         "a lane must not get a hook inbox"
     );
-}
-
-/// `--no-hooks` keeps a claude coordinator on pane injection, for a pane whose
-/// project settings nobody wants touched.
-#[test]
-fn no_hooks_adopts_without_touching_the_project_settings() {
-    let coord = Coordinator::new("nohooks");
-    let adopted = coord.boop(&[
-        "adopt",
-        "--name",
-        &coord.name,
-        "--tmux",
-        &coord.session,
-        "--harness",
-        "claude",
-        "--cwd",
-        coord.project().to_str().unwrap(),
-        "--no-hooks",
-    ]);
-    assert!(
-        adopted.status.success(),
-        "adopt: {}",
-        String::from_utf8_lossy(&adopted.stderr)
-    );
-    assert!(!coord
-        .project()
-        .join(".claude")
-        .join("settings.json")
-        .exists());
-    assert!(coord.hail("typed as before").contains("injected into tmux"));
 }
 
 /// The drain reads its own name from the identity ladder when `--as` is absent,

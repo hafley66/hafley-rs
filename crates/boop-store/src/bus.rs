@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde_json::{Map, Value};
 
+use crate::harness_id::HarnessId;
+
 /// A mailbox envelope as it appears on disk.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Message {
@@ -34,7 +36,7 @@ pub struct Message {
 pub struct Route {
     /// `lane` is the default for registry rows written before kinds existed.
     pub kind: String,
-    pub harness: Option<String>,
+    pub harness: Option<HarnessId>,
     pub tmux: Option<String>,
     pub cwd: Option<String>,
     pub model: Option<String>,
@@ -93,7 +95,9 @@ fn route_from_value(entry: &Value) -> Route {
     };
     Route {
         kind: string_field(object, "kind").unwrap_or_else(|| "lane".into()),
-        harness: string_field(object, "harness"),
+        harness: string_field(object, "harness")
+            .as_deref()
+            .and_then(HarnessId::parse),
         tmux: string_field(object, "tmux"),
         cwd: string_field(object, "cwd"),
         model: string_field(object, "model"),
@@ -390,6 +394,7 @@ fn getrandom_bytes(out: &mut [u8]) {
 #[cfg(test)]
 mod tests {
     use super::{fold, injected_line, parse_line, read_routes, unacked};
+    use crate::harness_id::HarnessId;
 
     fn temp_dir(tag: &str) -> std::path::PathBuf {
         use std::sync::atomic::{AtomicUsize, Ordering};
@@ -531,7 +536,7 @@ mod tests {
         let routes = read_routes(&dir).unwrap();
         let child = routes.get("child").unwrap();
         assert_eq!(child.parent, None);
-        assert_eq!(child.harness.as_deref(), Some("opencode"));
+        assert_eq!(child.harness, Some(HarnessId::Opencode));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -562,7 +567,7 @@ mod tests {
         let routes = read_routes(&dir).unwrap();
         let child = routes.get("child").unwrap();
         assert_eq!(child.goal, None);
-        assert_eq!(child.harness.as_deref(), Some("opencode"));
+        assert_eq!(child.harness, Some(HarnessId::Opencode));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

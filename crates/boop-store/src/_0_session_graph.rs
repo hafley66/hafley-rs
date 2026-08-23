@@ -7,6 +7,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::bus::{Message, Route};
+use crate::harness_id::HarnessId;
 use crate::proc::ProcReader;
 use crate::runtime::{runtime_snapshot, AgentRuntimeRow, RuntimeSnapshotInput};
 use crate::tmux::Multiplexer;
@@ -461,7 +462,7 @@ fn native_codex_shell_for_focus(
             environment_session = Some(session);
             owner = Some(process.clone());
         }
-        if process.name == "codex" {
+        if HarnessId::Codex.owns_process_name(&process.name) {
             for path in runtime.processes.open_files(pid) {
                 if let Some(session) = codex_rollout_session(&path) {
                     owned_sessions.insert(session);
@@ -483,15 +484,16 @@ fn native_codex_shell_for_focus(
     let pane = target.starts_with('%').then(|| target.to_owned());
     Some(AgentShellNode {
         lane: format!(
-            "codex-{}",
+            "{}-{}",
+            HarnessId::Codex,
             pane.as_deref().unwrap_or(target).trim_start_matches('%')
         ),
         parent_lane: None,
-        harness: Some("codex".to_owned()),
+        harness: Some(HarnessId::Codex.as_str().to_owned()),
         mode: Some("interactive".to_owned()),
         session_id: Some(session_id.clone()),
         session: Some(AgentSessionIdentity {
-            harness: "codex".to_owned(),
+            harness: HarnessId::Codex.as_str().to_owned(),
             id: session_id,
         }),
         trace: None,
@@ -578,14 +580,14 @@ fn shell_from_runtime(row: AgentRuntimeRow) -> Option<AgentShellNode> {
     Some(AgentShellNode {
         lane: row.lane,
         parent_lane: route.parent,
-        harness: route.harness.clone(),
+        harness: route.harness.map(|id| id.as_str().to_owned()),
         mode: route.mode.clone(),
         session: route
             .session_id
             .as_ref()
-            .zip(route.harness.as_ref())
+            .zip(route.harness)
             .map(|(id, harness)| AgentSessionIdentity {
-                harness: harness.clone(),
+                harness: harness.as_str().to_owned(),
                 id: id.clone(),
             }),
         session_id: route.session_id,
@@ -1104,7 +1106,7 @@ mod tests {
         let route = ResolvedRoute {
             lane: "lane".into(),
             kind: "lane".into(),
-            harness: Some("codex".into()),
+            harness: Some(HarnessId::Codex),
             tmux: Some("lane".into()),
             cwd: Some("/repo".into()),
             model: None,
@@ -1169,7 +1171,7 @@ mod tests {
             "codex-1206".into(),
             Route {
                 kind: "coordinator".into(),
-                harness: Some("codex".into()),
+                harness: Some(HarnessId::Codex),
                 tmux: Some("codex-parent".into()),
                 cwd: Some("/repo".into()),
                 model: None,
@@ -1256,7 +1258,7 @@ mod tests {
             "claude-coordinator".into(),
             Route {
                 kind: "coordinator".into(),
-                harness: Some("claude".into()),
+                harness: Some(HarnessId::Claude),
                 tmux: Some("%1206".into()),
                 cwd: Some("/repo".into()),
                 model: None,
@@ -1382,11 +1384,11 @@ mod tests {
         assert!(graph
             .sessions
             .iter()
-            .any(|session| session.session.harness == "claude"));
+            .any(|session| session.session.harness == HarnessId::Claude.as_str()));
         assert!(graph
             .sessions
             .iter()
-            .any(|session| session.session.harness == "opencode"));
+            .any(|session| session.session.harness == HarnessId::Opencode.as_str()));
         let _ = std::fs::remove_file(path);
     }
 
@@ -1592,11 +1594,11 @@ mod tests {
                 shells: vec![AgentShellNode {
                     lane: "sprefa-coordinator".into(),
                     parent_lane: None,
-                    harness: Some("claude".into()),
+                    harness: Some(HarnessId::Claude.as_str().to_owned()),
                     mode: None,
                     session_id: Some("da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b".into()),
                     session: Some(AgentSessionIdentity {
-                        harness: "claude".into(),
+                        harness: HarnessId::Claude.as_str().to_owned(),
                         id: "da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b".into(),
                     }),
                     trace: None,
@@ -1718,14 +1720,8 @@ mod tests {
                 lane.into(),
                 Route {
                     kind: "coordinator".into(),
-                    harness: Some(
-                        if lane.starts_with("claude") {
-                            "claude"
-                        } else {
-                            "codex"
-                        }
-                        .into(),
-                    ),
+                    harness: HarnessId::parse(lane.split('-').next().unwrap_or_default())
+                        .or(Some(HarnessId::Codex)),
                     tmux: Some(tmux.into()),
                     cwd: Some("/same-cwd-for-all".into()),
                     model: None,

@@ -3,6 +3,7 @@ use std::path::Path;
 use anyhow::Result;
 use tracing::warn;
 
+use boop::harness::HarnessId;
 use boop::{config, lane};
 
 use crate::cli::db::open_ro_store;
@@ -63,7 +64,7 @@ pub(crate) fn run_host(cmd: HostCmd) -> Result<()> {
 pub(crate) fn default_preset_for_harness(
     config: &config::Config,
     config_path: &Path,
-    harness_id: &str,
+    harness_id: HarnessId,
 ) -> Result<Option<String>> {
     let Some(preset) = config.default_model_preset.as_deref() else {
         return Ok(None);
@@ -102,8 +103,8 @@ pub(crate) fn presets_table() -> Result<String> {
     for name in config.model_presets.keys() {
         let preset = config::resolve_preset(name, &path)?;
         let harness = lane::harness_for_model(&preset.model)?
-            .map(|harness| harness.into_owned())
-            .unwrap_or_else(|| "?".to_owned());
+            .map_or("?", HarnessId::as_str)
+            .to_owned();
         let default = if config.default_model_preset.as_deref() == Some(name) {
             "*"
         } else {
@@ -161,11 +162,11 @@ mod tests {
         .expect("write the probe config");
         let config = config::load(&path).expect("load the probe config");
         assert_eq!(
-            default_preset_for_harness(&config, &path, "opencode").unwrap(),
+            default_preset_for_harness(&config, &path, HarnessId::Opencode).unwrap(),
             Some("flash4".to_owned())
         );
         assert_eq!(
-            default_preset_for_harness(&config, &path, "codex").unwrap(),
+            default_preset_for_harness(&config, &path, HarnessId::Codex).unwrap(),
             None
         );
     }

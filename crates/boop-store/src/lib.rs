@@ -12,6 +12,7 @@ pub mod _0_session_graph;
 pub mod activity;
 pub mod bus;
 pub mod event;
+pub mod harness_id;
 pub mod ident;
 pub mod proc;
 #[cfg(feature = "agent-read")]
@@ -37,6 +38,7 @@ pub use _0_session_graph::{
 };
 #[cfg(feature = "agent-read")]
 pub use activity::{ActivityCount, ActivityScope, ToolResultAvailability};
+pub use harness_id::HarnessId;
 pub use ident::{
     Store, SyncStat, TraceErrorRow, TraceEvent, TraceEventRow, TRACE_EVENT_RETENTION_LIMIT,
 };

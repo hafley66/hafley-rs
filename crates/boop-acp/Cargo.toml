@@ -2,24 +2,19 @@
 name = "boop-acp"
 version = "0.0.2"
 edition.workspace = true
-description = "the boop lane channel: one ACP client per agent conversation, plus the tmux TUI driver for harnesses without one"
+description = "the boop lane channel: one ACP client per agent conversation"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-# The database: the trail files a channel child writes its stderr into, and the
-# tmux seam the TUI driver targets.
+# The database: the trail files a channel child writes its stderr into.
 boop-store = { version = "0.0.2", path = "../boop-store", default-features = false }
 # The transcripts and rpc frames are JSON; this is the credible reader.
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 # Application-level errors.
 anyhow = "1"
-# Resolve the opencode store path without XDG project-dir machinery.
-dirs = "5"
-# The opencode store is SQLite; the TUI driver reads it to see a turn land.
-rusqlite = { version = "0.40", features = ["bundled", "trace"] }
 # Process-wide diagnostics. The binary installs the subscriber; library code
 # only emits conventional tracing events and spans.
 tracing.workspace = true
@@ -32,12 +27,7 @@ agent-client-protocol = "2.0.0"
 # The ACP connection is async and `LaneChannel` is sync, so one current-thread
 # runtime per channel drives it on its own thread. `rt` and `sync` only: the
 # reactor under the ACP crate is async-io's, not tokio's.
-tokio = { version = "1", features = ["rt", "sync", "net", "macros"] }
-# Codex remote-control exposes JSON-RPC as WebSocket text frames over its UDS.
-# The synchronous client fits the one-shot native TUI thread bootstrap.
-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
-tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
-futures-util = { version = "0.3", features = ["sink"] }
+tokio = { version = "1", features = ["rt", "sync"] }
 
 [lib]
 name = "boop_acp"

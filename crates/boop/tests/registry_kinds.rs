@@ -67,7 +67,10 @@ fn prune_skips_a_dead_coordinator_and_legacy_rows_still_prune() {
 }
 
 #[test]
-fn hail_to_a_pane_less_native_row_is_queued_successfully() {
+/// RECEIPT. `beep agent register --kind native` writes a route with no
+/// harness, so nothing declares a door for it. The hail stays on the bus and
+/// the refusal is named, in stdout and in the `agent_delivery` ledger.
+fn a_hail_to_a_harnessless_native_row_is_refused_by_name_and_recorded() {
     let dir = mail_dir("hail");
     std::fs::write(
         dir.join("registry.json"),
@@ -77,9 +80,29 @@ fn hail_to_a_pane_less_native_row_is_queued_successfully() {
     let output = run(&dir, &["beep", "hail", "native-worker", "--body", "hello"]);
     assert!(output.status.success(), "stderr: {:?}", output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("(no pane)"), "stdout: {stdout}");
+    assert!(
+        stdout.contains("route native-worker names no harness"),
+        "stdout: {stdout}"
+    );
     let mailbox = std::fs::read_to_string(dir.join("bus.ndjson")).unwrap();
     assert!(mailbox.contains("hello"));
+
+    let ledger = Command::new(BOOP)
+        .args([
+            "db",
+            "select outcome, detail from agent_delivery order by at_ms desc limit 1",
+        ])
+        .env("HOME", dir.join("home"))
+        .env("BOOP_DB", dir.join("boop.db"))
+        .output()
+        .unwrap();
+    assert!(ledger.status.success(), "stderr: {:?}", ledger.stderr);
+    let rows = String::from_utf8_lossy(&ledger.stdout);
+    assert!(rows.contains("unreachable"), "ledger: {rows}");
+    assert!(
+        rows.contains("route native-worker names no harness"),
+        "ledger: {rows}"
+    );
 }
 
 #[test]

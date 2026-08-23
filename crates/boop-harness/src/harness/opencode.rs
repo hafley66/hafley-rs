@@ -10,25 +10,52 @@ use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
 
 use crate::harness::{
-    Capabilities, Harness, Ingested, OneShotSpec, ReadChunk, SessionRef, SpawnSpec,
+    Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, LanePolicy, MailPolicy,
+    OneShotSpec, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
 };
 use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
 
 pub struct Opencode;
 
+/// The `provider/model` form is opencode's, so its prefix list is the empty
+/// prefix; plan-family models would bill metered credit and are refused.
+static CAPABILITIES: Capabilities = Capabilities {
+    bans_plan_family_models: true,
+    lanes: LanePolicy::Allowed,
+    variant: VariantSupport::Flag,
+    mail: MailPolicy::Door,
+    native_tui_projector: false,
+};
+
+/// The `opencode serve` this machine's TUIs are clients of.
+static DOOR: crate::door::opencode::OpencodeDoor = crate::door::opencode::OpencodeDoor::machine();
+
 impl Harness for Opencode {
     fn open_channel(
         &self,
         spec: &boop_acp::channel::ChannelSpec,
     ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
-        Ok(Box::new(
-            boop_acp::channel::opencode::OpencodeChannel::open(spec)?,
-        ))
+        Ok(Box::new(boop_acp::channel::acp::AcpChannel::open_adapter(
+            spec,
+            boop_acp::channel::acp::OPENCODE_ADAPTER,
+        )?))
     }
 
-    fn id(&self) -> &'static str {
-        "opencode"
+    fn id(&self) -> HarnessId {
+        HarnessId::Opencode
+    }
+
+    fn capabilities(&self) -> &'static Capabilities {
+        &CAPABILITIES
+    }
+
+    fn live(&self) -> &dyn crate::live::LiveSessions {
+        &DOOR
+    }
+
+    fn door(&self) -> &dyn crate::door::Door {
+        &DOOR
     }
 
     fn sessions(&self) -> Result<Vec<SessionRef>> {
@@ -49,7 +76,7 @@ impl Harness for Opencode {
         for message in messages_after(&connection, &session.session_id, offset)? {
             next = message.rowid;
             events.push(AgentEvent {
-                harness: "opencode",
+                harness: HarnessId::Opencode.as_str(),
                 session_id: session.session_id.clone(),
                 ts_ms: message.ts,
                 uuid: Some(message.id.clone()),
@@ -73,8 +100,8 @@ impl Harness for Opencode {
 
     /// `send_midflight` stays false: `opencode run` reads no stdin mid-turn,
     /// so a pane injection lands on dead air (transport itself is tested).
-    fn capabilities(&self) -> Capabilities {
-        Capabilities {
+    fn control_capabilities(&self) -> ControlCapabilities {
+        ControlCapabilities {
             send_midflight: false,
             resume: true,
             spawn: true,
@@ -139,7 +166,7 @@ impl Harness for Opencode {
             &command,
         )?;
         Ok(SessionRef {
-            harness: "opencode",
+            harness: HarnessId::Opencode,
             session_id: session_id.clone(),
             nickname: session_id,
             path: opencode_db_path().unwrap_or_else(|| cwd.join("opencode.db")),
@@ -296,7 +323,7 @@ fn sessions_from(path: &std::path::Path) -> Result<Vec<SessionRef>> {
         let (id, directory, parent, slug, updated) = row?;
         let size = last_rowid.get(&id).copied().unwrap_or(0);
         sessions.push(SessionRef {
-            harness: "opencode",
+            harness: HarnessId::Opencode,
             session_id: id.clone(),
             nickname: slug.unwrap_or(id),
             path: path.to_owned(),
@@ -441,7 +468,22 @@ pub struct Part {
     pub input: Option<Value>,
 }
 
-pub use boop_acp::channel::opencode::{opencode_db_path, store_path};
+/// The opencode store on this machine, `None` until opencode has created it.
+pub fn store_path() -> Option<PathBuf> {
+    opencode_db_path().filter(|path| path.exists())
+}
+
+/// The db path regardless of existence; a spawn writes its command before
+/// opencode has ever created the file.
+pub fn opencode_db_path() -> Option<PathBuf> {
+    Some(
+        dirs::home_dir()?
+            .join(".local")
+            .join("share")
+            .join("opencode")
+            .join("opencode.db"),
+    )
+}
 
 /// The opencode command a spawn runs. Opencode has no default model; the
 /// caller resolves one into `spec.model` or the spawn refuses.
@@ -619,6 +661,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::harness::HarnessId;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use rusqlite::trace::{TraceEvent, TraceEventCodes};
@@ -642,7 +685,7 @@ mod tests {
     /// Capabilities are claims; each true one needs a test.
     #[test]
     fn opencode_capabilities_match_the_binary() {
-        let caps = Opencode.capabilities();
+        let caps = Opencode.control_capabilities();
         assert!(!caps.send_midflight, "opencode run reads no stdin mid-turn");
         assert!(caps.resume, "opencode run -s <sessionID> resumes");
         assert!(caps.spawn, "spawn is implemented and tested below");
@@ -817,7 +860,7 @@ mod tests {
 
     fn spec(guard: &TmuxGuard) -> SpawnSpec {
         SpawnSpec {
-            harness: "opencode".to_owned(),
+            harness: HarnessId::Opencode,
             branch: "lane-test".to_owned(),
             base_sha: "0000000000000000000000000000000000000000".to_owned(),
             main_tree: true,

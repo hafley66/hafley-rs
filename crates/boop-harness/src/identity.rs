@@ -40,7 +40,7 @@ impl Rung {
     pub fn confidence(self) -> &'static str {
         match self {
             Rung::Env | Rung::ClaudeProcess | Rung::CodexProcess | Rung::KimiProcess => "exact",
-            Rung::RouteCwd => "live-transcript",
+            Rung::RouteCwd => "live-registry",
             Rung::Pane => "stamped",
             Rung::None => "unresolved",
         }
@@ -88,18 +88,13 @@ pub fn resolve_with(
     registry: &crate::registry::Registry,
     routes: &BTreeMap<String, Route>,
 ) -> Result<Identity> {
-    if let Some(harness) = registry.all().first() {
-        if let Some(identity) = harness.identity_env() {
-            return Ok(identity);
-        }
+    if let Some(identity) = from_env() {
+        return Ok(identity);
     }
     if let Some(pane) = caller_pane() {
         reject_two_routes_on_one_pane(boop_store::tmux::mux(), routes, &pane)?;
     }
-    let pane_identity = registry
-        .all()
-        .iter()
-        .find_map(|harness| harness.identity_pane(routes));
+    let pane_identity = from_pane(routes);
     for harness in registry.all() {
         if let Some(identity) = harness.identity_process() {
             return Ok(named_by_route(identity, pane_identity.as_ref()));
@@ -182,29 +177,30 @@ pub(crate) fn route_owns_pane(
 
 /// Rung 4. The route's `session_id` is a stamp; the session it names moves on
 /// /clear, on compaction and on resume, and a route written before its session
-/// existed carries none at all. The harness's own transcripts for the route's
-/// cwd say which session is live, and only one written since the route
-/// registered can be this pane's.
+/// existed carries none at all. The harness's own live-session registry says
+/// which of its sessions is running in the route's cwd right now.
 fn live_session_for_route(
     registry: &crate::registry::Registry,
     route: &Route,
 ) -> Result<Option<String>> {
-    let (Some(harness_id), Some(cwd)) = (route.harness.as_deref(), route.cwd.as_deref()) else {
-        return Ok(None);
-    };
-    let Some(harness) = registry.by_id(harness_id) else {
+    let (Some(harness_id), Some(cwd)) = (route.harness, route.cwd.as_deref()) else {
         return Ok(None);
     };
     let since = route
         .registered_at
         .as_deref()
         .and_then(boop_store::session::parse_iso_ms);
-    let mut live: Vec<crate::harness::SessionRef> = harness
-        .root_sessions_for_cwd(cwd)?
+    let mut live: Vec<crate::live::LiveSession> = registry
+        .get(harness_id)
+        .live()
+        .live_sessions()?
         .into_iter()
-        .filter(|session| since.is_none_or(|since| session.modified_ms >= since))
+        .filter(|session| {
+            session.cwd.as_deref() == Some(std::path::Path::new(cwd))
+                && since.is_none_or(|since| session.observed_ms >= since)
+        })
         .collect();
-    live.sort_by_key(|session| session.modified_ms);
+    live.sort_by_key(|session| session.observed_ms);
     match live.len() {
         0 => Ok(None),
         1 => Ok(Some(live.remove(0).session_id)),
@@ -214,7 +210,7 @@ fn live_session_for_route(
                 .map(|session| session.session_id.as_str())
                 .collect();
             anyhow::bail!(
-                "ambiguous caller: {} {harness_id} sessions wrote to {cwd} since the route registered ({}); name one with `boop adopt --session-id`",
+                "ambiguous caller: {} {harness_id} sessions are live in {cwd} ({}); name one with `boop adopt --session-id`",
                 names.len(),
                 names.join(", ")
             )
@@ -223,7 +219,8 @@ fn live_session_for_route(
 }
 
 /// Rung 1. The stamp a boop spawn wrote into the child's own environment.
-pub(crate) fn from_env_for(_harness: &str) -> Option<Identity> {
+/// Boop writes it, so no harness owns it.
+pub(crate) fn from_env() -> Option<Identity> {
     let session = std::env::var("BOOP_SESSION")
         .ok()
         .filter(|s| !s.is_empty())?;
@@ -240,22 +237,18 @@ pub(crate) fn from_env_for(_harness: &str) -> Option<Identity> {
 /// Rung 2. `$TMUX_PANE` names interactive shells directly. Codex tool
 /// subprocesses omit it while retaining `TMUX`, so tmux resolves the calling
 /// client's selected pane. The registry may own that pane or its whole session.
-pub(crate) fn from_pane_for(harness: &str, routes: &BTreeMap<String, Route>) -> Option<Identity> {
+pub(crate) fn from_pane(routes: &BTreeMap<String, Route>) -> Option<Identity> {
     let pane = caller_pane()?;
     let multiplexer = boop_store::tmux::mux();
     let tmux_session = multiplexer.session_of_pane(None, &pane);
-    let (lane, route) = routes.iter().find(|(_, route)| {
-        route
-            .harness
-            .as_deref()
-            .is_none_or(|route_harness| route_harness == harness)
-            && route_owns_pane(multiplexer, route, &pane, tmux_session.as_deref())
-    })?;
+    let (lane, route) = routes
+        .iter()
+        .find(|(_, route)| route_owns_pane(multiplexer, route, &pane, tmux_session.as_deref()))?;
     Some(Identity {
         session: route.session_id.clone().or_else(|| Some(lane.clone())),
         lane: Some(lane.clone()),
         parent: None,
-        harness: route.harness.clone(),
+        harness: route.harness.map(|id| id.to_string()),
         pane: Some(pane),
         rung: Some(Rung::Pane),
     })

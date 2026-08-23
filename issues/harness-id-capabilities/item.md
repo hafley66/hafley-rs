@@ -2,11 +2,12 @@
 created: 2026-08-22
 updated: 2026-08-22
 type: task
-status: open
+status: done
 priority: high
 epic: harness-interface
 labels: [domain-boop, intent-implementation]
 size: M
+closed: 2026-08-22
 ---
 
 # HarnessId + Capabilities replace 16 harness literals
@@ -22,3 +23,9 @@ size: M
 - [ ] `grep -rnE '== *"(claude|codex|kimi|opencode)"' crates --include=*.rs | grep -v tests` prints 0 lines
 - [ ] `Registry::get(HarnessId)` is total; test-only `Echo` harness registers with no other edit
 - [ ] `cargo test --workspace` green except pre-existing `inbox_hooks::a_hail_during_a_long_turn…`
+
+## Comments
+
+### 2026-08-22T22:45:06Z · @fable
+
+Landed in PR #47: 8d821db, 25dbfad. HarnessId in boop-store/src/harness_id.rs; Capabilities without model_prefixes/process_names; literal grep 0 after P3.

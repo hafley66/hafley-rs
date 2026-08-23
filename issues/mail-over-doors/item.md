@@ -2,12 +2,13 @@
 created: 2026-08-22
 updated: 2026-08-22
 type: task
-status: open
+status: done
 priority: high
 epic: harness-interface
 related: ['@live-sessions-doors', '@acp-one-send-path']
 labels: [domain-boop, intent-implementation]
 size: M
+closed: 2026-08-22
 ---
 
 # deliver_hail through Harness::door, agent_delivery rows
@@ -23,3 +24,9 @@ size: M
 - [ ] keystroke delivery removed; claude hook inbox path kept behind `MailPolicy::TurnBoundaryHook` until card 4
 - [ ] live receipt: `boop beep hail` lands in a real `boop tui claude` pane and a `boop tui codex` pane
 - [ ] `agent_delivery` PK `(message_id, route)`
+
+## Comments
+
+### 2026-08-22T22:45:06Z · @fable
+
+Landed in PR #47: 95ef59c, 854caa0, c86832f. Schema 14, agent_delivery ledger, boop wait reads it; route with no harness is unreachable.

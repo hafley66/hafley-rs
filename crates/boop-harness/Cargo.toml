@@ -17,6 +17,21 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 # Application-level errors.
 anyhow = "1"
+# The door address of an HTTP-served harness is parsed once, not re-spliced
+# from strings at each request.
+url = "2"
+# Blocking HTTP for the one harness whose TUI is a client of a server.
+# Candidates weighed: reqwest-blocking (drags tokio and hyper in for two
+# localhost calls, and its blocking mode parks a runtime thread), minreq
+# (buffers the whole body, so an SSE stream never yields a line), attohttpc
+# (unmaintained since 2024), isahc (libcurl C dependency). ureq is blocking,
+# pure Rust, streams the response body as a Read, and takes per-request
+# timeouts, which is exactly the GET/POST/SSE trio the opencode door needs.
+# No TLS feature: the door talks to 127.0.0.1.
+ureq = { version = "3", default-features = false }
+# kill(pid, 0): a registry file outlives its process, so every live-session
+# read filters on the existence probe libc already exposes.
+libc = "0.2"
 # Resolve the claude home dir without XDG project-dir machinery.
 dirs = "5"
 # Parallel filesystem acquisition for transcript candidates. Harness adapters

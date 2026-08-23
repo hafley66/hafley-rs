@@ -487,9 +487,7 @@ pub fn run(args: Args) -> Result<()> {
     let registry: &'static Registry = Box::leak(Box::new(Registry::discover()));
     let harness = crate::lane::harness_for_model(&args.model)?
         .with_context(|| format!("model `{}` names no harness", args.model))?;
-    let adapter = registry
-        .by_id(&harness)
-        .with_context(|| format!("no adapter registered for harness `{harness}`"))?;
+    let adapter = registry.get(harness);
     std::fs::create_dir_all(&args.state_dir)
         .with_context(|| format!("create {}", args.state_dir.display()))?;
     let template = args.template.clone();
@@ -857,14 +855,17 @@ fn one_shot_bounded(
 mod tests {
     use super::*;
     use boop_acp::channel::{Delivery, TurnEvent};
-    use boop_harness::harness::{Harness, OneShotSpec, ReadChunk, SessionRef};
+    use boop_harness::harness::{
+        Capabilities, Harness, HarnessId, LanePolicy, MailPolicy, OneShotSpec, ReadChunk,
+        SessionRef, VariantSupport,
+    };
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
     fn row(session: &str, turn: i64, ts: i64, role: &str, said: &str) -> TurnRow {
         TurnRow {
             session: session.into(),
-            harness: "claude".into(),
+            harness: HarnessId::Claude.as_str().to_owned(),
             turn,
             ts,
             role: role.into(),
@@ -1097,7 +1098,7 @@ mod tests {
     /// `agent_session` row `turn_rows` joins against.
     fn session_ref(session: &str) -> SessionRef {
         SessionRef {
-            harness: "fake",
+            harness: HarnessId::Kimi,
             session_id: session.to_owned(),
             nickname: session.to_owned(),
             path: PathBuf::new(),
@@ -1120,9 +1121,20 @@ mod tests {
         plant_done: Option<(PathBuf, String, i64)>,
     }
 
+    static CAPABILITIES: Capabilities = Capabilities {
+        bans_plan_family_models: false,
+        lanes: LanePolicy::Allowed,
+        variant: VariantSupport::None,
+        mail: MailPolicy::Keystrokes,
+        native_tui_projector: false,
+    };
+
     impl Harness for FakeHarness {
-        fn id(&self) -> &'static str {
-            "fake"
+        fn id(&self) -> HarnessId {
+            HarnessId::Kimi
+        }
+        fn capabilities(&self) -> &'static Capabilities {
+            &CAPABILITIES
         }
         fn sessions(&self) -> Result<Vec<SessionRef>> {
             Ok(Vec::new())

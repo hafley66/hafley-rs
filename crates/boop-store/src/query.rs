@@ -15,6 +15,17 @@ fn opt_i64(value: Option<u64>) -> rusqlite::types::Value {
     value.map(|v| v as i64).into()
 }
 
+/// One recorded hail delivery: the door's answer for one message on one
+/// route. `harness` stays TEXT, as every other `dict_harness` read does.
+pub struct DeliveryRow {
+    pub message_id: String,
+    pub route: String,
+    pub harness: Option<String>,
+    pub outcome: String,
+    pub detail: String,
+    pub at_ms: i64,
+}
+
 /// One bundle row a window SQL returns: `id` (stable done-marker key), `ts`
 /// (the cursor watermark: the max ts of the bundle's turns), and `text` (the
 /// message batch, already concat'ed by the SQL).
@@ -633,11 +644,38 @@ impl Store {
         }
         Ok(out)
     }
+
+    /// What every door answered for one message, one row per route it was
+    /// addressed to. Empty means nothing has tried to deliver it yet.
+    pub fn delivery_rows(&self, message_id: &str) -> Result<Vec<DeliveryRow>> {
+        let sql = "SELECT d.message_id, d.route, h.value, d.outcome, d.detail, d.at_ms
+                   FROM agent_delivery d
+                   LEFT JOIN dict_harness h ON h.id = d.harness_id
+                   WHERE d.message_id = ?1
+                   ORDER BY d.route";
+        let mut statement = self.connection().prepare(sql)?;
+        let iter = statement.query_map(params![message_id], |row| {
+            Ok(DeliveryRow {
+                message_id: row.get(0)?,
+                route: row.get(1)?,
+                harness: row.get(2)?,
+                outcome: row.get(3)?,
+                detail: row.get(4)?,
+                at_ms: row.get(5)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for row in iter {
+            out.push(row?);
+        }
+        Ok(out)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{FactKind, FactQuery};
+    use crate::harness_id::HarnessId;
     use crate::ident::Store;
 
     fn store() -> (Store, std::path::PathBuf) {
@@ -789,7 +827,7 @@ mod tests {
         writeln!(file, r#"{{"type":"assistant","sessionId":"ses-1","timestamp":"2026-08-01T00:00:01.000Z","message":{{"content":[{{"type":"tool_use","name":"Read","input":{{"file_path":"/tmp/a.rs"}}}}]}}}}"#).unwrap();
         drop(file);
         let session = SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: "ses-1".to_owned(),
             nickname: "ses-1".to_owned(),
             path: log_path.clone(),
@@ -853,7 +891,7 @@ mod tests {
         writeln!(file, r#"{{"type":"user","sessionId":"ses-1","timestamp":"2026-08-01T00:00:00.100Z","message":"hello"}}"#).unwrap();
         drop(file);
         let session = SessionRef {
-            harness: "claude",
+            harness: HarnessId::Claude,
             session_id: "ses-1".to_owned(),
             nickname: "ses-1".to_owned(),
             path: log_path.clone(),

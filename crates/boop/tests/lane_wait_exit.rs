@@ -341,6 +341,7 @@ fn a_fresh_codex_caller_registers_and_parents_a_waiting_lane() {
             "cwd": fixture.repo.display().to_string(),
             "mode": "interactive",
             "sessionId": "thread-codex-parent",
+            "sourcePath": "CODEX_THREAD_ID=thread-codex-parent;TMUX_PANE=%1206",
             "registeredAt": registry["codex-1206"]["registeredAt"],
         })
     );

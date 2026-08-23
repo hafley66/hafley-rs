@@ -12,12 +12,27 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use serde_json::Value;
 
-use crate::harness::{Capabilities, Harness, Ingested, ReadChunk, SessionRef, SpawnSpec};
+use crate::harness::{
+    Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, LanePolicy, MailPolicy,
+    ReadChunk, SessionRef, SpawnSpec, VariantSupport,
+};
 use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
 use boop_store::tail;
 
 pub struct Kimi;
+
+/// The kimi TUI takes no variant flag and exposes no control plane.
+static CAPABILITIES: Capabilities = Capabilities {
+    bans_plan_family_models: false,
+    lanes: LanePolicy::Allowed,
+    variant: VariantSupport::None,
+    mail: MailPolicy::Keystrokes,
+    native_tui_projector: false,
+};
+
+/// kimi publishes no door; the impl says so rather than guessing one.
+static DOOR: crate::door::kimi::KimiDoor = crate::door::kimi::KimiDoor;
 
 impl Harness for Kimi {
     fn identity_process(&self) -> Option<crate::identity::Identity> {
@@ -26,7 +41,7 @@ impl Harness for Kimi {
             .filter(|value| !value.is_empty())?;
         Some(crate::identity::Identity {
             session: Some(session),
-            harness: Some(self.id().to_owned()),
+            harness: Some(self.id().to_string()),
             rung: Some(crate::identity::Rung::KimiProcess),
             ..Default::default()
         })
@@ -42,15 +57,27 @@ impl Harness for Kimi {
         )?))
     }
 
-    fn id(&self) -> &'static str {
-        "kimi"
+    fn id(&self) -> HarnessId {
+        HarnessId::Kimi
+    }
+
+    fn capabilities(&self) -> &'static Capabilities {
+        &CAPABILITIES
+    }
+
+    fn live(&self) -> &dyn crate::live::LiveSessions {
+        &DOOR
+    }
+
+    fn door(&self) -> &dyn crate::door::Door {
+        &DOOR
     }
 
     /// `send_midflight` is false since the lane channel became ACP: the
     /// ctrl-s steer key belonged to the tui path, and `session/prompt` takes
     /// one prompt per turn.
-    fn capabilities(&self) -> Capabilities {
-        Capabilities {
+    fn control_capabilities(&self) -> ControlCapabilities {
+        ControlCapabilities {
             send_midflight: false,
             resume: true,
             spawn: true,
@@ -76,7 +103,7 @@ impl Harness for Kimi {
             &command,
         )?;
         Ok(SessionRef {
-            harness: "kimi",
+            harness: HarnessId::Kimi,
             session_id: spec.lane.clone(),
             nickname: spec.lane.clone(),
             path: kimi_sessions_dir().unwrap_or_else(|_| cwd.join(".kimi-sessions")),
@@ -240,7 +267,7 @@ fn sessions_in(base: &Path) -> anyhow::Result<Vec<SessionRef>> {
                     .unwrap_or(0);
                 let size = metadata.map(|meta| meta.len()).unwrap_or(0);
                 sessions.push(SessionRef {
-                    harness: "kimi",
+                    harness: HarnessId::Kimi,
                     session_id,
                     nickname: agent_id,
                     path: wire_path,
@@ -303,7 +330,7 @@ fn parse_line(session: &SessionRef, line: &tail::CompleteLine) -> Option<AgentEv
     }
 
     Some(AgentEvent {
-        harness: session.harness,
+        harness: session.harness.as_str(),
         session_id: session.session_id.clone(),
         ts_ms,
         uuid: None,
@@ -495,6 +522,7 @@ fn project_line(
 
 #[cfg(test)]
 mod tests {
+    use crate::harness::HarnessId;
     use std::fs::OpenOptions;
     use std::io::Write;
     use std::path::PathBuf;
@@ -522,7 +550,7 @@ mod tests {
 
     fn session_for(path: &std::path::Path, size: u64) -> SessionRef {
         SessionRef {
-            harness: "kimi",
+            harness: HarnessId::Kimi,
             session_id: "ses-kimi-1".to_owned(),
             nickname: "main".to_owned(),
             path: path.to_path_buf(),
@@ -538,7 +566,7 @@ mod tests {
 
     #[test]
     fn kimi_spawns_and_resumes_like_every_other_harness() {
-        let caps = Kimi.capabilities();
+        let caps = Kimi.control_capabilities();
         assert!(!caps.send_midflight, "acp takes one prompt per turn");
         assert!(caps.resume);
         assert!(caps.spawn);

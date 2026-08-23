@@ -5,6 +5,7 @@ use std::process::Command;
 use anyhow::{Context, Result};
 
 use boop::bus::Route;
+use boop::harness::{HarnessId, VariantSupport};
 use boop::mailwait::Watch;
 use boop::proc::ProcReader;
 use boop::registry::Registry;
@@ -14,7 +15,7 @@ use tracing::{error, info, warn};
 use crate::cli::db::{resolve_harness, run_harnesses};
 use crate::cli::debug::default_preset_for_harness;
 use crate::cli::mail::{all_messages, run_hail, run_list};
-use crate::cli::me::{run_adopt, run_prune, HookWiring};
+use crate::cli::me::{run_adopt, run_prune};
 use crate::cli::{append_ack, append_message, line, mail_dir, pad, route_to_json, write_route};
 use crate::{AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat};
 
@@ -104,10 +105,10 @@ pub(crate) struct DispatchArgs {
 
 pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
     let adapter = resolve_dispatch_harness(registry, args.harness.as_deref())?;
-    let harness_id = adapter.id().to_owned();
+    let harness_id = adapter.id();
     info!(
         lane = args.to,
-        harness = harness_id,
+        harness = harness_id.as_str(),
         model = args.model.as_deref().unwrap_or_default(),
         cwd = args.cwd,
         tmux_target = args.tmux.as_deref().unwrap_or_default(),
@@ -144,7 +145,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
     };
 
     let spec = boop::harness::SpawnSpec {
-        harness: harness_id.clone(),
+        harness: harness_id,
         branch,
         base_sha,
         main_tree: args.main_tree,
@@ -156,7 +157,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
         repo: std::path::PathBuf::from(&args.cwd),
         env_stamp: Some(spawn_env_stamp(
             &args.to,
-            &harness_id,
+            harness_id.as_str(),
             args.parent.as_deref(),
         )),
         model: args.model.clone(),
@@ -194,7 +195,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
     append_message(&dir, &message)?;
     info!(
         lane = args.to,
-        harness = adapter.id(),
+        harness = adapter.id().as_str(),
         tmux_target = session.tmux.as_deref().unwrap_or_default(),
         conversation_id = session.session_id,
         conversation_id_kind = "spawn_handle",
@@ -239,13 +240,13 @@ pub(crate) fn resolve_dispatch_harness<'a>(
             .map(|boxed| boxed.as_ref())
             .ok_or_else(|| anyhow::anyhow!("no harness registered"));
     };
-    match registry.by_id(id) {
+    match registry.by_name(id) {
         Some(adapter) => Ok(adapter),
         None => {
             let registered = registry
                 .all()
                 .iter()
-                .map(|harness| harness.id())
+                .map(|harness| harness.id().as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
             anyhow::bail!("unregistered harness `{id}`; registered harnesses: {registered}")
@@ -260,7 +261,7 @@ pub(crate) fn harness_by_id<'a>(
     id: &str,
 ) -> Result<&'a dyn boop::harness::Harness> {
     registry
-        .by_id(id)
+        .by_name(id)
         .or_else(|| registry.all().first().map(|b| b.as_ref()))
         .ok_or_else(|| anyhow::anyhow!("no harness registered"))
 }
@@ -298,7 +299,7 @@ pub(crate) fn run_resolve(to: &str, mail_dir_arg: Option<&Path>) -> Result<()> {
         );
         return Ok(());
     }
-    let harness = route.harness.as_deref().unwrap_or("-");
+    let harness = route.harness.map_or("-", HarnessId::as_str);
     let Some(cwd) = route.cwd.as_deref() else {
         println!("unresolved {to}: no cwd in registry route");
         return Ok(());
@@ -479,7 +480,28 @@ pub(crate) fn run_wait(
             name: waiting_as(&dir, as_name)?,
         },
     };
+    if let Some(id) = id {
+        report_delivery(id);
+    }
     wait_and_exit(&dir, watch, timeout_secs, as_name, mail_dir_arg)
+}
+
+/// What the ledger recorded for the message being waited on, one line per
+/// route it was delivered to. An unreadable store costs the lines and nothing
+/// else: the wait itself reads the mailbox.
+fn report_delivery(message_id: &str) {
+    let rows = boop::Store::default_path()
+        .and_then(boop::Store::open)
+        .and_then(|store| store.delivery_rows(message_id));
+    let Ok(rows) = rows else {
+        return;
+    };
+    for row in rows {
+        line(&format!(
+            "{message_id} -> {}: {} ({})",
+            row.route, row.outcome, row.detail
+        ));
+    }
 }
 
 /// Whose inbox `--me` watches: the name given, else the identity ladder's lane
@@ -593,8 +615,7 @@ pub(crate) fn run_sweep(
             } else {
                 println!(
                     "{} -> {}: no registry route, cannot scope the cass query (--close-routeless expires these)",
-                    message.id,
-                    message.to
+                    message.id, message.to
                 );
             }
             continue;
@@ -740,8 +761,12 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         (None, Some(preset)) => Some(config::resolve_model(preset, &config_path)?),
         (None, None) => None,
     };
-    let harness_id = lane::harness_for_spawn(args.harness.as_deref(), requested_model.as_deref())?;
-    let adapter = harness_by_id(registry, &harness_id)?;
+    let harness_id = lane::harness_for_spawn(
+        registry,
+        args.harness.as_deref(),
+        requested_model.as_deref(),
+    )?;
+    let adapter = registry.get(harness_id);
     let repo = match &args.cwd {
         Some(cwd) => PathBuf::from(cwd),
         None => lane::repo_root(&std::env::current_dir().context("read the current directory")?)?,
@@ -757,7 +782,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     info!(
         lane = identity.lane,
         tmux_target = identity.tmux,
-        harness = harness_id,
+        harness = harness_id.as_str(),
         cwd = %repo.display(),
         boop_build = boop::BUILD,
         "lane create resolved"
@@ -775,7 +800,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     if let Some(mood) = args.mood.as_deref() {
         boop::Store::open(boop::Store::default_path()?)?.check_mood_name(mood)?;
     }
-    let default_preset = default_preset_for_harness(&config, &config_path, &harness_id)?;
+    let default_preset = default_preset_for_harness(&config, &config_path, harness_id)?;
     let model = config::resolve_spawn_model(
         requested_model.as_deref(),
         None,
@@ -795,7 +820,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             .and_then(|name| config::resolve_variant(name, &config_path).ok())
             .flatten(),
     };
-    if variant.is_some() && harness_id == "codex" {
+    if variant.is_some() && adapter.capabilities().variant != VariantSupport::Flag {
         anyhow::bail!(
             "--variant is opencode-only; the codex channel sets reasoning effort via the \
              `model@effort` suffix instead"
@@ -837,11 +862,11 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     if args.dry_run {
         info!(
             lane = identity.lane,
-            harness = harness_id,
+            harness = harness_id.as_str(),
             "lane create dry run"
         );
         let spec = boop::harness::SpawnSpec {
-            harness: harness_id.clone(),
+            harness: harness_id,
             branch: identity.branch.clone(),
             base_sha: base.sha.clone(),
             main_tree: !worktree_mode,
@@ -853,7 +878,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             repo: repo.clone(),
             env_stamp: Some(spawn_env_stamp(
                 &identity.lane,
-                &harness_id,
+                harness_id.as_str(),
                 parent.parent.as_deref(),
             )),
             model: model.clone(),
@@ -924,7 +949,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     record_lane_purpose(
         &identity.lane,
         &trace,
-        &harness_id,
+        harness_id.as_str(),
         &identity.branch,
         &repo,
         model.as_deref(),
@@ -942,7 +967,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             cwd: repo.display().to_string(),
             cmd: prompt,
             from: None,
-            harness: Some(harness_id.clone()),
+            harness: Some(harness_id.as_str().to_owned()),
             session_id: None,
             model,
             mode: Some("auto".into()),
@@ -968,7 +993,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     )?;
     info!(
         lane = lane_id,
-        harness = harness_id,
+        harness = harness_id.as_str(),
         "lane create dispatched"
     );
     if args.wait {
@@ -1015,7 +1040,7 @@ pub(crate) fn register_fresh_codex_spawner(
     }
     let route = Route {
         kind: "coordinator".to_owned(),
-        harness: Some("codex".to_owned()),
+        harness: Some(HarnessId::Codex),
         tmux: Some(pane.into()),
         cwd: Some(cwd.display().to_string()),
         model: None,
@@ -1200,7 +1225,11 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             state,
             harness,
             mail_dir,
-        } => run_lane_list(mail_dir.as_deref(), state.as_deref(), harness.as_deref()),
+        } => run_lane_list(
+            mail_dir.as_deref(),
+            state.as_deref(),
+            harness.as_deref().map(str::parse).transpose()?,
+        ),
         LaneCmd::Create {
             lane,
             cwd,
@@ -1306,10 +1335,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             parent.as_deref(),
             goal.as_deref(),
             mail_dir.as_deref(),
-            HookWiring {
-                no_hooks: true,
-                uninstall: false,
-            },
+            false,
         ),
         LaneCmd::Delete {
             lane,
@@ -1346,7 +1372,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
 
 pub(crate) fn run_harness_get(registry: &Registry, id: &str) -> Result<()> {
     let adapter = resolve_harness(registry, id)?;
-    let caps = adapter.capabilities();
+    let caps = adapter.control_capabilities();
     println!(
         "{}",
         serde_json::json!({
@@ -1365,7 +1391,7 @@ pub(crate) fn run_harness_get(registry: &Registry, id: &str) -> Result<()> {
 pub(crate) fn run_lane_list(
     mail_dir_arg: Option<&Path>,
     state_filter: Option<&str>,
-    harness_filter: Option<&str>,
+    harness_filter: Option<HarnessId>,
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
@@ -1378,7 +1404,7 @@ pub(crate) fn run_lane_list(
             }
         }
         if let Some(want) = harness_filter {
-            if route.harness.as_deref() != Some(want) {
+            if route.harness != Some(want) {
                 continue;
             }
         }
@@ -1413,7 +1439,7 @@ pub(crate) fn run_lane_list(
             pad(state, 4),
             pad(name, 16),
             pad(&route.kind, 12),
-            pad(route.harness.as_deref().unwrap_or("-"), 10),
+            pad(route.harness.map_or("-", HarnessId::as_str), 10),
             pad(route.mode.as_deref().unwrap_or("-"), 6),
             pad(route.model.as_deref().unwrap_or("-"), 46),
             pad(route.tmux.as_deref().unwrap_or("-"), 16),
@@ -2268,7 +2294,7 @@ mod tests {
 
         for route in [memory, disk] {
             assert_eq!(route.kind, "coordinator");
-            assert_eq!(route.harness.as_deref(), Some("codex"));
+            assert_eq!(route.harness, Some(HarnessId::Codex));
             assert_eq!(route.tmux.as_deref(), Some("%1206"));
             assert_eq!(route.cwd.as_deref(), Some("/tmp/unrecorded-worktree"));
             assert_eq!(route.mode.as_deref(), Some("interactive"));
@@ -2284,7 +2310,7 @@ mod tests {
         let mut routes = BTreeMap::new();
         let route = Route {
             kind: "coordinator".into(),
-            harness: Some("codex".into()),
+            harness: Some(HarnessId::Codex),
             tmux: Some("%1206".into()),
             cwd: Some("/shared-cwd".into()),
             model: None,
@@ -2406,7 +2432,7 @@ mod tests {
             "l",
             Route {
                 kind: "lane".into(),
-                harness: Some("claude".into()),
+                harness: Some(HarnessId::Claude),
                 tmux: Some("somesession".into()),
                 cwd: None,
                 model: None,
@@ -2444,7 +2470,7 @@ mod tests {
     fn tmux_route(tmux_name: &str) -> Route {
         Route {
             kind: "lane".into(),
-            harness: Some("claude".into()),
+            harness: Some(HarnessId::Claude),
             tmux: Some(tmux_name.to_owned()),
             cwd: None,
             model: None,
@@ -2586,7 +2612,7 @@ mod tests {
         let snapshot = SysinfoSnapshot::capture().unwrap();
         let route = Route {
             kind: "lane".into(),
-            harness: Some("claude".into()),
+            harness: Some(HarnessId::Claude),
             tmux: None,
             cwd: None,
             model: None,
@@ -2625,7 +2651,7 @@ mod tests {
     fn registered_route(ts: &str) -> Route {
         Route {
             kind: "lane".into(),
-            harness: Some("claude".into()),
+            harness: Some(HarnessId::Claude),
             tmux: Some("l".into()),
             cwd: None,
             model: None,
@@ -3069,7 +3095,7 @@ mod tests {
             "child".into(),
             Route {
                 kind: "lane".into(),
-                harness: Some("opencode".into()),
+                harness: Some(HarnessId::Opencode),
                 tmux: Some("lane-x".into()),
                 cwd: None,
                 model: None,
