@@ -95,6 +95,10 @@ pub struct ChannelSpec {
     /// The lane whose trail the harness child's stderr is written to. `None`
     /// is a caller outside a lane; its child inherits the pane's stderr.
     pub lane: Option<String>,
+    /// The executable the harness runs as, replacing the binary it names for
+    /// itself (`ccz` is claude under the z.ai env). `None` is the harness's
+    /// own binary.
+    pub executable: Option<String>,
 }
 
 /// One live conversation. Every harness answers the same four calls, so the

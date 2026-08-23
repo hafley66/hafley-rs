@@ -114,7 +114,8 @@ impl OpencodeDoor {
             .send(serde_json::to_string(&payload)?)
             .context("opencode POST /session")?;
         let text = response.body_mut().read_to_string()?;
-        let value: serde_json::Value = serde_json::from_str(&text).context("decode POST /session")?;
+        let value: serde_json::Value =
+            serde_json::from_str(&text).context("decode POST /session")?;
         value
             .get("id")
             .and_then(serde_json::Value::as_str)
@@ -298,7 +299,9 @@ impl Door for OpencodeDoor {
             args,
             mode: "native-remote".into(),
             session_id: Some(session.clone()),
-            source_path: Some(format!("managed-opencode-serve={base};started-session={session}")),
+            source_path: Some(format!(
+                "managed-opencode-serve={base};started-session={session}"
+            )),
             app_server_socket: Some(base.to_string()),
         })
     }

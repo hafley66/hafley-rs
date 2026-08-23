@@ -37,6 +37,17 @@ pub const CODEX_ADAPTER: &[&str] = &["npx", "-y", "@agentclientprotocol/codex-ac
 pub const KIMI_ADAPTER: &[&str] = &["kimi", "acp"];
 pub const OPENCODE_ADAPTER: &[&str] = &["opencode", "acp"];
 
+/// The argv a roster row spawns as. An `executable` override replaces the
+/// row's program and keeps its arguments, so `["kimi", "acp"]` under `ccz`
+/// spawns `ccz acp` and a bare `["codex-acp"]` spawns `ccz` alone.
+pub fn adapter_command(adapter: &[&str], executable: Option<&str>) -> Vec<String> {
+    let mut command: Vec<String> = adapter.iter().map(|part| (*part).to_owned()).collect();
+    if let (Some(executable), Some(program)) = (executable, command.first_mut()) {
+        *program = executable.to_owned();
+    }
+    command
+}
+
 /// How long the opening handshake (spawn, `initialize`, session) may take.
 const OPEN_TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -147,8 +158,7 @@ impl AcpChannel {
     /// Open one of the roster adapters. The roster rows are `&[&str]`, so a
     /// caller names a const instead of building a `Vec<String>`.
     pub fn open_adapter(spec: &ChannelSpec, adapter: &[&str]) -> Result<AcpChannel> {
-        let command: Vec<String> = adapter.iter().map(|part| (*part).to_owned()).collect();
-        AcpChannel::open(spec, &command)
+        AcpChannel::open(spec, &adapter_command(adapter, spec.executable.as_deref()))
     }
 }
 
@@ -696,6 +706,38 @@ mod tests {
         assert_eq!(KIMI_ADAPTER, ["kimi", "acp"]);
     }
 
+    /// RECEIPT. An executable override replaces the roster row's program and
+    /// nothing else; no override leaves the row byte-identical. Sabotage:
+    /// replacing the whole command drops `acp` and the child never speaks the
+    /// protocol.
+    #[test]
+    fn an_executable_override_replaces_only_the_adapter_program() {
+        assert_eq!(
+            adapter_command(KIMI_ADAPTER, Some("ccz")),
+            ["ccz", "acp"],
+            "kimi row"
+        );
+        assert_eq!(
+            adapter_command(OPENCODE_ADAPTER, Some("ccz")),
+            ["ccz", "acp"],
+            "opencode row"
+        );
+        assert_eq!(
+            adapter_command(&["codex-acp"], Some("ccz")),
+            ["ccz"],
+            "one-word row"
+        );
+        assert_eq!(
+            adapter_command(CODEX_ADAPTER, None),
+            CODEX_ADAPTER
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>(),
+            "no override"
+        );
+        assert!(adapter_command(&[], Some("ccz")).is_empty());
+    }
+
     /// RECEIPT for the capability flip: claude and kimi advertised
     /// `send_midflight` on their old transports and cannot on this one, so
     /// every steer is held for the next turn.
@@ -737,6 +779,7 @@ mod tests {
             cwd: std::env::temp_dir(),
             resume: None,
             lane: None,
+            executable: None,
         };
         let opened = std::time::Instant::now();
         let mut channel = AcpChannel::open_adapter(&spec, adapter).unwrap();
@@ -823,6 +866,7 @@ mod tests {
             cwd: std::env::temp_dir(),
             resume: None,
             lane: None,
+            executable: None,
         };
         let mut first = AcpChannel::open_adapter(&spec, adapter).unwrap();
         let session = first.conversation_id().expect("a session id");
@@ -887,6 +931,7 @@ mod tests {
             cwd: std::env::temp_dir(),
             resume: None,
             lane: None,
+            executable: None,
         };
         let error = match AcpChannel::open(&spec, &[]) {
             Ok(_) => panic!("an empty command opened a channel"),

@@ -1161,9 +1161,10 @@ impl Store {
     /// Drop one favorite. The markdown body stays in markdown_cache, which
     /// other rows may share. `false` when the id names no favorite.
     pub fn favorite_delete(&self, id: i64) -> Result<bool> {
-        let removed = self
-            .connection
-            .execute("DELETE FROM agent_favorite WHERE favorite_id = ?1", params![id])?;
+        let removed = self.connection.execute(
+            "DELETE FROM agent_favorite WHERE favorite_id = ?1",
+            params![id],
+        )?;
         Ok(removed == 1)
     }
 

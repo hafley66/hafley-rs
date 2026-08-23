@@ -155,9 +155,7 @@ fn land(
         return Ok(Landing::lane_supervisor());
     }
     let Some(id) = route.harness else {
-        return Ok(Landing::unreachable(format!(
-            "route {to} names no harness"
-        )));
+        return Ok(Landing::unreachable(format!("route {to} names no harness")));
     };
     let harness = registry.get(id);
     match harness.capabilities().mail {

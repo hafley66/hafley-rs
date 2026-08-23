@@ -873,6 +873,7 @@ mod tests {
             env_stamp: None,
             model: Some("m".to_owned()),
             variant: None,
+            bin: None,
             on_exit: None,
             tmux: None,
             lane: "lane-test".to_owned(),

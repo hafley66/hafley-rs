@@ -115,7 +115,10 @@ edge and stay invisible to tracking:
   provider/model opencode, kimi-* kimi).
   Overrides: --lane <id>, --tmux <name>, --base-sha <sha>, --harness <id>.
   Model preset: --preset flash4 resolves through the platform config directory's
-  boop/config.json; `boop config presets` lists every name with its model and harness.
+  boop/config.json; `boop config presets` lists every name with its model, bin
+  and harness.
+  Alternate binary: --bin ccz runs the harness as that executable instead of its
+  own (ccz is claude under the z.ai env); a preset's `bin` key sets it per name.
   One shot: worktree at base sha + spawn + route registration.
   Always --dry-run first; the printed `cmd:` line is the literal spawn.
 

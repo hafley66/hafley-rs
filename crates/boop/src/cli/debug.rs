@@ -88,15 +88,16 @@ pub(crate) fn run_config(cmd: ConfigCmd) -> Result<()> {
     Ok(())
 }
 
-/// Each preset resolved to model, variant, and the harness the model spelling
-/// names, with the `default-model-preset` row marked.
+/// Each preset resolved to model, variant, executable, and the harness the
+/// model spelling names, with the `default-model-preset` row marked.
 pub(crate) fn presets_table() -> Result<String> {
     let path = config::default_path()?;
     let config = config::load(&path)?;
-    let mut rows: Vec<[String; 5]> = vec![[
+    let mut rows: Vec<[String; 6]> = vec![[
         "PRESET".into(),
         "MODEL".into(),
         "VARIANT".into(),
+        "BIN".into(),
         "HARNESS".into(),
         "DEFAULT".into(),
     ]];
@@ -114,6 +115,7 @@ pub(crate) fn presets_table() -> Result<String> {
             name.clone(),
             preset.model,
             preset.variant.unwrap_or_default(),
+            preset.bin.unwrap_or_default(),
             harness,
             default.to_owned(),
         ]);
@@ -121,7 +123,7 @@ pub(crate) fn presets_table() -> Result<String> {
     if rows.len() == 1 {
         return Ok(format!("no model presets in {}", path.display()));
     }
-    let mut widths = [0usize; 5];
+    let mut widths = [0usize; 6];
     for row in &rows {
         for (width, cell) in widths.iter_mut().zip(row) {
             *width = (*width).max(cell.len());

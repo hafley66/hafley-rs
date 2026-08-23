@@ -86,6 +86,8 @@ pub(crate) struct DispatchArgs {
     pub(crate) base_sha: Option<String>,
     /// opencode reasoning-effort variant, threaded from `lane create`.
     pub(crate) variant: Option<String>,
+    /// The executable the harness runs as, threaded from `lane create`.
+    pub(crate) bin: Option<String>,
     /// Overrides the branch name derived from `tmux`/`to`; `lane create`
     /// sets this from its own `--branch` flag.
     pub(crate) branch: Option<String>,
@@ -162,6 +164,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
         )),
         model: args.model.clone(),
         variant: args.variant.clone(),
+        bin: args.bin.clone(),
         on_exit: args.on_exit.clone(),
         tmux: args.tmux.clone(),
         lane: args.to.clone(),
@@ -361,6 +364,7 @@ pub(crate) fn run_lane_supervisor(
     model: Option<&str>,
     resume: Option<&str>,
     variant: Option<&str>,
+    bin: Option<&str>,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
     info!(
@@ -370,6 +374,7 @@ pub(crate) fn run_lane_supervisor(
         cwd = %std::env::current_dir().unwrap_or_default().display(),
         resume = resume.unwrap_or_default(),
         variant = variant.unwrap_or_default(),
+        bin = bin.unwrap_or_default(),
         "lane supervisor starting"
     );
     let adapter = harness_by_id(registry, harness_id)?;
@@ -386,6 +391,7 @@ pub(crate) fn run_lane_supervisor(
         cwd: cwd.clone(),
         resume: resume.map(str::to_owned),
         lane: Some(lane.to_owned()),
+        executable: bin.map(str::to_owned),
     };
     let mut channel = adapter.open_channel(&spec).inspect_err(|error| {
         error!(lane, harness = harness_id, error = %error, "lane channel open failed");
@@ -495,7 +501,9 @@ pub(crate) fn watch_turn_end(
     message_id: &str,
     timeout_secs: u64,
 ) -> Option<std::sync::mpsc::Receiver<String>> {
-    let store = boop::Store::default_path().and_then(boop::Store::open).ok()?;
+    let store = boop::Store::default_path()
+        .and_then(boop::Store::open)
+        .ok()?;
     let rows = store.delivery_rows(message_id).ok()?;
     let routes = bus::read_routes(dir).ok()?;
     let registry = std::sync::Arc::new(Registry::discover());
@@ -505,9 +513,15 @@ pub(crate) fn watch_turn_end(
         if row.outcome != "injected" && row.outcome != "queued-for-turn-boundary" {
             continue;
         }
-        let Some(route) = routes.get(&row.route).cloned() else { continue };
-        let Some(harness_id) = route.harness else { continue };
-        let Ok(Some(live)) = boop::mail::live_session(registry.get(harness_id), &store, &route, harness_id) else {
+        let Some(route) = routes.get(&row.route).cloned() else {
+            continue;
+        };
+        let Some(harness_id) = route.harness else {
+            continue;
+        };
+        let Ok(Some(live)) =
+            boop::mail::live_session(registry.get(harness_id), &store, &route, harness_id)
+        else {
             continue;
         };
         let registry = registry.clone();
@@ -746,6 +760,7 @@ pub(crate) struct LaneArgs {
     pub(crate) model: Option<String>,
     pub(crate) preset: Option<String>,
     pub(crate) variant: Option<String>,
+    pub(crate) bin: Option<String>,
     pub(crate) tmux: Option<String>,
     pub(crate) parent: Option<String>,
     pub(crate) branch: Option<String>,
@@ -874,6 +889,14 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             .and_then(|name| config::resolve_variant(name, &config_path).ok())
             .flatten(),
     };
+    // The executable override rides the same precedence as the variant: an
+    // explicit --bin wins, else the preset that resolved the model names one.
+    let bin = match args.bin {
+        Some(bin) => Some(bin),
+        None => preset_name
+            .and_then(|name| config::resolve_preset(name, &config_path).ok())
+            .and_then(|preset| preset.bin),
+    };
     if variant.is_some() && adapter.capabilities().variant != VariantSupport::Flag {
         anyhow::bail!(
             "--variant is opencode-only; the codex channel sets reasoning effort via the \
@@ -937,6 +960,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             )),
             model: model.clone(),
             variant: variant.clone(),
+            bin: bin.clone(),
             on_exit: on_exit.clone(),
             tmux: Some(identity.tmux.clone()),
             lane: identity.lane.clone(),
@@ -969,6 +993,9 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
                 println!("parent: - (foreground wait owns the completion receipt)")
             }
             None => println!("parent: - (no completion hail; pass --parent <lane>)"),
+        }
+        if let Some(bin) = &bin {
+            println!("bin: {bin}");
         }
         if let Some(goal) = &args.goal {
             println!("goal: {goal}");
@@ -1043,6 +1070,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             on_exit,
             warm_start: !args.no_start,
             variant: variant.clone(),
+            bin: bin.clone(),
         },
     )?;
     info!(
@@ -1292,6 +1320,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             model,
             preset,
             variant,
+            bin,
             tmux,
             parent,
             branch,
@@ -1328,6 +1357,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
                     model,
                     preset,
                     variant,
+                    bin,
                     tmux,
                     parent,
                     branch,
@@ -1352,6 +1382,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             model,
             resume,
             variant,
+            bin,
             mail_dir,
         } => run_lane_supervisor(
             registry,
@@ -1361,6 +1392,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             model.as_deref(),
             resume.as_deref(),
             variant.as_deref(),
+            bin.as_deref(),
             mail_dir.as_deref(),
         ),
         LaneCmd::Get { lane, mail_dir } => run_lane_get(mail_dir.as_deref(), &lane),

@@ -35,9 +35,11 @@ fn opened_session(
             .filter(|session| {
                 // A harness that records a start time decides by it: a thread
                 // another TUI keeps updating in the same cwd is not this one.
-                session.started_ms.map_or(session.observed_ms >= opened_ms, |started| {
-                    started >= opened_ms
-                })
+                session
+                    .started_ms
+                    .map_or(session.observed_ms >= opened_ms, |started| {
+                        started >= opened_ms
+                    })
                     && session
                         .cwd
                         .as_ref()

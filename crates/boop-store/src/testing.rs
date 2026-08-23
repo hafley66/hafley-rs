@@ -177,9 +177,6 @@ impl Multiplexer for FakeMux {
         Ok(())
     }
 
-
-
-
     fn new_window(
         &self,
         _: Option<&str>,
