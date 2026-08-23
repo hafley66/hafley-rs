@@ -193,6 +193,7 @@ impl Rewriter {
             cwd,
             resume,
             lane: None,
+            executable: None,
         };
         let channel = adapter
             .open_channel(&spec)
@@ -1355,6 +1356,7 @@ mod tests {
             cwd: temp_dir("chat_cwd"),
             resume: None,
             lane: None,
+            executable: None,
         };
         let turns = Arc::new(Mutex::new(Vec::new()));
         let mut rewriter = Rewriter::Chat {
@@ -1436,6 +1438,7 @@ mod tests {
             cwd: temp_dir("subject_cwd"),
             resume: None,
             lane: None,
+            executable: None,
         };
         let delivered = Arc::new(Mutex::new(Vec::new()));
         let events = Arc::new(AtomicUsize::new(0));

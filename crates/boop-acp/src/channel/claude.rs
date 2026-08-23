@@ -1,9 +1,10 @@
 //! The claude lane channel: one long-lived `claude -p` child in stream-json
 //! mode. Extra user lines written to its stdin land inside the running turn.
 //!
-//! RETIRED as a lane transport: `Claude::open_channel` mints an `AcpChannel`
-//! on `CLAUDE_ADAPTER`. Kept unwired this arc as the rollback door; nothing
-//! outside its own tests constructs it.
+//! `Claude::open_channel` mints an `AcpChannel` on `CLAUDE_ADAPTER` for the
+//! plain lane. This channel answers the one case ACP cannot: a lane pinned to
+//! an alternate claude binary through `spec.executable`, which the npx-hosted
+//! adapter row has no slot for.
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -28,7 +29,7 @@ pub struct ClaudeChannel {
 
 impl ClaudeChannel {
     pub fn open(spec: &ChannelSpec) -> Result<ClaudeChannel> {
-        Self::open_with_binary(spec, "claude")
+        Self::open_with_binary(spec, spec.executable.as_deref().unwrap_or("claude"))
     }
 
     fn open_with_binary(spec: &ChannelSpec, binary: &str) -> Result<ClaudeChannel> {
@@ -233,16 +234,23 @@ mod tests {
             cwd: std::env::temp_dir(),
             resume: None,
             lane: None,
+            executable: None,
         }
     }
 
     /// Write a fake `claude` shell script that runs `body`, and return its path.
     /// The channel spawns it through the same `open` path as the real binary.
     fn fake_claude(name: &str, body: &str) -> PathBuf {
+        fake_binary("claude", name, body)
+    }
+
+    /// The same fake under an arbitrary program name, so a test can tell which
+    /// executable `open` actually spawned.
+    fn fake_binary(program: &str, name: &str, body: &str) -> PathBuf {
         let dir =
             std::env::temp_dir().join(format!("boop-claude-fake-{}-{name}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("claude");
+        let path = dir.join(program);
         std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
         let mut permissions = std::fs::metadata(&path).unwrap().permissions();
         permissions.set_mode(0o755);
@@ -265,6 +273,31 @@ mod tests {
             .next_event(Duration::from_secs(5))
             .unwrap()
             .expect("the fake claude transcript yields a turn end")
+    }
+
+    /// RECEIPT. `open` spawns `spec.executable`, not `claude`. The fake is
+    /// installed under the name `ccz` and reports its own argv[0] as the
+    /// result subtype, so the assert reads the program that actually ran.
+    /// Sabotage: hard-coding `"claude"` back into `open` makes this fail at
+    /// the spawn, since no `claude` exists in the fake's directory.
+    #[test]
+    fn open_spawns_the_executable_override_instead_of_claude() {
+        let binary = fake_binary(
+            "ccz",
+            "executable-override",
+            r#"printf '{"type":"result","subtype":"%s","is_error":false}\n' "$(basename "$0")""#,
+        );
+        let spec = ChannelSpec {
+            executable: Some(binary.display().to_string()),
+            ..spec()
+        };
+        let mut channel = ClaudeChannel::open(&spec).unwrap();
+        let _ = channel.start_turn("do the lane");
+        let end = channel
+            .next_event(Duration::from_secs(5))
+            .unwrap()
+            .expect("the fake transcript yields a turn end");
+        assert_eq!(end.detail(), "ccz", "{end:?}");
     }
 
     /// RECEIPT. A completed transcript wins over a nonzero exit: the claude CLI

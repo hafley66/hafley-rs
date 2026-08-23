@@ -386,6 +386,7 @@ pub(crate) fn run_lane_supervisor(
         cwd: cwd.clone(),
         resume: resume.map(str::to_owned),
         lane: Some(lane.to_owned()),
+        executable: None,
     };
     let mut channel = adapter.open_channel(&spec).inspect_err(|error| {
         error!(lane, harness = harness_id, error = %error, "lane channel open failed");
@@ -495,7 +496,9 @@ pub(crate) fn watch_turn_end(
     message_id: &str,
     timeout_secs: u64,
 ) -> Option<std::sync::mpsc::Receiver<String>> {
-    let store = boop::Store::default_path().and_then(boop::Store::open).ok()?;
+    let store = boop::Store::default_path()
+        .and_then(boop::Store::open)
+        .ok()?;
     let rows = store.delivery_rows(message_id).ok()?;
     let routes = bus::read_routes(dir).ok()?;
     let registry = std::sync::Arc::new(Registry::discover());
@@ -505,9 +508,15 @@ pub(crate) fn watch_turn_end(
         if row.outcome != "injected" && row.outcome != "queued-for-turn-boundary" {
             continue;
         }
-        let Some(route) = routes.get(&row.route).cloned() else { continue };
-        let Some(harness_id) = route.harness else { continue };
-        let Ok(Some(live)) = boop::mail::live_session(registry.get(harness_id), &store, &route, harness_id) else {
+        let Some(route) = routes.get(&row.route).cloned() else {
+            continue;
+        };
+        let Some(harness_id) = route.harness else {
+            continue;
+        };
+        let Ok(Some(live)) =
+            boop::mail::live_session(registry.get(harness_id), &store, &route, harness_id)
+        else {
             continue;
         };
         let registry = registry.clone();

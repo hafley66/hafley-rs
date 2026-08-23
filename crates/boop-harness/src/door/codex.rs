@@ -176,7 +176,6 @@ impl Door for CodexDoor {
     }
 }
 
-
 impl CodexDoor {
     /// `codex remote-control start` is idempotent: it reports the socket of
     /// the daemon already running, or starts one and reports that.
@@ -219,22 +218,32 @@ fn wait_for_idle(socket: &Path, thread: &str, timeout: Duration) -> Result<IdleN
         let message = match ws.read() {
             Ok(message) => message,
             Err(tungstenite::Error::Io(error))
-                if matches!(error.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) =>
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
             {
                 continue
             }
             Err(error) => return Err(error.into()),
         };
-        let Message::Text(text) = message else { continue };
-        let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else { continue };
-        if value.get("method").and_then(serde_json::Value::as_str) != Some("thread/status/changed") {
+        let Message::Text(text) = message else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        if value.get("method").and_then(serde_json::Value::as_str) != Some("thread/status/changed")
+        {
             continue;
         }
         let params = &value["params"];
         if params.get("threadId").and_then(serde_json::Value::as_str) != Some(thread) {
             continue;
         }
-        let status = params.pointer("/status/type").and_then(serde_json::Value::as_str);
+        let status = params
+            .pointer("/status/type")
+            .and_then(serde_json::Value::as_str);
         if status == Some("idle") {
             return Ok(IdleNotice::now(Some("idle".into())));
         }
