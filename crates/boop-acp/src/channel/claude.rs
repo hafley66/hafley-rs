@@ -50,8 +50,14 @@ impl ClaudeChannel {
                 command.args(["--session-id", &conversation]);
             }
         }
+        // `name@effort` splits: claude takes the model and the effort as two
+        // flags, never the joined spelling.
         if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
-            command.args(["--model", model]);
+            let parsed: boop_store::session::ModelSpec = model.parse()?;
+            command.args(["--model", parsed.name.as_str()]);
+            if let Some(effort) = parsed.effort {
+                command.args(["--effort", effort.as_str()]);
+            }
         }
         let mut child = command
             .current_dir(&spec.cwd)

@@ -204,6 +204,10 @@ pub enum Effort {
     Low,
     Medium,
     High,
+    /// claude `--effort xhigh`; codex names it the same on `turn/start`.
+    XHigh,
+    /// claude `--effort max`.
+    Max,
 }
 
 impl Effort {
@@ -212,6 +216,8 @@ impl Effort {
             Effort::Low => "low",
             Effort::Medium => "medium",
             Effort::High => "high",
+            Effort::XHigh => "xhigh",
+            Effort::Max => "max",
         }
     }
 }
@@ -224,8 +230,10 @@ impl std::str::FromStr for Effort {
             "low" => Ok(Effort::Low),
             "medium" => Ok(Effort::Medium),
             "high" => Ok(Effort::High),
+            "xhigh" => Ok(Effort::XHigh),
+            "max" => Ok(Effort::Max),
             other => {
-                anyhow::bail!("effort `{other}` is not one of low, medium, high")
+                anyhow::bail!("effort `{other}` is not one of low, medium, high, xhigh, max")
             }
         }
     }
