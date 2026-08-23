@@ -169,6 +169,64 @@ pub fn reparented_to(rows: &[crate::bus::Message], lane: &str) -> Option<String>
         .map(|row| row.to.clone())
 }
 
+// ---------------------------------------------------------------------------
+// The transcript-sync trail
+// ---------------------------------------------------------------------------
+
+/// The sync trail file name under `~/.agent`.
+pub const SYNC_TRAIL: &str = "sync-trail.ndjson";
+
+/// Bytes kept before the sync trail is truncated. A pass writes two short
+/// lines, so this holds thousands of passes; the trail answers "what was the
+/// last hour doing", never "what happened last month".
+const SYNC_TRAIL_CAP: u64 = 512 * 1024;
+
+/// `~/.agent`.
+pub fn agent_root() -> Result<PathBuf> {
+    let home = dirs::home_dir().context("resolve home directory")?;
+    Ok(home.join(".agent"))
+}
+
+/// `~/.agent/sync-trail.ndjson`, or the `BOOP_SYNC_TRAIL` override a test sets.
+pub fn sync_trail_path() -> Result<PathBuf> {
+    if let Some(path) = std::env::var_os("BOOP_SYNC_TRAIL").filter(|path| !path.is_empty()) {
+        return Ok(PathBuf::from(path));
+    }
+    Ok(agent_root()?.join(SYNC_TRAIL))
+}
+
+/// Append one NDJSON record. The file is opened `O_APPEND` and one record is
+/// one `write`, so concurrent passes interleave whole lines and a SIGKILL
+/// between records loses nothing already written.
+pub fn append_sync_trail(path: &Path, record: &str) {
+    use std::io::Write;
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if std::fs::metadata(path).is_ok_and(|meta| meta.len() > SYNC_TRAIL_CAP) {
+        let _ = std::fs::File::create(path);
+    }
+    let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    else {
+        return;
+    };
+    let _ = file.write_all(format!("{record}\n").as_bytes());
+}
+
+/// Every record in the trail, oldest first. A line that is not JSON is skipped
+/// rather than failing the read: the trail is diagnostic, never a contract.
+pub fn read_sync_trail(path: &Path) -> Vec<serde_json::Value> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    text.lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

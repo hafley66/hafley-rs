@@ -205,6 +205,99 @@ pub fn as_json(alerts: &[Alert]) -> serde_json::Value {
     )
 }
 
+/// The sync trail inside the window, as rows. A `start` with no `done` at the
+/// same pid is a pass that was killed; a `deferred` is a caller that found a
+/// pass in flight and read without running its own.
+pub fn sync_json(passes: &[serde_json::Value], since_ms: u64) -> serde_json::Value {
+    let inside =
+        |record: &&serde_json::Value| record["at_ms"].as_u64().unwrap_or_default() >= since_ms;
+    let of_kind = |wanted: &str| -> Vec<&serde_json::Value> {
+        passes
+            .iter()
+            .filter(|record| record["kind"] == wanted)
+            .filter(inside)
+            .collect()
+    };
+    let done = of_kind("done");
+    let finished: Vec<u64> = done
+        .iter()
+        .filter_map(|record| record["pid"].as_u64())
+        .collect();
+    let killed: Vec<&serde_json::Value> = of_kind("start")
+        .into_iter()
+        .filter(|record| {
+            record["pid"]
+                .as_u64()
+                .is_none_or(|pid| !finished.contains(&pid))
+        })
+        .collect();
+    serde_json::json!({
+        "passes": done,
+        "deferred": of_kind("deferred").len(),
+        "killed": killed,
+    })
+}
+
+/// The text form: one line per finished pass, its wall and where the wall
+/// went, plus the deferral count and any pass that never wrote a `done`.
+pub fn sync_report(passes: &[serde_json::Value], since_ms: u64) -> String {
+    let document = sync_json(passes, since_ms);
+    let empty = Vec::new();
+    let rows = document["passes"].as_array().unwrap_or(&empty);
+    let killed = document["killed"].as_array().unwrap_or(&empty);
+    let deferred = document["deferred"].as_u64().unwrap_or_default();
+    if rows.is_empty() && killed.is_empty() && deferred == 0 {
+        return "no transcript sync in the window".to_owned();
+    }
+    let field = |record: &serde_json::Value, name: &str| record[name].as_u64().unwrap_or_default();
+    let mut out = String::from("\ntranscript sync\n");
+    for record in rows {
+        out.push_str(&format!(
+            "  {} pid={} {}ms known={}ms/{} candidates+backfill={}ms project={}ms projected={}{}\n",
+            clock(field(record, "at_ms")),
+            field(record, "pid"),
+            field(record, "elapsed_ms"),
+            field(record, "known_ms"),
+            field(record, "known"),
+            adapter_ms(record),
+            field(record, "project_ms"),
+            field(record, "projected"),
+            match record["yielded"].as_bool() {
+                Some(true) => " YIELDED-ON-BUDGET",
+                _ => "",
+            }
+        ));
+    }
+    for record in killed {
+        out.push_str(&format!(
+            "  {} pid={} started and never finished: killed mid-sync\n",
+            clock(field(record, "at_ms")),
+            field(record, "pid"),
+        ));
+    }
+    if deferred > 0 {
+        out.push_str(&format!(
+            "  {deferred} caller(s) found a sync in flight and read without one\n"
+        ));
+    }
+    out.trim_end().to_owned()
+}
+
+/// The discovery half of one pass: every adapter's walk plus its backfill.
+fn adapter_ms(record: &serde_json::Value) -> u64 {
+    record["adapters"]
+        .as_array()
+        .map(|legs| {
+            legs.iter()
+                .map(|leg| {
+                    leg["candidates_ms"].as_u64().unwrap_or_default()
+                        + leg["backfill_ms"].as_u64().unwrap_or_default()
+                })
+                .sum()
+        })
+        .unwrap_or_default()
+}
+
 /// `HH:MM:SS` UTC. The date is the window's, so it never varies inside a report.
 fn clock(at_ms: u64) -> String {
     let seconds = (at_ms / 1000) % 86_400;
