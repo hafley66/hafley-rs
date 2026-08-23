@@ -17,15 +17,20 @@ pub struct Config {
     pub opencode_banned: BTreeMap<String, String>,
 }
 
-/// One named preset: the provider/model string plus an optional opencode
-/// reasoning-effort variant. `model_presets` values accept either the legacy
-/// bare model string or this object form.
+/// One named preset: the provider/model string, an optional opencode
+/// reasoning-effort variant, and an optional executable the harness runs
+/// under. `model_presets` values accept either the legacy bare model string
+/// or this object form.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ModelPreset {
     pub model: String,
     #[serde(default)]
     pub variant: Option<String>,
+    /// The executable the harness is launched as, replacing its own binary
+    /// (`ccz` is claude under the z.ai env). `None` keeps the harness default.
+    #[serde(default)]
+    pub bin: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -88,6 +93,7 @@ pub fn resolve_preset(preset: &str, path: &Path) -> Result<ModelPreset> {
             PresetEntry::Legacy(model) => ModelPreset {
                 model,
                 variant: None,
+                bin: None,
             },
         })
         .with_context(|| {
@@ -214,6 +220,27 @@ mod tests {
             Some("high".into())
         );
         assert_eq!(resolve_variant("luna", &path).unwrap(), None);
+    }
+
+    /// A preset object naming an alternate executable survives the round
+    /// trip, and the legacy bare-string form still resolves to no executable.
+    #[test]
+    fn preset_object_form_carries_a_bin() {
+        let text = r#"{ "model-presets": {
+                "zfable": { "model": "claude-fable-5@high", "bin": "ccz" },
+                "fable": "claude-fable-5@high" } }"#;
+        let config: Config = serde_json::from_str(text).unwrap();
+        let dumped = serde_json::to_string(&config).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Config>(&dumped).unwrap(),
+            config,
+            "{dumped}"
+        );
+        let path = write_config(text, "object-bin");
+        let preset = resolve_preset("zfable", &path).unwrap();
+        assert_eq!(preset.model, "claude-fable-5@high");
+        assert_eq!(preset.bin.as_deref(), Some("ccz"));
+        assert_eq!(resolve_preset("fable", &path).unwrap().bin, None);
     }
 
     fn write_config(text: &str, name: &str) -> std::path::PathBuf {
