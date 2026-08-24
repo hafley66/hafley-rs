@@ -9,6 +9,14 @@ install-boop:
 install-boop-check repo=".":
     bash crates/boop/scripts/install-guard.sh "{{repo}}"
 
+# Version bumps + changelog from conventional commits since the last tags,
+# committed and pushed, then tags + GitHub releases minted from this machine
+# (gh supplies the token). The Actions release flow is retired.
+release:
+    release-plz update
+    if ! git diff --quiet; then git add CHANGELOG.md Cargo.lock crates/*/Cargo.toml && git commit -m "chore(release): version bumps and changelog" && git push origin main; fi
+    release-plz release --git-token "$(gh auth token)"
+
 boop-perf-grid:
     cargo test -p boop --test bench_grid -- --nocapture
 

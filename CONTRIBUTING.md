@@ -26,7 +26,7 @@ release-plz owns release-time edits to these fields and files:
 - `Cargo.lock`
 - `CHANGELOG.md`
 
-the release pull request contains those edits for review. merging it lets the next main-branch run create package tags and github releases. these crates use git-only releases and are not published to crates.io.
+releases run locally with `just release`: `release-plz update` writes the version bumps and changelog, the recipe commits and pushes them, and `release-plz release` creates package tags and github releases using the `gh` login. these crates use git-only releases and are not published to crates.io. no actions workflow releases anymore.
 
 ## local checks
 
@@ -38,4 +38,4 @@ pull requests also compare the public rust api of `boop` and `boop-mux` with the
 
 ## repository setting
 
-github must allow actions to create and approve pull requests under settings, actions, general, workflow permissions. the workflows use the repository `GITHUB_TOKEN`; no cargo registry token is required for git-only releases.
+releasing needs a `gh auth login` with `repo` scope on the releasing machine. no cargo registry token and no actions permissions are required.
