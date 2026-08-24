@@ -773,6 +773,7 @@ pub(crate) fn run_follow(registry: &Registry) -> Result<()> {
 /// cannot bind or alter a parent route.
 pub(crate) fn sync_native_child_route_once(
     store: &ident::Store,
+    known: &mut boop::harness::KnownSessions,
     adapter: &dyn Harness,
     route_name: &str,
     dir: &Path,
@@ -786,13 +787,22 @@ pub(crate) fn sync_native_child_route_once(
     let parent_session = route
         .session_id
         .context("native route has no managed app-server thread id")?;
-    sync_native_child_route_with_parent(store, adapter, route_name, dir, parent_session, deliver)
+    sync_native_child_route_with_parent(
+        store,
+        known,
+        adapter,
+        route_name,
+        dir,
+        parent_session,
+        deliver,
+    )
 }
 
 /// Project the children belonging to one parent whose managed app-server
 /// thread was written to the route before the TUI started.
 fn sync_native_child_route_with_parent(
     store: &ident::Store,
+    known: &mut boop::harness::KnownSessions,
     adapter: &dyn Harness,
     route_name: &str,
     dir: &Path,
@@ -804,8 +814,7 @@ fn sync_native_child_route_with_parent(
         .get(route_name)
         .cloned()
         .with_context(|| format!("native route `{route_name}` is not registered"))?;
-    let known = store.known_sessions()?;
-    let candidates = adapter.sync_candidates(&known)?;
+    let candidates = adapter.sync_candidates(known)?;
     if route.session_id.as_deref() != Some(parent_session.as_str()) {
         let mut enriched = route;
         enriched.session_id = Some(parent_session.clone());
@@ -817,7 +826,7 @@ fn sync_native_child_route_with_parent(
         .iter()
         .filter(|session| session.parent.as_deref() == Some(parent_session.as_str()))
     {
-        if !session_needs_sync(session, &known) {
+        if !session_needs_sync(session, known) {
             continue;
         }
         let from = store.cursor_offset(&session.session_id, &session.path.display().to_string())?;
@@ -829,7 +838,10 @@ fn sync_native_child_route_with_parent(
             Ok(stat)
         })();
         match result {
-            Ok(_) => store.commit()?,
+            Ok(_) => {
+                store.commit()?;
+                known.upsert_ref(session, session.size);
+            }
             Err(error) => {
                 let _ = store.rollback();
                 return Err(error);
@@ -1905,9 +1917,11 @@ mod tests {
         let (delivery_tx, delivery_rx) = mpsc::channel();
         let worker = std::thread::spawn(move || -> Result<()> {
             let store = ident::Store::open(db_path)?;
+            let mut known = store.known_sessions()?;
             while worker_running.load(Ordering::SeqCst) {
                 sync_native_child_route_once(
                     &store,
+                    &mut known,
                     &watcher,
                     "resident-parent",
                     &worker_dir,
@@ -1998,9 +2012,11 @@ mod tests {
         let (delivery_tx, delivery_rx) = mpsc::channel();
         let worker = std::thread::spawn(move || -> Result<()> {
             let store = ident::Store::open(db_path)?;
+            let mut known = store.known_sessions()?;
             while worker_running.load(Ordering::SeqCst) {
                 sync_native_child_route_once(
                     &store,
+                    &mut known,
                     &watcher,
                     "codex-live-parent",
                     &worker_dir,

@@ -985,6 +985,18 @@ impl Store {
     /// harness uses it to construct candidates from a filesystem stat instead
     /// of reopening each historical transcript just to parse its first record.
     pub fn known_sessions(&self) -> Result<KnownSessions> {
+        if let Some(path) = std::env::var_os("BOOP_KNOWN_SESSIONS_TRAIL") {
+            use std::io::Write;
+            let path = std::path::PathBuf::from(path);
+            let path = path
+                .to_string_lossy()
+                .replace("%p", &std::process::id().to_string());
+            let mut trail = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)?;
+            writeln!(trail, "{}", std::process::id())?;
+        }
         let mut statement = self.connection.prepare(
             "SELECT dp.value, ds.value, COALESCE(s.nickname, ds.value), cwd.value, branch.value, harness.value,
                     (SELECT parent.value

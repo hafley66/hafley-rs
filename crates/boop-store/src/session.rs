@@ -79,6 +79,28 @@ impl KnownSessions {
         self.0.entry(path).or_default().push(session);
     }
 
+    pub fn upsert_ref(&mut self, session: &SessionRef, cursor: u64) {
+        let known = KnownSession {
+            harness: session.harness.as_str().to_owned(),
+            session_id: session.session_id.clone(),
+            nickname: session.nickname.clone(),
+            cwd: session.cwd.clone(),
+            git_branch: session.git_branch.clone(),
+            parent: session.parent.clone(),
+            cursor,
+            modified_ms: session.modified_ms,
+        };
+        let sessions = self.0.entry(session.path.clone()).or_default();
+        if let Some(current) = sessions
+            .iter_mut()
+            .find(|current| current.session_id == session.session_id)
+        {
+            *current = known;
+        } else {
+            sessions.push(known);
+        }
+    }
+
     pub fn get(&self, path: &Path) -> Option<&KnownSession> {
         let sessions = self.0.get(path)?;
         (sessions.len() == 1).then(|| &sessions[0])
