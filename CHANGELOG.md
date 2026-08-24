@@ -4,6 +4,27 @@ all notable changes to `boop` and `boop-mux` are recorded here. versions follow 
 
 ## unreleased
 
+## [0.0.3] - 2026-08-24
+
+### Fixed
+
+- *(boop)* the caller's own identity resolves from an adopted pane (#43)
+- release boop 0.0.2 opencode completion
+
+### Other
+
+- update Cargo.toml dependencies
+- *(boop-harness)* six identity and TUI-driving methods off trait Harness
+- decouple foreground waits from coordinators
+- Merge pull request #18 from hafley66/chore/issues-sync-20260817
+- sync 2026-08-17 boop cards, session logs, plans
+- hand a pane its body as a paste, not typed keys
+- 'boop me' registers a Codex pane as a coordinator route
+- Merge feature/agent-pipe: native concatmap resident
+- new-window targets name the window id, not its index
+- boop 0.0.1 tracing baseline
+- boop and boop-mux: extract from sprefa into a standalone workspace
+
 ### added
 
 - `boop --preset codex` runs a foreground coordinator on a persistent ACPX session.
