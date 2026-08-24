@@ -226,6 +226,14 @@ fn run_rg(
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let observability = hafley_observe::Config::from_env(
+        "soopy",
+        env!("CARGO_PKG_VERSION"),
+        "warn",
+        std::io::IsTerminal::is_terminal(&std::io::stderr()),
+    )?;
+    hafley_observe::init(observability)
+        .map_err(|error| anyhow::anyhow!("initialise tracing subscriber: {error}"))?;
     if let Command::ShowStage { id, store } = &cli.command {
         let store = DurableStageStore::open(store)?;
         let stage = store.load(id.parse::<StageId>().map_err(anyhow::Error::msg)?)?;

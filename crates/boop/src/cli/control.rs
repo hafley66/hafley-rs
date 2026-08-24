@@ -108,6 +108,10 @@ pub(crate) fn run_native_tui(
         .native_tui_projector
         .then(|| boop::Store::open(boop::Store::default_path()?))
         .transpose()?;
+    let mut known = store
+        .as_ref()
+        .map(boop::Store::known_sessions)
+        .transpose()?;
     let opened_ms = boop::live::now_ms();
     let mut child = Command::new(&plan.program)
         .args(&plan.args)
@@ -139,27 +143,32 @@ pub(crate) fn run_native_tui(
         app_server_socket: plan.app_server_socket.clone(),
     };
     write_route(&dir, name, route.clone())?;
-    // The projector pass joins every sync_cursor row (~190ms on a 4k-session
-    // store); running it each 250ms tick burned a core per wrapper.
+    // Child exit observation stays responsive while transcript projection is
+    // independently bounded. The global known-session join ran once above;
+    // every pass below reuses and incrementally updates that resident cache.
     const EXIT_POLL: Duration = Duration::from_millis(250);
-    const PROJECT_EVERY: Duration = Duration::from_secs(2);
-    let mut last_project = std::time::Instant::now() - PROJECT_EVERY;
+    let project_every = std::env::var("BOOP_NATIVE_PROJECT_EVERY_MS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .map(Duration::from_millis)
+        .unwrap_or(Duration::from_secs(30));
+    let mut last_project = std::time::Instant::now() - project_every;
     loop {
         if let Some(status) = child.try_wait().context("observe native TUI exit")? {
             if status.success() {
                 return Ok(());
             }
             let next = match route.session_id.as_deref() {
-                Some(session) if respawn_wanted(status, respawns, spawned_at.elapsed()) => adapter
-                    .door()
-                    .tui_relaunch(
+                Some(session) if respawn_wanted(status, respawns, spawned_at.elapsed()) => {
+                    adapter.door().tui_relaunch(
                         &NativeTuiSpec {
                             executable: executable.into(),
                             cwd: cwd.to_path_buf(),
                             args: Vec::new(),
                         },
                         session,
-                    )?,
+                    )?
+                }
                 _ => None,
             };
             let Some(next) = next else {
@@ -183,7 +192,7 @@ pub(crate) fn run_native_tui(
             write_route(&dir, name, route.clone())?;
             continue;
         }
-        if last_project.elapsed() < PROJECT_EVERY {
+        if last_project.elapsed() < project_every {
             std::thread::sleep(EXIT_POLL);
             continue;
         }
@@ -206,6 +215,7 @@ pub(crate) fn run_native_tui(
         if let Some(store) = store.as_ref() {
             if let Err(error) = crate::cli::db::sync_native_child_route_once(
                 store,
+                known.as_mut().expect("projector store has a session cache"),
                 adapter,
                 name,
                 &dir,

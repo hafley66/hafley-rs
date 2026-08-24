@@ -985,6 +985,27 @@ impl Store {
     /// harness uses it to construct candidates from a filesystem stat instead
     /// of reopening each historical transcript just to parse its first record.
     pub fn known_sessions(&self) -> Result<KnownSessions> {
+        let started = std::time::Instant::now();
+        let span = tracing::debug_span!(
+            "db.known_sessions",
+            operation = "known_sessions",
+            db.system = "sqlite",
+            rows.read = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+        );
+        let _entered = span.enter();
+        if let Some(path) = std::env::var_os("BOOP_KNOWN_SESSIONS_TRAIL") {
+            use std::io::Write;
+            let path = std::path::PathBuf::from(path);
+            let path = path
+                .to_string_lossy()
+                .replace("%p", &std::process::id().to_string());
+            let mut trail = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)?;
+            writeln!(trail, "{}", std::process::id())?;
+        }
         let mut statement = self.connection.prepare(
             "SELECT dp.value, ds.value, COALESCE(s.nickname, ds.value), cwd.value, branch.value, harness.value,
                     (SELECT parent.value
@@ -1033,6 +1054,16 @@ impl Store {
                 },
             );
         }
+        let duration_ms = started.elapsed().as_secs_f64() * 1_000.0;
+        let rows_read = out.len();
+        span.record("rows.read", rows_read as u64);
+        span.record("duration_ms", duration_ms);
+        tracing::debug!(
+            query.name = "known_sessions",
+            rows.read = rows_read,
+            duration_ms,
+            "known sessions materialized"
+        );
         Ok(out)
     }
 

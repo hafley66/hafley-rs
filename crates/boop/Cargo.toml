@@ -46,6 +46,7 @@ time = { version = "0.3", features = ["parsing", "formatting"] }
 # only emits conventional tracing events and spans.
 tracing.workspace = true
 tracing-subscriber.workspace = true
+hafley-observe = { path = "../hafley-observe" }
 
 [dev-dependencies]
 # Deadline on a synchronous std::process::Child in tests/0_sqlite_contention.rs
