@@ -18,6 +18,11 @@ pub fn init_with_writer(
         .with(filter)
         .with(format)
         .try_init()?;
+    startup(&config);
+    Ok(())
+}
+
+pub fn startup(config: &Config) {
     tracing::debug!(
         service.name = config.service_name,
         service.version = config.service_version,
@@ -25,5 +30,4 @@ pub fn init_with_writer(
         log.format = config.format.as_str(),
         "observability initialized"
     );
-    Ok(())
 }
