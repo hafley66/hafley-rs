@@ -112,6 +112,14 @@ fn projector_worker() {
         return;
     };
     let start = PathBuf::from(std::env::var_os("BOOP_CONTENTION_START").unwrap());
+    hafley_observe::init(hafley_observe::Config {
+        service_name: "boop-contention-worker",
+        service_version: env!("CARGO_PKG_VERSION"),
+        default_filter: "boop_store=debug",
+        format: hafley_observe::OutputFormat::Json,
+        ansi: false,
+    })
+    .unwrap();
     let store = Store::open(PathBuf::from(db)).unwrap();
     let known = store.known_sessions().unwrap();
     assert_eq!(known.len(), STORED_SESSIONS);
@@ -193,18 +201,30 @@ fn six_idle_projector_processes_do_not_repeat_global_session_materialization() {
     std::fs::write(fixture.start(), "").unwrap();
 
     let mut failures = Vec::new();
+    let mut worker_logs = Vec::new();
     for child in fixture.children.drain(..) {
         let output = child.wait_with_output().unwrap();
+        worker_logs.push(String::from_utf8_lossy(&output.stderr).into_owned());
         if !output.status.success() {
             failures.push(String::from_utf8_lossy(&output.stderr).into_owned());
         }
     }
     assert!(failures.is_empty(), "workers failed: {failures:#?}");
+    let materialization_events = worker_logs
+        .iter()
+        .map(|log| log.matches("known sessions materialized").count())
+        .sum::<usize>();
+    let materialized_row_fields = worker_logs
+        .iter()
+        .map(|log| log.matches("\"rows.read\":4136").count())
+        .sum::<usize>();
+    assert_eq!(materialization_events, WRAPPER_PROCESSES);
+    assert_eq!(materialized_row_fields, WRAPPER_PROCESSES * 3);
 
     let per_process = pass_counts(&fixture.root);
     let idle_materializations: usize = per_process.values().sum();
     assert_eq!(
         idle_materializations, 0,
-        "boop={version} harnesses={{claude: {WRAPPER_PROCESSES}}} processes={WRAPPER_PROCESSES} stored_sessions={STORED_SESSIONS} startup_materializations={startup_materializations:?} idle_passes_per_process={IDLE_PASSES_PER_PROCESS} idle_global_materializations={idle_materializations} per_process={per_process:?}"
+        "boop={version} harnesses={{claude: {WRAPPER_PROCESSES}}} processes={WRAPPER_PROCESSES} stored_sessions={STORED_SESSIONS} startup_materializations={startup_materializations:?} idle_passes_per_process={IDLE_PASSES_PER_PROCESS} idle_global_materializations={idle_materializations} per_process={per_process:?} worker_logs={worker_logs:#?}"
     );
 }

@@ -10,7 +10,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 use crate::{
     ContentId, EntryIdentity, EntryTransition, GitEntryKind, GitEntryMode, GitFileQuery,
@@ -172,6 +172,18 @@ pub(crate) fn tracked_state_with_metrics(
     query: &GitFileQuery,
     cache: &mut GitStatusCache,
 ) -> Result<TrackedStateResult> {
+    let started = Instant::now();
+    let span = tracing::info_span!(
+        "git.tracked_state",
+        operation = "tracked_state",
+        repo.path = %repository.root.display(),
+        items.observed = tracing::field::Empty,
+        process.spawned = tracing::field::Empty,
+        cache.hits = tracing::field::Empty,
+        cache.misses = tracing::field::Empty,
+        duration_ms = tracing::field::Empty,
+    );
+    let _entered = span.enter();
     let mut metrics = TrackedStateMetrics::default();
     let head_state = head_state(repository, &mut metrics)?;
     let mut rows = BTreeMap::<String, PathRows>::new();
@@ -339,6 +351,21 @@ pub(crate) fn tracked_state_with_metrics(
             index_to_worktree: Some(index_to_worktree),
         });
     }
+    span.record("items.observed", observed.len() as u64);
+    span.record("process.spawned", metrics.git_child_processes);
+    span.record("cache.hits", metrics.worktree_cache_hits);
+    span.record("cache.misses", metrics.worktree_cache_misses);
+    span.record("duration_ms", started.elapsed().as_secs_f64() * 1_000.0);
+    tracing::debug!(
+        git.child_processes = metrics.git_child_processes,
+        git.hash_worker_launches = metrics.hash_worker_launches,
+        git.byte_worker_launches = metrics.byte_worker_launches,
+        bytes.hashed = metrics.bytes_hashed,
+        cache.hits = metrics.worktree_cache_hits,
+        cache.misses = metrics.worktree_cache_misses,
+        observations = observed.len(),
+        "tracked state completed"
+    );
     Ok(TrackedStateResult {
         observations: observed,
         metrics,

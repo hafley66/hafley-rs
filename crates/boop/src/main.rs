@@ -7,7 +7,6 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use tracing_subscriber::EnvFilter;
 
 use boop::registry::Registry;
 use boop::supervise::ParentDeathPolicy;
@@ -1058,13 +1057,8 @@ fn init_tracing(lane: Option<&str>) -> Result<()> {
     // The file copy carries no escape codes; the pane keeps its colours only
     // when there is no file to share the formatter with.
     let ansi = lane_log.is_none();
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .with_ansi(ansi)
-        .with_writer(boop::trail::lane_writer(lane_log))
-        .try_init()
+    let config = hafley_observe::Config::from_env("boop", boop::BUILD, "info", ansi)?;
+    hafley_observe::init_with_writer(config, boop::trail::lane_writer(lane_log))
         .map_err(|error| anyhow::anyhow!("initialise tracing subscriber: {error}"))
 }
 
