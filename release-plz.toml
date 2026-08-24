@@ -1,7 +1,7 @@
 [workspace]
 changelog_update = false
 dependencies_update = false
-git_only = true
+publish = false
 git_release_enable = true
 git_tag_enable = true
 pr_labels = ["release"]
