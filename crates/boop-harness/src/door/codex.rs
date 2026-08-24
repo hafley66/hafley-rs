@@ -174,6 +174,20 @@ impl Door for CodexDoor {
             app_server_socket: Some(socket),
         })
     }
+
+    /// `remote-control start` is idempotent, so this also revives a daemon
+    /// whose restart (auto-upgrade) killed the previous TUI's transport.
+    fn tui_relaunch(&self, spec: &NativeTuiSpec, session: &str) -> Result<Option<NativeTuiPlan>> {
+        let socket = self.start_daemon(&spec.executable)?;
+        Ok(Some(NativeTuiPlan {
+            program: spec.executable.clone(),
+            args: native_tui_args(Some(session), &socket, &spec.cwd, &[]),
+            mode: "native-remote".into(),
+            session_id: Some(session.to_string()),
+            source_path: Some(format!("managed-app-server={socket};respawn-resume={session}")),
+            app_server_socket: Some(socket),
+        }))
+    }
 }
 
 impl CodexDoor {

@@ -56,6 +56,13 @@ pub trait Door: Send + Sync {
     fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan> {
         Ok(NativeTuiPlan::direct(spec))
     }
+
+    /// A fresh process plan resuming `session` after the TUI process died
+    /// under a still-wanted route. `None` means this harness has no resume
+    /// story and the death is final.
+    fn tui_relaunch(&self, _spec: &NativeTuiSpec, _session: &str) -> Result<Option<NativeTuiPlan>> {
+        Ok(None)
+    }
 }
 
 /// The harness with no control plane: nothing is running that boop can find,

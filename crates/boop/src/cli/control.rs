@@ -18,6 +18,22 @@ use crate::cli::{mail_dir, write_route};
 /// `sessionId` field empty rather than carrying a guess.
 const SESSION_WAIT: Duration = Duration::from_secs(10);
 
+/// Respawn ceiling for one wrapper process; past it a dying TUI is a defect
+/// to look at, never a loop to ride.
+const RESPAWN_MAX: u32 = 3;
+
+/// Below this uptime a nonzero exit is a launch defect (bad flag, bad
+/// config) and a respawn would loop on it.
+const RESPAWN_MIN_UPTIME: Duration = Duration::from_secs(10);
+
+/// Whether a dead TUI earns another process against the same session. A
+/// signal death is a deliberate kill and both gates below stop loops.
+fn respawn_wanted(status: std::process::ExitStatus, respawns: u32, uptime: Duration) -> bool {
+    status.code().is_some_and(|code| code != 0)
+        && respawns < RESPAWN_MAX
+        && uptime >= RESPAWN_MIN_UPTIME
+}
+
 /// The session this launch opened, read from the harness's own live registry:
 /// the newest one under `cwd` that the registry first saw after `opened_ms`.
 fn opened_session(
@@ -98,6 +114,8 @@ pub(crate) fn run_native_tui(
         .current_dir(cwd)
         .spawn()
         .with_context(|| format!("start native {} TUI", adapter.id()))?;
+    let mut respawns: u32 = 0;
+    let mut spawned_at = std::time::Instant::now();
     if plan.session_id.is_none() {
         plan.session_id = opened_session(adapter, cwd, opened_ms, SESSION_WAIT);
         if let Some(session) = plan.session_id.as_deref() {
@@ -128,12 +146,42 @@ pub(crate) fn run_native_tui(
     let mut last_project = std::time::Instant::now() - PROJECT_EVERY;
     loop {
         if let Some(status) = child.try_wait().context("observe native TUI exit")? {
-            anyhow::ensure!(
-                status.success(),
-                "native {} TUI exited with {status}",
-                adapter.id()
+            if status.success() {
+                return Ok(());
+            }
+            let next = match route.session_id.as_deref() {
+                Some(session) if respawn_wanted(status, respawns, spawned_at.elapsed()) => adapter
+                    .door()
+                    .tui_relaunch(
+                        &NativeTuiSpec {
+                            executable: executable.into(),
+                            cwd: cwd.to_path_buf(),
+                            args: Vec::new(),
+                        },
+                        session,
+                    )?,
+                _ => None,
+            };
+            let Some(next) = next else {
+                anyhow::bail!("native {} TUI exited with {status}", adapter.id());
+            };
+            respawns += 1;
+            warn!(
+                route = name,
+                status = %status,
+                attempt = respawns,
+                "native TUI died; respawning against its session"
             );
-            return Ok(());
+            child = Command::new(&next.program)
+                .args(&next.args)
+                .current_dir(cwd)
+                .spawn()
+                .with_context(|| format!("respawn native {} TUI", adapter.id()))?;
+            spawned_at = std::time::Instant::now();
+            route.app_server_socket = next.app_server_socket.clone();
+            route.source_path = next.source_path.clone();
+            write_route(&dir, name, route.clone())?;
+            continue;
         }
         if last_project.elapsed() < PROJECT_EVERY {
             std::thread::sleep(EXIT_POLL);
@@ -167,5 +215,29 @@ pub(crate) fn run_native_tui(
             }
         }
         std::thread::sleep(EXIT_POLL);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{respawn_wanted, RESPAWN_MIN_UPTIME};
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::ExitStatus;
+    use std::time::Duration;
+
+    #[test]
+    fn nonzero_exit_after_min_uptime_respawns() {
+        let status = ExitStatus::from_raw(256);
+        assert!(respawn_wanted(status, 0, RESPAWN_MIN_UPTIME));
+        assert!(respawn_wanted(status, 2, Duration::from_secs(3600)));
+    }
+
+    #[test]
+    fn signal_death_fast_death_and_exhaustion_end_the_wrapper() {
+        let killed = ExitStatus::from_raw(9);
+        assert!(!respawn_wanted(killed, 0, Duration::from_secs(3600)));
+        let failed = ExitStatus::from_raw(256);
+        assert!(!respawn_wanted(failed, 0, Duration::from_secs(1)));
+        assert!(!respawn_wanted(failed, 3, Duration::from_secs(3600)));
     }
 }
