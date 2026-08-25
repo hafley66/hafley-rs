@@ -2,10 +2,12 @@
 created: 2026-08-17
 updated: 2026-08-25
 type: bug
-status: open
+status: fixed
 priority: high
 related: ['@boop-lane-observability']
 labels: [domain-boop, intent-correctness, user-law]
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 `boop beep lane wait` returned `rc=0` for the Flash4 lane
