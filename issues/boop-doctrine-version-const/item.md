@@ -1,12 +1,14 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-08-25
 type: bug
-status: open
+status: fixed
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-correctness]
 size: S
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 # DOCTRINE hardcodes the schema version number

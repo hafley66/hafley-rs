@@ -3,8 +3,10 @@ created: 2026-08-25
 updated: 2026-08-25
 type: bug
 reporter: claude-5
-status: open
+status: fixed
 priority: high
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 # boop wait <lane> returns the previous turn's done row after a resume
