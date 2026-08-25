@@ -1,10 +1,12 @@
 ---
 created: 2026-08-20
-updated: 2026-08-20
+updated: 2026-08-25
 type: bug
-status: open
+status: wontfix
 priority: high
 epic: boop-process
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 # Setup-step deadline and process-group kill do not hold on Linux

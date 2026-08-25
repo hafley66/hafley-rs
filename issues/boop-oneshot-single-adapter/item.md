@@ -1,12 +1,14 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-08-25
 type: bug
-status: open
+status: wontfix
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-correctness, needs-chris]
 size: S
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 # one_shot is implemented by exactly one adapter
@@ -43,3 +45,9 @@ Is the single-adapter state intended? Chris's call. Do not dispatch.
 Source: crates/boop/docs/audit-2026-08-17.md sections 9 and 10 (audit branch `audit/boop-review`, origin/main 49aca76).
 
 Style laws apply: comment budget (no change-log narrative), no `eprintln!` in `src/**` (`tracing` only), no em dashes, banned identifiers `provenance`/`substrate`/`load-bearing`/`regime`.
+
+## Comments
+
+### 2026-08-25T18:30:16Z · @claude-5
+
+Call: concatmap sits behind feature dl6 (comment-out-dl6-verbs) and opencode is the only harness with a one-shot CLI; the single impl is the design.
