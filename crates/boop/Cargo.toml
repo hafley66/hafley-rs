@@ -5,6 +5,10 @@ edition.workspace = true
 description = "cross-harness agent transcript reader: tail agent events from every harness on this machine as one stream"
 license.workspace = true
 
+# tests/main.rs is the one integration target; without this cargo also
+# mints one per tests/*.rs and links the crate again for each.
+autotests = false
+
 [features]
 # Transcript reading and its store-facing read surface: the query, usage, and
 # chat-repr modules. Default on; `--no-default-features` keeps the lane/bus/mux
@@ -73,3 +77,7 @@ required-features = ["agent-read"]
 [[example]]
 name = "typed_rows"
 required-features = ["agent-read"]
+
+[[test]]
+name = "main"
+path = "tests/main.rs"

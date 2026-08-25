@@ -7,6 +7,10 @@ repository.workspace = true
 homepage.workspace = true
 description = "Git revision and filesystem source enumeration, reading, and watching"
 
+# tests/main.rs is the one integration target; without this cargo also
+# mints one per tests/*.rs and links the crate again for each.
+autotests = false
+
 [dependencies]
 anyhow = "1"
 blake3 = "1"
@@ -30,3 +34,24 @@ hafley-observe = { path = "../hafley-observe" }
 [[bin]]
 name = "soopy"
 path = "src/main.rs"
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+# device_sync_counts is a process-wide tally, so this file's test cannot share
+# a process with any other; its own header states the constraint.
+[[test]]
+name = "17_durable_flushes"
+path = "tests/17_durable_flushes.rs"
+
+# A filesystem-watcher test waits on debounced kqueue events against a wall
+# clock. Sharing a process with the whole suite starves those waits, so these
+# two files link separately and run in their own process.
+[[test]]
+name = "8_watch"
+path = "tests/8_watch.rs"
+
+[[test]]
+name = "6_git_optional"
+path = "tests/6_git_optional.rs"
