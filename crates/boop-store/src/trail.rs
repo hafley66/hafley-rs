@@ -8,6 +8,7 @@ use std::process::Stdio;
 use std::sync::Mutex;
 
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use tracing_subscriber::fmt::writer::{BoxMakeWriter, MakeWriterExt};
 
 /// The supervisor's own tracing output.
@@ -34,6 +35,37 @@ pub fn lane_dir_in(root: &Path, lane: &str) -> PathBuf {
 /// The trail directory for one lane under `~/.agent/lanes`.
 pub fn lane_dir(lane: &str) -> Result<PathBuf> {
     Ok(lane_dir_in(&lanes_root()?, lane))
+}
+
+/// What a lane must produce to count as complete. `paths` are relative to the
+/// lane worktree; `commit_subjects` are exact subject lines of any commit after
+/// `base_sha`; `commits_at_least` is a lower bound on those commits.
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq)]
+pub struct Expect {
+    pub paths: Vec<String>,
+    pub commit_subjects: Vec<String>,
+    pub commits_at_least: Option<u32>,
+}
+
+/// The expectation file name under a lane's trail directory.
+pub const EXPECT_FILE: &str = "expect.json";
+
+/// Write the lane's typed completion expectations to
+/// `~/.agent/lanes/<lane>/expect.json`.
+pub fn write_expect(lane: &str, expect: &Expect) -> Result<()> {
+    let dir = lane_dir(lane)?;
+    std::fs::create_dir_all(&dir).context("create lane trail dir")?;
+    let text = serde_json::to_vec_pretty(expect).context("serialize expect")?;
+    std::fs::write(dir.join(EXPECT_FILE), text).context("write expect file")?;
+    Ok(())
+}
+
+/// The lane's typed completion expectations, or `None` when the file is absent
+/// or unreadable.
+pub fn read_expect(lane: &str) -> Option<Expect> {
+    let dir = lane_dir(lane).ok()?;
+    let text = std::fs::read_to_string(dir.join(EXPECT_FILE)).ok()?;
+    serde_json::from_str(&text).ok()
 }
 
 /// Open `<root>/<lane>/<name>` for append, creating the directory.
@@ -437,6 +469,28 @@ mod tests {
             "rc=1 (stalled: 300s with no harness activity)"
         );
         let _ = std::fs::remove_dir_all(&mail);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A typed expectation survives the write/read round trip, and an absent
+    /// file reads back as `None`.
+    #[test]
+    fn expect_round_trips_through_the_lane_trail() {
+        let root = tempdir("expect");
+        std::env::set_var("HOME", root.join("home"));
+        let lane = format!(
+            "expect-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        );
+        let expect = Expect {
+            paths: vec!["plans/x.md".to_owned()],
+            commit_subjects: vec!["docs: foo".to_owned()],
+            commits_at_least: Some(2),
+        };
+        assert_eq!(read_expect(&lane), None);
+        write_expect(&lane, &expect).unwrap();
+        assert_eq!(read_expect(&lane), Some(expect));
         let _ = std::fs::remove_dir_all(&root);
     }
 }
