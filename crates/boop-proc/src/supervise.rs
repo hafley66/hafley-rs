@@ -974,6 +974,107 @@ fn result_body(lane: &str, exit_code: i32, detail: Option<&str>) -> String {
     }
 }
 
+/// The exit code a result row wears when the process exited 0 but the lane's
+/// typed expectations were unmet. The task is incomplete; the process did not
+/// fail.
+const INCOMPLETE_EXIT: i32 = 4;
+
+/// The unmet typed completion assertions for a lane: one string per failed
+/// path, subject, or commit-count bound.
+pub struct Unmet(pub Vec<String>);
+
+/// Evaluate the lane's completion expectations against its worktree. `base_sha`
+/// bounds the commit range (`None` counts every commit on HEAD); `cwd` is the
+/// lane worktree.
+pub fn evaluate_expect(
+    cwd: &Path,
+    base_sha: Option<&str>,
+    expect: &boop_store::trail::Expect,
+) -> Unmet {
+    let mut unmet = Vec::new();
+    for path in &expect.paths {
+        if !cwd.join(path).exists() {
+            unmet.push(format!("missing path {path}"));
+        }
+    }
+    let subjects = commit_subjects(cwd, base_sha);
+    for subject in &expect.commit_subjects {
+        if !subjects.iter().any(|candidate| candidate == subject) {
+            unmet.push(format!("no commit with subject '{subject}'"));
+        }
+    }
+    if let Some(at_least) = expect.commits_at_least {
+        if (subjects.len() as u32) < at_least {
+            unmet.push(format!(
+                "{} commit{}, expected at least {}",
+                subjects.len(),
+                if subjects.len() == 1 { "" } else { "s" },
+                at_least
+            ));
+        }
+    }
+    Unmet(unmet)
+}
+
+/// The commit subject lines in the lane worktree after `base_sha` (every
+/// commit on HEAD when `base_sha` is `None`), capped at 200. A git that cannot
+/// answer contributes nothing.
+fn commit_subjects(cwd: &Path, base_sha: Option<&str>) -> Vec<String> {
+    let range = base_sha.map_or_else(|| "HEAD".to_owned(), |sha| format!("{sha}..HEAD"));
+    let output = std::process::Command::new("git")
+        .args([
+            "-C",
+            &cwd.display().to_string(),
+            "log",
+            "--format=%s",
+            "--max-count=200",
+            &range,
+        ])
+        .output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::to_owned)
+        .filter(|subject| !subject.trim().is_empty())
+        .collect()
+}
+
+/// Fold the lane's typed expectations into a result: an unmet assertion turns a
+/// clean process exit into rc 4 and lists the unmet items in the detail. A
+/// process failure keeps its own rc; the detail still names what was missing.
+fn apply_expectations(
+    lane: &LaneRun,
+    exit_code: i32,
+    detail: Option<&str>,
+) -> (i32, Option<String>) {
+    let Some(expect) = boop_store::trail::read_expect(&lane.lane) else {
+        return (exit_code, detail.map(str::to_owned));
+    };
+    let base_sha = bus::read_routes(&lane.mail_dir).ok().and_then(|routes| {
+        routes
+            .get(&lane.lane)
+            .and_then(|route| route.base_sha.clone())
+    });
+    let unmet = evaluate_expect(&lane.cwd, base_sha.as_deref(), &expect);
+    if unmet.0.is_empty() {
+        return (exit_code, detail.map(str::to_owned));
+    }
+    let detail = format!("incomplete: {}", unmet.0.join("; "));
+    (
+        if exit_code == 0 {
+            INCOMPLETE_EXIT
+        } else {
+            exit_code
+        },
+        Some(detail),
+    )
+}
+
 /// Write the lane's result row before the pane can evaporate: a killed pane
 /// never runs its epilogue, and the waiter reads only this mailbox.
 fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
@@ -984,6 +1085,7 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
         );
         return;
     };
+    let (exit_code, detail) = apply_expectations(lane, exit_code, detail);
     let row = bus::Message {
         id: bus::mint_id(),
         from: lane.lane.clone(),
@@ -992,10 +1094,10 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
         to_timestamp: None,
         kind: "result".into(),
         reply_to: None,
-        body: result_body(&lane.lane, exit_code, detail),
+        body: result_body(&lane.lane, exit_code, detail.as_deref()),
         r#ref: None,
         rc: Some(exit_code),
-        detail: detail.map(str::to_owned),
+        detail: detail.clone(),
     };
     match append_row(&lane.mail_dir, &row) {
         Ok(()) => {
@@ -1014,12 +1116,12 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
             println!("[boop] result row write failed: {error}");
         }
     }
-    if exit_code != 0 && !ended_on_parent_death(detail) {
+    if exit_code != 0 && !ended_on_parent_death(detail.as_deref()) {
         hail_parent_once(
             lane,
             EXITED_WITHOUT_COMPLETION,
             exit_code as u32,
-            detail.unwrap_or("no completion reported"),
+            detail.as_deref().unwrap_or("no completion reported"),
         );
     }
 }
@@ -2226,6 +2328,118 @@ mod tests {
         let results = result_rows(&dir);
         assert_eq!(results.len(), 1, "the waiter still gets its rc");
         assert_eq!(results[0].rc, Some(1));
+    }
+
+    /// A repo with one commit on top of its base, subject `docs: foo` and a
+    /// file `plans/x.md`. Returns the worktree path and the base sha.
+    fn repo_after_base(dir: &Path) -> (PathBuf, String) {
+        let work = dir.join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        let base = git_repo(&work);
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .args(["-C", &work.display().to_string()])
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        std::fs::create_dir_all(work.join("plans")).unwrap();
+        std::fs::write(work.join("plans/x.md"), "x\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "docs: foo"]);
+        (work, base)
+    }
+
+    #[test]
+    fn expectations_all_met_is_empty_unmet() {
+        let dir = tempdir();
+        let (work, base) = repo_after_base(&dir);
+        let expect = boop_store::trail::Expect {
+            paths: vec!["plans/x.md".to_owned()],
+            commit_subjects: vec!["docs: foo".to_owned()],
+            commits_at_least: Some(1),
+        };
+        assert_eq!(
+            evaluate_expect(&work, Some(&base), &expect).0,
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn a_missing_path_is_named() {
+        let dir = tempdir();
+        let (work, base) = repo_after_base(&dir);
+        let expect = boop_store::trail::Expect {
+            paths: vec!["plans/nope.md".to_owned()],
+            ..Default::default()
+        };
+        assert_eq!(
+            evaluate_expect(&work, Some(&base), &expect).0,
+            vec!["missing path plans/nope.md".to_owned()]
+        );
+    }
+
+    #[test]
+    fn a_wrong_subject_is_named() {
+        let dir = tempdir();
+        let (work, base) = repo_after_base(&dir);
+        let expect = boop_store::trail::Expect {
+            commit_subjects: vec!["docs: bar".to_owned()],
+            ..Default::default()
+        };
+        assert_eq!(
+            evaluate_expect(&work, Some(&base), &expect).0,
+            vec!["no commit with subject 'docs: bar'".to_owned()]
+        );
+    }
+
+    #[test]
+    fn too_few_commits_is_named() {
+        let dir = tempdir();
+        let (work, base) = repo_after_base(&dir);
+        let expect = boop_store::trail::Expect {
+            commits_at_least: Some(2),
+            ..Default::default()
+        };
+        assert_eq!(
+            evaluate_expect(&work, Some(&base), &expect).0,
+            vec!["1 commit, expected at least 2".to_owned()]
+        );
+    }
+
+    #[test]
+    fn an_unmet_expectation_turns_exit_zero_into_rc_four() {
+        let dir = tempdir();
+        let lane_name = format!(
+            "expect-lane-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        );
+        let work = dir.join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        let _ = git_repo(&work);
+        let mut lane = parented_lane(&dir, &lane_name, "coordinator");
+        lane.cwd = work.clone();
+        boop_store::trail::write_expect(
+            &lane_name,
+            &boop_store::trail::Expect {
+                paths: vec!["plans/x.md".to_owned()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        record_result(&lane, 0, None);
+        let rows = result_rows(&dir);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].rc, Some(4));
+        assert_eq!(
+            rows[0].body,
+            format!("lane {lane_name} done rc=4 (incomplete: missing path plans/x.md)")
+        );
+        assert_eq!(
+            rows[0].detail.as_deref(),
+            Some("incomplete: missing path plans/x.md")
+        );
     }
 
     /// Every test root, and the one store every test in this binary writes.
