@@ -172,6 +172,7 @@ pub struct CommitEngine {
     state_root: PathBuf,
     durability: Durability,
     shared_device: bool,
+    staged_blobs: Option<PathBuf>,
 }
 
 impl CommitEngine {
@@ -190,6 +191,25 @@ impl CommitEngine {
 
     pub fn durability(&self) -> Durability {
         self.durability
+    }
+
+    /// Reads commit payloads as hard links into an already-published blob
+    /// directory, such as [`crate::DurableStageStore::blobs_dir`]. The bytes
+    /// were written and synced once by the stage; a second name for the same
+    /// inode costs a directory entry. A directory whose blobs were never made
+    /// durable must not be passed here.
+    pub fn with_staged_blobs(mut self, blobs: impl AsRef<Path>) -> Self {
+        self.staged_blobs = Some(blobs.as_ref().to_path_buf());
+        self
+    }
+
+    /// Fails on a different device, a missing stage, or a link-count ceiling,
+    /// and every one of those falls back to writing the payload.
+    fn link_staged_blob(&self, blob: StagedContentId, destination: &Path) -> bool {
+        let Some(source) = &self.staged_blobs else {
+            return false;
+        };
+        fs::hard_link(source.join(blob.to_hex()), destination).is_ok()
     }
 
     fn open_with_durability(
@@ -227,6 +247,7 @@ impl CommitEngine {
             state_root,
             durability,
             shared_device,
+            staged_blobs: None,
         })
     }
 
@@ -541,6 +562,7 @@ impl CommitEngine {
             "commit.materialize_payloads",
             operation = "materialize_payloads",
             files = stage.files.len(),
+            linked = tracing::field::Empty,
             sync.data = tracing::field::Empty,
             sync.fences = tracing::field::Empty,
             sync.flushes = tracing::field::Empty,
@@ -549,6 +571,7 @@ impl CommitEngine {
         );
         let _entered = span.enter();
         let mut meter = SyncMeter::default();
+        let mut linked = 0usize;
         for (file, operation) in stage.files.iter().zip(&journal.operations) {
             let Some(blob) = operation.after_blob else {
                 continue;
@@ -579,6 +602,8 @@ impl CommitEngine {
             }
             if self.durability.dry_run() {
                 write_unsynced(&path, bytes, None, "write commit payload")?;
+            } else if self.link_staged_blob(blob, &path) {
+                linked += 1;
             } else {
                 publish_file(&path, bytes, SyncLevel::Data, &mut meter, |_| Ok(()))
                     .map_err(|error| io_refusal_context("publish commit payload", error))?;
@@ -590,9 +615,11 @@ impl CommitEngine {
             SyncLevel::Fence,
             &mut meter,
         )?;
+        span.record("linked", linked);
         record_sync(&span, meter, started);
         tracing::debug!(
             files = stage.files.len(),
+            linked,
             sync.data = meter.data(),
             sync.fences = meter.fences(),
             sync.flushes = meter.flushes(),

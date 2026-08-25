@@ -349,7 +349,9 @@ impl DurableStageStore {
     fn manifest_path(&self, id: StageId) -> PathBuf {
         self.root.join("manifests").join(format!("{}.json", id))
     }
-    fn blobs_dir(&self) -> PathBuf {
+    /// The content-addressed blob directory. A commit engine pointed here
+    /// links these inodes instead of writing the same bytes a second time.
+    pub fn blobs_dir(&self) -> PathBuf {
         self.root.join("blobs")
     }
     fn manifests_dir(&self) -> PathBuf {
