@@ -1,6 +1,6 @@
 ---
 created: 2026-08-24
-updated: 2026-08-24
+updated: 2026-08-25
 type: improvement
 status: open
 priority: high
@@ -19,6 +19,12 @@ size: S
 
 ## Acceptance Criteria
 
-- [ ] both variants and their `run_*` wiring under `#[cfg(feature = "dl6")]`, feature off by default
-- [ ] `boop --help` no longer lists them
-- [ ] `cargo build --features dl6` still compiles
+- [x] both variants and their `run_*` wiring under `#[cfg(feature = "dl6")]`, feature off by default
+- [x] `boop --help` no longer lists them
+- [x] `cargo build --features dl6` still compiles
+
+## Agent Runs
+
+### 2026-08-25T04:18:37Z · @chore-verb-cuts
+
+d71b2cc concatmap and host clap variants plus their run_* call sites cfg-gated behind feature dl6 (off by default); Cargo.toml required-features=[dl6] added for tests/host_chat.rs and tests/concatmap_e2e.rs; cargo build -p boop and cargo build -p boop --features dl6 both compile.

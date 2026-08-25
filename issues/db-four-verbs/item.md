@@ -1,6 +1,6 @@
 ---
 created: 2026-08-24
-updated: 2026-08-24
+updated: 2026-08-25
 type: improvement
 status: open
 priority: high
@@ -21,4 +21,10 @@ Cut: `db <sql>`, `db chat`, `db status`, `db sync` visible; `usage`, `price`, `f
 
 ## Acceptance Criteria
 
-- [ ] `boop db --help` lists 4
+- [x] `boop db --help` lists 4
+
+## Agent Runs
+
+### 2026-08-25T04:18:37Z · @chore-verb-cuts
+
+092a0fd usage, price, favorite, sync-cursor clap variants hidden = true; boop db --help now lists chat, status, sync plus the <SQL> passthrough.
