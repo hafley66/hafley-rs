@@ -6,12 +6,14 @@
 mod t0_sqlite_contention;
 #[path = "boop_start_warm.rs"]
 mod boop_start_warm;
+#[cfg(feature = "dl6")]
 #[path = "concatmap_e2e.rs"]
 mod concatmap_e2e;
 #[path = "coordinator_ping.rs"]
 mod coordinator_ping;
 #[path = "deliver_door.rs"]
 mod deliver_door;
+#[cfg(feature = "dl6")]
 #[path = "host_chat.rs"]
 mod host_chat;
 #[path = "inbox_hooks.rs"]
@@ -32,6 +34,8 @@ mod native_agent_liveness;
 mod native_projector_contention;
 #[path = "no_sync_hatch.rs"]
 mod no_sync_hatch;
+#[path = "preset_dry_run.rs"]
+mod preset_dry_run;
 #[path = "registry_kinds.rs"]
 mod registry_kinds;
 #[path = "session_mood.rs"]
