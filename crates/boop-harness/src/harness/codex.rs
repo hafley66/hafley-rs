@@ -253,6 +253,13 @@ fn launch_command(spec: &SpawnSpec) -> anyhow::Result<String> {
         None => format!("codex exec {}", shell_quote(&spec.prompt)),
     };
     command.push_str(" --dangerously-bypass-approvals-and-sandbox");
+    // The CLI flag sets the sandbox for this exec's own turn. An agent this
+    // turn spawns through `multi_agent_v1` reads the process config instead,
+    // so the same two settings ride `-c` where every spawned agent inherits
+    // them. Without this a spawned agent's `boop` calls cannot write the mail
+    // dir or the repo's `.git/worktrees`.
+    command.push_str(" -c 'sandbox_mode=\"danger-full-access\"'");
+    command.push_str(" -c 'approval_policy=\"never\"'");
     if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
         let model_spec: ModelSpec = model.parse()?;
         command.push_str(&format!(" -m {}", shell_quote(&model_spec.name)));
@@ -893,6 +900,21 @@ mod tests {
             "{command}"
         );
         assert!(command.ends_with(" -m 'gpt-5.6-luna'"), "{command}");
+    }
+
+    /// Defect 1 (addendum 2026-08-25): a spawned native subagent inherits the
+    /// process config, never the parent turn's CLI sandbox flag.
+    #[test]
+    fn launch_command_sets_process_level_sandbox_and_approvals() {
+        let command = super::launch_command(&spawn_spec(None)).unwrap();
+        assert!(
+            command.contains(" -c 'sandbox_mode=\"danger-full-access\"'"),
+            "{command}"
+        );
+        assert!(
+            command.contains(" -c 'approval_policy=\"never\"'"),
+            "{command}"
+        );
     }
 
     #[test]

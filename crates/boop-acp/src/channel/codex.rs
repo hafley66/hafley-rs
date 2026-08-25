@@ -18,6 +18,19 @@ use boop_store::session::ModelSpec;
 
 const CALL_TIMEOUT: Duration = Duration::from_secs(120);
 
+/// Process-level config the whole `codex app-server` process runs under. The
+/// per-session `sandbox`/`approvalPolicy` params reach only the thread boop
+/// starts; an agent that thread spawns through `multi_agent_v1` reads the
+/// process config, so its `exec` calls run sandboxed unless these are set
+/// here. Boop lanes write outside the worktree (mail dir, git worktree
+/// metadata), so the sandbox has to be off for the whole process.
+const PROCESS_CONFIG: [&str; 4] = [
+    "-c",
+    "sandbox_mode=\"danger-full-access\"",
+    "-c",
+    "approval_policy=\"never\"",
+];
+
 pub struct CodexChannel {
     rpc: RpcChild,
     thread: String,
@@ -28,6 +41,7 @@ pub struct CodexChannel {
 impl CodexChannel {
     pub fn open(spec: &ChannelSpec) -> Result<CodexChannel> {
         let mut command = Command::new("codex");
+        command.args(PROCESS_CONFIG);
         command.arg("app-server");
         Self::open_command(spec, command)
     }
@@ -224,6 +238,22 @@ mod tests {
         ]}});
         assert_eq!(active_turn_id(&reply).as_deref(), Some("active"));
         assert_eq!(active_turn_id(&json!({"thread": {"turns": []}})), None);
+    }
+
+    /// Defect 1 (addendum 2026-08-25): the per-session `sandbox` param reaches
+    /// only boop's own thread, so the process config carries the same setting
+    /// for every agent spawned inside the process.
+    #[test]
+    fn the_launch_sets_process_level_sandbox_and_approvals() {
+        assert_eq!(
+            PROCESS_CONFIG,
+            [
+                "-c",
+                "sandbox_mode=\"danger-full-access\"",
+                "-c",
+                "approval_policy=\"never\"",
+            ]
+        );
     }
 
     #[test]
