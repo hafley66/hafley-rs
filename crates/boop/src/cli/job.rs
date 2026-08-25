@@ -1511,6 +1511,29 @@ pub(crate) fn run_lane_list(
                 "-",
             ));
         }
+        for (route_name, route) in &routes {
+            if route.harness != Some(HarnessId::Claude) {
+                continue;
+            }
+            let Some(cwd) = route.cwd.as_deref() else {
+                continue;
+            };
+            for (name, path, locked) in claude_agent_worktrees(cwd) {
+                let state = if locked { "live" } else { "dead" };
+                line(&format!(
+                    "{} {} {} {} {} {} {} {}{}",
+                    pad(state, 4),
+                    pad(&name, 16),
+                    pad("native-claude", 12),
+                    pad("-", 10),
+                    pad("-", 6),
+                    pad("-", 46),
+                    pad("-", 16),
+                    path,
+                    format!(" PARENT={route_name}"),
+                ));
+            }
+        }
     }
     Ok(())
 }
@@ -1534,6 +1557,55 @@ pub(crate) fn unregistered_sessions(
         })
         .cloned()
         .collect()
+}
+
+/// The native Claude Code subagent worktrees linked into the repo at `cwd`.
+/// One tuple per `git worktree list --porcelain` block whose path carries
+/// `/.claude/worktrees/agent-`: `(agent-<id> name, path, locked)`.
+pub(crate) fn claude_agent_worktrees(cwd: &str) -> Vec<(String, String, bool)> {
+    let output = Command::new("git")
+        .args(["-C", cwd, "worktree", "list", "--porcelain"])
+        .output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    parse_claude_agent_worktrees(&String::from_utf8_lossy(&output.stdout))
+}
+
+fn parse_claude_agent_worktrees(porcelain: &str) -> Vec<(String, String, bool)> {
+    let mut result = Vec::new();
+    let mut current: Option<(String, bool)> = None;
+    for line in porcelain.lines() {
+        if let Some(path) = line.strip_prefix("worktree ") {
+            if let Some((path, locked)) = current.take() {
+                push_claude_agent(&mut result, path, locked);
+            }
+            current = Some((path.to_owned(), false));
+        } else if line == "locked" {
+            if let Some((_, locked)) = current.as_mut() {
+                *locked = true;
+            }
+        }
+    }
+    if let Some((path, locked)) = current {
+        push_claude_agent(&mut result, path, locked);
+    }
+    result
+}
+
+fn push_claude_agent(result: &mut Vec<(String, String, bool)>, path: String, locked: bool) {
+    const MARKER: &str = "/.claude/worktrees/agent-";
+    let Some(idx) = path.find(MARKER) else {
+        return;
+    };
+    let id = path[idx + MARKER.len()..].split('/').next().unwrap_or_default();
+    if id.is_empty() {
+        return;
+    }
+    result.push((format!("agent-{id}"), path, locked));
 }
 
 /// The parent edge that answers nobody, so a surviving orphan says so on its
@@ -2706,6 +2778,55 @@ mod tests {
             vec!["free-session".to_owned()]
         );
         assert!(unregistered_sessions(&routes, &None).is_empty());
+    }
+
+    /// RECEIPT (native-visibility). A repo's linked `.claude/worktrees/agent-*`
+    /// worktrees surface as native Claude subagents: a `locked` porcelain block
+    /// reads `live`, an unlocked one reads `dead`.
+    #[test]
+    fn claude_agent_worktrees_lists_locked_and_unlocked_agents() {
+        let base = std::env::temp_dir().join(format!("boop-claude-wt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let run = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&base)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        run(&["init", "-q"]);
+        run(&["config", "user.email", "t@t"]);
+        run(&["config", "user.name", "t"]);
+        std::fs::write(base.join("seed.txt"), "s").unwrap();
+        run(&["add", "-A"]);
+        run(&["commit", "-qm", "seed"]);
+        std::fs::create_dir_all(base.join(".claude/worktrees")).unwrap();
+        run(&["worktree", "add", ".claude/worktrees/agent-abc", "HEAD"]);
+        run(&["worktree", "add", ".claude/worktrees/agent-def", "HEAD"]);
+        run(&["worktree", "lock", ".claude/worktrees/agent-abc"]);
+
+        let trees = claude_agent_worktrees(base.to_str().unwrap());
+        let names = trees
+            .iter()
+            .map(|(name, _, _)| name.as_str())
+            .collect::<Vec<_>>();
+        assert!(names.contains(&"agent-abc"), "{names:?}");
+        assert!(names.contains(&"agent-def"), "{names:?}");
+        for (name, path, locked) in &trees {
+            assert!(path.contains("/.claude/worktrees/agent-"), "{path}");
+            match name.as_str() {
+                "agent-abc" => assert!(*locked, "agent-abc must be locked"),
+                "agent-def" => assert!(!*locked, "agent-def must be unlocked"),
+                other => panic!("unexpected worktree name {other}"),
+            }
+        }
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// RECEIPT (Job 3b). A `--route-only` delete drops the lane's registry row
