@@ -43,15 +43,10 @@ impl Fixture {
         .unwrap();
     }
 
-    /// Every row `bus.ndjson` holds, in file order. Empty when the file was
-    /// never written, the way a failed send leaves it.
+    /// Every row the mailbox holds, in append order. Empty when the send
+    /// never wrote one, the way a failed send leaves it.
     fn bus_rows(&self) -> Vec<serde_json::Value> {
-        std::fs::read_to_string(self.mail().join("bus.ndjson"))
-            .unwrap_or_default()
-            .lines()
-            .filter(|line| !line.trim().is_empty())
-            .map(|line| serde_json::from_str(line).unwrap())
-            .collect()
+        boop_store::testing::mail_rows(&self.mail().join("boop.db"))
     }
 
     /// `boop <args>` run as `caller`, resolved through the env rung

@@ -200,15 +200,17 @@ pub fn deliver_hail_with(
 ) -> Result<Landing> {
     let route = routes.get(message.to.as_str());
     let harness = route.and_then(|route| route.harness);
-    store.append_delivery_transition(
-        &message.id,
-        &message.to,
-        harness,
-        DeliveryState::Appended.as_str(),
-        "mailbox",
-        None,
-        boop_harness::live::now_ms(),
-    )?;
+    if !store.has_delivery_transition(&message.id)? {
+        store.append_delivery_transition(
+            &message.id,
+            &message.to,
+            harness,
+            DeliveryState::Appended.as_str(),
+            "mailbox",
+            None,
+            boop_harness::live::now_ms(),
+        )?;
+    }
     let landing = land(registry, store, routes, message, paster)?;
     landing.record(store, &message.id, &message.to, harness)?;
     Ok(landing)

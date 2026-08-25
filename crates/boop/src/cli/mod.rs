@@ -216,7 +216,8 @@ ACK: age-based bulk-mark, NOT proof-of-read:
 
 ROUTE: the session id one lane answers on, whose route cwd is its worktree:
     boop beep lane route <lane>
-  Mailbox: ~/.agent/mail/ (bus.ndjson + registry.json), override --mail-dir.
+  Mailbox: ~/.agent/boop.db (agent_mail + agent_route); --mail-dir names the
+  directory holding it.
 
 TRACE + PURPOSE: a session id is per-process-run and MOVES on /clear, on
 compaction and on resume. A trace does not move, and every session id a lane
@@ -386,26 +387,18 @@ pub(crate) fn route_to_json(route: &Route) -> serde_json::Value {
 }
 
 pub(crate) fn append_message(dir: &std::path::Path, message: &bus::Message) -> Result<()> {
-    append_message_to(dir, "bus.ndjson", message)
+    append_message_to(dir, "bus", message)
 }
 
+/// `filename` is the old ndjson spelling of a mailbox name; its stem is the
+/// `mailbox` column now.
 pub(crate) fn append_message_to(
     dir: &std::path::Path,
     filename: &str,
     message: &bus::Message,
 ) -> Result<()> {
-    let path = dir.join(filename);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).context("create mail dir")?;
-    }
-    use std::io::Write;
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .context("open ndjson box")?;
-    writeln!(file, "{}", bus::message_line(message)).context("append ndjson box")?;
-    Ok(())
+    let mailbox = filename.strip_suffix(".ndjson").unwrap_or(filename);
+    bus::append(dir, mailbox, message).context("append mailbox row")
 }
 
 pub(crate) fn append_ack(
@@ -422,26 +415,9 @@ pub(crate) fn append_acks(dir: &std::path::Path, messages: &[bus::Message]) -> R
     if messages.is_empty() {
         return Ok(0);
     }
-    let path = dir.join("bus.ndjson");
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).context("create mail dir")?;
-    }
-    let stamp = bus::now_iso();
-    let mut batch = String::new();
-    for message in messages {
-        let mut ack = message.clone();
-        ack.to_timestamp = Some(stamp.clone());
-        batch.push_str(&bus::message_line(&ack));
-        batch.push('\n');
-    }
-    use std::io::Write;
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .context("open ndjson box")?;
-    file.write_all(batch.as_bytes())
-        .context("append ndjson box")?;
+    let ids: Vec<String> = messages.iter().map(|message| message.id.clone()).collect();
+    let store = bus::open_store(dir).context("open the mailbox")?;
+    bus::ack_messages(&store, &ids, &bus::now_iso()).context("stamp mailbox rows taken")?;
     Ok(messages.len())
 }
 

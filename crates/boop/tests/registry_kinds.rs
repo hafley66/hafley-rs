@@ -60,8 +60,7 @@ fn prune_skips_a_dead_coordinator_and_legacy_rows_still_prune() {
     .unwrap();
     let output = run(&dir, &["beep", "lane", "prune"]);
     assert!(output.status.success(), "stderr: {:?}", output.stderr);
-    let routes: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(dir.join("registry.json")).unwrap()).unwrap();
+    let routes = boop_store::testing::routes_json(&dir.join("boop.db"));
     assert!(routes.get("coord").is_some());
     assert!(routes.get("old").is_none());
 }
@@ -85,7 +84,8 @@ fn a_hail_to_a_harnessless_native_row_is_held_and_the_reason_recorded() {
         stdout.contains("route native-worker names no harness"),
         "stdout: {stdout}"
     );
-    let mailbox = std::fs::read_to_string(dir.join("bus.ndjson")).unwrap();
+    let mailbox = serde_json::Value::Array(boop_store::testing::mail_rows(&dir.join("boop.db")))
+        .to_string();
     assert!(mailbox.contains("hello"));
 
     let ledger = Command::new(BOOP)
@@ -127,8 +127,7 @@ fn agent_register_and_done_round_trip_registry_and_ledger() {
         "stderr: {:?}",
         registered.stderr
     );
-    let routes: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(dir.join("registry.json")).unwrap()).unwrap();
+    let routes = boop_store::testing::routes_json(&dir.join("boop.db"));
     assert_eq!(routes["native-worker"]["kind"], "native");
     assert_eq!(routes["native-worker"]["parent"], "coord");
 
@@ -137,10 +136,10 @@ fn agent_register_and_done_round_trip_registry_and_ledger() {
         &["beep", "agent", "done", "native-worker", "--rc", "7"],
     );
     assert!(done.status.success(), "stderr: {:?}", done.stderr);
-    let routes: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(dir.join("registry.json")).unwrap()).unwrap();
+    let routes = boop_store::testing::routes_json(&dir.join("boop.db"));
     assert!(routes.get("native-worker").is_none());
-    let mailbox = std::fs::read_to_string(dir.join("bus.ndjson")).unwrap();
+    let mailbox = serde_json::Value::Array(boop_store::testing::mail_rows(&dir.join("boop.db")))
+        .to_string();
     assert!(mailbox.contains("lane native-worker done rc=7"));
     assert!(mailbox.contains("\"to\":\"coord\""));
 }

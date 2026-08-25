@@ -1274,9 +1274,8 @@ fn mail_parent(lane: &LaneRun, parent: &str, kind: &str, body: String, detail: O
 /// sent yields it never received. Returns the rung, or `None` when the store
 /// or the registry could not be read.
 fn deliver_outbound(lane: &LaneRun, row: &bus::Message) -> Option<String> {
-    let routes = bus::read_routes(&lane.mail_dir).ok()?;
-    let store =
-        boop_store::ident::Store::open(boop_store::ident::Store::default_path().ok()?).ok()?;
+    let store = bus::open_store(&lane.mail_dir).ok()?;
+    let routes = bus::routes_in(&store).ok()?;
     let registry = boop_harness::registry::Registry::discover();
     match crate::deliver::deliver_hail(&registry, &store, &routes, row) {
         Ok(landing) => {
@@ -1443,16 +1442,11 @@ fn hail_parent_once(lane: &LaneRun, kind: &str, attempt: u32, reason: &str) {
     }
 }
 
-/// Append one row to the lane's mailbox, the same file and line format the
-/// `boop hail` verb appends to.
+/// Append one row to the lane's mailbox, through the same store and the same
+/// first transition the `boop beep` verb writes.
 fn append_row(dir: &Path, row: &bus::Message) -> std::io::Result<()> {
-    use std::io::Write;
-    std::fs::create_dir_all(dir)?;
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(dir.join("bus.ndjson"))?;
-    writeln!(file, "{}", bus::message_line(row))
+    bus::append(dir, "bus", row)
+        .map_err(|error| std::io::Error::other(format!("append mailbox row: {error}")))
 }
 
 /// Pin the harness's current conversation to the lane route and to the lane's
@@ -1507,9 +1501,7 @@ fn remember_conversation(lane: &LaneRun, channel: &dyn LaneChannel) {
 /// The conversation id a previous supervisor pinned for this lane, if any.
 /// Read by the cold-restart path so a respawn continues instead of restarting.
 pub fn pinned_conversation(dir: &Path, lane: &str) -> Option<String> {
-    let raw = std::fs::read_to_string(dir.join("registry.json")).ok()?;
-    let map: serde_json::Value = serde_json::from_str(&raw).ok()?;
-    map.get(lane)?.get("sessionId")?.as_str().map(str::to_owned)
+    bus::read_routes(dir).ok()?.get(lane)?.session_id.clone()
 }
 
 /// Write the harness's own conversation id onto the lane's registry route so a
@@ -1538,25 +1530,13 @@ fn record_conversation(dir: &Path, lane: &str, conversation: &str) {
 
 /// Stamp the mailbox row delivered so no later read re-offers it.
 pub fn ack(dir: &Path, hail: &Hail) {
-    let mut rows = Vec::new();
-    for path in bus::read_boxes(dir).unwrap_or_default() {
-        rows.extend(bus::parse_box(&path));
+    let Ok(store) = bus::open_store(dir) else {
+        return;
+    };
+    let ids = [hail.id.clone()];
+    if let Err(error) = bus::ack_messages(&store, &ids, &bus::now_iso()) {
+        warn!(message_id = hail.id, error = %error, "mailbox ack failed");
     }
-    let Some(mut row) = bus::fold(&rows).into_iter().find(|row| row.id == hail.id) else {
-        return;
-    };
-    row.to_timestamp = Some(bus::now_iso());
-    let line = bus::message_line(&row);
-    let path = dir.join("bus.ndjson");
-    let Ok(mut file) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-    else {
-        return;
-    };
-    use std::io::Write;
-    let _ = writeln!(file, "{line}");
 }
 
 /// Append one lane-supervisor receipt. A failure to observe the receipt does

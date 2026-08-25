@@ -41,11 +41,7 @@ impl Fixture {
     }
 
     fn rows(&self) -> Vec<serde_json::Value> {
-        let text = std::fs::read_to_string(self.mail.join("bus.ndjson")).unwrap_or_default();
-        text.lines()
-            .filter(|line| !line.trim().is_empty())
-            .map(|line| serde_json::from_str(line).unwrap())
-            .collect()
+        boop_store::testing::mail_rows(&self.mail.join("boop.db"))
     }
 }
 
@@ -55,14 +51,8 @@ impl Drop for Fixture {
     }
 }
 
-fn append(mail: &Path, row: serde_json::Value) {
-    use std::io::Write;
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(mail.join("bus.ndjson"))
-        .unwrap();
-    writeln!(file, "{row}").unwrap();
+fn append(db: &Path, row: serde_json::Value) {
+    boop_store::testing::append_mail(db, &row);
 }
 
 fn reply_row(id: &str, reply_to: &str, body: &str) -> serde_json::Value {
@@ -133,7 +123,7 @@ fn a_reply_ends_the_wait_with_its_body_and_a_delivery_stamp() {
     // The wait re-reads the mailbox once a second, so the reply lands after it
     // has already blocked at least once.
     std::thread::sleep(std::time::Duration::from_millis(1500));
-    append(&fixture.mail, reply_row("m-answer", &id, "the answer is 4"));
+    append(&fixture.mail.join("boop.db"), reply_row("m-answer", &id, "the answer is 4"));
     let output = waiting.wait_with_output().unwrap();
 
     assert_eq!(output.status.code(), Some(0), "an answered wait exits 0");
@@ -171,7 +161,7 @@ fn a_delivered_reply_is_not_replayed_by_a_second_wait() {
         .output()
         .unwrap();
     let id = queued_id(&fixture);
-    append(&fixture.mail, reply_row("m-answer", &id, "the answer is 4"));
+    append(&fixture.mail.join("boop.db"), reply_row("m-answer", &id, "the answer is 4"));
 
     let first = fixture
         .boop(&["wait", &id, "--wait-timeout", "10"])
@@ -219,7 +209,7 @@ fn a_timeout_exits_124_with_the_re_run_line_on_both_streams() {
 fn me_takes_every_unread_row_addressed_to_the_named_inbox() {
     let fixture = Fixture::new("me");
     append(
-        &fixture.mail,
+        &fixture.mail.join("boop.db"),
         serde_json::json!({
             "id": "m-one",
             "from": "coordinator",
@@ -233,7 +223,7 @@ fn me_takes_every_unread_row_addressed_to_the_named_inbox() {
         }),
     );
     append(
-        &fixture.mail,
+        &fixture.mail.join("boop.db"),
         serde_json::json!({
             "id": "m-two",
             "from": "coordinator",
@@ -247,7 +237,7 @@ fn me_takes_every_unread_row_addressed_to_the_named_inbox() {
         }),
     );
     append(
-        &fixture.mail,
+        &fixture.mail.join("boop.db"),
         serde_json::json!({
             "id": "m-elsewhere",
             "from": "coordinator",
@@ -305,7 +295,7 @@ fn me_takes_every_unread_row_addressed_to_the_named_inbox() {
 fn me_without_a_name_watches_the_inbox_the_spawn_stamp_names() {
     let fixture = Fixture::new("stamp");
     append(
-        &fixture.mail,
+        &fixture.mail.join("boop.db"),
         serde_json::json!({
             "id": "m-stamped",
             "from": "coordinator",
@@ -396,7 +386,7 @@ fn push_sends_and_blocks_until_the_reply_arrives() {
     std::thread::sleep(std::time::Duration::from_millis(1500));
     let id = queued_id(&fixture);
     append(
-        &fixture.mail,
+        &fixture.mail.join("boop.db"),
         reply_row("m-push-answer", &id, "the answer is 4"),
     );
     let output = pushing.wait_with_output().unwrap();
@@ -486,7 +476,7 @@ fn push_at_an_unregistered_name_still_reports_a_rung() {
 fn me_never_hands_back_the_lanes_own_dispatch_row() {
     let fixture = Fixture::new("dispatch");
     append(
-        &fixture.mail,
+        &fixture.mail.join("boop.db"),
         serde_json::json!({
             "id": "m-d2252d54",
             "from": "coordinator",
