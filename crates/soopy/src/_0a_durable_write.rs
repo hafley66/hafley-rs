@@ -178,3 +178,19 @@ pub(crate) fn record_sync(span: &tracing::Span, meter: SyncMeter, started: Insta
 pub(crate) fn elapsed_millis(started: Instant) -> f64 {
     started.elapsed().as_secs_f64() * 1_000.0
 }
+
+/// Whether two paths sit on one device. A fence orders I/O within a device
+/// only, so a protocol step crossing this boundary has to pay a full flush.
+#[cfg(unix)]
+pub(crate) fn same_device(left: &Path, right: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (std::fs::metadata(left), std::fs::metadata(right)) {
+        (Ok(left), Ok(right)) => left.dev() == right.dev(),
+        _ => false,
+    }
+}
+
+#[cfg(not(unix))]
+pub(crate) fn same_device(_left: &Path, _right: &Path) -> bool {
+    false
+}

@@ -17,7 +17,7 @@ use fs4::fs_std::FileExt;
 use serde::{Deserialize, Serialize};
 
 use crate::_0a_durable_write::{
-    elapsed_millis, publish_file, record_sync, SyncLevel, SyncMeter,
+    elapsed_millis, publish_file, record_sync, same_device, SyncLevel, SyncMeter,
 };
 use crate::{
     ContentId, FileModeObservation, PlannedFileKind, SourcePath, SourceRoot, SourceRootId, StageId,
@@ -171,6 +171,7 @@ pub struct CommitEngine {
     target_root: PathBuf,
     state_root: PathBuf,
     durability: Durability,
+    shared_device: bool,
 }
 
 impl CommitEngine {
@@ -220,10 +221,12 @@ impl CommitEngine {
         fs::create_dir_all(state_root.join("journals"))?;
         fs::create_dir_all(state_root.join("blobs"))?;
         fs::create_dir_all(state_root.join("receipts"))?;
+        let shared_device = same_device(&target_root, &state_root);
         Ok(Self {
             target_root,
             state_root,
             durability,
+            shared_device,
         })
     }
 
@@ -335,7 +338,13 @@ impl CommitEngine {
         );
         let journal_entered = journal_span.enter();
         let mut journal_sync = SyncMeter::default();
-        write_journal(&journal_path, &journal, self.durability, &mut journal_sync)?;
+        write_journal(
+            &journal_path,
+            &journal,
+            self.durability,
+            self.cross_root_level(),
+            &mut journal_sync,
+        )?;
         record_sync(&journal_span, journal_sync, journal_started);
         tracing::debug!(
             sync.data = journal_sync.data(),
@@ -380,7 +389,7 @@ impl CommitEngine {
             self.durability,
             &mut receipt_sync,
         )?;
-        remove_journal(&journal_path, self.durability, &mut receipt_sync)?;
+        remove_journal(&journal_path)?;
         record_sync(&receipt_span, receipt_sync, receipt_started);
         tracing::debug!(
             sync.data = receipt_sync.data(),
@@ -462,8 +471,19 @@ impl CommitEngine {
             self.durability,
             &mut recovery_sync,
         )?;
-        remove_journal(&journal_path, self.durability, &mut recovery_sync)?;
+        remove_journal(&journal_path)?;
         Ok(receipt)
+    }
+
+    /// A fence orders one device. Journal-before-target and
+    /// target-before-receipt cross the boundary when the state root lives on
+    /// another volume, and only a full flush orders that.
+    fn cross_root_level(&self) -> SyncLevel {
+        if self.shared_device {
+            SyncLevel::Fence
+        } else {
+            SyncLevel::Flush
+        }
     }
 
     pub fn journal_path_for(&self, stage_id: StageId) -> PathBuf {
@@ -560,14 +580,14 @@ impl CommitEngine {
             if self.durability.dry_run() {
                 write_unsynced(&path, bytes, None, "write commit payload")?;
             } else {
-                publish_file(&path, bytes, SyncLevel::Flush, &mut meter, |_| Ok(()))
+                publish_file(&path, bytes, SyncLevel::Data, &mut meter, |_| Ok(()))
                     .map_err(|error| io_refusal_context("publish commit payload", error))?;
             }
         }
         sync_dir_when_durable(
             &self.state_root.join("blobs"),
             self.durability,
-            SyncLevel::Flush,
+            SyncLevel::Fence,
             &mut meter,
         )?;
         record_sync(&span, meter, started);
@@ -660,6 +680,14 @@ impl CommitEngine {
         );
         let _entered = span.enter();
         let mut meter = SyncMeter::default();
+        // Every payload is read and digested before the first target moves, so
+        // a bad payload cannot leave the tree half applied.
+        let payloads = journal
+            .operations
+            .iter()
+            .map(|operation| self.operation_bytes(operation))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let mut directories = BTreeSet::new();
         for index in 0..journal.operations.len() {
             if completed.contains(&index) {
                 continue;
@@ -669,19 +697,32 @@ impl CommitEngine {
                     point: CommitFailpoint::BeforeOperation(index),
                 });
             }
-            let bytes = self.operation_bytes(&journal.operations[index])?;
             apply_operation(
                 &self.target_root,
                 &journal.operations[index],
-                bytes.as_deref().unwrap_or_default(),
+                payloads[index].as_deref().unwrap_or_default(),
                 self.durability,
                 &mut meter,
+                &mut directories,
             )?;
             if failpoint == Some(CommitFailpoint::AfterOperation(index)) {
                 return Err(CommitRefusal::Failpoint {
                     point: CommitFailpoint::AfterOperation(index),
                 });
             }
+        }
+        for directory in &directories {
+            sync_dir_when_durable(directory, self.durability, SyncLevel::Data, &mut meter)?;
+        }
+        // Nothing written after this point may reach the device before the
+        // targets do, which is what keeps a receipt from outliving its work.
+        if !directories.is_empty() {
+            sync_dir_when_durable(
+                &self.target_root,
+                self.durability,
+                self.cross_root_level(),
+                &mut meter,
+            )?;
         }
         record_sync(&span, meter, started);
         tracing::debug!(
@@ -850,6 +891,7 @@ fn apply_operation(
     bytes: &[u8],
     durability: Durability,
     meter: &mut SyncMeter,
+    directories: &mut BTreeSet<PathBuf>,
 ) -> std::result::Result<(), CommitRefusal> {
     match operation.kind {
         PlannedFileKind::Create | PlannedFileKind::Replace => {
@@ -862,12 +904,7 @@ fn apply_operation(
             );
             ensure_parent_dirs(root, &path)?;
             atomic_write(&path, bytes, operation.mode.as_ref(), durability, meter)?;
-            sync_dir_when_durable(
-                path.parent().unwrap_or_else(|| Path::new(".")),
-                durability,
-                SyncLevel::Flush,
-                meter,
-            )?;
+            directories.insert(parent_of(&path));
         }
         PlannedFileKind::Move => {
             let source = target_path(
@@ -887,20 +924,8 @@ fn apply_operation(
             ensure_parent_dirs(root, &destination)?;
             fs::rename(&source, &destination)
                 .map_err(|error| io_refusal_context("rename staged move", error))?;
-            sync_dir_when_durable(
-                source.parent().unwrap_or_else(|| Path::new(".")),
-                durability,
-                SyncLevel::Flush,
-                meter,
-            )?;
-            if destination.parent() != source.parent() {
-                sync_dir_when_durable(
-                    destination.parent().unwrap_or_else(|| Path::new(".")),
-                    durability,
-                    SyncLevel::Flush,
-                    meter,
-                )?;
-            }
+            directories.insert(parent_of(&source));
+            directories.insert(parent_of(&destination));
         }
         PlannedFileKind::Delete => {
             let source = target_path(
@@ -912,12 +937,7 @@ fn apply_operation(
             );
             fs::remove_file(&source)
                 .map_err(|error| io_refusal_context("delete staged file", error))?;
-            sync_dir_when_durable(
-                source.parent().unwrap_or_else(|| Path::new(".")),
-                durability,
-                SyncLevel::Flush,
-                meter,
-            )?;
+            directories.insert(parent_of(&source));
         }
     }
     Ok(())
@@ -1104,7 +1124,7 @@ fn atomic_write(
     if durability.dry_run() {
         return write_unsynced(path, bytes, mode, "write atomic target");
     }
-    publish_file(path, bytes, SyncLevel::Flush, meter, |file| {
+    publish_file(path, bytes, SyncLevel::Data, meter, |file| {
         mode.map_or(Ok(()), |mode| set_mode(file, mode))
     })
     .map_err(|error| io_refusal_context("publish atomic target", error))
@@ -1179,6 +1199,9 @@ fn ensure_parent_dirs(_root: &Path, path: &Path) -> std::result::Result<(), Comm
     Ok(())
 }
 
+fn parent_of(path: &Path) -> PathBuf {
+    path.parent().unwrap_or_else(|| Path::new(".")).to_path_buf()
+}
 fn target_path(root: &Path, path: &SourcePath) -> PathBuf {
     root.join(path_text(path))
 }
@@ -1226,6 +1249,7 @@ fn write_journal(
     path: &Path,
     journal: &CommitJournal,
     durability: Durability,
+    level: SyncLevel,
     meter: &mut SyncMeter,
 ) -> std::result::Result<(), CommitRefusal> {
     let bytes = serde_json::to_vec(journal)
@@ -1233,13 +1257,14 @@ fn write_journal(
     if durability.dry_run() {
         write_unsynced(path, &bytes, None, "write commit journal")?;
     } else {
-        publish_file(path, &bytes, SyncLevel::Flush, meter, |_| Ok(()))
+        publish_file(path, &bytes, SyncLevel::Data, meter, |_| Ok(()))
             .map_err(|error| io_refusal_context("publish commit journal", error))?;
     }
+    // No target may reach the device before the journal that describes it.
     sync_dir_when_durable(
         path.parent().unwrap_or_else(|| Path::new(".")),
         durability,
-        SyncLevel::Flush,
+        level,
         meter,
     )
 }
@@ -1396,9 +1421,10 @@ fn write_receipt(
     if durability.dry_run() {
         write_unsynced(path, &bytes, None, "write commit receipt")?;
     } else {
-        publish_file(path, &bytes, SyncLevel::Flush, meter, |_| Ok(()))
+        publish_file(path, &bytes, SyncLevel::Data, meter, |_| Ok(()))
             .map_err(|error| io_refusal_context("publish commit receipt", error))?;
     }
+    // The one device flush a commit pays. It settles every fence before it.
     sync_dir_when_durable(
         path.parent().unwrap_or_else(|| Path::new(".")),
         durability,
@@ -1438,22 +1464,15 @@ fn sync_dir_when_durable(
         .map_err(|error| io_refusal_context("sync commit directory", error))
 }
 
-fn remove_journal(
-    path: &Path,
-    durability: Durability,
-    meter: &mut SyncMeter,
-) -> std::result::Result<(), CommitRefusal> {
+/// Unsynced on purpose. `commit` reads the receipt before it looks for a
+/// journal and `recover` reclassifies a fully applied journal as done, so a
+/// journal that outlives its receipt costs nothing.
+fn remove_journal(path: &Path) -> std::result::Result<(), CommitRefusal> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(io_refusal_context("remove commit journal", error)),
-    }?;
-    sync_dir_when_durable(
-        path.parent().unwrap_or_else(|| Path::new(".")),
-        durability,
-        SyncLevel::Flush,
-        meter,
-    )
+    }
 }
 fn receipt(
     stage_id: StageId,
