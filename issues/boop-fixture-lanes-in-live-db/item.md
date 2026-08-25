@@ -1,6 +1,6 @@
 ---
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-08-25
 type: bug
 status: open
 priority: normal
@@ -20,3 +20,9 @@ Measured 2026-08-19 13:30 on the live `~/.agent/boop.db`: test fixture lanes lea
 - [ ] Find where the 13:22:55 `mine`/`lane-test` lines come from (`boop debug` source path); if any test still writes under the real HOME or real `~/.agent`, fix the test and extend `tests/temp_home_rail.rs` to cover that path.
 - [ ] One-shot cleanup: `boop db` statements (or a `boop db purge-fixture-lanes` named SQL report, visible and deletable per CLAUDE.md) that delete `agent_trace_event`, `agent_lane`, `agent_trace`, mail rows for lane names in the fixture set (`mine`, `lane-test`, any name the tests use; list them by grepping `tests/**`), run once on the live db with before/after counts pasted here; `~/.agent/lanes/mine`, `~/.agent/lanes/lane-test` removed.
 - [ ] Rail: `boop debug` and lane list ignore nothing; instead a test asserts the live db has zero rows for fixture lane names after `cargo test -p boop` (run against a copy of the live db, count before == count after).
+
+## Agent Runs
+
+### 2026-08-25T18:23:40Z · @claude-5
+
+Source: supervise.rs unit tests (TraceRecorder::new -> Store::default_path()). Fix: tempdir() pins BOOP_DB and HOME under a Once; rail recognises the pin. Full suite: fixture rows 9149 before, 9147 after (0 new). Purge script crates/boop-store/sql/purge_fixture_lanes.sql; the live purge and rm -rf ~/.agent/lanes/lane-test are left for Chris (destructive).

@@ -1,12 +1,14 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-08-25
 type: bug
-status: open
+status: fixed
 priority: high
 epic: boop-lane-observability
 labels: [domain-boop, intent-correctness, component-supervisor]
 size: S
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 # 30-second first-signal limit kills healthy codex lanes
@@ -80,3 +82,9 @@ independent evidence.
 
 This bug blocks every codex lane dispatch. It is why the 2026-08-17 boop audit
 fix wave ran on native subagents instead.
+
+## Comments
+
+### 2026-08-25T18:18:43Z · @claude-5
+
+Superseded: codex lanes launch through codex-acp only (codex-acp-only-launcher); DEFAULT_STALL_LIMIT is 30 minutes (supervise.rs:24), BOOP_STALL_LIMIT_SECS overrides; a stall ends the turn with turn_end_reason naming it and the parent gets the idle row with that reason (parent-visibility).

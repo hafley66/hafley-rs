@@ -1,11 +1,13 @@
 ---
 created: 2026-08-22
-updated: 2026-08-23
+updated: 2026-08-25
 type: bug
-status: open
+status: fixed
 priority: high
 labels: [domain-boop, intent-fix]
 size: S
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 # `boop beep lane create` repoints the CALLER's coordinator route at the new lane's pane
@@ -37,4 +39,9 @@ Receipt 2026-08-23 05:16: two lane creates repointed the route again; the workar
 ### 2026-08-23T18:41:57Z · @sprefa-coordinator
 
 2026-08-23 18:38: 'boop beep lane create --harness codex --model gpt-5.6-sol@high' (and the preset 'sol' which expands to the same string) dies at ACP handshake: 'Invalid params: model gpt-5.6-sol@high (this agent takes: gpt-5.6-sol, ...)'. The @effort suffix reaches the codex ACP agent unstripped; boop-acp/src/channel/acp.rs:617 says the split exists for opencode. lane create prints 'dispatched' and exits 0 with no route and no tmux session. Workaround: bare gpt-5.6-sol; ~/.codex/config.toml model_reasoning_effort=high supplies the effort.
+
+### 2026-08-25T18:18:43Z · @claude-5
+
+Superseded: lane create writes exactly one route, the new lane's (job.rs:157 write_route(&dir, &args.to, route)); the caller was repointed by the adopt/pane rung path that env-only-identity removed.
+
 
