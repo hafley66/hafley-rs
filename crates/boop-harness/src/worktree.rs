@@ -8,7 +8,6 @@ use std::process::Command;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use wait_timeout::ChildExt;
 
 use crate::harness::SpawnSpec;
 
@@ -192,12 +191,16 @@ fn spawn_grouped(cmd: &mut Command) -> Result<std::process::Child> {
     cmd.spawn().context("spawn child")
 }
 
-/// `kill -9` the whole group `pid` leads, since `pid` was made its own group
-/// leader by `spawn_grouped`.
+/// SIGKILL the whole group `pid` leads, since `pid` was made its own group
+/// leader by `spawn_grouped`. A direct `killpg`: shelling out to `kill -9
+/// -<pid>` reached procps on ubuntu, which read the negative pid as a signal
+/// name and killed nothing (worktree-deadline-linux).
 fn kill_process_group(pid: i32) {
-    let _ = Command::new("kill")
-        .args(["-9", &format!("-{pid}")])
-        .status();
+    // SAFETY: killpg on a group id this process created; the only effect is
+    // signal delivery, and an already-reaped group yields ESRCH.
+    unsafe {
+        libc::killpg(pid, libc::SIGKILL);
+    }
 }
 
 fn read_all(pipe: Option<impl std::io::Read>) -> Vec<u8> {
@@ -208,28 +211,38 @@ fn read_all(pipe: Option<impl std::io::Read>) -> Vec<u8> {
     buf
 }
 
+/// How often the deadline wait asks the child whether it exited.
+const DEADLINE_POLL: Duration = Duration::from_millis(50);
+
 /// Wait on `child` up to `deadline`; past it, kill the group and return
-/// `SpawnChildTimedOut` instead of leaving the caller to hang.
+/// `SpawnChildTimedOut` instead of leaving the caller to hang. A `try_wait`
+/// poll rather than a SIGCHLD-driven wait: the previous `wait_timeout` never
+/// woke when another SIGCHLD handler owned the signal in the same process
+/// (the ubuntu test binary waited the full 999s of `sleep 999`).
 fn wait_with_deadline(
     mut child: std::process::Child,
     what: &'static str,
     deadline: Duration,
 ) -> Result<std::process::ExitStatus> {
     let pid = child.id() as i32;
-    match child
-        .wait_timeout(deadline)
-        .with_context(|| format!("wait on {what}"))?
-    {
-        Some(status) => Ok(status),
-        None => {
+    let started = std::time::Instant::now();
+    loop {
+        if let Some(status) = child
+            .try_wait()
+            .with_context(|| format!("wait on {what}"))?
+        {
+            return Ok(status);
+        }
+        if started.elapsed() >= deadline {
             kill_process_group(pid);
             let _ = child.wait();
-            Err(SpawnChildTimedOut {
+            return Err(SpawnChildTimedOut {
                 what,
                 seconds: deadline.as_secs(),
             }
-            .into())
+            .into());
         }
+        std::thread::sleep(DEADLINE_POLL);
     }
 }
 
