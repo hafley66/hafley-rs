@@ -1444,7 +1444,7 @@ pub(crate) fn run_lane_list(
     let routes = bus::read_routes(&dir)?;
     let live = tmux::mux().live_sessions(None);
     for (name, route) in &routes {
-        let state = lane_state(&dir, name, &live, route);
+        let state = lane_state(&dir, name, &live, route, &routes);
         if let Some(want) = state_filter {
             if state != want {
                 continue;
@@ -1507,7 +1507,7 @@ pub(crate) fn gone_parent<'a>(
 ) -> Option<&'a str> {
     let parent = route.parent.as_deref()?;
     match routes.get(parent) {
-        Some(parent_route) if lane_state(dir, parent, live, parent_route) != "dead" => None,
+        Some(parent_route) if lane_state(dir, parent, live, parent_route, routes) != "dead" => None,
         _ => Some(parent),
     }
 }
@@ -1523,14 +1523,45 @@ pub(crate) fn dead_reason_token(mail_dir: &std::path::Path, lane: &str) -> Strin
 
 /// `live`/`idle`/`dead`/`?`. `idle` reads the supervisor's residency file; a
 /// lane older than that file reads through as `live`.
+///
+/// A pane-less coordinator or native route has no tmux target of its own to
+/// probe, so its liveness is inherited from its parent. The parent hop is
+/// measured once and no deeper: a parent that is itself pane-less answers `?`,
+/// and a parentless pane-less route answers `?` too.
 pub(crate) fn lane_state(
     dir: &Path,
     name: &str,
     live: &Option<tmux::LiveSessions>,
     route: &Route,
+    routes: &BTreeMap<String, Route>,
+) -> &'static str {
+    lane_state_hop(dir, name, live, route, routes, true)
+}
+
+/// The shared body of `lane_state`. A pane-less coordinator/native route has
+/// no tmux target of its own, so its liveness is inherited from its parent.
+/// `allow_parent_hop` bounds the inheritance to one level: a parent that is
+/// itself pane-less answers `?` rather than chasing a grandparent, and a
+/// parentless pane-less route answers `?` too.
+fn lane_state_hop(
+    dir: &Path,
+    name: &str,
+    live: &Option<tmux::LiveSessions>,
+    route: &Route,
+    routes: &BTreeMap<String, Route>,
+    allow_parent_hop: bool,
 ) -> &'static str {
     if route.tmux.is_none() && matches!(route.kind.as_str(), "coordinator" | "native") {
-        return "live";
+        if !allow_parent_hop {
+            return "?";
+        }
+        let Some(parent_name) = route.parent.as_deref() else {
+            return "?";
+        };
+        let Some(parent_route) = routes.get(parent_name) else {
+            return "?";
+        };
+        return lane_state_hop(dir, parent_name, live, parent_route, routes, false);
     }
     let tmux_alive = match live {
         None => return "?",
@@ -1559,7 +1590,7 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str) -> Result<()
         "{}",
         serde_json::json!({
             "lane": lane,
-            "state": lane_state(&dir, lane, &live, route),
+            "state": lane_state(&dir, lane, &live, route, &routes),
             "harness": route.harness,
             "tmux": route.tmux,
             "cwd": route.cwd,
@@ -1870,7 +1901,7 @@ pub(crate) fn route_liveness(dir: &std::path::Path, lane: &str) -> RouteLiveness
     if route.tmux.is_none() {
         return RouteLiveness::Unknown;
     }
-    match lane_state(dir, lane, &tmux::mux().live_sessions(None), route) {
+    match lane_state(dir, lane, &tmux::mux().live_sessions(None), route, &routes) {
         "live" | "idle" => RouteLiveness::Live,
         "dead" => RouteLiveness::Dead,
         _ => RouteLiveness::Unknown,
@@ -2505,6 +2536,9 @@ mod tests {
     fn native_registration_stays_live_until_explicit_done_and_done_is_once() {
         let dir = temp_mail_dir();
         std::fs::create_dir_all(&dir).unwrap();
+        let coord_name = unique_name("boop-native-coord");
+        let _session = LiveTmuxSession::new(&coord_name);
+        write_route(&dir, "coordinator", tmux_route(&coord_name)).unwrap();
         run_agent(AgentCmd::Register {
             name: "native-child".into(),
             kind: "native".into(),
@@ -2515,13 +2549,15 @@ mod tests {
         })
         .unwrap();
 
-        let route = read_routes(&dir).unwrap().remove("native-child").unwrap();
+        let routes = read_routes(&dir).unwrap();
+        let route = &routes["native-child"];
         assert_eq!(
             lane_state(
                 &dir,
                 "native-child",
                 &Some(boop::tmux::LiveSessions::default()),
-                &route
+                route,
+                &routes,
             ),
             "live"
         );
@@ -2555,6 +2591,55 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].to, "coordinator");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// FAIL-PRE-FIX: a pane-less coordinator/native was hardcoded `live` with
+    /// no probe, so dead natives read `live` until their parent evaporated.
+    /// Liveness now inherits from the parent (one hop): a live parent reads
+    /// `live`, a dead parent reads `dead`, and a parentless pane-less route
+    /// reads `?`.
+    #[test]
+    fn pane_less_route_inherits_parent_liveness() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let live_name = unique_name("boop-native-parent-live");
+        let live_session = LiveTmuxSession::new(&live_name);
+        write_route(&dir, "parent-live", tmux_route(&live_name)).unwrap();
+        write_route(
+            &dir,
+            "parent-dead",
+            tmux_route(&unique_name("boop-native-parent-dead")),
+        )
+        .unwrap();
+        let routes = read_routes(&dir).unwrap();
+        let live = tmux::mux().live_sessions(None);
+
+        let native = |parent: Option<&str>| Route {
+            kind: "native".into(),
+            harness: None,
+            tmux: None,
+            cwd: None,
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: parent.map(str::to_owned),
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+            app_server_socket: None,
+        };
+
+        let child = native(Some("parent-live"));
+        assert_eq!(lane_state(&dir, "child", &live, &child, &routes), "live");
+        let child = native(Some("parent-dead"));
+        assert_eq!(lane_state(&dir, "child", &live, &child, &routes), "dead");
+        let child = native(None);
+        assert_eq!(lane_state(&dir, "child", &live, &child, &routes), "?");
+
+        drop(live_session);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -2713,15 +2798,16 @@ mod tests {
             names: [name.clone()].into_iter().collect(),
         });
         let route = read_routes(&dir).unwrap().remove("mine").unwrap();
+        let routes = BTreeMap::new();
 
-        assert_eq!(lane_state(&dir, "mine", &live, &route), "live");
+        assert_eq!(lane_state(&dir, "mine", &live, &route, &routes), "live");
 
         boop::supervise::record_residency(&dir, "mine", boop::supervise::RESIDENCY_IDLE);
-        assert_eq!(lane_state(&dir, "mine", &live, &route), "idle");
+        assert_eq!(lane_state(&dir, "mine", &live, &route, &routes), "idle");
 
         drop(session);
         let dead_live = tmux::mux().live_sessions(None);
-        assert_eq!(lane_state(&dir, "mine", &dead_live, &route), "dead");
+        assert_eq!(lane_state(&dir, "mine", &dead_live, &route, &routes), "dead");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
