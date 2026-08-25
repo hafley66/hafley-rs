@@ -62,7 +62,6 @@ struct Cli {
 enum SubCmd {
     /// Print shell functions that route interactive harnesses through Boop.
     /// Folded (one-pane-register-path): `boop tui <harness>` is the spelling.
-    #[command(hide = true)]
     ShellInit {
         #[arg(value_enum)]
         shell: ShellKind,

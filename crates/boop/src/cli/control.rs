@@ -113,8 +113,12 @@ pub(crate) fn run_native_tui(
         .map(boop::Store::known_sessions)
         .transpose()?;
     let opened_ms = boop::live::now_ms();
+    // The stamp every `boop` call inside this TUI reads as its identity,
+    // inherited by the harness's own shell and native subagents.
     let mut child = Command::new(&plan.program)
         .args(&plan.args)
+        .env("BOOP_SESSION", name)
+        .env("BOOP_LANE", name)
         .current_dir(cwd)
         .spawn()
         .with_context(|| format!("start native {} TUI", adapter.id()))?;
@@ -183,6 +187,8 @@ pub(crate) fn run_native_tui(
             );
             child = Command::new(&next.program)
                 .args(&next.args)
+                .env("BOOP_SESSION", name)
+                .env("BOOP_LANE", name)
                 .current_dir(cwd)
                 .spawn()
                 .with_context(|| format!("respawn native {} TUI", adapter.id()))?;
