@@ -55,26 +55,16 @@ pub(crate) fn run_lane_debug(lane: &str, since: &str, mail_dir_arg: Option<&Path
     }
 
     line(&format!("\n== 2 mail {lane} =="));
-    // The mailbox is append-only and an ack is a second copy of the row, so
-    // the rows are folded to one per id before the last five are taken.
-    let mut rows = boop::bus::fold(&crate::cli::mail::all_messages(&dir).unwrap_or_default());
-    rows.retain(|row| row.from == lane || row.to == lane);
-    let recent: Vec<_> = rows.iter().rev().take(5).collect();
+    let recent = boop::bus::open_store(&dir)
+        .and_then(|store| boop::bus::mail_with_landing(&store, lane, 5))
+        .unwrap_or_default();
     match recent.is_empty() {
         true => line("none"),
         false => {
-            let store = open_ro_store().ok();
-            for row in recent.into_iter().rev() {
-                let landed = store
-                    .as_ref()
-                    .and_then(|store| store.delivery_rows(&row.id).ok())
-                    .unwrap_or_default()
-                    .last()
-                    .map(|transition| format!("{} ({})", transition.outcome, transition.detail))
-                    .unwrap_or_else(|| "no delivery transition".to_owned());
+            for row in recent {
                 line(&format!(
-                    "{} {} -> {} [{}] {landed}",
-                    row.id, row.from, row.to, row.kind,
+                    "{} {} -> {} [{}] {} ({})",
+                    row.id, row.from, row.to, row.kind, row.outcome, row.detail,
                 ));
             }
         }

@@ -15,7 +15,7 @@ fn boop(home: &PathBuf, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_boop"))
         .env_clear()
         .env("HOME", home)
-        .env("BOOP_DB", home.join("boop.db"))
+        .env("BOOP_DB", home.join("mail").join("boop.db"))
         .env("PATH", "/usr/bin:/bin")
         .args(args)
         .arg("--mail-dir")

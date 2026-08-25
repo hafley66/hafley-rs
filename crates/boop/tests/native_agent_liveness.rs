@@ -113,28 +113,14 @@ fn native_route_stays_live_until_done_and_wait_me_consumes_one_completion() {
         "completion must be explicit and once"
     );
 
-    let text = std::fs::read_to_string(dir.join("bus.ndjson")).unwrap();
-    let result_ids = text
-        .lines()
-        .filter(|line| {
-            let row: serde_json::Value = serde_json::from_str(line).unwrap();
-            row["kind"] == "result" && row["from"] == "native-child"
-        })
-        .map(|line| {
-            serde_json::from_str::<serde_json::Value>(line).unwrap()["id"]
-                .as_str()
-                .unwrap()
-                .to_owned()
-        })
+    let result_ids = boop_store::testing::mail_rows(&dir.join("boop.db"))
+        .into_iter()
+        .filter(|row| row["kind"] == "result" && row["from"] == "native-child")
+        .map(|row| row["id"].as_str().unwrap().to_owned())
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(result_ids.len(), 1);
-    assert!(
-        !dir.join("registry.json").exists() || {
-            let registry: serde_json::Value =
-                serde_json::from_str(&std::fs::read_to_string(dir.join("registry.json")).unwrap())
-                    .unwrap();
-            registry.get("native-child").is_none()
-        }
-    );
+    assert!(boop_store::testing::routes_json(&dir.join("boop.db"))
+        .get("native-child")
+        .is_none());
     let _ = std::fs::remove_dir_all(&dir);
 }

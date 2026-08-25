@@ -3,7 +3,7 @@
 
 use std::io::BufRead;
 use std::os::unix::fs::{symlink, PermissionsExt};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 fn mail_dir(name: &str) -> PathBuf {
@@ -28,7 +28,7 @@ fn seed_result(dir: &std::path::Path, lane: &str, rc: i32) {
         "body": format!("lane {lane} done rc={rc}"),
         "ref": null,
     });
-    std::fs::write(dir.join("bus.ndjson"), format!("{row}\n")).unwrap();
+    boop_store::testing::append_mail(&dir.join("boop.db"), &row);
 }
 
 fn seed_current_result(dir: &std::path::Path, lane: &str, rc: i32) {
@@ -43,15 +43,7 @@ fn seed_current_result(dir: &std::path::Path, lane: &str, rc: i32) {
         "body": format!("lane {lane} done rc={rc}"),
         "ref": null,
     });
-    use std::io::Write;
-    writeln!(
-        std::fs::OpenOptions::new()
-            .append(true)
-            .open(dir.join("bus.ndjson"))
-            .unwrap(),
-        "{row}"
-    )
-    .unwrap();
+    boop_store::testing::append_mail(&dir.join("boop.db"), &row);
 }
 
 fn executable(name: &str) -> PathBuf {
@@ -328,9 +320,8 @@ fn a_codex_thread_id_and_pane_no_longer_name_a_caller() {
         "{stdout}"
     );
     assert!(!stdout.contains("codex-1206"), "{stdout}");
-    let registry =
-        std::fs::read_to_string(fixture.mail.join("registry.json")).unwrap_or_default();
-    assert!(!registry.contains("codex-1206"), "{registry}");
+    let registry = boop_store::testing::routes_json(&fixture.mail.join("boop.db"));
+    assert!(registry.get("codex-1206").is_none(), "{registry}");
 }
 
 /// RECEIPT. A codex ACP session id arrives before the first turn. The lane
@@ -405,12 +396,9 @@ done
 
     // A lane whose turn completes with no pending mail parks instead of
     // exiting, so this waits for the result row rather than for the process.
-    let bus = mail.join("bus.ndjson");
+    let db = mail.join("boop.db");
     let start = std::time::Instant::now();
-    while !std::fs::read_to_string(&bus)
-        .unwrap_or_default()
-        .contains("lane feature-fresh-codex done rc=0")
-    {
+    while !mailbox_text(&db).contains("lane feature-fresh-codex done rc=0") {
         assert!(
             start.elapsed() < std::time::Duration::from_secs(10),
             "no result row within the wait budget"
@@ -426,11 +414,16 @@ done
         !rpc.contains("previous turn ended on a provider error"),
         "{rpc}"
     );
-    let result = std::fs::read_to_string(mail.join("bus.ndjson")).unwrap();
+    let result = mailbox_text(&db);
     assert!(
         result.contains("lane feature-fresh-codex done rc=0"),
         "{result}"
     );
 
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Every mailbox row as one blob of text, the way the ndjson file read.
+fn mailbox_text(db: &Path) -> String {
+    serde_json::Value::Array(boop_store::testing::mail_rows(db)).to_string()
 }

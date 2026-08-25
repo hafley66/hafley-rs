@@ -10,6 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use rusqlite::OptionalExtension;
 use serde_json::{Map, Value};
 
 use crate::harness_id::HarnessId;
@@ -60,24 +61,9 @@ pub struct Route {
     pub app_server_socket: Option<String>,
 }
 
-/// Read the route map out of the `--mail-dir` registry. Corrupt JSON is an
-/// error naming the path; it is never silently reset.
+/// Read the route map out of the mailbox `dir` addresses.
 pub fn read_routes(dir: &Path) -> Result<BTreeMap<String, Route>> {
-    let path = dir.join("registry.json");
-    let text = fs::read_to_string(&path).unwrap_or_default();
-    if text.trim().is_empty() {
-        return Ok(BTreeMap::new());
-    }
-    let value: Value = serde_json::from_str(&text)
-        .with_context(|| format!("registry.json is invalid JSON at {}", path.display()))?;
-    let Some(object) = value.as_object() else {
-        return Ok(BTreeMap::new());
-    };
-    let mut routes = BTreeMap::new();
-    for (id, entry) in object {
-        routes.insert(id.clone(), route_from_value(entry));
-    }
-    Ok(routes)
+    routes_in(&open_store(dir)?)
 }
 
 fn route_from_value(entry: &Value) -> Route {
@@ -148,29 +134,22 @@ fn int_field(object: &Map<String, Value>, key: &str) -> Option<i32> {
         .map(|value| value as i32)
 }
 
-/// Read every `.ndjson` mailbox file, newest file first is not needed; callers
-/// fold across all of them.
+/// The one mailbox `dir` addresses. A caller that folded across many ndjson
+/// files now folds across one database.
 pub fn read_boxes(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut paths = Vec::new();
-    if !dir.is_dir() {
-        return Ok(paths);
-    }
-    for entry in fs::read_dir(dir).context("read mail dir")? {
-        let entry = entry.context("read mail entry")?;
-        if entry.path().extension().is_some_and(|ext| ext == "ndjson") {
-            paths.push(entry.path());
-        }
-    }
-    paths.sort();
-    Ok(paths)
+    open_store(dir)?;
+    Ok(vec![db_path(dir)?])
 }
 
-/// Parse the NDJSON lines in one mailbox file, skipping malformed lines.
+/// Read one mailbox back. A `.ndjson` path is still parsed as a file so the
+/// importer and old fixtures keep working; anything else is a database.
 pub fn parse_box(path: &Path) -> Vec<Message> {
-    let Ok(text) = fs::read_to_string(path) else {
-        return Vec::new();
-    };
-    text.lines().filter_map(parse_line).collect()
+    if path.extension().is_some_and(|ext| ext == "ndjson") {
+        return parse_ndjson(path);
+    }
+    crate::ident::Store::open(path.to_path_buf())
+        .and_then(|store| messages_in(&store))
+        .unwrap_or_default()
 }
 
 pub fn parse_line(line: &str) -> Option<Message> {
@@ -306,6 +285,10 @@ pub fn cas_update_json(
     path: &Path,
     mutate: impl Fn(&mut Map<String, Value>) -> Result<()>,
 ) -> Result<()> {
+    if path.file_name().is_some_and(|name| name == "registry.json") {
+        let dir = path.parent().unwrap_or(Path::new("."));
+        return registry_update(dir, mutate);
+    }
     let max_attempts = 5;
     for attempt in 0..max_attempts {
         let raw = fs::read(path).ok();
@@ -350,8 +333,19 @@ fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:016x}", hasher.finish())
 }
 
-/// Default mail dir: `~/.agent/mail`.
+/// The configured mail dir: `BOOP_MAIL_DIR`, else the directory `BOOP_DB`
+/// names, else `~/.agent/mail`. A caller that redirected the store has
+/// redirected the mailbox with it, so no verb reaches into `~/.agent` behind
+/// its back.
 pub fn default_mail_dir() -> Result<PathBuf> {
+    if let Some(dir) = std::env::var_os("BOOP_MAIL_DIR").filter(|dir| !dir.is_empty()) {
+        return Ok(PathBuf::from(dir));
+    }
+    if let Some(db) = std::env::var_os("BOOP_DB").filter(|db| !db.is_empty()) {
+        if let Some(parent) = PathBuf::from(db).parent() {
+            return Ok(parent.to_path_buf());
+        }
+    }
     let home = dirs::home_dir().context("resolve home directory")?;
     Ok(home.join(".agent").join("mail"))
 }
@@ -389,6 +383,499 @@ fn getrandom_bytes(out: &mut [u8]) {
             .wrapping_add(1442695040888963407);
         *slot = (state >> 33) as u8;
     }
+}
+
+
+// ---------------------------------------------------------------------------
+// the sqlite mailbox
+// ---------------------------------------------------------------------------
+
+/// The first transition every appended envelope carries.
+const APPENDED: &str = "appended";
+
+/// The database `dir` addresses: a mail dir holds its own `boop.db`, and the
+/// default mail dir maps to the one store every other verb opens.
+pub fn db_path(dir: &Path) -> Result<PathBuf> {
+    if default_mail_dir().is_ok_and(|home| home == dir) {
+        return crate::ident::Store::default_path();
+    }
+    Ok(dir.join("boop.db"))
+}
+
+/// Open the mailbox `dir` addresses, importing any `bus.ndjson` and
+/// `registry.json` left beside it exactly once.
+pub fn open_store(dir: &Path) -> Result<crate::ident::Store> {
+    let path = db_path(dir)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).context("create mailbox parent dir")?;
+    }
+    let store = crate::ident::Store::open(path)?;
+    import_legacy(&store, dir)?;
+    Ok(store)
+}
+
+/// Tail every legacy file beside the database. The files are never renamed,
+/// moved or deleted: a `boop` that predates the mailbox keeps appending to
+/// them, and every open reads only what was written since the last one.
+fn import_legacy(store: &crate::ident::Store, dir: &Path) -> Result<()> {
+    if !dir.is_dir() {
+        return Ok(());
+    }
+    import_registry_file(store, &dir.join("registry.json"))?;
+    for path in read_ndjson_files(dir)? {
+        import_ndjson_tail(store, &path)?;
+    }
+    Ok(())
+}
+
+/// The byte offset and content digest this path was last read at.
+fn import_mark(store: &crate::ident::Store, path: &Path) -> Result<(i64, String)> {
+    let key = path.display().to_string();
+    let mark = store
+        .connection()
+        .query_row(
+            "SELECT offset, digest FROM mail_import WHERE path = ?1",
+            rusqlite::params![key],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    Ok(mark.unwrap_or((0, String::new())))
+}
+
+fn set_import_mark(
+    store: &crate::ident::Store,
+    path: &Path,
+    offset: i64,
+    digest: &str,
+) -> Result<()> {
+    store.connection().execute(
+        "INSERT INTO mail_import (path, offset, digest) VALUES (?1, ?2, ?3)
+         ON CONFLICT(path) DO UPDATE SET offset = excluded.offset, digest = excluded.digest",
+        rusqlite::params![path.display().to_string(), offset, digest],
+    )?;
+    Ok(())
+}
+
+/// Read one ndjson file from the last imported byte to the last complete line.
+/// A row whose id the mailbox already holds is a no-op, so a re-read of the
+/// same bytes doubles nothing; the offset makes the usual case read nothing.
+fn import_ndjson_tail(store: &crate::ident::Store, path: &Path) -> Result<()> {
+    let Ok(metadata) = fs::metadata(path) else {
+        return Ok(());
+    };
+    let length = metadata.len() as i64;
+    let (mark, _) = import_mark(store, path)?;
+    // A file shorter than the mark was rotated or truncated under us.
+    let offset = match length < mark {
+        true => 0,
+        false => mark,
+    };
+    if length == offset {
+        return Ok(());
+    }
+    let bytes = read_from(path, offset as u64)?;
+    let Some(last) = bytes.iter().rposition(|byte| *byte == b'\n') else {
+        return Ok(());
+    };
+    let complete = &bytes[..=last];
+    let mailbox = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("bus")
+        .to_owned();
+    let connection = store.connection();
+    connection.execute_batch("BEGIN IMMEDIATE")?;
+    let result = (|| -> Result<()> {
+        for line in String::from_utf8_lossy(complete).lines() {
+            let Some(message) = parse_line(line) else {
+                continue;
+            };
+            write_message(store, &mailbox, &message, "imported from ndjson")?;
+        }
+        set_import_mark(store, path, offset + complete.len() as i64, "")
+    })();
+    finish(connection, result)
+}
+
+fn read_from(path: &Path, offset: u64) -> Result<Vec<u8>> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
+    file.seek(SeekFrom::Start(offset))
+        .with_context(|| format!("seek {}", path.display()))?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)
+        .with_context(|| format!("read {}", path.display()))?;
+    Ok(bytes)
+}
+
+/// Merge the registry file into the route table by name. The newer
+/// `registeredAt` wins, so a route the mailbox already carries is not rolled
+/// back to an older spawn's spelling. Nothing is deleted: a name only the
+/// table holds survives a file that never knew it.
+fn import_registry_file(store: &crate::ident::Store, path: &Path) -> Result<()> {
+    let Ok(text) = fs::read_to_string(path) else {
+        return Ok(());
+    };
+    if text.trim().is_empty() {
+        return Ok(());
+    }
+    let digest = sha256_hex(text.as_bytes());
+    let (_, seen) = import_mark(store, path)?;
+    if seen == digest {
+        return Ok(());
+    }
+    let value: Value = serde_json::from_str(&text)
+        .with_context(|| format!("registry.json is invalid JSON at {}", path.display()))?;
+    let Some(object) = value.as_object() else {
+        return Ok(());
+    };
+    let connection = store.connection();
+    connection.execute_batch("BEGIN IMMEDIATE")?;
+    let result = (|| -> Result<()> {
+        let held = routes_in(store)?;
+        for (id, entry) in object {
+            let incoming = route_from_value(entry);
+            if outranks(held.get(id), &incoming) {
+                continue;
+            }
+            upsert_route(store, id, &incoming)?;
+        }
+        set_import_mark(store, path, 0, &digest)
+    })();
+    finish(connection, result)
+}
+
+/// Whether the route the table already holds beats the one the file carries.
+/// An unstamped file row never displaces a stamped stored one.
+fn outranks(held: Option<&Route>, incoming: &Route) -> bool {
+    let Some(held) = held else {
+        return false;
+    };
+    match (held.registered_at.as_deref(), incoming.registered_at.as_deref()) {
+        (Some(held_at), Some(new_at)) => held_at >= new_at,
+        (Some(_), None) => true,
+        _ => false,
+    }
+}
+
+fn finish(connection: &rusqlite::Connection, result: Result<()>) -> Result<()> {
+    match result {
+        Ok(()) => {
+            connection.execute_batch("COMMIT")?;
+            Ok(())
+        }
+        Err(error) => {
+            let _ = connection.execute_batch("ROLLBACK");
+            Err(error)
+        }
+    }
+}
+
+fn read_ndjson_files(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut paths = Vec::new();
+    for entry in fs::read_dir(dir).context("read mail dir")? {
+        let entry = entry.context("read mail entry")?;
+        if entry.path().extension().is_some_and(|ext| ext == "ndjson") {
+            paths.push(entry.path());
+        }
+    }
+    paths.sort();
+    Ok(paths)
+}
+
+fn parse_ndjson(path: &Path) -> Vec<Message> {
+    let Ok(text) = fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    text.lines().filter_map(parse_line).collect()
+}
+
+/// Append one envelope and its first transition in one transaction. The
+/// `agent_mail_needs_transition` trigger refuses the row if the pair splits.
+pub fn insert_message(
+    store: &crate::ident::Store,
+    mailbox: &str,
+    message: &Message,
+    detail: &str,
+) -> Result<()> {
+    let connection = store.connection();
+    connection.execute_batch("BEGIN IMMEDIATE")?;
+    let result = write_message(store, mailbox, message, detail);
+    finish(connection, result)
+}
+
+fn write_message(
+    store: &crate::ident::Store,
+    mailbox: &str,
+    message: &Message,
+    detail: &str,
+) -> Result<()> {
+    let connection = store.connection();
+    if !store.has_delivery_transition(&message.id)? {
+        store.append_delivery_transition(
+            &message.id,
+            &message.to,
+            None,
+            APPENDED,
+            detail,
+            None,
+            now_ms(),
+        )?;
+    }
+    connection.execute(
+        "INSERT INTO agent_mail
+           (message_id, mailbox, from_route, to_route, from_timestamp, to_timestamp,
+            kind, reply_to, body, ref_id, rc, detail)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+         ON CONFLICT(message_id) DO UPDATE SET
+           to_timestamp = COALESCE(excluded.to_timestamp, agent_mail.to_timestamp),
+           kind = excluded.kind,
+           body = excluded.body,
+           reply_to = excluded.reply_to,
+           ref_id = excluded.ref_id,
+           rc = excluded.rc,
+           detail = excluded.detail",
+        rusqlite::params![
+            message.id,
+            mailbox,
+            message.from,
+            message.to,
+            message.from_timestamp,
+            message.to_timestamp,
+            message.kind,
+            message.reply_to,
+            message.body,
+            message.r#ref,
+            message.rc,
+            message.detail,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Append one envelope to the mailbox `dir` addresses.
+pub fn append(dir: &Path, mailbox: &str, message: &Message) -> Result<()> {
+    let store = open_store(dir)?;
+    insert_message(&store, mailbox, message, "mailbox")
+}
+
+/// Stamp `ids` taken. Returns how many rows were open before the stamp.
+pub fn ack_messages(store: &crate::ident::Store, ids: &[String], stamp: &str) -> Result<usize> {
+    let connection = store.connection();
+    connection.execute_batch("BEGIN IMMEDIATE")?;
+    let mut stamped = 0usize;
+    let result = (|| -> Result<()> {
+        for id in ids {
+            stamped += connection.execute(
+                "UPDATE agent_mail SET to_timestamp = ?1
+                 WHERE message_id = ?2 AND to_timestamp IS NULL",
+                rusqlite::params![stamp, id],
+            )?;
+        }
+        Ok(())
+    })();
+    finish(connection, result)?;
+    Ok(stamped)
+}
+
+/// Every envelope in append order.
+pub fn messages_in(store: &crate::ident::Store) -> Result<Vec<Message>> {
+    let mut statement = store.connection().prepare(
+        "SELECT message_id, from_route, to_route, from_timestamp, to_timestamp,
+                kind, reply_to, body, ref_id, rc, detail
+         FROM agent_mail ORDER BY seq",
+    )?;
+    let rows = statement.query_map([], |row| {
+        Ok(Message {
+            id: row.get(0)?,
+            from: row.get(1)?,
+            to: row.get(2)?,
+            from_timestamp: row.get(3)?,
+            to_timestamp: row.get(4)?,
+            kind: row.get(5)?,
+            reply_to: row.get(6)?,
+            body: row.get(7)?,
+            r#ref: row.get(8)?,
+            rc: row.get(9)?,
+            detail: row.get(10)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+/// Every envelope in the mailbox `dir` addresses.
+pub fn read_messages(dir: &Path) -> Result<Vec<Message>> {
+    messages_in(&open_store(dir)?)
+}
+
+/// Every route the store can address.
+pub fn routes_in(store: &crate::ident::Store) -> Result<BTreeMap<String, Route>> {
+    let mut statement = store.connection().prepare(
+        "SELECT route, kind, harness, tmux, cwd, model, mode, session_id, source_path,
+                parent, goal, registered_at, base_sha, worktree_dir, app_server_socket
+         FROM agent_route ORDER BY route",
+    )?;
+    let rows = statement.query_map([], |row| {
+        let harness: Option<String> = row.get(2)?;
+        Ok((
+            row.get::<_, String>(0)?,
+            Route {
+                kind: row.get(1)?,
+                harness: harness.as_deref().and_then(HarnessId::parse),
+                tmux: row.get(3)?,
+                cwd: row.get(4)?,
+                model: row.get(5)?,
+                mode: row.get(6)?,
+                session_id: row.get(7)?,
+                source_path: row.get(8)?,
+                parent: row.get(9)?,
+                goal: row.get(10)?,
+                registered_at: row.get(11)?,
+                base_sha: row.get(12)?,
+                worktree_dir: row.get(13)?,
+                app_server_socket: row.get(14)?,
+            },
+        ))
+    })?;
+    let mut out = BTreeMap::new();
+    for row in rows {
+        let (id, route) = row?;
+        out.insert(id, route);
+    }
+    Ok(out)
+}
+
+fn upsert_route(store: &crate::ident::Store, id: &str, route: &Route) -> Result<()> {
+    store.connection().execute(
+        "INSERT OR REPLACE INTO agent_route
+           (route, kind, harness, tmux, cwd, model, mode, session_id, source_path,
+            parent, goal, registered_at, base_sha, worktree_dir, app_server_socket)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+        rusqlite::params![
+            id,
+            route.kind,
+            route.harness.map(|id| id.as_str().to_owned()),
+            route.tmux,
+            route.cwd,
+            route.model,
+            route.mode,
+            route.session_id,
+            route.source_path,
+            route.parent,
+            route.goal,
+            route.registered_at,
+            route.base_sha,
+            route.worktree_dir,
+            route.app_server_socket,
+        ],
+    )?;
+    Ok(())
+}
+
+/// The registry as the JSON shape every caller's mutation is written against.
+pub fn route_to_value(route: &Route) -> Value {
+    let mut object = Map::new();
+    object.insert("kind".into(), Value::String(route.kind.clone()));
+    let pairs: [(&str, Option<String>); 13] = [
+        ("harness", route.harness.map(|id| id.as_str().to_owned())),
+        ("tmux", route.tmux.clone()),
+        ("cwd", route.cwd.clone()),
+        ("model", route.model.clone()),
+        ("mode", route.mode.clone()),
+        ("sessionId", route.session_id.clone()),
+        ("sourcePath", route.source_path.clone()),
+        ("parent", route.parent.clone()),
+        ("goal", route.goal.clone()),
+        ("registeredAt", route.registered_at.clone()),
+        ("baseSha", route.base_sha.clone()),
+        ("worktreeDir", route.worktree_dir.clone()),
+        ("appServerSocket", route.app_server_socket.clone()),
+    ];
+    for (key, value) in pairs {
+        if let Some(value) = value {
+            object.insert(key.into(), Value::String(value));
+        }
+    }
+    Value::Object(object)
+}
+
+/// Run one caller mutation against the route table under `BEGIN IMMEDIATE`.
+/// The table is the whole map, so a key the mutation dropped is deleted.
+fn registry_update(
+    dir: &Path,
+    mutate: impl Fn(&mut Map<String, Value>) -> Result<()>,
+) -> Result<()> {
+    let store = open_store(dir)?;
+    let connection = store.connection();
+    connection.execute_batch("BEGIN IMMEDIATE")?;
+    let result = (|| -> Result<()> {
+        let mut map = Map::new();
+        for (id, route) in routes_in(&store)? {
+            map.insert(id, route_to_value(&route));
+        }
+        mutate(&mut map)?;
+        connection.execute("DELETE FROM agent_route", [])?;
+        for (id, entry) in &map {
+            upsert_route(&store, id, &route_from_value(entry))?;
+        }
+        Ok(())
+    })();
+    finish(connection, result)
+}
+
+/// One envelope and the last transition its id carries.
+pub struct Landed {
+    pub id: String,
+    pub from: String,
+    pub to: String,
+    pub kind: String,
+    pub outcome: String,
+    pub detail: String,
+}
+
+/// The newest `limit` envelopes to or from `route`, each with the transition
+/// it last took. The join is inner: a row with no transition cannot exist.
+pub fn mail_with_landing(
+    store: &crate::ident::Store,
+    route: &str,
+    limit: usize,
+) -> Result<Vec<Landed>> {
+    let mut statement = store.connection().prepare(
+        "SELECT m.message_id, m.from_route, m.to_route, m.kind, t.outcome, t.detail
+         FROM agent_mail m
+         JOIN agent_delivery_transition t ON t.message_id = m.message_id
+          AND t.sequence = (SELECT MAX(sequence) FROM agent_delivery_transition
+                             WHERE message_id = m.message_id)
+         WHERE m.from_route = ?1 OR m.to_route = ?1
+         ORDER BY m.seq DESC LIMIT ?2",
+    )?;
+    let rows = statement.query_map(rusqlite::params![route, limit as i64], |row| {
+        Ok(Landed {
+            id: row.get(0)?,
+            from: row.get(1)?,
+            to: row.get(2)?,
+            kind: row.get(3)?,
+            outcome: row.get(4)?,
+            detail: row.get(5)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    out.reverse();
+    Ok(out)
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -507,6 +994,177 @@ mod tests {
             folded[0].to_timestamp.as_deref(),
             Some("2026-01-01T00:00:01.000Z")
         );
+    }
+
+    /// RECEIPT. The store refuses an envelope whose id carries no transition,
+    /// so no code path can leave a row nobody owns.
+    #[test]
+    fn a_mail_row_without_a_transition_is_refused() {
+        let dir = temp_dir("orphan");
+        let store = super::open_store(&dir).unwrap();
+        let refused = store.connection().execute(
+            "INSERT INTO agent_mail
+               (message_id, mailbox, from_route, to_route, from_timestamp, kind, body)
+             VALUES ('m-orphan', 'bus', 'a', 'b', '2026-01-01T00:00:00Z', 'note', 'hi')",
+            [],
+        );
+        let error = refused.expect_err("a row with no transition is a schema violation");
+        assert!(
+            error.to_string().contains("without a delivery transition"),
+            "{error}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. One append writes the envelope and its first transition, and
+    /// a re-append of the same id adds no second `appended`.
+    #[test]
+    fn an_append_carries_its_first_transition() {
+        let dir = temp_dir("append");
+        super::append(&dir, "bus", &send("m-append01")).unwrap();
+        super::append(&dir, "bus", &send("m-append01")).unwrap();
+        let store = super::open_store(&dir).unwrap();
+        let transitions: i64 = store
+            .connection()
+            .query_row(
+                "SELECT COUNT(*) FROM agent_delivery_transition WHERE message_id = 'm-append01'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(transitions, 1);
+        assert_eq!(super::messages_in(&store).unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. The files beside the database are read where they lie and
+    /// left there, so a `boop` that predates the mailbox keeps appending to
+    /// them while a newer one tails.
+    #[test]
+    fn the_files_beside_the_database_are_read_in_place() {
+        let dir = temp_dir("import");
+        std::fs::write(
+            dir.join("registry.json"),
+            r#"{"child": {"harness": "opencode", "parent": "coordinator"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("bus.ndjson"),
+            format!("{}\n", super::message_line(&send("m-import01"))),
+        )
+        .unwrap();
+        let routes = super::read_routes(&dir).unwrap();
+        assert_eq!(
+            routes.get("child").unwrap().parent.as_deref(),
+            Some("coordinator")
+        );
+        assert_eq!(super::read_messages(&dir).unwrap().len(), 1);
+        assert!(dir.join("bus.ndjson").is_file(), "the file stays put");
+        assert!(dir.join("registry.json").is_file(), "the file stays put");
+        assert!(!dir.join("bus.ndjson.imported").exists());
+        assert!(!dir.join("registry.json.imported").exists());
+        assert_eq!(super::read_messages(&dir).unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. Each open reads only the bytes written since the last one, so
+    /// rows an old `boop` appends after the first open still land exactly once.
+    #[test]
+    fn each_open_imports_only_the_ndjson_tail() {
+        use std::io::Write;
+        let dir = temp_dir("tail");
+        let path = dir.join("bus.ndjson");
+        std::fs::write(&path, format!("{}\n", super::message_line(&send("m-tail01")))).unwrap();
+        assert_eq!(super::read_messages(&dir).unwrap().len(), 1);
+
+        let mut file = std::fs::OpenOptions::new().append(true).open(&path).unwrap();
+        for id in ["m-tail02", "m-tail03"] {
+            writeln!(file, "{}", super::message_line(&send(id))).unwrap();
+        }
+        drop(file);
+        let after_append = super::read_messages(&dir).unwrap();
+        assert_eq!(after_append.len(), 3, "the tail brought exactly two rows");
+
+        let store = super::open_store(&dir).unwrap();
+        assert_eq!(super::messages_in(&store).unwrap().len(), 3, "no fourth read");
+        let mark: i64 = store
+            .connection()
+            .query_row(
+                "SELECT offset FROM mail_import WHERE path = ?1",
+                rusqlite::params![path.display().to_string()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            mark as u64,
+            std::fs::metadata(&path).unwrap().len(),
+            "the mark sits at the end of the file"
+        );
+        let transitions: i64 = store
+            .connection()
+            .query_row(
+                "SELECT COUNT(*) FROM agent_delivery_transition WHERE message_id LIKE 'm-tail%'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(transitions, 3, "one transition per row, never a second");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. A half-written last line waits for its newline instead of
+    /// being imported as a truncated row.
+    #[test]
+    fn a_partial_last_line_is_left_for_the_next_open() {
+        use std::io::Write;
+        let dir = temp_dir("partial");
+        let path = dir.join("bus.ndjson");
+        let whole = super::message_line(&send("m-part01"));
+        let half = super::message_line(&send("m-part02"));
+        std::fs::write(&path, format!("{whole}\n{}", &half[..half.len() / 2])).unwrap();
+        assert_eq!(super::read_messages(&dir).unwrap().len(), 1);
+
+        let mut file = std::fs::OpenOptions::new().append(true).open(&path).unwrap();
+        write!(file, "{}\n", &half[half.len() / 2..]).unwrap();
+        drop(file);
+        let rows = super::read_messages(&dir).unwrap();
+        assert_eq!(rows.len(), 2, "the completed line lands whole");
+        assert_eq!(rows[1].id, "m-part02");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. The route the mailbox already carries is not rolled back to an
+    /// older spawn's spelling by a stale registry file.
+    #[test]
+    fn a_newer_registered_route_outranks_the_file() {
+        let dir = temp_dir("outrank");
+        std::fs::write(
+            dir.join("registry.json"),
+            r#"{"route-outrank": {"harness": "opencode", "registeredAt": "2026-01-01T00:00:00Z", "goal": "old"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            super::read_routes(&dir).unwrap()["route-outrank"].goal.as_deref(),
+            Some("old")
+        );
+        let store = super::open_store(&dir).unwrap();
+        let fresh = super::Route {
+            registered_at: Some("2026-06-01T00:00:00Z".to_owned()),
+            goal: Some("new".to_owned()),
+            ..super::route_from_value(&serde_json::json!({"harness": "opencode"}))
+        };
+        super::upsert_route(&store, "route-outrank", &fresh).unwrap();
+        std::fs::write(
+            dir.join("registry.json"),
+            r#"{"route-outrank": {"harness": "opencode", "registeredAt": "2026-01-01T00:00:00Z", "goal": "older still"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            super::read_routes(&dir).unwrap()["route-outrank"].goal.as_deref(),
+            Some("new"),
+            "the stale file must not roll the route back"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

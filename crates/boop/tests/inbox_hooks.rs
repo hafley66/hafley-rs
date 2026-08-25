@@ -368,10 +368,12 @@ fn removing_the_hooks_leaves_a_hail_queued_with_a_named_refusal() {
     let pane = coord.pane();
     assert!(!pane.contains("back to nobody"), "pane: {pane}");
     assert!(
-        std::fs::read_to_string(coord.mail().join("bus.ndjson"))
-            .unwrap()
-            .contains("back to nobody"),
-        "an unreachable hail must stay on the bus"
+        serde_json::Value::Array(boop_store::testing::mail_rows(
+            &coord.mail().join("boop.db")
+        ))
+        .to_string()
+        .contains("back to nobody"),
+        "an unreachable hail must stay in the mailbox"
     );
 }
 

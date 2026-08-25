@@ -33,7 +33,7 @@ pub struct Store {
 /// 14 = the door a live session answers on, and one delivery row per hail.
 /// 15 = ordered delivery-transition receipts beside the current-state ledger.
 /// 16 = the typed error code a refused transition carries.
-pub const SCHEMA_VERSION: i64 = 16;
+pub const SCHEMA_VERSION: i64 = 18;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -498,6 +498,9 @@ impl Store {
             self.connection
                 .execute_batch(SCHEMA)
                 .with_context(|| format!("initialise boop.db schema at {}", path.display()))?;
+            self.connection
+                .execute_batch(MAILBOX_SCHEMA)
+                .with_context(|| format!("initialise mailbox schema at {}", path.display()))?;
             self.seed_moods()?;
             if self.schema_version()? == 0 {
                 self.stamp_version()?;
@@ -629,6 +632,10 @@ impl Store {
                 }
                 self.connection.execute_batch("PRAGMA user_version = 16;")?;
             }
+            if self.schema_version()? < 18 {
+                self.connection.execute_batch(MAILBOX_SCHEMA)?;
+                self.connection.execute_batch("PRAGMA user_version = 18;")?;
+            }
             self.stamp_version()?;
             Ok(())
         })();
@@ -681,6 +688,7 @@ impl Store {
                 .execute_batch(&format!("DROP TABLE IF EXISTS \"{name}\""))?;
         }
         self.connection.execute_batch(SCHEMA)?;
+        self.connection.execute_batch(MAILBOX_SCHEMA)?;
         self.seed_moods()?;
         self.stamp_version()?;
         for (body, note, source, created_ts, first_ts) in favorites {
@@ -2040,6 +2048,17 @@ impl Store {
         self.append_delivery_transition(message_id, route, harness, outcome, detail, None, at_ms)
     }
 
+    /// Whether this message id already carries a transition. The mailbox
+    /// append writes the first one, so a later ladder walk adds no second.
+    pub fn has_delivery_transition(&self, message_id: &str) -> Result<bool> {
+        let count: i64 = self.connection.query_row(
+            "SELECT COUNT(*) FROM agent_delivery_transition WHERE message_id = ?1",
+            params![message_id],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
     /// The typed writer every delivery path goes through. `sequence` is
     /// `MAX + 1` for this message, so a retry appends beside its predecessor
     /// and no earlier transition is ever rewritten.
@@ -2975,6 +2994,65 @@ CREATE TABLE IF NOT EXISTS mood (
   name_id INTEGER NOT NULL UNIQUE,
   template TEXT NOT NULL
 );
+";
+
+/// The mailbox and its routes. `agent_mail_needs_transition` refuses an
+/// envelope whose id has no transition yet, so a writer inserts both or none.
+pub(crate) const MAILBOX_SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS agent_mail (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  message_id TEXT NOT NULL UNIQUE,
+  mailbox TEXT NOT NULL DEFAULT 'bus',
+  from_route TEXT NOT NULL,
+  to_route TEXT NOT NULL,
+  from_timestamp TEXT NOT NULL,
+  to_timestamp TEXT,
+  kind TEXT NOT NULL,
+  reply_to TEXT,
+  body TEXT NOT NULL,
+  ref_id TEXT,
+  rc INTEGER,
+  detail TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_mail_to ON agent_mail(to_route, seq);
+CREATE INDEX IF NOT EXISTS idx_mail_from ON agent_mail(from_route, seq);
+
+CREATE TRIGGER IF NOT EXISTS agent_mail_needs_transition
+BEFORE INSERT ON agent_mail
+WHEN NOT EXISTS (
+  SELECT 1 FROM agent_delivery_transition WHERE message_id = NEW.message_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'agent_mail row without a delivery transition');
+END;
+
+-- How far each legacy file beside the database has been read. `offset` is the
+-- byte the next ndjson tail read starts at; `digest` is the last registry.json
+-- content a merge ran against. The files are never renamed or removed, so a
+-- `boop` that predates the mailbox keeps appending beside a `boop` that tails.
+CREATE TABLE IF NOT EXISTS mail_import (
+  path TEXT PRIMARY KEY,
+  offset INTEGER NOT NULL DEFAULT 0,
+  digest TEXT NOT NULL DEFAULT ''
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS agent_route (
+  route TEXT PRIMARY KEY,
+  kind TEXT NOT NULL DEFAULT 'lane',
+  harness TEXT,
+  tmux TEXT,
+  cwd TEXT,
+  model TEXT,
+  mode TEXT,
+  session_id TEXT,
+  source_path TEXT,
+  parent TEXT,
+  goal TEXT,
+  registered_at TEXT,
+  base_sha TEXT,
+  worktree_dir TEXT,
+  app_server_socket TEXT
+) WITHOUT ROWID;
 ";
 
 #[cfg(test)]

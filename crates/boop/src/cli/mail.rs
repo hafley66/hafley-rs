@@ -94,11 +94,7 @@ pub(crate) fn run_list(mail_dir_arg: Option<&Path>, agent: Option<&str>, all: bo
 }
 
 pub(crate) fn all_messages(dir: &std::path::Path) -> Result<Vec<bus::Message>> {
-    let mut messages = Vec::new();
-    for path in bus::read_boxes(dir)? {
-        messages.extend(bus::parse_box(&path));
-    }
-    Ok(messages)
+    bus::read_messages(dir)
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +142,7 @@ pub(crate) struct Outbound<'a> {
     pub kind: &'a str,
     /// Who the row is from, when the whoami ladder cannot say.
     pub as_name: Option<&'a str>,
-    /// A mailbox file other than `bus.ndjson`.
+    /// A mailbox other than `bus`.
     pub box_name: Option<&'a str>,
     pub timeout_secs: u64,
     /// Block for the answer. `--no-wait` clears it.
@@ -223,14 +219,14 @@ pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
         rc: None,
         detail: None,
     };
-    append_message_to(&dir, send.box_name.unwrap_or("bus.ndjson"), &message)?;
+    append_message_to(&dir, send.box_name.unwrap_or("bus"), &message)?;
     record_control_edge(&message)?;
     if let Some(source) = parent_source {
         println!("{sender} -> {to} (parent from {source})");
     }
     deliver_hail(registry, &dir, &message, None)?;
     if parent_source.is_some() {
-        print_tell_parent_receipt(&sender, &to, &message.id);
+        print_tell_parent_receipt(&dir, &sender, &to, &message.id);
         line(&message.id);
     }
     // The parent send's last line is its own id, by contract. Every other send
@@ -274,8 +270,8 @@ pub(crate) fn deliver_hail(
     _socket: Option<&str>,
 ) -> Result<()> {
     let to = message.to.as_str();
-    let routes = bus::read_routes(dir)?;
-    let store = boop::Store::open(boop::Store::default_path()?)?;
+    let store = bus::open_store(dir)?;
+    let routes = bus::routes_in(&store)?;
     if let Some(route) = routes.get(to).filter(|route| is_acpx(route)) {
         let response = crate::cli::acpx::deliver(route, &message.body)?;
         append_acks(dir, std::slice::from_ref(message))?;
@@ -283,15 +279,17 @@ pub(crate) fn deliver_hail(
         let harness_id = route
             .harness
             .map_or_else(|| "acpx".to_owned(), |id| id.to_string());
-        store.append_delivery_transition(
-            &message.id,
-            to,
-            route.harness,
-            boop::DeliveryState::Appended.as_str(),
-            "mailbox",
-            None,
-            boop::live::now_ms(),
-        )?;
+        if !store.has_delivery_transition(&message.id)? {
+            store.append_delivery_transition(
+                &message.id,
+                to,
+                route.harness,
+                boop::DeliveryState::Appended.as_str(),
+                "mailbox",
+                None,
+                boop::live::now_ms(),
+            )?;
+        }
         landing.record(&store, &message.id, to, route.harness)?;
         if let Some(reply) = landing.reply.as_deref().filter(|text| !text.is_empty()) {
             println!("{reply}");
@@ -336,7 +334,7 @@ fn confirm_transition_recorded(store: &boop::Store, message_id: &str, to: &str) 
         if std::time::Instant::now() >= deadline {
             let states: Vec<&str> = rows.iter().map(|row| row.outcome.as_str()).collect();
             anyhow::bail!(
-                "{message_id} -> {to}: appended with no delivery transition inside {}ms (ledger: {}); the row is in the mailbox and nothing owns it",
+                "{message_id} -> {to}: appended with no landing inside {}ms (ledger: {}); the row is in the mailbox and nothing owns it",
                 DELIVERY_CONFIRM.as_millis(),
                 if states.is_empty() {
                     "empty".to_owned()
@@ -349,8 +347,8 @@ fn confirm_transition_recorded(store: &boop::Store, message_id: &str, to: &str) 
     }
 }
 
-/// One supervisor POLL. A send that has no delivery transition by now is a row
-/// no rung of the ladder took.
+/// One supervisor POLL. A send with no landing by now is a row no rung of the
+/// ladder took.
 const DELIVERY_CONFIRM: std::time::Duration = std::time::Duration::from_millis(700);
 
 /// `push`: the send and the wait in one verb. The row goes down the same
@@ -508,9 +506,8 @@ pub(crate) fn run_tell_parent(
 /// edge resolved to, the message id, and the transition the ladder recorded.
 /// Read back from the store, so it is the same row `boop db` and `boop debug`
 /// show rather than a second account of the same send.
-fn print_tell_parent_receipt(caller: &str, parent: &str, message_id: &str) {
-    let rows = boop::Store::default_path()
-        .and_then(boop::Store::open)
+fn print_tell_parent_receipt(dir: &Path, caller: &str, parent: &str, message_id: &str) {
+    let rows = bus::open_store(dir)
         .and_then(|store| store.delivery_rows(message_id))
         .unwrap_or_default();
     match rows.last() {
@@ -519,7 +516,7 @@ fn print_tell_parent_receipt(caller: &str, parent: &str, message_id: &str) {
             row.outcome, row.detail
         )),
         None => line(&format!(
-            "receipt {caller} -> {parent} {message_id} no delivery transition recorded"
+            "receipt {caller} -> {parent} {message_id} no landing recorded"
         )),
     }
 }

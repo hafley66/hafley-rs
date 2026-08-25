@@ -59,9 +59,10 @@ impl Drop for TestSession {
 }
 
 fn route_kind(dir: &Path, name: &str) -> String {
-    let raw = std::fs::read_to_string(dir.join("registry.json")).unwrap();
-    let map: serde_json::Value = serde_json::from_str(&raw).unwrap();
-    map[name]["kind"].as_str().unwrap_or_default().to_owned()
+    boop_store::testing::routes_json(&dir.join("boop.db"))[name]["kind"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned()
 }
 
 #[test]

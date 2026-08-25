@@ -185,6 +185,9 @@ enum SubCmd {
     #[cfg(feature = "dl6")]
     #[command(hide = true)]
     Concatmap {
+        /// The directory holding the mailbox `--me` resolves the caller in.
+        #[arg(long = "mail-dir")]
+        mail_dir_arg: Option<PathBuf>,
         /// Prompt template file; substitutes {{mode}}, {{ai_text}} (the
         /// assistant turn(s) before the user turn), {{user_text}}. Optional
         /// under a rules `window` (the SQL's `text` column ships verbatim).
@@ -951,6 +954,7 @@ fn main() -> Result<()> {
             },
             #[cfg(feature = "dl6")]
             SubCmd::Concatmap {
+                mail_dir_arg,
                 template,
                 mode,
                 model,
@@ -990,7 +994,8 @@ fn main() -> Result<()> {
                 let session = match (session, me) {
                     (Some(session), _) => Some(session),
                     (None, true) => {
-                        let routes = bus::read_routes(&mail_dir(None)?).unwrap_or_default();
+                        let routes =
+                            bus::read_routes(&mail_dir(mail_dir_arg.as_deref())?).unwrap_or_default();
                         let identity = identity::resolve_with(&registry, &routes)?;
                         Some(identity.session.context(
                         "--me found no caller session: this process carries no BOOP_SESSION stamp; pass --session <id>",

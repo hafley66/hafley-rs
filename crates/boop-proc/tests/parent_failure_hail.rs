@@ -75,11 +75,17 @@ impl LaneChannel for DoneChannel {
     }
 }
 
+/// One lane name per mail dir. Every dir shares one `BOOP_DB`, so the lane
+/// name is what keeps two tests' rows apart.
+fn lane_of(dir: &Path) -> String {
+    dir.file_name().unwrap().to_string_lossy().into_owned()
+}
+
 fn lane_run(dir: &Path) -> LaneRun {
     let brief = dir.join("brief.md");
     std::fs::write(&brief, "do the work\n").unwrap();
     LaneRun {
-        lane: "mine".to_owned(),
+        lane: lane_of(dir),
         brief,
         mail_dir: dir.to_owned(),
         cwd: dir.to_owned(),
@@ -94,7 +100,7 @@ fn count(dir: &Path, kind: &str) -> usize {
         rows.extend(boop_store::bus::parse_box(&path));
     }
     rows.iter()
-        .filter(|row| row.kind == kind && row.from == "mine")
+        .filter(|row| row.kind == kind && row.from == lane_of(dir))
         .count()
 }
 
@@ -110,7 +116,8 @@ fn wait_for(mut ready: impl FnMut() -> bool, timeout: Duration) {
 fn parented(dir: &Path) {
     std::fs::write(
         dir.join("registry.json"),
-        serde_json::json!({ "mine": { "kind": "lane", "parent": "coordinator" } }).to_string(),
+        serde_json::json!({ lane_of(dir): { "kind": "lane", "parent": "coordinator" } })
+            .to_string(),
     )
     .unwrap();
 }
@@ -203,12 +210,18 @@ fn a_failure_row_names_the_lane_the_model_the_attempt_and_the_command() {
     for path in boop_store::bus::read_boxes(&dir).unwrap_or_default() {
         rows.extend(boop_store::bus::parse_box(&path));
     }
-    let retrying = rows.iter().find(|row| row.kind == RETRYING).unwrap();
+    let lane = lane_of(&dir);
+    let retrying = rows
+        .iter()
+        .find(|row| row.kind == RETRYING && row.from == lane)
+        .unwrap();
     assert_eq!(retrying.to, "coordinator");
     assert_eq!(
         retrying.body,
-        "lane mine retrying: aborted stream (attempt 1/5, model test-model); \
-         read: boop beep lane pane mine"
+        format!(
+            "lane {lane} retrying: aborted stream (attempt 1/5, model test-model); \
+             read: boop beep lane pane {lane}"
+        )
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -222,3 +222,37 @@ pub fn usage_totals_at(path: &Path) -> UsageTotals {
         cache_read_tokens,
     }
 }
+
+/// Every mailbox row a run left, in the JSON shape the ndjson file carried.
+/// `db` is the `BOOP_DB` the run under test was pointed at.
+pub fn mail_rows(db: &Path) -> Vec<serde_json::Value> {
+    let Ok(store) = crate::ident::Store::open(db.to_path_buf()) else {
+        return Vec::new();
+    };
+    crate::bus::messages_in(&store)
+        .unwrap_or_default()
+        .iter()
+        .map(|row| serde_json::from_str(&crate::bus::message_line(row)).unwrap())
+        .collect()
+}
+
+/// Every route a run left, in the shape `registry.json` carried.
+pub fn routes_json(db: &Path) -> serde_json::Value {
+    let Ok(store) = crate::ident::Store::open(db.to_path_buf()) else {
+        return serde_json::Value::Object(serde_json::Map::new());
+    };
+    let map: serde_json::Map<String, serde_json::Value> = crate::bus::routes_in(&store)
+        .unwrap_or_default()
+        .iter()
+        .map(|(id, route)| (id.clone(), crate::bus::route_to_value(route)))
+        .collect();
+    serde_json::Value::Object(map)
+}
+
+/// Append one row straight into a run's mailbox, the way an ndjson fixture
+/// line used to. Panics on a line the mailbox parser refuses.
+pub fn append_mail(db: &Path, row: &serde_json::Value) {
+    let message = crate::bus::parse_line(&row.to_string()).expect("a mailbox row");
+    let store = crate::ident::Store::open(db.to_path_buf()).expect("open the mailbox");
+    crate::bus::insert_message(&store, "bus", &message, "mailbox").expect("append the row");
+}

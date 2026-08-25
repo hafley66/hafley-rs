@@ -1694,7 +1694,8 @@ mod tests {
     }
 
     fn completion_rows(dir: &Path) -> Vec<bus::Message> {
-        bus::parse_box(&dir.join("bus.ndjson"))
+        crate::cli::mail::all_messages(dir)
+            .unwrap_or_default()
             .into_iter()
             .filter(|message| {
                 message.r#ref.as_deref()
@@ -1757,8 +1758,7 @@ mod tests {
             ]
         );
         let messages = completion_rows(&dir);
-        assert_eq!(messages.len(), 2);
-        assert_eq!(bus::fold(&messages).len(), 1);
+        assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].from, "child-session");
         assert_eq!(messages[0].to, "parent-route");
         assert_eq!(messages[0].kind, "completion");
@@ -1767,7 +1767,7 @@ mod tests {
             messages[0].r#ref.as_deref(),
             Some("native-child-completion:parent-session:child-session")
         );
-        assert!(messages[1].to_timestamp.is_some());
+        assert!(messages[0].to_timestamp.is_some());
         assert_eq!(delivered.len(), 1);
     }
 
@@ -1808,8 +1808,8 @@ mod tests {
         );
         assert!(delivered.is_empty());
         let messages = completion_rows(&dir);
-        assert_eq!(messages.len(), 2);
-        assert!(messages[1].to_timestamp.is_some());
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].to_timestamp.is_some());
         assert!(store.edge_rows(None).unwrap().iter().any(|edge| {
             edge.parent == "parent-session"
                 && edge.child == "child-session"
@@ -1849,8 +1849,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(completion_rows(&dir).len(), 2);
-        assert_eq!(bus::fold(&completion_rows(&dir)).len(), 1);
+        assert_eq!(completion_rows(&dir).len(), 1);
         assert_eq!(delivered.len(), 1);
         assert_eq!(
             delivered[0].id,
@@ -1889,8 +1888,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(completion_rows(&dir).len(), 2);
-        assert_eq!(bus::fold(&completion_rows(&dir)).len(), 1);
+        assert_eq!(completion_rows(&dir).len(), 1);
         assert_eq!(delivered.len(), 1);
     }
 
@@ -2073,7 +2071,8 @@ mod tests {
         assert_eq!(route.session_id.as_deref(), Some(PARENT));
         let expected_source = format!("managed-app-server=/tmp/codex.sock;thread-start={PARENT}");
         assert_eq!(route.source_path.as_deref(), Some(expected_source.as_str()));
-        let messages = bus::parse_box(&dir.join("bus.ndjson"))
+        let messages = crate::cli::mail::all_messages(&dir)
+            .unwrap()
             .into_iter()
             .filter(|message| {
                 message.r#ref.as_deref()
