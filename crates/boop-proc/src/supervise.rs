@@ -608,6 +608,7 @@ fn supervise(
     let mut result_written = false;
     let mut head_watch = HeadWatch::new(&lane.cwd);
     let mut reconciled_ms = 0u64;
+    let supervisor_started_ms = boop_acp::channel::now_ms();
     events.record(
         "channel-open",
         TraceRecorder::session(channel),
@@ -678,7 +679,12 @@ fn supervise(
                 },
             }
             head_watch.poll(lane, boop_acp::channel::now_ms());
-            reconcile_outbound(lane, &mut reconciled_ms, boop_acp::channel::now_ms());
+            reconcile_outbound(
+                lane,
+                supervisor_started_ms,
+                &mut reconciled_ms,
+                boop_acp::channel::now_ms(),
+            );
             let this_turn_activity = channel
                 .last_activity_ms()
                 .filter(|written| *written >= turn_started);
@@ -907,7 +913,12 @@ fn supervise(
                     return Ok(ended);
                 }
                 head_watch.poll(lane, boop_acp::channel::now_ms());
-                reconcile_outbound(lane, &mut reconciled_ms, boop_acp::channel::now_ms());
+                reconcile_outbound(
+                    lane,
+                    supervisor_started_ms,
+                    &mut reconciled_ms,
+                    boop_acp::channel::now_ms(),
+                );
                 let arrived = pending(&lane.mail_dir, &lane.lane, &seen)?;
                 if arrived.is_empty() {
                     std::thread::sleep(POLL);
@@ -1273,10 +1284,14 @@ const RECONCILE_POLL: Duration = Duration::from_secs(5);
 /// hundreds of rows re-tries the newest, never the whole file.
 const RECONCILE_BATCH: usize = 20;
 
-/// Re-run the ladder for every row this lane sent that no rung has taken. A
-/// door that was down when the row was written does not swallow the row for
-/// the rest of the lane's life.
-fn reconcile_outbound(lane: &LaneRun, last_run_ms: &mut u64, now_ms: u64) {
+/// Re-run the ladder for every row this supervisor run sent that no rung has
+/// taken. A door that was down when the row was written does not swallow the
+/// row for the rest of the lane's life.
+///
+/// The cutoff is this run's own start: a previous run's rows belong to a
+/// conversation the recipient has already moved past, and replaying them puts
+/// stale text in front of whoever is at that route now.
+fn reconcile_outbound(lane: &LaneRun, started_ms: u64, last_run_ms: &mut u64, now_ms: u64) {
     if now_ms.saturating_sub(*last_run_ms) < RECONCILE_POLL.as_millis() as u64 {
         return;
     }
@@ -1298,6 +1313,9 @@ fn reconcile_outbound(lane: &LaneRun, last_run_ms: &mut u64, now_ms: u64) {
         .into_iter()
         .rev()
         .filter(|row| row.from == lane.lane && row.to != lane.lane)
+        .filter(|row| written_since(&row.from_timestamp, started_ms))
+        .filter(|row| within_reconcile_age(&row.from_timestamp, now_ms))
+        .filter(|row| registered_before(&routes, &row.to, &row.from_timestamp))
         .filter(|row| !landed(&store, &row.id))
         .take(RECONCILE_BATCH)
         .collect();
@@ -1315,6 +1333,49 @@ fn reconcile_outbound(lane: &LaneRun, last_run_ms: &mut u64, now_ms: u64) {
         }
     }
 }
+
+/// One ISO-8601 mail timestamp as epoch milliseconds. Text this cannot parse
+/// reads as `None`, and every cutoff treats that as out of bounds.
+fn iso_ms(stamp: &str) -> Option<u64> {
+    time::OffsetDateTime::parse(stamp, &time::format_description::well_known::Rfc3339)
+        .ok()
+        .map(|at| (at.unix_timestamp_nanos() / 1_000_000) as u64)
+}
+
+/// Whether this row was written by the running supervisor rather than by a
+/// previous run of the same lane.
+fn written_since(stamp: &str, started_ms: u64) -> bool {
+    iso_ms(stamp).is_some_and(|at| at >= started_ms)
+}
+
+/// Whether the row is young enough to still be worth putting in front of its
+/// recipient. Text a recipient would read as news, not as history.
+fn within_reconcile_age(stamp: &str, now_ms: u64) -> bool {
+    iso_ms(stamp).is_some_and(|at| now_ms.saturating_sub(at) <= RECONCILE_MAX_AGE_MS)
+}
+
+/// Whether the recipient's route was registered before this row was written.
+/// A route that registered afterward is a different session standing where the
+/// old one was, and the row was never addressed to it.
+fn registered_before(
+    routes: &std::collections::BTreeMap<String, bus::Route>,
+    to: &str,
+    stamp: &str,
+) -> bool {
+    let Some(route) = routes.get(to) else {
+        return false;
+    };
+    let Some(registered) = route.registered_at.as_deref().and_then(iso_ms) else {
+        // A route with no registration stamp predates the field; its age is
+        // bounded by the row's own age cutoff and nothing else.
+        return true;
+    };
+    iso_ms(stamp).is_some_and(|at| at >= registered)
+}
+
+/// The oldest row a reconcile pass will re-deliver: 10 minutes, about one
+/// bounded turn. Anything older is history the recipient has moved past.
+const RECONCILE_MAX_AGE_MS: u64 = 10 * 60 * 1000;
 
 /// Whether the ledger holds a transition past `appended` for this message.
 fn landed(store: &boop_store::ident::Store, message_id: &str) -> bool {
@@ -2268,6 +2329,75 @@ mod tests {
         assert!(rows[0].body.contains(&first), "body: {}", rows[0].body);
         assert!(descends_from(&work, &first, &reported));
         assert!(!descends_from(&work, &reported, &first));
+    }
+
+    // FAIL-PRE-FIX: the reconciler retried every unlanded row in the mailbox.
+    // Three rows a previous run had written to codex-0 were replayed together
+    // and typed into a live TUI pane, where a human watched keys appear.
+    #[test]
+    fn the_reconciler_skips_rows_a_previous_run_wrote() {
+        let started = 999_999_999_000u64;
+        assert_eq!(iso_ms("2001-09-09T01:46:39Z"), Some(started));
+        assert!(!written_since("2001-09-09T01:46:38Z", started));
+        assert!(written_since("2001-09-09T01:46:41Z", started));
+        assert!(!written_since("not a timestamp", started));
+    }
+
+    /// RECEIPT. A row older than one bounded turn is history, not news, and
+    /// the reconciler leaves it where it lies.
+    #[test]
+    fn the_reconciler_skips_rows_older_than_one_bounded_turn() {
+        let now = 999_999_999_000u64; // 2001-09-09T01:46:39Z
+        let fresh = "2001-09-09T01:41:40Z"; // 5 minutes back
+        let stale = "2001-09-09T01:26:39Z"; // 20 minutes back
+        assert!(within_reconcile_age(fresh, now));
+        assert!(!within_reconcile_age(stale, now));
+    }
+
+    /// RECEIPT. A route that registered after the row was written is a
+    /// different session standing where the old one was, so the row was never
+    /// addressed to it and is not replayed at it.
+    #[test]
+    fn the_reconciler_skips_a_route_that_registered_after_the_row() {
+        let mut routes = std::collections::BTreeMap::new();
+        routes.insert(
+            "codex-0".to_owned(),
+            bus::Route {
+                kind: "coordinator".into(),
+                harness: None,
+                tmux: None,
+                cwd: None,
+                model: None,
+                mode: None,
+                session_id: None,
+                source_path: None,
+                parent: None,
+                goal: None,
+                registered_at: Some("2001-09-09T01:46:40Z".to_owned()),
+                base_sha: None,
+                worktree_dir: None,
+                app_server_socket: None,
+            },
+        );
+        assert!(!registered_before(
+            &routes,
+            "codex-0",
+            "2001-09-09T01:41:40Z"
+        ));
+        assert!(registered_before(
+            &routes,
+            "codex-0",
+            "2001-09-09T01:51:40Z"
+        ));
+        assert!(
+            !registered_before(&routes, "nobody", "2001-09-09T01:51:40Z"),
+            "a row for a route the registry does not carry is never replayed"
+        );
+        routes.get_mut("codex-0").unwrap().registered_at = None;
+        assert!(
+            registered_before(&routes, "codex-0", "2001-09-09T01:41:40Z"),
+            "a route with no stamp is bounded by the row's age alone"
+        );
     }
 
     fn tempdir() -> PathBuf {

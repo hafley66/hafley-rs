@@ -21,9 +21,9 @@ use boop_store::ident::{DeliveryState, LiveRow, Store};
 /// |---|---|---|
 /// | `Door` | a live door session takes the text into the running turn | accepted-by-harness |
 /// | `Acpx` | the caller drives the recipient's own acpx queue | accepted-by-harness |
-/// | `TurnBoundary` | the recipient's supervisor or door holds it for the next turn | held-for-turn-boundary |
+/// | `TurnBoundary` | the recipient's supervisor holds it, or a door harness whose door answered nothing holds it for its next turn | held-for-turn-boundary |
 /// | `HookInbox` | the recipient's project carries an installed inbox hook | queued-in-hook-inbox |
-/// | `PanePaste` | the route names a live tmux pane and nothing above answered | pasted-into-pane |
+/// | `PanePaste` | the route owns no door at all and names a live pane | pasted-into-pane |
 /// | `Mailbox` | nothing answered; the row waits and the supervisor retries it | held-in-mailbox |
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Rung {
@@ -234,7 +234,7 @@ fn land(
         return Ok(Landing::new(Rung::TurnBoundary, "lane supervisor"));
     }
     let Some(id) = route.harness else {
-        return Ok(below_the_door(
+        return Ok(no_door_route(
             route,
             to,
             paster,
@@ -243,7 +243,7 @@ fn land(
     };
     let harness = registry.get(id);
     if harness.capabilities().mail == MailPolicy::Keystrokes {
-        return Ok(below_the_door(
+        return Ok(no_door_route(
             route,
             to,
             paster,
@@ -251,10 +251,9 @@ fn land(
         ));
     }
     let Some(live) = live_session(harness, store, route, id)? else {
-        return Ok(below_the_door(
+        return Ok(door_route_below_the_door(
             route,
             to,
-            paster,
             format!("no live {id} session for {to}"),
         ));
     };
@@ -263,28 +262,47 @@ fn land(
     Ok(match harness.door().deliver(&live, &message.body)? {
         Delivered::Injected => Landing::new(Rung::Door, "door"),
         Delivered::QueuedForTurnBoundary => Landing::new(Rung::TurnBoundary, "door queue"),
-        Delivered::Unreachable(why) => below_the_door(route, to, paster, why),
+        Delivered::Unreachable(why) => door_route_below_the_door(route, to, why),
     })
 }
 
-/// Rungs 3 through 5, in order, for a route no door took. `why` is the check
-/// that closed the door rung and rides on whichever rung answers.
-fn below_the_door(
+/// A route whose harness owns a door, when that door answered nothing. The
+/// hook inbox is the one drain the recipient itself runs; failing that the row
+/// is held for the recipient's next turn boundary. A harness with a door is
+/// never pasted into: a codex or claude TUI pane takes its mail through the
+/// door or not at all, and typing at it puts keys in front of a human.
+fn door_route_below_the_door(route: &Route, to: &str, why: impl Into<String>) -> Landing {
+    let why = why.into();
+    match hook_inbox(route, to) {
+        true => Landing::new(Rung::HookInbox, why),
+        false => Landing::new(Rung::TurnBoundary, why),
+    }
+}
+
+/// A route with no door to try at all: no harness, or a harness whose only
+/// transport was ever the pane. Rungs 3 through 5 in order.
+fn no_door_route(
     route: &Route,
     to: &str,
     paster: &dyn PanePaster,
     why: impl Into<String>,
 ) -> Landing {
     let why = why.into();
-    if let Some(cwd) = route.cwd.as_deref() {
-        if crate::inbox::installed_for(std::path::Path::new(cwd), to) {
-            return Landing::new(Rung::HookInbox, why);
-        }
+    if hook_inbox(route, to) {
+        return Landing::new(Rung::HookInbox, why);
     }
     match paste_into_pane(route, to, paster) {
         Some(pane) => Landing::new(Rung::PanePaste, format!("{why}; pane {pane}")),
         None => Landing::new(Rung::Mailbox, why),
     }
+}
+
+/// Whether the recipient's project carries an installed inbox hook.
+fn hook_inbox(route: &Route, to: &str) -> bool {
+    route
+        .cwd
+        .as_deref()
+        .is_some_and(|cwd| crate::inbox::installed_for(std::path::Path::new(cwd), to))
 }
 
 /// Rung 4. The route's own pane takes the text as a paste when nothing else

@@ -108,7 +108,7 @@ fn lane_patch_still_writes_a_lane_route() {
 /// nothing takes the row: the refusal is named on stdout, written to the
 /// `agent_delivery` ledger, and the pane is never typed at.
 #[test]
-fn hail_to_an_adopted_coordinator_with_no_live_session_falls_to_the_paste_rung() {
+fn hail_to_an_adopted_coordinator_with_no_live_session_is_held_for_its_turn_boundary() {
     let dir = mail_dir("deliver");
     let session = TestSession::new("deliver");
     let adopted = boop(
@@ -147,8 +147,8 @@ fn hail_to_an_adopted_coordinator_with_no_live_session_falls_to_the_paste_rung()
         "the landing line must name the door it tried: {stdout}"
     );
     assert!(
-        stdout.contains("pasted"),
-        "a dead door falls to the paste rung, it does not refuse: {stdout}"
+        stdout.contains("held") && stdout.contains("turn boundary"),
+        "a claude route whose door is down is held, never pasted at: {stdout}"
     );
 
     let ledger = Command::new(BOOP)
@@ -165,7 +165,7 @@ fn hail_to_an_adopted_coordinator_with_no_live_session_falls_to_the_paste_rung()
     let row = String::from_utf8_lossy(&ledger.stdout);
     assert!(row.contains("ping-coord"), "ledger: {row}");
     assert!(row.contains("claude"), "ledger: {row}");
-    assert!(row.contains("pasted-into-pane"), "ledger: {row}");
+    assert!(row.contains("held-for-turn-boundary"), "ledger: {row}");
 
     std::thread::sleep(std::time::Duration::from_millis(300));
     let captured = tmux(&["capture-pane", "-p", "-t", &session.0]);

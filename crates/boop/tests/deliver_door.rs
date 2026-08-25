@@ -474,3 +474,43 @@ fn every_landing_records_a_transition_past_appended() {
     }
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// RECEIPT (rung selection). A codex route whose door answers nothing is held
+/// for its next turn boundary. The paster is never reached: a codex or claude
+/// TUI pane takes mail through its door or not at all, and typing at one puts
+/// keys in front of whoever is sitting there.
+#[test]
+fn a_door_harness_with_no_live_session_is_held_and_never_pasted() {
+    let dir = temp_dir("codex-door-down");
+    let store = store(&dir);
+    let mut harness = echo(HarnessId::Codex, &DOOR, &dir);
+    harness.live.pane = None;
+    let registry = Registry::with(vec![Box::new(harness)]);
+    let mut coordinator = route(HarnessId::Codex, Some("%1"), None);
+    coordinator.kind = "coordinator".into();
+    let routes = routes("codex-0", coordinator);
+    let message = message("m-codex", "codex-0", "read this");
+    let pane = RecordingPane::default();
+
+    let landing = deliver_hail_with(&registry, &store, &routes, &message, &pane).unwrap();
+    assert_eq!(landing.rung, Rung::TurnBoundary);
+    assert!(
+        landing.detail.contains("no live codex session"),
+        "detail: {}",
+        landing.detail
+    );
+    assert!(
+        pane.pasted.lock().unwrap().is_empty(),
+        "a door harness was pasted into: {:?}",
+        pane.pasted.lock().unwrap()
+    );
+    assert_eq!(
+        store
+            .delivery_rows("m-codex")
+            .unwrap()
+            .last()
+            .map(|row| row.outcome.clone()),
+        Some("held-for-turn-boundary".to_owned())
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
