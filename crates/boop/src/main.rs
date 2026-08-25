@@ -816,6 +816,7 @@ enum HostCmd {
     Chat,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum LaneCmd {
     /// Every lane, with live or dead.
@@ -856,6 +857,18 @@ enum LaneCmd {
         /// Defaults to origin/main's head, resolved and printed at spawn.
         #[arg(long)]
         base_sha: Option<String>,
+        /// A worktree-relative path that must exist for the lane to count as
+        /// complete. Repeatable.
+        #[arg(long = "expect-path")]
+        expect_path: Vec<String>,
+        /// An exact commit subject line that must appear in a commit after
+        /// base_sha for the lane to count as complete. Repeatable.
+        #[arg(long = "expect-commit-subject")]
+        expect_commit_subject: Vec<String>,
+        /// A lower bound on the commits after base_sha for the lane to count as
+        /// complete.
+        #[arg(long = "expect-commits-at-least")]
+        expect_commits_at_least: Option<u32>,
         /// Defaults to the caller, then to the one registered coordinator.
         #[arg(long)]
         parent: Option<String>,

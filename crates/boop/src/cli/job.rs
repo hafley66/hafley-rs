@@ -808,6 +808,9 @@ pub(crate) struct LaneArgs {
     pub(crate) wait: bool,
     pub(crate) wait_timeout: u64,
     pub(crate) reclaim: bool,
+    pub(crate) expect_path: Vec<String>,
+    pub(crate) expect_commit_subject: Vec<String>,
+    pub(crate) expect_commits_at_least: Option<u32>,
 }
 
 /// Falls back to a `*coordinator*` name match only when no route declares
@@ -847,6 +850,9 @@ pub(crate) fn start_plan(repo: &Path, no_start: bool) -> Result<String> {
 /// Register and spawn a lane. No match on harness id here; the adapter's own
 /// `spawn`/`preview_command` decides how `prompt` becomes a real invocation.
 pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
+    // Resolved before any `args` field is moved, so the expectation is ready
+    // for both the dry-run line and the post-spawn write.
+    let expect = lane_expect(&args);
     let config_path = config::default_path()?;
     let config = config::load(&config_path)?;
     let model_given = args.model.is_some();
@@ -1034,6 +1040,12 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         if let Some(mood) = &args.mood {
             println!("mood: {mood}");
         }
+        if let Some(expect) = expect.as_ref() {
+            println!(
+                "expect: {}",
+                serde_json::to_string(expect).unwrap_or_default()
+            );
+        }
         if args.wait {
             println!(
                 "wait: for {} result, timeout {}s",
@@ -1105,6 +1117,9 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             bin: bin.clone(),
         },
     )?;
+    if let Some(expect) = expect.as_ref() {
+        boop::trail::write_expect(&lane_id, expect)?;
+    }
     info!(
         lane = lane_id,
         harness = harness_id.as_str(),
@@ -1125,6 +1140,22 @@ pub(crate) fn completion_recipient(parent: Option<&str>, wait: bool, lane: &str)
     parent
         .map(str::to_owned)
         .or_else(|| wait.then(|| format!("__wait__{lane}")))
+}
+
+/// The typed completion expectations a `lane create` call named, `None` when no
+/// expectation flag was given.
+fn lane_expect(args: &LaneArgs) -> Option<boop::trail::Expect> {
+    if args.expect_path.is_empty()
+        && args.expect_commit_subject.is_empty()
+        && args.expect_commits_at_least.is_none()
+    {
+        return None;
+    }
+    Some(boop::trail::Expect {
+        paths: args.expect_path.clone(),
+        commit_subjects: args.expect_commit_subject.clone(),
+        commits_at_least: args.expect_commits_at_least,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1299,6 +1330,9 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             mood,
             reclaim,
             on_parent_death,
+            expect_path,
+            expect_commit_subject,
+            expect_commits_at_least,
         } => {
             // Recorded before the spawn: the route the dispatch writes replaces
             // whatever is under this lane's key.
@@ -1335,6 +1369,9 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
                     wait,
                     wait_timeout,
                     reclaim,
+                    expect_path,
+                    expect_commit_subject,
+                    expect_commits_at_least,
                 },
             )
         }
@@ -1555,6 +1592,9 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str) -> Result<()
         anyhow::bail!("no registry route for lane `{lane}`")
     };
     let live = tmux::mux().live_sessions(None);
+    let expect = boop::trail::read_expect(lane)
+        .and_then(|expect| serde_json::to_value(expect).ok())
+        .unwrap_or(serde_json::Value::Null);
     println!(
         "{}",
         serde_json::json!({
@@ -1566,6 +1606,7 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str) -> Result<()
             "model": route.model,
             "mode": route.mode,
             "session_id": route.session_id,
+            "expect": expect,
         })
     );
     Ok(())
