@@ -80,6 +80,10 @@ boop-start:
     cache="${BOOP_START_CACHE:-$HOME/.cache/boop}"
     shared="${BOOP_CARGO_TARGET_DIR:-$cache/cargo-target}"
     export CARGO_TARGET_DIR="$shared"
+    # Spotlight indexes a cargo target dir as cargo writes it, and mds_stores
+    # then competes with rustc for the whole build. This marker turns it off
+    # for that subtree; it cannot live in the repo because target/ is ignored.
+    mkdir -p "$shared" && touch "$shared/.metadata_never_index"
     cargo fetch --quiet
     cargo build -p boop --tests --quiet
     echo "boop-start: cargo fetch and boop tests into $shared, $((SECONDS - started))s"
