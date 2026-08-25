@@ -11,6 +11,9 @@ license.workspace = true
 # verbs with no transcript reader in the graph.
 default = ["agent-read"]
 agent-read = ["boop-store/agent-read", "boop-proc/agent-read"]
+# The DL6 refinement runtime (`concatmap`, `host`): off by default per the
+# 2026-08-25 user call, no other binary to move it to yet.
+dl6 = []
 
 [dependencies]
 # Process control: lane spawn, supervision, the mailbox, the coroutine host.
@@ -73,3 +76,14 @@ required-features = ["agent-read"]
 [[example]]
 name = "typed_rows"
 required-features = ["agent-read"]
+
+# DL6 host/concatmap end-to-end coverage; skipped unless the runtime is built.
+[[test]]
+name = "host_chat"
+path = "tests/host_chat.rs"
+required-features = ["dl6"]
+
+[[test]]
+name = "concatmap_e2e"
+path = "tests/concatmap_e2e.rs"
+required-features = ["dl6"]

@@ -10,7 +10,9 @@ use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 
 use boop::registry::Registry;
 use boop::supervise::ParentDeathPolicy;
-use boop::{bus, config, identity, mailwait};
+use boop::{bus, mailwait};
+#[cfg(feature = "dl6")]
+use boop::{config, identity};
 
 mod cli;
 
@@ -19,16 +21,20 @@ use cli::db::{
     run_chat_query, run_db, run_follow, run_harnesses, run_passthrough, run_public_agent_command,
     run_query, run_sessions, run_sync_all, run_tail, sync_before_read, ChatQueryOptions,
 };
-use cli::debug::{run_config, run_debug, run_host, run_lane_debug};
+use cli::debug::{run_config, run_debug, run_lane_debug};
+#[cfg(feature = "dl6")]
+use cli::debug::run_host;
 use cli::job::{
-    run_beep, run_dispatch, run_lane, run_measure, run_resolve, run_sweep, run_wait, DispatchArgs,
-    LaneArgs,
+    run_beep, run_dispatch, run_lane, run_lane_wait, run_measure, run_resolve, run_sweep, run_wait,
+    DispatchArgs, LaneArgs,
 };
 use cli::mail::{
     run_hail, run_inbox, run_list, run_push, run_send, run_tell_children, run_tell_parent, Outbound,
 };
 use cli::me::{run_adopt, run_me, run_me_favorite, run_me_mood, run_prune, run_whoami};
-use cli::{doctrine, line, mail_dir, now_ms, CONCATMAP_EXAMPLES};
+use cli::{doctrine, line, mail_dir, now_ms};
+#[cfg(feature = "dl6")]
+use cli::CONCATMAP_EXAMPLES;
 
 #[derive(Parser)]
 #[command(
@@ -55,6 +61,8 @@ struct Cli {
 #[derive(Subcommand)]
 enum SubCmd {
     /// Print shell functions that route interactive harnesses through Boop.
+    /// Folded (one-pane-register-path): `boop tui <harness>` is the spelling.
+    #[command(hide = true)]
     ShellInit {
         #[arg(value_enum)]
         shell: ShellKind,
@@ -77,6 +85,8 @@ enum SubCmd {
         args: Vec<String>,
     },
     /// Launch a native Codex TUI attached to a Boop-owned managed app-server.
+    /// Folded (one-pane-register-path): `boop tui codex` is the spelling.
+    #[command(hide = true)]
     Codex {
         /// Registry name. Defaults to the current tmux pane's Codex identity.
         #[arg(long)]
@@ -171,7 +181,9 @@ enum SubCmd {
     /// a model pass and write the rewrite per turn. For a resident DL6
     /// coroutine, use `boop host chat`.
     #[command(after_help = CONCATMAP_EXAMPLES)]
-    /// Folded (audit 2026-08-25): a DL6 refinement runtime, not the agent bus.
+    /// Folded (comment-out-dl6-verbs): the DL6 runtime, off by default;
+    /// `cargo build --features dl6` puts it back.
+    #[cfg(feature = "dl6")]
     #[command(hide = true)]
     Concatmap {
         /// Prompt template file; substitutes {{mode}}, {{ai_text}} (the
@@ -217,7 +229,8 @@ enum SubCmd {
         me: bool,
     },
     /// Typed stdin/stdout host boundary for compiled DL6 programs.
-    /// Folded (audit 2026-08-25): a DL6 program calls this; nobody types it.
+    /// Folded (comment-out-dl6-verbs): DL6, off by default.
+    #[cfg(feature = "dl6")]
     #[command(hide = true)]
     Host {
         #[command(subcommand)]
@@ -257,11 +270,11 @@ enum SubCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Block until mail lands: the reply to <id>, or the next unread row
-    /// addressed to you with --me. Every exit prints the next command to run.
+    /// Block until mail lands: the reply to <id>, a lane's result row, or
+    /// the next unread row addressed to you with --me.
     Wait {
-        /// The id `boop beep hail` printed. Omit it and pass --me instead.
-        #[arg(value_name = "MESSAGE-ID", required_unless_present = "me")]
+        /// A message id, or a registered lane's name. Omit and pass --me.
+        #[arg(value_name = "ID-OR-LANE", required_unless_present = "me")]
         id: Option<String>,
         /// Wait for the next unread mail addressed to the caller.
         #[arg(long, conflicts_with = "id")]
@@ -303,7 +316,10 @@ enum SubCmd {
         cmd: InboxCmd,
     },
     /// Register this Codex pane, or act on the caller's own conversation.
+    /// Folded (one-pane-register-path): `boop beep agent register` registers;
+    /// `boop me mood` / `boop me favorite` still run under this name.
     #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
+    #[command(hide = true)]
     Me {
         /// Registry name; defaults to codex-<pane id>.
         #[arg(long)]
@@ -930,6 +946,7 @@ fn main() -> Result<()> {
                     ),
                 },
             },
+            #[cfg(feature = "dl6")]
             SubCmd::Concatmap {
                 template,
                 mode,
@@ -944,8 +961,7 @@ fn main() -> Result<()> {
                 session,
                 me,
             } => {
-                // Common model-selection subset: explicit model wins, preset
-                // resolves through config; flash4 is the standing default.
+                // Explicit model wins, preset resolves through config.
                 let config_path = config::default_path()?;
                 let model = match (model, preset) {
                     (Some(model), _) => model,
@@ -994,6 +1010,7 @@ fn main() -> Result<()> {
                     session,
                 })
             }
+            #[cfg(feature = "dl6")]
             SubCmd::Host { cmd } => run_host(cmd),
             SubCmd::Push {
                 to,
@@ -1017,13 +1034,18 @@ fn main() -> Result<()> {
                 as_name,
                 wait_timeout,
                 mail_dir,
-            } => run_wait(
-                id.as_deref(),
-                me,
-                as_name.as_deref(),
-                wait_timeout,
-                mail_dir.as_deref(),
-            ),
+            } => match id.as_deref() {
+                Some(id) if wait_target_is_a_lane(mail_dir.as_deref(), id) => {
+                    run_lane_wait(mail_dir.as_deref(), id, wait_timeout)
+                }
+                _ => run_wait(
+                    id.as_deref(),
+                    me,
+                    as_name.as_deref(),
+                    wait_timeout,
+                    mail_dir.as_deref(),
+                ),
+            },
             SubCmd::TellParent {
                 kind,
                 body,
@@ -1095,6 +1117,18 @@ fn sync_before_local_command(registry: &Registry) -> Result<()> {
     sync_before_read(registry)
 }
 
+/// Whether `boop wait <id>` names a registered lane, so it dispatches to
+/// `run_lane_wait`. An unreadable registry falls through to the mail wait.
+fn wait_target_is_a_lane(mail_dir_arg: Option<&std::path::Path>, id: &str) -> bool {
+    let Ok(dir) = mail_dir(mail_dir_arg) else {
+        return false;
+    };
+    bus::read_routes(&dir)
+        .ok()
+        .and_then(|routes| routes.get(id).map(|route| route.kind == "lane"))
+        .unwrap_or(false)
+}
+
 /// The name of the escape hatch that suppresses the startup transcript sync.
 const NO_SYNC_ENV: &str = "BOOP_NO_SYNC";
 
@@ -1117,6 +1151,10 @@ fn startup_sync_wanted(command: &SubCmd, suppressed: bool) -> bool {
 /// Verbs that read `agent_*` rows. A registry, mailbox, tmux or live-process
 /// verb stays off: a cold cursor re-parses every transcript root from offset 0.
 fn command_needs_startup_sync(command: &SubCmd) -> bool {
+    #[cfg(feature = "dl6")]
+    if matches!(command, SubCmd::Concatmap { .. }) {
+        return true;
+    }
     matches!(
         command,
         SubCmd::Db { cmd: None, .. }
@@ -1187,7 +1225,6 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
             | SubCmd::Events { .. }
             | SubCmd::Chat { .. }
             | SubCmd::Agent { .. }
-            | SubCmd::Concatmap { .. }
             | SubCmd::Me { .. }
             | SubCmd::Debug { .. }
             | SubCmd::Harnesses
@@ -1388,7 +1425,8 @@ enum LaneCmd {
         bin: Option<String>,
         /// Block until the lane's on-exit result row lands, then exit with its
         /// rc. Without a parent, the waiter owns a private result recipient.
-        #[arg(long)]
+        /// Folded (one-wait-verb): `boop wait <lane>` is the spelling now.
+        #[arg(long, hide = true)]
         wait: bool,
         /// Seconds `--wait` blocks before exiting 124; 0 waits forever.
         #[arg(long, default_value_t = 3600)]
@@ -1513,6 +1551,8 @@ enum LaneCmd {
     },
     /// Wait for the lane's result row, then exit with the rc it names. `--timeout`
     /// seconds exits 124; a route that dies with no row exits 3.
+    /// Folded (one-wait-verb): `boop wait <lane>` is the spelling now.
+    #[command(hide = true)]
     Wait {
         lane: String,
         /// Seconds to wait before exiting 124; 0 waits until the lane reports
@@ -1760,6 +1800,7 @@ enum DbCmd {
     /// to accept the two forms.
     #[cfg(feature = "agent-read")]
     #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
+    #[command(hide = true)]
     Usage {
         #[command(flatten)]
         args: UsageArgs,
@@ -1771,12 +1812,14 @@ enum DbCmd {
     },
     /// The rate table cost is computed from.
     #[cfg(feature = "agent-read")]
+    #[command(hide = true)]
     Price {
         #[command(subcommand)]
         cmd: PriceCmd,
     },
     /// User-pinned markdown: save a message you want to keep, read it back.
     #[cfg(feature = "agent-read")]
+    #[command(hide = true)]
     Favorite {
         #[command(subcommand)]
         cmd: FavoriteCmd,
@@ -1788,6 +1831,7 @@ enum DbCmd {
     },
     /// How far ingest has read each transcript.
     #[cfg(feature = "agent-read")]
+    #[command(hide = true)]
     SyncCursor {
         #[command(subcommand)]
         cmd: CursorCmd,
@@ -2135,12 +2179,15 @@ mod tests {
     #[test]
     fn every_help_example_parses_through_clap() {
         let doctrine = doctrine();
+        #[allow(unused_mut)]
         let mut examples = help_examples(&doctrine);
+        #[cfg(feature = "dl6")]
         examples.extend(help_examples(CONCATMAP_EXAMPLES));
         // A regression in the extractor would pass this test by finding
-        // nothing, so the count is asserted before the parses are.
+        // nothing, so the count is asserted before the parses are. The floor
+        // covers doctrine alone; `--features dl6` adds CONCATMAP_EXAMPLES on top.
         assert!(
-            examples.len() >= 18,
+            examples.len() >= 15,
             "the extractor found almost nothing: {examples:#?}"
         );
         let mut rejected = Vec::new();
@@ -2355,6 +2402,47 @@ mod tests {
             blank.is_empty(),
             "db subcommands with empty about: {blank:?}"
         );
+    }
+
+    /// RECEIPT (db-four-verbs): `usage`, `price`, `favorite`, `sync-cursor`
+    /// hidden; `sql`, `chat`, `status`, `sync` are the four the reader sees.
+    #[test]
+    fn db_help_lists_exactly_chat_status_sync_besides_the_sql_passthrough() {
+        let db = DbCmd::augment_subcommands(clap::Command::new("db"));
+        let visible: std::collections::BTreeSet<String> = db
+            .get_subcommands()
+            .filter(|sub| !sub.is_hide_set())
+            .map(|sub| sub.get_name().to_owned())
+            .collect();
+        assert_eq!(
+            visible,
+            ["chat", "status", "sync"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            "boop db --help subcommands: {visible:?}"
+        );
+    }
+
+    /// RECEIPT (hide-lane-run): the supervisor's own entry point, spawned by
+    /// `lane create`; no human types it.
+    #[test]
+    fn beep_lane_run_is_hidden_a_human_never_calls_it() {
+        let lane = LaneCmd::augment_subcommands(clap::Command::new("lane"));
+        let run = lane.find_subcommand("run").expect("run subcommand exists");
+        assert!(run.is_hide_set(), "beep lane run must stay hidden");
+    }
+
+    /// RECEIPT (one-wait-verb): `boop wait <id>` dispatches to `run_lane_wait`
+    /// only when `<id>` names a registered lane route, never a message id.
+    #[test]
+    fn wait_dispatches_to_lane_wait_only_for_a_registered_lane_route() {
+        let dir = crate::cli::testkit::temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        crate::cli::write_route(&dir, "worker", crate::cli::testkit::route_with(None)).unwrap();
+        assert!(wait_target_is_a_lane(Some(&dir), "worker"));
+        assert!(!wait_target_is_a_lane(Some(&dir), "m-does-not-exist"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

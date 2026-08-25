@@ -16,6 +16,7 @@ use boop::{bus, ident};
 
 use crate::OutputFormat;
 
+#[cfg(feature = "dl6")]
 pub(crate) const CONCATMAP_EXAMPLES: &str = "\
 TEMPLATE: a markdown file whose rendered form IS the prompt. Keys:
   {{mode}}      the --mode word (labels the experiment; also how the loop
@@ -100,6 +101,14 @@ WARMUP: after the worktree exists and before the agent starts, lane create runs
   hook needs what it installs, and a lane that cannot commit reads the abort as
   success. `--no-start` opts out.
 
+REGISTER: one path per kind of caller. A pane registers itself by running a
+  harness TUI through Boop; a pane-less agent (a coordinator with no tmux
+  session, or a native subagent) registers by name:
+    boop tui <harness> [--cwd <dir>] [--name <id>]      interactive pane
+    boop beep agent register <name> [--parent <id>]     pane-less route
+  Folded aliases, hidden and unchanged: `boop codex`, `boop shell-init`,
+  `boop me`.
+
 SPAWN: every lane spawn goes through lane create; bare tmux spawns leave no
 edge and stay invisible to tracking:
     boop beep lane create --branch feature/<name> --brief <abs-path> \\
@@ -130,8 +139,10 @@ COMPLETION: the supervisor writes ONE row `lane <id> done rc=<n>` into the
   hail through its harness door as its next prompt; no wait needs arming.
   `--wait` blocks on that row and exits with the lane's rc, so spawn-and-join is
   one command; `--wait-timeout <s>` (default 3600, 0 waits forever) exits 124.
-  The same wait after the fact spells its bound `--timeout`, not `--wait-timeout`:
-    boop beep lane wait <lane> --timeout <s>
+  The same wait after the fact is the one wait verb, given the lane's name:
+    boop wait <lane> [--wait-timeout <s>]
+  Folded aliases, hidden and unchanged: `boop beep lane create --wait`,
+  `boop beep lane wait <lane>`.
   A wait whose lane route goes dead with no row exits 3 instead of blocking.
 
 DEBUG: what just went wrong, without opening a log:
@@ -200,6 +211,7 @@ WAIT: every agent can background a shell, so the universal push is a block.
   (claude registry status, codex thread/status/changed, opencode session.idle),
   printing `<route> turn ended (<status>)`; a reply mail ends it sooner.
     boop wait <message-id>          the reply to what you just sent
+    boop wait <lane>                a registered lane's result row, its rc
     boop wait --me [--as <name>]    the next unread mail addressed to you
   Default timeout 540s (under the 10-minute cap a background shell gives you),
   `--wait-timeout <s>` overrides it, and a timeout exits 124 printing the

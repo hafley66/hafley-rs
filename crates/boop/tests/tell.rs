@@ -324,8 +324,16 @@ fn boop_help_doctrine_names_the_one_send_and_the_wait() {
     assert!(text.contains("boop beep parent"), "stdout: {text}");
     assert!(text.contains("boop beep children"), "stdout: {text}");
     assert!(text.contains("boop wait --me"), "stdout: {text}");
+    assert!(text.contains("boop wait <lane>"), "stdout: {text}");
+    assert!(text.contains("boop tui <harness>"), "stdout: {text}");
+    assert!(text.contains("boop beep agent register"), "stdout: {text}");
     // The folded spellings still run; the doctrine no longer teaches them.
-    for folded in ["boop push <route>", "boop tell-parent [", "boop tell-children -"] {
+    for folded in [
+        "boop push <route>",
+        "boop tell-parent [",
+        "boop tell-children -",
+        "boop beep lane wait <lane> --timeout",
+    ] {
         assert!(!text.contains(folded), "doctrine still teaches {folded}:\n{text}");
     }
 }
