@@ -2,11 +2,13 @@
 created: 2026-08-24
 updated: 2026-08-25
 type: bug
-status: open
+status: fixed
 priority: high
 epic: boop-one-path
 labels: [domain-boop]
 size: S
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 # kimi transcript projection drops tool and assistant bodies

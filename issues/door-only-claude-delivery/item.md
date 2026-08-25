@@ -2,11 +2,13 @@
 created: 2026-08-24
 updated: 2026-08-25
 type: improvement
-status: open
+status: done
 priority: high
 epic: boop-one-path
 labels: [domain-boop]
 size: M
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 # Claude delivery through the door only; hook inbox is a rung, not a verb group

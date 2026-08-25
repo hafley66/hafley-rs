@@ -2,10 +2,12 @@
 created: 2026-08-25
 updated: 2026-08-25
 type: bug
-status: open
+status: fixed
 priority: high
 epic: boop-one-path
 labels: [domain-boop]
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 # Something removed .boop-worktrees wholesale under live lanes
