@@ -20,7 +20,13 @@ Requirements: `lane delete` removes exactly the route`s own `worktree_dir` and n
 
 ## Acceptance Criteria
 
-- [ ] culprit named with the command text
-- [ ] bulk delete never removes a path that is not a listed route`s worktree_dir
-- [ ] sibling-preservation test
-- [ ] `--dry-run` on bulk delete lists paths
+- [x] culprit named with the command text
+- [x] bulk delete never removes a path that is not a listed route`s worktree_dir
+- [x] sibling-preservation test
+- [x] `--dry-run` on bulk delete lists paths
+
+## Agent Runs
+
+### 2026-08-25T13:15:46Z · @feat-epic-wave-b
+
+910e778 CULPRIT: agent_cmd session 4799 (a sprefa perf lane), 2026-08-25 04:19:48 UTC / 00:19:48 local, command text: rm -rf ~/projects/hafley-rs/.boop-worktrees; ln -sfn /Users/chrishafley/projects/hafley-rs/.worktrees/origin-main /Users/chrishafley/projects/sprefa/.boop-worktrees/perf/hafley-rs; readlink ... . The same session ran ln -s /Users/chrishafley/projects/hafley-rs .boop-worktrees/perf/hafley-rs 15 s earlier, which resolved through an already-existing symlink and left the self-link the issue reports; the rm was its cleanup. boop is exonerated: lane delete <lane> and lane prune were both registry-only and touched no path, and lane delete --state dead routed to the registry-only run_prune. FIX: bulk delete now removes each dead route's own worktree_dir and only that. worktree::deletable_worktree canonicalizes the path and answers Some only for a linked git worktree whose own top level is itself, so the .boop-worktrees parent, the main checkout, and a plain directory are never candidates; removal is one git worktree remove --force from worktree_owner's repo. --dry-run prints every route and path and removes nothing. Tests: only_a_lanes_own_worktree_is_a_delete_candidate and a_bulk_delete_of_two_siblings_leaves_the_third_and_the_parent_alone (boop-harness 18 worktree tests pass). Live receipt in the scratch store: --dry-run listed 2 lanes / 2 worktrees and removed nothing, the real run removed exactly chore/door-claude and chore/kimi-terminal-receipt, and .boop-worktrees, .boop-worktrees/chore, feature/cx-a4 and feature/cx-b4 all survived.

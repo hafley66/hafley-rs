@@ -200,8 +200,8 @@ pub(crate) fn run_host(cmd: HostCmd) -> Result<()> {
     }
 }
 
-/// An opencode route handed to `codex exec -m` is a broken invocation, so a
-/// default preset whose model routes elsewhere goes unused.
+/// An opencode model spelling handed to the codex adapter is a broken lane, so
+/// a default preset whose model routes elsewhere goes unused.
 pub(crate) fn default_preset_for_harness(
     config: &config::Config,
     config_path: &Path,
@@ -309,7 +309,7 @@ mod tests {
     use super::*;
 
     /// Sabotage receipt: dropping the harness-fit guard makes this assert the
-    /// codex arm, spelling `codex exec -m openrouter/...`, which cannot run.
+    /// codex arm, handing codex an `openrouter/...` model it cannot run.
     #[test]
     fn the_default_preset_reaches_only_its_own_harness() {
         let dir = std::env::temp_dir().join("boop-default-preset-fit");

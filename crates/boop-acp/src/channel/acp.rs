@@ -10,11 +10,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_client_protocol::schema::v1::{
-    CancelNotification, InitializeRequest, LoadSessionRequest, NewSessionRequest,
-    PermissionOptionKind, PromptRequest, RequestPermissionOutcome, RequestPermissionRequest,
+    CancelNotification, ClientCapabilities, CreateTerminalRequest, CreateTerminalResponse,
+    InitializeRequest, KillTerminalRequest, KillTerminalResponse, LoadSessionRequest,
+    NewSessionRequest, PermissionOptionKind, PromptRequest, ReleaseTerminalRequest,
+    ReleaseTerminalResponse, RequestPermissionOutcome, RequestPermissionRequest,
     RequestPermissionResponse, SelectedPermissionOutcome, SessionConfigKind, SessionConfigOption,
     SessionConfigOptionValue, SessionConfigSelectOptions, SessionId, SessionNotification,
-    SessionUpdate, SetSessionConfigOptionRequest, StopReason,
+    SessionUpdate, SetSessionConfigOptionRequest, StopReason, TerminalOutputRequest,
+    TerminalOutputResponse, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
 };
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Agent, ConnectionTo, LineDirection};
@@ -22,6 +25,7 @@ use anyhow::{Context, Result};
 use boop_store::session::ModelSpec;
 use tracing::{debug, info, warn};
 
+use crate::channel::terminal::{await_exit, Terminals};
 use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
 
 /// The config option every ACP agent names its model with.
@@ -319,6 +323,7 @@ async fn connect(
 ) -> Result<(), agent_client_protocol::Error> {
     let clock = Arc::clone(&plan.clock);
     let mut commands = commands;
+    let terminals = Arc::new(Terminals::new(plan.cwd.clone()));
     agent_client_protocol::Client
         .builder()
         .name("boop")
@@ -357,6 +362,73 @@ async fn connect(
             },
             agent_client_protocol::on_receive_request!(),
         )
+        .on_receive_request(
+            {
+                let terminals = Arc::clone(&terminals);
+                async move |request: CreateTerminalRequest, responder, _connection| {
+                    match terminals.create(&request) {
+                        Ok(id) => responder.respond(CreateTerminalResponse::new(id)),
+                        Err(error) => responder.respond_with_error(terminal_error(error)),
+                    }
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let terminals = Arc::clone(&terminals);
+                async move |request: TerminalOutputRequest, responder, _connection| {
+                    match terminals.output(&request.terminal_id) {
+                        Ok((output, truncated, status)) => responder.respond(
+                            TerminalOutputResponse::new(output, truncated).exit_status(status),
+                        ),
+                        Err(error) => responder.respond_with_error(terminal_error(error)),
+                    }
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let terminals = Arc::clone(&terminals);
+                async move |request: WaitForTerminalExitRequest, responder, connection| {
+                    // The wait outlives the dispatch loop, so it rides its own
+                    // task and the connection keeps reading frames meanwhile.
+                    match terminals.exit_watch(&request.terminal_id) {
+                        Ok(mut exit) => connection.spawn(async move {
+                            let status = await_exit(&mut exit).await;
+                            responder.respond(WaitForTerminalExitResponse::new(status))
+                        }),
+                        Err(error) => responder.respond_with_error(terminal_error(error)),
+                    }
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let terminals = Arc::clone(&terminals);
+                async move |request: KillTerminalRequest, responder, _connection| {
+                    match terminals.kill(&request.terminal_id) {
+                        Ok(()) => responder.respond(KillTerminalResponse::new()),
+                        Err(error) => responder.respond_with_error(terminal_error(error)),
+                    }
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let terminals = Arc::clone(&terminals);
+                async move |request: ReleaseTerminalRequest, responder, _connection| {
+                    match terminals.release(&request.terminal_id) {
+                        Ok(()) => responder.respond(ReleaseTerminalResponse::new()),
+                        Err(error) => responder.respond_with_error(terminal_error(error)),
+                    }
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
         .connect_with(agent, async move |connection: ConnectionTo<Agent>| {
             let session = handshake(&connection, &plan).await?;
             let _ = notes.send(Note::Opened(session.0.to_string()));
@@ -386,6 +458,20 @@ async fn connect(
         .await
 }
 
+/// The JSON-RPC error a failed terminal call answers with. The default
+/// internal error hides its cause in `data`, which no agent prints.
+fn terminal_error(error: anyhow::Error) -> agent_client_protocol::Error {
+    let mut frame = agent_client_protocol::Error::internal_error();
+    frame.message = error.to_string();
+    frame
+}
+
+/// What boop serves back. `terminal` is the whole of it: kimi runs every
+/// shell command through the client, and `fs/*` is left to the agent's own.
+fn client_capabilities() -> ClientCapabilities {
+    ClientCapabilities::new().terminal(true)
+}
+
 /// `initialize`, session, then model. Under ACP opencode ignores
 /// `opencode.json` and `OPENCODE_MODEL` and hangs on its dead default, so the
 /// config-option call is the only model lever.
@@ -394,7 +480,9 @@ async fn handshake(
     plan: &SessionPlan,
 ) -> Result<agent_client_protocol::schema::v1::SessionId, agent_client_protocol::Error> {
     let initialized = connection
-        .send_request(InitializeRequest::new(ProtocolVersion::V1))
+        .send_request(
+            InitializeRequest::new(ProtocolVersion::V1).client_capabilities(client_capabilities()),
+        )
         .block_task()
         .await?;
     info!(
@@ -1103,5 +1191,201 @@ mod tests {
             Err(error) => error,
         };
         assert!(error.to_string().contains("needs a command"), "{error}");
+    }
+}
+
+/// The wire leg of the terminal methods, against a fake agent that speaks
+/// just enough ACP to drive all five and write down what it saw.
+#[cfg(test)]
+mod terminal_wire_tests {
+    use super::*;
+    use std::sync::OnceLock;
+
+    const FAKE_AGENT: &str = r#"
+import json, sys, time
+
+report_path = sys.argv[1]
+report = {}
+next_id = [100]
+
+def send(message):
+    sys.stdout.write(json.dumps(message) + "\n")
+    sys.stdout.flush()
+
+def call(method, params):
+    next_id[0] += 1
+    ident = next_id[0]
+    send({"jsonrpc": "2.0", "id": ident, "method": method, "params": params})
+    while True:
+        line = sys.stdin.readline()
+        if not line:
+            raise SystemExit(0)
+        frame = json.loads(line)
+        if frame.get("id") == ident and ("result" in frame or "error" in frame):
+            if "error" in frame:
+                return {"error": frame["error"].get("message", "")}
+            return frame["result"]
+
+def run_terminals(session):
+    first = call("terminal/create", {
+        "sessionId": session,
+        "command": "sh",
+        "args": ["-c", "printf hello; printf oops 1>&2; exit 5"],
+        "env": [{"name": "BOOP_FAKE_TERMINAL", "value": "on"}],
+        "outputByteLimit": 65536,
+    })
+    report["create"] = first
+    terminal = first.get("terminalId")
+    report["wait_for_exit"] = call("terminal/wait_for_exit", {"sessionId": session, "terminalId": terminal})
+    report["output"] = call("terminal/output", {"sessionId": session, "terminalId": terminal})
+    report["release"] = call("terminal/release", {"sessionId": session, "terminalId": terminal})
+    report["output_after_release"] = call("terminal/output", {"sessionId": session, "terminalId": terminal})
+
+    second = call("terminal/create", {
+        "sessionId": session,
+        "command": "sh",
+        "args": ["-c", "printf running; sleep 30"],
+        "outputByteLimit": 65536,
+    })
+    standing = second.get("terminalId")
+    for _ in range(200):
+        seen = call("terminal/output", {"sessionId": session, "terminalId": standing})
+        if "running" in seen.get("output", ""):
+            break
+        time.sleep(0.01)
+    report["kill"] = call("terminal/kill", {"sessionId": session, "terminalId": standing})
+    report["kill_exit"] = call("terminal/wait_for_exit", {"sessionId": session, "terminalId": standing})
+    report["kill_output"] = call("terminal/output", {"sessionId": session, "terminalId": standing})
+    call("terminal/release", {"sessionId": session, "terminalId": standing})
+    report["missing_terminal"] = call("terminal/kill", {"sessionId": session, "terminalId": "term_404"})
+
+session_id = "ses_fake"
+while True:
+    line = sys.stdin.readline()
+    if not line:
+        break
+    frame = json.loads(line)
+    method = frame.get("method")
+    if method == "initialize":
+        report["client_capabilities"] = frame["params"].get("clientCapabilities", {})
+        send({"jsonrpc": "2.0", "id": frame["id"], "result": {
+            "protocolVersion": 1,
+            "agentCapabilities": {},
+            "authMethods": [],
+        }})
+    elif method == "session/new":
+        send({"jsonrpc": "2.0", "id": frame["id"], "result": {"sessionId": session_id}})
+    elif method == "session/prompt":
+        run_terminals(frame["params"]["sessionId"])
+        with open(report_path, "w") as handle:
+            json.dump(report, handle)
+        send({"jsonrpc": "2.0", "id": frame["id"], "result": {"stopReason": "end_turn"}})
+    elif "id" in frame:
+        send({"jsonrpc": "2.0", "id": frame["id"], "result": {}})
+"#;
+
+    /// One turn against the fake agent, shared by every assertion below.
+    fn report() -> &'static serde_json::Value {
+        static REPORT: OnceLock<serde_json::Value> = OnceLock::new();
+        REPORT.get_or_init(|| {
+            let root =
+                std::env::temp_dir().join(format!("boop-acp-terminal-{}", std::process::id()));
+            std::fs::create_dir_all(&root).unwrap();
+            let script = root.join("fake_agent.py");
+            let written = root.join("report.json");
+            std::fs::write(&script, FAKE_AGENT).unwrap();
+
+            let spec = ChannelSpec {
+                model: None,
+                effort: None,
+                cwd: root.clone(),
+                resume: None,
+                lane: None,
+                executable: None,
+            };
+            let command = vec![
+                "python3".to_owned(),
+                script.display().to_string(),
+                written.display().to_string(),
+            ];
+            let mut channel = AcpChannel::open(&spec, &command).unwrap();
+            channel.start_turn("run the terminals").unwrap();
+            let deadline = std::time::Instant::now() + Duration::from_secs(60);
+            let verdict = loop {
+                if let Some(event) = channel.next_event(Duration::from_millis(100)).unwrap() {
+                    break event;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the fake agent never answered"
+                );
+            };
+            channel.close().unwrap();
+            assert!(verdict.is_done(), "{verdict:?}");
+            serde_json::from_str(&std::fs::read_to_string(&written).unwrap()).unwrap()
+        })
+    }
+
+    #[test]
+    fn initialize_advertises_the_terminal_capability() {
+        assert_eq!(
+            report()["client_capabilities"]["terminal"],
+            serde_json::json!(true)
+        );
+    }
+
+    #[test]
+    fn terminal_create_answers_with_an_id() {
+        let id = report()["create"]["terminalId"].as_str().unwrap();
+        assert!(id.starts_with("term_"), "{id}");
+    }
+
+    #[test]
+    fn terminal_wait_for_exit_answers_with_the_code() {
+        assert_eq!(report()["wait_for_exit"]["exitCode"], serde_json::json!(5));
+    }
+
+    #[test]
+    fn terminal_output_carries_both_pipes_and_the_status() {
+        let output = &report()["output"];
+        let text = output["output"].as_str().unwrap();
+        assert!(text.contains("hello"), "{text}");
+        assert!(text.contains("oops"), "{text}");
+        assert_eq!(output["truncated"], serde_json::json!(false));
+        assert_eq!(output["exitStatus"]["exitCode"], serde_json::json!(5));
+    }
+
+    #[test]
+    fn terminal_kill_stops_the_child_and_leaves_it_readable() {
+        assert!(
+            report()["kill"].get("error").is_none(),
+            "{:?}",
+            report()["kill"]
+        );
+        assert_eq!(
+            report()["kill_exit"]["signal"],
+            serde_json::json!("SIGKILL")
+        );
+        assert_eq!(
+            report()["kill_output"]["output"],
+            serde_json::json!("running")
+        );
+    }
+
+    #[test]
+    fn terminal_release_frees_the_id() {
+        assert!(
+            report()["release"].get("error").is_none(),
+            "{:?}",
+            report()["release"]
+        );
+        let after = report()["output_after_release"]["error"].as_str().unwrap();
+        assert!(after.starts_with("no terminal term_"), "{after}");
+    }
+
+    #[test]
+    fn an_unknown_terminal_id_answers_an_error_rather_than_wedging_the_turn() {
+        let error = report()["missing_terminal"]["error"].as_str().unwrap();
+        assert_eq!(error, "no terminal term_404");
     }
 }

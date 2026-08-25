@@ -28,6 +28,9 @@ agent-client-protocol = "2.0.0"
 # runtime per channel drives it on its own thread. `rt` and `sync` only: the
 # reactor under the ACP crate is async-io's, not tokio's.
 tokio = { version = "1", features = ["rt", "sync"] }
+# `terminal/kill` has to reach the whole command tree, and a process-group
+# signal is the only call that does; std stops at the direct child.
+libc = "0.2"
 
 [lib]
 name = "boop_acp"

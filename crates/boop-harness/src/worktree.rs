@@ -339,6 +339,37 @@ impl Reclaimed {
     }
 }
 
+/// The one path a lane delete may remove: the route's own `worktree_dir`,
+/// resolved and checked to be a linked git worktree whose own top level is
+/// itself. A parent, a plain directory and the main checkout all answer
+/// `None`, so no bulk walk can reach above a single lane.
+pub fn deletable_worktree(worktree_dir: &Path) -> Option<PathBuf> {
+    let resolved = std::fs::canonicalize(worktree_dir).ok()?;
+    if !resolved.is_dir() {
+        return None;
+    }
+    let top = git_stdout(&resolved, &["rev-parse", "--show-toplevel"])?;
+    if std::fs::canonicalize(top).ok()? != resolved {
+        return None;
+    }
+    // A linked worktree keeps its own `.git` file pointing elsewhere; the main
+    // checkout's git dir and common dir are the same directory.
+    let git_dir = absolute_git_path(&resolved, "--git-dir")?;
+    let common = absolute_git_path(&resolved, "--git-common-dir")?;
+    (git_dir != common).then_some(resolved)
+}
+
+/// The repo a linked worktree belongs to: the parent of its common git dir.
+pub fn worktree_owner(worktree_dir: &Path) -> Option<PathBuf> {
+    let common = absolute_git_path(worktree_dir, "--git-common-dir")?;
+    common.parent().map(Path::to_path_buf)
+}
+
+fn absolute_git_path(dir: &Path, flag: &str) -> Option<PathBuf> {
+    let printed = git_stdout(dir, &["rev-parse", "--path-format=absolute", flag])?;
+    std::fs::canonicalize(printed).ok()
+}
+
 /// Remove a dead lane's worktree and branch so the name spawns again. Liveness
 /// is the caller's; this refuses only on work git cannot get back.
 pub fn reclaim_carcass(repo: &Path, branch: &str, worktree: &Path) -> Result<Reclaimed> {
@@ -1259,5 +1290,91 @@ mod tests {
             "the worktree survives the refused reclaim"
         );
         assert!(super::branch_exists(&repo.repo, "feature/x"));
+    }
+
+    /// Three lane worktrees under one `.boop-worktrees` parent, the shape the
+    /// wholesale removal hit.
+    fn sibling_repo(tag: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let root = std::env::temp_dir().join(format!("boop-siblings-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let repo = root.join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        let base = init_repo(&repo);
+        let parent = repo.join(".boop-worktrees");
+        for lane in ["fix/one", "fix/two", "feature/live"] {
+            let path = parent.join(lane);
+            git(
+                &repo,
+                &[
+                    "worktree",
+                    "add",
+                    "-q",
+                    "-b",
+                    lane,
+                    &path.display().to_string(),
+                    &base,
+                ],
+            );
+        }
+        (repo, parent)
+    }
+
+    /// RECEIPT. Only a linked worktree whose own top level is itself is a
+    /// delete candidate; the `.boop-worktrees` parent and the main checkout
+    /// both answer `None`, so no walk can name them.
+    #[test]
+    fn only_a_lanes_own_worktree_is_a_delete_candidate() {
+        let (repo, parent) = sibling_repo("candidate");
+        let lane = parent.join("fix/one");
+        assert_eq!(
+            super::deletable_worktree(&lane),
+            Some(std::fs::canonicalize(&lane).unwrap()),
+            "a lane worktree is its own candidate"
+        );
+        assert_eq!(
+            super::deletable_worktree(&parent),
+            None,
+            "the parent that holds every lane is never a candidate"
+        );
+        assert_eq!(
+            super::deletable_worktree(&repo),
+            None,
+            "the main checkout is never a candidate"
+        );
+        assert_eq!(super::deletable_worktree(&repo.join("nope")), None);
+        assert_eq!(
+            super::worktree_owner(&lane),
+            Some(std::fs::canonicalize(&repo).unwrap())
+        );
+        let _ = std::fs::remove_dir_all(repo.parent().unwrap());
+    }
+
+    /// RECEIPT. A bulk delete over two dead lanes removes their two
+    /// worktrees, and the third sibling and the parent that holds all three
+    /// are still there afterwards.
+    #[test]
+    fn a_bulk_delete_of_two_siblings_leaves_the_third_and_the_parent_alone() {
+        let (repo, parent) = sibling_repo("bulk");
+        let dead = [parent.join("fix/one"), parent.join("fix/two")];
+        let live = parent.join("feature/live");
+        for path in &dead {
+            let candidate = super::deletable_worktree(path).expect("a lane worktree");
+            let owner = super::worktree_owner(&candidate).expect("an owning repo");
+            let removed = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&owner)
+                .args(["worktree", "remove", "--force"])
+                .arg(&candidate)
+                .status()
+                .unwrap();
+            assert!(removed.success(), "{}", candidate.display());
+        }
+        assert!(!dead[0].exists());
+        assert!(!dead[1].exists());
+        assert!(live.exists(), "the live sibling is untouched");
+        assert!(live.join(".git").exists(), "and is still a worktree");
+        assert!(parent.exists(), "the parent that holds them is untouched");
+        assert!(repo.join(".git").is_dir(), "and so is the repo itself");
+        let _ = std::fs::remove_dir_all(repo.parent().unwrap());
     }
 }

@@ -316,6 +316,10 @@ enum SubCmd {
         mail_dir: Option<PathBuf>,
     },
     /// Mail a claude coordinator reads at a turn boundary: the hook inbox.
+    /// Folded (door-only-claude-delivery): the hook inbox is a rung the
+    /// delivery ladder walks on its own, not a verb a caller reaches for. The
+    /// installed hook still calls `boop inbox drain`, so the group runs.
+    #[command(hide = true)]
     Inbox {
         #[command(subcommand)]
         cmd: InboxCmd,
@@ -994,8 +998,8 @@ fn main() -> Result<()> {
                 let session = match (session, me) {
                     (Some(session), _) => Some(session),
                     (None, true) => {
-                        let routes =
-                            bus::read_routes(&mail_dir(mail_dir_arg.as_deref())?).unwrap_or_default();
+                        let routes = bus::read_routes(&mail_dir(mail_dir_arg.as_deref())?)
+                            .unwrap_or_default();
                         let identity = identity::resolve_with(&registry, &routes)?;
                         Some(identity.session.context(
                         "--me found no caller session: this process carries no BOOP_SESSION stamp; pass --session <id>",
@@ -1533,6 +1537,10 @@ enum LaneCmd {
         route_only: bool,
         #[arg(long)]
         state: Option<String>,
+        /// Bulk delete only: print every route and every worktree path the
+        /// delete would remove, and remove nothing.
+        #[arg(long)]
+        dry_run: bool,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
