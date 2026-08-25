@@ -21,8 +21,8 @@ use cli::db::{
 };
 use cli::debug::{run_config, run_debug, run_host, run_lane_debug};
 use cli::job::{
-    run_beep, run_dispatch, run_lane, run_measure, run_resolve, run_sweep, run_wait, DispatchArgs,
-    LaneArgs,
+    run_beep, run_dispatch, run_lane, run_lane_wait, run_measure, run_resolve, run_sweep, run_wait,
+    DispatchArgs, LaneArgs,
 };
 use cli::mail::{
     run_hail, run_inbox, run_list, run_push, run_send, run_tell_children, run_tell_parent, Outbound,
@@ -257,11 +257,11 @@ enum SubCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Block until mail lands: the reply to <id>, or the next unread row
-    /// addressed to you with --me. Every exit prints the next command to run.
+    /// Block until mail lands: the reply to <id>, a lane's result row, or
+    /// the next unread row addressed to you with --me.
     Wait {
-        /// The id `boop beep hail` printed. Omit it and pass --me instead.
-        #[arg(value_name = "MESSAGE-ID", required_unless_present = "me")]
+        /// A message id, or a registered lane's name. Omit and pass --me.
+        #[arg(value_name = "ID-OR-LANE", required_unless_present = "me")]
         id: Option<String>,
         /// Wait for the next unread mail addressed to the caller.
         #[arg(long, conflicts_with = "id")]
@@ -1017,13 +1017,18 @@ fn main() -> Result<()> {
                 as_name,
                 wait_timeout,
                 mail_dir,
-            } => run_wait(
-                id.as_deref(),
-                me,
-                as_name.as_deref(),
-                wait_timeout,
-                mail_dir.as_deref(),
-            ),
+            } => match id.as_deref() {
+                Some(id) if wait_target_is_a_lane(mail_dir.as_deref(), id) => {
+                    run_lane_wait(mail_dir.as_deref(), id, wait_timeout)
+                }
+                _ => run_wait(
+                    id.as_deref(),
+                    me,
+                    as_name.as_deref(),
+                    wait_timeout,
+                    mail_dir.as_deref(),
+                ),
+            },
             SubCmd::TellParent {
                 kind,
                 body,
@@ -1093,6 +1098,18 @@ fn missing_beep_argument(name: &str) -> ! {
 
 fn sync_before_local_command(registry: &Registry) -> Result<()> {
     sync_before_read(registry)
+}
+
+/// Whether `boop wait <id>` names a registered lane, so it dispatches to
+/// `run_lane_wait`. An unreadable registry falls through to the mail wait.
+fn wait_target_is_a_lane(mail_dir_arg: Option<&std::path::Path>, id: &str) -> bool {
+    let Ok(dir) = mail_dir(mail_dir_arg) else {
+        return false;
+    };
+    bus::read_routes(&dir)
+        .ok()
+        .and_then(|routes| routes.get(id).map(|route| route.kind == "lane"))
+        .unwrap_or(false)
 }
 
 /// The name of the escape hatch that suppresses the startup transcript sync.
@@ -1388,7 +1405,8 @@ enum LaneCmd {
         bin: Option<String>,
         /// Block until the lane's on-exit result row lands, then exit with its
         /// rc. Without a parent, the waiter owns a private result recipient.
-        #[arg(long)]
+        /// Folded (one-wait-verb): `boop wait <lane>` is the spelling now.
+        #[arg(long, hide = true)]
         wait: bool,
         /// Seconds `--wait` blocks before exiting 124; 0 waits forever.
         #[arg(long, default_value_t = 3600)]
@@ -1513,6 +1531,8 @@ enum LaneCmd {
     },
     /// Wait for the lane's result row, then exit with the rc it names. `--timeout`
     /// seconds exits 124; a route that dies with no row exits 3.
+    /// Folded (one-wait-verb): `boop wait <lane>` is the spelling now.
+    #[command(hide = true)]
     Wait {
         lane: String,
         /// Seconds to wait before exiting 124; 0 waits until the lane reports
@@ -2355,6 +2375,18 @@ mod tests {
             blank.is_empty(),
             "db subcommands with empty about: {blank:?}"
         );
+    }
+
+    /// RECEIPT (one-wait-verb): `boop wait <id>` dispatches to `run_lane_wait`
+    /// only when `<id>` names a registered lane route, never a message id.
+    #[test]
+    fn wait_dispatches_to_lane_wait_only_for_a_registered_lane_route() {
+        let dir = crate::cli::testkit::temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        crate::cli::write_route(&dir, "worker", crate::cli::testkit::route_with(None)).unwrap();
+        assert!(wait_target_is_a_lane(Some(&dir), "worker"));
+        assert!(!wait_target_is_a_lane(Some(&dir), "m-does-not-exist"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -130,8 +130,10 @@ COMPLETION: the supervisor writes ONE row `lane <id> done rc=<n>` into the
   hail through its harness door as its next prompt; no wait needs arming.
   `--wait` blocks on that row and exits with the lane's rc, so spawn-and-join is
   one command; `--wait-timeout <s>` (default 3600, 0 waits forever) exits 124.
-  The same wait after the fact spells its bound `--timeout`, not `--wait-timeout`:
-    boop beep lane wait <lane> --timeout <s>
+  The same wait after the fact is the one wait verb, given the lane's name:
+    boop wait <lane> [--wait-timeout <s>]
+  Folded aliases, hidden and unchanged: `boop beep lane create --wait`,
+  `boop beep lane wait <lane>`.
   A wait whose lane route goes dead with no row exits 3 instead of blocking.
 
 DEBUG: what just went wrong, without opening a log:
@@ -200,6 +202,7 @@ WAIT: every agent can background a shell, so the universal push is a block.
   (claude registry status, codex thread/status/changed, opencode session.idle),
   printing `<route> turn ended (<status>)`; a reply mail ends it sooner.
     boop wait <message-id>          the reply to what you just sent
+    boop wait <lane>                a registered lane's result row, its rc
     boop wait --me [--as <name>]    the next unread mail addressed to you
   Default timeout 540s (under the 10-minute cap a background shell gives you),
   `--wait-timeout <s>` overrides it, and a timeout exits 124 printing the
