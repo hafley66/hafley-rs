@@ -366,7 +366,13 @@ fn write_part(
         }
         "tool" => {
             *turn += 1;
-            let inserted = store.write_turn(session_id, *turn, message.ts, "tool", "")?;
+            let inserted = store.write_turn(
+                session_id,
+                *turn,
+                message.ts,
+                "tool",
+                &part.tool_body(),
+            )?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
             store.write_tool_fact(
@@ -466,6 +472,29 @@ pub struct Part {
     pub tool: String,
     pub text: String,
     pub input: Option<Value>,
+    pub output: Option<Value>,
+    pub error: Option<Value>,
+}
+
+impl Part {
+    /// The chat body holds the complete readable tool exchange. Structured
+    /// facts remain separately projected for queries over commands and paths.
+    fn tool_body(&self) -> String {
+        let mut body = format!("tool {}", self.tool);
+        if let Some(input) = &self.input {
+            body.push_str("\ninput: ");
+            body.push_str(&input.to_string());
+        }
+        if let Some(output) = &self.output {
+            body.push_str("\noutput: ");
+            body.push_str(&output.to_string());
+        }
+        if let Some(error) = &self.error {
+            body.push_str("\nerror: ");
+            body.push_str(&error.to_string());
+        }
+        body
+    }
 }
 
 /// The opencode store on this machine, `None` until opencode has created it.
@@ -652,6 +681,14 @@ where
                         .get("state")
                         .and_then(|state| state.get("input"))
                         .cloned(),
+                    output: data
+                        .get("state")
+                        .and_then(|state| state.get("output"))
+                        .cloned(),
+                    error: data
+                        .get("state")
+                        .and_then(|state| state.get("error"))
+                        .cloned(),
                 },
             )?;
         }
@@ -669,7 +706,8 @@ mod tests {
     use super::{
         launch_command, messages_after, sessions_from, visit_parts_for_messages, Opencode, Part,
     };
-    use crate::harness::{Harness, SpawnSpec};
+    use crate::harness::{sync_session, Harness, SpawnSpec};
+    use boop_store::ident::{Store, TurnQuery};
     use boop_store::testing::TempRepo;
 
     static PART_SELECTS: AtomicUsize = AtomicUsize::new(0);
@@ -732,8 +770,72 @@ mod tests {
             tool: String::new(),
             text: "hello".to_owned(),
             input: None,
+            output: None,
+            error: None,
         };
         assert_eq!(part.text, "hello");
+    }
+
+    #[test]
+    fn opencode_projection_preserves_assistant_and_complete_tool_bodies() {
+        let source = std::path::Path::new("tests/fixtures/opencode/bench/opencode.db");
+        let transcript = std::env::temp_dir().join(format!(
+            "boop-opencode-body-{}-{:?}.db",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let store_path = std::env::temp_dir().join(format!(
+            "boop-opencode-body-store-{}-{:?}.db",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_file(&transcript);
+        let _ = std::fs::remove_file(&store_path);
+        std::fs::copy(source, &transcript).unwrap();
+        rusqlite::Connection::open(&transcript)
+            .unwrap()
+            .execute(
+                "UPDATE part SET data = ?1 WHERE id = 'ses_bench_0001_msg_0005_p1'",
+                [r#"{"type":"tool","tool":"bash","state":{"input":{"command":"cargo test bench_5"},"output":"tests passed","error":"stderr empty"}}"#],
+            )
+            .unwrap();
+
+        let session = sessions_from(&transcript)
+            .unwrap()
+            .into_iter()
+            .find(|session| session.session_id == "ses_bench_0001")
+            .unwrap();
+        let store = Store::open(store_path.clone()).unwrap();
+        sync_session(&store, &Opencode, &session).unwrap();
+        let turns = store
+            .query_turns(&TurnQuery {
+                session: Some(session.session_id),
+                ..TurnQuery::default()
+            })
+            .unwrap();
+        let projected = turns
+            .iter()
+            .map(|turn| {
+                format!(
+                    "{} {}",
+                    turn["role"].as_str().unwrap_or_default(),
+                    turn["said"].as_str().unwrap_or_default()
+                )
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            projected.iter().any(|turn| turn == "assistant bench reply 5"),
+            "turns: {projected:#?}"
+        );
+        assert!(
+            projected.iter().any(|turn| {
+                turn == "tool tool bash\ninput: {\"command\":\"cargo test bench_5\"}\noutput: \"tests passed\"\nerror: \"stderr empty\""
+            }),
+            "turns: {projected:#?}"
+        );
+        drop(store);
+        let _ = std::fs::remove_file(transcript);
+        let _ = std::fs::remove_file(store_path);
     }
 
     #[test]
