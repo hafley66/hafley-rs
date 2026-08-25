@@ -138,6 +138,12 @@ DEBUG: what just went wrong, without opening a log:
     boop debug [--since 2m] [--lane <id>] [--json]
   The WARN/ERROR tail of every ~/.agent/lanes/<lane>/supervise.log plus the
   store's kind=error trace events, grouped by lane, oldest first inside a lane.
+  Named, it answers one lane in full, five sections, `none` for an empty one:
+    boop debug <lane>
+  1 route (kind, harness, model, session, cwd, parent, liveness, last turn),
+  2 the last 5 mail rows with the rung each landed on, 3 the worktree's last 5
+  commits and its dirty count, 4 the last 3 assistant turns and tool calls,
+  5 the alert window above.
   `boop --help` prints a one-line banner when that window is non-empty, and
   nothing when it is clean.
 

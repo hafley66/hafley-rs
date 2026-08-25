@@ -19,7 +19,7 @@ use cli::db::{
     run_chat_query, run_db, run_follow, run_harnesses, run_passthrough, run_public_agent_command,
     run_query, run_sessions, run_sync_all, run_tail, sync_before_read, ChatQueryOptions,
 };
-use cli::debug::{run_config, run_debug, run_host};
+use cli::debug::{run_config, run_debug, run_host, run_lane_debug};
 use cli::job::{
     run_beep, run_dispatch, run_lane, run_measure, run_resolve, run_sweep, run_wait, DispatchArgs,
     LaneArgs,
@@ -109,15 +109,21 @@ enum SubCmd {
     /// What just went wrong: recent WARN/ERROR across the lane trails and the
     /// store's error events, grouped by lane.
     Debug {
+        /// One lane, answered in full: route, mail, worktree, transcript,
+        /// alerts. Without it, the WARN/ERROR window across every lane.
+        #[arg(value_name = "LANE")]
+        lane_arg: Option<String>,
         /// Window to read back, as `Ns`, `Nm`, `Nh` or a count of seconds.
         #[arg(long, default_value = "2m")]
         since: String,
-        /// One lane only.
+        /// One lane only, for the alert window.
         #[arg(long)]
         lane: Option<String>,
         /// One JSON document, `alerts` and `sync`, instead of the grouped text.
         #[arg(long)]
         json: bool,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
     },
     /// Freshly synchronize and summarize Boop agent/runtime/activity facts.
     #[cfg(feature = "agent-read")]
@@ -666,7 +672,16 @@ fn main() -> Result<()> {
             } => run_tail(&registry, &session_id, from.unwrap_or(0), format),
             SubCmd::Events { query } => run_query(&query),
             SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild),
-            SubCmd::Debug { since, lane, json } => run_debug(&since, lane.as_deref(), json),
+            SubCmd::Debug {
+                lane_arg,
+                since,
+                lane,
+                json,
+                mail_dir,
+            } => match lane_arg.as_deref().or(lane.as_deref()).filter(|_| !json) {
+                Some(lane) => run_lane_debug(lane, &since, mail_dir.as_deref()),
+                None => run_debug(&since, lane.as_deref(), json),
+            },
             #[cfg(feature = "agent-read")]
             SubCmd::Agent { cmd } => run_public_agent_command(cmd),
             SubCmd::Follow {} => run_follow(&registry),
