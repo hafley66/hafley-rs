@@ -333,6 +333,7 @@ dependencies = [
  "agent-client-protocol",
  "anyhow",
  "boop-store",
+ "libc",
  "serde",
  "serde_json",
  "tokio",

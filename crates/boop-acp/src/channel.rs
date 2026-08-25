@@ -9,6 +9,7 @@ pub mod acp;
 pub mod claude;
 pub mod codex;
 pub mod jsonrpc;
+pub mod terminal;
 
 /// Where a delivered message landed relative to the turn that was running.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
