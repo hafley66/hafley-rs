@@ -11,12 +11,14 @@ use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+use std::time::Instant;
 
 use anyhow::{Context, Result};
 use atomic_write_file::AtomicWriteFile;
 use fs4::fs_std::FileExt;
 use serde::{Deserialize, Serialize};
 
+use crate::_7e_stage_store::{elapsed_millis, SyncMeter};
 use crate::{
     ContentId, FileModeObservation, PlannedFileKind, SourcePath, SourceRoot, SourceRootId, StageId,
     StagedContentId, StagedFile, StagedSourceTransaction,
@@ -195,8 +197,33 @@ impl CommitEngine {
         stage: &StagedSourceTransaction,
         failpoint: Option<CommitFailpoint>,
     ) -> std::result::Result<CommitReceipt, CommitRefusal> {
-        let _lock = self.lock()?;
-        let actual = self.actual_root_id(&stage.root).map_err(io_refusal)?;
+        let commit_started = Instant::now();
+        let commit_span = tracing::debug_span!(
+            "commit.transaction",
+            operation = "commit",
+            files = stage.files.len(),
+            duration_ms = tracing::field::Empty,
+        );
+        let _commit_entered = commit_span.enter();
+
+        let lock_started = Instant::now();
+        let _lock = tracing::debug_span!("commit.lock", operation = "lock_root")
+            .in_scope(|| self.lock())?;
+        tracing::debug!(
+            duration_ms = elapsed_millis(lock_started),
+            "commit root locked"
+        );
+
+        let identity_started = Instant::now();
+        let identity_span =
+            tracing::debug_span!("commit.verify_identity", operation = "actual_root_id");
+        let actual = identity_span
+            .in_scope(|| self.actual_root_id(&stage.root))
+            .map_err(io_refusal)?;
+        tracing::debug!(
+            duration_ms = elapsed_millis(identity_started),
+            "commit root identity verified"
+        );
         if actual != stage.root {
             return Err(CommitRefusal::RootMismatch {
                 expected: stage.root.clone(),
@@ -236,16 +263,62 @@ impl CommitEngine {
                 journal: journal_path,
             });
         }
-        let journal = self.preflight(stage)?;
+        let preflight_started = Instant::now();
+        let preflight_span = tracing::debug_span!(
+            "commit.preflight",
+            operation = "preflight",
+            files = stage.files.len(),
+        );
+        let journal = preflight_span.in_scope(|| self.preflight(stage))?;
         validate_journal(&journal)?;
+        tracing::debug!(
+            files = journal.operations.len(),
+            duration_ms = elapsed_millis(preflight_started),
+            "commit preflight cleared"
+        );
+
         self.materialize_payloads(stage, &journal)?;
-        write_journal(&journal_path, &journal)?;
+
+        let journal_started = Instant::now();
+        let journal_span = tracing::debug_span!(
+            "commit.write_journal",
+            operation = "write_journal",
+            files = journal.operations.len(),
+            fsync.count = tracing::field::Empty,
+            fsync_ms = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+        );
+        let journal_entered = journal_span.enter();
+        let mut journal_sync = SyncMeter::default();
+        write_journal(&journal_path, &journal, &mut journal_sync)?;
+        journal_span.record("fsync.count", journal_sync.count());
+        journal_span.record("fsync_ms", journal_sync.millis());
+        journal_span.record("duration_ms", elapsed_millis(journal_started));
+        tracing::debug!(
+            fsync.count = journal_sync.count(),
+            fsync_ms = journal_sync.millis(),
+            duration_ms = elapsed_millis(journal_started),
+            "commit journal written"
+        );
+        drop(journal_entered);
+
         if failpoint == Some(CommitFailpoint::AfterJournal) {
             return Err(CommitRefusal::Failpoint {
                 point: CommitFailpoint::AfterJournal,
             });
         }
         self.apply_journal(&journal, failpoint, &BTreeSet::new())?;
+
+        let receipt_started = Instant::now();
+        let receipt_span = tracing::debug_span!(
+            "commit.write_receipt",
+            operation = "write_receipt",
+            files = journal.operations.len(),
+            fsync.count = tracing::field::Empty,
+            fsync_ms = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+        );
+        let receipt_entered = receipt_span.enter();
         let receipt = receipt(
             stage.id,
             &stage.root,
@@ -253,8 +326,26 @@ impl CommitEngine {
             fs::metadata(&journal_path).map(|m| m.len()).unwrap_or(0),
             0,
         );
-        write_receipt(&self.receipt_path(stage.id), &receipt)?;
-        remove_journal(&journal_path)?;
+        let mut receipt_sync = SyncMeter::default();
+        write_receipt(&self.receipt_path(stage.id), &receipt, &mut receipt_sync)?;
+        remove_journal(&journal_path, &mut receipt_sync)?;
+        receipt_span.record("fsync.count", receipt_sync.count());
+        receipt_span.record("fsync_ms", receipt_sync.millis());
+        receipt_span.record("duration_ms", elapsed_millis(receipt_started));
+        tracing::debug!(
+            fsync.count = receipt_sync.count(),
+            fsync_ms = receipt_sync.millis(),
+            duration_ms = elapsed_millis(receipt_started),
+            "commit receipt written"
+        );
+        drop(receipt_entered);
+
+        commit_span.record("duration_ms", elapsed_millis(commit_started));
+        tracing::debug!(
+            files = receipt.applied_files,
+            duration_ms = elapsed_millis(commit_started),
+            "commit applied"
+        );
         Ok(receipt)
     }
 
@@ -312,8 +403,13 @@ impl CommitEngine {
             fs::metadata(&journal_path).map(|m| m.len()).unwrap_or(0),
             0,
         );
-        write_receipt(&self.receipt_path(stage_id), &receipt)?;
-        remove_journal(&journal_path)?;
+        let mut recovery_sync = SyncMeter::default();
+        write_receipt(
+            &self.receipt_path(stage_id),
+            &receipt,
+            &mut recovery_sync,
+        )?;
+        remove_journal(&journal_path, &mut recovery_sync)?;
         Ok(receipt)
     }
 
@@ -367,6 +463,17 @@ impl CommitEngine {
         stage: &StagedSourceTransaction,
         journal: &CommitJournal,
     ) -> std::result::Result<(), CommitRefusal> {
+        let started = Instant::now();
+        let span = tracing::debug_span!(
+            "commit.materialize_payloads",
+            operation = "materialize_payloads",
+            files = stage.files.len(),
+            fsync.count = tracing::field::Empty,
+            fsync_ms = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+        );
+        let _entered = span.enter();
+        let mut meter = SyncMeter::default();
         for (file, operation) in stage.files.iter().zip(&journal.operations) {
             let Some(blob) = operation.after_blob else {
                 continue;
@@ -399,10 +506,22 @@ impl CommitEngine {
                 .map_err(|error| io_refusal_context("open commit payload", error))?;
             file.write_all(bytes)
                 .map_err(|error| io_refusal_context("write commit payload", error))?;
-            file.commit()
+            meter
+                .measure(|| file.commit())
                 .map_err(|error| io_refusal_context("publish commit payload", error))?;
         }
-        sync_dir(&self.state_root.join("blobs"))
+        meter.measure(|| sync_dir(&self.state_root.join("blobs")))?;
+        span.record("fsync.count", meter.count());
+        span.record("fsync_ms", meter.millis());
+        span.record("duration_ms", elapsed_millis(started));
+        tracing::debug!(
+            files = stage.files.len(),
+            fsync.count = meter.count(),
+            fsync_ms = meter.millis(),
+            duration_ms = elapsed_millis(started),
+            "commit payloads materialized"
+        );
+        Ok(())
     }
 
     fn operation_bytes(
@@ -469,6 +588,17 @@ impl CommitEngine {
         failpoint: Option<CommitFailpoint>,
         completed: &BTreeSet<usize>,
     ) -> std::result::Result<(), CommitRefusal> {
+        let started = Instant::now();
+        let span = tracing::debug_span!(
+            "commit.apply",
+            operation = "apply_journal",
+            files = journal.operations.len(),
+            fsync.count = tracing::field::Empty,
+            fsync_ms = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+        );
+        let _entered = span.enter();
+        let mut meter = SyncMeter::default();
         for index in 0..journal.operations.len() {
             if completed.contains(&index) {
                 continue;
@@ -483,6 +613,7 @@ impl CommitEngine {
                 &self.target_root,
                 &journal.operations[index],
                 bytes.as_deref().unwrap_or_default(),
+                &mut meter,
             )?;
             if failpoint == Some(CommitFailpoint::AfterOperation(index)) {
                 return Err(CommitRefusal::Failpoint {
@@ -490,6 +621,16 @@ impl CommitEngine {
                 });
             }
         }
+        span.record("fsync.count", meter.count());
+        span.record("fsync_ms", meter.millis());
+        span.record("duration_ms", elapsed_millis(started));
+        tracing::debug!(
+            files = journal.operations.len(),
+            fsync.count = meter.count(),
+            fsync_ms = meter.millis(),
+            duration_ms = elapsed_millis(started),
+            "commit journal applied"
+        );
         Ok(())
     }
 }
@@ -645,6 +786,7 @@ fn apply_operation(
     root: &Path,
     operation: &JournalOperation,
     bytes: &[u8],
+    meter: &mut SyncMeter,
 ) -> std::result::Result<(), CommitRefusal> {
     match operation.kind {
         PlannedFileKind::Create | PlannedFileKind::Replace => {
@@ -656,8 +798,8 @@ fn apply_operation(
                     .ok_or_else(|| missing_path(operation))?,
             );
             ensure_parent_dirs(root, &path)?;
-            atomic_write(&path, bytes, operation.mode.as_ref())?;
-            sync_dir(path.parent().unwrap_or_else(|| Path::new(".")))?;
+            atomic_write(&path, bytes, operation.mode.as_ref(), meter)?;
+            meter.measure(|| sync_dir(path.parent().unwrap_or_else(|| Path::new("."))))?;
         }
         PlannedFileKind::Move => {
             let source = target_path(
@@ -677,9 +819,11 @@ fn apply_operation(
             ensure_parent_dirs(root, &destination)?;
             fs::rename(&source, &destination)
                 .map_err(|error| io_refusal_context("rename staged move", error))?;
-            sync_dir(source.parent().unwrap_or_else(|| Path::new(".")))?;
+            meter.measure(|| sync_dir(source.parent().unwrap_or_else(|| Path::new("."))))?;
             if destination.parent() != source.parent() {
-                sync_dir(destination.parent().unwrap_or_else(|| Path::new(".")))?;
+                meter.measure(|| {
+                    sync_dir(destination.parent().unwrap_or_else(|| Path::new(".")))
+                })?;
             }
         }
         PlannedFileKind::Delete => {
@@ -692,7 +836,7 @@ fn apply_operation(
             );
             fs::remove_file(&source)
                 .map_err(|error| io_refusal_context("delete staged file", error))?;
-            sync_dir(source.parent().unwrap_or_else(|| Path::new(".")))?;
+            meter.measure(|| sync_dir(source.parent().unwrap_or_else(|| Path::new("."))))?;
         }
     }
     Ok(())
@@ -873,6 +1017,7 @@ fn atomic_write(
     path: &Path,
     bytes: &[u8],
     mode: Option<&FileModeObservation>,
+    meter: &mut SyncMeter,
 ) -> std::result::Result<(), CommitRefusal> {
     let mut file = AtomicWriteFile::open(path)
         .map_err(|error| io_refusal_context("open atomic target", error))?;
@@ -881,7 +1026,8 @@ fn atomic_write(
     if let Some(mode) = mode {
         set_mode(&file, mode).map_err(|error| io_refusal_context("set target mode", error))?;
     }
-    file.commit()
+    meter
+        .measure(|| file.commit())
         .map_err(|error| io_refusal_context("publish atomic target", error))
 }
 
@@ -997,16 +1143,21 @@ fn io_refusal_context(operation: &str, error: impl fmt::Display) -> CommitRefusa
     }
 }
 
-fn write_journal(path: &Path, journal: &CommitJournal) -> std::result::Result<(), CommitRefusal> {
+fn write_journal(
+    path: &Path,
+    journal: &CommitJournal,
+    meter: &mut SyncMeter,
+) -> std::result::Result<(), CommitRefusal> {
     let bytes = serde_json::to_vec(journal)
         .map_err(|error| io_refusal_context("encode commit journal", error))?;
     let mut file = AtomicWriteFile::open(path)
         .map_err(|error| io_refusal_context("open commit journal", error))?;
     file.write_all(&bytes)
         .map_err(|error| io_refusal_context("write commit journal", error))?;
-    file.commit()
+    meter
+        .measure(|| file.commit())
         .map_err(|error| io_refusal_context("publish commit journal", error))?;
-    sync_dir(path.parent().unwrap_or_else(|| Path::new(".")))
+    meter.measure(|| sync_dir(path.parent().unwrap_or_else(|| Path::new("."))))
 }
 fn read_journal(path: &Path) -> std::result::Result<CommitJournal, CommitRefusal> {
     let bytes = fs::read(path).map_err(|error| io_refusal_context("read commit journal", error))?;
@@ -1150,16 +1301,21 @@ fn validate_receipt(
     Ok(())
 }
 
-fn write_receipt(path: &Path, receipt: &CommitReceipt) -> std::result::Result<(), CommitRefusal> {
+fn write_receipt(
+    path: &Path,
+    receipt: &CommitReceipt,
+    meter: &mut SyncMeter,
+) -> std::result::Result<(), CommitRefusal> {
     let bytes = serde_json::to_vec(receipt)
         .map_err(|error| io_refusal_context("encode commit receipt", error))?;
     let mut file = AtomicWriteFile::open(path)
         .map_err(|error| io_refusal_context("open commit receipt", error))?;
     file.write_all(&bytes)
         .map_err(|error| io_refusal_context("write commit receipt", error))?;
-    file.commit()
+    meter
+        .measure(|| file.commit())
         .map_err(|error| io_refusal_context("publish commit receipt", error))?;
-    sync_dir(path.parent().unwrap_or_else(|| Path::new(".")))
+    meter.measure(|| sync_dir(path.parent().unwrap_or_else(|| Path::new("."))))
 }
 
 fn sync_dir(path: &Path) -> std::result::Result<(), CommitRefusal> {
@@ -1168,13 +1324,16 @@ fn sync_dir(path: &Path) -> std::result::Result<(), CommitRefusal> {
         .map_err(|error| io_refusal_context("sync commit directory", error))
 }
 
-fn remove_journal(path: &Path) -> std::result::Result<(), CommitRefusal> {
+fn remove_journal(
+    path: &Path,
+    meter: &mut SyncMeter,
+) -> std::result::Result<(), CommitRefusal> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(io_refusal_context("remove commit journal", error)),
     }?;
-    sync_dir(path.parent().unwrap_or_else(|| Path::new(".")))
+    meter.measure(|| sync_dir(path.parent().unwrap_or_else(|| Path::new("."))))
 }
 fn receipt(
     stage_id: StageId,
