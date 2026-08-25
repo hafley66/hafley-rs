@@ -1,0 +1,156 @@
+# Boop-managed Codex. Time flows downward.
+# OS processes, Unix-socket traffic, durable evidence, and state-aware wakeup.
+
+shape: sequence_diagram
+
+user: "User"
+shell: "bash\n`codex` wrapper"
+boop: "resident\n`boop codex`"
+proxy: "Boop inspecting\nWebSocket proxy"
+tui: "native Codex\nTUI process"
+daemon: "shared Codex\napp-server daemon"
+disk: "JSONL transcripts\n+ route registry"
+store: "mailbox NDJSON\n+ SQLite graph"
+parent: "exact parent\nCodex thread"
+children: "native child\nthreads A + B"
+
+launch: "1. PROCESS STARTUP AND LOCAL IPC" {
+  user -> shell: "run `codex`"
+  shell -> boop: "exec `boop codex --cwd PWD`"
+  boop -> daemon: "spawn `codex remote-control start --json`"
+  daemon -> boop: "control socket path\n~/.codex/app-server-control/app-server-control.sock"
+  boop -> proxy: "thread: UnixListener::bind\n/tmp/boop-codex-proxy-PID-TIME.sock"
+  boop -> tui: "spawn TUI child\n--remote unix://temporary-proxy.sock"
+  tui -> proxy: "UnixStream + WebSocket handshake"
+  proxy -> daemon: "UnixStream::connect(control socket)\nWebSocket handshake"
+
+  boop."OS ownership": |md
+    ### resident Boop process owns
+    - native TUI child process
+    - proxy thread and temporary UDS
+    - route registration
+    - 250 ms completion projector
+    - child reaping and socket cleanup
+  |
+}
+
+identity: "2. CAPTURE THE TUI'S OWN THREAD ID" {
+  tui -> proxy: "JSON-RPC request\n{id: 42, method: thread/start}"
+  proxy -> proxy: "record request correlation\n42 -> thread/start"
+  proxy -> daemon: "forward original WebSocket frame unchanged"
+  daemon -> proxy: "JSON-RPC response\n{id: 42, result.thread.id: PARENT}"
+  proxy -> proxy: "hold response until route persistence succeeds"
+  proxy -> boop: "NativeSessionResolver.resolve()\nreturns exact PARENT"
+  boop -> disk: "write codex-PANE -> PARENT\n+ cwd + app-server socket"
+  disk -> boop: "route durable"
+  boop -> proxy: "route_registered()"
+  proxy -> tui: "release original thread/start response"
+  tui -> parent: "interactive session ready"
+
+  proxy."readiness invariant": |md
+    The TUI cannot accept the first user prompt until its
+    exact parent route is written. No cwd, PID, environment,
+    or transcript-time guess chooses the parent.
+  |
+}
+
+delegate: "3. NATIVE DELEGATION WITHOUT A PARENT WAIT" {
+  user -> parent: "spawn two bounded native subagents"
+  parent -> children: "native spawn_agent(A)"
+  parent -> children: "native spawn_agent(B)"
+  children -> disk: "session_meta\nparent_thread_id = PARENT"
+  parent -> user: "PARENT-NO-POLL\nturn ends immediately"
+
+  parent."explicitly absent": |md
+    The parent calls none of `wait_agent`, `list_agents`,
+    `sleep`, a follow-up, or another polling operation.
+  |
+}
+
+project: "4. RESIDENT TRANSCRIPT PROJECTION" {
+  boop -> disk: "every 250 ms:\nread complete JSONL lines after byte cursor"
+  disk -> boop: "child Spawned / Completed events"
+  boop -> store: "advance cursor"
+  boop -> store: "upsert parent -> child edge"
+  boop -> store: "append deterministic completion message"
+  boop -> store: "write completion-observed edge"
+
+  store."persistence surfaces": |md
+    **registry.json** maps pane route to exact thread.
+
+    **bus.ndjson** is the append-only mailbox. The same
+    logical message ID receives a later delivery timestamp.
+
+    **boop.db** contains relational session, edge, cursor,
+    completion, and delivery facts.
+  |
+}
+
+first: "5A. FIRST CHILD COMPLETES WHILE PARENT IS IDLE" {
+  children -> disk: "child A task_complete\nlast_agent_message = FINAL-A-OK"
+  daemon -> disk: "append structured parent message\n<subagent_notification child=A result=FINAL-A-OK>"
+  boop -> disk: "read exact notification + parent lifecycle"
+  disk -> boop: "latest parent task_complete\nmeans IDLE"
+  boop -> daemon: "spawn short-lived `codex queue`\n--thread PARENT --remote unix://control.sock"
+  daemon -> parent: "start one parent turn"
+  parent -> disk: "task_started"
+  parent -> parent: "read pending native notification"
+
+  boop."why the nudge exists": |md
+    Codex persists a native child notification in an idle
+    parent transcript, but persistence alone does not start
+    a model turn. One queue call wakes the idle parent.
+  |
+}
+
+second: "5B. SECOND CHILD COMPLETES DURING THAT ACTIVE TURN" {
+  children -> disk: "child B task_complete\nlast_agent_message = FINAL-B-OK"
+  daemon -> disk: "append structured parent message\n<subagent_notification child=B result=FINAL-B-OK>"
+  boop -> disk: "read exact notification + parent lifecycle"
+  disk -> boop: "latest task_started has no later task_complete\nmeans ACTIVE"
+  boop -> store: "ack completion B\nwithout another queue call"
+  daemon -> parent: "native notification joins active turn"
+  parent -> user: "report A + B completion once"
+  parent -> disk: "task_complete"
+  boop -> store: "append delivery timestamps\n+ completion-delivered edges"
+
+  boop."coalescing rule": |md
+    - idle parent + notification: queue one wakeup
+    - active parent + notification: acknowledge only
+    - missing notification: preserve queue fallback
+
+    Nearby child completions share one parent turn.
+  |
+}
+
+boundaries: "6. WHAT CROSSES EACH BOUNDARY" {
+  shell -> boop: "OS process exec/spawn"
+  tui -> proxy: "WebSocket frames over temporary Unix socket"
+  proxy -> daemon: "WebSocket frames over control Unix socket"
+  boop -> daemon: "short-lived `codex queue` process for idle wakeup"
+  daemon -> disk: "append-only Codex JSONL"
+  boop -> store: "filesystem append + SQLite transactions"
+
+  proxy."protocol boundary": |md
+    Native Codex control is JSON-RPC in WebSocket text frames
+    over Unix-domain sockets. ACP serves other Boop conversation
+    paths; this path speaks the Codex app-server protocol.
+  |
+
+  shell."tmux boundary": |md
+    Tmux supplies `TMUX_PANE` for the route name. Production
+    completion delivery uses no tmux key sending. Tmux calls in
+    the E2E belong to the external test harness.
+  |
+}
+
+cleanup: "7. PROCESS EXIT" {
+  user -> tui: "exit Codex"
+  tui -> boop: "child process exits"
+  boop -> boop: "try_wait() observes status\nthen reaps child"
+  boop -> proxy: "drop inspecting proxy"
+  proxy -> proxy: "unlink temporary Unix socket"
+  boop -> disk: "transcripts + route evidence remain"
+  boop -> store: "mailbox + graph + cursors remain queryable"
+  boop -> shell: "return exit status"
+}

@@ -2,3 +2,5 @@ target/
 /.boop-worktrees/
 
 .issuectl/write.lock
+.dl/
+.worktrees/
