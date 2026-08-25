@@ -26,6 +26,22 @@ use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
 /// The config option every ACP agent names its model with.
 const MODEL_CONFIG_ID: &str = "model";
 
+/// The config option codex-acp names its permission mode with, and the value
+/// that means no sandbox and no approval prompts.
+///
+/// codex-acp opens every session on its `agent` mode: `workspace-write` plus
+/// `on-request` approvals. A lane writes outside its worktree on every boop
+/// call (the mail dir, `~/.agent/boop.db`, the repo's `.git/worktrees`), and a
+/// codex native subagent the lane spawns inherits the session's sandbox, so
+/// its `boop` calls fail with `Operation not permitted` and `attempt to write
+/// a readonly database`. The mode is set once at the handshake and every agent
+/// in the conversation runs under it.
+///
+/// The value id is codex-acp's own; no other adapter offers it, so no other
+/// harness's permissions move.
+const MODE_CONFIG_ID: &str = "mode";
+const FULL_ACCESS_MODE: &str = "agent-full-access";
+
 /// The command that speaks ACP, one row per harness. Compiled in rather than
 /// read from `config.json`: that file is parsed by boop-proc, which depends on
 /// this crate, so a lookup here would invert the crate order. The npx rows
@@ -393,16 +409,51 @@ async fn handshake(
         }
     };
 
+    let offered = config_options.as_deref().unwrap_or_default();
+    select_full_access_mode(connection, &session, offered).await;
     if let Some(model) = plan.model.as_deref() {
-        select_model(
-            connection,
-            &session,
-            model,
-            config_options.as_deref().unwrap_or_default(),
-        )
-        .await?;
+        select_model(connection, &session, model, offered).await?;
     }
     Ok(session)
+}
+
+/// Put the session on the agent's full-access mode when it offers one. An
+/// agent that offers no such value is left alone, and a refusal is a warning
+/// rather than an open failure: the lane still runs, it just cannot write
+/// outside its worktree, and the first `boop` call says so in its own words.
+async fn select_full_access_mode(
+    connection: &ConnectionTo<Agent>,
+    session: &SessionId,
+    config_options: &[SessionConfigOption],
+) {
+    if !offers_value(config_options, MODE_CONFIG_ID, FULL_ACCESS_MODE) {
+        return;
+    }
+    match connection
+        .send_request(SetSessionConfigOptionRequest::new(
+            session.clone(),
+            MODE_CONFIG_ID,
+            SessionConfigOptionValue::value_id(FULL_ACCESS_MODE.to_owned()),
+        ))
+        .block_task()
+        .await
+    {
+        Ok(_) => info!(mode = FULL_ACCESS_MODE, "acp session mode set"),
+        Err(error) => warn!(
+            mode = FULL_ACCESS_MODE,
+            error = error.message,
+            "acp agent refused the full-access mode; the lane runs sandboxed"
+        ),
+    }
+}
+
+/// Whether the agent's `option_id` select offers `value_id`.
+fn offers_value(config_options: &[SessionConfigOption], option_id: &str, value_id: &str) -> bool {
+    select_value_ids(config_options, option_id).is_some_and(|values| {
+        values
+            .iter()
+            .any(|offered| offered.as_str() == value_id)
+    })
 }
 
 /// Name the model. The spelling is the harness's own and is sent through
@@ -446,26 +497,32 @@ fn model_rejection(message: &str, model: &str, config_options: &[SessionConfigOp
 
 /// The value ids of the agent's `model` config option, comma joined.
 fn offered_models(config_options: &[SessionConfigOption]) -> Option<String> {
+    Some(select_value_ids(config_options, MODEL_CONFIG_ID)?.join(", "))
+}
+
+/// Every value id the agent's `option_id` select offers, in the order it sent
+/// them. `None` for an option it does not carry or one that is not a select.
+fn select_value_ids(config_options: &[SessionConfigOption], option_id: &str) -> Option<Vec<String>> {
     let select = config_options
         .iter()
-        .find(|option| option.id.0.as_ref() == MODEL_CONFIG_ID)
+        .find(|option| option.id.0.as_ref() == option_id)
         .and_then(|option| match &option.kind {
             SessionConfigKind::Select(select) => Some(select),
             _ => None,
         })?;
-    let values: Vec<&str> = match &select.options {
+    let values: Vec<String> = match &select.options {
         SessionConfigSelectOptions::Ungrouped(options) => options
             .iter()
-            .map(|option| option.value.0.as_ref())
+            .map(|option| option.value.0.as_ref().to_owned())
             .collect(),
         SessionConfigSelectOptions::Grouped(groups) => groups
             .iter()
             .flat_map(|group| group.options.iter())
-            .map(|option| option.value.0.as_ref())
+            .map(|option| option.value.0.as_ref().to_owned())
             .collect(),
         _ => return None,
     };
-    Some(values.join(", "))
+    Some(values)
 }
 
 /// The turn verdict for one `session/prompt` outcome. A JSON-RPC error is a
@@ -659,6 +716,55 @@ mod tests {
             message,
             "Invalid params: model `gpt-5.6-luna@medium` (this agent takes: gpt-5.6-sol, gpt-5.6-luna)"
         );
+    }
+
+    /// Defect 1 (addendum 2026-08-25): codex-acp opens on `agent`
+    /// (workspace-write), so the lane and every native subagent it spawns run
+    /// sandboxed and boop cannot write the mail dir or the store.
+    #[test]
+    fn the_codex_full_access_mode_is_taken_when_the_agent_offers_it() {
+        let options = vec![SessionConfigOption::select(
+            SessionConfigId::new(MODE_CONFIG_ID),
+            "Mode",
+            SessionConfigValueId::new("agent"),
+            vec![
+                SessionConfigSelectOption::new(SessionConfigValueId::new("read-only"), "Read-only"),
+                SessionConfigSelectOption::new(SessionConfigValueId::new("agent"), "Agent"),
+                SessionConfigSelectOption::new(
+                    SessionConfigValueId::new(FULL_ACCESS_MODE),
+                    "Agent (full access)",
+                ),
+            ],
+        )];
+        assert!(offers_value(&options, MODE_CONFIG_ID, FULL_ACCESS_MODE));
+        assert_eq!(
+            select_value_ids(&options, MODE_CONFIG_ID),
+            Some(vec![
+                "read-only".to_owned(),
+                "agent".to_owned(),
+                FULL_ACCESS_MODE.to_owned(),
+            ])
+        );
+    }
+
+    /// An adapter with different mode ids keeps its own permissions: only the
+    /// exact codex-acp value is taken.
+    #[test]
+    fn an_agent_offering_no_full_access_mode_is_left_alone() {
+        let claude_modes = vec![SessionConfigOption::select(
+            SessionConfigId::new(MODE_CONFIG_ID),
+            "Mode",
+            SessionConfigValueId::new("default"),
+            vec![
+                SessionConfigSelectOption::new(SessionConfigValueId::new("default"), "Default"),
+                SessionConfigSelectOption::new(
+                    SessionConfigValueId::new("bypassPermissions"),
+                    "Bypass permissions",
+                ),
+            ],
+        )];
+        assert!(!offers_value(&claude_modes, MODE_CONFIG_ID, FULL_ACCESS_MODE));
+        assert!(!offers_value(&[], MODE_CONFIG_ID, FULL_ACCESS_MODE));
     }
 
     /// An agent that lists no model option leaves the message unadorned.
