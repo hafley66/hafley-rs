@@ -225,7 +225,9 @@ mod tests {
         assert!(!already_in_front_of_the_recipient(["held-in-mailbox"]));
         assert!(!already_in_front_of_the_recipient(["appended"]));
         assert!(!already_in_front_of_the_recipient([]));
-        assert!(!already_in_front_of_the_recipient(["what-boop-writes-next"]));
+        assert!(!already_in_front_of_the_recipient([
+            "what-boop-writes-next"
+        ]));
     }
 
     #[test]

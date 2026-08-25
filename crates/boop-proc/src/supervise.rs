@@ -2228,12 +2228,20 @@ mod tests {
         assert_eq!(results[0].rc, Some(1));
     }
 
+    /// Every test root, and the one store every test in this binary writes.
+    /// `TraceRecorder::new` and `mood_template` open `Store::default_path()`,
+    /// so without this pin a supervisor test for lane `mine` writes its trace
+    /// events into `~/.agent/boop.db` (boop-fixture-lanes-in-live-db: 9150
+    /// rows measured 2026-08-25).
     fn tempdir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "boop-supervise-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        static PIN: std::sync::Once = std::sync::Once::new();
+        let root = std::env::temp_dir().join(format!("boop-supervise-{}", std::process::id()));
+        PIN.call_once(|| {
+            std::fs::create_dir_all(root.join("home")).unwrap();
+            std::env::set_var("HOME", root.join("home"));
+            std::env::set_var("BOOP_DB", root.join("boop.db"));
+        });
+        let dir = root.join(format!("{:?}", std::thread::current().id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
