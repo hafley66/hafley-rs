@@ -251,8 +251,7 @@ fn pump(mut reader: impl Read + Send + 'static, sink: Arc<Mutex<OutputBuffer>>, 
             }
         }
         live.finish();
-    })
-    .thread();
+    });
 }
 
 /// How many pipes are still being drained, so the reaper can wait for the

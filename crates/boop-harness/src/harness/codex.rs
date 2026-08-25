@@ -13,7 +13,6 @@ use crate::harness::{
 use anyhow::Context;
 use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
-use boop_store::session::ModelSpec;
 use boop_store::tail;
 use serde_json::Value;
 
@@ -59,8 +58,8 @@ impl Harness for Codex {
         &DOOR
     }
 
-    /// `send_midflight` stays false: `codex exec` reads no stdin mid-turn,
-    /// and interactive codex never exits, so the on-exit hail never fires.
+    /// `send_midflight` stays false: ACP takes one `session/prompt` per turn
+    /// and a second before the first resolves is out of protocol.
     fn control_capabilities(&self) -> ControlCapabilities {
         ControlCapabilities {
             send_midflight: false,
@@ -221,52 +220,6 @@ impl Harness for Codex {
 fn codex_sessions_dir() -> anyhow::Result<PathBuf> {
     let home = dirs::home_dir().context("resolve home directory")?;
     Ok(home.join(".codex").join("sessions"))
-}
-
-/// `codex exec`, never interactive: the on-exit hail rides process exit and
-/// interactive codex idles forever (class 42). `@effort` -> reasoning config.
-fn launch_command(spec: &SpawnSpec) -> anyhow::Result<String> {
-    let mut command = match &spec.resume_session {
-        Some(id) => format!(
-            "codex exec resume {} {}",
-            shell_quote(id),
-            shell_quote(&spec.prompt)
-        ),
-        None => format!("codex exec {}", shell_quote(&spec.prompt)),
-    };
-    command.push_str(" --dangerously-bypass-approvals-and-sandbox");
-    // The CLI flag sets the sandbox for this exec's own turn. An agent this
-    // turn spawns through `multi_agent_v1` reads the process config instead,
-    // so the same two settings ride `-c` where every spawned agent inherits
-    // them. Without this a spawned agent's `boop` calls cannot write the mail
-    // dir or the repo's `.git/worktrees`.
-    command.push_str(" -c 'sandbox_mode=\"danger-full-access\"'");
-    command.push_str(" -c 'approval_policy=\"never\"'");
-    if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
-        let model_spec: ModelSpec = model.parse()?;
-        command.push_str(&format!(" -m {}", shell_quote(&model_spec.name)));
-        // The preset's own `effort` field wins; an `@suffix` on a bare
-        // `--model` is the older spelling and still resolves.
-        let effort = spec
-            .effort
-            .clone()
-            .filter(|value| !value.is_empty())
-            .or_else(|| model_spec.effort.map(|effort| effort.as_str().to_owned()));
-        if let Some(effort) = effort {
-            command.push_str(&format!(
-                " -c {}",
-                shell_quote(&format!("model_reasoning_effort=\"{effort}\""))
-            ));
-        }
-    }
-    Ok(spec.with_on_exit(match &spec.env_stamp {
-        Some(stamp) => format!("{stamp} {command}"),
-        None => command,
-    }))
-}
-
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', r"'\''"))
 }
 
 fn random_hex() -> String {
@@ -986,76 +939,10 @@ mod tests {
     #[test]
     fn codex_capabilities_are_measured() {
         let caps = Codex.control_capabilities();
-        assert!(!caps.send_midflight, "codex exec reads no stdin mid-turn");
+        assert!(!caps.send_midflight, "acp takes one prompt per turn");
         assert!(caps.resume);
         assert!(caps.spawn);
         assert!(caps.subagent_visible);
-    }
-
-    #[test]
-    fn launch_command_resumes_by_session_id() {
-        let mut spec = spawn_spec(None);
-        spec.resume_session = Some("0192aef3-aaaa-bbbb-cccc-dddddddddddd".to_owned());
-        spec.model = Some("gpt-5.6-luna".to_owned());
-        let command = super::launch_command(&spec).unwrap();
-        assert!(command.starts_with("codex exec resume "), "{command}");
-        assert!(command.contains("'do the lane'"), "{command}");
-        assert!(
-            command.contains(" --dangerously-bypass-approvals-and-sandbox"),
-            "{command}"
-        );
-        assert!(command.ends_with(" -m 'gpt-5.6-luna'"), "{command}");
-    }
-
-    /// Defect 1 (addendum 2026-08-25): a spawned native subagent inherits the
-    /// process config, never the parent turn's CLI sandbox flag.
-    #[test]
-    fn launch_command_sets_process_level_sandbox_and_approvals() {
-        let command = super::launch_command(&spawn_spec(None)).unwrap();
-        assert!(
-            command.contains(" -c 'sandbox_mode=\"danger-full-access\"'"),
-            "{command}"
-        );
-        assert!(
-            command.contains(" -c 'approval_policy=\"never\"'"),
-            "{command}"
-        );
-    }
-
-    #[test]
-    fn launch_command_passes_model_and_effort_suffix() {
-        let mut spec = spawn_spec(None);
-        spec.model = Some("gpt-5.6-luna@medium".to_owned());
-        let command = super::launch_command(&spec).unwrap();
-        assert!(command.starts_with("codex exec 'do the lane'"), "{command}");
-        assert!(command.contains(" -m 'gpt-5.6-luna'"), "{command}");
-        assert!(
-            command.contains(" -c 'model_reasoning_effort=\"medium\"'"),
-            "{command}"
-        );
-    }
-
-    #[test]
-    fn launch_command_leaves_plain_model_alone() {
-        let mut spec = spawn_spec(None);
-        spec.model = Some("gpt-5.6-sol".to_owned());
-        let command = super::launch_command(&spec).unwrap();
-        assert!(command.ends_with(" -m 'gpt-5.6-sol'"), "{command}");
-        assert!(!command.contains("model_reasoning_effort"), "{command}");
-    }
-
-    /// RECEIPT. Pre-fix, an `@` suffix outside the effort allowlist stayed
-    /// glued to the model name and was passed to codex unvalidated, failing
-    /// downstream inside the codex binary instead of here. `x@turbo` now
-    /// fails at parse, naming the allowlist.
-    #[test]
-    fn launch_command_rejects_an_at_suffix_outside_the_effort_allowlist() {
-        let mut spec = spawn_spec(None);
-        spec.model = Some("vendor@custom".to_owned());
-        let error = super::launch_command(&spec).unwrap_err().to_string();
-        assert!(error.contains("low"), "message: {error}");
-        assert!(error.contains("medium"), "message: {error}");
-        assert!(error.contains("high"), "message: {error}");
     }
 
     fn spawn_spec(socket: Option<String>) -> crate::harness::SpawnSpec {
