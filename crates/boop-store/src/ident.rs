@@ -33,7 +33,7 @@ pub struct Store {
 /// 14 = the door a live session answers on, and one delivery row per hail.
 /// 15 = ordered delivery-transition receipts beside the current-state ledger.
 /// 16 = the typed error code a refused transition carries.
-pub const SCHEMA_VERSION: i64 = 17;
+pub const SCHEMA_VERSION: i64 = 18;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -632,9 +632,9 @@ impl Store {
                 }
                 self.connection.execute_batch("PRAGMA user_version = 16;")?;
             }
-            if self.schema_version()? < 17 {
+            if self.schema_version()? < 18 {
                 self.connection.execute_batch(MAILBOX_SCHEMA)?;
-                self.connection.execute_batch("PRAGMA user_version = 17;")?;
+                self.connection.execute_batch("PRAGMA user_version = 18;")?;
             }
             self.stamp_version()?;
             Ok(())
@@ -3025,6 +3025,16 @@ WHEN NOT EXISTS (
 BEGIN
   SELECT RAISE(ABORT, 'agent_mail row without a delivery transition');
 END;
+
+-- How far each legacy file beside the database has been read. `offset` is the
+-- byte the next ndjson tail read starts at; `digest` is the last registry.json
+-- content a merge ran against. The files are never renamed or removed, so a
+-- `boop` that predates the mailbox keeps appending beside a `boop` that tails.
+CREATE TABLE IF NOT EXISTS mail_import (
+  path TEXT PRIMARY KEY,
+  offset INTEGER NOT NULL DEFAULT 0,
+  digest TEXT NOT NULL DEFAULT ''
+) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS agent_route (
   route TEXT PRIMARY KEY,

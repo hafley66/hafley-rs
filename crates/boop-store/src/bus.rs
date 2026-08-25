@@ -10,6 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use rusqlite::OptionalExtension;
 use serde_json::{Map, Value};
 
 use crate::harness_id::HarnessId;
@@ -332,8 +333,19 @@ fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:016x}", hasher.finish())
 }
 
-/// Default mail dir: `~/.agent/mail`.
+/// The configured mail dir: `BOOP_MAIL_DIR`, else the directory `BOOP_DB`
+/// names, else `~/.agent/mail`. A caller that redirected the store has
+/// redirected the mailbox with it, so no verb reaches into `~/.agent` behind
+/// its back.
 pub fn default_mail_dir() -> Result<PathBuf> {
+    if let Some(dir) = std::env::var_os("BOOP_MAIL_DIR").filter(|dir| !dir.is_empty()) {
+        return Ok(PathBuf::from(dir));
+    }
+    if let Some(db) = std::env::var_os("BOOP_DB").filter(|db| !db.is_empty()) {
+        if let Some(parent) = PathBuf::from(db).parent() {
+            return Ok(parent.to_path_buf());
+        }
+    }
     let home = dirs::home_dir().context("resolve home directory")?;
     Ok(home.join(".agent").join("mail"))
 }
@@ -402,39 +414,114 @@ pub fn open_store(dir: &Path) -> Result<crate::ident::Store> {
     Ok(store)
 }
 
-/// The one-shot import. Each file is renamed to `*.imported` before it is
-/// read, so a second opener finds nothing to claim and never doubles a row.
+/// Tail every legacy file beside the database. The files are never renamed,
+/// moved or deleted: a `boop` that predates the mailbox keeps appending to
+/// them, and every open reads only what was written since the last one.
 fn import_legacy(store: &crate::ident::Store, dir: &Path) -> Result<()> {
     if !dir.is_dir() {
         return Ok(());
     }
-    let registry = dir.join("registry.json");
-    if registry.is_file() {
-        let claimed = dir.join("registry.json.imported");
-        if fs::rename(&registry, &claimed).is_ok() {
-            import_registry_file(store, &claimed)?;
-        }
-    }
+    import_registry_file(store, &dir.join("registry.json"))?;
     for path in read_ndjson_files(dir)? {
-        let claimed = path.with_extension("ndjson.imported");
-        if fs::rename(&path, &claimed).is_err() {
-            continue;
-        }
-        let mailbox = path
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .unwrap_or("bus")
-            .to_owned();
-        for message in parse_ndjson(&claimed) {
-            insert_message(store, &mailbox, &message, "imported from ndjson")?;
-        }
+        import_ndjson_tail(store, &path)?;
     }
     Ok(())
 }
 
+/// The byte offset and content digest this path was last read at.
+fn import_mark(store: &crate::ident::Store, path: &Path) -> Result<(i64, String)> {
+    let key = path.display().to_string();
+    let mark = store
+        .connection()
+        .query_row(
+            "SELECT offset, digest FROM mail_import WHERE path = ?1",
+            rusqlite::params![key],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    Ok(mark.unwrap_or((0, String::new())))
+}
+
+fn set_import_mark(
+    store: &crate::ident::Store,
+    path: &Path,
+    offset: i64,
+    digest: &str,
+) -> Result<()> {
+    store.connection().execute(
+        "INSERT INTO mail_import (path, offset, digest) VALUES (?1, ?2, ?3)
+         ON CONFLICT(path) DO UPDATE SET offset = excluded.offset, digest = excluded.digest",
+        rusqlite::params![path.display().to_string(), offset, digest],
+    )?;
+    Ok(())
+}
+
+/// Read one ndjson file from the last imported byte to the last complete line.
+/// A row whose id the mailbox already holds is a no-op, so a re-read of the
+/// same bytes doubles nothing; the offset makes the usual case read nothing.
+fn import_ndjson_tail(store: &crate::ident::Store, path: &Path) -> Result<()> {
+    let Ok(metadata) = fs::metadata(path) else {
+        return Ok(());
+    };
+    let length = metadata.len() as i64;
+    let (mark, _) = import_mark(store, path)?;
+    // A file shorter than the mark was rotated or truncated under us.
+    let offset = match length < mark {
+        true => 0,
+        false => mark,
+    };
+    if length == offset {
+        return Ok(());
+    }
+    let bytes = read_from(path, offset as u64)?;
+    let Some(last) = bytes.iter().rposition(|byte| *byte == b'\n') else {
+        return Ok(());
+    };
+    let complete = &bytes[..=last];
+    let mailbox = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("bus")
+        .to_owned();
+    let connection = store.connection();
+    connection.execute_batch("BEGIN IMMEDIATE")?;
+    let result = (|| -> Result<()> {
+        for line in String::from_utf8_lossy(complete).lines() {
+            let Some(message) = parse_line(line) else {
+                continue;
+            };
+            write_message(store, &mailbox, &message, "imported from ndjson")?;
+        }
+        set_import_mark(store, path, offset + complete.len() as i64, "")
+    })();
+    finish(connection, result)
+}
+
+fn read_from(path: &Path, offset: u64) -> Result<Vec<u8>> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
+    file.seek(SeekFrom::Start(offset))
+        .with_context(|| format!("seek {}", path.display()))?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)
+        .with_context(|| format!("read {}", path.display()))?;
+    Ok(bytes)
+}
+
+/// Merge the registry file into the route table by name. The newer
+/// `registeredAt` wins, so a route the mailbox already carries is not rolled
+/// back to an older spawn's spelling. Nothing is deleted: a name only the
+/// table holds survives a file that never knew it.
 fn import_registry_file(store: &crate::ident::Store, path: &Path) -> Result<()> {
-    let text = fs::read_to_string(path).unwrap_or_default();
+    let Ok(text) = fs::read_to_string(path) else {
+        return Ok(());
+    };
     if text.trim().is_empty() {
+        return Ok(());
+    }
+    let digest = sha256_hex(text.as_bytes());
+    let (_, seen) = import_mark(store, path)?;
+    if seen == digest {
         return Ok(());
     }
     let value: Value = serde_json::from_str(&text)
@@ -445,12 +532,30 @@ fn import_registry_file(store: &crate::ident::Store, path: &Path) -> Result<()> 
     let connection = store.connection();
     connection.execute_batch("BEGIN IMMEDIATE")?;
     let result = (|| -> Result<()> {
+        let held = routes_in(store)?;
         for (id, entry) in object {
-            upsert_route(store, id, &route_from_value(entry))?;
+            let incoming = route_from_value(entry);
+            if outranks(held.get(id), &incoming) {
+                continue;
+            }
+            upsert_route(store, id, &incoming)?;
         }
-        Ok(())
+        set_import_mark(store, path, 0, &digest)
     })();
     finish(connection, result)
+}
+
+/// Whether the route the table already holds beats the one the file carries.
+/// An unstamped file row never displaces a stamped stored one.
+fn outranks(held: Option<&Route>, incoming: &Route) -> bool {
+    let Some(held) = held else {
+        return false;
+    };
+    match (held.registered_at.as_deref(), incoming.registered_at.as_deref()) {
+        (Some(held_at), Some(new_at)) => held_at >= new_at,
+        (Some(_), None) => true,
+        _ => false,
+    }
 }
 
 fn finish(connection: &rusqlite::Connection, result: Result<()>) -> Result<()> {
@@ -932,10 +1037,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// RECEIPT. `bus.ndjson` and `registry.json` beside the database are read
-    /// once, renamed away, and a second open imports nothing.
+    /// RECEIPT. The files beside the database are read where they lie and
+    /// left there, so a `boop` that predates the mailbox keeps appending to
+    /// them while a newer one tails.
     #[test]
-    fn the_files_beside_the_database_import_exactly_once() {
+    fn the_files_beside_the_database_are_read_in_place() {
         let dir = temp_dir("import");
         std::fs::write(
             dir.join("registry.json"),
@@ -953,11 +1059,111 @@ mod tests {
             Some("coordinator")
         );
         assert_eq!(super::read_messages(&dir).unwrap().len(), 1);
-        assert!(!dir.join("bus.ndjson").exists());
-        assert!(!dir.join("registry.json").exists());
-        assert!(dir.join("bus.ndjson.imported").is_file());
-        assert!(dir.join("registry.json.imported").is_file());
+        assert!(dir.join("bus.ndjson").is_file(), "the file stays put");
+        assert!(dir.join("registry.json").is_file(), "the file stays put");
+        assert!(!dir.join("bus.ndjson.imported").exists());
+        assert!(!dir.join("registry.json.imported").exists());
         assert_eq!(super::read_messages(&dir).unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. Each open reads only the bytes written since the last one, so
+    /// rows an old `boop` appends after the first open still land exactly once.
+    #[test]
+    fn each_open_imports_only_the_ndjson_tail() {
+        use std::io::Write;
+        let dir = temp_dir("tail");
+        let path = dir.join("bus.ndjson");
+        std::fs::write(&path, format!("{}\n", super::message_line(&send("m-tail01")))).unwrap();
+        assert_eq!(super::read_messages(&dir).unwrap().len(), 1);
+
+        let mut file = std::fs::OpenOptions::new().append(true).open(&path).unwrap();
+        for id in ["m-tail02", "m-tail03"] {
+            writeln!(file, "{}", super::message_line(&send(id))).unwrap();
+        }
+        drop(file);
+        let after_append = super::read_messages(&dir).unwrap();
+        assert_eq!(after_append.len(), 3, "the tail brought exactly two rows");
+
+        let store = super::open_store(&dir).unwrap();
+        assert_eq!(super::messages_in(&store).unwrap().len(), 3, "no fourth read");
+        let mark: i64 = store
+            .connection()
+            .query_row(
+                "SELECT offset FROM mail_import WHERE path = ?1",
+                rusqlite::params![path.display().to_string()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            mark as u64,
+            std::fs::metadata(&path).unwrap().len(),
+            "the mark sits at the end of the file"
+        );
+        let transitions: i64 = store
+            .connection()
+            .query_row(
+                "SELECT COUNT(*) FROM agent_delivery_transition WHERE message_id LIKE 'm-tail%'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(transitions, 3, "one transition per row, never a second");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. A half-written last line waits for its newline instead of
+    /// being imported as a truncated row.
+    #[test]
+    fn a_partial_last_line_is_left_for_the_next_open() {
+        use std::io::Write;
+        let dir = temp_dir("partial");
+        let path = dir.join("bus.ndjson");
+        let whole = super::message_line(&send("m-part01"));
+        let half = super::message_line(&send("m-part02"));
+        std::fs::write(&path, format!("{whole}\n{}", &half[..half.len() / 2])).unwrap();
+        assert_eq!(super::read_messages(&dir).unwrap().len(), 1);
+
+        let mut file = std::fs::OpenOptions::new().append(true).open(&path).unwrap();
+        write!(file, "{}\n", &half[half.len() / 2..]).unwrap();
+        drop(file);
+        let rows = super::read_messages(&dir).unwrap();
+        assert_eq!(rows.len(), 2, "the completed line lands whole");
+        assert_eq!(rows[1].id, "m-part02");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. The route the mailbox already carries is not rolled back to an
+    /// older spawn's spelling by a stale registry file.
+    #[test]
+    fn a_newer_registered_route_outranks_the_file() {
+        let dir = temp_dir("outrank");
+        std::fs::write(
+            dir.join("registry.json"),
+            r#"{"route-outrank": {"harness": "opencode", "registeredAt": "2026-01-01T00:00:00Z", "goal": "old"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            super::read_routes(&dir).unwrap()["route-outrank"].goal.as_deref(),
+            Some("old")
+        );
+        let store = super::open_store(&dir).unwrap();
+        let fresh = super::Route {
+            registered_at: Some("2026-06-01T00:00:00Z".to_owned()),
+            goal: Some("new".to_owned()),
+            ..super::route_from_value(&serde_json::json!({"harness": "opencode"}))
+        };
+        super::upsert_route(&store, "route-outrank", &fresh).unwrap();
+        std::fs::write(
+            dir.join("registry.json"),
+            r#"{"route-outrank": {"harness": "opencode", "registeredAt": "2026-01-01T00:00:00Z", "goal": "older still"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            super::read_routes(&dir).unwrap()["route-outrank"].goal.as_deref(),
+            Some("new"),
+            "the stale file must not roll the route back"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
