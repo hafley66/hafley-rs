@@ -14,6 +14,16 @@ fn mail_dir(name: &str) -> PathBuf {
     dir
 }
 
+/// `boop wait <lane>` dispatches to the lane-result wait only when the
+/// registry already names `lane` as a `kind: "lane"` route.
+fn seed_lane_route(dir: &std::path::Path, lane: &str) {
+    std::fs::write(
+        dir.join("registry.json"),
+        serde_json::json!({ lane: { "kind": "lane" } }).to_string(),
+    )
+    .unwrap();
+}
+
 /// One result row in the shape the on-exit epilogue hails: from the lane, to
 /// the parent that spawned it.
 fn seed_result(dir: &std::path::Path, lane: &str, rc: i32) {
@@ -200,7 +210,7 @@ impl Drop for CreateFixture {
 
 fn wait_exit(dir: &std::path::Path, lane: &str, timeout: &str) -> i32 {
     Command::new(env!("CARGO_BIN_EXE_boop"))
-        .args(["beep", "lane", "wait", lane, "--timeout", timeout])
+        .args(["wait", lane, "--wait-timeout", timeout])
         .arg("--mail-dir")
         .arg(dir)
         .env("HOME", dir.join("home"))
@@ -216,10 +226,12 @@ fn wait_exit(dir: &std::path::Path, lane: &str, timeout: &str) -> i32 {
 #[test]
 fn a_wait_exits_with_the_lanes_own_rc() {
     let dir = mail_dir("rc");
+    seed_lane_route(&dir, "feature-schema-emit");
     seed_result(&dir, "feature-schema-emit", 0);
     assert_eq!(wait_exit(&dir, "feature-schema-emit", "5"), 0);
 
     let dir = mail_dir("rc-fail");
+    seed_lane_route(&dir, "feature-schema-emit");
     seed_result(&dir, "feature-schema-emit", 17);
     assert_eq!(wait_exit(&dir, "feature-schema-emit", "5"), 17);
     let _ = std::fs::remove_dir_all(&dir);

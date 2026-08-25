@@ -1,7 +1,7 @@
 //! End-to-end: the hook inbox, which is what drains a claude coordinator's
-//! mail when no claude door answers for its pane. `boop adopt` installs
-//! nothing; `boop inbox hooks` is the one verb that writes the project
-//! settings, and a hail is never typed into a pane whatever the answer.
+//! mail when no claude door answers for its pane. Registering the route
+//! writes no project settings; `boop inbox hooks` is the one verb that
+//! writes them, and a hail is never typed into a pane whatever the answer.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -98,31 +98,37 @@ impl Coordinator {
         ])
     }
 
-    fn adopt(&self) -> std::process::Output {
-        self.boop(&[
-            "adopt",
-            "--name",
-            &self.name,
-            "--tmux",
-            &self.session,
-            "--harness",
-            "claude",
-            "--cwd",
-            self.project().to_str().unwrap(),
-        ])
+    /// Register this coordinator's route directly, the way a real adopt would
+    /// have written it: no CLI verb registers an existing pane as a
+    /// coordinator route anymore, so the fixture writes `registry.json` the
+    /// way `run_adopt_with` used to.
+    fn adopt(&self) {
+        std::fs::create_dir_all(self.mail()).unwrap();
+        std::fs::write(
+            self.mail().join("registry.json"),
+            serde_json::json!({
+                &self.name: {
+                    "kind": "coordinator",
+                    "harness": "claude",
+                    "tmux": &self.session,
+                    "cwd": self.project().to_str().unwrap(),
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
     }
 
     fn hail(&self, body: &str) -> String {
         let out = self.boop(&[
-            "hail",
-            "--to",
+            "beep",
             &self.name,
-            "--from",
+            body,
+            "--as",
             "fake-lane",
             "--kind",
             "result",
-            "--body",
-            body,
+            "--no-wait",
         ]);
         assert!(
             out.status.success(),
@@ -179,26 +185,11 @@ fn commands(settings: &serde_json::Value, event: &str) -> Vec<String> {
 
 /// RECEIPT. `boop inbox hooks` writes the Stop and UserPromptSubmit hooks
 /// once, is idempotent (a second Stop hook would deliver every hail twice),
-/// and `--uninstall` takes both back out. Adopting the pane writes the route
-/// and nothing else: the claude door, not the hook inbox, is where mail goes
-/// first, so no adopt touches a project's settings.
+/// and `--uninstall` takes both back out.
 #[test]
 fn the_inbox_hooks_verb_installs_both_hooks_once_and_removes_them() {
     let coord = Coordinator::new("install");
-    let adopted = coord.adopt();
-    assert!(
-        adopted.status.success(),
-        "adopt: {}",
-        String::from_utf8_lossy(&adopted.stderr)
-    );
-    assert!(
-        !coord
-            .project()
-            .join(".claude")
-            .join("settings.json")
-            .exists(),
-        "adopt must not write project settings"
-    );
+    coord.adopt();
 
     assert!(coord.install_hooks().status.success());
     let stop = format!("boop inbox drain --as {} --hook stop", coord.name);
@@ -216,15 +207,14 @@ fn the_inbox_hooks_verb_installs_both_hooks_once_and_removes_them() {
         vec![prompt]
     );
 
-    let removed = coord.boop(&[
-        "adopt",
+    let removed = coord.boop_no_mail_dir(&[
+        "inbox",
+        "hooks",
         "--name",
         &coord.name,
-        "--tmux",
-        &coord.session,
         "--cwd",
         coord.project().to_str().unwrap(),
-        "--uninstall-hooks",
+        "--uninstall",
     ]);
     assert!(
         removed.status.success(),
@@ -244,7 +234,7 @@ fn the_inbox_hooks_verb_installs_both_hooks_once_and_removes_them() {
 #[test]
 fn a_hail_during_a_long_turn_arrives_once_at_the_next_stop_and_never_as_keystrokes() {
     let coord = Coordinator::new("deliver");
-    assert!(coord.adopt().status.success());
+    coord.adopt();
     assert!(coord.install_hooks().status.success());
 
     // The long turn: the pane is busy, nothing drains, two hails land.
@@ -318,7 +308,7 @@ fn a_hail_during_a_long_turn_arrives_once_at_the_next_stop_and_never_as_keystrok
 #[test]
 fn the_prompt_hook_prints_the_mail_as_context_and_takes_delivery() {
     let coord = Coordinator::new("prompt");
-    assert!(coord.adopt().status.success());
+    coord.adopt();
     assert!(coord.install_hooks().status.success());
     coord.hail("read this before your next prompt");
     let printed = coord.drain("prompt");
@@ -341,7 +331,7 @@ fn the_prompt_hook_prints_the_mail_as_context_and_takes_delivery() {
 #[test]
 fn removing_the_hooks_leaves_a_hail_queued_with_a_named_refusal() {
     let coord = Coordinator::new("restore");
-    assert!(coord.adopt().status.success());
+    coord.adopt();
     assert!(coord.install_hooks().status.success());
     assert!(coord
         .boop_no_mail_dir(&[
@@ -414,7 +404,7 @@ fn a_lane_patch_installs_no_hooks() {
 #[test]
 fn a_drain_without_a_name_uses_the_identity_ladder() {
     let coord = Coordinator::new("ladder");
-    assert!(coord.adopt().status.success());
+    coord.adopt();
     coord.hail("ladder mail");
     let out = Command::new(BOOP)
         .args(["inbox", "drain", "--hook", "plain"])
@@ -442,7 +432,7 @@ fn a_drain_without_a_name_uses_the_identity_ladder() {
 #[test]
 fn an_empty_inbox_is_silent() {
     let coord = Coordinator::new("silent");
-    assert!(coord.adopt().status.success());
+    coord.adopt();
     assert_eq!(coord.drain("stop"), "");
     assert_eq!(coord.drain("prompt"), "");
     assert!(Path::new(&coord.mail()).exists());

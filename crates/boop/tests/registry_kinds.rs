@@ -77,7 +77,7 @@ fn a_hail_to_a_harnessless_native_row_is_held_and_the_reason_recorded() {
         r#"{"native-worker":{"kind":"native"}}"#,
     )
     .unwrap();
-    let output = run(&dir, &["beep", "hail", "native-worker", "--body", "hello"]);
+    let output = run(&dir, &["beep", "native-worker", "hello", "--no-wait"]);
     assert!(output.status.success(), "stderr: {:?}", output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(

@@ -11,10 +11,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use boop::bus::Route;
-use boop::event::AgentEvent;
 use boop::{bus, ident};
-
-use crate::OutputFormat;
 
 #[cfg(feature = "dl6")]
 pub(crate) const CONCATMAP_EXAMPLES: &str = "\
@@ -106,8 +103,6 @@ REGISTER: one path per kind of caller. A pane registers itself by running a
   session, or a native subagent) registers by name:
     boop tui <harness> [--cwd <dir>] [--name <id>]      interactive pane
     boop beep agent register <name> [--parent <id>]     pane-less route
-  Folded aliases, hidden and unchanged: `boop codex`, `boop shell-init`,
-  `boop me`.
 
 SPAWN: every lane spawn goes through lane create; bare tmux spawns leave no
 edge and stay invisible to tracking:
@@ -135,14 +130,13 @@ COMPLETION: the supervisor writes ONE row `lane <id> done rc=<n>` into the
   parent's mailbox on every exit path, including a signalled pane; the pane's
   own epilogue only drops the lane's route.
   A lane spawned with --parent reports completion; do not poll.
-  A parent whose route is kind=coordinator (what `boop adopt` writes) gets that
-  hail through its harness door as its next prompt; no wait needs arming.
+  A parent whose route is kind=coordinator (what `boop tui <harness>` writes)
+  gets that hail through its harness door as its next prompt; no wait needs
+  arming.
   `--wait` blocks on that row and exits with the lane's rc, so spawn-and-join is
   one command; `--wait-timeout <s>` (default 3600, 0 waits forever) exits 124.
   The same wait after the fact is the one wait verb, given the lane's name:
     boop wait <lane> [--wait-timeout <s>]
-  Folded aliases, hidden and unchanged: `boop beep lane create --wait`,
-  `boop beep lane wait <lane>`.
   A wait whose lane route goes dead with no row exits 3 instead of blocking.
 
 DEBUG: what just went wrong, without opening a log:
@@ -203,8 +197,6 @@ SEND: one verb, `boop beep`. It sends and then blocks for the answer:
   the same spelling `boop wait --me --as <name>` takes.
   A route named after a `beep` subcommand (lane, agent, ps, pstree, harness) is
   unreachable and says so; rename it.
-  Folded aliases, hidden and unchanged: `boop push`, `boop beep hail`,
-  `boop tell-parent`, `boop tell-children`.
 
 WAIT: every agent can background a shell, so the universal push is a block.
   A wait on a door-delivered hail also ends when the recipient's turn ends
@@ -259,11 +251,7 @@ SQL: the store is SQLite at ~/.agent/boop.db; `boop db \"<sql>\"` queries it
   passthrough takes plain SQL only.
 
 BOOP_NO_SYNC=1 in the environment skips the startup transcript sync for every
-  verb, so a read hits the store as it stands instead of paying a cold sync.
-
-The pre-split verbs (harnesses, sessions, events, chat, tail, list, measure,
-dispatch, lane, resolve, adopt, sweep, prune, hail, sync, follow) still run as
-hidden aliases for one release. Use `beep` and `db`.",
+  verb, so a read hits the store as it stands instead of paying a cold sync.",
         version = ident::SCHEMA_VERSION
     )
 }
@@ -285,46 +273,6 @@ pub(crate) fn line(text: &str) {
 
 pub(crate) fn write_line(output: &mut impl std::io::Write, text: &str) -> std::io::Result<()> {
     writeln!(output, "{text}")
-}
-
-// ---------------------------------------------------------------------------
-// The verb output helpers
-// ---------------------------------------------------------------------------
-
-pub(crate) fn emit_event(event: &AgentEvent, format: OutputFormat) {
-    match format {
-        OutputFormat::Json => {
-            if let Ok(encoded) = serde_json::to_string(event) {
-                println!("{encoded}");
-            }
-        }
-        OutputFormat::Text => {
-            let paths = event
-                .paths
-                .iter()
-                .map(|path| format!("{}({:?})", path.path, path.access))
-                .collect::<Vec<_>>()
-                .join(",");
-            let tool = event.tool_name.as_deref().unwrap_or("-");
-            if paths.is_empty() && event.urls.is_empty() {
-                println!(
-                    "[{}] {} {} {} {}",
-                    event.harness, event.ts_ms, event.record_type, tool, event.session_id
-                );
-            } else {
-                println!(
-                    "[{}] {} {} {} {} paths=[{}] urls=[{}]",
-                    event.harness,
-                    event.ts_ms,
-                    event.record_type,
-                    tool,
-                    event.session_id,
-                    paths,
-                    event.urls.join(",")
-                );
-            }
-        }
-    }
 }
 
 pub(crate) fn mail_dir(value: Option<&Path>) -> Result<PathBuf> {

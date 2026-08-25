@@ -1,6 +1,7 @@
-//! Pins `boop tell-parent` (parent-edge resolution through the identity
-//! ladder's env rung, the registered-coordinator fallback, the `yield`
-//! default body) and `boop tell-children` (per-child landed/no-route/dead).
+//! Pins `boop beep parent <body>` (parent-edge resolution through the
+//! identity ladder's env rung, the registered-coordinator fallback, the
+//! `yield` default body) and `boop beep children <body>`
+//! (per-child landed/no-route/dead).
 
 use std::path::PathBuf;
 use std::process::{Command, Output};
@@ -91,7 +92,7 @@ fn stderr(output: &Output) -> String {
 }
 
 #[test]
-fn tell_parent_lands_exactly_one_row_of_the_given_kind_addressed_to_the_recorded_parent_edge() {
+fn beep_parent_lands_exactly_one_row_of_the_given_kind_addressed_to_the_recorded_parent_edge() {
     let fixture = Fixture::new("edge");
     fixture.write_registry(serde_json::json!({
         "feature-a": {"kind": "lane", "parent": "coord-1"},
@@ -99,7 +100,14 @@ fn tell_parent_lands_exactly_one_row_of_the_given_kind_addressed_to_the_recorded
     }));
     let output = fixture.boop_as(
         "feature-a",
-        &["tell-parent", "--kind", "completion", "--body", "done here"],
+        &[
+            "beep",
+            "parent",
+            "done here",
+            "--kind",
+            "completion",
+            "--no-wait",
+        ],
     );
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let text = stdout(&output);
@@ -135,7 +143,7 @@ fn a_caller_with_no_recorded_parent_falls_back_to_the_one_registered_coordinator
     }));
     let output = fixture.boop_as(
         "feature-b",
-        &["tell-parent", "--kind", "note", "--body", "hi"],
+        &["beep", "parent", "hi", "--kind", "note", "--no-wait"],
     );
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let text = stdout(&output);
@@ -152,7 +160,10 @@ fn a_caller_with_no_parent_edge_and_no_registered_coordinator_fails_by_name() {
     fixture.write_registry(serde_json::json!({
         "solo": {"kind": "lane"},
     }));
-    let output = fixture.boop_as("solo", &["tell-parent", "--kind", "note", "--body", "hi"]);
+    let output = fixture.boop_as(
+        "solo",
+        &["beep", "parent", "hi", "--kind", "note", "--no-wait"],
+    );
     assert!(!output.status.success(), "stdout: {}", stdout(&output));
     let err = stderr(&output);
     assert!(err.contains("no parent edge:"), "stderr: {err}");
@@ -168,7 +179,10 @@ fn kind_yield_with_no_body_mints_the_default_body() {
         "feature-a": {"kind": "lane", "parent": "coord-1"},
         "coord-1": {"kind": "coordinator"},
     }));
-    let output = fixture.boop_as("feature-a", &["tell-parent", "--kind", "yield"]);
+    let output = fixture.boop_as(
+        "feature-a",
+        &["beep", "parent", "--kind", "yield", "--no-wait"],
+    );
     assert!(output.status.success(), "stderr: {}", stderr(&output));
 
     let rows = fixture.bus_rows();
@@ -182,21 +196,7 @@ fn kind_yield_with_no_body_mints_the_default_body() {
 }
 
 #[test]
-fn kind_completion_with_no_body_is_an_error_naming_the_kind() {
-    let fixture = Fixture::new("nobody");
-    fixture.write_registry(serde_json::json!({
-        "feature-a": {"kind": "lane", "parent": "coord-1"},
-        "coord-1": {"kind": "coordinator"},
-    }));
-    let output = fixture.boop_as("feature-a", &["tell-parent", "--kind", "completion"]);
-    assert!(!output.status.success(), "stdout: {}", stdout(&output));
-    let err = stderr(&output);
-    assert!(err.contains("a body is required"), "stderr: {err}");
-    assert!(err.contains("--kind completion"), "stderr: {err}");
-}
-
-#[test]
-fn tell_children_lands_on_the_hook_child_and_reports_the_routeless_child_as_no_route() {
+fn beep_children_lands_on_the_hook_child_and_reports_the_routeless_child_as_no_route() {
     let fixture = Fixture::new("children");
     let hook_child_cwd = fixture.root.join("hook-child-project");
     std::fs::create_dir_all(hook_child_cwd.join(".claude")).unwrap();
@@ -226,7 +226,10 @@ fn tell_children_lands_on_the_hook_child_and_reports_the_routeless_child_as_no_r
             "cwd": hook_child_cwd.to_str().unwrap(),
         },
     }));
-    let output = fixture.boop_as("coord-3", &["tell-children", "--body", "status check"]);
+    let output = fixture.boop_as(
+        "coord-3",
+        &["beep", "children", "status check", "--kind", "note"],
+    );
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
@@ -257,12 +260,12 @@ fn tell_children_lands_on_the_hook_child_and_reports_the_routeless_child_as_no_r
 }
 
 #[test]
-fn tell_children_with_no_children_at_all_says_so_and_exits_clean() {
+fn beep_children_with_no_children_at_all_says_so_and_exits_clean() {
     let fixture = Fixture::new("nochildren");
     fixture.write_registry(serde_json::json!({
         "coord-4": {"kind": "coordinator"},
     }));
-    let output = fixture.boop_as("coord-4", &["tell-children", "--body", "anyone there"]);
+    let output = fixture.boop_as("coord-4", &["beep", "children", "anyone there"]);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     assert_eq!(
         stdout(&output).trim(),
@@ -281,7 +284,7 @@ fn tell_children_with_no_children_at_all_says_so_and_exits_clean() {
 /// to land. The verb says so per target instead of exiting clean on an empty
 /// registry child list.
 #[test]
-fn tell_children_names_a_native_subagent_child_as_no_route() {
+fn beep_children_names_a_native_subagent_child_as_no_route() {
     let fixture = Fixture::new("native");
     fixture.write_registry(serde_json::json!({
         "coord-6": {"kind": "coordinator", "sessionId": "coord-6"},
@@ -292,7 +295,7 @@ fn tell_children_names_a_native_subagent_child_as_no_route() {
         .unwrap();
     drop(store);
 
-    let output = fixture.boop_as("coord-6", &["tell-children", "--body", "ping"]);
+    let output = fixture.boop_as("coord-6", &["beep", "children", "ping"]);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let text = stdout(&output);
     let lines: Vec<&str> = text.lines().collect();
@@ -322,16 +325,16 @@ fn boop_help_doctrine_names_the_one_send_and_the_wait() {
     assert!(text.contains("boop wait <lane>"), "stdout: {text}");
     assert!(text.contains("boop tui <harness>"), "stdout: {text}");
     assert!(text.contains("boop beep agent register"), "stdout: {text}");
-    // The folded spellings still run; the doctrine no longer teaches them.
-    for folded in [
+    // Deleted spellings never resurface in the doctrine text.
+    for deleted in [
         "boop push <route>",
         "boop tell-parent [",
         "boop tell-children -",
         "boop beep lane wait <lane> --timeout",
     ] {
         assert!(
-            !text.contains(folded),
-            "doctrine still teaches {folded}:\n{text}"
+            !text.contains(deleted),
+            "doctrine still teaches {deleted}:\n{text}"
         );
     }
 }
@@ -340,7 +343,7 @@ fn boop_help_doctrine_names_the_one_send_and_the_wait() {
 /// spawner's environment, so the env rung names the spawner. `--as` outranks
 /// it and the row leaves the native's own parent edge.
 #[test]
-fn tell_parent_as_a_native_outranks_the_spawners_env_stamp() {
+fn beep_parent_as_a_native_outranks_the_spawners_env_stamp() {
     let fixture = Fixture::new("as-native");
     fixture.write_registry(serde_json::json!({
         "feature-a": {"kind": "lane", "parent": "coord-1"},
@@ -350,13 +353,14 @@ fn tell_parent_as_a_native_outranks_the_spawners_env_stamp() {
     let output = fixture.boop_as(
         "feature-a",
         &[
-            "tell-parent",
+            "beep",
+            "parent",
+            "from the native",
             "--as",
             "native-n1",
             "--kind",
             "note",
-            "--body",
-            "from the native",
+            "--no-wait",
         ],
     );
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -369,7 +373,7 @@ fn tell_parent_as_a_native_outranks_the_spawners_env_stamp() {
 /// `--as` naming nothing in the registry is an error with the fix in it, not
 /// a silent fall back to the env rung.
 #[test]
-fn tell_parent_as_an_unregistered_name_says_to_register_it() {
+fn beep_parent_as_an_unregistered_name_says_to_register_it() {
     let fixture = Fixture::new("as-unknown");
     fixture.write_registry(serde_json::json!({
         "feature-a": {"kind": "lane", "parent": "coord-1"},
@@ -377,7 +381,7 @@ fn tell_parent_as_an_unregistered_name_says_to_register_it() {
     }));
     let output = fixture.boop_as(
         "feature-a",
-        &["tell-parent", "--as", "ghost", "--body", "hello"],
+        &["beep", "parent", "hello", "--as", "ghost", "--no-wait"],
     );
     assert!(!output.status.success());
     assert!(
@@ -414,10 +418,10 @@ fn agent_register_ends_with_the_as_line_for_the_new_name() {
     );
 }
 
-/// Defect 2: `push` and `beep hail` take the same `--as` spelling `wait --me`
-/// takes, so one brief line serves every verb a native runs.
+/// Defect 2: `beep` takes the same `--as` spelling `wait --me` takes, so one
+/// brief line serves every verb a native runs.
 #[test]
-fn push_and_hail_accept_the_as_spelling_for_the_sender() {
+fn beep_accepts_the_as_spelling_for_the_sender() {
     let fixture = Fixture::new("as-spelling");
     fixture.write_registry(serde_json::json!({
         "native-n1": {"kind": "native", "parent": "feature-a"},
@@ -427,12 +431,11 @@ fn push_and_hail_accept_the_as_spelling_for_the_sender() {
         "feature-b",
         &[
             "beep",
-            "hail",
             "native-n1",
+            "ping",
             "--as",
             "native-n2",
-            "--body",
-            "ping",
+            "--no-wait",
         ],
     );
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -442,11 +445,10 @@ fn push_and_hail_accept_the_as_spelling_for_the_sender() {
     assert_eq!(rows[0]["to"], "native-n1");
 }
 
-/// Defect 4 (addendum 2026-08-25): `push parent` and `beep hail parent`
-/// advertise the alias in their help, then addressed a route literally named
-/// `parent` and left the row held with no registry route.
+/// Defect 4 (addendum 2026-08-25): `beep parent` addressed a route literally
+/// named `parent` and left the row held with no registry route.
 #[test]
-fn hail_parent_resolves_the_alias_through_the_same_edge_tell_parent_walks() {
+fn beep_parent_no_wait_resolves_the_alias_through_the_same_edge_beep_parent_walks() {
     let fixture = Fixture::new("hail-parent");
     fixture.write_registry(serde_json::json!({
         "native-n1": {"kind": "native", "parent": "feature-cx-a"},
@@ -455,15 +457,7 @@ fn hail_parent_resolves_the_alias_through_the_same_edge_tell_parent_walks() {
     }));
     let output = fixture.boop_as(
         "feature-cx-a",
-        &[
-            "beep",
-            "hail",
-            "parent",
-            "--as",
-            "native-n1",
-            "--body",
-            "up one",
-        ],
+        &["beep", "parent", "up one", "--as", "native-n1", "--no-wait"],
     );
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let rows = fixture.bus_rows();
@@ -473,7 +467,7 @@ fn hail_parent_resolves_the_alias_through_the_same_edge_tell_parent_walks() {
 }
 
 #[test]
-fn push_parent_resolves_the_alias_before_it_walks_the_ladder() {
+fn beep_parent_waited_resolves_the_alias_before_it_walks_the_ladder() {
     let fixture = Fixture::new("push-parent");
     fixture.write_registry(serde_json::json!({
         "native-n1": {"kind": "native", "parent": "feature-cx-a"},
@@ -483,12 +477,11 @@ fn push_parent_resolves_the_alias_before_it_walks_the_ladder() {
     let output = fixture.boop_as(
         "feature-cx-a",
         &[
-            "push",
+            "beep",
             "parent",
+            "up one",
             "--as",
             "native-n1",
-            "--body",
-            "up one",
             "--timeout",
             "1",
         ],
@@ -510,15 +503,12 @@ fn push_parent_resolves_the_alias_before_it_walks_the_ladder() {
 /// A caller whose parent edge cannot be resolved gets that error, never a row
 /// addressed to the literal word.
 #[test]
-fn push_parent_with_no_edge_fails_by_name_instead_of_addressing_the_word() {
+fn beep_parent_with_no_edge_fails_by_name_instead_of_addressing_the_word() {
     let fixture = Fixture::new("push-parent-noedge");
     fixture.write_registry(serde_json::json!({
         "lonely": {"kind": "coordinator"},
     }));
-    let output = fixture.boop_as(
-        "lonely",
-        &["push", "parent", "--body", "up one", "--timeout", "1"],
-    );
+    let output = fixture.boop_as("lonely", &["beep", "parent", "up one", "--timeout", "1"]);
     assert!(!output.status.success());
     assert!(
         stderr(&output).contains("no parent edge"),
@@ -529,7 +519,7 @@ fn push_parent_with_no_edge_fails_by_name_instead_of_addressing_the_word() {
 }
 
 // ---------------------------------------------------------------------------
-// the fold: one send, four hidden aliases
+// the one send
 // ---------------------------------------------------------------------------
 
 /// The registry every alias test sends against: a native under a lane under a
@@ -584,8 +574,7 @@ fn beep_sends_one_row_from_a_route_and_a_body_positional() {
     );
 }
 
-/// `--body` is the older spelling of the positional, kept so briefs written
-/// against `push` and `beep hail` keep running.
+/// `--body` is the older spelling of the positional.
 #[test]
 fn beep_still_takes_the_body_flag_spelling() {
     let fixture = Fixture::new("beep-body-flag");
@@ -604,133 +593,6 @@ fn beep_still_takes_the_body_flag_spelling() {
     );
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     assert_eq!(only_row(&fixture).3, "the body");
-}
-
-/// Alias 1: `boop beep hail`. Same row, same rung.
-#[test]
-fn beep_hail_is_an_alias_of_the_one_send() {
-    let fixture = Fixture::new("alias-hail");
-    fixture.write_registry(folded_registry());
-    let output = fixture.boop_as(
-        "feature-a",
-        &[
-            "beep",
-            "hail",
-            "native-n1",
-            "--body",
-            "the body",
-            "--kind",
-            "note",
-        ],
-    );
-    assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert_eq!(
-        only_row(&fixture),
-        (
-            "feature-a".to_owned(),
-            "native-n1".to_owned(),
-            "note".to_owned(),
-            "the body".to_owned()
-        )
-    );
-}
-
-/// Alias 2: `boop push`. Same row; it blocks after, so the timeout is short.
-#[test]
-fn push_is_an_alias_of_the_one_send() {
-    let fixture = Fixture::new("alias-push");
-    fixture.write_registry(folded_registry());
-    let output = fixture.boop_as(
-        "feature-a",
-        &[
-            "push",
-            "native-n1",
-            "--body",
-            "the body",
-            "--kind",
-            "note",
-            "--timeout",
-            "1",
-        ],
-    );
-    assert_eq!(
-        output.status.code(),
-        Some(124),
-        "stderr: {}",
-        stderr(&output)
-    );
-    assert_eq!(
-        only_row(&fixture),
-        (
-            "feature-a".to_owned(),
-            "native-n1".to_owned(),
-            "note".to_owned(),
-            "the body".to_owned()
-        )
-    );
-}
-
-/// Alias 3: `boop tell-parent` == `boop beep parent <body>`.
-#[test]
-fn tell_parent_is_an_alias_of_beep_parent() {
-    let alias = Fixture::new("alias-parent-old");
-    alias.write_registry(folded_registry());
-    let output = alias.boop_as(
-        "native-n1",
-        &["tell-parent", "--kind", "note", "--body", "the body"],
-    );
-    assert!(output.status.success(), "stderr: {}", stderr(&output));
-
-    let folded = Fixture::new("alias-parent-new");
-    folded.write_registry(folded_registry());
-    let output = folded.boop_as(
-        "native-n1",
-        &["beep", "parent", "the body", "--kind", "note", "--no-wait"],
-    );
-    assert!(output.status.success(), "stderr: {}", stderr(&output));
-
-    assert_eq!(only_row(&alias).0, only_row(&folded).0);
-    assert_eq!(only_row(&alias).1, "feature-a");
-    assert_eq!(only_row(&alias).1, only_row(&folded).1);
-    assert_eq!(only_row(&alias).3, only_row(&folded).3);
-}
-
-/// Alias 4: `boop tell-children` == `boop beep children <body>`. The fan-out
-/// reports per target, so the tally line is what the two have to share.
-#[test]
-fn tell_children_is_an_alias_of_beep_children() {
-    let alias = Fixture::new("alias-children-old");
-    alias.write_registry(folded_registry());
-    let old = alias.boop_as("feature-a", &["tell-children", "--body", "stop"]);
-    assert!(old.status.success(), "stderr: {}", stderr(&old));
-
-    let folded = Fixture::new("alias-children-new");
-    folded.write_registry(folded_registry());
-    let new = folded.boop_as("feature-a", &["beep", "children", "stop"]);
-    assert!(new.status.success(), "stderr: {}", stderr(&new));
-
-    assert_eq!(stdout(&old), stdout(&new));
-    assert!(
-        stdout(&old).contains("no-route native-n1"),
-        "{}",
-        stdout(&old)
-    );
-}
-
-/// A route named after a `beep` subcommand can never be addressed, because
-/// clap resolves the name to that subcommand first. The send says so.
-#[test]
-fn a_route_named_after_a_beep_subcommand_is_refused_by_name() {
-    let fixture = Fixture::new("reserved-route");
-    fixture.write_registry(folded_registry());
-    let output = fixture.boop_as("feature-a", &["push", "lane", "--body", "x"]);
-    assert!(!output.status.success());
-    let err = stderr(&output);
-    assert!(
-        err.contains("`lane` is the name of a `boop beep` subcommand"),
-        "stderr: {err}"
-    );
-    assert!(fixture.bus_rows().is_empty(), "no row was appended");
 }
 
 /// Missing body is clap's own required-argument error, exit 2, naming <BODY>.

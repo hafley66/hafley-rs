@@ -80,12 +80,11 @@ fn hail_prints_the_wait_hint_naming_the_id_it_queued() {
     let output = fixture
         .boop(&[
             "beep",
-            "hail",
             "feature-answers",
-            "--body",
             "question",
-            "--from",
+            "--as",
             "asker",
+            "--no-wait",
         ])
         .output()
         .unwrap();
@@ -105,12 +104,11 @@ fn a_reply_ends_the_wait_with_its_body_and_a_delivery_stamp() {
     fixture
         .boop(&[
             "beep",
-            "hail",
             "feature-answers",
-            "--body",
             "question",
-            "--from",
+            "--as",
             "asker",
+            "--no-wait",
         ])
         .output()
         .unwrap();
@@ -154,12 +152,11 @@ fn a_delivered_reply_is_not_replayed_by_a_second_wait() {
     fixture
         .boop(&[
             "beep",
-            "hail",
             "feature-answers",
-            "--body",
             "question",
-            "--from",
+            "--as",
             "asker",
+            "--no-wait",
         ])
         .output()
         .unwrap();
@@ -329,18 +326,16 @@ fn me_without_a_name_watches_the_inbox_the_spawn_stamp_names() {
 }
 
 #[test]
-fn hail_with_a_wait_timeout_sends_then_blocks_and_times_out() {
+fn beep_with_a_timeout_sends_then_blocks_and_times_out() {
     let fixture = Fixture::new("hailwait");
     let output = fixture
         .boop(&[
             "beep",
-            "hail",
             "feature-answers",
-            "--body",
             "question",
-            "--from",
+            "--as",
             "asker",
-            "--wait-timeout",
+            "--timeout",
             "1",
         ])
         .output()
@@ -348,7 +343,7 @@ fn hail_with_a_wait_timeout_sends_then_blocks_and_times_out() {
     assert_eq!(
         output.status.code(),
         Some(124),
-        "hail --wait-timeout blocks on the reply and times out with it"
+        "beep --timeout blocks on the reply and times out with it"
     );
     let stdout = String::from_utf8(output.stdout).unwrap();
     let id = queued_id(&fixture);
@@ -356,8 +351,8 @@ fn hail_with_a_wait_timeout_sends_then_blocks_and_times_out() {
         stdout.contains(&format!("to await the reply: boop wait {id}")),
         "the hint still prints before the block: {stdout}"
     );
-    // Folded (2026-08-25): `beep hail --wait-timeout` is `push`'s block, so
-    // its timeout ends on `push`'s two lines rather than the bare re-run one.
+    // A waited `beep` times out on the two-line push_wait block, not the
+    // bare re-run line a bodyless `boop wait` prints.
     assert!(
         stdout.contains(&format!("no answer from feature-answers in 1s (id {id})")),
         "the timeout names the route and the id: {stdout}"
@@ -370,24 +365,24 @@ fn hail_with_a_wait_timeout_sends_then_blocks_and_times_out() {
 }
 
 // FAIL-PRE-FIX: a parent had to send with one verb and wait with another,
-// pasting the id between them; `push` is both, and its exits are typed.
+// pasting the id between them; `beep` with a timeout is both, and its exits
+// are typed.
 #[test]
-fn push_sends_and_blocks_until_the_reply_arrives() {
+fn beep_with_a_timeout_sends_and_blocks_until_the_reply_arrives() {
     let fixture = Fixture::new("push-reply");
     let pushing = fixture
         .boop(&[
-            "push",
+            "beep",
             "feature-answers",
-            "--body",
             "question",
-            "--from",
+            "--as",
             "asker",
             "--timeout",
             "30",
         ])
         .spawn()
         .unwrap();
-    // The push re-reads the mailbox twice a second, so the reply lands after
+    // The wait re-reads the mailbox twice a second, so the reply lands after
     // it has already blocked at least once.
     std::thread::sleep(std::time::Duration::from_millis(1500));
     let id = queued_id(&fixture);
@@ -416,25 +411,24 @@ fn push_sends_and_blocks_until_the_reply_arrives() {
     );
 }
 
-/// RECEIPT (push). A route that never answers exits 124, and both streams
-/// carry the command that reads what happened.
+/// RECEIPT. A route that never answers exits 124, and both streams carry the
+/// command that reads what happened.
 #[test]
-fn push_exits_124_and_names_the_debug_command() {
+fn beep_with_a_timeout_exits_124_and_names_the_debug_command() {
     let fixture = Fixture::new("push-timeout");
     let output = fixture
         .boop(&[
-            "push",
+            "beep",
             "feature-silent",
-            "--body",
             "question",
-            "--from",
+            "--as",
             "asker",
             "--timeout",
             "1",
         ])
         .output()
         .unwrap();
-    assert_eq!(output.status.code(), Some(124), "a silent push exits 124");
+    assert_eq!(output.status.code(), Some(124), "a silent send exits 124");
     let stdout = String::from_utf8(output.stdout).unwrap();
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert_eq!(
@@ -448,18 +442,17 @@ fn push_exits_124_and_names_the_debug_command() {
     );
 }
 
-/// RECEIPT (push). A push at a name with no route still lands: the row is
+/// RECEIPT. A waited send at a name with no route still lands: the row is
 /// held in the mailbox and the sender is told which rung took it.
 #[test]
-fn push_at_an_unregistered_name_still_reports_a_rung() {
+fn beep_at_an_unregistered_name_still_reports_a_rung() {
     let fixture = Fixture::new("push-noroute");
     let output = fixture
         .boop(&[
-            "push",
+            "beep",
             "nobody",
-            "--body",
             "into the void",
-            "--from",
+            "--as",
             "asker",
             "--timeout",
             "1",
@@ -536,16 +529,19 @@ fn me_still_takes_a_row_held_in_the_mailbox_for_a_native_route() {
     let sent = fixture
         .boop(&[
             "beep",
-            "hail",
             "native-n1",
+            "ping from the sibling native",
             "--as",
             "native-n2",
-            "--body",
-            "ping from the sibling native",
+            "--no-wait",
         ])
         .output()
         .unwrap();
-    assert_eq!(sent.status.code(), Some(0), "hail to a native route lands");
+    assert_eq!(
+        sent.status.code(),
+        Some(0),
+        "the send to a native route lands"
+    );
     assert!(
         String::from_utf8_lossy(&sent.stdout).contains("held-in-mailbox")
             || String::from_utf8_lossy(&sent.stdout).contains("held"),
