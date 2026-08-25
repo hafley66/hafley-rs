@@ -439,7 +439,9 @@ impl StageStore for DurableStageStore {
         let bytes = serde_json::to_vec(&manifest)?;
         let target = self.manifest_path(transaction.id);
         let mut manifest_sync = SyncMeter::default();
-        publish_file(&target, &bytes, SyncLevel::Data, &mut manifest_sync, |_| Ok(()))?;
+        publish_file(&target, &bytes, SyncLevel::Data, &mut manifest_sync, |_| {
+            Ok(())
+        })?;
         // The one flush a save pays: it settles every blob fenced before it.
         manifest_sync.directory(&self.manifests_dir(), SyncLevel::Flush)?;
         record_sync(&manifest_span, manifest_sync, manifest_started);

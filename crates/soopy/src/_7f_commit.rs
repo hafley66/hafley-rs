@@ -715,7 +715,7 @@ impl CommitEngine {
             .map(|operation| self.operation_bytes(operation))
             .collect::<std::result::Result<Vec<_>, _>>()?;
         let mut directories = BTreeSet::new();
-        for index in 0..journal.operations.len() {
+        for (index, payload) in payloads.iter().enumerate() {
             if completed.contains(&index) {
                 continue;
             }
@@ -727,7 +727,7 @@ impl CommitEngine {
             apply_operation(
                 &self.target_root,
                 &journal.operations[index],
-                payloads[index].as_deref().unwrap_or_default(),
+                payload.as_deref().unwrap_or_default(),
                 self.durability,
                 &mut meter,
                 &mut directories,
@@ -1227,7 +1227,9 @@ fn ensure_parent_dirs(_root: &Path, path: &Path) -> std::result::Result<(), Comm
 }
 
 fn parent_of(path: &Path) -> PathBuf {
-    path.parent().unwrap_or_else(|| Path::new(".")).to_path_buf()
+    path.parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf()
 }
 fn target_path(root: &Path, path: &SourcePath) -> PathBuf {
     root.join(path_text(path))
