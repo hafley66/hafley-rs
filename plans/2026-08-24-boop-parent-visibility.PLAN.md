@@ -115,3 +115,18 @@ Lane `feature-boop-parent-visibility` yielded `039a729` (tests 128+102+64), then
 ## Addendum 2026-08-25 00:35: rows appended without delivery
 
 Lane sent m-f8da00f2 (yield) and m-07ebeea1 (note) to claude-5 at 00:18:07/11 from its rebuilt worktree binary. Both exist in bus.ndjson, neither has an `agent_delivery` row, `to_timestamp` null, parent never saw them. m-ad41edc9 (shipped binary, 00:17:56) has `queued-for-turn-boundary` and landed. Invariant for 7.2: a mailbox append with no delivery transition inside one POLL is itself an error the sender prints and exits non-zero on.
+
+## Why boop permits each failure (design root causes)
+
+| failure seen today | design decision that permits it | replacement |
+|---|---|---|
+| hail queued, never delivered | append to `bus.ndjson` and delivery are two separate steps; nothing reconciles the gap | supervisor loop owns a reconciler: every row addressed to a route it owns with no terminal transition is retried each POLL until one lands; sender never exits before a transition exists |
+| hail held for 26 min | the whole brief is one ACP turn; a turn boundary is the only injection point | supervisor drives the brief as a sequence of bounded turns (one per brief item, or `--turn-budget` tool calls), so a boundary exists every few minutes; hails land at the next one |
+| lane idle, parent silent | parent mail is tied to `record_result` (once) and exit, not to turn end | every turn end emits one row to the parent, unconditionally, from the supervisor |
+| commits with no yield | progress reporting is delegated to the model (`tell-parent` in the prompt) | supervisor watches worktree HEAD each POLL and mails `commit <old>..<new>` itself; model yields are extra |
+| yielded commit reset away | supervisor never reads HEAD ancestry | HEAD not descending from last-mailed sha = diagnostic row to parent, same watcher |
+| transcript bodies empty | opencode ACP adapter projects only the variants it knows; unknown = empty body, no error | unknown variant projects raw JSON as body and records a `projection-gap` event; empty body from a content-bearing event is a test failure |
+| `--wait-timeout` in help, rejected by parser | help text is hand-written prose | help examples live in a test that runs each through clap |
+| `beep ps` says alive, nothing else | liveness = pid | liveness = pid + last turn ts + HEAD + last transition, one row in `lane list` |
+
+Principle: the supervisor observes and reports on its own; the model's cooperation is never a precondition for the parent knowing the state.
