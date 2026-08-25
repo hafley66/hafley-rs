@@ -358,13 +358,28 @@ pub(crate) fn run_tell_parent(
     registry: &Registry,
     kind: &str,
     body: Option<&str>,
+    as_name: Option<&str>,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
-    let identity = identity::resolve_with(registry, &routes)?;
-    let (caller, route) = lane::caller_route(&identity, &routes)?;
-    let pick = lane::tell_parent_target(&caller, route, &routes, identity.parent.as_deref())?;
+    // `--as` is the whole identity: a native subagent runs inside its
+    // spawner's environment, so the env stamp names the spawner and the
+    // stamped parent belongs to the spawner too.
+    let (caller, route, stamped) = match as_name {
+        Some(name) => {
+            let route = routes.get(name).with_context(|| {
+                format!("--as {name} names no registered route; `beep agent register {name}` first")
+            })?;
+            (name.to_owned(), route, None)
+        }
+        None => {
+            let identity = identity::resolve_with(registry, &routes)?;
+            let (caller, route) = lane::caller_route(&identity, &routes)?;
+            (caller, route, identity.parent)
+        }
+    };
+    let pick = lane::tell_parent_target(&caller, route, &routes, stamped.as_deref())?;
     let parent = pick
         .parent
         .clone()

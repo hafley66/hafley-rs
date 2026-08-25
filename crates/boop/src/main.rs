@@ -196,6 +196,10 @@ enum SubCmd {
         /// The message. Required for every kind but `yield`.
         #[arg(long)]
         body: Option<String>,
+        /// Who is calling, when the whoami ladder cannot say. A native subagent
+        /// inherits its spawner's `BOOP_LANE`, so it names itself here.
+        #[arg(long = "as", value_name = "NAME")]
+        as_name: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -248,8 +252,9 @@ enum SubCmd {
         /// The mail kind the row wears.
         #[arg(long, default_value = "request")]
         kind: String,
-        /// Who the row is from, when the whoami ladder cannot say.
-        #[arg(long)]
+        /// Who the row is from, when the whoami ladder cannot say. Spelled
+        /// `--as` too, matching `boop wait --me --as <name>`.
+        #[arg(long, visible_alias = "as", value_name = "NAME")]
         from: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
@@ -372,7 +377,8 @@ enum SubCmd {
         to: String,
         #[arg(long)]
         body: String,
-        #[arg(long)]
+        /// Who the row is from. Spelled `--as` too.
+        #[arg(long, visible_alias = "as", value_name = "NAME")]
         from: Option<String>,
         #[arg(long)]
         kind: Option<String>,
@@ -957,8 +963,15 @@ fn main() -> Result<()> {
             SubCmd::TellParent {
                 kind,
                 body,
+                as_name,
                 mail_dir,
-            } => run_tell_parent(&registry, &kind, body.as_deref(), mail_dir.as_deref()),
+            } => run_tell_parent(
+                &registry,
+                &kind,
+                body.as_deref(),
+                as_name.as_deref(),
+                mail_dir.as_deref(),
+            ),
             SubCmd::TellChildren { body, mail_dir } => {
                 run_tell_children(&registry, &body, mail_dir.as_deref())
             }
@@ -1159,7 +1172,8 @@ enum BeepCmd {
         lane: String,
         #[arg(long)]
         body: String,
-        #[arg(long)]
+        /// Who the row is from. Spelled `--as` too.
+        #[arg(long, visible_alias = "as", value_name = "NAME")]
         from: Option<String>,
         #[arg(long)]
         kind: Option<String>,

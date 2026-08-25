@@ -1273,6 +1273,10 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
             if let Some(outcome) = started {
                 print!("{}", boop::lane::start_preamble(&outcome.status));
             }
+            // Last line, so a caller can `eval "$(boop beep agent register ...
+            // | tail -1)"`. Without it the ladder keeps reading the spawner's
+            // `BOOP_LANE` and every `--me` verb watches the spawner's inbox.
+            println!("export BOOP_SESSION={name} BOOP_LANE={name}");
             Ok(())
         }
         AgentCmd::Done {

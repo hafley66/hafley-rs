@@ -322,3 +322,109 @@ fn boop_help_doctrine_names_both_verbs() {
     assert!(text.contains("boop tell-parent"), "stdout: {text}");
     assert!(text.contains("boop tell-children"), "stdout: {text}");
 }
+
+/// Defect 2 (addendum 2026-08-25): a native subagent runs inside its
+/// spawner's environment, so the env rung names the spawner. `--as` outranks
+/// it and the row leaves the native's own parent edge.
+#[test]
+fn tell_parent_as_a_native_outranks_the_spawners_env_stamp() {
+    let fixture = Fixture::new("as-native");
+    fixture.write_registry(serde_json::json!({
+        "feature-a": {"kind": "lane", "parent": "coord-1"},
+        "native-n1": {"kind": "native", "parent": "feature-a"},
+        "coord-1": {"kind": "coordinator"},
+    }));
+    let output = fixture.boop_as(
+        "feature-a",
+        &[
+            "tell-parent",
+            "--as",
+            "native-n1",
+            "--kind",
+            "note",
+            "--body",
+            "from the native",
+        ],
+    );
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let rows = fixture.bus_rows();
+    assert_eq!(rows.len(), 1, "bus rows: {rows:?}");
+    assert_eq!(rows[0]["from"], "native-n1");
+    assert_eq!(rows[0]["to"], "feature-a");
+}
+
+/// `--as` naming nothing in the registry is an error with the fix in it, not
+/// a silent fall back to the env rung.
+#[test]
+fn tell_parent_as_an_unregistered_name_says_to_register_it() {
+    let fixture = Fixture::new("as-unknown");
+    fixture.write_registry(serde_json::json!({
+        "feature-a": {"kind": "lane", "parent": "coord-1"},
+        "coord-1": {"kind": "coordinator"},
+    }));
+    let output = fixture.boop_as(
+        "feature-a",
+        &["tell-parent", "--as", "ghost", "--body", "hello"],
+    );
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("beep agent register ghost"),
+        "stderr: {}",
+        stderr(&output)
+    );
+}
+
+/// Defect 2: the registration's last line is the export the native evals, so
+/// every later `--me` verb watches the native's own inbox.
+#[test]
+fn agent_register_ends_with_the_export_line_for_the_new_name() {
+    let fixture = Fixture::new("register-export");
+    fixture.write_registry(serde_json::json!({
+        "coord-1": {"kind": "coordinator"},
+    }));
+    let output = fixture.boop(&[
+        "beep",
+        "agent",
+        "register",
+        "native-n1",
+        "--parent",
+        "coord-1",
+        "--mail-dir",
+        fixture.mail().to_str().unwrap(),
+    ]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let text = stdout(&output);
+    assert_eq!(
+        text.lines().last(),
+        Some("export BOOP_SESSION=native-n1 BOOP_LANE=native-n1"),
+        "stdout: {text}"
+    );
+}
+
+/// Defect 2: `push` and `beep hail` take the same `--as` spelling `wait --me`
+/// takes, so one brief line serves every verb a native runs.
+#[test]
+fn push_and_hail_accept_the_as_spelling_for_the_sender() {
+    let fixture = Fixture::new("as-spelling");
+    fixture.write_registry(serde_json::json!({
+        "native-n1": {"kind": "native", "parent": "feature-a"},
+        "native-n2": {"kind": "native", "parent": "feature-b"},
+    }));
+    let output = fixture.boop_as(
+        "feature-b",
+        &[
+            "beep",
+            "hail",
+            "native-n1",
+            "--as",
+            "native-n2",
+            "--body",
+            "ping",
+        ],
+    );
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let rows = fixture.bus_rows();
+    assert_eq!(rows.len(), 1, "bus rows: {rows:?}");
+    assert_eq!(rows[0]["from"], "native-n2");
+    assert_eq!(rows[0]["to"], "native-n1");
+}
