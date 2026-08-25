@@ -1,0 +1,17 @@
+[profile.default]
+# Most tests here wait on a spawned process, a tmux pane or a filesystem
+# watcher rather than on a core, so useful parallelism runs above the core
+# count.
+test-threads = 16
+# A test past this is waiting on something that is not coming back; the 10
+# second law says investigate, not wait.
+slow-timeout = { period = "20s", terminations = 3 }
+
+# Filesystem watcher tests race each other for fsevents delivery; they fail
+# 1 in 3 even at -j 1 on main and 3 in 3 at 16 threads. Serialize them.
+[test-groups]
+watchers = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'test(/watch/)'
+test-group = 'watchers'

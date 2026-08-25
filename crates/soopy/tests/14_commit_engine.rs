@@ -583,3 +583,174 @@ fn journal_and_receipt_tampering_are_refused() {
     let _ = fs::remove_dir_all(root);
     let _ = fs::remove_dir_all(state);
 }
+
+fn seed_mirror(root: &std::path::Path) {
+    for index in 0..8 {
+        fs::write(root.join(format!("file-{index}.txt")), format!("body {index}\n")).unwrap();
+    }
+}
+
+fn dry_run_actions(root: &std::path::Path) -> soopy::StageRequest {
+    let source_root = SourceRoot::open_directory(root).unwrap();
+    let identity = source_root.directory().identity.clone();
+    let root_id = SourceRootId::Directory {
+        directory: identity.clone(),
+    };
+    let source = |name: &str| soopy::ActionSource::Directory {
+        file: soopy::FileRef {
+            directory: identity.clone(),
+            path: RootPath(Arc::from(name)),
+        },
+    };
+    let expected = |name: &str| ContentId::blake3(&fs::read(root.join(name)).unwrap());
+    let mut actions = vec![soopy::SourceAction::Move {
+        source: source("file-0.txt"),
+        expected: expected("file-0.txt"),
+        destination: path("moved/file-0.txt"),
+    }];
+    for index in 1..8 {
+        let name = format!("file-{index}.txt");
+        let handle = source(&name);
+        actions.push(soopy::SourceAction::Replace {
+            source: handle.clone(),
+            expected: expected(&name),
+            edits: vec![soopy::TextEdit {
+                range: soopy::ActionSpan {
+                    source: handle,
+                    start: 0,
+                    end: 4,
+                },
+                replacement: b"HEAD".to_vec(),
+                producer: soopy::ActionProducer::unordered("soopy.test.dry_run"),
+            }],
+        });
+    }
+    soopy::StageRequest::new(root_id, actions)
+}
+
+fn tree_bytes(root: &std::path::Path) -> Vec<(String, Vec<u8>)> {
+    let mut rows = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(&directory).unwrap() {
+            let entry = entry.unwrap();
+            let entry_path = entry.path();
+            if entry.file_type().unwrap().is_dir() {
+                pending.push(entry_path);
+                continue;
+            }
+            let relative = entry_path
+                .strip_prefix(root)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+            rows.push((relative, fs::read(&entry_path).unwrap()));
+        }
+    }
+    rows.sort();
+    rows
+}
+
+/// The dry_run engine drops device flushes only. Same request, same
+/// previews, same applied operations, same resulting bytes.
+#[test]
+fn dry_run_commit_matches_the_durable_commit_on_the_same_request() {
+    let durable_root = temp_dir("dry_run_durable_root");
+    let durable_state = temp_dir("dry_run_durable_state");
+    let dry_run_root = temp_dir("dry_run_root");
+    let dry_run_state = temp_dir("dry_run_state");
+    seed_mirror(&durable_root);
+    seed_mirror(&dry_run_root);
+
+    let mut durable_source = SourceRoot::open_directory(&durable_root).unwrap();
+    let durable_request = dry_run_actions(&durable_root);
+    let mut durable_store = soopy::DurableStageStore::open(durable_state.join("stages")).unwrap();
+    let durable_sealed =
+        soopy::stage_mutations(&mut durable_source, &durable_request, &mut durable_store).unwrap();
+    let durable_stage = soopy::show_stage(&durable_store, durable_sealed.id)
+        .unwrap()
+        .unwrap();
+    let durable_engine =
+        CommitEngine::open(&durable_root, durable_state.join("commits")).unwrap();
+    assert_eq!(durable_engine.durability(), soopy::Durability::Durable);
+    let durable_receipt = durable_engine.commit(&durable_stage).unwrap();
+
+    let mut dry_run_source = SourceRoot::open_directory(&dry_run_root).unwrap();
+    let dry_run_request = dry_run_actions(&dry_run_root);
+    let mut dry_run_store = InMemoryStageStore::new();
+    let dry_run_sealed = soopy::stage_mutations(
+        &mut dry_run_source,
+        &dry_run_request,
+        &mut dry_run_store,
+    )
+    .unwrap();
+    let dry_run_stage = soopy::show_stage(&dry_run_store, dry_run_sealed.id)
+        .unwrap()
+        .unwrap();
+    let dry_run_engine =
+        CommitEngine::open_dry_run(&dry_run_root, dry_run_state.join("commits")).unwrap();
+    assert_eq!(
+        dry_run_engine.durability(),
+        soopy::Durability::DryRun
+    );
+    let dry_run_receipt = dry_run_engine.commit(&dry_run_stage).unwrap();
+
+    assert_eq!(durable_stage.previews, dry_run_stage.previews);
+    assert_eq!(durable_receipt.applied_files, dry_run_receipt.applied_files);
+    assert_eq!(durable_receipt.operations, dry_run_receipt.operations);
+    assert_eq!(tree_bytes(&durable_root), tree_bytes(&dry_run_root));
+    assert!(dry_run_root.join("moved/file-0.txt").is_file());
+    assert!(!dry_run_root.join("file-0.txt").exists());
+    assert_eq!(
+        fs::read(dry_run_root.join("file-1.txt")).unwrap(),
+        b"HEAD 1\n".to_vec()
+    );
+
+    // The dry_run engine still writes its receipt, so a replayed commit is
+    // still an early-out rather than a second application.
+    let replay = dry_run_engine.commit(&dry_run_stage).unwrap();
+    assert_eq!(replay.operations, dry_run_receipt.operations);
+
+    for directory in [
+        durable_root,
+        durable_state,
+        dry_run_root,
+        dry_run_state,
+    ] {
+        let _ = fs::remove_dir_all(directory);
+    }
+}
+
+#[test]
+fn a_journal_outliving_its_receipt_is_replayable() {
+    let root = temp_dir("stale_journal");
+    let transaction = stage(
+        &root,
+        vec![
+            replace_file(&root, "first.txt", b"old-first", b"new-first"),
+            replace_file(&root, "second.txt", b"old-second", b"new-second"),
+        ],
+    );
+    let state = temp_dir("stale_journal_state");
+    let engine = CommitEngine::open(&root, &state).unwrap();
+    assert!(matches!(
+        engine.commit_with_failpoint(&transaction, Some(CommitFailpoint::AfterJournal)),
+        Err(CommitRefusal::Failpoint { .. })
+    ));
+    let journal_path = engine.journal_path_for(transaction.id);
+    let journal = fs::read(&journal_path).unwrap();
+    let receipt = engine.recover(transaction.id).unwrap();
+    assert!(!journal_path.exists());
+
+    // Journal removal is not flushed, so a power loss can restore this name
+    // after the receipt is already durable.
+    fs::write(&journal_path, &journal).unwrap();
+    let replayed = engine.commit(&transaction).unwrap();
+    assert_eq!(replayed, receipt);
+    let recovered = engine.recover(transaction.id).unwrap();
+    assert_eq!(recovered.operations, receipt.operations);
+    assert_eq!(fs::read(root.join("first.txt")).unwrap(), b"new-first");
+    assert_eq!(fs::read(root.join("second.txt")).unwrap(), b"new-second");
+    let _ = fs::remove_dir_all(root);
+    let _ = fs::remove_dir_all(state);
+}

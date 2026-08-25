@@ -1,4 +1,5 @@
 mod _0_types;
+mod _0a_durable_write;
 mod _11_refs;
 mod _12_revision_graph;
 mod _13_fetch;
@@ -26,6 +27,8 @@ mod _8a_watch_core;
 mod _9_git_files;
 
 pub use _0_types::*;
+pub(crate) use _0a_durable_write::elapsed_millis;
+pub use _0a_durable_write::{device_sync_counts, DeviceSyncCounts};
 pub use _11_refs::{diff_refs, Refs};
 pub use _12_revision_graph::RevisionGraph;
 pub use _13_fetch::Acquisition;

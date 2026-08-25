@@ -54,6 +54,72 @@ the plan under its content-derived `StageId`. `CommitEngine` checks the staged
 inputs again, writes the approved result, journals progress, and returns an
 idempotent receipt.
 
+### DryRun mode
+
+A dry run against a throwaway mirror pays for durability it then deletes. Pair
+`InMemoryStageStore` with `CommitEngine::open_dry_run` and the same
+`StageRequest` runs the same planning, sealing, preflight, journal, apply and
+receipt steps with every device flush dropped:
+
+```rust
+let mut stages = soopy::InMemoryStageStore::new();
+let sealed = soopy::stage_mutations(&mut root, &request, &mut stages)?;
+let stage = soopy::show_stage(&stages, sealed.id)?.expect("stage present");
+let engine = soopy::CommitEngine::open_dry_run(mirror, state)?;
+let receipt = engine.commit(&stage)?;
+# Ok::<(), anyhow::Error>(())
+```
+
+Previews, applied operations and resulting bytes match the durable path;
+`tests/14_commit_engine.rs` pins that. Never point a dry run engine at a root
+a human keeps: an interrupted dry run has no crash guarantee.
+
+### Device syncs
+
+macOS `fcntl(2)` gives three settings and soopy uses all three. `fsync(2)`
+hands a body to the device. `F_BARRIERFSYNC` orders everything already synced
+on that device ahead of everything after it. `F_FULLFSYNC` drains the device
+queue, and the man page states that when it returns, "data that had been
+fsync'd on the same device before is guaranteed to be persisted". One flush
+therefore settles a whole phase, and the protocol spends fences only where an
+order matters:
+
+| step | needs | level |
+|---|---|---|
+| stage blobs before the manifest naming them | order | fence |
+| stage manifest | durability | flush |
+| commit payloads before the journal naming them | order | fence |
+| journal before any target is touched | order | fence |
+| targets before the receipt claiming them | order | fence |
+| commit receipt | durability | flush |
+
+Journal removal is deliberately unsynced: `commit` reads the receipt before it
+looks for a journal, and `recover` reclassifies a fully applied journal as
+done. A state root on another volume cannot be fenced against the target root,
+so those two crossings pay a full flush instead.
+
+`device_sync_counts()` returns the process tally by level.
+`tests/17_durable_flushes.rs` pins the exact numbers.
+
+One Move plus 26 Replace actions over a 282-file mirror, release build, macOS
+APFS, three runs each:
+
+| path | stage | rehydrate | commit | total | fsync / fence / flush |
+|---|---|---|---|---|---|
+| durable | 19.5 / 11.4 / 11.8 ms | 0.8 ms | 26.0 / 27.0 / 23.1 ms | 46.4 / 39.2 / 35.6 ms | 58 / 4 / 2 |
+| dry run | 0.6 / 0.7 / 0.6 ms | 0.005 ms | 4.3 / 4.7 / 4.9 ms | 4.8 / 5.4 / 5.5 ms | 0 / 0 / 0 |
+
+A durable commit engine given `DurableStageStore::blobs_dir` hard-links the
+staged payloads instead of writing the same bytes a second time:
+
+```rust
+let engine = CommitEngine::open(target, state)?.with_staged_blobs(stages.blobs_dir());
+```
+
+```bash
+cargo run -p soopy --release --example 7_stage_commit_phases -- --dry-run
+```
+
 Run the deterministic mutation and repository-scale gates:
 
 ```bash

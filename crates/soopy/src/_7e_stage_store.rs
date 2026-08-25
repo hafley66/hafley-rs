@@ -6,16 +6,16 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::fs::{self, File};
-use std::io::{self, Write};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
-use atomic_write_file::AtomicWriteFile;
 use diffy::PatchFormatter;
 use serde::{Deserialize, Serialize};
 
+use crate::_0a_durable_write::{elapsed_millis, publish_file, record_sync, SyncLevel, SyncMeter};
 use crate::{
     ActionSource, ContentId, FileModeObservation, MutationPlan, NormalizedEdit, PlannedFileKind,
     SourcePath, SourceRootId,
@@ -166,12 +166,40 @@ pub fn stage_mutations<S: StageStore>(
     request: &crate::StageRequest,
     store: &mut S,
 ) -> Result<StagedSourceTransaction, crate::StageRefusal> {
+    let span = tracing::debug_span!(
+        "stage.mutations",
+        operation = "stage_mutations",
+        actions = request.actions.len(),
+        files = tracing::field::Empty,
+        plan_ms = tracing::field::Empty,
+        save_ms = tracing::field::Empty,
+        duration_ms = tracing::field::Empty,
+    );
+    let _entered = span.enter();
+    let started = Instant::now();
     let plan = crate::plan_mutations(root, request)?;
-    store
+    let plan_ms = elapsed_millis(started);
+    let files = plan.files.len();
+    let save_started = Instant::now();
+    let staged = store
         .save(plan)
         .map_err(|error| crate::StageRefusal::Store {
             detail: error.to_string(),
-        })
+        })?;
+    let save_ms = elapsed_millis(save_started);
+    let duration_ms = elapsed_millis(started);
+    span.record("files", files);
+    span.record("plan_ms", plan_ms);
+    span.record("save_ms", save_ms);
+    span.record("duration_ms", duration_ms);
+    tracing::debug!(
+        files,
+        plan_ms,
+        save_ms,
+        duration_ms,
+        "stage mutations sealed"
+    );
+    Ok(staged)
 }
 
 pub fn show_stage<S: StageStore>(
@@ -321,25 +349,84 @@ impl DurableStageStore {
     fn manifest_path(&self, id: StageId) -> PathBuf {
         self.root.join("manifests").join(format!("{}.json", id))
     }
-    fn sync_dir(path: &Path) -> io::Result<()> {
-        File::open(path)?.sync_all()
+    /// The content-addressed blob directory. A commit engine pointed here
+    /// links these inodes instead of writing the same bytes a second time.
+    pub fn blobs_dir(&self) -> PathBuf {
+        self.root.join("blobs")
+    }
+    fn manifests_dir(&self) -> PathBuf {
+        self.root.join("manifests")
     }
 }
 
 impl StageStore for DurableStageStore {
     fn save(&mut self, plan: MutationPlan) -> Result<StagedSourceTransaction> {
-        let (transaction, blobs) = seal_plan(plan)?;
+        let seal_started = Instant::now();
+        let seal_span = tracing::debug_span!(
+            "stage.seal",
+            operation = "seal_plan",
+            files = plan.files.len(),
+        );
+        let (transaction, blobs) = seal_span.in_scope(|| seal_plan(plan))?;
+        tracing::debug!(
+            files = transaction.files.len(),
+            duration_ms = elapsed_millis(seal_started),
+            "stage plan sealed"
+        );
+
+        let blobs_started = Instant::now();
+        let blob_count = blobs.len();
+        let blob_span = tracing::debug_span!(
+            "stage.write_blobs",
+            operation = "write_staged_blobs",
+            files = blob_count,
+            sync.data = tracing::field::Empty,
+            sync.fences = tracing::field::Empty,
+            sync.flushes = tracing::field::Empty,
+            sync_ms = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+        );
+        let blob_entered = blob_span.enter();
+        let mut blob_sync = SyncMeter::default();
+        let mut published = false;
         for (id, bytes) in blobs {
             let target = self.blob_path(id);
             if target.exists() && blob_matches(&target, id)? {
                 continue;
             }
-            let mut file = AtomicWriteFile::open(&target)
+            publish_file(&target, &bytes, SyncLevel::Data, &mut blob_sync, |_| Ok(()))
                 .with_context(|| format!("create staged blob {}", target.display()))?;
-            file.write_all(&bytes)?;
-            file.commit()?;
-            Self::sync_dir(&self.root.join("blobs"))?;
+            published = true;
         }
+        // The fence is what stops a manifest from reaching the device ahead of
+        // the blobs it names.
+        if published {
+            blob_sync.directory(&self.blobs_dir(), SyncLevel::Fence)?;
+        }
+        record_sync(&blob_span, blob_sync, blobs_started);
+        tracing::debug!(
+            files = blob_count,
+            sync.data = blob_sync.data(),
+            sync.fences = blob_sync.fences(),
+            sync.flushes = blob_sync.flushes(),
+            sync_ms = blob_sync.millis(),
+            duration_ms = elapsed_millis(blobs_started),
+            "staged blobs published"
+        );
+        drop(blob_entered);
+
+        let manifest_started = Instant::now();
+        let manifest_span = tracing::debug_span!(
+            "stage.write_manifest",
+            operation = "write_stage_manifest",
+            files = transaction.files.len(),
+            sync.data = tracing::field::Empty,
+            sync.fences = tracing::field::Empty,
+            sync.flushes = tracing::field::Empty,
+            sync_ms = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+        );
+        let manifest_entered = manifest_span.enter();
         let identity = identity_bytes(&transaction.root, &transaction.files)?;
         let manifest = StoredManifest {
             schema_version: STAGE_STORE_SCHEMA_VERSION,
@@ -351,14 +438,35 @@ impl StageStore for DurableStageStore {
         };
         let bytes = serde_json::to_vec(&manifest)?;
         let target = self.manifest_path(transaction.id);
-        let mut file = AtomicWriteFile::open(&target)?;
-        file.write_all(&bytes)?;
-        file.commit()?;
-        Self::sync_dir(&self.root.join("manifests"))?;
+        let mut manifest_sync = SyncMeter::default();
+        publish_file(&target, &bytes, SyncLevel::Data, &mut manifest_sync, |_| {
+            Ok(())
+        })?;
+        // The one flush a save pays: it settles every blob fenced before it.
+        manifest_sync.directory(&self.manifests_dir(), SyncLevel::Flush)?;
+        record_sync(&manifest_span, manifest_sync, manifest_started);
+        tracing::debug!(
+            manifest.bytes = bytes.len(),
+            sync.data = manifest_sync.data(),
+            sync.fences = manifest_sync.fences(),
+            sync.flushes = manifest_sync.flushes(),
+            sync_ms = manifest_sync.millis(),
+            duration_ms = elapsed_millis(manifest_started),
+            "stage manifest published"
+        );
+        drop(manifest_entered);
         Ok(transaction)
     }
 
     fn load(&self, id: StageId) -> Result<Option<StagedSourceTransaction>> {
+        let started = Instant::now();
+        let span = tracing::debug_span!(
+            "stage.load",
+            operation = "load_stage",
+            files = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+        );
+        let _entered = span.enter();
         let path = self.manifest_path(id);
         if !path.exists() {
             return Ok(None);
@@ -392,6 +500,13 @@ impl StageStore for DurableStageStore {
                 file.bytes_after = Some(bytes);
             }
         }
+        span.record("files", stage.files.len());
+        span.record("duration_ms", elapsed_millis(started));
+        tracing::debug!(
+            files = stage.files.len(),
+            duration_ms = elapsed_millis(started),
+            "stage rehydrated"
+        );
         Ok(Some(stage))
     }
 
@@ -401,7 +516,7 @@ impl StageStore for DurableStageStore {
             return Ok(false);
         }
         fs::remove_file(path)?;
-        Self::sync_dir(&self.root.join("manifests"))?;
+        SyncMeter::default().directory(&self.manifests_dir(), SyncLevel::Flush)?;
         Ok(true)
     }
 
@@ -424,7 +539,7 @@ impl StageStore for DurableStageStore {
                     removed += 1;
                 }
             }
-            Self::sync_dir(&self.root.join("manifests"))?;
+            SyncMeter::default().directory(&self.manifests_dir(), SyncLevel::Flush)?;
         }
         if policy.remove_unreferenced_blobs {
             let mut referenced = BTreeSet::new();
@@ -447,7 +562,7 @@ impl StageStore for DurableStageStore {
                     removed += 1;
                 }
             }
-            Self::sync_dir(&self.root.join("blobs"))?;
+            SyncMeter::default().directory(&self.blobs_dir(), SyncLevel::Flush)?;
         }
         Ok(removed)
     }

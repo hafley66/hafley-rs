@@ -31,8 +31,13 @@ releases run locally with `just release`: `release-plz update` writes the versio
 ## local checks
 
 ```sh
-cargo test --workspace --locked
+just test          # cargo nextest run --workspace, the fast path
+just test-ci       # cargo test --workspace --locked, exactly what CI runs
 ```
+
+`just test` needs `cargo-nextest`; `cargo install cargo-nextest --locked`
+installs it. CI runs `cargo test`, so a change has to pass `just test-ci`
+before it ships.
 
 pull requests also compare the public rust api of `boop` and `boop-mux` with the pull request base commit using cargo-semver-checks.
 

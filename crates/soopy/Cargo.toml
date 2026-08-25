@@ -7,20 +7,25 @@ repository.workspace = true
 homepage.workspace = true
 description = "Git revision and filesystem source enumeration, reading, and watching"
 
+# tests/main.rs is the one integration target; without this cargo also
+# mints one per tests/*.rs and links the crate again for each.
+autotests = false
+
 [dependencies]
 anyhow = "1"
-atomic-write-file = "0.3"
 blake3 = "1"
 clap = { version = "4", features = ["derive"] }
 diffy = { version = "0.5", features = ["std"] }
 fs4 = "0.12"
 globset = "0.4"
 ignore = "0.4"
+nix = { version = "0.31", features = ["fs"] }
 notify = { version = "8", features = ["macos_kqueue"] }
 notify-debouncer-full = { version = "0.7", default-features = false, features = ["macos_kqueue"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sysinfo = "0.39"
+tempfile = "3"
 tracing.workspace = true
 hafley-observe = { path = "../hafley-observe" }
 
@@ -29,3 +34,24 @@ hafley-observe = { path = "../hafley-observe" }
 [[bin]]
 name = "soopy"
 path = "src/main.rs"
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+# device_sync_counts is a process-wide tally, so this file's test cannot share
+# a process with any other; its own header states the constraint.
+[[test]]
+name = "17_durable_flushes"
+path = "tests/17_durable_flushes.rs"
+
+# A filesystem-watcher test waits on debounced kqueue events against a wall
+# clock. Sharing a process with the whole suite starves those waits, so these
+# two files link separately and run in their own process.
+[[test]]
+name = "8_watch"
+path = "tests/8_watch.rs"
+
+[[test]]
+name = "6_git_optional"
+path = "tests/6_git_optional.rs"

@@ -10,6 +10,16 @@ const STORED_SESSIONS: usize = 4_136;
 const WRAPPER_PROCESSES: usize = 6;
 const IDLE_PASSES_PER_PROCESS: usize = 4;
 
+/// libtest names a test by its module path with the crate root dropped. This
+/// file is a module of `tests/main.rs`, so a re-entry filter written as a bare
+/// function name matches nothing and the child silently runs zero tests.
+fn test_name(function: &str) -> String {
+    match module_path!().split_once("::") {
+        Some((_crate_root, module)) => format!("{module}::{function}"),
+        None => function.to_owned(),
+    }
+}
+
 struct Fixture {
     root: PathBuf,
     children: Vec<Child>,
@@ -170,7 +180,7 @@ fn six_idle_projector_processes_do_not_repeat_global_session_materialization() {
     let test_binary = std::env::current_exe().unwrap();
     for _ in 0..WRAPPER_PROCESSES {
         let child = Command::new(&test_binary)
-            .args(["--exact", "projector_worker", "--nocapture"])
+            .args(["--exact", &test_name("projector_worker"), "--nocapture"])
             .env("BOOP_CONTENTION_WORKER_DB", fixture.db())
             .env("BOOP_CONTENTION_START", fixture.start())
             .env("BOOP_CONTENTION_READY", fixture.ready())
