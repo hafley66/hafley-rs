@@ -23,18 +23,14 @@ step and says so.
 
 A native has no injected first turn, so `boop beep agent register --worktree <dir>` warms that tree and prints the two lines to its own stdout.
 
-The registration's last line is an export, and a native must eval it before
-any other boop verb:
-
-```
-eval "$(boop beep agent register native-n1 --parent feature-a | tail -1)"
-```
-
-A native subagent runs inside its spawner's environment, so without the eval
-the identity ladder's env rung keeps naming the spawner and `boop wait --me`
-watches the spawner's inbox. Where the eval cannot run, every verb takes the
-name directly: `boop wait --me --as native-n1`, `boop beep <route> "<body>"
---as native-n1`, `boop beep parent "<body>" --as native-n1`.
+The registration's last line tells the native how to name itself. A native
+subagent runs inside its spawner's process, so no export can reach it and the
+identity ladder's env rung keeps naming the spawner. Every verb the native runs
+carries the name: `boop wait --me --as native-n1`, `boop beep <route> "<body>"
+--as native-n1`, `boop beep parent "<body>" --as native-n1`. A bare `--me`
+under a lane stamp that has live native children is refused with the
+candidates listed (native-subagent-identity), never watched on the wrong
+mailbox.
 
 Recipe contract: idempotent, one summary line on stdout, under the spawn
 deadline warm. This repo's builds into the shared target named by
