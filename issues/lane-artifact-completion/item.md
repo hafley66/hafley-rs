@@ -1,6 +1,6 @@
 ---
 created: 2026-08-17
-updated: 2026-08-23
+updated: 2026-08-25
 type: bug
 status: open
 priority: high
@@ -66,22 +66,22 @@ and stored result rows should expose the same distinction.
 
 ## Acceptance Criteria
 
-- [ ] Lane creation accepts typed completion assertions without parsing prose.
-- [ ] Supervisor stores process exit and task outcome separately.
-- [ ] An interrupted provider stream cannot produce a successful task outcome solely from process exit 0.
-- [ ] Missing expected paths and commits produce named assertion failures.
-- [ ] `lane wait` prints the failed assertions and exits nonzero for an incomplete task.
+- [x] Lane creation accepts typed completion assertions without parsing prose.
+- [x] Supervisor stores process exit and task outcome separately.
+- [x] An interrupted provider stream cannot produce a successful task outcome solely from process exit 0.
+- [x] Missing expected paths and commits produce named assertion failures.
+- [x] `lane wait` prints the failed assertions and exits nonzero for an incomplete task.
 - [ ] `lane get` and agent summary expose process, transcript, assertion, and task outcome fields.
-- [ ] A fixture reproduces exit 0 with no artifact and proves incomplete status.
-- [ ] A fixture with the expected artifact and commit proves complete status.
-- [ ] Help documents process success versus task completion.
+- [x] A fixture reproduces exit 0 with no artifact and proves incomplete status.
+- [x] A fixture with the expected artifact and commit proves complete status.
+- [x] Help documents process success versus task completion.
 
 ## Tests Run
 
 - [ ] cargo test -p boop
 - [ ] cargo test -p boop-mux
-- [ ] deterministic supervisor fixture: exit 0, missing artifact
-- [ ] deterministic supervisor fixture: exit 0, satisfied assertions
+- [x] deterministic supervisor fixture: exit 0, missing artifact
+- [x] deterministic supervisor fixture: exit 0, satisfied assertions
 
 ## Implementation Notes
 
@@ -94,6 +94,11 @@ clean harness exit.
 ### 2026-08-17T22:17:20Z · @root
 
 Commit afaf0e7 decouples foreground lane waits from coordinator routes and prevents pane-less coordinators from becoming inferred parents. Focused wait tests, coordinator tmux tests, and strict clippy pass. Artifact assertions remain open acceptance work.
+
+### 2026-08-25T18:51:41Z · @fix-lane-completion
+
+Typed completion expectations (--expect-path, --expect-commit-subject, --expect-commits-at-least) stored in the lane trail, evaluated by the supervisor at the result row. Unmet expectations rewrite a clean exit to rc 4 with detail 'incomplete: ...'. Transcript terminal state (AC 3) is met only through these expectations: the design does not read the transcript or detect aborted streams directly. Ran: cargo test -p boop-proc -p boop-store (all pass), cargo test -p boop (3 pre-existing tell:: failures unrelated to this change).
+
 
 ## Comments
 
