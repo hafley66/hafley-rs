@@ -188,7 +188,7 @@ pub(crate) fn run_me_favorite(index: i64, note: Option<&str>) -> Result<()> {
     let identity = identity::resolve(&routes)?;
     let session = identity
         .session
-        .context("no caller session resolved; run `boop me` once in this tmux pane, then retry")?;
+        .context("no caller session resolved: no BOOP_SESSION stamp in this process")?;
 
     let store = open_store()?;
     let rows = store.turn_rows(&ident::TurnQuery {
@@ -287,10 +287,10 @@ pub(crate) fn run_me_mood(
     Ok(())
 }
 
-pub(crate) fn run_whoami(json: bool, mail_dir_arg: Option<&Path>) -> Result<()> {
-    let dir = mail_dir(mail_dir_arg)?;
-    let routes = bus::read_routes(&dir).unwrap_or_default();
-    let identity = identity::resolve(&routes)?;
+/// The caller's own identity, from the two rungs and nothing else. A caller
+/// neither rung names exits 2 on one line naming `--as`.
+pub(crate) fn run_whoami(json: bool, as_name: Option<&str>, _mail_dir: Option<&Path>) -> Result<()> {
+    let identity = identity::require(as_name);
     if json {
         println!("{}", identity.to_json());
         return Ok(());
@@ -302,7 +302,21 @@ pub(crate) fn run_whoami(json: bool, mail_dir_arg: Option<&Path>) -> Result<()> 
     println!("harness  {}", identity.harness.as_deref().unwrap_or("-"));
     println!("pane     {}", identity.pane.as_deref().unwrap_or("-"));
     println!("rung     {} ({})", rung.as_str(), rung.confidence());
+    println!(
+        "rungs    --as ({}), env BOOP_SESSION ({})",
+        mark(as_name.is_some()),
+        mark(identity.rung == Some(identity::Rung::Env))
+    );
     Ok(())
+}
+
+/// Which rung answered, for the two-rung line `whoami` prints.
+fn mark(hit: bool) -> &'static str {
+    if hit {
+        "hit"
+    } else {
+        "miss"
+    }
 }
 
 #[cfg(test)]

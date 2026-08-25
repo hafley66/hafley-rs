@@ -576,15 +576,12 @@ fn report_delivery(message_id: &str) {
 
 /// Whose inbox `--me` watches: the name given, else the identity ladder's lane
 /// or session. An unresolved caller is told to name itself, never guessed at.
-pub(crate) fn waiting_as(dir: &Path, as_name: Option<&str>) -> Result<String> {
-    if let Some(name) = as_name {
-        return Ok(name.to_owned());
-    }
-    let routes = bus::read_routes(dir).unwrap_or_default();
-    let identity = identity::resolve(&routes)?;
-    identity.lane.or(identity.session).context(
-        "boop wait --me cannot tell who you are; pass --as <name> (boop whoami shows the ladder)",
-    )
+pub(crate) fn waiting_as(_dir: &Path, as_name: Option<&str>) -> Result<String> {
+    let identity = identity::require(as_name);
+    identity
+        .lane
+        .or(identity.session)
+        .context(identity::UNRESOLVED)
 }
 
 /// Block until the watch is satisfied, print what arrived, take delivery of it,
@@ -961,9 +958,8 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         },
     };
     let hail_mail_dir = mail_dir(args.mail_dir.as_deref())?;
-    let mut routes = bus::read_routes(&hail_mail_dir)?;
+    let routes = bus::read_routes(&hail_mail_dir)?;
     let caller = identity::resolve(&routes)?;
-    register_fresh_codex_spawner(&hail_mail_dir, &repo, &caller, &mut routes)?;
     let caller_lane = caller.lane.clone().filter(|lane| *lane != identity.lane);
     let parent = resolve_parent_with_legacy_fallback(
         args.parent.as_deref(),
@@ -1125,62 +1121,6 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         // Same code path as `beep lane wait`, which exits with the lane's rc.
         return run_lane_wait(Some(&hail_mail_dir), &lane_id, args.wait_timeout);
     }
-    Ok(())
-}
-
-/// A Codex tool process carries an exact thread and pane before Boop has seen
-/// it. Persist that observed caller before selecting the child's parent so the
-/// completion hail has a pane-backed coordinator route on the first spawn.
-pub(crate) fn register_fresh_codex_spawner(
-    mail_dir: &Path,
-    cwd: &Path,
-    caller: &identity::Identity,
-    routes: &mut BTreeMap<String, Route>,
-) -> Result<()> {
-    if caller.rung != Some(identity::Rung::CodexProcess) {
-        return Ok(());
-    }
-    let lane = caller.lane.as_deref().context("Codex caller lane")?;
-    let thread = caller
-        .session
-        .as_deref()
-        .context("Codex caller has no CODEX_THREAD_ID")?;
-    let pane = caller
-        .pane
-        .as_deref()
-        .context("Codex caller has no TMUX_PANE")?;
-    if let Some(existing) = routes.get(lane) {
-        if existing.mode.as_deref() == Some("native-remote") && existing.session_id.is_none() {
-            anyhow::ensure!(
-                existing.tmux.as_deref() == Some(pane),
-                "native Codex route {lane} is registered for another tmux pane"
-            );
-            let mut enriched = existing.clone();
-            enriched.session_id = Some(thread.into());
-            enriched.source_path = Some(format!("CODEX_THREAD_ID={thread};TMUX_PANE={pane}"));
-            write_route(mail_dir, lane, enriched.clone())?;
-            routes.insert(lane.to_owned(), enriched);
-        }
-        return Ok(());
-    }
-    let route = Route {
-        kind: "coordinator".to_owned(),
-        harness: Some(HarnessId::Codex),
-        tmux: Some(pane.into()),
-        cwd: Some(cwd.display().to_string()),
-        model: None,
-        mode: Some("interactive".to_owned()),
-        session_id: Some(thread.into()),
-        source_path: Some(format!("CODEX_THREAD_ID={thread};TMUX_PANE={pane}")),
-        parent: None,
-        goal: None,
-        registered_at: Some(bus::now_iso()),
-        base_sha: None,
-        worktree_dir: None,
-        app_server_socket: None,
-    };
-    write_route(mail_dir, lane, route.clone())?;
-    routes.insert(lane.to_owned(), route);
     Ok(())
 }
 
@@ -2415,84 +2355,6 @@ mod tests {
             Some("coordinator".into())
         );
         assert_eq!(completion_recipient(None, false, "feature-a"), None);
-    }
-
-    #[test]
-    fn a_first_codex_spawn_registers_its_observed_pane_as_the_parent_route() {
-        let dir = temp_mail_dir();
-        std::fs::create_dir_all(&dir).expect("mail dir");
-        let cwd = std::path::Path::new("/tmp/unrecorded-worktree");
-        let caller = boop::identity::Identity {
-            session: Some("thread-7".to_owned()),
-            lane: Some("codex-1206".to_owned()),
-            parent: None,
-            harness: Some("codex".to_owned()),
-            pane: Some("%1206".to_owned()),
-            rung: Some(boop::identity::Rung::CodexProcess),
-        };
-        let mut routes = BTreeMap::new();
-
-        register_fresh_codex_spawner(&dir, cwd, &caller, &mut routes).expect("register caller");
-        let persisted = read_routes(&dir).expect("persisted routes");
-        let memory = routes.get("codex-1206").expect("memory route");
-        let disk = persisted.get("codex-1206").expect("disk route");
-
-        for route in [memory, disk] {
-            assert_eq!(route.kind, "coordinator");
-            assert_eq!(route.harness, Some(HarnessId::Codex));
-            assert_eq!(route.tmux.as_deref(), Some("%1206"));
-            assert_eq!(route.cwd.as_deref(), Some("/tmp/unrecorded-worktree"));
-            assert_eq!(route.mode.as_deref(), Some("interactive"));
-            assert_eq!(route.session_id.as_deref(), Some("thread-7"));
-        }
-        std::fs::remove_dir_all(dir).expect("remove mail dir");
-    }
-
-    #[test]
-    fn native_remote_route_is_enriched_only_by_its_matching_pane_thread() {
-        let dir = temp_mail_dir();
-        std::fs::create_dir_all(&dir).expect("mail dir");
-        let mut routes = BTreeMap::new();
-        let route = Route {
-            kind: "coordinator".into(),
-            harness: Some(HarnessId::Codex),
-            tmux: Some("%1206".into()),
-            cwd: Some("/shared-cwd".into()),
-            model: None,
-            mode: Some("native-remote".into()),
-            session_id: None,
-            source_path: None,
-            parent: None,
-            goal: None,
-            registered_at: None,
-            base_sha: None,
-            worktree_dir: None,
-            app_server_socket: Some("/tmp/codex.sock".into()),
-        };
-        write_route(&dir, "codex-1206", route.clone()).expect("write route");
-        routes.insert("codex-1206".into(), route);
-        let caller = boop::identity::Identity {
-            session: Some("thread-pane-1206".into()),
-            lane: Some("codex-1206".into()),
-            parent: None,
-            harness: Some("codex".into()),
-            pane: Some("%1206".into()),
-            rung: Some(boop::identity::Rung::CodexProcess),
-        };
-        register_fresh_codex_spawner(
-            &dir,
-            std::path::Path::new("/shared-cwd"),
-            &caller,
-            &mut routes,
-        )
-        .expect("enrich exact pane route");
-        let route = routes.get("codex-1206").expect("route");
-        assert_eq!(route.session_id.as_deref(), Some("thread-pane-1206"));
-        assert_eq!(
-            route.source_path.as_deref(),
-            Some("CODEX_THREAD_ID=thread-pane-1206;TMUX_PANE=%1206")
-        );
-        std::fs::remove_dir_all(dir).expect("remove mail dir");
     }
 
     /// A named harness that is not registered must be refused, never quietly

@@ -157,15 +157,6 @@ pub trait Harness: Send + Sync {
         &crate::door::UNREACHABLE
     }
 
-    /// The session id this harness exports to the tool subprocesses it runs.
-    /// A subprocess asking who it is holds its own environment and nothing
-    /// else: it owns no pane of its own and appears in no live registry.
-    // plan §6 row 1: kept because a tool subprocess has no pane to look up,
-    // so `live()` cannot answer for it.
-    fn identity_process(&self) -> Option<crate::identity::Identity> {
-        None
-    }
-
     /// Every session this harness has on disk, newest last. No cap.
     fn sessions(&self) -> anyhow::Result<Vec<SessionRef>>;
 

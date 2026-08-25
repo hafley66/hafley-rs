@@ -7,7 +7,6 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::bus::{Message, Route};
-use crate::harness_id::HarnessId;
 use crate::proc::ProcReader;
 use crate::runtime::{runtime_snapshot, AgentRuntimeRow, RuntimeSnapshotInput};
 use crate::tmux::Multiplexer;
@@ -420,147 +419,12 @@ pub fn load_agent_session_graph_with_runtime(
             }
         }
     }
-    if let Some(shell) = native_codex_shell_for_focus(&query, &runtime, &graph) {
-        if let Some(existing) = graph
-            .shells
-            .iter_mut()
-            .find(|existing| existing.lane == shell.lane)
-        {
-            *existing = shell;
-        } else {
-            graph.shells.push(shell);
-        }
-    }
     graph
         .shells
         .sort_by(|left, right| left.lane.cmp(&right.lane));
     focus_graph(&mut graph, &query);
     graph.trace_events = query_trace_events(store, &graph.sessions, &graph.shells)?;
     Ok(graph)
-}
-
-fn native_codex_shell_for_focus(
-    query: &AgentSessionGraphQuery,
-    runtime: &AgentSessionGraphRuntime<'_>,
-    graph: &AgentSessionGraph,
-) -> Option<AgentShellNode> {
-    let target = query.tmux.as_deref()?;
-    let pane_pid = runtime.multiplexer.pane_pid(runtime.tmux_socket, target)?;
-    let mut process_ids = vec![pane_pid];
-    process_ids.extend(runtime.processes.descendants(pane_pid));
-    let mut owned_sessions = BTreeSet::new();
-    let mut owner = None;
-    let mut environment_session = None;
-    for pid in process_ids {
-        let Some(process) = runtime.processes.process(pid) else {
-            continue;
-        };
-        if let Some(session) = runtime
-            .processes
-            .environment_variable(pid, "CODEX_THREAD_ID")
-        {
-            environment_session = Some(session);
-            owner = Some(process.clone());
-        }
-        if HarnessId::Codex.owns_process_name(&process.name) {
-            for path in runtime.processes.open_files(pid) {
-                if let Some(session) = codex_rollout_session(&path) {
-                    owned_sessions.insert(session);
-                    owner = Some(process.clone());
-                }
-            }
-        }
-    }
-    let session_id = environment_session
-        .or_else(|| owned_codex_root(graph, &owned_sessions).map(|identity| identity.id.clone()))?;
-    let process = owner?;
-    let tmux_session = if target.starts_with('%') {
-        runtime
-            .multiplexer
-            .session_of_pane(runtime.tmux_socket, target)
-    } else {
-        tmux_session_anchor(target).map(str::to_owned)
-    };
-    let pane = target.starts_with('%').then(|| target.to_owned());
-    Some(AgentShellNode {
-        lane: format!(
-            "{}-{}",
-            HarnessId::Codex,
-            pane.as_deref().unwrap_or(target).trim_start_matches('%')
-        ),
-        parent_lane: None,
-        harness: Some(HarnessId::Codex.as_str().to_owned()),
-        mode: Some("interactive".to_owned()),
-        session_id: Some(session_id.clone()),
-        session: Some(AgentSessionIdentity {
-            harness: HarnessId::Codex.as_str().to_owned(),
-            id: session_id,
-        }),
-        trace: None,
-        cwd: process.cwd,
-        tmux: Some(target.to_owned()),
-        tmux_session,
-        tmux_pane: pane,
-        pid: Some(process.pid),
-        state: "live".to_owned(),
-        started_ts: Some(process.start_time_secs.saturating_mul(1_000)),
-        registered_at: None,
-    })
-}
-
-fn codex_rollout_session(path: &std::path::Path) -> Option<String> {
-    let name = path.file_name()?.to_str()?;
-    name.strip_prefix("rollout-")?.strip_suffix(".jsonl")?;
-    // UUIDv7 ids contain four internal dashes; the timestamp prefix contains
-    // three. Keep the final five dash-separated fields.
-    let fields = name.strip_suffix(".jsonl")?.split('-').collect::<Vec<_>>();
-    (fields.len() >= 9)
-        .then(|| fields[fields.len() - 5..].join("-"))
-        .filter(|value| value.len() == 36)
-}
-
-fn owned_codex_root<'a>(
-    graph: &'a AgentSessionGraph,
-    owned: &BTreeSet<String>,
-) -> Option<&'a AgentSessionIdentity> {
-    let roots = graph
-        .sessions
-        .iter()
-        .filter(|node| owned.contains(&node.session.id))
-        .filter(|node| {
-            !graph.edges.iter().any(|edge| {
-                edge.kind == "spawned"
-                    && edge.child == node.session
-                    && owned.contains(&edge.parent.id)
-            })
-        });
-    roots
-        .max_by_key(|root| {
-            let mut family = BTreeSet::from([root.session.clone()]);
-            loop {
-                let before = family.len();
-                for edge in graph.edges.iter().filter(|edge| edge.kind == "spawned") {
-                    if family.contains(&edge.parent) {
-                        family.insert(edge.child.clone());
-                    }
-                }
-                if family.len() == before {
-                    break;
-                }
-            }
-            graph
-                .sessions
-                .iter()
-                .filter(|node| family.contains(&node.session))
-                .filter_map(|node| {
-                    node.last_activity_ts
-                        .or(node.finished_ts)
-                        .or(node.started_ts)
-                })
-                .max()
-                .unwrap_or(0)
-        })
-        .map(|node| &node.session)
 }
 
 fn shell_from_runtime(row: AgentRuntimeRow) -> Option<AgentShellNode> {
@@ -606,7 +470,6 @@ fn shell_from_runtime(row: AgentRuntimeRow) -> Option<AgentShellNode> {
         registered_at: route.registered_at,
     })
 }
-
 /// Reduce a broad durable projection to the rooted family selected by exact
 /// tmux evidence. `spawned` is the only edge kind used as parenthood: hail and
 /// delivery edges stay visible when both endpoints are in the family but never
@@ -728,210 +591,14 @@ fn tmux_session_anchor(target: &str) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::BTreeMap;
 
     use super::*;
+    use crate::harness_id::HarnessId;
     use crate::ident::{LaneSpawn, TraceEvent};
-    use crate::proc::{ProcReader, ProcessInfo, SysinfoSnapshot};
+    use crate::proc::SysinfoSnapshot;
     use crate::runtime::{ProcessLiveness, ResolvedRoute, RuntimeLiveness, TmuxLiveness};
     use crate::testing::FakeMux;
-
-    struct CodexProcessFixture {
-        rows: HashMap<u32, ProcessInfo>,
-        children: HashMap<u32, Vec<u32>>,
-        threads: HashMap<u32, String>,
-        files: HashMap<u32, Vec<PathBuf>>,
-    }
-
-    impl ProcReader for CodexProcessFixture {
-        fn is_alive(&self, pid: u32) -> bool {
-            self.rows.contains_key(&pid)
-        }
-
-        fn process(&self, pid: u32) -> Option<ProcessInfo> {
-            self.rows.get(&pid).cloned()
-        }
-
-        fn environment_variable(&self, pid: u32, name: &str) -> Option<String> {
-            (name == "CODEX_THREAD_ID")
-                .then(|| self.threads.get(&pid).cloned())
-                .flatten()
-        }
-
-        fn open_files(&self, pid: u32) -> Vec<PathBuf> {
-            self.files.get(&pid).cloned().unwrap_or_default()
-        }
-
-        fn children(&self, pid: u32) -> Vec<u32> {
-            self.children.get(&pid).cloned().unwrap_or_default()
-        }
-
-        fn descendants(&self, pid: u32) -> Vec<u32> {
-            self.children(pid)
-        }
-
-        fn descendant_count(&self, pid: u32) -> usize {
-            self.descendants(pid).len()
-        }
-    }
-
-    #[test]
-    fn focused_tmux_discovers_an_unregistered_codex_root_from_its_process_tree() {
-        let process = |pid, parent, name: &str| ProcessInfo {
-            pid,
-            parent,
-            name: name.to_owned(),
-            command: Vec::new(),
-            rss_bytes: 1,
-            cpu_percent: 0.0,
-            start_time_secs: 100,
-            cwd: Some(PathBuf::from("/repo")),
-        };
-        let processes = CodexProcessFixture {
-            rows: HashMap::from([
-                (10, process(10, None, "codex")),
-                (11, process(11, Some(10), "codex-code-mode-host")),
-            ]),
-            children: HashMap::from([(10, vec![11])]),
-            threads: HashMap::from([(11, "root-thread".to_owned())]),
-            files: HashMap::new(),
-        };
-        let mux = FakeMux::available(&["projects-3"])
-            .with_pane("%31", "projects-3")
-            .with_pane_pid("projects-3", 10);
-        let routes = BTreeMap::new();
-        let runtime = AgentSessionGraphRuntime {
-            routes: &routes,
-            messages: &[],
-            multiplexer: &mux,
-            tmux_socket: None,
-            processes: &processes,
-        };
-        let shell = native_codex_shell_for_focus(
-            &AgentSessionGraphQuery {
-                tmux: Some("projects-3".to_owned()),
-                ..AgentSessionGraphQuery::default()
-            },
-            &runtime,
-            &AgentSessionGraph {
-                schema_version: AGENT_SESSION_GRAPH_SCHEMA_VERSION,
-                sessions: Vec::new(),
-                edges: Vec::new(),
-                shells: Vec::new(),
-                trace_events: Vec::new(),
-            },
-        )
-        .unwrap();
-
-        assert_eq!(shell.lane, "codex-projects-3");
-        assert_eq!(shell.session_id.as_deref(), Some("root-thread"));
-        assert_eq!(shell.tmux_session.as_deref(), Some("projects-3"));
-        assert_eq!(shell.pid, Some(11));
-        assert_eq!(shell.cwd, Some(PathBuf::from("/repo")));
-    }
-
-    #[test]
-    fn focused_tmux_uses_open_rollouts_when_the_idle_codex_environment_has_no_thread() {
-        let identity = |id: &str| AgentSessionIdentity {
-            harness: "codex".to_owned(),
-            id: id.to_owned(),
-        };
-        let root = identity("019ffb9b-51cb-7e92-be44-4eb469f46d95");
-        let child_a = identity("01a01621-c819-7c23-ab6b-1219329c29ab");
-        let child_b = identity("01a01621-e45d-72a1-8a69-9193e2dcbf27");
-        let stale = identity("01a014c6-501e-74e3-a1ae-83c16648214a");
-        let graph = AgentSessionGraph {
-            schema_version: AGENT_SESSION_GRAPH_SCHEMA_VERSION,
-            sessions: vec![
-                (root.clone(), 100),
-                (child_a.clone(), 300),
-                (child_b.clone(), 290),
-                (stale.clone(), 200),
-            ]
-            .into_iter()
-            .map(|(session, last_activity_ts)| AgentSessionNode {
-                session,
-                cwd: Some(PathBuf::from("/repo")),
-                tmux: None,
-                state: Some("idle".to_owned()),
-                trace: None,
-                trace_attached_ts: None,
-                started_ts: Some(1),
-                last_activity_ts: Some(last_activity_ts),
-                finished_ts: None,
-            })
-            .collect(),
-            edges: vec![
-                AgentSessionEdge {
-                    parent: root.clone(),
-                    child: child_a.clone(),
-                    kind: "spawned".to_owned(),
-                    first_ts: Some(2),
-                    last_ts: Some(2),
-                },
-                AgentSessionEdge {
-                    parent: root.clone(),
-                    child: child_b.clone(),
-                    kind: "spawned".to_owned(),
-                    first_ts: Some(3),
-                    last_ts: Some(3),
-                },
-            ],
-            shells: Vec::new(),
-            trace_events: Vec::new(),
-        };
-        let rollout = |id: &str| {
-            PathBuf::from(format!(
-                "/Users/test/.codex/sessions/2026/08/18/rollout-2026-08-18T14-28-35-{id}.jsonl"
-            ))
-        };
-        let processes = CodexProcessFixture {
-            rows: HashMap::from([(
-                10,
-                ProcessInfo {
-                    pid: 10,
-                    parent: None,
-                    name: "codex".to_owned(),
-                    command: Vec::new(),
-                    rss_bytes: 1,
-                    cpu_percent: 0.0,
-                    start_time_secs: 100,
-                    cwd: Some(PathBuf::from("/repo")),
-                },
-            )]),
-            children: HashMap::new(),
-            threads: HashMap::new(),
-            files: HashMap::from([(
-                10,
-                vec![
-                    rollout(&root.id),
-                    rollout(&child_a.id),
-                    rollout(&child_b.id),
-                    rollout(&stale.id),
-                ],
-            )]),
-        };
-        let mux = FakeMux::available(&["projects-3"]).with_pane_pid("projects-3", 10);
-        let routes = BTreeMap::new();
-        let runtime = AgentSessionGraphRuntime {
-            routes: &routes,
-            messages: &[],
-            multiplexer: &mux,
-            tmux_socket: None,
-            processes: &processes,
-        };
-        let shell = native_codex_shell_for_focus(
-            &AgentSessionGraphQuery {
-                tmux: Some("projects-3".to_owned()),
-                ..AgentSessionGraphQuery::default()
-            },
-            &runtime,
-            &graph,
-        )
-        .unwrap();
-
-        assert_eq!(shell.session, Some(root));
-    }
 
     #[test]
     fn graph_projects_sessions_edges_and_shells_from_setwise_relations() {

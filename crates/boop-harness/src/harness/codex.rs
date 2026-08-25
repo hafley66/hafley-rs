@@ -33,24 +33,6 @@ static CAPABILITIES: Capabilities = Capabilities {
 static DOOR: crate::door::codex::CodexDoor = crate::door::codex::CodexDoor::machine();
 
 impl Harness for Codex {
-    fn identity_process(&self) -> Option<crate::identity::Identity> {
-        let session = std::env::var("CODEX_THREAD_ID")
-            .ok()
-            .filter(|value| !value.is_empty())?;
-        let pane = std::env::var("TMUX_PANE")
-            .ok()
-            .filter(|value| !value.is_empty())
-            .or_else(|| boop_store::tmux::mux().current_pane(None))?;
-        Some(crate::identity::Identity {
-            session: Some(session),
-            lane: Some(format!("codex-{}", pane.trim_start_matches('%'))),
-            harness: Some(self.id().to_string()),
-            pane: Some(pane),
-            rung: Some(crate::identity::Rung::CodexProcess),
-            ..Default::default()
-        })
-    }
-
     fn open_channel(
         &self,
         spec: &boop_acp::channel::ChannelSpec,

@@ -32,22 +32,6 @@ static CAPABILITIES: Capabilities = Capabilities {
 static DOOR: crate::door::claude::ClaudeDoor = crate::door::claude::ClaudeDoor::machine();
 
 impl Harness for Claude {
-    /// Claude stamps its session id into every process it runs, and a sidechain
-    /// record carries the same `sessionId` as the root that spawned it, so a
-    /// subagent's shell resolves the session hosting it rather than nothing.
-    fn identity_process(&self) -> Option<crate::identity::Identity> {
-        let session = std::env::var("CLAUDE_CODE_SESSION_ID")
-            .ok()
-            .filter(|value| !value.is_empty())?;
-        Some(crate::identity::Identity {
-            session: Some(session),
-            harness: Some(self.id().to_string()),
-            pane: std::env::var("TMUX_PANE").ok().filter(|p| !p.is_empty()),
-            rung: Some(crate::identity::Rung::ClaudeProcess),
-            ..Default::default()
-        })
-    }
-
     fn open_channel(
         &self,
         spec: &boop_acp::channel::ChannelSpec,

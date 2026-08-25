@@ -309,42 +309,28 @@ fn create_dry_run_with_wait_does_not_block() {
         .success());
 }
 
-/// RECEIPT. A fresh Codex tool subprocess has a runtime thread id and an
-/// inherited pane before Boop has a registry row. `lane create --wait` must
-/// first persist that evidence as a coordinator route, then derive the
-/// completion parent from it without requiring `boop me`.
+/// RECEIPT (env-only-identity). A fresh Codex tool subprocess carries
+/// `CODEX_THREAD_ID` and a pane and no `BOOP_SESSION`. Neither names a caller
+/// now, so no route is invented for it and no parent is derived from it.
 #[test]
-fn a_fresh_codex_caller_registers_and_parents_a_waiting_lane() {
+fn a_codex_thread_id_and_pane_no_longer_name_a_caller() {
     let fixture = CreateFixture::new("fresh-codex-parent");
     let output = fixture.codex_caller_command().output().unwrap();
     assert!(
         output.status.success(),
-        "stdout={}\\nstderr={}",
+        "stdout={}\nstderr={}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(
-        stdout.contains("parent: codex-1206 (from caller; completion hail appended on exit)"),
+        stdout.contains("parent: - (foreground wait owns the completion receipt)"),
         "{stdout}"
     );
-
-    let registry: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(fixture.mail.join("registry.json")).unwrap())
-            .unwrap();
-    assert_eq!(
-        registry["codex-1206"],
-        serde_json::json!({
-            "kind": "coordinator",
-            "harness": "codex",
-            "tmux": "%1206",
-            "cwd": fixture.repo.display().to_string(),
-            "mode": "interactive",
-            "sessionId": "thread-codex-parent",
-            "sourcePath": "CODEX_THREAD_ID=thread-codex-parent;TMUX_PANE=%1206",
-            "registeredAt": registry["codex-1206"]["registeredAt"],
-        })
-    );
+    assert!(!stdout.contains("codex-1206"), "{stdout}");
+    let registry =
+        std::fs::read_to_string(fixture.mail.join("registry.json")).unwrap_or_default();
+    assert!(!registry.contains("codex-1206"), "{registry}");
 }
 
 /// RECEIPT. A codex ACP session id arrives before the first turn. The lane

@@ -263,10 +263,13 @@ enum SubCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Report the caller's own identity and the rung that resolved it.
+    /// Report the caller's own identity and which of the two rungs named it.
     Whoami {
         #[arg(long)]
         json: bool,
+        /// Who is calling. The first rung; `--from` is the same flag.
+        #[arg(long = "as", alias = "from", value_name = "NAME")]
+        as_name: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -303,9 +306,9 @@ enum SubCmd {
         /// The mail kind the row wears.
         #[arg(long, default_value = "request")]
         kind: String,
-        /// Who the row is from, when the whoami ladder cannot say. Spelled
-        /// `--as` too, matching `boop wait --me --as <name>`.
-        #[arg(long, visible_alias = "as", value_name = "NAME")]
+        /// Who the row is from, when no env stamp says. `--from` is the same
+        /// flag, kept for briefs that spell it that way.
+        #[arg(long = "as", alias = "from", value_name = "NAME")]
         from: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
@@ -432,8 +435,8 @@ enum SubCmd {
         to: String,
         #[arg(long)]
         body: String,
-        /// Who the row is from. Spelled `--as` too.
-        #[arg(long, visible_alias = "as", value_name = "NAME")]
+        /// Who the row is from; `--from` is the same flag.
+        #[arg(long = "as", alias = "from", value_name = "NAME")]
         from: Option<String>,
         #[arg(long)]
         kind: Option<String>,
@@ -990,7 +993,7 @@ fn main() -> Result<()> {
                         let routes = bus::read_routes(&mail_dir(None)?).unwrap_or_default();
                         let identity = identity::resolve_with(&registry, &routes)?;
                         Some(identity.session.context(
-                        "--me found no caller session (no BOOP_SESSION, no pane or process rung); pass --session <id>",
+                        "--me found no caller session: this process carries no BOOP_SESSION stamp; pass --session <id>",
                     )?)
                     }
                     (None, false) => anyhow::bail!(
@@ -1061,7 +1064,11 @@ fn main() -> Result<()> {
             SubCmd::TellChildren { body, mail_dir } => {
                 run_tell_children(&registry, &body, mail_dir.as_deref())
             }
-            SubCmd::Whoami { json, mail_dir } => run_whoami(json, mail_dir.as_deref()),
+            SubCmd::Whoami {
+                json,
+                as_name,
+                mail_dir,
+            } => run_whoami(json, as_name.as_deref(), mail_dir.as_deref()),
             SubCmd::Inbox { cmd } => run_inbox(cmd),
             SubCmd::Me {
                 name,
@@ -1305,8 +1312,8 @@ enum BeepCmd {
         lane: String,
         #[arg(long)]
         body: String,
-        /// Who the row is from. Spelled `--as` too.
-        #[arg(long, visible_alias = "as", value_name = "NAME")]
+        /// Who the row is from; `--from` is the same flag.
+        #[arg(long = "as", alias = "from", value_name = "NAME")]
         from: Option<String>,
         #[arg(long)]
         kind: Option<String>,

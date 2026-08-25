@@ -1,5 +1,5 @@
-//! Who is calling. Env inference answers "who am I", never "who is the child I
-//! am spawning" (agent-bus, two incidents, 2026-08-07).
+//! Who is calling: the `--as` flag, then the env stamp boop writes into every
+//! process it spawns. No pane lookup, no process tree (issue env-only-identity).
 
 use std::collections::BTreeMap;
 
@@ -7,41 +7,32 @@ use anyhow::Result;
 
 use boop_store::bus::Route;
 
-/// The rung of the ladder that produced an identity. Ordered most trustworthy
-/// first; `Env` is self-reported, so a consumer needing certainty checks this.
+/// The rung that produced an identity. Ordered most explicit first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Rung {
+    /// `--as <name>`: the caller named itself on the command line.
+    As,
+    /// `BOOP_SESSION` (or `BOOP_LANE` from a pre-2026-08-24 spawn).
     Env,
-    ClaudeProcess,
-    CodexProcess,
-    KimiProcess,
-    RouteCwd,
-    Pane,
+    /// Neither rung answered.
     None,
 }
 
 impl Rung {
     pub fn as_str(self) -> &'static str {
         match self {
+            Rung::As => "as",
             Rung::Env => "env",
-            Rung::ClaudeProcess => "claude-process",
-            Rung::CodexProcess => "codex-process",
-            Rung::KimiProcess => "kimi-process",
-            Rung::RouteCwd => "route-cwd",
-            Rung::Pane => "pane",
             Rung::None => "none",
         }
     }
 
-    /// Whether the rung observed the identity or read it back from a stamp.
-    /// `pane` is the route's `session_id` field, written once at adoption; a
-    /// session id moves on /clear, on compaction and on resume, so that field
-    /// is the weakest answer that is still an answer.
+    /// Where the name came from: the caller's own word, or the stamp its
+    /// spawner wrote.
     pub fn confidence(self) -> &'static str {
         match self {
-            Rung::Env | Rung::ClaudeProcess | Rung::CodexProcess | Rung::KimiProcess => "exact",
-            Rung::RouteCwd => "live-registry",
-            Rung::Pane => "stamped",
+            Rung::As => "named",
+            Rung::Env => "stamped",
             Rung::None => "unresolved",
         }
     }
@@ -72,186 +63,86 @@ impl Identity {
             "confidence": rung.confidence(),
         })
     }
+
+    /// Whether either rung named this caller.
+    pub fn is_resolved(&self) -> bool {
+        matches!(self.rung, Some(Rung::As) | Some(Rung::Env))
+    }
 }
 
-/// Resolve the caller. Rungs are tried in order and the first hit wins:
-/// stamped env, registered pane, harness process tell, then unresolved.
-/// A miss falls through and nothing is guessed.
-pub fn resolve(routes: &BTreeMap<String, Route>) -> Result<Identity> {
-    let registry = crate::registry::Registry::discover();
-    resolve_with(&registry, routes)
+/// The one line an unresolved caller reads. It names `--as` because that is
+/// the only thing the caller can do about it.
+pub const UNRESOLVED: &str =
+    "boop cannot tell who is calling: this process carries no BOOP_SESSION stamp; name yourself with `--as <name>`";
+
+/// The exit code an unresolved caller exits with.
+pub const UNRESOLVED_EXIT: i32 = 2;
+
+/// The whole ladder: `--as`, then the env stamp. A caller neither rung names
+/// carries `Rung::None`.
+pub fn resolve_as(as_name: Option<&str>) -> Identity {
+    if let Some(name) = as_name.filter(|name| !name.is_empty()) {
+        return Identity {
+            session: Some(name.to_owned()),
+            lane: Some(name.to_owned()),
+            parent: env("BOOP_PARENT"),
+            harness: env("BOOP_HARNESS"),
+            pane: env("TMUX_PANE"),
+            rung: Some(Rung::As),
+        };
+    }
+    from_env().unwrap_or(Identity {
+        rung: Some(Rung::None),
+        ..Default::default()
+    })
 }
 
-/// Resolve through the registered harness adapters. The ladder order is
-/// global; each rung's implementation belongs to the adapter that owns it.
+/// The env rung alone, for a caller with no flag to offer. Kept as the old
+/// name so no call site outside this module changes.
+pub fn resolve(_routes: &BTreeMap<String, Route>) -> Result<Identity> {
+    Ok(resolve_as(None))
+}
+
+/// The env rung alone. The registry argument is vestigial: no harness owns a
+/// rung any more.
 pub fn resolve_with(
-    registry: &crate::registry::Registry,
-    routes: &BTreeMap<String, Route>,
+    _registry: &crate::registry::Registry,
+    _routes: &BTreeMap<String, Route>,
 ) -> Result<Identity> {
-    if let Some(identity) = from_env() {
-        return Ok(identity);
-    }
-    if let Some(pane) = caller_pane() {
-        reject_two_routes_on_one_pane(boop_store::tmux::mux(), routes, &pane)?;
-    }
-    let pane_identity = from_pane(routes);
-    for harness in registry.all() {
-        if let Some(identity) = harness.identity_process() {
-            return Ok(named_by_route(identity, pane_identity.as_ref()));
-        }
-    }
-    let Some(mut identity) = pane_identity else {
-        return Ok(Identity {
-            rung: Some(Rung::None),
-            ..Default::default()
-        });
-    };
-    if let Some(route) = identity.lane.as_deref().and_then(|lane| routes.get(lane)) {
-        if let Some(session) = live_session_for_route(registry, route)? {
-            identity.session = Some(session);
-            identity.rung = Some(Rung::RouteCwd);
-        }
-    }
-    Ok(identity)
+    Ok(resolve_as(None))
 }
 
-/// The pane the caller stands in: its own `$TMUX_PANE`, else the pane the
-/// calling tmux client has selected.
-pub(crate) fn caller_pane() -> Option<String> {
-    std::env::var("TMUX_PANE")
-        .ok()
-        .filter(|pane| !pane.is_empty())
-        .or_else(|| boop_store::tmux::mux().current_pane(None))
-}
-
-/// A harness process names its own session; the registry route standing on the
-/// same pane names the lane that session answers to. Neither one is guessed
-/// from the other.
-fn named_by_route(mut identity: Identity, pane_identity: Option<&Identity>) -> Identity {
-    let Some(matched) = pane_identity else {
+/// The caller, or one line and exit 2. Every verb that must put a name on
+/// something calls this rather than inventing a fallback.
+pub fn require(as_name: Option<&str>) -> Identity {
+    let identity = resolve_as(as_name);
+    if identity.is_resolved() {
         return identity;
-    };
-    identity.lane = matched.lane.clone().or(identity.lane);
-    identity.pane = identity.pane.take().or_else(|| matched.pane.clone());
-    identity.harness = identity.harness.take().or_else(|| matched.harness.clone());
-    identity
-}
-
-/// One pane carries one caller. Two routes standing on it name two senders and
-/// picking either would put the wrong name on the mail.
-fn reject_two_routes_on_one_pane(
-    multiplexer: &dyn boop_store::tmux::Multiplexer,
-    routes: &BTreeMap<String, Route>,
-    pane: &str,
-) -> Result<()> {
-    let tmux_session = multiplexer.session_of_pane(None, pane);
-    let mut hits = routes
-        .iter()
-        .filter(|(_, route)| route_owns_pane(multiplexer, route, pane, tmux_session.as_deref()))
-        .map(|(name, _)| name.as_str());
-    if let (Some(first), Some(second)) = (hits.next(), hits.next()) {
-        anyhow::bail!(
-            "ambiguous caller: pane {pane} is registered as both `{first}` and `{second}`; prune one route"
-        );
     }
-    Ok(())
+    eprintln!("{UNRESOLVED}");
+    std::process::exit(UNRESOLVED_EXIT)
 }
 
-/// Whether a route's tmux target names this pane. The target is written in
-/// whatever form the adopter used: a pane id, a session name, or the
-/// `session:window.pane` form `boop adopt` records, which tmux resolves.
-pub(crate) fn route_owns_pane(
-    multiplexer: &dyn boop_store::tmux::Multiplexer,
-    route: &Route,
-    pane: &str,
-    tmux_session: Option<&str>,
-) -> bool {
-    let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) else {
-        return false;
-    };
-    if target == pane || Some(target) == tmux_session {
-        return true;
+/// The stamp a boop spawn wrote into the child's own environment. `BOOP_LANE`
+/// alone answers for a spawn made before boop stamped `BOOP_SESSION`.
+pub fn from_env() -> Option<Identity> {
+    let session = env("BOOP_SESSION");
+    let lane = env("BOOP_LANE");
+    if session.is_none() && lane.is_none() {
+        return None;
     }
-    target.contains(':') && multiplexer.pane_id(None, target).as_deref() == Some(pane)
-}
-
-/// Rung 4. The route's `session_id` is a stamp; the session it names moves on
-/// /clear, on compaction and on resume, and a route written before its session
-/// existed carries none at all. The harness's own live-session registry says
-/// which of its sessions is running in the route's cwd right now.
-fn live_session_for_route(
-    registry: &crate::registry::Registry,
-    route: &Route,
-) -> Result<Option<String>> {
-    let (Some(harness_id), Some(cwd)) = (route.harness, route.cwd.as_deref()) else {
-        return Ok(None);
-    };
-    let since = route
-        .registered_at
-        .as_deref()
-        .and_then(boop_store::session::parse_iso_ms);
-    let mut live: Vec<crate::live::LiveSession> = registry
-        .get(harness_id)
-        .live()
-        .live_sessions()?
-        .into_iter()
-        .filter(|session| {
-            session.cwd.as_deref() == Some(std::path::Path::new(cwd))
-                && since.is_none_or(|since| session.observed_ms >= since)
-        })
-        .collect();
-    live.sort_by_key(|session| session.observed_ms);
-    match live.len() {
-        0 => Ok(None),
-        1 => Ok(Some(live.remove(0).session_id)),
-        _ => {
-            let names: Vec<&str> = live
-                .iter()
-                .map(|session| session.session_id.as_str())
-                .collect();
-            anyhow::bail!(
-                "ambiguous caller: {} {harness_id} sessions are live in {cwd} ({}); name one with `boop adopt --session-id`",
-                names.len(),
-                names.join(", ")
-            )
-        }
-    }
-}
-
-/// Rung 1. The stamp a boop spawn wrote into the child's own environment.
-/// Boop writes it, so no harness owns it.
-pub(crate) fn from_env() -> Option<Identity> {
-    let session = std::env::var("BOOP_SESSION")
-        .ok()
-        .filter(|s| !s.is_empty())?;
     Some(Identity {
-        session: Some(session),
-        lane: std::env::var("BOOP_LANE").ok().filter(|s| !s.is_empty()),
-        parent: std::env::var("BOOP_PARENT").ok().filter(|s| !s.is_empty()),
-        harness: std::env::var("BOOP_HARNESS").ok().filter(|s| !s.is_empty()),
-        pane: std::env::var("TMUX_PANE").ok(),
+        session: session.clone().or_else(|| lane.clone()),
+        lane: lane.or(session),
+        parent: env("BOOP_PARENT"),
+        harness: env("BOOP_HARNESS"),
+        pane: env("TMUX_PANE"),
         rung: Some(Rung::Env),
     })
 }
 
-/// Rung 2. `$TMUX_PANE` names interactive shells directly. Codex tool
-/// subprocesses omit it while retaining `TMUX`, so tmux resolves the calling
-/// client's selected pane. The registry may own that pane or its whole session.
-pub(crate) fn from_pane(routes: &BTreeMap<String, Route>) -> Option<Identity> {
-    let pane = caller_pane()?;
-    let multiplexer = boop_store::tmux::mux();
-    let tmux_session = multiplexer.session_of_pane(None, &pane);
-    let (lane, route) = routes
-        .iter()
-        .find(|(_, route)| route_owns_pane(multiplexer, route, &pane, tmux_session.as_deref()))?;
-    Some(Identity {
-        session: route.session_id.clone().or_else(|| Some(lane.clone())),
-        lane: Some(lane.clone()),
-        parent: None,
-        harness: route.harness.map(|id| id.to_string()),
-        pane: Some(pane),
-        rung: Some(Rung::Pane),
-    })
+fn env(key: &str) -> Option<String> {
+    std::env::var(key).ok().filter(|value| !value.is_empty())
 }
 
 /// The env stamp a spawn writes into its CHILD. Every value describes the
@@ -275,94 +166,84 @@ fn shell_word(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use super::{child_stamp, resolve_as, Rung};
 
-    use boop_store::bus::Route;
-    use boop_store::testing::FakeMux;
-
-    use super::{child_stamp, reject_two_routes_on_one_pane, resolve, route_owns_pane, Rung};
-
-    fn route_on(target: &str) -> Route {
-        Route {
-            kind: "coordinator".into(),
-            harness: None,
-            tmux: Some(target.to_owned()),
-            cwd: None,
-            model: None,
-            mode: None,
-            session_id: None,
-            source_path: None,
-            parent: None,
-            goal: None,
-            registered_at: None,
-            base_sha: None,
-            worktree_dir: None,
-            app_server_socket: None,
-        }
-    }
-
-    /// FAIL-PRE-FIX. `boop adopt` records `session:window.pane`, which equals
-    /// neither the pane id nor the session name, so the string compare this
-    /// replaced matched nothing and every adopted coordinator read `rung none`.
+    /// The flag wins over a stamp: a native subagent inherits its spawner's
+    /// env and must be able to say it is somebody else.
     #[test]
-    fn a_route_adopted_as_session_window_pane_names_its_own_caller_pane() {
-        let mux = FakeMux::available(&["turn-visibility"]).with_pane("%2810", "turn-visibility");
-        assert!(route_owns_pane(
-            &mux,
-            &route_on("turn-visibility:0.0"),
-            "%2810",
-            Some("turn-visibility")
-        ));
-        assert!(route_owns_pane(&mux, &route_on("%2810"), "%2810", None));
-        assert!(route_owns_pane(
-            &mux,
-            &route_on("turn-visibility"),
-            "%2810",
-            Some("turn-visibility")
-        ));
-        assert!(!route_owns_pane(
-            &mux,
-            &route_on("other:0.0"),
-            "%2810",
-            Some("turn-visibility")
-        ));
-    }
-
-    /// One pane carries one caller; picking either of two would put the wrong
-    /// name on the mail.
-    #[test]
-    fn two_routes_standing_on_one_pane_are_a_named_error() {
-        let mux = FakeMux::available(&["turn-visibility"]).with_pane("%2810", "turn-visibility");
-        let mut routes = BTreeMap::new();
-        routes.insert("coord-a".to_owned(), route_on("turn-visibility:0.0"));
-        routes.insert("coord-b".to_owned(), route_on("%2810"));
-        let error = reject_two_routes_on_one_pane(&mux, &routes, "%2810")
-            .expect_err("two routes on one pane must not resolve");
-        let text = error.to_string();
-        assert!(text.contains("ambiguous caller"), "{text}");
-        assert!(
-            text.contains("coord-a") && text.contains("coord-b"),
-            "{text}"
+    fn the_as_flag_outranks_the_env_stamp() {
+        temp_env::with_vars(
+            [
+                ("BOOP_SESSION", Some("spawner-1")),
+                ("BOOP_LANE", Some("spawner-1")),
+                ("BOOP_PARENT", Some("coord")),
+            ],
+            || {
+                let identity = resolve_as(Some("native-n1"));
+                assert_eq!(identity.rung, Some(Rung::As));
+                assert_eq!(identity.session.as_deref(), Some("native-n1"));
+                assert_eq!(identity.lane.as_deref(), Some("native-n1"));
+                assert_eq!(identity.parent.as_deref(), Some("coord"));
+                assert_eq!(identity.to_json()["confidence"], "named");
+            },
         );
     }
 
-    /// The claude rung reads the id claude stamps into every process it runs.
     #[test]
-    fn the_claude_process_rung_names_the_session_claude_stamped() {
+    fn the_env_stamp_is_the_second_rung() {
+        temp_env::with_vars(
+            [
+                ("BOOP_SESSION", Some("s-1")),
+                ("BOOP_LANE", Some("lane-a")),
+                ("BOOP_PARENT", Some("coord")),
+            ],
+            || {
+                let identity = resolve_as(None);
+                assert_eq!(identity.rung, Some(Rung::Env));
+                assert_eq!(identity.session.as_deref(), Some("s-1"));
+                assert_eq!(identity.lane.as_deref(), Some("lane-a"));
+                assert_eq!(identity.to_json()["rung"], "env");
+            },
+        );
+    }
+
+    /// A spawn from before the `BOOP_SESSION` stamp still carries `BOOP_LANE`.
+    #[test]
+    fn boop_lane_alone_answers_for_an_old_spawn() {
         temp_env::with_vars(
             [
                 ("BOOP_SESSION", None::<&str>),
-                ("TMUX_PANE", None::<&str>),
-                ("CLAUDE_CODE_SESSION_ID", Some("555ec3f8")),
-                ("CODEX_THREAD_ID", None::<&str>),
-                ("KIMI_SESSION_ID", None::<&str>),
+                ("BOOP_LANE", Some("lane-a")),
+                ("BOOP_PARENT", None::<&str>),
             ],
             || {
-                let identity = resolve(&BTreeMap::new()).unwrap();
-                assert_eq!(identity.session.as_deref(), Some("555ec3f8"));
-                assert_eq!(identity.harness.as_deref(), Some("claude"));
-                assert_eq!(identity.rung, Some(Rung::ClaudeProcess));
-                assert_eq!(identity.to_json()["confidence"], "exact");
+                let identity = resolve_as(None);
+                assert_eq!(identity.rung, Some(Rung::Env));
+                assert_eq!(identity.lane.as_deref(), Some("lane-a"));
+                assert_eq!(identity.session.as_deref(), Some("lane-a"));
+            },
+        );
+    }
+
+    /// No pane, no process tree: a caller with neither rung is unresolved and
+    /// nothing plausible is invented for it.
+    #[test]
+    fn a_caller_with_neither_rung_is_unresolved() {
+        temp_env::with_vars(
+            [
+                ("BOOP_SESSION", None::<&str>),
+                ("BOOP_LANE", None::<&str>),
+                ("TMUX_PANE", Some("%1206")),
+                ("CODEX_THREAD_ID", Some("thread-7")),
+                ("CLAUDE_CODE_SESSION_ID", Some("555ec3f8")),
+            ],
+            || {
+                let identity = resolve_as(None);
+                assert_eq!(identity.rung, Some(Rung::None));
+                assert!(identity.session.is_none());
+                assert!(identity.lane.is_none());
+                assert!(!identity.is_resolved());
+                assert_eq!(identity.to_json()["confidence"], "unresolved");
             },
         );
     }
@@ -385,85 +266,6 @@ mod tests {
     fn a_stamp_with_no_parent_omits_the_variable() {
         let stamp = child_stamp("child-1", "lane-a", "claude", None);
         assert!(!stamp.contains("BOOP_PARENT"), "{stamp}");
-    }
-
-    /// An unresolved caller is reported, never defaulted to something plausible.
-    #[test]
-    fn an_unresolved_caller_says_so() {
-        temp_env::with_vars(
-            [
-                ("BOOP_SESSION", None::<&str>),
-                ("TMUX_PANE", None::<&str>),
-                ("CLAUDE_CODE_SESSION_ID", None::<&str>),
-                ("CODEX_THREAD_ID", None::<&str>),
-                ("KIMI_SESSION_ID", None::<&str>),
-            ],
-            || {
-                let identity = resolve(&BTreeMap::new()).unwrap();
-                assert_eq!(identity.rung, Some(Rung::None));
-                assert!(identity.session.is_none());
-                assert_eq!(identity.to_json()["confidence"], "unresolved");
-            },
-        );
-    }
-
-    #[test]
-    fn a_fresh_codex_process_identifies_its_spawning_pane_without_a_route() {
-        temp_env::with_vars(
-            [
-                ("BOOP_SESSION", None::<&str>),
-                ("TMUX_PANE", Some("%1206")),
-                ("CLAUDE_CODE_SESSION_ID", None::<&str>),
-                ("CODEX_THREAD_ID", Some("thread-7")),
-                ("KIMI_SESSION_ID", None::<&str>),
-            ],
-            || {
-                let identity = resolve(&BTreeMap::new()).unwrap();
-                assert_eq!(identity.session.as_deref(), Some("thread-7"));
-                assert_eq!(identity.lane.as_deref(), Some("codex-1206"));
-                assert_eq!(identity.harness.as_deref(), Some("codex"));
-                assert_eq!(identity.pane.as_deref(), Some("%1206"));
-                assert_eq!(identity.rung, Some(Rung::CodexProcess));
-            },
-        );
-    }
-
-    #[test]
-    fn kimi_process_rung_uses_the_follow_up_contract() {
-        temp_env::with_vars(
-            [
-                ("BOOP_SESSION", None::<&str>),
-                ("TMUX_PANE", None::<&str>),
-                ("CLAUDE_CODE_SESSION_ID", None::<&str>),
-                ("CODEX_THREAD_ID", None::<&str>),
-                ("KIMI_SESSION_ID", Some("session-8")),
-            ],
-            || {
-                let identity = resolve(&BTreeMap::new()).unwrap();
-                assert_eq!(identity.session.as_deref(), Some("session-8"));
-                assert_eq!(identity.harness.as_deref(), Some("kimi"));
-                assert_eq!(identity.rung, Some(Rung::KimiProcess));
-            },
-        );
-    }
-    /// The env rung is self-reported, so it must say so rather than pass as
-    /// verified: the bus incident was a self-reported id trusted blindly.
-    #[test]
-    fn the_env_rung_is_labelled() {
-        temp_env::with_vars(
-            [
-                ("BOOP_SESSION", Some("s-1")),
-                ("BOOP_LANE", Some("lane-a")),
-                ("BOOP_PARENT", Some("coord")),
-            ],
-            || {
-                let identity = resolve(&BTreeMap::new()).unwrap();
-                assert_eq!(identity.rung, Some(Rung::Env));
-                assert_eq!(identity.session.as_deref(), Some("s-1"));
-                assert_eq!(identity.parent.as_deref(), Some("coord"));
-                assert_eq!(identity.to_json()["rung"], "env");
-            },
-        );
     }
 
     mod temp_env {

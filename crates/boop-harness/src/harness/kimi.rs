@@ -35,18 +35,6 @@ static CAPABILITIES: Capabilities = Capabilities {
 static DOOR: crate::door::kimi::KimiDoor = crate::door::kimi::KimiDoor;
 
 impl Harness for Kimi {
-    fn identity_process(&self) -> Option<crate::identity::Identity> {
-        let session = std::env::var("KIMI_SESSION_ID")
-            .ok()
-            .filter(|value| !value.is_empty())?;
-        Some(crate::identity::Identity {
-            session: Some(session),
-            harness: Some(self.id().to_string()),
-            rung: Some(crate::identity::Rung::KimiProcess),
-            ..Default::default()
-        })
-    }
-
     fn open_channel(
         &self,
         spec: &boop_acp::channel::ChannelSpec,
