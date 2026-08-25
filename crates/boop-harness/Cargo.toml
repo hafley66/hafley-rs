@@ -46,9 +46,6 @@ ignore = "0.4"
 rusqlite = { version = "0.40", features = ["bundled", "trace"] }
 # Transcript timestamps parse against Rfc3339; hand-rolled date math is gone.
 time = { version = "0.3", features = ["parsing", "formatting"] }
-# Deadline on a synchronous std::process::Child without pulling in an async
-# runtime: one method, wait_timeout, on the same Child this file already spawns.
-wait-timeout = "0.2.1"
 # Process-wide diagnostics. The binary installs the subscriber; library code
 # only emits conventional tracing events and spans.
 tracing.workspace = true
