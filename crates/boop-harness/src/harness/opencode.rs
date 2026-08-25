@@ -378,10 +378,56 @@ fn write_part(
                 part.input.as_ref(),
             )?;
         }
-        _ => {}
+        // The model's own words before a tool call. Projected under the
+        // message's role so a chat read shows what the lane was thinking
+        // rather than 48 empty assistant rows.
+        "reasoning" => {
+            *turn += 1;
+            let inserted = store.write_turn(
+                session_id,
+                *turn,
+                message.ts,
+                &message.role,
+                &format!("reasoning: {}", part.text),
+            )?;
+            record(stat, inserted);
+            first_turn.get_or_insert(*turn);
+        }
+        // A snapshot of the files one step wrote. The hash and the paths are
+        // the content; there is no prose to keep.
+        "patch" => {
+            *turn += 1;
+            let inserted =
+                store.write_turn(session_id, *turn, message.ts, "tool", &part.patch_body())?;
+            record(stat, inserted);
+            first_turn.get_or_insert(*turn);
+        }
+        // Step markers carry no readable content of their own. Their token
+        // counts reach the store through `finish_message`.
+        kind if STRUCTURAL_PARTS.contains(&kind) => {}
+        // A kind this projection has never seen. The raw JSON becomes the body
+        // rather than disappearing, and the gap is reported so the adapter can
+        // grow a real arm for it.
+        kind => {
+            *turn += 1;
+            let inserted =
+                store.write_turn(session_id, *turn, message.ts, "tool", &part.gap_body())?;
+            record(stat, inserted);
+            first_turn.get_or_insert(*turn);
+            tracing::warn!(
+                projection_gap = kind,
+                session_id,
+                turn = *turn,
+                "opencode part kind projected as raw json"
+            );
+        }
     }
     Ok(())
 }
+
+/// Part kinds whose raw event holds no readable content. Every other kind
+/// projects a body, so an empty body always means an empty event.
+const STRUCTURAL_PARTS: [&str; 3] = ["step-start", "step-finish", "snapshot"];
 
 fn finish_message(
     store: &Store,
@@ -469,9 +515,34 @@ pub struct Part {
     pub input: Option<Value>,
     pub output: Option<Value>,
     pub error: Option<Value>,
+    /// A `patch` part's snapshot hash and the paths it wrote.
+    pub hash: String,
+    pub files: Vec<String>,
+    /// The event exactly as opencode wrote it, so a kind with no arm still
+    /// reaches the chat body instead of vanishing.
+    pub raw: String,
 }
 
 impl Part {
+    /// The files one step wrote, named by the snapshot that holds them.
+    fn patch_body(&self) -> String {
+        let files = self
+            .files
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join(", ");
+        match files.is_empty() {
+            true => format!("patch {}", self.hash),
+            false => format!("patch {}\nfiles: {files}", self.hash),
+        }
+    }
+
+    /// An unknown kind's body: the raw event, verbatim, under its own name.
+    fn gap_body(&self) -> String {
+        format!("{} (unprojected)\n{}", self.kind, self.raw)
+    }
+
     /// The chat body holds the complete readable tool exchange. Structured
     /// facts remain separately projected for queries over commands and paths.
     fn tool_body(&self) -> String {
@@ -684,6 +755,23 @@ where
                         .get("state")
                         .and_then(|state| state.get("error"))
                         .cloned(),
+                    hash: data
+                        .get("hash")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_owned(),
+                    files: data
+                        .get("files")
+                        .and_then(Value::as_array)
+                        .map(|files| {
+                            files
+                                .iter()
+                                .filter_map(Value::as_str)
+                                .map(str::to_owned)
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                    raw,
                 },
             )?;
         }
@@ -767,6 +855,9 @@ mod tests {
             input: None,
             output: None,
             error: None,
+            hash: String::new(),
+            files: Vec::new(),
+            raw: String::new(),
         };
         assert_eq!(part.text, "hello");
     }
@@ -833,6 +924,133 @@ mod tests {
         drop(store);
         let _ = std::fs::remove_file(transcript);
         let _ = std::fs::remove_file(store_path);
+    }
+
+    // FAIL-PRE-FIX: `reasoning`, `patch`, and every kind the match had no arm
+    // for were dropped, so 48 of one real session's 55 assistant turns and all
+    // 107 of its tool turns projected as empty bodies.
+    #[test]
+    fn every_content_bearing_part_kind_projects_a_body() {
+        let transcript = temp_db("kinds-transcript");
+        let store_path = temp_db("kinds-store");
+        std::fs::copy("tests/fixtures/opencode/bench/opencode.db", &transcript).unwrap();
+        let connection = rusqlite::Connection::open(&transcript).unwrap();
+        let message: String = connection
+            .query_row(
+                "SELECT id FROM message WHERE session_id = 'ses_bench_0001' ORDER BY id LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        for (id, data) in [
+            (
+                "part-reasoning",
+                r#"{"type":"reasoning","text":"weighing the two shapes"}"#,
+            ),
+            (
+                "part-patch",
+                r#"{"type":"patch","hash":"abc1234","files":["crates/boop/src/mail.rs"]}"#,
+            ),
+            ("part-step", r#"{"type":"step-start","snapshot":"abc1234"}"#),
+            (
+                "part-future",
+                r#"{"type":"a-kind-from-the-future","payload":"keep me"}"#,
+            ),
+        ] {
+            connection
+                .execute(
+                    "INSERT INTO part (id, message_id, data) VALUES (?1, ?2, ?3)",
+                    rusqlite::params![id, message, data],
+                )
+                .unwrap();
+        }
+        drop(connection);
+
+        let session = sessions_from(&transcript)
+            .unwrap()
+            .into_iter()
+            .find(|session| session.session_id == "ses_bench_0001")
+            .unwrap();
+        let store = Store::open(store_path.clone()).unwrap();
+        sync_session(&store, &Opencode, &session).unwrap();
+        let turns = store
+            .query_turns(&TurnQuery {
+                session: Some(session.session_id),
+                ..TurnQuery::default()
+            })
+            .unwrap();
+        let bodies: Vec<String> = turns
+            .iter()
+            .map(|turn| turn["said"].as_str().unwrap_or_default().to_owned())
+            .collect();
+        assert!(
+            bodies
+                .iter()
+                .any(|body| body == "reasoning: weighing the two shapes"),
+            "bodies: {bodies:#?}"
+        );
+        assert!(
+            bodies
+                .iter()
+                .any(|body| body == "patch abc1234\nfiles: crates/boop/src/mail.rs"),
+            "bodies: {bodies:#?}"
+        );
+        assert!(
+            bodies.iter().any(
+                |body| body.starts_with("a-kind-from-the-future (unprojected)")
+                    && body.contains("keep me")
+            ),
+            "an unknown kind keeps its raw event: {bodies:#?}"
+        );
+        assert!(
+            !bodies.iter().any(|body| body.contains("step-start")),
+            "a structural part writes no turn: {bodies:#?}"
+        );
+        drop(store);
+        let _ = std::fs::remove_file(transcript);
+        let _ = std::fs::remove_file(store_path);
+    }
+
+    /// RECEIPT (7.4). No turn this projection writes has an empty body: an
+    /// empty chat row can only come from an event that was empty itself.
+    #[test]
+    fn no_projected_turn_from_the_fixture_has_an_empty_body() {
+        let transcript = temp_db("nonempty-transcript");
+        let store_path = temp_db("nonempty-store");
+        std::fs::copy("tests/fixtures/opencode/bench/opencode.db", &transcript).unwrap();
+        let session = sessions_from(&transcript)
+            .unwrap()
+            .into_iter()
+            .find(|session| session.session_id == "ses_bench_0001")
+            .unwrap();
+        let store = Store::open(store_path.clone()).unwrap();
+        sync_session(&store, &Opencode, &session).unwrap();
+        let turns = store
+            .query_turns(&TurnQuery {
+                session: Some(session.session_id),
+                ..TurnQuery::default()
+            })
+            .unwrap();
+        assert!(!turns.is_empty(), "the fixture projects turns");
+        let empty: Vec<&serde_json::Value> = turns
+            .iter()
+            .filter(|turn| turn["said"].as_str().unwrap_or_default().is_empty())
+            .collect();
+        assert!(empty.is_empty(), "empty projected bodies: {empty:#?}");
+        drop(store);
+        let _ = std::fs::remove_file(transcript);
+        let _ = std::fs::remove_file(store_path);
+    }
+
+    /// One scratch database path per test, per process.
+    fn temp_db(name: &str) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "boop-opencode-{name}-{}-{:?}.db",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        path
     }
 
     #[test]
