@@ -118,6 +118,7 @@ pub(crate) fn run_hail(
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
+    let to = &resolve_parent_alias(registry, &bus::read_routes(&dir)?, to, from)?;
     let message = bus::Message {
         id: bus::mint_id(),
         from: from.unwrap_or("coordinator").to_owned(),
@@ -271,6 +272,7 @@ pub(crate) fn run_push(
                 .unwrap_or_else(|_| "coordinator".to_owned())
         }
     };
+    let to = &resolve_parent_alias(registry, &routes, to, from)?;
     let message = bus::Message {
         id: bus::mint_id(),
         from: sender,
@@ -352,6 +354,57 @@ fn is_acpx(route: &Route) -> bool {
     route.mode.as_deref() == Some("acpx")
 }
 
+/// Who is calling, for every verb that has to know: the name, its registry
+/// route, and the parent the spawner stamped into the environment.
+///
+/// `--as` is the whole identity. A native subagent runs inside its spawner's
+/// environment, so the env rung names the spawner and `BOOP_PARENT` is the
+/// spawner's parent, never the native's.
+fn caller_identity<'a>(
+    registry: &Registry,
+    routes: &'a BTreeMap<String, Route>,
+    as_name: Option<&str>,
+) -> Result<(String, &'a Route, Option<String>)> {
+    match as_name {
+        Some(name) => {
+            let route = routes.get(name).with_context(|| {
+                format!("--as {name} names no registered route; `beep agent register {name}` first")
+            })?;
+            Ok((name.to_owned(), route, None))
+        }
+        None => {
+            let identity = identity::resolve_with(registry, routes)?;
+            let (caller, route) = lane::caller_route(&identity, routes)?;
+            Ok((caller, route, identity.parent))
+        }
+    }
+}
+
+/// `parent` is an alias every send verb's help advertises, never a route
+/// name. It resolves through the one function `tell-parent` walks, so `push
+/// parent`, `beep hail parent` and `tell-parent` cannot disagree about who
+/// the parent is. Every other spelling passes through untouched.
+fn resolve_parent_alias(
+    registry: &Registry,
+    routes: &BTreeMap<String, Route>,
+    to: &str,
+    as_name: Option<&str>,
+) -> Result<String> {
+    if to != PARENT_ALIAS {
+        return Ok(to.to_owned());
+    }
+    let (caller, route, stamped) = caller_identity(registry, routes, as_name)?;
+    let pick = lane::tell_parent_target(&caller, route, routes, stamped.as_deref())?;
+    let parent = pick
+        .parent
+        .context("no parent edge resolved for the caller")?;
+    info!(caller, parent, source = pick.source, "parent alias resolved");
+    Ok(parent)
+}
+
+/// The one route name that is an alias rather than a registry key.
+const PARENT_ALIAS: &str = "parent";
+
 /// `tell-parent`: one row from the caller to the parent its registration
 /// recorded. The caller spells neither end of the edge.
 pub(crate) fn run_tell_parent(
@@ -363,22 +416,7 @@ pub(crate) fn run_tell_parent(
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
-    // `--as` is the whole identity: a native subagent runs inside its
-    // spawner's environment, so the env stamp names the spawner and the
-    // stamped parent belongs to the spawner too.
-    let (caller, route, stamped) = match as_name {
-        Some(name) => {
-            let route = routes.get(name).with_context(|| {
-                format!("--as {name} names no registered route; `beep agent register {name}` first")
-            })?;
-            (name.to_owned(), route, None)
-        }
-        None => {
-            let identity = identity::resolve_with(registry, &routes)?;
-            let (caller, route) = lane::caller_route(&identity, &routes)?;
-            (caller, route, identity.parent)
-        }
-    };
+    let (caller, route, stamped) = caller_identity(registry, &routes, as_name)?;
     let pick = lane::tell_parent_target(&caller, route, &routes, stamped.as_deref())?;
     let parent = pick
         .parent

@@ -428,3 +428,71 @@ fn push_and_hail_accept_the_as_spelling_for_the_sender() {
     assert_eq!(rows[0]["from"], "native-n2");
     assert_eq!(rows[0]["to"], "native-n1");
 }
+
+/// Defect 4 (addendum 2026-08-25): `push parent` and `beep hail parent`
+/// advertise the alias in their help, then addressed a route literally named
+/// `parent` and left the row held with no registry route.
+#[test]
+fn hail_parent_resolves_the_alias_through_the_same_edge_tell_parent_walks() {
+    let fixture = Fixture::new("hail-parent");
+    fixture.write_registry(serde_json::json!({
+        "native-n1": {"kind": "native", "parent": "feature-cx-a"},
+        "feature-cx-a": {"kind": "lane", "parent": "coord-1"},
+        "coord-1": {"kind": "coordinator"},
+    }));
+    let output = fixture.boop_as(
+        "feature-cx-a",
+        &[
+            "beep", "hail", "parent", "--as", "native-n1", "--body", "up one",
+        ],
+    );
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let rows = fixture.bus_rows();
+    assert_eq!(rows.len(), 1, "bus rows: {rows:?}");
+    assert_eq!(rows[0]["to"], "feature-cx-a", "the alias resolved");
+    assert_eq!(rows[0]["from"], "native-n1");
+}
+
+#[test]
+fn push_parent_resolves_the_alias_before_it_walks_the_ladder() {
+    let fixture = Fixture::new("push-parent");
+    fixture.write_registry(serde_json::json!({
+        "native-n1": {"kind": "native", "parent": "feature-cx-a"},
+        "feature-cx-a": {"kind": "lane", "parent": "coord-1"},
+        "coord-1": {"kind": "coordinator"},
+    }));
+    let output = fixture.boop_as(
+        "feature-cx-a",
+        &[
+            "push", "parent", "--as", "native-n1", "--body", "up one", "--timeout", "1",
+        ],
+    );
+    // No parent answers inside a second, so the block times out. The row it
+    // appended first is what this pins.
+    assert_eq!(output.status.code(), Some(124), "stderr: {}", stderr(&output));
+    let rows = fixture.bus_rows();
+    assert_eq!(rows.len(), 1, "bus rows: {rows:?}");
+    assert_eq!(rows[0]["to"], "feature-cx-a", "the alias resolved");
+    assert_eq!(rows[0]["from"], "native-n1");
+}
+
+/// A caller whose parent edge cannot be resolved gets that error, never a row
+/// addressed to the literal word.
+#[test]
+fn push_parent_with_no_edge_fails_by_name_instead_of_addressing_the_word() {
+    let fixture = Fixture::new("push-parent-noedge");
+    fixture.write_registry(serde_json::json!({
+        "lonely": {"kind": "coordinator"},
+    }));
+    let output = fixture.boop_as(
+        "lonely",
+        &["push", "parent", "--body", "up one", "--timeout", "1"],
+    );
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("no parent edge"),
+        "stderr: {}",
+        stderr(&output)
+    );
+    assert!(fixture.bus_rows().is_empty(), "no row was appended");
+}

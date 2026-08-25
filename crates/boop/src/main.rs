@@ -373,6 +373,7 @@ enum SubCmd {
     /// Queue a message and inject it into a live pane.
     #[command(hide = true)]
     Hail {
+        /// The route to hail, or `parent` for the caller's own parent edge.
         #[arg(long)]
         to: String,
         #[arg(long)]
@@ -1169,6 +1170,8 @@ enum BeepCmd {
     },
     /// Hand a message to a running agent through its harness door, and say where it landed.
     Hail {
+        /// The route to hail: a lane, a coordinator, a native, or `parent`,
+        /// which resolves through the same edge `boop tell-parent` walks.
         lane: String,
         #[arg(long)]
         body: String,
