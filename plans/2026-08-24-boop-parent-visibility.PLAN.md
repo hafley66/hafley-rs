@@ -9,6 +9,8 @@
 
 ## Incident evidence
 
+Primary evidence and defect analysis: `plans/2026-08-24-boop-opencode-supervision-failures.PLAN.md` (codex, 476 lines). Its sections 6 to 11 are the spec for delivery receipts, transcript projection, and progress diagnostics. This doc adds `boop push` and the verb audit only.
+
 Lane `feature-generic-graph-rxjs-renderers`, opencode, model `openrouter/deepseek/deepseek-v4-pro-0813`,
 session `ses_fc9db2240ffeXH41Dc1Grco8l9`, cwd `hafley-rxjs/.boop-worktrees/feature/generic-graph-rxjs-renderers`,
 parent `codex-0` (a codex lane row, `shell-3:0.0`).
