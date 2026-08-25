@@ -1800,6 +1800,7 @@ enum DbCmd {
     /// to accept the two forms.
     #[cfg(feature = "agent-read")]
     #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
+    #[command(hide = true)]
     Usage {
         #[command(flatten)]
         args: UsageArgs,
@@ -1811,12 +1812,14 @@ enum DbCmd {
     },
     /// The rate table cost is computed from.
     #[cfg(feature = "agent-read")]
+    #[command(hide = true)]
     Price {
         #[command(subcommand)]
         cmd: PriceCmd,
     },
     /// User-pinned markdown: save a message you want to keep, read it back.
     #[cfg(feature = "agent-read")]
+    #[command(hide = true)]
     Favorite {
         #[command(subcommand)]
         cmd: FavoriteCmd,
@@ -1828,6 +1831,7 @@ enum DbCmd {
     },
     /// How far ingest has read each transcript.
     #[cfg(feature = "agent-read")]
+    #[command(hide = true)]
     SyncCursor {
         #[command(subcommand)]
         cmd: CursorCmd,
@@ -2397,6 +2401,26 @@ mod tests {
         assert!(
             blank.is_empty(),
             "db subcommands with empty about: {blank:?}"
+        );
+    }
+
+    /// RECEIPT (db-four-verbs): `usage`, `price`, `favorite`, `sync-cursor`
+    /// hidden; `sql`, `chat`, `status`, `sync` are the four the reader sees.
+    #[test]
+    fn db_help_lists_exactly_chat_status_sync_besides_the_sql_passthrough() {
+        let db = DbCmd::augment_subcommands(clap::Command::new("db"));
+        let visible: std::collections::BTreeSet<String> = db
+            .get_subcommands()
+            .filter(|sub| !sub.is_hide_set())
+            .map(|sub| sub.get_name().to_owned())
+            .collect();
+        assert_eq!(
+            visible,
+            ["chat", "status", "sync"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            "boop db --help subcommands: {visible:?}"
         );
     }
 
