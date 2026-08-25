@@ -20,50 +20,6 @@ use crate::cli::{append_ack, append_message, line, mail_dir, pad, route_to_json,
 use crate::{AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat};
 
 // ---------------------------------------------------------------------------
-// measure (layer 0)
-// ---------------------------------------------------------------------------
-
-pub(crate) fn run_measure(mail_dir_arg: Option<&Path>) -> Result<()> {
-    let snapshot = proc::SysinfoSnapshot::capture()?;
-    run_measure_with(mail_dir_arg, &snapshot)
-}
-
-/// Takes the `ProcReader` seam rather than the concrete snapshot, so a fake
-/// reader can drive this without a real process tree.
-pub(crate) fn run_measure_with(
-    mail_dir_arg: Option<&Path>,
-    reader: &dyn proc::ProcReader,
-) -> Result<()> {
-    let dir = mail_dir(mail_dir_arg)?;
-    let routes = bus::read_routes(&dir)?;
-    line("lane\tpid\trss_kb\tcpu_pct\tuptime_sec\tchildren");
-    for (name, route) in &routes {
-        let pane_pid = route
-            .tmux
-            .as_deref()
-            .and_then(|target| tmux::mux().pane_pid(None, target))
-            .unwrap_or(0);
-        match proc::tree_sum_of(reader, pane_pid) {
-            Some(sum) => {
-                let now = now_unix_secs();
-                let uptime = proc::uptime_secs(sum.start_time_secs, now);
-                line(&format!(
-                    "{}\t{}\t{}\t{:.1}\t{}\t{}",
-                    name,
-                    pane_pid,
-                    sum.rss_bytes / 1024,
-                    sum.cpu_percent,
-                    uptime,
-                    reader.descendant_count(pane_pid),
-                ));
-            }
-            None => println!("{}\t{}\t-\t-\t-\t-", name, pane_pid),
-        }
-    }
-    Ok(())
-}
-
-// ---------------------------------------------------------------------------
 // dispatch (layer 1 + bus)
 // ---------------------------------------------------------------------------
 

@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use tracing::info;
 
 use boop::bus::Route;
 use boop::harness::HarnessId;
@@ -143,36 +142,6 @@ pub(crate) fn adopt_cwd(cwd: Option<&str>) -> Result<PathBuf> {
     }
 }
 
-pub(crate) fn run_prune(mail_dir_arg: Option<&Path>) -> Result<()> {
-    let dir = mail_dir(mail_dir_arg)?;
-    if tmux::mux().live_sessions(None).is_none() {
-        println!("refusing prune: tmux unreachable, cannot tell live from dead");
-        return Ok(());
-    }
-    let routes = bus::read_routes(&dir)?;
-    let dead: Vec<String> = routes
-        .iter()
-        .filter(|(_, route)| route.kind == "lane")
-        .filter(|(_, route)| {
-            let Some(target) = route.tmux.as_deref() else {
-                return true;
-            };
-            !tmux::mux().target_alive(None, target)
-        })
-        .map(|(name, _)| name.clone())
-        .collect();
-    let path = dir.join("registry.json");
-    bus::cas_update_json(&path, |current| {
-        for name in &dead {
-            current.remove(name);
-        }
-        Ok(())
-    })?;
-    info!(routes_deleted = dead.len(), mail_dir = %dir.display(), "lane routes pruned");
-    println!("pruned {} dead routes", dead.len());
-    Ok(())
-}
-
 // ---------------------------------------------------------------------------
 // whoami
 // ---------------------------------------------------------------------------
@@ -213,48 +182,6 @@ pub(crate) fn run_me_favorite(index: i64, note: Option<&str>) -> Result<()> {
     let source = format!("{}:{}:assistant:{}", row.harness, session, row.turn);
     let id = store.favorite_add(&row.said, note.unwrap_or(""), &source, now_ms())?;
     line(&format!("favorite {id}"));
-    Ok(())
-}
-
-pub(crate) fn run_me(name: Option<&str>, mail_dir_arg: Option<&Path>) -> Result<()> {
-    let pane = std::env::var("TMUX_PANE")
-        .ok()
-        .filter(|pane| !pane.is_empty())
-        .or_else(|| tmux::mux().current_pane(None))
-        .context("resolve current tmux pane; run boop me inside tmux")?;
-    let cwd = std::env::current_dir().context("read current directory")?;
-    let session = boop::harness::codex::latest_root_session_for_cwd(&cwd)?
-        .context("no root Codex transcript records the current directory")?;
-    let generated = format!("codex-{}", pane.trim_start_matches('%'));
-    let name = name.unwrap_or(&generated);
-    let dir = mail_dir(mail_dir_arg)?;
-    write_route(
-        &dir,
-        name,
-        Route {
-            kind: "coordinator".into(),
-            harness: Some(HarnessId::Codex),
-            tmux: Some(pane.clone()),
-            cwd: Some(cwd.display().to_string()),
-            model: None,
-            mode: Some("interactive".into()),
-            session_id: Some(session.session_id.clone()),
-            source_path: Some(session.path.display().to_string()),
-            parent: None,
-            goal: None,
-            registered_at: Some(bus::now_iso()),
-            base_sha: None,
-            worktree_dir: None,
-            app_server_socket: None,
-        },
-    )?;
-    println!("registered {name} -> {pane} codex {}", session.session_id);
-    if let Ok(mood) = boop::Store::default_path()
-        .and_then(boop::Store::open)
-        .and_then(|store| store.effective_mood(name))
-    {
-        println!("{}", mood.line());
-    }
     Ok(())
 }
 

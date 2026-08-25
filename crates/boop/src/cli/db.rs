@@ -12,11 +12,11 @@ use boop::{query, usage};
 
 use crate::cli::job::lane_state;
 use crate::cli::mail::deliver_hail;
-use crate::cli::{append_acks, append_message, emit_event, line, mail_dir, now_ms, write_route};
+use crate::cli::{append_acks, append_message, line, mail_dir, now_ms, write_route};
 use crate::{
     AgentSessionGraphFormat, AgentSummaryCmd, AgentSummaryFormat, ChatCmd, CursorCmd, DbCmd,
-    EdgeCmd, FactCmd, FavoriteCmd, OutputFormat, PriceCmd, QueryArgs, QueryFormat, SessionCmd,
-    SyncCmd, TurnCmd, UsageArgs, UsageCmd,
+    EdgeCmd, FactCmd, FavoriteCmd, PriceCmd, QueryArgs, QueryFormat, SessionCmd, SyncCmd, TurnCmd,
+    UsageArgs, UsageCmd,
 };
 
 // ---------------------------------------------------------------------------
@@ -28,51 +28,6 @@ pub(crate) fn run_harnesses(registry: &Registry) -> Result<()> {
         line(harness.id().as_str());
     }
     Ok(())
-}
-
-pub(crate) fn run_sessions(registry: &Registry, harness_id: Option<&str>) -> Result<()> {
-    let harnesses: Vec<&dyn boop::harness::Harness> = match harness_id {
-        Some(id) => vec![resolve_harness(registry, id)?],
-        None => registry.all().iter().map(|boxed| boxed.as_ref()).collect(),
-    };
-    for adapter in harnesses {
-        for session in adapter.sessions()? {
-            line(&format!(
-                "{}\t{}\t{}\t{}\t{}\t{}",
-                session.session_id,
-                session.harness,
-                session.cwd.as_deref().unwrap_or("-"),
-                session.git_branch.as_deref().unwrap_or("-"),
-                session.modified_ms,
-                session.size,
-            ));
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn run_tail(
-    registry: &Registry,
-    session_id: &str,
-    offset: u64,
-    format: OutputFormat,
-) -> Result<()> {
-    for adapter in registry.all() {
-        for session in adapter.sessions()? {
-            if session.session_id == session_id {
-                let chunk = adapter.read_from(&session, offset)?;
-                emit_notes(chunk.reset, chunk.skipped);
-                for event in &chunk.events {
-                    emit_event(event, format);
-                }
-                if matches!(format, OutputFormat::Text) {
-                    eprintln!("resume offset: {}", chunk.next_offset);
-                }
-                return Ok(());
-            }
-        }
-    }
-    anyhow::bail!("no session found with id `{session_id}`")
 }
 
 /// Resolve the shared filter set, with the session filter pinned externally
@@ -911,15 +866,6 @@ pub(crate) fn resolve_harness<'a>(
     registry
         .by_name(id)
         .with_context(|| format!("no harness registered with id `{id}`"))
-}
-
-pub(crate) fn emit_notes(reset: bool, skipped: usize) {
-    if reset {
-        eprintln!("note: transcript shorter than stored offset; restarted from byte 0");
-    }
-    if skipped > 0 {
-        eprintln!("note: skipped {skipped} line(s) that failed to parse as JSON");
-    }
 }
 
 // ---------------------------------------------------------------------------

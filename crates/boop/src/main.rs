@@ -18,20 +18,15 @@ mod cli;
 
 use cli::control::run_native_tui;
 use cli::db::{
-    run_chat_query, run_db, run_follow, run_harnesses, run_passthrough, run_public_agent_command,
-    run_query, run_sessions, run_sync_all, run_tail, sync_before_read, ChatQueryOptions,
+    run_chat_query, run_db, run_follow, run_passthrough, run_public_agent_command, run_sync_all,
+    sync_before_read, ChatQueryOptions,
 };
 #[cfg(feature = "dl6")]
 use cli::debug::run_host;
 use cli::debug::{run_config, run_debug, run_lane_debug};
-use cli::job::{
-    run_beep, run_dispatch, run_lane, run_lane_wait, run_measure, run_resolve, run_sweep, run_wait,
-    DispatchArgs, LaneArgs,
-};
-use cli::mail::{
-    run_hail, run_inbox, run_list, run_push, run_send, run_tell_children, run_tell_parent, Outbound,
-};
-use cli::me::{run_adopt, run_me, run_me_favorite, run_me_mood, run_prune, run_whoami};
+use cli::job::{run_beep, run_dispatch, run_lane, run_lane_wait, run_wait, DispatchArgs, LaneArgs};
+use cli::mail::{run_inbox, run_send, Outbound};
+use cli::me::{run_me_favorite, run_me_mood, run_whoami};
 #[cfg(feature = "dl6")]
 use cli::CONCATMAP_EXAMPLES;
 use cli::{doctrine, line, mail_dir, now_ms};
@@ -80,22 +75,6 @@ enum SubCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
         /// Arguments forwarded to the ordinary harness TUI.
-        #[arg(last = true)]
-        args: Vec<String>,
-    },
-    /// Launch a native Codex TUI attached to a Boop-owned managed app-server.
-    /// Folded (one-pane-register-path): `boop tui codex` is the spelling.
-    #[command(hide = true)]
-    Codex {
-        /// Registry name. Defaults to the current tmux pane's Codex identity.
-        #[arg(long)]
-        name: Option<String>,
-        /// Working directory for the native TUI.
-        #[arg(long)]
-        cwd: Option<PathBuf>,
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
-        /// Arguments forwarded to the ordinary Codex TUI.
         #[arg(last = true)]
         args: Vec<String>,
     },
@@ -238,33 +217,6 @@ enum SubCmd {
         #[command(subcommand)]
         cmd: HostCmd,
     },
-    /// Folded (2026-08-25): `boop beep parent <body>` is the spelling; this
-    /// one is a hidden alias over the same send.
-    #[command(hide = true)]
-    TellParent {
-        /// What the row says it is. `yield` carries a default body.
-        #[arg(long, default_value = "note", value_parser = ["completion", "yield", "note"])]
-        kind: String,
-        /// The message. Required for every kind but `yield`.
-        #[arg(long)]
-        body: Option<String>,
-        /// Who is calling, when the whoami ladder cannot say. A native subagent
-        /// inherits its spawner's `BOOP_LANE`, so it names itself here.
-        #[arg(long = "as", value_name = "NAME")]
-        as_name: Option<String>,
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
-    },
-    /// Folded (2026-08-25): `boop beep children <body>` is the spelling; this
-    /// one is a hidden alias over the same send.
-    #[command(hide = true)]
-    TellChildren {
-        /// The message every child gets.
-        #[arg(long)]
-        body: String,
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
-    },
     /// Report the caller's own identity and which of the two rungs named it.
     Whoami {
         #[arg(long)]
@@ -293,28 +245,6 @@ enum SubCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Folded (2026-08-25): `boop beep <route> <body>` is the spelling; this
-    /// one is a hidden alias over the same send.
-    #[command(hide = true)]
-    Push {
-        /// The route to push at: a lane, a coordinator, or `parent`.
-        #[arg(value_name = "ROUTE")]
-        to: String,
-        #[arg(long)]
-        body: String,
-        /// Seconds to block before exiting 124.
-        #[arg(long, default_value_t = mailwait::DEFAULT_TIMEOUT_SECS)]
-        timeout: u64,
-        /// The mail kind the row wears.
-        #[arg(long, default_value = "request")]
-        kind: String,
-        /// Who the row is from, when no env stamp says. `--from` is the same
-        /// flag, kept for briefs that spell it that way.
-        #[arg(long = "as", alias = "from", value_name = "NAME")]
-        from: Option<String>,
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
-    },
     /// Mail a claude coordinator reads at a turn boundary: the hook inbox.
     /// Folded (door-only-claude-delivery): the hook inbox is a rung the
     /// delivery ladder walks on its own, not a verb a caller reaches for. The
@@ -324,67 +254,19 @@ enum SubCmd {
         #[command(subcommand)]
         cmd: InboxCmd,
     },
-    /// Register this Codex pane, or act on the caller's own conversation.
-    /// Folded (one-pane-register-path): `boop beep agent register` registers;
-    /// `boop me mood` / `boop me favorite` still run under this name.
-    #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
+    /// The caller's own mood and favorite messages, the only verb for either.
+    /// Registering a pane is `boop tui` / `boop beep agent register` now.
     #[command(hide = true)]
     Me {
-        /// Registry name; defaults to codex-<pane id>.
-        #[arg(long)]
-        name: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
         #[command(subcommand)]
-        cmd: Option<MeCmd>,
+        cmd: MeCmd,
     },
     /// Inspect the boop configuration the CLI reads.
     Config {
         #[command(subcommand)]
         cmd: ConfigCmd,
-    },
-    /// List registered harness adapters, one per line. (pass 1)
-    #[command(hide = true)]
-    Harnesses,
-    /// List on-disk sessions, newest last. (pass 1)
-    #[command(hide = true)]
-    Sessions {
-        /// Only sessions from this harness (its stable id).
-        #[arg(long)]
-        harness: Option<String>,
-    },
-    /// Tail one session's events from a byte offset. (pass 1)
-    #[command(hide = true)]
-    Tail {
-        /// The session id to read.
-        session_id: String,
-        /// Byte offset to start from. Defaults to 0.
-        #[arg(long)]
-        from: Option<u64>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
-        format: OutputFormat,
-    },
-    /// Stream turns across sessions, filtered from the db. (pass 4)
-    #[command(hide = true)]
-    Events {
-        #[command(flatten)]
-        query: QueryArgs,
-    },
-    /// List lanes and messages like `bus list`.
-    #[command(hide = true)]
-    List {
-        #[arg(long)]
-        agent: Option<String>,
-        #[arg(long)]
-        all: bool,
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
-    },
-    /// Measure per-lane pid, rss, cpu, uptime, child count.
-    #[command(hide = true)]
-    Measure {
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
     },
     /// Spawn a lane: tmux new-session + mailbox + registry route.
     #[command(hide = true)]
@@ -425,51 +307,6 @@ enum SubCmd {
         #[arg(long)]
         base_sha: Option<String>,
     },
-    /// Resolve a lane's harness session id into its registry route.
-    #[command(hide = true)]
-    Resolve {
-        #[arg(long)]
-        to: String,
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
-    },
-    /// Queue a message and inject it into a live pane.
-    #[command(hide = true)]
-    Hail {
-        /// The route to hail, or `parent` for the caller's own parent edge.
-        #[arg(long)]
-        to: String,
-        #[arg(long)]
-        body: String,
-        /// Who the row is from; `--from` is the same flag.
-        #[arg(long = "as", alias = "from", value_name = "NAME")]
-        from: Option<String>,
-        #[arg(long)]
-        kind: Option<String>,
-        #[arg(long)]
-        box_: Option<String>,
-        #[arg(long)]
-        socket: Option<String>,
-        /// Send, then block for the reply exactly as `boop wait <id>` does.
-        #[arg(long, value_name = "SECS")]
-        wait_timeout: Option<u64>,
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
-    },
-    /// Acknowledge unacked lanes via cass and stamp token usage.
-    #[command(hide = true)]
-    Sweep {
-        #[arg(long)]
-        agent: Option<String>,
-        #[arg(long)]
-        box_: Option<String>,
-        #[arg(long)]
-        close_routeless: bool,
-        #[arg(long, default_value_t = 7)]
-        max_age_days: u64,
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
-    },
     /// Register and spawn a lane (the first-contact verb).
     #[command(hide = true)]
     Lane {
@@ -506,45 +343,6 @@ enum SubCmd {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Register an existing interactive pane as a coordinator route; never
-    /// spawns. Mail to the adopted route goes through its harness's own door;
-    /// `boop inbox hooks` is the fallback for a session with no live door.
-    #[command(hide = true)]
-    Adopt {
-        #[arg(long)]
-        name: String,
-        #[arg(long)]
-        tmux: String,
-        /// Take the hook inbox back out of the project settings and leave the
-        /// route alone. The pane is not checked, so a dead one is fine;
-        /// `boop inbox hooks --uninstall` is the same edit without a route.
-        #[arg(long)]
-        uninstall_hooks: bool,
-        #[arg(long)]
-        harness: Option<String>,
-        #[arg(long)]
-        session_id: Option<String>,
-        #[arg(long)]
-        cwd: Option<String>,
-        #[arg(long)]
-        model: Option<String>,
-        #[arg(long)]
-        mode: Option<String>,
-        /// The lane that summoned this one.
-        #[arg(long)]
-        parent: Option<String>,
-        #[arg(long)]
-        goal: Option<String>,
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
-    },
-    /// Drop lanes whose tmux sessions are gone. Refuses when tmux is
-    /// unreachable because it cannot tell live from dead.
-    #[command(hide = true)]
-    Prune {
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
-    },
     /// Project sessions into NDJSON chat-repr turns (the zipf door).
     #[command(hide = true)]
     Chat {
@@ -570,7 +368,7 @@ enum SubCmd {
     Follow {},
 }
 
-/// The shared read filter, used by `chat` and `events`.
+/// The shared read filter, used by `chat` and `db turn`.
 #[derive(clap::Args, Clone, Default)]
 struct QueryArgs {
     #[arg(long)]
@@ -605,12 +403,6 @@ enum QueryFormat {
 #[cfg(feature = "agent-read")]
 #[derive(Clone, Copy, ValueEnum)]
 enum AgentSummaryFormat {
-    Text,
-    Json,
-}
-
-#[derive(Clone, Copy, ValueEnum)]
-enum OutputFormat {
     Text,
     Json,
 }
@@ -697,24 +489,6 @@ fn main() -> Result<()> {
                 print_shell_init(shell);
                 Ok(())
             }
-            SubCmd::Codex {
-                name,
-                cwd,
-                mail_dir,
-                args,
-            } => {
-                let cwd = cwd.unwrap_or(std::env::current_dir().context("read current directory")?);
-                let adapter = registry.get(boop::harness::HarnessId::Codex);
-                run_native_tui(
-                    &registry,
-                    adapter,
-                    name.as_deref(),
-                    &cwd,
-                    mail_dir.as_deref(),
-                    None,
-                    &args,
-                )
-            }
             SubCmd::Tui {
                 harness,
                 executable,
@@ -737,14 +511,6 @@ fn main() -> Result<()> {
                     &args,
                 )
             }
-            SubCmd::Harnesses => run_harnesses(&registry),
-            SubCmd::Sessions { harness } => run_sessions(&registry, harness.as_deref()),
-            SubCmd::Tail {
-                session_id,
-                from,
-                format,
-            } => run_tail(&registry, &session_id, from.unwrap_or(0), format),
-            SubCmd::Events { query } => run_query(&query),
             SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild, None),
             SubCmd::Debug {
                 lane_arg,
@@ -762,12 +528,6 @@ fn main() -> Result<()> {
             SubCmd::Chat { query, all, follow } => {
                 run_chat_query(&query, ChatQueryOptions { all, follow })
             }
-            SubCmd::List {
-                agent,
-                all,
-                mail_dir,
-            } => run_list(mail_dir.as_deref(), agent.as_deref(), all),
-            SubCmd::Measure { mail_dir } => run_measure(mail_dir.as_deref()),
             SubCmd::Dispatch {
                 to,
                 cwd,
@@ -816,40 +576,6 @@ fn main() -> Result<()> {
                     bin: None,
                 },
             ),
-            SubCmd::Resolve { to, mail_dir } => run_resolve(&to, mail_dir.as_deref()),
-            SubCmd::Hail {
-                to,
-                body,
-                from,
-                kind,
-                box_,
-                socket,
-                wait_timeout,
-                mail_dir,
-            } => run_hail(
-                &registry,
-                &to,
-                &body,
-                from.as_deref(),
-                kind.as_deref(),
-                box_.as_deref(),
-                socket.as_deref(),
-                wait_timeout,
-                mail_dir.as_deref(),
-            ),
-            SubCmd::Sweep {
-                agent,
-                box_,
-                close_routeless,
-                max_age_days,
-                mail_dir,
-            } => run_sweep(
-                mail_dir.as_deref(),
-                box_.as_deref(),
-                agent.as_deref(),
-                close_routeless,
-                max_age_days,
-            ),
             SubCmd::Lane {
                 name,
                 cwd,
@@ -892,35 +618,6 @@ fn main() -> Result<()> {
                     reclaim: false,
                 },
             ),
-            SubCmd::Adopt {
-                name,
-                tmux,
-                uninstall_hooks,
-                harness,
-                session_id,
-                cwd,
-                model,
-                mode,
-                parent,
-                goal,
-                mail_dir,
-                // An adopted pane is an interactive session with no lane supervisor
-                // polling its mailbox; `coordinator` makes hail deliver by pane injection.
-            } => run_adopt(
-                &name,
-                "coordinator",
-                &tmux,
-                harness.as_deref(),
-                session_id.as_deref(),
-                cwd.as_deref(),
-                model.as_deref(),
-                mode.as_deref(),
-                parent.as_deref(),
-                goal.as_deref(),
-                mail_dir.as_deref(),
-                uninstall_hooks,
-            ),
-            SubCmd::Prune { mail_dir } => run_prune(mail_dir.as_deref()),
             SubCmd::Beep {
                 route,
                 body,
@@ -1024,22 +721,6 @@ fn main() -> Result<()> {
             }
             #[cfg(feature = "dl6")]
             SubCmd::Host { cmd } => run_host(cmd),
-            SubCmd::Push {
-                to,
-                body,
-                timeout,
-                kind,
-                from,
-                mail_dir,
-            } => run_push(
-                &registry,
-                &to,
-                &body,
-                &kind,
-                from.as_deref(),
-                timeout,
-                mail_dir.as_deref(),
-            ),
             SubCmd::Wait {
                 id,
                 me,
@@ -1058,44 +739,24 @@ fn main() -> Result<()> {
                     mail_dir.as_deref(),
                 ),
             },
-            SubCmd::TellParent {
-                kind,
-                body,
-                as_name,
-                mail_dir,
-            } => run_tell_parent(
-                &registry,
-                &kind,
-                body.as_deref(),
-                as_name.as_deref(),
-                mail_dir.as_deref(),
-            ),
-            SubCmd::TellChildren { body, mail_dir } => {
-                run_tell_children(&registry, &body, mail_dir.as_deref())
-            }
             SubCmd::Whoami {
                 json,
                 as_name,
                 mail_dir,
             } => run_whoami(json, as_name.as_deref(), mail_dir.as_deref()),
             SubCmd::Inbox { cmd } => run_inbox(cmd),
-            SubCmd::Me {
-                name,
-                mail_dir,
-                cmd,
-            } => match cmd {
-                Some(MeCmd::Mood {
+            SubCmd::Me { mail_dir, cmd } => match cmd {
+                MeCmd::Mood {
                     name: mood,
                     clear,
                     as_name,
-                }) => run_me_mood(
+                } => run_me_mood(
                     mood.as_deref(),
                     clear,
                     as_name.as_deref(),
                     mail_dir.as_deref(),
                 ),
-                Some(MeCmd::Favorite { index, note }) => run_me_favorite(index, note.as_deref()),
-                None => run_me(name.as_deref(), mail_dir.as_deref()),
+                MeCmd::Favorite { index, note } => run_me_favorite(index, note.as_deref()),
             },
             SubCmd::Config { cmd } => run_config(&registry, cmd),
         },
@@ -1238,14 +899,10 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
                 cmd: Some(DbCmd::AgentSummary { .. }),
                 ..
             }
-            | SubCmd::Events { .. }
             | SubCmd::Chat { .. }
             | SubCmd::Agent { .. }
             | SubCmd::Me { .. }
             | SubCmd::Debug { .. }
-            | SubCmd::Harnesses
-            | SubCmd::Sessions { .. }
-            | SubCmd::Tail { .. }
     )
 }
 

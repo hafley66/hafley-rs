@@ -11,10 +11,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use boop::bus::Route;
-use boop::event::AgentEvent;
 use boop::{bus, ident};
-
-use crate::OutputFormat;
 
 #[cfg(feature = "dl6")]
 pub(crate) const CONCATMAP_EXAMPLES: &str = "\
@@ -285,46 +282,6 @@ pub(crate) fn line(text: &str) {
 
 pub(crate) fn write_line(output: &mut impl std::io::Write, text: &str) -> std::io::Result<()> {
     writeln!(output, "{text}")
-}
-
-// ---------------------------------------------------------------------------
-// The verb output helpers
-// ---------------------------------------------------------------------------
-
-pub(crate) fn emit_event(event: &AgentEvent, format: OutputFormat) {
-    match format {
-        OutputFormat::Json => {
-            if let Ok(encoded) = serde_json::to_string(event) {
-                println!("{encoded}");
-            }
-        }
-        OutputFormat::Text => {
-            let paths = event
-                .paths
-                .iter()
-                .map(|path| format!("{}({:?})", path.path, path.access))
-                .collect::<Vec<_>>()
-                .join(",");
-            let tool = event.tool_name.as_deref().unwrap_or("-");
-            if paths.is_empty() && event.urls.is_empty() {
-                println!(
-                    "[{}] {} {} {} {}",
-                    event.harness, event.ts_ms, event.record_type, tool, event.session_id
-                );
-            } else {
-                println!(
-                    "[{}] {} {} {} {} paths=[{}] urls=[{}]",
-                    event.harness,
-                    event.ts_ms,
-                    event.record_type,
-                    tool,
-                    event.session_id,
-                    paths,
-                    event.urls.join(",")
-                );
-            }
-        }
-    }
 }
 
 pub(crate) fn mail_dir(value: Option<&Path>) -> Result<PathBuf> {

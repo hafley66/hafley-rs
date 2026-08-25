@@ -351,44 +351,7 @@ fn confirm_transition_recorded(store: &boop::Store, message_id: &str, to: &str) 
 /// ladder took.
 const DELIVERY_CONFIRM: std::time::Duration = std::time::Duration::from_millis(700);
 
-/// `push`: the send and the wait in one verb. The row goes down the same
-/// ladder every send path walks, then the caller blocks on the first of a
-/// reply, the recipient's turn ending, the route dying, or the timeout.
-///
-/// | ends on | exit | last line |
-/// |---|---|---|
-/// | a reply row, or the recipient's next mail back | 0 | the reply, then `boop wait <id>` |
-/// | the recipient's turn ending with no reply | 0 | `boop wait <id>` |
-/// | the route going dead | 3 | `boop debug <route>` |
-/// | the timeout | 124 | `boop debug <route>` |
-/// `push`: the old send-and-block spelling, kept for briefs that still name
-/// it. One call into the send every verb shares.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn run_push(
-    registry: &Registry,
-    to: &str,
-    body: &str,
-    kind: &str,
-    from: Option<&str>,
-    timeout_secs: u64,
-    mail_dir_arg: Option<&Path>,
-) -> Result<()> {
-    run_send(
-        registry,
-        Outbound {
-            route: to,
-            body: Some(body),
-            kind,
-            as_name: from,
-            box_name: None,
-            timeout_secs,
-            wait: true,
-            mail_dir: mail_dir_arg,
-        },
-    )
-}
-
-/// The block half of `push`. Every source it watches is one an existing verb
+/// The block half of a waited send. Every source it watches is one an existing verb
 /// already watches: `boop wait`'s reply selection, `beep hail --wait-timeout`'s
 /// turn-end receiver, and `beep lane wait`'s route liveness.
 fn push_wait(dir: &Path, to: &str, message_id: &str, timeout_secs: u64) -> Result<()> {
@@ -478,31 +441,7 @@ fn caller_identity<'a>(
 /// The one route name that is an alias rather than a registry key.
 const PARENT_ALIAS: &str = "parent";
 
-/// `tell-parent`: the old spelling of `boop beep parent <body>`, kept for
-/// briefs that still name it. One call into the send every verb shares.
-pub(crate) fn run_tell_parent(
-    registry: &Registry,
-    kind: &str,
-    body: Option<&str>,
-    as_name: Option<&str>,
-    mail_dir_arg: Option<&Path>,
-) -> Result<()> {
-    run_send(
-        registry,
-        Outbound {
-            route: PARENT_ALIAS,
-            body,
-            kind,
-            as_name,
-            box_name: None,
-            timeout_secs: boop::mailwait::DEFAULT_TIMEOUT_SECS,
-            wait: false,
-            mail_dir: mail_dir_arg,
-        },
-    )
-}
-
-/// The receipt `tell-parent` leaves (spec 7.5): who called, which parent the
+/// The receipt a `parent` send leaves (spec 7.5): who called, which parent the
 /// edge resolved to, the message id, and the transition the ladder recorded.
 /// Read back from the store, so it is the same row `boop db` and `boop debug`
 /// show rather than a second account of the same send.
@@ -519,28 +458,6 @@ fn print_tell_parent_receipt(dir: &Path, caller: &str, parent: &str, message_id:
             "receipt {caller} -> {parent} {message_id} no landing recorded"
         )),
     }
-}
-
-/// `tell-children`: the old spelling of `boop beep children <body>`, kept for
-/// briefs that still name it. One call into the send every verb shares.
-pub(crate) fn run_tell_children(
-    registry: &Registry,
-    body: &str,
-    mail_dir_arg: Option<&Path>,
-) -> Result<()> {
-    run_send(
-        registry,
-        Outbound {
-            route: CHILDREN_ALIAS,
-            body: Some(body),
-            kind: "note",
-            as_name: None,
-            box_name: None,
-            timeout_secs: boop::mailwait::DEFAULT_TIMEOUT_SECS,
-            wait: false,
-            mail_dir: mail_dir_arg,
-        },
-    )
 }
 
 /// The `children` route: one body to every child of the caller, from the
