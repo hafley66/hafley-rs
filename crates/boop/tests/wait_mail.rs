@@ -123,7 +123,10 @@ fn a_reply_ends_the_wait_with_its_body_and_a_delivery_stamp() {
     // The wait re-reads the mailbox once a second, so the reply lands after it
     // has already blocked at least once.
     std::thread::sleep(std::time::Duration::from_millis(1500));
-    append(&fixture.mail.join("boop.db"), reply_row("m-answer", &id, "the answer is 4"));
+    append(
+        &fixture.mail.join("boop.db"),
+        reply_row("m-answer", &id, "the answer is 4"),
+    );
     let output = waiting.wait_with_output().unwrap();
 
     assert_eq!(output.status.code(), Some(0), "an answered wait exits 0");
@@ -161,7 +164,10 @@ fn a_delivered_reply_is_not_replayed_by_a_second_wait() {
         .output()
         .unwrap();
     let id = queued_id(&fixture);
-    append(&fixture.mail.join("boop.db"), reply_row("m-answer", &id, "the answer is 4"));
+    append(
+        &fixture.mail.join("boop.db"),
+        reply_row("m-answer", &id, "the answer is 4"),
+    );
 
     let first = fixture
         .boop(&["wait", &id, "--wait-timeout", "10"])
@@ -490,7 +496,14 @@ fn me_never_hands_back_the_lanes_own_dispatch_row() {
         }),
     );
     let output = fixture
-        .boop(&["wait", "--me", "--as", "feature-cx-a", "--wait-timeout", "1"])
+        .boop(&[
+            "wait",
+            "--me",
+            "--as",
+            "feature-cx-a",
+            "--wait-timeout",
+            "1",
+        ])
         .output()
         .unwrap();
     assert_eq!(

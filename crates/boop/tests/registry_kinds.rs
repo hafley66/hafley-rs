@@ -84,8 +84,8 @@ fn a_hail_to_a_harnessless_native_row_is_held_and_the_reason_recorded() {
         stdout.contains("route native-worker names no harness"),
         "stdout: {stdout}"
     );
-    let mailbox = serde_json::Value::Array(boop_store::testing::mail_rows(&dir.join("boop.db")))
-        .to_string();
+    let mailbox =
+        serde_json::Value::Array(boop_store::testing::mail_rows(&dir.join("boop.db"))).to_string();
     assert!(mailbox.contains("hello"));
 
     let ledger = Command::new(BOOP)
@@ -138,8 +138,8 @@ fn agent_register_and_done_round_trip_registry_and_ledger() {
     assert!(done.status.success(), "stderr: {:?}", done.stderr);
     let routes = boop_store::testing::routes_json(&dir.join("boop.db"));
     assert!(routes.get("native-worker").is_none());
-    let mailbox = serde_json::Value::Array(boop_store::testing::mail_rows(&dir.join("boop.db")))
-        .to_string();
+    let mailbox =
+        serde_json::Value::Array(boop_store::testing::mail_rows(&dir.join("boop.db"))).to_string();
     assert!(mailbox.contains("lane native-worker done rc=7"));
     assert!(mailbox.contains("\"to\":\"coord\""));
 }

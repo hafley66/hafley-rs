@@ -583,12 +583,42 @@ fn report_delivery(message_id: &str) {
 
 /// Whose inbox `--me` watches: the name given, else the identity ladder's lane
 /// or session. An unresolved caller is told to name itself, never guessed at.
-pub(crate) fn waiting_as(_dir: &Path, as_name: Option<&str>) -> Result<String> {
+pub(crate) fn waiting_as(dir: &Path, as_name: Option<&str>) -> Result<String> {
     let identity = identity::require(as_name);
-    identity
+    let from_env = identity.rung == Some(identity::Rung::Env);
+    let name = identity
         .lane
         .or(identity.session)
-        .context(identity::UNRESOLVED)
+        .context(identity::UNRESOLVED)?;
+    if from_env {
+        let routes = bus::read_routes(dir).unwrap_or_default();
+        refuse_a_shared_stamp(&routes, &name)?;
+    }
+    Ok(name)
+}
+
+/// A native subagent runs inside its lane's process and inherits the lane's
+/// `BOOP_SESSION`, so an env-resolved lane name that has live native children
+/// could be any of them. Rather than watch the lane's mailbox while the
+/// native's own rows sit unread (native-subagent-identity), name the
+/// candidates and stop.
+pub(crate) fn refuse_a_shared_stamp(routes: &BTreeMap<String, Route>, name: &str) -> Result<()> {
+    if routes.get(name).map(|route| route.kind.as_str()) != Some("lane") {
+        return Ok(());
+    }
+    let natives: Vec<&str> = routes
+        .iter()
+        .filter(|(_, route)| route.kind == "native" && route.parent.as_deref() == Some(name))
+        .map(|(child, _)| child.as_str())
+        .collect();
+    if natives.is_empty() {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "the env stamp names lane `{name}`, which has native subagents sharing its process ({}); \
+         say which mailbox this is: `--as {name}` for the lane itself, or `--as <native>`",
+        natives.join(", ")
+    )
 }
 
 /// Block until the watch is satisfied, print what arrived, take delivery of it,
@@ -1246,10 +1276,12 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
             if let Some(outcome) = started {
                 print!("{}", boop::lane::start_preamble(&outcome.status));
             }
-            // Last line, so a caller can `eval "$(boop beep agent register ...
-            // | tail -1)"`. Without it the ladder keeps reading the spawner's
-            // `BOOP_LANE` and every `--me` verb watches the spawner's inbox.
-            println!("export BOOP_SESSION={name} BOOP_LANE={name}");
+            // Last line. A native shares its spawner's process, so no export
+            // reaches it; every verb it runs names itself with `--as`, and a
+            // bare `--me` under the spawner's stamp is refused as ambiguous.
+            println!(
+                "pass --as {name} on every boop call: this agent shares its spawner's env stamp"
+            );
             Ok(())
         }
         AgentCmd::Done {
@@ -2449,6 +2481,36 @@ mod tests {
     use boop::proc::{ProcReader, ProcessInfo, SysinfoSnapshot};
     use boop::registry::Registry;
     use std::collections::{BTreeMap, BTreeSet};
+
+    /// RECEIPT (native-subagent-identity). pid 34606 sat in `wait --me` for
+    /// eight minutes on lane feature-cx-a4's mailbox while four rows to its
+    /// native-n1d went unread: the native inherited the lane's env stamp. An
+    /// env-resolved lane name with live native children is refused, naming
+    /// them; a lane with no natives, a native, and a coordinator pass.
+    #[test]
+    fn an_env_stamp_shared_with_native_children_is_refused_not_guessed() {
+        let mut routes = BTreeMap::new();
+        routes.insert("feature-cx-a4".to_owned(), route_with(None));
+        let mut native = route_with(Some("feature-cx-a4"));
+        native.kind = "native".into();
+        routes.insert("native-n1d".to_owned(), native.clone());
+        routes.insert("native-n2d".to_owned(), native);
+        routes.insert("feature-solo".to_owned(), route_with(None));
+        let mut coordinator = route_with(None);
+        coordinator.kind = "coordinator".into();
+        routes.insert("claude-5".to_owned(), coordinator);
+
+        let error = refuse_a_shared_stamp(&routes, "feature-cx-a4")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("native-n1d, native-n2d"), "{error}");
+        assert!(error.contains("--as feature-cx-a4"), "{error}");
+
+        assert!(refuse_a_shared_stamp(&routes, "feature-solo").is_ok());
+        assert!(refuse_a_shared_stamp(&routes, "native-n1d").is_ok());
+        assert!(refuse_a_shared_stamp(&routes, "claude-5").is_ok());
+        assert!(refuse_a_shared_stamp(&routes, "unregistered").is_ok());
+    }
 
     #[test]
     fn foreground_wait_owns_a_result_recipient_without_a_parent() {

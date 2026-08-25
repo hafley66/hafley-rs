@@ -329,7 +329,10 @@ fn boop_help_doctrine_names_the_one_send_and_the_wait() {
         "boop tell-children -",
         "boop beep lane wait <lane> --timeout",
     ] {
-        assert!(!text.contains(folded), "doctrine still teaches {folded}:\n{text}");
+        assert!(
+            !text.contains(folded),
+            "doctrine still teaches {folded}:\n{text}"
+        );
     }
 }
 
@@ -384,10 +387,10 @@ fn tell_parent_as_an_unregistered_name_says_to_register_it() {
     );
 }
 
-/// Defect 2: the registration's last line is the export the native evals, so
+/// Defect 2: the registration's last line names the native, so every verb it runs carries `--as`;
 /// every later `--me` verb watches the native's own inbox.
 #[test]
-fn agent_register_ends_with_the_export_line_for_the_new_name() {
+fn agent_register_ends_with_the_as_line_for_the_new_name() {
     let fixture = Fixture::new("register-export");
     fixture.write_registry(serde_json::json!({
         "coord-1": {"kind": "coordinator"},
@@ -406,7 +409,7 @@ fn agent_register_ends_with_the_export_line_for_the_new_name() {
     let text = stdout(&output);
     assert_eq!(
         text.lines().last(),
-        Some("export BOOP_SESSION=native-n1 BOOP_LANE=native-n1"),
+        Some("pass --as native-n1 on every boop call: this agent shares its spawner's env stamp"),
         "stdout: {text}"
     );
 }
@@ -453,7 +456,13 @@ fn hail_parent_resolves_the_alias_through_the_same_edge_tell_parent_walks() {
     let output = fixture.boop_as(
         "feature-cx-a",
         &[
-            "beep", "hail", "parent", "--as", "native-n1", "--body", "up one",
+            "beep",
+            "hail",
+            "parent",
+            "--as",
+            "native-n1",
+            "--body",
+            "up one",
         ],
     );
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -474,12 +483,24 @@ fn push_parent_resolves_the_alias_before_it_walks_the_ladder() {
     let output = fixture.boop_as(
         "feature-cx-a",
         &[
-            "push", "parent", "--as", "native-n1", "--body", "up one", "--timeout", "1",
+            "push",
+            "parent",
+            "--as",
+            "native-n1",
+            "--body",
+            "up one",
+            "--timeout",
+            "1",
         ],
     );
     // No parent answers inside a second, so the block times out. The row it
     // appended first is what this pins.
-    assert_eq!(output.status.code(), Some(124), "stderr: {}", stderr(&output));
+    assert_eq!(
+        output.status.code(),
+        Some(124),
+        "stderr: {}",
+        stderr(&output)
+    );
     let rows = fixture.bus_rows();
     assert_eq!(rows.len(), 1, "bus rows: {rows:?}");
     assert_eq!(rows[0]["to"], "feature-cx-a", "the alias resolved");
@@ -542,7 +563,14 @@ fn beep_sends_one_row_from_a_route_and_a_body_positional() {
     fixture.write_registry(folded_registry());
     let output = fixture.boop_as(
         "feature-a",
-        &["beep", "native-n1", "the body", "--kind", "note", "--no-wait"],
+        &[
+            "beep",
+            "native-n1",
+            "the body",
+            "--kind",
+            "note",
+            "--no-wait",
+        ],
     );
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     assert_eq!(
@@ -625,7 +653,12 @@ fn push_is_an_alias_of_the_one_send() {
             "1",
         ],
     );
-    assert_eq!(output.status.code(), Some(124), "stderr: {}", stderr(&output));
+    assert_eq!(
+        output.status.code(),
+        Some(124),
+        "stderr: {}",
+        stderr(&output)
+    );
     assert_eq!(
         only_row(&fixture),
         (
@@ -677,7 +710,11 @@ fn tell_children_is_an_alias_of_beep_children() {
     assert!(new.status.success(), "stderr: {}", stderr(&new));
 
     assert_eq!(stdout(&old), stdout(&new));
-    assert!(stdout(&old).contains("no-route native-n1"), "{}", stdout(&old));
+    assert!(
+        stdout(&old).contains("no-route native-n1"),
+        "{}",
+        stdout(&old)
+    );
 }
 
 /// A route named after a `beep` subcommand can never be addressed, because
@@ -689,7 +726,10 @@ fn a_route_named_after_a_beep_subcommand_is_refused_by_name() {
     let output = fixture.boop_as("feature-a", &["push", "lane", "--body", "x"]);
     assert!(!output.status.success());
     let err = stderr(&output);
-    assert!(err.contains("`lane` is the name of a `boop beep` subcommand"), "stderr: {err}");
+    assert!(
+        err.contains("`lane` is the name of a `boop beep` subcommand"),
+        "stderr: {err}"
+    );
     assert!(fixture.bus_rows().is_empty(), "no row was appended");
 }
 
