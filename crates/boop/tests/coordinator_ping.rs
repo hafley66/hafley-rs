@@ -1,8 +1,9 @@
 //! End-to-end coordinator ping delivery over a real tmux session.
 //!
-//! FAIL-PRE-FIX: `boop adopt` wrote `kind: "lane"`, so `boop hail` took the
-//! "lane supervisor delivers it" branch and every result row addressed to an
-//! adopted coordinator queued in bus.ndjson forever, never reaching the pane.
+//! FAIL-PRE-FIX: registering a coordinator route wrote `kind: "lane"`, so a
+//! hail took the "lane supervisor delivers it" branch and every result row
+//! addressed to a coordinator queued in bus.ndjson forever, never reaching
+//! the pane.
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -65,30 +66,23 @@ fn route_kind(dir: &Path, name: &str) -> String {
         .to_owned()
 }
 
-#[test]
-fn adopt_writes_a_coordinator_route() {
-    let dir = mail_dir("adopt");
-    let session = TestSession::new("adopt");
-    // `--cwd` is not optional in a test: without it, adopting a claude session
-    // installs the hook inbox into whatever directory the test binary ran in,
-    // which is the crate's own source tree.
-    let output = boop(
-        &dir,
-        &[
-            "adopt",
-            "--name",
-            "test-coord",
-            "--tmux",
-            &session.0,
-            "--harness",
-            "claude",
-            "--cwd",
-            dir.to_str().unwrap(),
-        ],
-    );
-    assert!(output.status.success(), "stderr: {:?}", output.stderr);
-    assert_eq!(route_kind(&dir, "test-coord"), "coordinator");
-    let _ = std::fs::remove_dir_all(&dir);
+/// Write a coordinator route directly, the way an adopted pane used to be
+/// registered: no CLI verb attaches to an already-running pane anymore.
+fn write_coordinator_route(dir: &Path, name: &str, tmux: &str) {
+    std::fs::create_dir_all(dir).unwrap();
+    std::fs::write(
+        dir.join("registry.json"),
+        serde_json::json!({
+            name: {
+                "kind": "coordinator",
+                "harness": "claude",
+                "tmux": tmux,
+                "cwd": dir.to_str().unwrap(),
+            }
+        })
+        .to_string(),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -104,41 +98,26 @@ fn lane_patch_still_writes_a_lane_route() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// RECEIPT. A hail to an adopted claude coordinator goes to the claude door.
+/// RECEIPT. A hail to a claude coordinator route goes to the claude door.
 /// With no claude session live in that pane and no hook inbox in the project,
 /// nothing takes the row: the refusal is named on stdout, written to the
 /// `agent_delivery` ledger, and the pane is never typed at.
 #[test]
-fn hail_to_an_adopted_coordinator_with_no_live_session_is_held_for_its_turn_boundary() {
+fn hail_to_a_coordinator_with_no_live_session_is_held_for_its_turn_boundary() {
     let dir = mail_dir("deliver");
     let session = TestSession::new("deliver");
-    let adopted = boop(
-        &dir,
-        &[
-            "adopt",
-            "--name",
-            "ping-coord",
-            "--tmux",
-            &session.0,
-            "--harness",
-            "claude",
-            "--cwd",
-            dir.to_str().unwrap(),
-        ],
-    );
-    assert!(adopted.status.success(), "stderr: {:?}", adopted.stderr);
+    write_coordinator_route(&dir, "ping-coord", &session.0);
     let hailed = boop(
         &dir,
         &[
-            "hail",
-            "--to",
+            "beep",
             "ping-coord",
-            "--from",
+            "lane fake-lane done rc=0",
+            "--as",
             "fake-lane",
             "--kind",
             "result",
-            "--body",
-            "lane fake-lane done rc=0",
+            "--no-wait",
         ],
     );
     assert!(hailed.status.success(), "stderr: {:?}", hailed.stderr);

@@ -447,7 +447,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Some(SubCmd::Me {
-                cmd: Some(MeCmd::Favorite { index: -1, .. }),
+                cmd: MeCmd::Favorite { index: -1, .. },
                 ..
             })
         ));
@@ -460,7 +460,7 @@ mod tests {
         assert!(matches!(
             cli.command,
             Some(SubCmd::Me {
-                cmd: Some(MeCmd::Favorite { index: -2, .. }),
+                cmd: MeCmd::Favorite { index: -2, .. },
                 ..
             })
         ));

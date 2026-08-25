@@ -634,7 +634,7 @@ fn main() -> Result<()> {
                     &registry,
                     Outbound {
                         route: &beep_route(route.as_deref()),
-                        body: beep_body(body.as_deref().or(body_flag.as_deref())),
+                        body: beep_body(body.as_deref().or(body_flag.as_deref()), &kind),
                         kind: &kind,
                         as_name: as_name.as_deref(),
                         box_name: None,
@@ -774,10 +774,13 @@ fn beep_route(route: Option<&str>) -> String {
     }
 }
 
-fn beep_body(body: Option<&str>) -> Option<&str> {
-    match body {
-        Some(body) => Some(body),
-        None => missing_beep_argument("<BODY>"),
+/// `--kind yield` defers a missing body to `run_send`, which mints one; every
+/// other kind fails here with clap's own missing-argument error.
+fn beep_body<'a>(body: Option<&'a str>, kind: &str) -> Option<&'a str> {
+    match (body, kind) {
+        (Some(body), _) => Some(body),
+        (None, "yield") => None,
+        (None, _) => missing_beep_argument("<BODY>"),
     }
 }
 
@@ -1880,9 +1883,9 @@ mod tests {
     #[test]
     fn startup_sync_policy_limits_projection_to_transcript_consumers() {
         let registry_only = [
-            vec!["boop", "adopt", "--name", "root", "--tmux", "root"],
+            vec!["boop", "beep", "lane", "patch", "root", "--tmux", "root"],
             vec![
-                "boop", "hail", "--to", "root", "--from", "lane", "--body", "done",
+                "boop", "beep", "root", "done", "--as", "lane", "--no-wait",
             ],
             vec!["boop", "inbox", "drain", "--as", "root"],
             vec!["boop", "beep", "agent", "register", "worker"],
@@ -1919,7 +1922,7 @@ mod tests {
             vec!["boop", "db", "SELECT 1"],
             vec!["boop", "db", "turn", "list"],
             vec!["boop", "debug"],
-            vec!["boop", "sessions"],
+            vec!["boop", "chat"],
         ];
         for argv in syncing {
             let cli = Cli::try_parse_from(&argv).unwrap_or_else(|e| panic!("{argv:?}: {e}"));

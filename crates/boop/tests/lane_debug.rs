@@ -100,12 +100,11 @@ fn a_registered_lane_fills_the_route_mail_and_worktree_sections() {
         &home,
         &[
             "beep",
-            "hail",
             "feature-notes",
-            "--body",
             "work this",
-            "--from",
+            "--as",
             "coordinator",
+            "--no-wait",
         ],
     );
     assert!(sent.status.success(), "stderr: {:?}", sent.stderr);
