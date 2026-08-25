@@ -2,8 +2,6 @@
 //! file's tests is `--test main -- <module>`, and `autotests = false` in
 //! Cargo.toml is what stops cargo minting a second target per file.
 
-#[path = "0_sqlite_contention.rs"]
-mod t0_sqlite_contention;
 #[path = "boop_start_warm.rs"]
 mod boop_start_warm;
 #[cfg(feature = "dl6")]
@@ -44,6 +42,8 @@ mod session_mood;
 mod sync_convoy;
 #[path = "sync_discovery.rs"]
 mod sync_discovery;
+#[path = "0_sqlite_contention.rs"]
+mod t0_sqlite_contention;
 #[path = "tell.rs"]
 mod tell;
 #[path = "temp_home_rail.rs"]

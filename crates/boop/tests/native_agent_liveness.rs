@@ -54,11 +54,9 @@ fn native_route_stays_live_until_done_and_wait_me_consumes_one_completion() {
 
     let lane_wait = Command::new(BOOP)
         .args([
-            "beep",
-            "lane",
             "wait",
             "native-child",
-            "--timeout",
+            "--wait-timeout",
             "1",
             "--mail-dir",
         ])

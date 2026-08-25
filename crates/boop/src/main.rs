@@ -1884,9 +1884,7 @@ mod tests {
     fn startup_sync_policy_limits_projection_to_transcript_consumers() {
         let registry_only = [
             vec!["boop", "beep", "lane", "patch", "root", "--tmux", "root"],
-            vec![
-                "boop", "beep", "root", "done", "--as", "lane", "--no-wait",
-            ],
+            vec!["boop", "beep", "root", "done", "--as", "lane", "--no-wait"],
             vec!["boop", "inbox", "drain", "--as", "root"],
             vec!["boop", "beep", "agent", "register", "worker"],
             vec!["boop", "beep", "agent", "done", "worker"],

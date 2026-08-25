@@ -101,7 +101,12 @@ fn beep_parent_lands_exactly_one_row_of_the_given_kind_addressed_to_the_recorded
     let output = fixture.boop_as(
         "feature-a",
         &[
-            "beep", "parent", "done here", "--kind", "completion", "--no-wait",
+            "beep",
+            "parent",
+            "done here",
+            "--kind",
+            "completion",
+            "--no-wait",
         ],
     );
     assert!(output.status.success(), "stderr: {}", stderr(&output));
@@ -174,7 +179,10 @@ fn kind_yield_with_no_body_mints_the_default_body() {
         "feature-a": {"kind": "lane", "parent": "coord-1"},
         "coord-1": {"kind": "coordinator"},
     }));
-    let output = fixture.boop_as("feature-a", &["beep", "parent", "--kind", "yield", "--no-wait"]);
+    let output = fixture.boop_as(
+        "feature-a",
+        &["beep", "parent", "--kind", "yield", "--no-wait"],
+    );
     assert!(output.status.success(), "stderr: {}", stderr(&output));
 
     let rows = fixture.bus_rows();
@@ -449,14 +457,7 @@ fn beep_parent_no_wait_resolves_the_alias_through_the_same_edge_beep_parent_walk
     }));
     let output = fixture.boop_as(
         "feature-cx-a",
-        &[
-            "beep",
-            "parent",
-            "up one",
-            "--as",
-            "native-n1",
-            "--no-wait",
-        ],
+        &["beep", "parent", "up one", "--as", "native-n1", "--no-wait"],
     );
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let rows = fixture.bus_rows();
@@ -507,10 +508,7 @@ fn beep_parent_with_no_edge_fails_by_name_instead_of_addressing_the_word() {
     fixture.write_registry(serde_json::json!({
         "lonely": {"kind": "coordinator"},
     }));
-    let output = fixture.boop_as(
-        "lonely",
-        &["beep", "parent", "up one", "--timeout", "1"],
-    );
+    let output = fixture.boop_as("lonely", &["beep", "parent", "up one", "--timeout", "1"]);
     assert!(!output.status.success());
     assert!(
         stderr(&output).contains("no parent edge"),

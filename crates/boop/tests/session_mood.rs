@@ -55,7 +55,7 @@ impl Fixture {
 
     fn hail(&self, body: &str) {
         let out = self.boop_mail(&[
-            "hail", "--to", "coord", "--from", "lane-x", "--kind", "result", "--body", body,
+            "beep", "coord", body, "--as", "lane-x", "--kind", "result", "--no-wait",
         ]);
         assert!(
             out.status.success(),
