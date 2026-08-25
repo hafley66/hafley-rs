@@ -123,6 +123,9 @@ edge and stay invisible to tracking:
   and harness.
   Alternate binary: --bin ccz runs the harness as that executable instead of its
   own (ccz is claude under the z.ai env); a preset's `bin` key sets it per name.
+  Completion assertions: --expect-path <rel> (repeatable) names a worktree file
+  that must exist; --expect-commit-subject <text> (repeatable) an exact commit
+  subject after base-sha; --expect-commits-at-least <n> a floor on those commits.
   One shot: worktree at base sha + spawn + route registration.
   Always --dry-run first; the printed `cmd:` line is the literal spawn.
 
@@ -207,8 +210,11 @@ WAIT: every agent can background a shell, so the universal push is a block.
     boop wait --me [--as <name>]    the next unread mail addressed to you
   Default timeout 540s (under the 10-minute cap a background shell gives you),
   `--wait-timeout <s>` overrides it, and a timeout exits 124 printing the
-  re-run line on stdout AND stderr. A reply is a row naming your id in
-  `reply_to`, or the recipient's next mail back to you. Every arrival is
+  re-run line on stdout AND stderr. A lane whose typed expectations are unmet
+  after a clean exit is rewritten to exit 4, the \"task incomplete\" exit, with
+  the failed assertions in the row's detail; a lane route that goes dead with
+  no result row exits 3. A reply is a row naming your id in `reply_to`, or the
+  recipient's next mail back to you. Every arrival is
   printed and stamped delivered, so a second wait on the same id blocks
   instead of replaying it. The LAST line of every exit is the next command to
   run; nobody composes one by hand.
