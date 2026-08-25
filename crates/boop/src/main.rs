@@ -2424,6 +2424,15 @@ mod tests {
         );
     }
 
+    /// RECEIPT (hide-lane-run): the supervisor's own entry point, spawned by
+    /// `lane create`; no human types it.
+    #[test]
+    fn beep_lane_run_is_hidden_a_human_never_calls_it() {
+        let lane = LaneCmd::augment_subcommands(clap::Command::new("lane"));
+        let run = lane.find_subcommand("run").expect("run subcommand exists");
+        assert!(run.is_hide_set(), "beep lane run must stay hidden");
+    }
+
     /// RECEIPT (one-wait-verb): `boop wait <id>` dispatches to `run_lane_wait`
     /// only when `<id>` names a registered lane route, never a message id.
     #[test]
