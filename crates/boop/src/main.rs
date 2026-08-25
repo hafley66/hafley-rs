@@ -1530,11 +1530,15 @@ enum LaneCmd {
     },
     /// Stop a lane and forget it, or bulk-delete by state.
     Delete {
+        /// One lane: kill its pane and drop its route. Omit for a bulk delete
+        /// by `--state`.
         lane: Option<String>,
         /// Drop only the registry route; never kill the pane. The `--parent`
         /// on-exit epilogue uses this to clean up while still running inside it.
         #[arg(long)]
         route_only: bool,
+        /// Bulk delete: `dead` removes every dead lane's route and its own
+        /// worktree, and nothing above it. Pair with `--dry-run` first.
         #[arg(long)]
         state: Option<String>,
         /// Bulk delete only: print every route and every worktree path the
@@ -1595,9 +1599,15 @@ enum LaneCmd {
 enum AgentCmd {
     /// Add a pane-less registry row.
     Register {
+        /// The route name. Every boop call this agent makes then carries
+        /// `--as <name>`: it shares its spawner's process, so no env stamp
+        /// can name it.
         name: String,
+        /// `native` (a subagent inside a lane or coordinator process) or
+        /// `coordinator` (a pane-less session that owns lanes).
         #[arg(long, default_value = "native")]
         kind: String,
+        /// The route completion and `boop beep parent` rows go to.
         #[arg(long)]
         parent: Option<String>,
         /// Recorded for this row; a pane-less agent runs no supervisor of its
