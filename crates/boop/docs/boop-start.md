@@ -33,9 +33,8 @@ eval "$(boop beep agent register native-n1 --parent feature-a | tail -1)"
 A native subagent runs inside its spawner's environment, so without the eval
 the identity ladder's env rung keeps naming the spawner and `boop wait --me`
 watches the spawner's inbox. Where the eval cannot run, every verb takes the
-name directly: `boop wait --me --as native-n1`, `boop push <route> --as
-native-n1`, `boop tell-parent --as native-n1`, `boop beep hail <route> --as
-native-n1`.
+name directly: `boop wait --me --as native-n1`, `boop beep <route> "<body>"
+--as native-n1`, `boop beep parent "<body>" --as native-n1`.
 
 Recipe contract: idempotent, one summary line on stdout, under the spawn
 deadline warm. This repo's builds into the shared target named by

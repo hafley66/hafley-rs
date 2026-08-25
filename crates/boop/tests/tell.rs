@@ -187,7 +187,7 @@ fn kind_yield_with_no_body_mints_the_default_body() {
 }
 
 #[test]
-fn kind_completion_with_no_body_is_an_error_naming_the_flag() {
+fn kind_completion_with_no_body_is_an_error_naming_the_kind() {
     let fixture = Fixture::new("nobody");
     fixture.write_registry(serde_json::json!({
         "feature-a": {"kind": "lane", "parent": "coord-1"},
@@ -196,7 +196,8 @@ fn kind_completion_with_no_body_is_an_error_naming_the_flag() {
     let output = fixture.boop_as("feature-a", &["tell-parent", "--kind", "completion"]);
     assert!(!output.status.success(), "stdout: {}", stdout(&output));
     let err = stderr(&output);
-    assert!(err.contains("--body is required"), "stderr: {err}");
+    assert!(err.contains("a body is required"), "stderr: {err}");
+    assert!(err.contains("--kind completion"), "stderr: {err}");
 }
 
 #[test]
@@ -314,13 +315,19 @@ fn tell_children_names_a_native_subagent_child_as_no_route() {
 }
 
 #[test]
-fn boop_help_doctrine_names_both_verbs() {
+fn boop_help_doctrine_names_the_one_send_and_the_wait() {
     let fixture = Fixture::new("help");
     let output = fixture.boop(&["--help"]);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let text = stdout(&output);
-    assert!(text.contains("boop tell-parent"), "stdout: {text}");
-    assert!(text.contains("boop tell-children"), "stdout: {text}");
+    assert!(text.contains("boop beep <route> <body>"), "stdout: {text}");
+    assert!(text.contains("boop beep parent"), "stdout: {text}");
+    assert!(text.contains("boop beep children"), "stdout: {text}");
+    assert!(text.contains("boop wait --me"), "stdout: {text}");
+    // The folded spellings still run; the doctrine no longer teaches them.
+    for folded in ["boop push <route>", "boop tell-parent [", "boop tell-children -"] {
+        assert!(!text.contains(folded), "doctrine still teaches {folded}:\n{text}");
+    }
 }
 
 /// Defect 2 (addendum 2026-08-25): a native subagent runs inside its
@@ -495,4 +502,225 @@ fn push_parent_with_no_edge_fails_by_name_instead_of_addressing_the_word() {
         stderr(&output)
     );
     assert!(fixture.bus_rows().is_empty(), "no row was appended");
+}
+
+// ---------------------------------------------------------------------------
+// the fold: one send, four hidden aliases
+// ---------------------------------------------------------------------------
+
+/// The registry every alias test sends against: a native under a lane under a
+/// coordinator, so `parent` and `children` both resolve.
+fn folded_registry() -> serde_json::Value {
+    serde_json::json!({
+        "coord-1": {"kind": "coordinator"},
+        "feature-a": {"kind": "lane", "parent": "coord-1"},
+        "native-n1": {"kind": "native", "parent": "feature-a"},
+    })
+}
+
+/// The row one send left, as `(from, to, kind, body)`.
+fn only_row(fixture: &Fixture) -> (String, String, String, String) {
+    let rows = fixture.bus_rows();
+    assert_eq!(rows.len(), 1, "bus rows: {rows:?}");
+    let row = &rows[0];
+    (
+        row["from"].as_str().unwrap().to_owned(),
+        row["to"].as_str().unwrap().to_owned(),
+        row["kind"].as_str().unwrap().to_owned(),
+        row["body"].as_str().unwrap().to_owned(),
+    )
+}
+
+/// `boop beep <route> <body>`: the one send, in the spelling the doctrine now
+/// teaches. Every case below has to leave the same row this one leaves.
+#[test]
+fn beep_sends_one_row_from_a_route_and_a_body_positional() {
+    let fixture = Fixture::new("beep-send");
+    fixture.write_registry(folded_registry());
+    let output = fixture.boop_as(
+        "feature-a",
+        &["beep", "native-n1", "the body", "--kind", "note", "--no-wait"],
+    );
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_eq!(
+        only_row(&fixture),
+        (
+            "feature-a".to_owned(),
+            "native-n1".to_owned(),
+            "note".to_owned(),
+            "the body".to_owned()
+        )
+    );
+}
+
+/// `--body` is the older spelling of the positional, kept so briefs written
+/// against `push` and `beep hail` keep running.
+#[test]
+fn beep_still_takes_the_body_flag_spelling() {
+    let fixture = Fixture::new("beep-body-flag");
+    fixture.write_registry(folded_registry());
+    let output = fixture.boop_as(
+        "feature-a",
+        &[
+            "beep",
+            "native-n1",
+            "--body",
+            "the body",
+            "--kind",
+            "note",
+            "--no-wait",
+        ],
+    );
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_eq!(only_row(&fixture).3, "the body");
+}
+
+/// Alias 1: `boop beep hail`. Same row, same rung.
+#[test]
+fn beep_hail_is_an_alias_of_the_one_send() {
+    let fixture = Fixture::new("alias-hail");
+    fixture.write_registry(folded_registry());
+    let output = fixture.boop_as(
+        "feature-a",
+        &[
+            "beep",
+            "hail",
+            "native-n1",
+            "--body",
+            "the body",
+            "--kind",
+            "note",
+        ],
+    );
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert_eq!(
+        only_row(&fixture),
+        (
+            "feature-a".to_owned(),
+            "native-n1".to_owned(),
+            "note".to_owned(),
+            "the body".to_owned()
+        )
+    );
+}
+
+/// Alias 2: `boop push`. Same row; it blocks after, so the timeout is short.
+#[test]
+fn push_is_an_alias_of_the_one_send() {
+    let fixture = Fixture::new("alias-push");
+    fixture.write_registry(folded_registry());
+    let output = fixture.boop_as(
+        "feature-a",
+        &[
+            "push",
+            "native-n1",
+            "--body",
+            "the body",
+            "--kind",
+            "note",
+            "--timeout",
+            "1",
+        ],
+    );
+    assert_eq!(output.status.code(), Some(124), "stderr: {}", stderr(&output));
+    assert_eq!(
+        only_row(&fixture),
+        (
+            "feature-a".to_owned(),
+            "native-n1".to_owned(),
+            "note".to_owned(),
+            "the body".to_owned()
+        )
+    );
+}
+
+/// Alias 3: `boop tell-parent` == `boop beep parent <body>`.
+#[test]
+fn tell_parent_is_an_alias_of_beep_parent() {
+    let alias = Fixture::new("alias-parent-old");
+    alias.write_registry(folded_registry());
+    let output = alias.boop_as(
+        "native-n1",
+        &["tell-parent", "--kind", "note", "--body", "the body"],
+    );
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+
+    let folded = Fixture::new("alias-parent-new");
+    folded.write_registry(folded_registry());
+    let output = folded.boop_as(
+        "native-n1",
+        &["beep", "parent", "the body", "--kind", "note", "--no-wait"],
+    );
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+
+    assert_eq!(only_row(&alias).0, only_row(&folded).0);
+    assert_eq!(only_row(&alias).1, "feature-a");
+    assert_eq!(only_row(&alias).1, only_row(&folded).1);
+    assert_eq!(only_row(&alias).3, only_row(&folded).3);
+}
+
+/// Alias 4: `boop tell-children` == `boop beep children <body>`. The fan-out
+/// reports per target, so the tally line is what the two have to share.
+#[test]
+fn tell_children_is_an_alias_of_beep_children() {
+    let alias = Fixture::new("alias-children-old");
+    alias.write_registry(folded_registry());
+    let old = alias.boop_as("feature-a", &["tell-children", "--body", "stop"]);
+    assert!(old.status.success(), "stderr: {}", stderr(&old));
+
+    let folded = Fixture::new("alias-children-new");
+    folded.write_registry(folded_registry());
+    let new = folded.boop_as("feature-a", &["beep", "children", "stop"]);
+    assert!(new.status.success(), "stderr: {}", stderr(&new));
+
+    assert_eq!(stdout(&old), stdout(&new));
+    assert!(stdout(&old).contains("no-route native-n1"), "{}", stdout(&old));
+}
+
+/// A route named after a `beep` subcommand can never be addressed, because
+/// clap resolves the name to that subcommand first. The send says so.
+#[test]
+fn a_route_named_after_a_beep_subcommand_is_refused_by_name() {
+    let fixture = Fixture::new("reserved-route");
+    fixture.write_registry(folded_registry());
+    let output = fixture.boop_as("feature-a", &["push", "lane", "--body", "x"]);
+    assert!(!output.status.success());
+    let err = stderr(&output);
+    assert!(err.contains("`lane` is the name of a `boop beep` subcommand"), "stderr: {err}");
+    assert!(fixture.bus_rows().is_empty(), "no row was appended");
+}
+
+/// Missing body is clap's own required-argument error, exit 2, naming <BODY>.
+#[test]
+fn beep_without_a_body_is_a_clap_required_argument_error() {
+    let fixture = Fixture::new("beep-no-body");
+    fixture.write_registry(folded_registry());
+    let output = fixture.boop_as("feature-a", &["beep", "native-n1"]);
+    assert_eq!(output.status.code(), Some(2), "stdout: {}", stdout(&output));
+    let err = stderr(&output);
+    assert!(err.contains("<BODY>"), "stderr: {err}");
+    assert!(
+        err.contains("required arguments were not provided"),
+        "stderr: {err}"
+    );
+}
+
+/// The `beep` group still reaches its own subcommands with the route
+/// positional in front of them.
+#[test]
+fn the_beep_subcommand_group_still_parses_under_the_route_positional() {
+    let fixture = Fixture::new("beep-group");
+    fixture.write_registry(folded_registry());
+    for argv in [
+        vec!["beep", "lane", "list"],
+        vec!["beep", "pstree"],
+        vec!["beep", "ps"],
+    ] {
+        let output = fixture.boop_as("feature-a", &argv);
+        assert!(
+            output.status.success(),
+            "{argv:?} stderr: {}",
+            stderr(&output)
+        );
+    }
 }

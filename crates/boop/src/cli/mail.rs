@@ -12,7 +12,7 @@ use boop::mailwait::Watch;
 use boop::registry::Registry;
 use boop::{bus, identity, inbox, lane, tmux};
 
-use crate::cli::job::{wait_and_exit, waiting_as};
+use crate::cli::job::waiting_as;
 use crate::cli::{append_acks, append_message, append_message_to, line, mail_dir, pad};
 use crate::InboxCmd;
 
@@ -105,6 +105,8 @@ pub(crate) fn all_messages(dir: &std::path::Path) -> Result<Vec<bus::Message>> {
 // hail
 // ---------------------------------------------------------------------------
 
+/// `beep hail`: the old send-without-waiting spelling, kept for briefs that
+/// still name it. One call into the send every verb shares.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_hail(
     registry: &Registry,
@@ -113,44 +115,154 @@ pub(crate) fn run_hail(
     from: Option<&str>,
     kind: Option<&str>,
     box_name: Option<&str>,
-    socket: Option<&str>,
+    _socket: Option<&str>,
     wait_timeout: Option<u64>,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
-    let dir = mail_dir(mail_dir_arg)?;
-    let to = &resolve_parent_alias(registry, &bus::read_routes(&dir)?, to, from)?;
+    run_send(
+        registry,
+        Outbound {
+            route: to,
+            body: Some(body),
+            kind: kind.unwrap_or("request"),
+            as_name: from,
+            box_name,
+            timeout_secs: wait_timeout.unwrap_or(boop::mailwait::DEFAULT_TIMEOUT_SECS),
+            wait: wait_timeout.is_some(),
+            mail_dir: mail_dir_arg,
+        },
+    )
+}
+
+/// One send, spelled once. Every send verb in the CLI is a call into this
+/// function: `boop beep <route> <body>` is its visible spelling, and `push`,
+/// `beep hail`, `tell-parent` and `tell-children` are hidden aliases that fill
+/// the same struct.
+pub(crate) struct Outbound<'a> {
+    /// A registry name, or the `parent` / `children` alias.
+    pub route: &'a str,
+    /// `None` is legal only with `--kind yield`, which mints its own body.
+    pub body: Option<&'a str>,
+    pub kind: &'a str,
+    /// Who the row is from, when the whoami ladder cannot say.
+    pub as_name: Option<&'a str>,
+    /// A mailbox file other than `bus.ndjson`.
+    pub box_name: Option<&'a str>,
+    pub timeout_secs: u64,
+    /// Block for the answer. `--no-wait` clears it.
+    pub wait: bool,
+    pub mail_dir: Option<&'a Path>,
+}
+
+/// Route names a send cannot address: clap resolves each to the `beep`
+/// subcommand of that name long before the send sees it, so a registry row
+/// wearing one is unreachable and says so rather than mailing into the void.
+const RESERVED_ROUTES: [&str; 8] = [
+    "lane", "agent", "hail", "message", "ps", "pstree", "harness", "help",
+];
+
+/// Who a row is from when no `--as` and no ladder rung names the caller.
+const DEFAULT_SENDER: &str = "coordinator";
+
+/// Fan a body out to every child of the caller instead of addressing one.
+const CHILDREN_ALIAS: &str = "children";
+
+pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
+    if RESERVED_ROUTES.contains(&send.route) {
+        anyhow::bail!(
+            "`{route}` is the name of a `boop beep` subcommand, so it cannot be a route: \
+             `boop beep {route} ...` runs that subcommand. Rename the route.",
+            route = send.route
+        );
+    }
+    let dir = mail_dir(send.mail_dir)?;
+    let routes = bus::read_routes(&dir)?;
+    if send.route == CHILDREN_ALIAS {
+        return fan_out_to_children(registry, &dir, &routes, &send);
+    }
+    // Only the aliases that read an edge need the caller's own route; every
+    // other send takes the name it was handed, registered or not.
+    let (sender, to, parent_source) = if send.route == PARENT_ALIAS {
+        let (caller, route, stamped) = caller_identity(registry, &routes, send.as_name)?;
+        let pick = lane::tell_parent_target(&caller, route, &routes, stamped.as_deref())?;
+        let parent = pick
+            .parent
+            .clone()
+            .context("no parent edge resolved for the caller")?;
+        (caller, parent, Some(pick.source))
+    } else {
+        (
+            sender_name(registry, &routes, send.as_name)?,
+            send.route.to_owned(),
+            None,
+        )
+    };
+    let body = match (send.body, send.kind) {
+        (Some(body), _) => body.to_owned(),
+        (None, "yield") => {
+            let tree = routes
+                .get(&sender)
+                .and_then(|route| route.worktree_dir.as_deref().or(route.cwd.as_deref()))
+                .map(Path::new);
+            lane::yield_body(&sender, tree)
+        }
+        (None, kind) => anyhow::bail!(
+            "a body is required with --kind {kind}; only `yield` carries a default body"
+        ),
+    };
     let message = bus::Message {
         id: bus::mint_id(),
-        from: from.unwrap_or("coordinator").to_owned(),
-        to: to.to_owned(),
+        from: sender.clone(),
+        to: to.clone(),
         from_timestamp: bus::now_iso(),
         to_timestamp: None,
-        kind: kind.unwrap_or("request").to_owned(),
+        kind: send.kind.to_owned(),
         reply_to: None,
-        body: body.to_owned(),
+        body,
         r#ref: None,
         rc: None,
         detail: None,
     };
-    append_message_to(&dir, box_name.unwrap_or("bus.ndjson"), &message)?;
+    append_message_to(&dir, send.box_name.unwrap_or("bus.ndjson"), &message)?;
     record_control_edge(&message)?;
-    deliver_hail(registry, &dir, &message, socket)?;
-    line(&format!(
-        "to await the reply: boop wait {}   (or: boop wait --me &)",
-        message.id
-    ));
-    let Some(timeout_secs) = wait_timeout else {
+    if let Some(source) = parent_source {
+        println!("{sender} -> {to} (parent from {source})");
+    }
+    deliver_hail(registry, &dir, &message, None)?;
+    if parent_source.is_some() {
+        print_tell_parent_receipt(&sender, &to, &message.id);
+        line(&message.id);
+    }
+    // The parent send's last line is its own id, by contract. Every other send
+    // names the command that collects the answer, before the block as well as
+    // instead of it: a shell killed mid-wait leaves the id on screen.
+    if parent_source.is_none() {
+        line(&format!(
+            "to await the reply: boop wait {}   (or: boop wait --me &)",
+            message.id
+        ));
+    }
+    if !send.wait {
         return Ok(());
-    };
-    let idle = crate::cli::job::watch_turn_end(&dir, &message.id, timeout_secs);
-    wait_and_exit(
-        &dir,
-        Watch::Reply { id: message.id },
-        timeout_secs,
-        None,
-        mail_dir_arg,
-        idle,
-    )
+    }
+    push_wait(&dir, &to, &message.id, send.timeout_secs)
+}
+
+/// Who the row is from: `--as`, else the identity ladder's own name, else the
+/// placeholder. A name `--as` gives is taken as written; only the alias sends
+/// need it to be a registered route.
+fn sender_name(
+    registry: &Registry,
+    routes: &BTreeMap<String, Route>,
+    as_name: Option<&str>,
+) -> Result<String> {
+    if let Some(name) = as_name {
+        return Ok(name.to_owned());
+    }
+    let identity = identity::resolve_with(registry, routes)?;
+    Ok(lane::caller_route(&identity, routes)
+        .map(|(caller, _)| caller)
+        .unwrap_or_else(|_| DEFAULT_SENDER.to_owned()))
 }
 
 /// Put one queued message in front of its recipient, through the door its
@@ -251,6 +363,8 @@ const DELIVERY_CONFIRM: std::time::Duration = std::time::Duration::from_millis(7
 /// | the recipient's turn ending with no reply | 0 | `boop wait <id>` |
 /// | the route going dead | 3 | `boop debug <route>` |
 /// | the timeout | 124 | `boop debug <route>` |
+/// `push`: the old send-and-block spelling, kept for briefs that still name
+/// it. One call into the send every verb shares.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_push(
     registry: &Registry,
@@ -261,36 +375,19 @@ pub(crate) fn run_push(
     timeout_secs: u64,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
-    let dir = mail_dir(mail_dir_arg)?;
-    let routes = bus::read_routes(&dir)?;
-    let sender = match from {
-        Some(name) => name.to_owned(),
-        None => {
-            let identity = identity::resolve_with(registry, &routes)?;
-            lane::caller_route(&identity, &routes)
-                .map(|(caller, _)| caller)
-                .unwrap_or_else(|_| "coordinator".to_owned())
-        }
-    };
-    let to = &resolve_parent_alias(registry, &routes, to, from)?;
-    let message = bus::Message {
-        id: bus::mint_id(),
-        from: sender,
-        to: to.to_owned(),
-        from_timestamp: bus::now_iso(),
-        to_timestamp: None,
-        kind: kind.to_owned(),
-        reply_to: None,
-        body: body.to_owned(),
-        r#ref: None,
-        rc: None,
-        detail: None,
-    };
-    append_message(&dir, &message)?;
-    record_control_edge(&message)?;
-    // One delivery line, printed by the same path `beep hail` prints it from.
-    deliver_hail(registry, &dir, &message, None)?;
-    push_wait(&dir, to, &message.id, timeout_secs)
+    run_send(
+        registry,
+        Outbound {
+            route: to,
+            body: Some(body),
+            kind,
+            as_name: from,
+            box_name: None,
+            timeout_secs,
+            wait: true,
+            mail_dir: mail_dir_arg,
+        },
+    )
 }
 
 /// The block half of `push`. Every source it watches is one an existing verb
@@ -380,33 +477,11 @@ fn caller_identity<'a>(
     }
 }
 
-/// `parent` is an alias every send verb's help advertises, never a route
-/// name. It resolves through the one function `tell-parent` walks, so `push
-/// parent`, `beep hail parent` and `tell-parent` cannot disagree about who
-/// the parent is. Every other spelling passes through untouched.
-fn resolve_parent_alias(
-    registry: &Registry,
-    routes: &BTreeMap<String, Route>,
-    to: &str,
-    as_name: Option<&str>,
-) -> Result<String> {
-    if to != PARENT_ALIAS {
-        return Ok(to.to_owned());
-    }
-    let (caller, route, stamped) = caller_identity(registry, routes, as_name)?;
-    let pick = lane::tell_parent_target(&caller, route, routes, stamped.as_deref())?;
-    let parent = pick
-        .parent
-        .context("no parent edge resolved for the caller")?;
-    info!(caller, parent, source = pick.source, "parent alias resolved");
-    Ok(parent)
-}
-
 /// The one route name that is an alias rather than a registry key.
 const PARENT_ALIAS: &str = "parent";
 
-/// `tell-parent`: one row from the caller to the parent its registration
-/// recorded. The caller spells neither end of the edge.
+/// `tell-parent`: the old spelling of `boop beep parent <body>`, kept for
+/// briefs that still name it. One call into the send every verb shares.
 pub(crate) fn run_tell_parent(
     registry: &Registry,
     kind: &str,
@@ -414,48 +489,19 @@ pub(crate) fn run_tell_parent(
     as_name: Option<&str>,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
-    let dir = mail_dir(mail_dir_arg)?;
-    let routes = bus::read_routes(&dir)?;
-    let (caller, route, stamped) = caller_identity(registry, &routes, as_name)?;
-    let pick = lane::tell_parent_target(&caller, route, &routes, stamped.as_deref())?;
-    let parent = pick
-        .parent
-        .clone()
-        .context("no parent edge resolved for the caller")?;
-    let body = match (body, kind) {
-        (Some(body), _) => body.to_owned(),
-        (None, "yield") => {
-            let tree = route
-                .worktree_dir
-                .as_deref()
-                .or(route.cwd.as_deref())
-                .map(Path::new);
-            lane::yield_body(&caller, tree)
-        }
-        (None, kind) => anyhow::bail!(
-            "--body is required with --kind {kind}; only `yield` carries a default body"
-        ),
-    };
-    let message = bus::Message {
-        id: bus::mint_id(),
-        from: caller.clone(),
-        to: parent.clone(),
-        from_timestamp: bus::now_iso(),
-        to_timestamp: None,
-        kind: kind.to_owned(),
-        reply_to: None,
-        body,
-        r#ref: None,
-        rc: None,
-        detail: None,
-    };
-    append_message(&dir, &message)?;
-    record_control_edge(&message)?;
-    println!("{caller} -> {parent} (parent from {})", pick.source);
-    deliver_hail(registry, &dir, &message, None)?;
-    print_tell_parent_receipt(&caller, &parent, &message.id);
-    line(&message.id);
-    Ok(())
+    run_send(
+        registry,
+        Outbound {
+            route: PARENT_ALIAS,
+            body,
+            kind,
+            as_name,
+            box_name: None,
+            timeout_secs: boop::mailwait::DEFAULT_TIMEOUT_SECS,
+            wait: false,
+            mail_dir: mail_dir_arg,
+        },
+    )
 }
 
 /// The receipt `tell-parent` leaves (spec 7.5): who called, which parent the
@@ -478,21 +524,46 @@ fn print_tell_parent_receipt(caller: &str, parent: &str, message_id: &str) {
     }
 }
 
-/// `tell-children`: one body to every child of the caller, from the registry's
-/// parent edges and from the store's `spawned` edges for the caller's session.
-/// Every target reports its own outcome and the run ends in a tally, so a run
-/// that reached nobody cannot read as success.
+/// `tell-children`: the old spelling of `boop beep children <body>`, kept for
+/// briefs that still name it. One call into the send every verb shares.
 pub(crate) fn run_tell_children(
     registry: &Registry,
     body: &str,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
-    let dir = mail_dir(mail_dir_arg)?;
-    let routes = bus::read_routes(&dir)?;
-    let identity = identity::resolve_with(registry, &routes)?;
-    let (caller, _) = lane::caller_route(&identity, &routes)?;
-    let children = lane::children_of(&caller, &routes);
-    let spawned = spawned_children(identity.session.as_deref(), &routes);
+    run_send(
+        registry,
+        Outbound {
+            route: CHILDREN_ALIAS,
+            body: Some(body),
+            kind: "note",
+            as_name: None,
+            box_name: None,
+            timeout_secs: boop::mailwait::DEFAULT_TIMEOUT_SECS,
+            wait: false,
+            mail_dir: mail_dir_arg,
+        },
+    )
+}
+
+/// The `children` route: one body to every child of the caller, from the
+/// registry's parent edges and from the store's `spawned` edges for the
+/// caller's session. Every target reports its own outcome and the run ends in
+/// a tally, so a run that reached nobody cannot read as success. A fan-out has
+/// no single row to wait on, so `--timeout` and `--no-wait` do not reach here.
+fn fan_out_to_children(
+    registry: &Registry,
+    dir: &Path,
+    routes: &BTreeMap<String, Route>,
+    send: &Outbound<'_>,
+) -> Result<()> {
+    let (caller, _, _) = caller_identity(registry, routes, send.as_name)?;
+    let body = send
+        .body
+        .context("a body is required to mail the caller's children")?;
+    let identity = identity::resolve_with(registry, routes).unwrap_or_default();
+    let children = lane::children_of(&caller, routes);
+    let spawned = spawned_children(identity.session.as_deref(), routes);
     if children.is_empty() && spawned.is_empty() {
         println!("no child of {caller} is registered");
         return Ok(());
@@ -526,7 +597,7 @@ pub(crate) fn run_tell_children(
             rc: None,
             detail: None,
         };
-        append_message(&dir, &message)?;
+        append_message(dir, &message)?;
         record_control_edge(&message)?;
         match reach {
             ChildReach::Hook => {

@@ -360,11 +360,16 @@ fn hail_with_a_wait_timeout_sends_then_blocks_and_times_out() {
         stdout.contains(&format!("to await the reply: boop wait {id}")),
         "the hint still prints before the block: {stdout}"
     );
+    // Folded (2026-08-25): `beep hail --wait-timeout` is `push`'s block, so
+    // its timeout ends on `push`'s two lines rather than the bare re-run one.
     assert!(
-        stdout.lines().last().unwrap().starts_with(&format!(
-            "timed out after 1s waiting for reply to {id}; re-run:"
-        )),
-        "the last line is the re-run command: {stdout}"
+        stdout.contains(&format!("no answer from feature-answers in 1s (id {id})")),
+        "the timeout names the route and the id: {stdout}"
+    );
+    assert_eq!(
+        stdout.lines().last(),
+        Some("boop debug feature-answers"),
+        "the last line is the next command: {stdout}"
     );
 }
 

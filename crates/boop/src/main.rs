@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 
 use boop::registry::Registry;
 use boop::supervise::ParentDeathPolicy;
@@ -24,7 +24,9 @@ use cli::job::{
     run_beep, run_dispatch, run_lane, run_measure, run_resolve, run_sweep, run_wait, DispatchArgs,
     LaneArgs,
 };
-use cli::mail::{run_hail, run_inbox, run_list, run_push, run_tell_children, run_tell_parent};
+use cli::mail::{
+    run_hail, run_inbox, run_list, run_push, run_send, run_tell_children, run_tell_parent, Outbound,
+};
 use cli::me::{run_adopt, run_me, run_me_favorite, run_me_mood, run_prune, run_whoami};
 use cli::{doctrine, line, mail_dir, now_ms, CONCATMAP_EXAMPLES};
 
@@ -88,10 +90,44 @@ enum SubCmd {
         #[arg(last = true)]
         args: Vec<String>,
     },
-    /// Drive agents: harnesses, lanes, mail, processes.
+    /// Mail a route and block for its answer; also the group that drives
+    /// harnesses, lanes, agents and processes.
+    ///
+    /// `boop beep <route> <body>` is the one send. `<route>` is a lane, a
+    /// coordinator, a native, `parent` (the caller's own parent edge) or
+    /// `children` (every live child of the caller).
+    #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
     Beep {
+        /// A registry name, or the `parent` / `children` alias.
+        ///
+        /// Clap cannot mark this required: `subcommand_negates_reqs` does not
+        /// clear a parent positional once a `beep` subcommand matches, so
+        /// `beep lane list` would fail on a missing `<ROUTE>`. The dispatch
+        /// raises clap's own missing-argument error instead.
+        #[arg(value_name = "ROUTE")]
+        route: Option<String>,
+        /// The message.
+        #[arg(value_name = "BODY")]
+        body: Option<String>,
+        /// The older spelling of the BODY positional.
+        #[arg(long = "body", hide = true)]
+        body_flag: Option<String>,
+        /// Who the row is from, when the whoami ladder cannot say.
+        #[arg(long = "as", value_name = "NAME")]
+        as_name: Option<String>,
+        /// The mail kind the row wears.
+        #[arg(long, default_value = "request")]
+        kind: String,
+        /// Seconds to block before exiting 124.
+        #[arg(long, default_value_t = mailwait::DEFAULT_TIMEOUT_SECS)]
+        timeout: u64,
+        /// Send and return, instead of blocking for the answer.
+        #[arg(long)]
+        no_wait: bool,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
         #[command(subcommand)]
-        cmd: BeepCmd,
+        cmd: Option<BeepCmd>,
     },
     /// Run raw SQL read-only against the store (the default `db` form), or
     /// read/count what agents did through a `db` subcommand.
@@ -187,8 +223,9 @@ enum SubCmd {
         #[command(subcommand)]
         cmd: HostCmd,
     },
-    /// Mail the caller's own parent. The identity ladder names the sender and
-    /// the registered parent edge names the recipient, so neither is spelled.
+    /// Folded (2026-08-25): `boop beep parent <body>` is the spelling; this
+    /// one is a hidden alias over the same send.
+    #[command(hide = true)]
     TellParent {
         /// What the row says it is. `yield` carries a default body.
         #[arg(long, default_value = "note", value_parser = ["completion", "yield", "note"])]
@@ -203,8 +240,9 @@ enum SubCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Mail one body to every live child of the caller, resolved from the same
-    /// parent edges, with a landed/dead line per target.
+    /// Folded (2026-08-25): `boop beep children <body>` is the spelling; this
+    /// one is a hidden alias over the same send.
+    #[command(hide = true)]
     TellChildren {
         /// The message every child gets.
         #[arg(long)]
@@ -237,9 +275,9 @@ enum SubCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Send one body to a route and block until it answers: the one verb that
-    /// is both the send and the wait. Exits 0 on a reply or the recipient's
-    /// turn end, 124 on the timeout, 3 when the route dies first.
+    /// Folded (2026-08-25): `boop beep <route> <body>` is the spelling; this
+    /// one is a hidden alias over the same send.
+    #[command(hide = true)]
     Push {
         /// The route to push at: a lane, a coordinator, or `parent`.
         #[arg(value_name = "ROUTE")]
@@ -857,7 +895,32 @@ fn main() -> Result<()> {
                 uninstall_hooks,
             ),
             SubCmd::Prune { mail_dir } => run_prune(mail_dir.as_deref()),
-            SubCmd::Beep { cmd } => run_beep(&registry, cmd),
+            SubCmd::Beep {
+                route,
+                body,
+                body_flag,
+                as_name,
+                kind,
+                timeout,
+                no_wait,
+                mail_dir,
+                cmd,
+            } => match cmd {
+                Some(cmd) => run_beep(&registry, cmd),
+                None => run_send(
+                    &registry,
+                    Outbound {
+                        route: &beep_route(route.as_deref()),
+                        body: beep_body(body.as_deref().or(body_flag.as_deref())),
+                        kind: &kind,
+                        as_name: as_name.as_deref(),
+                        box_name: None,
+                        timeout_secs: timeout,
+                        wait: !no_wait,
+                        mail_dir: mail_dir.as_deref(),
+                    },
+                ),
+            },
             SubCmd::Db { sql, format, cmd } => match cmd {
                 Some(cmd) => run_db(&registry, cmd),
                 None => match sql {
@@ -1001,6 +1064,33 @@ fn main() -> Result<()> {
     )
 }
 
+/// The two positionals `boop beep <route> <body>` needs, raised as clap's own
+/// missing-argument error when the caller left one out. Clap cannot mark them
+/// required itself without breaking `boop beep lane list`, so the check runs
+/// here and the reader still sees `<ROUTE>` / `<BODY>` and exit 2.
+fn beep_route(route: Option<&str>) -> String {
+    match route {
+        Some(route) => route.to_owned(),
+        None => missing_beep_argument("<ROUTE>"),
+    }
+}
+
+fn beep_body(body: Option<&str>) -> Option<&str> {
+    match body {
+        Some(body) => Some(body),
+        None => missing_beep_argument("<BODY>"),
+    }
+}
+
+fn missing_beep_argument(name: &str) -> ! {
+    Cli::command()
+        .error(
+            clap::error::ErrorKind::MissingRequiredArgument,
+            format!("the following required arguments were not provided:\n  {name}\n\nUsage: boop beep <ROUTE> <BODY>\n"),
+        )
+        .exit()
+}
+
 fn sync_before_local_command(registry: &Registry) -> Result<()> {
     sync_before_read(registry)
 }
@@ -1137,9 +1227,11 @@ fn init_tracing(lane: Option<&str>) -> Result<()> {
 fn supervised_lane(command: &SubCmd) -> Option<&str> {
     match command {
         SubCmd::Beep {
-            cmd: BeepCmd::Lane {
-                cmd: LaneCmd::Run { lane, .. },
-            },
+            cmd:
+                Some(BeepCmd::Lane {
+                    cmd: LaneCmd::Run { lane, .. },
+                }),
+            ..
         } => Some(lane),
         _ => None,
     }
@@ -1168,10 +1260,11 @@ enum BeepCmd {
         #[command(subcommand)]
         cmd: AgentCmd,
     },
-    /// Hand a message to a running agent through its harness door, and say where it landed.
+    /// Folded (2026-08-25): `boop beep <route> <body> --no-wait` is the
+    /// spelling; this one is a hidden alias over the same send.
+    #[command(hide = true)]
     Hail {
-        /// The route to hail: a lane, a coordinator, a native, or `parent`,
-        /// which resolves through the same edge `boop tell-parent` walks.
+        /// The route to hail: a lane, a coordinator, a native, or `parent`.
         lane: String,
         #[arg(long)]
         body: String,
@@ -2156,9 +2249,10 @@ mod tests {
         match cli.command {
             Some(SubCmd::Beep {
                 cmd:
-                    BeepCmd::Lane {
+                    Some(BeepCmd::Lane {
                         cmd: LaneCmd::Create { bin, preset, .. },
-                    },
+                    }),
+                ..
             }) => {
                 assert_eq!(bin.as_deref(), Some("ccz"));
                 assert_eq!(preset.as_deref(), Some("zfable"));
@@ -2183,9 +2277,10 @@ mod tests {
         match cli.command {
             Some(SubCmd::Beep {
                 cmd:
-                    BeepCmd::Lane {
+                    Some(BeepCmd::Lane {
                         cmd: LaneCmd::Run { bin, .. },
-                    },
+                    }),
+                ..
             }) => assert_eq!(bin.as_deref(), Some("ccz")),
             other => panic!("lane run parsed as {:?}", other.is_some()),
         }

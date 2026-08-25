@@ -160,7 +160,7 @@ TRANSPORT: every lane pane runs ONE command, whatever the harness:
   resume turn for anything the harness would not take mid-turn. Nothing is ever
   dropped and no hail needs a human re-dispatch.
 
-HAIL: boop beep hail <lane> --body \"text\" [--from <me>] [--kind <k>]
+DELIVERY: what one send does after the row is written.
   A kind=lane route is handed to its supervisor (stream-json stdin for claude,
   app-server turn/steer for codex). A kind=coordinator route (a pane running
   `boop tui <harness>`) goes through the harness door; nothing is typed:
@@ -177,18 +177,23 @@ HAIL: boop beep hail <lane> --body \"text\" [--from <me>] [--kind <k>]
     boop db \"SELECT * FROM agent_delivery_transition ORDER BY sequence\"
   and `boop wait <message-id>` prints that history.
 
-TELL: the caller's parent edge, and every live child, one verb each:
-    boop tell-parent [--kind completion|yield|note] [--body \"t\"]
-    boop tell-children --body \"t\"
-  Neither end of the edge is spelled by the caller; the registry holds it.
-
-PUSH: the send and the wait in one verb, for a parent that wants an answer:
-    boop push <route> --body \"t\" [--timeout <s>] [--kind <k>]
+SEND: one verb, `boop beep`. It sends and then blocks for the answer:
+    boop beep <route> <body> [--timeout <s>] [--kind <k>] [--as <name>]
+    boop beep <route> <body> --no-wait          send and return
+  <route> is a lane, a coordinator, a native, or one of two aliases:
+    boop beep parent \"done with x\"      the caller's own parent edge
+    boop beep children \"stop\"           every live child of the caller
+  Neither end of an alias edge is spelled by the caller; the registry holds it.
   It walks the same ladder every send walks, prints the rung that took the row,
   then blocks. Exits: 0 on a reply or the recipient's turn ending, 124 on the
   timeout, 3 when the route dies first. The last line is always the next
   command: `boop wait <id>` after an answer, `boop debug <route>` after a
-  failure.
+  failure. `--as <name>` is the sender when the whoami ladder cannot say it,
+  the same spelling `boop wait --me --as <name>` takes.
+  A route named after a `beep` subcommand (lane, agent, ps, pstree, harness) is
+  unreachable and says so; rename it.
+  Folded aliases, hidden and unchanged: `boop push`, `boop beep hail`,
+  `boop tell-parent`, `boop tell-children`.
 
 WAIT: every agent can background a shell, so the universal push is a block.
   A wait on a door-delivered hail also ends when the recipient's turn ends
@@ -196,7 +201,6 @@ WAIT: every agent can background a shell, so the universal push is a block.
   printing `<route> turn ended (<status>)`; a reply mail ends it sooner.
     boop wait <message-id>          the reply to what you just sent
     boop wait --me [--as <name>]    the next unread mail addressed to you
-    boop beep hail <lane> --body \"...\" --wait-timeout <s>   send, then block
   Default timeout 540s (under the 10-minute cap a background shell gives you),
   `--wait-timeout <s>` overrides it, and a timeout exits 124 printing the
   re-run line on stdout AND stderr. A reply is a row naming your id in

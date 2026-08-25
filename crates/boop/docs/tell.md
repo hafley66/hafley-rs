@@ -1,21 +1,25 @@
-# tell-parent / tell-children
+# beep parent / beep children
 
 A child already carries its own identity and the edge that names its parent, so
 neither end of that edge is worth spelling in a prompt.
 
 ```
-boop tell-parent [--kind completion|yield|note] [--body TEXT]
-boop tell-children --body TEXT
+boop beep parent "TEXT" [--kind completion|yield|note] [--as NAME]
+boop beep children "TEXT" [--as NAME]
 ```
+
+Folded 2026-08-25: `boop tell-parent` and `boop tell-children` are hidden
+aliases over the same send, so briefs that name them keep running. `--body
+TEXT` is accepted in place of the positional for the same reason.
 
 | step | where it comes from |
 |---|---|
 | the sender | the identity ladder (`boop whoami`): `BOOP_LANE`/`BOOP_SESSION`, else the registered pane, else the harness process |
 | the recipient | the caller's registry route `parent`, written by `lane create --parent` and `agent register --parent` |
 | the fallback | the one registered coordinator with a pane, when the route records no parent |
-| delivery | the path `beep hail` uses: pane injection for a coordinator, inbox drain for a hook, the mailbox for a lane supervisor |
+| delivery | the ladder every send walks: pane injection for a coordinator, inbox drain for a hook, the mailbox for a lane supervisor |
 
-`--kind` is the mail row's kind. `--body` is required for `completion` and
+`--kind` is the mail row's kind. A body is required for `completion` and
 `note`. `yield` alone has a default, `yield <lane> rc=0 branch=<branch>
 head=<sha>`, read from the route's worktree, and it is a turn boundary: the
 lane stays alive and can be hailed again.
