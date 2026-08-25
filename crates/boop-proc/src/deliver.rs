@@ -69,6 +69,7 @@ impl Rung {
 
 /// Where one message landed and why that rung. `detail` names the transport or
 /// the check that sent the ladder one rung lower.
+#[derive(Clone, Debug)]
 pub struct Landing {
     pub rung: Rung,
     pub detail: String,
@@ -421,8 +422,180 @@ pub fn door_address(kind: Option<&str>, addr: Option<&str>) -> DoorAddress {
 
 #[cfg(test)]
 mod tests {
-    use super::{door_address, door_columns};
+    use super::*;
+    use boop_harness::door::{Door, IdleNotice};
+    use boop_harness::harness::{Capabilities, ReadChunk, SessionRef};
     use boop_harness::live::DoorAddress;
+    use std::time::Duration;
+
+    /// A claude door that always takes the row, so the test measures which
+    /// rung the ladder stops on rather than a real socket.
+    struct FakeClaudeDoor;
+
+    impl Door for FakeClaudeDoor {
+        fn deliver(&self, _session: &LiveSession, _body: &str) -> Result<Delivered> {
+            Ok(Delivered::Injected)
+        }
+
+        fn notify_idle(&self, _session: &LiveSession, _timeout: Duration) -> Result<IdleNotice> {
+            Ok(IdleNotice::now(None))
+        }
+    }
+
+    struct FakeClaudeLive;
+
+    impl boop_harness::live::LiveSessions for FakeClaudeLive {
+        fn live_sessions(&self) -> Result<Vec<LiveSession>> {
+            Ok(vec![LiveSession {
+                harness: HarnessId::Claude,
+                session_id: "ses-fake-claude".to_owned(),
+                pid: Some(4242),
+                cwd: None,
+                tmux_pane: Some("%77".to_owned()),
+                status: LiveStatus::Idle,
+                door: DoorAddress::UnixSocket {
+                    path: "/tmp/boop-fake-claude.sock".into(),
+                    token: None,
+                },
+                observed_ms: boop_harness::live::now_ms(),
+                started_ms: None,
+            }])
+        }
+    }
+
+    /// Claude's own capabilities behind a door the test owns.
+    struct FakeClaude;
+
+    static FAKE_DOOR: FakeClaudeDoor = FakeClaudeDoor;
+    static FAKE_LIVE: FakeClaudeLive = FakeClaudeLive;
+
+    impl Harness for FakeClaude {
+        fn id(&self) -> HarnessId {
+            HarnessId::Claude
+        }
+
+        fn capabilities(&self) -> &'static Capabilities {
+            boop_harness::harness::claude::Claude.capabilities()
+        }
+
+        fn live(&self) -> &dyn boop_harness::live::LiveSessions {
+            &FAKE_LIVE
+        }
+
+        fn door(&self) -> &dyn Door {
+            &FAKE_DOOR
+        }
+
+        fn sessions(&self) -> Result<Vec<SessionRef>> {
+            Ok(Vec::new())
+        }
+
+        fn read_from(&self, _session: &SessionRef, offset: u64) -> Result<ReadChunk> {
+            Ok(ReadChunk {
+                events: Vec::new(),
+                next_offset: offset,
+                reset: false,
+                skipped: 0,
+            })
+        }
+    }
+
+    /// Nothing paste-able; a paste here would mean the ladder fell past the
+    /// door for a harness that owns one.
+    struct NoPane;
+
+    impl PanePaster for NoPane {
+        fn paste(&self, _pane: &str, _notice: &str) -> Option<String> {
+            panic!("a claude coordinator is never pasted into");
+        }
+    }
+
+    fn message(to: &str) -> Message {
+        Message {
+            id: format!("m-{to}"),
+            from: "wave-b-parent".to_owned(),
+            to: to.to_owned(),
+            from_timestamp: "2026-08-25T00:00:00Z".to_owned(),
+            to_timestamp: None,
+            kind: "request".to_owned(),
+            reply_to: None,
+            body: "a row for the coordinator".to_owned(),
+            r#ref: None,
+            rc: None,
+            detail: None,
+        }
+    }
+
+    /// RECEIPT. A claude coordinator whose project carries no
+    /// `.claude/settings.json` hook still takes its row at the door, so the
+    /// hook inbox is a rung below rather than a step a caller installs.
+    #[test]
+    fn a_claude_coordinator_takes_its_row_at_the_door_with_no_hooks_installed() {
+        let dir = std::env::temp_dir().join(format!("boop-door-only-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(
+            !dir.join(".claude").join("settings.json").exists(),
+            "the probe project carries no installed hook"
+        );
+
+        let store = Store::open(dir.join("store.db")).unwrap();
+        let registry = Registry::with(vec![Box::new(FakeClaude)]);
+        let mut routes = BTreeMap::new();
+        routes.insert(
+            "claude-77".to_owned(),
+            Route {
+                kind: "coordinator".to_owned(),
+                harness: Some(HarnessId::Claude),
+                tmux: Some("%77".to_owned()),
+                cwd: Some(dir.display().to_string()),
+                session_id: Some("ses-fake-claude".to_owned()),
+                model: None,
+                mode: None,
+                source_path: None,
+                parent: None,
+                goal: None,
+                registered_at: None,
+                base_sha: None,
+                worktree_dir: None,
+                app_server_socket: None,
+            },
+        );
+
+        let landing =
+            deliver_hail_with(&registry, &store, &routes, &message("claude-77"), &NoPane).unwrap();
+        assert_eq!(landing.rung, Rung::Door, "{landing:?}");
+        assert!(landing.rung.carried_the_body());
+        assert_eq!(
+            landing.line("m-1", "claude-77", "claude"),
+            "delivered m-1 -> claude-77 through the claude door"
+        );
+
+        let (_, history) = store
+            .passthrough(
+                "SELECT outcome FROM agent_delivery_transition \
+                 WHERE message_id = 'm-claude-77' ORDER BY sequence",
+            )
+            .unwrap();
+        let states: Vec<String> = history
+            .iter()
+            .map(|row| row["outcome"].as_str().unwrap_or_default().to_owned())
+            .collect();
+        assert_eq!(
+            states,
+            vec![
+                DeliveryState::Appended.as_str().to_owned(),
+                DeliveryState::AcceptedByHarness.as_str().to_owned()
+            ],
+            "{history:#?}"
+        );
+        assert!(
+            !states.iter().any(|state| state.contains("hook-inbox")),
+            "no hook rung was walked: {states:?}"
+        );
+        drop(store);
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     /// RECEIPT. Every door address round-trips through the two `agent_live`
     /// columns, so a store fallback addresses the same door the registry did.

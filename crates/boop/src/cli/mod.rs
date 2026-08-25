@@ -166,8 +166,8 @@ LIVENESS: a lane can die silently, producing nothing. Liveness is TWO checks:
 
 TRANSPORT: every lane pane runs ONE command, whatever the harness:
     boop beep lane run --lane <id> --harness <h> --brief <abs> --model <m>
-  That supervisor owns the harness conversation and the lane's inbox. It opens
-  the conversation with the brief, drains the inbox every 700 ms, and starts a
+  That supervisor owns the harness conversation and the lane's mailbox. It opens
+  the conversation with the brief, drains the mailbox every 700 ms, and starts a
   resume turn for anything the harness would not take mid-turn. Nothing is ever
   dropped and no hail needs a human re-dispatch.
 
