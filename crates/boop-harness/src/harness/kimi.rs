@@ -366,6 +366,84 @@ fn append_message_text(content: Option<&Value>) -> String {
     parts.join("\n")
 }
 
+/// A char-boundary-safe prefix; byte slicing risks panicking mid multi-byte
+/// character.
+fn truncate_chars(text: &str, max_chars: usize) -> String {
+    text.chars().take(max_chars).collect()
+}
+
+/// The string itself, or its JSON form when it is not a string.
+fn value_as_text(value: &Value) -> String {
+    match value.as_str() {
+        Some(text) => text.to_owned(),
+        None => value.to_string(),
+    }
+}
+
+/// A content part's own text. `think` carries it under `think`, `text` under
+/// `text`, and `display.command` under `command`, so the key is read off the
+/// kind before the whole part is kept as raw JSON.
+fn part_text(part: &Value, kind: &str) -> String {
+    let tail = kind.rsplit('.').next().unwrap_or(kind);
+    for key in ["text", kind, tail, "content"] {
+        if let Some(value) = part.get(key) {
+            let text = value_as_text(value);
+            if !text.is_empty() {
+                return text;
+            }
+        }
+    }
+    part.to_string()
+}
+
+/// One content part's readable body. `text` rides bare; every other kind
+/// wears its own tag so a reasoning line is not read as prose.
+fn part_body(part: &Value) -> String {
+    let kind = part.get("type").and_then(Value::as_str).unwrap_or("part");
+    let text = truncate_chars(&part_text(part, kind), 4000);
+    match kind {
+        "text" => text,
+        kind => format!("[{kind}] {text}"),
+    }
+}
+
+/// A tool call's readable body: the name, then the arguments verbatim.
+fn tool_call_body(name: &str, args: Option<&Value>) -> String {
+    let input = args.map(value_as_text).unwrap_or_default();
+    format!("{name}\n{}", truncate_chars(&input, 2000))
+}
+
+/// A tool result's body: `output` as a string, or its `text` parts joined.
+/// A failed call keeps its text under an `error:` tag, never empty.
+fn tool_result_body(result: Option<&Value>) -> String {
+    let Some(result) = result else {
+        return "tool result (empty)".to_owned();
+    };
+    let text = match result.get("output") {
+        Some(Value::String(text)) => text.clone(),
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(|item| item.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        Some(other) => other.to_string(),
+        None => String::new(),
+    };
+    let text = match text.is_empty() {
+        true => result.to_string(),
+        false => text,
+    };
+    let text = truncate_chars(&text, 4000);
+    match result
+        .get("isError")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        true => format!("error: {text}"),
+        false => text,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 /// Running totals for one turn's `usage.record` snapshots.
 #[derive(Default)]
@@ -422,7 +500,10 @@ fn project_line(
             .to_owned();
         let attach_turn = if *turn == 0 {
             *turn += 1;
-            let inserted = store.write_turn(&sid, *turn, ts, "assistant", "")?;
+            // A usage row before any content still needs a turn to hang on;
+            // it says which model spent the tokens rather than nothing.
+            let body = format!("[usage] {model}");
+            let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body)?;
             record(stat, inserted);
             *turn
         } else {
@@ -473,27 +554,21 @@ fn project_line(
     let event_type = event.get("type").and_then(Value::as_str).unwrap_or("");
     match event_type {
         "content.part" => {
-            let part = event.get("part");
-            if part
-                .and_then(|part| part.get("type"))
-                .and_then(Value::as_str)
-                == Some("text")
-            {
-                let text = part
-                    .and_then(|part| part.get("text"))
-                    .and_then(Value::as_str)
-                    .unwrap_or("");
-                if !text.is_empty() {
-                    *turn += 1;
-                    let inserted = store.write_turn(&sid, *turn, ts, "assistant", text)?;
-                    record(stat, inserted);
-                }
+            let Some(part) = event.get("part") else {
+                return Ok(());
+            };
+            let body = part_body(part);
+            if !body.is_empty() {
+                *turn += 1;
+                let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body)?;
+                record(stat, inserted);
             }
         }
         "tool.call" => {
             let name = event.get("name").and_then(Value::as_str).unwrap_or("tool");
             *turn += 1;
-            let inserted = store.write_turn(&sid, *turn, ts, "tool", "")?;
+            let body = tool_call_body(name, event.get("args"));
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
             record(stat, inserted);
             store.write_tool_fact(
                 &sid,
@@ -502,6 +577,12 @@ fn project_line(
                 normalize_tool_name(name),
                 event.get("args"),
             )?;
+        }
+        "tool.result" => {
+            *turn += 1;
+            let body = tool_result_body(event.get("result"));
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
+            record(stat, inserted);
         }
         _ => {}
     }
@@ -689,5 +770,191 @@ mod tests {
     fn kimi_fixture_projects_through_the_graph_query() {
         let sessions = sessions_in(&std::path::PathBuf::from("tests/fixtures/kimi")).unwrap();
         crate::harness::assert_fixture_sessions_project(&super::Kimi, &sessions, 1);
+    }
+
+    /// Ingest one raw jsonl line and return the turns it projects.
+    fn project_one_line(name: &str, line: &str) -> Vec<serde_json::Value> {
+        let base = temp_path(&format!("project-{name}"));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let transcript = base.join("wire.jsonl");
+        write_lines(&transcript, &[line]);
+        let store = Store::open(base.join("store.db")).unwrap();
+        let size = std::fs::metadata(&transcript).unwrap().len();
+        let session = session_for(&transcript, size);
+        crate::harness::sync_session(&store, &Kimi, &session).unwrap();
+        let turns = store
+            .query_turns(&boop_store::ident::TurnQuery {
+                session: Some(session.session_id.clone()),
+                ..boop_store::ident::TurnQuery::default()
+            })
+            .unwrap();
+        drop(store);
+        std::fs::remove_dir_all(base).unwrap();
+        turns
+    }
+
+    fn loop_event(event: &str) -> String {
+        format!(
+            r#"{{"type":"context.append_loop_event","agentId":"main","time":1787629891186,"event":{event}}}"#
+        )
+    }
+
+    // FAIL-PRE-FIX: tool.call wrote `""` and tool.result had no arm at all.
+    #[test]
+    fn a_tool_call_projects_its_name_and_arguments() {
+        let turns = project_one_line(
+            "tool-call",
+            &loop_event(
+                r#"{"type":"tool.call","toolCallId":"tool_1","name":"Bash","args":{"command":"git commit"}}"#,
+            ),
+        );
+        assert_eq!(turns[0]["role"], "tool");
+        assert_eq!(
+            turns[0]["said"].as_str().unwrap(),
+            "Bash\n{\"command\":\"git commit\"}"
+        );
+    }
+
+    #[test]
+    fn a_tool_result_projects_its_output() {
+        let turns = project_one_line(
+            "tool-result",
+            &loop_event(
+                r#"{"type":"tool.result","toolCallId":"tool_1","result":{"output":"1 file changed"}}"#,
+            ),
+        );
+        assert_eq!(turns[0]["role"], "tool");
+        assert_eq!(turns[0]["said"].as_str().unwrap(), "1 file changed");
+    }
+
+    #[test]
+    fn a_failed_tool_result_keeps_its_text_under_an_error_tag() {
+        let turns = project_one_line(
+            "tool-result-error",
+            &loop_event(
+                r#"{"type":"tool.result","toolCallId":"tool_1","result":{"output":"ACP terminal capability is unavailable","isError":true}}"#,
+            ),
+        );
+        assert_eq!(
+            turns[0]["said"].as_str().unwrap(),
+            "error: ACP terminal capability is unavailable"
+        );
+    }
+
+    #[test]
+    fn a_think_part_keeps_its_body_under_a_think_tag() {
+        let turns = project_one_line(
+            "think-part",
+            &loop_event(r#"{"type":"content.part","part":{"type":"think","think":"weighing it"}}"#),
+        );
+        assert_eq!(turns[0]["role"], "assistant");
+        assert_eq!(turns[0]["said"].as_str().unwrap(), "[think] weighing it");
+    }
+
+    #[test]
+    fn a_text_part_rides_bare() {
+        let turns = project_one_line(
+            "text-part",
+            &loop_event(r#"{"type":"content.part","part":{"type":"text","text":"on it"}}"#),
+        );
+        assert_eq!(turns[0]["said"].as_str().unwrap(), "on it");
+    }
+
+    #[test]
+    fn a_display_command_part_reads_its_command_key() {
+        let turns = project_one_line(
+            "display-command",
+            &loop_event(
+                r#"{"type":"content.part","part":{"type":"display.command","command":"git log"}}"#,
+            ),
+        );
+        assert_eq!(
+            turns[0]["said"].as_str().unwrap(),
+            "[display.command] git log"
+        );
+    }
+
+    #[test]
+    fn an_unknown_part_kind_keeps_its_raw_json() {
+        let turns = project_one_line(
+            "unknown-part",
+            &loop_event(
+                r#"{"type":"content.part","part":{"type":"a_kind_from_the_future","payload_field":"keep me"}}"#,
+            ),
+        );
+        let body = turns[0]["said"].as_str().unwrap();
+        assert!(body.starts_with("[a_kind_from_the_future] "), "{body}");
+        assert!(body.contains("keep me"), "{body}");
+    }
+
+    #[test]
+    fn a_usage_row_before_any_content_names_its_model_instead_of_nothing() {
+        let turns = project_one_line(
+            "usage-first",
+            r#"{"type":"usage.record","agentId":"main","model":"kimi-code/k3","time":1787629891186,"usage":{"inputOther":10,"output":2}}"#,
+        );
+        assert_eq!(turns[0]["role"], "assistant");
+        assert_eq!(turns[0]["said"].as_str().unwrap(), "[usage] kimi-code/k3");
+    }
+
+    #[test]
+    fn tool_call_arguments_truncate_to_2000_chars() {
+        let args = serde_json::Value::String("a".repeat(3000));
+        let body = super::tool_call_body("Bash", Some(&args));
+        let (name, input) = body.split_once('\n').unwrap();
+        assert_eq!(name, "Bash");
+        assert_eq!(input.chars().count(), 2000);
+    }
+
+    #[test]
+    fn tool_result_output_truncates_to_4000_chars() {
+        let result = serde_json::json!({ "output": "b".repeat(5000) });
+        assert_eq!(super::tool_result_body(Some(&result)).chars().count(), 4000);
+    }
+
+    /// RECEIPT. No tool or assistant turn the probe fixture projects is empty.
+    #[test]
+    fn the_probe_fixture_keeps_every_tool_and_assistant_body() {
+        let fixture = PathBuf::from(
+            "tests/fixtures/kimi/wd_kimi-probe/session_8fbd623a/agents/main/wire.jsonl",
+        );
+        let size = std::fs::metadata(&fixture).unwrap().len();
+        let session = session_for(&fixture, size);
+        let store_path = temp_path("probe-fixture-bodies");
+        let _ = std::fs::remove_file(&store_path);
+        let store = Store::open(store_path.clone()).unwrap();
+        crate::harness::sync_session(&store, &Kimi, &session).unwrap();
+        let turns = store
+            .query_turns(&boop_store::ident::TurnQuery {
+                session: Some(session.session_id.clone()),
+                ..boop_store::ident::TurnQuery::default()
+            })
+            .unwrap();
+        assert!(!turns.is_empty(), "the fixture projects turns");
+
+        let empty = |role: &str| {
+            turns
+                .iter()
+                .filter(|turn| {
+                    turn["role"] == role && turn["said"].as_str().unwrap_or_default().is_empty()
+                })
+                .count()
+        };
+        assert_eq!(empty("tool"), 0, "empty tool bodies: {turns:#?}");
+        assert_eq!(empty("assistant"), 0, "empty assistant bodies: {turns:#?}");
+
+        let tool_rows = turns.iter().filter(|turn| turn["role"] == "tool").count();
+        let assistant_rows = turns
+            .iter()
+            .filter(|turn| turn["role"] == "assistant")
+            .count();
+        assert!(
+            tool_rows >= 4,
+            "calls and results both project: {tool_rows}"
+        );
+        assert!(assistant_rows >= 3, "think and text both project");
+        drop(store);
+        let _ = std::fs::remove_file(store_path);
     }
 }
