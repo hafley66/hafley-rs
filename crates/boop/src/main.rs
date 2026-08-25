@@ -675,7 +675,7 @@ fn main() -> Result<()> {
                 format,
             } => run_tail(&registry, &session_id, from.unwrap_or(0), format),
             SubCmd::Events { query } => run_query(&query),
-            SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild),
+            SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild, None),
             SubCmd::Debug {
                 lane_arg,
                 since,
@@ -1840,6 +1840,10 @@ enum SyncCmd {
         /// Keep syncing on a poll instead of returning.
         #[arg(long)]
         forever: bool,
+        /// Where the pass delivers the native-child completions it finds. A
+        /// scratch mailbox here keeps an analysis pass off the live bus.
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
     },
 }
 

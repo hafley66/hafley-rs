@@ -54,7 +54,9 @@ pub(crate) fn run_lane_debug(lane: &str, since: &str, mail_dir_arg: Option<&Path
     }
 
     line(&format!("\n== 2 mail {lane} =="));
-    let mut rows = crate::cli::mail::all_messages(&dir).unwrap_or_default();
+    // The mailbox is append-only and an ack is a second copy of the row, so
+    // the rows are folded to one per id before the last five are taken.
+    let mut rows = boop::bus::fold(&crate::cli::mail::all_messages(&dir).unwrap_or_default());
     rows.retain(|row| row.from == lane || row.to == lane);
     let recent: Vec<_> = rows.iter().rev().take(5).collect();
     match recent.is_empty() {

@@ -393,9 +393,6 @@ pub(crate) fn run_lane_supervisor(
         lane: Some(lane.to_owned()),
         executable: bin.map(str::to_owned),
     };
-    let mut channel = adapter.open_channel(&spec).inspect_err(|error| {
-        error!(lane, harness = harness_id, error = %error, "lane channel open failed");
-    })?;
     let run = boop::supervise::LaneRun {
         lane: lane.to_owned(),
         // The warm-up's outcome and the setup sentence lead the first turn.
@@ -404,6 +401,17 @@ pub(crate) fn run_lane_supervisor(
         cwd,
         model: model.map(str::to_owned),
         resume: resume.map(str::to_owned),
+    };
+    // A handshake that fails here happens before the supervisor exists, so
+    // nothing else would tell the parent this lane never opened. A rejected
+    // model spelling looked exactly like a lane still starting up.
+    let mut channel = match adapter.open_channel(&spec) {
+        Ok(channel) => channel,
+        Err(error) => {
+            error!(lane, harness = harness_id, error = %error, "lane channel open failed");
+            boop::supervise::report_open_failure(&run, &error.to_string());
+            return Err(error);
+        }
     };
     // Process-global, so it is armed here and not inside the library call.
     boop::supervise::arm_signal_trail(&run);

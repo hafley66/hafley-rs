@@ -1070,6 +1070,23 @@ fn already_hailed(dir: &Path, lane: &str, kind: &str) -> bool {
     rows.iter().any(|row| row.from == lane && row.kind == kind)
 }
 
+/// The kind a lane that never opened wears. It is not a turn end, so it
+/// carries its own word rather than borrowing `yield`'s.
+pub const OPEN_FAILED: &str = "open_failed";
+
+/// Mail the parent one row for a lane whose harness channel never opened.
+/// The supervisor loop has not started yet, so nothing else in the lane would
+/// report it and the parent would read a silent route as a slow start.
+pub fn report_open_failure(lane: &LaneRun, reason: &str) {
+    let body = format!(
+        "lane {} never opened: {reason} (model {})",
+        lane.lane,
+        lane.model.as_deref().unwrap_or("-"),
+    );
+    mail_to_parent_kind(lane, OPEN_FAILED, body, Some(reason));
+    record_result(lane, 1, Some(reason));
+}
+
 /// The kind every progress row wears. A parent filters one word to see where
 /// each of its lanes stopped and what the worktree looked like when it did.
 pub const YIELD: &str = "yield";
@@ -2329,6 +2346,30 @@ mod tests {
         assert!(rows[0].body.contains(&first), "body: {}", rows[0].body);
         assert!(descends_from(&work, &first, &reported));
         assert!(!descends_from(&work, &reported, &first));
+    }
+
+    // FAIL-PRE-FIX: a lane whose model spelling the harness rejected died
+    // before the supervisor existed, so the parent saw a registered route,
+    // no rows at all, and no way to tell a dead lane from a slow start.
+    #[test]
+    fn a_lane_that_never_opened_mails_the_parent_and_writes_its_result() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        report_open_failure(&lane, "acp handshake failed: Invalid params");
+
+        let opened = rows_of_kind(&dir, OPEN_FAILED);
+        assert_eq!(opened.len(), 1, "one row per failed open");
+        assert_eq!(opened[0].to, "coordinator");
+        assert!(
+            opened[0]
+                .body
+                .starts_with("lane mine never opened: acp handshake failed"),
+            "body: {}",
+            opened[0].body
+        );
+        let results = result_rows(&dir);
+        assert_eq!(results.len(), 1, "the waiter still gets its rc");
+        assert_eq!(results[0].rc, Some(1));
     }
 
     // FAIL-PRE-FIX: the reconciler retried every unlanded row in the mailbox.
