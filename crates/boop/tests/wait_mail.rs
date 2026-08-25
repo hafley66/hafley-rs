@@ -472,3 +472,86 @@ fn push_at_an_unregistered_name_still_reports_a_rung() {
         "the rung and its reason are printed: {stdout}"
     );
 }
+
+/// Defect 3 (addendum 2026-08-25): `wait --me` handed the lane its own
+/// dispatch row back as the next unread row, hours after the spawn turn ate
+/// it. With that row the only one in the box, the wait has nothing and times
+/// out.
+#[test]
+fn me_never_hands_back_the_lanes_own_dispatch_row() {
+    let fixture = Fixture::new("dispatch");
+    append(
+        &fixture.mail,
+        serde_json::json!({
+            "id": "m-d2252d54",
+            "from": "coordinator",
+            "to": "feature-cx-a",
+            "from_timestamp": boop::bus::now_iso(),
+            "to_timestamp": null,
+            "kind": "dispatch",
+            "reply_to": null,
+            "body": "the brief the spawn already injected",
+            "ref": null,
+        }),
+    );
+    let output = fixture
+        .boop(&["wait", "--me", "--as", "feature-cx-a", "--wait-timeout", "1"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(124),
+        "a dispatch row is not unread mail"
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        !stdout.contains("the brief the spawn already injected"),
+        "stdout: {stdout}"
+    );
+}
+
+/// Defect 3, the other half: a row to a route naming no harness stops at
+/// `held-in-mailbox`, and a polling `wait --me` is the only thing that ever
+/// finds it. That transition must not read as delivered.
+#[test]
+fn me_still_takes_a_row_held_in_the_mailbox_for_a_native_route() {
+    let fixture = Fixture::new("held");
+    std::fs::write(
+        fixture.mail.join("registry.json"),
+        serde_json::json!({
+            "native-n1": {"kind": "native", "parent": "feature-cx-a"},
+            "native-n2": {"kind": "native", "parent": "feature-cx-b"},
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let sent = fixture
+        .boop(&[
+            "beep",
+            "hail",
+            "native-n1",
+            "--as",
+            "native-n2",
+            "--body",
+            "ping from the sibling native",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(sent.status.code(), Some(0), "hail to a native route lands");
+    assert!(
+        String::from_utf8_lossy(&sent.stdout).contains("held-in-mailbox")
+            || String::from_utf8_lossy(&sent.stdout).contains("held"),
+        "stdout: {}",
+        String::from_utf8_lossy(&sent.stdout)
+    );
+    let output = fixture
+        .boop(&["wait", "--me", "--as", "native-n1", "--wait-timeout", "10"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0), "the held row answers --me");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("ping from the sibling native"),
+        "stdout: {stdout}"
+    );
+}

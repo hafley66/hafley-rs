@@ -589,6 +589,32 @@ pub(crate) fn waiting_as(dir: &Path, as_name: Option<&str>) -> Result<String> {
 
 /// Block until the watch is satisfied, print what arrived, take delivery of it,
 /// and exit. A timeout exits 124 with the re-run line on both streams.
+/// The ledger half of the `--me` unread test (defect 3, addendum 2026-08-25).
+/// The mailbox alone cannot say whether a rung already put a row in front of
+/// its recipient; the delivery transitions can, so an inbox wait reads them
+/// and hands back only what nothing else took. A `Reply` watch is unfiltered:
+/// its row is the answer to a question this caller asked, and the caller is
+/// the one taking delivery.
+fn drop_rows_already_delivered(watch: &Watch, arrivals: Vec<bus::Message>) -> Vec<bus::Message> {
+    if !matches!(watch, Watch::Inbox { .. }) {
+        return arrivals;
+    }
+    let Ok(store) = boop::Store::default_path().and_then(boop::Store::open) else {
+        return arrivals;
+    };
+    arrivals
+        .into_iter()
+        .filter(|message| {
+            let Ok(rows) = store.delivery_rows(&message.id) else {
+                return true;
+            };
+            !mailwait::already_in_front_of_the_recipient(
+                rows.iter().map(|row| row.outcome.as_str()),
+            )
+        })
+        .collect()
+}
+
 pub(crate) fn wait_and_exit(
     dir: &Path,
     watch: Watch,
@@ -607,7 +633,7 @@ pub(crate) fn wait_and_exit(
     info!(watching = watch.what(), timeout_secs, "mail wait starting");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
     loop {
-        let arrivals = watch.arrivals(&all_messages(dir)?);
+        let arrivals = drop_rows_already_delivered(&watch, watch.arrivals(&all_messages(dir)?));
         if !arrivals.is_empty() {
             info!(
                 watching = watch.what(),
