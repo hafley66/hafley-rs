@@ -1,6 +1,6 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-08-25
 type: bug
 status: open
 priority: high
@@ -57,10 +57,10 @@ session node.
 
 ## Acceptance Criteria
 
-- [ ] A live registered `lane` route with a harness and unresolved session ID appears once in `AgentSessionGraph.shells`.
+- [x] A live registered `lane` route with a harness and unresolved session ID appears once in `AgentSessionGraph.shells`.
 - [ ] The shell row carries lane, harness, mode, cwd, tmux, PID, and live state from the bounded runtime observation.
-- [ ] Once the matching native transcript session resolves, the graph merges or replaces the provisional shell without duplication.
-- [ ] Native session routes already represented in `sessions` remain absent from `shells`.
+- [x] Once the matching native transcript session resolves, the graph merges or replaces the provisional shell without duplication.
+- [x] Native session routes already represented in `sessions` remain absent from `shells`.
 - [ ] Dead provisional routes remain excluded unless `--history` is requested.
 - [ ] CWD filtering applies identically before and after native-session resolution.
 - [ ] The public `boop agent sessions --format json` fixture covers unresolved, resolved, and dead transitions.
@@ -78,3 +78,9 @@ session node.
 The native-session membership check already runs before `shell_from_runtime`.
 Use that evidence to suppress duplication. Do not classify route kind or
 harness presence as proof that a native session row exists.
+
+## Agent Runs
+
+### 2026-08-25T18:52:10Z · @fix-native-visibility
+
+Step 4: added unresolved->resolved lane test (unresolved_live_lane_appears_as_shell_then_merges_into_sessions) and fixed shell_from_runtime to drop a resolved kind=lane route whose session is in sessions. Ran: cargo test -p boop-store (133 passed). AC 8 (Instant external-shell projection fixture) out of scope.
