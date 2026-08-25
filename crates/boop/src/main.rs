@@ -10,7 +10,9 @@ use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 
 use boop::registry::Registry;
 use boop::supervise::ParentDeathPolicy;
-use boop::{bus, config, identity, mailwait};
+use boop::{bus, mailwait};
+#[cfg(feature = "dl6")]
+use boop::{config, identity};
 
 mod cli;
 
@@ -19,7 +21,9 @@ use cli::db::{
     run_chat_query, run_db, run_follow, run_harnesses, run_passthrough, run_public_agent_command,
     run_query, run_sessions, run_sync_all, run_tail, sync_before_read, ChatQueryOptions,
 };
-use cli::debug::{run_config, run_debug, run_host, run_lane_debug};
+use cli::debug::{run_config, run_debug, run_lane_debug};
+#[cfg(feature = "dl6")]
+use cli::debug::run_host;
 use cli::job::{
     run_beep, run_dispatch, run_lane, run_lane_wait, run_measure, run_resolve, run_sweep, run_wait,
     DispatchArgs, LaneArgs,
@@ -28,7 +32,9 @@ use cli::mail::{
     run_hail, run_inbox, run_list, run_push, run_send, run_tell_children, run_tell_parent, Outbound,
 };
 use cli::me::{run_adopt, run_me, run_me_favorite, run_me_mood, run_prune, run_whoami};
-use cli::{doctrine, line, mail_dir, now_ms, CONCATMAP_EXAMPLES};
+use cli::{doctrine, line, mail_dir, now_ms};
+#[cfg(feature = "dl6")]
+use cli::CONCATMAP_EXAMPLES;
 
 #[derive(Parser)]
 #[command(
@@ -171,7 +177,9 @@ enum SubCmd {
     /// a model pass and write the rewrite per turn. For a resident DL6
     /// coroutine, use `boop host chat`.
     #[command(after_help = CONCATMAP_EXAMPLES)]
-    /// Folded (audit 2026-08-25): a DL6 refinement runtime, not the agent bus.
+    /// Folded (comment-out-dl6-verbs): the DL6 runtime, off by default;
+    /// `cargo build --features dl6` puts it back.
+    #[cfg(feature = "dl6")]
     #[command(hide = true)]
     Concatmap {
         /// Prompt template file; substitutes {{mode}}, {{ai_text}} (the
@@ -217,7 +225,8 @@ enum SubCmd {
         me: bool,
     },
     /// Typed stdin/stdout host boundary for compiled DL6 programs.
-    /// Folded (audit 2026-08-25): a DL6 program calls this; nobody types it.
+    /// Folded (comment-out-dl6-verbs): DL6, off by default.
+    #[cfg(feature = "dl6")]
     #[command(hide = true)]
     Host {
         #[command(subcommand)]
@@ -930,6 +939,7 @@ fn main() -> Result<()> {
                     ),
                 },
             },
+            #[cfg(feature = "dl6")]
             SubCmd::Concatmap {
                 template,
                 mode,
@@ -944,8 +954,7 @@ fn main() -> Result<()> {
                 session,
                 me,
             } => {
-                // Common model-selection subset: explicit model wins, preset
-                // resolves through config; flash4 is the standing default.
+                // Explicit model wins, preset resolves through config.
                 let config_path = config::default_path()?;
                 let model = match (model, preset) {
                     (Some(model), _) => model,
@@ -994,6 +1003,7 @@ fn main() -> Result<()> {
                     session,
                 })
             }
+            #[cfg(feature = "dl6")]
             SubCmd::Host { cmd } => run_host(cmd),
             SubCmd::Push {
                 to,
@@ -1134,6 +1144,10 @@ fn startup_sync_wanted(command: &SubCmd, suppressed: bool) -> bool {
 /// Verbs that read `agent_*` rows. A registry, mailbox, tmux or live-process
 /// verb stays off: a cold cursor re-parses every transcript root from offset 0.
 fn command_needs_startup_sync(command: &SubCmd) -> bool {
+    #[cfg(feature = "dl6")]
+    if matches!(command, SubCmd::Concatmap { .. }) {
+        return true;
+    }
     matches!(
         command,
         SubCmd::Db { cmd: None, .. }
@@ -1204,7 +1218,6 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
             | SubCmd::Events { .. }
             | SubCmd::Chat { .. }
             | SubCmd::Agent { .. }
-            | SubCmd::Concatmap { .. }
             | SubCmd::Me { .. }
             | SubCmd::Debug { .. }
             | SubCmd::Harnesses
@@ -2155,12 +2168,15 @@ mod tests {
     #[test]
     fn every_help_example_parses_through_clap() {
         let doctrine = doctrine();
+        #[allow(unused_mut)]
         let mut examples = help_examples(&doctrine);
+        #[cfg(feature = "dl6")]
         examples.extend(help_examples(CONCATMAP_EXAMPLES));
         // A regression in the extractor would pass this test by finding
-        // nothing, so the count is asserted before the parses are.
+        // nothing, so the count is asserted before the parses are. The floor
+        // covers doctrine alone; `--features dl6` adds CONCATMAP_EXAMPLES on top.
         assert!(
-            examples.len() >= 18,
+            examples.len() >= 15,
             "the extractor found almost nothing: {examples:#?}"
         );
         let mut rejected = Vec::new();

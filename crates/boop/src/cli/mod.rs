@@ -16,6 +16,7 @@ use boop::{bus, ident};
 
 use crate::OutputFormat;
 
+#[cfg(feature = "dl6")]
 pub(crate) const CONCATMAP_EXAMPLES: &str = "\
 TEMPLATE: a markdown file whose rendered form IS the prompt. Keys:
   {{mode}}      the --mode word (labels the experiment; also how the loop
