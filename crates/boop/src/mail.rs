@@ -89,12 +89,11 @@ impl Landing {
         }
     }
 
-    /// The ledger's `outcome` word.
+    /// The terminal receipt state this transport reports.
     pub fn outcome(&self) -> &'static str {
         match self.delivered {
-            Delivered::Injected => "injected",
-            Delivered::QueuedForTurnBoundary => "queued-for-turn-boundary",
-            Delivered::Unreachable(_) => "unreachable",
+            Delivered::Injected | Delivered::QueuedForTurnBoundary => "accepted-by-harness",
+            Delivered::Unreachable(_) => "rejected-by-harness",
         }
     }
 
@@ -106,7 +105,7 @@ impl Landing {
         }
     }
 
-    /// Write this attempt to the ledger, one row per (message, route).
+    /// Append this transport's terminal transition to the delivery receipt.
     pub fn record(
         &self,
         store: &Store,
@@ -133,11 +132,31 @@ pub fn deliver_hail(
     routes: &BTreeMap<String, Route>,
     message: &Message,
 ) -> Result<Landing> {
+    let route = routes.get(message.to.as_str());
+    let harness = route.and_then(|route| route.harness);
+    store.record_delivery(
+        &message.id,
+        &message.to,
+        harness,
+        "appended",
+        "mailbox",
+        boop_harness::live::now_ms(),
+    )?;
+    let lane_supervisor = route.is_some_and(|route| route.kind == "lane");
+    if !lane_supervisor {
+        store.record_delivery(
+            &message.id,
+            &message.to,
+            harness,
+            "submitted-to-harness",
+            "delivery transport",
+            boop_harness::live::now_ms(),
+        )?;
+    }
     let landing = land(registry, store, routes, message)?;
-    let harness = routes
-        .get(message.to.as_str())
-        .and_then(|route| route.harness);
-    landing.record(store, &message.id, &message.to, harness)?;
+    if !lane_supervisor {
+        landing.record(store, &message.id, &message.to, harness)?;
+    }
     Ok(landing)
 }
 

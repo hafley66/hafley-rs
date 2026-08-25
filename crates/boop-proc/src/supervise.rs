@@ -582,6 +582,7 @@ fn supervise(
     channel.set_brief(&brief);
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut held: Vec<Hail> = Vec::new();
+    let mut opening_hails: Vec<Hail> = Vec::new();
     // Resolved once: a lane's mood is a spawn-time attribute, and re-reading it
     // per hail would open the store inside the delivery path.
     let mood = mood_template(&lane.lane);
@@ -633,6 +634,14 @@ fn supervise(
             "turn submitted",
         );
         if let Err(error) = channel.start_turn(&turn) {
+            for hail in &opening_hails {
+                record_hail_transition(
+                    events,
+                    hail,
+                    "rejected-by-harness",
+                    "start turn failed",
+                );
+            }
             events.record(
                 "error",
                 TraceRecorder::session(channel),
@@ -645,6 +654,9 @@ fn supervise(
                 "pre-turn launch failed",
             );
             return Err(error);
+        }
+        for hail in opening_hails.drain(..) {
+            record_delivery(events, &lane.mail_dir, &hail, Delivery::NextTurn);
         }
         remember_conversation(lane, channel);
         let end = loop {
@@ -720,8 +732,27 @@ fn supervise(
             }
             for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
                 seen.insert(hail.id.clone());
-                match channel.steer(&hail_text(&hail, &mood))? {
+                record_hail_transition(events, &hail, "claimed-by-supervisor", "inbox drain");
+                let delivery = match channel.steer(&hail_text(&hail, &mood)) {
+                    Ok(delivery) => delivery,
+                    Err(error) => {
+                        record_hail_transition(
+                            events,
+                            &hail,
+                            "rejected-by-harness",
+                            &error.to_string(),
+                        );
+                        return Err(error);
+                    }
+                };
+                match delivery {
                     Delivery::MidTurn => {
+                        record_hail_transition(
+                            events,
+                            &hail,
+                            "submitted-to-harness",
+                            "mid-turn steer",
+                        );
                         println!("[boop] hail {} delivered midturn", hail.id);
                         info!(
                             hail_id = hail.id,
@@ -810,6 +841,7 @@ fn supervise(
         }
         for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
             seen.insert(hail.id.clone());
+            record_hail_transition(events, &hail, "claimed-by-supervisor", "turn boundary");
             held.push(hail);
         }
         if held.is_empty() && !end.is_done() {
@@ -865,15 +897,17 @@ fn supervise(
                 }
                 for hail in arrived {
                     seen.insert(hail.id.clone());
+                    record_hail_transition(events, &hail, "claimed-by-supervisor", "parked inbox drain");
                     held.push(hail);
                 }
                 break;
             }
         }
+        opening_hails = held.clone();
         turn = held
             .drain(..)
             .map(|hail| {
-                record_delivery(events, &lane.mail_dir, &hail, Delivery::NextTurn);
+                record_hail_transition(events, &hail, "submitted-to-harness", "resume turn");
                 events.record(
                     "delivery",
                     TraceRecorder::session(channel),
@@ -1151,10 +1185,29 @@ pub fn ack(dir: &Path, hail: &Hail) {
     let _ = writeln!(file, "{line}");
 }
 
-/// Ack plus a store edge naming the tier, so `boop db` answers "did the lane
-/// get it, and did it land mid-turn".
+/// Append one lane-supervisor receipt. A failure to observe the receipt does
+/// not undo the live channel operation it accompanies.
+fn record_hail_transition(events: &TraceRecorder, hail: &Hail, state: &str, detail: &str) {
+    let Some(store) = &events.store else {
+        return;
+    };
+    if let Err(error) = store.record_delivery(
+        &hail.id,
+        &events.lane,
+        None,
+        state,
+        detail,
+        boop_acp::channel::now_ms(),
+    ) {
+        warn!(lane = events.lane, hail_id = hail.id, state, error = %error, "delivery receipt write failed");
+    }
+}
+
+/// Ack plus an accepted receipt and store edge naming the tier, so `boop db`
+/// answers whether the lane received the hail and how it landed.
 fn record_delivery(events: &TraceRecorder, dir: &Path, hail: &Hail, tier: Delivery) {
     ack(dir, hail);
+    record_hail_transition(events, hail, "accepted-by-harness", tier.as_str());
     let Some(store) = &events.store else {
         return;
     };

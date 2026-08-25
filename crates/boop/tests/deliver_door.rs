@@ -178,8 +178,8 @@ fn routes(name: &str, route: Route) -> BTreeMap<String, Route> {
     BTreeMap::from([(name.to_owned(), route)])
 }
 
-/// RECEIPT. A hail to a Door harness reaches that harness's own door, the
-/// pane its live registry reports, and leaves exactly one ledger row.
+/// RECEIPT. A hail to a Door harness reaches that harness's own door and
+/// leaves its append, submit, and acceptance transitions in order.
 #[test]
 fn a_door_harness_takes_the_body_and_leaves_one_delivery_row() {
     let dir = temp_dir("door");
@@ -197,11 +197,16 @@ fn a_door_harness_takes_the_body_and_leaves_one_delivery_row() {
     );
 
     let rows = store.delivery_rows("m-door").unwrap();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].route, "tui");
-    assert_eq!(rows[0].harness.as_deref(), Some("kimi"));
-    assert_eq!(rows[0].outcome, "injected");
-    assert_eq!(rows[0].detail, "door");
+    assert_eq!(
+        rows.iter()
+            .map(|row| (row.sequence, row.route.as_str(), row.harness.as_deref(), row.outcome.as_str(), row.detail.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            (1, "tui", Some("kimi"), "appended", "mailbox"),
+            (2, "tui", Some("kimi"), "submitted-to-harness", "delivery transport"),
+            (3, "tui", Some("kimi"), "accepted-by-harness", "door"),
+        ]
+    );
 
     let live = store.live_row("live-1").unwrap().unwrap();
     assert_eq!(live.door_kind.as_deref(), Some("unix-socket"));
@@ -231,10 +236,16 @@ fn a_keystrokes_harness_is_unreachable_and_still_records_a_row() {
     assert!(!dir.join("door.log").exists(), "no door was opened");
 
     let rows = store.delivery_rows("m-keys").unwrap();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].outcome, "unreachable");
-    assert_eq!(rows[0].detail, "keystroke delivery retired");
-    assert_eq!(rows[0].harness.as_deref(), Some("codex"));
+    assert_eq!(
+        rows.iter()
+            .map(|row| (row.outcome.as_str(), row.detail.as_str(), row.harness.as_deref()))
+            .collect::<Vec<_>>(),
+        [
+            ("appended", "mailbox", Some("codex")),
+            ("submitted-to-harness", "delivery transport", Some("codex")),
+            ("rejected-by-harness", "keystroke delivery retired", Some("codex")),
+        ]
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -264,8 +275,12 @@ fn a_door_falls_back_to_the_last_agent_live_row() {
         "stored-1 <- through the projection"
     );
     assert_eq!(
-        store.delivery_rows("m-fallback").unwrap()[0].outcome,
-        "injected"
+        store
+            .delivery_rows("m-fallback")
+            .unwrap()
+            .last()
+            .map(|row| row.outcome.as_str()),
+        Some("accepted-by-harness")
     );
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -285,8 +300,9 @@ fn a_hail_with_no_route_records_its_own_refusal() {
         Delivered::Unreachable("no registry route for nobody".into())
     );
     let rows = store.delivery_rows("m-none").unwrap();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].harness, None);
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows.last().unwrap().harness, None);
+    assert_eq!(rows.last().unwrap().outcome, "rejected-by-harness");
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -311,10 +327,16 @@ fn a_route_with_no_harness_is_unreachable_and_records_it() {
     assert!(!dir.join("door.log").exists(), "no door was opened");
 
     let rows = store.delivery_rows("m-harnessless").unwrap();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].outcome, "unreachable");
-    assert_eq!(rows[0].detail, "route native-worker names no harness");
-    assert_eq!(rows[0].harness, None);
+    assert_eq!(
+        rows.iter()
+            .map(|row| (row.outcome.as_str(), row.detail.as_str(), row.harness.as_deref()))
+            .collect::<Vec<_>>(),
+        [
+            ("appended", "mailbox", None),
+            ("submitted-to-harness", "delivery transport", None),
+            ("rejected-by-harness", "route native-worker names no harness", None),
+        ]
+    );
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -337,7 +359,7 @@ fn a_lane_route_with_no_harness_still_lands_at_its_supervisor() {
 
     let rows = store.delivery_rows("m-lane").unwrap();
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].outcome, "queued-for-turn-boundary");
+    assert_eq!(rows[0].outcome, "appended");
     assert_eq!(rows[0].detail, "lane supervisor");
     let _ = std::fs::remove_dir_all(dir);
 }

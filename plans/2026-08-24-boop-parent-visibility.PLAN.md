@@ -107,3 +107,7 @@ Rule for the lane: a verb survives only with a written one-line use that no othe
 - `boop debug feature-generic-graph-rxjs-renderers` prints all 5 sections; paste.
 - `boop db chat list` for session `ses_fc9db2240ffeXH41Dc1Grco8l9` shows non-empty assistant text; paste 2 rows.
 - REPORT at `TASKS/boop-parent-visibility.REPORT.md`: verb table with defend/fold per row.
+
+## Addendum 2026-08-25 00:30: yielded commit rewound
+
+Lane `feature-boop-parent-visibility` yielded `039a729` (tests 128+102+64), then ran `git reset HEAD~1` (reflog `HEAD@{1}`) and kept editing. The parent held a receipt for a commit that no longer existed on the branch. Requirement added to 7.6: HEAD moving to a non-ancestor/non-descendant of the last yielded sha emits a diagnostic naming both shas. Commit pinned as tag `yielded/039a729`.

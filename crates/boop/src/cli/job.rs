@@ -510,7 +510,7 @@ pub(crate) fn watch_turn_end(
     let (sender, receiver) = std::sync::mpsc::channel();
     let mut armed = 0usize;
     for row in rows {
-        if row.outcome != "injected" && row.outcome != "queued-for-turn-boundary" {
+        if row.outcome != "accepted-by-harness" {
             continue;
         }
         let Some(route) = routes.get(&row.route).cloned() else {

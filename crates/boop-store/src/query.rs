@@ -15,10 +15,11 @@ fn opt_i64(value: Option<u64>) -> rusqlite::types::Value {
     value.map(|v| v as i64).into()
 }
 
-/// One recorded hail delivery: the door's answer for one message on one
-/// route. `harness` stays TEXT, as every other `dict_harness` read does.
+/// One recorded hail transition. `sequence` orders all receiver-boundary
+/// receipts for one message; `harness` stays TEXT at the read surface.
 pub struct DeliveryRow {
     pub message_id: String,
+    pub sequence: i64,
     pub route: String,
     pub harness: Option<String>,
     pub outcome: String,
@@ -656,23 +657,24 @@ impl Store {
         Ok(out)
     }
 
-    /// What every door answered for one message, one row per route it was
-    /// addressed to. Empty means nothing has tried to deliver it yet.
+    /// Every recorded receiver-boundary transition for one message. Empty
+    /// means no path has observed or attempted delivery yet.
     pub fn delivery_rows(&self, message_id: &str) -> Result<Vec<DeliveryRow>> {
-        let sql = "SELECT d.message_id, d.route, h.value, d.outcome, d.detail, d.at_ms
-                   FROM agent_delivery d
+        let sql = "SELECT d.message_id, d.sequence, d.route, h.value, d.outcome, d.detail, d.at_ms
+                   FROM agent_delivery_transition d
                    LEFT JOIN dict_harness h ON h.id = d.harness_id
                    WHERE d.message_id = ?1
-                   ORDER BY d.route";
+                   ORDER BY d.sequence";
         let mut statement = self.connection().prepare(sql)?;
         let iter = statement.query_map(params![message_id], |row| {
             Ok(DeliveryRow {
                 message_id: row.get(0)?,
-                route: row.get(1)?,
-                harness: row.get(2)?,
-                outcome: row.get(3)?,
-                detail: row.get(4)?,
-                at_ms: row.get(5)?,
+                sequence: row.get(1)?,
+                route: row.get(2)?,
+                harness: row.get(3)?,
+                outcome: row.get(4)?,
+                detail: row.get(5)?,
+                at_ms: row.get(6)?,
             })
         })?;
         let mut out = Vec::new();

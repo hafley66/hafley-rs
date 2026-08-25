@@ -184,7 +184,9 @@ impl Door for CodexDoor {
             args: native_tui_args(Some(session), &socket, &spec.cwd, &[]),
             mode: "native-remote".into(),
             session_id: Some(session.to_string()),
-            source_path: Some(format!("managed-app-server={socket};respawn-resume={session}")),
+            source_path: Some(format!(
+                "managed-app-server={socket};respawn-resume={session}"
+            )),
             app_server_socket: Some(socket),
         }))
     }

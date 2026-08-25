@@ -35,3 +35,47 @@ dead   feature-b
 A child is reachable when a boop drain hook is installed in its project or its
 tmux target is alive. A dead child gets a line and no row, so nothing queues up
 for a lane that will never read it.
+
+## ACP delivery target
+
+The target transport keeps one ACP connection alive for every agent, including
+the coordinator. The owning supervisor exposes a local control socket; mailbox
+senders address the supervisor rather than attempting to reconstruct an ACP
+connection from a session id.
+
+```mermaid
+sequenceDiagram
+    participant Terra
+    participant Child as Child Boop supervisor
+    participant Bus as Boop mailbox
+    participant Parent as Parent Boop supervisor
+    participant ACP as ACP adapter
+    participant Agent as Parent agent
+
+    Terra->>Child: tell-parent(completion)
+    Child->>Bus: Store message
+    Bus-->>Child: Message ID
+    Child->>Parent: Notify through Unix socket
+    Parent->>Bus: Read message
+
+    alt Parent agent is idle
+        Parent->>ACP: session/prompt(message)
+        ACP->>Agent: Start turn
+        Agent-->>ACP: Complete turn
+        ACP-->>Parent: Turn completed
+        Parent->>Bus: Stamp delivery time
+    else Parent agent is busy
+        Parent->>Parent: Queue message
+        ACP-->>Parent: Current turn completed
+        Parent->>ACP: session/prompt(queued message)
+        ACP->>Agent: Start next turn
+        Agent-->>ACP: Complete turn
+        ACP-->>Parent: Turn completed
+        Parent->>Bus: Stamp delivery time
+    end
+```
+
+The ACP adapters remain the protocol servers. Boop owns the ACP clients and
+routes local delivery through supervisor sockets. tmux injection and hook
+inboxes remain compatibility transports for coordinators without an owned ACP
+connection.

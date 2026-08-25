@@ -31,7 +31,8 @@ pub struct Store {
 /// 11 = bounded, lane-addressable supervisor/channel trace events.
 /// 13 = per-session attributes and the mood rows mail renders through.
 /// 14 = the door a live session answers on, and one delivery row per hail.
-pub const SCHEMA_VERSION: i64 = 14;
+/// 15 = ordered delivery-transition receipts beside the current-state ledger.
+pub const SCHEMA_VERSION: i64 = 15;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -497,6 +498,23 @@ impl Store {
                     }
                 }
                 self.connection.execute_batch("PRAGMA user_version = 14;")?;
+            }
+            if self.schema_version()? < 15 {
+                self.connection.execute_batch(
+                    "CREATE TABLE IF NOT EXISTS agent_delivery_transition (
+                       message_id TEXT NOT NULL,
+                       sequence INTEGER NOT NULL,
+                       route TEXT NOT NULL,
+                       harness_id INTEGER,
+                       outcome TEXT NOT NULL,
+                       detail TEXT NOT NULL DEFAULT '',
+                       at_ms INTEGER NOT NULL,
+                       PRIMARY KEY (message_id, sequence)
+                     ) WITHOUT ROWID;
+                     CREATE INDEX IF NOT EXISTS idx_delivery_transition_route
+                       ON agent_delivery_transition(message_id, route);
+                     PRAGMA user_version = 15;",
+                )?;
             }
             self.stamp_version()?;
             Ok(())
@@ -1894,8 +1912,9 @@ impl Store {
         Ok(row)
     }
 
-    /// Record what one hail's door answered. Keyed on (message, route): a
-    /// second delivery attempt of the same message overwrites its outcome.
+    /// Append one observable delivery transition. The current-state ledger
+    /// remains available at `agent_delivery`; the child receipt table retains
+    /// the ordered history without rewriting older stores.
     pub fn record_delivery(
         &self,
         message_id: &str,
@@ -1916,6 +1935,17 @@ impl Store {
                outcome = excluded.outcome,
                detail = excluded.detail,
                at_ms = excluded.at_ms",
+            params![message_id, route, harness_id, outcome, detail, at_ms as i64],
+        )?;
+        self.connection.execute(
+            "INSERT INTO agent_delivery_transition
+               (message_id, sequence, route, harness_id, outcome, detail, at_ms)
+             VALUES (
+               ?1,
+               (SELECT COALESCE(MAX(sequence), 0) + 1
+                  FROM agent_delivery_transition WHERE message_id = ?1),
+               ?2, ?3, ?4, ?5, ?6
+             )",
             params![message_id, route, harness_id, outcome, detail, at_ms as i64],
         )?;
         Ok(())
@@ -2741,6 +2771,21 @@ CREATE TABLE IF NOT EXISTS agent_delivery (
   at_ms INTEGER NOT NULL,
   PRIMARY KEY (message_id, route)
 ) WITHOUT ROWID;
+
+-- The current-state ledger above keeps the latest outcome per route. This
+-- child table is the append-only receipt history for every handoff.
+CREATE TABLE IF NOT EXISTS agent_delivery_transition (
+  message_id TEXT NOT NULL,
+  sequence INTEGER NOT NULL,
+  route TEXT NOT NULL,
+  harness_id INTEGER,
+  outcome TEXT NOT NULL,
+  detail TEXT NOT NULL DEFAULT '',
+  at_ms INTEGER NOT NULL,
+  PRIMARY KEY (message_id, sequence)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_delivery_transition_route
+  ON agent_delivery_transition(message_id, route);
 
 -- Historical liveness: [from_ts, to_ts) intervals, open when to_ts IS NULL,
 -- folded from observations so a state change closes an interval and repeated
@@ -4157,8 +4202,9 @@ mod tests {
         let _ = std::fs::remove_file(&db_path);
     }
 
-    /// ACCEPTANCE (v14 migration). A store whose agent_live predates the door
-    /// columns gains them and the delivery ledger, keeping its liveness rows.
+    /// ACCEPTANCE (v15 migration). A store whose agent_live predates the door
+    /// columns gains them and both delivery receipt relations, keeping its
+    /// liveness rows.
     #[test]
     fn a_v13_store_gains_the_door_columns_and_the_delivery_ledger() {
         let db_path = temp_path("doormig");
@@ -4203,14 +4249,18 @@ mod tests {
             .passthrough("SELECT COUNT(*) AS n FROM agent_delivery")
             .unwrap();
         assert_eq!(rows[0].get("n").unwrap(), 1);
+        let (_, rows) = store
+            .passthrough("SELECT COUNT(*) AS n FROM agent_delivery_transition")
+            .unwrap();
+        assert_eq!(rows[0].get("n").unwrap(), 1);
         drop(store);
         let _ = std::fs::remove_file(&db_path);
     }
 
-    /// RECEIPT. Two deliveries of one message to one route leave one row:
-    /// the ledger answers "what happened to this hail", not "how many tries".
+    /// RECEIPT. The current-state ledger keeps the latest result while the
+    /// child receipt relation retains the full ordered transition history.
     #[test]
-    fn a_second_delivery_of_one_message_overwrites_its_outcome() {
+    fn a_second_delivery_of_one_message_appends_a_transition() {
         let (path, store) = fresh_store("delivery-ledger");
         store
             .record_delivery("m-9", "lane-a", None, "unreachable", "no live session", 10)
@@ -4226,11 +4276,14 @@ mod tests {
             )
             .unwrap();
         let rows = store.delivery_rows("m-9").unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].outcome, "injected");
-        assert_eq!(rows[0].harness.as_deref(), Some("codex"));
-        assert_eq!(rows[0].detail, "");
-        assert_eq!(rows[0].at_ms, 20);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(
+            rows.iter()
+                .map(|row| (row.sequence, row.outcome.as_str(), row.detail.as_str(), row.at_ms))
+                .collect::<Vec<_>>(),
+            [(1, "unreachable", "no live session", 10), (2, "injected", "", 20)]
+        );
+        assert_eq!(rows[1].harness.as_deref(), Some("codex"));
         assert!(store.delivery_rows("m-nothing").unwrap().is_empty());
         drop(store);
         let _ = std::fs::remove_file(&path);
