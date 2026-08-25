@@ -135,6 +135,8 @@ enum SubCmd {
     /// a model pass and write the rewrite per turn. For a resident DL6
     /// coroutine, use `boop host chat`.
     #[command(after_help = CONCATMAP_EXAMPLES)]
+    /// Folded (audit 2026-08-25): a DL6 refinement runtime, not the agent bus.
+    #[command(hide = true)]
     Concatmap {
         /// Prompt template file; substitutes {{mode}}, {{ai_text}} (the
         /// assistant turn(s) before the user turn), {{user_text}}. Optional
@@ -179,6 +181,8 @@ enum SubCmd {
         me: bool,
     },
     /// Typed stdin/stdout host boundary for compiled DL6 programs.
+    /// Folded (audit 2026-08-25): a DL6 program calls this; nobody types it.
+    #[command(hide = true)]
     Host {
         #[command(subcommand)]
         cmd: HostCmd,
@@ -1168,6 +1172,8 @@ enum BeepCmd {
         mail_dir: Option<PathBuf>,
     },
     /// Mail across lanes.
+    /// Folded (audit 2026-08-25): its one verb, `ack`, is folded with it.
+    #[command(hide = true)]
     Message {
         #[command(subcommand)]
         cmd: MessageCmd,
@@ -1182,6 +1188,8 @@ enum BeepCmd {
         mail_dir: Option<PathBuf>,
     },
     /// Filesystem-style tree of lanes by parent edge.
+    /// Folded (audit 2026-08-25): `beep lane list` carries the parent column.
+    #[command(hide = true)]
     Pstree {
         /// Include dead lanes; default is live-only.
         #[arg(long)]
@@ -1296,6 +1304,8 @@ enum LaneCmd {
     },
     /// Drive one lane conversation. This is what a lane pane runs; a human
     /// calls `lane create`, never this.
+    /// Folded (audit 2026-08-25): the supervisor's entry point, spawned by `lane create`.
+    #[command(hide = true)]
     Run {
         #[arg(long)]
         lane: String,
@@ -1369,6 +1379,8 @@ enum LaneCmd {
         mail_dir: Option<PathBuf>,
     },
     /// Which tmux pane and harness session id.
+    /// Folded (audit 2026-08-25): `beep lane get` prints the same route row.
+    #[command(hide = true)]
     Route {
         lane: String,
         #[arg(long)]
@@ -1530,6 +1542,8 @@ enum InboxCmd {
 #[derive(Subcommand)]
 enum MessageCmd {
     /// Mark mail handled, in bulk.
+    /// Folded (audit 2026-08-25): age-based bulk-mark proves no read and no compliance.
+    #[command(hide = true)]
     Ack {
         #[arg(long)]
         lane: Option<String>,
@@ -1558,11 +1572,15 @@ enum DbCmd {
     },
     /// Rows from `agent_session`: one row per transcript session.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_session"` answers it.
+    #[command(hide = true)]
     Session {
         #[command(subcommand)]
         cmd: SessionCmd,
     },
     /// Rows from `agent_turn`: one row per user/assistant turn.
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_turn"` answers it.
+    #[command(hide = true)]
     Turn {
         #[command(subcommand)]
         cmd: TurnCmd,
@@ -1574,41 +1592,55 @@ enum DbCmd {
     },
     /// Rows from `agent_touch`: files a session read or edited.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_touch"` answers it.
+    #[command(hide = true)]
     Touch {
         #[command(subcommand)]
         cmd: FactCmd,
     },
     /// Rows from `agent_cmd`: shell commands a session ran.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_cmd"` answers it.
+    #[command(hide = true)]
     Command {
         #[command(subcommand)]
         cmd: FactCmd,
     },
     /// Rows from `agent_fetch`: URLs a session fetched.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_fetch"` answers it.
+    #[command(hide = true)]
     Fetch {
         #[command(subcommand)]
         cmd: FactCmd,
     },
     /// Rows from `agent_skill`: skills a session invoked.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_skill"` answers it.
+    #[command(hide = true)]
     Skill {
         #[command(subcommand)]
         cmd: FactCmd,
     },
     /// Rows from `agent_pr`: pull requests a session touched.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_pr"` answers it.
+    #[command(hide = true)]
     Pr {
         #[command(subcommand)]
         cmd: FactCmd,
     },
     /// Rows from `agent_span`: live time spans a session recorded.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_span"` answers it.
+    #[command(hide = true)]
     Span {
         #[command(subcommand)]
         cmd: FactCmd,
     },
     /// Rows from `agent_edge`: parent/child spawn edges between sessions.
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_edge"` answers it.
+    #[command(hide = true)]
     Edge {
         #[command(subcommand)]
         cmd: EdgeCmd,
