@@ -61,6 +61,8 @@ struct Cli {
 #[derive(Subcommand)]
 enum SubCmd {
     /// Print shell functions that route interactive harnesses through Boop.
+    /// Folded (one-pane-register-path): `boop tui <harness>` is the spelling.
+    #[command(hide = true)]
     ShellInit {
         #[arg(value_enum)]
         shell: ShellKind,
@@ -83,6 +85,8 @@ enum SubCmd {
         args: Vec<String>,
     },
     /// Launch a native Codex TUI attached to a Boop-owned managed app-server.
+    /// Folded (one-pane-register-path): `boop tui codex` is the spelling.
+    #[command(hide = true)]
     Codex {
         /// Registry name. Defaults to the current tmux pane's Codex identity.
         #[arg(long)]
@@ -312,7 +316,10 @@ enum SubCmd {
         cmd: InboxCmd,
     },
     /// Register this Codex pane, or act on the caller's own conversation.
+    /// Folded (one-pane-register-path): `boop beep agent register` registers;
+    /// `boop me mood` / `boop me favorite` still run under this name.
     #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
+    #[command(hide = true)]
     Me {
         /// Registry name; defaults to codex-<pane id>.
         #[arg(long)]

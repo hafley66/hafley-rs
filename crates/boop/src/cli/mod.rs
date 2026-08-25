@@ -101,6 +101,14 @@ WARMUP: after the worktree exists and before the agent starts, lane create runs
   hook needs what it installs, and a lane that cannot commit reads the abort as
   success. `--no-start` opts out.
 
+REGISTER: one path per kind of caller. A pane registers itself by running a
+  harness TUI through Boop; a pane-less agent (a coordinator with no tmux
+  session, or a native subagent) registers by name:
+    boop tui <harness> [--cwd <dir>] [--name <id>]      interactive pane
+    boop beep agent register <name> [--parent <id>]     pane-less route
+  Folded aliases, hidden and unchanged: `boop codex`, `boop shell-init`,
+  `boop me`.
+
 SPAWN: every lane spawn goes through lane create; bare tmux spawns leave no
 edge and stay invisible to tracking:
     boop beep lane create --branch feature/<name> --brief <abs-path> \\
