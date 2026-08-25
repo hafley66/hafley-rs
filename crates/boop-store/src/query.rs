@@ -24,6 +24,7 @@ pub struct DeliveryRow {
     pub harness: Option<String>,
     pub outcome: String,
     pub detail: String,
+    pub error_code: Option<String>,
     pub at_ms: i64,
 }
 
@@ -660,7 +661,8 @@ impl Store {
     /// Every recorded receiver-boundary transition for one message. Empty
     /// means no path has observed or attempted delivery yet.
     pub fn delivery_rows(&self, message_id: &str) -> Result<Vec<DeliveryRow>> {
-        let sql = "SELECT d.message_id, d.sequence, d.route, h.value, d.outcome, d.detail, d.at_ms
+        let sql = "SELECT d.message_id, d.sequence, d.route, h.value, d.outcome, d.detail,
+                          d.error_code, d.at_ms
                    FROM agent_delivery_transition d
                    LEFT JOIN dict_harness h ON h.id = d.harness_id
                    WHERE d.message_id = ?1
@@ -674,7 +676,8 @@ impl Store {
                 harness: row.get(3)?,
                 outcome: row.get(4)?,
                 detail: row.get(5)?,
-                at_ms: row.get(6)?,
+                error_code: row.get(6)?,
+                at_ms: row.get(7)?,
             })
         })?;
         let mut out = Vec::new();

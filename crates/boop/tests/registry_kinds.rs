@@ -68,9 +68,10 @@ fn prune_skips_a_dead_coordinator_and_legacy_rows_still_prune() {
 
 #[test]
 /// RECEIPT. `beep agent register --kind native` writes a route with no
-/// harness, so nothing declares a door for it. The hail stays on the bus and
-/// the refusal is named, in stdout and in the `agent_delivery` ledger.
-fn a_hail_to_a_harnessless_native_row_is_refused_by_name_and_recorded() {
+/// harness, so nothing declares a door for it. The hail stays on the bus, the
+/// ladder's last rung holds it, and the reason is named in stdout and in the
+/// `agent_delivery` ledger.
+fn a_hail_to_a_harnessless_native_row_is_held_and_the_reason_recorded() {
     let dir = mail_dir("hail");
     std::fs::write(
         dir.join("registry.json"),
@@ -98,7 +99,7 @@ fn a_hail_to_a_harnessless_native_row_is_refused_by_name_and_recorded() {
         .unwrap();
     assert!(ledger.status.success(), "stderr: {:?}", ledger.stderr);
     let rows = String::from_utf8_lossy(&ledger.stdout);
-    assert!(rows.contains("unreachable"), "ledger: {rows}");
+    assert!(rows.contains("held-in-mailbox"), "ledger: {rows}");
     assert!(
         rows.contains("route native-worker names no harness"),
         "ledger: {rows}"

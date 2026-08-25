@@ -19,12 +19,12 @@ use cli::db::{
     run_chat_query, run_db, run_follow, run_harnesses, run_passthrough, run_public_agent_command,
     run_query, run_sessions, run_sync_all, run_tail, sync_before_read, ChatQueryOptions,
 };
-use cli::debug::{run_config, run_debug, run_host};
+use cli::debug::{run_config, run_debug, run_host, run_lane_debug};
 use cli::job::{
     run_beep, run_dispatch, run_lane, run_measure, run_resolve, run_sweep, run_wait, DispatchArgs,
     LaneArgs,
 };
-use cli::mail::{run_hail, run_inbox, run_list, run_tell_children, run_tell_parent};
+use cli::mail::{run_hail, run_inbox, run_list, run_push, run_tell_children, run_tell_parent};
 use cli::me::{run_adopt, run_me, run_me_favorite, run_me_mood, run_prune, run_whoami};
 use cli::{doctrine, line, mail_dir, now_ms, CONCATMAP_EXAMPLES};
 
@@ -109,15 +109,21 @@ enum SubCmd {
     /// What just went wrong: recent WARN/ERROR across the lane trails and the
     /// store's error events, grouped by lane.
     Debug {
+        /// One lane, answered in full: route, mail, worktree, transcript,
+        /// alerts. Without it, the WARN/ERROR window across every lane.
+        #[arg(value_name = "LANE")]
+        lane_arg: Option<String>,
         /// Window to read back, as `Ns`, `Nm`, `Nh` or a count of seconds.
         #[arg(long, default_value = "2m")]
         since: String,
-        /// One lane only.
+        /// One lane only, for the alert window.
         #[arg(long)]
         lane: Option<String>,
         /// One JSON document, `alerts` and `sync`, instead of the grouped text.
         #[arg(long)]
         json: bool,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
     },
     /// Freshly synchronize and summarize Boop agent/runtime/activity facts.
     #[cfg(feature = "agent-read")]
@@ -129,6 +135,8 @@ enum SubCmd {
     /// a model pass and write the rewrite per turn. For a resident DL6
     /// coroutine, use `boop host chat`.
     #[command(after_help = CONCATMAP_EXAMPLES)]
+    /// Folded (audit 2026-08-25): a DL6 refinement runtime, not the agent bus.
+    #[command(hide = true)]
     Concatmap {
         /// Prompt template file; substitutes {{mode}}, {{ai_text}} (the
         /// assistant turn(s) before the user turn), {{user_text}}. Optional
@@ -173,6 +181,8 @@ enum SubCmd {
         me: bool,
     },
     /// Typed stdin/stdout host boundary for compiled DL6 programs.
+    /// Folded (audit 2026-08-25): a DL6 program calls this; nobody types it.
+    #[command(hide = true)]
     Host {
         #[command(subcommand)]
         cmd: HostCmd,
@@ -220,6 +230,27 @@ enum SubCmd {
         /// Seconds to block before exiting 124.
         #[arg(long, default_value_t = mailwait::DEFAULT_TIMEOUT_SECS)]
         wait_timeout: u64,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Send one body to a route and block until it answers: the one verb that
+    /// is both the send and the wait. Exits 0 on a reply or the recipient's
+    /// turn end, 124 on the timeout, 3 when the route dies first.
+    Push {
+        /// The route to push at: a lane, a coordinator, or `parent`.
+        #[arg(value_name = "ROUTE")]
+        to: String,
+        #[arg(long)]
+        body: String,
+        /// Seconds to block before exiting 124.
+        #[arg(long, default_value_t = mailwait::DEFAULT_TIMEOUT_SECS)]
+        timeout: u64,
+        /// The mail kind the row wears.
+        #[arg(long, default_value = "request")]
+        kind: String,
+        /// Who the row is from, when the whoami ladder cannot say.
+        #[arg(long)]
+        from: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -644,8 +675,17 @@ fn main() -> Result<()> {
                 format,
             } => run_tail(&registry, &session_id, from.unwrap_or(0), format),
             SubCmd::Events { query } => run_query(&query),
-            SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild),
-            SubCmd::Debug { since, lane, json } => run_debug(&since, lane.as_deref(), json),
+            SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild, None),
+            SubCmd::Debug {
+                lane_arg,
+                since,
+                lane,
+                json,
+                mail_dir,
+            } => match lane_arg.as_deref().or(lane.as_deref()).filter(|_| !json) {
+                Some(lane) => run_lane_debug(lane, &since, mail_dir.as_deref()),
+                None => run_debug(&since, lane.as_deref(), json),
+            },
             #[cfg(feature = "agent-read")]
             SubCmd::Agent { cmd } => run_public_agent_command(cmd),
             SubCmd::Follow {} => run_follow(&registry),
@@ -885,6 +925,22 @@ fn main() -> Result<()> {
                 })
             }
             SubCmd::Host { cmd } => run_host(cmd),
+            SubCmd::Push {
+                to,
+                body,
+                timeout,
+                kind,
+                from,
+                mail_dir,
+            } => run_push(
+                &registry,
+                &to,
+                &body,
+                &kind,
+                from.as_deref(),
+                timeout,
+                mail_dir.as_deref(),
+            ),
             SubCmd::Wait {
                 id,
                 me,
@@ -1116,6 +1172,8 @@ enum BeepCmd {
         mail_dir: Option<PathBuf>,
     },
     /// Mail across lanes.
+    /// Folded (audit 2026-08-25): its one verb, `ack`, is folded with it.
+    #[command(hide = true)]
     Message {
         #[command(subcommand)]
         cmd: MessageCmd,
@@ -1130,6 +1188,8 @@ enum BeepCmd {
         mail_dir: Option<PathBuf>,
     },
     /// Filesystem-style tree of lanes by parent edge.
+    /// Folded (audit 2026-08-25): `beep lane list` carries the parent column.
+    #[command(hide = true)]
     Pstree {
         /// Include dead lanes; default is live-only.
         #[arg(long)]
@@ -1244,6 +1304,8 @@ enum LaneCmd {
     },
     /// Drive one lane conversation. This is what a lane pane runs; a human
     /// calls `lane create`, never this.
+    /// Folded (audit 2026-08-25): the supervisor's entry point, spawned by `lane create`.
+    #[command(hide = true)]
     Run {
         #[arg(long)]
         lane: String,
@@ -1317,6 +1379,8 @@ enum LaneCmd {
         mail_dir: Option<PathBuf>,
     },
     /// Which tmux pane and harness session id.
+    /// Folded (audit 2026-08-25): `beep lane get` prints the same route row.
+    #[command(hide = true)]
     Route {
         lane: String,
         #[arg(long)]
@@ -1478,6 +1542,8 @@ enum InboxCmd {
 #[derive(Subcommand)]
 enum MessageCmd {
     /// Mark mail handled, in bulk.
+    /// Folded (audit 2026-08-25): age-based bulk-mark proves no read and no compliance.
+    #[command(hide = true)]
     Ack {
         #[arg(long)]
         lane: Option<String>,
@@ -1506,11 +1572,15 @@ enum DbCmd {
     },
     /// Rows from `agent_session`: one row per transcript session.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_session"` answers it.
+    #[command(hide = true)]
     Session {
         #[command(subcommand)]
         cmd: SessionCmd,
     },
     /// Rows from `agent_turn`: one row per user/assistant turn.
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_turn"` answers it.
+    #[command(hide = true)]
     Turn {
         #[command(subcommand)]
         cmd: TurnCmd,
@@ -1522,41 +1592,55 @@ enum DbCmd {
     },
     /// Rows from `agent_touch`: files a session read or edited.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_touch"` answers it.
+    #[command(hide = true)]
     Touch {
         #[command(subcommand)]
         cmd: FactCmd,
     },
     /// Rows from `agent_cmd`: shell commands a session ran.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_cmd"` answers it.
+    #[command(hide = true)]
     Command {
         #[command(subcommand)]
         cmd: FactCmd,
     },
     /// Rows from `agent_fetch`: URLs a session fetched.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_fetch"` answers it.
+    #[command(hide = true)]
     Fetch {
         #[command(subcommand)]
         cmd: FactCmd,
     },
     /// Rows from `agent_skill`: skills a session invoked.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_skill"` answers it.
+    #[command(hide = true)]
     Skill {
         #[command(subcommand)]
         cmd: FactCmd,
     },
     /// Rows from `agent_pr`: pull requests a session touched.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_pr"` answers it.
+    #[command(hide = true)]
     Pr {
         #[command(subcommand)]
         cmd: FactCmd,
     },
     /// Rows from `agent_span`: live time spans a session recorded.
     #[cfg(feature = "agent-read")]
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_span"` answers it.
+    #[command(hide = true)]
     Span {
         #[command(subcommand)]
         cmd: FactCmd,
     },
     /// Rows from `agent_edge`: parent/child spawn edges between sessions.
+    /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_edge"` answers it.
+    #[command(hide = true)]
     Edge {
         #[command(subcommand)]
         cmd: EdgeCmd,
@@ -1756,6 +1840,10 @@ enum SyncCmd {
         /// Keep syncing on a poll instead of returning.
         #[arg(long)]
         forever: bool,
+        /// Where the pass delivers the native-child completions it finds. A
+        /// scratch mailbox here keeps an analysis pass off the live bus.
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
     },
 }
 
@@ -1843,6 +1931,121 @@ mod tests {
     use clap::{CommandFactory, Parser, Subcommand};
 
     use boop::ident;
+
+    /// Every shell command the help text prints, extracted from the two help
+    /// constants themselves. A line counts as an example when it *starts* with
+    /// `boop`; a prose sentence that merely mentions the binary does not.
+    /// Continuations end in a backslash, and an unbalanced quote absorbs the
+    /// lines that close it.
+    fn help_examples(text: &str) -> Vec<String> {
+        let mut examples = Vec::new();
+        let mut pending: Option<String> = None;
+        for raw in text.lines() {
+            let line = raw.trim();
+            match pending.take() {
+                Some(mut open) => {
+                    open.push(' ');
+                    open.push_str(line.trim_end_matches('\\').trim());
+                    pending = Some(open);
+                }
+                None => match example_start(line) {
+                    Some(at) => pending = Some(line[at..].trim_end_matches('\\').trim().to_owned()),
+                    None => continue,
+                },
+            }
+            let Some(open) = pending.take() else { continue };
+            let unbalanced = open.matches('"').count() % 2 == 1;
+            if raw.trim_end().ends_with('\\') || unbalanced {
+                pending = Some(open);
+                continue;
+            }
+            examples.push(open);
+        }
+        examples.extend(pending);
+        examples
+    }
+
+    /// Where a command example starts in one help line: at column zero, or
+    /// after a label that ends in a colon. A backticked mention inside prose
+    /// is not an example and names no column.
+    fn example_start(line: &str) -> Option<usize> {
+        let at = line.find("boop")?;
+        if line[at..] != *"boop" && !line[at..].starts_with("boop ") {
+            return None;
+        }
+        let before = &line[..at];
+        match before.trim_end().is_empty() || before.trim_end().ends_with(':') {
+            true => Some(at),
+            false => None,
+        }
+    }
+
+    /// The argv one help example stands for. Column-aligned prose after the
+    /// command is cut, placeholders take a value every type accepts, an
+    /// alternation takes its first spelling, and optional brackets are opened
+    /// so the flags inside them are parsed rather than skipped.
+    fn example_argv(example: &str) -> Vec<String> {
+        let cut = example
+            .find("   ")
+            .or_else(|| example.find(" -- "))
+            .map_or(example, |at| &example[..at]);
+        let mut argv = Vec::new();
+        let mut token = String::new();
+        let mut quoted = false;
+        for character in cut.chars() {
+            match character {
+                '"' => quoted = !quoted,
+                '[' | ']' => {}
+                character if character.is_whitespace() && !quoted => {
+                    if !token.is_empty() {
+                        argv.push(std::mem::take(&mut token));
+                    }
+                }
+                character => token.push(character),
+            }
+        }
+        if !token.is_empty() {
+            argv.push(token);
+        }
+        argv.into_iter()
+            .map(|word| match word.split_once('|') {
+                Some((first, _)) => first.to_owned(),
+                None => word,
+            })
+            .map(|word| match word.starts_with('<') && word.ends_with('>') {
+                true => "1".to_owned(),
+                false => word,
+            })
+            .collect()
+    }
+
+    // FAIL-PRE-FIX: the WAIT block printed `boop beep lane wait <lane>
+    // --wait-timeout <s>`, a flag `beep lane wait` never had, and nothing
+    // checked the help text against the parser that has to accept it.
+    #[test]
+    fn every_help_example_parses_through_clap() {
+        let doctrine = doctrine();
+        let mut examples = help_examples(&doctrine);
+        examples.extend(help_examples(CONCATMAP_EXAMPLES));
+        // A regression in the extractor would pass this test by finding
+        // nothing, so the count is asserted before the parses are.
+        assert!(
+            examples.len() >= 18,
+            "the extractor found almost nothing: {examples:#?}"
+        );
+        let mut rejected = Vec::new();
+        for example in &examples {
+            let argv = example_argv(example);
+            if let Err(error) = Cli::try_parse_from(&argv) {
+                rejected.push(format!("{example}\n  argv: {argv:?}\n  {error}"));
+            }
+        }
+        assert!(
+            rejected.is_empty(),
+            "help examples the installed parser rejects:\n{}",
+            rejected.join("\n\n")
+        );
+    }
 
     #[test]
     fn public_agent_summary_command_parses() {

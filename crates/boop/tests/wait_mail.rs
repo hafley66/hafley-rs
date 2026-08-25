@@ -367,3 +367,108 @@ fn hail_with_a_wait_timeout_sends_then_blocks_and_times_out() {
         "the last line is the re-run command: {stdout}"
     );
 }
+
+// FAIL-PRE-FIX: a parent had to send with one verb and wait with another,
+// pasting the id between them; `push` is both, and its exits are typed.
+#[test]
+fn push_sends_and_blocks_until_the_reply_arrives() {
+    let fixture = Fixture::new("push-reply");
+    let pushing = fixture
+        .boop(&[
+            "push",
+            "feature-answers",
+            "--body",
+            "question",
+            "--from",
+            "asker",
+            "--timeout",
+            "30",
+        ])
+        .spawn()
+        .unwrap();
+    // The push re-reads the mailbox twice a second, so the reply lands after
+    // it has already blocked at least once.
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    let id = queued_id(&fixture);
+    append(
+        &fixture.mail,
+        reply_row("m-push-answer", &id, "the answer is 4"),
+    );
+    let output = pushing.wait_with_output().unwrap();
+
+    assert_eq!(output.status.code(), Some(0), "an answered push exits 0");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert!(
+        lines.iter().any(|line| line.contains(&id)
+            && (line.starts_with("held") || line.starts_with("delivered"))),
+        "one delivery line naming the rung: {stdout}"
+    );
+    assert!(
+        lines.contains(&"the answer is 4"),
+        "the reply body is printed: {stdout}"
+    );
+    assert_eq!(
+        lines.last(),
+        Some(&format!("boop wait {id}").as_str()),
+        "the last line is the next command: {stdout}"
+    );
+}
+
+/// RECEIPT (push). A route that never answers exits 124, and both streams
+/// carry the command that reads what happened.
+#[test]
+fn push_exits_124_and_names_the_debug_command() {
+    let fixture = Fixture::new("push-timeout");
+    let output = fixture
+        .boop(&[
+            "push",
+            "feature-silent",
+            "--body",
+            "question",
+            "--from",
+            "asker",
+            "--timeout",
+            "1",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(124), "a silent push exits 124");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert_eq!(
+        stdout.lines().last(),
+        Some("boop debug feature-silent"),
+        "the last line reads what happened: {stdout}"
+    );
+    assert!(
+        stderr.contains("boop debug feature-silent"),
+        "the next command survives a redirected stdout: {stderr}"
+    );
+}
+
+/// RECEIPT (push). A push at a name with no route still lands: the row is
+/// held in the mailbox and the sender is told which rung took it.
+#[test]
+fn push_at_an_unregistered_name_still_reports_a_rung() {
+    let fixture = Fixture::new("push-noroute");
+    let output = fixture
+        .boop(&[
+            "push",
+            "nobody",
+            "--body",
+            "into the void",
+            "--from",
+            "asker",
+            "--timeout",
+            "1",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(124), "nothing answered");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("held") && stdout.contains("no registry route for nobody"),
+        "the rung and its reason are printed: {stdout}"
+    );
+}

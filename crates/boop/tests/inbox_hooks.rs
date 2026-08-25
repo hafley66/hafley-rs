@@ -250,7 +250,7 @@ fn a_hail_during_a_long_turn_arrives_once_at_the_next_stop_and_never_as_keystrok
     // The long turn: the pane is busy, nothing drains, two hails land.
     let queued = coord.hail("lane fake-lane done rc=0");
     assert!(
-        queued.contains("hook inbox drains it"),
+        queued.contains("installed inbox hook"),
         "hail did not queue for the hook inbox: {queued}"
     );
     assert!(
@@ -357,12 +357,12 @@ fn removing_the_hooks_leaves_a_hail_queued_with_a_named_refusal() {
         .success());
     let queued = coord.hail("back to nobody");
     assert!(
-        !queued.contains("hook inbox drains it"),
+        !queued.contains("installed inbox hook"),
         "the removed hook still routed the hail: {queued}"
     );
     assert!(
         queued.contains("no live claude session for"),
-        "the refusal must name the door it tried: {queued}"
+        "the landing line must name the door it tried: {queued}"
     );
     std::thread::sleep(std::time::Duration::from_millis(300));
     let pane = coord.pane();

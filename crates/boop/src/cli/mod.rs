@@ -130,13 +130,20 @@ COMPLETION: the supervisor writes ONE row `lane <id> done rc=<n>` into the
   hail through its harness door as its next prompt; no wait needs arming.
   `--wait` blocks on that row and exits with the lane's rc, so spawn-and-join is
   one command; `--wait-timeout <s>` (default 3600, 0 waits forever) exits 124.
-  The same wait after the fact is `boop beep lane wait <lane>`.
+  The same wait after the fact spells its bound `--timeout`, not `--wait-timeout`:
+    boop beep lane wait <lane> --timeout <s>
   A wait whose lane route goes dead with no row exits 3 instead of blocking.
 
 DEBUG: what just went wrong, without opening a log:
     boop debug [--since 2m] [--lane <id>] [--json]
   The WARN/ERROR tail of every ~/.agent/lanes/<lane>/supervise.log plus the
   store's kind=error trace events, grouped by lane, oldest first inside a lane.
+  Named, it answers one lane in full, five sections, `none` for an empty one:
+    boop debug <lane>
+  1 route (kind, harness, model, session, cwd, parent, liveness, last turn),
+  2 the last 5 mail rows with the rung each landed on, 3 the worktree's last 5
+  commits and its dirty count, 4 the last 3 assistant turns and tool calls,
+  5 the alert window above.
   `boop --help` prints a one-line banner when that window is non-empty, and
   nothing when it is clean.
 
@@ -162,13 +169,26 @@ HAIL: boop beep hail <lane> --body \"text\" [--from <me>] [--kind <k>]
     opencode  `POST /session/<id>/prompt_async` on boop's `opencode serve` (:4097)
     kimi      no door; spawn a lane instead
   The recipient takes it as its next prompt; no agent reads a mailbox. A route
-  with no harness, or a session the door cannot find, is refused by name.
-  Proof of delivery is one row per hail:
-    boop db \"SELECT * FROM agent_delivery\" -- outcome injected / queued-for-turn-boundary / unreachable
-  and `boop wait <message-id>` reads that row.
+  with no harness, or a session the door cannot find, walks down the ladder to
+  the hook inbox, the pane, then the mailbox; no send reports a refusal.
+  Proof of delivery is the transition history, one row per rung the ladder
+  walked (appended, held-for-turn-boundary, queued-in-hook-inbox,
+  pasted-into-pane, held-in-mailbox, accepted-by-harness):
+    boop db \"SELECT * FROM agent_delivery_transition ORDER BY sequence\"
+  and `boop wait <message-id>` prints that history.
 
-TELL: boop tell-parent [--kind completion|yield|note] [--body \"t\"] mails the
-  caller's parent edge; boop tell-children --body \"t\" mails every live child.
+TELL: the caller's parent edge, and every live child, one verb each:
+    boop tell-parent [--kind completion|yield|note] [--body \"t\"]
+    boop tell-children --body \"t\"
+  Neither end of the edge is spelled by the caller; the registry holds it.
+
+PUSH: the send and the wait in one verb, for a parent that wants an answer:
+    boop push <route> --body \"t\" [--timeout <s>] [--kind <k>]
+  It walks the same ladder every send walks, prints the rung that took the row,
+  then blocks. Exits: 0 on a reply or the recipient's turn ending, 124 on the
+  timeout, 3 when the route dies first. The last line is always the next
+  command: `boop wait <id>` after an answer, `boop debug <route>` after a
+  failure.
 
 WAIT: every agent can background a shell, so the universal push is a block.
   A wait on a door-delivered hail also ends when the recipient's turn ends
@@ -185,12 +205,14 @@ WAIT: every agent can background a shell, so the universal push is a block.
   instead of replaying it. The LAST line of every exit is the next command to
   run; nobody composes one by hand.
 
-ACK: boop beep message ack is age-based bulk-mark, NOT proof-of-read. An ack
-  proves read at best, never compliance; compliance = the work's own artifacts.
+ACK: age-based bulk-mark, NOT proof-of-read:
+    boop beep message ack
+  An ack proves a read at best, never compliance; compliance is the work's own
+  artifacts.
 
-ROUTE: session id for a lane: boop beep lane route <lane> (route cwd = the
-  lane's worktree). Mailbox: ~/.agent/mail/ (bus.ndjson + registry.json),
-  override with --mail-dir.
+ROUTE: the session id one lane answers on, whose route cwd is its worktree:
+    boop beep lane route <lane>
+  Mailbox: ~/.agent/mail/ (bus.ndjson + registry.json), override --mail-dir.
 
 TRACE + PURPOSE: a session id is per-process-run and MOVES on /clear, on
 compaction and on resume. A trace does not move, and every session id a lane

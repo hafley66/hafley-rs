@@ -30,6 +30,8 @@ dirs = "5"
 sysinfo = "0.39"
 # Read-only opens of the store from the coroutine host.
 rusqlite = { version = "0.40", features = ["bundled", "trace"] }
+# The door address of an HTTP-served harness parses once, in the ladder.
+url = "2"
 # Timestamps parse against Rfc3339; hand-rolled date math is gone.
 time = { version = "0.3", features = ["parsing", "formatting"] }
 # Process-wide diagnostics. The binary installs the subscriber; library code

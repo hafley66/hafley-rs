@@ -606,6 +606,9 @@ fn supervise(
     };
     let mut flake_resumes = 0u32;
     let mut result_written = false;
+    let mut head_watch = HeadWatch::new(&lane.cwd);
+    let mut reconciled_ms = 0u64;
+    let supervisor_started_ms = boop_acp::channel::now_ms();
     events.record(
         "channel-open",
         TraceRecorder::session(channel),
@@ -635,12 +638,7 @@ fn supervise(
         );
         if let Err(error) = channel.start_turn(&turn) {
             for hail in &opening_hails {
-                record_hail_transition(
-                    events,
-                    hail,
-                    "rejected-by-harness",
-                    "start turn failed",
-                );
+                record_hail_transition(events, hail, "rejected-by-harness", "start turn failed");
             }
             events.record(
                 "error",
@@ -680,6 +678,13 @@ fn supervise(
                     Some(end) => break end,
                 },
             }
+            head_watch.poll(lane, boop_acp::channel::now_ms());
+            reconcile_outbound(
+                lane,
+                supervisor_started_ms,
+                &mut reconciled_ms,
+                boop_acp::channel::now_ms(),
+            );
             let this_turn_activity = channel
                 .last_activity_ms()
                 .filter(|written| *written >= turn_started);
@@ -714,6 +719,13 @@ fn supervise(
                 if let Err(error) = channel.close() {
                     warn!(lane = lane.lane, error = %error, "close after parent death failed");
                 }
+                yield_to_parent(
+                    lane,
+                    ended
+                        .detail
+                        .as_deref()
+                        .unwrap_or(boop_store::trail::PARENT_DIED),
+                );
                 events.record(
                     "parent-death",
                     TraceRecorder::session(channel),
@@ -787,6 +799,9 @@ fn supervise(
             }
         };
         println!("[boop] turn ended: {}", end.detail());
+        // Every turn end reports itself. The parent's picture of this lane
+        // never depends on the model choosing to run `tell-parent`.
+        yield_to_parent(lane, end.detail());
         let finish = boop_acp::channel::now_ms();
         events.record(
             "turn-finish",
@@ -874,6 +889,13 @@ fn supervise(
                     if let Err(error) = channel.close() {
                         warn!(lane = lane.lane, error = %error, "close while parked failed");
                     }
+                    yield_to_parent(
+                        lane,
+                        ended
+                            .detail
+                            .as_deref()
+                            .unwrap_or(boop_store::trail::PARENT_DIED),
+                    );
                     events.record(
                         "parent-death",
                         TraceRecorder::session(channel),
@@ -890,6 +912,13 @@ fn supervise(
                     );
                     return Ok(ended);
                 }
+                head_watch.poll(lane, boop_acp::channel::now_ms());
+                reconcile_outbound(
+                    lane,
+                    supervisor_started_ms,
+                    &mut reconciled_ms,
+                    boop_acp::channel::now_ms(),
+                );
                 let arrived = pending(&lane.mail_dir, &lane.lane, &seen)?;
                 if arrived.is_empty() {
                     std::thread::sleep(POLL);
@@ -897,7 +926,12 @@ fn supervise(
                 }
                 for hail in arrived {
                     seen.insert(hail.id.clone());
-                    record_hail_transition(events, &hail, "claimed-by-supervisor", "parked inbox drain");
+                    record_hail_transition(
+                        events,
+                        &hail,
+                        "claimed-by-supervisor",
+                        "parked inbox drain",
+                    );
                     held.push(hail);
                 }
                 break;
@@ -982,7 +1016,11 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
                 lane = lane.lane,
                 parent, exit_code, "lane result row written"
             );
-            println!("[boop] result rc={exit_code} hailed to {parent}");
+            let landed = deliver_outbound(lane, &row);
+            println!(
+                "[boop] result rc={exit_code} hailed to {parent}: {}",
+                landed.unwrap_or_else(|| "held in the mailbox".to_owned())
+            );
         }
         Err(error) => {
             error!(lane = lane.lane, parent, error = %error, "lane result row write failed");
@@ -1030,6 +1068,342 @@ fn already_hailed(dir: &Path, lane: &str, kind: &str) -> bool {
         rows.extend(bus::parse_box(&path));
     }
     rows.iter().any(|row| row.from == lane && row.kind == kind)
+}
+
+/// The kind a lane that never opened wears. It is not a turn end, so it
+/// carries its own word rather than borrowing `yield`'s.
+pub const OPEN_FAILED: &str = "open_failed";
+
+/// Mail the parent one row for a lane whose harness channel never opened.
+/// The supervisor loop has not started yet, so nothing else in the lane would
+/// report it and the parent would read a silent route as a slow start.
+pub fn report_open_failure(lane: &LaneRun, reason: &str) {
+    let body = format!(
+        "lane {} never opened: {reason} (model {})",
+        lane.lane,
+        lane.model.as_deref().unwrap_or("-"),
+    );
+    mail_to_parent_kind(lane, OPEN_FAILED, body, Some(reason));
+    record_result(lane, 1, Some(reason));
+}
+
+/// The kind every progress row wears. A parent filters one word to see where
+/// each of its lanes stopped and what the worktree looked like when it did.
+pub const YIELD: &str = "yield";
+
+/// The worktree HEAD as a short sha. A directory git cannot answer for reads
+/// `unknown` rather than dropping the field the parent greps for.
+fn head_sha(cwd: &Path) -> String {
+    std::process::Command::new("git")
+        .args([
+            "-C",
+            &cwd.display().to_string(),
+            "rev-parse",
+            "--short",
+            "HEAD",
+        ])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned())
+        .filter(|sha| !sha.is_empty())
+        .unwrap_or_else(|| "unknown".to_owned())
+}
+
+/// How many paths `git status --porcelain` lists in the worktree. Anything git
+/// cannot answer counts as zero, so the row still reports HEAD.
+fn dirty_count(cwd: &Path) -> usize {
+    std::process::Command::new("git")
+        .args(["-C", &cwd.display().to_string(), "status", "--porcelain"])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| {
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+/// The body a parked lane mails: which lane, why the turn ended, where HEAD
+/// sits, and how many paths are dirty. One line, four fields, greppable.
+fn idle_body(lane: &LaneRun, reason: &str) -> String {
+    format!(
+        "idle {} turn={reason} head={} dirty={}",
+        lane.lane,
+        head_sha(&lane.cwd),
+        dirty_count(&lane.cwd),
+    )
+}
+
+/// How often the supervisor asks git where HEAD sits. A 700 ms inbox poll
+/// would fork git twice a second for a value that moves at commit speed.
+const HEAD_POLL: Duration = Duration::from_secs(5);
+
+/// The lane's own progress watcher. It holds the last sha this supervisor
+/// mailed the parent, so the parent hears about a commit whether or not the
+/// model ever runs `tell-parent`.
+struct HeadWatch {
+    last_mailed: Option<String>,
+    checked_ms: u64,
+}
+
+/// Whether `candidate` descends from `ancestor` in this worktree. A git that
+/// cannot answer reports `true`, so an unreadable repo raises no diagnostic.
+fn descends_from(cwd: &Path, ancestor: &str, candidate: &str) -> bool {
+    std::process::Command::new("git")
+        .args([
+            "-C",
+            &cwd.display().to_string(),
+            "merge-base",
+            "--is-ancestor",
+            ancestor,
+            candidate,
+        ])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(true)
+}
+
+impl HeadWatch {
+    /// Seed from where HEAD sits now, so the first row a parent sees names a
+    /// move this lane made rather than the base it started from.
+    fn new(cwd: &Path) -> HeadWatch {
+        HeadWatch {
+            last_mailed: match head_sha(cwd).as_str() {
+                "unknown" => None,
+                sha => Some(sha.to_owned()),
+            },
+            checked_ms: 0,
+        }
+    }
+
+    /// Read HEAD at most once per `HEAD_POLL` and mail the parent what moved.
+    /// A descendant is a commit row; anything else names both shas as a
+    /// rewind, which is how a yielded sha reset off the branch surfaces.
+    fn poll(&mut self, lane: &LaneRun, now_ms: u64) {
+        if now_ms.saturating_sub(self.checked_ms) < HEAD_POLL.as_millis() as u64 {
+            return;
+        }
+        self.checked_ms = now_ms;
+        let head = head_sha(&lane.cwd);
+        if head == "unknown" {
+            return;
+        }
+        let Some(previous) = self.last_mailed.clone() else {
+            self.last_mailed = Some(head);
+            return;
+        };
+        if previous == head {
+            return;
+        }
+        self.last_mailed = Some(head.clone());
+        if descends_from(&lane.cwd, &previous, &head) {
+            let body = format!(
+                "commit {} {previous}..{head} dirty={}",
+                lane.lane,
+                dirty_count(&lane.cwd),
+            );
+            mail_to_parent_kind(lane, YIELD, body, Some("head advanced"));
+            return;
+        }
+        let body = format!(
+            "head {} rewound: {head} does not descend from the last reported {previous}",
+            lane.lane,
+        );
+        mail_to_parent_kind(lane, HEAD_REWOUND, body, Some("head rewound"));
+    }
+}
+
+/// The kind a rewind wears. A parent that holds a receipt for a sha no longer
+/// on the branch reads exactly one row naming both shas.
+pub const HEAD_REWOUND: &str = "head_rewound";
+
+/// Resolve the parent and mail one row of `kind`. A parentless lane writes
+/// nothing, which is the same silence every other parent path keeps.
+fn mail_to_parent_kind(lane: &LaneRun, kind: &str, body: String, detail: Option<&str>) {
+    let Some(parent) = registered_parent(&lane.mail_dir, &lane.lane) else {
+        debug!(lane = lane.lane, kind, "no registered parent; no row");
+        return;
+    };
+    mail_parent(lane, &parent, kind, body, detail);
+}
+
+/// Mail the registered parent one `yield` row for this park. Every park sends
+/// its own row: the dedup `hail_parent_once` applies to failure kinds would
+/// collapse a whole lane's progress into a single line.
+fn yield_to_parent(lane: &LaneRun, reason: &str) {
+    mail_to_parent_kind(lane, YIELD, idle_body(lane, reason), Some(reason));
+}
+
+/// Append one row from this lane to its parent. `hail_parent_once` and
+/// `yield_to_parent` share it, so both leave the same shape in the mailbox.
+fn mail_parent(lane: &LaneRun, parent: &str, kind: &str, body: String, detail: Option<&str>) {
+    let row = bus::Message {
+        id: bus::mint_id(),
+        from: lane.lane.clone(),
+        to: parent.to_owned(),
+        from_timestamp: bus::now_iso(),
+        to_timestamp: None,
+        kind: kind.to_owned(),
+        reply_to: None,
+        body,
+        r#ref: None,
+        rc: None,
+        detail: detail.map(str::to_owned),
+    };
+    match append_row(&lane.mail_dir, &row) {
+        Ok(()) => {
+            info!(lane = lane.lane, parent, kind, "lane parent row written");
+            let landed = deliver_outbound(lane, &row);
+            println!(
+                "[boop] {kind} hailed to {parent}: {}",
+                landed.unwrap_or_else(|| "held in the mailbox".to_owned())
+            );
+        }
+        Err(error) => {
+            error!(lane = lane.lane, parent, kind, error = %error, "parent row write failed");
+        }
+    }
+}
+
+/// Push one row this lane wrote down the delivery ladder and record where it
+/// landed. Appending alone leaves a row nobody owns: that is how a parent was
+/// sent yields it never received. Returns the rung, or `None` when the store
+/// or the registry could not be read.
+fn deliver_outbound(lane: &LaneRun, row: &bus::Message) -> Option<String> {
+    let routes = bus::read_routes(&lane.mail_dir).ok()?;
+    let store =
+        boop_store::ident::Store::open(boop_store::ident::Store::default_path().ok()?).ok()?;
+    let registry = boop_harness::registry::Registry::discover();
+    match crate::deliver::deliver_hail(&registry, &store, &routes, row) {
+        Ok(landing) => {
+            info!(
+                lane = lane.lane,
+                message_id = row.id,
+                rung = landing.rung.as_str(),
+                "lane outbound row delivered"
+            );
+            Some(landing.line(&row.id, &row.to, "harness"))
+        }
+        Err(error) => {
+            warn!(lane = lane.lane, message_id = row.id, error = %error, "outbound delivery failed");
+            None
+        }
+    }
+}
+
+/// How often the supervisor re-checks its own outbound rows.
+const RECONCILE_POLL: Duration = Duration::from_secs(5);
+/// How many unlanded rows one reconcile pass retries. A lane that has written
+/// hundreds of rows re-tries the newest, never the whole file.
+const RECONCILE_BATCH: usize = 20;
+
+/// Re-run the ladder for every row this supervisor run sent that no rung has
+/// taken. A door that was down when the row was written does not swallow the
+/// row for the rest of the lane's life.
+///
+/// The cutoff is this run's own start: a previous run's rows belong to a
+/// conversation the recipient has already moved past, and replaying them puts
+/// stale text in front of whoever is at that route now.
+fn reconcile_outbound(lane: &LaneRun, started_ms: u64, last_run_ms: &mut u64, now_ms: u64) {
+    if now_ms.saturating_sub(*last_run_ms) < RECONCILE_POLL.as_millis() as u64 {
+        return;
+    }
+    *last_run_ms = now_ms;
+    let Ok(store) =
+        boop_store::ident::Store::default_path().and_then(boop_store::ident::Store::open)
+    else {
+        return;
+    };
+    let Ok(routes) = bus::read_routes(&lane.mail_dir) else {
+        return;
+    };
+    let registry = boop_harness::registry::Registry::discover();
+    let mut rows = Vec::new();
+    for path in bus::read_boxes(&lane.mail_dir).unwrap_or_default() {
+        rows.extend(bus::parse_box(&path));
+    }
+    let unlanded: Vec<bus::Message> = rows
+        .into_iter()
+        .rev()
+        .filter(|row| row.from == lane.lane && row.to != lane.lane)
+        .filter(|row| written_since(&row.from_timestamp, started_ms))
+        .filter(|row| within_reconcile_age(&row.from_timestamp, now_ms))
+        .filter(|row| registered_before(&routes, &row.to, &row.from_timestamp))
+        .filter(|row| !landed(&store, &row.id))
+        .take(RECONCILE_BATCH)
+        .collect();
+    for row in unlanded {
+        match crate::deliver::deliver_hail(&registry, &store, &routes, &row) {
+            Ok(landing) => info!(
+                lane = lane.lane,
+                message_id = row.id,
+                rung = landing.rung.as_str(),
+                "outbound row reconciled"
+            ),
+            Err(error) => {
+                warn!(lane = lane.lane, message_id = row.id, error = %error, "reconcile failed")
+            }
+        }
+    }
+}
+
+/// One ISO-8601 mail timestamp as epoch milliseconds. Text this cannot parse
+/// reads as `None`, and every cutoff treats that as out of bounds.
+fn iso_ms(stamp: &str) -> Option<u64> {
+    time::OffsetDateTime::parse(stamp, &time::format_description::well_known::Rfc3339)
+        .ok()
+        .map(|at| (at.unix_timestamp_nanos() / 1_000_000) as u64)
+}
+
+/// Whether this row was written by the running supervisor rather than by a
+/// previous run of the same lane.
+fn written_since(stamp: &str, started_ms: u64) -> bool {
+    iso_ms(stamp).is_some_and(|at| at >= started_ms)
+}
+
+/// Whether the row is young enough to still be worth putting in front of its
+/// recipient. Text a recipient would read as news, not as history.
+fn within_reconcile_age(stamp: &str, now_ms: u64) -> bool {
+    iso_ms(stamp).is_some_and(|at| now_ms.saturating_sub(at) <= RECONCILE_MAX_AGE_MS)
+}
+
+/// Whether the recipient's route was registered before this row was written.
+/// A route that registered afterward is a different session standing where the
+/// old one was, and the row was never addressed to it.
+fn registered_before(
+    routes: &std::collections::BTreeMap<String, bus::Route>,
+    to: &str,
+    stamp: &str,
+) -> bool {
+    let Some(route) = routes.get(to) else {
+        return false;
+    };
+    let Some(registered) = route.registered_at.as_deref().and_then(iso_ms) else {
+        // A route with no registration stamp predates the field; its age is
+        // bounded by the row's own age cutoff and nothing else.
+        return true;
+    };
+    iso_ms(stamp).is_some_and(|at| at >= registered)
+}
+
+/// The oldest row a reconcile pass will re-deliver: 10 minutes, about one
+/// bounded turn. Anything older is history the recipient has moved past.
+const RECONCILE_MAX_AGE_MS: u64 = 10 * 60 * 1000;
+
+/// Whether the ledger holds a transition past `appended` for this message.
+fn landed(store: &boop_store::ident::Store, message_id: &str) -> bool {
+    store
+        .delivery_rows(message_id)
+        .unwrap_or_default()
+        .iter()
+        .any(|row| {
+            boop_store::DeliveryState::parse(&row.outcome)
+                .is_some_and(boop_store::DeliveryState::landed)
+        })
 }
 
 /// Mail the registered parent one typed failure row. A parentless lane and a
@@ -1427,6 +1801,32 @@ mod tests {
         }
     }
 
+    fn rows_of_kind(dir: &Path, kind: &str) -> Vec<bus::Message> {
+        let mut rows = Vec::new();
+        for path in bus::read_boxes(dir).unwrap_or_default() {
+            rows.extend(bus::parse_box(&path));
+        }
+        rows.into_iter().filter(|row| row.kind == kind).collect()
+    }
+
+    /// A worktree with one commit, so HEAD ancestry has something to answer.
+    fn git_repo(dir: &Path) -> String {
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .args(["-C", &dir.display().to_string()])
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.email", "lane@boop"]);
+        git(&["config", "user.name", "lane"]);
+        std::fs::write(dir.join("one.txt"), "one\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "one"]);
+        head_sha(dir)
+    }
+
     fn result_rows(dir: &Path) -> Vec<bus::Message> {
         let mut rows = Vec::new();
         for path in bus::read_boxes(dir).unwrap_or_default() {
@@ -1798,6 +2198,247 @@ mod tests {
         wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
         assert_eq!(*turns.lock().unwrap(), [RESUME_NUDGE]);
         assert_eq!(brief.lock().unwrap().as_deref(), Some("do the work\n"));
+    }
+
+    // FAIL-PRE-FIX: an idle park printed one line to its own pane and nothing
+    // else, so a parent heard from a working lane exactly once, at exit.
+    #[test]
+    fn an_idle_park_mails_the_parent_one_yield_row() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let mut channel = ParksThenWakesChannel::default();
+        let turns = channel.turns.clone();
+        std::thread::spawn(move || {
+            let _ = run(lane, &mut channel);
+        });
+
+        wait_for(
+            || rows_of_kind(&dir, "yield").len() == 1,
+            Duration::from_secs(5),
+        );
+        let parked = rows_of_kind(&dir, "yield");
+        assert_eq!(parked.len(), 1, "one yield row per park");
+        assert_eq!(parked[0].from, "mine");
+        assert_eq!(parked[0].to, "coordinator");
+        assert!(
+            parked[0].body.starts_with("idle mine turn=completed head="),
+            "body: {}",
+            parked[0].body
+        );
+        assert!(
+            parked[0].body.contains(" dirty="),
+            "body: {}",
+            parked[0].body
+        );
+
+        append_row(&dir, &message("wake", "mine", "hail")).unwrap();
+        wait_for(|| turns.lock().unwrap().len() == 2, Duration::from_secs(5));
+        wait_for(
+            || rows_of_kind(&dir, "yield").len() == 2,
+            Duration::from_secs(5),
+        );
+        assert_eq!(
+            rows_of_kind(&dir, "yield").len(),
+            2,
+            "the second park mails its own row"
+        );
+    }
+
+    /// RECEIPT (Item 0). A parentless lane parks with no row to write, and the
+    /// park still happens: reporting never gates the lane's own progress.
+    #[test]
+    fn a_parentless_park_mails_nothing() {
+        let dir = tempdir();
+        std::fs::write(
+            dir.join("registry.json"),
+            serde_json::json!({ "mine": { "kind": "lane" } }).to_string(),
+        )
+        .unwrap();
+        let brief = dir.join("brief.md");
+        std::fs::write(&brief, "do the work\n").unwrap();
+        let lane = LaneRun {
+            lane: "mine".into(),
+            brief,
+            mail_dir: dir.clone(),
+            cwd: dir.clone(),
+            model: None,
+            resume: None,
+        };
+        yield_to_parent(&lane, "completed");
+        assert!(rows_of_kind(&dir, "yield").is_empty());
+    }
+
+    /// RECEIPT (Item 0). A worktree git cannot read still reports a body with
+    /// both fields, so the parent's grep never loses a column.
+    #[test]
+    fn an_unreadable_worktree_still_names_head_and_dirty() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        assert_eq!(
+            idle_body(&lane, "stalled"),
+            "idle mine turn=stalled head=unknown dirty=0"
+        );
+    }
+
+    // FAIL-PRE-FIX: the supervisor never read HEAD, so a lane that committed
+    // four times without yielding left its parent with nothing to read.
+    #[test]
+    fn a_commit_mails_the_parent_the_sha_range() {
+        let dir = tempdir();
+        let work = dir.join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        let first = git_repo(&work);
+        let mut lane = parented_lane(&dir, "mine", "coordinator");
+        lane.cwd = work.clone();
+        let mut watch = HeadWatch::new(&lane.cwd);
+        assert_eq!(watch.last_mailed.as_deref(), Some(first.as_str()));
+
+        std::fs::write(work.join("two.txt"), "two\n").unwrap();
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .args(["-C", &work.display().to_string()])
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "two"]);
+        let second = head_sha(&work);
+
+        watch.poll(&lane, HEAD_POLL.as_millis() as u64 + 1);
+        let rows = rows_of_kind(&dir, "yield");
+        assert_eq!(rows.len(), 1, "one commit row");
+        assert_eq!(
+            rows[0].body,
+            format!("commit mine {first}..{second} dirty=0")
+        );
+    }
+
+    // FAIL-PRE-FIX: a lane that reset away a sha it had already reported left
+    // the parent holding a receipt for a commit no longer on the branch.
+    #[test]
+    fn a_head_that_does_not_descend_names_both_shas() {
+        let dir = tempdir();
+        let work = dir.join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        let first = git_repo(&work);
+        let mut lane = parented_lane(&dir, "mine", "coordinator");
+        lane.cwd = work.clone();
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .args(["-C", &work.display().to_string()])
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        std::fs::write(work.join("two.txt"), "two\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "two"]);
+        let reported = head_sha(&work);
+        let mut watch = HeadWatch::new(&lane.cwd);
+        assert_eq!(watch.last_mailed.as_deref(), Some(reported.as_str()));
+
+        git(&["reset", "-q", "--hard", "HEAD~1"]);
+        watch.poll(&lane, HEAD_POLL.as_millis() as u64 + 1);
+        let rows = rows_of_kind(&dir, HEAD_REWOUND);
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].body.contains(&reported), "body: {}", rows[0].body);
+        assert!(rows[0].body.contains(&first), "body: {}", rows[0].body);
+        assert!(descends_from(&work, &first, &reported));
+        assert!(!descends_from(&work, &reported, &first));
+    }
+
+    // FAIL-PRE-FIX: a lane whose model spelling the harness rejected died
+    // before the supervisor existed, so the parent saw a registered route,
+    // no rows at all, and no way to tell a dead lane from a slow start.
+    #[test]
+    fn a_lane_that_never_opened_mails_the_parent_and_writes_its_result() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        report_open_failure(&lane, "acp handshake failed: Invalid params");
+
+        let opened = rows_of_kind(&dir, OPEN_FAILED);
+        assert_eq!(opened.len(), 1, "one row per failed open");
+        assert_eq!(opened[0].to, "coordinator");
+        assert!(
+            opened[0]
+                .body
+                .starts_with("lane mine never opened: acp handshake failed"),
+            "body: {}",
+            opened[0].body
+        );
+        let results = result_rows(&dir);
+        assert_eq!(results.len(), 1, "the waiter still gets its rc");
+        assert_eq!(results[0].rc, Some(1));
+    }
+
+    // FAIL-PRE-FIX: the reconciler retried every unlanded row in the mailbox.
+    // Three rows a previous run had written to codex-0 were replayed together
+    // and typed into a live TUI pane, where a human watched keys appear.
+    #[test]
+    fn the_reconciler_skips_rows_a_previous_run_wrote() {
+        let started = 999_999_999_000u64;
+        assert_eq!(iso_ms("2001-09-09T01:46:39Z"), Some(started));
+        assert!(!written_since("2001-09-09T01:46:38Z", started));
+        assert!(written_since("2001-09-09T01:46:41Z", started));
+        assert!(!written_since("not a timestamp", started));
+    }
+
+    /// RECEIPT. A row older than one bounded turn is history, not news, and
+    /// the reconciler leaves it where it lies.
+    #[test]
+    fn the_reconciler_skips_rows_older_than_one_bounded_turn() {
+        let now = 999_999_999_000u64; // 2001-09-09T01:46:39Z
+        let fresh = "2001-09-09T01:41:40Z"; // 5 minutes back
+        let stale = "2001-09-09T01:26:39Z"; // 20 minutes back
+        assert!(within_reconcile_age(fresh, now));
+        assert!(!within_reconcile_age(stale, now));
+    }
+
+    /// RECEIPT. A route that registered after the row was written is a
+    /// different session standing where the old one was, so the row was never
+    /// addressed to it and is not replayed at it.
+    #[test]
+    fn the_reconciler_skips_a_route_that_registered_after_the_row() {
+        let mut routes = std::collections::BTreeMap::new();
+        routes.insert(
+            "codex-0".to_owned(),
+            bus::Route {
+                kind: "coordinator".into(),
+                harness: None,
+                tmux: None,
+                cwd: None,
+                model: None,
+                mode: None,
+                session_id: None,
+                source_path: None,
+                parent: None,
+                goal: None,
+                registered_at: Some("2001-09-09T01:46:40Z".to_owned()),
+                base_sha: None,
+                worktree_dir: None,
+                app_server_socket: None,
+            },
+        );
+        assert!(!registered_before(
+            &routes,
+            "codex-0",
+            "2001-09-09T01:41:40Z"
+        ));
+        assert!(registered_before(
+            &routes,
+            "codex-0",
+            "2001-09-09T01:51:40Z"
+        ));
+        assert!(
+            !registered_before(&routes, "nobody", "2001-09-09T01:51:40Z"),
+            "a row for a route the registry does not carry is never replayed"
+        );
+        routes.get_mut("codex-0").unwrap().registered_at = None;
+        assert!(
+            registered_before(&routes, "codex-0", "2001-09-09T01:41:40Z"),
+            "a route with no stamp is bounded by the row's age alone"
+        );
     }
 
     fn tempdir() -> PathBuf {

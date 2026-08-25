@@ -396,11 +396,20 @@ pub fn tell_parent_target(
     caller: &str,
     route: &Route,
     routes: &BTreeMap<String, Route>,
+    stamped: Option<&str>,
 ) -> Result<ParentPick> {
     if let Some(parent) = route.parent.as_deref().filter(|parent| !parent.is_empty()) {
         return Ok(ParentPick {
             parent: Some(parent.to_owned()),
             source: "edge",
+        });
+    }
+    // A process the spawner stamped knows its own parent even when the
+    // registry row does not carry the edge, which is every adopted pane.
+    if let Some(stamped) = stamped.filter(|parent| !parent.is_empty() && *parent != caller) {
+        return Ok(ParentPick {
+            parent: Some(stamped.to_owned()),
+            source: "stamp",
         });
     }
     let pick = resolve_parent(None, None, routes);
@@ -940,19 +949,26 @@ mod tests {
         child.parent = Some("luna".to_owned());
         routes.insert("boop-sql".to_owned(), child.clone());
 
-        let edge = tell_parent_target("boop-sql", &child, &routes).unwrap();
+        let edge = tell_parent_target("boop-sql", &child, &routes, None).unwrap();
         assert_eq!(edge.parent.as_deref(), Some("luna"));
         assert_eq!(edge.source, "edge");
 
         let mut orphan = route("boop-sql");
         orphan.parent = None;
-        let fallback = tell_parent_target("boop-sql", &orphan, &routes).unwrap();
+        let fallback = tell_parent_target("boop-sql", &orphan, &routes, None).unwrap();
         assert_eq!(fallback.parent.as_deref(), Some("terra"));
         assert_eq!(fallback.source, "registry");
 
         let coordinator = routes.get("terra").unwrap().clone();
-        let error = tell_parent_target("terra", &coordinator, &routes).unwrap_err();
+        let error = tell_parent_target("terra", &coordinator, &routes, None).unwrap_err();
         assert!(error.to_string().contains("no parent edge"), "{error}");
+
+        // The spawn stamp names a parent the registry row never carried, and
+        // a stamp naming the caller itself is not a parent edge.
+        let stamped = tell_parent_target("terra", &coordinator, &routes, Some("claude-5")).unwrap();
+        assert_eq!(stamped.parent.as_deref(), Some("claude-5"));
+        assert_eq!(stamped.source, "stamp");
+        assert!(tell_parent_target("terra", &coordinator, &routes, Some("terra")).is_err());
     }
 
     /// RECEIPT. Children are the recorded edges pointing at the caller, and a

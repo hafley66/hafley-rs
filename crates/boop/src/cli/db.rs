@@ -393,8 +393,20 @@ pub(crate) const STARTUP_SYNC_BUDGET: std::time::Duration = std::time::Duration:
 pub(crate) const EXPLICIT_SYNC_WAIT: std::time::Duration = std::time::Duration::from_secs(120);
 
 /// `boop sync`: tail every harness forward from stored offsets into the db.
-pub(crate) fn run_sync_all(registry: &Registry, rebuild: bool) -> Result<()> {
-    sync_all(registry, rebuild, true, SyncLiveness::StampLivePid)
+/// `mail_dir` is where the pass delivers the native-child completions it
+/// discovers; a pass pointed at a scratch mailbox cannot touch the live one.
+pub(crate) fn run_sync_all(
+    registry: &Registry,
+    rebuild: bool,
+    mail_dir_arg: Option<&std::path::Path>,
+) -> Result<()> {
+    sync_all(
+        registry,
+        rebuild,
+        true,
+        SyncLiveness::StampLivePid,
+        mail_dir_arg,
+    )
 }
 
 /// Whether incremental transcript sync asks tmux for a route PID per changed
@@ -414,6 +426,7 @@ pub(crate) fn sync_all(
     rebuild: bool,
     report: bool,
     liveness: SyncLiveness,
+    mail_dir_arg: Option<&std::path::Path>,
 ) -> Result<()> {
     sync_all_budgeted(
         registry,
@@ -422,6 +435,7 @@ pub(crate) fn sync_all(
         liveness,
         None,
         SyncContention::Wait(EXPLICIT_SYNC_WAIT),
+        mail_dir_arg,
     )
 }
 
@@ -436,6 +450,7 @@ pub(crate) fn sync_before_read(registry: &Registry) -> Result<()> {
         SyncLiveness::TranscriptOnly,
         Some(STARTUP_SYNC_BUDGET),
         SyncContention::Defer,
+        None,
     )
 }
 
@@ -443,6 +458,7 @@ pub(crate) fn sync_before_read(registry: &Registry) -> Result<()> {
 /// pass stops between sessions once it is spent, writes what it was doing, and
 /// yields. Every session commits on its own, so the next pass resumes from the
 /// cursors this one left.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn sync_all_budgeted(
     registry: &Registry,
     rebuild: bool,
@@ -450,6 +466,7 @@ pub(crate) fn sync_all_budgeted(
     liveness: SyncLiveness,
     budget: Option<std::time::Duration>,
     contention: SyncContention,
+    mail_dir_arg: Option<&std::path::Path>,
 ) -> Result<()> {
     let started = std::time::Instant::now();
     let mut phases = SyncPhases::new(budget);
@@ -554,7 +571,7 @@ pub(crate) fn sync_all_budgeted(
     }
     phases.project_ms = project_mark.elapsed().as_millis();
     phases.projected = stat.written;
-    let native_child_mail_dir = mail_dir(None)?;
+    let native_child_mail_dir = mail_dir(mail_dir_arg)?;
     let native_child_routes = bus::read_routes(&native_child_mail_dir)?;
     deliver_native_child_completions(
         &store,
@@ -760,7 +777,7 @@ pub(crate) fn refuse_stale(store: &ident::Store) -> Result<()> {
 /// changed, so steady-state idle is a stat per file plus a sleep.
 pub(crate) fn run_follow(registry: &Registry) -> Result<()> {
     loop {
-        sync_all(registry, false, false, SyncLiveness::StampLivePid)?;
+        sync_all(registry, false, false, SyncLiveness::StampLivePid, None)?;
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }
@@ -1041,11 +1058,15 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
             }
         },
         DbCmd::Sync { cmd } => match cmd {
-            SyncCmd::Create { rebuild, forever } => {
+            SyncCmd::Create {
+                rebuild,
+                forever,
+                mail_dir: mail_dir_arg,
+            } => {
                 if forever {
                     run_follow(registry)
                 } else {
-                    run_sync_all(registry, rebuild)
+                    run_sync_all(registry, rebuild, mail_dir_arg.as_deref())
                 }
             }
         },

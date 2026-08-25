@@ -393,9 +393,6 @@ pub(crate) fn run_lane_supervisor(
         lane: Some(lane.to_owned()),
         executable: bin.map(str::to_owned),
     };
-    let mut channel = adapter.open_channel(&spec).inspect_err(|error| {
-        error!(lane, harness = harness_id, error = %error, "lane channel open failed");
-    })?;
     let run = boop::supervise::LaneRun {
         lane: lane.to_owned(),
         // The warm-up's outcome and the setup sentence lead the first turn.
@@ -404,6 +401,17 @@ pub(crate) fn run_lane_supervisor(
         cwd,
         model: model.map(str::to_owned),
         resume: resume.map(str::to_owned),
+    };
+    // A handshake that fails here happens before the supervisor exists, so
+    // nothing else would tell the parent this lane never opened. A rejected
+    // model spelling looked exactly like a lane still starting up.
+    let mut channel = match adapter.open_channel(&spec) {
+        Ok(channel) => channel,
+        Err(error) => {
+            error!(lane, harness = harness_id, error = %error, "lane channel open failed");
+            boop::supervise::report_open_failure(&run, &error.to_string());
+            return Err(error);
+        }
     };
     // Process-global, so it is armed here and not inside the library call.
     boop::supervise::arm_signal_trail(&run);
@@ -510,7 +518,11 @@ pub(crate) fn watch_turn_end(
     let (sender, receiver) = std::sync::mpsc::channel();
     let mut armed = 0usize;
     for row in rows {
-        if row.outcome != "accepted-by-harness" {
+        // Only a rung that put the body itself in front of the recipient has
+        // a turn to end. A held or pasted row waits on the mailbox alone.
+        if !boop::DeliveryState::parse(&row.outcome)
+            .is_some_and(|state| state == boop::DeliveryState::AcceptedByHarness)
+        {
             continue;
         }
         let Some(route) = routes.get(&row.route).cloned() else {
@@ -539,9 +551,9 @@ pub(crate) fn watch_turn_end(
     (armed > 0).then_some(receiver)
 }
 
-/// What the ledger recorded for the message being waited on, one line per
-/// route it was delivered to. An unreadable store costs the lines and nothing
-/// else: the wait itself reads the mailbox.
+/// The delivery history of the message being waited on: one line per recorded
+/// transition, oldest first. An unreadable store costs the lines and nothing
+/// else, because the wait itself reads the mailbox.
 fn report_delivery(message_id: &str) {
     let rows = boop::Store::default_path()
         .and_then(boop::Store::open)
@@ -550,9 +562,14 @@ fn report_delivery(message_id: &str) {
         return;
     };
     for row in rows {
+        let code = row
+            .error_code
+            .as_deref()
+            .map(|code| format!(" [{code}]"))
+            .unwrap_or_default();
         line(&format!(
-            "{message_id} -> {}: {} ({})",
-            row.route, row.outcome, row.detail
+            "{message_id} -> {} #{} {} ({}){code}",
+            row.route, row.sequence, row.outcome, row.detail
         ));
     }
 }
