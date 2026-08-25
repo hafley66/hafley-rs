@@ -590,7 +590,7 @@ fn seed_mirror(root: &std::path::Path) {
     }
 }
 
-fn rehearsal_actions(root: &std::path::Path) -> soopy::StageRequest {
+fn dry_run_actions(root: &std::path::Path) -> soopy::StageRequest {
     let source_root = SourceRoot::open_directory(root).unwrap();
     let identity = source_root.directory().identity.clone();
     let root_id = SourceRootId::Directory {
@@ -621,7 +621,7 @@ fn rehearsal_actions(root: &std::path::Path) -> soopy::StageRequest {
                     end: 4,
                 },
                 replacement: b"HEAD".to_vec(),
-                producer: soopy::ActionProducer::unordered("soopy.test.rehearsal"),
+                producer: soopy::ActionProducer::unordered("soopy.test.dry_run"),
             }],
         });
     }
@@ -651,19 +651,19 @@ fn tree_bytes(root: &std::path::Path) -> Vec<(String, Vec<u8>)> {
     rows
 }
 
-/// The rehearsal engine drops device flushes only. Same request, same
+/// The dry_run engine drops device flushes only. Same request, same
 /// previews, same applied operations, same resulting bytes.
 #[test]
-fn rehearsal_commit_matches_the_durable_commit_on_the_same_request() {
-    let durable_root = temp_dir("rehearsal_durable_root");
-    let durable_state = temp_dir("rehearsal_durable_state");
-    let rehearsal_root = temp_dir("rehearsal_root");
-    let rehearsal_state = temp_dir("rehearsal_state");
+fn dry_run_commit_matches_the_durable_commit_on_the_same_request() {
+    let durable_root = temp_dir("dry_run_durable_root");
+    let durable_state = temp_dir("dry_run_durable_state");
+    let dry_run_root = temp_dir("dry_run_root");
+    let dry_run_state = temp_dir("dry_run_state");
     seed_mirror(&durable_root);
-    seed_mirror(&rehearsal_root);
+    seed_mirror(&dry_run_root);
 
     let mut durable_source = SourceRoot::open_directory(&durable_root).unwrap();
-    let durable_request = rehearsal_actions(&durable_root);
+    let durable_request = dry_run_actions(&durable_root);
     let mut durable_store = soopy::DurableStageStore::open(durable_state.join("stages")).unwrap();
     let durable_sealed =
         soopy::stage_mutations(&mut durable_source, &durable_request, &mut durable_store).unwrap();
@@ -675,47 +675,47 @@ fn rehearsal_commit_matches_the_durable_commit_on_the_same_request() {
     assert_eq!(durable_engine.durability(), soopy::Durability::Durable);
     let durable_receipt = durable_engine.commit(&durable_stage).unwrap();
 
-    let mut rehearsal_source = SourceRoot::open_directory(&rehearsal_root).unwrap();
-    let rehearsal_request = rehearsal_actions(&rehearsal_root);
-    let mut rehearsal_store = InMemoryStageStore::new();
-    let rehearsal_sealed = soopy::stage_mutations(
-        &mut rehearsal_source,
-        &rehearsal_request,
-        &mut rehearsal_store,
+    let mut dry_run_source = SourceRoot::open_directory(&dry_run_root).unwrap();
+    let dry_run_request = dry_run_actions(&dry_run_root);
+    let mut dry_run_store = InMemoryStageStore::new();
+    let dry_run_sealed = soopy::stage_mutations(
+        &mut dry_run_source,
+        &dry_run_request,
+        &mut dry_run_store,
     )
     .unwrap();
-    let rehearsal_stage = soopy::show_stage(&rehearsal_store, rehearsal_sealed.id)
+    let dry_run_stage = soopy::show_stage(&dry_run_store, dry_run_sealed.id)
         .unwrap()
         .unwrap();
-    let rehearsal_engine =
-        CommitEngine::open_rehearsal(&rehearsal_root, rehearsal_state.join("commits")).unwrap();
+    let dry_run_engine =
+        CommitEngine::open_dry_run(&dry_run_root, dry_run_state.join("commits")).unwrap();
     assert_eq!(
-        rehearsal_engine.durability(),
-        soopy::Durability::Rehearsal
+        dry_run_engine.durability(),
+        soopy::Durability::DryRun
     );
-    let rehearsal_receipt = rehearsal_engine.commit(&rehearsal_stage).unwrap();
+    let dry_run_receipt = dry_run_engine.commit(&dry_run_stage).unwrap();
 
-    assert_eq!(durable_stage.previews, rehearsal_stage.previews);
-    assert_eq!(durable_receipt.applied_files, rehearsal_receipt.applied_files);
-    assert_eq!(durable_receipt.operations, rehearsal_receipt.operations);
-    assert_eq!(tree_bytes(&durable_root), tree_bytes(&rehearsal_root));
-    assert!(rehearsal_root.join("moved/file-0.txt").is_file());
-    assert!(!rehearsal_root.join("file-0.txt").exists());
+    assert_eq!(durable_stage.previews, dry_run_stage.previews);
+    assert_eq!(durable_receipt.applied_files, dry_run_receipt.applied_files);
+    assert_eq!(durable_receipt.operations, dry_run_receipt.operations);
+    assert_eq!(tree_bytes(&durable_root), tree_bytes(&dry_run_root));
+    assert!(dry_run_root.join("moved/file-0.txt").is_file());
+    assert!(!dry_run_root.join("file-0.txt").exists());
     assert_eq!(
-        fs::read(rehearsal_root.join("file-1.txt")).unwrap(),
+        fs::read(dry_run_root.join("file-1.txt")).unwrap(),
         b"HEAD 1\n".to_vec()
     );
 
-    // The rehearsal engine still writes its receipt, so a replayed commit is
+    // The dry_run engine still writes its receipt, so a replayed commit is
     // still an early-out rather than a second application.
-    let replay = rehearsal_engine.commit(&rehearsal_stage).unwrap();
-    assert_eq!(replay.operations, rehearsal_receipt.operations);
+    let replay = dry_run_engine.commit(&dry_run_stage).unwrap();
+    assert_eq!(replay.operations, dry_run_receipt.operations);
 
     for directory in [
         durable_root,
         durable_state,
-        rehearsal_root,
-        rehearsal_state,
+        dry_run_root,
+        dry_run_state,
     ] {
         let _ = fs::remove_dir_all(directory);
     }

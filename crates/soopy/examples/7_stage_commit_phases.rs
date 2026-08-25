@@ -1,4 +1,4 @@
-//! Phase timings for the sprefa `extract move` rehearsal shape: a directory
+//! Phase timings for the sprefa `extract move` dry-run shape: a directory
 //! mirror, one Move plus 26 Replace actions, staged durably and committed.
 //!
 //! Run with `RUST_LOG=soopy=debug` so every phase event prints.
@@ -26,7 +26,7 @@ fn main() {
     let args: Vec<_> = std::env::args().collect();
     let corpus = numeric_arg(&args, "--files").unwrap_or(282);
     let replaces = numeric_arg(&args, "--replaces").unwrap_or(26);
-    let rehearsal = args.iter().any(|value| value == "--rehearsal");
+    let dry_run = args.iter().any(|value| value == "--dry-run");
 
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -80,15 +80,15 @@ fn main() {
     }
 
     let request = StageRequest::new(root_id, actions);
-    let (stage, stage_ms, load_ms) = if rehearsal {
+    let (stage, stage_ms, load_ms) = if dry_run {
         stage_and_load(&mut source_root, &request, &mut InMemoryStageStore::new())
     } else {
         let mut store = DurableStageStore::open(state.join("stages")).expect("open stage store");
         stage_and_load(&mut source_root, &request, &mut store)
     };
 
-    let engine = if rehearsal {
-        CommitEngine::open_rehearsal(&root, state.join("commits"))
+    let engine = if dry_run {
+        CommitEngine::open_dry_run(&root, state.join("commits"))
     } else {
         CommitEngine::open(&root, state.join("commits"))
     }
@@ -100,7 +100,7 @@ fn main() {
     println!(
         "{}",
         serde_json::json!({
-            "mode": if rehearsal { "rehearsal" } else { "durable" },
+            "mode": if dry_run { "dry_run" } else { "durable" },
             "corpus_files": corpus,
             "staged_files": stage.files.len(),
             "applied_files": receipt.applied_files,

@@ -146,20 +146,20 @@ impl std::error::Error for CommitRefusal {}
 
 /// Whether commit state has to survive a machine crash.
 ///
-/// `Rehearsal` targets a throwaway mirror: every journal, payload, receipt and
+/// `DryRun` targets a throwaway mirror: every journal, payload, receipt and
 /// target write still lands and is still read back, and no write is flushed to
-/// the device. A rehearsal engine must never be pointed at a root a human
+/// the device. A dry-run engine must never be pointed at a root a human
 /// keeps.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Durability {
     #[default]
     Durable,
-    Rehearsal,
+    DryRun,
 }
 
 impl Durability {
-    fn rehearsal(self) -> bool {
-        self == Self::Rehearsal
+    fn dry_run(self) -> bool {
+        self == Self::DryRun
     }
 }
 
@@ -180,11 +180,11 @@ impl CommitEngine {
 
     /// Open an engine for a throwaway mirror. Identical control flow to
     /// [`CommitEngine::open`] with every device flush dropped.
-    pub fn open_rehearsal(
+    pub fn open_dry_run(
         target_root: impl AsRef<Path>,
         state_root: impl AsRef<Path>,
     ) -> Result<Self> {
-        Self::open_with_durability(target_root, state_root, Durability::Rehearsal)
+        Self::open_with_durability(target_root, state_root, Durability::DryRun)
     }
 
     pub fn durability(&self) -> Durability {
@@ -551,7 +551,7 @@ impl CommitEngine {
                 }
                 continue;
             }
-            if self.durability.rehearsal() {
+            if self.durability.dry_run() {
                 write_unsynced(&path, bytes, None, "write commit payload")?;
             } else {
                 let mut file = AtomicWriteFile::open(&path)
@@ -1089,7 +1089,7 @@ fn atomic_write(
     durability: Durability,
     meter: &mut SyncMeter,
 ) -> std::result::Result<(), CommitRefusal> {
-    if durability.rehearsal() {
+    if durability.dry_run() {
         return write_unsynced(path, bytes, mode, "write atomic target");
     }
     let mut file = AtomicWriteFile::open(path)
@@ -1224,7 +1224,7 @@ fn write_journal(
 ) -> std::result::Result<(), CommitRefusal> {
     let bytes = serde_json::to_vec(journal)
         .map_err(|error| io_refusal_context("encode commit journal", error))?;
-    if durability.rehearsal() {
+    if durability.dry_run() {
         write_unsynced(path, &bytes, None, "write commit journal")?;
     } else {
         let mut file = AtomicWriteFile::open(path)
@@ -1391,7 +1391,7 @@ fn write_receipt(
 ) -> std::result::Result<(), CommitRefusal> {
     let bytes = serde_json::to_vec(receipt)
         .map_err(|error| io_refusal_context("encode commit receipt", error))?;
-    if durability.rehearsal() {
+    if durability.dry_run() {
         write_unsynced(path, &bytes, None, "write commit receipt")?;
     } else {
         let mut file = AtomicWriteFile::open(path)
@@ -1415,7 +1415,7 @@ fn sync_dir(path: &Path) -> std::result::Result<(), CommitRefusal> {
         .map_err(|error| io_refusal_context("sync commit directory", error))
 }
 
-/// A rehearsal mirror is discarded whole, so a partly written file can never
+/// A dry-run mirror is discarded whole, so a partly written file can never
 /// be read by anything but the same process. The temporary-and-rename dance
 /// buys nothing there and costs one device flush per file.
 fn write_unsynced(
@@ -1437,7 +1437,7 @@ fn sync_dir_when_durable(
     durability: Durability,
     meter: &mut SyncMeter,
 ) -> std::result::Result<(), CommitRefusal> {
-    if durability.rehearsal() {
+    if durability.dry_run() {
         return Ok(());
     }
     meter.measure(|| sync_dir(path))
