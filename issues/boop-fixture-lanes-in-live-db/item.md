@@ -2,9 +2,11 @@
 created: 2026-08-19
 updated: 2026-08-25
 type: bug
-status: open
+status: fixed
 priority: normal
 related: ['@boop-adopt-startup-sync-cold']
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 # Test fixture lanes (mine, lane-test) leaked 5k trace rows into the live boop.db; purge + rail
@@ -26,3 +28,9 @@ Measured 2026-08-19 13:30 on the live `~/.agent/boop.db`: test fixture lanes lea
 ### 2026-08-25T18:23:40Z · @claude-5
 
 Source: supervise.rs unit tests (TraceRecorder::new -> Store::default_path()). Fix: tempdir() pins BOOP_DB and HOME under a Once; rail recognises the pin. Full suite: fixture rows 9149 before, 9147 after (0 new). Purge script crates/boop-store/sql/purge_fixture_lanes.sql; the live purge and rm -rf ~/.agent/lanes/lane-test are left for Chris (destructive).
+
+## Comments
+
+### 2026-08-25T21:03:29Z · @claude-5
+
+Purge ran: agent_trace_event left 0; ~/.agent/lanes/lane-test removed.
