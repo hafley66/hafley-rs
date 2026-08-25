@@ -972,7 +972,9 @@ mod tests {
         assert!(graph.shells[0].session_id.is_none());
 
         let harness = store.intern_public("dict_harness", "opencode").unwrap();
-        let session = store.intern_public("dict_session", "native-session").unwrap();
+        let session = store
+            .intern_public("dict_session", "native-session")
+            .unwrap();
         store
             .connection()
             .execute(
@@ -980,10 +982,7 @@ mod tests {
                 rusqlite::params![session, harness],
             )
             .unwrap();
-        routes
-            .get_mut("feature-lane")
-            .unwrap()
-            .session_id = Some("native-session".into());
+        routes.get_mut("feature-lane").unwrap().session_id = Some("native-session".into());
 
         let graph = load_agent_session_graph_with_runtime(
             &store,

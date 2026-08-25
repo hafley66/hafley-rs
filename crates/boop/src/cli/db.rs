@@ -1111,7 +1111,10 @@ pub(crate) fn run_status(window_minutes: u64, format: QueryFormat) -> Result<()>
                 || route.cwd.as_deref() == row["cwd"].as_str()
         });
         let (lane_name, state) = match lane {
-            Some((name, route)) => (Some(name.clone()), lane_state(&dir, name, &live, route, &routes)),
+            Some((name, route)) => (
+                Some(name.clone()),
+                lane_state(&dir, name, &live, route, &routes),
+            ),
             None => (None, "unknown"),
         };
         if let Some(object) = row.as_object_mut() {

@@ -1521,7 +1521,7 @@ pub(crate) fn run_lane_list(
             for (name, path, locked) in claude_agent_worktrees(cwd) {
                 let state = if locked { "live" } else { "dead" };
                 line(&format!(
-                    "{} {} {} {} {} {} {} {}{}",
+                    "{} {} {} {} {} {} {} {} PARENT={}",
                     pad(state, 4),
                     pad(&name, 16),
                     pad("native-claude", 12),
@@ -1530,7 +1530,7 @@ pub(crate) fn run_lane_list(
                     pad("-", 46),
                     pad("-", 16),
                     path,
-                    format!(" PARENT={route_name}"),
+                    route_name,
                 ));
             }
         }
@@ -1601,7 +1601,10 @@ fn push_claude_agent(result: &mut Vec<(String, String, bool)>, path: String, loc
     let Some(idx) = path.find(MARKER) else {
         return;
     };
-    let id = path[idx + MARKER.len()..].split('/').next().unwrap_or_default();
+    let id = path[idx + MARKER.len()..]
+        .split('/')
+        .next()
+        .unwrap_or_default();
     if id.is_empty() {
         return;
     }
@@ -1670,7 +1673,9 @@ fn lane_state_hop(
             return "?";
         };
         let Some(parent_route) = routes.get(parent_name) else {
-            return "?";
+            // A parent that never registered is not evidence of death: the
+            // native stays live until an explicit done.
+            return "live";
         };
         return lane_state_hop(dir, parent_name, live, parent_route, routes, false);
     }
@@ -2993,7 +2998,10 @@ mod tests {
 
         drop(session);
         let dead_live = tmux::mux().live_sessions(None);
-        assert_eq!(lane_state(&dir, "mine", &dead_live, &route, &routes), "dead");
+        assert_eq!(
+            lane_state(&dir, "mine", &dead_live, &route, &routes),
+            "dead"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
