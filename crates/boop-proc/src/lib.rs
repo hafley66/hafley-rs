@@ -4,6 +4,7 @@
 
 pub mod concatmap;
 pub mod config;
+pub mod deliver;
 pub mod host;
 pub mod inbox;
 pub mod lane;

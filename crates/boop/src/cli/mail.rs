@@ -2,17 +2,17 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use boop::bus::Route;
 use boop::door::Delivered;
 use boop::harness::HarnessId;
-use boop::mail::{Landing, Via};
+use boop::mail::Landing;
 use boop::mailwait::Watch;
 use boop::registry::Registry;
 use boop::{bus, identity, inbox, lane, tmux};
 
-use crate::cli::job::{wait_and_exit, waiting_as};
+use crate::cli::job::waiting_as;
 use crate::cli::{append_acks, append_message, append_message_to, line, mail_dir, pad};
 use crate::InboxCmd;
 
@@ -105,6 +105,8 @@ pub(crate) fn all_messages(dir: &std::path::Path) -> Result<Vec<bus::Message>> {
 // hail
 // ---------------------------------------------------------------------------
 
+/// `beep hail`: the old send-without-waiting spelling, kept for briefs that
+/// still name it. One call into the send every verb shares.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_hail(
     registry: &Registry,
@@ -113,43 +115,154 @@ pub(crate) fn run_hail(
     from: Option<&str>,
     kind: Option<&str>,
     box_name: Option<&str>,
-    socket: Option<&str>,
+    _socket: Option<&str>,
     wait_timeout: Option<u64>,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
-    let dir = mail_dir(mail_dir_arg)?;
+    run_send(
+        registry,
+        Outbound {
+            route: to,
+            body: Some(body),
+            kind: kind.unwrap_or("request"),
+            as_name: from,
+            box_name,
+            timeout_secs: wait_timeout.unwrap_or(boop::mailwait::DEFAULT_TIMEOUT_SECS),
+            wait: wait_timeout.is_some(),
+            mail_dir: mail_dir_arg,
+        },
+    )
+}
+
+/// One send, spelled once. Every send verb in the CLI is a call into this
+/// function: `boop beep <route> <body>` is its visible spelling, and `push`,
+/// `beep hail`, `tell-parent` and `tell-children` are hidden aliases that fill
+/// the same struct.
+pub(crate) struct Outbound<'a> {
+    /// A registry name, or the `parent` / `children` alias.
+    pub route: &'a str,
+    /// `None` is legal only with `--kind yield`, which mints its own body.
+    pub body: Option<&'a str>,
+    pub kind: &'a str,
+    /// Who the row is from, when the whoami ladder cannot say.
+    pub as_name: Option<&'a str>,
+    /// A mailbox file other than `bus.ndjson`.
+    pub box_name: Option<&'a str>,
+    pub timeout_secs: u64,
+    /// Block for the answer. `--no-wait` clears it.
+    pub wait: bool,
+    pub mail_dir: Option<&'a Path>,
+}
+
+/// Route names a send cannot address: clap resolves each to the `beep`
+/// subcommand of that name long before the send sees it, so a registry row
+/// wearing one is unreachable and says so rather than mailing into the void.
+const RESERVED_ROUTES: [&str; 8] = [
+    "lane", "agent", "hail", "message", "ps", "pstree", "harness", "help",
+];
+
+/// Who a row is from when no `--as` and no ladder rung names the caller.
+const DEFAULT_SENDER: &str = "coordinator";
+
+/// Fan a body out to every child of the caller instead of addressing one.
+const CHILDREN_ALIAS: &str = "children";
+
+pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
+    if RESERVED_ROUTES.contains(&send.route) {
+        anyhow::bail!(
+            "`{route}` is the name of a `boop beep` subcommand, so it cannot be a route: \
+             `boop beep {route} ...` runs that subcommand. Rename the route.",
+            route = send.route
+        );
+    }
+    let dir = mail_dir(send.mail_dir)?;
+    let routes = bus::read_routes(&dir)?;
+    if send.route == CHILDREN_ALIAS {
+        return fan_out_to_children(registry, &dir, &routes, &send);
+    }
+    // Only the aliases that read an edge need the caller's own route; every
+    // other send takes the name it was handed, registered or not.
+    let (sender, to, parent_source) = if send.route == PARENT_ALIAS {
+        let (caller, route, stamped) = caller_identity(registry, &routes, send.as_name)?;
+        let pick = lane::tell_parent_target(&caller, route, &routes, stamped.as_deref())?;
+        let parent = pick
+            .parent
+            .clone()
+            .context("no parent edge resolved for the caller")?;
+        (caller, parent, Some(pick.source))
+    } else {
+        (
+            sender_name(registry, &routes, send.as_name)?,
+            send.route.to_owned(),
+            None,
+        )
+    };
+    let body = match (send.body, send.kind) {
+        (Some(body), _) => body.to_owned(),
+        (None, "yield") => {
+            let tree = routes
+                .get(&sender)
+                .and_then(|route| route.worktree_dir.as_deref().or(route.cwd.as_deref()))
+                .map(Path::new);
+            lane::yield_body(&sender, tree)
+        }
+        (None, kind) => anyhow::bail!(
+            "a body is required with --kind {kind}; only `yield` carries a default body"
+        ),
+    };
     let message = bus::Message {
         id: bus::mint_id(),
-        from: from.unwrap_or("coordinator").to_owned(),
-        to: to.to_owned(),
+        from: sender.clone(),
+        to: to.clone(),
         from_timestamp: bus::now_iso(),
         to_timestamp: None,
-        kind: kind.unwrap_or("request").to_owned(),
+        kind: send.kind.to_owned(),
         reply_to: None,
-        body: body.to_owned(),
+        body,
         r#ref: None,
         rc: None,
         detail: None,
     };
-    append_message_to(&dir, box_name.unwrap_or("bus.ndjson"), &message)?;
+    append_message_to(&dir, send.box_name.unwrap_or("bus.ndjson"), &message)?;
     record_control_edge(&message)?;
-    deliver_hail(registry, &dir, &message, socket)?;
-    line(&format!(
-        "to await the reply: boop wait {}   (or: boop wait --me &)",
-        message.id
-    ));
-    let Some(timeout_secs) = wait_timeout else {
+    if let Some(source) = parent_source {
+        println!("{sender} -> {to} (parent from {source})");
+    }
+    deliver_hail(registry, &dir, &message, None)?;
+    if parent_source.is_some() {
+        print_tell_parent_receipt(&sender, &to, &message.id);
+        line(&message.id);
+    }
+    // The parent send's last line is its own id, by contract. Every other send
+    // names the command that collects the answer, before the block as well as
+    // instead of it: a shell killed mid-wait leaves the id on screen.
+    if parent_source.is_none() {
+        line(&format!(
+            "to await the reply: boop wait {}   (or: boop wait --me &)",
+            message.id
+        ));
+    }
+    if !send.wait {
         return Ok(());
-    };
-    let idle = crate::cli::job::watch_turn_end(&dir, &message.id, timeout_secs);
-    wait_and_exit(
-        &dir,
-        Watch::Reply { id: message.id },
-        timeout_secs,
-        None,
-        mail_dir_arg,
-        idle,
-    )
+    }
+    push_wait(&dir, &to, &message.id, send.timeout_secs)
+}
+
+/// Who the row is from: `--as`, else the identity ladder's own name, else the
+/// placeholder. A name `--as` gives is taken as written; only the alias sends
+/// need it to be a registered route.
+fn sender_name(
+    registry: &Registry,
+    routes: &BTreeMap<String, Route>,
+    as_name: Option<&str>,
+) -> Result<String> {
+    if let Some(name) = as_name {
+        return Ok(name.to_owned());
+    }
+    let identity = identity::resolve_with(registry, routes)?;
+    Ok(lane::caller_route(&identity, routes)
+        .map(|(caller, _)| caller)
+        .unwrap_or_else(|_| DEFAULT_SENDER.to_owned()))
 }
 
 /// Put one queued message in front of its recipient, through the door its
@@ -167,15 +280,27 @@ pub(crate) fn deliver_hail(
         let response = crate::cli::acpx::deliver(route, &message.body)?;
         append_acks(dir, std::slice::from_ref(message))?;
         let landing = Landing::acpx(response.trim_end().to_owned());
+        let harness_id = route
+            .harness
+            .map_or_else(|| "acpx".to_owned(), |id| id.to_string());
+        store.append_delivery_transition(
+            &message.id,
+            to,
+            route.harness,
+            boop::DeliveryState::Appended.as_str(),
+            "mailbox",
+            None,
+            boop::live::now_ms(),
+        )?;
         landing.record(&store, &message.id, to, route.harness)?;
         if let Some(reply) = landing.reply.as_deref().filter(|text| !text.is_empty()) {
             println!("{reply}");
         }
-        println!("delivered {} -> {to} (acpx queue)", message.id);
+        println!("{}", landing.line(&message.id, to, &harness_id));
         return Ok(());
     }
-    // Only a door landing names a harness, and a door landing has one; a route
-    // with no harness never reaches an arm that prints this word.
+    // The door rung is the only line that names a harness; a route naming none
+    // reads the placeholder rather than inventing one.
     let harness_id = routes
         .get(to)
         .and_then(|route| route.harness)
@@ -184,111 +309,261 @@ pub(crate) fn deliver_hail(
     info!(
         to,
         message_id = message.id,
-        delivery = landing.via.as_str(),
+        rung = landing.rung.as_str(),
         outcome = landing.outcome(),
         "hail delivery recorded"
     );
-    match &landing.delivered {
-        Delivered::Injected => {
-            append_acks(dir, std::slice::from_ref(message))?;
-            println!(
-                "delivered {} -> {to} through the {harness_id} door",
-                message.id
-            );
-        }
-        Delivered::QueuedForTurnBoundary => match landing.via {
-            Via::HookInbox => println!("queued {} -> {to} (hook inbox drains it)", message.id),
-            Via::LaneSupervisor => {
-                println!(
-                    "queued {} -> {to} (lane supervisor delivers it)",
-                    message.id
-                )
-            }
-            _ => println!(
-                "queued {} -> {to} (the {harness_id} door takes it at the next turn boundary)",
-                message.id
-            ),
-        },
-        Delivered::Unreachable(why) => {
-            println!("queued {} -> {to}", message.id);
-            println!("{to}: {why}: message stays queued, to_timestamp null");
-        }
+    if landing.rung.carried_the_body() {
+        append_acks(dir, std::slice::from_ref(message))?;
     }
+    println!("{}", landing.line(&message.id, to, &harness_id));
+    confirm_transition_recorded(&store, &message.id, to)?;
     Ok(())
 }
+
+/// One POLL after the append, the ledger must hold a transition past
+/// `appended` for this message. A row nobody owns is the failure the sender
+/// reports, and it is the only outcome that is not an exit 0.
+fn confirm_transition_recorded(store: &boop::Store, message_id: &str, to: &str) -> Result<()> {
+    let deadline = std::time::Instant::now() + DELIVERY_CONFIRM;
+    loop {
+        let rows = store.delivery_rows(message_id).unwrap_or_default();
+        if rows.iter().any(|row| {
+            boop::DeliveryState::parse(&row.outcome).is_some_and(boop::DeliveryState::landed)
+        }) {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            let states: Vec<&str> = rows.iter().map(|row| row.outcome.as_str()).collect();
+            anyhow::bail!(
+                "{message_id} -> {to}: appended with no delivery transition inside {}ms (ledger: {}); the row is in the mailbox and nothing owns it",
+                DELIVERY_CONFIRM.as_millis(),
+                if states.is_empty() {
+                    "empty".to_owned()
+                } else {
+                    states.join(", ")
+                }
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+/// One supervisor POLL. A send that has no delivery transition by now is a row
+/// no rung of the ladder took.
+const DELIVERY_CONFIRM: std::time::Duration = std::time::Duration::from_millis(700);
+
+/// `push`: the send and the wait in one verb. The row goes down the same
+/// ladder every send path walks, then the caller blocks on the first of a
+/// reply, the recipient's turn ending, the route dying, or the timeout.
+///
+/// | ends on | exit | last line |
+/// |---|---|---|
+/// | a reply row, or the recipient's next mail back | 0 | the reply, then `boop wait <id>` |
+/// | the recipient's turn ending with no reply | 0 | `boop wait <id>` |
+/// | the route going dead | 3 | `boop debug <route>` |
+/// | the timeout | 124 | `boop debug <route>` |
+/// `push`: the old send-and-block spelling, kept for briefs that still name
+/// it. One call into the send every verb shares.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_push(
+    registry: &Registry,
+    to: &str,
+    body: &str,
+    kind: &str,
+    from: Option<&str>,
+    timeout_secs: u64,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    run_send(
+        registry,
+        Outbound {
+            route: to,
+            body: Some(body),
+            kind,
+            as_name: from,
+            box_name: None,
+            timeout_secs,
+            wait: true,
+            mail_dir: mail_dir_arg,
+        },
+    )
+}
+
+/// The block half of `push`. Every source it watches is one an existing verb
+/// already watches: `boop wait`'s reply selection, `beep hail --wait-timeout`'s
+/// turn-end receiver, and `beep lane wait`'s route liveness.
+fn push_wait(dir: &Path, to: &str, message_id: &str, timeout_secs: u64) -> Result<()> {
+    let watch = Watch::Reply {
+        id: message_id.to_owned(),
+    };
+    let turn_end = crate::cli::job::watch_turn_end(dir, message_id, timeout_secs);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+    let next_wait = format!("boop wait {message_id}");
+    let next_debug = format!("boop debug {to}");
+    info!(to, message_id, timeout_secs, "push wait starting");
+    let mut dead_polls = 0u32;
+    loop {
+        let arrivals = watch.arrivals(&all_messages(dir)?);
+        if let Some(reply) = arrivals.first() {
+            info!(to, message_id, "push answered by a reply");
+            line(&reply.body);
+            append_acks(dir, std::slice::from_ref(reply))?;
+            line(&next_wait);
+            return Ok(());
+        }
+        if let Some(ended) = turn_end.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            info!(to, message_id, "push answered by a turn end");
+            line(&ended);
+            line(&next_wait);
+            return Ok(());
+        }
+        // A route is written before its session answers, so one dead
+        // observation is never enough. The same bound `beep lane wait` uses.
+        dead_polls = match crate::cli::job::route_liveness(dir, to) {
+            crate::cli::job::RouteLiveness::Dead => dead_polls + 1,
+            _ => 0,
+        };
+        if dead_polls >= crate::cli::job::DEAD_POLLS {
+            warn!(to, message_id, exit_code = 3, "push route died");
+            line(&format!("{to} died with no answer to {message_id}"));
+            line(&next_debug);
+            std::process::exit(3);
+        }
+        if std::time::Instant::now() >= deadline {
+            info!(to, message_id, exit_code = 124, "push timed out");
+            let timed_out = format!("no answer from {to} in {timeout_secs}s (id {message_id})");
+            line(&timed_out);
+            eprintln!("{timed_out}"); // @eprintln-ok: the next line must survive a redirected stdout
+            line(&next_debug);
+            eprintln!("{next_debug}"); // @eprintln-ok: same
+            std::process::exit(124);
+        }
+        std::thread::sleep(PUSH_POLL);
+    }
+}
+
+/// How often `push` re-reads the mailbox. The same cadence `boop wait` uses.
+const PUSH_POLL: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// An acpx route is driven by the caller's own queue, not by a harness door.
 fn is_acpx(route: &Route) -> bool {
     route.mode.as_deref() == Some("acpx")
 }
 
-/// `tell-parent`: one row from the caller to the parent its registration
-/// recorded. The caller spells neither end of the edge.
+/// Who is calling, for every verb that has to know: the name, its registry
+/// route, and the parent the spawner stamped into the environment.
+///
+/// `--as` is the whole identity. A native subagent runs inside its spawner's
+/// environment, so the env rung names the spawner and `BOOP_PARENT` is the
+/// spawner's parent, never the native's.
+fn caller_identity<'a>(
+    registry: &Registry,
+    routes: &'a BTreeMap<String, Route>,
+    as_name: Option<&str>,
+) -> Result<(String, &'a Route, Option<String>)> {
+    match as_name {
+        Some(name) => {
+            let route = routes.get(name).with_context(|| {
+                format!("--as {name} names no registered route; `beep agent register {name}` first")
+            })?;
+            Ok((name.to_owned(), route, None))
+        }
+        None => {
+            let identity = identity::resolve_with(registry, routes)?;
+            let (caller, route) = lane::caller_route(&identity, routes)?;
+            Ok((caller, route, identity.parent))
+        }
+    }
+}
+
+/// The one route name that is an alias rather than a registry key.
+const PARENT_ALIAS: &str = "parent";
+
+/// `tell-parent`: the old spelling of `boop beep parent <body>`, kept for
+/// briefs that still name it. One call into the send every verb shares.
 pub(crate) fn run_tell_parent(
     registry: &Registry,
     kind: &str,
     body: Option<&str>,
+    as_name: Option<&str>,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
-    let dir = mail_dir(mail_dir_arg)?;
-    let routes = bus::read_routes(&dir)?;
-    let identity = identity::resolve_with(registry, &routes)?;
-    let (caller, route) = lane::caller_route(&identity, &routes)?;
-    let pick = lane::tell_parent_target(&caller, route, &routes)?;
-    let parent = pick
-        .parent
-        .clone()
-        .context("no parent edge resolved for the caller")?;
-    let body = match (body, kind) {
-        (Some(body), _) => body.to_owned(),
-        (None, "yield") => {
-            let tree = route
-                .worktree_dir
-                .as_deref()
-                .or(route.cwd.as_deref())
-                .map(Path::new);
-            lane::yield_body(&caller, tree)
-        }
-        (None, kind) => anyhow::bail!(
-            "--body is required with --kind {kind}; only `yield` carries a default body"
-        ),
-    };
-    let message = bus::Message {
-        id: bus::mint_id(),
-        from: caller.clone(),
-        to: parent.clone(),
-        from_timestamp: bus::now_iso(),
-        to_timestamp: None,
-        kind: kind.to_owned(),
-        reply_to: None,
-        body,
-        r#ref: None,
-        rc: None,
-        detail: None,
-    };
-    append_message(&dir, &message)?;
-    record_control_edge(&message)?;
-    println!("{caller} -> {parent} (parent from {})", pick.source);
-    deliver_hail(registry, &dir, &message, None)?;
-    line(&message.id);
-    Ok(())
+    run_send(
+        registry,
+        Outbound {
+            route: PARENT_ALIAS,
+            body,
+            kind,
+            as_name,
+            box_name: None,
+            timeout_secs: boop::mailwait::DEFAULT_TIMEOUT_SECS,
+            wait: false,
+            mail_dir: mail_dir_arg,
+        },
+    )
 }
 
-/// `tell-children`: one body to every child of the caller, from the registry's
-/// parent edges and from the store's `spawned` edges for the caller's session.
-/// Every target reports its own outcome and the run ends in a tally, so a run
-/// that reached nobody cannot read as success.
+/// The receipt `tell-parent` leaves (spec 7.5): who called, which parent the
+/// edge resolved to, the message id, and the transition the ladder recorded.
+/// Read back from the store, so it is the same row `boop db` and `boop debug`
+/// show rather than a second account of the same send.
+fn print_tell_parent_receipt(caller: &str, parent: &str, message_id: &str) {
+    let rows = boop::Store::default_path()
+        .and_then(boop::Store::open)
+        .and_then(|store| store.delivery_rows(message_id))
+        .unwrap_or_default();
+    match rows.last() {
+        Some(row) => line(&format!(
+            "receipt {caller} -> {parent} {message_id} {} ({})",
+            row.outcome, row.detail
+        )),
+        None => line(&format!(
+            "receipt {caller} -> {parent} {message_id} no delivery transition recorded"
+        )),
+    }
+}
+
+/// `tell-children`: the old spelling of `boop beep children <body>`, kept for
+/// briefs that still name it. One call into the send every verb shares.
 pub(crate) fn run_tell_children(
     registry: &Registry,
     body: &str,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
-    let dir = mail_dir(mail_dir_arg)?;
-    let routes = bus::read_routes(&dir)?;
-    let identity = identity::resolve_with(registry, &routes)?;
-    let (caller, _) = lane::caller_route(&identity, &routes)?;
-    let children = lane::children_of(&caller, &routes);
-    let spawned = spawned_children(identity.session.as_deref(), &routes);
+    run_send(
+        registry,
+        Outbound {
+            route: CHILDREN_ALIAS,
+            body: Some(body),
+            kind: "note",
+            as_name: None,
+            box_name: None,
+            timeout_secs: boop::mailwait::DEFAULT_TIMEOUT_SECS,
+            wait: false,
+            mail_dir: mail_dir_arg,
+        },
+    )
+}
+
+/// The `children` route: one body to every child of the caller, from the
+/// registry's parent edges and from the store's `spawned` edges for the
+/// caller's session. Every target reports its own outcome and the run ends in
+/// a tally, so a run that reached nobody cannot read as success. A fan-out has
+/// no single row to wait on, so `--timeout` and `--no-wait` do not reach here.
+fn fan_out_to_children(
+    registry: &Registry,
+    dir: &Path,
+    routes: &BTreeMap<String, Route>,
+    send: &Outbound<'_>,
+) -> Result<()> {
+    let (caller, _, _) = caller_identity(registry, routes, send.as_name)?;
+    let body = send
+        .body
+        .context("a body is required to mail the caller's children")?;
+    let identity = identity::resolve_with(registry, routes).unwrap_or_default();
+    let children = lane::children_of(&caller, routes);
+    let spawned = spawned_children(identity.session.as_deref(), routes);
     if children.is_empty() && spawned.is_empty() {
         println!("no child of {caller} is registered");
         return Ok(());
@@ -322,7 +597,7 @@ pub(crate) fn run_tell_children(
             rc: None,
             detail: None,
         };
-        append_message(&dir, &message)?;
+        append_message(dir, &message)?;
         record_control_edge(&message)?;
         match reach {
             ChildReach::Hook => {

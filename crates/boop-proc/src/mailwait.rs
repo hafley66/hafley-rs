@@ -3,6 +3,7 @@
 //! this module is the selection over bus rows.
 
 use boop_store::bus::{fold, unacked, Message};
+use boop_store::DeliveryState;
 
 /// Seconds a wait blocks before exiting 124. Under the 10-minute cap a
 /// background shell gives an agent, so the re-run line is always reachable.
@@ -79,13 +80,34 @@ pub fn reply_to(rows: &[Message], id: &str) -> Option<Message> {
         .cloned()
 }
 
-/// Every row addressed to `name` that nothing has taken delivery of. An ack is
-/// a fact about the transcript, never mail to read.
+/// Kinds no inbox wait hands back. An `ack` is a fact about the transcript,
+/// never mail to read. A `dispatch` is the lane's own spawn brief, already in
+/// the first turn, and reading it a second time restarts work already done.
+pub const NOT_UNREAD_KINDS: [&str; 2] = ["ack", "dispatch"];
+
+/// Every row addressed to `name` that nothing has taken delivery of.
 pub fn unread_for(rows: &[Message], name: &str) -> Vec<Message> {
     unacked(rows)
         .into_iter()
-        .filter(|row| row.to == name && row.kind != "ack")
+        .filter(|row| row.to == name && !NOT_UNREAD_KINDS.contains(&row.kind.as_str()))
         .collect()
+}
+
+/// Whether the ledger says something already put this row in front of its
+/// recipient, from the `outcome` words of its delivery transitions.
+///
+/// `held-in-mailbox` is the one landing that reads as still unread: a row to a
+/// route naming no harness stops there, and a polling `wait --me` is the only
+/// thing that ever finds it. Every other landing means a harness, a hook, a
+/// pane or a parent door took the body.
+pub fn already_in_front_of_the_recipient<'a>(outcomes: impl IntoIterator<Item = &'a str>) -> bool {
+    outcomes
+        .into_iter()
+        .any(|word| match DeliveryState::parse(word) {
+            Some(DeliveryState::HeldInMailbox) => false,
+            Some(state) => state.landed() || state == DeliveryState::TurnStarted,
+            None => false,
+        })
 }
 
 /// The last line a timed-out wait prints, on stdout and on stderr both.
@@ -170,6 +192,40 @@ mod tests {
         let elsewhere = row("m-4", "coordinator", "someone-else", "2026-08-16T00:00:04Z");
         let rows = vec![unread_one.clone(), unread_two.clone(), delivered, elsewhere];
         assert_eq!(unread_for(&rows, "me"), vec![unread_one, unread_two]);
+    }
+
+    /// Defect 3 (addendum 2026-08-25): the lane's own dispatch row came back
+    /// from `wait --me` as the next unread row, hours after the spawn turn ate
+    /// it.
+    #[test]
+    fn an_inbox_wait_never_hands_back_the_lanes_own_dispatch_row() {
+        let mut dispatch = row("m-d2252d54", "coordinator", "me", "2026-08-16T00:00:00Z");
+        dispatch.kind = "dispatch".to_owned();
+        let mail = row("m-2", "other", "me", "2026-08-16T00:00:01Z");
+        let rows = vec![dispatch, mail.clone()];
+        assert_eq!(unread_for(&rows, "me"), vec![mail]);
+    }
+
+    #[test]
+    fn a_row_a_harness_hook_or_pane_already_took_is_not_unread() {
+        assert!(already_in_front_of_the_recipient(["accepted-by-harness"]));
+        assert!(already_in_front_of_the_recipient([
+            "appended",
+            "queued-in-hook-inbox"
+        ]));
+        assert!(already_in_front_of_the_recipient(["pasted-into-pane"]));
+        assert!(already_in_front_of_the_recipient(["turn-started"]));
+        assert!(already_in_front_of_the_recipient(["parent-door-delivered"]));
+    }
+
+    /// A row to a route naming no harness stops at `held-in-mailbox`, and a
+    /// polling `wait --me` is the only thing that ever delivers it.
+    #[test]
+    fn a_row_held_in_the_mailbox_stays_unread() {
+        assert!(!already_in_front_of_the_recipient(["held-in-mailbox"]));
+        assert!(!already_in_front_of_the_recipient(["appended"]));
+        assert!(!already_in_front_of_the_recipient([]));
+        assert!(!already_in_front_of_the_recipient(["what-boop-writes-next"]));
     }
 
     #[test]

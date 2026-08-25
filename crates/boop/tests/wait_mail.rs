@@ -360,10 +360,203 @@ fn hail_with_a_wait_timeout_sends_then_blocks_and_times_out() {
         stdout.contains(&format!("to await the reply: boop wait {id}")),
         "the hint still prints before the block: {stdout}"
     );
+    // Folded (2026-08-25): `beep hail --wait-timeout` is `push`'s block, so
+    // its timeout ends on `push`'s two lines rather than the bare re-run one.
     assert!(
-        stdout.lines().last().unwrap().starts_with(&format!(
-            "timed out after 1s waiting for reply to {id}; re-run:"
-        )),
-        "the last line is the re-run command: {stdout}"
+        stdout.contains(&format!("no answer from feature-answers in 1s (id {id})")),
+        "the timeout names the route and the id: {stdout}"
+    );
+    assert_eq!(
+        stdout.lines().last(),
+        Some("boop debug feature-answers"),
+        "the last line is the next command: {stdout}"
+    );
+}
+
+// FAIL-PRE-FIX: a parent had to send with one verb and wait with another,
+// pasting the id between them; `push` is both, and its exits are typed.
+#[test]
+fn push_sends_and_blocks_until_the_reply_arrives() {
+    let fixture = Fixture::new("push-reply");
+    let pushing = fixture
+        .boop(&[
+            "push",
+            "feature-answers",
+            "--body",
+            "question",
+            "--from",
+            "asker",
+            "--timeout",
+            "30",
+        ])
+        .spawn()
+        .unwrap();
+    // The push re-reads the mailbox twice a second, so the reply lands after
+    // it has already blocked at least once.
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    let id = queued_id(&fixture);
+    append(
+        &fixture.mail,
+        reply_row("m-push-answer", &id, "the answer is 4"),
+    );
+    let output = pushing.wait_with_output().unwrap();
+
+    assert_eq!(output.status.code(), Some(0), "an answered push exits 0");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert!(
+        lines.iter().any(|line| line.contains(&id)
+            && (line.starts_with("held") || line.starts_with("delivered"))),
+        "one delivery line naming the rung: {stdout}"
+    );
+    assert!(
+        lines.contains(&"the answer is 4"),
+        "the reply body is printed: {stdout}"
+    );
+    assert_eq!(
+        lines.last(),
+        Some(&format!("boop wait {id}").as_str()),
+        "the last line is the next command: {stdout}"
+    );
+}
+
+/// RECEIPT (push). A route that never answers exits 124, and both streams
+/// carry the command that reads what happened.
+#[test]
+fn push_exits_124_and_names_the_debug_command() {
+    let fixture = Fixture::new("push-timeout");
+    let output = fixture
+        .boop(&[
+            "push",
+            "feature-silent",
+            "--body",
+            "question",
+            "--from",
+            "asker",
+            "--timeout",
+            "1",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(124), "a silent push exits 124");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert_eq!(
+        stdout.lines().last(),
+        Some("boop debug feature-silent"),
+        "the last line reads what happened: {stdout}"
+    );
+    assert!(
+        stderr.contains("boop debug feature-silent"),
+        "the next command survives a redirected stdout: {stderr}"
+    );
+}
+
+/// RECEIPT (push). A push at a name with no route still lands: the row is
+/// held in the mailbox and the sender is told which rung took it.
+#[test]
+fn push_at_an_unregistered_name_still_reports_a_rung() {
+    let fixture = Fixture::new("push-noroute");
+    let output = fixture
+        .boop(&[
+            "push",
+            "nobody",
+            "--body",
+            "into the void",
+            "--from",
+            "asker",
+            "--timeout",
+            "1",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(124), "nothing answered");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("held") && stdout.contains("no registry route for nobody"),
+        "the rung and its reason are printed: {stdout}"
+    );
+}
+
+/// Defect 3 (addendum 2026-08-25): `wait --me` handed the lane its own
+/// dispatch row back as the next unread row, hours after the spawn turn ate
+/// it. With that row the only one in the box, the wait has nothing and times
+/// out.
+#[test]
+fn me_never_hands_back_the_lanes_own_dispatch_row() {
+    let fixture = Fixture::new("dispatch");
+    append(
+        &fixture.mail,
+        serde_json::json!({
+            "id": "m-d2252d54",
+            "from": "coordinator",
+            "to": "feature-cx-a",
+            "from_timestamp": boop::bus::now_iso(),
+            "to_timestamp": null,
+            "kind": "dispatch",
+            "reply_to": null,
+            "body": "the brief the spawn already injected",
+            "ref": null,
+        }),
+    );
+    let output = fixture
+        .boop(&["wait", "--me", "--as", "feature-cx-a", "--wait-timeout", "1"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(124),
+        "a dispatch row is not unread mail"
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        !stdout.contains("the brief the spawn already injected"),
+        "stdout: {stdout}"
+    );
+}
+
+/// Defect 3, the other half: a row to a route naming no harness stops at
+/// `held-in-mailbox`, and a polling `wait --me` is the only thing that ever
+/// finds it. That transition must not read as delivered.
+#[test]
+fn me_still_takes_a_row_held_in_the_mailbox_for_a_native_route() {
+    let fixture = Fixture::new("held");
+    std::fs::write(
+        fixture.mail.join("registry.json"),
+        serde_json::json!({
+            "native-n1": {"kind": "native", "parent": "feature-cx-a"},
+            "native-n2": {"kind": "native", "parent": "feature-cx-b"},
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let sent = fixture
+        .boop(&[
+            "beep",
+            "hail",
+            "native-n1",
+            "--as",
+            "native-n2",
+            "--body",
+            "ping from the sibling native",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(sent.status.code(), Some(0), "hail to a native route lands");
+    assert!(
+        String::from_utf8_lossy(&sent.stdout).contains("held-in-mailbox")
+            || String::from_utf8_lossy(&sent.stdout).contains("held"),
+        "stdout: {}",
+        String::from_utf8_lossy(&sent.stdout)
+    );
+    let output = fixture
+        .boop(&["wait", "--me", "--as", "native-n1", "--wait-timeout", "10"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0), "the held row answers --me");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("ping from the sibling native"),
+        "stdout: {stdout}"
     );
 }

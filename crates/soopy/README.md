@@ -54,6 +54,43 @@ the plan under its content-derived `StageId`. `CommitEngine` checks the staged
 inputs again, writes the approved result, journals progress, and returns an
 idempotent receipt.
 
+### Rehearsal mode
+
+A dry run against a throwaway mirror pays for durability it then deletes. Pair
+`InMemoryStageStore` with `CommitEngine::open_rehearsal` and the same
+`StageRequest` runs the same planning, sealing, preflight, journal, apply and
+receipt steps with every device flush dropped:
+
+```rust
+let mut stages = soopy::InMemoryStageStore::new();
+let sealed = soopy::stage_mutations(&mut root, &request, &mut stages)?;
+let stage = soopy::show_stage(&stages, sealed.id)?.expect("stage present");
+let engine = soopy::CommitEngine::open_rehearsal(mirror, state)?;
+let receipt = engine.commit(&stage)?;
+# Ok::<(), anyhow::Error>(())
+```
+
+Previews, applied operations and resulting bytes match the durable path;
+`tests/14_commit_engine.rs` pins that. Never point a rehearsal engine at a root
+a human keeps: an interrupted rehearsal has no crash guarantee.
+
+One Move plus 26 Replace actions over a 282-file mirror, release build, macOS
+APFS, three runs each:
+
+| path | stage | rehydrate | commit | total | fsyncs |
+|---|---|---|---|---|---|
+| durable | 326 / 305 / 338 ms | 1.1 / 1.2 / 1.4 ms | 509 / 476 / 457 ms | 837 / 782 / 796 ms | 143 |
+| rehearsal | 0.62 / 0.63 / 0.67 ms | 0.005 ms | 4.9 / 5.3 / 5.5 ms | 5.5 / 6.0 / 6.2 ms | 0 |
+
+The durable split is 54 in `stage.write_blobs`, 2 in `stage.write_manifest`,
+28 in `commit.materialize_payloads`, 2 in `commit.write_journal`, 54 in
+`commit.apply`, 3 in `commit.write_receipt`. `File::sync_all` is `F_FULLFSYNC`
+on macOS, so each one is a device cache flush at roughly 5 ms.
+
+```bash
+cargo run -p soopy --release --example 7_stage_commit_phases -- --rehearsal
+```
+
 Run the deterministic mutation and repository-scale gates:
 
 ```bash

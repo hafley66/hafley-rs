@@ -5,6 +5,7 @@
 //! target filesystem, Git index, ref, or commit mutation.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
@@ -100,13 +101,48 @@ pub fn plan_mutations(
         });
     }
 
+    let plan_started = Instant::now();
+    let plan_span = tracing::debug_span!(
+        "stage.plan",
+        operation = "plan_mutations",
+        actions = request.actions.len(),
+        files = tracing::field::Empty,
+        duration_ms = tracing::field::Empty,
+    );
+    let _plan_entered = plan_span.enter();
+
     let grouped = group_actions(root, request)?;
+
+    let read_started = Instant::now();
+    let read_span = tracing::debug_span!(
+        "stage.read_inputs",
+        operation = "read_inputs",
+        files = grouped.sources.len(),
+        duration_ms = tracing::field::Empty,
+    );
+    let read_entered = read_span.enter();
     let inputs = read_inputs(root, &grouped)?;
+    read_span.record("duration_ms", crate::elapsed_millis(read_started));
+    tracing::debug!(
+        files = inputs.len(),
+        duration_ms = crate::elapsed_millis(read_started),
+        "stage inputs read"
+    );
+    drop(read_entered);
+
     let stale = stale_inputs(&grouped, &inputs);
     if !stale.is_empty() {
         return Err(StageRefusal::Stale { inputs: stale });
     }
 
+    let normalize_started = Instant::now();
+    let normalize_span = tracing::debug_span!(
+        "stage.normalize",
+        operation = "normalize_edits",
+        files = grouped.sources.len() + grouped.creates.len(),
+        duration_ms = tracing::field::Empty,
+    );
+    let normalize_entered = normalize_span.enter();
     let mut files = Vec::with_capacity(grouped.sources.len() + grouped.creates.len());
     for (path, bytes) in grouped.creates {
         files.push(PlannedFile {
@@ -170,6 +206,20 @@ pub fn plan_mutations(
         }
     }
     files.sort_by_key(planned_file_key);
+    normalize_span.record("duration_ms", crate::elapsed_millis(normalize_started));
+    tracing::debug!(
+        files = files.len(),
+        duration_ms = crate::elapsed_millis(normalize_started),
+        "stage outputs normalized"
+    );
+    drop(normalize_entered);
+    plan_span.record("files", files.len());
+    plan_span.record("duration_ms", crate::elapsed_millis(plan_started));
+    tracing::debug!(
+        files = files.len(),
+        duration_ms = crate::elapsed_millis(plan_started),
+        "mutation plan built"
+    );
     Ok(MutationPlan {
         root: request.root.clone(),
         files,

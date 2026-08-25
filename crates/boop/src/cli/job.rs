@@ -393,9 +393,6 @@ pub(crate) fn run_lane_supervisor(
         lane: Some(lane.to_owned()),
         executable: bin.map(str::to_owned),
     };
-    let mut channel = adapter.open_channel(&spec).inspect_err(|error| {
-        error!(lane, harness = harness_id, error = %error, "lane channel open failed");
-    })?;
     let run = boop::supervise::LaneRun {
         lane: lane.to_owned(),
         // The warm-up's outcome and the setup sentence lead the first turn.
@@ -404,6 +401,17 @@ pub(crate) fn run_lane_supervisor(
         cwd,
         model: model.map(str::to_owned),
         resume: resume.map(str::to_owned),
+    };
+    // A handshake that fails here happens before the supervisor exists, so
+    // nothing else would tell the parent this lane never opened. A rejected
+    // model spelling looked exactly like a lane still starting up.
+    let mut channel = match adapter.open_channel(&spec) {
+        Ok(channel) => channel,
+        Err(error) => {
+            error!(lane, harness = harness_id, error = %error, "lane channel open failed");
+            boop::supervise::report_open_failure(&run, &error.to_string());
+            return Err(error);
+        }
     };
     // Process-global, so it is armed here and not inside the library call.
     boop::supervise::arm_signal_trail(&run);
@@ -510,7 +518,11 @@ pub(crate) fn watch_turn_end(
     let (sender, receiver) = std::sync::mpsc::channel();
     let mut armed = 0usize;
     for row in rows {
-        if row.outcome != "injected" && row.outcome != "queued-for-turn-boundary" {
+        // Only a rung that put the body itself in front of the recipient has
+        // a turn to end. A held or pasted row waits on the mailbox alone.
+        if !boop::DeliveryState::parse(&row.outcome)
+            .is_some_and(|state| state == boop::DeliveryState::AcceptedByHarness)
+        {
             continue;
         }
         let Some(route) = routes.get(&row.route).cloned() else {
@@ -539,9 +551,9 @@ pub(crate) fn watch_turn_end(
     (armed > 0).then_some(receiver)
 }
 
-/// What the ledger recorded for the message being waited on, one line per
-/// route it was delivered to. An unreadable store costs the lines and nothing
-/// else: the wait itself reads the mailbox.
+/// The delivery history of the message being waited on: one line per recorded
+/// transition, oldest first. An unreadable store costs the lines and nothing
+/// else, because the wait itself reads the mailbox.
 fn report_delivery(message_id: &str) {
     let rows = boop::Store::default_path()
         .and_then(boop::Store::open)
@@ -550,9 +562,14 @@ fn report_delivery(message_id: &str) {
         return;
     };
     for row in rows {
+        let code = row
+            .error_code
+            .as_deref()
+            .map(|code| format!(" [{code}]"))
+            .unwrap_or_default();
         line(&format!(
-            "{message_id} -> {}: {} ({})",
-            row.route, row.outcome, row.detail
+            "{message_id} -> {} #{} {} ({}){code}",
+            row.route, row.sequence, row.outcome, row.detail
         ));
     }
 }
@@ -572,6 +589,32 @@ pub(crate) fn waiting_as(dir: &Path, as_name: Option<&str>) -> Result<String> {
 
 /// Block until the watch is satisfied, print what arrived, take delivery of it,
 /// and exit. A timeout exits 124 with the re-run line on both streams.
+/// The ledger half of the `--me` unread test (defect 3, addendum 2026-08-25).
+/// The mailbox alone cannot say whether a rung already put a row in front of
+/// its recipient; the delivery transitions can, so an inbox wait reads them
+/// and hands back only what nothing else took. A `Reply` watch is unfiltered:
+/// its row is the answer to a question this caller asked, and the caller is
+/// the one taking delivery.
+fn drop_rows_already_delivered(watch: &Watch, arrivals: Vec<bus::Message>) -> Vec<bus::Message> {
+    if !matches!(watch, Watch::Inbox { .. }) {
+        return arrivals;
+    }
+    let Ok(store) = boop::Store::default_path().and_then(boop::Store::open) else {
+        return arrivals;
+    };
+    arrivals
+        .into_iter()
+        .filter(|message| {
+            let Ok(rows) = store.delivery_rows(&message.id) else {
+                return true;
+            };
+            !mailwait::already_in_front_of_the_recipient(
+                rows.iter().map(|row| row.outcome.as_str()),
+            )
+        })
+        .collect()
+}
+
 pub(crate) fn wait_and_exit(
     dir: &Path,
     watch: Watch,
@@ -590,7 +633,7 @@ pub(crate) fn wait_and_exit(
     info!(watching = watch.what(), timeout_secs, "mail wait starting");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
     loop {
-        let arrivals = watch.arrivals(&all_messages(dir)?);
+        let arrivals = drop_rows_already_delivered(&watch, watch.arrivals(&all_messages(dir)?));
         if !arrivals.is_empty() {
             info!(
                 watching = watch.what(),
@@ -1256,6 +1299,10 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
             if let Some(outcome) = started {
                 print!("{}", boop::lane::start_preamble(&outcome.status));
             }
+            // Last line, so a caller can `eval "$(boop beep agent register ...
+            // | tail -1)"`. Without it the ladder keeps reading the spawner's
+            // `BOOP_LANE` and every `--me` verb watches the spawner's inbox.
+            println!("export BOOP_SESSION={name} BOOP_LANE={name}");
             Ok(())
         }
         AgentCmd::Done {
@@ -2224,7 +2271,15 @@ pub(crate) fn run_pstree(
             .as_deref()
             .and_then(|target| tmux::mux().pane_pid(None, target))
             .unwrap_or(0);
-        let live = snapshot.process(pane_pid).is_some();
+        // A registered coordinator or native runs no pane of its own, so a
+        // pane probe says nothing about it and its registry row is the whole
+        // evidence. The rule `route_liveness` already uses. Without it every
+        // native dropped out of the tree and reappeared only as a `[gone]`
+        // root above its own children, which hid the native-to-native rungs
+        // the chain is built from.
+        let paneless_agent =
+            route.tmux.is_none() && matches!(route.kind.as_str(), "coordinator" | "native");
+        let live = paneless_agent || snapshot.process(pane_pid).is_some();
         if !all && !live {
             continue;
         }
@@ -2243,7 +2298,11 @@ pub(crate) fn run_pstree(
             name.clone(),
             LaneMeta {
                 pid: pane_pid,
-                state: if live { "live" } else { "dead" },
+                state: match (paneless_agent, live) {
+                    (true, _) => "registered",
+                    (false, true) => "live",
+                    (false, false) => "dead",
+                },
                 descendants,
             },
         );

@@ -1,1 +1,1 @@
-20260822.0.boop-cpu-fixes-harness-interface-plan.md
+20260823.0.boop-doors-e2e-presets-bin.md

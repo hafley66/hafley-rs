@@ -10,6 +10,7 @@ use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
 use atomic_write_file::AtomicWriteFile;
@@ -154,6 +155,39 @@ pub struct CleanupPolicy {
     pub remove_unreferenced_blobs: bool,
 }
 
+/// Durable-write accounting for the phase spans. Counting and timing only;
+/// no phase reads it back to make a decision.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct SyncMeter {
+    count: u64,
+    nanos: u128,
+}
+
+impl SyncMeter {
+    pub(crate) fn measure<T, E>(
+        &mut self,
+        action: impl FnOnce() -> std::result::Result<T, E>,
+    ) -> std::result::Result<T, E> {
+        let started = Instant::now();
+        let outcome = action();
+        self.nanos += started.elapsed().as_nanos();
+        self.count += 1;
+        outcome
+    }
+
+    pub(crate) fn count(self) -> u64 {
+        self.count
+    }
+
+    pub(crate) fn millis(self) -> f64 {
+        self.nanos as f64 / 1_000_000.0
+    }
+}
+
+pub(crate) fn elapsed_millis(started: Instant) -> f64 {
+    started.elapsed().as_secs_f64() * 1_000.0
+}
+
 pub trait StageStore {
     fn save(&mut self, plan: MutationPlan) -> Result<StagedSourceTransaction>;
     fn load(&self, id: StageId) -> Result<Option<StagedSourceTransaction>>;
@@ -166,12 +200,40 @@ pub fn stage_mutations<S: StageStore>(
     request: &crate::StageRequest,
     store: &mut S,
 ) -> Result<StagedSourceTransaction, crate::StageRefusal> {
+    let span = tracing::debug_span!(
+        "stage.mutations",
+        operation = "stage_mutations",
+        actions = request.actions.len(),
+        files = tracing::field::Empty,
+        plan_ms = tracing::field::Empty,
+        save_ms = tracing::field::Empty,
+        duration_ms = tracing::field::Empty,
+    );
+    let _entered = span.enter();
+    let started = Instant::now();
     let plan = crate::plan_mutations(root, request)?;
-    store
+    let plan_ms = elapsed_millis(started);
+    let files = plan.files.len();
+    let save_started = Instant::now();
+    let staged = store
         .save(plan)
         .map_err(|error| crate::StageRefusal::Store {
             detail: error.to_string(),
-        })
+        })?;
+    let save_ms = elapsed_millis(save_started);
+    let duration_ms = elapsed_millis(started);
+    span.record("files", files);
+    span.record("plan_ms", plan_ms);
+    span.record("save_ms", save_ms);
+    span.record("duration_ms", duration_ms);
+    tracing::debug!(
+        files,
+        plan_ms,
+        save_ms,
+        duration_ms,
+        "stage mutations sealed"
+    );
+    Ok(staged)
 }
 
 pub fn show_stage<S: StageStore>(
@@ -328,7 +390,31 @@ impl DurableStageStore {
 
 impl StageStore for DurableStageStore {
     fn save(&mut self, plan: MutationPlan) -> Result<StagedSourceTransaction> {
-        let (transaction, blobs) = seal_plan(plan)?;
+        let seal_started = Instant::now();
+        let seal_span = tracing::debug_span!(
+            "stage.seal",
+            operation = "seal_plan",
+            files = plan.files.len(),
+        );
+        let (transaction, blobs) = seal_span.in_scope(|| seal_plan(plan))?;
+        tracing::debug!(
+            files = transaction.files.len(),
+            duration_ms = elapsed_millis(seal_started),
+            "stage plan sealed"
+        );
+
+        let blobs_started = Instant::now();
+        let blob_count = blobs.len();
+        let blob_span = tracing::debug_span!(
+            "stage.write_blobs",
+            operation = "write_staged_blobs",
+            files = blob_count,
+            fsync.count = tracing::field::Empty,
+            fsync_ms = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+        );
+        let blob_entered = blob_span.enter();
+        let mut blob_sync = SyncMeter::default();
         for (id, bytes) in blobs {
             let target = self.blob_path(id);
             if target.exists() && blob_matches(&target, id)? {
@@ -337,9 +423,31 @@ impl StageStore for DurableStageStore {
             let mut file = AtomicWriteFile::open(&target)
                 .with_context(|| format!("create staged blob {}", target.display()))?;
             file.write_all(&bytes)?;
-            file.commit()?;
-            Self::sync_dir(&self.root.join("blobs"))?;
+            blob_sync.measure(|| file.commit())?;
+            blob_sync.measure(|| Self::sync_dir(&self.root.join("blobs")))?;
         }
+        blob_span.record("fsync.count", blob_sync.count());
+        blob_span.record("fsync_ms", blob_sync.millis());
+        blob_span.record("duration_ms", elapsed_millis(blobs_started));
+        tracing::debug!(
+            files = blob_count,
+            fsync.count = blob_sync.count(),
+            fsync_ms = blob_sync.millis(),
+            duration_ms = elapsed_millis(blobs_started),
+            "staged blobs published"
+        );
+        drop(blob_entered);
+
+        let manifest_started = Instant::now();
+        let manifest_span = tracing::debug_span!(
+            "stage.write_manifest",
+            operation = "write_stage_manifest",
+            files = transaction.files.len(),
+            fsync.count = tracing::field::Empty,
+            fsync_ms = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+        );
+        let manifest_entered = manifest_span.enter();
         let identity = identity_bytes(&transaction.root, &transaction.files)?;
         let manifest = StoredManifest {
             schema_version: STAGE_STORE_SCHEMA_VERSION,
@@ -353,12 +461,32 @@ impl StageStore for DurableStageStore {
         let target = self.manifest_path(transaction.id);
         let mut file = AtomicWriteFile::open(&target)?;
         file.write_all(&bytes)?;
-        file.commit()?;
-        Self::sync_dir(&self.root.join("manifests"))?;
+        let mut manifest_sync = SyncMeter::default();
+        manifest_sync.measure(|| file.commit())?;
+        manifest_sync.measure(|| Self::sync_dir(&self.root.join("manifests")))?;
+        manifest_span.record("fsync.count", manifest_sync.count());
+        manifest_span.record("fsync_ms", manifest_sync.millis());
+        manifest_span.record("duration_ms", elapsed_millis(manifest_started));
+        tracing::debug!(
+            manifest.bytes = bytes.len(),
+            fsync.count = manifest_sync.count(),
+            fsync_ms = manifest_sync.millis(),
+            duration_ms = elapsed_millis(manifest_started),
+            "stage manifest published"
+        );
+        drop(manifest_entered);
         Ok(transaction)
     }
 
     fn load(&self, id: StageId) -> Result<Option<StagedSourceTransaction>> {
+        let started = Instant::now();
+        let span = tracing::debug_span!(
+            "stage.load",
+            operation = "load_stage",
+            files = tracing::field::Empty,
+            duration_ms = tracing::field::Empty,
+        );
+        let _entered = span.enter();
         let path = self.manifest_path(id);
         if !path.exists() {
             return Ok(None);
@@ -392,6 +520,13 @@ impl StageStore for DurableStageStore {
                 file.bytes_after = Some(bytes);
             }
         }
+        span.record("files", stage.files.len());
+        span.record("duration_ms", elapsed_millis(started));
+        tracing::debug!(
+            files = stage.files.len(),
+            duration_ms = elapsed_millis(started),
+            "stage rehydrated"
+        );
         Ok(Some(stage))
     }
 

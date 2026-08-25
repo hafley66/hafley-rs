@@ -40,7 +40,8 @@ pub use boop_proc::{concatmap, config, host, inbox, lane, mailwait, supervise};
 #[cfg(feature = "agent-read")]
 pub mod chat;
 pub mod debug;
-pub mod mail;
+/// The delivery ladder, at the path every send path already spells.
+pub use boop_proc::deliver as mail;
 
 pub use boop_harness::Registry;
 pub use boop_store::open_default;
@@ -57,9 +58,9 @@ pub use boop_store::{
     LoadAgentSessionGraph, ToolResultAvailability, UsageQuery, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
 };
 pub use boop_store::{
-    AgentRuntimeRow, CommandRow, CompletionRecord, EdgeRow, FactCursor, FetchRow, LaneRuntime,
-    LiveSpanRow, MailboxCounts, ProcessIdentity, ProcessLiveness, ResolvedRoute, RuntimeDiagnostic,
-    RuntimeLiveness, RuntimeSnapshotInput, SessionRow, StatusRow, Store, SyncStat, TmuxLiveness,
-    TouchRow, TraceErrorRow, TraceEvent, TraceEventRow, TurnRow, UsageRow, WorktreeCoordinates,
-    TRACE_EVENT_RETENTION_LIMIT,
+    AgentRuntimeRow, CommandRow, CompletionRecord, DeliveryState, EdgeRow, FactCursor, FetchRow,
+    LaneRuntime, LiveSpanRow, MailboxCounts, ProcessIdentity, ProcessLiveness, ResolvedRoute,
+    RuntimeDiagnostic, RuntimeLiveness, RuntimeSnapshotInput, SessionRow, StatusRow, Store,
+    SyncStat, TmuxLiveness, TouchRow, TraceErrorRow, TraceEvent, TraceEventRow, TurnRow, UsageRow,
+    WorktreeCoordinates, TRACE_EVENT_RETENTION_LIMIT,
 };

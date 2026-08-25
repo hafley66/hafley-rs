@@ -40,7 +40,8 @@ pub use _0_session_graph::{
 pub use activity::{ActivityCount, ActivityScope, ToolResultAvailability};
 pub use harness_id::HarnessId;
 pub use ident::{
-    Store, SyncStat, TraceErrorRow, TraceEvent, TraceEventRow, TRACE_EVENT_RETENTION_LIMIT,
+    DeliveryState, Store, SyncStat, TraceErrorRow, TraceEvent, TraceEventRow,
+    TRACE_EVENT_RETENTION_LIMIT,
 };
 #[cfg(feature = "agent-read")]
 pub use query::{FactKind, FactQuery};
