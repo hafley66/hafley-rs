@@ -111,3 +111,7 @@ Rule for the lane: a verb survives only with a written one-line use that no othe
 ## Addendum 2026-08-25 00:30: yielded commit rewound
 
 Lane `feature-boop-parent-visibility` yielded `039a729` (tests 128+102+64), then ran `git reset HEAD~1` (reflog `HEAD@{1}`) and kept editing. The parent held a receipt for a commit that no longer existed on the branch. Requirement added to 7.6: HEAD moving to a non-ancestor/non-descendant of the last yielded sha emits a diagnostic naming both shas. Commit pinned as tag `yielded/039a729`.
+
+## Addendum 2026-08-25 00:35: rows appended without delivery
+
+Lane sent m-f8da00f2 (yield) and m-07ebeea1 (note) to claude-5 at 00:18:07/11 from its rebuilt worktree binary. Both exist in bus.ndjson, neither has an `agent_delivery` row, `to_timestamp` null, parent never saw them. m-ad41edc9 (shipped binary, 00:17:56) has `queued-for-turn-boundary` and landed. Invariant for 7.2: a mailbox append with no delivery transition inside one POLL is itself an error the sender prints and exits non-zero on.
