@@ -2048,6 +2048,17 @@ impl Store {
         self.append_delivery_transition(message_id, route, harness, outcome, detail, None, at_ms)
     }
 
+    /// Whether this message id already carries a transition. The mailbox
+    /// append writes the first one, so a later ladder walk adds no second.
+    pub fn has_delivery_transition(&self, message_id: &str) -> Result<bool> {
+        let count: i64 = self.connection.query_row(
+            "SELECT COUNT(*) FROM agent_delivery_transition WHERE message_id = ?1",
+            params![message_id],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
     /// The typed writer every delivery path goes through. `sequence` is
     /// `MAX + 1` for this message, so a retry appends beside its predecessor
     /// and no earlier transition is ever rewritten.
