@@ -1914,6 +1914,35 @@ pub(crate) fn lane_result_rc_since(
         .and_then(|message| message.rc)
 }
 
+/// The newest moment a result row must postdate to count: the route's
+/// registration, or the latest inbound row the lane's supervisor took
+/// (`to_timestamp` set), whichever is later. A resume turn starts with such a
+/// claim, so the previous turn's done row stops satisfying a wait
+/// (wait-stale-result-row).
+pub(crate) fn wait_boundary(dir: &std::path::Path, lane: &str) -> Option<u64> {
+    let registered = route_registered_at(dir, lane);
+    let claimed = lane_last_claim_at(dir, lane);
+    match (registered, claimed) {
+        (Some(a), Some(b)) => Some(a.max(b)),
+        (a, b) => a.or(b),
+    }
+}
+
+/// Epoch millis of the newest inbound row addressed to `lane` that a rung
+/// took (`to_timestamp` set); `None` when nothing was ever taken.
+pub(crate) fn lane_last_claim_at(dir: &std::path::Path, lane: &str) -> Option<u64> {
+    let mut messages = Vec::new();
+    for box_path in bus::read_boxes(dir).unwrap_or_default() {
+        messages.extend(bus::parse_box(&box_path));
+    }
+    bus::fold(&messages)
+        .iter()
+        .filter(|message| message.to == lane && message.kind != "result")
+        .filter_map(|message| message.to_timestamp.as_deref())
+        .filter_map(parse_iso_ms)
+        .max()
+}
+
 /// The lane's registration timestamp (ms since epoch) for the spawn that
 /// wrote the current route row; `None` when no route row exists.
 pub(crate) fn route_registered_at(dir: &std::path::Path, lane: &str) -> Option<u64> {
@@ -2044,7 +2073,7 @@ pub(crate) fn wait_for_outcome(
     interval: std::time::Duration,
     liveness: &dyn Fn(&std::path::Path, &str) -> RouteLiveness,
 ) -> WaitOutcome {
-    let since = route_registered_at(dir, lane);
+    let since = wait_boundary(dir, lane);
     let start = std::time::Instant::now();
     let mut dead_polls = 0u32;
     loop {
@@ -2834,6 +2863,59 @@ mod tests {
                 std::time::Duration::from_millis(10),
             ),
             Some(4)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT (wait-stale-result-row, 2026-08-25). Lane chore-alias-cut
+    /// ended turn 1 with a question and a done row; the answer was taken as a
+    /// resume turn; `boop wait chore-alias-cut` returned that stale done row
+    /// while tool calls were still running. A result row older than the
+    /// newest taken inbound row no longer satisfies the wait; a newer one does.
+    #[test]
+    fn a_done_row_older_than_the_taken_resume_row_does_not_satisfy_the_wait() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut stale = result_message("m-done-1", "chore-alias-cut", 0);
+        stale.to = "claude-5".into();
+        stale.from_timestamp = "2026-08-25T17:10:00.000Z".into();
+        append_message(&dir, &stale).unwrap();
+        assert_eq!(super::lane_result_rc(&dir, "chore-alias-cut"), Some(0));
+
+        let mut answer = result_message("m-answer", "claude-5", 0);
+        answer.to = "chore-alias-cut".into();
+        answer.kind = "request".into();
+        answer.rc = None;
+        answer.from_timestamp = "2026-08-25T17:11:00.000Z".into();
+        answer.to_timestamp = Some("2026-08-25T17:11:01.000Z".into());
+        append_message(&dir, &answer).unwrap();
+        assert_eq!(
+            super::wait_boundary(&dir, "chore-alias-cut"),
+            parse_iso_ms("2026-08-25T17:11:01.000Z")
+        );
+        assert_eq!(
+            super::wait_for_result(
+                &dir,
+                "chore-alias-cut",
+                Some(std::time::Duration::from_millis(60)),
+                std::time::Duration::from_millis(10),
+            ),
+            None,
+            "the pre-resume done row must not end the wait"
+        );
+
+        let mut fresh = result_message("m-done-2", "chore-alias-cut", 7);
+        fresh.to = "claude-5".into();
+        fresh.from_timestamp = "2026-08-25T17:40:00.000Z".into();
+        append_message(&dir, &fresh).unwrap();
+        assert_eq!(
+            super::wait_for_result(
+                &dir,
+                "chore-alias-cut",
+                Some(std::time::Duration::from_secs(2)),
+                std::time::Duration::from_millis(10),
+            ),
+            Some(7)
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
