@@ -597,6 +597,23 @@ fn patch_body(call_id: &str, files: &[String]) -> String {
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Codex record types that carry session bookkeeping and no transcript
+/// content. `user_message` duplicates the `response_item` message that
+/// precedes it; `task_started`/`task_complete` bracket a turn the message rows
+/// already delimit; the rest are session and context metadata.
+const BOOKKEEPING: &[&str] = &[
+    "session_meta",
+    "turn_context",
+    "world_state",
+    "task_started",
+    "task_complete",
+    "user_message",
+    "context_compacted",
+    "compacted",
+    "item_started",
+    "item_completed",
+];
+
 /// Running totals for one turn's `token_count` snapshots.
 #[derive(Default)]
 struct TurnTokens {
@@ -772,6 +789,37 @@ fn project_line(
                     stat.usage_updated += 1;
                 }
             }
+        }
+        "reasoning" => {
+            // Codex reasoning carries only its summary text. Empty summaries
+            // (the common case) leave no row.
+            let text = payload
+                .get("summary")
+                .and_then(Value::as_array)
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(|item| item.get("text").and_then(Value::as_str))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                })
+                .unwrap_or_default();
+            if !text.is_empty() {
+                *turn += 1;
+                let body = format!("(reasoning)\n{text}");
+                let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body)?;
+                record(stat, inserted);
+            }
+        }
+        kind if BOOKKEEPING.contains(&if kind.is_empty() { outer_type } else { kind }) => {
+            // Session bookkeeping, no transcript content: nothing to project
+            // and nothing to warn about. WARN here printed into the codex
+            // pane on every `boop` call the agent made.
+            tracing::debug!(
+                record = if kind.is_empty() { outer_type } else { kind },
+                session_id = %sid,
+                "codex bookkeeping record skipped"
+            );
         }
         kind => {
             let label = if kind.is_empty() { outer_type } else { kind };
@@ -1369,6 +1417,35 @@ mod tests {
         assert_eq!(
             turns[0]["said"].as_str().unwrap(),
             "patch exec-9\nfiles: /tmp/a.rs"
+        );
+    }
+
+    /// RECEIPT (2026-08-25). A codex TUI pane showed four WARN lines per
+    /// `boop` call: session_meta, task_started, world_state, turn_context
+    /// each projected as raw json. Bookkeeping records leave no row and no
+    /// warning; a reasoning summary lands as an assistant row.
+    #[test]
+    fn bookkeeping_records_leave_no_row_and_reasoning_keeps_its_summary() {
+        for line in [
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"session_meta","payload":{"id":"s1","cwd":"/tmp"}}"#,
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"turn_context","payload":{"cwd":"/tmp","model":"gpt-test"}}"#,
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"world_state","payload":{"files":[]}}"#,
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"t1"}}"#,
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"t1"}}"#,
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"event_msg","payload":{"type":"user_message","message":"hi"}}"#,
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"response_item","payload":{"type":"reasoning","summary":[]}}"#,
+        ] {
+            let turns = project_one_line("bookkeeping", line);
+            assert!(turns.is_empty(), "{line}: {turns:?}");
+        }
+        let turns = project_one_line(
+            "reasoning-summary",
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"Weighing two fixes."}]}}"#,
+        );
+        assert_eq!(turns[0]["role"], "assistant");
+        assert_eq!(
+            turns[0]["said"].as_str().unwrap(),
+            "(reasoning)\nWeighing two fixes."
         );
     }
 
