@@ -176,6 +176,14 @@ TELL: the caller's parent edge, and every live child, one verb each:
     boop tell-children --body \"t\"
   Neither end of the edge is spelled by the caller; the registry holds it.
 
+PUSH: the send and the wait in one verb, for a parent that wants an answer:
+    boop push <route> --body \"t\" [--timeout <s>] [--kind <k>]
+  It walks the same ladder every send walks, prints the rung that took the row,
+  then blocks. Exits: 0 on a reply or the recipient's turn ending, 124 on the
+  timeout, 3 when the route dies first. The last line is always the next
+  command: `boop wait <id>` after an answer, `boop debug <route>` after a
+  failure.
+
 WAIT: every agent can background a shell, so the universal push is a block.
   A wait on a door-delivered hail also ends when the recipient's turn ends
   (claude registry status, codex thread/status/changed, opencode session.idle),

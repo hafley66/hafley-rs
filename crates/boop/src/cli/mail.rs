@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use boop::bus::Route;
 use boop::door::Delivered;
@@ -239,6 +239,113 @@ fn confirm_transition_recorded(store: &boop::Store, message_id: &str, to: &str) 
 /// One supervisor POLL. A send that has no delivery transition by now is a row
 /// no rung of the ladder took.
 const DELIVERY_CONFIRM: std::time::Duration = std::time::Duration::from_millis(700);
+
+/// `push`: the send and the wait in one verb. The row goes down the same
+/// ladder every send path walks, then the caller blocks on the first of a
+/// reply, the recipient's turn ending, the route dying, or the timeout.
+///
+/// | ends on | exit | last line |
+/// |---|---|---|
+/// | a reply row, or the recipient's next mail back | 0 | the reply, then `boop wait <id>` |
+/// | the recipient's turn ending with no reply | 0 | `boop wait <id>` |
+/// | the route going dead | 3 | `boop debug <route>` |
+/// | the timeout | 124 | `boop debug <route>` |
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_push(
+    registry: &Registry,
+    to: &str,
+    body: &str,
+    kind: &str,
+    from: Option<&str>,
+    timeout_secs: u64,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let routes = bus::read_routes(&dir)?;
+    let sender = match from {
+        Some(name) => name.to_owned(),
+        None => {
+            let identity = identity::resolve_with(registry, &routes)?;
+            lane::caller_route(&identity, &routes)
+                .map(|(caller, _)| caller)
+                .unwrap_or_else(|_| "coordinator".to_owned())
+        }
+    };
+    let message = bus::Message {
+        id: bus::mint_id(),
+        from: sender,
+        to: to.to_owned(),
+        from_timestamp: bus::now_iso(),
+        to_timestamp: None,
+        kind: kind.to_owned(),
+        reply_to: None,
+        body: body.to_owned(),
+        r#ref: None,
+        rc: None,
+        detail: None,
+    };
+    append_message(&dir, &message)?;
+    record_control_edge(&message)?;
+    // One delivery line, printed by the same path `beep hail` prints it from.
+    deliver_hail(registry, &dir, &message, None)?;
+    push_wait(&dir, to, &message.id, timeout_secs)
+}
+
+/// The block half of `push`. Every source it watches is one an existing verb
+/// already watches: `boop wait`'s reply selection, `beep hail --wait-timeout`'s
+/// turn-end receiver, and `beep lane wait`'s route liveness.
+fn push_wait(dir: &Path, to: &str, message_id: &str, timeout_secs: u64) -> Result<()> {
+    let watch = Watch::Reply {
+        id: message_id.to_owned(),
+    };
+    let turn_end = crate::cli::job::watch_turn_end(dir, message_id, timeout_secs);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+    let next_wait = format!("boop wait {message_id}");
+    let next_debug = format!("boop debug {to}");
+    info!(to, message_id, timeout_secs, "push wait starting");
+    let mut dead_polls = 0u32;
+    loop {
+        let arrivals = watch.arrivals(&all_messages(dir)?);
+        if let Some(reply) = arrivals.first() {
+            info!(to, message_id, "push answered by a reply");
+            line(&reply.body);
+            append_acks(dir, std::slice::from_ref(reply))?;
+            line(&next_wait);
+            return Ok(());
+        }
+        if let Some(ended) = turn_end.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            info!(to, message_id, "push answered by a turn end");
+            line(&ended);
+            line(&next_wait);
+            return Ok(());
+        }
+        // A route is written before its session answers, so one dead
+        // observation is never enough. The same bound `beep lane wait` uses.
+        dead_polls = match crate::cli::job::route_liveness(dir, to) {
+            crate::cli::job::RouteLiveness::Dead => dead_polls + 1,
+            _ => 0,
+        };
+        if dead_polls >= crate::cli::job::DEAD_POLLS {
+            warn!(to, message_id, exit_code = 3, "push route died");
+            line(&format!("{to} died with no answer to {message_id}"));
+            line(&next_debug);
+            std::process::exit(3);
+        }
+        if std::time::Instant::now() >= deadline {
+            info!(to, message_id, exit_code = 124, "push timed out");
+            let timed_out = format!("no answer from {to} in {timeout_secs}s (id {message_id})");
+            line(&timed_out);
+            eprintln!("{timed_out}"); // @eprintln-ok: the next line must survive a redirected stdout
+            line(&next_debug);
+            eprintln!("{next_debug}"); // @eprintln-ok: same
+            std::process::exit(124);
+        }
+        std::thread::sleep(PUSH_POLL);
+    }
+}
+
+/// How often `push` re-reads the mailbox. The same cadence `boop wait` uses.
+const PUSH_POLL: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// An acpx route is driven by the caller's own queue, not by a harness door.
 fn is_acpx(route: &Route) -> bool {

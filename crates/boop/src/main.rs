@@ -24,7 +24,7 @@ use cli::job::{
     run_beep, run_dispatch, run_lane, run_measure, run_resolve, run_sweep, run_wait, DispatchArgs,
     LaneArgs,
 };
-use cli::mail::{run_hail, run_inbox, run_list, run_tell_children, run_tell_parent};
+use cli::mail::{run_hail, run_inbox, run_list, run_push, run_tell_children, run_tell_parent};
 use cli::me::{run_adopt, run_me, run_me_favorite, run_me_mood, run_prune, run_whoami};
 use cli::{doctrine, line, mail_dir, now_ms, CONCATMAP_EXAMPLES};
 
@@ -220,6 +220,27 @@ enum SubCmd {
         /// Seconds to block before exiting 124.
         #[arg(long, default_value_t = mailwait::DEFAULT_TIMEOUT_SECS)]
         wait_timeout: u64,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Send one body to a route and block until it answers: the one verb that
+    /// is both the send and the wait. Exits 0 on a reply or the recipient's
+    /// turn end, 124 on the timeout, 3 when the route dies first.
+    Push {
+        /// The route to push at: a lane, a coordinator, or `parent`.
+        #[arg(value_name = "ROUTE")]
+        to: String,
+        #[arg(long)]
+        body: String,
+        /// Seconds to block before exiting 124.
+        #[arg(long, default_value_t = mailwait::DEFAULT_TIMEOUT_SECS)]
+        timeout: u64,
+        /// The mail kind the row wears.
+        #[arg(long, default_value = "request")]
+        kind: String,
+        /// Who the row is from, when the whoami ladder cannot say.
+        #[arg(long)]
+        from: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -885,6 +906,22 @@ fn main() -> Result<()> {
                 })
             }
             SubCmd::Host { cmd } => run_host(cmd),
+            SubCmd::Push {
+                to,
+                body,
+                timeout,
+                kind,
+                from,
+                mail_dir,
+            } => run_push(
+                &registry,
+                &to,
+                &body,
+                &kind,
+                from.as_deref(),
+                timeout,
+                mail_dir.as_deref(),
+            ),
             SubCmd::Wait {
                 id,
                 me,
