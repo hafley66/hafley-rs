@@ -2,11 +2,12 @@
 created: 2026-08-24
 updated: 2026-08-25
 type: improvement
-status: open
+status: done
 priority: high
 epic: boop-one-path
 labels: [domain-boop]
 size: S
+closed: 2026-08-25
 ---
 
 # One wait: boop wait <id|lane>, and beep blocks

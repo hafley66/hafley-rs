@@ -2,11 +2,12 @@
 created: 2026-08-24
 updated: 2026-08-25
 type: improvement
-status: open
+status: done
 priority: high
 epic: boop-one-path
 labels: [domain-boop]
 size: M
+closed: 2026-08-25
 ---
 
 # Presets are the only model spelling; harness and bail derive from the table

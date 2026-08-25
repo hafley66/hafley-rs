@@ -2,11 +2,12 @@
 created: 2026-08-24
 updated: 2026-08-25
 type: improvement
-status: open
+status: done
 priority: high
 epic: boop-one-path
 labels: [domain-boop]
 size: L
+closed: 2026-08-25
 ---
 
 # One sqlite mailbox replaces bus.ndjson + registry.json
@@ -54,3 +55,33 @@ answered; boop debug printed all five sections with a landing on every mail row.
 
 Note: --mail-dir now means the directory that holds boop.db. The default mail dir
 maps to the one store beside it.
+
+### 2026-08-25T04:53:10Z · @feat-one-sqlite-mailbox
+
+Follow-up commit e124229: the import tails the legacy files instead of claiming them.
+
+An old `boop` keeps appending to `bus.ndjson` and `registry.json` for as long as one
+runs, so the one-shot rename stranded every row written after it. Each open now reads
+the ndjson from the last imported byte to the last complete line, and merges the
+registry by name with the newer `registeredAt` winning. Nothing is renamed, moved or
+deleted, and a row already in `agent_mail` is a no-op, so the two binaries run side by
+side until nothing old is left.
+
+Receipt on a copy of the live mailbox (3057 lines, 75 routes):
+
+| open | rows | routes | ndjson offset |
+|---|---|---|---|
+| 1 | 2109 | 75 | 1405648 (whole file) |
+| 2, after 2 rows appended | 2111 | 75 | 1406074 |
+| 3, nothing appended | 2111 | 75 | 1406074 |
+
+3059 ndjson lines fold to 2111 ids: the old format writes a second line per ack and the
+upsert folds it onto the row. Each late row carries exactly one transition, zero rows
+have none, and both files are still in place afterward.
+
+`default_mail_dir` now follows `BOOP_MAIL_DIR`, then the directory `BOOP_DB` names, so a
+redirected store redirects the mailbox with it and no verb reads `~/.agent` behind the
+caller's back. `concatmap --me` takes `--mail-dir`.
+
+Tests: 549 passed, 0 failed.
+
