@@ -40,7 +40,7 @@ const SPAWN_WAIVED: &[&str] = &[
 /// `cli/job.rs` match on route and tmux names their own test binary wrote 0
 /// rows for, measured 2026-08-19 by counting `agent_trace_event` around each
 /// target.
-const STORE_WAIVED: &[&str] = &["cli/db.rs", "cli/job.rs", "supervise.rs"];
+const STORE_WAIVED: &[&str] = &["cli/db.rs", "cli/job.rs"];
 
 #[test]
 fn every_boop_subprocess_site_redirects_home_and_boop_db() {
@@ -157,7 +157,10 @@ fn no_new_src_unit_test_reaches_the_machine_s_own_agent_root() {
         let names_a_fixture = FIXTURE_LANES
             .iter()
             .any(|lane| text.contains(&format!("\"{lane}\"")));
-        let stores = text.contains("Store::default_path()") && names_a_fixture;
+        // A module whose test helper pins `BOOP_DB` (a `set_var` under a
+        // `Once`, as `supervise.rs` does in `tempdir()`) reaches a temp store.
+        let pins_store = text.contains("set_var(\"BOOP_DB\"");
+        let stores = text.contains("Store::default_path()") && names_a_fixture && !pins_store;
 
         if spawns && !SPAWN_WAIVED.contains(&name.as_str()) {
             spawners.push(name.clone());
