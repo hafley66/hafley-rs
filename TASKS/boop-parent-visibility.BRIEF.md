@@ -10,3 +10,7 @@ Laws:
 - Style: no em dashes, no words `provenance substrate load-bearing regime` in prose or identifiers, no negative parallelism, tables over prose.
 - Before writing any new polling/wait loop, check what `boop wait` and `beep lane wait` already use and reuse it.
 - End with `boop tell-parent --kind completion --body "REPORT at TASKS/boop-parent-visibility.REPORT.md"`.
+
+## Item 0 (do FIRST, before item 1)
+
+`crates/boop-proc/src/supervise.rs:870` parks the lane idle with only a `println`. The parent hears nothing after the first `record_result`. Change: every idle park mails the parent one row, kind `yield`, body `idle <lane> turn=<end.detail()> head=<worktree HEAD short sha> dirty=<count>`, through the same path `hail_parent_once` uses, then parks. Also mail on `turn stalled` (`supervise.rs:693`) and on `parent-death`. Add a test next to the `stalled` tests asserting one yield row per idle park. Commit, then `boop tell-parent --kind yield --body "<sha> item0 ..."`.
