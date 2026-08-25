@@ -583,3 +583,140 @@ fn journal_and_receipt_tampering_are_refused() {
     let _ = fs::remove_dir_all(root);
     let _ = fs::remove_dir_all(state);
 }
+
+fn seed_mirror(root: &std::path::Path) {
+    for index in 0..8 {
+        fs::write(root.join(format!("file-{index}.txt")), format!("body {index}\n")).unwrap();
+    }
+}
+
+fn rehearsal_actions(root: &std::path::Path) -> soopy::StageRequest {
+    let source_root = SourceRoot::open_directory(root).unwrap();
+    let identity = source_root.directory().identity.clone();
+    let root_id = SourceRootId::Directory {
+        directory: identity.clone(),
+    };
+    let source = |name: &str| soopy::ActionSource::Directory {
+        file: soopy::FileRef {
+            directory: identity.clone(),
+            path: RootPath(Arc::from(name)),
+        },
+    };
+    let expected = |name: &str| ContentId::blake3(&fs::read(root.join(name)).unwrap());
+    let mut actions = vec![soopy::SourceAction::Move {
+        source: source("file-0.txt"),
+        expected: expected("file-0.txt"),
+        destination: path("moved/file-0.txt"),
+    }];
+    for index in 1..8 {
+        let name = format!("file-{index}.txt");
+        let handle = source(&name);
+        actions.push(soopy::SourceAction::Replace {
+            source: handle.clone(),
+            expected: expected(&name),
+            edits: vec![soopy::TextEdit {
+                range: soopy::ActionSpan {
+                    source: handle,
+                    start: 0,
+                    end: 4,
+                },
+                replacement: b"HEAD".to_vec(),
+                producer: soopy::ActionProducer::unordered("soopy.test.rehearsal"),
+            }],
+        });
+    }
+    soopy::StageRequest::new(root_id, actions)
+}
+
+fn tree_bytes(root: &std::path::Path) -> Vec<(String, Vec<u8>)> {
+    let mut rows = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(&directory).unwrap() {
+            let entry = entry.unwrap();
+            let entry_path = entry.path();
+            if entry.file_type().unwrap().is_dir() {
+                pending.push(entry_path);
+                continue;
+            }
+            let relative = entry_path
+                .strip_prefix(root)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+            rows.push((relative, fs::read(&entry_path).unwrap()));
+        }
+    }
+    rows.sort();
+    rows
+}
+
+/// The rehearsal engine drops device flushes only. Same request, same
+/// previews, same applied operations, same resulting bytes.
+#[test]
+fn rehearsal_commit_matches_the_durable_commit_on_the_same_request() {
+    let durable_root = temp_dir("rehearsal_durable_root");
+    let durable_state = temp_dir("rehearsal_durable_state");
+    let rehearsal_root = temp_dir("rehearsal_root");
+    let rehearsal_state = temp_dir("rehearsal_state");
+    seed_mirror(&durable_root);
+    seed_mirror(&rehearsal_root);
+
+    let mut durable_source = SourceRoot::open_directory(&durable_root).unwrap();
+    let durable_request = rehearsal_actions(&durable_root);
+    let mut durable_store = soopy::DurableStageStore::open(durable_state.join("stages")).unwrap();
+    let durable_sealed =
+        soopy::stage_mutations(&mut durable_source, &durable_request, &mut durable_store).unwrap();
+    let durable_stage = soopy::show_stage(&durable_store, durable_sealed.id)
+        .unwrap()
+        .unwrap();
+    let durable_engine =
+        CommitEngine::open(&durable_root, durable_state.join("commits")).unwrap();
+    assert_eq!(durable_engine.durability(), soopy::Durability::Durable);
+    let durable_receipt = durable_engine.commit(&durable_stage).unwrap();
+
+    let mut rehearsal_source = SourceRoot::open_directory(&rehearsal_root).unwrap();
+    let rehearsal_request = rehearsal_actions(&rehearsal_root);
+    let mut rehearsal_store = InMemoryStageStore::new();
+    let rehearsal_sealed = soopy::stage_mutations(
+        &mut rehearsal_source,
+        &rehearsal_request,
+        &mut rehearsal_store,
+    )
+    .unwrap();
+    let rehearsal_stage = soopy::show_stage(&rehearsal_store, rehearsal_sealed.id)
+        .unwrap()
+        .unwrap();
+    let rehearsal_engine =
+        CommitEngine::open_rehearsal(&rehearsal_root, rehearsal_state.join("commits")).unwrap();
+    assert_eq!(
+        rehearsal_engine.durability(),
+        soopy::Durability::Rehearsal
+    );
+    let rehearsal_receipt = rehearsal_engine.commit(&rehearsal_stage).unwrap();
+
+    assert_eq!(durable_stage.previews, rehearsal_stage.previews);
+    assert_eq!(durable_receipt.applied_files, rehearsal_receipt.applied_files);
+    assert_eq!(durable_receipt.operations, rehearsal_receipt.operations);
+    assert_eq!(tree_bytes(&durable_root), tree_bytes(&rehearsal_root));
+    assert!(rehearsal_root.join("moved/file-0.txt").is_file());
+    assert!(!rehearsal_root.join("file-0.txt").exists());
+    assert_eq!(
+        fs::read(rehearsal_root.join("file-1.txt")).unwrap(),
+        b"HEAD 1\n".to_vec()
+    );
+
+    // The rehearsal engine still writes its receipt, so a replayed commit is
+    // still an early-out rather than a second application.
+    let replay = rehearsal_engine.commit(&rehearsal_stage).unwrap();
+    assert_eq!(replay.operations, rehearsal_receipt.operations);
+
+    for directory in [
+        durable_root,
+        durable_state,
+        rehearsal_root,
+        rehearsal_state,
+    ] {
+        let _ = fs::remove_dir_all(directory);
+    }
+}

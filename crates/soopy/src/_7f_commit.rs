@@ -144,6 +144,25 @@ impl fmt::Display for CommitRefusal {
 
 impl std::error::Error for CommitRefusal {}
 
+/// Whether commit state has to survive a machine crash.
+///
+/// `Rehearsal` targets a throwaway mirror: every journal, payload, receipt and
+/// target write still lands and is still read back, and no write is flushed to
+/// the device. A rehearsal engine must never be pointed at a root a human
+/// keeps.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Durability {
+    #[default]
+    Durable,
+    Rehearsal,
+}
+
+impl Durability {
+    fn rehearsal(self) -> bool {
+        self == Self::Rehearsal
+    }
+}
+
 /// A commit engine for one canonical target root and an external state root.
 /// `state_root` must be outside `target_root`; journals and lock files never
 /// become source-tree entries.
@@ -151,10 +170,32 @@ impl std::error::Error for CommitRefusal {}
 pub struct CommitEngine {
     target_root: PathBuf,
     state_root: PathBuf,
+    durability: Durability,
 }
 
 impl CommitEngine {
     pub fn open(target_root: impl AsRef<Path>, state_root: impl AsRef<Path>) -> Result<Self> {
+        Self::open_with_durability(target_root, state_root, Durability::Durable)
+    }
+
+    /// Open an engine for a throwaway mirror. Identical control flow to
+    /// [`CommitEngine::open`] with every device flush dropped.
+    pub fn open_rehearsal(
+        target_root: impl AsRef<Path>,
+        state_root: impl AsRef<Path>,
+    ) -> Result<Self> {
+        Self::open_with_durability(target_root, state_root, Durability::Rehearsal)
+    }
+
+    pub fn durability(&self) -> Durability {
+        self.durability
+    }
+
+    fn open_with_durability(
+        target_root: impl AsRef<Path>,
+        state_root: impl AsRef<Path>,
+        durability: Durability,
+    ) -> Result<Self> {
         let target_root = target_root.as_ref().canonicalize().with_context(|| {
             format!(
                 "canonicalize commit target root {}",
@@ -182,6 +223,7 @@ impl CommitEngine {
         Ok(Self {
             target_root,
             state_root,
+            durability,
         })
     }
 
@@ -202,6 +244,7 @@ impl CommitEngine {
             "commit.transaction",
             operation = "commit",
             files = stage.files.len(),
+            durability = ?self.durability,
             duration_ms = tracing::field::Empty,
         );
         let _commit_entered = commit_span.enter();
@@ -290,7 +333,7 @@ impl CommitEngine {
         );
         let journal_entered = journal_span.enter();
         let mut journal_sync = SyncMeter::default();
-        write_journal(&journal_path, &journal, &mut journal_sync)?;
+        write_journal(&journal_path, &journal, self.durability, &mut journal_sync)?;
         journal_span.record("fsync.count", journal_sync.count());
         journal_span.record("fsync_ms", journal_sync.millis());
         journal_span.record("duration_ms", elapsed_millis(journal_started));
@@ -327,8 +370,13 @@ impl CommitEngine {
             0,
         );
         let mut receipt_sync = SyncMeter::default();
-        write_receipt(&self.receipt_path(stage.id), &receipt, &mut receipt_sync)?;
-        remove_journal(&journal_path, &mut receipt_sync)?;
+        write_receipt(
+            &self.receipt_path(stage.id),
+            &receipt,
+            self.durability,
+            &mut receipt_sync,
+        )?;
+        remove_journal(&journal_path, self.durability, &mut receipt_sync)?;
         receipt_span.record("fsync.count", receipt_sync.count());
         receipt_span.record("fsync_ms", receipt_sync.millis());
         receipt_span.record("duration_ms", elapsed_millis(receipt_started));
@@ -407,9 +455,10 @@ impl CommitEngine {
         write_receipt(
             &self.receipt_path(stage_id),
             &receipt,
+            self.durability,
             &mut recovery_sync,
         )?;
-        remove_journal(&journal_path, &mut recovery_sync)?;
+        remove_journal(&journal_path, self.durability, &mut recovery_sync)?;
         Ok(receipt)
     }
 
@@ -502,15 +551,19 @@ impl CommitEngine {
                 }
                 continue;
             }
-            let mut file = AtomicWriteFile::open(&path)
-                .map_err(|error| io_refusal_context("open commit payload", error))?;
-            file.write_all(bytes)
-                .map_err(|error| io_refusal_context("write commit payload", error))?;
-            meter
-                .measure(|| file.commit())
-                .map_err(|error| io_refusal_context("publish commit payload", error))?;
+            if self.durability.rehearsal() {
+                write_unsynced(&path, bytes, None, "write commit payload")?;
+            } else {
+                let mut file = AtomicWriteFile::open(&path)
+                    .map_err(|error| io_refusal_context("open commit payload", error))?;
+                file.write_all(bytes)
+                    .map_err(|error| io_refusal_context("write commit payload", error))?;
+                meter
+                    .measure(|| file.commit())
+                    .map_err(|error| io_refusal_context("publish commit payload", error))?;
+            }
         }
-        meter.measure(|| sync_dir(&self.state_root.join("blobs")))?;
+        sync_dir_when_durable(&self.state_root.join("blobs"), self.durability, &mut meter)?;
         span.record("fsync.count", meter.count());
         span.record("fsync_ms", meter.millis());
         span.record("duration_ms", elapsed_millis(started));
@@ -613,6 +666,7 @@ impl CommitEngine {
                 &self.target_root,
                 &journal.operations[index],
                 bytes.as_deref().unwrap_or_default(),
+                self.durability,
                 &mut meter,
             )?;
             if failpoint == Some(CommitFailpoint::AfterOperation(index)) {
@@ -786,6 +840,7 @@ fn apply_operation(
     root: &Path,
     operation: &JournalOperation,
     bytes: &[u8],
+    durability: Durability,
     meter: &mut SyncMeter,
 ) -> std::result::Result<(), CommitRefusal> {
     match operation.kind {
@@ -798,8 +853,12 @@ fn apply_operation(
                     .ok_or_else(|| missing_path(operation))?,
             );
             ensure_parent_dirs(root, &path)?;
-            atomic_write(&path, bytes, operation.mode.as_ref(), meter)?;
-            meter.measure(|| sync_dir(path.parent().unwrap_or_else(|| Path::new("."))))?;
+            atomic_write(&path, bytes, operation.mode.as_ref(), durability, meter)?;
+            sync_dir_when_durable(
+                path.parent().unwrap_or_else(|| Path::new(".")),
+                durability,
+                meter,
+            )?;
         }
         PlannedFileKind::Move => {
             let source = target_path(
@@ -819,11 +878,17 @@ fn apply_operation(
             ensure_parent_dirs(root, &destination)?;
             fs::rename(&source, &destination)
                 .map_err(|error| io_refusal_context("rename staged move", error))?;
-            meter.measure(|| sync_dir(source.parent().unwrap_or_else(|| Path::new("."))))?;
+            sync_dir_when_durable(
+                source.parent().unwrap_or_else(|| Path::new(".")),
+                durability,
+                meter,
+            )?;
             if destination.parent() != source.parent() {
-                meter.measure(|| {
-                    sync_dir(destination.parent().unwrap_or_else(|| Path::new(".")))
-                })?;
+                sync_dir_when_durable(
+                    destination.parent().unwrap_or_else(|| Path::new(".")),
+                    durability,
+                    meter,
+                )?;
             }
         }
         PlannedFileKind::Delete => {
@@ -836,7 +901,11 @@ fn apply_operation(
             );
             fs::remove_file(&source)
                 .map_err(|error| io_refusal_context("delete staged file", error))?;
-            meter.measure(|| sync_dir(source.parent().unwrap_or_else(|| Path::new("."))))?;
+            sync_dir_when_durable(
+                source.parent().unwrap_or_else(|| Path::new(".")),
+                durability,
+                meter,
+            )?;
         }
     }
     Ok(())
@@ -1017,8 +1086,12 @@ fn atomic_write(
     path: &Path,
     bytes: &[u8],
     mode: Option<&FileModeObservation>,
+    durability: Durability,
     meter: &mut SyncMeter,
 ) -> std::result::Result<(), CommitRefusal> {
+    if durability.rehearsal() {
+        return write_unsynced(path, bytes, mode, "write atomic target");
+    }
     let mut file = AtomicWriteFile::open(path)
         .map_err(|error| io_refusal_context("open atomic target", error))?;
     file.write_all(bytes)
@@ -1146,18 +1219,27 @@ fn io_refusal_context(operation: &str, error: impl fmt::Display) -> CommitRefusa
 fn write_journal(
     path: &Path,
     journal: &CommitJournal,
+    durability: Durability,
     meter: &mut SyncMeter,
 ) -> std::result::Result<(), CommitRefusal> {
     let bytes = serde_json::to_vec(journal)
         .map_err(|error| io_refusal_context("encode commit journal", error))?;
-    let mut file = AtomicWriteFile::open(path)
-        .map_err(|error| io_refusal_context("open commit journal", error))?;
-    file.write_all(&bytes)
-        .map_err(|error| io_refusal_context("write commit journal", error))?;
-    meter
-        .measure(|| file.commit())
-        .map_err(|error| io_refusal_context("publish commit journal", error))?;
-    meter.measure(|| sync_dir(path.parent().unwrap_or_else(|| Path::new("."))))
+    if durability.rehearsal() {
+        write_unsynced(path, &bytes, None, "write commit journal")?;
+    } else {
+        let mut file = AtomicWriteFile::open(path)
+            .map_err(|error| io_refusal_context("open commit journal", error))?;
+        file.write_all(&bytes)
+            .map_err(|error| io_refusal_context("write commit journal", error))?;
+        meter
+            .measure(|| file.commit())
+            .map_err(|error| io_refusal_context("publish commit journal", error))?;
+    }
+    sync_dir_when_durable(
+        path.parent().unwrap_or_else(|| Path::new(".")),
+        durability,
+        meter,
+    )
 }
 fn read_journal(path: &Path) -> std::result::Result<CommitJournal, CommitRefusal> {
     let bytes = fs::read(path).map_err(|error| io_refusal_context("read commit journal", error))?;
@@ -1304,18 +1386,27 @@ fn validate_receipt(
 fn write_receipt(
     path: &Path,
     receipt: &CommitReceipt,
+    durability: Durability,
     meter: &mut SyncMeter,
 ) -> std::result::Result<(), CommitRefusal> {
     let bytes = serde_json::to_vec(receipt)
         .map_err(|error| io_refusal_context("encode commit receipt", error))?;
-    let mut file = AtomicWriteFile::open(path)
-        .map_err(|error| io_refusal_context("open commit receipt", error))?;
-    file.write_all(&bytes)
-        .map_err(|error| io_refusal_context("write commit receipt", error))?;
-    meter
-        .measure(|| file.commit())
-        .map_err(|error| io_refusal_context("publish commit receipt", error))?;
-    meter.measure(|| sync_dir(path.parent().unwrap_or_else(|| Path::new("."))))
+    if durability.rehearsal() {
+        write_unsynced(path, &bytes, None, "write commit receipt")?;
+    } else {
+        let mut file = AtomicWriteFile::open(path)
+            .map_err(|error| io_refusal_context("open commit receipt", error))?;
+        file.write_all(&bytes)
+            .map_err(|error| io_refusal_context("write commit receipt", error))?;
+        meter
+            .measure(|| file.commit())
+            .map_err(|error| io_refusal_context("publish commit receipt", error))?;
+    }
+    sync_dir_when_durable(
+        path.parent().unwrap_or_else(|| Path::new(".")),
+        durability,
+        meter,
+    )
 }
 
 fn sync_dir(path: &Path) -> std::result::Result<(), CommitRefusal> {
@@ -1324,8 +1415,37 @@ fn sync_dir(path: &Path) -> std::result::Result<(), CommitRefusal> {
         .map_err(|error| io_refusal_context("sync commit directory", error))
 }
 
+/// A rehearsal mirror is discarded whole, so a partly written file can never
+/// be read by anything but the same process. The temporary-and-rename dance
+/// buys nothing there and costs one device flush per file.
+fn write_unsynced(
+    path: &Path,
+    bytes: &[u8],
+    mode: Option<&FileModeObservation>,
+    operation: &'static str,
+) -> std::result::Result<(), CommitRefusal> {
+    fs::write(path, bytes).map_err(|error| io_refusal_context(operation, error))?;
+    let Some(mode) = mode else {
+        return Ok(());
+    };
+    let file = File::open(path).map_err(|error| io_refusal_context(operation, error))?;
+    set_mode(&file, mode).map_err(|error| io_refusal_context("set target mode", error))
+}
+
+fn sync_dir_when_durable(
+    path: &Path,
+    durability: Durability,
+    meter: &mut SyncMeter,
+) -> std::result::Result<(), CommitRefusal> {
+    if durability.rehearsal() {
+        return Ok(());
+    }
+    meter.measure(|| sync_dir(path))
+}
+
 fn remove_journal(
     path: &Path,
+    durability: Durability,
     meter: &mut SyncMeter,
 ) -> std::result::Result<(), CommitRefusal> {
     match fs::remove_file(path) {
@@ -1333,7 +1453,11 @@ fn remove_journal(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(io_refusal_context("remove commit journal", error)),
     }?;
-    meter.measure(|| sync_dir(path.parent().unwrap_or_else(|| Path::new("."))))
+    sync_dir_when_durable(
+        path.parent().unwrap_or_else(|| Path::new(".")),
+        durability,
+        meter,
+    )
 }
 fn receipt(
     stage_id: StageId,

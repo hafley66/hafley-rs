@@ -10,8 +10,8 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use soopy::{
     ActionProducer, ActionSource, ActionSpan, CommitEngine, ContentId, DirectoryId,
-    DurableStageStore, FileRef, RootPath, SourceAction, SourcePath, SourceRoot, SourceRootId,
-    StageRequest, TextEdit,
+    DurableStageStore, FileRef, InMemoryStageStore, RootPath, SourceAction, SourcePath, SourceRoot,
+    SourceRootId, StageRequest, StageStore, StagedSourceTransaction, TextEdit,
 };
 
 const PRODUCER: &str = "soopy.example.stage_commit_phases";
@@ -26,6 +26,7 @@ fn main() {
     let args: Vec<_> = std::env::args().collect();
     let corpus = numeric_arg(&args, "--files").unwrap_or(282);
     let replaces = numeric_arg(&args, "--replaces").unwrap_or(26);
+    let rehearsal = args.iter().any(|value| value == "--rehearsal");
 
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -79,19 +80,19 @@ fn main() {
     }
 
     let request = StageRequest::new(root_id, actions);
-    let mut store = DurableStageStore::open(state.join("stages")).expect("open stage store");
+    let (stage, stage_ms, load_ms) = if rehearsal {
+        stage_and_load(&mut source_root, &request, &mut InMemoryStageStore::new())
+    } else {
+        let mut store = DurableStageStore::open(state.join("stages")).expect("open stage store");
+        stage_and_load(&mut source_root, &request, &mut store)
+    };
 
-    let staged_started = Instant::now();
-    let sealed = soopy::stage_mutations(&mut source_root, &request, &mut store).expect("stage");
-    let stage_ms = elapsed_ms(staged_started);
-
-    let load_started = Instant::now();
-    let stage = soopy::show_stage(&store, sealed.id)
-        .expect("load stage")
-        .expect("stage present");
-    let load_ms = elapsed_ms(load_started);
-
-    let engine = CommitEngine::open(&root, state.join("commits")).expect("open commit engine");
+    let engine = if rehearsal {
+        CommitEngine::open_rehearsal(&root, state.join("commits"))
+    } else {
+        CommitEngine::open(&root, state.join("commits"))
+    }
+    .expect("open commit engine");
     let commit_started = Instant::now();
     let receipt = engine.commit(&stage).expect("commit");
     let commit_ms = elapsed_ms(commit_started);
@@ -99,6 +100,7 @@ fn main() {
     println!(
         "{}",
         serde_json::json!({
+            "mode": if rehearsal { "rehearsal" } else { "durable" },
             "corpus_files": corpus,
             "staged_files": stage.files.len(),
             "applied_files": receipt.applied_files,
@@ -110,6 +112,21 @@ fn main() {
     );
 
     let _ = fs::remove_dir_all(&base);
+}
+
+fn stage_and_load<S: StageStore>(
+    source_root: &mut SourceRoot,
+    request: &StageRequest,
+    store: &mut S,
+) -> (StagedSourceTransaction, f64, f64) {
+    let staged_started = Instant::now();
+    let sealed = soopy::stage_mutations(source_root, request, store).expect("stage");
+    let stage_ms = elapsed_ms(staged_started);
+    let load_started = Instant::now();
+    let stage = soopy::show_stage(store, sealed.id)
+        .expect("load stage")
+        .expect("stage present");
+    (stage, stage_ms, elapsed_ms(load_started))
 }
 
 fn body(index: usize) -> Vec<u8> {
