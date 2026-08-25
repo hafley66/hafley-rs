@@ -3,9 +3,11 @@ created: 2026-08-25
 updated: 2026-08-25
 type: bug
 reporter: claude-5
-status: open
+status: fixed
 priority: high
 epic: boop-one-path
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 # codex native subagent inherits the lane BOOP_SESSION so wait --me watches the wrong mailbox
