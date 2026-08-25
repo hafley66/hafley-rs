@@ -1300,11 +1300,13 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
         LaneCmd::List {
             state,
             harness,
+            all,
             mail_dir,
         } => run_lane_list(
             mail_dir.as_deref(),
             state.as_deref(),
             harness.as_deref().map(str::parse).transpose()?,
+            all,
         ),
         LaneCmd::Create {
             lane,
@@ -1476,12 +1478,13 @@ pub(crate) fn run_lane_list(
     mail_dir_arg: Option<&Path>,
     state_filter: Option<&str>,
     harness_filter: Option<HarnessId>,
+    all: bool,
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
     let live = tmux::mux().live_sessions(None);
     for (name, route) in &routes {
-        let state = lane_state(&dir, name, &live, route);
+        let state = lane_state(&dir, name, &live, route, &routes);
         if let Some(want) = state_filter {
             if state != want {
                 continue;
@@ -1531,7 +1534,118 @@ pub(crate) fn run_lane_list(
             suffix,
         ));
     }
+    if all {
+        for name in unregistered_sessions(&routes, &live) {
+            line(&format!(
+                "{} {} {} {} {} {} {} {}",
+                pad("live", 4),
+                pad(&name, 16),
+                pad("unregistered", 12),
+                pad("-", 10),
+                pad("-", 6),
+                pad("-", 46),
+                pad("-", 16),
+                "-",
+            ));
+        }
+        for (route_name, route) in &routes {
+            if route.harness != Some(HarnessId::Claude) {
+                continue;
+            }
+            let Some(cwd) = route.cwd.as_deref() else {
+                continue;
+            };
+            for (name, path, locked) in claude_agent_worktrees(cwd) {
+                let state = if locked { "live" } else { "dead" };
+                line(&format!(
+                    "{} {} {} {} {} {} {} {} PARENT={}",
+                    pad(state, 4),
+                    pad(&name, 16),
+                    pad("native-claude", 12),
+                    pad("-", 10),
+                    pad("-", 6),
+                    pad("-", 46),
+                    pad("-", 16),
+                    path,
+                    route_name,
+                ));
+            }
+        }
+    }
     Ok(())
+}
+
+/// The tmux sessions no route claims: not a route `tmux` target and not a
+/// route name. These are live sessions boop does not manage, listed under
+/// `--all` so the panel's view counts them without pretending they are lanes.
+pub(crate) fn unregistered_sessions(
+    routes: &BTreeMap<String, Route>,
+    live: &Option<tmux::LiveSessions>,
+) -> Vec<String> {
+    let Some(live) = live else {
+        return Vec::new();
+    };
+    live.names
+        .iter()
+        .filter(|name| {
+            !routes.iter().any(|(route_name, route)| {
+                route.tmux.as_deref() == Some(name.as_str()) || route_name == name.as_str()
+            })
+        })
+        .cloned()
+        .collect()
+}
+
+/// The native Claude Code subagent worktrees linked into the repo at `cwd`.
+/// One tuple per `git worktree list --porcelain` block whose path carries
+/// `/.claude/worktrees/agent-`: `(agent-<id> name, path, locked)`.
+pub(crate) fn claude_agent_worktrees(cwd: &str) -> Vec<(String, String, bool)> {
+    let output = Command::new("git")
+        .args(["-C", cwd, "worktree", "list", "--porcelain"])
+        .output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    parse_claude_agent_worktrees(&String::from_utf8_lossy(&output.stdout))
+}
+
+fn parse_claude_agent_worktrees(porcelain: &str) -> Vec<(String, String, bool)> {
+    let mut result = Vec::new();
+    let mut current: Option<(String, bool)> = None;
+    for line in porcelain.lines() {
+        if let Some(path) = line.strip_prefix("worktree ") {
+            if let Some((path, locked)) = current.take() {
+                push_claude_agent(&mut result, path, locked);
+            }
+            current = Some((path.to_owned(), false));
+        } else if line == "locked" {
+            if let Some((_, locked)) = current.as_mut() {
+                *locked = true;
+            }
+        }
+    }
+    if let Some((path, locked)) = current {
+        push_claude_agent(&mut result, path, locked);
+    }
+    result
+}
+
+fn push_claude_agent(result: &mut Vec<(String, String, bool)>, path: String, locked: bool) {
+    const MARKER: &str = "/.claude/worktrees/agent-";
+    let Some(idx) = path.find(MARKER) else {
+        return;
+    };
+    let id = path[idx + MARKER.len()..]
+        .split('/')
+        .next()
+        .unwrap_or_default();
+    if id.is_empty() {
+        return;
+    }
+    result.push((format!("agent-{id}"), path, locked));
 }
 
 /// The parent edge that answers nobody, so a surviving orphan says so on its
@@ -1544,7 +1658,7 @@ pub(crate) fn gone_parent<'a>(
 ) -> Option<&'a str> {
     let parent = route.parent.as_deref()?;
     match routes.get(parent) {
-        Some(parent_route) if lane_state(dir, parent, live, parent_route) != "dead" => None,
+        Some(parent_route) if lane_state(dir, parent, live, parent_route, routes) != "dead" => None,
         _ => Some(parent),
     }
 }
@@ -1560,14 +1674,47 @@ pub(crate) fn dead_reason_token(mail_dir: &std::path::Path, lane: &str) -> Strin
 
 /// `live`/`idle`/`dead`/`?`. `idle` reads the supervisor's residency file; a
 /// lane older than that file reads through as `live`.
+///
+/// A pane-less coordinator or native route has no tmux target of its own to
+/// probe, so its liveness is inherited from its parent. The parent hop is
+/// measured once and no deeper: a parent that is itself pane-less answers `?`,
+/// and a parentless pane-less route answers `?` too.
 pub(crate) fn lane_state(
     dir: &Path,
     name: &str,
     live: &Option<tmux::LiveSessions>,
     route: &Route,
+    routes: &BTreeMap<String, Route>,
+) -> &'static str {
+    lane_state_hop(dir, name, live, route, routes, true)
+}
+
+/// The shared body of `lane_state`. A pane-less coordinator/native route has
+/// no tmux target of its own, so its liveness is inherited from its parent.
+/// `allow_parent_hop` bounds the inheritance to one level: a parent that is
+/// itself pane-less answers `?` rather than chasing a grandparent, and a
+/// parentless pane-less route answers `?` too.
+fn lane_state_hop(
+    dir: &Path,
+    name: &str,
+    live: &Option<tmux::LiveSessions>,
+    route: &Route,
+    routes: &BTreeMap<String, Route>,
+    allow_parent_hop: bool,
 ) -> &'static str {
     if route.tmux.is_none() && matches!(route.kind.as_str(), "coordinator" | "native") {
-        return "live";
+        if !allow_parent_hop {
+            return "?";
+        }
+        let Some(parent_name) = route.parent.as_deref() else {
+            return "?";
+        };
+        let Some(parent_route) = routes.get(parent_name) else {
+            // A parent that never registered is not evidence of death: the
+            // native stays live until an explicit done.
+            return "live";
+        };
+        return lane_state_hop(dir, parent_name, live, parent_route, routes, false);
     }
     let tmux_alive = match live {
         None => return "?",
@@ -1599,7 +1746,7 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str) -> Result<()
         "{}",
         serde_json::json!({
             "lane": lane,
-            "state": lane_state(&dir, lane, &live, route),
+            "state": lane_state(&dir, lane, &live, route, &routes),
             "harness": route.harness,
             "tmux": route.tmux,
             "cwd": route.cwd,
@@ -1911,7 +2058,7 @@ pub(crate) fn route_liveness(dir: &std::path::Path, lane: &str) -> RouteLiveness
     if route.tmux.is_none() {
         return RouteLiveness::Unknown;
     }
-    match lane_state(dir, lane, &tmux::mux().live_sessions(None), route) {
+    match lane_state(dir, lane, &tmux::mux().live_sessions(None), route, &routes) {
         "live" | "idle" => RouteLiveness::Live,
         "dead" => RouteLiveness::Dead,
         _ => RouteLiveness::Unknown,
@@ -2546,6 +2693,9 @@ mod tests {
     fn native_registration_stays_live_until_explicit_done_and_done_is_once() {
         let dir = temp_mail_dir();
         std::fs::create_dir_all(&dir).unwrap();
+        let coord_name = unique_name("boop-native-coord");
+        let _session = LiveTmuxSession::new(&coord_name);
+        write_route(&dir, "coordinator", tmux_route(&coord_name)).unwrap();
         run_agent(AgentCmd::Register {
             name: "native-child".into(),
             kind: "native".into(),
@@ -2556,13 +2706,15 @@ mod tests {
         })
         .unwrap();
 
-        let route = read_routes(&dir).unwrap().remove("native-child").unwrap();
+        let routes = read_routes(&dir).unwrap();
+        let route = &routes["native-child"];
         assert_eq!(
             lane_state(
                 &dir,
                 "native-child",
                 &Some(boop::tmux::LiveSessions::default()),
-                &route
+                route,
+                &routes,
             ),
             "live"
         );
@@ -2597,6 +2749,130 @@ mod tests {
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].to, "coordinator");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// FAIL-PRE-FIX: a pane-less coordinator/native was hardcoded `live` with
+    /// no probe, so dead natives read `live` until their parent evaporated.
+    /// Liveness now inherits from the parent (one hop): a live parent reads
+    /// `live`, a dead parent reads `dead`, and a parentless pane-less route
+    /// reads `?`.
+    #[test]
+    fn pane_less_route_inherits_parent_liveness() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let live_name = unique_name("boop-native-parent-live");
+        let live_session = LiveTmuxSession::new(&live_name);
+        write_route(&dir, "parent-live", tmux_route(&live_name)).unwrap();
+        write_route(
+            &dir,
+            "parent-dead",
+            tmux_route(&unique_name("boop-native-parent-dead")),
+        )
+        .unwrap();
+        let routes = read_routes(&dir).unwrap();
+        let live = tmux::mux().live_sessions(None);
+
+        let native = |parent: Option<&str>| Route {
+            kind: "native".into(),
+            harness: None,
+            tmux: None,
+            cwd: None,
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: parent.map(str::to_owned),
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+            app_server_socket: None,
+        };
+
+        let child = native(Some("parent-live"));
+        assert_eq!(lane_state(&dir, "child", &live, &child, &routes), "live");
+        let child = native(Some("parent-dead"));
+        assert_eq!(lane_state(&dir, "child", &live, &child, &routes), "dead");
+        let child = native(None);
+        assert_eq!(lane_state(&dir, "child", &live, &child, &routes), "?");
+
+        drop(live_session);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT (native-visibility). A tmux session no route claims is a live
+    /// session boop does not manage; a route `tmux` target or route name that
+    /// matches a session name is claimed and therefore not unregistered.
+    #[test]
+    fn unregistered_sessions_names_claimless_tmux_sessions() {
+        let mut routes = BTreeMap::new();
+        let mut routed = tmux_route("claimed-by-tmux");
+        routed.kind = "lane".into();
+        routes.insert("claimed-by-tmux".into(), routed);
+        routes.insert("claimed-by-name".into(), tmux_route("other-target"));
+        let live = Some(boop::tmux::LiveSessions {
+            names: [
+                "claimed-by-tmux".to_owned(),
+                "claimed-by-name".to_owned(),
+                "free-session".to_owned(),
+            ]
+            .into_iter()
+            .collect(),
+        });
+        assert_eq!(
+            unregistered_sessions(&routes, &live),
+            vec!["free-session".to_owned()]
+        );
+        assert!(unregistered_sessions(&routes, &None).is_empty());
+    }
+
+    /// RECEIPT (native-visibility). A repo's linked `.claude/worktrees/agent-*`
+    /// worktrees surface as native Claude subagents: a `locked` porcelain block
+    /// reads `live`, an unlocked one reads `dead`.
+    #[test]
+    fn claude_agent_worktrees_lists_locked_and_unlocked_agents() {
+        let base = std::env::temp_dir().join(format!("boop-claude-wt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let run = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&base)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        run(&["init", "-q"]);
+        run(&["config", "user.email", "t@t"]);
+        run(&["config", "user.name", "t"]);
+        std::fs::write(base.join("seed.txt"), "s").unwrap();
+        run(&["add", "-A"]);
+        run(&["commit", "-qm", "seed"]);
+        std::fs::create_dir_all(base.join(".claude/worktrees")).unwrap();
+        run(&["worktree", "add", ".claude/worktrees/agent-abc", "HEAD"]);
+        run(&["worktree", "add", ".claude/worktrees/agent-def", "HEAD"]);
+        run(&["worktree", "lock", ".claude/worktrees/agent-abc"]);
+
+        let trees = claude_agent_worktrees(base.to_str().unwrap());
+        let names = trees
+            .iter()
+            .map(|(name, _, _)| name.as_str())
+            .collect::<Vec<_>>();
+        assert!(names.contains(&"agent-abc"), "{names:?}");
+        assert!(names.contains(&"agent-def"), "{names:?}");
+        for (name, path, locked) in &trees {
+            assert!(path.contains("/.claude/worktrees/agent-"), "{path}");
+            match name.as_str() {
+                "agent-abc" => assert!(*locked, "agent-abc must be locked"),
+                "agent-def" => assert!(!*locked, "agent-def must be unlocked"),
+                other => panic!("unexpected worktree name {other}"),
+            }
+        }
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// RECEIPT (Job 3b). A `--route-only` delete drops the lane's registry row
@@ -2754,15 +3030,19 @@ mod tests {
             names: [name.clone()].into_iter().collect(),
         });
         let route = read_routes(&dir).unwrap().remove("mine").unwrap();
+        let routes = BTreeMap::new();
 
-        assert_eq!(lane_state(&dir, "mine", &live, &route), "live");
+        assert_eq!(lane_state(&dir, "mine", &live, &route, &routes), "live");
 
         boop::supervise::record_residency(&dir, "mine", boop::supervise::RESIDENCY_IDLE);
-        assert_eq!(lane_state(&dir, "mine", &live, &route), "idle");
+        assert_eq!(lane_state(&dir, "mine", &live, &route, &routes), "idle");
 
         drop(session);
         let dead_live = tmux::mux().live_sessions(None);
-        assert_eq!(lane_state(&dir, "mine", &dead_live, &route), "dead");
+        assert_eq!(
+            lane_state(&dir, "mine", &dead_live, &route, &routes),
+            "dead"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

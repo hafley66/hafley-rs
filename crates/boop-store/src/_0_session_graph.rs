@@ -380,8 +380,13 @@ pub fn load_agent_session_graph_with_runtime(
         tmux_socket: runtime.tmux_socket,
         processes: runtime.processes,
     })?;
+    let resolved_sessions = graph
+        .sessions
+        .iter()
+        .map(|session| session.session.id.clone())
+        .collect::<BTreeSet<_>>();
     for row in rows {
-        if let Some(mut shell) = shell_from_runtime(row) {
+        if let Some(mut shell) = shell_from_runtime(row, &resolved_sessions) {
             if let Some(pane) = shell
                 .tmux
                 .as_deref()
@@ -427,9 +432,24 @@ pub fn load_agent_session_graph_with_runtime(
     Ok(graph)
 }
 
-fn shell_from_runtime(row: AgentRuntimeRow) -> Option<AgentShellNode> {
+fn shell_from_runtime(
+    row: AgentRuntimeRow,
+    resolved_sessions: &BTreeSet<String>,
+) -> Option<AgentShellNode> {
     let route = row.route?;
     let tmux = row.tmux_target.clone().or(row.tmux_pane.clone())?;
+    // A provisional lane route whose native session has resolved is that
+    // session's own record; emitting a second shell would duplicate it. The
+    // membership check is on the resolved session id, so kind and harness
+    // presence alone never drop an unresolved lane, and coordinator tmux-pane
+    // anchors stay in `shells`.
+    if route.kind == "lane" {
+        if let Some(session_id) = route.session_id.as_deref() {
+            if resolved_sessions.contains(session_id) {
+                return None;
+            }
+        }
+    }
     let state = if matches!(row.liveness.process, crate::runtime::ProcessLiveness::Live)
         || matches!(row.liveness.tmux, crate::runtime::TmuxLiveness::Live)
     {
@@ -805,7 +825,7 @@ mod tests {
             worktree: Default::default(),
             diagnostics: Vec::new(),
         };
-        let shell = shell_from_runtime(native).unwrap();
+        let shell = shell_from_runtime(native, &BTreeSet::new()).unwrap();
         assert_eq!(shell.lane, "lane");
         assert_eq!(shell.harness.as_deref(), Some("codex"));
         assert_eq!(shell.tmux.as_deref(), Some("lane"));
@@ -819,7 +839,7 @@ mod tests {
             tmux_target: Some("shell".into()),
             ..native_for_shell()
         };
-        let shell = shell_from_runtime(shell).unwrap();
+        let shell = shell_from_runtime(shell, &BTreeSet::new()).unwrap();
         assert_eq!(shell.mode.as_deref(), Some("auto"));
         assert_eq!(shell.harness, None);
         assert_eq!(shell.session_id.as_deref(), Some("native"));
@@ -894,6 +914,93 @@ mod tests {
                 "registered_at": "2026-08-18T00:00:00Z"
             }])
         );
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// RECEIPT (live-lane-session-graph). A live tmux-backed `lane` route with
+    /// a harness and an unresolved session id surfaces once in `shells`; once
+    /// its transcript session resolves, the same lane appears once in
+    /// `sessions` and not at all in `shells`.
+    #[test]
+    fn unresolved_live_lane_appears_as_shell_then_merges_into_sessions() {
+        let path = std::env::temp_dir().join(format!(
+            "boop-session-graph-lane-resolve-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+
+        let lane_route = Route {
+            kind: "lane".into(),
+            harness: Some(HarnessId::Opencode),
+            tmux: Some("feature-lane".into()),
+            cwd: Some("/repo".into()),
+            model: None,
+            mode: Some("auto".into()),
+            session_id: None,
+            source_path: None,
+            parent: None,
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+            app_server_socket: None,
+        };
+        let mut routes = BTreeMap::new();
+        routes.insert("feature-lane".into(), lane_route);
+
+        let mux = FakeMux::available(&["feature-lane"]);
+        let processes = SysinfoSnapshot::capture().unwrap();
+
+        let graph = load_agent_session_graph_with_runtime(
+            &store,
+            AgentSessionGraphQuery::default(),
+            AgentSessionGraphRuntime {
+                routes: &routes,
+                messages: &[],
+                multiplexer: &mux,
+                tmux_socket: None,
+                processes: &processes,
+            },
+        )
+        .unwrap();
+        assert_eq!(graph.sessions.len(), 0);
+        assert_eq!(graph.shells.len(), 1);
+        assert_eq!(graph.shells[0].lane, "feature-lane");
+        assert_eq!(graph.shells[0].state, "live");
+        assert!(graph.shells[0].session.is_none());
+        assert!(graph.shells[0].session_id.is_none());
+
+        let harness = store.intern_public("dict_harness", "opencode").unwrap();
+        let session = store
+            .intern_public("dict_session", "native-session")
+            .unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                rusqlite::params![session, harness],
+            )
+            .unwrap();
+        routes.get_mut("feature-lane").unwrap().session_id = Some("native-session".into());
+
+        let graph = load_agent_session_graph_with_runtime(
+            &store,
+            AgentSessionGraphQuery::default(),
+            AgentSessionGraphRuntime {
+                routes: &routes,
+                messages: &[],
+                multiplexer: &mux,
+                tmux_socket: None,
+                processes: &processes,
+            },
+        )
+        .unwrap();
+        assert_eq!(graph.sessions.len(), 1);
+        assert_eq!(graph.sessions[0].session.id, "native-session");
+        assert!(graph.shells.is_empty());
+
+        drop(store);
         let _ = std::fs::remove_file(path);
     }
 
