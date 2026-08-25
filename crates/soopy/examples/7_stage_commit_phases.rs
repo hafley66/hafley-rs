@@ -80,11 +80,15 @@ fn main() {
     }
 
     let request = StageRequest::new(root_id, actions);
-    let (stage, stage_ms, load_ms) = if dry_run {
-        stage_and_load(&mut source_root, &request, &mut InMemoryStageStore::new())
+    let (stage, stage_ms, load_ms, staged_blobs) = if dry_run {
+        let (stage, stage_ms, load_ms) =
+            stage_and_load(&mut source_root, &request, &mut InMemoryStageStore::new());
+        (stage, stage_ms, load_ms, None)
     } else {
         let mut store = DurableStageStore::open(state.join("stages")).expect("open stage store");
-        stage_and_load(&mut source_root, &request, &mut store)
+        let blobs = store.blobs_dir();
+        let (stage, stage_ms, load_ms) = stage_and_load(&mut source_root, &request, &mut store);
+        (stage, stage_ms, load_ms, Some(blobs))
     };
 
     let engine = if dry_run {
@@ -93,6 +97,10 @@ fn main() {
         CommitEngine::open(&root, state.join("commits"))
     }
     .expect("open commit engine");
+    let engine = match staged_blobs {
+        Some(blobs) => engine.with_staged_blobs(blobs),
+        None => engine,
+    };
     let commit_started = Instant::now();
     let receipt = engine.commit(&stage).expect("commit");
     let commit_ms = elapsed_ms(commit_started);
@@ -108,6 +116,11 @@ fn main() {
             "load_ms": load_ms,
             "commit_ms": commit_ms,
             "total_ms": stage_ms + load_ms + commit_ms,
+            "sync": {
+                "data": soopy::device_sync_counts().data,
+                "fences": soopy::device_sync_counts().fences,
+                "flushes": soopy::device_sync_counts().flushes,
+            },
         })
     );
 

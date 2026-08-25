@@ -720,3 +720,37 @@ fn dry_run_commit_matches_the_durable_commit_on_the_same_request() {
         let _ = fs::remove_dir_all(directory);
     }
 }
+
+#[test]
+fn a_journal_outliving_its_receipt_is_replayable() {
+    let root = temp_dir("stale_journal");
+    let transaction = stage(
+        &root,
+        vec![
+            replace_file(&root, "first.txt", b"old-first", b"new-first"),
+            replace_file(&root, "second.txt", b"old-second", b"new-second"),
+        ],
+    );
+    let state = temp_dir("stale_journal_state");
+    let engine = CommitEngine::open(&root, &state).unwrap();
+    assert!(matches!(
+        engine.commit_with_failpoint(&transaction, Some(CommitFailpoint::AfterJournal)),
+        Err(CommitRefusal::Failpoint { .. })
+    ));
+    let journal_path = engine.journal_path_for(transaction.id);
+    let journal = fs::read(&journal_path).unwrap();
+    let receipt = engine.recover(transaction.id).unwrap();
+    assert!(!journal_path.exists());
+
+    // Journal removal is not flushed, so a power loss can restore this name
+    // after the receipt is already durable.
+    fs::write(&journal_path, &journal).unwrap();
+    let replayed = engine.commit(&transaction).unwrap();
+    assert_eq!(replayed, receipt);
+    let recovered = engine.recover(transaction.id).unwrap();
+    assert_eq!(recovered.operations, receipt.operations);
+    assert_eq!(fs::read(root.join("first.txt")).unwrap(), b"new-first");
+    assert_eq!(fs::read(root.join("second.txt")).unwrap(), b"new-second");
+    let _ = fs::remove_dir_all(root);
+    let _ = fs::remove_dir_all(state);
+}
