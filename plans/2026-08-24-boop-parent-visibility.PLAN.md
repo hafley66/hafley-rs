@@ -130,3 +130,15 @@ Lane sent m-f8da00f2 (yield) and m-07ebeea1 (note) to claude-5 at 00:18:07/11 fr
 | `beep ps` says alive, nothing else | liveness = pid | liveness = pid + last turn ts + HEAD + last transition, one row in `lane list` |
 
 Principle: the supervisor observes and reports on its own; the model's cooperation is never a precondition for the parent knowing the state.
+
+## Addendum 2026-08-25 02:25: codex native subagent cross-messaging (run cx-a / native-n1 / cx-b / native-n2)
+
+Chain: lane feature-cx-a (codex) -> native subagent native-n1 -> lane feature-cx-b (codex, parent native-n1) -> native subagent native-n2 -> `boop push native-n1`. The ping was never appended.
+
+| # | defect | evidence (codex rollouts 02:19-02:21) | fix |
+|---|---|---|---|
+| 1 | codex native subagents run under the codex sandbox with writable root = the worktree; boop cannot write `~/.agent/mail` or `<repo>/.git/worktrees/*` | `Error: write registry temp / Operation not permitted`, `Error: open ndjson box / Operation not permitted`, `fatal: Unable to create .git/worktrees/cx-a/index.lock: Operation not permitted` | `crates/boop-acp/src/channel/codex.rs:58` sets `sandbox: danger-full-access` per session only; launch codex with process-level config `-c sandbox_mode="danger-full-access" -c approval_policy="never"` so spawned agents inherit; test: a spawned agent's exec writes outside the worktree |
+| 2 | identity ladder: env `BOOP_LANE` outranks a `beep agent register` done in the same process tree, so native-n1's `boop wait --me` watched `feature-cx-a` | `mail wait answered watching="mail for feature-cx-a"` at 02:19:34, registration at 02:19:46 | `agent register` prints an `export BOOP_SESSION=<name>` line and the docs say to eval it; `wait --me`/`push`/`tell-parent` take `--as <name>` and the brief template uses it for natives |
+| 3 | `wait --me` handed back the lane's own dispatch row `m-d2252d54` (already consumed at spawn) as the next unread row | 02:20:06 output | dispatch rows are stamped delivered at spawn; `--me` skips kinds `dispatch` and rows with a delivery transition |
+| 4 | `push parent` does not resolve the `parent` alias its help advertises | `m-a654e50a -> parent held-in-mailbox (no registry route for parent)` | resolve `parent` through `lane::tell_parent_target` before the ladder; same for `hail` |
+| 5 | rows to a native route are `held-in-mailbox (route native-n1 names no harness)` and only a polling `wait --me` finds them | ledger 02:20:25 | acceptable, but `wait --me` must be correct (2, 3) for it to work |
