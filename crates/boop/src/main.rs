@@ -1537,6 +1537,10 @@ enum LaneCmd {
         route_only: bool,
         #[arg(long)]
         state: Option<String>,
+        /// Bulk delete only: print every route and every worktree path the
+        /// delete would remove, and remove nothing.
+        #[arg(long)]
+        dry_run: bool,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },

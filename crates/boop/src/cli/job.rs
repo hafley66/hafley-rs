@@ -15,7 +15,7 @@ use tracing::{error, info, warn};
 use crate::cli::db::{resolve_harness, run_harnesses};
 use crate::cli::debug::default_preset_for_harness;
 use crate::cli::mail::{all_messages, run_hail, run_list};
-use crate::cli::me::{run_adopt, run_prune};
+use crate::cli::me::run_adopt;
 use crate::cli::{append_ack, append_message, line, mail_dir, pad, route_to_json, write_route};
 use crate::{AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat};
 
@@ -1423,10 +1423,11 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             lane,
             route_only,
             state,
+            dry_run,
             mail_dir,
         } => match (lane, state) {
             (Some(lane), _) => run_lane_delete(mail_dir.as_deref(), &lane, route_only),
-            (None, Some(_)) => run_prune(mail_dir.as_deref()),
+            (None, Some(_)) => run_lane_bulk_delete(mail_dir.as_deref(), dry_run),
             (None, None) => {
                 anyhow::bail!("name a lane to delete, or pass --state dead for a bulk delete")
             }
@@ -1637,6 +1638,102 @@ pub(crate) fn run_lane_delete(
     })?;
     info!(lane, route_only, "lane route deleted");
     println!("deleted {lane}");
+    Ok(())
+}
+
+/// Bulk delete: every dead lane route, its own `worktree_dir` and nothing
+/// else. A path is removed only when `deletable_worktree` says it is a linked
+/// worktree whose top level is itself, so a parent such as `.boop-worktrees`
+/// is never a candidate and a live sibling under it is never reached.
+pub(crate) fn run_lane_bulk_delete(mail_dir_arg: Option<&Path>, dry_run: bool) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    if tmux::mux().live_sessions(None).is_none() {
+        anyhow::bail!("tmux unreachable, cannot tell live from dead");
+    }
+    let routes = bus::read_routes(&dir)?;
+    let snapshot = proc::SysinfoSnapshot::capture()?;
+    let dead: Vec<(String, Option<PathBuf>)> = routes
+        .iter()
+        .filter(|(_, route)| route.kind == "lane")
+        .filter(|(_, route)| dead_reason(route, &snapshot).is_some())
+        .map(|(name, route)| {
+            let worktree = route
+                .worktree_dir
+                .as_deref()
+                .map(Path::new)
+                .and_then(boop::worktree::deletable_worktree);
+            (name.clone(), worktree)
+        })
+        .collect();
+
+    for (name, worktree) in &dead {
+        match worktree {
+            Some(path) => line(&format!("lane {name}: route, worktree {}", path.display())),
+            None => line(&format!("lane {name}: route only, no worktree of its own")),
+        }
+    }
+    if dry_run {
+        line(&format!(
+            "{} lane(s) and {} worktree(s) would be removed (dry run)",
+            dead.len(),
+            dead.iter().filter(|(_, path)| path.is_some()).count()
+        ));
+        return Ok(());
+    }
+
+    let mut removed_worktrees = 0usize;
+    for (name, worktree) in &dead {
+        let Some(path) = worktree else { continue };
+        let Some(repo) = boop::worktree::worktree_owner(path) else {
+            line(&format!(
+                "lane {name}: {} names no owning repo, left alone",
+                path.display()
+            ));
+            continue;
+        };
+        match remove_one_worktree(&repo, path) {
+            Ok(()) => {
+                removed_worktrees += 1;
+                line(&format!("removed worktree {}", path.display()));
+            }
+            Err(error) => line(&format!("lane {name}: {} kept, {error}", path.display())),
+        }
+    }
+    let path = dir.join("registry.json");
+    bus::cas_update_json(&path, |current| {
+        for (name, _) in &dead {
+            current.remove(name);
+        }
+        Ok(())
+    })?;
+    info!(
+        routes_deleted = dead.len(),
+        worktrees_removed = removed_worktrees,
+        mail_dir = %dir.display(),
+        "lane routes bulk deleted"
+    );
+    line(&format!(
+        "{} lane(s) deleted, {removed_worktrees} worktree(s) removed",
+        dead.len()
+    ));
+    Ok(())
+}
+
+/// One `git worktree remove --force` against exactly `worktree`, run from the
+/// owning repo. Nothing else on disk is touched.
+fn remove_one_worktree(repo: &Path, worktree: &Path) -> Result<()> {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["worktree", "remove", "--force"])
+        .arg(worktree)
+        .output()
+        .with_context(|| format!("run git worktree remove in {}", repo.display()))?;
+    anyhow::ensure!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr).trim().to_owned()
+    );
     Ok(())
 }
 
