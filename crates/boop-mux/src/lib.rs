@@ -292,10 +292,27 @@ impl Multiplexer for Tmux {
             .start_directory(cwd)
             .session_name(name)
             .shell_command(command);
-        builder
+        let output = builder
             .add_command(new)
             .output()
             .context("tmux new-session")?;
+        if !output.success() {
+            let rc = output.code().unwrap_or(-1);
+            warn!(session = name, rc, "tmux new detached session failed");
+            anyhow::bail!(
+                "tmux new-session failed rc={rc}: {}",
+                String::from_utf8_lossy(&output.stderr()).trim()
+            );
+        }
+        if !self.has_session(socket, name)? {
+            warn!(
+                session = name,
+                "tmux new-session reported success but the session is not live"
+            );
+            anyhow::bail!(
+                "tmux new-session failed: {name} exited 0 but has-session found no such session"
+            );
+        }
         debug!(session = name, "tmux new detached session completed");
         Ok(())
     }
@@ -759,6 +776,31 @@ mod tests {
 
     fn mux() -> Tmux {
         Tmux
+    }
+
+    /// `tmux -V` is the cheapest reachability probe; a missing binary makes
+    /// every other helper in this module panic before it reaches an assert.
+    fn tmux_on_path() -> bool {
+        Command::new("tmux").arg("-V").output().is_ok()
+    }
+
+    /// RECEIPT: a spawn against a socket path tmux can never open is an `Err`,
+    /// never a silent `Ok(())` a caller then reports as `dispatched`.
+    #[test]
+    fn a_spawn_against_an_unreachable_socket_returns_err() {
+        if !tmux_on_path() {
+            eprintln!("skipping: tmux not on PATH");
+            return;
+        }
+        let name = session_name();
+        let result =
+            mux().new_detached_session(Some("/nonexistent/sock"), &name, "/tmp", "true");
+        let err = result.expect_err("an unreachable socket must not report a dispatched lane");
+        let message = err.to_string();
+        assert!(
+            message.contains("tmux new-session failed"),
+            "expected 'tmux new-session failed' in {message:?}"
+        );
     }
 
     #[test]
