@@ -1269,11 +1269,13 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
         LaneCmd::List {
             state,
             harness,
+            all,
             mail_dir,
         } => run_lane_list(
             mail_dir.as_deref(),
             state.as_deref(),
             harness.as_deref().map(str::parse).transpose()?,
+            all,
         ),
         LaneCmd::Create {
             lane,
@@ -1439,6 +1441,7 @@ pub(crate) fn run_lane_list(
     mail_dir_arg: Option<&Path>,
     state_filter: Option<&str>,
     harness_filter: Option<HarnessId>,
+    all: bool,
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
@@ -1494,7 +1497,43 @@ pub(crate) fn run_lane_list(
             suffix,
         ));
     }
+    if all {
+        for name in unregistered_sessions(&routes, &live) {
+            line(&format!(
+                "{} {} {} {} {} {} {} {}",
+                pad("live", 4),
+                pad(&name, 16),
+                pad("unregistered", 12),
+                pad("-", 10),
+                pad("-", 6),
+                pad("-", 46),
+                pad("-", 16),
+                "-",
+            ));
+        }
+    }
     Ok(())
+}
+
+/// The tmux sessions no route claims: not a route `tmux` target and not a
+/// route name. These are live sessions boop does not manage, listed under
+/// `--all` so the panel's view counts them without pretending they are lanes.
+pub(crate) fn unregistered_sessions(
+    routes: &BTreeMap<String, Route>,
+    live: &Option<tmux::LiveSessions>,
+) -> Vec<String> {
+    let Some(live) = live else {
+        return Vec::new();
+    };
+    live.names
+        .iter()
+        .filter(|name| {
+            !routes.iter().any(|(route_name, route)| {
+                route.tmux.as_deref() == Some(name.as_str()) || route_name == name.as_str()
+            })
+        })
+        .cloned()
+        .collect()
 }
 
 /// The parent edge that answers nobody, so a surviving orphan says so on its
@@ -2641,6 +2680,32 @@ mod tests {
 
         drop(live_session);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT (native-visibility). A tmux session no route claims is a live
+    /// session boop does not manage; a route `tmux` target or route name that
+    /// matches a session name is claimed and therefore not unregistered.
+    #[test]
+    fn unregistered_sessions_names_claimless_tmux_sessions() {
+        let mut routes = BTreeMap::new();
+        let mut routed = tmux_route("claimed-by-tmux");
+        routed.kind = "lane".into();
+        routes.insert("claimed-by-tmux".into(), routed);
+        routes.insert("claimed-by-name".into(), tmux_route("other-target"));
+        let live = Some(boop::tmux::LiveSessions {
+            names: [
+                "claimed-by-tmux".to_owned(),
+                "claimed-by-name".to_owned(),
+                "free-session".to_owned(),
+            ]
+            .into_iter()
+            .collect(),
+        });
+        assert_eq!(
+            unregistered_sessions(&routes, &live),
+            vec!["free-session".to_owned()]
+        );
+        assert!(unregistered_sessions(&routes, &None).is_empty());
     }
 
     /// RECEIPT (Job 3b). A `--route-only` delete drops the lane's registry row

@@ -824,6 +824,9 @@ enum LaneCmd {
         state: Option<String>,
         #[arg(long)]
         harness: Option<String>,
+        /// Include unregistered tmux sessions and native Claude subagents.
+        #[arg(long)]
+        all: bool,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
