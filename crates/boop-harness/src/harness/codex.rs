@@ -245,10 +245,17 @@ fn launch_command(spec: &SpawnSpec) -> anyhow::Result<String> {
     if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
         let model_spec: ModelSpec = model.parse()?;
         command.push_str(&format!(" -m {}", shell_quote(&model_spec.name)));
-        if let Some(effort) = model_spec.effort {
+        // The preset's own `effort` field wins; an `@suffix` on a bare
+        // `--model` is the older spelling and still resolves.
+        let effort = spec
+            .effort
+            .clone()
+            .filter(|value| !value.is_empty())
+            .or_else(|| model_spec.effort.map(|effort| effort.as_str().to_owned()));
+        if let Some(effort) = effort {
             command.push_str(&format!(
                 " -c {}",
-                shell_quote(&format!("model_reasoning_effort=\"{}\"", effort.as_str()))
+                shell_quote(&format!("model_reasoning_effort=\"{effort}\""))
             ));
         }
     }
@@ -1053,6 +1060,7 @@ mod tests {
 
     fn spawn_spec(socket: Option<String>) -> crate::harness::SpawnSpec {
         crate::harness::SpawnSpec {
+            effort: None,
             harness: HarnessId::Codex,
             branch: "lane-test".to_owned(),
             base_sha: "0000000000000000000000000000000000000000".to_owned(),

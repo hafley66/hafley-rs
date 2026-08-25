@@ -600,6 +600,7 @@ mod tests {
 
     fn spec(guard: &TmuxGuard) -> crate::harness::SpawnSpec {
         crate::harness::SpawnSpec {
+            effort: None,
             harness: HarnessId::Claude,
             branch: "lane-test".to_owned(),
             base_sha: "0000000000000000000000000000000000000000".to_owned(),

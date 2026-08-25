@@ -230,6 +230,7 @@ mod tests {
 
     fn spec() -> ChannelSpec {
         ChannelSpec {
+            effort: None,
             model: None,
             cwd: std::env::temp_dir(),
             resume: None,

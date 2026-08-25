@@ -272,6 +272,9 @@ pub fn supervisor_command(spec: &SpawnSpec) -> String {
     if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
         command.push_str(&format!(" --model {}", quote(model)));
     }
+    if let Some(effort) = spec.effort.as_deref().filter(|value| !value.is_empty()) {
+        command.push_str(&format!(" --effort {}", quote(effort)));
+    }
     if let Some(variant) = spec.variant.as_deref().filter(|value| !value.is_empty()) {
         command.push_str(&format!(" --variant {}", quote(variant)));
     }
@@ -382,6 +385,7 @@ mod supervisor_command_tests {
 
     fn spec() -> SpawnSpec {
         SpawnSpec {
+            effort: None,
             harness: HarnessId::Claude,
             branch: "lane-test".to_owned(),
             base_sha: "0".repeat(40),

@@ -84,6 +84,9 @@ pub(crate) struct DispatchArgs {
     pub(crate) resolve_wait: u64,
     pub(crate) main_tree: bool,
     pub(crate) base_sha: Option<String>,
+    /// Reasoning effort from the preset row, spelled as the harness's own
+    /// config flag rather than an `@suffix` on the model.
+    pub(crate) effort: Option<String>,
     /// opencode reasoning-effort variant, threaded from `lane create`.
     pub(crate) variant: Option<String>,
     /// The executable the harness runs as, threaded from `lane create`.
@@ -163,6 +166,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             args.parent.as_deref(),
         )),
         model: args.model.clone(),
+        effort: args.effort.clone(),
         variant: args.variant.clone(),
         bin: args.bin.clone(),
         on_exit: args.on_exit.clone(),
@@ -362,6 +366,7 @@ pub(crate) fn run_lane_supervisor(
     harness_id: &str,
     brief: &Path,
     model: Option<&str>,
+    effort: Option<&str>,
     resume: Option<&str>,
     variant: Option<&str>,
     bin: Option<&str>,
@@ -371,6 +376,7 @@ pub(crate) fn run_lane_supervisor(
         lane,
         harness = harness_id,
         model = model.unwrap_or_default(),
+        effort = effort.unwrap_or_default(),
         cwd = %std::env::current_dir().unwrap_or_default().display(),
         resume = resume.unwrap_or_default(),
         variant = variant.unwrap_or_default(),
@@ -387,6 +393,7 @@ pub(crate) fn run_lane_supervisor(
         .or_else(|| boop::supervise::pinned_conversation(&dir, lane));
     let resume = resume.as_deref();
     let spec = boop::channel::ChannelSpec {
+        effort: effort.map(str::to_owned),
         model: model.map(str::to_owned),
         cwd: cwd.clone(),
         resume: resume.map(str::to_owned),
@@ -857,15 +864,18 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     let config_path = config::default_path()?;
     let config = config::load(&config_path)?;
     let model_given = args.model.is_some();
-    let requested_model = match (args.model, args.preset.as_deref()) {
-        (Some(model), _) => Some(model),
-        (None, Some(preset)) => Some(config::resolve_model(preset, &config_path)?),
+    // One row decides harness, model and effort. `--model` is the hidden
+    // alias: it reads as a preset of one row that names no harness.
+    let requested = match (args.model.as_deref(), args.preset.as_deref()) {
+        (Some(model), _) => Some(config::ModelPreset::from_model(model)?),
+        (None, Some(preset)) => Some(config::resolve_preset(preset, &config_path)?),
         (None, None) => None,
     };
+    let requested_model = requested.as_ref().map(|preset| preset.model.clone());
     // A preset names its harness as surely as --harness does: choosing
     // `--preset opus` is the opt-in a claude tmux lane asks for.
-    let preset_harness = match (model_given, requested_model.as_deref()) {
-        (false, Some(model)) => lane::harness_for_model(model)?,
+    let preset_harness = match (model_given, &requested) {
+        (false, Some(preset)) => lane::harness_for_preset(preset)?,
         _ => None,
     };
     let harness_id = lane::harness_for_spawn(
@@ -909,33 +919,25 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     if let Some(mood) = args.mood.as_deref() {
         boop::Store::open(boop::Store::default_path()?)?.check_mood_name(mood)?;
     }
+    // The row that spawns: the one named, else the harness's default preset.
+    // An explicit --model opts out of the default-preset lookup entirely.
     let default_preset = default_preset_for_harness(&config, &config_path, harness_id)?;
-    let model = config::resolve_spawn_model(
-        requested_model.as_deref(),
-        None,
-        default_preset.as_deref(),
-        &config_path,
-    )?;
-    // The preset that resolved the model also carries the variant; an explicit
-    // --model opts out of both preset lookups. CLI --variant wins over preset.
-    let preset_name = if model_given {
-        None
-    } else {
-        args.preset.as_deref().or(default_preset.as_deref())
+    let spawning = match (&requested, default_preset.as_deref()) {
+        (Some(preset), _) => Some(preset.clone()),
+        (None, Some(name)) => Some(config::resolve_preset(name, &config_path)?),
+        (None, None) => None,
     };
+    let model = spawning.as_ref().map(|preset| preset.model.clone());
+    // Effort reaches the harness as its own config; the model string stays
+    // bare (presets-only-model-spelling, luna open_failed 02:10:31).
+    let effort = spawning.as_ref().and_then(|preset| preset.effort.clone());
     let variant = match args.variant {
         Some(variant) => Some(variant),
-        None => preset_name
-            .and_then(|name| config::resolve_variant(name, &config_path).ok())
-            .flatten(),
+        None => spawning.as_ref().and_then(|preset| preset.variant.clone()),
     };
-    // The executable override rides the same precedence as the variant: an
-    // explicit --bin wins, else the preset that resolved the model names one.
     let bin = match args.bin {
         Some(bin) => Some(bin),
-        None => preset_name
-            .and_then(|name| config::resolve_preset(name, &config_path).ok())
-            .and_then(|preset| preset.bin),
+        None => spawning.as_ref().and_then(|preset| preset.bin.clone()),
     };
     if variant.is_some() && adapter.capabilities().variant != VariantSupport::Flag {
         anyhow::bail!(
@@ -982,6 +984,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             "lane create dry run"
         );
         let spec = boop::harness::SpawnSpec {
+            effort: effort.clone(),
             harness: harness_id,
             branch: identity.branch.clone(),
             base_sha: base.sha.clone(),
@@ -1013,6 +1016,9 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         println!("to: {}", identity.lane);
         println!("cwd: {}", repo.display());
         println!("harness: {harness_id}");
+        if let Some(effort) = &effort {
+            println!("effort: {effort}");
+        }
         match lane::kind_of(&identity.branch) {
             Some(kind) => println!("branch: {} (kind {kind})", identity.branch),
             None => println!("branch: {}", identity.branch),
@@ -1090,6 +1096,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             harness: Some(harness_id.as_str().to_owned()),
             session_id: None,
             model,
+            effort,
             mode: Some("auto".into()),
             tmux: Some(identity.tmux),
             socket: args.socket,
@@ -1367,6 +1374,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             harness,
             brief,
             model,
+            effort,
             resume,
             variant,
             bin,
@@ -1377,6 +1385,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             &harness,
             &brief,
             model.as_deref(),
+            effort.as_deref(),
             resume.as_deref(),
             variant.as_deref(),
             bin.as_deref(),

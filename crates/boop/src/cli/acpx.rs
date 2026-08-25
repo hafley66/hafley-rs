@@ -92,9 +92,14 @@ fn resolve_agent_and_model(preset: &str) -> Result<(String, Option<String>)> {
         return Ok((preset.to_owned(), None));
     }
     let path = config::default_path()?;
-    let model = config::resolve_model(preset, &path)?;
-    let agent = boop::lane::harness_for_model(&model)?
+    let row = config::resolve_preset(preset, &path)?;
+    let agent = boop::lane::harness_for_preset(&row)?
         .context("model preset does not select an ACP agent")?;
+    // acpx spells effort in brackets; the model string itself stays bare.
+    let model = match row.effort.as_deref() {
+        Some(effort) => format!("{}[{effort}]", row.model),
+        None => row.model,
+    };
     Ok((agent.as_str().to_owned(), Some(model)))
 }
 

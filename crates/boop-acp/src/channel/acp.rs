@@ -19,12 +19,17 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Agent, ConnectionTo, LineDirection};
 use anyhow::{Context, Result};
+use boop_store::session::ModelSpec;
 use tracing::{debug, info, warn};
 
 use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
 
 /// The config option every ACP agent names its model with.
 const MODEL_CONFIG_ID: &str = "model";
+
+/// The config option codex-acp carries reasoning effort on. Its `model`
+/// option takes the family alone, so `gpt-5.6-luna@medium` matches no value.
+const EFFORT_CONFIG_ID: &str = "reasoning_effort";
 
 /// The config option codex-acp names its permission mode with, and the value
 /// that means no sandbox and no approval prompts.
@@ -123,9 +128,27 @@ impl AcpChannel {
         let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
         let (note_tx, note_rx) = std::sync::mpsc::channel();
         let last_update_ms = Arc::new(AtomicU64::new(0));
+        // The agent's `model` option takes the family alone, so an `@effort`
+        // suffix is split off here and set as its own option below.
+        let model_spec = spec
+            .model
+            .as_deref()
+            .filter(|value| !value.is_empty())
+            .map(str::parse::<ModelSpec>)
+            .transpose()?;
         let plan = SessionPlan {
             cwd,
-            model: spec.model.clone().filter(|value| !value.is_empty()),
+            model: model_spec.as_ref().map(|spec| spec.name.clone()),
+            effort: spec
+                .effort
+                .clone()
+                .filter(|value| !value.is_empty())
+                .or_else(|| {
+                    model_spec
+                        .as_ref()
+                        .and_then(|spec| spec.effort)
+                        .map(|effort| effort.as_str().to_owned())
+                }),
             resume: spec.resume.clone(),
             clock: Arc::clone(&last_update_ms),
         };
@@ -261,6 +284,7 @@ impl LaneChannel for AcpChannel {
 struct SessionPlan {
     cwd: PathBuf,
     model: Option<String>,
+    effort: Option<String>,
     resume: Option<String>,
     clock: Arc<AtomicU64>,
 }
@@ -414,6 +438,9 @@ async fn handshake(
     if let Some(model) = plan.model.as_deref() {
         select_model(connection, &session, model, offered).await?;
     }
+    if let Some(effort) = plan.effort.as_deref() {
+        select_effort(connection, &session, effort, offered).await;
+    }
     Ok(session)
 }
 
@@ -449,11 +476,33 @@ async fn select_full_access_mode(
 
 /// Whether the agent's `option_id` select offers `value_id`.
 fn offers_value(config_options: &[SessionConfigOption], option_id: &str, value_id: &str) -> bool {
-    select_value_ids(config_options, option_id).is_some_and(|values| {
-        values
-            .iter()
-            .any(|offered| offered.as_str() == value_id)
-    })
+    select_value_ids(config_options, option_id)
+        .is_some_and(|values| values.iter().any(|offered| offered.as_str() == value_id))
+}
+
+/// Name the reasoning effort on the agent's own option. An agent that offers
+/// no such option is left alone; a refusal is a warning, never an open failure.
+async fn select_effort(
+    connection: &ConnectionTo<Agent>,
+    session: &SessionId,
+    effort: &str,
+    config_options: &[SessionConfigOption],
+) {
+    if !offers_value(config_options, EFFORT_CONFIG_ID, effort) {
+        return;
+    }
+    match connection
+        .send_request(SetSessionConfigOptionRequest::new(
+            session.clone(),
+            EFFORT_CONFIG_ID,
+            SessionConfigOptionValue::value_id(effort.to_owned()),
+        ))
+        .block_task()
+        .await
+    {
+        Ok(_) => info!(effort, "acp session reasoning effort set"),
+        Err(error) => warn!(effort, error = %error.message, "acp reasoning effort refused"),
+    }
 }
 
 /// Name the model. The spelling is the harness's own and is sent through
@@ -502,7 +551,10 @@ fn offered_models(config_options: &[SessionConfigOption]) -> Option<String> {
 
 /// Every value id the agent's `option_id` select offers, in the order it sent
 /// them. `None` for an option it does not carry or one that is not a select.
-fn select_value_ids(config_options: &[SessionConfigOption], option_id: &str) -> Option<Vec<String>> {
+fn select_value_ids(
+    config_options: &[SessionConfigOption],
+    option_id: &str,
+) -> Option<Vec<String>> {
     let select = config_options
         .iter()
         .find(|option| option.id.0.as_ref() == option_id)
@@ -763,7 +815,11 @@ mod tests {
                 ),
             ],
         )];
-        assert!(!offers_value(&claude_modes, MODE_CONFIG_ID, FULL_ACCESS_MODE));
+        assert!(!offers_value(
+            &claude_modes,
+            MODE_CONFIG_ID,
+            FULL_ACCESS_MODE
+        ));
         assert!(!offers_value(&[], MODE_CONFIG_ID, FULL_ACCESS_MODE));
     }
 
@@ -881,6 +937,7 @@ mod tests {
     /// failure names its harness through the test name.
     fn live_pong_turn(adapter: &[&str], model: Option<&str>, cap: Duration) -> TurnEvent {
         let spec = ChannelSpec {
+            effort: None,
             model: model.map(str::to_owned),
             cwd: std::env::temp_dir(),
             resume: None,
@@ -968,6 +1025,7 @@ mod tests {
     /// `session/load` and keeps it as the conversation id.
     fn live_resumed_turn(adapter: &[&str], model: Option<&str>) -> (String, String) {
         let spec = ChannelSpec {
+            effort: None,
             model: model.map(str::to_owned),
             cwd: std::env::temp_dir(),
             resume: None,
@@ -1033,6 +1091,7 @@ mod tests {
     #[test]
     fn an_empty_command_is_refused_before_a_thread_is_spawned() {
         let spec = ChannelSpec {
+            effort: None,
             model: None,
             cwd: std::env::temp_dir(),
             resume: None,

@@ -179,6 +179,9 @@ pub struct SpawnSpec {
     /// The model the lane runs, in the harness's own flag spelling. `None`
     /// lets the harness default; a harness with no default refuses.
     pub model: Option<String>,
+    /// Reasoning effort, carried beside the model rather than inside it:
+    /// codex spells it `-c model_reasoning_effort=`, never `model@effort`.
+    pub effort: Option<String>,
     /// opencode reasoning-effort variant (`--variant low|medium|high`).
     /// `None` emits no flag, keeping opencode's own per-model default.
     pub variant: Option<String>,

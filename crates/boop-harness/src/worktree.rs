@@ -841,6 +841,7 @@ mod tests {
         main_tree: bool,
     ) -> SpawnSpec {
         SpawnSpec {
+            effort: None,
             harness: HarnessId::Claude,
             branch: "lane-wt".to_owned(),
             base_sha: base.to_owned(),

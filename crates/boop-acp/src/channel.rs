@@ -89,6 +89,9 @@ impl TurnEvent {
 pub struct ChannelSpec {
     /// The harness's own model spelling; `None` takes the harness default.
     pub model: Option<String>,
+    /// Reasoning effort, set as the agent's own session option. `None` leaves
+    /// the agent's default; it never rides inside `model`.
+    pub effort: Option<String>,
     pub cwd: PathBuf,
     /// An existing conversation to continue instead of starting a new one.
     pub resume: Option<String>,

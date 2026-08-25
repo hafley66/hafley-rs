@@ -115,6 +115,7 @@ fn spawn_spec(
     mail_dir: &Path,
 ) -> SpawnSpec {
     SpawnSpec {
+        effort: None,
         harness: boop::harness::HarnessId::Claude,
         branch: branch.to_owned(),
         base_sha: base_sha.to_owned(),

@@ -21,9 +21,9 @@ use cli::db::{
     run_chat_query, run_db, run_follow, run_harnesses, run_passthrough, run_public_agent_command,
     run_query, run_sessions, run_sync_all, run_tail, sync_before_read, ChatQueryOptions,
 };
-use cli::debug::{run_config, run_debug, run_lane_debug};
 #[cfg(feature = "dl6")]
 use cli::debug::run_host;
+use cli::debug::{run_config, run_debug, run_lane_debug};
 use cli::job::{
     run_beep, run_dispatch, run_lane, run_lane_wait, run_measure, run_resolve, run_sweep, run_wait,
     DispatchArgs, LaneArgs,
@@ -32,9 +32,9 @@ use cli::mail::{
     run_hail, run_inbox, run_list, run_push, run_send, run_tell_children, run_tell_parent, Outbound,
 };
 use cli::me::{run_adopt, run_me, run_me_favorite, run_me_mood, run_prune, run_whoami};
-use cli::{doctrine, line, mail_dir, now_ms};
 #[cfg(feature = "dl6")]
 use cli::CONCATMAP_EXAMPLES;
+use cli::{doctrine, line, mail_dir, now_ms};
 
 #[derive(Parser)]
 #[command(
@@ -805,6 +805,7 @@ fn main() -> Result<()> {
                     parent: None,
                     on_exit: None,
                     warm_start: true,
+                    effort: None,
                     variant: None,
                     bin: None,
                 },
@@ -1088,7 +1089,7 @@ fn main() -> Result<()> {
                 Some(MeCmd::Favorite { index, note }) => run_me_favorite(index, note.as_deref()),
                 None => run_me(name.as_deref(), mail_dir.as_deref()),
             },
-            SubCmd::Config { cmd } => run_config(cmd),
+            SubCmd::Config { cmd } => run_config(&registry, cmd),
         },
     )
 }
@@ -1271,10 +1272,9 @@ fn init_tracing(lane: Option<&str>) -> Result<()> {
 fn supervised_lane(command: &SubCmd) -> Option<&str> {
     match command {
         SubCmd::Beep {
-            cmd:
-                Some(BeepCmd::Lane {
-                    cmd: LaneCmd::Run { lane, .. },
-                }),
+            cmd: Some(BeepCmd::Lane {
+                cmd: LaneCmd::Run { lane, .. },
+            }),
             ..
         } => Some(lane),
         _ => None,
@@ -1413,12 +1413,16 @@ enum LaneCmd {
         /// What this lane does when its parent route stops answering.
         #[arg(long, value_enum, default_value_t = ParentDeathPolicy::Orphan)]
         on_parent_death: ParentDeathPolicy,
-        /// Defaults to the harness the model spelling names.
-        #[arg(long)]
+        /// Folded (presets-only-model-spelling): the preset table names the
+        /// harness. Hidden alias, still honoured.
+        #[arg(long, hide = true)]
         harness: Option<String>,
-        #[arg(long)]
+        /// Folded (presets-only-model-spelling): `--preset <name>` is the
+        /// spelling. Hidden alias, still honoured.
+        #[arg(long, hide = true)]
         model: Option<String>,
-        /// Resolve a named provider/model entry from the platform Boop config.
+        /// The row of the config preset table this lane spawns from: harness,
+        /// model, effort. The one model spelling `lane create` takes.
         #[arg(long, conflicts_with = "model")]
         preset: Option<String>,
         /// opencode reasoning-effort variant (low|medium|high); CLI wins over
@@ -1471,6 +1475,10 @@ enum LaneCmd {
         brief: PathBuf,
         #[arg(long)]
         model: Option<String>,
+        /// Reasoning effort, threaded from the preset; the harness spells it
+        /// as its own config, never as `model@effort`.
+        #[arg(long)]
+        effort: Option<String>,
         /// Continue an existing harness conversation instead of opening one.
         #[arg(long)]
         resume: Option<String>,

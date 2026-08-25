@@ -189,6 +189,7 @@ impl Rewriter {
         compact_tokens: usize,
     ) -> Result<Rewriter> {
         let spec = ChannelSpec {
+            effort: None,
             model: Some(model),
             cwd,
             resume,
@@ -1352,6 +1353,7 @@ mod tests {
             plant_done: None,
         }));
         let spec = ChannelSpec {
+            effort: None,
             model: Some("fake-model".into()),
             cwd: temp_dir("chat_cwd"),
             resume: None,
@@ -1434,6 +1436,7 @@ mod tests {
             plant_done: None,
         }));
         let spec = ChannelSpec {
+            effort: None,
             model: Some("fake-model".into()),
             cwd: temp_dir("subject_cwd"),
             resume: None,

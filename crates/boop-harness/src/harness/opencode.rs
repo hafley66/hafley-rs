@@ -1177,6 +1177,7 @@ mod tests {
 
     fn spec(guard: &TmuxGuard) -> SpawnSpec {
         SpawnSpec {
+            effort: None,
             harness: HarnessId::Opencode,
             branch: "lane-test".to_owned(),
             base_sha: "0000000000000000000000000000000000000000".to_owned(),

@@ -4,6 +4,7 @@ use anyhow::Result;
 use tracing::warn;
 
 use boop::harness::HarnessId;
+use boop::registry::Registry;
 use boop::{config, lane};
 
 use crate::cli::db::open_ro_store;
@@ -219,8 +220,8 @@ pub(crate) fn default_preset_for_harness(
     let Some(preset) = config.default_model_preset.as_deref() else {
         return Ok(None);
     };
-    let model = config::resolve_model(preset, config_path)?;
-    match lane::harness_for_model(&model)? {
+    let row = config::resolve_preset(preset, config_path)?;
+    match lane::harness_for_preset(&row)? {
         Some(owner) if owner == harness_id => Ok(Some(preset.to_owned())),
         _ => Ok(None),
     }
@@ -229,51 +230,69 @@ pub(crate) fn default_preset_for_harness(
 /// `boop config path` prints the resolved config path; `boop config show`
 /// prints the loaded config as pretty JSON, including the defaults a missing
 /// file produces.
-pub(crate) fn run_config(cmd: ConfigCmd) -> Result<()> {
+pub(crate) fn run_config(registry: &Registry, cmd: ConfigCmd) -> Result<()> {
     match cmd {
         ConfigCmd::Path => line(&config::default_path()?.display().to_string()),
         ConfigCmd::Show => line(&config::show(&config::default_path()?)?),
-        ConfigCmd::Presets => line(&presets_table()?),
+        ConfigCmd::Presets => line(&presets_table(registry)?),
     }
     Ok(())
 }
 
-/// Each preset resolved to model, variant, executable, and the harness the
-/// model spelling names, with the `default-model-preset` row marked.
-pub(crate) fn presets_table() -> Result<String> {
+/// The default marker for a preset that spawns.
+fn spawn_status(config: &config::Config, name: &str) -> String {
+    match config.default_model_preset.as_deref() == Some(name) {
+        true => "ok *".to_owned(),
+        false => "ok".to_owned(),
+    }
+}
+
+/// The refusal's own first line; anyhow chains the rest behind it.
+fn first_line(text: &str) -> String {
+    text.lines().next().unwrap_or_default().trim().to_owned()
+}
+
+/// One row per preset: harness, model, effort, variant, executable, and
+/// whether it can spawn at all. A row whose harness refuses the model reads
+/// DEAD with the refusal, so a broken preset is found here and not at spawn.
+pub(crate) fn presets_table(registry: &Registry) -> Result<String> {
     let path = config::default_path()?;
     let config = config::load(&path)?;
-    let mut rows: Vec<[String; 6]> = vec![[
+    let mut rows: Vec<[String; 7]> = vec![[
         "PRESET".into(),
+        "HARNESS".into(),
         "MODEL".into(),
+        "EFFORT".into(),
         "VARIANT".into(),
         "BIN".into(),
-        "HARNESS".into(),
-        "DEFAULT".into(),
+        "STATUS".into(),
     ]];
     for name in config.model_presets.keys() {
         let preset = config::resolve_preset(name, &path)?;
-        let harness = lane::harness_for_model(&preset.model)?
-            .map_or("?", HarnessId::as_str)
-            .to_owned();
-        let default = if config.default_model_preset.as_deref() == Some(name) {
-            "*"
-        } else {
-            ""
+        let (harness, status) = match lane::preset_spawn_check(registry, &preset) {
+            Ok(harness) => (harness.as_str().to_owned(), spawn_status(&config, name)),
+            Err(error) => (
+                lane::harness_for_preset(&preset)
+                    .ok()
+                    .flatten()
+                    .map_or("?".to_owned(), |id| id.as_str().to_owned()),
+                format!("DEAD {}", first_line(&error.to_string())),
+            ),
         };
         rows.push([
             name.clone(),
+            harness,
             preset.model,
+            preset.effort.unwrap_or_default(),
             preset.variant.unwrap_or_default(),
             preset.bin.unwrap_or_default(),
-            harness,
-            default.to_owned(),
+            status,
         ]);
     }
     if rows.len() == 1 {
         return Ok(format!("no model presets in {}", path.display()));
     }
-    let mut widths = [0usize; 6];
+    let mut widths = [0usize; 7];
     for row in &rows {
         for (width, cell) in widths.iter_mut().zip(row) {
             *width = (*width).max(cell.len());

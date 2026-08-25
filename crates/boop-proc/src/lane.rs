@@ -289,6 +289,26 @@ pub fn harness_for_model(model: &str) -> Result<Option<HarnessId>> {
     Ok(configured.or_else(|| HarnessId::for_model(model)))
 }
 
+/// The harness a preset runs on: its own `harness` field, else the harness its
+/// model spelling names. `kimi-code/k3` reads as a provider path, so the field.
+pub fn harness_for_preset(preset: &config::ModelPreset) -> Result<Option<HarnessId>> {
+    match preset.harness.as_deref().filter(|id| !id.is_empty()) {
+        Some(harness) => Ok(Some(harness.parse::<HarnessId>()?)),
+        None => harness_for_model(&preset.model),
+    }
+}
+
+/// Whether one preset can spawn: the harness it names must exist and must
+/// accept the model. `boop config presets` prints the error as the row's DEAD.
+pub fn preset_spawn_check(registry: &Registry, preset: &config::ModelPreset) -> Result<HarnessId> {
+    let harness = harness_for_preset(preset)?;
+    harness_for_spawn(
+        registry,
+        harness.map(HarnessId::as_str),
+        Some(&preset.model),
+    )
+}
+
 /// A model family whose own harness runs on a flat-rate plan; opencode would
 /// pay metered credit for it, so spawn refuses with no override.
 fn plan_harness_family(model: &str) -> Result<Option<Cow<'static, str>>> {

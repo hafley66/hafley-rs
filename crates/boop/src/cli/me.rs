@@ -289,7 +289,11 @@ pub(crate) fn run_me_mood(
 
 /// The caller's own identity, from the two rungs and nothing else. A caller
 /// neither rung names exits 2 on one line naming `--as`.
-pub(crate) fn run_whoami(json: bool, as_name: Option<&str>, _mail_dir: Option<&Path>) -> Result<()> {
+pub(crate) fn run_whoami(
+    json: bool,
+    as_name: Option<&str>,
+    _mail_dir: Option<&Path>,
+) -> Result<()> {
     let identity = identity::require(as_name);
     if json {
         println!("{}", identity.to_json());
