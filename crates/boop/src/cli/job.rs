@@ -2271,7 +2271,15 @@ pub(crate) fn run_pstree(
             .as_deref()
             .and_then(|target| tmux::mux().pane_pid(None, target))
             .unwrap_or(0);
-        let live = snapshot.process(pane_pid).is_some();
+        // A registered coordinator or native runs no pane of its own, so a
+        // pane probe says nothing about it and its registry row is the whole
+        // evidence. The rule `route_liveness` already uses. Without it every
+        // native dropped out of the tree and reappeared only as a `[gone]`
+        // root above its own children, which hid the native-to-native rungs
+        // the chain is built from.
+        let paneless_agent =
+            route.tmux.is_none() && matches!(route.kind.as_str(), "coordinator" | "native");
+        let live = paneless_agent || snapshot.process(pane_pid).is_some();
         if !all && !live {
             continue;
         }
@@ -2290,7 +2298,11 @@ pub(crate) fn run_pstree(
             name.clone(),
             LaneMeta {
                 pid: pane_pid,
-                state: if live { "live" } else { "dead" },
+                state: match (paneless_agent, live) {
+                    (true, _) => "registered",
+                    (false, true) => "live",
+                    (false, false) => "dead",
+                },
                 descendants,
             },
         );

@@ -144,3 +144,58 @@ fn agent_register_and_done_round_trip_registry_and_ledger() {
     assert!(mailbox.contains("lane native-worker done rc=7"));
     assert!(mailbox.contains("\"to\":\"coord\""));
 }
+
+/// The live receipt for the codex native cross-messaging chain: a lane whose
+/// native subagent spawned a second lane whose own native answers it. Every
+/// rung of that chain has to show as one nesting level, so a pane-less
+/// coordinator or native is a node rather than a probe of a pane it never had.
+#[test]
+fn pstree_nests_a_native_between_the_two_lanes_it_joins() {
+    let dir = mail_dir("pstree-native");
+    std::fs::write(
+        dir.join("registry.json"),
+        r#"{
+  "e2e-root": {"kind":"coordinator"},
+  "feature-cx-a2": {"kind":"lane", "parent":"e2e-root", "tmux":"boop-no-cx-a2"},
+  "native-n1b": {"kind":"native", "parent":"feature-cx-a2"},
+  "feature-cx-b2": {"kind":"lane", "parent":"native-n1b", "tmux":"boop-no-cx-b2"},
+  "native-n2b": {"kind":"native", "parent":"feature-cx-b2"}
+}"#,
+    )
+    .unwrap();
+    let output = run(&dir, &["beep", "pstree", "--all"]);
+    assert!(output.status.success(), "stderr: {:?}", output.stderr);
+    let text = String::from_utf8(output.stdout).unwrap();
+    let depth = |name: &str| -> usize {
+        let row = text
+            .lines()
+            .find(|line| line.trim_start().starts_with(name))
+            .unwrap_or_else(|| panic!("{name} is missing from the tree:\n{text}"));
+        row.len() - row.trim_start().len()
+    };
+    assert_eq!(depth("e2e-root"), 0, "{text}");
+    assert!(depth("feature-cx-a2") > depth("e2e-root"), "{text}");
+    assert!(depth("native-n1b") > depth("feature-cx-a2"), "{text}");
+    assert!(depth("feature-cx-b2") > depth("native-n1b"), "{text}");
+    assert!(depth("native-n2b") > depth("feature-cx-b2"), "{text}");
+}
+
+/// A pane-less agent has no pane to probe, so a live-only run keeps it too:
+/// without it the tree breaks into one root per native.
+#[test]
+fn pstree_keeps_a_paneless_native_without_all() {
+    let dir = mail_dir("pstree-live-native");
+    std::fs::write(
+        dir.join("registry.json"),
+        r#"{
+  "coord": {"kind":"coordinator"},
+  "native-only": {"kind":"native", "parent":"coord"}
+}"#,
+    )
+    .unwrap();
+    let output = run(&dir, &["beep", "pstree"]);
+    assert!(output.status.success(), "stderr: {:?}", output.stderr);
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("native-only"), "{text}");
+    assert!(!text.contains("[gone]"), "{text}");
+}
