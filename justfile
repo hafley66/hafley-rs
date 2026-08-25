@@ -35,6 +35,15 @@ perf-source-mutations-planner files="1000" edits_per_file="100" bytes_per_file="
 perf-source-mutations-stage files="1000" edits_per_file="100" bytes_per_file="4096" store="target/soopy-stage-scale":
     cargo run -q -p soopy --example 3_stage_store_scale -- --files "{{files}}" --edits-per-file "{{edits_per_file}}" --bytes-per-file "{{bytes_per_file}}" --store "{{store}}"
 
+# The whole gate. nextest runs each test as its own process across one pool, so
+# test binaries overlap; cargo test finishes one before it starts the next.
+test *ARGS:
+    cargo nextest run --workspace {{ARGS}}
+
+# What CI runs, for reproducing a CI-only failure locally.
+test-ci:
+    cargo test --workspace --locked
+
 test-source-mutations-commit:
     cargo test -p soopy --test main -- t14_commit_engine --nocapture
 
