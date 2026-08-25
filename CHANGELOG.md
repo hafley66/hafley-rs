@@ -4,6 +4,43 @@ all notable changes to `boop` and `boop-mux` are recorded here. versions follow 
 
 ## unreleased
 
+## [0.0.4] - 2026-08-25
+
+Epic boop-one-path: one path per job. The supervisor mails the parent on every
+turn end, commit and exit; one send verb; presets-only model spelling; one
+sqlite mailbox; identity is `--as` then `BOOP_SESSION`; top-level verbs cut
+18 -> 9.
+
+### Added
+
+- *(boop)* `boop beep <route> <body>` is the one send: a delivery ladder (door, turn boundary, hook inbox, pane, mailbox) and every rung leaves a transition receipt
+- *(boop)* `boop wait <id|lane|--me>` is the one wait verb; `beep` blocks on its answer
+- *(boop)* `boop debug <lane>` answers what happened in five sections
+- *(boop)* the supervisor reports every turn end and every HEAD move to the parent
+- *(boop)* `boop tui <harness>` is the one pane-register path and stamps `BOOP_SESSION`
+- *(boop)* `lane delete --state dead [--dry-run]` removes each dead lane's own worktree and nothing above it
+- *(store)* one sqlite mailbox (`agent_mail`, `agent_route`) replaces bus.ndjson + registry.json; legacy files are tailed, never claimed
+- *(acp)* kimi lanes get a shell: the five `terminal/*` methods are served and advertised
+- *(harness)* kimi transcripts keep tool and assistant bodies
+- *(observability)* one Rust tracing configuration across the crates
+
+### Changed
+
+- *(boop)* presets are the only model spelling (`boop config presets`); `gem37` is dead
+- *(boop)* codex lanes launch through codex-acp only; `codex exec` is gone
+- *(boop)* `agent register` prints the `--as` instruction; a bare `wait --me` under a lane stamp shared with native children is refused, naming them
+- *(boop)* claude coordinators take rows at the door; the hook inbox is a hidden fallback rung
+- *(boop)* concatmap and host verbs sit behind feature `dl6`
+- *(proc)* the outbound reconciler is gone
+
+### Fixed
+
+- *(codex)* process-level sandbox and approval config reach native subagents
+- *(boop)* `wait --me` skips dispatch rows and rows a rung already took
+- *(boop)* opencode and codex tool turns keep their names, inputs and outputs
+- *(mux)* a failed tmux spawn is an error, never a dispatched line
+- *(tui)* `BOOP_SESSION` reaches the harness process; shell-init visible again
+
 ## [0.0.3] - 2026-08-24
 
 ### Fixed
