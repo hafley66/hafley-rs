@@ -1844,6 +1844,121 @@ mod tests {
 
     use boop::ident;
 
+    /// Every shell command the help text prints, extracted from the two help
+    /// constants themselves. A line counts as an example when it *starts* with
+    /// `boop`; a prose sentence that merely mentions the binary does not.
+    /// Continuations end in a backslash, and an unbalanced quote absorbs the
+    /// lines that close it.
+    fn help_examples(text: &str) -> Vec<String> {
+        let mut examples = Vec::new();
+        let mut pending: Option<String> = None;
+        for raw in text.lines() {
+            let line = raw.trim();
+            match pending.take() {
+                Some(mut open) => {
+                    open.push(' ');
+                    open.push_str(line.trim_end_matches('\\').trim());
+                    pending = Some(open);
+                }
+                None => match example_start(line) {
+                    Some(at) => pending = Some(line[at..].trim_end_matches('\\').trim().to_owned()),
+                    None => continue,
+                },
+            }
+            let Some(open) = pending.take() else { continue };
+            let unbalanced = open.matches('"').count() % 2 == 1;
+            if raw.trim_end().ends_with('\\') || unbalanced {
+                pending = Some(open);
+                continue;
+            }
+            examples.push(open);
+        }
+        examples.extend(pending);
+        examples
+    }
+
+    /// Where a command example starts in one help line: at column zero, or
+    /// after a label that ends in a colon. A backticked mention inside prose
+    /// is not an example and names no column.
+    fn example_start(line: &str) -> Option<usize> {
+        let at = line.find("boop")?;
+        if line[at..] != *"boop" && !line[at..].starts_with("boop ") {
+            return None;
+        }
+        let before = &line[..at];
+        match before.trim_end().is_empty() || before.trim_end().ends_with(':') {
+            true => Some(at),
+            false => None,
+        }
+    }
+
+    /// The argv one help example stands for. Column-aligned prose after the
+    /// command is cut, placeholders take a value every type accepts, an
+    /// alternation takes its first spelling, and optional brackets are opened
+    /// so the flags inside them are parsed rather than skipped.
+    fn example_argv(example: &str) -> Vec<String> {
+        let cut = example
+            .find("   ")
+            .or_else(|| example.find(" -- "))
+            .map_or(example, |at| &example[..at]);
+        let mut argv = Vec::new();
+        let mut token = String::new();
+        let mut quoted = false;
+        for character in cut.chars() {
+            match character {
+                '"' => quoted = !quoted,
+                '[' | ']' => {}
+                character if character.is_whitespace() && !quoted => {
+                    if !token.is_empty() {
+                        argv.push(std::mem::take(&mut token));
+                    }
+                }
+                character => token.push(character),
+            }
+        }
+        if !token.is_empty() {
+            argv.push(token);
+        }
+        argv.into_iter()
+            .map(|word| match word.split_once('|') {
+                Some((first, _)) => first.to_owned(),
+                None => word,
+            })
+            .map(|word| match word.starts_with('<') && word.ends_with('>') {
+                true => "1".to_owned(),
+                false => word,
+            })
+            .collect()
+    }
+
+    // FAIL-PRE-FIX: the WAIT block printed `boop beep lane wait <lane>
+    // --wait-timeout <s>`, a flag `beep lane wait` never had, and nothing
+    // checked the help text against the parser that has to accept it.
+    #[test]
+    fn every_help_example_parses_through_clap() {
+        let doctrine = doctrine();
+        let mut examples = help_examples(&doctrine);
+        examples.extend(help_examples(CONCATMAP_EXAMPLES));
+        // A regression in the extractor would pass this test by finding
+        // nothing, so the count is asserted before the parses are.
+        assert!(
+            examples.len() >= 18,
+            "the extractor found almost nothing: {examples:#?}"
+        );
+        let mut rejected = Vec::new();
+        for example in &examples {
+            let argv = example_argv(example);
+            if let Err(error) = Cli::try_parse_from(&argv) {
+                rejected.push(format!("{example}\n  argv: {argv:?}\n  {error}"));
+            }
+        }
+        assert!(
+            rejected.is_empty(),
+            "help examples the installed parser rejects:\n{}",
+            rejected.join("\n\n")
+        );
+    }
+
     #[test]
     fn public_agent_summary_command_parses() {
         let cli = Cli::try_parse_from(["boop", "agent", "summary", "--format", "text"])
