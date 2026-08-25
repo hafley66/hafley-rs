@@ -600,6 +600,60 @@ fn message_text(payload: &serde_json::Map<String, Value>) -> String {
     parts.join("\n")
 }
 
+/// A char-boundary-safe prefix; byte slicing risks panicking mid multi-byte
+/// character.
+fn truncate_chars(text: &str, max_chars: usize) -> String {
+    text.chars().take(max_chars).collect()
+}
+
+/// The string itself, or its JSON form when it is not a string.
+fn value_as_text(value: &Value) -> String {
+    match value.as_str() {
+        Some(text) => text.to_owned(),
+        None => value.to_string(),
+    }
+}
+
+/// A tool call's readable body: the name, then the input verbatim. Input
+/// rides `input` (custom tools) or `arguments` (function calls).
+fn tool_call_body(name: &str, payload: &serde_json::Map<String, Value>) -> String {
+    let input = payload
+        .get("input")
+        .or_else(|| payload.get("arguments"))
+        .map(value_as_text)
+        .unwrap_or_default();
+    format!("{name}\n{}", truncate_chars(&input, 2000))
+}
+
+/// `output`'s `input_text` parts joined, or the string verbatim.
+/// An unrecognized shape falls back to the whole payload, never empty.
+fn tool_output_body(payload: &serde_json::Map<String, Value>) -> String {
+    let text = match payload.get("output") {
+        Some(Value::String(text)) => text.clone(),
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(|item| item.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        Some(other) => other.to_string(),
+        None => String::new(),
+    };
+    let text = match text.is_empty() {
+        true => serde_json::to_string(payload).unwrap_or_default(),
+        false => text,
+    };
+    truncate_chars(&text, 4000)
+}
+
+/// A patch's call id and the paths it touched; there is no prose beyond the
+/// file list.
+fn patch_body(call_id: &str, files: &[String]) -> String {
+    match files.is_empty() {
+        true => format!("patch {call_id}"),
+        false => format!("patch {call_id}\nfiles: {}", files.join(", ")),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 /// Running totals for one turn's `token_count` snapshots.
 #[derive(Default)]
@@ -633,6 +687,7 @@ fn project_line(
         return Ok(());
     };
     let record_type = payload.get("type").and_then(Value::as_str).unwrap_or("");
+    let outer_type = value.get("type").and_then(Value::as_str).unwrap_or("");
     let sid = session.session_id.clone();
 
     match record_type {
@@ -656,9 +711,27 @@ fn project_line(
                 .and_then(Value::as_str)
                 .unwrap_or("tool");
             *turn += 1;
-            let inserted = store.write_turn(&sid, *turn, ts, "tool", "")?;
+            let body = tool_call_body(name, payload);
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
             record(stat, inserted);
             store.write_tool_fact(&sid, *turn, ts, name, None)?;
+        }
+        "function_call_output" | "custom_tool_call_output" => {
+            *turn += 1;
+            let body = tool_output_body(payload);
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
+            record(stat, inserted);
+        }
+        "agent_message" => {
+            let text = payload
+                .get("message")
+                .and_then(Value::as_str)
+                .filter(|text| !text.is_empty())
+                .map(str::to_owned)
+                .unwrap_or_else(|| serde_json::to_string(payload).unwrap_or_default());
+            *turn += 1;
+            let inserted = store.write_turn(&sid, *turn, ts, "assistant", &text)?;
+            record(stat, inserted);
         }
         "patch_apply_end" => {
             let Some(changes) = payload.get("changes").and_then(Value::as_object) else {
@@ -667,8 +740,14 @@ fn project_line(
             if changes.is_empty() {
                 return Ok(());
             }
+            let call_id = payload
+                .get("call_id")
+                .and_then(Value::as_str)
+                .unwrap_or("patch");
+            let files: Vec<String> = changes.keys().cloned().collect();
             *turn += 1;
-            let inserted = store.write_turn(&sid, *turn, ts, "tool", "")?;
+            let body = patch_body(call_id, &files);
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
             record(stat, inserted);
             for (path, change) in changes {
                 // The store's verb vocabulary (read/write/edit/...) has no
@@ -752,7 +831,20 @@ fn project_line(
                 }
             }
         }
-        _ => {}
+        kind => {
+            let label = if kind.is_empty() { outer_type } else { kind };
+            *turn += 1;
+            let raw = truncate_chars(&value.to_string(), 4000);
+            let body = format!("{label} (unprojected)\n{raw}");
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
+            record(stat, inserted);
+            tracing::warn!(
+                projection_gap = label,
+                session_id = %sid,
+                turn = *turn,
+                "codex record type projected as raw json"
+            );
+        }
     }
     Ok(())
 }
@@ -765,7 +857,8 @@ mod tests {
     use std::fs::OpenOptions;
     use std::io::Write;
 
-    use crate::harness::{claude, Harness, KnownSession, KnownSessions, SessionRef};
+    use crate::harness::{claude, sync_session, Harness, KnownSession, KnownSessions, SessionRef};
+    use boop_store::ident::TurnQuery;
     use boop_store::testing::TempRepo;
     use boop_store::Store;
 
@@ -876,6 +969,29 @@ mod tests {
             tmux_socket: None,
             parent: None,
         }
+    }
+
+    /// Ingest one raw jsonl line and return the turns it projects.
+    fn project_one_line(name: &str, line: &str) -> Vec<serde_json::Value> {
+        let base = temp_path(&format!("project-{name}"));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let transcript = base.join("session.jsonl");
+        write_lines(&transcript, &[line]);
+        let store_path = base.join("store.db");
+        let store = Store::open(store_path).unwrap();
+        let size = std::fs::metadata(&transcript).unwrap().len();
+        let session = session_for(&transcript, size);
+        sync_session(&store, &Codex, &session).unwrap();
+        let turns = store
+            .query_turns(&TurnQuery {
+                session: Some(session.session_id.clone()),
+                ..TurnQuery::default()
+            })
+            .unwrap();
+        drop(store);
+        std::fs::remove_dir_all(base).unwrap();
+        turns
     }
 
     #[test]
@@ -1313,5 +1429,148 @@ mod tests {
             claude::parse_iso_ms("2026-08-09T17:20:05.152Z"),
             Some(1_786_296_005_152)
         );
+    }
+
+    // FAIL-PRE-FIX: call turns wrote `""`, and `_output` had no arm.
+    #[test]
+    fn custom_tool_call_projects_name_and_input() {
+        let turns = project_one_line(
+            "custom-tool-call",
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"response_item","payload":{"type":"custom_tool_call","name":"exec","input":"echo hi","call_id":"call_1"}}"#,
+        );
+        assert_eq!(turns[0]["role"], "tool");
+        assert_eq!(turns[0]["said"].as_str().unwrap(), "exec\necho hi");
+    }
+
+    #[test]
+    fn function_call_projects_name_and_arguments() {
+        let turns = project_one_line(
+            "function-call",
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\"cmd\":\"ls\"}","call_id":"call_2"}}"#,
+        );
+        assert_eq!(
+            turns[0]["said"].as_str().unwrap(),
+            "shell\n{\"cmd\":\"ls\"}"
+        );
+    }
+
+    #[test]
+    fn custom_tool_call_output_joins_input_text_parts() {
+        let turns = project_one_line(
+            "custom-tool-call-output",
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_1","output":[{"type":"input_text","text":"line one"},{"type":"input_text","text":"line two"}]}}"#,
+        );
+        assert_eq!(turns[0]["role"], "tool");
+        assert_eq!(turns[0]["said"].as_str().unwrap(), "line one\nline two");
+    }
+
+    #[test]
+    fn function_call_output_keeps_the_raw_string() {
+        let turns = project_one_line(
+            "function-call-output",
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_2","output":"total 0"}}"#,
+        );
+        assert_eq!(turns[0]["said"].as_str().unwrap(), "total 0");
+    }
+
+    #[test]
+    fn agent_message_projects_under_the_assistant_role() {
+        let turns = project_one_line(
+            "agent-message",
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Working on it."}}"#,
+        );
+        assert_eq!(turns[0]["role"], "assistant");
+        assert_eq!(turns[0]["said"].as_str().unwrap(), "Working on it.");
+    }
+
+    #[test]
+    fn patch_apply_end_names_its_call_and_files() {
+        let turns = project_one_line(
+            "patch-apply-end",
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"event_msg","payload":{"type":"patch_apply_end","call_id":"exec-9","changes":{"/tmp/a.rs":{"type":"add"}}}}"#,
+        );
+        assert_eq!(
+            turns[0]["said"].as_str().unwrap(),
+            "patch exec-9\nfiles: /tmp/a.rs"
+        );
+    }
+
+    #[test]
+    fn an_unknown_record_type_keeps_its_raw_json() {
+        let turns = project_one_line(
+            "unknown-record",
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"event_msg","payload":{"type":"a_kind_from_the_future","payload_field":"keep me"}}"#,
+        );
+        let body = turns[0]["said"].as_str().unwrap();
+        assert!(body.starts_with("a_kind_from_the_future (unprojected)"));
+        assert!(body.contains("keep me"));
+    }
+
+    #[test]
+    fn tool_call_body_truncates_input_to_2000_chars() {
+        let payload = serde_json::json!({ "input": "a".repeat(3000) });
+        let body = super::tool_call_body("exec", payload.as_object().unwrap());
+        let (name, input) = body.split_once('\n').unwrap();
+        assert_eq!(name, "exec");
+        assert_eq!(input.len(), 2000);
+    }
+
+    #[test]
+    fn tool_output_body_truncates_output_to_4000_chars() {
+        let payload = serde_json::json!({ "output": "b".repeat(5000) });
+        let body = super::tool_output_body(payload.as_object().unwrap());
+        assert_eq!(body.len(), 4000);
+    }
+
+    /// RECEIPT. No tool or assistant turn the fixture projects is empty.
+    #[test]
+    fn codex_fixture_tool_and_assistant_turns_keep_their_content() {
+        let fixture = PathBuf::from(
+            "tests/fixtures/codex/2026/08/24/\
+             rollout-2026-08-24T22-10-59-01a036af-654b-72c3-b468-3266bc459b4e.jsonl",
+        );
+        let size = std::fs::metadata(&fixture).unwrap().len();
+        let session = session_for(&fixture, size);
+        let store_path = temp_path("fixture-tool-bodies-store");
+        let _ = std::fs::remove_file(&store_path);
+        let store = Store::open(store_path.clone()).unwrap();
+        sync_session(&store, &Codex, &session).unwrap();
+        let turns = store
+            .query_turns(&TurnQuery {
+                session: Some(session.session_id.clone()),
+                ..TurnQuery::default()
+            })
+            .unwrap();
+        assert!(!turns.is_empty(), "the fixture projects turns");
+
+        let empty_tool = turns
+            .iter()
+            .filter(|turn| {
+                turn["role"] == "tool" && turn["said"].as_str().unwrap_or_default().is_empty()
+            })
+            .count();
+        let empty_assistant = turns
+            .iter()
+            .filter(|turn| {
+                turn["role"] == "assistant" && turn["said"].as_str().unwrap_or_default().is_empty()
+            })
+            .count();
+        assert_eq!(empty_tool, 0, "empty tool bodies: {turns:#?}");
+        assert_eq!(empty_assistant, 0, "empty assistant bodies: {turns:#?}");
+
+        println!("projected tool rows, calls and results (first 3):");
+        let named_tool_rows = turns.iter().filter(|turn| {
+            turn["role"] == "tool"
+                && !turn["said"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("(unprojected)")
+        });
+        for row in named_tool_rows.take(3) {
+            println!("{}", serde_json::to_string_pretty(row).unwrap());
+        }
+
+        drop(store);
+        let _ = std::fs::remove_file(store_path);
     }
 }
