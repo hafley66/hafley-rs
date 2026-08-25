@@ -155,7 +155,7 @@ fn six_idle_projector_processes_do_not_repeat_global_session_materialization() {
     }
 
     let seeded = Command::new(BOOP)
-        .arg("sync")
+        .args(["db", "sync", "create"])
         .env("HOME", &fixture.root)
         .env("BOOP_DB", fixture.db())
         .stdout(Stdio::null())

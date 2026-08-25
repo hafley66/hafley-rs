@@ -537,7 +537,11 @@ fn me_still_takes_a_row_held_in_the_mailbox_for_a_native_route() {
         ])
         .output()
         .unwrap();
-    assert_eq!(sent.status.code(), Some(0), "the send to a native route lands");
+    assert_eq!(
+        sent.status.code(),
+        Some(0),
+        "the send to a native route lands"
+    );
     assert!(
         String::from_utf8_lossy(&sent.stdout).contains("held-in-mailbox")
             || String::from_utf8_lossy(&sent.stdout).contains("held"),

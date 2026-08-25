@@ -53,13 +53,7 @@ fn native_route_stays_live_until_done_and_wait_me_consumes_one_completion() {
     assert!(listing.contains("live") && listing.contains("native-child"));
 
     let lane_wait = Command::new(BOOP)
-        .args([
-            "wait",
-            "native-child",
-            "--wait-timeout",
-            "1",
-            "--mail-dir",
-        ])
+        .args(["wait", "native-child", "--wait-timeout", "1", "--mail-dir"])
         .arg(&dir)
         .env("HOME", dir.join("home"))
         .env("BOOP_DB", dir.join("boop.db"))

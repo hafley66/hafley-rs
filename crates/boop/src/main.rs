@@ -17,14 +17,11 @@ use boop::{config, identity};
 mod cli;
 
 use cli::control::run_native_tui;
-use cli::db::{
-    run_chat_query, run_db, run_follow, run_passthrough, run_public_agent_command, run_sync_all,
-    sync_before_read, ChatQueryOptions,
-};
+use cli::db::{run_db, run_passthrough, run_public_agent_command, sync_before_read};
 #[cfg(feature = "dl6")]
 use cli::debug::run_host;
 use cli::debug::{run_config, run_debug, run_lane_debug};
-use cli::job::{run_beep, run_dispatch, run_lane, run_lane_wait, run_wait, DispatchArgs, LaneArgs};
+use cli::job::{run_beep, run_lane_wait, run_wait};
 use cli::mail::{run_inbox, run_send, Outbound};
 use cli::me::{run_me_favorite, run_me_mood, run_whoami};
 #[cfg(feature = "dl6")]
@@ -268,104 +265,6 @@ enum SubCmd {
         #[command(subcommand)]
         cmd: ConfigCmd,
     },
-    /// Spawn a lane: tmux new-session + mailbox + registry route.
-    #[command(hide = true)]
-    Dispatch {
-        #[arg(long)]
-        to: String,
-        #[arg(long)]
-        cwd: String,
-        #[arg(long)]
-        cmd: String,
-        #[arg(long)]
-        from: Option<String>,
-        #[arg(long)]
-        harness: Option<String>,
-        #[arg(long)]
-        session_id: Option<String>,
-        #[arg(long)]
-        model: Option<String>,
-        #[arg(long)]
-        mode: Option<String>,
-        #[arg(long)]
-        tmux: Option<String>,
-        #[arg(long)]
-        socket: Option<String>,
-        #[arg(long)]
-        body: Option<String>,
-        #[arg(long)]
-        r#ref: Option<String>,
-        #[arg(long)]
-        goal: Option<String>,
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
-        #[arg(long, default_value_t = 3)]
-        resolve_wait: u64,
-        /// Spawn in the main tree instead of creating a worktree.
-        #[arg(long)]
-        main_tree: bool,
-        #[arg(long)]
-        base_sha: Option<String>,
-    },
-    /// Register and spawn a lane (the first-contact verb).
-    #[command(hide = true)]
-    Lane {
-        #[arg(long)]
-        name: String,
-        #[arg(long)]
-        cwd: String,
-        #[arg(long)]
-        harness: Option<String>,
-        #[arg(long)]
-        brief: Option<PathBuf>,
-        #[arg(long)]
-        model: Option<String>,
-        #[arg(long, conflicts_with = "model")]
-        preset: Option<String>,
-        #[arg(long)]
-        tmux: Option<String>,
-        #[arg(long)]
-        parent: Option<String>,
-        /// New branch name; with `--base-sha`, spawns in a worktree instead
-        /// of `--cwd` directly.
-        #[arg(long)]
-        branch: Option<String>,
-        #[arg(long)]
-        base_sha: Option<String>,
-        /// tmux socket to spawn on; a throwaway socket for tests, `None` for
-        /// the default server.
-        #[arg(long)]
-        socket: Option<String>,
-        #[arg(long)]
-        goal: Option<String>,
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
-        #[arg(long)]
-        dry_run: bool,
-    },
-    /// Project sessions into NDJSON chat-repr turns (the zipf door).
-    #[command(hide = true)]
-    Chat {
-        #[command(flatten)]
-        query: QueryArgs,
-        /// Project every session the registry knows.
-        #[arg(long)]
-        all: bool,
-        /// Tail new turns from the db, one NDJSON line per new turn.
-        #[arg(long)]
-        follow: bool,
-    },
-    /// Tail every harness forward from stored offsets into the db.
-    #[command(hide = true)]
-    Sync {
-        /// Drop every stored row and re-project every transcript from byte 0.
-        /// Required once to move a store off pre-dense turn ordinals.
-        #[arg(long)]
-        rebuild: bool,
-    },
-    /// Stream new facts into the db on a coarse poll (idle near-zero CPU).
-    #[command(hide = true)]
-    Follow {},
 }
 
 /// The shared read filter, used by `chat` and `db turn`.
@@ -511,7 +410,6 @@ fn main() -> Result<()> {
                     &args,
                 )
             }
-            SubCmd::Sync { rebuild } => run_sync_all(&registry, rebuild, None),
             SubCmd::Debug {
                 lane_arg,
                 since,
@@ -524,100 +422,6 @@ fn main() -> Result<()> {
             },
             #[cfg(feature = "agent-read")]
             SubCmd::Agent { cmd } => run_public_agent_command(cmd),
-            SubCmd::Follow {} => run_follow(&registry),
-            SubCmd::Chat { query, all, follow } => {
-                run_chat_query(&query, ChatQueryOptions { all, follow })
-            }
-            SubCmd::Dispatch {
-                to,
-                cwd,
-                cmd,
-                from,
-                harness,
-                session_id,
-                model,
-                mode,
-                tmux,
-                socket,
-                body,
-                r#ref,
-                goal,
-                mail_dir,
-                resolve_wait,
-                main_tree,
-                base_sha,
-            } => run_dispatch(
-                &registry,
-                DispatchArgs {
-                    to,
-                    cwd,
-                    cmd,
-                    from,
-                    harness,
-                    session_id,
-                    model,
-                    mode,
-                    tmux,
-                    socket,
-                    body,
-                    r#ref,
-                    goal,
-                    mail_dir,
-                    resolve_wait,
-                    main_tree,
-                    base_sha,
-                    branch: None,
-                    worktree_dir: None,
-                    parent: None,
-                    on_exit: None,
-                    warm_start: true,
-                    effort: None,
-                    variant: None,
-                    bin: None,
-                },
-            ),
-            SubCmd::Lane {
-                name,
-                cwd,
-                harness,
-                brief,
-                model,
-                preset,
-                tmux,
-                parent,
-                branch,
-                base_sha,
-                socket,
-                goal,
-                mail_dir,
-                dry_run,
-            } => run_lane(
-                &registry,
-                LaneArgs {
-                    name: Some(name),
-                    cwd: Some(cwd),
-                    harness,
-                    brief,
-                    model,
-                    preset,
-                    variant: None,
-                    bin: None,
-                    tmux,
-                    parent,
-                    branch,
-                    base_sha,
-                    socket,
-                    goal,
-                    mood: None,
-                    trace: None,
-                    no_start: false,
-                    mail_dir,
-                    dry_run,
-                    wait: false,
-                    wait_timeout: 0,
-                    reclaim: false,
-                },
-            ),
             SubCmd::Beep {
                 route,
                 body,
@@ -902,7 +706,6 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
                 cmd: Some(DbCmd::AgentSummary { .. }),
                 ..
             }
-            | SubCmd::Chat { .. }
             | SubCmd::Agent { .. }
             | SubCmd::Me { .. }
             | SubCmd::Debug { .. }
@@ -1920,7 +1723,7 @@ mod tests {
             vec!["boop", "db", "SELECT 1"],
             vec!["boop", "db", "turn", "list"],
             vec!["boop", "debug"],
-            vec!["boop", "chat"],
+            vec!["boop", "db", "chat", "list"],
         ];
         for argv in syncing {
             let cli = Cli::try_parse_from(&argv).unwrap_or_else(|e| panic!("{argv:?}: {e}"));
