@@ -24,7 +24,7 @@ Cut: delete the `codex exec` path; `boop tui codex` and lanes both go through th
 ## Acceptance Criteria
 
 - [x] `grep -rn "codex exec" crates/` returns nothing
-- [ ] codex lane e2e (TASKS/codex-native-messaging.REPORT.md chain) green
+- [x] codex lane e2e (TASKS/codex-native-messaging.REPORT.md chain) green
 
 ## Agent Runs
 

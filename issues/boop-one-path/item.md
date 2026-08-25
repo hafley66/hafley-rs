@@ -1,11 +1,13 @@
 ---
 created: 2026-08-24
-updated: 2026-08-24
+updated: 2026-08-25
 type: epic
 owner: chris
-status: open
+status: done
 priority: high
 labels: [domain-boop]
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 # boop: one path per job
@@ -35,6 +37,12 @@ Landed before this epic (main ae1057e): supervisor mails every turn end and HEAD
 
 ## Acceptance Criteria
 
-- [ ] every child closed
-- [ ] `boop --help` top level lists at most 9 verbs
-- [ ] the three live chains in the plan (flash4 side lane; luna>q38>sonnet; codex>native>codex>native) rerun green from the shim binary
+- [x] every child closed
+- [x] `boop --help` top level lists at most 9 verbs
+- [x] the three live chains in the plan (flash4 side lane; luna>q38>sonnet; codex>native>codex>native) rerun green from the shim binary
+
+## Agent Runs
+
+### 2026-08-25T16:40:37Z · @claude-5
+
+AC 3 on the installed binary (b890b33): side flash4 lane 0c8da22,1c88f74 rc=0; top-luna-2 > mid-q38-2 > leaf-sonnet-2 (zsonnet) 0e660e5 > bc1e3ea > f8a5e94 all rc=0; codex cx-a5 > native-n1e > cx-b5 > native-n2e ping+pong taken, rc=0. boop --help lists 9 verbs. 14 children closed.
