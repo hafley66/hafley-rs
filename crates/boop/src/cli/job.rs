@@ -14,7 +14,7 @@ use tracing::{error, info, warn};
 
 use crate::cli::db::{resolve_harness, run_harnesses};
 use crate::cli::debug::default_preset_for_harness;
-use crate::cli::mail::{all_messages, run_hail, run_list};
+use crate::cli::mail::{all_messages, run_list};
 use crate::cli::me::run_adopt;
 use crate::cli::{append_ack, append_message, line, mail_dir, pad, route_to_json, write_route};
 use crate::{AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat};
@@ -1139,25 +1139,6 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
         },
         BeepCmd::Lane { cmd } => run_beep_lane(registry, cmd),
         BeepCmd::Agent { cmd } => run_agent(cmd),
-        BeepCmd::Hail {
-            lane,
-            body,
-            from,
-            kind,
-            socket,
-            wait_timeout,
-            mail_dir,
-        } => run_hail(
-            registry,
-            &lane,
-            &body,
-            from.as_deref(),
-            kind.as_deref(),
-            None,
-            socket.as_deref(),
-            wait_timeout,
-            mail_dir.as_deref(),
-        ),
         BeepCmd::Message { cmd } => match cmd {
             MessageCmd::Ack {
                 lane,
@@ -1433,11 +1414,6 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
                 run_list(mail_dir.as_deref(), Some(&lane), true)
             }
         },
-        LaneCmd::Wait {
-            lane,
-            timeout,
-            mail_dir,
-        } => run_lane_wait(mail_dir.as_deref(), &lane, timeout),
     }
 }
 

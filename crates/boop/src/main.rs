@@ -969,29 +969,7 @@ enum BeepCmd {
         #[command(subcommand)]
         cmd: AgentCmd,
     },
-    /// Folded (2026-08-25): `boop beep <route> <body> --no-wait` is the
-    /// spelling; this one is a hidden alias over the same send.
-    #[command(hide = true)]
-    Hail {
-        /// The route to hail: a lane, a coordinator, a native, or `parent`.
-        lane: String,
-        #[arg(long)]
-        body: String,
-        /// Who the row is from; `--from` is the same flag.
-        #[arg(long = "as", alias = "from", value_name = "NAME")]
-        from: Option<String>,
-        #[arg(long)]
-        kind: Option<String>,
-        #[arg(long)]
-        socket: Option<String>,
-        /// Send, then block for the reply exactly as `boop wait <id>` does.
-        #[arg(long, value_name = "SECS")]
-        wait_timeout: Option<u64>,
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
-    },
-    /// Mail across lanes.
-    /// Folded (audit 2026-08-25): its one verb, `ack`, is folded with it.
+    /// Mail across lanes; the one verb `ack` has no other spelling.
     #[command(hide = true)]
     Message {
         #[command(subcommand)]
@@ -1236,19 +1214,6 @@ enum LaneCmd {
     Message {
         #[command(subcommand)]
         cmd: LaneMessageCmd,
-    },
-    /// Wait for the lane's result row, then exit with the rc it names. `--timeout`
-    /// seconds exits 124; a route that dies with no row exits 3.
-    /// Folded (one-wait-verb): `boop wait <lane>` is the spelling now.
-    #[command(hide = true)]
-    Wait {
-        lane: String,
-        /// Seconds to wait before exiting 124; 0 waits until the lane reports
-        /// or its route dies.
-        #[arg(long, default_value_t = 0)]
-        timeout: u64,
-        #[arg(long)]
-        mail_dir: Option<PathBuf>,
     },
 }
 

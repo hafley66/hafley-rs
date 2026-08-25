@@ -97,43 +97,7 @@ pub(crate) fn all_messages(dir: &std::path::Path) -> Result<Vec<bus::Message>> {
     bus::read_messages(dir)
 }
 
-// ---------------------------------------------------------------------------
-// hail
-// ---------------------------------------------------------------------------
-
-/// `beep hail`: the old send-without-waiting spelling, kept for briefs that
-/// still name it. One call into the send every verb shares.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn run_hail(
-    registry: &Registry,
-    to: &str,
-    body: &str,
-    from: Option<&str>,
-    kind: Option<&str>,
-    box_name: Option<&str>,
-    _socket: Option<&str>,
-    wait_timeout: Option<u64>,
-    mail_dir_arg: Option<&Path>,
-) -> Result<()> {
-    run_send(
-        registry,
-        Outbound {
-            route: to,
-            body: Some(body),
-            kind: kind.unwrap_or("request"),
-            as_name: from,
-            box_name,
-            timeout_secs: wait_timeout.unwrap_or(boop::mailwait::DEFAULT_TIMEOUT_SECS),
-            wait: wait_timeout.is_some(),
-            mail_dir: mail_dir_arg,
-        },
-    )
-}
-
-/// One send, spelled once. Every send verb in the CLI is a call into this
-/// function: `boop beep <route> <body>` is its visible spelling, and `push`,
-/// `beep hail`, `tell-parent` and `tell-children` are hidden aliases that fill
-/// the same struct.
+/// One send, spelled once: `boop beep <route> <body>` is its one spelling.
 pub(crate) struct Outbound<'a> {
     /// A registry name, or the `parent` / `children` alias.
     pub route: &'a str,
