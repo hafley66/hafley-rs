@@ -12,7 +12,7 @@ use boop::harness::{
     Capabilities, Harness, HarnessId, LanePolicy, MailPolicy, ReadChunk, SessionRef, VariantSupport,
 };
 use boop::live::{DoorAddress, LiveSession, LiveSessions, LiveStatus};
-use boop::mail::{deliver_hail, Via};
+use boop::mail::{deliver_hail_with, PanePaster, Rung};
 use boop::registry::Registry;
 use boop::Store;
 
@@ -174,12 +174,39 @@ fn message(id: &str, to: &str, body: &str) -> Message {
     }
 }
 
+/// A pane that takes nothing. Rung 4 must never touch a real terminal from a
+/// test, and a dead pane is what most routes have anyway.
+struct NoPane;
+
+impl PanePaster for NoPane {
+    fn paste(&self, _pane: &str, _notice: &str) -> Option<String> {
+        None
+    }
+}
+
+/// A pane that records what it was handed, for the one test that asserts the
+/// paste rung.
+#[derive(Default)]
+struct RecordingPane {
+    pasted: std::sync::Mutex<Vec<(String, String)>>,
+}
+
+impl PanePaster for RecordingPane {
+    fn paste(&self, pane: &str, notice: &str) -> Option<String> {
+        self.pasted
+            .lock()
+            .unwrap()
+            .push((pane.to_owned(), notice.to_owned()));
+        Some(pane.to_owned())
+    }
+}
+
 fn routes(name: &str, route: Route) -> BTreeMap<String, Route> {
     BTreeMap::from([(name.to_owned(), route)])
 }
 
 /// RECEIPT. A hail to a Door harness reaches that harness's own door and
-/// leaves its append, submit, and acceptance transitions in order.
+/// leaves its append and acceptance transitions in order.
 #[test]
 fn a_door_harness_takes_the_body_and_leaves_one_delivery_row() {
     let dir = temp_dir("door");
@@ -188,9 +215,8 @@ fn a_door_harness_takes_the_body_and_leaves_one_delivery_row() {
     let routes = routes("tui", route(HarnessId::Kimi, Some("projects:@1.%1"), None));
     let message = message("m-door", "tui", "ping through the door");
 
-    let landing = deliver_hail(&registry, &store, &routes, &message).unwrap();
-    assert_eq!(landing.delivered, Delivered::Injected);
-    assert_eq!(landing.via, Via::Door);
+    let landing = deliver_hail_with(&registry, &store, &routes, &message, &NoPane).unwrap();
+    assert_eq!(landing.rung, Rung::Door);
     assert_eq!(
         std::fs::read_to_string(dir.join("door.log")).unwrap(),
         "live-1 <- ping through the door"
@@ -199,12 +225,17 @@ fn a_door_harness_takes_the_body_and_leaves_one_delivery_row() {
     let rows = store.delivery_rows("m-door").unwrap();
     assert_eq!(
         rows.iter()
-            .map(|row| (row.sequence, row.route.as_str(), row.harness.as_deref(), row.outcome.as_str(), row.detail.as_str()))
+            .map(|row| (
+                row.sequence,
+                row.route.as_str(),
+                row.harness.as_deref(),
+                row.outcome.as_str(),
+                row.detail.as_str()
+            ))
             .collect::<Vec<_>>(),
         [
             (1, "tui", Some("kimi"), "appended", "mailbox"),
-            (2, "tui", Some("kimi"), "submitted-to-harness", "delivery transport"),
-            (3, "tui", Some("kimi"), "accepted-by-harness", "door"),
+            (2, "tui", Some("kimi"), "accepted-by-harness", "door"),
         ]
     );
 
@@ -218,32 +249,37 @@ fn a_door_harness_takes_the_body_and_leaves_one_delivery_row() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// RECEIPT. A harness that still declares keystrokes gets no delivery at all,
-/// and the refusal is a row, not a silent queue.
+/// RECEIPT. A harness that still declares keystrokes has no door to try, so
+/// the ladder walks past it and the row is held where a retry finds it.
 #[test]
-fn a_keystrokes_harness_is_unreachable_and_still_records_a_row() {
+fn a_keystrokes_harness_falls_to_the_mailbox_rung() {
     let dir = temp_dir("keys");
     let store = store(&dir);
     let registry = Registry::with(vec![Box::new(echo(HarnessId::Codex, &KEYSTROKES, &dir))]);
     let routes = routes("typed", route(HarnessId::Codex, Some("%1"), None));
     let message = message("m-keys", "typed", "never typed");
 
-    let landing = deliver_hail(&registry, &store, &routes, &message).unwrap();
-    assert_eq!(
-        landing.delivered,
-        Delivered::Unreachable("keystroke delivery retired".into())
-    );
+    let landing = deliver_hail_with(&registry, &store, &routes, &message, &NoPane).unwrap();
+    assert_eq!(landing.rung, Rung::Mailbox);
+    assert_eq!(landing.detail, "harness takes no door mail");
     assert!(!dir.join("door.log").exists(), "no door was opened");
 
     let rows = store.delivery_rows("m-keys").unwrap();
     assert_eq!(
         rows.iter()
-            .map(|row| (row.outcome.as_str(), row.detail.as_str(), row.harness.as_deref()))
+            .map(|row| (
+                row.outcome.as_str(),
+                row.detail.as_str(),
+                row.harness.as_deref()
+            ))
             .collect::<Vec<_>>(),
         [
             ("appended", "mailbox", Some("codex")),
-            ("submitted-to-harness", "delivery transport", Some("codex")),
-            ("rejected-by-harness", "keystroke delivery retired", Some("codex")),
+            (
+                "held-in-mailbox",
+                "harness takes no door mail",
+                Some("codex")
+            ),
         ]
     );
     let _ = std::fs::remove_dir_all(dir);
@@ -268,8 +304,8 @@ fn a_door_falls_back_to_the_last_agent_live_row() {
         .record_live_door("stored-1", "unix-socket", Some("/tmp/stored.sock"))
         .unwrap();
 
-    let landing = deliver_hail(&registry, &store, &routes, &message).unwrap();
-    assert_eq!(landing.delivered, Delivered::Injected);
+    let landing = deliver_hail_with(&registry, &store, &routes, &message, &NoPane).unwrap();
+    assert_eq!(landing.rung, Rung::Door);
     assert_eq!(
         std::fs::read_to_string(dir.join("door.log")).unwrap(),
         "stored-1 <- through the projection"
@@ -285,31 +321,30 @@ fn a_door_falls_back_to_the_last_agent_live_row() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// RECEIPT. A name with no route is one unreachable row, so `boop wait` can
-/// say why nothing arrived instead of waiting on a message nobody took.
+/// RECEIPT. A name with no route still lands: the row is held in the mailbox
+/// and the reason rides on the transition, so a retry knows what to re-try.
 #[test]
-fn a_hail_with_no_route_records_its_own_refusal() {
+fn a_hail_with_no_route_is_held_in_the_mailbox() {
     let dir = temp_dir("routeless");
     let store = store(&dir);
     let registry = Registry::with(vec![Box::new(echo(HarnessId::Kimi, &DOOR, &dir))]);
     let message = message("m-none", "nobody", "into the void");
 
-    let landing = deliver_hail(&registry, &store, &BTreeMap::new(), &message).unwrap();
-    assert_eq!(
-        landing.delivered,
-        Delivered::Unreachable("no registry route for nobody".into())
-    );
+    let landing =
+        deliver_hail_with(&registry, &store, &BTreeMap::new(), &message, &NoPane).unwrap();
+    assert_eq!(landing.rung, Rung::Mailbox);
+    assert_eq!(landing.detail, "no registry route for nobody");
     let rows = store.delivery_rows("m-none").unwrap();
-    assert_eq!(rows.len(), 3);
+    assert_eq!(rows.len(), 2);
     assert_eq!(rows.last().unwrap().harness, None);
-    assert_eq!(rows.last().unwrap().outcome, "rejected-by-harness");
+    assert_eq!(rows.last().unwrap().outcome, "held-in-mailbox");
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// RECEIPT. A route that names no harness has no door to try, so the hail is
-/// one unreachable row rather than a delivery through a guessed default.
+/// RECEIPT. A route that names no harness has no door to try, so the ladder
+/// falls to the mailbox rung rather than delivering through a guessed default.
 #[test]
-fn a_route_with_no_harness_is_unreachable_and_records_it() {
+fn a_route_with_no_harness_falls_to_the_mailbox_rung() {
     let dir = temp_dir("harnessless");
     let store = store(&dir);
     let registry = Registry::with(vec![Box::new(echo(HarnessId::Kimi, &DOOR, &dir))]);
@@ -319,22 +354,26 @@ fn a_route_with_no_harness_is_unreachable_and_records_it() {
     let routes = routes("native-worker", native);
     let message = message("m-harnessless", "native-worker", "into the void");
 
-    let landing = deliver_hail(&registry, &store, &routes, &message).unwrap();
-    assert_eq!(
-        landing.delivered,
-        Delivered::Unreachable("route native-worker names no harness".into())
-    );
+    let landing = deliver_hail_with(&registry, &store, &routes, &message, &NoPane).unwrap();
+    assert_eq!(landing.rung, Rung::Mailbox);
     assert!(!dir.join("door.log").exists(), "no door was opened");
 
     let rows = store.delivery_rows("m-harnessless").unwrap();
     assert_eq!(
         rows.iter()
-            .map(|row| (row.outcome.as_str(), row.detail.as_str(), row.harness.as_deref()))
+            .map(|row| (
+                row.outcome.as_str(),
+                row.detail.as_str(),
+                row.harness.as_deref()
+            ))
             .collect::<Vec<_>>(),
         [
             ("appended", "mailbox", None),
-            ("submitted-to-harness", "delivery transport", None),
-            ("rejected-by-harness", "route native-worker names no harness", None),
+            (
+                "held-in-mailbox",
+                "route native-worker names no harness",
+                None
+            ),
         ]
     );
     let _ = std::fs::remove_dir_all(dir);
@@ -353,13 +392,85 @@ fn a_lane_route_with_no_harness_still_lands_at_its_supervisor() {
     let routes = routes("feature-lane", lane);
     let message = message("m-lane", "feature-lane", "work this");
 
-    let landing = deliver_hail(&registry, &store, &routes, &message).unwrap();
-    assert_eq!(landing.delivered, Delivered::QueuedForTurnBoundary);
-    assert_eq!(landing.via, Via::LaneSupervisor);
+    let landing = deliver_hail_with(&registry, &store, &routes, &message, &NoPane).unwrap();
+    assert_eq!(landing.rung, Rung::TurnBoundary);
+    assert_eq!(landing.detail, "lane supervisor");
 
     let rows = store.delivery_rows("m-lane").unwrap();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].outcome, "appended");
-    assert_eq!(rows[0].detail, "lane supervisor");
+    assert_eq!(
+        rows.iter()
+            .map(|row| (row.outcome.as_str(), row.detail.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            ("appended", "mailbox"),
+            ("held-for-turn-boundary", "lane supervisor"),
+        ],
+        "a lane row is held by its own supervisor, and the sender is told so"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// RECEIPT (ladder rung 4). A route whose door answered nothing, with no hook
+/// installed and a live pane, has the notice pasted into that pane, and the
+/// transition names the rung.
+#[test]
+fn a_route_with_a_live_pane_takes_the_paste_rung() {
+    let dir = temp_dir("paste");
+    let store = store(&dir);
+    let registry = Registry::with(vec![Box::new(echo(HarnessId::Codex, &KEYSTROKES, &dir))]);
+    let routes = routes("typed", route(HarnessId::Codex, Some("%1"), None));
+    let message = message("m-paste", "typed", "read this");
+    let pane = RecordingPane::default();
+
+    let landing = deliver_hail_with(&registry, &store, &routes, &message, &pane).unwrap();
+    assert_eq!(landing.rung, Rung::PanePaste);
+    let pasted = pane.pasted.lock().unwrap().clone();
+    assert_eq!(pasted.len(), 1, "one paste, one pane");
+    assert!(
+        pasted[0].1.contains("boop inbox drain"),
+        "notice: {}",
+        pasted[0].1
+    );
+    assert_eq!(
+        store
+            .delivery_rows("m-paste")
+            .unwrap()
+            .last()
+            .map(|row| row.outcome.clone()),
+        Some("pasted-into-pane".to_owned())
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// RECEIPT (ladder). Every rung records a transition the sender can read back,
+/// and none of them is `appended` alone: a row nobody owns is the one failure.
+#[test]
+fn every_landing_records_a_transition_past_appended() {
+    let dir = temp_dir("ladder");
+    let store = store(&dir);
+    let registry = Registry::with(vec![Box::new(echo(HarnessId::Kimi, &DOOR, &dir))]);
+    let mut lane = route(HarnessId::Kimi, None, None);
+    lane.kind = "lane".into();
+    let cases: [(&str, BTreeMap<String, Route>, &str); 3] = [
+        (
+            "m-l1",
+            routes("tui", route(HarnessId::Kimi, Some("projects:@1.%1"), None)),
+            "tui",
+        ),
+        ("m-l2", routes("feature-lane", lane), "feature-lane"),
+        ("m-l3", BTreeMap::new(), "nobody"),
+    ];
+    for (id, routes, to) in cases {
+        let message = message(id, to, "body");
+        let landing = deliver_hail_with(&registry, &store, &routes, &message, &NoPane).unwrap();
+        assert!(
+            landing.state().landed(),
+            "{id} landed on {:?}, which is not a landed state",
+            landing.rung
+        );
+        let rows = store.delivery_rows(id).unwrap();
+        assert_eq!(rows.first().unwrap().outcome, "appended", "{id}");
+        assert_eq!(rows.last().unwrap().outcome, landing.outcome(), "{id}");
+    }
     let _ = std::fs::remove_dir_all(dir);
 }

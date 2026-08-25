@@ -607,6 +607,7 @@ fn supervise(
     let mut flake_resumes = 0u32;
     let mut result_written = false;
     let mut head_watch = HeadWatch::new(&lane.cwd);
+    let mut reconciled_ms = 0u64;
     events.record(
         "channel-open",
         TraceRecorder::session(channel),
@@ -677,6 +678,7 @@ fn supervise(
                 },
             }
             head_watch.poll(lane, boop_acp::channel::now_ms());
+            reconcile_outbound(lane, &mut reconciled_ms, boop_acp::channel::now_ms());
             let this_turn_activity = channel
                 .last_activity_ms()
                 .filter(|written| *written >= turn_started);
@@ -905,6 +907,7 @@ fn supervise(
                     return Ok(ended);
                 }
                 head_watch.poll(lane, boop_acp::channel::now_ms());
+                reconcile_outbound(lane, &mut reconciled_ms, boop_acp::channel::now_ms());
                 let arrived = pending(&lane.mail_dir, &lane.lane, &seen)?;
                 if arrived.is_empty() {
                     std::thread::sleep(POLL);
@@ -1002,7 +1005,11 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
                 lane = lane.lane,
                 parent, exit_code, "lane result row written"
             );
-            println!("[boop] result rc={exit_code} hailed to {parent}");
+            let landed = deliver_outbound(lane, &row);
+            println!(
+                "[boop] result rc={exit_code} hailed to {parent}: {}",
+                landed.unwrap_or_else(|| "held in the mailbox".to_owned())
+            );
         }
         Err(error) => {
             error!(lane = lane.lane, parent, error = %error, "lane result row write failed");
@@ -1222,12 +1229,103 @@ fn mail_parent(lane: &LaneRun, parent: &str, kind: &str, body: String, detail: O
     match append_row(&lane.mail_dir, &row) {
         Ok(()) => {
             info!(lane = lane.lane, parent, kind, "lane parent row written");
-            println!("[boop] {kind} hailed to {parent}");
+            let landed = deliver_outbound(lane, &row);
+            println!(
+                "[boop] {kind} hailed to {parent}: {}",
+                landed.unwrap_or_else(|| "held in the mailbox".to_owned())
+            );
         }
         Err(error) => {
             error!(lane = lane.lane, parent, kind, error = %error, "parent row write failed");
         }
     }
+}
+
+/// Push one row this lane wrote down the delivery ladder and record where it
+/// landed. Appending alone leaves a row nobody owns: that is how a parent was
+/// sent yields it never received. Returns the rung, or `None` when the store
+/// or the registry could not be read.
+fn deliver_outbound(lane: &LaneRun, row: &bus::Message) -> Option<String> {
+    let routes = bus::read_routes(&lane.mail_dir).ok()?;
+    let store =
+        boop_store::ident::Store::open(boop_store::ident::Store::default_path().ok()?).ok()?;
+    let registry = boop_harness::registry::Registry::discover();
+    match crate::deliver::deliver_hail(&registry, &store, &routes, row) {
+        Ok(landing) => {
+            info!(
+                lane = lane.lane,
+                message_id = row.id,
+                rung = landing.rung.as_str(),
+                "lane outbound row delivered"
+            );
+            Some(landing.line(&row.id, &row.to, "harness"))
+        }
+        Err(error) => {
+            warn!(lane = lane.lane, message_id = row.id, error = %error, "outbound delivery failed");
+            None
+        }
+    }
+}
+
+/// How often the supervisor re-checks its own outbound rows.
+const RECONCILE_POLL: Duration = Duration::from_secs(5);
+/// How many unlanded rows one reconcile pass retries. A lane that has written
+/// hundreds of rows re-tries the newest, never the whole file.
+const RECONCILE_BATCH: usize = 20;
+
+/// Re-run the ladder for every row this lane sent that no rung has taken. A
+/// door that was down when the row was written does not swallow the row for
+/// the rest of the lane's life.
+fn reconcile_outbound(lane: &LaneRun, last_run_ms: &mut u64, now_ms: u64) {
+    if now_ms.saturating_sub(*last_run_ms) < RECONCILE_POLL.as_millis() as u64 {
+        return;
+    }
+    *last_run_ms = now_ms;
+    let Ok(store) =
+        boop_store::ident::Store::default_path().and_then(boop_store::ident::Store::open)
+    else {
+        return;
+    };
+    let Ok(routes) = bus::read_routes(&lane.mail_dir) else {
+        return;
+    };
+    let registry = boop_harness::registry::Registry::discover();
+    let mut rows = Vec::new();
+    for path in bus::read_boxes(&lane.mail_dir).unwrap_or_default() {
+        rows.extend(bus::parse_box(&path));
+    }
+    let unlanded: Vec<bus::Message> = rows
+        .into_iter()
+        .rev()
+        .filter(|row| row.from == lane.lane && row.to != lane.lane)
+        .filter(|row| !landed(&store, &row.id))
+        .take(RECONCILE_BATCH)
+        .collect();
+    for row in unlanded {
+        match crate::deliver::deliver_hail(&registry, &store, &routes, &row) {
+            Ok(landing) => info!(
+                lane = lane.lane,
+                message_id = row.id,
+                rung = landing.rung.as_str(),
+                "outbound row reconciled"
+            ),
+            Err(error) => {
+                warn!(lane = lane.lane, message_id = row.id, error = %error, "reconcile failed")
+            }
+        }
+    }
+}
+
+/// Whether the ledger holds a transition past `appended` for this message.
+fn landed(store: &boop_store::ident::Store, message_id: &str) -> bool {
+    store
+        .delivery_rows(message_id)
+        .unwrap_or_default()
+        .iter()
+        .any(|row| {
+            boop_store::DeliveryState::parse(&row.outcome)
+                .is_some_and(boop_store::DeliveryState::landed)
+        })
 }
 
 /// Mail the registered parent one typed failure row. A parentless lane and a

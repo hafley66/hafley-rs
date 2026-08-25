@@ -510,7 +510,11 @@ pub(crate) fn watch_turn_end(
     let (sender, receiver) = std::sync::mpsc::channel();
     let mut armed = 0usize;
     for row in rows {
-        if row.outcome != "accepted-by-harness" {
+        // Only a rung that put the body itself in front of the recipient has
+        // a turn to end. A held or pasted row waits on the mailbox alone.
+        if !boop::DeliveryState::parse(&row.outcome)
+            .is_some_and(|state| state == boop::DeliveryState::AcceptedByHarness)
+        {
             continue;
         }
         let Some(route) = routes.get(&row.route).cloned() else {
@@ -539,9 +543,9 @@ pub(crate) fn watch_turn_end(
     (armed > 0).then_some(receiver)
 }
 
-/// What the ledger recorded for the message being waited on, one line per
-/// route it was delivered to. An unreadable store costs the lines and nothing
-/// else: the wait itself reads the mailbox.
+/// The delivery history of the message being waited on: one line per recorded
+/// transition, oldest first. An unreadable store costs the lines and nothing
+/// else, because the wait itself reads the mailbox.
 fn report_delivery(message_id: &str) {
     let rows = boop::Store::default_path()
         .and_then(boop::Store::open)
@@ -550,9 +554,14 @@ fn report_delivery(message_id: &str) {
         return;
     };
     for row in rows {
+        let code = row
+            .error_code
+            .as_deref()
+            .map(|code| format!(" [{code}]"))
+            .unwrap_or_default();
         line(&format!(
-            "{message_id} -> {}: {} ({})",
-            row.route, row.outcome, row.detail
+            "{message_id} -> {} #{} {} ({}){code}",
+            row.route, row.sequence, row.outcome, row.detail
         ));
     }
 }

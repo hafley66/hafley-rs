@@ -366,13 +366,8 @@ fn write_part(
         }
         "tool" => {
             *turn += 1;
-            let inserted = store.write_turn(
-                session_id,
-                *turn,
-                message.ts,
-                "tool",
-                &part.tool_body(),
-            )?;
+            let inserted =
+                store.write_turn(session_id, *turn, message.ts, "tool", &part.tool_body())?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
             store.write_tool_fact(
@@ -824,7 +819,9 @@ mod tests {
             })
             .collect::<Vec<_>>();
         assert!(
-            projected.iter().any(|turn| turn == "assistant bench reply 5"),
+            projected
+                .iter()
+                .any(|turn| turn == "assistant bench reply 5"),
             "turns: {projected:#?}"
         );
         assert!(

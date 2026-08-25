@@ -32,7 +32,8 @@ pub struct Store {
 /// 13 = per-session attributes and the mood rows mail renders through.
 /// 14 = the door a live session answers on, and one delivery row per hail.
 /// 15 = ordered delivery-transition receipts beside the current-state ledger.
-pub const SCHEMA_VERSION: i64 = 15;
+/// 16 = the typed error code a refused transition carries.
+pub const SCHEMA_VERSION: i64 = 16;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -188,6 +189,103 @@ impl EffectiveMood {
             Some(setter) => format!("mood: {} (set by {setter})", self.name),
             None => format!("mood: {} (set by default)", self.name),
         }
+    }
+}
+
+/// Every state a message passes through between the mailbox and the recipient.
+/// The spellings are the `outcome` column's values, so a stored row and a
+/// matched arm never drift apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeliveryState {
+    /// The row is in the mailbox file. Every message starts here.
+    Appended,
+    /// A supervisor read the row and owns delivering it.
+    ClaimedBySupervisor,
+    /// The text was handed to a harness and the answer is not in yet.
+    SubmittedToHarness,
+    /// The harness took the text into the running turn.
+    AcceptedByHarness,
+    /// The harness refused the text. The row stays in the mailbox.
+    RejectedByHarness,
+    /// Rung 2: the recipient's supervisor holds the row for its next turn.
+    HeldForTurnBoundary,
+    /// Rung 3: an installed hook drains the row at the session's next turn.
+    QueuedInHookInbox,
+    /// Rung 4: the text was pasted into the recipient's pane.
+    PastedIntoPane,
+    /// Rung 5: nothing above answered. The row waits and is retried.
+    HeldInMailbox,
+    /// The recipient's turn opened with this row in it.
+    TurnStarted,
+    /// The turn carrying this row finished.
+    TurnEnded,
+    /// The recipient answered with a row naming this one.
+    ReplyAppended,
+    /// The turn ended with no row naming this one.
+    NoReply,
+    /// A parent-addressed row reached the parent's own door.
+    ParentDoorDelivered,
+    /// A parent-addressed row did not reach the parent's door.
+    ParentDoorFailed,
+}
+
+impl DeliveryState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DeliveryState::Appended => "appended",
+            DeliveryState::ClaimedBySupervisor => "claimed-by-supervisor",
+            DeliveryState::SubmittedToHarness => "submitted-to-harness",
+            DeliveryState::AcceptedByHarness => "accepted-by-harness",
+            DeliveryState::RejectedByHarness => "rejected-by-harness",
+            DeliveryState::HeldForTurnBoundary => "held-for-turn-boundary",
+            DeliveryState::QueuedInHookInbox => "queued-in-hook-inbox",
+            DeliveryState::PastedIntoPane => "pasted-into-pane",
+            DeliveryState::HeldInMailbox => "held-in-mailbox",
+            DeliveryState::TurnStarted => "turn-started",
+            DeliveryState::TurnEnded => "turn-ended",
+            DeliveryState::ReplyAppended => "reply-appended",
+            DeliveryState::NoReply => "no-reply",
+            DeliveryState::ParentDoorDelivered => "parent-door-delivered",
+            DeliveryState::ParentDoorFailed => "parent-door-failed",
+        }
+    }
+
+    /// Whether this state ends the sender's responsibility: the row is either
+    /// in front of the recipient or held by something that will put it there.
+    /// `appended` alone is the one state that leaves a row nobody owns.
+    pub fn landed(self) -> bool {
+        matches!(
+            self,
+            DeliveryState::AcceptedByHarness
+                | DeliveryState::HeldForTurnBoundary
+                | DeliveryState::QueuedInHookInbox
+                | DeliveryState::PastedIntoPane
+                | DeliveryState::HeldInMailbox
+                | DeliveryState::ParentDoorDelivered
+        )
+    }
+
+    /// Read one stored `outcome` word back. Unknown text is `None` rather than
+    /// a guess, so a store written by a newer boop reads as unknown.
+    pub fn parse(word: &str) -> Option<DeliveryState> {
+        const ALL: [DeliveryState; 15] = [
+            DeliveryState::Appended,
+            DeliveryState::ClaimedBySupervisor,
+            DeliveryState::SubmittedToHarness,
+            DeliveryState::AcceptedByHarness,
+            DeliveryState::RejectedByHarness,
+            DeliveryState::HeldForTurnBoundary,
+            DeliveryState::QueuedInHookInbox,
+            DeliveryState::PastedIntoPane,
+            DeliveryState::HeldInMailbox,
+            DeliveryState::TurnStarted,
+            DeliveryState::TurnEnded,
+            DeliveryState::ReplyAppended,
+            DeliveryState::NoReply,
+            DeliveryState::ParentDoorDelivered,
+            DeliveryState::ParentDoorFailed,
+        ];
+        ALL.into_iter().find(|state| state.as_str() == word)
     }
 }
 
@@ -508,6 +606,7 @@ impl Store {
                        harness_id INTEGER,
                        outcome TEXT NOT NULL,
                        detail TEXT NOT NULL DEFAULT '',
+                       error_code TEXT,
                        at_ms INTEGER NOT NULL,
                        PRIMARY KEY (message_id, sequence)
                      ) WITHOUT ROWID;
@@ -515,6 +614,20 @@ impl Store {
                        ON agent_delivery_transition(message_id, route);
                      PRAGMA user_version = 15;",
                 )?;
+            }
+            if self.schema_version()? < 16 {
+                // A refused transition needs a word a caller can match on
+                // without parsing `detail`, which is free text from the door.
+                let has_error_code = self
+                    .connection
+                    .prepare("SELECT error_code FROM agent_delivery_transition LIMIT 1")
+                    .is_ok();
+                if !has_error_code {
+                    self.connection.execute_batch(
+                        "ALTER TABLE agent_delivery_transition ADD COLUMN error_code TEXT;",
+                    )?;
+                }
+                self.connection.execute_batch("PRAGMA user_version = 16;")?;
             }
             self.stamp_version()?;
             Ok(())
@@ -1924,6 +2037,23 @@ impl Store {
         detail: &str,
         at_ms: u64,
     ) -> Result<()> {
+        self.append_delivery_transition(message_id, route, harness, outcome, detail, None, at_ms)
+    }
+
+    /// The typed writer every delivery path goes through. `sequence` is
+    /// `MAX + 1` for this message, so a retry appends beside its predecessor
+    /// and no earlier transition is ever rewritten.
+    #[allow(clippy::too_many_arguments)]
+    pub fn append_delivery_transition(
+        &self,
+        message_id: &str,
+        route: &str,
+        harness: Option<crate::harness_id::HarnessId>,
+        outcome: &str,
+        detail: &str,
+        error_code: Option<&str>,
+        at_ms: u64,
+    ) -> Result<()> {
         let harness_id = harness
             .map(|id| self.intern("dict_harness", id.as_str()))
             .transpose()?;
@@ -1939,14 +2069,22 @@ impl Store {
         )?;
         self.connection.execute(
             "INSERT INTO agent_delivery_transition
-               (message_id, sequence, route, harness_id, outcome, detail, at_ms)
+               (message_id, sequence, route, harness_id, outcome, detail, error_code, at_ms)
              VALUES (
                ?1,
                (SELECT COALESCE(MAX(sequence), 0) + 1
                   FROM agent_delivery_transition WHERE message_id = ?1),
-               ?2, ?3, ?4, ?5, ?6
+               ?2, ?3, ?4, ?5, ?6, ?7
              )",
-            params![message_id, route, harness_id, outcome, detail, at_ms as i64],
+            params![
+                message_id,
+                route,
+                harness_id,
+                outcome,
+                detail,
+                error_code,
+                at_ms as i64
+            ],
         )?;
         Ok(())
     }
@@ -2781,6 +2919,7 @@ CREATE TABLE IF NOT EXISTS agent_delivery_transition (
   harness_id INTEGER,
   outcome TEXT NOT NULL,
   detail TEXT NOT NULL DEFAULT '',
+  error_code TEXT,
   at_ms INTEGER NOT NULL,
   PRIMARY KEY (message_id, sequence)
 ) WITHOUT ROWID;
@@ -4279,9 +4418,17 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(
             rows.iter()
-                .map(|row| (row.sequence, row.outcome.as_str(), row.detail.as_str(), row.at_ms))
+                .map(|row| (
+                    row.sequence,
+                    row.outcome.as_str(),
+                    row.detail.as_str(),
+                    row.at_ms
+                ))
                 .collect::<Vec<_>>(),
-            [(1, "unreachable", "no live session", 10), (2, "injected", "", 20)]
+            [
+                (1, "unreachable", "no live session", 10),
+                (2, "injected", "", 20)
+            ]
         );
         assert_eq!(rows[1].harness.as_deref(), Some("codex"));
         assert!(store.delivery_rows("m-nothing").unwrap().is_empty());

@@ -7,7 +7,7 @@ use tracing::{debug, info};
 use boop::bus::Route;
 use boop::door::Delivered;
 use boop::harness::HarnessId;
-use boop::mail::{Landing, Via};
+use boop::mail::Landing;
 use boop::mailwait::Watch;
 use boop::registry::Registry;
 use boop::{bus, identity, inbox, lane, tmux};
@@ -167,15 +167,27 @@ pub(crate) fn deliver_hail(
         let response = crate::cli::acpx::deliver(route, &message.body)?;
         append_acks(dir, std::slice::from_ref(message))?;
         let landing = Landing::acpx(response.trim_end().to_owned());
+        let harness_id = route
+            .harness
+            .map_or_else(|| "acpx".to_owned(), |id| id.to_string());
+        store.append_delivery_transition(
+            &message.id,
+            to,
+            route.harness,
+            boop::DeliveryState::Appended.as_str(),
+            "mailbox",
+            None,
+            boop::live::now_ms(),
+        )?;
         landing.record(&store, &message.id, to, route.harness)?;
         if let Some(reply) = landing.reply.as_deref().filter(|text| !text.is_empty()) {
             println!("{reply}");
         }
-        println!("delivered {} -> {to} (acpx queue)", message.id);
+        println!("{}", landing.line(&message.id, to, &harness_id));
         return Ok(());
     }
-    // Only a door landing names a harness, and a door landing has one; a route
-    // with no harness never reaches an arm that prints this word.
+    // The door rung is the only line that names a harness; a route naming none
+    // reads the placeholder rather than inventing one.
     let harness_id = routes
         .get(to)
         .and_then(|route| route.harness)
@@ -184,38 +196,49 @@ pub(crate) fn deliver_hail(
     info!(
         to,
         message_id = message.id,
-        delivery = landing.via.as_str(),
+        rung = landing.rung.as_str(),
         outcome = landing.outcome(),
         "hail delivery recorded"
     );
-    match &landing.delivered {
-        Delivered::Injected => {
-            append_acks(dir, std::slice::from_ref(message))?;
-            println!(
-                "delivered {} -> {to} through the {harness_id} door",
-                message.id
-            );
-        }
-        Delivered::QueuedForTurnBoundary => match landing.via {
-            Via::HookInbox => println!("queued {} -> {to} (hook inbox drains it)", message.id),
-            Via::LaneSupervisor => {
-                println!(
-                    "queued {} -> {to} (lane supervisor delivers it)",
-                    message.id
-                )
-            }
-            _ => println!(
-                "queued {} -> {to} (the {harness_id} door takes it at the next turn boundary)",
-                message.id
-            ),
-        },
-        Delivered::Unreachable(why) => {
-            println!("queued {} -> {to}", message.id);
-            println!("{to}: {why}: message stays queued, to_timestamp null");
-        }
+    if landing.rung.carried_the_body() {
+        append_acks(dir, std::slice::from_ref(message))?;
     }
+    println!("{}", landing.line(&message.id, to, &harness_id));
+    confirm_transition_recorded(&store, &message.id, to)?;
     Ok(())
 }
+
+/// One POLL after the append, the ledger must hold a transition past
+/// `appended` for this message. A row nobody owns is the failure the sender
+/// reports, and it is the only outcome that is not an exit 0.
+fn confirm_transition_recorded(store: &boop::Store, message_id: &str, to: &str) -> Result<()> {
+    let deadline = std::time::Instant::now() + DELIVERY_CONFIRM;
+    loop {
+        let rows = store.delivery_rows(message_id).unwrap_or_default();
+        if rows.iter().any(|row| {
+            boop::DeliveryState::parse(&row.outcome).is_some_and(boop::DeliveryState::landed)
+        }) {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            let states: Vec<&str> = rows.iter().map(|row| row.outcome.as_str()).collect();
+            anyhow::bail!(
+                "{message_id} -> {to}: appended with no delivery transition inside {}ms (ledger: {}); the row is in the mailbox and nothing owns it",
+                DELIVERY_CONFIRM.as_millis(),
+                if states.is_empty() {
+                    "empty".to_owned()
+                } else {
+                    states.join(", ")
+                }
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+/// One supervisor POLL. A send that has no delivery transition by now is a row
+/// no rung of the ladder took.
+const DELIVERY_CONFIRM: std::time::Duration = std::time::Duration::from_millis(700);
 
 /// An acpx route is driven by the caller's own queue, not by a harness door.
 fn is_acpx(route: &Route) -> bool {
@@ -234,7 +257,7 @@ pub(crate) fn run_tell_parent(
     let routes = bus::read_routes(&dir)?;
     let identity = identity::resolve_with(registry, &routes)?;
     let (caller, route) = lane::caller_route(&identity, &routes)?;
-    let pick = lane::tell_parent_target(&caller, route, &routes)?;
+    let pick = lane::tell_parent_target(&caller, route, &routes, identity.parent.as_deref())?;
     let parent = pick
         .parent
         .clone()
@@ -270,8 +293,29 @@ pub(crate) fn run_tell_parent(
     record_control_edge(&message)?;
     println!("{caller} -> {parent} (parent from {})", pick.source);
     deliver_hail(registry, &dir, &message, None)?;
+    print_tell_parent_receipt(&caller, &parent, &message.id);
     line(&message.id);
     Ok(())
+}
+
+/// The receipt `tell-parent` leaves (spec 7.5): who called, which parent the
+/// edge resolved to, the message id, and the transition the ladder recorded.
+/// Read back from the store, so it is the same row `boop db` and `boop debug`
+/// show rather than a second account of the same send.
+fn print_tell_parent_receipt(caller: &str, parent: &str, message_id: &str) {
+    let rows = boop::Store::default_path()
+        .and_then(boop::Store::open)
+        .and_then(|store| store.delivery_rows(message_id))
+        .unwrap_or_default();
+    match rows.last() {
+        Some(row) => line(&format!(
+            "receipt {caller} -> {parent} {message_id} {} ({})",
+            row.outcome, row.detail
+        )),
+        None => line(&format!(
+            "receipt {caller} -> {parent} {message_id} no delivery transition recorded"
+        )),
+    }
 }
 
 /// `tell-children`: one body to every child of the caller, from the registry's
