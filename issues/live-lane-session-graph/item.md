@@ -2,10 +2,12 @@
 created: 2026-08-17
 updated: 2026-08-25
 type: bug
-status: open
+status: fixed
 priority: high
 related: ['@boop-lane-observability']
 labels: [domain-boop, intent-correctness]
+closed: 2026-08-25
+closed_by: claude-5
 ---
 
 # Live harness lane missing from session graph
@@ -68,8 +70,8 @@ session node.
 
 ## Tests Run
 
-- [ ] cargo test -p boop session_graph
-- [ ] cargo test -p boop --all-targets
+- [x] cargo test -p boop session_graph
+- [x] cargo test -p boop --all-targets
 - [ ] cargo clippy -p boop --all-targets -- -D warnings
 - [ ] Instant focused Boop agent explorer tests
 
@@ -84,3 +86,9 @@ harness presence as proof that a native session row exists.
 ### 2026-08-25T18:52:10Z · @fix-native-visibility
 
 Step 4: added unresolved->resolved lane test (unresolved_live_lane_appears_as_shell_then_merges_into_sessions) and fixed shell_from_runtime to drop a resolved kind=lane route whose session is in sessions. Ran: cargo test -p boop-store (133 passed). AC 8 (Instant external-shell projection fixture) out of scope.
+
+## Comments
+
+### 2026-08-25T19:03:08Z · @claude-5
+
+Unresolved live lane appears once in shells and moves to sessions on resolution (receipt test in _0_session_graph.rs). Left unticked: instant-side fixtures and the --history/cwd-filter transitions; file a follow-up from the instant repo if the panel still undercounts.
