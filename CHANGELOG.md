@@ -4,6 +4,26 @@ all notable changes to `boop` and `boop-mux` are recorded here. versions follow 
 
 ## unreleased
 
+## [0.0.5] - 2026-08-25
+
+### Added
+
+- *(boop)* typed lane completion: `lane create --expect-path <rel>`, `--expect-commit-subject <text>`, `--expect-commits-at-least <n>`; a clean exit with an unmet assertion is rewritten to rc=4 with the failed assertions in the row's detail; `lane get` prints the `expect` field
+- *(boop)* `lane list --all` shows unregistered tmux sessions and claude Agent-tool worktrees, with measured liveness for pane-less routes
+- *(boop)* the session graph resolves lanes it could not before; the resolved lane shell is dropped from the graph to avoid duplication
+
+### Changed
+
+- *(boop)* the 49 hidden verb aliases (Dispatch, Lane, Chat, Sync, Follow and the nested variants) are deleted; the 9 documented verbs are the whole surface
+- *(boop)* help doctrine: spawn examples spell `--preset`, the stale `--model` and `--harness` flags are gone, every `lane list` and `lane create` flag has help text
+
+### Fixed
+
+- *(boop)* `boop wait <lane>` ignores result rows older than the newest taken inbound row
+- *(codex)* bookkeeping records leave no row and no WARN; reasoning summaries project as assistant rows
+- *(harness)* the setup-step deadline polls `try_wait` and kills the process group with `killpg`
+- *(boop)* supervise unit tests pin `BOOP_DB` and `HOME` in a tempdir; fixture lanes no longer leak into the live store
+
 ## [0.0.4] - 2026-08-25
 
 Epic boop-one-path: one path per job. The supervisor mails the parent on every

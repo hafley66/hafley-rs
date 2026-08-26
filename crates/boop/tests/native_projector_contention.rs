@@ -176,7 +176,8 @@ fn six_idle_projector_processes_do_not_repeat_global_session_materialization() {
 
     let version = Command::new(BOOP).arg("--version").output().unwrap();
     let version = String::from_utf8(version.stdout).unwrap().trim().to_owned();
-    assert!(version.starts_with("boop 0.0.4 "), "{version}");
+    let expected = format!("boop {} ", env!("CARGO_PKG_VERSION"));
+    assert!(version.starts_with(&expected), "{version}");
     let test_binary = std::env::current_exe().unwrap();
     for _ in 0..WRAPPER_PROCESSES {
         let child = Command::new(&test_binary)

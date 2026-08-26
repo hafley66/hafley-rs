@@ -821,13 +821,16 @@ enum HostCmd {
 enum LaneCmd {
     /// Every lane, with live or dead.
     List {
+        /// Only lanes in this state: `live` or `dead`.
         #[arg(long)]
         state: Option<String>,
+        /// Only lanes on this harness: claude, codex, opencode, kimi.
         #[arg(long)]
         harness: Option<String>,
         /// Include unregistered tmux sessions and native Claude subagents.
         #[arg(long)]
         all: bool,
+        /// Directory holding boop.db; defaults to ~/.agent.
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -917,8 +920,10 @@ enum LaneCmd {
         /// the default server.
         #[arg(long)]
         socket: Option<String>,
+        /// Directory holding boop.db; defaults to ~/.agent.
         #[arg(long)]
         mail_dir: Option<PathBuf>,
+        /// Print the worktree, branch, base sha and the literal `cmd:` line without spawning.
         #[arg(long)]
         dry_run: bool,
         /// Remove a dead lane's worktree and branch before spawning. A live
@@ -1116,8 +1121,10 @@ enum AgentSessionGraphFormat {
 
 #[derive(Subcommand)]
 enum LaneMessageCmd {
+    /// Every mail row addressed to or sent by the lane, oldest first.
     List {
         lane: String,
+        /// Directory holding boop.db; defaults to ~/.agent.
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },

@@ -295,7 +295,7 @@ dependencies = [
 
 [[package]]
 name = "boop"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "anyhow",
  "boop-acp",
@@ -353,7 +353,7 @@ dependencies = [
 
 [[package]]
 name = "boop-mux"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "anyhow",
  "tmux_interface",

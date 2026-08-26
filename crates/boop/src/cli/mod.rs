@@ -107,7 +107,7 @@ REGISTER: one path per kind of caller. A pane registers itself by running a
 SPAWN: every lane spawn goes through lane create; bare tmux spawns leave no
 edge and stay invisible to tracking:
     boop beep lane create --branch feature/<name> --brief <abs-path> \\
-      [--goal <text>] [--model <m>] [--wait] [--mail-dir <d>] [--dry-run]
+      --preset <p> [--goal <text>] [--wait] [--mail-dir <d>] [--dry-run]
   ONE derivation, from the whole branch name: `feature/schema-emit` gives lane
   id and tmux session `feature-schema-emit` (`/` spelled `-`, the one character
   tmux cannot hold) and worktree `.boop-worktrees/feature/schema-emit` (the same
@@ -115,9 +115,8 @@ edge and stay invisible to tracking:
   Kinds are feature/fix/refactor/chore, a convention the CLI prints, not a gate.
   --cwd defaults to the repo you stand in, --base-sha to origin/main's head
   (resolved at spawn and printed), --parent to you then to the one registered
-  coordinator, --harness to the one the model spelling names (gpt-* codex,
-  provider/model opencode, kimi-* kimi).
-  Overrides: --lane <id>, --tmux <name>, --base-sha <sha>, --harness <id>.
+  coordinator; the harness is the preset's.
+  Overrides: --lane <id>, --tmux <name>, --base-sha <sha>.
   Model preset: --preset flash4 resolves through the platform config directory's
   boop/config.json; `boop config presets` lists every name with its model, bin
   and harness.
@@ -160,6 +159,9 @@ LIVENESS: a lane can die silently, producing nothing. Liveness is TWO checks:
     2. worktree changed: git -C <worktree> status --short
   A REPORT.md at the root alone proves nothing; check its mtime and first line
   against the lane you dispatched.
+  `boop beep lane list --all` adds what the registry does not hold: unregistered
+  tmux sessions and claude Agent-tool worktrees, with measured liveness for
+  pane-less routes.
 
 TRANSPORT: every lane pane runs ONE command, whatever the harness:
     boop beep lane run --lane <id> --harness <h> --brief <abs> --model <m>
