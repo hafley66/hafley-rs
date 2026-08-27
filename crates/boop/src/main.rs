@@ -330,23 +330,30 @@ enum ShellKind {
     Bash,
 }
 
+/// Outside tmux there is no pane to key the route on, so each wrapper runs
+/// the bare binary instead of failing on the missing TMUX_PANE.
 const BASH_SHELL_INIT: &str = r#"codex() {
+  [ -n "$TMUX_PANE" ] || { command codex "$@"; return; }
   command boop tui codex --cwd "$PWD" -- "$@"
 }
 
 claude() {
+  [ -n "$TMUX_PANE" ] || { command claude "$@"; return; }
   command boop tui claude --cwd "$PWD" -- "$@"
 }
 
 ccz() {
+  [ -n "$TMUX_PANE" ] || { command ccz "$@"; return; }
   command boop tui claude --bin ccz --cwd "$PWD" -- "$@"
 }
 
 kimi() {
+  [ -n "$TMUX_PANE" ] || { command kimi "$@"; return; }
   command boop tui kimi --cwd "$PWD" -- "$@"
 }
 
 opencode() {
+  [ -n "$TMUX_PANE" ] || { command opencode "$@"; return; }
   command boop tui opencode --cwd "$PWD" -- "$@"
 }"#;
 

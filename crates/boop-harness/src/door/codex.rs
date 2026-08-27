@@ -291,10 +291,12 @@ fn explicit_resume(tui_args: &[String]) -> anyhow::Result<(Option<String>, &[Str
     if tui_args.first().map(String::as_str) != Some("resume") {
         return Ok((None, tui_args));
     }
-    let thread = tui_args
-        .get(1)
-        .filter(|value| !value.starts_with('-'))
-        .context("`boop tui codex -- resume` requires an explicit thread id")?;
+    // `resume`, `resume --last`, `resume --all`: the TUI picks the thread
+    // itself; the whole argument list forwards and the wrapper adopts the
+    // thread once the TUI reports it.
+    let Some(thread) = tui_args.get(1).filter(|value| !value.starts_with('-')) else {
+        return Ok((None, tui_args));
+    };
     Ok((Some(thread.clone()), &tui_args[2..]))
 }
 
@@ -472,6 +474,18 @@ mod tests {
             Some("019ffb9b-51cb-7e92-be44-4eb469f46d95")
         );
         assert_eq!(forwarded, ["--no-alt-screen"]);
+    }
+
+    #[test]
+    fn a_resume_without_an_id_forwards_to_the_native_picker() {
+        for args in [
+            vec!["resume".to_string()],
+            vec!["resume".to_string(), "--last".to_string()],
+        ] {
+            let (thread, forwarded) = explicit_resume(&args).expect("picker resume");
+            assert_eq!(thread, None);
+            assert_eq!(forwarded, args);
+        }
     }
 
     #[test]

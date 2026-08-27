@@ -4,6 +4,13 @@ all notable changes to `boop` and `boop-mux` are recorded here. versions follow 
 
 ## unreleased
 
+## [0.0.6] - 2026-08-26
+
+### Fixed
+
+- *(codex)* `codex resume` with no thread id (picker, `--last`, `--all`) forwards to the native TUI instead of failing on the missing id
+- *(boop)* the `boop shell init bash` wrappers (`codex`, `claude`, `ccz`, `kimi`, `opencode`) run the bare binary when `TMUX_PANE` is unset instead of failing outside tmux
+
 ## [0.0.5] - 2026-08-25
 
 ### Added
