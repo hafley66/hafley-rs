@@ -66,7 +66,7 @@ pub fn read_routes(dir: &Path) -> Result<BTreeMap<String, Route>> {
     routes_in(&open_store(dir)?)
 }
 
-fn route_from_value(entry: &Value) -> Route {
+pub fn route_from_value(entry: &Value) -> Route {
     let object = match entry.as_object() {
         Some(object) => object,
         // a bare string is a shorthand for a session id route

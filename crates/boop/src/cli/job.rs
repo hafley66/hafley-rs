@@ -132,7 +132,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
         warm_start: args.warm_start,
     };
     let session = adapter.spawn(&spec)?;
-
+    // The record a send to a retired lane replays to bring the pane back.
     // The route's cwd is where the harness actually runs (the worktree when
     // one was made): session-id resolution joins opencode.db on directory.
     let route = Route {
@@ -154,6 +154,19 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             .map(|dir| dir.display().to_string()),
         app_server_socket: None,
     };
+    // The record a send to a retired lane replays to bring the pane back.
+    if let (Some(tmux), Some(cwd)) = (session.tmux.as_deref(), session.cwd.as_deref()) {
+        let spawn = boop::trail::Spawn {
+            tmux: tmux.to_owned(),
+            socket: session.tmux_socket.clone(),
+            cwd: cwd.to_owned(),
+            command: boop::harness::supervisor_command(&spec),
+            route: crate::cli::route_to_json(&route),
+        };
+        if let Err(error) = boop::trail::write_spawn(&args.to, &spawn) {
+            warn!(lane = args.to, error = %error, "spawn record not written");
+        }
+    }
     write_route(&dir, &args.to, route)?;
     append_message(&dir, &message)?;
     info!(
@@ -1728,6 +1741,7 @@ fn lane_state_hop(
     }
     match boop::supervise::read_residency(dir, name).as_deref() {
         Some(boop::supervise::RESIDENCY_IDLE) => "idle",
+        Some(boop::supervise::RESIDENCY_RETIRED) => "retired",
         _ => "live",
     }
 }

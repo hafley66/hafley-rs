@@ -47,6 +47,58 @@ pub struct Expect {
     pub commits_at_least: Option<u32>,
 }
 
+/// What re-creates a lane's pane: the tmux session name, its socket, the
+/// directory the supervisor runs in and the exact supervisor command line.
+/// Written once at spawn; a send to a retired lane replays it.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct Spawn {
+    pub tmux: String,
+    pub socket: Option<String>,
+    pub cwd: String,
+    pub command: String,
+    /// The registry route as written at spawn, re-registered on revive: the
+    /// pane epilogue drops the route when a retired lane exits.
+    #[serde(default)]
+    pub route: serde_json::Value,
+}
+
+/// The spawn record file name under a lane's trail directory.
+pub const SPAWN_FILE: &str = "spawn.json";
+
+/// Write `~/.agent/lanes/<lane>/spawn.json`.
+pub fn write_spawn(lane: &str, spawn: &Spawn) -> Result<()> {
+    let dir = lane_dir(lane)?;
+    std::fs::create_dir_all(&dir).context("create lane trail dir")?;
+    let text = serde_json::to_vec_pretty(spawn).context("serialize spawn")?;
+    std::fs::write(dir.join(SPAWN_FILE), text).context("write spawn file")?;
+    Ok(())
+}
+
+/// Read the spawn record; `None` when the lane predates it or never had one.
+pub fn read_spawn(lane: &str) -> Option<Spawn> {
+    let text = std::fs::read_to_string(lane_dir(lane).ok()?.join(SPAWN_FILE)).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// The pinned conversation file under a lane's trail directory. The route
+/// also carries it, but the pane epilogue drops the route on exit; this copy
+/// is what a revive resumes.
+pub const CONVERSATION_FILE: &str = "conversation";
+
+/// Write `~/.agent/lanes/<lane>/conversation`.
+pub fn write_conversation(lane: &str, conversation: &str) -> Result<()> {
+    let dir = lane_dir(lane)?;
+    std::fs::create_dir_all(&dir).context("create lane trail dir")?;
+    std::fs::write(dir.join(CONVERSATION_FILE), conversation).context("write conversation file")
+}
+
+/// Read the pinned conversation from the trail; `None` when never written.
+pub fn read_conversation(lane: &str) -> Option<String> {
+    let text = std::fs::read_to_string(lane_dir(lane).ok()?.join(CONVERSATION_FILE)).ok()?;
+    let text = text.trim();
+    (!text.is_empty()).then(|| text.to_owned())
+}
+
 /// The expectation file name under a lane's trail directory.
 pub const EXPECT_FILE: &str = "expect.json";
 

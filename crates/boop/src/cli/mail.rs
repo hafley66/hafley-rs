@@ -13,7 +13,9 @@ use boop::registry::Registry;
 use boop::{bus, identity, inbox, lane, tmux};
 
 use crate::cli::job::waiting_as;
-use crate::cli::{append_acks, append_message, append_message_to, line, mail_dir, pad};
+use crate::cli::{
+    append_acks, append_message, append_message_to, line, mail_dir, pad, write_route,
+};
 use crate::InboxCmd;
 
 // ---------------------------------------------------------------------------
@@ -235,7 +237,10 @@ pub(crate) fn deliver_hail(
 ) -> Result<()> {
     let to = message.to.as_str();
     let store = bus::open_store(dir)?;
-    let routes = bus::routes_in(&store)?;
+    let mut routes = bus::routes_in(&store)?;
+    if let Some(route) = revive_if_retired(dir, to, routes.get(to))? {
+        routes.insert(to.to_owned(), route);
+    }
     if let Some(route) = routes.get(to).filter(|route| is_acpx(route)) {
         let response = crate::cli::acpx::deliver(route, &message.body)?;
         append_acks(dir, std::slice::from_ref(message))?;
@@ -327,15 +332,30 @@ fn push_wait(dir: &Path, to: &str, message_id: &str, timeout_secs: u64) -> Resul
     let next_wait = format!("boop wait {message_id}");
     let next_debug = format!("boop debug {to}");
     info!(to, message_id, timeout_secs, "push wait starting");
+    let lane_route = bus::read_routes(dir)
+        .ok()
+        .and_then(|routes| routes.get(to).map(|route| route.kind == "lane"))
+        .unwrap_or(false);
     let mut dead_polls = 0u32;
     loop {
-        let arrivals = watch.arrivals(&all_messages(dir)?);
+        let rows = all_messages(dir)?;
+        let arrivals = watch.arrivals(&rows);
         if let Some(reply) = arrivals.first() {
             info!(to, message_id, "push answered by a reply");
             line(&reply.body);
             append_acks(dir, std::slice::from_ref(reply))?;
             line(&next_wait);
             return Ok(());
+        }
+        // A lane answers its parent, never the sender: its next yield or
+        // result row after the send is the turn end the sender waits for.
+        if lane_route {
+            if let Some(ended) = lane_turn_end(&rows, to, message_id) {
+                info!(to, message_id, "push answered by the lane's turn end");
+                line(&ended.body);
+                line(&next_wait);
+                return Ok(());
+            }
         }
         if let Some(ended) = turn_end.as_ref().and_then(|rx| rx.try_recv().ok()) {
             info!(to, message_id, "push answered by a turn end");
@@ -580,6 +600,82 @@ pub(crate) enum ChildReach {
     NoRoute(&'static str),
     /// The child named a tmux target and tmux no longer has it.
     Dead(String),
+}
+
+/// The lane's first `yield` or `result` row written after the send `id`:
+/// the supervisor mails those to the parent at every turn end.
+fn lane_turn_end(rows: &[bus::Message], lane: &str, id: &str) -> Option<bus::Message> {
+    let sent = rows.iter().find(|row| row.id == id)?;
+    rows.iter()
+        .filter(|row| row.from == lane && matches!(row.kind.as_str(), "yield" | "result"))
+        .find(|row| row.from_timestamp > sent.from_timestamp)
+        .cloned()
+}
+
+/// How long a send waits for a revived lane's supervisor to come up.
+const REVIVE_WAIT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// A lane whose pane is gone (retired on the idle shutdown, or dead) and
+/// whose spawn record exists is brought back on its pinned conversation
+/// before the row is delivered; its route is re-registered first, since the
+/// pane epilogue dropped it. Returns the live route once the supervisor has
+/// reported itself live, `None` when nothing needed reviving.
+pub(crate) fn revive_if_retired(
+    dir: &Path,
+    name: &str,
+    route: Option<&Route>,
+) -> Result<Option<Route>> {
+    if let Some(route) = route {
+        if route.kind != "lane" {
+            return Ok(None);
+        }
+        if let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) {
+            if tmux::mux().target_alive(None, target) {
+                return Ok(None);
+            }
+        }
+    }
+    let Some(spawn) = boop::trail::read_spawn(name) else {
+        return Ok(None);
+    };
+    if tmux::mux().target_alive(spawn.socket.as_deref(), &spawn.tmux) {
+        return Ok(None);
+    }
+    let mut revived = bus::route_from_value(&spawn.route);
+    if revived.kind != "lane" {
+        return Ok(None);
+    }
+    revived.registered_at = Some(bus::now_iso());
+    revived.session_id = boop::trail::read_conversation(name).or(revived.session_id);
+    write_route(dir, name, revived.clone())?;
+    println!(
+        "revive {name} (pane {} gone; respawning on the pinned conversation)",
+        spawn.tmux
+    );
+    tmux::mux().new_detached_session(
+        spawn.socket.as_deref(),
+        &spawn.tmux,
+        &spawn.cwd,
+        &spawn.command,
+    )?;
+    let deadline = std::time::Instant::now() + REVIVE_WAIT;
+    while std::time::Instant::now() < deadline {
+        if boop::supervise::read_residency(dir, name).as_deref()
+            == Some(boop::supervise::RESIDENCY_LIVE)
+        {
+            println!("revived {name}");
+            return Ok(Some(revived));
+        }
+        if !tmux::mux().target_alive(spawn.socket.as_deref(), &spawn.tmux) {
+            anyhow::bail!(
+                "revive of {name} died before its supervisor reported live; `boop debug {name}`"
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    anyhow::bail!(
+        "revive of {name} did not report live within {REVIVE_WAIT:?}; `boop debug {name}`"
+    )
 }
 
 /// How a queued row reaches a child. A route with no hook and no tmux target

@@ -4,6 +4,11 @@ all notable changes to `boop` and `boop-mux` are recorded here. versions follow 
 
 ## unreleased
 
+### Added
+
+- *(lane)* idle shutdown: a lane with its result row written and no mail for `BOOP_IDLE_SHUTDOWN_SECS` (default 60, 0 disables) closes its harness and exits; residency `retired`, one `note` row to the parent
+- *(lane)* revive on send: `boop beep <lane> <body>` to a retired lane replays `~/.agent/lanes/<lane>/spawn.json`, re-registers the route, resumes the pinned conversation (`~/.agent/lanes/<lane>/conversation`) and delivers the body as the opening turn; the send's wait ends on the lane's next yield or result row
+
 ### Changed
 
 - *(boop)* `boop --help` carries the whole primer: READ, FAVORITE, ME, SHELL, IDENTITY, PRESETS, LAWS, BUILD sections; every subcommand is visible except `beep lane run` (supervisor entry) and the dl6-gated `concatmap`

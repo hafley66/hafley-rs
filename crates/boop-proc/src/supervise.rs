@@ -29,6 +29,29 @@ fn idle_ms(now_ms: u64, turn_started: u64, activity: Option<u64>) -> u64 {
     now_ms.saturating_sub(activity.unwrap_or(turn_started))
 }
 
+/// Seconds a parked lane (result row written, no mail arriving) stays
+/// resident before it closes its channel and exits. A parked claude lane
+/// holds a 130-165 MB ACP child; 17 of them sat for three days on 2026-08-27.
+const IDLE_SHUTDOWN_ENV: &str = "BOOP_IDLE_SHUTDOWN_SECS";
+const DEFAULT_IDLE_SHUTDOWN: Duration = Duration::from_secs(60);
+
+/// `IDLE_SHUTDOWN_ENV` parsed; `0` disables the shutdown.
+fn parse_idle_shutdown(raw: Option<&str>) -> Option<Duration> {
+    match raw.and_then(|value| value.parse::<u64>().ok()) {
+        Some(0) => None,
+        Some(secs) => Some(Duration::from_secs(secs)),
+        None => Some(DEFAULT_IDLE_SHUTDOWN),
+    }
+}
+
+fn idle_shutdown() -> Option<Duration> {
+    parse_idle_shutdown(std::env::var(IDLE_SHUTDOWN_ENV).ok().as_deref())
+}
+
+/// The residency a lane records when it leaves on the idle shutdown: its
+/// conversation is pinned on the route and `lane create --resume` re-opens it.
+pub const RESIDENCY_RETIRED: &str = "retired";
+
 /// `STALL_LIMIT_ENV` parsed, isolated from the process environment so a test
 /// never mutates global state to exercise it.
 fn parse_stall_limit(raw: Option<&str>) -> Duration {
@@ -51,6 +74,10 @@ fn stalled(idle_ms: u64, limit: Duration) -> bool {
 /// The text a resumed conversation opens with instead of the full brief.
 const RESUME_NUDGE: &str = "The previous turn ended on a provider error you never saw. \
      Re-read your last steps and continue the brief from where you left off.";
+
+/// The opening turn of a revived lane that finds no mail waiting.
+const REVIVE_TEXT: &str = "You were paused after finishing and are now resumed. \
+     No new instruction has arrived yet; reply with the single word ready.";
 
 /// What the next turn re-opens with after a retryable end. Until the brief
 /// turn has completed, a channel id is insufficient evidence that the
@@ -221,6 +248,9 @@ struct Ended {
     /// The last turn's reason, carried out when the lane ended on a provider
     /// flake so the result row names what killed it.
     detail: Option<String>,
+    /// The lane left on the idle shutdown after its result row was already
+    /// mailed; `run` writes no second row.
+    retired: bool,
 }
 
 /// What a lane exits with when its parent died under the `kill` policy. The
@@ -340,6 +370,7 @@ impl ParentWatch {
                 return Some(Ended {
                     exit_code: PARENT_DIED_EXIT,
                     detail: Some(format!("{}: {pane}", boop_store::trail::PANE_GONE)),
+                    retired: false,
                 });
             }
         }
@@ -357,6 +388,7 @@ impl ParentWatch {
                 Some(Ended {
                     exit_code: PARENT_DIED_EXIT,
                     detail: Some(format!("{}: {parent}", boop_store::trail::PARENT_DIED)),
+                    retired: false,
                 })
             }
             ParentDeathPolicy::Reparent => {
@@ -528,7 +560,9 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
         None,
         ended.detail.as_deref().unwrap_or("supervisor exited"),
     );
-    record_result(&lane, ended.exit_code, ended.detail.as_deref());
+    if !ended.retired {
+        record_result(&lane, ended.exit_code, ended.detail.as_deref());
+    }
     Ok(ended.exit_code)
 }
 
@@ -618,7 +652,33 @@ fn supervise(
     // already holds the brief.
     let mut brief_completed = lane.resume.is_some();
     let mut brief_turn_pending = lane.resume.is_none();
+    // A lane retired on the idle shutdown is revived by a send; the mail that
+    // revived it is its opening turn, never the flake nudge.
+    let revived = lane.resume.is_some()
+        && read_residency(&lane.mail_dir, &lane.lane).as_deref() == Some(RESIDENCY_RETIRED);
     let mut turn = match &lane.resume {
+        Some(conversation) if revived => {
+            info!(
+                conversation_id = conversation,
+                "lane revived from retirement"
+            );
+            println!("[boop] revived conversation {conversation}");
+            let arrived = pending(&lane.mail_dir, &lane.lane, &seen)?;
+            for hail in &arrived {
+                seen.insert(hail.id.clone());
+                record_hail_transition(events, hail, "claimed-by-supervisor", "revive");
+            }
+            opening_hails = arrived.clone();
+            if arrived.is_empty() {
+                REVIVE_TEXT.to_owned()
+            } else {
+                arrived
+                    .iter()
+                    .map(|hail| hail_text(hail, &mood))
+                    .collect::<Vec<_>>()
+                    .join("\n\n")
+            }
+        }
         Some(conversation) => {
             info!(
                 conversation_id = conversation,
@@ -897,12 +957,56 @@ fn supervise(
             let (exit_code, detail) = completion_verdict(brief_completed, &end)
                 .unwrap_or_else(|| (1, Some(end.detail().to_owned())));
             info!(exit_code, "lane supervision complete");
-            return Ok(Ended { exit_code, detail });
+            return Ok(Ended {
+                exit_code,
+                detail,
+                retired: false,
+            });
         }
         if held.is_empty() {
             record_residency(&lane.mail_dir, &lane.lane, RESIDENCY_IDLE);
             println!("[boop] lane idle, parked on the mailbox");
+            let parked_at = std::time::Instant::now();
+            let shutdown = idle_shutdown().filter(|_| result_written);
             loop {
+                if let Some(limit) = shutdown.filter(|limit| parked_at.elapsed() >= *limit) {
+                    let secs = limit.as_secs();
+                    info!(lane = lane.lane, idle_secs = secs, "lane idle shutdown");
+                    println!("[boop] no mail for {secs}s after the result row; retiring");
+                    if let Err(error) = channel.close() {
+                        warn!(lane = lane.lane, error = %error, "close on idle shutdown failed");
+                    }
+                    record_residency(&lane.mail_dir, &lane.lane, RESIDENCY_RETIRED);
+                    let conversation = channel.conversation_id().unwrap_or_default();
+                    mail_to_parent_kind(
+                        lane,
+                        "note",
+                        format!(
+                            "lane {} retired: idle {secs}s after its result row; \
+                             `boop beep {} <body>` revives conversation {conversation}",
+                            lane.lane, lane.lane
+                        ),
+                        Some(RESIDENCY_RETIRED),
+                    );
+                    events.record(
+                        "idle-shutdown",
+                        TraceRecorder::session(channel),
+                        None,
+                        Some(boop_acp::channel::now_ms()),
+                        None,
+                        Some("retired"),
+                        None,
+                        None,
+                        "lane retired on idle shutdown",
+                    );
+                    let (exit_code, detail) = completion_verdict(brief_completed, &end)
+                        .unwrap_or_else(|| (1, Some(end.detail().to_owned())));
+                    return Ok(Ended {
+                        exit_code,
+                        detail,
+                        retired: true,
+                    });
+                }
                 if let Some(ended) = watch.probe(lane, boop_store::tmux::mux()) {
                     if let Err(error) = channel.close() {
                         warn!(lane = lane.lane, error = %error, "close while parked failed");
@@ -1504,12 +1608,18 @@ fn remember_conversation(lane: &LaneRun, channel: &dyn LaneChannel) {
 /// The conversation id a previous supervisor pinned for this lane, if any.
 /// Read by the cold-restart path so a respawn continues instead of restarting.
 pub fn pinned_conversation(dir: &Path, lane: &str) -> Option<String> {
-    bus::read_routes(dir).ok()?.get(lane)?.session_id.clone()
+    bus::read_routes(dir)
+        .ok()
+        .and_then(|routes| routes.get(lane)?.session_id.clone())
+        .or_else(|| boop_store::trail::read_conversation(lane))
 }
 
 /// Write the harness's own conversation id onto the lane's registry route so a
 /// later resume finds it without a transcript scan.
 fn record_conversation(dir: &Path, lane: &str, conversation: &str) {
+    if let Err(error) = boop_store::trail::write_conversation(lane, conversation) {
+        warn!(lane, conversation_id = conversation, error = %error, "conversation trail write failed");
+    }
     let path = dir.join("registry.json");
     let lane = lane.to_owned();
     let conversation = conversation.to_owned();
@@ -1609,6 +1719,20 @@ mod tests {
     // FAIL-PRE-FIX: a respawned supervisor had no route read-back, so every
     // cold restart opened a fresh session with the full brief.
     #[test]
+    fn the_idle_shutdown_defaults_to_one_minute_and_zero_disables_it() {
+        assert_eq!(parse_idle_shutdown(None), Some(Duration::from_secs(60)));
+        assert_eq!(
+            parse_idle_shutdown(Some("45")),
+            Some(Duration::from_secs(45))
+        );
+        assert_eq!(parse_idle_shutdown(Some("0")), None);
+        assert_eq!(
+            parse_idle_shutdown(Some("x")),
+            Some(Duration::from_secs(60))
+        );
+    }
+
+    #[test]
     fn a_supervisor_whose_own_pane_is_gone_ends_the_lane() {
         let dir = tempdir();
         let lane = LaneRun {
@@ -1634,14 +1758,22 @@ mod tests {
 
     #[test]
     fn a_pinned_conversation_round_trips_through_the_registry_route() {
+        // HOME is process-wide in this test binary and the trail copy lives
+        // under it, so the lane name is unique to this test.
         let dir = tempdir();
-        assert_eq!(pinned_conversation(&dir, "mine"), None);
-        record_conversation(&dir, "mine", "ses_route_1");
+        assert_eq!(pinned_conversation(&dir, "pinned-round-trip"), None);
+        record_conversation(&dir, "pinned-round-trip", "ses_route_1");
         assert_eq!(
-            pinned_conversation(&dir, "mine").as_deref(),
+            pinned_conversation(&dir, "pinned-round-trip").as_deref(),
             Some("ses_route_1")
         );
-        assert_eq!(pinned_conversation(&dir, "other"), None);
+        // The trail copy answers when the route is gone.
+        std::fs::remove_file(dir.join("registry.json")).ok();
+        assert_eq!(
+            pinned_conversation(&dir, "pinned-round-trip").as_deref(),
+            Some("ses_route_1")
+        );
+        assert_eq!(pinned_conversation(&dir, "pinned-other"), None);
     }
 
     #[test]

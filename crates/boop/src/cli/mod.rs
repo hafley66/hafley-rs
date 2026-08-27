@@ -141,6 +141,17 @@ COMPLETION: the supervisor writes ONE row `lane <id> done rc=<n>` into the
     boop wait <lane> [--wait-timeout <s>]
   A wait whose lane route goes dead with no row exits 3 instead of blocking.
 
+RETIRE + REVIVE: a lane whose result row is written and then sees no mail for
+  BOOP_IDLE_SHUTDOWN_SECS (default 60; 0 disables) closes its harness and
+  exits with the rc it already mailed; residency reads `retired` and the
+  parent gets one `note` row. Nothing is lost: the conversation id is pinned
+  in ~/.agent/lanes/<lane>/conversation and the exact spawn in spawn.json.
+    boop beep <lane> <body>
+  to a retired lane replays that spawn, re-registers the route, resumes the
+  pinned conversation, waits up to 60 s for the supervisor to report live,
+  and hands it the body as its opening turn. The send's wait then ends on the
+  lane's next yield or result row, the same rows its parent reads.
+
 DEBUG: what just went wrong, without opening a log:
     boop debug [--since 2m] [--lane <id>] [--json]
   The WARN/ERROR tail of every ~/.agent/lanes/<lane>/supervise.log plus the
