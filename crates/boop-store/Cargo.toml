@@ -24,7 +24,7 @@ clap = ["dep:clap"]
 # so the one enum carries its own value list.
 clap = { version = "4", features = ["derive"], optional = true }
 # The tmux multiplexer seam: one trait, one implementation, in its own crate.
-boop-mux = { version = "0.0.8", path = "../boop-mux" }
+boop-mux = { version = "0.0.9", path = "../boop-mux" }
 # The transcripts are JSONL; this is the credible reader.
 serde = { version = "1", features = ["derive"] }
 # preserve_order: a row's column order is its SELECT order, so `--format text`

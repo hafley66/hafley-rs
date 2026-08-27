@@ -4,9 +4,12 @@ all notable changes to `boop` and `boop-mux` are recorded here. versions follow 
 
 ## unreleased
 
+## [0.0.9] - 2026-08-27
+
 ### Added
 
 - *(lane)* idle shutdown: a lane with its result row written and no mail for `BOOP_IDLE_SHUTDOWN_SECS` (default 60, 0 disables) closes its harness and exits; residency `retired`, one `note` row to the parent
+- *(boop)* `boop beep lane list` shows retired lanes with their revive spelling; `--state retired`
 - *(lane)* revive on send: `boop beep <lane> <body>` to a retired lane replays `~/.agent/lanes/<lane>/spawn.json`, re-registers the route, resumes the pinned conversation (`~/.agent/lanes/<lane>/conversation`) and delivers the body as the opening turn; the send's wait ends on the lane's next yield or result row
 
 ### Changed
