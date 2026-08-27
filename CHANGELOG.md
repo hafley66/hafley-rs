@@ -4,6 +4,10 @@ all notable changes to `boop` and `boop-mux` are recorded here. versions follow 
 
 ## unreleased
 
+### Changed
+
+- *(boop)* `boop --help` carries the whole primer: READ, FAVORITE, ME, SHELL, IDENTITY, PRESETS, LAWS, BUILD sections; every subcommand is visible except `beep lane run` (supervisor entry) and the dl6-gated `concatmap`
+
 ## [0.0.8] - 2026-08-27
 
 ### Fixed

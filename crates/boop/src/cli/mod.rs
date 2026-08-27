@@ -259,7 +259,81 @@ SQL: the store is SQLite at ~/.agent/boop.db; `boop db \"<sql>\"` queries it
   passthrough takes plain SQL only.
 
 BOOP_NO_SYNC=1 in the environment skips the startup transcript sync for every
-  verb, so a read hits the store as it stands instead of paying a cold sync.",
+  verb, so a read hits the store as it stands instead of paying a cold sync.
+
+READ: the questions agents ask most, each one verb, no SQL and no schema probe:
+    boop db search <text> [--days 7] [--harness H] [--limit 50]   who said X
+    boop db sessions [--days 7] [--harness H]   what ran where: id, harness,
+                                                cwd, branch, turns, last_ts
+    boop db lanes [--days 7]                    spawns with model, branch,
+                                                parent, goal, result rc+detail
+    boop db mail <route> [--kind result]        one route's inbox and outbox
+    boop db schema                              every table with its columns
+    boop db status [--window <min>]             who is alive and what it cost
+    boop db usage burn-rate                     tokens/min, dollars/hour
+    boop db price list                          the model price table
+  `--format text` prints tab-separated rows; the default is NDJSON. Every
+  text column in the store is an id into a `dict_*` table (`agent_turn` holds
+  `role_id`, `session_id`, and its text in `said`); the verbs above do those
+  joins so a hand-written query is the exception.
+
+FAVORITE: pin markdown you want to keep, read it back later:
+    boop me favorite -1 --note <why>      the newest assistant turn of the
+      caller's own conversation; -2 is the one before, and -1 is the default
+    boop db favorite add --file <md> [--note <why>] [--source <text>]
+    boop db favorite list --limit 10 --format text
+    boop db favorite show <id>
+    boop db favorite edit <id> --note <why>
+    boop db favorite delete <id>
+  `me` resolves the caller from BOOP_SESSION, so run it inside the pane whose
+  turn you want. Bodies dedupe through markdown_cache and are immutable; note
+  and source are editable.
+
+ME: the caller's own conversation.
+    boop me mood [--as <name>]        the mood template hails render with
+    boop me favorite -1               see FAVORITE
+
+SHELL: `eval \"$(boop shell-init bash)\"` defines codex, claude, ccz, kimi and
+  opencode as functions that run `boop tui <harness> --cwd $PWD -- \"$@\"`,
+  registering the pane. Outside tmux (no TMUX_PANE) each function runs the bare
+  binary. Every wrapped TUI logs to ~/.agent/lanes/<harness>-<pane>/supervise.log
+  and never into its own screen. `codex resume` with no id opens the picker.
+
+IDENTITY: two rungs only: `--as <name>`, then the BOOP_SESSION env stamp.
+  `boop tui` writes the stamp; a session that predates it passes
+  BOOP_SESSION=<name> on spawns or `--as` on every verb. A native subagent
+  shares its spawner's process, so the stamp names the spawner:
+    boop beep agent register <name> --parent <route>
+  prints the instruction; every verb the native runs carries `--as <name>`.
+  A bare `wait --me` under a lane stamp with live native children is refused
+  with the candidates listed. `boop whoami` prints which rung named you.
+
+PRESETS: model spelling is presets only; `boop config presets` lists name,
+  harness, model, effort, bin. Lane defaults: flash4 or pro4; luna for codex
+  (sol only on an explicit ask); k3 for kimi; glm53 for claude through z.ai
+  (bin ccz). The codex/gpt, claude and gemini families through opencode are
+  refused at spawn: each has a flat-rate harness and opencode bills them metered.
+
+LAWS:
+  1 Every lane spawn goes through `lane create`; a bare tmux spawn leaves no
+    edge and no tracking.
+  2 Claude-model workers on the user's own plan are the coordinator's native
+    subagents (Agent tool). Lanes are for opencode, codex, kimi and ccz.
+  3 A lane can die silently. Liveness is TWO checks: `boop beep ps <lane>`
+    AND `git -C <worktree> status --short`. A REPORT.md alone proves nothing.
+  4 Give each lane its own CARGO_TARGET_DIR; shared target dirs race.
+  5 A brief never writes an absolute `cd` to the primary checkout; the lane
+    works in $PWD, its worktree.
+  6 `lane delete --state dead` removes each dead lane's own worktree and
+    nothing above it; `--dry-run` first. Nothing in boop runs rm -rf on
+    .boop-worktrees.
+  7 `boop beep message ack` proves a read at best, never compliance.
+  8 Codex native subagents need sandbox_mode=danger-full-access plus ACP
+    session mode agent-full-access, or their boop calls cannot write the mail
+    dir or .git/worktrees.
+
+BUILD: hafley-rs crates/boop; `cargo install --path crates/boop --force` from
+  main installs ~/.cargo/bin/boop. `boop --version` prints version and sha.",
         version = ident::SCHEMA_VERSION
     )
 }

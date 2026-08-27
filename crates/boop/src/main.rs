@@ -210,7 +210,6 @@ enum SubCmd {
     /// Typed stdin/stdout host boundary for compiled DL6 programs.
     /// Folded (comment-out-dl6-verbs): DL6, off by default.
     #[cfg(feature = "dl6")]
-    #[command(hide = true)]
     Host {
         #[command(subcommand)]
         cmd: HostCmd,
@@ -247,14 +246,12 @@ enum SubCmd {
     /// Folded (door-only-claude-delivery): the hook inbox is a rung the
     /// delivery ladder walks on its own, not a verb a caller reaches for. The
     /// installed hook still calls `boop inbox drain`, so the group runs.
-    #[command(hide = true)]
     Inbox {
         #[command(subcommand)]
         cmd: InboxCmd,
     },
     /// The caller's own mood and favorite messages, the only verb for either.
     /// Registering a pane is `boop tui` / `boop beep agent register` now.
-    #[command(hide = true)]
     Me {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
@@ -815,7 +812,6 @@ enum BeepCmd {
         cmd: AgentCmd,
     },
     /// Mail across lanes; the one verb `ack` has no other spelling.
-    #[command(hide = true)]
     Message {
         #[command(subcommand)]
         cmd: MessageCmd,
@@ -831,7 +827,6 @@ enum BeepCmd {
     },
     /// Filesystem-style tree of lanes by parent edge.
     /// Folded (audit 2026-08-25): `beep lane list` carries the parent column.
-    #[command(hide = true)]
     Pstree {
         /// Include dead lanes; default is live-only.
         #[arg(long)]
@@ -1060,7 +1055,6 @@ enum LaneCmd {
     },
     /// Which tmux pane and harness session id.
     /// Folded (audit 2026-08-25): `beep lane get` prints the same route row.
-    #[command(hide = true)]
     Route {
         lane: String,
         #[arg(long)]
@@ -1220,7 +1214,6 @@ enum InboxCmd {
 enum MessageCmd {
     /// Mark mail handled, in bulk.
     /// Folded (audit 2026-08-25): age-based bulk-mark proves no read and no compliance.
-    #[command(hide = true)]
     Ack {
         #[arg(long)]
         lane: Option<String>,
@@ -1240,7 +1233,6 @@ enum DbCmd {
     /// Versioned CASS-compatible agent/runtime/activity summary. CASS issue,
     /// reservation, and provider records are separate contracts.
     #[cfg(feature = "agent-read")]
-    #[command(hide = true)]
     AgentSummary {
         #[arg(long, value_enum, default_value_t = AgentSummaryFormat::Json)]
         format: AgentSummaryFormat,
@@ -1250,14 +1242,12 @@ enum DbCmd {
     /// Rows from `agent_session`: one row per transcript session.
     #[cfg(feature = "agent-read")]
     /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_session"` answers it.
-    #[command(hide = true)]
     Session {
         #[command(subcommand)]
         cmd: SessionCmd,
     },
     /// Rows from `agent_turn`: one row per user/assistant turn.
     /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_turn"` answers it.
-    #[command(hide = true)]
     Turn {
         #[command(subcommand)]
         cmd: TurnCmd,
@@ -1270,7 +1260,6 @@ enum DbCmd {
     /// Rows from `agent_touch`: files a session read or edited.
     #[cfg(feature = "agent-read")]
     /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_touch"` answers it.
-    #[command(hide = true)]
     Touch {
         #[command(subcommand)]
         cmd: FactCmd,
@@ -1278,7 +1267,6 @@ enum DbCmd {
     /// Rows from `agent_cmd`: shell commands a session ran.
     #[cfg(feature = "agent-read")]
     /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_cmd"` answers it.
-    #[command(hide = true)]
     Command {
         #[command(subcommand)]
         cmd: FactCmd,
@@ -1286,7 +1274,6 @@ enum DbCmd {
     /// Rows from `agent_fetch`: URLs a session fetched.
     #[cfg(feature = "agent-read")]
     /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_fetch"` answers it.
-    #[command(hide = true)]
     Fetch {
         #[command(subcommand)]
         cmd: FactCmd,
@@ -1294,7 +1281,6 @@ enum DbCmd {
     /// Rows from `agent_skill`: skills a session invoked.
     #[cfg(feature = "agent-read")]
     /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_skill"` answers it.
-    #[command(hide = true)]
     Skill {
         #[command(subcommand)]
         cmd: FactCmd,
@@ -1302,7 +1288,6 @@ enum DbCmd {
     /// Rows from `agent_pr`: pull requests a session touched.
     #[cfg(feature = "agent-read")]
     /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_pr"` answers it.
-    #[command(hide = true)]
     Pr {
         #[command(subcommand)]
         cmd: FactCmd,
@@ -1310,14 +1295,12 @@ enum DbCmd {
     /// Rows from `agent_span`: live time spans a session recorded.
     #[cfg(feature = "agent-read")]
     /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_span"` answers it.
-    #[command(hide = true)]
     Span {
         #[command(subcommand)]
         cmd: FactCmd,
     },
     /// Rows from `agent_edge`: parent/child spawn edges between sessions.
     /// Folded (audit 2026-08-25): one-table dump; `boop db "SELECT * FROM agent_edge"` answers it.
-    #[command(hide = true)]
     Edge {
         #[command(subcommand)]
         cmd: EdgeCmd,
@@ -1327,7 +1310,6 @@ enum DbCmd {
     /// to accept the two forms.
     #[cfg(feature = "agent-read")]
     #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
-    #[command(hide = true)]
     Usage {
         #[command(flatten)]
         args: UsageArgs,
@@ -1339,14 +1321,12 @@ enum DbCmd {
     },
     /// The rate table cost is computed from.
     #[cfg(feature = "agent-read")]
-    #[command(hide = true)]
     Price {
         #[command(subcommand)]
         cmd: PriceCmd,
     },
     /// User-pinned markdown: save a message you want to keep, read it back.
     #[cfg(feature = "agent-read")]
-    #[command(hide = true)]
     Favorite {
         #[command(subcommand)]
         cmd: FavoriteCmd,
@@ -1358,7 +1338,6 @@ enum DbCmd {
     },
     /// How far ingest has read each transcript.
     #[cfg(feature = "agent-read")]
-    #[command(hide = true)]
     SyncCursor {
         #[command(subcommand)]
         cmd: CursorCmd,
@@ -1992,9 +1971,8 @@ mod tests {
         );
     }
 
-    /// RECEIPT (db-four-verbs, widened 2026-08-27): `usage`, `price`,
-    /// `favorite`, `sync-cursor` hidden; `sql`, `chat`, `lanes`, `mail`,
-    /// `schema`, `search`, `sessions`, `status`, `sync` are what the reader sees.
+    /// RECEIPT (everything-in-help, user-set 2026-08-27): every db verb is
+    /// visible; nothing under `db` hides from `--help`.
     #[test]
     fn db_help_lists_the_read_verbs_besides_the_sql_passthrough() {
         let db = DbCmd::augment_subcommands(clap::Command::new("db"));
@@ -2005,10 +1983,33 @@ mod tests {
             .collect();
         assert_eq!(
             visible,
-            ["chat", "lanes", "mail", "schema", "search", "sessions", "status", "sync"]
-                .into_iter()
-                .map(str::to_owned)
-                .collect(),
+            [
+                "agent-summary",
+                "chat",
+                "command",
+                "edge",
+                "favorite",
+                "fetch",
+                "lanes",
+                "mail",
+                "pr",
+                "price",
+                "schema",
+                "search",
+                "session",
+                "sessions",
+                "skill",
+                "span",
+                "status",
+                "sync",
+                "sync-cursor",
+                "touch",
+                "turn",
+                "usage",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
             "boop db --help subcommands: {visible:?}"
         );
     }
