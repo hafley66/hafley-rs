@@ -1945,10 +1945,11 @@ mod tests {
         );
     }
 
-    /// RECEIPT (db-four-verbs): `usage`, `price`, `favorite`, `sync-cursor`
-    /// hidden; `sql`, `chat`, `status`, `sync` are the four the reader sees.
+    /// RECEIPT (db-four-verbs, widened 2026-08-27): `usage`, `price`,
+    /// `favorite`, `sync-cursor` hidden; `sql`, `chat`, `search`, `schema`,
+    /// `status`, `sync` are what the reader sees.
     #[test]
-    fn db_help_lists_exactly_chat_status_sync_besides_the_sql_passthrough() {
+    fn db_help_lists_exactly_chat_search_schema_status_sync_besides_the_sql_passthrough() {
         let db = DbCmd::augment_subcommands(clap::Command::new("db"));
         let visible: std::collections::BTreeSet<String> = db
             .get_subcommands()
@@ -1957,7 +1958,7 @@ mod tests {
             .collect();
         assert_eq!(
             visible,
-            ["chat", "status", "sync"]
+            ["chat", "schema", "search", "status", "sync"]
                 .into_iter()
                 .map(str::to_owned)
                 .collect(),
