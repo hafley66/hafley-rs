@@ -4,6 +4,12 @@ all notable changes to `boop` and `boop-mux` are recorded here. versions follow 
 
 ## unreleased
 
+## [0.0.8] - 2026-08-27
+
+### Fixed
+
+- *(lane)* the signal handler leaves through `_exit` after writing the result row; `process::exit` from the handler thread deadlocked and left every SIGHUP-killed supervisor alive
+
 ## [0.0.7] - 2026-08-27
 
 ### Added
