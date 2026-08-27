@@ -385,7 +385,6 @@ fn getrandom_bytes(out: &mut [u8]) {
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // the sqlite mailbox
 // ---------------------------------------------------------------------------
@@ -551,7 +550,10 @@ fn outranks(held: Option<&Route>, incoming: &Route) -> bool {
     let Some(held) = held else {
         return false;
     };
-    match (held.registered_at.as_deref(), incoming.registered_at.as_deref()) {
+    match (
+        held.registered_at.as_deref(),
+        incoming.registered_at.as_deref(),
+    ) {
         (Some(held_at), Some(new_at)) => held_at >= new_at,
         (Some(_), None) => true,
         _ => false,
@@ -1074,10 +1076,17 @@ mod tests {
         use std::io::Write;
         let dir = temp_dir("tail");
         let path = dir.join("bus.ndjson");
-        std::fs::write(&path, format!("{}\n", super::message_line(&send("m-tail01")))).unwrap();
+        std::fs::write(
+            &path,
+            format!("{}\n", super::message_line(&send("m-tail01"))),
+        )
+        .unwrap();
         assert_eq!(super::read_messages(&dir).unwrap().len(), 1);
 
-        let mut file = std::fs::OpenOptions::new().append(true).open(&path).unwrap();
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap();
         for id in ["m-tail02", "m-tail03"] {
             writeln!(file, "{}", super::message_line(&send(id))).unwrap();
         }
@@ -1086,7 +1095,11 @@ mod tests {
         assert_eq!(after_append.len(), 3, "the tail brought exactly two rows");
 
         let store = super::open_store(&dir).unwrap();
-        assert_eq!(super::messages_in(&store).unwrap().len(), 3, "no fourth read");
+        assert_eq!(
+            super::messages_in(&store).unwrap().len(),
+            3,
+            "no fourth read"
+        );
         let mark: i64 = store
             .connection()
             .query_row(
@@ -1124,7 +1137,10 @@ mod tests {
         std::fs::write(&path, format!("{whole}\n{}", &half[..half.len() / 2])).unwrap();
         assert_eq!(super::read_messages(&dir).unwrap().len(), 1);
 
-        let mut file = std::fs::OpenOptions::new().append(true).open(&path).unwrap();
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap();
         write!(file, "{}\n", &half[half.len() / 2..]).unwrap();
         drop(file);
         let rows = super::read_messages(&dir).unwrap();
@@ -1144,7 +1160,9 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            super::read_routes(&dir).unwrap()["route-outrank"].goal.as_deref(),
+            super::read_routes(&dir).unwrap()["route-outrank"]
+                .goal
+                .as_deref(),
             Some("old")
         );
         let store = super::open_store(&dir).unwrap();
@@ -1160,7 +1178,9 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            super::read_routes(&dir).unwrap()["route-outrank"].goal.as_deref(),
+            super::read_routes(&dir).unwrap()["route-outrank"]
+                .goal
+                .as_deref(),
             Some("new"),
             "the stale file must not roll the route back"
         );

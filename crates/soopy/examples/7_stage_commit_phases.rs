@@ -18,8 +18,13 @@ const PRODUCER: &str = "soopy.example.stage_commit_phases";
 
 fn main() {
     hafley_observe::init(
-        hafley_observe::Config::from_env("soopy-phases", env!("CARGO_PKG_VERSION"), "soopy=debug", false)
-            .expect("log format"),
+        hafley_observe::Config::from_env(
+            "soopy-phases",
+            env!("CARGO_PKG_VERSION"),
+            "soopy=debug",
+            false,
+        )
+        .expect("log format"),
     )
     .expect("observability");
 

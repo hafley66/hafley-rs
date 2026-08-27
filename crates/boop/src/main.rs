@@ -384,7 +384,10 @@ fn main() -> Result<()> {
         return cli::acpx::run_foreground(preset, cli.name.as_deref(), cli.mail_dir.as_deref());
     }
     let command = cli.command.context("a command or --preset is required")?;
-    init_tracing(supervised_lane(&command))?;
+    match &command {
+        SubCmd::Tui { harness, .. } => init_tracing(tui_trail(harness).as_deref(), true)?,
+        _ => init_tracing(supervised_lane(&command), false)?,
+    }
     let registry = Registry::discover();
     let needs_startup_sync = startup_sync_wanted(&command, sync_suppressed());
     run_with_startup_sync(
@@ -735,14 +738,30 @@ fn run_with_startup_sync<T>(
 ///
 /// A lane supervisor also writes every event to `~/.agent/lanes/<lane>/supervise.log`:
 /// the pane it logs to can be killed, and its scrollback goes with it.
-fn init_tracing(lane: Option<&str>) -> Result<()> {
+fn init_tracing(lane: Option<&str>, pane_owned: bool) -> Result<()> {
     let lane_log = lane.and_then(|lane| boop::trail::open(lane, boop::trail::SUPERVISE_LOG));
     // The file copy carries no escape codes; the pane keeps its colours only
     // when there is no file to share the formatter with.
     let ansi = lane_log.is_none();
     let config = hafley_observe::Config::from_env("boop", boop::BUILD, "info", ansi)?;
-    hafley_observe::init_with_writer(config, boop::trail::lane_writer(lane_log))
+    // A native TUI owns the pane; any event written to stderr lands inside
+    // its screen, so the trail file is the only sink.
+    let writer = if pane_owned {
+        boop::trail::file_writer(lane_log)
+    } else {
+        boop::trail::lane_writer(lane_log)
+    };
+    hafley_observe::init_with_writer(config, writer)
         .map_err(|error| anyhow::anyhow!("initialise tracing subscriber: {error}"))
+}
+
+/// The trail name a `boop tui` run logs under: the same `<harness>-<pane>`
+/// route name `run_native_tui` registers.
+fn tui_trail(harness: &str) -> Option<String> {
+    let pane = std::env::var("TMUX_PANE")
+        .ok()
+        .filter(|pane| !pane.is_empty())?;
+    Some(format!("{harness}-{}", pane.trim_start_matches('%')))
 }
 
 /// The lane this invocation supervises, which is the only verb whose whole run

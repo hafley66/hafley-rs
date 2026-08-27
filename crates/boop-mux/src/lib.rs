@@ -793,8 +793,7 @@ mod tests {
             return;
         }
         let name = session_name();
-        let result =
-            mux().new_detached_session(Some("/nonexistent/sock"), &name, "/tmp", "true");
+        let result = mux().new_detached_session(Some("/nonexistent/sock"), &name, "/tmp", "true");
         let err = result.expect_err("an unreachable socket must not report a dispatched lane");
         let message = err.to_string();
         assert!(

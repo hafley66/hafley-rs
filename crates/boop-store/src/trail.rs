@@ -118,6 +118,15 @@ pub fn lane_writer(lane_log: Option<File>) -> BoxMakeWriter {
     }
 }
 
+/// The writer for a process whose pane belongs to a native TUI: the trail
+/// file alone, or nothing when no trail could be opened.
+pub fn file_writer(lane_log: Option<File>) -> BoxMakeWriter {
+    match lane_log {
+        Some(file) => BoxMakeWriter::new(Mutex::new(file)),
+        None => BoxMakeWriter::new(std::io::sink),
+    }
+}
+
 /// The `detail` a parent-death kill writes ahead of the parent's name, read
 /// back by `dead_reason` as a typed variant rather than as free text.
 pub const PARENT_DIED: &str = "parent-died";

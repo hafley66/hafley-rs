@@ -106,12 +106,16 @@ impl OpencodeDoor {
 
     /// `POST /session` for `directory`; the id of the session the server made.
     fn create_session(&self, base: &Url, cwd: &std::path::Path) -> Result<String> {
-        let url = base.join("session")?;
-        let payload = serde_json::json!({ "directory": cwd });
+        // The server reads the directory from the query string only; a
+        // `directory` field in the body is ignored and the session lands in
+        // the server's own cwd.
+        let mut url = base.join("session")?;
+        url.query_pairs_mut()
+            .append_pair("directory", &cwd.display().to_string());
         let mut response = agent(READ_TIMEOUT)
             .post(url.as_str())
             .header("content-type", "application/json")
-            .send(serde_json::to_string(&payload)?)
+            .send("{}")
             .context("opencode POST /session")?;
         let text = response.body_mut().read_to_string()?;
         let value: serde_json::Value =
@@ -292,6 +296,10 @@ impl Door for OpencodeDoor {
             base.as_str().into(),
             "--session".into(),
             session.clone().into(),
+            // The shared server keeps the cwd it was started in; without
+            // `--dir` the TUI runs there instead of in this pane's directory.
+            "--dir".into(),
+            spec.cwd.as_os_str().to_owned(),
         ];
         args.extend(spec.args.iter().map(std::ffi::OsString::from));
         Ok(NativeTuiPlan {

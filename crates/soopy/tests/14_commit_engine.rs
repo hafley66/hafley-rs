@@ -586,7 +586,11 @@ fn journal_and_receipt_tampering_are_refused() {
 
 fn seed_mirror(root: &std::path::Path) {
     for index in 0..8 {
-        fs::write(root.join(format!("file-{index}.txt")), format!("body {index}\n")).unwrap();
+        fs::write(
+            root.join(format!("file-{index}.txt")),
+            format!("body {index}\n"),
+        )
+        .unwrap();
     }
 }
 
@@ -670,29 +674,21 @@ fn dry_run_commit_matches_the_durable_commit_on_the_same_request() {
     let durable_stage = soopy::show_stage(&durable_store, durable_sealed.id)
         .unwrap()
         .unwrap();
-    let durable_engine =
-        CommitEngine::open(&durable_root, durable_state.join("commits")).unwrap();
+    let durable_engine = CommitEngine::open(&durable_root, durable_state.join("commits")).unwrap();
     assert_eq!(durable_engine.durability(), soopy::Durability::Durable);
     let durable_receipt = durable_engine.commit(&durable_stage).unwrap();
 
     let mut dry_run_source = SourceRoot::open_directory(&dry_run_root).unwrap();
     let dry_run_request = dry_run_actions(&dry_run_root);
     let mut dry_run_store = InMemoryStageStore::new();
-    let dry_run_sealed = soopy::stage_mutations(
-        &mut dry_run_source,
-        &dry_run_request,
-        &mut dry_run_store,
-    )
-    .unwrap();
+    let dry_run_sealed =
+        soopy::stage_mutations(&mut dry_run_source, &dry_run_request, &mut dry_run_store).unwrap();
     let dry_run_stage = soopy::show_stage(&dry_run_store, dry_run_sealed.id)
         .unwrap()
         .unwrap();
     let dry_run_engine =
         CommitEngine::open_dry_run(&dry_run_root, dry_run_state.join("commits")).unwrap();
-    assert_eq!(
-        dry_run_engine.durability(),
-        soopy::Durability::DryRun
-    );
+    assert_eq!(dry_run_engine.durability(), soopy::Durability::DryRun);
     let dry_run_receipt = dry_run_engine.commit(&dry_run_stage).unwrap();
 
     assert_eq!(durable_stage.previews, dry_run_stage.previews);
@@ -711,12 +707,7 @@ fn dry_run_commit_matches_the_durable_commit_on_the_same_request() {
     let replay = dry_run_engine.commit(&dry_run_stage).unwrap();
     assert_eq!(replay.operations, dry_run_receipt.operations);
 
-    for directory in [
-        durable_root,
-        durable_state,
-        dry_run_root,
-        dry_run_state,
-    ] {
+    for directory in [durable_root, durable_state, dry_run_root, dry_run_state] {
         let _ = fs::remove_dir_all(directory);
     }
 }

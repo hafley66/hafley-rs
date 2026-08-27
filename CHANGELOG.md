@@ -4,6 +4,11 @@ all notable changes to `boop` and `boop-mux` are recorded here. versions follow 
 
 ## unreleased
 
+### Fixed
+
+- *(opencode)* `boop tui opencode` creates its session with `?directory=<cwd>` and attaches with `--dir <cwd>`; the server ignored `directory` in the POST body, so every TUI landed in the server's own cwd
+- *(boop)* `boop tui` tracing writes only to `~/.agent/lanes/<harness>-<pane>/supervise.log`; WARN lines no longer print inside the native TUI's screen
+
 ## [0.0.6] - 2026-08-26
 
 ### Fixed
