@@ -135,7 +135,7 @@ pub fn parent_policy(dir: &Path, lane: &str) -> ParentDeathPolicy {
 
 /// The lane-to-residency map beside the registry. A lane this file has never
 /// heard of falls back to tmux-only liveness.
-const RESIDENCY_FILE: &str = "lane-residency.json";
+pub const RESIDENCY_FILE: &str = "lane-residency.json";
 
 /// One lane's residency between `lane list`'s `live` and `dead`: mid-turn, or
 /// parked waiting on its mailbox. Dead is a tmux fact, never written here.

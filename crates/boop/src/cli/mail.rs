@@ -612,6 +612,15 @@ fn lane_turn_end(rows: &[bus::Message], lane: &str, id: &str) -> Option<bus::Mes
         .cloned()
 }
 
+/// Whether the residency file was rewritten after `since`: the revived
+/// supervisor's own report, as opposed to the retired state it left behind.
+fn residency_written_since(dir: &Path, since: std::time::SystemTime) -> bool {
+    std::fs::metadata(dir.join(boop::supervise::RESIDENCY_FILE))
+        .and_then(|meta| meta.modified())
+        .map(|modified| modified >= since)
+        .unwrap_or(false)
+}
+
 /// How long a send waits for a revived lane's supervisor to come up.
 const REVIVE_WAIT: std::time::Duration = std::time::Duration::from_secs(60);
 
@@ -658,20 +667,35 @@ pub(crate) fn revive_if_retired(
         &spawn.cwd,
         &spawn.command,
     )?;
+    let spawned_at = std::time::SystemTime::now();
     let deadline = std::time::Instant::now() + REVIVE_WAIT;
     while std::time::Instant::now() < deadline {
-        if boop::supervise::read_residency(dir, name).as_deref()
-            == Some(boop::supervise::RESIDENCY_LIVE)
+        // `live` is the supervisor's first turn; `idle` means it already ran
+        // the opening turn and parked. A fast harness reaches `idle` before
+        // this loop wakes.
+        let residency = boop::supervise::read_residency(dir, name);
+        let reported = residency_written_since(dir, spawned_at);
+        if reported
+            && matches!(
+                residency.as_deref(),
+                Some(boop::supervise::RESIDENCY_LIVE) | Some(boop::supervise::RESIDENCY_IDLE)
+            )
         {
             println!("revived {name}");
             return Ok(Some(revived));
         }
         if !tmux::mux().target_alive(spawn.socket.as_deref(), &spawn.tmux) {
+            // Ran the opening turn and retired again before this poll: the
+            // body was delivered, which is all the send needs.
+            if reported {
+                println!("revived {name} (ran its turn and retired again)");
+                return Ok(Some(revived));
+            }
             anyhow::bail!(
                 "revive of {name} died before its supervisor reported live; `boop debug {name}`"
             );
         }
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        std::thread::sleep(std::time::Duration::from_millis(200));
     }
     anyhow::bail!(
         "revive of {name} did not report live within {REVIVE_WAIT:?}; `boop debug {name}`"
