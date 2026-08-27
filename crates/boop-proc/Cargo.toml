@@ -13,6 +13,7 @@ default = ["agent-read"]
 agent-read = ["boop-store/agent-read"]
 
 [dependencies]
+libc = "0.2"
 # The lane channel the supervisor drives.
 boop-acp = { version = "0.0.2", path = "../boop-acp" }
 # The per-harness adapters a spawn picks from, and the spawn worktree.

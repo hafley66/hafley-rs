@@ -369,6 +369,7 @@ dependencies = [
  "boop-harness",
  "boop-store",
  "dirs",
+ "libc",
  "rusqlite",
  "serde",
  "serde_json",

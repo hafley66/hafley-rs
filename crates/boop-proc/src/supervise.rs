@@ -582,7 +582,14 @@ pub fn arm_signal_trail(lane: &LaneRun) {
         // The first signal is the last: the row is written and the process
         // ends, so nothing here iterates twice.
         if let Some(signal) = signals.forever().next() {
-            std::process::exit(signal_exit(&lane, signal));
+            let code = signal_exit(&lane, signal);
+            // `std::process::exit` from this thread runs atexit and stdio
+            // cleanup that wait on locks the parked main thread holds; on
+            // 2026-08-25 38 supervisors wrote their row and then sat for two
+            // days on that exit. The row is already fsync-free on disk, so
+            // leave without unwinding anything.
+            // SAFETY: _exit is async-signal-safe and touches no Rust state.
+            unsafe { libc::_exit(code) }
         }
     });
 }
