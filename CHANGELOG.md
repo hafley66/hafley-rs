@@ -4,10 +4,13 @@ all notable changes to `boop` and `boop-mux` are recorded here. versions follow 
 
 ## unreleased
 
+## [0.0.7] - 2026-08-27
+
 ### Added
 
 - *(boop)* `boop db search <text> [--days 7] [--harness H] [--limit 50]`: turns across every harness containing the text, newest first, with session, cwd, role and a snippet
 - *(boop)* `boop db schema`: every table with its columns
+- *(boop)* `boop db sessions [--days 7] [--harness H]`, `boop db lanes [--days 7]` (with each lane's result rc), `boop db mail <route> [--kind K]`
 
 ### Fixed
 

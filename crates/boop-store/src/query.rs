@@ -493,6 +493,84 @@ impl Store {
         self.rows(&sql, values)
     }
 
+    /// Sessions across every harness that moved within the window, newest
+    /// activity first: id, harness, cwd, branch, nickname, turn count, span.
+    pub fn recent_sessions(
+        &self,
+        since_ts: u64,
+        harness: Option<&str>,
+        limit: u64,
+    ) -> Result<Vec<Row>> {
+        let mut sql = String::from(
+            "SELECT dict_session.value AS session_id, dict_harness.value AS harness,
+                    dict_cwd.value AS cwd, dict_branch.value AS branch,
+                    agent_session.nickname AS nickname,
+                    COUNT(t.turn) AS turns, agent_session.started_ts AS started_ts,
+                    MAX(t.ts) AS last_ts
+             FROM agent_session
+             JOIN dict_session ON dict_session.id = agent_session.session_id
+             JOIN dict_harness ON dict_harness.id = agent_session.harness_id
+             LEFT JOIN dict_cwd ON dict_cwd.id = agent_session.cwd_id
+             LEFT JOIN dict_branch ON dict_branch.id = agent_session.branch_id
+             LEFT JOIN agent_turn t ON t.session_id = agent_session.session_id
+             WHERE 1=1",
+        );
+        let mut values: Vec<rusqlite::types::Value> = Vec::new();
+        if let Some(harness) = harness {
+            sql.push_str(" AND dict_harness.value = ?");
+            values.push(harness.to_string().into());
+        }
+        sql.push_str(&format!(
+            " GROUP BY agent_session.session_id HAVING MAX(t.ts) >= {since_ts}
+              ORDER BY last_ts DESC LIMIT {limit}"
+        ));
+        self.rows(&sql, values)
+    }
+
+    /// Lanes spawned within the window, newest first, with the rc and detail
+    /// of their result row when one was mailed.
+    pub fn recent_lanes(&self, since_ts: u64, limit: u64) -> Result<Vec<Row>> {
+        let sql = format!(
+            "SELECT lane_name.value AS lane, dict_harness.value AS harness,
+                    dict_model.value AS model, dict_branch.value AS branch,
+                    dict_cwd.value AS cwd, parent_name.value AS parent,
+                    agent_lane.goal AS goal, agent_lane.spawned_ts AS spawned_ts,
+                    result.rc AS rc, result.detail AS detail,
+                    result.from_timestamp AS ended_at
+             FROM agent_lane
+             JOIN dict_session lane_name ON lane_name.id = agent_lane.lane_id
+             JOIN dict_harness ON dict_harness.id = agent_lane.harness_id
+             LEFT JOIN dict_model ON dict_model.id = agent_lane.model_id
+             LEFT JOIN dict_branch ON dict_branch.id = agent_lane.branch_id
+             LEFT JOIN dict_cwd ON dict_cwd.id = agent_lane.cwd_id
+             LEFT JOIN dict_session parent_name ON parent_name.id = agent_lane.parent_lane_id
+             LEFT JOIN agent_mail result
+               ON result.kind = 'result' AND result.from_route = lane_name.value
+              AND result.seq = (SELECT MAX(seq) FROM agent_mail m
+                                 WHERE m.kind = 'result' AND m.from_route = lane_name.value)
+             WHERE agent_lane.spawned_ts >= {since_ts}
+             ORDER BY agent_lane.spawned_ts DESC LIMIT {limit}"
+        );
+        self.rows(&sql, Vec::new())
+    }
+
+    /// Mail to or from one route, newest first; `kind` narrows to one kind.
+    pub fn route_mail(&self, route: &str, kind: Option<&str>, limit: u64) -> Result<Vec<Row>> {
+        let mut sql = String::from(
+            "SELECT seq, message_id, kind, from_route, to_route, from_timestamp,
+                    to_timestamp, rc, detail, substr(body, 1, 400) AS body
+             FROM agent_mail
+             WHERE (from_route = ?1 OR to_route = ?1)",
+        );
+        let mut values: Vec<rusqlite::types::Value> = vec![route.to_string().into()];
+        if let Some(kind) = kind {
+            sql.push_str(" AND kind = ?2");
+            values.push(kind.to_string().into());
+        }
+        sql.push_str(&format!(" ORDER BY seq DESC LIMIT {limit}"));
+        self.rows(&sql, values)
+    }
+
     /// Every user table with its columns, `{table, columns}` per row.
     pub fn schema_rows(&self) -> Result<Vec<Row>> {
         let tables = self.rows(

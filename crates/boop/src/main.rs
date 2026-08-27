@@ -666,6 +666,14 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
                 ..
             }
             | SubCmd::Db {
+                cmd: Some(DbCmd::Sessions { .. }),
+                ..
+            }
+            | SubCmd::Db {
+                cmd: Some(DbCmd::Lanes { .. }),
+                ..
+            }
+            | SubCmd::Db {
                 cmd: Some(DbCmd::Session { .. }),
                 ..
             }
@@ -1372,6 +1380,45 @@ enum DbCmd {
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
         format: QueryFormat,
     },
+    /// Sessions across every harness that moved in the window, newest first.
+    #[cfg(feature = "agent-read")]
+    Sessions {
+        /// Look back this many days.
+        #[arg(long, default_value_t = 7)]
+        days: u64,
+        /// Only this harness: claude, codex, kimi, opencode.
+        #[arg(long)]
+        harness: Option<String>,
+        #[arg(long, default_value_t = 50)]
+        limit: u64,
+        #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
+        format: QueryFormat,
+    },
+    /// Lanes spawned in the window, newest first, with the rc of each one's
+    /// result row.
+    #[cfg(feature = "agent-read")]
+    Lanes {
+        /// Look back this many days.
+        #[arg(long, default_value_t = 7)]
+        days: u64,
+        #[arg(long, default_value_t = 50)]
+        limit: u64,
+        #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
+        format: QueryFormat,
+    },
+    /// Mail to or from one route, newest first.
+    #[cfg(feature = "agent-read")]
+    Mail {
+        /// Lane, coordinator or native route name.
+        route: String,
+        /// Only this kind: dispatch, result, request, completion, yield, note.
+        #[arg(long)]
+        kind: Option<String>,
+        #[arg(long, default_value_t = 50)]
+        limit: u64,
+        #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
+        format: QueryFormat,
+    },
     /// Every table with its columns, so a query never starts with a probe of
     /// `sqlite_master`.
     #[cfg(feature = "agent-read")]
@@ -1946,10 +1993,10 @@ mod tests {
     }
 
     /// RECEIPT (db-four-verbs, widened 2026-08-27): `usage`, `price`,
-    /// `favorite`, `sync-cursor` hidden; `sql`, `chat`, `search`, `schema`,
-    /// `status`, `sync` are what the reader sees.
+    /// `favorite`, `sync-cursor` hidden; `sql`, `chat`, `lanes`, `mail`,
+    /// `schema`, `search`, `sessions`, `status`, `sync` are what the reader sees.
     #[test]
-    fn db_help_lists_exactly_chat_search_schema_status_sync_besides_the_sql_passthrough() {
+    fn db_help_lists_the_read_verbs_besides_the_sql_passthrough() {
         let db = DbCmd::augment_subcommands(clap::Command::new("db"));
         let visible: std::collections::BTreeSet<String> = db
             .get_subcommands()
@@ -1958,7 +2005,7 @@ mod tests {
             .collect();
         assert_eq!(
             visible,
-            ["chat", "schema", "search", "status", "sync"]
+            ["chat", "lanes", "mail", "schema", "search", "sessions", "status", "sync"]
                 .into_iter()
                 .map(str::to_owned)
                 .collect(),

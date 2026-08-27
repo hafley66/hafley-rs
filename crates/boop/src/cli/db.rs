@@ -1041,6 +1041,40 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
             );
             Ok(())
         }
+        DbCmd::Sessions {
+            days,
+            harness,
+            limit,
+            format,
+        } => {
+            let store = open_ro_store()?;
+            let since = now_ms().saturating_sub(days * 24 * 60 * 60 * 1000);
+            emit_json_rows(
+                &store.recent_sessions(since, harness.as_deref(), limit)?,
+                format,
+            );
+            Ok(())
+        }
+        DbCmd::Lanes {
+            days,
+            limit,
+            format,
+        } => {
+            let store = open_ro_store()?;
+            let since = now_ms().saturating_sub(days * 24 * 60 * 60 * 1000);
+            emit_json_rows(&store.recent_lanes(since, limit)?, format);
+            Ok(())
+        }
+        DbCmd::Mail {
+            route,
+            kind,
+            limit,
+            format,
+        } => {
+            let store = open_ro_store()?;
+            emit_json_rows(&store.route_mail(&route, kind.as_deref(), limit)?, format);
+            Ok(())
+        }
         DbCmd::Schema { format } => {
             let store = open_ro_store()?;
             emit_json_rows(&store.schema_rows()?, format);

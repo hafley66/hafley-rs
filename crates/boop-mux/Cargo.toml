@@ -1,6 +1,6 @@
 [package]
 name = "boop-mux"
-version = "0.0.6"
+version = "0.0.7"
 edition.workspace = true
 description = "the tmux multiplexer seam boop drives: one trait, one implementation over tmux_interface"
 license.workspace = true
