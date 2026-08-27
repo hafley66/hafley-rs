@@ -6,6 +6,8 @@ all notable changes to `boop` and `boop-mux` are recorded here. versions follow 
 
 ### Fixed
 
+- *(lane)* a supervisor whose own tmux pane is gone ends the lane (`pane-gone` detail) instead of parking on the mailbox forever with its harness children
+- *(opencode)* `live_sessions` lists sessions for every `GET /project` worktree; `GET /session` alone is scoped to the server's cwd
 - *(opencode)* `boop tui opencode` creates its session with `?directory=<cwd>` and attaches with `--dir <cwd>`; the server ignored `directory` in the POST body, so every TUI landed in the server's own cwd
 - *(boop)* `boop tui` tracing writes only to `~/.agent/lanes/<harness>-<pane>/supervise.log`; WARN lines no longer print inside the native TUI's screen
 

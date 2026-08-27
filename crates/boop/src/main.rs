@@ -50,6 +50,7 @@ struct Cli {
     command: Option<SubCmd>,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum SubCmd {
     /// Print shell functions that route interactive harnesses through Boop.

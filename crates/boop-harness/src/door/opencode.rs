@@ -163,9 +163,29 @@ impl OpencodeDoor {
 
     fn get(&self, path: &str, timeout: Duration) -> Result<String> {
         let url = self.base()?.join(path)?;
+        self.get_url(url.as_str(), timeout)
+    }
+
+    fn get_url(&self, url: &str, timeout: Duration) -> Result<String> {
         let agent = agent(timeout);
-        let mut response = agent.get(url.as_str()).call()?;
+        let mut response = agent.get(url).call()?;
         Ok(response.body_mut().read_to_string()?)
+    }
+
+    /// Every worktree directory `GET /project` names, the server's own cwd
+    /// included.
+    fn project_worktrees(&self) -> Vec<String> {
+        let Ok(text) = self.get("project", READ_TIMEOUT) else {
+            return Vec::new();
+        };
+        serde_json::from_str::<Vec<serde_json::Value>>(&text)
+            .map(|projects| {
+                projects
+                    .iter()
+                    .filter_map(|project| project.get("worktree")?.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     fn statuses(&self) -> BTreeMap<String, LiveStatus> {
@@ -247,8 +267,29 @@ impl LiveSessions for OpencodeDoor {
         let Ok(text) = self.get("session", READ_TIMEOUT) else {
             return Ok(Vec::new());
         };
-        let entries: Vec<SessionEntry> =
+        let mut entries: Vec<SessionEntry> =
             serde_json::from_str(&text).context("decode opencode session list")?;
+        // `GET /session` is scoped to the server's own cwd; every other
+        // directory the server has a project for is listed by name.
+        let mut seen: std::collections::BTreeSet<String> =
+            entries.iter().map(|entry| entry.id.clone()).collect();
+        for worktree in self.project_worktrees() {
+            let mut url = match self.base().and_then(|base| Ok(base.join("session")?)) {
+                Ok(url) => url,
+                Err(_) => break,
+            };
+            url.query_pairs_mut().append_pair("directory", &worktree);
+            let Ok(text) = self.get_url(url.as_str(), READ_TIMEOUT) else {
+                continue;
+            };
+            let Ok(more) = serde_json::from_str::<Vec<SessionEntry>>(&text) else {
+                continue;
+            };
+            entries.extend(
+                more.into_iter()
+                    .filter(|entry| seen.insert(entry.id.clone())),
+            );
+        }
         let statuses = self.statuses();
         let base = self.base()?;
         let mut live = entries

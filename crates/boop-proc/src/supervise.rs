@@ -308,6 +308,10 @@ fn reparent(lane: &LaneRun, dead: &str) -> Option<String> {
 struct ParentWatch {
     policy: ParentDeathPolicy,
     parent: Option<String>,
+    /// The pane this supervisor runs in. A killed pane reparents the process
+    /// to init without a signal; without this probe the supervisor parked on
+    /// the mailbox forever and kept its harness children with it.
+    own_pane: Option<String>,
 }
 
 impl ParentWatch {
@@ -315,16 +319,30 @@ impl ParentWatch {
         ParentWatch {
             policy: parent_policy(dir, lane),
             parent: registered_parent(dir, lane),
+            own_pane: std::env::var("TMUX_PANE")
+                .ok()
+                .filter(|pane| !pane.is_empty()),
         }
     }
 
-    /// One probe. `Some` ends the lane; the `orphan` default probes nothing, so
-    /// an unchanged spawn pays no tmux call per poll.
+    /// One probe. `Some` ends the lane; the `orphan` default probes nothing
+    /// about the parent, so an unchanged spawn pays one tmux call per poll
+    /// for its own pane and nothing more.
     fn probe(
         &mut self,
         lane: &LaneRun,
         multiplexer: &dyn boop_store::tmux::Multiplexer,
     ) -> Option<Ended> {
+        if let Some(pane) = self.own_pane.as_deref() {
+            if !multiplexer.target_alive(None, pane) {
+                warn!(lane = lane.lane, pane, "own pane gone; ending the lane");
+                println!("[boop] pane {pane} is gone; ending the lane");
+                return Some(Ended {
+                    exit_code: PARENT_DIED_EXIT,
+                    detail: Some(format!("{}: {pane}", boop_store::trail::PANE_GONE)),
+                });
+            }
+        }
         if self.policy == ParentDeathPolicy::Orphan {
             return None;
         }
@@ -1583,6 +1601,30 @@ mod tests {
 
     // FAIL-PRE-FIX: a respawned supervisor had no route read-back, so every
     // cold restart opened a fresh session with the full brief.
+    #[test]
+    fn a_supervisor_whose_own_pane_is_gone_ends_the_lane() {
+        let dir = tempdir();
+        let lane = LaneRun {
+            lane: "mine".into(),
+            brief: dir.join("brief.md"),
+            mail_dir: dir.clone(),
+            cwd: dir.clone(),
+            model: None,
+            resume: None,
+        };
+        let mut watch = ParentWatch {
+            policy: ParentDeathPolicy::Orphan,
+            parent: None,
+            own_pane: Some("%7".into()),
+        };
+        let alive = boop_store::testing::FakeMux::available(&["s"]).with_pane("%7", "s");
+        assert!(watch.probe(&lane, &alive).is_none());
+        let gone = boop_store::testing::FakeMux::available(&["s"]);
+        let ended = watch.probe(&lane, &gone).expect("pane gone ends the lane");
+        assert_eq!(ended.exit_code, PARENT_DIED_EXIT);
+        assert_eq!(ended.detail.as_deref(), Some("pane-gone: %7"));
+    }
+
     #[test]
     fn a_pinned_conversation_round_trips_through_the_registry_route() {
         let dir = tempdir();

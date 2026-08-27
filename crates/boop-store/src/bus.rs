@@ -1141,7 +1141,7 @@ mod tests {
             .append(true)
             .open(&path)
             .unwrap();
-        write!(file, "{}\n", &half[half.len() / 2..]).unwrap();
+        writeln!(file, "{}", &half[half.len() / 2..]).unwrap();
         drop(file);
         let rows = super::read_messages(&dir).unwrap();
         assert_eq!(rows.len(), 2, "the completed line lands whole");

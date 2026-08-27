@@ -131,6 +131,9 @@ pub fn file_writer(lane_log: Option<File>) -> BoxMakeWriter {
 /// back by `dead_reason` as a typed variant rather than as free text.
 pub const PARENT_DIED: &str = "parent-died";
 
+/// The `detail` written when the supervisor's own tmux pane disappears.
+pub const PANE_GONE: &str = "pane-gone";
+
 /// The mailbox `kind` a lane writes when its parent edge is rewritten.
 pub const REPARENTED: &str = "reparented";
 
