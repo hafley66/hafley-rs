@@ -4,6 +4,11 @@ all notable changes to `boop` and `boop-mux` are recorded here. versions follow 
 
 ## unreleased
 
+### Added
+
+- *(boop)* `boop db search <text> [--days 7] [--harness H] [--limit 50]`: turns across every harness containing the text, newest first, with session, cwd, role and a snippet
+- *(boop)* `boop db schema`: every table with its columns
+
 ### Fixed
 
 - *(lane)* a supervisor whose own tmux pane is gone ends the lane (`pane-gone` detail) instead of parking on the mailbox forever with its harness children

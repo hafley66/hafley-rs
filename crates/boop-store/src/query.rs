@@ -460,6 +460,60 @@ impl Store {
         Ok(out)
     }
 
+    /// Turns whose text contains `needle` (case-insensitive), across every
+    /// harness, newest first. `since_ts` is a lower bound on the turn's ms
+    /// timestamp; `harness` narrows to one adapter name.
+    pub fn search_turns(
+        &self,
+        needle: &str,
+        since_ts: u64,
+        harness: Option<&str>,
+        limit: u64,
+    ) -> Result<Vec<Row>> {
+        let mut sql = String::from(
+            "SELECT dict_session.value AS session_id, dict_harness.value AS harness,
+                    dict_cwd.value AS cwd, agent_session.nickname AS nickname,
+                    t.turn AS turn, t.ts AS ts, dict_role.value AS role,
+                    substr(t.said, max(1, instr(lower(t.said), lower(?1)) - 80), 240) AS snippet
+             FROM agent_turn t
+             JOIN agent_session ON agent_session.session_id = t.session_id
+             JOIN dict_session ON dict_session.id = t.session_id
+             JOIN dict_harness ON dict_harness.id = agent_session.harness_id
+             JOIN dict_role ON dict_role.id = t.role_id
+             LEFT JOIN dict_cwd ON dict_cwd.id = agent_session.cwd_id
+             WHERE t.ts >= ?2 AND instr(lower(t.said), lower(?1)) > 0",
+        );
+        let mut values: Vec<rusqlite::types::Value> =
+            vec![needle.to_string().into(), (since_ts as i64).into()];
+        if let Some(harness) = harness {
+            sql.push_str(" AND dict_harness.value = ?3");
+            values.push(harness.to_string().into());
+        }
+        sql.push_str(&format!(" ORDER BY t.ts DESC LIMIT {limit}"));
+        self.rows(&sql, values)
+    }
+
+    /// Every user table with its columns, `{table, columns}` per row.
+    pub fn schema_rows(&self) -> Result<Vec<Row>> {
+        let tables = self.rows(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+            Vec::new(),
+        )?;
+        let mut out = Vec::with_capacity(tables.len());
+        for table in tables {
+            let Some(name) = table.get("name").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            let columns = self
+                .rows(&format!("PRAGMA table_info({name})"), Vec::new())?
+                .into_iter()
+                .filter_map(|row| row.get("name").cloned())
+                .collect::<Vec<_>>();
+            out.push(serde_json::json!({ "table": name, "columns": columns }));
+        }
+        Ok(out)
+    }
+
     /// Sessions as the query surface exposes them, least recent first.
     pub fn query_sessions(&self, session: Option<&str>, limit: Option<u64>) -> Result<Vec<Row>> {
         let rows = self.session_rows(session, limit)?;

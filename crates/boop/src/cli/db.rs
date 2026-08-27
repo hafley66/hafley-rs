@@ -1026,6 +1026,26 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
         },
         #[cfg(feature = "agent-read")]
         DbCmd::Status { window, format } => run_status(window, format),
+        DbCmd::Search {
+            text,
+            days,
+            harness,
+            limit,
+            format,
+        } => {
+            let store = open_ro_store()?;
+            let since = now_ms().saturating_sub(days * 24 * 60 * 60 * 1000);
+            emit_json_rows(
+                &store.search_turns(&text, since, harness.as_deref(), limit)?,
+                format,
+            );
+            Ok(())
+        }
+        DbCmd::Schema { format } => {
+            let store = open_ro_store()?;
+            emit_json_rows(&store.schema_rows()?, format);
+            Ok(())
+        }
     }
 }
 

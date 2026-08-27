@@ -662,6 +662,10 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
                 ..
             }
             | SubCmd::Db {
+                cmd: Some(DbCmd::Search { .. }),
+                ..
+            }
+            | SubCmd::Db {
                 cmd: Some(DbCmd::Session { .. }),
                 ..
             }
@@ -1350,6 +1354,30 @@ enum DbCmd {
     SyncCursor {
         #[command(subcommand)]
         cmd: CursorCmd,
+    },
+    /// Search every harness's turns for a text, newest first; `--days 7` is
+    /// the default window. Answers "who talked about X" without SQL.
+    #[cfg(feature = "agent-read")]
+    Search {
+        /// Text to find, case-insensitive.
+        text: String,
+        /// Look back this many days.
+        #[arg(long, default_value_t = 7)]
+        days: u64,
+        /// Only this harness: claude, codex, kimi, opencode.
+        #[arg(long)]
+        harness: Option<String>,
+        #[arg(long, default_value_t = 50)]
+        limit: u64,
+        #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
+        format: QueryFormat,
+    },
+    /// Every table with its columns, so a query never starts with a probe of
+    /// `sqlite_master`.
+    #[cfg(feature = "agent-read")]
+    Schema {
+        #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
+        format: QueryFormat,
     },
     /// Who is alive, who moved recently, and what it cost.
     #[cfg(feature = "agent-read")]
