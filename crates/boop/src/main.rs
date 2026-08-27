@@ -855,7 +855,9 @@ enum HostCmd {
 enum LaneCmd {
     /// Every lane, with live or dead.
     List {
-        /// Only lanes in this state: `live` or `dead`.
+        /// Only lanes in this state: `live`, `idle`, `retired` or `dead`.
+        /// `retired` lanes have left their pane on the idle shutdown and come
+        /// back on `boop beep <lane> <body>`.
         #[arg(long)]
         state: Option<String>,
         /// Only lanes on this harness: claude, codex, opencode, kimi.

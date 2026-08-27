@@ -42,6 +42,9 @@ The branch is the whole identity: lane id and tmux session `fix-wait-boundary`,
 worktree `.boop-worktrees/fix/wait-boundary`. Drop `--dry-run` to spawn. The
 supervisor mails the parent on every turn end, every commit and on exit
 (`lane <id> done rc=<n>`). `--wait` blocks on that row and exits with its rc.
+A finished lane that sees no mail for `BOOP_IDLE_SHUTDOWN_SECS` (default 60)
+closes its harness and leaves its pane; `lane list` shows it as `retired`,
+and `boop beep <lane> <body>` brings it back on the same conversation.
 
 ## Send and wait
 

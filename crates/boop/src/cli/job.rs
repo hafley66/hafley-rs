@@ -1487,6 +1487,38 @@ pub(crate) fn run_harness_get(registry: &Registry, id: &str) -> Result<()> {
 
 /// Lanes only. `boop list` printed routes and mail together; the two trees
 /// split that, so this half never prints a message.
+/// Lanes whose residency reads `retired` and whose spawn record exists, with
+/// no live route: what `lane list` would otherwise never show again.
+fn retired_lanes(
+    dir: &Path,
+    routes: &BTreeMap<String, Route>,
+) -> Vec<(String, boop::trail::Spawn)> {
+    let Ok(root) = boop::trail::lanes_root() else {
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut out: Vec<(String, boop::trail::Spawn)> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().to_str()?.to_owned();
+            if routes.contains_key(&name) {
+                return None;
+            }
+            if boop::supervise::read_residency(dir, &name).as_deref()
+                != Some(boop::supervise::RESIDENCY_RETIRED)
+            {
+                return None;
+            }
+            let spawn = boop::trail::read_spawn(&name)?;
+            Some((name, spawn))
+        })
+        .collect();
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
 pub(crate) fn run_lane_list(
     mail_dir_arg: Option<&Path>,
     state_filter: Option<&str>,
@@ -1545,6 +1577,30 @@ pub(crate) fn run_lane_list(
             pad(route.tmux.as_deref().unwrap_or("-"), 16),
             route.cwd.as_deref().unwrap_or("-"),
             suffix,
+        ));
+    }
+    // A retired lane has no route (the pane epilogue dropped it) but keeps
+    // its spawn record and pinned conversation; it comes back on a send.
+    for (name, spawn) in retired_lanes(&dir, &routes) {
+        if state_filter.is_some_and(|want| want != "retired") {
+            continue;
+        }
+        let route = bus::route_from_value(&spawn.route);
+        if let Some(want) = harness_filter {
+            if route.harness != Some(want) {
+                continue;
+            }
+        }
+        line(&format!(
+            "{} {} {} {} {} {} {} {} REVIVE=boop beep {name} <body>",
+            pad("retired", 4),
+            pad(&name, 16),
+            pad("lane", 12),
+            pad(route.harness.map_or("-", HarnessId::as_str), 10),
+            pad(route.mode.as_deref().unwrap_or("-"), 6),
+            pad(route.model.as_deref().unwrap_or("-"), 46),
+            pad(&spawn.tmux, 16),
+            spawn.cwd,
         ));
     }
     if all {

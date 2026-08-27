@@ -256,6 +256,19 @@ fn a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation() {
         "retirement must not write a second result row"
     );
 
+    // 3b. the registry lost the route, and `lane list` still shows the lane.
+    let list = fx
+        .boop()
+        .args(["beep", "lane", "list", "--state", "retired", "--mail-dir"])
+        .arg(&fx.mail)
+        .output()
+        .unwrap();
+    let list = String::from_utf8_lossy(&list.stdout);
+    assert!(
+        list.contains("retired") && list.contains("feature-retire") && list.contains("REVIVE="),
+        "lane list must show the retired lane with its revive spelling:\n{list}"
+    );
+
     // 4. a send to the retired lane revives it and returns on its turn end.
     let beep = fx
         .boop()
