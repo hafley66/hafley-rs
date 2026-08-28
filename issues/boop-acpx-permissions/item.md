@@ -4,7 +4,7 @@ updated: 2026-08-28
 type: bug
 reporter: codex
 assignee: opus
-status: open
+status: resolved
 priority: high
 labels: [boop, acpx]
 ---
@@ -81,14 +81,14 @@ Review the permission choice against Boop's coordinator contract. The requested 
 
 ## Acceptance Criteria
 
-- [ ] `boop --preset glm53f --name <route>` can read and write inside its designated worktree without ACPX status 5.
-- [ ] Session ensure and every later prompt use the same explicit ACPX permission policy.
-- [ ] A nonzero ACPX result preserves meaningful stdout and stderr in Boop's error.
-- [ ] Argument construction has one source of truth.
-- [ ] Focused unit tests cover permission arguments and dual-stream diagnostics.
-- [ ] A live rebuilt-Boop smoke test makes GLM create one proof file inside a temporary or designated worktree path.
-- [ ] The proof file is inspected and removed after the smoke test.
-- [ ] The fix is committed with `Refs-Issue: @boop-acpx-permissions`.
+- [x] `boop --preset glm53f --name <route>` can read and write inside its designated worktree without ACPX status 5.
+- [x] Session ensure and every later prompt use the same explicit ACPX permission policy.
+- [x] A nonzero ACPX result preserves meaningful stdout and stderr in Boop's error.
+- [x] Argument construction has one source of truth.
+- [x] Focused unit tests cover permission arguments and dual-stream diagnostics.
+- [x] A live rebuilt-Boop smoke test makes GLM create one proof file inside a temporary or designated worktree path.
+- [x] The proof file is inspected and removed after the smoke test.
+- [x] The fix is committed with `Refs-Issue: @boop-acpx-permissions`.
 
 ## Tests Run
 
@@ -101,3 +101,40 @@ The delegating agent must run the focused test after its final edit and one live
 ## Implementation Notes
 
 Work only in the assigned Hafley Rust worktree. Re-find symbols because line numbers drift. Preserve unrelated files and existing dirty chat logs. Review the local hypothesis instead of accepting it mechanically. Install the rebuilt Boop binary only after tests and the live command succeed. Commit the fix and issue update; do not push.
+
+## Resolution
+
+`acpx@0.13.1` defaults to `DEFAULT_PERMISSION_MODE = "approve-reads"` and
+`DEFAULT_NON_INTERACTIVE_PERMISSION_POLICY = "deny"` (`dist/cli.js:1398`). No
+`~/.acpx/config.json` exists on this machine, so an unflagged write request was
+denied non-interactively and acpx exited 5.
+
+Each queued prompt carries its own `permissionMode` to the queue owner
+(`dist/output-BZQE0gI1.js:1054`, applied by `updateRuntimeOptions` at
+`dist/live-checkpoint-BSIrfgVo.js:4171`), so passing the policy only at session
+ensure would not have held for later prompts. `base_args` therefore emits
+`--approve-all --non-interactive-permissions deny` on ensure and on every prompt.
+
+`crates/boop/src/cli/acpx.rs`:
+
+- `base_args(model)` is the single source for the global flag vector, including
+  the `--model` pair; both `prompt_args` and `run_foreground` call it.
+- `output_detail(stdout, stderr)` keeps both streams in the `checked` error.
+
+Live smoke, rebuilt debug binary, temp git worktree, session `acpx-smoke-83019`:
+
+```text
+registered acpx-smoke-83019 -> opencode ACPX session
+[tool] acpx-proof.txt (completed)
+  kind: edit
+  input: /private/tmp/boop-acpx-smoke-83019/work/acpx-proof.txt
+  output: Wrote file successfully.
+[done] end_turn
+```
+
+`acpx-proof.txt` read back as `acpx write permission ok.`; the temp tree was removed.
+
+```text
+cargo test -p boop --bin boop cli::acpx::tests -- --nocapture
+4 passed; 0 failed; 69 filtered out
+```
