@@ -35,6 +35,37 @@ fn invoke(args: &[String], cwd: &Path) -> Result<Output> {
     }
 }
 
+// acpx defaults to approve-reads, so an unflagged write exits 5. Every queued
+// prompt carries its own mode to the queue owner, so ensure alone is not enough.
+fn base_args(model: Option<&str>) -> Result<Vec<String>> {
+    let mut args: Vec<String> = vec![
+        "--format".into(),
+        "text".into(),
+        "--ttl".into(),
+        "0".into(),
+        "--approve-all".into(),
+        "--non-interactive-permissions".into(),
+        "deny".into(),
+    ];
+    if let Some(model) = model {
+        args.extend(["--model".into(), acpx_model(model)?]);
+    }
+    Ok(args)
+}
+
+fn output_detail(stdout: &[u8], stderr: &[u8]) -> String {
+    let stdout = String::from_utf8_lossy(stdout);
+    let stderr = String::from_utf8_lossy(stderr);
+    let stdout = stdout.trim();
+    let stderr = stderr.trim();
+    match (stdout.is_empty(), stderr.is_empty()) {
+        (false, false) => format!("stdout: {stdout}; stderr: {stderr}"),
+        (false, true) => format!("stdout: {stdout}"),
+        (true, false) => format!("stderr: {stderr}"),
+        (true, true) => "no output".into(),
+    }
+}
+
 fn checked(args: &[String], cwd: &Path) -> Result<Output> {
     let output = invoke(args, cwd)?;
     anyhow::ensure!(
@@ -42,7 +73,7 @@ fn checked(args: &[String], cwd: &Path) -> Result<Output> {
         "acpx {} failed ({}): {}",
         args.join(" "),
         output.status,
-        String::from_utf8_lossy(&output.stderr).trim()
+        output_detail(&output.stdout, &output.stderr)
     );
     Ok(output)
 }
@@ -56,10 +87,7 @@ fn prompt_args(route: &Route, body: &str, no_wait: bool) -> Result<Vec<String>> 
         .session_id
         .as_deref()
         .context("ACPX route has no session")?;
-    let mut args = vec!["--format".into(), "text".into(), "--ttl".into(), "0".into()];
-    if let Some(model) = route.model.as_deref() {
-        args.extend(["--model".into(), acpx_model(model)?]);
-    }
+    let mut args = base_args(route.model.as_deref())?;
     args.extend([agent.into(), "-s".into(), session.into()]);
     if no_wait {
         args.push("--no-wait".into());
@@ -120,10 +148,7 @@ pub(crate) fn run_foreground(
             && route.cwd.as_deref() == Some(cwd.to_string_lossy().as_ref())
     });
     if !reusable {
-        let mut args = vec!["--format".into(), "text".into(), "--ttl".into(), "0".into()];
-        if let Some(model) = model.as_deref() {
-            args.extend(["--model".into(), acpx_model(model)?]);
-        }
+        let mut args = base_args(model.as_deref())?;
         args.extend([
             agent.clone(),
             "sessions".into(),
@@ -207,6 +232,9 @@ mod tests {
                 "text",
                 "--ttl",
                 "0",
+                "--approve-all",
+                "--non-interactive-permissions",
+                "deny",
                 "--model",
                 "gpt-5.6-terra[medium]",
                 "codex",
@@ -228,6 +256,9 @@ mod tests {
                 "text",
                 "--ttl",
                 "0",
+                "--approve-all",
+                "--non-interactive-permissions",
+                "deny",
                 "--model",
                 "gpt-5.6-terra[medium]",
                 "codex",
@@ -236,5 +267,27 @@ mod tests {
                 "continue",
             ]
         );
+    }
+
+    #[test]
+    fn session_ensure_and_prompts_share_the_permission_policy() {
+        let ensure = base_args(Some("gpt-5.6-terra@medium")).unwrap();
+        let prompt = prompt_args(&route(), "continue", false).unwrap();
+        assert_eq!(prompt[..ensure.len()], ensure[..]);
+        assert!(ensure.contains(&"--approve-all".to_string()));
+    }
+
+    #[test]
+    fn failure_detail_keeps_both_output_streams() {
+        assert_eq!(
+            output_detail(b"permission denied\n", b"agent starting\n"),
+            "stdout: permission denied; stderr: agent starting"
+        );
+        assert_eq!(
+            output_detail(b"", b"agent starting\n"),
+            "stderr: agent starting"
+        );
+        assert_eq!(output_detail(b"done\n", b""), "stdout: done");
+        assert_eq!(output_detail(b"", b""), "no output");
     }
 }
