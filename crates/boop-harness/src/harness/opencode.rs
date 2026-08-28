@@ -402,6 +402,30 @@ fn write_part(
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
         }
+        // A file the user attached to the message with `@path`. The path is
+        // the content, and it counts as a read of that file.
+        "file" => {
+            let path = part.file_path();
+            *turn += 1;
+            let inserted = store.write_turn(
+                session_id,
+                *turn,
+                message.ts,
+                &message.role,
+                &format!("file {path}"),
+            )?;
+            record(stat, inserted);
+            first_turn.get_or_insert(*turn);
+            if !path.is_empty() {
+                store.write_tool_fact(
+                    session_id,
+                    *turn,
+                    message.ts,
+                    "Read",
+                    Some(&serde_json::json!({ "file_path": path })),
+                )?;
+            }
+        }
         // Step markers carry no readable content of their own. Their token
         // counts reach the store through `finish_message`.
         kind if STRUCTURAL_PARTS.contains(&kind) => {}
@@ -414,12 +438,23 @@ fn write_part(
                 store.write_turn(session_id, *turn, message.ts, "tool", &part.gap_body())?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
-            tracing::warn!(
-                projection_gap = kind,
-                session_id,
-                turn = *turn,
-                "opencode part kind projected as raw json"
-            );
+            // One line per kind per process; the pane an opencode TUI draws
+            // in is the same fd this writes to.
+            if crate::harness::first_projection_gap("opencode", kind) {
+                tracing::warn!(
+                    projection_gap = kind,
+                    session_id,
+                    turn = *turn,
+                    "opencode part kind projected as raw json"
+                );
+            } else {
+                tracing::debug!(
+                    projection_gap = kind,
+                    session_id,
+                    turn = *turn,
+                    "opencode part kind projected as raw json"
+                );
+            }
         }
     }
     Ok(())
@@ -427,7 +462,7 @@ fn write_part(
 
 /// Part kinds whose raw event holds no readable content. Every other kind
 /// projects a body, so an empty body always means an empty event.
-const STRUCTURAL_PARTS: [&str; 3] = ["step-start", "step-finish", "snapshot"];
+const STRUCTURAL_PARTS: [&str; 4] = ["step-start", "step-finish", "snapshot", "compaction"];
 
 fn finish_message(
     store: &Store,
@@ -536,6 +571,23 @@ impl Part {
             true => format!("patch {}", self.hash),
             false => format!("patch {}\nfiles: {files}", self.hash),
         }
+    }
+
+    /// The path a `file` part names. `filename` is the relative spelling the
+    /// user typed; `source.path` is the fallback when it is absent.
+    fn file_path(&self) -> String {
+        let Ok(raw) = serde_json::from_str::<Value>(&self.raw) else {
+            return String::new();
+        };
+        raw.get("filename")
+            .and_then(Value::as_str)
+            .or_else(|| {
+                raw.get("source")
+                    .and_then(|source| source.get("path"))
+                    .and_then(Value::as_str)
+            })
+            .unwrap_or_default()
+            .to_owned()
     }
 
     /// An unknown kind's body: the raw event, verbatim, under its own name.
@@ -811,6 +863,37 @@ mod tests {
         assert!(caps.resume, "opencode run -s <sessionID> resumes");
         assert!(caps.spawn, "spawn is implemented and tested below");
         assert!(caps.subagent_visible, "session.parent_id names the parent");
+    }
+
+    /// RECEIPT (2026-08-28). `file` and `compaction` were the last two kinds a
+    /// `--rebuild` sync still projected as raw json. A `file` part names the
+    /// path the user attached; a `compaction` part carries no readable text.
+    #[test]
+    fn a_file_part_names_its_path_and_compaction_is_structural() {
+        let file_part = |raw: &str| Part {
+            kind: "file".to_owned(),
+            tool: String::new(),
+            text: String::new(),
+            input: None,
+            output: None,
+            error: None,
+            hash: String::new(),
+            files: Vec::new(),
+            raw: raw.to_owned(),
+        };
+        assert_eq!(
+            file_part(
+                r#"{"type":"file","mime":"text/plain","filename":"chat_log/a.md","source":{"type":"file","path":"chat_log/a.md"}}"#
+            )
+            .file_path(),
+            "chat_log/a.md"
+        );
+        assert_eq!(
+            file_part(r#"{"type":"file","source":{"type":"file","path":"docs/b.md"}}"#).file_path(),
+            "docs/b.md"
+        );
+
+        assert!(super::STRUCTURAL_PARTS.contains(&"compaction"));
     }
 
     /// A missing opencode store is no sessions, never an error and never a

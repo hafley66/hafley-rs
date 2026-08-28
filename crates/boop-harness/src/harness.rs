@@ -54,6 +54,20 @@ pub enum MailPolicy {
     Keystrokes,
 }
 
+/// One WARN per unprojected record kind per process. A codex session writes
+/// thousands of records of a single unprojected kind, and every WARN reaches
+/// the pane the harness TUI is drawing in; the raw-json row keeps the record
+/// whatever this returns. `false` means the kind has already been reported and
+/// the caller logs at debug instead.
+pub(crate) fn first_projection_gap(harness: &str, label: &str) -> bool {
+    static SEEN: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    SEEN.get_or_init(Default::default)
+        .lock()
+        .map(|mut seen| seen.insert(format!("{harness}/{label}")))
+        .unwrap_or(true)
+}
+
 pub mod claude;
 pub mod codex;
 pub mod kimi;

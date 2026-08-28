@@ -612,6 +612,12 @@ const BOOKKEEPING: &[&str] = &[
     "compacted",
     "item_started",
     "item_completed",
+    "sub_agent_activity",
+    "inter_agent_communication_metadata",
+    "turn_aborted",
+    "thread_rolled_back",
+    "tool_search_call",
+    "tool_search_output",
 ];
 
 /// Running totals for one turn's `token_count` snapshots.
@@ -811,6 +817,78 @@ fn project_line(
                 record(stat, inserted);
             }
         }
+        "agent_reasoning" => {
+            // The event_msg twin of `reasoning`: the summary is already one
+            // assembled string rather than a list of parts.
+            let text = payload.get("text").and_then(Value::as_str).unwrap_or("");
+            if !text.is_empty() {
+                *turn += 1;
+                let body = format!("(reasoning)\n{}", truncate_chars(text, 4000));
+                let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body)?;
+                record(stat, inserted);
+            }
+        }
+        "web_search_call" | "web_search_end" => {
+            // The query rides `query` on the event and `action.query` on the
+            // response item. The search fact comes off `web_search_end` alone:
+            // a session carrying both records would otherwise count each
+            // search twice.
+            let query = payload
+                .get("query")
+                .and_then(Value::as_str)
+                .or_else(|| {
+                    payload
+                        .get("action")
+                        .and_then(|action| action.get("query"))
+                        .and_then(Value::as_str)
+                })
+                .unwrap_or("");
+            if query.is_empty() {
+                return Ok(());
+            }
+            *turn += 1;
+            let body = match payload.get("results").and_then(Value::as_array) {
+                Some(results) => format!("web_search {query}\nresults: {}", results.len()),
+                None => format!("web_search {query}"),
+            };
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
+            record(stat, inserted);
+            if record_type == "web_search_end" {
+                store.write_tool_fact(
+                    &sid,
+                    *turn,
+                    ts,
+                    "WebSearch",
+                    Some(&serde_json::json!({ "query": query })),
+                )?;
+            }
+        }
+        "mcp_tool_call_end" => {
+            let invocation = payload.get("invocation");
+            let field = |key: &str| -> &str {
+                invocation
+                    .and_then(|invocation| invocation.get(key))
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+            };
+            let server = field("server");
+            let tool = field("tool");
+            let name = match (server.is_empty(), tool.is_empty()) {
+                (true, true) => "mcp".to_owned(),
+                (true, false) => tool.to_owned(),
+                (false, true) => server.to_owned(),
+                (false, false) => format!("{server}__{tool}"),
+            };
+            let arguments = invocation
+                .and_then(|invocation| invocation.get("arguments"))
+                .map(value_as_text)
+                .unwrap_or_default();
+            *turn += 1;
+            let body = format!("{name}\n{}", truncate_chars(&arguments, 2000));
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
+            record(stat, inserted);
+            store.write_tool_fact(&sid, *turn, ts, &name, None)?;
+        }
         kind if BOOKKEEPING.contains(&if kind.is_empty() { outer_type } else { kind }) => {
             // Session bookkeeping, no transcript content: nothing to project
             // and nothing to warn about. WARN here printed into the codex
@@ -828,12 +906,24 @@ fn project_line(
             let body = format!("{label} (unprojected)\n{raw}");
             let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
             record(stat, inserted);
-            tracing::warn!(
-                projection_gap = label,
-                session_id = %sid,
-                turn = *turn,
-                "codex record type projected as raw json"
-            );
+            // One line per kind per process. Before this, a single session's
+            // 9734 `sub_agent_activity` records printed 9734 WARN lines into
+            // the pane codex draws its TUI in.
+            if crate::harness::first_projection_gap("codex", label) {
+                tracing::warn!(
+                    projection_gap = label,
+                    session_id = %sid,
+                    turn = *turn,
+                    "codex record type projected as raw json"
+                );
+            } else {
+                tracing::debug!(
+                    projection_gap = label,
+                    session_id = %sid,
+                    turn = *turn,
+                    "codex record type projected as raw json"
+                );
+            }
         }
     }
     Ok(())
@@ -1447,6 +1537,72 @@ mod tests {
             turns[0]["said"].as_str().unwrap(),
             "(reasoning)\nWeighing two fixes."
         );
+    }
+
+    /// RECEIPT (2026-08-28). A `--rebuild` sync over ~/.codex/sessions printed
+    /// 24396 codex WARN lines, 9734 of them `sub_agent_activity` and 7935
+    /// `agent_reasoning`, into the pane codex draws its TUI in. The four kinds
+    /// below now project or stay silent.
+    #[test]
+    fn agent_reasoning_web_search_and_mcp_calls_project_instead_of_warning() {
+        for line in [
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"event_msg","payload":{"type":"sub_agent_activity","agent_path":"/root/child","kind":"started"}}"#,
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"inter_agent_communication_metadata","payload":{"trigger_turn":true}}"#,
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"event_msg","payload":{"type":"turn_aborted","reason":"interrupted"}}"#,
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"event_msg","payload":{"type":"thread_rolled_back","num_turns":1}}"#,
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"event_msg","payload":{"type":"agent_reasoning","text":""}}"#,
+        ] {
+            let turns = project_one_line("codex-bookkeeping", line);
+            assert!(turns.is_empty(), "{line}: {turns:?}");
+        }
+
+        let turns = project_one_line(
+            "agent-reasoning",
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"event_msg","payload":{"type":"agent_reasoning","text":"**Planning the fix**"}}"#,
+        );
+        assert_eq!(turns[0]["role"], "assistant");
+        assert_eq!(
+            turns[0]["said"].as_str().unwrap(),
+            "(reasoning)\n**Planning the fix**"
+        );
+
+        let turns = project_one_line(
+            "web-search-end",
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"event_msg","payload":{"type":"web_search_end","query":"dbsp outer join","results":[{"type":"text_result"},{"type":"text_result"}]}}"#,
+        );
+        assert_eq!(turns[0]["role"], "tool");
+        assert_eq!(
+            turns[0]["said"].as_str().unwrap(),
+            "web_search dbsp outer join\nresults: 2"
+        );
+
+        let turns = project_one_line(
+            "web-search-call",
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"response_item","payload":{"type":"web_search_call","action":{"type":"search","query":"site:github.com hafley66"}}}"#,
+        );
+        assert_eq!(
+            turns[0]["said"].as_str().unwrap(),
+            "web_search site:github.com hafley66"
+        );
+
+        let turns = project_one_line(
+            "mcp-tool-call-end",
+            r#"{"timestamp":"2026-08-09T17:20:05.000Z","type":"event_msg","payload":{"type":"mcp_tool_call_end","invocation":{"server":"node_repl","tool":"js","arguments":{"code":"1+1"}}}}"#,
+        );
+        assert_eq!(turns[0]["role"], "tool");
+        let body = turns[0]["said"].as_str().unwrap();
+        assert!(body.starts_with("node_repl__js\n"), "{body}");
+        assert!(body.contains("1+1"), "{body}");
+    }
+
+    /// RECEIPT. The second sighting of one unprojected kind is a debug event,
+    /// so a session with 9734 of them costs the pane one line.
+    #[test]
+    fn an_unprojected_kind_warns_once_per_process() {
+        let label = "a_kind_only_this_test_names";
+        assert!(super::super::first_projection_gap("codex", label));
+        assert!(!super::super::first_projection_gap("codex", label));
+        assert!(super::super::first_projection_gap("opencode", label));
     }
 
     #[test]
