@@ -1,0 +1,629 @@
+{
+ "fixture": "codex",
+ "cols": 200,
+ "rows": 100,
+ "lines": [
+  {
+   "start": 0,
+   "end": 0,
+   "normalized": "delete mode 100755 scripts/proof/stage.sh",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 1,
+   "end": 1,
+   "normalized": "delete mode 100644 src-tauri/src/0aharnesstraceindex.rs",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 2,
+   "end": 2,
+   "normalized": "delete mode 100644 src/0boopagentexplorertypes.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 3,
+   "end": 3,
+   "normalized": "delete mode 100644 src/0externalshells.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 4,
+   "end": 4,
+   "normalized": "delete mode 100644 src/0sessionsidebarmodel.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 5,
+   "end": 5,
+   "normalized": "delete mode 100644 src/0sessionsidebarmodel.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 6,
+   "end": 6,
+   "normalized": "delete mode 100644 src/0turnpreviewpopover.tsx",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 7,
+   "end": 7,
+   "normalized": "delete mode 100644 src/1boopnetwork.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 8,
+   "end": 8,
+   "normalized": "delete mode 100644 src/1aboopnetworkgraph.tsx",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 9,
+   "end": 9,
+   "normalized": "delete mode 100644 src/1bboopfamilygraph.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 10,
+   "end": 10,
+   "normalized": "delete mode 100644 src/1bboopfamilygraph.tsx",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 11,
+   "end": 11,
+   "normalized": "delete mode 100644 src/1cfocusedboopnetwork.tsx",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 12,
+   "end": 12,
+   "normalized": "delete mode 100644 src/2boopagentexplorerpanel.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 13,
+   "end": 13,
+   "normalized": "delete mode 100644 src/2boopagentexplorerpanel.tsx",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 14,
+   "end": 14,
+   "normalized": "delete mode 100644 src/age<truncated omittedapproxtokens=\"94\" />644 src/plugins/harnesstrace/0bus.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 15,
+   "end": 15,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0bus.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 16,
+   "end": 16,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0live.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 17,
+   "end": 17,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0live.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 18,
+   "end": 18,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0mail.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 19,
+   "end": 19,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0mail.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 20,
+   "end": 20,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0strip.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 21,
+   "end": 21,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0strip.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 22,
+   "end": 22,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0tree.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 23,
+   "end": 23,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0tree.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 24,
+   "end": 24,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0types.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 25,
+   "end": 25,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0viewertab.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 26,
+   "end": 26,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0viewertab.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 27,
+   "end": 27,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0waterfall.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 28,
+   "end": 28,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/0waterfall.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 29,
+   "end": 29,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/1boopfamily.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 30,
+   "end": 30,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/1boopfamily.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 31,
+   "end": 31,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/2focusedfamilysplit.tsx",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 32,
+   "end": 32,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/2join.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 33,
+   "end": 33,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/2join.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 34,
+   "end": 34,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/2livestate.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 35,
+   "end": 35,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/2livestate.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 36,
+   "end": 36,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/2mailbox.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 37,
+   "end": 37,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/3router.mail.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 38,
+   "end": 38,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/3router.test.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 39,
+   "end": 39,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/3router.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 40,
+   "end": 40,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/4mailpreview.tsx",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 41,
+   "end": 41,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/4waterfall.tsx",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 42,
+   "end": 42,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/dockstrippanel.tsx",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 43,
+   "end": 43,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/dockstripshared.tsx",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 44,
+   "end": 44,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/harnesstracepanel.tsx",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 45,
+   "end": 45,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/intabstrip.tsx",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 46,
+   "end": 46,
+   "normalized": "delete mode 100644 src/plugins/harnesstrace/index.ts",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 47,
+   "end": 47,
+   "normalized": "",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 48,
+   "end": 48,
+   "normalized": "",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 49,
+   "end": 49,
+   "normalized": "[439] tool exec call: const r = await tools.execcommand({cmd:\"git status --short && git log -1 --oneline && git rev-list --left-right --count origin/main...main\",\"workdir\":\"/users/chrishafley/",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 50,
+   "end": 50,
+   "normalized": "projects/instant\",\"login\":false,\"yieldtimems\":10000,\"maxoutputtokens\":5000}); text(r.output)",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 51,
+   "end": 51,
+   "normalized": "",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 52,
+   "end": 52,
+   "normalized": "",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 53,
+   "end": 53,
+   "normalized": "[440] tool exec result: script completed",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 54,
+   "end": 54,
+   "normalized": "wall time 0.2 seconds",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 55,
+   "end": 55,
+   "normalized": "output:",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 56,
+   "end": 56,
+   "normalized": "",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 57,
+   "end": 57,
+   "normalized": "/opt/homebrew/bin/bash: warning: setlocale: lcall: cannot change locale (c.utf-8): no such file or directory",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 58,
+   "end": 58,
+   "normalized": "?? .claude/skills/",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 59,
+   "end": 59,
+   "normalized": "?? .codex/",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 60,
+   "end": 60,
+   "normalized": "?? .issuectl/",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 61,
+   "end": 61,
+   "normalized": "?? issues/",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 62,
+   "end": 62,
+   "normalized": "061a2bc remove agent integration surfaces from instant",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 63,
+   "end": 63,
+   "normalized": "0 8",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 64,
+   "end": 64,
+   "normalized": "",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 65,
+   "end": 65,
+   "normalized": "",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 66,
+   "end": 66,
+   "normalized": "[441] tool exec call: const r = await tools.execcommand({cmd:\"git push origin main\",\"workdir\":\"/users/chrishafley/projects/",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 67,
+   "end": 67,
+   "normalized": "instant\",\"login\":false,\"yieldtimems\":30000,\"maxoutputtokens\":12000,\"sandboxpermissions\":\"requireescalated\",\"justification\":\"allow pushing the committed instant main cleanup to origin/",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 68,
+   "end": 68,
+   "normalized": "main?\",\"prefixrule\":[\"git\",\"push\",\"origin\",\"main\"]}); text(r.output)",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 69,
+   "end": 69,
+   "normalized": "",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 70,
+   "end": 70,
+   "normalized": "transcript delta end",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 71,
+   "end": 71,
+   "normalized": "reviewed codex session id: 01a00ced-b0ab-7c82-a51d-d1edce663213",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 72,
+   "end": 72,
+   "normalized": "the codex agent has requested the following next action:",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 73,
+   "end": 73,
+   "normalized": "approval request start",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 74,
+   "end": 74,
+   "normalized": "assess the exact planned action below. use read-only tool checks when local state matters.",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 75,
+   "end": 75,
+   "normalized": "planned action json:",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 76,
+   "end": 76,
+   "normalized": "{",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 77,
+   "end": 77,
+   "normalized": "\"command\": [",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 78,
+   "end": 78,
+   "normalized": "\"/opt/homebrew/bin/bash\",",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 79,
+   "end": 79,
+   "normalized": "\"-c\",",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 80,
+   "end": 80,
+   "normalized": "\"git push origin main\"",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 81,
+   "end": 81,
+   "normalized": "],",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 82,
+   "end": 82,
+   "normalized": "\"cwd\": \"/users/chrishafley/projects/instant\",",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 83,
+   "end": 83,
+   "normalized": "\"justification\": \"allow pushing the committed instant main cleanup to origin/main?\",",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 84,
+   "end": 84,
+   "normalized": "\"sandboxpermissions\": \"requireescalated\",",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 85,
+   "end": 85,
+   "normalized": "\"tool\": \"execcommand\",",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 86,
+   "end": 86,
+   "normalized": "\"tty\": false",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 87,
+   "end": 87,
+   "normalized": "}",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 88,
+   "end": 88,
+   "normalized": "approval request end",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261"
+  },
+  {
+   "start": 89,
+   "end": 89,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 90,
+   "end": 90,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 91,
+   "end": 91,
+   "normalized": "{\"risklevel\":\"high\",\"userauthorization\":\"high\",\"outcome\":\"allow\",\"rationale\":\"pushes the explicitly committed agent-integration cleanup to the authorized origin/main destination.\"}",
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1262"
+  },
+  {
+   "start": 92,
+   "end": 92,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 93,
+   "end": 93,
+   "normalized": "you have 1 usage limit reset available. run /usage to use one.",
+   "id": null
+  },
+  {
+   "start": 94,
+   "end": 94,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 95,
+   "end": 95,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 96,
+   "end": 96,
+   "normalized": "ask codex to do anything",
+   "id": null
+  },
+  {
+   "start": 97,
+   "end": 97,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 98,
+   "end": 98,
+   "normalized": "codex-auto-review · /projects/instant · no changes · approve for me",
+   "id": null
+  },
+  {
+   "start": 99,
+   "end": 99,
+   "normalized": "[lab-codex0:codex \"instant\" 10:52 29-aug-26",
+   "id": null
+  }
+ ],
+ "turns": [
+  {
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261",
+   "turn": 1261,
+   "role": "user",
+   "confidence": "extended",
+   "anchorStart": 0,
+   "anchorEnd": 88,
+   "bufferStart": 0,
+   "bufferEnd": 90
+  },
+  {
+   "id": "01a014c5-a146-7b70-9579-f493b23f1701:1262",
+   "turn": 1262,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 91,
+   "anchorEnd": 91,
+   "bufferStart": 91,
+   "bufferEnd": 99
+  }
+ ]
+}

@@ -1,0 +1,639 @@
+{
+ "fixture": "claude",
+ "cols": 200,
+ "rows": 100,
+ "lines": [
+  {
+   "start": 0,
+   "end": 0,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 1,
+   "end": 1,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 2,
+   "end": 2,
+   "normalized": "go in a lab with worktree off all this and get some e2e receipts telling me we are good. u can use our own convo to summon claude resume <id> and codex resume of some thing in projects, so we can",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:172"
+  },
+  {
+   "start": 3,
+   "end": 3,
+   "normalized": "ensure we are capturing shit",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:172"
+  },
+  {
+   "start": 4,
+   "end": 4,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 5,
+   "end": 5,
+   "normalized": "ran 1 shell command",
+   "id": null
+  },
+  {
+   "start": 6,
+   "end": 6,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 7,
+   "end": 7,
+   "normalized": "try alacritty yada yada",
+   "id": null
+  },
+  {
+   "start": 8,
+   "end": 8,
+   "normalized": "interrupted · what should claude do instead?",
+   "id": null
+  },
+  {
+   "start": 9,
+   "end": 9,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 10,
+   "end": 10,
+   "normalized": "idk how cmux works or herdr or cate but im still learning the whole intersection of ai and tui/pty/terms",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:177"
+  },
+  {
+   "start": 11,
+   "end": 11,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 12,
+   "end": 12,
+   "normalized": "creating worktree(lab-turn-identity-alacritty)",
+   "id": null
+  },
+  {
+   "start": 13,
+   "end": 13,
+   "normalized": "switched to worktree on branch worktree-lab-turn-identity-alacritty",
+   "id": null
+  },
+  {
+   "start": 14,
+   "end": 14,
+   "normalized": "/users/chrishafley/projects/instant/.claude/worktrees/lab-turn-identity-alacritty",
+   "id": null
+  },
+  {
+   "start": 15,
+   "end": 15,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 16,
+   "end": 16,
+   "normalized": "read 1 file, listed 1 directory, ran 10 shell commands",
+   "id": null
+  },
+  {
+   "start": 17,
+   "end": 17,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 18,
+   "end": 18,
+   "normalized": "write(labs/turn-identity/cargo.toml)",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 19,
+   "end": 19,
+   "normalized": "wrote 11 lines to labs/turn-identity/cargo.toml",
+   "id": null
+  },
+  {
+   "start": 20,
+   "end": 20,
+   "normalized": "1 [package]",
+   "id": null
+  },
+  {
+   "start": 21,
+   "end": 21,
+   "normalized": "2 name = \"turn-identity-lab\"",
+   "id": null
+  },
+  {
+   "start": 22,
+   "end": 22,
+   "normalized": "3 version = \"0.0.0\"",
+   "id": null
+  },
+  {
+   "start": 23,
+   "end": 23,
+   "normalized": "4 edition = \"2021\"",
+   "id": null
+  },
+  {
+   "start": 24,
+   "end": 24,
+   "normalized": "5 publish = false",
+   "id": null
+  },
+  {
+   "start": 25,
+   "end": 25,
+   "normalized": "6",
+   "id": null
+  },
+  {
+   "start": 26,
+   "end": 26,
+   "normalized": "7 [dependencies]",
+   "id": null
+  },
+  {
+   "start": 27,
+   "end": 27,
+   "normalized": "8 alacrittyterminal = \"0.26\"",
+   "id": null
+  },
+  {
+   "start": 28,
+   "end": 28,
+   "normalized": "9 portable-pty = \"0.9\"",
+   "id": null
+  },
+  {
+   "start": 29,
+   "end": 29,
+   "normalized": "10 serde = { version = \"1\", features = [\"derive\"] }",
+   "id": null
+  },
+  {
+   "start": 30,
+   "end": 30,
+   "normalized": "… +1 line",
+   "id": null
+  },
+  {
+   "start": 31,
+   "end": 31,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 32,
+   "end": 32,
+   "normalized": "write(labs/turn-identity/src/main.rs)",
+   "id": null
+  },
+  {
+   "start": 33,
+   "end": 33,
+   "normalized": "wrote 150 lines to labs/turn-identity/src/main.rs",
+   "id": null
+  },
+  {
+   "start": 34,
+   "end": 34,
+   "normalized": "1 //! capture one tmux pane the way instant's frontend sees it, without a",
+   "id": null
+  },
+  {
+   "start": 35,
+   "end": 35,
+   "normalized": "2 //! frontend. tmux attach runs inside a pty; the byte stream feeds a headless",
+   "id": null
+  },
+  {
+   "start": 36,
+   "end": 36,
+   "normalized": "3 //! alacrittyterminal::term, which tracks per-row wrap state, so the logical",
+   "id": null
+  },
+  {
+   "start": 37,
+   "end": 37,
+   "normalized": "4 //! lines it emits have the same shape as xterm.js's",
+   "id": null
+  },
+  {
+   "start": 38,
+   "end": 38,
+   "normalized": "5 //! readvisiblelogicallines() (wrapped rows joined, start/end spanning",
+   "id": null
+  },
+  {
+   "start": 39,
+   "end": 39,
+   "normalized": "6 //! them). output is the json fixture the turn-identity scorer reads.",
+   "id": null
+  },
+  {
+   "start": 40,
+   "end": 40,
+   "normalized": "7",
+   "id": null
+  },
+  {
+   "start": 41,
+   "end": 41,
+   "normalized": "8 use alacrittyterminal::event::voidlistener;",
+   "id": null
+  },
+  {
+   "start": 42,
+   "end": 42,
+   "normalized": "9 use alacrittyterminal::index::{column, line};",
+   "id": null
+  },
+  {
+   "start": 43,
+   "end": 43,
+   "normalized": "10 use alacrittyterminal::term::cell::flags;",
+   "id": null
+  },
+  {
+   "start": 44,
+   "end": 44,
+   "normalized": "… +140 lines",
+   "id": null
+  },
+  {
+   "start": 45,
+   "end": 45,
+   "normalized": "posttooluse:write hook returned blocking error",
+   "id": null
+  },
+  {
+   "start": 46,
+   "end": 46,
+   "normalized": "[/users/chrishafley/projects/claude-research/bin/comment-prod --hook]: comment budget violation (max 2 consecutive comment lines in new code):",
+   "id": null
+  },
+  {
+   "start": 47,
+   "end": 47,
+   "normalized": "/users/chrishafley/projects/instant/.claude/worktrees/lab-turn-identity-alacritty/labs/turn-identity/src/main.rs:1-6 (6 comment lines)",
+   "id": null
+  },
+  {
+   "start": 48,
+   "end": 48,
+   "normalized": "repo law: comments state only constraints the code cannot show.",
+   "id": null
+  },
+  {
+   "start": 49,
+   "end": 49,
+   "normalized": "fix: delete the narrative, keep at most 2 lines, or carry '@comment-ok: <reason>' if a scanner-backed waiver truly applies.",
+   "id": null
+  },
+  {
+   "start": 50,
+   "end": 50,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 51,
+   "end": 51,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 52,
+   "end": 52,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 53,
+   "end": 53,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 54,
+   "end": 54,
+   "normalized": "update(labs/turn-identity/src/main.rs)",
+   "id": null
+  },
+  {
+   "start": 55,
+   "end": 55,
+   "normalized": "added 2 lines, removed 6 lines",
+   "id": null
+  },
+  {
+   "start": 56,
+   "end": 56,
+   "normalized": "1 -//! capture one tmux pane the way instant's frontend sees it, without a",
+   "id": null
+  },
+  {
+   "start": 57,
+   "end": 57,
+   "normalized": "2 -//! frontend. tmux attach runs inside a pty; the byte stream feeds a headless",
+   "id": null
+  },
+  {
+   "start": 58,
+   "end": 58,
+   "normalized": "3 -//! alacrittyterminal::term, which tracks per-row wrap state, so the logical",
+   "id": null
+  },
+  {
+   "start": 59,
+   "end": 59,
+   "normalized": "4 -//! lines it emits have the same shape as xterm.js's",
+   "id": null
+  },
+  {
+   "start": 60,
+   "end": 60,
+   "normalized": "5 -//! readvisiblelogicallines() (wrapped rows joined, start/end spanning",
+   "id": null
+  },
+  {
+   "start": 61,
+   "end": 61,
+   "normalized": "6 -//! them). output is the json fixture the turn-identity scorer reads.",
+   "id": null
+  },
+  {
+   "start": 62,
+   "end": 62,
+   "normalized": "1 +//! emits the same logical-line shape as xterm.js readvisiblelogicallines()",
+   "id": null
+  },
+  {
+   "start": 63,
+   "end": 63,
+   "normalized": "2 +//! (wrapped rows joined, start/end spanning them), with no frontend.",
+   "id": null
+  },
+  {
+   "start": 64,
+   "end": 64,
+   "normalized": "3",
+   "id": null
+  },
+  {
+   "start": 65,
+   "end": 65,
+   "normalized": "4 use alacrittyterminal::event::voidlistener;",
+   "id": null
+  },
+  {
+   "start": 66,
+   "end": 66,
+   "normalized": "5 use alacrittyterminal::index::{column, line};",
+   "id": null
+  },
+  {
+   "start": 67,
+   "end": 67,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 68,
+   "end": 68,
+   "normalized": "ran 3 shell commands",
+   "id": null
+  },
+  {
+   "start": 69,
+   "end": 69,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 70,
+   "end": 70,
+   "normalized": "update(labs/turn-identity/src/main.rs)",
+   "id": null
+  },
+  {
+   "start": 71,
+   "end": 71,
+   "normalized": "added 1 line, removed 1 line",
+   "id": null
+  },
+  {
+   "start": 72,
+   "end": 72,
+   "normalized": "6 use alacrittyterminal::term::cell::flags;",
+   "id": null
+  },
+  {
+   "start": 73,
+   "end": 73,
+   "normalized": "7 use alacrittyterminal::term::test::termsize;",
+   "id": null
+  },
+  {
+   "start": 74,
+   "end": 74,
+   "normalized": "8 use alacrittyterminal::term::{config, term};",
+   "id": null
+  },
+  {
+   "start": 75,
+   "end": 75,
+   "normalized": "9 -use alacrittyterminal::vte::ansi::processor;",
+   "id": null
+  },
+  {
+   "start": 76,
+   "end": 76,
+   "normalized": "9 +use alacrittyterminal::vte::ansi::{processor, stdsynchandler};",
+   "id": null
+  },
+  {
+   "start": 77,
+   "end": 77,
+   "normalized": "10 use portablepty::{nativeptysystem, commandbuilder, ptysize};",
+   "id": null
+  },
+  {
+   "start": 78,
+   "end": 78,
+   "normalized": "11 use serde::serialize;",
+   "id": null
+  },
+  {
+   "start": 79,
+   "end": 79,
+   "normalized": "12 use std::io::read;",
+   "id": null
+  },
+  {
+   "start": 80,
+   "end": 80,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 81,
+   "end": 81,
+   "normalized": "update(labs/turn-identity/src/main.rs)",
+   "id": null
+  },
+  {
+   "start": 82,
+   "end": 82,
+   "normalized": "added 1 line, removed 1 line",
+   "id": null
+  },
+  {
+   "start": 83,
+   "end": 83,
+   "normalized": "76 &termsize::new(cols as usize, rows as usize),",
+   "id": null
+  },
+  {
+   "start": 84,
+   "end": 84,
+   "normalized": "77 voidlistener,",
+   "id": null
+  },
+  {
+   "start": 85,
+   "end": 85,
+   "normalized": "78 );",
+   "id": null
+  },
+  {
+   "start": 86,
+   "end": 86,
+   "normalized": "79 - let mut parser = processor::new();",
+   "id": null
+  },
+  {
+   "start": 87,
+   "end": 87,
+   "normalized": "79 + let mut parser: processor<stdsynchandler> = processor::new();",
+   "id": null
+  },
+  {
+   "start": 88,
+   "end": 88,
+   "normalized": "80 let mut bytes = 0usize;",
+   "id": null
+  },
+  {
+   "start": 89,
+   "end": 89,
+   "normalized": "81 let deadline = instant::now() + duration::frommillis(settlems);",
+   "id": null
+  },
+  {
+   "start": 90,
+   "end": 90,
+   "normalized": "82 while instant::now() < deadline {",
+   "id": null
+  },
+  {
+   "start": 91,
+   "end": 91,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 92,
+   "end": 92,
+   "normalized": "listed 1 directory, ran 4 shell commands",
+   "id": null
+  },
+  {
+   "start": 93,
+   "end": 93,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 94,
+   "end": 94,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 95,
+   "end": 95,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 96,
+   "end": 96,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 97,
+   "end": 97,
+   "normalized": "opus 5 ctx 20% of 1000k 200547in 1887out",
+   "id": null
+  },
+  {
+   "start": 98,
+   "end": 98,
+   "normalized": "auto mode on (shift+tab to cycle) · ← for agents",
+   "id": null
+  },
+  {
+   "start": 99,
+   "end": 99,
+   "normalized": "[lab-claud0:2.1.251 \"✳ tmux selection beha\" 10:52 29-aug-26",
+   "id": null
+  }
+ ],
+ "turns": [
+  {
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:172",
+   "turn": 172,
+   "role": "user",
+   "confidence": "extended",
+   "anchorStart": 2,
+   "anchorEnd": 3,
+   "bufferStart": 0,
+   "bufferEnd": 9
+  },
+  {
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:177",
+   "turn": 177,
+   "role": "user",
+   "confidence": "extended",
+   "anchorStart": 10,
+   "anchorEnd": 10,
+   "bufferStart": 10,
+   "bufferEnd": 17
+  },
+  {
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377",
+   "turn": 377,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 18,
+   "anchorEnd": 18,
+   "bufferStart": 18,
+   "bufferEnd": 99
+  }
+ ]
+}

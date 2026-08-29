@@ -400,6 +400,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "boop-turnvis"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "bs58"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

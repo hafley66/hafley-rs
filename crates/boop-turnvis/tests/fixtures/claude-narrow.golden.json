@@ -1,0 +1,649 @@
+{
+ "fixture": "claude-narrow",
+ "cols": 80,
+ "rows": 100,
+ "lines": [
+  {
+   "start": 0,
+   "end": 0,
+   "normalized": "cause",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 1,
+   "end": 1,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 2,
+   "end": 2,
+   "normalized": "0terminalturnvisibility.ts:138-152. after matching, every turn's span is",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 3,
+   "end": 3,
+   "normalized": "rewritten to tile the viewport: first turn's start becomes viewportstart,",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 4,
+   "end": 4,
+   "normalized": "every turn's end becomes nextturn.bufferstart - 1, last turn's end becomes",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 5,
+   "end": 5,
+   "normalized": "viewportend. turnatbufferrow then did plain range containment over those",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 6,
+   "end": 6,
+   "normalized": "spans, so every row on screen belonged to some turn by construction. both",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 7,
+   "end": 7,
+   "normalized": "located turns carried confidence: \"extended\" — neither had an anchor anywhere",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 8,
+   "end": 8,
+   "normalized": "near the rows it claimed.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 9,
+   "end": 9,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 10,
+   "end": 10,
+   "normalized": "fix",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 11,
+   "end": 11,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 12,
+   "end": 12,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 13,
+   "end": 13,
+   "normalized": "file change",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 14,
+   "end": 14,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 15,
+   "end": 15,
+   "normalized": "src/0terminalturnvisibility.ts:18-19 visibleturn gains anchorstart",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 16,
+   "end": 16,
+   "normalized": "/ anchorend",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 17,
+   "end": 17,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 18,
+   "end": 18,
+   "normalized": "src/0terminalturnvisibility.ts:127-135 recorded from the matched hit",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 19,
+   "end": 19,
+   "normalized": "rows, before extension",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 20,
+   "end": 20,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 21,
+   "end": 21,
+   "normalized": "src/0terminalturnvisibility.ts:238-241 turnatbufferrow answers from",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 22,
+   "end": 22,
+   "normalized": "the anchor, not the span",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 23,
+   "end": 23,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 24,
+   "end": 24,
+   "normalized": "src/1aterminalcontextqueue.ts:32-38 turnsacrossrange tags a",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 25,
+   "end": 25,
+   "normalized": "selection by anchor overlap",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 26,
+   "end": 26,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 27,
+   "end": 27,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 28,
+   "end": 28,
+   "normalized": "the extended span stays and still drives region projection and the gutter.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 29,
+   "end": 29,
+   "normalized": "identity now says \"no boop turn at pointer\" instead of guessing — that menu",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 30,
+   "end": 30,
+   "normalized": "item already existed at chrome.ts:383 and had no way to fire.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 31,
+   "end": 31,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 32,
+   "end": 32,
+   "normalized": "after",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 33,
+   "end": 33,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 34,
+   "end": 34,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 35,
+   "end": 35,
+   "normalized": "pane scored rows correct wrong missing phantom",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 36,
+   "end": 36,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 37,
+   "end": 37,
+   "normalized": "claude 70 70 0 0 0",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 38,
+   "end": 38,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 39,
+   "end": 39,
+   "normalized": "codex 57 57 0 0 0",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 40,
+   "end": 40,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 41,
+   "end": 41,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 42,
+   "end": 42,
+   "normalized": "read the claude row honestly: it gained no true positives. claude code renders",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 43,
+   "end": 43,
+   "normalized": "tool-call chrome that is not in agentturn.said, so only rows 2 and 10 are",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 44,
+   "end": 44,
+   "normalized": "attributable at all out of 100. the win is that the other 98 now report",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 45,
+   "end": 45,
+   "normalized": "nothing instead of lying. codex renders close to its transcript, so turn 1261",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 46,
+   "end": 46,
+   "normalized": "anchors a real 0..88.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 47,
+   "end": 47,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 48,
+   "end": 48,
+   "normalized": "the receipts test asserts phantom === 0 and wrong === 0, so it fails if this",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 49,
+   "end": 49,
+   "normalized": "regresses.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 50,
+   "end": 50,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 51,
+   "end": 51,
+   "normalized": "verification",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 52,
+   "end": 52,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 53,
+   "end": 53,
+   "normalized": "- npx vitest run — 63 files, 315 tests, all pass.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 54,
+   "end": 54,
+   "normalized": "- npx tsc --noemit — clean.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 55,
+   "end": 55,
+   "normalized": "- 0terminalturnvisibility.test.ts — 2 inline snapshots updated for the new",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 56,
+   "end": 56,
+   "normalized": "fields; the 2026-08-22 defect-receipt test gained anchored-identity",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 57,
+   "end": 57,
+   "normalized": "assertions, including identity(11) === null for the blank row between two",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 58,
+   "end": 58,
+   "normalized": "turns.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 59,
+   "end": 59,
+   "normalized": "- lab-claude and lab-codex tmux sessions killed.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 60,
+   "end": 60,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 61,
+   "end": 61,
+   "normalized": "uncommitted on the worktree branch. say the word and i'll commit, or",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 62,
+   "end": 62,
+   "normalized": "exitworktree to drop it.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 63,
+   "end": 63,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 64,
+   "end": 64,
+   "normalized": "ran 1 stop hook",
+   "id": null
+  },
+  {
+   "start": 65,
+   "end": 65,
+   "normalized": "stop hook error: [proseprodmaxwords=999999",
+   "id": null
+  },
+  {
+   "start": 66,
+   "end": 66,
+   "normalized": "proseprodmaxsentences=999999 proseprodmaxparagraphs=999999",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 67,
+   "end": 67,
+   "normalized": "proseprodmaxfiller=999999",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 68,
+   "end": 68,
+   "normalized": "/users/chrishafley/projects/claude-research/bin/prose-prod --hook]:",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 69,
+   "end": 69,
+   "normalized": "prose law violation (assistant turn):",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 70,
+   "end": 70,
+   "normalized": "[decreed-stem] scores every logical row: ground truth is the turn",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 71,
+   "end": 71,
+   "normalized": "whose transcript contains that row under the matcher's own contain...",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 72,
+   "end": 72,
+   "normalized": "law: decreed slop words banned. (stem: ground)",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 73,
+   "end": 73,
+   "normalized": "[decreed-stem] read the claude row honestly: it gained no true",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 74,
+   "end": 74,
+   "normalized": "positives.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 75,
+   "end": 75,
+   "normalized": "law: decreed slop words banned. (stem: honest)",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 76,
+   "end": 76,
+   "normalized": "fix: fix the flagged slop: emit only the corrected sentences, one per",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 77,
+   "end": 77,
+   "normalized": "line, each prefixed 'corrected: '.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 78,
+   "end": 78,
+   "normalized": "attempt 1 of 3; after 3 the turn ends as-is.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 79,
+   "end": 79,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 80,
+   "end": 80,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 81,
+   "end": 81,
+   "normalized": "corrected: src/0terminalturnvisibility.receipts.test.ts scores every logical",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:379"
+  },
+  {
+   "start": 82,
+   "end": 82,
+   "normalized": "row: the reference answer is the turn whose transcript contains that row under",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:379"
+  },
+  {
+   "start": 83,
+   "end": 83,
+   "normalized": "the matcher's own containment rule.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:379"
+  },
+  {
+   "start": 84,
+   "end": 84,
+   "normalized": "corrected: read the claude row plainly: it gained no true positives.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:379"
+  },
+  {
+   "start": 85,
+   "end": 85,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 86,
+   "end": 86,
+   "normalized": "baked for 9m 25s · done 10:55 am",
+   "id": null
+  },
+  {
+   "start": 87,
+   "end": 87,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 88,
+   "end": 88,
+   "normalized": "works for inline markdown and table renders? markdown tables in claude code",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:380"
+  },
+  {
+   "start": 89,
+   "end": 89,
+   "normalized": "get rsposnive designed into a list mode so there are 2 renders for it, and",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:380"
+  },
+  {
+   "start": 90,
+   "end": 90,
+   "normalized": "code and tool calls and yada yada?",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:380"
+  },
+  {
+   "start": 91,
+   "end": 91,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 92,
+   "end": 92,
+   "normalized": "ran 1 shell command",
+   "id": null
+  },
+  {
+   "start": 93,
+   "end": 93,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 94,
+   "end": 94,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 95,
+   "end": 95,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 96,
+   "end": 96,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 97,
+   "end": 97,
+   "normalized": "opus 5 ctx 24% of 1000k 235159in 1373out",
+   "id": null
+  },
+  {
+   "start": 98,
+   "end": 98,
+   "normalized": "auto mode on (shift+tab to cycle) · ← for agents",
+   "id": null
+  },
+  {
+   "start": 99,
+   "end": 99,
+   "normalized": "[lab-claud0:2.1.251 \"✳ tmux selection beha\" 11:06 29-aug-26",
+   "id": null
+  }
+ ],
+ "turns": [
+  {
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377",
+   "turn": 377,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 0,
+   "anchorEnd": 62,
+   "bufferStart": 0,
+   "bufferEnd": 65
+  },
+  {
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378",
+   "turn": 378,
+   "role": "user",
+   "confidence": "extended",
+   "anchorStart": 66,
+   "anchorEnd": 78,
+   "bufferStart": 66,
+   "bufferEnd": 80
+  },
+  {
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:379",
+   "turn": 379,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 81,
+   "anchorEnd": 84,
+   "bufferStart": 81,
+   "bufferEnd": 87
+  },
+  {
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:380",
+   "turn": 380,
+   "role": "user",
+   "confidence": "extended",
+   "anchorStart": 88,
+   "anchorEnd": 90,
+   "bufferStart": 88,
+   "bufferEnd": 99
+  }
+ ]
+}

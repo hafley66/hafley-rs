@@ -1,0 +1,659 @@
+{
+ "fixture": "opencode",
+ "cols": 200,
+ "rows": 100,
+ "lines": [
+  {
+   "start": 0,
+   "end": 0,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 1,
+   "end": 1,
+   "normalized": "the test uses catch(expandgenericprogram(program, ), thrown, true) then checks subterm(...) with ;. the choicepoint is likely from expandgenericprogram succeeding once then the ; in the",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:528"
+  },
+  {
+   "start": 2,
+   "end": 2,
+   "normalized": "subterm check. let me add once around the catch to suppress the warning.",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:528"
+  },
+  {
+   "start": 3,
+   "end": 3,
+   "normalized": "",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:528"
+  },
+  {
+   "start": 4,
+   "end": 4,
+   "normalized": "let me look at the test.",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:528"
+  },
+  {
+   "start": 5,
+   "end": 5,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 6,
+   "end": 6,
+   "normalized": "→ read v6/prolog/compile/test/plunittests.pl [limit=15, offset=6904]",
+   "id": null
+  },
+  {
+   "start": 7,
+   "end": 7,
+   "normalized": "→ read v6/prolog/compile/test/plunittests.pl [limit=12, offset=6915]",
+   "id": null
+  },
+  {
+   "start": 8,
+   "end": 8,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 9,
+   "end": 9,
+   "normalized": "the choicepoint comes from the catch(...) leaving a choicepoint because expandgenericprogram throws and the catch handler true could leave alternatives. actually the choicepoint is from",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:531"
+  },
+  {
+   "start": 10,
+   "end": 10,
+   "normalized": "subterm with ;. let me add once around the whole check to suppress the warning, matching the pattern used elsewhere. let me wrap the catch in once.",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:531"
+  },
+  {
+   "start": 11,
+   "end": 11,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 12,
+   "end": 12,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 13,
+   "end": 13,
+   "normalized": "← edit v6/prolog/compile/test/plunittests.pl",
+   "id": null
+  },
+  {
+   "start": 14,
+   "end": 14,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 15,
+   "end": 15,
+   "normalized": "6918 typeparameter('r', [])], 6918 typeparameter('r', [])],",
+   "id": null
+  },
+  {
+   "start": 16,
+   "end": 16,
+   "normalized": "6919 (err(error:'l') ; ok(value:'r'))), 6919 (err(error:'l') ; ok(value:'r'))),",
+   "id": null
+  },
+  {
+   "start": 17,
+   "end": 17,
+   "normalized": "6920 coltype(edge/1, endpoints, result(int, x)) ], 6920 coltype(edge/1, endpoints, result(int, x)) ],",
+   "id": null
+  },
+  {
+   "start": 18,
+   "end": 18,
+   "normalized": "6921 []), 6921 []),",
+   "id": null
+  },
+  {
+   "start": 19,
+   "end": 19,
+   "normalized": "6922 - catch(expandgenericprogram(program, ), thrown, true), 6922 + once(catch(expandgenericprogram(program, ), thrown, true)),",
+   "id": null
+  },
+  {
+   "start": 20,
+   "end": 20,
+   "normalized": "6923 - ( subterm(generictypenotground, thrown) 6923 + once(( subterm(generictypenotground, thrown)",
+   "id": null
+  },
+  {
+   "start": 21,
+   "end": 21,
+   "normalized": "6924 - ; subterm(generictypenotground(), thrown) ). 6924 + ; subterm(generictypenotground(), thrown) )).",
+   "id": null
+  },
+  {
+   "start": 22,
+   "end": 22,
+   "normalized": "6925 6925",
+   "id": null
+  },
+  {
+   "start": 23,
+   "end": 23,
+   "normalized": "6926 % enum expansion lowers a minted concrete enum into a tag relation and one 6926 % enum expansion lowers a minted concrete enum into a tag relation and one",
+   "id": null
+  },
+  {
+   "start": 24,
+   "end": 24,
+   "normalized": "6927 % relation per variant, with the substituted payload types intact. 6927 % relation per variant, with the substituted payload types intact.",
+   "id": null
+  },
+  {
+   "start": 25,
+   "end": 25,
+   "normalized": "6928 test(enumloweringmintstagandonevariantrelperconcreteenum) :- 6928 test(enumloweringmintstagandonevariantrelperconcreteenum) :-",
+   "id": null
+  },
+  {
+   "start": 26,
+   "end": 26,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 27,
+   "end": 27,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 28,
+   "end": 28,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 29,
+   "end": 29,
+   "normalized": "$ cd /users/chrishafley/projects/sprefa/.boop-worktrees/feature/dl6-generic-sum-flash4/v6/prolog/compile && timeout 300 swipl -q -l test/plunittests.pl -g \"runtests(",
+   "id": null
+  },
+  {
+   "start": 30,
+   "end": 30,
+   "normalized": "reltemplateandisclause)\" -g halt 2>&1 grep -ie \"choicepoint failed tests failed\" head",
+   "id": null
+  },
+  {
+   "start": 31,
+   "end": 31,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 32,
+   "end": 32,
+   "normalized": "(no output)",
+   "id": null
+  },
+  {
+   "start": 33,
+   "end": 33,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 34,
+   "end": 34,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 35,
+   "end": 35,
+   "normalized": "no more warnings. now let me also check the emitter tests for choicepoints (i added ! earlier). let me run the emittyperenderers group.",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:534"
+  },
+  {
+   "start": 36,
+   "end": 36,
+   "normalized": "",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:534"
+  },
+  {
+   "start": 37,
+   "end": 37,
+   "normalized": "now let me run the full verification gates. first, let me check prolog-lint since the task mentions lint gates.",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:534"
+  },
+  {
+   "start": 38,
+   "end": 38,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 39,
+   "end": 39,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 40,
+   "end": 40,
+   "normalized": "$ cd /users/chrishafley/projects/sprefa/.boop-worktrees/feature/dl6-generic-sum-flash4/v6 && cat justfile grep -n \"prolog-lint\\ typecheck\\ plunit:\" head",
+   "id": null
+  },
+  {
+   "start": 41,
+   "end": 41,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 42,
+   "end": 42,
+   "normalized": "52:plunit:",
+   "id": null
+  },
+  {
+   "start": 43,
+   "end": 43,
+   "normalized": "74: prolog/tools/prolog-lint-baseline.txt; unused exports are advisory output.",
+   "id": null
+  },
+  {
+   "start": 44,
+   "end": 44,
+   "normalized": "75:prolog-lint:",
+   "id": null
+  },
+  {
+   "start": 45,
+   "end": 45,
+   "normalized": "76: cd {{ v6 }}/prolog && bash tools/prolog-lint.sh",
+   "id": null
+  },
+  {
+   "start": 46,
+   "end": 46,
+   "normalized": "126:typecheck:",
+   "id": null
+  },
+  {
+   "start": 47,
+   "end": 47,
+   "normalized": "484:green: conformance roundtrip text-door plunit prolog-lint typecheck tsv2-test import-gate one-subscribe golden-flex store-test dd-grade rust-grade",
+   "id": null
+  },
+  {
+   "start": 48,
+   "end": 48,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 49,
+   "end": 49,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 50,
+   "end": 50,
+   "normalized": "let me run the prolog-lint gate, since the task mentions \"relevant compiler/typegen gates\" and lint.",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:536"
+  },
+  {
+   "start": 51,
+   "end": 51,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 52,
+   "end": 52,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 53,
+   "end": 53,
+   "normalized": "$ cd /users/chrishafley/projects/sprefa/.boop-worktrees/feature/dl6-generic-sum-flash4/v6/prolog && timeout 300 bash tools/prolog-lint.sh 2>&1 tail -30",
+   "id": null
+  },
+  {
+   "start": 54,
+   "end": 54,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 55,
+   "end": 55,
+   "normalized": "unusedexportcandidate conformance/engine.pl-fixtureexpectationshold/2",
+   "id": null
+  },
+  {
+   "start": 56,
+   "end": 56,
+   "normalized": "unusedexportcandidate conformance/engine.pl-reldeltas/3",
+   "id": null
+  },
+  {
+   "start": 57,
+   "end": 57,
+   "normalized": "unusedexportcandidate conformance/engine.pl-relrows/3",
+   "id": null
+  },
+  {
+   "start": 58,
+   "end": 58,
+   "normalized": "unusedexportcandidate conformance/engine.pl-runfixturechecks/2",
+   "id": null
+  },
+  {
+   "start": 59,
+   "end": 59,
+   "normalized": "unusedexportcandidate diag.pl-diagstreamopen/0",
+   "id": null
+  },
+  {
+   "start": 60,
+   "end": 60,
+   "normalized": "unusedexportcandidate diag.pl-dl6span/6",
+   "id": null
+  },
+  {
+   "start": 61,
+   "end": 61,
+   "normalized": "unusedexportcandidate diag.pl-emitdiag/2",
+   "id": null
+  },
+  {
+   "start": 62,
+   "end": 62,
+   "normalized": "unusedexportcandidate diag.pl-emitdiagterm/1",
+   "id": null
+  },
+  {
+   "start": 63,
+   "end": 63,
+   "normalized": "unusedexportcandidate diag.pl-setdiagfile/1",
+   "id": null
+  },
+  {
+   "start": 64,
+   "end": 64,
+   "normalized": "unusedexportcandidate lower.pl-dictionaryrenderexpr/3",
+   "id": null
+  },
+  {
+   "start": 65,
+   "end": 65,
+   "normalized": "…",
+   "id": null
+  },
+  {
+   "start": 66,
+   "end": 66,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 67,
+   "end": 67,
+   "normalized": "click to expand",
+   "id": null
+  },
+  {
+   "start": 68,
+   "end": 68,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 69,
+   "end": 69,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 70,
+   "end": 70,
+   "normalized": "prolog-lint passes (findings=0). the unusedexportcandidate lines are advisory output. now let me run the conformance gate (the g3 leg) to ensure the conformance suite stays green.",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:538"
+  },
+  {
+   "start": 71,
+   "end": 71,
+   "normalized": "",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:538"
+  },
+  {
+   "start": 72,
+   "end": 72,
+   "normalized": "let me check what the conformance just target runs.",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:538"
+  },
+  {
+   "start": 73,
+   "end": 73,
+   "normalized": "",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:538"
+  },
+  {
+   "start": 74,
+   "end": 74,
+   "normalized": "the full green includes conformance, roundtrip, plunit, prolog-lint, typecheck, tsv2-test, etc. let me run the conformance go.pl to confirm no regressions from my changes (particularly the",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:538"
+  },
+  {
+   "start": 75,
+   "end": 75,
+   "normalized": "enum/generic expansion changes).",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:538"
+  },
+  {
+   "start": 76,
+   "end": 76,
+   "normalized": "",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:538"
+  },
+  {
+   "start": 77,
+   "end": 77,
+   "normalized": "let me run conformance.",
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:538"
+  },
+  {
+   "start": 78,
+   "end": 78,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 79,
+   "end": 79,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 80,
+   "end": 80,
+   "normalized": "$ cd /users/chrishafley/projects/sprefa/.boop-worktrees/feature/dl6-generic-sum-flash4/v6/prolog/conformance && timeout 300 swipl -q -l go.pl -g \"runtests\" -g halt 2>&1 tail -15",
+   "id": null
+  },
+  {
+   "start": 81,
+   "end": 81,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 82,
+   "end": 82,
+   "normalized": "warning: /users/chrishafley/projects/sprefa/.boop-worktrees/feature/dl6-generic-sum-flash4/v6/prolog/0genericexpand.pl:33:",
+   "id": null
+  },
+  {
+   "start": 83,
+   "end": 83,
+   "normalized": "warning: singleton variables: [enuminstances]",
+   "id": null
+  },
+  {
+   "start": 84,
+   "end": 84,
+   "normalized": "warning: /users/chrishafley/projects/sprefa/.boop-worktrees/feature/dl6-generic-sum-flash4/v6/prolog/0genericexpand.pl:47:",
+   "id": null
+  },
+  {
+   "start": 85,
+   "end": 85,
+   "normalized": "warning: singleton variables: [enuminstances]",
+   "id": null
+  },
+  {
+   "start": 86,
+   "end": 86,
+   "normalized": "warning: /users/chrishafley/projects/sprefa/.boop-worktrees/feature/dl6-generic-sum-flash4/v6/prolog/0genericexpand.pl:186:",
+   "id": null
+  },
+  {
+   "start": 87,
+   "end": 87,
+   "normalized": "warning: singleton variables: [arity]",
+   "id": null
+  },
+  {
+   "start": 88,
+   "end": 88,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 89,
+   "end": 89,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 90,
+   "end": 90,
+   "normalized": "▣ build · deepseek v4 flash 0731",
+   "id": null
+  },
+  {
+   "start": 91,
+   "end": 91,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 92,
+   "end": 92,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 93,
+   "end": 93,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 94,
+   "end": 94,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 95,
+   "end": 95,
+   "normalized": "build · deepseek v4 flash 0731 openrouter · high",
+   "id": null
+  },
+  {
+   "start": 96,
+   "end": 96,
+   "normalized": "╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
+   "id": null
+  },
+  {
+   "start": 97,
+   "end": 97,
+   "normalized": "/users/chrishafley/projects/sprefa/.boop-worktrees/feature/dl6-generic-sum-flash4 580.9k (44%) · $3.63 ctrl+p commands",
+   "id": null
+  },
+  {
+   "start": 98,
+   "end": 98,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 99,
+   "end": 99,
+   "normalized": "[lab-openc0:opencode.exe \"oc dl6 parameterize\" 11:32 29-aug-26",
+   "id": null
+  }
+ ],
+ "turns": [
+  {
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:528",
+   "turn": 528,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 1,
+   "anchorEnd": 4,
+   "bufferStart": 0,
+   "bufferEnd": 8
+  },
+  {
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:531",
+   "turn": 531,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 9,
+   "anchorEnd": 10,
+   "bufferStart": 9,
+   "bufferEnd": 34
+  },
+  {
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:534",
+   "turn": 534,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 35,
+   "anchorEnd": 37,
+   "bufferStart": 35,
+   "bufferEnd": 49
+  },
+  {
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:536",
+   "turn": 536,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 50,
+   "anchorEnd": 50,
+   "bufferStart": 50,
+   "bufferEnd": 69
+  },
+  {
+   "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:538",
+   "turn": 538,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 70,
+   "anchorEnd": 77,
+   "bufferStart": 70,
+   "bufferEnd": 99
+  }
+ ]
+}

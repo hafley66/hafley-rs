@@ -1,0 +1,649 @@
+{
+ "fixture": "claude-wide",
+ "cols": 200,
+ "rows": 100,
+ "lines": [
+  {
+   "start": 0,
+   "end": 0,
+   "normalized": "both sessions are real, resumed from your own history:",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 1,
+   "end": 1,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 2,
+   "end": 2,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 3,
+   "end": 3,
+   "normalized": "fixture tmux command boop session turns in window",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 4,
+   "end": 4,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 5,
+   "end": 5,
+   "normalized": "claude lab-claude claude --resume 220a0de3-… (this conversation) 220a0de3-62f5-4dd9-99ce-0ce71a7fb897 301 of 339",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 6,
+   "end": 6,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 7,
+   "end": 7,
+   "normalized": "codex lab-codex codex resume 01a014c5-… (instant) 01a014c5-a146-7b70-9579-f493b23f1701 301 of 1262",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 8,
+   "end": 8,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 9,
+   "end": 9,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 10,
+   "end": 10,
+   "normalized": "before",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 11,
+   "end": 11,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 12,
+   "end": 12,
+   "normalized": "src/0terminalturnvisibility.receipts.test.ts scores every logical row: ground truth is the turn whose transcript contains that row under the matcher's own containment rule. a phantom is a row named",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 13,
+   "end": 13,
+   "normalized": "for a turn when no turn's text resembles it.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 14,
+   "end": 14,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 15,
+   "end": 15,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 16,
+   "end": 16,
+   "normalized": "pane located turns scored rows correct phantom",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 17,
+   "end": 17,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 18,
+   "end": 18,
+   "normalized": "claude 2 70 0 70",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 19,
+   "end": 19,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 20,
+   "end": 20,
+   "normalized": "codex 2 57 53 4",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 21,
+   "end": 21,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 22,
+   "end": 22,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 23,
+   "end": 23,
+   "normalized": "claude pane, every row wrong. two turns tiled the whole 100-row screen (0..9, 10..99), so write(labs/turn-identity/cargo.toml), ⎿ wrote 11 lines to…, numbered file contents, and ran 1 shell command",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 24,
+   "end": 24,
+   "normalized": "all reported turn 172 or 177. codex's four phantoms were the input box (ask codex to do anything), the usage notice, the status line, and the tmux status bar.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 25,
+   "end": 25,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 26,
+   "end": 26,
+   "normalized": "cause",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 27,
+   "end": 27,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 28,
+   "end": 28,
+   "normalized": "0terminalturnvisibility.ts:138-152. after matching, every turn's span is rewritten to tile the viewport: first turn's start becomes viewportstart, every turn's end becomes nextturn.bufferstart - 1,",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 29,
+   "end": 29,
+   "normalized": "last turn's end becomes viewportend. turnatbufferrow then did plain range containment over those spans, so every row on screen belonged to some turn by construction. both located turns carried",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 30,
+   "end": 30,
+   "normalized": "confidence: \"extended\" — neither had an anchor anywhere near the rows it claimed.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 31,
+   "end": 31,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 32,
+   "end": 32,
+   "normalized": "fix",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 33,
+   "end": 33,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 34,
+   "end": 34,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 35,
+   "end": 35,
+   "normalized": "file change",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 36,
+   "end": 36,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 37,
+   "end": 37,
+   "normalized": "src/0terminalturnvisibility.ts:18-19 visibleturn gains anchorstart / anchorend",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 38,
+   "end": 38,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 39,
+   "end": 39,
+   "normalized": "src/0terminalturnvisibility.ts:127-135 recorded from the matched hit rows, before extension",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 40,
+   "end": 40,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 41,
+   "end": 41,
+   "normalized": "src/0terminalturnvisibility.ts:238-241 turnatbufferrow answers from the anchor, not the span",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 42,
+   "end": 42,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 43,
+   "end": 43,
+   "normalized": "src/1aterminalcontextqueue.ts:32-38 turnsacrossrange tags a selection by anchor overlap",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 44,
+   "end": 44,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 45,
+   "end": 45,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 46,
+   "end": 46,
+   "normalized": "the extended span stays and still drives region projection and the gutter. identity now says \"no boop turn at pointer\" instead of guessing — that menu item already existed at chrome.ts:383 and had",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 47,
+   "end": 47,
+   "normalized": "no way to fire.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 48,
+   "end": 48,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 49,
+   "end": 49,
+   "normalized": "after",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 50,
+   "end": 50,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 51,
+   "end": 51,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 52,
+   "end": 52,
+   "normalized": "pane scored rows correct wrong missing phantom",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 53,
+   "end": 53,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 54,
+   "end": 54,
+   "normalized": "claude 70 70 0 0 0",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 55,
+   "end": 55,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 56,
+   "end": 56,
+   "normalized": "codex 57 57 0 0 0",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 57,
+   "end": 57,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 58,
+   "end": 58,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 59,
+   "end": 59,
+   "normalized": "read the claude row honestly: it gained no true positives. claude code renders tool-call chrome that is not in agentturn.said, so only rows 2 and 10 are attributable at all out of 100. the win is",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 60,
+   "end": 60,
+   "normalized": "that the other 98 now report nothing instead of lying. codex renders close to its transcript, so turn 1261 anchors a real 0..88.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 61,
+   "end": 61,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 62,
+   "end": 62,
+   "normalized": "the receipts test asserts phantom === 0 and wrong === 0, so it fails if this regresses.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 63,
+   "end": 63,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 64,
+   "end": 64,
+   "normalized": "verification",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 65,
+   "end": 65,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 66,
+   "end": 66,
+   "normalized": "- npx vitest run — 63 files, 315 tests, all pass.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 67,
+   "end": 67,
+   "normalized": "- npx tsc --noemit — clean.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 68,
+   "end": 68,
+   "normalized": "- 0terminalturnvisibility.test.ts — 2 inline snapshots updated for the new fields; the 2026-08-22 defect-receipt test gained anchored-identity assertions, including identity(11) === null for the",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 69,
+   "end": 69,
+   "normalized": "blank row between two turns.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 70,
+   "end": 70,
+   "normalized": "- lab-claude and lab-codex tmux sessions killed.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 71,
+   "end": 71,
+   "normalized": "",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 72,
+   "end": 72,
+   "normalized": "uncommitted on the worktree branch. say the word and i'll commit, or exitworktree to drop it.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377"
+  },
+  {
+   "start": 73,
+   "end": 73,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 74,
+   "end": 74,
+   "normalized": "ran 1 stop hook",
+   "id": null
+  },
+  {
+   "start": 75,
+   "end": 75,
+   "normalized": "stop hook error: [proseprodmaxwords=999999 proseprodmaxsentences=999999 proseprodmaxparagraphs=999999 proseprodmaxfiller=999999",
+   "id": null
+  },
+  {
+   "start": 76,
+   "end": 76,
+   "normalized": "/users/chrishafley/projects/claude-research/bin/prose-prod --hook]: prose law violation (assistant turn):",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 77,
+   "end": 77,
+   "normalized": "[decreed-stem] scores every logical row: ground truth is the turn whose transcript contains that row under the matcher's own contain...",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 78,
+   "end": 78,
+   "normalized": "law: decreed slop words banned. (stem: ground)",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 79,
+   "end": 79,
+   "normalized": "[decreed-stem] read the claude row honestly: it gained no true positives.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 80,
+   "end": 80,
+   "normalized": "law: decreed slop words banned. (stem: honest)",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 81,
+   "end": 81,
+   "normalized": "fix: fix the flagged slop: emit only the corrected sentences, one per line, each prefixed 'corrected: '.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 82,
+   "end": 82,
+   "normalized": "attempt 1 of 3; after 3 the turn ends as-is.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378"
+  },
+  {
+   "start": 83,
+   "end": 83,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 84,
+   "end": 84,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 85,
+   "end": 85,
+   "normalized": "corrected: src/0terminalturnvisibility.receipts.test.ts scores every logical row: the reference answer is the turn whose transcript contains that row under the matcher's own containment rule.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:379"
+  },
+  {
+   "start": 86,
+   "end": 86,
+   "normalized": "corrected: read the claude row plainly: it gained no true positives.",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:379"
+  },
+  {
+   "start": 87,
+   "end": 87,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 88,
+   "end": 88,
+   "normalized": "baked for 9m 25s · done 10:55 am",
+   "id": null
+  },
+  {
+   "start": 89,
+   "end": 89,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 90,
+   "end": 90,
+   "normalized": "works for inline markdown and table renders? markdown tables in claude code get rsposnive designed into a list mode so there are 2 renders for it, and code and tool calls and yada yada?",
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:380"
+  },
+  {
+   "start": 91,
+   "end": 91,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 92,
+   "end": 92,
+   "normalized": "ran 1 shell command",
+   "id": null
+  },
+  {
+   "start": 93,
+   "end": 93,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 94,
+   "end": 94,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 95,
+   "end": 95,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 96,
+   "end": 96,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 97,
+   "end": 97,
+   "normalized": "opus 5 ctx 24% of 1000k 235159in 1373out",
+   "id": null
+  },
+  {
+   "start": 98,
+   "end": 98,
+   "normalized": "auto mode on (shift+tab to cycle) · ← for agents",
+   "id": null
+  },
+  {
+   "start": 99,
+   "end": 99,
+   "normalized": "[lab-claud0:2.1.251 \"✳ tmux selection beha\" 11:06 29-aug-26",
+   "id": null
+  }
+ ],
+ "turns": [
+  {
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377",
+   "turn": 377,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 0,
+   "anchorEnd": 72,
+   "bufferStart": 0,
+   "bufferEnd": 75
+  },
+  {
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378",
+   "turn": 378,
+   "role": "user",
+   "confidence": "extended",
+   "anchorStart": 76,
+   "anchorEnd": 82,
+   "bufferStart": 76,
+   "bufferEnd": 84
+  },
+  {
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:379",
+   "turn": 379,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 85,
+   "anchorEnd": 86,
+   "bufferStart": 85,
+   "bufferEnd": 89
+  },
+  {
+   "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:380",
+   "turn": 380,
+   "role": "user",
+   "confidence": "extended",
+   "anchorStart": 90,
+   "anchorEnd": 90,
+   "bufferStart": 90,
+   "bufferEnd": 99
+  }
+ ]
+}

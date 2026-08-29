@@ -1,0 +1,2410 @@
+[
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 85,
+  "ts": 1788012981848,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 86,
+  "ts": 1788012984910,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 87,
+  "ts": 1788012999397,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 88,
+  "ts": 1788013002555,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 89,
+  "ts": 1788013021383,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 90,
+  "ts": 1788013024909,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 91,
+  "ts": 1788013026442,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 92,
+  "ts": 1788013051854,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 93,
+  "ts": 1788013054240,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 94,
+  "ts": 1788013066008,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 95,
+  "ts": 1788013068844,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 96,
+  "ts": 1788013084256,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 97,
+  "ts": 1788013085454,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 98,
+  "ts": 1788013093427,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 99,
+  "ts": 1788013094169,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 100,
+  "ts": 1788013100777,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 101,
+  "ts": 1788013101928,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 102,
+  "ts": 1788013104187,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 103,
+  "ts": 1788013107960,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 104,
+  "ts": 1788013108786,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 105,
+  "ts": 1788013118489,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 106,
+  "ts": 1788013130478,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 107,
+  "ts": 1788013130484,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 108,
+  "ts": 1788013141380,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 109,
+  "ts": 1788013181450,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 110,
+  "ts": 1788013196277,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 111,
+  "ts": 1788013197125,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 112,
+  "ts": 1788013244994,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 113,
+  "ts": 1788013262094,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 114,
+  "ts": 1788013263233,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 115,
+  "ts": 1788013275560,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 116,
+  "ts": 1788013292807,
+  "role": "assistant",
+  "said": "Correction: codex accepts `[tui] alternate_screen` and then ignores it.\n\n## What the probe showed\n\n| test | result |\n| --- | --- |\n| `codex -c 'tui.alternate_screen=\"bogus\"' mcp list` | `unknown variant, expected one of auto, always, never` \u2014 key is real, `always` is valid |\n| `~/.codex/config.toml:163` | already `[tui]` / `alternate_screen = \"always\"` (mtime Aug 28 18:28, before your codex started 09:21) |\n| raw pty capture, `TERM=xterm-256color`, 8212 bytes | `ESC[?1049h` count = **0** |\n| same under tmux, pipe-pane, 13166 bytes | `ESC[?1049h` count = **0**; emits `?2026` (sync output) \u00d730, `?2004h`, `?1004h` |\n| your `projects` pane, pid 62687 real codex TUI | `alternate_on = off` |\n| control: `boop tui claude` panes (projects-2/3/4) | `alternate_on = ON` |\n\ncodex 0.151.0 renders inline and uses synchronized-output repaints for flicker. It never asks for the alternate buffer, so tmux keeps scrolling. That is [openai/codex#24552](https://github.com/openai/codex/issues/24552), open, no maintainer response, reported on 0.133.0 and still true on 0.151.0. `--no-alt-screen` exists as a flag but its counterpart does nothing.\n\n## Fix applied in hafley-rs\n\nboop now emits the switch on codex's behalf.\n\n| file | change |\n| --- | --- |\n| `crates/boop-harness/src/harness.rs:31-37` | new `Capabilities::wrapper_owns_alternate_screen` |\n| `crates/boop-harness/src/harness/codex.rs:29` | `true` |\n| `claude.rs:28`, `opencode.rs:29`, `kimi.rs:32`, `registry.rs:75`, 5 test/CLI sites | `false` |\n| `crates/boop/src/cli/control.rs:31-56` | `AlternateScreen` guard: writes `ESC[?1049h` before spawn, `ESC[?1049l` on `Drop` so bail, `?`, and clean exit all restore |\n| `crates/boop/src/cli/control.rs:139-140` | `AlternateScreen::enter(adapter.capabilities().wrapper_owns_alternate_screen)` |\n\ntmux parses `1049h` out of the pane stream regardless of which process wrote it, and `alternate-screen` is already `on` globally, so the pane flips for the child's whole life.\n\n## Verification\n\n```\ntmux new-session -d -s boopalt -c /tmp \"target/debug/boop tui codex --cwd /tmp\"\nalt=ON  history=0\n\u2502 >_ OpenAI Codex (v0.151.0)  model: gpt-5.6-sol high  directory: /tmp \u2502\n\u203a Ask Codex to do anything\n```\n\nInput pinned at the bottom, `history_size` stays 0, zero scrollback pollution. `cargo check --workspace --all-targets` clean apart from the pre-existing `run_host` dead-code warning. Test sessions killed.\n\nNext: `cargo install --path crates/boop` (or your justfile install target) so the `boop` on your PATH picks this up, then restart the `projects` pane's `boop tui codex`."
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 117,
+  "ts": 1788013476495,
+  "role": "user",
+  "said": "can we get a candidate extraction of the pty as a trait/struct/enum system that we lift into boop-mux or boop-pty, where we match over the ui/data available out of tmux so we can speak generically/DOMingly about it"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 118,
+  "ts": 1788013482717,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 119,
+  "ts": 1788013485546,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 120,
+  "ts": 1788013486259,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 121,
+  "ts": 1788013490901,
+  "role": "user",
+  "said": "[Request interrupted by user]"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 122,
+  "ts": 1788013490971,
+  "role": "user",
+  "said": "are there any other rust libraries that do this"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 123,
+  "ts": 1788013499324,
+  "role": "user",
+  "said": "[Request interrupted by user]"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 124,
+  "ts": 1788013499337,
+  "role": "user",
+  "said": "think outside the box ur bad at it and research more than 4"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 125,
+  "ts": 1788013506579,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 126,
+  "ts": 1788013508701,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 127,
+  "ts": 1788013509143,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 128,
+  "ts": 1788013524911,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 129,
+  "ts": 1788013525709,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 130,
+  "ts": 1788013526209,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 131,
+  "ts": 1788013539564,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 132,
+  "ts": 1788013540254,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 133,
+  "ts": 1788013540294,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 134,
+  "ts": 1788013558508,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 135,
+  "ts": 1788013562829,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 136,
+  "ts": 1788013568922,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 137,
+  "ts": 1788013569884,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 138,
+  "ts": 1788013573006,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 139,
+  "ts": 1788013579879,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 140,
+  "ts": 1788013593812,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 141,
+  "ts": 1788013595226,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 142,
+  "ts": 1788013597071,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 143,
+  "ts": 1788013607094,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 144,
+  "ts": 1788013609184,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 145,
+  "ts": 1788013609324,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 146,
+  "ts": 1788013626618,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 147,
+  "ts": 1788013627286,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 148,
+  "ts": 1788013627560,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 149,
+  "ts": 1788013646511,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 150,
+  "ts": 1788013649585,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 151,
+  "ts": 1788013657797,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 152,
+  "ts": 1788013714730,
+  "role": "assistant",
+  "said": "## Contents\n\n1. The question splits into 6 layers\n2. Candidates per layer, with receipts\n3. The three that change the design\n4. What tmux actually exposes\n5. Where nothing exists, and the prior art\n6. Buy / wrap / build call\n\n---\n\n## 1. The question splits into 6 layers\n\n`instant/src-tauri/src/pty.rs` (1080 lines) is not one library-shaped problem. It is six stacked, and the buy answer differs per layer.\n\n```mermaid\nflowchart TD\n  L6[\"L6 semantic blocks<br/>turn / command / region, addressable\"]\n  L5[\"L5 harness identity<br/>which agent runs in this pane\"]\n  L4[\"L4 screen model<br/>grid, cursor, selection, scrollback\"]\n  L3[\"L3 mux object model<br/>session / window / pane tree + events\"]\n  L2[\"L2 mux transport<br/>one-shot argv vs control mode\"]\n  L1[\"L1 pty<br/>fork, resize, read, write\"]\n  L1 --> L2 --> L3 --> L4 --> L5 --> L6\n```\n\nYour current code: L1 = `portable-pty`, L2 = raw `Command` + `tmux_interface`, L3 = ad-hoc `HashMap<String, Vec<String>>` (`session_pane_info`, `pty.rs:224`), L4 = none in Rust (xterm.js owns it), L5 = hand-rolled `ps`/`lsof` scrape (`process_snapshot`, `inner_agent_command`), L6 = TypeScript only (`0_terminalTurnVisibility.ts`, `1a_terminalContextQueue.ts`).\n\n---\n\n## 2. Candidates per layer\n\nDownloads and dates pulled from the crates.io API today.\n\n### L1 \u2014 pty\n\n| crate | ver | all-time | 90d | updated | fit |\n| --- | --- | --- | --- | --- | --- |\n| `portable-pty` | 0.9.0 | 13.2M | 6.5M | 2025-02-11 | already your dep; runtime-swappable impls behind traits, Windows ConPTY included |\n| `pty-process` | 0.5.3 | 4.6M | 982k | 2025-07-12 | thinner, tokio-native, Unix-only |\n| `ptyprocess` | 0.5.0 | 1.15M | 388k | 2025-09-12 | backend for `expectrl`; lower level than you need |\n| `conpty` | 0.7.0 | 469k | 184k | 2024-09-23 | Windows-only, subsumed by `portable-pty` |\n| `expectrl` / `rexpect` | 0.9 / 0.7.1 | 699k / 1.9M | 273k / 346k | 2026-05 | expect-style automation, not pane hosting |\n\nNo reason to move. `portable-pty` is the trait-based one; the others are narrower.\n\n### L2 \u2014 tmux transport\n\n| crate | ver | all-time | 90d | updated | fit |\n| --- | --- | --- | --- | --- | --- |\n| `tmux_interface` | 0.4.0 | 152k | 49k | 2026-03-10 | already your dep; typed argv builders, **CLI only, no control-mode parsing** |\n| `tmuxpulse` | 0.1.0 | 36 | 14 | 2026-03-02 | the only crate whose stated design is control-mode `tmux -C` as a structured event stream, sub-10ms |\n| `tmux-lib` | 0.5.0 | 6.4k | 229 | 2026-04-18 | helper functions, thin |\n| `tmux-mcp-rs` | 0.6.0 | 492 | 256 | 2026-07-11 | local/SSH process adapter, parsers, buffer search \u2014 MCP-shaped |\n| `tmuxcc` | 0.1.7 | 326 | 50 | 2026-01-19 | see \u00a73 |\n\nYour `boop-mux/src/lib.rs:449-676` (`Notification`, `ControlEvent`, `parse_event`, `ControlClient`) already is an L2 control-mode client. Nothing published beats it at your download-weight threshold; `tmuxpulse` at 36 downloads is not a dependency, it is a design to read.\n\n### L3 \u2014 mux object model\n\n| candidate | published? | fit |\n| --- | --- | --- |\n| wezterm `mux` crate | **not on crates.io** (404 for `wezterm-mux`, `wezterm-client`; `mux` 0.1.1 is an unrelated 2016 codec crate) | git-dep only; the richest typed Window/Tab/Pane tree in Rust, `wezterm cli list --format json` is the shape you're describing |\n| `zellij-utils` | 0.45.1, 421k dl, 47k/90d, 2026-08-28 | real crate, but it is Zellij's internals, not a neutral model |\n| `zellij-tile` | 0.45.1, 184k dl, 30k/90d | plugin-side view of panes; WASM ABI, wrong direction |\n| tmux format vars | n/a | see \u00a74 \u2014 tmux already ships the model, untyped |\n\n### L4 \u2014 screen model\n\n| crate | ver | all-time | 90d | updated | fit |\n| --- | --- | --- | --- | --- | --- |\n| `vte` | 0.15.0 | 70.9M | 14.6M | 2025-02-02 | parser only, no grid; the byte-level primitive everything else sits on |\n| `termwiz` | 0.23.3 | 19.7M | 9.8M | 2025-03-20 | wezterm's terminal library; `Surface`, cell attrs, full escape modelling |\n| `vt100` | 0.16.2 | 10.4M | 3.7M | 2025-07-12 | feed bytes, read a rendered grid; simplest queryable screen |\n| `alacritty_terminal` | 0.26.0 | 1.3M | 698k | 2026-04-06 | grid + scrollback + selection + search; heaviest, most complete |\n| `avt` | 0.18.0 | 241k | 34k | 2026-05-05 | asciinema's headless VT, built for offline replay of a stream |\n| `tui-term` | 0.3.4 | 1.2M | 293k | 2026-04-07 | `vt100` grid rendered as a ratatui widget |\n\n### L5 \u2014 harness identity\n\nNothing published. `tmuxcc` is the only crate that even names the problem (\u00a73).\n\n### L6 \u2014 semantic blocks\n\nNothing published in Rust. \u00a75.\n\n---\n\n## 3. The three that change the design\n\n**`tmuxcc` 0.1.7** \u2014 description reads: *\"AI Agent Dashboard for tmux - Monitor Claude Code, OpenCode, Codex CLI, and Gemini.\"* That is your L3+L5+L6 stack, shipped. Public surface: `Action`, `AppState`, `Config`, `TmuxClient`, and modules `agents / app / monitor / parsers / tmux / ui`, on `ratatui 0.29` + `tokio 1`. Whether `TmuxClient` uses control mode or one-shot CLI is not stated in the rustdoc; it needs a source read. At 326 downloads it is not a dependency you take, but its module split is direct evidence that `agents` and `parsers` want to be separate from `tmux` \u2014 which is the split you are proposing.\n\n**wezterm's `mux` crate** \u2014 the strongest typed answer, and unbuyable: not published, git-dep only, and it drags the wezterm workspace (19+ member crates). Its `wezterm cli list --format json` output (`window_id, tab_id, pane_id, workspace, size, title, cwd`) is the exact \"DOM\" shape you asked for, and is worth copying as a schema even though the crate is not worth vendoring.\n\n**`alacritty_terminal` 0.26.0** \u2014 698k downloads in 90 days, actively released 2026-04. This is the one real buy in the list, and it buys L4, the layer you currently do not have in Rust at all. Grid, scrollback, selection ranges, and search are exactly what a \"match over the UI available\" needs, and today they live only in xterm.js on the TypeScript side. `vt100` is the lighter alternative if you only want a rendered grid; `avt` if you want to replay a captured stream headlessly in tests.\n\n---\n\n## 4. What tmux actually exposes\n\nMeasured on your running server, not from docs.\n\n| scope | format vars | examples you already read |\n| --- | --- | --- |\n| pane | 44 | `pane_id`, `pane_pid`, `pane_current_command`, `pane_current_path`, `pane_in_mode`, `pane_dead` |\n| window | 32 | `window_zoomed_flag`, `window_panes` |\n| client | 24 | `client_termname`, `client_control_mode` |\n| session | 20 | `session_name`, `session_windows`, `session_attached` |\n| cursor | 8 | `cursor_x`, `cursor_y`, `cursor_shape` |\n| mouse | 6 | `mouse_any_flag`, `mouse_sgr_flag` \u2014 the flags that decided your right-click fix |\n| buffer | 6 | `buffer_size`, `buffer_sample` |\n| history | 4 | `history_size`, `history_limit` \u2014 the receipt for the alt-screen fix |\n| alternate | 3 | `alternate_on` |\n| scroll | 2 | `scroll_position` |\n| **total** | **174** | plus 91 commands |\n\n174 typed fields is the actual enum surface of the extraction. That is a generated model, not a hand-written one.\n\n---\n\n## 5. Where nothing exists, and the prior art\n\nL6 \u2014 \"a command and its output as one addressable, attachable unit\" \u2014 has no Rust crate. The named prior art is **Warp's block model**: the viewport is a `BlockList`, an ordered list of typed blocks, each holding command string, stdout/stderr, exit code, cwd, timestamp; blocks are individually copyable, searchable, bookmarkable, and **attachable as agent context**. That last property is the feature you built by hand yesterday in `1a_terminalContextQueue.ts`.\n\nThe open standard underneath it is **OSC 133** (Final Term / FTCS shell integration): `A` prompt start, `B` prompt end, `C` output start, `D` output end + exit code. Adopted by iTerm2, WezTerm, kitty, VS Code, Contour, foot. Two blockers, both real:\n\n- tmux does not forward OSC 133 by default \u2014 [tmux#3064](https://github.com/tmux/tmux/issues/3064) and [tmux#5237](https://github.com/tmux/tmux/issues/5237), both open.\n- Claude Code does not emit it \u2014 [anthropics/claude-code#32635](https://github.com/anthropics/claude-code/issues/32635), open.\n\nSo the semantic layer stays yours either way. What exists to reuse is the *vocabulary* (block, prompt-start, output-start, exit-code), not an implementation.\n\n---\n\n## 6. Buy / wrap / build\n\n| layer | call | what |\n| --- | --- | --- |\n| L1 pty | **keep** | `portable-pty` 0.9; no candidate improves on it |\n| L2 transport | **keep + extend** | your `ControlClient` in `boop-mux/src/lib.rs:527`; read `tmuxpulse` for its event-stream shape, do not depend on it |\n| L3 object model | **build, schema-borrowed** | generate typed structs from the 174 format vars; copy wezterm's `wezterm cli list --format json` field naming |\n| L4 screen | **buy** | `alacritty_terminal` 0.26 (grid + scrollback + selection + search), or `vt100` 0.16 if you only need the rendered grid |\n| L5 harness identity | **build** | nothing published; `tmuxcc`'s `agents` module is the only prior art and it is 326 downloads |\n| L6 semantic blocks | **build, vocabulary-borrowed** | Warp's BlockList naming + OSC 133 field names; port `0_terminalTurnVisibility.ts` down into Rust |\n\nThe crate split that falls out: `boop-mux` keeps L2+L3 (transport and object model), a new `boop-term` takes L4+L6 (screen and blocks) wrapping `alacritty_terminal`, and L5 belongs in the existing `boop-harness` next to `Capabilities`, not in a mux crate.\n\nI have not written any of it. Say which layers you want and I will do the signatures-first pass on those.\n\nSources: [tmux_interface](https://crates.io/crates/tmux_interface), [tmuxcc](https://docs.rs/tmuxcc/latest/tmuxcc/), [tmuxpulse](https://lib.rs/crates/tmuxpulse), [tmux-mcp-rs](https://docs.rs/tmux-mcp-rs/latest/tmux_mcp_rs/), [portable-pty](https://docs.rs/portable-pty), [pty-process](https://docs.rs/pty-process), [ptyprocess](https://github.com/zhiburt/ptyprocess), [alacritty_terminal](https://docs.rs/alacritty_terminal/latest/alacritty_terminal/), [vt100](https://docs.rs/vt100/latest/vt100/index.html), [termwiz](https://docs.rs/termwiz/latest/termwiz/), [tui-term](https://github.com/a-kenji/tui-term), [wezterm mux/src/lib.rs](https://github.com/wezterm/wezterm/blob/main/mux/src/lib.rs), [wezterm cli list](https://wezterm.org/cli/cli/list.html), [Warp block model](https://www.warp.dev/blog/block-model-behind-warps-agentic-development-environment), [OSC 133 spec](https://contour-terminal.org/vt-extensions/osc-133-shell-integration/), [tmux#3064](https://github.com/tmux/tmux/issues/3064), [claude-code#32635](https://github.com/anthropics/claude-code/issues/32635)"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 153,
+  "ts": 1788013714961,
+  "role": "user",
+  "said": "Stop hook feedback:\n[PROSE_PROD_MAX_WORDS=999999 PROSE_PROD_MAX_SENTENCES=999999 PROSE_PROD_MAX_PARAGRAPHS=999999 PROSE_PROD_MAX_FILLER=999999 /Users/chrishafley/projects/claude-research/bin/prose-prod --hook]: PROSE LAW VIOLATION (assistant turn):\n  [neg-parallelism] At 326 downloads it is not a dependency you take, but its module split is direct evidence that\n      law: No negative parallelism (not X, Y / X. Not Y.). State the positive claim.\nFix: fix the flagged slop: emit ONLY the corrected sentences, one per line, each prefixed 'corrected: '.\nattempt 1 of 3; after 3 the turn ends as-is.\n"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 154,
+  "ts": 1788013717184,
+  "role": "assistant",
+  "said": "corrected: At 326 downloads it stays a design to read rather than a dependency to take, and its module split is direct evidence that `agents` and `parsers` want to be separate from `tmux` \u2014 which is the split you are proposing."
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 155,
+  "ts": 1788014548013,
+  "role": "user",
+  "said": "alacritty would that become the pty driver or we gotta write this frontend in rust"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 156,
+  "ts": 1788014559428,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 157,
+  "ts": 1788014561602,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 158,
+  "ts": 1788014562508,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 159,
+  "ts": 1788014586183,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 160,
+  "ts": 1788014587806,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 161,
+  "ts": 1788014593328,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 162,
+  "ts": 1788014610441,
+  "role": "assistant",
+  "said": "Neither. It is a third consumer of bytes Rust already holds.\n\n## What the crate actually contains\n\n`alacritty_terminal` 0.26 has no feature gates except `serde`. Everything below always compiles:\n\n| module | what it gives you | do you need it |\n| --- | --- | --- |\n| `tty` | pty spawn \u2014 `rustix-openpty` on unix, ConPTY on windows | no, `portable-pty` already does this |\n| `event_loop` | \"performs I/O on the pseudoterminal\" | no, `pty.rs` already has a read loop |\n| `term` / `grid` | headless `Term`, cells, scrollback | **yes, this is the buy** |\n| `selection` | typed selection ranges | yes |\n| `vi_mode` + `regex-automata` | in-grid search and motions | yes |\n| `index` | `Line` / `Column` newtypes | yes |\n\nNo rendering frontend anywhere in that list. `Term::renderable_content()` is what a renderer *may* consume; nothing forces one to exist.\n\n## Where it lands\n\n```mermaid\nflowchart LR\n  tmux[\"tmux attach -d -t SESSION\"] --> pty[\"portable-pty<br/>pty.rs:531 openpty\"]\n  pty --> drain[\"drain_utf8<br/>pty.rs:336\"]\n  drain --> emit[\"emit pty-data-batch\"]\n  emit --> xterm[\"xterm.js<br/>renders + owns selection\"]\n  drain -.new.-> term[\"alacritty_terminal Term<br/>headless, queryable\"]\n  term -.new.-> blocks[\"block / turn extraction<br/>in Rust\"]\n```\n\nOne added line in `drain_utf8`'s caller. `portable-pty` stays the driver, xterm.js stays the frontend.\n\n## The three options, stated plainly\n\n| option | pty driver | frontend | cost |\n| --- | --- | --- | --- |\n| **A. tee** | `portable-pty` (unchanged) | xterm.js (unchanged) | one `Term` per tab, fed the same bytes |\n| B. swap driver | `alacritty_terminal::tty` + `event_loop` | xterm.js (unchanged) | drops `portable-pty`, inherits their loop design, buys nothing you lack |\n| C. Rust frontend | either | `ratatui` + `tui-term`, or wgpu | rewrites every overlay in `src/` \u2014 diagrams, anchors, context queue, sidebar |\n\nNothing in the extraction requires C.\n\n## The one real risk in A\n\nTwo independent VT interpreters read the same stream, and they can disagree on reflow at resize. Your addressing today is row-indexed: `TerminalLineAnchors.elementForBufferRow()` (`00b_terminalLineAnchors.ts`) maps an xterm buffer row to a DOM node, and `1a_terminalContextQueue.ts:171-179` stores `bufferStart.row` / `bufferEnd.row`. If Rust computes a block at alacritty row 40 and xterm.js has that content at row 39, the `+ next` button paints on the wrong line.\n\nThree ways out, cheapest first:\n\n1. **Ask tmux instead of emulating.** `capture-pane -p -e -J` is already implemented at `boop-mux/src/lib.rs:237`. One grid, one source of truth, zero new deps. Poll-shaped, not live.\n2. **Address by marker, not row.** Blocks carry a content hash or an OSC-133-style id; the frontend resolves id \u2192 row itself. Survives reflow on both sides.\n3. **Make alacritty authoritative.** Rust sends resolved coordinates, xterm.js stops computing them. Largest change, tightest result.\n\nRecommendation: A with mitigation 2. Take `alacritty_terminal` for `term`/`grid`/`selection`/search, keep `portable-pty`, keep xterm.js, and never let a row index cross the IPC boundary."
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 163,
+  "ts": 1788014707374,
+  "role": "user",
+  "said": "wtf is tee doing here, listen idc, i want the ability to read the message im viewing to be correct bc right now its hella not lmfao"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 164,
+  "ts": 1788014714935,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 165,
+  "ts": 1788014716462,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 166,
+  "ts": 1788014718095,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 167,
+  "ts": 1788014730373,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 168,
+  "ts": 1788014730687,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 169,
+  "ts": 1788014746769,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 170,
+  "ts": 1788014747188,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 171,
+  "ts": 1788014754199,
+  "role": "user",
+  "said": "[Request interrupted by user]"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 172,
+  "ts": 1788014754285,
+  "role": "user",
+  "said": "go in a lab with worktree off all this and get some e2e receipts telling me we are good. u can use our own convo to summon claude resume <id> and codex resume of some thing in projects, so we can ensure we are capturing shit"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 173,
+  "ts": 1788014765969,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 174,
+  "ts": 1788014766659,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 175,
+  "ts": 1788014768697,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 176,
+  "ts": 1788014779557,
+  "role": "user",
+  "said": "[Request interrupted by user]"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 177,
+  "ts": 1788014779573,
+  "role": "user",
+  "said": "idk how cmux works or herdr or cate but im still learning the whole intersection of ai and tui/pty/terms"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 178,
+  "ts": 1788012196036,
+  "role": "user",
+  "said": "use opus to make ./instant and ./hafley-rs and ./hafley-rxjs and get my tmux sessions with u and other ai harnesses from boop and boop-mux, i want right click on text selection to not fucking auto copy and remove the selection (tmux pisses me off on codex lmfao) i want to fucking text range select and \"add\" to my next message/save it to a list of what i wnat to ask the ai next, instead of just copyingh and praying to find a fucking input box. and also go find out if codex has a tui fullscreen mode that keeps the input still like claude code and opencode have"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 179,
+  "ts": 1788012204258,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 180,
+  "ts": 1788012205589,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 181,
+  "ts": 1788012213769,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 182,
+  "ts": 1788012215500,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 183,
+  "ts": 1788012220131,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 184,
+  "ts": 1788012221154,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 185,
+  "ts": 1788012227062,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 186,
+  "ts": 1788012227985,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 187,
+  "ts": 1788012234773,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 188,
+  "ts": 1788012236236,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 189,
+  "ts": 1788012246211,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 190,
+  "ts": 1788012246304,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 191,
+  "ts": 1788012251670,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 192,
+  "ts": 1788012251865,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 193,
+  "ts": 1788012269891,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 194,
+  "ts": 1788012270701,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 195,
+  "ts": 1788012283370,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 196,
+  "ts": 1788012285523,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 197,
+  "ts": 1788012291952,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 198,
+  "ts": 1788012293284,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 199,
+  "ts": 1788012309681,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 200,
+  "ts": 1788012311394,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 201,
+  "ts": 1788012314768,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 202,
+  "ts": 1788012315222,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 203,
+  "ts": 1788012318424,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 204,
+  "ts": 1788012320354,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 205,
+  "ts": 1788012336253,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 206,
+  "ts": 1788012336996,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 207,
+  "ts": 1788012350828,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 208,
+  "ts": 1788012360010,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 209,
+  "ts": 1788012372913,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 210,
+  "ts": 1788012381067,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 211,
+  "ts": 1788012387016,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 212,
+  "ts": 1788012388064,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 213,
+  "ts": 1788012571643,
+  "role": "user",
+  "said": "Continue from where you left off."
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 214,
+  "ts": 1788012571643,
+  "role": "assistant",
+  "said": "No response requested."
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 215,
+  "ts": 1788012573660,
+  "role": "user",
+  "said": "continue"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 216,
+  "ts": 1788012581594,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 217,
+  "ts": 1788012582669,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 218,
+  "ts": 1788012615005,
+  "role": "assistant",
+  "said": "## Changed files\n\n| file | change |\n| --- | --- |\n| `instant/src-tauri/src/pty.rs:398` | `enable_mouse` now calls new `keep_mouse_selection()` |\n| `instant/src-tauri/src/pty.rs:402-441` | rebinds tmux `MouseDragEnd1Pane` / `DoubleClick1Pane` / `TripleClick1Pane` off `copy-pipe-and-cancel` |\n| `instant/src/terminal.ts:615` | `rightClickSelectsWord: false` |\n| `instant/src/1a_terminalContextQueue.ts:143-146,177-181,223,397` | selection capture wired up (was dead code) |\n| `instant/src/chrome.ts:398-411` | terminal right-click menu: \"Add selection to next message\", \"Copy selection\" |\n\n`hafley-rs` and `hafley-rxjs`: no edits needed. `boop-mux` only spawns/queries tmux; all mouse and clipboard policy lived in `instant/src-tauri/src/pty.rs`.\n\n## Why selection kept vanishing\n\n| layer | old behavior | now |\n| --- | --- | --- |\n| tmux `copy-mode-vi MouseDragEnd1Pane` | `copy-pipe-and-cancel` \u2014 copies **and** exits copy-mode, wiping the highlight | `stop-selection` \u2014 highlight freezes, nothing copied |\n| tmux `root Double/TripleClick1Pane` | `copy-mode -H; select-word; copy-pipe-and-cancel` | same minus the copy-and-cancel |\n| tmux `-g set-clipboard on` (`pty.rs:394`) | turned tmux's mouse copy into an OSC 52 that `terminal.ts:836` writes to the macOS clipboard | unchanged, but nothing auto-pipes into it now |\n| xterm.js `rightClickSelectsWord` | undefined \u2192 **true on macOS**: right-click drops your selection, re-selects the word under the pointer | `false` |\n\nCopy is now explicit only: `Enter`/`y` in copy-mode, `\u2318C`, or the new \"Copy selection\" menu item.\n\n## Selection \u2192 next message\n\n`TerminalContextQueue` already had `captureSelection()`, `addSelection()`, the `+ next` button, the `NEXT MESSAGE` queue panel, and CSS at `styles.css:1035-1100`. None of it ran: `selectionAction` was never appended to `root`, had no click handler, and no `onSelectionChange` subscription existed.\n\n1. Option-drag in the terminal (tmux mouse mode is on, so `macOptionClickForcesSelection` forces xterm's own selection).\n2. `+ next` appears at the selection's first row.\n3. Click it, or right-click \u2192 \"Add selection to next message\".\n4. Item lands in the `NEXT MESSAGE` panel as an editable textarea with a checkbox.\n5. \"Paste into prompt\" writes all enabled items to the pty as `[turn <session>:<n>]`-tagged blocks, then clears the queue.\n\nStructured table-row / list-item checkboxes in the gutter feed the same queue.\n\n## Codex fullscreen: yes, and you already have it on\n\n| knob | value |\n| --- | --- |\n| `~/.codex/config.toml:163-164` | `[tui]` / `alternate_screen = \"always\"` \u2014 already set |\n| values | `always` \\| `auto` \\| `never` |\n| CLI override | `codex --no-alt-screen` (inline mode, keeps scrollback) |\n| version | `codex-cli 0.151.0` |\n\n`always` is the equivalent of Claude Code's `/tui fullscreen`: alternate screen buffer, input pinned to the bottom. `never` is what you'd want under Zellij, where alt-screen fights pane scrollback.\n\n## Verification\n\n- `npx tsc --noEmit`: clean.\n- `cargo check` in `src-tauri`: clean (one pre-existing `magick_run` dead-code warning).\n- `vitest src/1a_terminalContextQueue.test.ts`: 5 passed.\n- Rebinds applied to the live tmux server, confirmed via `tmux list-keys`.\n\nCaveat: tmux key tables are server-global (unlike `mouse`, which `pty.rs` keeps per-session), so these bindings hit all 11 of your sessions, not just instant's.\n\nNext: relaunch instant (`cargo tauri dev` or your justfile target) to pick up the Rust + TS changes; the tmux half is already live in existing panes.\n\nSources: [Claude Code fullscreen docs](https://code.claude.com/docs/en/fullscreen), [codex alternate screen issue #24552](https://github.com/openai/codex/issues/24552), [Codex TUI tuning](https://codex.danielvaughan.com/2026/03/28/codex-cli-feature-flags-tui-tuning/)"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 219,
+  "ts": 1788012870221,
+  "role": "user",
+  "said": "okay but codex doesnt do it? i still get tmux scrollback"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 220,
+  "ts": 1788012881950,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 221,
+  "ts": 1788012883276,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 222,
+  "ts": 1788012897132,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 223,
+  "ts": 1788012899100,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 224,
+  "ts": 1788012910840,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 225,
+  "ts": 1788012911855,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 226,
+  "ts": 1788012916671,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 227,
+  "ts": 1788012925263,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 228,
+  "ts": 1788012927240,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 229,
+  "ts": 1788012935995,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 230,
+  "ts": 1788012943940,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 231,
+  "ts": 1788012945801,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 232,
+  "ts": 1788012958296,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 233,
+  "ts": 1788012962056,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 234,
+  "ts": 1788012966188,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 235,
+  "ts": 1788012984910,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 236,
+  "ts": 1788013002555,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 237,
+  "ts": 1788013024909,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 238,
+  "ts": 1788013026442,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 239,
+  "ts": 1788013054240,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 240,
+  "ts": 1788013068844,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 241,
+  "ts": 1788013085454,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 242,
+  "ts": 1788013094169,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 243,
+  "ts": 1788013101928,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 244,
+  "ts": 1788013104187,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 245,
+  "ts": 1788013108786,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 246,
+  "ts": 1788013118489,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 247,
+  "ts": 1788013130484,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 248,
+  "ts": 1788013141380,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 249,
+  "ts": 1788013181450,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 250,
+  "ts": 1788013197125,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 251,
+  "ts": 1788013244994,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 252,
+  "ts": 1788013263233,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 253,
+  "ts": 1788013275560,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 254,
+  "ts": 1788013292807,
+  "role": "assistant",
+  "said": "Correction: codex accepts `[tui] alternate_screen` and then ignores it.\n\n## What the probe showed\n\n| test | result |\n| --- | --- |\n| `codex -c 'tui.alternate_screen=\"bogus\"' mcp list` | `unknown variant, expected one of auto, always, never` \u2014 key is real, `always` is valid |\n| `~/.codex/config.toml:163` | already `[tui]` / `alternate_screen = \"always\"` (mtime Aug 28 18:28, before your codex started 09:21) |\n| raw pty capture, `TERM=xterm-256color`, 8212 bytes | `ESC[?1049h` count = **0** |\n| same under tmux, pipe-pane, 13166 bytes | `ESC[?1049h` count = **0**; emits `?2026` (sync output) \u00d730, `?2004h`, `?1004h` |\n| your `projects` pane, pid 62687 real codex TUI | `alternate_on = off` |\n| control: `boop tui claude` panes (projects-2/3/4) | `alternate_on = ON` |\n\ncodex 0.151.0 renders inline and uses synchronized-output repaints for flicker. It never asks for the alternate buffer, so tmux keeps scrolling. That is [openai/codex#24552](https://github.com/openai/codex/issues/24552), open, no maintainer response, reported on 0.133.0 and still true on 0.151.0. `--no-alt-screen` exists as a flag but its counterpart does nothing.\n\n## Fix applied in hafley-rs\n\nboop now emits the switch on codex's behalf.\n\n| file | change |\n| --- | --- |\n| `crates/boop-harness/src/harness.rs:31-37` | new `Capabilities::wrapper_owns_alternate_screen` |\n| `crates/boop-harness/src/harness/codex.rs:29` | `true` |\n| `claude.rs:28`, `opencode.rs:29`, `kimi.rs:32`, `registry.rs:75`, 5 test/CLI sites | `false` |\n| `crates/boop/src/cli/control.rs:31-56` | `AlternateScreen` guard: writes `ESC[?1049h` before spawn, `ESC[?1049l` on `Drop` so bail, `?`, and clean exit all restore |\n| `crates/boop/src/cli/control.rs:139-140` | `AlternateScreen::enter(adapter.capabilities().wrapper_owns_alternate_screen)` |\n\ntmux parses `1049h` out of the pane stream regardless of which process wrote it, and `alternate-screen` is already `on` globally, so the pane flips for the child's whole life.\n\n## Verification\n\n```\ntmux new-session -d -s boopalt -c /tmp \"target/debug/boop tui codex --cwd /tmp\"\nalt=ON  history=0\n\u2502 >_ OpenAI Codex (v0.151.0)  model: gpt-5.6-sol high  directory: /tmp \u2502\n\u203a Ask Codex to do anything\n```\n\nInput pinned at the bottom, `history_size` stays 0, zero scrollback pollution. `cargo check --workspace --all-targets` clean apart from the pre-existing `run_host` dead-code warning. Test sessions killed.\n\nNext: `cargo install --path crates/boop` (or your justfile install target) so the `boop` on your PATH picks this up, then restart the `projects` pane's `boop tui codex`."
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 255,
+  "ts": 1788013476495,
+  "role": "user",
+  "said": "can we get a candidate extraction of the pty as a trait/struct/enum system that we lift into boop-mux or boop-pty, where we match over the ui/data available out of tmux so we can speak generically/DOMingly about it"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 256,
+  "ts": 1788013485546,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 257,
+  "ts": 1788013486259,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 258,
+  "ts": 1788013490901,
+  "role": "user",
+  "said": "[Request interrupted by user]"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 259,
+  "ts": 1788013490971,
+  "role": "user",
+  "said": "are there any other rust libraries that do this"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 260,
+  "ts": 1788013499324,
+  "role": "user",
+  "said": "[Request interrupted by user]"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 261,
+  "ts": 1788013499337,
+  "role": "user",
+  "said": "think outside the box ur bad at it and research more than 4"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 262,
+  "ts": 1788013508701,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 263,
+  "ts": 1788013509143,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 264,
+  "ts": 1788013525709,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 265,
+  "ts": 1788013526209,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 266,
+  "ts": 1788013540254,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 267,
+  "ts": 1788013540294,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 268,
+  "ts": 1788013562829,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 269,
+  "ts": 1788013569884,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 270,
+  "ts": 1788013579879,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 271,
+  "ts": 1788013595226,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 272,
+  "ts": 1788013597071,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 273,
+  "ts": 1788013609184,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 274,
+  "ts": 1788013609324,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 275,
+  "ts": 1788013627286,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 276,
+  "ts": 1788013627560,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 277,
+  "ts": 1788013649585,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 278,
+  "ts": 1788013714730,
+  "role": "assistant",
+  "said": "## Contents\n\n1. The question splits into 6 layers\n2. Candidates per layer, with receipts\n3. The three that change the design\n4. What tmux actually exposes\n5. Where nothing exists, and the prior art\n6. Buy / wrap / build call\n\n---\n\n## 1. The question splits into 6 layers\n\n`instant/src-tauri/src/pty.rs` (1080 lines) is not one library-shaped problem. It is six stacked, and the buy answer differs per layer.\n\n```mermaid\nflowchart TD\n  L6[\"L6 semantic blocks<br/>turn / command / region, addressable\"]\n  L5[\"L5 harness identity<br/>which agent runs in this pane\"]\n  L4[\"L4 screen model<br/>grid, cursor, selection, scrollback\"]\n  L3[\"L3 mux object model<br/>session / window / pane tree + events\"]\n  L2[\"L2 mux transport<br/>one-shot argv vs control mode\"]\n  L1[\"L1 pty<br/>fork, resize, read, write\"]\n  L1 --> L2 --> L3 --> L4 --> L5 --> L6\n```\n\nYour current code: L1 = `portable-pty`, L2 = raw `Command` + `tmux_interface`, L3 = ad-hoc `HashMap<String, Vec<String>>` (`session_pane_info`, `pty.rs:224`), L4 = none in Rust (xterm.js owns it), L5 = hand-rolled `ps`/`lsof` scrape (`process_snapshot`, `inner_agent_command`), L6 = TypeScript only (`0_terminalTurnVisibility.ts`, `1a_terminalContextQueue.ts`).\n\n---\n\n## 2. Candidates per layer\n\nDownloads and dates pulled from the crates.io API today.\n\n### L1 \u2014 pty\n\n| crate | ver | all-time | 90d | updated | fit |\n| --- | --- | --- | --- | --- | --- |\n| `portable-pty` | 0.9.0 | 13.2M | 6.5M | 2025-02-11 | already your dep; runtime-swappable impls behind traits, Windows ConPTY included |\n| `pty-process` | 0.5.3 | 4.6M | 982k | 2025-07-12 | thinner, tokio-native, Unix-only |\n| `ptyprocess` | 0.5.0 | 1.15M | 388k | 2025-09-12 | backend for `expectrl`; lower level than you need |\n| `conpty` | 0.7.0 | 469k | 184k | 2024-09-23 | Windows-only, subsumed by `portable-pty` |\n| `expectrl` / `rexpect` | 0.9 / 0.7.1 | 699k / 1.9M | 273k / 346k | 2026-05 | expect-style automation, not pane hosting |\n\nNo reason to move. `portable-pty` is the trait-based one; the others are narrower.\n\n### L2 \u2014 tmux transport\n\n| crate | ver | all-time | 90d | updated | fit |\n| --- | --- | --- | --- | --- | --- |\n| `tmux_interface` | 0.4.0 | 152k | 49k | 2026-03-10 | already your dep; typed argv builders, **CLI only, no control-mode parsing** |\n| `tmuxpulse` | 0.1.0 | 36 | 14 | 2026-03-02 | the only crate whose stated design is control-mode `tmux -C` as a structured event stream, sub-10ms |\n| `tmux-lib` | 0.5.0 | 6.4k | 229 | 2026-04-18 | helper functions, thin |\n| `tmux-mcp-rs` | 0.6.0 | 492 | 256 | 2026-07-11 | local/SSH process adapter, parsers, buffer search \u2014 MCP-shaped |\n| `tmuxcc` | 0.1.7 | 326 | 50 | 2026-01-19 | see \u00a73 |\n\nYour `boop-mux/src/lib.rs:449-676` (`Notification`, `ControlEvent`, `parse_event`, `ControlClient`) already is an L2 control-mode client. Nothing published beats it at your download-weight threshold; `tmuxpulse` at 36 downloads is not a dependency, it is a design to read.\n\n### L3 \u2014 mux object model\n\n| candidate | published? | fit |\n| --- | --- | --- |\n| wezterm `mux` crate | **not on crates.io** (404 for `wezterm-mux`, `wezterm-client`; `mux` 0.1.1 is an unrelated 2016 codec crate) | git-dep only; the richest typed Window/Tab/Pane tree in Rust, `wezterm cli list --format json` is the shape you're describing |\n| `zellij-utils` | 0.45.1, 421k dl, 47k/90d, 2026-08-28 | real crate, but it is Zellij's internals, not a neutral model |\n| `zellij-tile` | 0.45.1, 184k dl, 30k/90d | plugin-side view of panes; WASM ABI, wrong direction |\n| tmux format vars | n/a | see \u00a74 \u2014 tmux already ships the model, untyped |\n\n### L4 \u2014 screen model\n\n| crate | ver | all-time | 90d | updated | fit |\n| --- | --- | --- | --- | --- | --- |\n| `vte` | 0.15.0 | 70.9M | 14.6M | 2025-02-02 | parser only, no grid; the byte-level primitive everything else sits on |\n| `termwiz` | 0.23.3 | 19.7M | 9.8M | 2025-03-20 | wezterm's terminal library; `Surface`, cell attrs, full escape modelling |\n| `vt100` | 0.16.2 | 10.4M | 3.7M | 2025-07-12 | feed bytes, read a rendered grid; simplest queryable screen |\n| `alacritty_terminal` | 0.26.0 | 1.3M | 698k | 2026-04-06 | grid + scrollback + selection + search; heaviest, most complete |\n| `avt` | 0.18.0 | 241k | 34k | 2026-05-05 | asciinema's headless VT, built for offline replay of a stream |\n| `tui-term` | 0.3.4 | 1.2M | 293k | 2026-04-07 | `vt100` grid rendered as a ratatui widget |\n\n### L5 \u2014 harness identity\n\nNothing published. `tmuxcc` is the only crate that even names the problem (\u00a73).\n\n### L6 \u2014 semantic blocks\n\nNothing published in Rust. \u00a75.\n\n---\n\n## 3. The three that change the design\n\n**`tmuxcc` 0.1.7** \u2014 description reads: *\"AI Agent Dashboard for tmux - Monitor Claude Code, OpenCode, Codex CLI, and Gemini.\"* That is your L3+L5+L6 stack, shipped. Public surface: `Action`, `AppState`, `Config`, `TmuxClient`, and modules `agents / app / monitor / parsers / tmux / ui`, on `ratatui 0.29` + `tokio 1`. Whether `TmuxClient` uses control mode or one-shot CLI is not stated in the rustdoc; it needs a source read. At 326 downloads it is not a dependency you take, but its module split is direct evidence that `agents` and `parsers` want to be separate from `tmux` \u2014 which is the split you are proposing.\n\n**wezterm's `mux` crate** \u2014 the strongest typed answer, and unbuyable: not published, git-dep only, and it drags the wezterm workspace (19+ member crates). Its `wezterm cli list --format json` output (`window_id, tab_id, pane_id, workspace, size, title, cwd`) is the exact \"DOM\" shape you asked for, and is worth copying as a schema even though the crate is not worth vendoring.\n\n**`alacritty_terminal` 0.26.0** \u2014 698k downloads in 90 days, actively released 2026-04. This is the one real buy in the list, and it buys L4, the layer you currently do not have in Rust at all. Grid, scrollback, selection ranges, and search are exactly what a \"match over the UI available\" needs, and today they live only in xterm.js on the TypeScript side. `vt100` is the lighter alternative if you only want a rendered grid; `avt` if you want to replay a captured stream headlessly in tests.\n\n---\n\n## 4. What tmux actually exposes\n\nMeasured on your running server, not from docs.\n\n| scope | format vars | examples you already read |\n| --- | --- | --- |\n| pane | 44 | `pane_id`, `pane_pid`, `pane_current_command`, `pane_current_path`, `pane_in_mode`, `pane_dead` |\n| window | 32 | `window_zoomed_flag`, `window_panes` |\n| client | 24 | `client_termname`, `client_control_mode` |\n| session | 20 | `session_name`, `session_windows`, `session_attached` |\n| cursor | 8 | `cursor_x`, `cursor_y`, `cursor_shape` |\n| mouse | 6 | `mouse_any_flag`, `mouse_sgr_flag` \u2014 the flags that decided your right-click fix |\n| buffer | 6 | `buffer_size`, `buffer_sample` |\n| history | 4 | `history_size`, `history_limit` \u2014 the receipt for the alt-screen fix |\n| alternate | 3 | `alternate_on` |\n| scroll | 2 | `scroll_position` |\n| **total** | **174** | plus 91 commands |\n\n174 typed fields is the actual enum surface of the extraction. That is a generated model, not a hand-written one.\n\n---\n\n## 5. Where nothing exists, and the prior art\n\nL6 \u2014 \"a command and its output as one addressable, attachable unit\" \u2014 has no Rust crate. The named prior art is **Warp's block model**: the viewport is a `BlockList`, an ordered list of typed blocks, each holding command string, stdout/stderr, exit code, cwd, timestamp; blocks are individually copyable, searchable, bookmarkable, and **attachable as agent context**. That last property is the feature you built by hand yesterday in `1a_terminalContextQueue.ts`.\n\nThe open standard underneath it is **OSC 133** (Final Term / FTCS shell integration): `A` prompt start, `B` prompt end, `C` output start, `D` output end + exit code. Adopted by iTerm2, WezTerm, kitty, VS Code, Contour, foot. Two blockers, both real:\n\n- tmux does not forward OSC 133 by default \u2014 [tmux#3064](https://github.com/tmux/tmux/issues/3064) and [tmux#5237](https://github.com/tmux/tmux/issues/5237), both open.\n- Claude Code does not emit it \u2014 [anthropics/claude-code#32635](https://github.com/anthropics/claude-code/issues/32635), open.\n\nSo the semantic layer stays yours either way. What exists to reuse is the *vocabulary* (block, prompt-start, output-start, exit-code), not an implementation.\n\n---\n\n## 6. Buy / wrap / build\n\n| layer | call | what |\n| --- | --- | --- |\n| L1 pty | **keep** | `portable-pty` 0.9; no candidate improves on it |\n| L2 transport | **keep + extend** | your `ControlClient` in `boop-mux/src/lib.rs:527`; read `tmuxpulse` for its event-stream shape, do not depend on it |\n| L3 object model | **build, schema-borrowed** | generate typed structs from the 174 format vars; copy wezterm's `wezterm cli list --format json` field naming |\n| L4 screen | **buy** | `alacritty_terminal` 0.26 (grid + scrollback + selection + search), or `vt100` 0.16 if you only need the rendered grid |\n| L5 harness identity | **build** | nothing published; `tmuxcc`'s `agents` module is the only prior art and it is 326 downloads |\n| L6 semantic blocks | **build, vocabulary-borrowed** | Warp's BlockList naming + OSC 133 field names; port `0_terminalTurnVisibility.ts` down into Rust |\n\nThe crate split that falls out: `boop-mux` keeps L2+L3 (transport and object model), a new `boop-term` takes L4+L6 (screen and blocks) wrapping `alacritty_terminal`, and L5 belongs in the existing `boop-harness` next to `Capabilities`, not in a mux crate.\n\nI have not written any of it. Say which layers you want and I will do the signatures-first pass on those.\n\nSources: [tmux_interface](https://crates.io/crates/tmux_interface), [tmuxcc](https://docs.rs/tmuxcc/latest/tmuxcc/), [tmuxpulse](https://lib.rs/crates/tmuxpulse), [tmux-mcp-rs](https://docs.rs/tmux-mcp-rs/latest/tmux_mcp_rs/), [portable-pty](https://docs.rs/portable-pty), [pty-process](https://docs.rs/pty-process), [ptyprocess](https://github.com/zhiburt/ptyprocess), [alacritty_terminal](https://docs.rs/alacritty_terminal/latest/alacritty_terminal/), [vt100](https://docs.rs/vt100/latest/vt100/index.html), [termwiz](https://docs.rs/termwiz/latest/termwiz/), [tui-term](https://github.com/a-kenji/tui-term), [wezterm mux/src/lib.rs](https://github.com/wezterm/wezterm/blob/main/mux/src/lib.rs), [wezterm cli list](https://wezterm.org/cli/cli/list.html), [Warp block model](https://www.warp.dev/blog/block-model-behind-warps-agentic-development-environment), [OSC 133 spec](https://contour-terminal.org/vt-extensions/osc-133-shell-integration/), [tmux#3064](https://github.com/tmux/tmux/issues/3064), [claude-code#32635](https://github.com/anthropics/claude-code/issues/32635)"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 279,
+  "ts": 1788013714961,
+  "role": "user",
+  "said": "Stop hook feedback:\n[PROSE_PROD_MAX_WORDS=999999 PROSE_PROD_MAX_SENTENCES=999999 PROSE_PROD_MAX_PARAGRAPHS=999999 PROSE_PROD_MAX_FILLER=999999 /Users/chrishafley/projects/claude-research/bin/prose-prod --hook]: PROSE LAW VIOLATION (assistant turn):\n  [neg-parallelism] At 326 downloads it is not a dependency you take, but its module split is direct evidence that\n      law: No negative parallelism (not X, Y / X. Not Y.). State the positive claim.\nFix: fix the flagged slop: emit ONLY the corrected sentences, one per line, each prefixed 'corrected: '.\nattempt 1 of 3; after 3 the turn ends as-is.\n"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 280,
+  "ts": 1788013717184,
+  "role": "assistant",
+  "said": "corrected: At 326 downloads it stays a design to read rather than a dependency to take, and its module split is direct evidence that `agents` and `parsers` want to be separate from `tmux` \u2014 which is the split you are proposing."
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 281,
+  "ts": 1788014548013,
+  "role": "user",
+  "said": "alacritty would that become the pty driver or we gotta write this frontend in rust"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 282,
+  "ts": 1788014561602,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 283,
+  "ts": 1788014562508,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 284,
+  "ts": 1788014587806,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 285,
+  "ts": 1788014610441,
+  "role": "assistant",
+  "said": "Neither. It is a third consumer of bytes Rust already holds.\n\n## What the crate actually contains\n\n`alacritty_terminal` 0.26 has no feature gates except `serde`. Everything below always compiles:\n\n| module | what it gives you | do you need it |\n| --- | --- | --- |\n| `tty` | pty spawn \u2014 `rustix-openpty` on unix, ConPTY on windows | no, `portable-pty` already does this |\n| `event_loop` | \"performs I/O on the pseudoterminal\" | no, `pty.rs` already has a read loop |\n| `term` / `grid` | headless `Term`, cells, scrollback | **yes, this is the buy** |\n| `selection` | typed selection ranges | yes |\n| `vi_mode` + `regex-automata` | in-grid search and motions | yes |\n| `index` | `Line` / `Column` newtypes | yes |\n\nNo rendering frontend anywhere in that list. `Term::renderable_content()` is what a renderer *may* consume; nothing forces one to exist.\n\n## Where it lands\n\n```mermaid\nflowchart LR\n  tmux[\"tmux attach -d -t SESSION\"] --> pty[\"portable-pty<br/>pty.rs:531 openpty\"]\n  pty --> drain[\"drain_utf8<br/>pty.rs:336\"]\n  drain --> emit[\"emit pty-data-batch\"]\n  emit --> xterm[\"xterm.js<br/>renders + owns selection\"]\n  drain -.new.-> term[\"alacritty_terminal Term<br/>headless, queryable\"]\n  term -.new.-> blocks[\"block / turn extraction<br/>in Rust\"]\n```\n\nOne added line in `drain_utf8`'s caller. `portable-pty` stays the driver, xterm.js stays the frontend.\n\n## The three options, stated plainly\n\n| option | pty driver | frontend | cost |\n| --- | --- | --- | --- |\n| **A. tee** | `portable-pty` (unchanged) | xterm.js (unchanged) | one `Term` per tab, fed the same bytes |\n| B. swap driver | `alacritty_terminal::tty` + `event_loop` | xterm.js (unchanged) | drops `portable-pty`, inherits their loop design, buys nothing you lack |\n| C. Rust frontend | either | `ratatui` + `tui-term`, or wgpu | rewrites every overlay in `src/` \u2014 diagrams, anchors, context queue, sidebar |\n\nNothing in the extraction requires C.\n\n## The one real risk in A\n\nTwo independent VT interpreters read the same stream, and they can disagree on reflow at resize. Your addressing today is row-indexed: `TerminalLineAnchors.elementForBufferRow()` (`00b_terminalLineAnchors.ts`) maps an xterm buffer row to a DOM node, and `1a_terminalContextQueue.ts:171-179` stores `bufferStart.row` / `bufferEnd.row`. If Rust computes a block at alacritty row 40 and xterm.js has that content at row 39, the `+ next` button paints on the wrong line.\n\nThree ways out, cheapest first:\n\n1. **Ask tmux instead of emulating.** `capture-pane -p -e -J` is already implemented at `boop-mux/src/lib.rs:237`. One grid, one source of truth, zero new deps. Poll-shaped, not live.\n2. **Address by marker, not row.** Blocks carry a content hash or an OSC-133-style id; the frontend resolves id \u2192 row itself. Survives reflow on both sides.\n3. **Make alacritty authoritative.** Rust sends resolved coordinates, xterm.js stops computing them. Largest change, tightest result.\n\nRecommendation: A with mitigation 2. Take `alacritty_terminal` for `term`/`grid`/`selection`/search, keep `portable-pty`, keep xterm.js, and never let a row index cross the IPC boundary."
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 286,
+  "ts": 1788014707374,
+  "role": "user",
+  "said": "wtf is tee doing here, listen idc, i want the ability to read the message im viewing to be correct bc right now its hella not lmfao"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 287,
+  "ts": 1788014716462,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 288,
+  "ts": 1788014718095,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 289,
+  "ts": 1788014730687,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 290,
+  "ts": 1788014747188,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 291,
+  "ts": 1788014754199,
+  "role": "user",
+  "said": "[Request interrupted by user]"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 292,
+  "ts": 1788014754285,
+  "role": "user",
+  "said": "go in a lab with worktree off all this and get some e2e receipts telling me we are good. u can use our own convo to summon claude resume <id> and codex resume of some thing in projects, so we can ensure we are capturing shit"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 293,
+  "ts": 1788014766659,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 294,
+  "ts": 1788014768697,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 295,
+  "ts": 1788014779557,
+  "role": "user",
+  "said": "[Request interrupted by user]"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 296,
+  "ts": 1788014779573,
+  "role": "user",
+  "said": "idk how cmux works or herdr or cate but im still learning the whole intersection of ai and tui/pty/terms"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 297,
+  "ts": 1788014787423,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 298,
+  "ts": 1788014787426,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 299,
+  "ts": 1788014793209,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 300,
+  "ts": 1788014793917,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 301,
+  "ts": 1788014795115,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 302,
+  "ts": 1788014798477,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 303,
+  "ts": 1788014803527,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 304,
+  "ts": 1788014823340,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 305,
+  "ts": 1788014824753,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 306,
+  "ts": 1788014825245,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 307,
+  "ts": 1788014835726,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 308,
+  "ts": 1788014836706,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 309,
+  "ts": 1788014847350,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 310,
+  "ts": 1788014849214,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 311,
+  "ts": 1788014855587,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 312,
+  "ts": 1788014857234,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 313,
+  "ts": 1788014863492,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 314,
+  "ts": 1788014865539,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 315,
+  "ts": 1788014875556,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 316,
+  "ts": 1788014895648,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 317,
+  "ts": 1788014898832,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 318,
+  "ts": 1788014899040,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 319,
+  "ts": 1788014902341,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 320,
+  "ts": 1788014920534,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 321,
+  "ts": 1788014925224,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 322,
+  "ts": 1788014927559,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 323,
+  "ts": 1788014937734,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 324,
+  "ts": 1788014939901,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 325,
+  "ts": 1788014942664,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 326,
+  "ts": 1788014945303,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 327,
+  "ts": 1788014947262,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 328,
+  "ts": 1788014955996,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 329,
+  "ts": 1788014956752,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 330,
+  "ts": 1788014962830,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 331,
+  "ts": 1788014966647,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 332,
+  "ts": 1788014970623,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 333,
+  "ts": 1788014998583,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 334,
+  "ts": 1788015001017,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 335,
+  "ts": 1788015007560,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 336,
+  "ts": 1788015010456,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 337,
+  "ts": 1788015036350,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 338,
+  "ts": 1788015037480,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 339,
+  "ts": 1788015050076,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 340,
+  "ts": 1788015068353,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 341,
+  "ts": 1788015074086,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 342,
+  "ts": 1788015084347,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 343,
+  "ts": 1788015099163,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 344,
+  "ts": 1788015101712,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 345,
+  "ts": 1788015107270,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 346,
+  "ts": 1788015108015,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 347,
+  "ts": 1788015126893,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 348,
+  "ts": 1788015128725,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 349,
+  "ts": 1788015151275,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 350,
+  "ts": 1788015166405,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 351,
+  "ts": 1788015169754,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 352,
+  "ts": 1788015172527,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 353,
+  "ts": 1788015174880,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 354,
+  "ts": 1788015192404,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 355,
+  "ts": 1788015193108,
+  "role": "assistant",
+  "said": "Receipts say we are not good. The lab caught it cold."
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 356,
+  "ts": 1788015199336,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 357,
+  "ts": 1788015204166,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 358,
+  "ts": 1788015210562,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 359,
+  "ts": 1788015221442,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 360,
+  "ts": 1788015222437,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 361,
+  "ts": 1788015230101,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 362,
+  "ts": 1788015230668,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 363,
+  "ts": 1788015239075,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 364,
+  "ts": 1788015243458,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 365,
+  "ts": 1788015248720,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 366,
+  "ts": 1788015251087,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 367,
+  "ts": 1788015255557,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 368,
+  "ts": 1788015266108,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 369,
+  "ts": 1788015267266,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 370,
+  "ts": 1788015271902,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 371,
+  "ts": 1788015280296,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 372,
+  "ts": 1788015295817,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 373,
+  "ts": 1788015298450,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 374,
+  "ts": 1788015303449,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 375,
+  "ts": 1788015309976,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 376,
+  "ts": 1788015316413,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 377,
+  "ts": 1788015341090,
+  "role": "assistant",
+  "said": "We are not good. The lab caught it, and the fix is in the worktree.\n\n## The lab\n\nWorktree `.claude/worktrees/lab-turn-identity-alacritty`, branch `worktree-lab-turn-identity-alacritty`.\n\n`labs/turn-identity` is a Rust bin on `alacritty_terminal` 0.26 + `portable-pty`. It runs `tmux attach -d` inside a pty, feeds the byte stream to a headless `Term`, and emits logical lines joined on `Flags::WRAPLINE` \u2014 the same shape xterm.js's `readVisibleLogicalLines()` produces. No frontend, no GUI. That answers your earlier question in the affirmative: alacritty is a byte-stream consumer, and it produced a faithful fixture in 150 lines.\n\nBoth sessions are real, resumed from your own history:\n\n| fixture | tmux | command | boop session | turns in window |\n| --- | --- | --- | --- | --- |\n| claude | `lab-claude` | `claude --resume 220a0de3-\u2026` (this conversation) | `220a0de3-62f5-4dd9-99ce-0ce71a7fb897` | 301 of 339 |\n| codex | `lab-codex` | `codex resume 01a014c5-\u2026` (instant) | `01a014c5-a146-7b70-9579-f493b23f1701` | 301 of 1262 |\n\n## Before\n\n`src/0_terminalTurnVisibility.receipts.test.ts` scores every logical row: ground truth is the turn whose transcript contains that row under the matcher's own containment rule. A **phantom** is a row named for a turn when no turn's text resembles it.\n\n| pane | located turns | scored rows | correct | phantom |\n| --- | --- | --- | --- | --- |\n| claude | 2 | 70 | **0** | **70** |\n| codex | 2 | 57 | 53 | 4 |\n\nclaude pane, every row wrong. Two turns tiled the whole 100-row screen (`0..9`, `10..99`), so `Write(labs/turn-identity/Cargo.toml)`, `\u23bf Wrote 11 lines to\u2026`, numbered file contents, and `Ran 1 shell command` all reported turn 172 or 177. Codex's four phantoms were the input box (`ask codex to do anything`), the usage notice, the status line, and the tmux status bar.\n\n## Cause\n\n`0_terminalTurnVisibility.ts:138-152`. After matching, every turn's span is rewritten to tile the viewport: first turn's start becomes `viewportStart`, every turn's end becomes `nextTurn.bufferStart - 1`, last turn's end becomes `viewportEnd`. `turnAtBufferRow` then did plain range containment over those spans, so every row on screen belonged to some turn by construction. Both located turns carried `confidence: \"extended\"` \u2014 neither had an anchor anywhere near the rows it claimed.\n\n## Fix\n\n| file | change |\n| --- | --- |\n| `src/0_terminalTurnVisibility.ts:18-19` | `VisibleTurn` gains `anchorStart` / `anchorEnd` |\n| `src/0_terminalTurnVisibility.ts:127-135` | recorded from the matched hit rows, before extension |\n| `src/0_terminalTurnVisibility.ts:238-241` | `turnAtBufferRow` answers from the anchor, not the span |\n| `src/1a_terminalContextQueue.ts:32-38` | `turnsAcrossRange` tags a selection by anchor overlap |\n\nThe extended span stays and still drives region projection and the gutter. Identity now says \"no Boop turn at pointer\" instead of guessing \u2014 that menu item already existed at `chrome.ts:383` and had no way to fire.\n\n## After\n\n| pane | scored rows | correct | wrong | missing | phantom |\n| --- | --- | --- | --- | --- | --- |\n| claude | 70 | 70 | 0 | 0 | **0** |\n| codex | 57 | 57 | 0 | 0 | **0** |\n\nRead the claude row honestly: it gained no true positives. Claude Code renders tool-call chrome that is not in `agent_turn.said`, so only rows 2 and 10 are attributable at all out of 100. The win is that the other 98 now report nothing instead of lying. Codex renders close to its transcript, so turn 1261 anchors a real `0..88`.\n\nThe receipts test asserts `phantom === 0` and `wrong === 0`, so it fails if this regresses.\n\n## Verification\n\n- `npx vitest run` \u2014 63 files, 315 tests, all pass.\n- `npx tsc --noEmit` \u2014 clean.\n- `0_terminalTurnVisibility.test.ts` \u2014 2 inline snapshots updated for the new fields; the 2026-08-22 defect-receipt test gained anchored-identity assertions, including `identity(11) === null` for the blank row between two turns.\n- `lab-claude` and `lab-codex` tmux sessions killed.\n\nUncommitted on the worktree branch. Say the word and I'll commit, or `ExitWorktree` to drop it."
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 378,
+  "ts": 1788015341258,
+  "role": "user",
+  "said": "Stop hook feedback:\n[PROSE_PROD_MAX_WORDS=999999 PROSE_PROD_MAX_SENTENCES=999999 PROSE_PROD_MAX_PARAGRAPHS=999999 PROSE_PROD_MAX_FILLER=999999 /Users/chrishafley/projects/claude-research/bin/prose-prod --hook]: PROSE LAW VIOLATION (assistant turn):\n  [decreed-stem] scores every logical row: ground truth is the turn whose transcript contains that row under the matcher's own contain...\n      law: Decreed slop words banned. (stem: ground)\n  [decreed-stem] Read the claude row honestly: it gained no true positives.\n      law: Decreed slop words banned. (stem: honest)\nFix: fix the flagged slop: emit ONLY the corrected sentences, one per line, each prefixed 'corrected: '.\nattempt 1 of 3; after 3 the turn ends as-is.\n"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 379,
+  "ts": 1788015344606,
+  "role": "assistant",
+  "said": "corrected: `src/0_terminalTurnVisibility.receipts.test.ts` scores every logical row: the reference answer is the turn whose transcript contains that row under the matcher's own containment rule.\ncorrected: Read the claude row plainly: it gained no true positives."
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 380,
+  "ts": 1788015901318,
+  "role": "user",
+  "said": "works for inline markdown and table renders? markdown tables in claude code get rsposnive designed into a list mode so there are 2 renders for it, and code and tool calls and yada yada?"
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 381,
+  "ts": 1788015919587,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 382,
+  "ts": 1788015922764,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 383,
+  "ts": 1788015929702,
+  "role": "assistant",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 384,
+  "ts": 1788015932150,
+  "role": "tool",
+  "said": ""
+ },
+ {
+  "session": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897",
+  "harness": "claude",
+  "turn": 385,
+  "ts": 1788015953672,
+  "role": "tool",
+  "said": ""
+ }
+]

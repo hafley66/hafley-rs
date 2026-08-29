@@ -1,0 +1,699 @@
+{
+ "fixture": "ccz",
+ "cols": 200,
+ "rows": 100,
+ "lines": [
+  {
+   "start": 0,
+   "end": 0,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 1,
+   "end": 1,
+   "normalized": "naming note recorded with it: \"diet\" is now the in-repo word for parse-technique-plus-heuristics anywhere it appears — no output ever gets to look like scip data without being scip data.",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2516"
+  },
+  {
+   "start": 2,
+   "end": 2,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 3,
+   "end": 3,
+   "normalized": "cogitated for 2m 6s · done friday, jul 31 at 2:32 pm",
+   "id": null
+  },
+  {
+   "start": 4,
+   "end": 4,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 5,
+   "end": 5,
+   "normalized": "agent \"clock-check algorithm fix lane\" finished · 22m 10s",
+   "id": null
+  },
+  {
+   "start": 6,
+   "end": 6,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 7,
+   "end": 7,
+   "normalized": "committed 06ccaca2, pushed to codex/rel-ref-file-span-lab, merged worktree-agent-a03158c44e1dcf9b6, ran 1 shell command",
+   "id": null
+  },
+  {
+   "start": 8,
+   "end": 8,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 9,
+   "end": 9,
+   "normalized": "the bad algorithm is dead. landed with my own timing receipt on the merged tree:",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 10,
+   "end": 10,
+   "normalized": "",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 11,
+   "end": 11,
+   "normalized": "k-route stress: 51.1s -> 3.5ms at 2^20 parallel routes",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 12,
+   "end": 12,
+   "normalized": "atlas compile: 284.8s @ 8gb stack -> 14.8s @ the default 1gb",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 13,
+   "end": 13,
+   "normalized": "(the exact stack the served door was dying on)",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 14,
+   "end": 14,
+   "normalized": "",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 15,
+   "end": 15,
+   "normalized": "simple-path enumeration replaced with offset propagation: one number per edge, worklist over nodes, and a node holding two offsets is the conflict. the good-engineering parts worth your eyes:",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 16,
+   "end": 16,
+   "normalized": "",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 17,
+   "end": 17,
+   "normalized": "- verdict movement is zero by machine check — the sweep's refusal-reason diff (restated=0 added=0 removed=0 across all 196 compiled fixtures), plus all 5 historical bug classes in the replay gate",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 18,
+   "end": 18,
+   "normalized": "still caught.",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 19,
+   "end": 19,
+   "normalized": "- equivalence is checked, never assumed: propagation agrees with enumeration exactly when every cycle weighs zero; that precondition is verified per component, and the one shape that fails it falls",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 20,
+   "end": 20,
+   "normalized": "back to a path the checker already refuses.",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 21,
+   "end": 21,
+   "normalized": "- the new count rail's sabotage receipt exposed why this survived so long: the old rail measured a chain (one route) and stayed green through the whole exponential era — cost rails have to measure",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 22,
+   "end": 22,
+   "normalized": "the axis that actually blows up.",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 23,
+   "end": 23,
+   "normalized": "- free finding: the parse-phase compile-speed regression is not the clock checker (isolated by revert) — that hunt is still open, now with a narrower suspect list.",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 24,
+   "end": 24,
+   "normalized": "",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 25,
+   "end": 25,
+   "normalized": "still running: timeout gun, scip families.",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523"
+  },
+  {
+   "start": 26,
+   "end": 26,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 27,
+   "end": 27,
+   "normalized": "baked for 1m 15s · done friday, jul 31 at 2:42 pm",
+   "id": null
+  },
+  {
+   "start": 28,
+   "end": 28,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 29,
+   "end": 29,
+   "normalized": "agent \"scip/dietscip extractor lane\" finished · 28m 27s",
+   "id": null
+  },
+  {
+   "start": 30,
+   "end": 30,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 31,
+   "end": 31,
+   "normalized": "committed dec06d99, pushed to codex/rel-ref-file-span-lab, ran 3 shell commands",
+   "id": null
+  },
+  {
+   "start": 32,
+   "end": 32,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 33,
+   "end": 33,
+   "normalized": "scip families landed, verified by my own runs (crate 58/0, smoke holds). the receipt that justifies the whole design, verbatim from the goldens:",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 34,
+   "end": 34,
+   "normalized": "",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 35,
+   "end": 35,
+   "normalized": "$ extract --family dietscip alpha.ts beta.ts gamma.ts gamma imports alpha's helper",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 36,
+   "end": 36,
+   "normalized": "(zero rows)",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 37,
+   "end": 37,
+   "normalized": "",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 38,
+   "end": 38,
+   "normalized": "$ extract --family scip .",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 39,
+   "end": 39,
+   "normalized": "scipfnedge gamma.ts/use() -> alpha.ts/helper()",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 40,
+   "end": 40,
+   "normalized": "scipref gamma.ts refs alpha's helper, deffile = alpha.ts",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 41,
+   "end": 41,
+   "normalized": "",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 42,
+   "end": 42,
+   "normalized": "cross-file resolution: real scip answers it, the diet heuristics answer nothing — same result through rust-analyzer on the rust mirror. and the flex receipt: v6/tsv2 indexes itself in 4.35s →",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 43,
+   "end": 43,
+   "normalized": "120,059 rows.",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 44,
+   "end": 44,
+   "normalized": "",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 45,
+   "end": 45,
+   "normalized": "quality notes from the lane worth trusting it for: it falsified its own sabotage claim (the \"this would go red\" assertion didn't — def and ref rows share columns, so leaked references passed",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 46,
+   "end": 46,
+   "normalized": "presence checks; it fixed the assertion and re-proved red), and the timeout receipt asserts the wedged indexer's grandchild dies, which is the assertion that separates a real process-group kill from",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 47,
+   "end": 47,
+   "normalized": "a cosmetic one.",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 48,
+   "end": 48,
+   "normalized": "",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 49,
+   "end": 49,
+   "normalized": "one lane left in flight: the timeout gun, which owns every script — the scip smoke's justfile recipe rides its close-out. when it lands, today's board is fully clear except the standing user pile",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 50,
+   "end": 50,
+   "normalized": "(main push + tag, install story, gen naming cards, prolog partition ruling).",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532"
+  },
+  {
+   "start": 51,
+   "end": 51,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 52,
+   "end": 52,
+   "normalized": "sautéed for 1m 57s · done friday, jul 31 at 3:02 pm",
+   "id": null
+  },
+  {
+   "start": 53,
+   "end": 53,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 54,
+   "end": 54,
+   "normalized": "agent \"timeout gun sweep lane\" finished · 49m 13s",
+   "id": null
+  },
+  {
+   "start": 55,
+   "end": 55,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 56,
+   "end": 56,
+   "normalized": "committed b10defaa, ran 5 shell commands",
+   "id": null
+  },
+  {
+   "start": 57,
+   "end": 57,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 58,
+   "end": 58,
+   "normalized": "the staleness class again — the merged tree's release extract binary predates the scip code. rebuilding:",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2543"
+  },
+  {
+   "start": 59,
+   "end": 59,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 60,
+   "end": 60,
+   "normalized": "searched for 1 pattern, ran 10 shell commands",
+   "id": null
+  },
+  {
+   "start": 61,
+   "end": 61,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 62,
+   "end": 62,
+   "normalized": "background command \"run smoke directly for the real error\" completed (exit code 0)",
+   "id": null
+  },
+  {
+   "start": 63,
+   "end": 63,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 64,
+   "end": 64,
+   "normalized": "gate covers it correctly (and specifies --features cli — the exact footgun). all green now. close-out:",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2562"
+  },
+  {
+   "start": 65,
+   "end": 65,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 66,
+   "end": 66,
+   "normalized": "committed be092b2e, pushed to codex/rel-ref-file-span-lab",
+   "id": null
+  },
+  {
+   "start": 67,
+   "end": 67,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 68,
+   "end": 68,
+   "normalized": "all lanes down, board clear, everything pushed. the timeout gun is live everywhere:",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 69,
+   "end": 69,
+   "normalized": "",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 70,
+   "end": 70,
+   "normalized": "- one shared run-capped.sh (process-group kill, exit 124, plus a whole-script variant and a curl variant), every receipt script and long recipe budgeted off measured walls",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 71,
+   "end": 71,
+   "normalized": "- the served compile door now answers compiletimeout and stays alive instead of hanging or dying",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 72,
+   "end": 72,
+   "normalized": "- the class-38 lesson it found by running, not reasoning: a streaming post needs its load budget split from its plain-request budget — the naive curl cap broke atlas and only execution caught it",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 73,
+   "end": 73,
+   "normalized": "- the orphaning perl one-liner is gone from both generator scripts",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 74,
+   "end": 74,
+   "normalized": "",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 75,
+   "end": 75,
+   "normalized": "landing tripped one more instance of the staleness class worth knowing: the release extract binary predated the scip merge, and cargo build --release silently skips the bin (it's gated behind the",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 76,
+   "end": 76,
+   "normalized": "cli feature, cargo still says finished). the staleness gate knows the correct command; it sits in green-all, which is why plain green didn't catch it. noted on the ledger.",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 77,
+   "end": 77,
+   "normalized": "",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 78,
+   "end": 78,
+   "normalized": "today's full sweep, since you asked \"how we doing\" and got interrupted: bench reference tier + doom probe + legible names + self-tracing, type gate widened (matrix divergent 104→18), gen card,",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 79,
+   "end": 79,
+   "normalized": "archaeology, files/filesat + scan refusal, crawl as one program, dataflow atlas + 4 layout variants, prolog packaging analysis, clock-check exponential killed (285s→15s), scip/dietscip families,",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 80,
+   "end": 80,
+   "normalized": "timeout law everywhere, 10 defects found-and-filed or fixed with receipts.",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 81,
+   "end": 81,
+   "normalized": "",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 82,
+   "end": 82,
+   "normalized": "your pile: prolog partition ruling (2 = alias workspace recommended), gen naming cards, install story, main push + v6.2.0 tag.",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564"
+  },
+  {
+   "start": 83,
+   "end": 83,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 84,
+   "end": 84,
+   "normalized": "sautéed for 1h 3m 35s · done friday, jul 31 at 3:20 pm",
+   "id": null
+  },
+  {
+   "start": 85,
+   "end": 85,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 86,
+   "end": 86,
+   "normalized": "/i:save-session",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2565"
+  },
+  {
+   "start": 87,
+   "end": 87,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 88,
+   "end": 88,
+   "normalized": "ran 1 shell command",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2455"
+  },
+  {
+   "start": 89,
+   "end": 89,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 90,
+   "end": 90,
+   "normalized": "saved: chatlog/20260731.0.fable-bench-atlas-scip-timeout-storm.md.",
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2569"
+  },
+  {
+   "start": 91,
+   "end": 91,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 92,
+   "end": 92,
+   "normalized": "brewed for 1m 18s · done friday, jul 31 at 3:21 pm",
+   "id": null
+  },
+  {
+   "start": 93,
+   "end": 93,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 94,
+   "end": 94,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 95,
+   "end": 95,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 96,
+   "end": 96,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 97,
+   "end": 97,
+   "normalized": "fable 5 ctx 39% of 1000k 392010in 41out",
+   "id": null
+  },
+  {
+   "start": 98,
+   "end": 98,
+   "normalized": "auto mode on (shift+tab to cycle) · ← for agents",
+   "id": null
+  },
+  {
+   "start": 99,
+   "end": 99,
+   "normalized": "[lab-ccz] 0:2.1.251 \"✳ manage in-flight ag\" 11:32 29-aug-26",
+   "id": null
+  }
+ ],
+ "turns": [
+  {
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2516",
+   "turn": 2516,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 1,
+   "anchorEnd": 1,
+   "bufferStart": 0,
+   "bufferEnd": 8
+  },
+  {
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523",
+   "turn": 2523,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 9,
+   "anchorEnd": 25,
+   "bufferStart": 9,
+   "bufferEnd": 32
+  },
+  {
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532",
+   "turn": 2532,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 33,
+   "anchorEnd": 50,
+   "bufferStart": 33,
+   "bufferEnd": 57
+  },
+  {
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2543",
+   "turn": 2543,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 58,
+   "anchorEnd": 58,
+   "bufferStart": 58,
+   "bufferEnd": 63
+  },
+  {
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2562",
+   "turn": 2562,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 64,
+   "anchorEnd": 64,
+   "bufferStart": 64,
+   "bufferEnd": 67
+  },
+  {
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564",
+   "turn": 2564,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 68,
+   "anchorEnd": 82,
+   "bufferStart": 68,
+   "bufferEnd": 85
+  },
+  {
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2565",
+   "turn": 2565,
+   "role": "user",
+   "confidence": "extended",
+   "anchorStart": 86,
+   "anchorEnd": 86,
+   "bufferStart": 86,
+   "bufferEnd": 87
+  },
+  {
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2455",
+   "turn": 2455,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 88,
+   "anchorEnd": 88,
+   "bufferStart": 88,
+   "bufferEnd": 89
+  },
+  {
+   "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2569",
+   "turn": 2569,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 90,
+   "anchorEnd": 90,
+   "bufferStart": 90,
+   "bufferEnd": 99
+  }
+ ]
+}

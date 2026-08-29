@@ -1,0 +1,659 @@
+{
+ "fixture": "kimi",
+ "cols": 200,
+ "rows": 100,
+ "lines": [
+  {
+   "start": 0,
+   "end": 0,
+   "normalized": "overflowdb solved spill-to-disk — the 30gb class of problem, engineered away.",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:506"
+  },
+  {
+   "start": 1,
+   "end": 1,
+   "normalized": "ecosystem: query libraries, docs, users, a company.",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:506"
+  },
+  {
+   "start": 2,
+   "end": 2,
+   "normalized": "",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:506"
+  },
+  {
+   "start": 3,
+   "end": 3,
+   "normalized": "so the one-line diff: joern is the finished platform version of your architecture, in someone else's runtime, language, and graph format — and it can't be borrowed piecemeal. your counter isn't",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:506"
+  },
+  {
+   "start": 4,
+   "end": 4,
+   "normalized": "\"i'll rebuild joern\" (that's the heaviness you flinched from); it's the bake-off's actual question: does the engine — the one piece joern has and you haven't finished — justify adopting a",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:506"
+  },
+  {
+   "start": 5,
+   "end": 5,
+   "normalized": "platform, or does a native lab over your jsonl hit the same numbers at a tenth the weight? the honest caveat i keep in the plan: if joern humiliates the field, its frontends are genuinely good,",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:506"
+  },
+  {
+   "start": 6,
+   "end": 6,
+   "normalized": "and \"parse with joern, keep your rails\" becomes the serious conversation — with the cost that your parity/oracle machinery then has to be rebuilt against a black-box cpg.",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:506"
+  },
+  {
+   "start": 7,
+   "end": 7,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 8,
+   "end": 8,
+   "normalized": "i guess lab it out with joernn and then see if rust can go faster",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:507"
+  },
+  {
+   "start": 9,
+   "end": 9,
+   "normalized": "… 1 messages",
+   "id": null
+  },
+  {
+   "start": 10,
+   "end": 10,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 11,
+   "end": 11,
+   "normalized": "the user says: \"i guess lab it out with joern and then see if rust can go faster.\"",
+   "id": null
+  },
+  {
+   "start": 12,
+   "end": 12,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 13,
+   "end": 13,
+   "normalized": "... (42 more lines, ctrl+o to expand)",
+   "id": null
+  },
+  {
+   "start": 14,
+   "end": 14,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 15,
+   "end": 15,
+   "normalized": "used edit (…olden-plan/plans/2026-07-25-analysis-engine-bakeoff-labs.md) · +7",
+   "id": null
+  },
+  {
+   "start": 16,
+   "end": 16,
+   "normalized": "+7 /users/chrishafley/projects/sprefa/.claude/worktrees/extract-golden-plan/plans/2026-07-25-analysis-engine-bakeoff-labs.md",
+   "id": null
+  },
+  {
+   "start": 17,
+   "end": 17,
+   "normalized": "1 decisions",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:481"
+  },
+  {
+   "start": 18,
+   "end": 18,
+   "normalized": "2",
+   "id": null
+  },
+  {
+   "start": 19,
+   "end": 19,
+   "normalized": "3 + - head-to-head framing (user, 2026-07-25): \"lab it out with joern and",
+   "id": null
+  },
+  {
+   "start": 20,
+   "end": 20,
+   "normalized": "4 + then see if rust can go faster.\" joern runs early as the reference",
+   "id": null
+  },
+  {
+   "start": 21,
+   "end": 21,
+   "normalized": "5 + implementation of the shape (its numbers + its ergonomics are the bar);",
+   "id": null
+  },
+  {
+   "start": 22,
+   "end": 22,
+   "normalized": "6 + the rust lab (datafrog/ascent or bespoke over extract jsonl) runs as the",
+   "id": null
+  },
+  {
+   "start": 23,
+   "end": 23,
+   "normalized": "7 + challenger whose explicit job is beating joern's wall/rss at equal",
+   "id": null
+  },
+  {
+   "start": 24,
+   "end": 24,
+   "normalized": "8 + answers. soufflé/kuzu/graph-tool become optional fillers only if the",
+   "id": null
+  },
+  {
+   "start": 25,
+   "end": 25,
+   "normalized": "9 + head-to-head is inconclusive.",
+   "id": null
+  },
+  {
+   "start": 26,
+   "end": 26,
+   "normalized": "10 - bake-off over adoption-by-reading: rejected \"just read joern's docs\" —",
+   "id": null
+  },
+  {
+   "start": 27,
+   "end": 27,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 28,
+   "end": 28,
+   "normalized": "ran a command",
+   "id": null
+  },
+  {
+   "start": 29,
+   "end": 29,
+   "normalized": "$ cat >> /tmp/staffingedit.py <<'eof'",
+   "id": null
+  },
+  {
+   "start": 30,
+   "end": 30,
+   "normalized": "eof",
+   "id": null
+  },
+  {
+   "start": 31,
+   "end": 31,
+   "normalized": "true",
+   "id": null
+  },
+  {
+   "start": 32,
+   "end": 32,
+   "normalized": "command executed successfully.",
+   "id": null
+  },
+  {
+   "start": 33,
+   "end": 33,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 34,
+   "end": 34,
+   "normalized": "that was a stray no-op command (leftover thought). let me now update the staffing section of the plan to reorder phases per the head-to-head framing: phase 2 = joern reference, phase 3 = rust",
+   "id": null
+  },
+  {
+   "start": 35,
+   "end": 35,
+   "normalized": "challenger, fillers optional. then commit + push, then ask the launch question.",
+   "id": null
+  },
+  {
+   "start": 36,
+   "end": 36,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 37,
+   "end": 37,
+   "normalized": "used edit (…olden-plan/plans/2026-07-25-analysis-engine-bakeoff-labs.md) · +7 -3",
+   "id": null
+  },
+  {
+   "start": 38,
+   "end": 38,
+   "normalized": "+7 -3 /users/chrishafley/projects/sprefa/.claude/worktrees/extract-golden-plan/plans/2026-07-25-analysis-engine-bakeoff-labs.md",
+   "id": null
+  },
+  {
+   "start": 39,
+   "end": 39,
+   "normalized": "3 - phase 0 — harness + corpus pinning + measure script + this battery as a",
+   "id": null
+  },
+  {
+   "start": 40,
+   "end": 40,
+   "normalized": "4 runnable appendix: one agent (worktree tbd at kickoff; base = branch tip).",
+   "id": null
+  },
+  {
+   "start": 41,
+   "end": 41,
+   "normalized": "5 - phase 1 — control: v5 dl answers q1–q10 over c0–c2: one agent.",
+   "id": null
+  },
+  {
+   "start": 42,
+   "end": 42,
+   "normalized": "6 - - phase 2 — native labs (soufflé, kuzu, rust datafrog/ascent, graph-tool):",
+   "id": null
+  },
+  {
+   "start": 43,
+   "end": 43,
+   "normalized": "7 - one agent each, sequential unless sandboxed.",
+   "id": null
+  },
+  {
+   "start": 44,
+   "end": 44,
+   "normalized": "8 - - phase 3 — joern shape reference: one agent.",
+   "id": null
+  },
+  {
+   "start": 45,
+   "end": 45,
+   "normalized": "6 + - phase 2 — reference: joern answers q1–q10 over c0–c2, jvm tax recorded",
+   "id": null
+  },
+  {
+   "start": 46,
+   "end": 46,
+   "normalized": "7 + (heap, cold-start, import time): one agent.",
+   "id": null
+  },
+  {
+   "start": 47,
+   "end": 47,
+   "normalized": "8 + - phase 3 — challenger: rust lab (datafrog/ascent or bespoke over extract",
+   "id": null
+  },
+  {
+   "start": 48,
+   "end": 48,
+   "normalized": "9 + jsonl) answers the same battery with the explicit target of beating",
+   "id": null
+  },
+  {
+   "start": 49,
+   "end": 49,
+   "normalized": "… 3 more changes hidden (ctrl+o to expand)",
+   "id": null
+  },
+  {
+   "start": 50,
+   "end": 50,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 51,
+   "end": 51,
+   "normalized": "ran a command",
+   "id": null
+  },
+  {
+   "start": 52,
+   "end": 52,
+   "normalized": "$ /projects/sprefa/target/release/dl examples/gen-plans-index.dl >/dev/null 2>&1; /projects/sprefa/target/release/dl examples/gen-plans-index.dl --check >/dev/null 2>&1 && echo \"rail green\";",
+   "id": null
+  },
+  {
+   "start": 53,
+   "end": 53,
+   "normalized": "git add plans/2026-07-25-analysis-engine-bakeoff-labs.md plans.md && git commit -m \"plans: bake-off reframed as joern-reference vs rust-challenger head-to-head\" && git push origin",
+   "id": null
+  },
+  {
+   "start": 54,
+   "end": 54,
+   "normalized": "plan/extract-golden-plan && git log --oneline -1",
+   "id": null
+  },
+  {
+   "start": 55,
+   "end": 55,
+   "normalized": "rail green",
+   "id": null
+  },
+  {
+   "start": 56,
+   "end": 56,
+   "normalized": "gen-index: wrote v6/index.md (480 lines)",
+   "id": null
+  },
+  {
+   "start": 57,
+   "end": 57,
+   "normalized": "[plan/extract-golden-plan 023cd61a] plans: bake-off reframed as joern-reference vs rust-challenger head-to-head",
+   "id": null
+  },
+  {
+   "start": 58,
+   "end": 58,
+   "normalized": "... (4 more lines, ctrl+o to expand)",
+   "id": null
+  },
+  {
+   "start": 59,
+   "end": 59,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 60,
+   "end": 60,
+   "normalized": "update the todo list (bake-off phases renamed per head-to-head) and ask the user what to launch first — one crisp question. given their credit situation and that it's late in their 5h window,",
+   "id": null
+  },
+  {
+   "start": 61,
+   "end": 61,
+   "normalized": "asking is right (this is a genuine fork: bake-off phase 0 vs i0a vs nothing tonight).",
+   "id": null
+  },
+  {
+   "start": 62,
+   "end": 62,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 63,
+   "end": 63,
+   "normalized": "used todolist",
+   "id": null
+  },
+  {
+   "start": 64,
+   "end": 64,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 65,
+   "end": 65,
+   "normalized": "decision's locked into the plan and pushed (023cd61a): phase 2 = joern reference (numbers + ergonomics as the bar), phase 3 = rust challenger whose explicit job is beating joern's wall/rss at",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:515"
+  },
+  {
+   "start": 66,
+   "end": 66,
+   "normalized": "equal answers, soufflé/kuzu/graph-tool demoted to only-if-inconclusive fillers.",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:515"
+  },
+  {
+   "start": 67,
+   "end": 67,
+   "normalized": "",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:515"
+  },
+  {
+   "start": 68,
+   "end": 68,
+   "normalized": "two arcs are now queued and both are chewable — what launches first?",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:515"
+  },
+  {
+   "start": 69,
+   "end": 69,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 70,
+   "end": 70,
+   "normalized": "collected your answers",
+   "id": null
+  },
+  {
+   "start": 71,
+   "end": 71,
+   "normalized": "q which arc gets the next agent?",
+   "id": null
+  },
+  {
+   "start": 72,
+   "end": 72,
+   "normalized": "→ hold — credits reset first",
+   "id": null
+  },
+  {
+   "start": 73,
+   "end": 73,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 74,
+   "end": 74,
+   "normalized": "the user chose \"hold — credits reset first.\" so: no new agents. everything is on origin. close out cleanly with a short summary of where things stand and what to say when resuming. keep it very",
+   "id": null
+  },
+  {
+   "start": 75,
+   "end": 75,
+   "normalized": "short — they're done for now.",
+   "id": null
+  },
+  {
+   "start": 76,
+   "end": 76,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 77,
+   "end": 77,
+   "normalized": "holding. everything's on origin — the resume state is complete:",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:517"
+  },
+  {
+   "start": 78,
+   "end": 78,
+   "normalized": "",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:517"
+  },
+  {
+   "start": 79,
+   "end": 79,
+   "normalized": "extract queue: i0a → i0b → i1 → i2 → i2.5 → i3 → i4a–d → i5 → i6 → i7, briefs ready in v6/plans/2026-07-24-extract-go-closeout-and-resolve4.md (plus s1–s6 seeds + agents.md in the crate).",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:517"
+  },
+  {
+   "start": 80,
+   "end": 80,
+   "normalized": "bake-off: plans/2026-07-25-analysis-engine-bakeoff-labs.md — q1–q10 battery, corpus tiers, joern-reference vs rust-challenger, budget + oracle laws, 5 phases.",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:517"
+  },
+  {
+   "start": 81,
+   "end": 81,
+   "normalized": "",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:517"
+  },
+  {
+   "start": 82,
+   "end": 82,
+   "normalized": "when you're back: \"go bake-off phase 0\" or \"go i0a\" and it starts. good session — get some rest.",
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:517"
+  },
+  {
+   "start": 83,
+   "end": 83,
+   "normalized": "[loopcontrol] 'maxretriesperstep' is deprecated and no longer used; rename it to 'maxattemptsperstep'. run /update-config to fix it.",
+   "id": null
+  },
+  {
+   "start": 84,
+   "end": 84,
+   "normalized": "tmux extended-keys is off. modified enter keys may not work. add set -g extended-keys on to /.tmux.conf and restart tmux.",
+   "id": null
+  },
+  {
+   "start": 85,
+   "end": 85,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 86,
+   "end": 86,
+   "normalized": "",
+   "id": null
+  },
+  {
+   "start": 87,
+   "end": 87,
+   "normalized": "todo",
+   "id": null
+  },
+  {
+   "start": 88,
+   "end": 88,
+   "normalized": "✓ bake-off plan written + reframed joern-vs-rust head-to-head, pushed (023cd61a)",
+   "id": null
+  },
+  {
+   "start": 89,
+   "end": 89,
+   "normalized": "○ i0a cli micros batch — brief in plan, awaits go",
+   "id": null
+  },
+  {
+   "start": 90,
+   "end": 90,
+   "normalized": "○ i0b stdin + --ext — brief in plan",
+   "id": null
+  },
+  {
+   "start": 91,
+   "end": 91,
+   "normalized": "○ i1 df aux port — brief in plan (feeds s3 flow + hooks program)",
+   "id": null
+  },
+  {
+   "start": 92,
+   "end": 92,
+   "normalized": "○ i2 docs facet port — brief in plan",
+   "id": null
+  },
+  {
+   "start": 93,
+   "end": 93,
+   "normalized": "… +10 more (3 done · 7 pending) · ctrl+t to expand",
+   "id": null
+  },
+  {
+   "start": 94,
+   "end": 94,
+   "normalized": "╮",
+   "id": null
+  },
+  {
+   "start": 95,
+   "end": 95,
+   "normalized": ">",
+   "id": null
+  },
+  {
+   "start": 96,
+   "end": 96,
+   "normalized": "╯",
+   "id": null
+  },
+  {
+   "start": 97,
+   "end": 97,
+   "normalized": "yolo k3 thinking: max /projects/sprefa main [± ↑1↓2] shift+enter: newline",
+   "id": null
+  },
+  {
+   "start": 98,
+   "end": 98,
+   "normalized": "context: 17% (164k/1m)",
+   "id": null
+  },
+  {
+   "start": 99,
+   "end": 99,
+   "normalized": "[lab-kimi]0:kimi \"header text confirmed\" 11:32 29-aug-26",
+   "id": null
+  }
+ ],
+ "turns": [
+  {
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:506",
+   "turn": 506,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 0,
+   "anchorEnd": 6,
+   "bufferStart": 0,
+   "bufferEnd": 7
+  },
+  {
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:507",
+   "turn": 507,
+   "role": "user",
+   "confidence": "extended",
+   "anchorStart": 8,
+   "anchorEnd": 8,
+   "bufferStart": 8,
+   "bufferEnd": 16
+  },
+  {
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:481",
+   "turn": 481,
+   "role": "user",
+   "confidence": "extended",
+   "anchorStart": 17,
+   "anchorEnd": 17,
+   "bufferStart": 17,
+   "bufferEnd": 64
+  },
+  {
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:515",
+   "turn": 515,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 65,
+   "anchorEnd": 68,
+   "bufferStart": 65,
+   "bufferEnd": 76
+  },
+  {
+   "id": "474e7231-c516-46a4-a506-9a2c1136cf44:517",
+   "turn": 517,
+   "role": "assistant",
+   "confidence": "extended",
+   "anchorStart": 77,
+   "anchorEnd": 82,
+   "bufferStart": 77,
+   "bufferEnd": 99
+  }
+ ]
+}

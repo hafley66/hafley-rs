@@ -1,0 +1,508 @@
+{
+  "session": "lab-codex",
+  "cols": 200,
+  "rows": 100,
+  "bytes": 25621,
+  "lines": [
+    {
+      "text": "   delete mode 100755 scripts/proof/stage.sh",
+      "start": 0,
+      "end": 0
+    },
+    {
+      "text": "   delete mode 100644 src-tauri/src/0a_harness_trace_index.rs",
+      "start": 1,
+      "end": 1
+    },
+    {
+      "text": "   delete mode 100644 src/0_boopAgentExplorerTypes.ts",
+      "start": 2,
+      "end": 2
+    },
+    {
+      "text": "   delete mode 100644 src/0_externalShells.test.ts",
+      "start": 3,
+      "end": 3
+    },
+    {
+      "text": "   delete mode 100644 src/0_sessionSidebarModel.test.ts",
+      "start": 4,
+      "end": 4
+    },
+    {
+      "text": "   delete mode 100644 src/0_sessionSidebarModel.ts",
+      "start": 5,
+      "end": 5
+    },
+    {
+      "text": "   delete mode 100644 src/0_turnPreviewPopover.tsx",
+      "start": 6,
+      "end": 6
+    },
+    {
+      "text": "   delete mode 100644 src/1_boopNetwork.ts",
+      "start": 7,
+      "end": 7
+    },
+    {
+      "text": "   delete mode 100644 src/1a_BoopNetworkGraph.tsx",
+      "start": 8,
+      "end": 8
+    },
+    {
+      "text": "   delete mode 100644 src/1b_BoopFamilyGraph.test.ts",
+      "start": 9,
+      "end": 9
+    },
+    {
+      "text": "   delete mode 100644 src/1b_BoopFamilyGraph.tsx",
+      "start": 10,
+      "end": 10
+    },
+    {
+      "text": "   delete mode 100644 src/1c_FocusedBoopNetwork.tsx",
+      "start": 11,
+      "end": 11
+    },
+    {
+      "text": "   delete mode 100644 src/2_boopAgentExplorerPanel.test.ts",
+      "start": 12,
+      "end": 12
+    },
+    {
+      "text": "   delete mode 100644 src/2_boopAgentExplorerPanel.tsx",
+      "start": 13,
+      "end": 13
+    },
+    {
+      "text": "   delete mode 100644 src/age<truncated omitted_approx_tokens=\"94\" />644 src/plugins/harnessTrace/0_bus.test.ts",
+      "start": 14,
+      "end": 14
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_bus.ts",
+      "start": 15,
+      "end": 15
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_live.test.ts",
+      "start": 16,
+      "end": 16
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_live.ts",
+      "start": 17,
+      "end": 17
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_mail.test.ts",
+      "start": 18,
+      "end": 18
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_mail.ts",
+      "start": 19,
+      "end": 19
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_strip.test.ts",
+      "start": 20,
+      "end": 20
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_strip.ts",
+      "start": 21,
+      "end": 21
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_tree.test.ts",
+      "start": 22,
+      "end": 22
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_tree.ts",
+      "start": 23,
+      "end": 23
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_types.ts",
+      "start": 24,
+      "end": 24
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_viewerTab.test.ts",
+      "start": 25,
+      "end": 25
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_viewerTab.ts",
+      "start": 26,
+      "end": 26
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_waterfall.test.ts",
+      "start": 27,
+      "end": 27
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/0_waterfall.ts",
+      "start": 28,
+      "end": 28
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/1_boopFamily.test.ts",
+      "start": 29,
+      "end": 29
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/1_boopFamily.ts",
+      "start": 30,
+      "end": 30
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/2_FocusedFamilySplit.tsx",
+      "start": 31,
+      "end": 31
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/2_join.test.ts",
+      "start": 32,
+      "end": 32
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/2_join.ts",
+      "start": 33,
+      "end": 33
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/2_liveState.test.ts",
+      "start": 34,
+      "end": 34
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/2_liveState.ts",
+      "start": 35,
+      "end": 35
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/2_mailbox.ts",
+      "start": 36,
+      "end": 36
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/3_router.mail.test.ts",
+      "start": 37,
+      "end": 37
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/3_router.test.ts",
+      "start": 38,
+      "end": 38
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/3_router.ts",
+      "start": 39,
+      "end": 39
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/4_MailPreview.tsx",
+      "start": 40,
+      "end": 40
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/4_Waterfall.tsx",
+      "start": 41,
+      "end": 41
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/DockStripPanel.tsx",
+      "start": 42,
+      "end": 42
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/DockStripShared.tsx",
+      "start": 43,
+      "end": 43
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/HarnessTracePanel.tsx",
+      "start": 44,
+      "end": 44
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/InTabStrip.tsx",
+      "start": 45,
+      "end": 45
+    },
+    {
+      "text": "   delete mode 100644 src/plugins/harnessTrace/index.ts",
+      "start": 46,
+      "end": 46
+    },
+    {
+      "text": "",
+      "start": 47,
+      "end": 47
+    },
+    {
+      "text": "",
+      "start": 48,
+      "end": 48
+    },
+    {
+      "text": "  [439] tool exec call: const r = await tools.exec_command({cmd:\"git status --short && git log -1 --oneline && git rev-list --left-right --count origin/main...main\",\"workdir\":\"/Users/chrishafley/",
+      "start": 49,
+      "end": 49
+    },
+    {
+      "text": "  projects/instant\",\"login\":false,\"yield_time_ms\":10000,\"max_output_tokens\":5000}); text(r.output)",
+      "start": 50,
+      "end": 50
+    },
+    {
+      "text": "",
+      "start": 51,
+      "end": 51
+    },
+    {
+      "text": "",
+      "start": 52,
+      "end": 52
+    },
+    {
+      "text": "  [440] tool exec result: Script completed",
+      "start": 53,
+      "end": 53
+    },
+    {
+      "text": "  Wall time 0.2 seconds",
+      "start": 54,
+      "end": 54
+    },
+    {
+      "text": "  Output:",
+      "start": 55,
+      "end": 55
+    },
+    {
+      "text": "",
+      "start": 56,
+      "end": 56
+    },
+    {
+      "text": "  /opt/homebrew/bin/bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory",
+      "start": 57,
+      "end": 57
+    },
+    {
+      "text": "  ?? .claude/skills/",
+      "start": 58,
+      "end": 58
+    },
+    {
+      "text": "  ?? .codex/",
+      "start": 59,
+      "end": 59
+    },
+    {
+      "text": "  ?? .issuectl/",
+      "start": 60,
+      "end": 60
+    },
+    {
+      "text": "  ?? issues/",
+      "start": 61,
+      "end": 61
+    },
+    {
+      "text": "  061a2bc remove agent integration surfaces from instant",
+      "start": 62,
+      "end": 62
+    },
+    {
+      "text": "  0     8",
+      "start": 63,
+      "end": 63
+    },
+    {
+      "text": "",
+      "start": 64,
+      "end": 64
+    },
+    {
+      "text": "",
+      "start": 65,
+      "end": 65
+    },
+    {
+      "text": "  [441] tool exec call: const r = await tools.exec_command({cmd:\"git push origin main\",\"workdir\":\"/Users/chrishafley/projects/",
+      "start": 66,
+      "end": 66
+    },
+    {
+      "text": "  instant\",\"login\":false,\"yield_time_ms\":30000,\"max_output_tokens\":12000,\"sandbox_permissions\":\"require_escalated\",\"justification\":\"Allow pushing the committed Instant main cleanup to origin/",
+      "start": 67,
+      "end": 67
+    },
+    {
+      "text": "  main?\",\"prefix_rule\":[\"git\",\"push\",\"origin\",\"main\"]}); text(r.output)",
+      "start": 68,
+      "end": 68
+    },
+    {
+      "text": "",
+      "start": 69,
+      "end": 69
+    },
+    {
+      "text": "  >>> TRANSCRIPT DELTA END",
+      "start": 70,
+      "end": 70
+    },
+    {
+      "text": "  Reviewed Codex session id: 01a00ced-b0ab-7c82-a51d-d1edce663213",
+      "start": 71,
+      "end": 71
+    },
+    {
+      "text": "  The Codex agent has requested the following next action:",
+      "start": 72,
+      "end": 72
+    },
+    {
+      "text": "  >>> APPROVAL REQUEST START",
+      "start": 73,
+      "end": 73
+    },
+    {
+      "text": "  Assess the exact planned action below. Use read-only tool checks when local state matters.",
+      "start": 74,
+      "end": 74
+    },
+    {
+      "text": "  Planned action JSON:",
+      "start": 75,
+      "end": 75
+    },
+    {
+      "text": "  {",
+      "start": 76,
+      "end": 76
+    },
+    {
+      "text": "    \"command\": [",
+      "start": 77,
+      "end": 77
+    },
+    {
+      "text": "      \"/opt/homebrew/bin/bash\",",
+      "start": 78,
+      "end": 78
+    },
+    {
+      "text": "      \"-c\",",
+      "start": 79,
+      "end": 79
+    },
+    {
+      "text": "      \"git push origin main\"",
+      "start": 80,
+      "end": 80
+    },
+    {
+      "text": "    ],",
+      "start": 81,
+      "end": 81
+    },
+    {
+      "text": "    \"cwd\": \"/Users/chrishafley/projects/instant\",",
+      "start": 82,
+      "end": 82
+    },
+    {
+      "text": "    \"justification\": \"Allow pushing the committed Instant main cleanup to origin/main?\",",
+      "start": 83,
+      "end": 83
+    },
+    {
+      "text": "    \"sandbox_permissions\": \"require_escalated\",",
+      "start": 84,
+      "end": 84
+    },
+    {
+      "text": "    \"tool\": \"exec_command\",",
+      "start": 85,
+      "end": 85
+    },
+    {
+      "text": "    \"tty\": false",
+      "start": 86,
+      "end": 86
+    },
+    {
+      "text": "  }",
+      "start": 87,
+      "end": 87
+    },
+    {
+      "text": "  >>> APPROVAL REQUEST END",
+      "start": 88,
+      "end": 88
+    },
+    {
+      "text": "",
+      "start": 89,
+      "end": 89
+    },
+    {
+      "text": "",
+      "start": 90,
+      "end": 90
+    },
+    {
+      "text": "• {\"risk_level\":\"high\",\"user_authorization\":\"high\",\"outcome\":\"allow\",\"rationale\":\"Pushes the explicitly committed agent-integration cleanup to the authorized origin/main destination.\"}",
+      "start": 91,
+      "end": 91
+    },
+    {
+      "text": "",
+      "start": 92,
+      "end": 92
+    },
+    {
+      "text": "• You have 1 usage limit reset available. Run /usage to use one.",
+      "start": 93,
+      "end": 93
+    },
+    {
+      "text": "",
+      "start": 94,
+      "end": 94
+    },
+    {
+      "text": "",
+      "start": 95,
+      "end": 95
+    },
+    {
+      "text": "› Ask Codex to do anything",
+      "start": 96,
+      "end": 96
+    },
+    {
+      "text": "",
+      "start": 97,
+      "end": 97
+    },
+    {
+      "text": "  codex-auto-review · ~/projects/instant · No changes · Approve for me",
+      "start": 98,
+      "end": 98
+    },
+    {
+      "text": "[lab-codex0:codex*                                                                                                                                                             \"instant\" 10:52 29-Aug-26",
+      "start": 99,
+      "end": 99
+    }
+  ]
+}

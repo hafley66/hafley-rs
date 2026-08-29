@@ -1,0 +1,508 @@
+{
+  "session": "lab-ccz",
+  "cols": 200,
+  "rows": 100,
+  "bytes": 35873,
+  "lines": [
+    {
+      "text": "",
+      "start": 0,
+      "end": 0
+    },
+    {
+      "text": "  Naming note recorded with it: \"diet\" is now the in-repo word for parse-technique-plus-heuristics anywhere it appears — no output ever gets to look like SCIP data without being SCIP data.",
+      "start": 1,
+      "end": 1
+    },
+    {
+      "text": "",
+      "start": 2,
+      "end": 2
+    },
+    {
+      "text": "✻ Cogitated for 2m 6s · done Friday, Jul 31 at 2:32 PM",
+      "start": 3,
+      "end": 3
+    },
+    {
+      "text": "",
+      "start": 4,
+      "end": 4
+    },
+    {
+      "text": "⏺ Agent \"Clock-check algorithm fix lane\" finished · 22m 10s",
+      "start": 5,
+      "end": 5
+    },
+    {
+      "text": "",
+      "start": 6,
+      "end": 6
+    },
+    {
+      "text": "  Committed 06ccaca2, pushed to codex/rel-ref-file-span-lab, merged worktree-agent-a03158c44e1dcf9b6, ran 1 shell command",
+      "start": 7,
+      "end": 7
+    },
+    {
+      "text": "",
+      "start": 8,
+      "end": 8
+    },
+    {
+      "text": "⏺ The bad algorithm is dead. Landed with my own timing receipt on the merged tree:",
+      "start": 9,
+      "end": 9
+    },
+    {
+      "text": "",
+      "start": 10,
+      "end": 10
+    },
+    {
+      "text": "  k-route stress:   51.1s  ->  3.5ms   at 2^20 parallel routes",
+      "start": 11,
+      "end": 11
+    },
+    {
+      "text": "  atlas compile:    284.8s @ 8GB stack  ->  14.8s @ the DEFAULT 1GB",
+      "start": 12,
+      "end": 12
+    },
+    {
+      "text": "                    (the exact stack the served door was dying on)",
+      "start": 13,
+      "end": 13
+    },
+    {
+      "text": "",
+      "start": 14,
+      "end": 14
+    },
+    {
+      "text": "  Simple-path enumeration replaced with offset propagation: one number per edge, worklist over nodes, and a node holding two offsets is the conflict. The good-engineering parts worth your eyes:",
+      "start": 15,
+      "end": 15
+    },
+    {
+      "text": "",
+      "start": 16,
+      "end": 16
+    },
+    {
+      "text": "  - Verdict movement is zero by machine check — the sweep's refusal-reason diff (restated=0 added=0 removed=0 across all 196 compiled fixtures), plus all 5 historical bug classes in the replay gate",
+      "start": 17,
+      "end": 17
+    },
+    {
+      "text": "    still caught.",
+      "start": 18,
+      "end": 18
+    },
+    {
+      "text": "  - Equivalence is checked, never assumed: propagation agrees with enumeration exactly when every cycle weighs zero; that precondition is verified per component, and the one shape that fails it falls",
+      "start": 19,
+      "end": 19
+    },
+    {
+      "text": "    back to a path the checker already refuses.",
+      "start": 20,
+      "end": 20
+    },
+    {
+      "text": "  - The new count rail's sabotage receipt exposed why this survived so long: the old rail measured a chain (one route) and stayed green through the whole exponential era — cost rails have to measure",
+      "start": 21,
+      "end": 21
+    },
+    {
+      "text": "    the axis that actually blows up.",
+      "start": 22,
+      "end": 22
+    },
+    {
+      "text": "  - Free finding: the parse-phase compile-speed regression is not the clock checker (isolated by revert) — that hunt is still open, now with a narrower suspect list.",
+      "start": 23,
+      "end": 23
+    },
+    {
+      "text": "",
+      "start": 24,
+      "end": 24
+    },
+    {
+      "text": "  Still running: timeout gun, scip families.",
+      "start": 25,
+      "end": 25
+    },
+    {
+      "text": "",
+      "start": 26,
+      "end": 26
+    },
+    {
+      "text": "✻ Baked for 1m 15s · done Friday, Jul 31 at 2:42 PM",
+      "start": 27,
+      "end": 27
+    },
+    {
+      "text": "",
+      "start": 28,
+      "end": 28
+    },
+    {
+      "text": "⏺ Agent \"scip/diet_scip extractor lane\" finished · 28m 27s",
+      "start": 29,
+      "end": 29
+    },
+    {
+      "text": "",
+      "start": 30,
+      "end": 30
+    },
+    {
+      "text": "  Committed dec06d99, pushed to codex/rel-ref-file-span-lab, ran 3 shell commands",
+      "start": 31,
+      "end": 31
+    },
+    {
+      "text": "",
+      "start": 32,
+      "end": 32
+    },
+    {
+      "text": "⏺ scip families landed, verified by my own runs (crate 58/0, smoke HOLDS). The receipt that justifies the whole design, verbatim from the goldens:",
+      "start": 33,
+      "end": 33
+    },
+    {
+      "text": "",
+      "start": 34,
+      "end": 34
+    },
+    {
+      "text": "  $ extract --family diet_scip alpha.ts beta.ts gamma.ts     # gamma imports alpha's helper",
+      "start": 35,
+      "end": 35
+    },
+    {
+      "text": "  (zero rows)",
+      "start": 36,
+      "end": 36
+    },
+    {
+      "text": "",
+      "start": 37,
+      "end": 37
+    },
+    {
+      "text": "  $ extract --family scip .",
+      "start": 38,
+      "end": 38
+    },
+    {
+      "text": "  scip_fn_edge  gamma.ts/use() -> alpha.ts/helper()",
+      "start": 39,
+      "end": 39
+    },
+    {
+      "text": "  scip_ref      gamma.ts refs alpha's helper, def_file = alpha.ts",
+      "start": 40,
+      "end": 40
+    },
+    {
+      "text": "",
+      "start": 41,
+      "end": 41
+    },
+    {
+      "text": "  Cross-file resolution: real SCIP answers it, the diet heuristics answer nothing — same result through rust-analyzer on the rust mirror. And the flex receipt: v6/tsv2 indexes itself in 4.35s →",
+      "start": 42,
+      "end": 42
+    },
+    {
+      "text": "  120,059 rows.",
+      "start": 43,
+      "end": 43
+    },
+    {
+      "text": "",
+      "start": 44,
+      "end": 44
+    },
+    {
+      "text": "  Quality notes from the lane worth trusting it for: it falsified its own sabotage claim (the \"this would go red\" assertion didn't — def and ref rows share columns, so leaked references passed",
+      "start": 45,
+      "end": 45
+    },
+    {
+      "text": "  presence checks; it fixed the assertion and re-proved red), and the timeout receipt asserts the wedged indexer's grandchild dies, which is the assertion that separates a real process-group kill from",
+      "start": 46,
+      "end": 46
+    },
+    {
+      "text": "  a cosmetic one.",
+      "start": 47,
+      "end": 47
+    },
+    {
+      "text": "",
+      "start": 48,
+      "end": 48
+    },
+    {
+      "text": "  One lane left in flight: the timeout gun, which owns every script — the scip smoke's justfile recipe rides its close-out. When it lands, today's board is fully clear except the standing user pile",
+      "start": 49,
+      "end": 49
+    },
+    {
+      "text": "  (main push + tag, install story, gen naming cards, prolog partition ruling).",
+      "start": 50,
+      "end": 50
+    },
+    {
+      "text": "",
+      "start": 51,
+      "end": 51
+    },
+    {
+      "text": "✻ Sautéed for 1m 57s · done Friday, Jul 31 at 3:02 PM",
+      "start": 52,
+      "end": 52
+    },
+    {
+      "text": "",
+      "start": 53,
+      "end": 53
+    },
+    {
+      "text": "⏺ Agent \"Timeout gun sweep lane\" finished · 49m 13s",
+      "start": 54,
+      "end": 54
+    },
+    {
+      "text": "",
+      "start": 55,
+      "end": 55
+    },
+    {
+      "text": "  Committed b10defaa, ran 5 shell commands",
+      "start": 56,
+      "end": 56
+    },
+    {
+      "text": "",
+      "start": 57,
+      "end": 57
+    },
+    {
+      "text": "⏺ The staleness class again — the merged tree's release extract binary predates the scip code. Rebuilding:",
+      "start": 58,
+      "end": 58
+    },
+    {
+      "text": "",
+      "start": 59,
+      "end": 59
+    },
+    {
+      "text": "  Searched for 1 pattern, ran 10 shell commands",
+      "start": 60,
+      "end": 60
+    },
+    {
+      "text": "",
+      "start": 61,
+      "end": 61
+    },
+    {
+      "text": "⏺ Background command \"Run smoke directly for the real error\" completed (exit code 0)",
+      "start": 62,
+      "end": 62
+    },
+    {
+      "text": "",
+      "start": 63,
+      "end": 63
+    },
+    {
+      "text": "⏺ Gate covers it correctly (and specifies --features cli — the exact footgun). All green now. Close-out:",
+      "start": 64,
+      "end": 64
+    },
+    {
+      "text": "",
+      "start": 65,
+      "end": 65
+    },
+    {
+      "text": "  Committed be092b2e, pushed to codex/rel-ref-file-span-lab",
+      "start": 66,
+      "end": 66
+    },
+    {
+      "text": "",
+      "start": 67,
+      "end": 67
+    },
+    {
+      "text": "⏺ All lanes down, board clear, everything pushed. The timeout gun is live everywhere:",
+      "start": 68,
+      "end": 68
+    },
+    {
+      "text": "",
+      "start": 69,
+      "end": 69
+    },
+    {
+      "text": "  - one shared run-capped.sh (process-group kill, exit 124, plus a whole-script variant and a curl variant), every receipt script and long recipe budgeted off measured walls",
+      "start": 70,
+      "end": 70
+    },
+    {
+      "text": "  - the served compile door now answers compile_timeout and stays alive instead of hanging or dying",
+      "start": 71,
+      "end": 71
+    },
+    {
+      "text": "  - the class-38 lesson it found by running, not reasoning: a streaming POST needs its load budget split from its plain-request budget — the naive curl cap broke atlas and only execution caught it",
+      "start": 72,
+      "end": 72
+    },
+    {
+      "text": "  - the orphaning perl one-liner is gone from both generator scripts",
+      "start": 73,
+      "end": 73
+    },
+    {
+      "text": "",
+      "start": 74,
+      "end": 74
+    },
+    {
+      "text": "  Landing tripped one more instance of the staleness class worth knowing: the release extract binary predated the scip merge, and cargo build --release silently skips the bin (it's gated behind the",
+      "start": 75,
+      "end": 75
+    },
+    {
+      "text": "  cli feature, cargo still says Finished). The staleness gate knows the correct command; it sits in green-all, which is why plain green didn't catch it. Noted on the ledger.",
+      "start": 76,
+      "end": 76
+    },
+    {
+      "text": "",
+      "start": 77,
+      "end": 77
+    },
+    {
+      "text": "  Today's full sweep, since you asked \"how we doing\" and got interrupted: bench reference tier + doom probe + legible names + self-tracing, type gate widened (matrix divergent 104→18), gen card,",
+      "start": 78,
+      "end": 78
+    },
+    {
+      "text": "  archaeology, files/files_at + scan refusal, crawl as ONE program, dataflow atlas + 4 layout variants, prolog packaging analysis, clock-check exponential killed (285s→15s), scip/diet_scip families,",
+      "start": 79,
+      "end": 79
+    },
+    {
+      "text": "  timeout law everywhere, ~10 defects found-and-filed or fixed with receipts.",
+      "start": 80,
+      "end": 80
+    },
+    {
+      "text": "",
+      "start": 81,
+      "end": 81
+    },
+    {
+      "text": "  Your pile: prolog partition ruling (2 = alias workspace recommended), gen naming cards, install story, main push + v6.2.0 tag.",
+      "start": 82,
+      "end": 82
+    },
+    {
+      "text": "",
+      "start": 83,
+      "end": 83
+    },
+    {
+      "text": "✻ Sautéed for 1h 3m 35s · done Friday, Jul 31 at 3:20 PM",
+      "start": 84,
+      "end": 84
+    },
+    {
+      "text": "",
+      "start": 85,
+      "end": 85
+    },
+    {
+      "text": "❯ /i:save-session",
+      "start": 86,
+      "end": 86
+    },
+    {
+      "text": "",
+      "start": 87,
+      "end": 87
+    },
+    {
+      "text": "  Ran 1 shell command",
+      "start": 88,
+      "end": 88
+    },
+    {
+      "text": "",
+      "start": 89,
+      "end": 89
+    },
+    {
+      "text": "⏺ Saved: chat_log/20260731.0.fable-bench-atlas-scip-timeout-storm.md.",
+      "start": 90,
+      "end": 90
+    },
+    {
+      "text": "",
+      "start": 91,
+      "end": 91
+    },
+    {
+      "text": "✻ Brewed for 1m 18s · done Friday, Jul 31 at 3:21 PM",
+      "start": 92,
+      "end": 92
+    },
+    {
+      "text": "",
+      "start": 93,
+      "end": 93
+    },
+    {
+      "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+      "start": 94,
+      "end": 94
+    },
+    {
+      "text": "❯",
+      "start": 95,
+      "end": 95
+    },
+    {
+      "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+      "start": 96,
+      "end": 96
+    },
+    {
+      "text": "  Fable 5  ctx 39% of 1000k  392010in 41out",
+      "start": 97,
+      "end": 97
+    },
+    {
+      "text": "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents",
+      "start": 98,
+      "end": 98
+    },
+    {
+      "text": "[lab-ccz] 0:2.1.251*                                                                                                                                             \"✳ Manage in-flight ag\" 11:32 29-Aug-26",
+      "start": 99,
+      "end": 99
+    }
+  ]
+}
