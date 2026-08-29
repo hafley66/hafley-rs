@@ -2,7 +2,7 @@
 
 ## First action
 ```
-git merge --ff-only e0b0a1dc308d8ab059596e945bda7e8e4212a555
+git merge --ff-only f3a2bfe9faf4c660c09f64717a275f2d6c4ffc21
 cargo build -p boop 2>&1 | tail -1
 ```
 Failure: STOP, `boop beep --no-wait --as feature-boop-quiet-yields sprefa-coordinator "<one line>"`.

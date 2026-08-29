@@ -25,6 +25,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     variant: VariantSupport::None,
     mail: MailPolicy::Door,
     native_tui_projector: false,
+    wrapper_owns_alternate_screen: false,
 };
 
 /// The registry directory and messaging sockets of the claude on this

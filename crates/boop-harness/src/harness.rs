@@ -28,6 +28,12 @@ pub struct Capabilities {
     /// Whether the native TUI wrapper runs the store projector alongside it.
     /// Was `boop/src/cli/control.rs:44`.
     pub native_tui_projector: bool,
+    /// Whether `boop tui` must switch the pane into the alternate screen on the
+    /// harness's behalf. codex 0.151.0 accepts `[tui] alternate_screen` in
+    /// `~/.codex/config.toml` and never emits `ESC [ ? 1049 h`
+    /// (openai/codex#24552), so its TUI renders inline and every repaint lands
+    /// in tmux scrollback. claude and opencode enter it themselves.
+    pub wrapper_owns_alternate_screen: bool,
 }
 
 /// Whether workers of this harness run as tmux lanes.

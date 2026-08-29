@@ -26,6 +26,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     variant: VariantSupport::Flag,
     mail: MailPolicy::Door,
     native_tui_projector: false,
+    wrapper_owns_alternate_screen: false,
 };
 
 /// The `opencode serve` this machine's TUIs are clients of.

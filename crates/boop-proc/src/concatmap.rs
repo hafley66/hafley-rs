@@ -1129,6 +1129,7 @@ mod tests {
         variant: VariantSupport::None,
         mail: MailPolicy::Keystrokes,
         native_tui_projector: false,
+        wrapper_owns_alternate_screen: false,
     };
 
     impl Harness for FakeHarness {

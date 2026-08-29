@@ -26,6 +26,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     variant: VariantSupport::ModelSuffixEffort,
     mail: MailPolicy::Door,
     native_tui_projector: true,
+    wrapper_owns_alternate_screen: true,
 };
 
 /// The state database and remote-control socket of the codex on this machine.

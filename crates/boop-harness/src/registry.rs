@@ -72,6 +72,7 @@ mod tests {
         variant: VariantSupport::Flag,
         mail: MailPolicy::Door,
         native_tui_projector: true,
+        wrapper_owns_alternate_screen: false,
     };
 
     impl Harness for Echo {

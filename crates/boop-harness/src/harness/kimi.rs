@@ -29,6 +29,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     variant: VariantSupport::None,
     mail: MailPolicy::Keystrokes,
     native_tui_projector: false,
+    wrapper_owns_alternate_screen: false,
 };
 
 /// kimi publishes no door; the impl says so rather than guessing one.

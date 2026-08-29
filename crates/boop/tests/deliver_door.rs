@@ -22,6 +22,7 @@ static DOOR: Capabilities = Capabilities {
     variant: VariantSupport::None,
     mail: MailPolicy::Door,
     native_tui_projector: false,
+    wrapper_owns_alternate_screen: false,
 };
 
 static KEYSTROKES: Capabilities = Capabilities {
@@ -30,6 +31,7 @@ static KEYSTROKES: Capabilities = Capabilities {
     variant: VariantSupport::None,
     mail: MailPolicy::Keystrokes,
     native_tui_projector: false,
+    wrapper_owns_alternate_screen: false,
 };
 
 /// A door that keeps what it was handed. The file is the recorder, so the

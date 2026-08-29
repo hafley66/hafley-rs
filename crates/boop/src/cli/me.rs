@@ -332,6 +332,7 @@ mod tests {
         variant: VariantSupport::None,
         mail: MailPolicy::Door,
         native_tui_projector: false,
+        wrapper_owns_alternate_screen: false,
     };
 
     struct OnePane;

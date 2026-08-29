@@ -1,6 +1,7 @@
 //! `boop tui`: launch a harness's own interactive TUI, register the pane as
 //! that harness's coordinator route, and project while it runs.
 
+use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
@@ -74,6 +75,35 @@ fn opened_session(
     }
 }
 
+/// Holds the pane in the terminal's alternate screen for a harness whose own
+/// TUI never asks for it. codex 0.151.0 parses `[tui] alternate_screen` and
+/// then renders inline anyway (openai/codex#24552), so its repaints scroll into
+/// tmux history and the input box walks up the pane instead of staying pinned.
+/// Writing the switch here makes tmux flip the pane to its alternate buffer for
+/// the child's whole life: input at the bottom, `history_size` stays 0. `Drop`
+/// restores the primary screen on every exit path, bail included.
+struct AlternateScreen;
+
+impl AlternateScreen {
+    fn enter(wanted: bool) -> Option<Self> {
+        if !wanted {
+            return None;
+        }
+        let mut out = std::io::stdout();
+        out.write_all(b"\x1b[?1049h").ok()?;
+        out.flush().ok()?;
+        Some(Self)
+    }
+}
+
+impl Drop for AlternateScreen {
+    fn drop(&mut self) {
+        let mut out = std::io::stdout();
+        let _ = out.write_all(b"\x1b[?1049l");
+        let _ = out.flush();
+    }
+}
+
 /// Ask the selected harness adapter to prepare its native process, register
 /// this pane as its coordinator, then run the ordinary interactive TUI.
 pub(crate) fn run_native_tui(
@@ -113,6 +143,8 @@ pub(crate) fn run_native_tui(
         .map(boop::Store::known_sessions)
         .transpose()?;
     let opened_ms = boop::live::now_ms();
+    let _alternate_screen =
+        AlternateScreen::enter(adapter.capabilities().wrapper_owns_alternate_screen);
     // The stamp every `boop` call inside this TUI reads as its identity,
     // inherited by the harness's own shell and native subagents.
     let mut child = Command::new(&plan.program)
