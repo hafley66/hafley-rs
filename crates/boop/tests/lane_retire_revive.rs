@@ -232,13 +232,9 @@ fn a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation() {
         || fx.mailbox().contains("lane feature-retire done rc=0"),
         Duration::from_secs(20),
     );
-    // 3. one second of silence: the lane retires, its pane is gone, the
-    //    parent holds one note, and the trail keeps what a revive needs.
-    wait_for(
-        "retire note",
-        || fx.mailbox().contains("lane feature-retire retired"),
-        Duration::from_secs(20),
-    );
+    // 3. one second of silence: the lane retires, its pane is gone, and the
+    //    trail keeps what a revive needs. The result row already answered
+    //    the parent, so no retire note is minted.
     wait_for("pane exit", || !fx.pane_alive(), Duration::from_secs(20));
     assert!(fx.trail("spawn.json").exists(), "spawn record missing");
     assert_eq!(
@@ -299,8 +295,8 @@ fn a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation() {
         "no revived line:\n{stdout}"
     );
     assert!(
-        stdout.contains("idle feature-retire turn="),
-        "the wait must end on the lane's turn-end row:\n{stdout}"
+        stdout.contains("lane feature-retire done rc=0"),
+        "the wait must end on the lane's result row:\n{stdout}"
     );
 
     // 5. the same conversation, resumed, and the body was the opening turn:
@@ -318,19 +314,15 @@ fn a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation() {
         "body never reached the harness"
     );
 
-    // 6. and it retires again on its own.
+    // 6. and it retires again on its own, still without a second note.
     wait_for(
         "second retirement",
         || !fx.pane_alive(),
         Duration::from_secs(20),
     );
-    wait_for(
-        "second retire note",
-        || fx.mailbox().matches("lane feature-retire retired").count() == 2,
-        Duration::from_secs(20),
-    );
     assert_eq!(
         fx.mailbox().matches("lane feature-retire retired").count(),
-        2
+        0,
+        "no retire note either time"
     );
 }

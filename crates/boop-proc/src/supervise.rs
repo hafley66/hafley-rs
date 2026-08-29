@@ -978,16 +978,20 @@ fn supervise(
                     }
                     record_residency(&lane.mail_dir, &lane.lane, RESIDENCY_RETIRED);
                     let conversation = channel.conversation_id().unwrap_or_default();
-                    mail_to_parent_kind(
-                        lane,
-                        "note",
-                        format!(
-                            "lane {} retired: idle {secs}s after its result row; \
+                    // The result row already told the parent the lane is done;
+                    // the retire note would only cost the parent another turn.
+                    if !has_answered(&lane.mail_dir, &lane.lane) {
+                        mail_to_parent_kind(
+                            lane,
+                            "note",
+                            format!(
+                                "lane {} retired: idle {secs}s after its result row; \
                              `boop beep {} <body>` revives conversation {conversation}",
-                            lane.lane, lane.lane
-                        ),
-                        Some(RESIDENCY_RETIRED),
-                    );
+                                lane.lane, lane.lane
+                            ),
+                            Some(RESIDENCY_RETIRED),
+                        );
+                    }
                     events.record(
                         "idle-shutdown",
                         TraceRecorder::session(channel),
@@ -1442,23 +1446,64 @@ pub const HEAD_REWOUND: &str = "head_rewound";
 /// Resolve the parent and mail one row of `kind`. A parentless lane writes
 /// nothing, which is the same silence every other parent path keeps.
 fn mail_to_parent_kind(lane: &LaneRun, kind: &str, body: String, detail: Option<&str>) {
-    let Some(parent) = registered_parent(&lane.mail_dir, &lane.lane) else {
+    let Ok(routes) = bus::read_routes(&lane.mail_dir) else {
+        debug!(lane = lane.lane, kind, "registry unreadable; no row");
+        return;
+    };
+    let Some(parent) = routes
+        .get(&lane.lane)
+        .and_then(|route| route.parent.clone())
+    else {
         debug!(lane = lane.lane, kind, "no registered parent; no row");
         return;
     };
-    mail_parent(lane, &parent, kind, body, detail);
+    // Yield rows stay trail-only for a coordinator parent: the mailbox keeps
+    // the history and the coordinator spends a turn only on a decision row.
+    let deliver = !(matches!(kind, YIELD | HEAD_REWOUND)
+        && routes
+            .get(&parent)
+            .is_some_and(|route| route.kind == "coordinator"));
+    mail_parent(lane, &parent, kind, body, detail, deliver);
+}
+
+/// Whether this lane has already written a `result` or `request` row to its
+/// parent. A parent holding the answer reads no further idle or retire rows;
+/// a later `boop beep <lane> <body>` revives the session as before.
+fn has_answered(dir: &Path, lane: &str) -> bool {
+    let mut rows = Vec::new();
+    for path in bus::read_boxes(dir).unwrap_or_default() {
+        rows.extend(bus::parse_box(&path));
+    }
+    rows.iter()
+        .any(|row| row.from == lane && matches!(row.kind.as_str(), "result" | "request"))
 }
 
 /// Mail the registered parent one `yield` row for this park. Every park sends
 /// its own row: the dedup `hail_parent_once` applies to failure kinds would
-/// collapse a whole lane's progress into a single line.
+/// collapse a whole lane's progress into a single line. A lane whose parent
+/// already holds a result or request row stays silent.
 fn yield_to_parent(lane: &LaneRun, reason: &str) {
+    if has_answered(&lane.mail_dir, &lane.lane) {
+        debug!(
+            lane = lane.lane,
+            reason, "result row already mailed; no idle yield"
+        );
+        return;
+    }
     mail_to_parent_kind(lane, YIELD, idle_body(lane, reason), Some(reason));
 }
 
 /// Append one row from this lane to its parent. `hail_parent_once` and
 /// `yield_to_parent` share it, so both leave the same shape in the mailbox.
-fn mail_parent(lane: &LaneRun, parent: &str, kind: &str, body: String, detail: Option<&str>) {
+/// `deliver` off appends the trail row and skips the delivery ladder.
+fn mail_parent(
+    lane: &LaneRun,
+    parent: &str,
+    kind: &str,
+    body: String,
+    detail: Option<&str>,
+    deliver: bool,
+) {
     let row = bus::Message {
         id: bus::mint_id(),
         from: lane.lane.clone(),
@@ -1475,7 +1520,7 @@ fn mail_parent(lane: &LaneRun, parent: &str, kind: &str, body: String, detail: O
     match append_row(&lane.mail_dir, &row) {
         Ok(()) => {
             info!(lane = lane.lane, parent, kind, "lane parent row written");
-            let landed = deliver_outbound(lane, &row);
+            let landed = deliver.then(|| deliver_outbound(lane, &row)).flatten();
             println!(
                 "[boop] {kind} hailed to {parent}: {}",
                 landed.unwrap_or_else(|| "held in the mailbox".to_owned())
@@ -2339,47 +2384,130 @@ mod tests {
         assert_eq!(brief.lock().unwrap().as_deref(), Some("do the work\n"));
     }
 
-    // FAIL-PRE-FIX: an idle park printed one line to its own pane and nothing
-    // else, so a parent heard from a working lane exactly once, at exit.
+    // QUIET: a coordinator parent spends a full harness turn per delivered
+    // row, and the result row already answered it, so a park stays silent.
     #[test]
-    fn an_idle_park_mails_the_parent_one_yield_row() {
+    fn a_park_after_the_result_row_mails_no_yield() {
         let dir = tempdir();
         let lane = parented_lane(&dir, "mine", "coordinator");
+        let mut seed = message("seed", "coordinator", "result");
+        seed.from = "mine".into();
+        append_row(&dir, &seed).unwrap();
         let mut channel = ParksThenWakesChannel::default();
         let turns = channel.turns.clone();
         std::thread::spawn(move || {
             let _ = run(lane, &mut channel);
         });
 
-        wait_for(
-            || rows_of_kind(&dir, "yield").len() == 1,
-            Duration::from_secs(5),
-        );
-        let parked = rows_of_kind(&dir, "yield");
-        assert_eq!(parked.len(), 1, "one yield row per park");
-        assert_eq!(parked[0].from, "mine");
-        assert_eq!(parked[0].to, "coordinator");
-        assert!(
-            parked[0].body.starts_with("idle mine turn=completed head="),
-            "body: {}",
-            parked[0].body
-        );
-        assert!(
-            parked[0].body.contains(" dirty="),
-            "body: {}",
-            parked[0].body
-        );
-
+        wait_for(|| turns.lock().unwrap().len() == 1, Duration::from_secs(5));
         append_row(&dir, &message("wake", "mine", "hail")).unwrap();
         wait_for(|| turns.lock().unwrap().len() == 2, Duration::from_secs(5));
-        wait_for(
-            || rows_of_kind(&dir, "yield").len() == 2,
-            Duration::from_secs(5),
+        assert!(
+            rows_of_kind(&dir, "yield").is_empty(),
+            "a lane with a prior result row mails no idle yield"
         );
+    }
+
+    /// QUIET rule 2. A yield row written before any result still lands in the
+    /// mailbox trail, and a coordinator parent route reads none of it.
+    #[test]
+    fn an_idle_yield_before_any_result_reaches_the_trail_but_not_the_coordinator() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coord");
+        std::fs::write(
+            dir.join("registry.json"),
+            serde_json::json!({
+                "mine": { "kind": "lane", "parent": "coord" },
+                "coord": { "kind": "coordinator" }
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        yield_to_parent(&lane, "completed");
+        let rows = rows_of_kind(&dir, "yield");
+        assert_eq!(rows.len(), 1, "one trail row per park");
+        assert_eq!(rows[0].to, "coord");
+        assert!(rows[0].body.contains(" dirty="), "body: {}", rows[0].body);
+        let store = bus::open_store(&dir).unwrap();
+        let (_, history) = store
+            .passthrough(&format!(
+                "SELECT outcome FROM agent_delivery_transition \
+                 WHERE message_id = '{}' ORDER BY sequence",
+                rows[0].id
+            ))
+            .unwrap();
         assert_eq!(
-            rows_of_kind(&dir, "yield").len(),
-            2,
-            "the second park mails its own row"
+            history.len(),
+            1,
+            "the mailbox append is the only transition: {history:?}"
+        );
+        assert_eq!(history[0]["outcome"].as_str(), Some("appended"));
+    }
+
+    /// QUIET rule 2 boundary. Only yield rows go quiet for a coordinator;
+    /// the decision row walks the delivery ladder as before.
+    #[test]
+    fn a_result_row_still_delivers_to_a_coordinator_parent() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coord");
+        std::fs::write(
+            dir.join("registry.json"),
+            serde_json::json!({
+                "mine": { "kind": "lane", "parent": "coord" },
+                "coord": { "kind": "coordinator" }
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        record_result(&lane, 0, None);
+        let rows = result_rows(&dir);
+        assert_eq!(rows.len(), 1);
+        let store = bus::open_store(&dir).unwrap();
+        let (_, history) = store
+            .passthrough(&format!(
+                "SELECT outcome FROM agent_delivery_transition \
+                 WHERE message_id = '{}' ORDER BY sequence",
+                rows[0].id
+            ))
+            .unwrap();
+        assert!(
+            history.len() > 1,
+            "the result row walked the ladder: {history:?}"
+        );
+    }
+
+    /// QUIET rule 2 boundary. A lane-to-lane parent keeps today's delivery.
+    #[test]
+    fn a_lane_parent_still_receives_yield_rows() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "up");
+        std::fs::write(
+            dir.join("registry.json"),
+            serde_json::json!({
+                "mine": { "kind": "lane", "parent": "up" },
+                "up": { "kind": "lane" }
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        yield_to_parent(&lane, "completed");
+        let rows = rows_of_kind(&dir, "yield");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].to, "up");
+        let store = bus::open_store(&dir).unwrap();
+        let (_, history) = store
+            .passthrough(&format!(
+                "SELECT outcome FROM agent_delivery_transition \
+                 WHERE message_id = '{}' ORDER BY sequence",
+                rows[0].id
+            ))
+            .unwrap();
+        assert!(
+            history.len() > 1,
+            "the lane parent route took the row: {history:?}"
         );
     }
 
