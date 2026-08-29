@@ -1,4 +1,6 @@
-use boop_turnvis::{locate_visible_turns, BoopTurn, Confidence, LogicalLine, VisibleTurn};
+use boop_turnvis::{
+    locate_visible_turns, normalize_turn_line, BoopTurn, Confidence, LogicalLine, VisibleTurn,
+};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -30,6 +32,16 @@ struct GoldenTurn {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoldenLine {
+    start: usize,
+    #[allow(dead_code)]
+    end: usize,
+    normalized: String,
+    id: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct Golden {
     #[allow(dead_code)]
     fixture: String,
@@ -37,6 +49,7 @@ struct Golden {
     cols: u16,
     #[allow(dead_code)]
     rows: u16,
+    lines: Vec<GoldenLine>,
     turns: Vec<GoldenTurn>,
 }
 
@@ -49,6 +62,81 @@ fn confidence_str(c: Confidence) -> &'static str {
 
 fn field_diff(name: &str, fixture: &str, index: usize, got: String, want: String) -> String {
     format!("{fixture}[{index}] {name}: got {got:?}, want {want:?}")
+}
+
+const TRUNC: usize = 72;
+
+fn trunc(s: &str) -> String {
+    if s.chars().count() <= TRUNC {
+        s.to_string()
+    } else {
+        let cut: String = s.chars().take(TRUNC).collect();
+        format!("{cut}...")
+    }
+}
+
+fn line_diff(
+    name: &str,
+    fixture: &str,
+    index: usize,
+    start: usize,
+    got: String,
+    want: String,
+) -> String {
+    format!(
+        "{fixture} line[{index}] (start {start}) {name}: got {:?}, want {:?}",
+        trunc(&got),
+        trunc(&want)
+    )
+}
+
+// Anchor containment, matching the TypeScript located.find accessor order.
+fn anchor_id_at(turns: &[VisibleTurn], row: usize) -> Option<&str> {
+    turns
+        .iter()
+        .find(|t| t.anchor_start <= row && row <= t.anchor_end)
+        .map(|t| t.id.as_str())
+}
+
+fn compare_lines(
+    fixture: &str,
+    capture: &[LogicalLine],
+    got: &[VisibleTurn],
+    golden: &Golden,
+) -> Vec<String> {
+    let mut failures = Vec::new();
+    if capture.len() != golden.lines.len() {
+        failures.push(format!(
+            "{fixture}: line count got {}, want {}",
+            capture.len(),
+            golden.lines.len()
+        ));
+    }
+    for (index, (line, w)) in capture.iter().zip(golden.lines.iter()).enumerate() {
+        let norm = normalize_turn_line(&line.text);
+        if norm != w.normalized {
+            failures.push(line_diff(
+                "normalized",
+                fixture,
+                index,
+                w.start,
+                norm,
+                w.normalized.clone(),
+            ));
+        }
+        let id = anchor_id_at(got, w.start).map(str::to_string);
+        if id != w.id {
+            failures.push(line_diff(
+                "id",
+                fixture,
+                index,
+                w.start,
+                id.unwrap_or_else(|| "null".to_string()),
+                w.id.clone().unwrap_or_else(|| "null".to_string()),
+            ));
+        }
+    }
+    failures
 }
 
 fn compare(fixture: &str, got: &[VisibleTurn], golden: &Golden) -> Vec<String> {
@@ -121,6 +209,7 @@ fn golden_fixtures() {
         let turns: Vec<BoopTurn> = load(&format!("{dir}/{turns_name}.turns.json"));
         let golden: Golden = load(&format!("{dir}/{name}.golden.json"));
         let got = locate_visible_turns(&capture.lines, &turns);
+        all_failures.extend(compare_lines(name, &capture.lines, &got, &golden));
         all_failures.extend(compare(name, &got, &golden));
     }
     assert!(all_failures.is_empty(), "\n{}", all_failures.join("\n"));
