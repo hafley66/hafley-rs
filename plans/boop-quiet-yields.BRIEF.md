@@ -15,22 +15,22 @@ per idle turn (`:1350` `idle_body`), and per retire (`:985`). Measured
 note. Each injected row costs the coordinator a full harness turn. Only
 `request` and `result` rows carry a decision.
 
-## Build
-1. `agent_route` gains a column `quiet_yields INTEGER NOT NULL DEFAULT 0`
-   (migration in `crates/boop-store`, additive).
-2. `boop adopt --quiet-yields` and `boop beep lane create --quiet-yields`
-   set it on the route being written; `boop route set <route> quiet_yields=1`
-   if a route-edit verb already exists, else add the flag to `adopt` only.
-3. `mail_to_parent_kind` (supervise.rs) with `kind == YIELD`: when the
-   parent route has `quiet_yields=1`, append the row to the mailbox
-   (the trail stays complete for `boop beep lane list` and self-diagnosis)
-   and SKIP `deliver_outbound`. `result`, `request`, `note` deliver as today.
-4. `boop beep lane list` output is unchanged.
+## Build (user decision 2026-08-29, supersedes any flag design)
+No new column, no flag. Two rules in `mail_to_parent_kind` / the retire path:
+1. A lane that has already written a `result` or `request` row to its parent
+   mints NO further `idle` or `retired` yield rows. The parent already has the
+   answer; a later `boop beep <lane> <body>` revives the session as today.
+2. `kind=yield` rows (commit, idle before any result, rewind) are appended to
+   the mailbox for the trail and are NEVER passed to `deliver_outbound` when
+   the parent route has `kind=coordinator`. Lane-to-lane parents keep today's
+   delivery. `result`, `request`, `note` deliver as today.
 
 ## Tests, fail-first
 In `supervise.rs` tests beside `an_idle_park_mails_the_parent_one_yield_row`:
-quiet parent -> yield row appended, zero delivery rows; loud parent ->
-unchanged; a `result` row to a quiet parent still delivers.
+a lane with a prior result row parks idle -> zero new rows; a lane with no
+result row parks idle -> one yield row appended, zero delivery rows when the
+parent is a coordinator; a `result` row still delivers; a lane parent still
+receives yields.
 
 ## Receipt
 `cargo test -p boop -p boop-proc -p boop-store` SUM. Push,
