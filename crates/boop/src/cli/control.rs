@@ -104,6 +104,32 @@ impl Drop for AlternateScreen {
     }
 }
 
+/// Bind a tmux pane to the boop session running in it, so a reader with a pane
+/// in hand can name the session outright instead of matching text against every
+/// recent session of the harness.
+fn record_pane(
+    open: Option<&boop::Store>,
+    session: &str,
+    pid: u32,
+    pane: &str,
+) -> anyhow::Result<()> {
+    let owned;
+    let store = match open {
+        Some(store) => store,
+        None => {
+            owned = boop::Store::open(boop::Store::default_path()?)?;
+            &owned
+        }
+    };
+    store.record_status(
+        session,
+        boop::live::now_ms(),
+        "live",
+        Some(i64::from(pid)),
+        Some(pane),
+    )
+}
+
 /// Ask the selected harness adapter to prepare its native process, register
 /// this pane as its coordinator, then run the ordinary interactive TUI.
 pub(crate) fn run_native_tui(
@@ -162,10 +188,23 @@ pub(crate) fn run_native_tui(
             plan.source_path = Some(format!("native-session={session}"));
         }
     }
+    // The pane id is the only thing tying this tmux cell to a boop session. It
+    // went into the route file and nowhere else, so `agent_live` held 0 pane
+    // ids across 4565 rows and any reader holding a pane had to guess its
+    // session from a pool of every recent session of that harness.
+    //
+    // Opened separately from `store` above: that handle is gated on
+    // `native_tui_projector`, which claude does not set, and registering a pane
+    // is not transcript projection.
+    if let Some(session) = plan.session_id.as_deref() {
+        if let Err(error) = record_pane(store.as_ref(), session, child.id(), &pane) {
+            eprintln!("boop: pane {pane} not recorded for session {session}: {error}");
+        }
+    }
     let mut route = Route {
         kind: "coordinator".into(),
         harness: Some(adapter.id()),
-        tmux: Some(pane),
+        tmux: Some(pane.clone()),
         cwd: Some(cwd.display().to_string()),
         model: None,
         mode: Some(plan.mode.clone()),

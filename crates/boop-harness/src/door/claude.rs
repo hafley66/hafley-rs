@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use crate::door::{Delivered, Door, IdleNotice};
-use crate::harness::HarnessId;
+use crate::harness::{HarnessId, NativeTuiPlan, NativeTuiSpec};
 use crate::live::{
     now_ms, pane_of_target, pid_alive, DoorAddress, LiveSession, LiveSessions, LiveStatus,
 };
@@ -183,7 +183,53 @@ impl LiveSessions for ClaudeDoor {
     }
 }
 
+/// The session id a `claude` command line names outright.
+///
+/// The default `tui_launch` reports no session, so `boop tui claude --
+/// --resume <id>` threw the id away and control.rs fell back to
+/// `opened_session`, which only accepts a session that started AFTER the
+/// wrapper did. A resumed session started hours earlier, so nothing bound the
+/// pane to it and every route carried `session_id: null`.
+///
+/// `--resume`/`-r` with no id is claude's picker, and `--continue`/`-c` names
+/// no id either. Both leave the answer to `opened_session`, unchanged.
+pub(crate) fn explicit_resume(tui_args: &[String]) -> Option<String> {
+    let mut args = tui_args.iter().peekable();
+    while let Some(arg) = args.next() {
+        if let Some(value) = arg.strip_prefix("--resume=") {
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+            continue;
+        }
+        if arg == "--resume" || arg == "-r" {
+            match args.peek() {
+                Some(next) if !next.starts_with('-') => return Some((*next).clone()),
+                _ => continue,
+            }
+        }
+    }
+    None
+}
+
 impl Door for ClaudeDoor {
+    /// Claude's TUI takes the user's arguments as written; the only thing the
+    /// wrapper adds is reading the resumed session id out of them.
+    fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan> {
+        let session_id = explicit_resume(&spec.args);
+        Ok(NativeTuiPlan {
+            source_path: Some(match &session_id {
+                Some(session) => format!(
+                    "native-executable={};requested-resume={session}",
+                    spec.executable
+                ),
+                None => format!("native-executable={}", spec.executable),
+            }),
+            session_id,
+            ..NativeTuiPlan::direct(spec)
+        })
+    }
+
     fn deliver(&self, session: &LiveSession, body: &str) -> Result<Delivered> {
         let DoorAddress::UnixSocket { path, token } = &session.door else {
             return Ok(Delivered::Unreachable(format!(
@@ -491,5 +537,79 @@ mod tests {
             !live.is_empty(),
             "this test runs from a live claude session"
         );
+    }
+}
+
+#[cfg(test)]
+mod tui_launch_tests {
+    use super::*;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn reads_the_session_id_after_a_long_resume_flag() {
+        assert_eq!(
+            explicit_resume(&args(&["--resume", "f3deaaac-d198-47d5-975d-8e84a038046f"])),
+            Some("f3deaaac-d198-47d5-975d-8e84a038046f".to_string())
+        );
+    }
+
+    #[test]
+    fn reads_it_after_the_short_flag_and_from_an_equals_form() {
+        assert_eq!(explicit_resume(&args(&["-r", "abc"])), Some("abc".to_string()));
+        assert_eq!(explicit_resume(&args(&["--resume=abc"])), Some("abc".to_string()));
+    }
+
+    #[test]
+    fn reads_it_past_earlier_flags() {
+        assert_eq!(
+            explicit_resume(&args(&["--model", "opus", "--resume", "abc"])),
+            Some("abc".to_string())
+        );
+    }
+
+    // Claude's picker: `--resume` alone opens a chooser and names no session,
+    // so the answer stays with opened_session rather than becoming a flag name.
+    #[test]
+    fn reports_nothing_when_resume_names_no_session() {
+        assert_eq!(explicit_resume(&args(&["--resume"])), None);
+        assert_eq!(explicit_resume(&args(&["--resume", "--verbose"])), None);
+        assert_eq!(explicit_resume(&args(&["--resume="])), None);
+    }
+
+    #[test]
+    fn reports_nothing_for_continue_or_a_bare_launch() {
+        assert_eq!(explicit_resume(&args(&["--continue"])), None);
+        assert_eq!(explicit_resume(&args(&["-c"])), None);
+        assert_eq!(explicit_resume(&args(&[])), None);
+    }
+
+    // The defect this exists for: control.rs only reached opened_session, which
+    // rejects a session that started before the wrapper did.
+    #[test]
+    fn tui_launch_carries_the_resumed_session_into_the_plan() {
+        let spec = NativeTuiSpec {
+            executable: "claude".into(),
+            cwd: std::path::PathBuf::from("/tmp"),
+            args: args(&["--resume", "f3deaaac-d198-47d5-975d-8e84a038046f"]),
+        };
+        let plan = ClaudeDoor::machine().tui_launch(&spec).unwrap();
+        assert_eq!(
+            plan.session_id.as_deref(),
+            Some("f3deaaac-d198-47d5-975d-8e84a038046f")
+        );
+        assert_eq!(plan.args, spec.args.iter().map(std::ffi::OsString::from).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn a_bare_launch_still_leaves_the_session_to_opened_session() {
+        let spec = NativeTuiSpec {
+            executable: "claude".into(),
+            cwd: std::path::PathBuf::from("/tmp"),
+            args: Vec::new(),
+        };
+        assert_eq!(ClaudeDoor::machine().tui_launch(&spec).unwrap().session_id, None);
     }
 }
