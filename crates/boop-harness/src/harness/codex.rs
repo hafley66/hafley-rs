@@ -26,7 +26,9 @@ static CAPABILITIES: Capabilities = Capabilities {
     variant: VariantSupport::ModelSuffixEffort,
     mail: MailPolicy::Door,
     native_tui_projector: true,
-    wrapper_owns_alternate_screen: true,
+    // false so codex renders on the primary screen: its transcript then lands in
+    // tmux history, which is the only scrollback a codex pane ever gets.
+    wrapper_owns_alternate_screen: false,
 };
 
 /// The state database and remote-control socket of the codex on this machine.
