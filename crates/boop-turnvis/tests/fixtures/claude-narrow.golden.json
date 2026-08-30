@@ -609,11 +609,11 @@
    "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:377",
    "turn": 377,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 0,
    "anchorEnd": 62,
    "bufferStart": 0,
-   "bufferEnd": 65
+   "bufferEnd": 62
   },
   {
    "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:378",
@@ -622,28 +622,28 @@
    "confidence": "extended",
    "anchorStart": 66,
    "anchorEnd": 78,
-   "bufferStart": 66,
-   "bufferEnd": 80
+   "bufferStart": 64,
+   "bufferEnd": 78
   },
   {
    "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:379",
    "turn": 379,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 81,
    "anchorEnd": 84,
    "bufferStart": 81,
-   "bufferEnd": 87
+   "bufferEnd": 84
   },
   {
    "id": "220a0de3-62f5-4dd9-99ce-0ce71a7fb897:380",
    "turn": 380,
    "role": "user",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 88,
    "anchorEnd": 90,
    "bufferStart": 88,
-   "bufferEnd": 99
+   "bufferEnd": 90
   }
  ]
 }

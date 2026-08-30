@@ -609,21 +609,21 @@
    "id": "01a014c5-a146-7b70-9579-f493b23f1701:1261",
    "turn": 1261,
    "role": "user",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 0,
    "anchorEnd": 88,
    "bufferStart": 0,
-   "bufferEnd": 90
+   "bufferEnd": 88
   },
   {
    "id": "01a014c5-a146-7b70-9579-f493b23f1701:1262",
    "turn": 1262,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 91,
    "anchorEnd": 91,
    "bufferStart": 91,
-   "bufferEnd": 99
+   "bufferEnd": 91
   }
  ]
 }

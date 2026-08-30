@@ -216,6 +216,39 @@ fn monotonic_turn_match(screen: &[ScreenRow], source: &Source) -> Option<TurnMat
     })
 }
 
+/// A blank row is where one message stops being the other. Extending across one
+/// merged two on-screen turns into a single attributed block.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Step {
+    Up,
+    Down,
+}
+
+fn extend_to(screen: &[ScreenRow], anchor: usize, limit: usize, step: Step) -> usize {
+    let Some(at) = screen
+        .iter()
+        .position(|row| row.line.start <= anchor && anchor <= row.line.end)
+    else {
+        return anchor;
+    };
+    let mut reached = anchor;
+    let mut index = at as isize;
+    loop {
+        index += if step == Step::Down { 1 } else { -1 };
+        if index < 0 || index as usize >= screen.len() {
+            break;
+        }
+        let row = &screen[index as usize];
+        let edge = if step == Step::Down { row.line.end } else { row.line.start };
+        let inside = if step == Step::Down { edge <= limit } else { edge >= limit };
+        if !inside || row.normalized.is_empty() {
+            break;
+        }
+        reached = edge;
+    }
+    reached
+}
+
 fn grow_anchors(visible: &mut [VisibleTurn], screen: &[ScreenRow], sources: &[Source]) {
     let rows: Vec<&ScreenRow> = screen
         .iter()
@@ -352,21 +385,21 @@ pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<Vi
     if lines.is_empty() {
         return visible;
     }
-    let viewport_start = lines[0].start;
-    let viewport_end = lines[lines.len() - 1].end;
     let sorted_len = visible.len();
     let mut result: Vec<VisibleTurn> = Vec::with_capacity(sorted_len);
     for (index, turn) in visible.iter().enumerate() {
-        let buffer_start = if index == 0 {
-            viewport_start
+        let ceiling = if index == 0 {
+            lines[0].start
         } else {
-            turn.buffer_start
+            visible[index - 1].buffer_end + 1
         };
-        let buffer_end = if index + 1 < sorted_len {
+        let floor = if index + 1 < sorted_len {
             visible[index + 1].buffer_start.saturating_sub(1)
         } else {
-            viewport_end
+            lines[lines.len() - 1].end
         };
+        let buffer_start = extend_to(&screen, turn.buffer_start, ceiling, Step::Up);
+        let buffer_end = extend_to(&screen, turn.buffer_end, floor, Step::Down);
         let extended = buffer_start != turn.buffer_start || buffer_end != turn.buffer_end;
         result.push(VisibleTurn {
             buffer_start,

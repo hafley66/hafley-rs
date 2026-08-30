@@ -609,91 +609,91 @@
    "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2516",
    "turn": 2516,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 1,
    "anchorEnd": 1,
-   "bufferStart": 0,
-   "bufferEnd": 8
+   "bufferStart": 1,
+   "bufferEnd": 1
   },
   {
    "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2523",
    "turn": 2523,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 9,
    "anchorEnd": 25,
    "bufferStart": 9,
-   "bufferEnd": 32
+   "bufferEnd": 25
   },
   {
    "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2532",
    "turn": 2532,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 33,
    "anchorEnd": 50,
    "bufferStart": 33,
-   "bufferEnd": 57
+   "bufferEnd": 50
   },
   {
    "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2543",
    "turn": 2543,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 58,
    "anchorEnd": 58,
    "bufferStart": 58,
-   "bufferEnd": 63
+   "bufferEnd": 58
   },
   {
    "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2562",
    "turn": 2562,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 64,
    "anchorEnd": 64,
    "bufferStart": 64,
-   "bufferEnd": 67
+   "bufferEnd": 64
   },
   {
    "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2564",
    "turn": 2564,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 68,
    "anchorEnd": 82,
    "bufferStart": 68,
-   "bufferEnd": 85
+   "bufferEnd": 82
   },
   {
    "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2565",
    "turn": 2565,
    "role": "user",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 86,
    "anchorEnd": 86,
    "bufferStart": 86,
-   "bufferEnd": 87
+   "bufferEnd": 86
   },
   {
    "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2455",
    "turn": 2455,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 88,
    "anchorEnd": 88,
    "bufferStart": 88,
-   "bufferEnd": 89
+   "bufferEnd": 88
   },
   {
    "id": "4c5c1a29-ef46-476a-934c-c0ce8097a62a:2569",
    "turn": 2569,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 90,
    "anchorEnd": 90,
    "bufferStart": 90,
-   "bufferEnd": 99
+   "bufferEnd": 90
   }
  ]
 }

@@ -609,51 +609,51 @@
    "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:528",
    "turn": 528,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 1,
    "anchorEnd": 4,
-   "bufferStart": 0,
-   "bufferEnd": 8
+   "bufferStart": 1,
+   "bufferEnd": 4
   },
   {
    "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:531",
    "turn": 531,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 9,
    "anchorEnd": 10,
    "bufferStart": 9,
-   "bufferEnd": 34
+   "bufferEnd": 10
   },
   {
    "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:534",
    "turn": 534,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 35,
    "anchorEnd": 37,
    "bufferStart": 35,
-   "bufferEnd": 49
+   "bufferEnd": 37
   },
   {
    "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:536",
    "turn": 536,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 50,
    "anchorEnd": 50,
    "bufferStart": 50,
-   "bufferEnd": 69
+   "bufferEnd": 50
   },
   {
    "id": "ses_fed1cd2f6ffeRWtNjUfzmZFYIt:538",
    "turn": 538,
    "role": "assistant",
-   "confidence": "extended",
+   "confidence": "anchored",
    "anchorStart": 70,
    "anchorEnd": 77,
    "bufferStart": 70,
-   "bufferEnd": 99
+   "bufferEnd": 77
   }
  ]
 }
