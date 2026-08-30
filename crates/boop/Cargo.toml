@@ -1,6 +1,6 @@
 [package]
 name = "boop"
-version = "0.0.9"
+version = "0.0.10"
 autotests = false
 edition.workspace = true
 description = "cross-harness agent transcript reader: tail agent events from every harness on this machine as one stream"
