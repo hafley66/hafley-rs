@@ -34,7 +34,7 @@ pub struct Store {
 /// 15 = ordered delivery-transition receipts beside the current-state ledger.
 /// 16 = the typed error code a refused transition carries.
 /// 19 = an absent favorite note is stored as NULL.
-pub const SCHEMA_VERSION: i64 = 19;
+pub const SCHEMA_VERSION: i64 = 20;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -148,6 +148,41 @@ pub struct TurnQuery {
     pub turn_to: Option<u64>,
     pub path: Option<String>,
     pub limit: Option<u64>,
+}
+
+/// One turn a comment quotes; `role` is '' for a turn not yet ingested.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TurnCommentTarget {
+    pub session: String,
+    pub turn: i64,
+    pub role: String,
+}
+
+/// One stored terminal comment with its resolved targets.
+#[derive(Clone, Debug)]
+pub struct TurnComment {
+    pub comment_id: i64,
+    pub client_id: String,
+    pub kind: String,
+    pub quote: String,
+    pub note: Option<String>,
+    pub enabled: bool,
+    pub tab_name: Option<String>,
+    pub created_ts: i64,
+    pub updated_ts: i64,
+    pub targets: Vec<TurnCommentTarget>,
+}
+
+/// The write shape for `turn_comment_upsert`; targets are (session, turn).
+pub struct TurnCommentUpsert<'a> {
+    pub client_id: &'a str,
+    pub kind: &'a str,
+    pub quote: &'a str,
+    pub note: Option<&'a str>,
+    pub enabled: bool,
+    pub tab_name: Option<&'a str>,
+    pub targets: &'a [(String, i64)],
+    pub ts: u64,
 }
 
 /// One lane spawn's purpose, as the store records it.
@@ -1368,6 +1403,149 @@ impl Store {
             params![id],
         )?;
         Ok(removed == 1)
+    }
+
+    /// Create or rewrite one turn comment by its client id, replacing its
+    /// target set wholesale; `created_ts` survives a rewrite, `updated_ts` moves.
+    pub fn turn_comment_upsert(&self, comment: &TurnCommentUpsert) -> Result<i64> {
+        self.connection.execute_batch("BEGIN IMMEDIATE")?;
+        let result = (|| {
+            self.connection.execute(
+                "INSERT INTO agent_turn_comment
+                   (client_id, kind, quote, note, enabled, tab_name, created_ts, updated_ts)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)
+                 ON CONFLICT(client_id) DO UPDATE SET
+                   kind = excluded.kind, quote = excluded.quote, note = excluded.note,
+                   enabled = excluded.enabled, tab_name = excluded.tab_name,
+                   updated_ts = excluded.updated_ts",
+                params![
+                    comment.client_id,
+                    comment.kind,
+                    comment.quote,
+                    comment.note,
+                    comment.enabled,
+                    comment.tab_name,
+                    comment.ts as i64,
+                ],
+            )?;
+            let comment_id: i64 = self.connection.query_row(
+                "SELECT comment_id FROM agent_turn_comment WHERE client_id = ?1",
+                params![comment.client_id],
+                |row| row.get(0),
+            )?;
+            self.connection.execute(
+                "DELETE FROM agent_turn_comment_target WHERE comment_id = ?1",
+                params![comment_id],
+            )?;
+            for (session, turn) in comment.targets {
+                let session_id = self.session_id(session)?;
+                self.connection.execute(
+                    "INSERT OR IGNORE INTO agent_turn_comment_target (comment_id, session_id, turn)
+                     VALUES (?1, ?2, ?3)",
+                    params![comment_id, session_id, turn],
+                )?;
+            }
+            Ok(comment_id)
+        })();
+        match result {
+            Ok(id) => {
+                self.connection.execute_batch("COMMIT")?;
+                Ok(id)
+            }
+            Err(error) => {
+                let _ = self.connection.execute_batch("ROLLBACK");
+                Err(error)
+            }
+        }
+    }
+
+    /// Drop one comment and its targets. `false` when the client id names no
+    /// comment.
+    pub fn turn_comment_delete(&self, client_id: &str) -> Result<bool> {
+        let removed = self.connection.execute(
+            "DELETE FROM agent_turn_comment_target WHERE comment_id IN
+               (SELECT comment_id FROM agent_turn_comment WHERE client_id = ?1);",
+            params![client_id],
+        );
+        removed?;
+        let removed = self.connection.execute(
+            "DELETE FROM agent_turn_comment WHERE client_id = ?1",
+            params![client_id],
+        )?;
+        Ok(removed == 1)
+    }
+
+    /// Stamp comments as delivered into a prompt. A sent comment is history:
+    /// it stays readable but leaves the pending set.
+    pub fn turn_comment_mark_sent(&self, client_ids: &[String], ts: u64) -> Result<usize> {
+        let mut stamped = 0;
+        for client_id in client_ids {
+            stamped += self.connection.execute(
+                "UPDATE agent_turn_comment SET sent_ts = ?2 WHERE client_id = ?1 AND sent_ts IS NULL",
+                params![client_id, ts as i64],
+            )?;
+        }
+        Ok(stamped)
+    }
+
+    /// Every comment not yet sent, targets attached. Target roles come off
+    /// agent_turn where the turn is ingested; an unknown turn reads as ''.
+    pub fn turn_comments_pending(&self) -> Result<Vec<TurnComment>> {
+        let mut comments: Vec<TurnComment> = Vec::new();
+        {
+            let mut statement = self.connection.prepare(
+                "SELECT comment_id, client_id, kind, quote, note, enabled, tab_name,
+                        created_ts, updated_ts
+                   FROM agent_turn_comment WHERE sent_ts IS NULL ORDER BY comment_id",
+            )?;
+            let rows = statement.query_map([], |row| {
+                Ok(TurnComment {
+                    comment_id: row.get(0)?,
+                    client_id: row.get(1)?,
+                    kind: row.get(2)?,
+                    quote: row.get(3)?,
+                    note: row.get(4)?,
+                    enabled: row.get(5)?,
+                    tab_name: row.get(6)?,
+                    created_ts: row.get(7)?,
+                    updated_ts: row.get(8)?,
+                    targets: Vec::new(),
+                })
+            })?;
+            for row in rows {
+                comments.push(row?);
+            }
+        }
+        let mut statement = self.connection.prepare(
+            "SELECT t.comment_id, s.value, t.turn, COALESCE(r.value, '')
+               FROM agent_turn_comment_target t
+               JOIN dict_session s ON s.id = t.session_id
+               LEFT JOIN agent_turn a ON a.session_id = t.session_id AND a.turn = t.turn
+               LEFT JOIN dict_role r ON r.id = a.role_id
+              ORDER BY t.comment_id, t.turn",
+        )?;
+        let targets = statement.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                TurnCommentTarget {
+                    session: row.get(1)?,
+                    turn: row.get(2)?,
+                    role: row.get(3)?,
+                },
+            ))
+        })?;
+        let by_id: std::collections::HashMap<i64, usize> = comments
+            .iter()
+            .enumerate()
+            .map(|(index, comment)| (comment.comment_id, index))
+            .collect();
+        for target in targets {
+            let (comment_id, target) = target?;
+            if let Some(&index) = by_id.get(&comment_id) {
+                comments[index].targets.push(target);
+            }
+        }
+        Ok(comments)
     }
 
     /// The trace a session belongs to, by trace name.
@@ -2761,6 +2939,36 @@ CREATE TABLE IF NOT EXISTS agent_favorite (
   created_ts INTEGER NOT NULL
 );
 
+-- User-authored comment on terminal output, second user-authored state after
+-- agent_favorite. `quote` is the slice as read off the screen; `note` is what
+-- the reader wants done with it. `client_id` is the UI's item id and the
+-- upsert key, so a re-sent edit converges instead of duplicating. `sent_ts`
+-- set means the comment went into a prompt; it stays as history and stops
+-- rehydrating. A slice that overlapped no turn keeps only `tab_name`.
+CREATE TABLE IF NOT EXISTS agent_turn_comment (
+  comment_id INTEGER PRIMARY KEY,
+  client_id TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL DEFAULT 'selection',
+  quote TEXT NOT NULL,
+  note TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  tab_name TEXT,
+  created_ts INTEGER NOT NULL,
+  updated_ts INTEGER NOT NULL,
+  sent_ts INTEGER
+);
+
+-- The turns a comment quotes, any role: user turns are targets exactly like
+-- assistant turns.
+CREATE TABLE IF NOT EXISTS agent_turn_comment_target (
+  comment_id INTEGER NOT NULL,
+  session_id INTEGER NOT NULL,
+  turn INTEGER NOT NULL,
+  PRIMARY KEY (comment_id, session_id, turn)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_turn_comment_target
+  ON agent_turn_comment_target(session_id, turn);
+
 CREATE TABLE IF NOT EXISTS agent_trace (
   trace_id INTEGER PRIMARY KEY,
   root_session_id INTEGER,
@@ -3097,6 +3305,7 @@ mod tests {
     use std::sync::{mpsc, Arc, Barrier};
     use std::time::Duration;
 
+    use crate::ident::TurnCommentUpsert;
     use crate::session::SessionRef;
 
     use rusqlite::params;
@@ -3136,6 +3345,63 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let store = Store::open(path.clone()).unwrap();
         (path, store)
+    }
+
+    #[test]
+    fn turn_comment_round_trip() {
+        let (path, store) = fresh_store("turn_comment");
+        store.write_turn("sess-a", 3, 100, "user", "please fix the thing").unwrap();
+        store.write_turn("sess-a", 4, 110, "assistant", "done").unwrap();
+        let targets = vec![("sess-a".to_string(), 3), ("sess-a".to_string(), 4)];
+        let upsert = TurnCommentUpsert {
+            client_id: "selection:1:0",
+            kind: "selection",
+            quote: "please fix the thing",
+            note: None,
+            enabled: true,
+            tab_name: Some("tab-1"),
+            targets: &targets,
+            ts: 120,
+        };
+        store.turn_comment_upsert(&upsert).unwrap();
+
+        let pending = store.turn_comments_pending().unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].quote, "please fix the thing");
+        assert_eq!(pending[0].created_ts, 120);
+        let roles: Vec<&str> = pending[0].targets.iter().map(|t| t.role.as_str()).collect();
+        assert_eq!(roles, ["user", "assistant"]);
+
+        let note_edit = TurnCommentUpsert {
+            note: Some("do it in rust"),
+            targets: &targets[..1],
+            ts: 130,
+            ..upsert
+        };
+        store.turn_comment_upsert(&note_edit).unwrap();
+        let pending = store.turn_comments_pending().unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].note.as_deref(), Some("do it in rust"));
+        assert_eq!(pending[0].created_ts, 120);
+        assert_eq!(pending[0].updated_ts, 130);
+        assert_eq!(pending[0].targets.len(), 1);
+        assert_eq!(pending[0].targets[0].role, "user");
+
+        store
+            .turn_comment_mark_sent(&["selection:1:0".to_string()], 140)
+            .unwrap();
+        assert!(store.turn_comments_pending().unwrap().is_empty());
+
+        store.turn_comment_upsert(&TurnCommentUpsert {
+            client_id: "selection:2:0",
+            note: None,
+            targets: &[],
+            ts: 150,
+            ..upsert
+        }).unwrap();
+        assert!(store.turn_comment_delete("selection:2:0").unwrap());
+        assert!(!store.turn_comment_delete("selection:2:0").unwrap());
+        let _ = std::fs::remove_file(path);
     }
 
     fn trace_event(key: &str, created_ts: u64) -> LaneTraceEvent {
