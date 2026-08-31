@@ -7,7 +7,7 @@
 //! because it is never a key. `boop sync` projects transcripts into these
 //! tables; `boop follow` is the same projection in a poll loop.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -34,7 +34,8 @@ pub struct Store {
 /// 15 = ordered delivery-transition receipts beside the current-state ledger.
 /// 16 = the typed error code a refused transition carries.
 /// 19 = an absent favorite note is stored as NULL.
-pub const SCHEMA_VERSION: i64 = 20;
+/// 21 = each transcript cursor records its adapter projection contract.
+pub const SCHEMA_VERSION: i64 = 21;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -78,9 +79,19 @@ pub type Row = serde_json::Value;
 #[derive(Default, Clone, Copy, Debug)]
 pub struct SyncStat {
     pub written: u64,
+    pub repaired: u64,
     pub dropped: u64,
     pub usage_written: u64,
     pub usage_updated: u64,
+}
+
+/// Durable position and projection contract for one `(session, source path)`.
+/// A sync transaction reads this once and advances all fields together.
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SyncCursor {
+    pub offset: u64,
+    pub modified_ms: u64,
+    pub projection_version: u32,
 }
 
 /// One completed native child whose parent currently has a registered route.
@@ -97,6 +108,7 @@ pub struct NativeChildCompletion {
 impl SyncStat {
     pub fn add(&mut self, other: SyncStat) {
         self.written += other.written;
+        self.repaired += other.repaired;
         self.dropped += other.dropped;
         self.usage_written += other.usage_written;
         self.usage_updated += other.usage_updated;
@@ -697,6 +709,46 @@ impl Store {
                 }
                 self.connection.execute_batch("PRAGMA user_version = 19;")?;
             }
+            if self.schema_version()? < 21 {
+                let migration_started = std::time::Instant::now();
+                let has_projection_version = self.connection.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM pragma_table_info('sync_cursor') WHERE name = 'projection_version')",
+                    [],
+                    |row| row.get::<_, bool>(0),
+                )?;
+                if !has_projection_version {
+                    self.connection.execute_batch(
+                        "ALTER TABLE sync_cursor ADD COLUMN projection_version INTEGER NOT NULL DEFAULT 0;",
+                    )?;
+                }
+                // OpenCode sessions without the historical empty-turn defect
+                // already satisfy projection v1. Affected sessions remain at
+                // v0 and pay exactly one adapter repair pass.
+                let already_current = self.connection.execute(
+                    "UPDATE sync_cursor SET projection_version = 1
+                     WHERE session_id IN (
+                       SELECT session.session_id
+                       FROM agent_session session
+                       JOIN dict_harness harness ON harness.id = session.harness_id
+                       WHERE harness.value = 'opencode'
+                     )
+                     AND NOT EXISTS (
+                       SELECT 1
+                       FROM agent_turn turn
+                       JOIN agent_usage usage
+                         ON usage.session_id = turn.session_id AND usage.turn = turn.turn
+                       WHERE turn.session_id = sync_cursor.session_id
+                         AND COALESCE(turn.said, '') = ''
+                     )",
+                    [],
+                )?;
+                self.connection.execute_batch("PRAGMA user_version = 21;")?;
+                tracing::info!(
+                    duration_ms = migration_started.elapsed().as_millis() as u64,
+                    opencode_sessions_already_current = already_current,
+                    "sync cursor projection-version migration finished"
+                );
+            }
             self.stamp_version()?;
             Ok(())
         })();
@@ -1107,6 +1159,7 @@ impl Store {
         Ok(())
     }
 
+    #[cfg(test)]
     fn set_cursor(&self, session: &str, path: &str, offset: u64) -> Result<()> {
         let sid = self.session_id(session)?;
         let path_id = self.intern("dict_path", path)?;
@@ -1118,19 +1171,42 @@ impl Store {
         Ok(())
     }
 
+    fn ensure_cursor(&self, session: &str, path: &str, offset: u64) -> Result<()> {
+        let sid = self.session_id(session)?;
+        let path_id = self.intern("dict_path", path)?;
+        self.connection.execute(
+            "INSERT OR IGNORE INTO sync_cursor (session_id, path_id, offset)
+             VALUES (?1, ?2, ?3)",
+            params![sid, path_id, offset as i64],
+        )?;
+        Ok(())
+    }
+
     fn set_cursor_modified(
         &self,
         session: &str,
         path: &str,
         offset: u64,
         modified_ms: u64,
+        projection_version: u32,
     ) -> Result<()> {
         let sid = self.session_id(session)?;
         let path_id = self.intern("dict_path", path)?;
         self.connection.execute(
-            "INSERT INTO sync_cursor (session_id, path_id, offset, modified_ms) VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(session_id, path_id) DO UPDATE SET offset=excluded.offset, modified_ms=excluded.modified_ms",
-            params![sid, path_id, offset as i64, modified_ms as i64],
+            "INSERT INTO sync_cursor
+               (session_id, path_id, offset, modified_ms, projection_version)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(session_id, path_id) DO UPDATE SET
+               offset=excluded.offset,
+               modified_ms=excluded.modified_ms,
+               projection_version=excluded.projection_version",
+            params![
+                sid,
+                path_id,
+                offset as i64,
+                modified_ms as i64,
+                projection_version
+            ],
         )?;
         Ok(())
     }
@@ -1161,24 +1237,32 @@ impl Store {
         Ok(())
     }
 
-    fn get_cursor(&self, session: &str, path: &str) -> Result<u64> {
-        let sid = self.session_id(session)?;
-        let path_id = self.intern("dict_path", path)?;
-        let offset: i64 = self
+    fn cursor_state(&self, session: &str, path: &str) -> Result<SyncCursor> {
+        Ok(self
             .connection
             .query_row(
-                "SELECT offset FROM sync_cursor WHERE session_id = ?1 AND path_id = ?2",
-                params![sid, path_id],
-                |row| row.get(0),
+                "SELECT cursor.offset, cursor.modified_ms, cursor.projection_version
+                 FROM sync_cursor cursor
+                 JOIN dict_session session ON session.id = cursor.session_id
+                 JOIN dict_path path ON path.id = cursor.path_id
+                 WHERE session.value = ?1 AND path.value = ?2",
+                params![session, path],
+                |row| {
+                    Ok(SyncCursor {
+                        offset: row.get::<_, i64>(0)? as u64,
+                        modified_ms: row.get::<_, i64>(1)? as u64,
+                        projection_version: row.get::<_, i64>(2)? as u32,
+                    })
+                },
             )
-            .unwrap_or(0);
-        Ok(offset as u64)
+            .optional()?
+            .unwrap_or_default())
     }
 
     /// The consumed byte offset for a transcript, 0 when never synced. The
     /// sync freshness gate compares it to `metadata.len()` to skip re-reads.
     pub fn cursor_offset(&self, session: &str, path: &str) -> Result<u64> {
-        self.get_cursor(session, path)
+        Ok(self.cursor_state(session, path)?.offset)
     }
 
     /// Metadata for transcript paths already projected into this store. A
@@ -1214,7 +1298,7 @@ impl Store {
                        JOIN dict_session parent ON parent.id = edge.parent_session_id
                       WHERE edge.child_session_id = sc.session_id AND kind.value = 'spawned'
                       LIMIT 1),
-                    sc.offset, sc.modified_ms
+                    sc.offset, sc.modified_ms, sc.projection_version
              FROM sync_cursor sc
              JOIN dict_session ds ON ds.id = sc.session_id
              JOIN dict_path dp ON dp.id = sc.path_id
@@ -1235,11 +1319,22 @@ impl Store {
                 row.get::<_, Option<String>>(6)?,
                 row.get::<_, i64>(7)?,
                 row.get::<_, i64>(8)?,
+                row.get::<_, i64>(9)?,
             ))
         })?;
         for row in rows {
-            let (path, session_id, nickname, cwd, git_branch, harness, parent, cursor, modified_ms) =
-                row?;
+            let (
+                path,
+                session_id,
+                nickname,
+                cwd,
+                git_branch,
+                harness,
+                parent,
+                cursor,
+                modified_ms,
+                projection_version,
+            ) = row?;
             out.insert(
                 PathBuf::from(path),
                 KnownSession {
@@ -1251,6 +1346,7 @@ impl Store {
                     parent,
                     cursor: cursor as u64,
                     modified_ms: modified_ms as u64,
+                    projection_version: projection_version as u32,
                 },
             );
         }
@@ -2502,12 +2598,14 @@ pub fn sync_session_with(
     store: &Store,
     session: &SessionRef,
     pid: Option<i64>,
-    ingest: impl FnOnce(&Store, &SessionRef, u64) -> Result<Ingested>,
+    projection_version: u32,
+    ingest: impl FnOnce(&Store, &SessionRef, SyncCursor) -> Result<Ingested>,
 ) -> Result<SyncStat> {
     let key = session.path.display().to_string();
-    let from = store.get_cursor(&session.session_id, &key)?;
-    store.set_cursor(&session.session_id, &key, from)?;
-    let ingested = ingest(store, session, from)?;
+    let cursor = store.cursor_state(&session.session_id, &key)?;
+    store.project_discovered_session(session)?;
+    store.ensure_cursor(&session.session_id, &key, cursor.offset)?;
+    let ingested = ingest(store, session, cursor)?;
     let observed_ts = session.modified_ms.max(
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -2525,12 +2623,12 @@ pub fn sync_session_with(
         pid,
         session.tmux.as_deref(),
     )?;
-    store.project_discovered_session(session)?;
     store.set_cursor_modified(
         &session.session_id,
         &key,
         ingested.next_cursor,
         session.modified_ms,
+        projection_version,
     )?;
     Ok(ingested.stat)
 }
@@ -2610,17 +2708,16 @@ impl Store {
         self.add_turn(session, turn, ts, role, said)
     }
 
-    /// Fill the legacy empty assistant turn attached to one source request.
+    /// Fill legacy empty assistant turns attached to source requests.
     /// OpenCode used to advance its message cursor before streamed parts
     /// arrived, leaving the usage-bearing turn permanently empty.
-    pub fn fill_empty_turn_for_request(
+    pub fn fill_empty_turns_for_requests(
         &self,
         session: &str,
-        message_id: &str,
-        said: &str,
+        repairs: &[(String, String)],
     ) -> Result<usize> {
         let sid = self.session_id(session)?;
-        Ok(self.connection.execute(
+        let mut statement = self.connection.prepare_cached(
             "UPDATE agent_turn SET said = ?3
              WHERE session_id = ?1 AND COALESCE(said, '') = ''
                AND turn = (
@@ -2629,8 +2726,12 @@ impl Store {
                  JOIN dict_request request ON request.id = usage.request_ref
                  WHERE usage.session_id = ?1 AND request.message_id = ?2
                )",
-            params![sid, message_id, said],
-        )?)
+        )?;
+        let mut updated = 0;
+        for (message_id, said) in repairs {
+            updated += statement.execute(params![sid, message_id, said])?;
+        }
+        Ok(updated)
     }
 
     /// Source request ids whose usage row is attached to an empty turn.
@@ -2650,27 +2751,6 @@ impl Store {
             ids.push(row?);
         }
         Ok(ids)
-    }
-
-    /// Sessions with an empty turn attached to a source request. OpenCode's
-    /// adapter uses this one query to schedule legacy repair without probing
-    /// every discovered session independently.
-    pub fn sessions_with_empty_request_turns(&self) -> Result<HashSet<String>> {
-        let mut statement = self.connection.prepare_cached(
-            "SELECT DISTINCT session.value
-             FROM agent_turn turn
-             JOIN agent_usage usage
-               ON usage.session_id = turn.session_id AND usage.turn = turn.turn
-             JOIN dict_request request ON request.id = usage.request_ref
-             JOIN dict_session session ON session.id = turn.session_id
-             WHERE COALESCE(turn.said, '') = '' AND request.message_id LIKE 'msg_%'",
-        )?;
-        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
-        let mut sessions = HashSet::new();
-        for row in rows {
-            sessions.insert(row?);
-        }
-        Ok(sessions)
     }
 
     pub fn write_tool_fact(
@@ -3271,6 +3351,7 @@ CREATE TABLE IF NOT EXISTS sync_cursor (
   turn INTEGER NOT NULL DEFAULT 0,
   timestamp INTEGER NOT NULL DEFAULT 0,
   modified_ms INTEGER NOT NULL DEFAULT 0,
+  projection_version INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (session_id, path_id)
 ) WITHOUT ROWID;
 
@@ -3371,8 +3452,8 @@ mod tests {
     use crate::ident::TurnCommentUpsert;
     use crate::session::SessionRef;
 
-    use rusqlite::params;
     use rusqlite::trace::{TraceEvent, TraceEventCodes};
+    use rusqlite::{params, Connection};
 
     use super::{
         project_transcript, sync_session_with, Store, TraceEvent as LaneTraceEvent, BUSY_TIMEOUT,
@@ -3381,6 +3462,14 @@ mod tests {
 
     static CURSOR_SQL: AtomicUsize = AtomicUsize::new(0);
     static MOOD_SQL: AtomicUsize = AtomicUsize::new(0);
+
+    fn project_cursor(
+        store: &Store,
+        session: &SessionRef,
+        cursor: super::SyncCursor,
+    ) -> anyhow::Result<crate::session::Ingested> {
+        project_transcript(store, session, cursor.offset)
+    }
 
     /// Every statement that reads the attribute rows, whatever else it names.
     fn count_mood_sql(event: TraceEvent<'_>) {
@@ -3413,8 +3502,12 @@ mod tests {
     #[test]
     fn turn_comment_round_trip() {
         let (path, store) = fresh_store("turn_comment");
-        store.write_turn("sess-a", 3, 100, "user", "please fix the thing").unwrap();
-        store.write_turn("sess-a", 4, 110, "assistant", "done").unwrap();
+        store
+            .write_turn("sess-a", 3, 100, "user", "please fix the thing")
+            .unwrap();
+        store
+            .write_turn("sess-a", 4, 110, "assistant", "done")
+            .unwrap();
         let targets = vec![("sess-a".to_string(), 3), ("sess-a".to_string(), 4)];
         let upsert = TurnCommentUpsert {
             client_id: "selection:1:0",
@@ -3455,13 +3548,15 @@ mod tests {
             .unwrap();
         assert!(store.turn_comments_pending().unwrap().is_empty());
 
-        store.turn_comment_upsert(&TurnCommentUpsert {
-            client_id: "selection:2:0",
-            note: None,
-            targets: &[],
-            ts: 150,
-            ..upsert
-        }).unwrap();
+        store
+            .turn_comment_upsert(&TurnCommentUpsert {
+                client_id: "selection:2:0",
+                note: None,
+                targets: &[],
+                ts: 150,
+                ..upsert
+            })
+            .unwrap();
         assert!(store.turn_comment_delete("selection:2:0").unwrap());
         assert!(!store.turn_comment_delete("selection:2:0").unwrap());
         let _ = std::fs::remove_file(path);
@@ -4139,6 +4234,45 @@ mod tests {
         assert_eq!(candidate.git_branch.as_deref(), Some("main"));
         assert_eq!(candidate.parent.as_deref(), Some("known-parent"));
         assert_eq!(candidate.cursor, 12);
+        assert_eq!(candidate.projection_version, 0);
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn schema_v20_adds_projection_version_to_existing_cursors() {
+        let path = temp_path("projection-version-migration");
+        let _ = std::fs::remove_file(&path);
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE sync_cursor (
+                   session_id INTEGER NOT NULL,
+                   path_id INTEGER NOT NULL,
+                   offset INTEGER NOT NULL,
+                   record_id_id INTEGER,
+                   turn INTEGER NOT NULL DEFAULT 0,
+                   timestamp INTEGER NOT NULL DEFAULT 0,
+                   modified_ms INTEGER NOT NULL DEFAULT 0,
+                   PRIMARY KEY (session_id, path_id)
+                 ) WITHOUT ROWID;
+                 PRAGMA user_version = 20;",
+            )
+            .unwrap();
+        drop(connection);
+
+        let store = Store::open(path.clone()).unwrap();
+        assert_eq!(store.schema_version().unwrap(), 21);
+        let projection_column: i64 = store
+            .connection()
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('sync_cursor')
+                 WHERE name = 'projection_version' AND \"notnull\" = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(projection_column, 1);
         drop(store);
         let _ = std::fs::remove_file(path);
     }
@@ -4219,9 +4353,18 @@ mod tests {
         drop(file);
 
         let session = session_for(&lines_path);
-        let first = sync_session_with(&store, &session, None, project_transcript).unwrap();
+        let first = sync_session_with(&store, &session, None, 7, project_cursor).unwrap();
         assert_eq!(first.written, 3, "user text, tool Read, tool Bash");
         assert_eq!(first.dropped, 0);
+        assert_eq!(
+            store
+                .known_sessions()
+                .unwrap()
+                .get(&lines_path)
+                .unwrap()
+                .projection_version,
+            7
+        );
 
         let counts = store.counts().unwrap();
         assert_eq!(counts["agent_turn"], 3);
@@ -4230,7 +4373,7 @@ mod tests {
         assert_eq!(counts["agent_session"], 1);
 
         // second sync with nothing new carries the cursor and writes nothing
-        let noop = sync_session_with(&store, &session, None, project_transcript).unwrap();
+        let noop = sync_session_with(&store, &session, None, 7, project_cursor).unwrap();
         assert_eq!(noop.written, 0);
         let counts2 = store.counts().unwrap();
         assert_eq!(counts2["agent_turn"], 3);
@@ -4319,7 +4462,7 @@ mod tests {
         session.session_id = "child".to_owned();
         session.parent = Some("parent".to_owned());
         drop(file);
-        sync_session_with(&store, &session, None, project_transcript).unwrap();
+        sync_session_with(&store, &session, None, 0, project_cursor).unwrap();
 
         let edges = store.query_edges(Some("child")).unwrap();
         assert_eq!(edges.len(), 1);
@@ -4353,14 +4496,14 @@ mod tests {
         drop(file);
 
         let session = session_for(&lines_path);
-        sync_session_with(&store, &session, None, project_transcript).unwrap();
+        sync_session_with(&store, &session, None, 0, project_cursor).unwrap();
 
         let mut file = OpenOptions::new().append(true).open(&lines_path).unwrap();
         writeln!(file, r#"{{"type":"user","sessionId":"ses-1","timestamp":"2026-08-01T00:00:00.300Z","message":"three"}}"#).unwrap();
         writeln!(file, r#"{{"type":"user","sessionId":"ses-1","timestamp":"2026-08-01T00:00:00.400Z","message":"four"}}"#).unwrap();
         drop(file);
 
-        sync_session_with(&store, &session, None, project_transcript).unwrap();
+        sync_session_with(&store, &session, None, 0, project_cursor).unwrap();
 
         let counts = store.counts().unwrap();
         assert_eq!(counts["agent_turn"], 4, "all four turns stored");
@@ -4388,7 +4531,7 @@ mod tests {
         drop(file);
 
         let session = session_for(&lines_path);
-        sync_session_with(&store, &session, None, project_transcript).unwrap();
+        sync_session_with(&store, &session, None, 0, project_cursor).unwrap();
 
         let filter = super::TurnQuery {
             session: Some("ses-1".to_owned()),
@@ -4435,8 +4578,8 @@ mod tests {
         let store = Store::open(db_path.clone()).unwrap();
         store.set_cursor("ses-1", "/a/one.jsonl", 100).unwrap();
         store.set_cursor("ses-1", "/b/one.jsonl", 250).unwrap();
-        assert_eq!(store.get_cursor("ses-1", "/a/one.jsonl").unwrap(), 100);
-        assert_eq!(store.get_cursor("ses-1", "/b/one.jsonl").unwrap(), 250);
+        assert_eq!(store.cursor_offset("ses-1", "/a/one.jsonl").unwrap(), 100);
+        assert_eq!(store.cursor_offset("ses-1", "/b/one.jsonl").unwrap(), 250);
         drop(store);
         let _ = std::fs::remove_file(&db_path);
     }
@@ -4476,7 +4619,7 @@ mod tests {
         }
         drop(file);
         let stat =
-            sync_session_with(store, &session_for(&lines_path), None, project_transcript).unwrap();
+            sync_session_with(store, &session_for(&lines_path), None, 0, project_cursor).unwrap();
         let _ = std::fs::remove_file(&lines_path);
         stat
     }
@@ -5019,7 +5162,7 @@ mod tests {
         .unwrap();
         drop(file);
         let session = session_for(&lines_path);
-        sync_session_with(&store, &session, Some(4242), project_transcript).unwrap();
+        sync_session_with(&store, &session, Some(4242), 0, project_cursor).unwrap();
         let pid: Option<i64> = store
             .connection
             .query_row(
@@ -5142,7 +5285,7 @@ mod tests {
             .unwrap();
         writeln!(file, r#"{{"type":"assistant","sessionId":"ses-1","timestamp":"2026-08-01T00:00:01.000Z","gitBranch":"main","message":{{"content":[{{"type":"tool_use","name":"Read","input":{{"file_path":"/tmp/a.rs"}}}},{{"type":"tool_use","name":"Write","input":{{"file_path":"/tmp/b.rs"}}}}]}}}}"#).unwrap();
         drop(file);
-        sync_session_with(&store, &session_for(&lines_path), None, project_transcript).unwrap();
+        sync_session_with(&store, &session_for(&lines_path), None, 0, project_cursor).unwrap();
 
         // A second adapter (opencode/codex path) funnels through the same
         // canonical write site with lowercase verbs.
@@ -5216,7 +5359,7 @@ mod tests {
             .unwrap();
         writeln!(file, r#"{{"type":"user","sessionId":"ses-1","timestamp":"2026-08-01T00:00:00.100Z","message":"hello"}}"#).unwrap();
         drop(file);
-        sync_session_with(&store, &session_for(&lines_path), None, project_transcript).unwrap();
+        sync_session_with(&store, &session_for(&lines_path), None, 0, project_cursor).unwrap();
 
         let cursors = store.query_cursors(Some("ses-1")).unwrap();
         assert_eq!(cursors.len(), 1);

@@ -206,8 +206,8 @@ pub fn as_json(alerts: &[Alert]) -> serde_json::Value {
 }
 
 /// The sync trail inside the window, as rows. A `start` with no `done` at the
-/// same pid is a pass that was killed; a `deferred` is a caller that found a
-/// pass in flight and read without running its own.
+/// same pid and no `aborted` is a pass that was killed; a `deferred` is a
+/// caller that found a pass in flight and read without running its own.
 pub fn sync_json(passes: &[serde_json::Value], since_ms: u64) -> serde_json::Value {
     let inside =
         |record: &&serde_json::Value| record["at_ms"].as_u64().unwrap_or_default() >= since_ms;
@@ -219,21 +219,23 @@ pub fn sync_json(passes: &[serde_json::Value], since_ms: u64) -> serde_json::Val
             .collect()
     };
     let done = of_kind("done");
-    let finished: Vec<u64> = done
+    let aborted = of_kind("aborted");
+    let terminal: Vec<(u64, u64)> = done
         .iter()
-        .filter_map(|record| record["pid"].as_u64())
+        .chain(aborted.iter())
+        .filter_map(|record| Some((record["pid"].as_u64()?, record["at_ms"].as_u64()?)))
         .collect();
     let killed: Vec<&serde_json::Value> = of_kind("start")
         .into_iter()
         .filter(|record| {
-            record["pid"]
-                .as_u64()
-                .is_none_or(|pid| !finished.contains(&pid))
+            let key = (record["pid"].as_u64(), record["at_ms"].as_u64());
+            !matches!(key, (Some(pid), Some(at_ms)) if terminal.contains(&(pid, at_ms)))
         })
         .collect();
     serde_json::json!({
         "passes": done,
         "deferred": of_kind("deferred").len(),
+        "aborted": aborted,
         "killed": killed,
     })
 }
@@ -245,15 +247,16 @@ pub fn sync_report(passes: &[serde_json::Value], since_ms: u64) -> String {
     let empty = Vec::new();
     let rows = document["passes"].as_array().unwrap_or(&empty);
     let killed = document["killed"].as_array().unwrap_or(&empty);
+    let aborted = document["aborted"].as_array().unwrap_or(&empty);
     let deferred = document["deferred"].as_u64().unwrap_or_default();
-    if rows.is_empty() && killed.is_empty() && deferred == 0 {
+    if rows.is_empty() && aborted.is_empty() && killed.is_empty() && deferred == 0 {
         return "no transcript sync in the window".to_owned();
     }
     let field = |record: &serde_json::Value, name: &str| record[name].as_u64().unwrap_or_default();
-    let mut out = String::from("\ntranscript sync\n");
+    let mut out = String::from("transcript sync\n");
     for record in rows {
         out.push_str(&format!(
-            "  {} pid={} {}ms known={}ms/{} candidates+backfill={}ms project={}ms projected={}{}\n",
+            "  {} pid={} {}ms known={}ms/{} candidates+backfill={}ms project={}ms written={} repaired={} db_growth={} wal_growth={}{}\n",
             clock(field(record, "at_ms")),
             field(record, "pid"),
             field(record, "elapsed_ms"),
@@ -262,10 +265,46 @@ pub fn sync_report(passes: &[serde_json::Value], since_ms: u64) -> String {
             adapter_ms(record),
             field(record, "project_ms"),
             field(record, "projected"),
+            field(record, "repaired"),
+            record["db_growth_bytes"].as_i64().unwrap_or_default(),
+            record["wal_growth_bytes"].as_i64().unwrap_or_default(),
             match record["yielded"].as_bool() {
                 Some(true) => " YIELDED-ON-BUDGET",
                 _ => "",
             }
+        ));
+        if let Some(adapters) = record["adapters"].as_array() {
+            for adapter in adapters {
+                if field(adapter, "pending") == 0 && field(adapter, "candidates_ms") < 100 {
+                    continue;
+                }
+                out.push_str(&format!(
+                    "    {} candidates={} scan={}ms pending={} reasons=new:{} cursor:{} modified:{} projection:{} project={}ms written={} repaired={}\n",
+                    adapter["harness"].as_str().unwrap_or("unknown"),
+                    field(adapter, "candidates"),
+                    field(adapter, "candidates_ms"),
+                    field(adapter, "pending"),
+                    field(adapter, "new_sessions"),
+                    field(adapter, "cursor_advanced"),
+                    field(adapter, "source_modified"),
+                    field(adapter, "projection_upgrades"),
+                    field(adapter, "project_ms"),
+                    field(adapter, "written"),
+                    field(adapter, "repaired"),
+                ));
+            }
+        }
+    }
+    for record in aborted {
+        out.push_str(&format!(
+            "  {} pid={} aborted stage={} known={} pending={} projected={} repaired={}\n",
+            clock(field(record, "at_ms")),
+            field(record, "pid"),
+            record["stage"].as_str().unwrap_or("unknown"),
+            field(record, "known"),
+            field(record, "pending"),
+            field(record, "projected"),
+            field(record, "repaired"),
         ));
     }
     for record in killed {
@@ -479,6 +518,68 @@ mod tests {
             "lane-one\n  16:34:24 WARN  boop::supervise: first\n  16:34:24 ERROR boop::supervise: second"
         );
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn sync_report_exposes_causes_repairs_and_database_growth() {
+        let passes = vec![serde_json::json!({
+            "kind": "done",
+            "pid": 42,
+            "at_ms": now(),
+            "elapsed_ms": 321,
+            "known_ms": 12,
+            "known": 4000,
+            "project_ms": 44,
+            "projected": 7,
+            "repaired": 3,
+            "db_growth_bytes": 8192,
+            "yielded": false,
+            "adapters": [{
+                "harness": "opencode",
+                "candidates_ms": 8,
+                "backfill_ms": 0,
+                "candidates": 2,
+                "pending": 2,
+                "new_sessions": 0,
+                "cursor_advanced": 1,
+                "source_modified": 1,
+                "projection_upgrades": 1,
+                "project_ms": 44,
+                "written": 7,
+                "repaired": 3
+            }]
+        })];
+        assert_eq!(
+            sync_report(&passes, since(DEFAULT_WINDOW)),
+            "transcript sync\n  16:35:00 pid=42 321ms known=12ms/4000 candidates+backfill=8ms project=44ms written=7 repaired=3 db_growth=8192 wal_growth=0\n    opencode candidates=2 scan=8ms pending=2 reasons=new:0 cursor:1 modified:1 projection:1 project=44ms written=7 repaired=3"
+        );
+    }
+
+    #[test]
+    fn aborted_pass_is_terminal_for_only_its_exact_start() {
+        let at_ms = now();
+        let passes = vec![
+            serde_json::json!({"kind": "start", "pid": 42, "at_ms": at_ms}),
+            serde_json::json!({
+                "kind": "aborted",
+                "pid": 42,
+                "at_ms": at_ms,
+                "known": 4000,
+                "pending": 3,
+                "projected": 1,
+                "repaired": 2,
+                "stage": "projection"
+            }),
+            serde_json::json!({"kind": "start", "pid": 42, "at_ms": at_ms + 1}),
+        ];
+        assert_eq!(
+            sync_report(&passes, since(DEFAULT_WINDOW)),
+            format!(
+                "transcript sync\n  {} pid=42 aborted stage=projection known=4000 pending=3 projected=1 repaired=2\n  {} pid=42 started and never finished: killed mid-sync",
+                clock(at_ms),
+                clock(at_ms + 1)
+            )
+        );
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! The opencode adapter. opencode writes no transcript file, so this tails
 //! `message.rowid` in its SQLite store, read-only; opencode owns that store.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -13,6 +13,8 @@ use crate::harness::{
     Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, KnownSessions, LanePolicy,
     MailPolicy, OneShotSpec, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
 };
+
+const SQLITE_ID_BATCH: usize = 500;
 use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
 
@@ -55,6 +57,10 @@ impl Harness for Opencode {
         crate::harness::TuiComposer::Opencode
     }
 
+    fn projection_version(&self) -> u32 {
+        1
+    }
+
     fn live(&self) -> &dyn crate::live::LiveSessions {
         &DOOR
     }
@@ -68,6 +74,13 @@ impl Harness for Opencode {
             return Ok(Vec::new());
         };
         sessions_from(&path)
+    }
+
+    fn sync_candidates(&self, known: &KnownSessions) -> Result<Vec<SessionRef>> {
+        let Some(path) = store_path() else {
+            return Ok(Vec::new());
+        };
+        sync_candidates_from(&path, known, self.projection_version())
     }
 
     fn sync_candidate(
@@ -208,7 +221,6 @@ impl Harness for Opencode {
     fn ingest(&self, store: &Store, session: &SessionRef, from: u64) -> Result<Ingested> {
         let connection = open_read_only(&session.path)?;
         let mut stat = SyncStat::default();
-        repair_empty_messages(store, &connection, &session.session_id, &mut stat)?;
         let messages = messages_after(&connection, &session.session_id, from)?;
         if messages.is_empty() {
             return Ok(Ingested {
@@ -300,6 +312,18 @@ impl Harness for Opencode {
             next_cursor: cursor,
         })
     }
+
+    fn migrate_projection(
+        &self,
+        store: &Store,
+        session: &SessionRef,
+        _from_version: u32,
+    ) -> Result<SyncStat> {
+        let connection = open_read_only(&session.path)?;
+        let mut stat = SyncStat::default();
+        repair_empty_messages(store, &connection, &session.session_id, &mut stat)?;
+        Ok(stat)
+    }
 }
 
 /// The last message rowid opencode holds per session. `size` is what the sync
@@ -354,6 +378,103 @@ fn sessions_from(path: &std::path::Path) -> Result<Vec<SessionRef>> {
         });
     }
     Ok(sessions)
+}
+
+/// OpenCode keeps every transcript in one SQLite file. Read its compact
+/// session table first, retain only new/modified/projection-stale ids, then
+/// fetch row cursors for those ids in bounded IN queries. The steady-state
+/// path avoids grouping the entire message table.
+fn sync_candidates_from(
+    path: &std::path::Path,
+    known: &KnownSessions,
+    projection_version: u32,
+) -> Result<Vec<SessionRef>> {
+    let connection = open_read_only(path)?;
+    sync_candidates_from_connection(path, &connection, known, projection_version)
+}
+
+fn sync_candidates_from_connection(
+    path: &std::path::Path,
+    connection: &Connection,
+    known: &KnownSessions,
+    projection_version: u32,
+) -> Result<Vec<SessionRef>> {
+    let mut statement = connection.prepare(
+        "SELECT id, directory, parent_id, slug, time_updated
+         FROM session ORDER BY time_updated",
+    )?;
+    let rows = statement.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, Option<String>>(1)?,
+            row.get::<_, Option<String>>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, i64>(4)? as u64,
+        ))
+    })?;
+    let mut changed = Vec::new();
+    for row in rows {
+        let row = row?;
+        let needs_sync =
+            known
+                .find(HarnessId::Opencode.as_str(), &row.0)
+                .is_none_or(|(_, session)| {
+                    session.modified_ms != row.4 || session.projection_version < projection_version
+                });
+        if needs_sync {
+            changed.push(row);
+        }
+    }
+    let ids = changed
+        .iter()
+        .map(|(id, _, _, _, _)| id.as_str())
+        .collect::<Vec<_>>();
+    let cursors = last_message_rowids_for(&connection, &ids)?;
+    Ok(changed
+        .into_iter()
+        .map(|(id, directory, parent, slug, modified_ms)| SessionRef {
+            harness: HarnessId::Opencode,
+            session_id: id.clone(),
+            nickname: slug.unwrap_or(id.clone()),
+            path: path.to_owned(),
+            cwd: directory,
+            git_branch: None,
+            modified_ms,
+            size: cursors.get(&id).copied().unwrap_or(0),
+            tmux: None,
+            tmux_socket: None,
+            parent,
+        })
+        .collect())
+}
+
+fn last_message_rowids_for(
+    connection: &Connection,
+    session_ids: &[&str],
+) -> Result<HashMap<String, u64>> {
+    let mut cursors = HashMap::new();
+    for batch in session_ids.chunks(SQLITE_ID_BATCH) {
+        let placeholders = (1..=batch.len())
+            .map(|index| format!("?{index}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if placeholders.is_empty() {
+            continue;
+        }
+        let sql = format!(
+            "SELECT session_id, MAX(rowid) FROM message
+             WHERE session_id IN ({placeholders}) GROUP BY session_id"
+        );
+        let mut statement = connection.prepare(&sql)?;
+        let rows = statement.query_map(rusqlite::params_from_iter(batch.iter()), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as u64))
+        })?;
+        for row in rows {
+            let (session_id, cursor) = row?;
+            cursors.insert(session_id, cursor);
+        }
+    }
+    Ok(cursors)
 }
 
 fn session_from(path: &std::path::Path, session_id: &str) -> Result<Option<SessionRef>> {
@@ -818,44 +939,11 @@ fn repair_empty_messages(
     session_id: &str,
     stat: &mut SyncStat,
 ) -> Result<()> {
-    let empty_ids = store
-        .empty_turn_request_ids(session_id)?
-        .into_iter()
-        .collect::<HashSet<_>>();
+    let empty_ids = store.empty_turn_request_ids(session_id)?;
     if empty_ids.is_empty() {
         return Ok(());
     }
-    let mut statement = connection.prepare(
-        "SELECT rowid, id, time_created, data FROM message
-         WHERE session_id = ?1 ORDER BY rowid",
-    )?;
-    let rows = statement.query_map([session_id], |row| {
-        Ok((
-            row.get::<_, i64>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, i64>(2)?,
-            row.get::<_, String>(3)?,
-        ))
-    })?;
-    let mut messages = Vec::new();
-    for row in rows {
-        let (rowid, id, ts, raw) = row?;
-        if !empty_ids.contains(&id) {
-            continue;
-        }
-        let data = serde_json::from_str(&raw).unwrap_or(Value::Null);
-        messages.push(Message {
-            rowid: rowid as u64,
-            id,
-            ts: ts as u64,
-            role: data
-                .get("role")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_owned(),
-            data,
-        });
-    }
+    let messages = messages_for_ids(connection, session_id, &empty_ids)?;
     if messages.is_empty() {
         return Ok(());
     }
@@ -866,14 +954,63 @@ fn repair_empty_messages(
         }
         Ok(())
     })?;
-    for (message, parts) in messages.iter().zip(bodies) {
-        if parts.is_empty() {
-            continue;
-        }
-        stat.written +=
-            store.fill_empty_turn_for_request(session_id, &message.id, &parts.join("\n\n"))? as u64;
-    }
+    let repairs = messages
+        .iter()
+        .zip(bodies)
+        .filter(|(_, parts)| !parts.is_empty())
+        .map(|(message, parts)| (message.id.clone(), parts.join("\n\n")))
+        .collect::<Vec<_>>();
+    stat.repaired += store.fill_empty_turns_for_requests(session_id, &repairs)? as u64;
     Ok(())
+}
+
+fn messages_for_ids(
+    connection: &Connection,
+    session_id: &str,
+    message_ids: &[String],
+) -> Result<Vec<Message>> {
+    let mut messages = Vec::new();
+    for batch in message_ids.chunks(SQLITE_ID_BATCH) {
+        let placeholders = (2..batch.len() + 2)
+            .map(|index| format!("?{index}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "SELECT rowid, id, time_created, data FROM message
+             WHERE session_id = ?1 AND id IN ({placeholders}) ORDER BY rowid"
+        );
+        let mut statement = connection.prepare(&sql)?;
+        let rows = statement.query_map(
+            rusqlite::params_from_iter(
+                std::iter::once(session_id).chain(batch.iter().map(String::as_str)),
+            ),
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            },
+        )?;
+        for row in rows {
+            let (rowid, id, ts, raw) = row?;
+            let data = serde_json::from_str(&raw).unwrap_or(Value::Null);
+            messages.push(Message {
+                rowid: rowid as u64,
+                id,
+                ts: ts as u64,
+                role: data
+                    .get("role")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_owned(),
+                data,
+            });
+        }
+    }
+    messages.sort_by_key(|message| message.rowid);
+    Ok(messages)
 }
 
 /// Visit every part for a message batch in one statement, retaining message
@@ -888,9 +1025,7 @@ fn visit_parts_for_messages<F>(
 where
     F: FnMut(usize, Part) -> Result<()>,
 {
-    const MAX_MESSAGE_IDS_PER_QUERY: usize = 500;
-
-    for (batch_index, message_batch) in messages.chunks(MAX_MESSAGE_IDS_PER_QUERY).enumerate() {
+    for (batch_index, message_batch) in messages.chunks(SQLITE_ID_BATCH).enumerate() {
         let message_indexes: HashMap<&str, usize> = message_batch
             .iter()
             .enumerate()
@@ -924,7 +1059,7 @@ where
                 Err(_) => continue,
             };
             visit(
-                batch_index * MAX_MESSAGE_IDS_PER_QUERY + message_index,
+                batch_index * SQLITE_ID_BATCH + message_index,
                 Part {
                     kind: data
                         .get("type")
@@ -985,19 +1120,28 @@ mod tests {
     use rusqlite::trace::{TraceEvent, TraceEventCodes};
 
     use super::{
-        launch_command, messages_after, repair_empty_messages, session_from, sessions_from,
-        visit_parts_for_messages, Opencode, Part,
+        launch_command, messages_after, session_from, sessions_from,
+        sync_candidates_from_connection, visit_parts_for_messages, Opencode, Part,
     };
     use crate::harness::{sync_session, Harness, KnownSessions, SpawnSpec};
     use boop_store::ident::{Store, TurnQuery, UsageRow};
     use boop_store::testing::TempRepo;
 
     static PART_SELECTS: AtomicUsize = AtomicUsize::new(0);
+    static MESSAGE_CURSOR_SELECTS: AtomicUsize = AtomicUsize::new(0);
 
     fn count_part_selects(event: TraceEvent<'_>) {
         if let TraceEvent::Stmt(_, sql) = event {
             if sql.contains("FROM part") {
                 PART_SELECTS.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
+    fn count_message_cursor_selects(event: TraceEvent<'_>) {
+        if let TraceEvent::Stmt(_, sql) = event {
+            if sql.contains("SELECT session_id, MAX(rowid) FROM message") {
+                MESSAGE_CURSOR_SELECTS.fetch_add(1, Ordering::Relaxed);
             }
         }
     }
@@ -1091,7 +1235,7 @@ mod tests {
             .find(|session| session.session_id == "ses_bench_0001")
             .unwrap();
         let mut known = KnownSessions::new();
-        known.upsert_ref(&initial, initial.size);
+        known.upsert_ref(&initial, initial.size, Opencode.projection_version());
 
         let refreshed = Opencode
             .sync_candidate(&known, &initial.session_id)
@@ -1115,6 +1259,56 @@ mod tests {
         );
         assert_ne!(refreshed.size, std::fs::metadata(&path).unwrap().len());
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn steady_candidate_discovery_skips_message_scan_and_batches_projection_upgrades() {
+        let path = std::path::Path::new("tests/fixtures/opencode/bench/opencode.db");
+        let sessions = sessions_from(path).unwrap();
+        let connection = super::open_read_only(path).unwrap();
+        let mut current = KnownSessions::new();
+        for session in &sessions {
+            current.upsert_ref(session, session.size, Opencode.projection_version());
+        }
+
+        MESSAGE_CURSOR_SELECTS.store(0, Ordering::Relaxed);
+        connection.trace_v2(
+            TraceEventCodes::SQLITE_TRACE_STMT,
+            Some(count_message_cursor_selects),
+        );
+        let steady = sync_candidates_from_connection(
+            path,
+            &connection,
+            &current,
+            Opencode.projection_version(),
+        )
+        .unwrap();
+        assert!(steady.is_empty());
+        assert_eq!(MESSAGE_CURSOR_SELECTS.load(Ordering::Relaxed), 0);
+
+        let mut stale = KnownSessions::new();
+        stale.upsert_ref(&sessions[0], sessions[0].size, 0);
+        stale.upsert_ref(
+            &sessions[1],
+            sessions[1].size,
+            Opencode.projection_version(),
+        );
+        let migration = sync_candidates_from_connection(
+            path,
+            &connection,
+            &stale,
+            Opencode.projection_version(),
+        )
+        .unwrap();
+        connection.trace_v2(TraceEventCodes::empty(), None);
+        assert_eq!(
+            migration
+                .iter()
+                .map(|session| session.session_id.as_str())
+                .collect::<Vec<_>>(),
+            vec![sessions[0].session_id.as_str()]
+        );
+        assert_eq!(MESSAGE_CURSOR_SELECTS.load(Ordering::Relaxed), 1);
     }
 
     #[test]
@@ -1418,9 +1612,29 @@ mod tests {
                  );",
             )
             .unwrap();
-        let mut stat = boop_store::ident::SyncStat::default();
-        repair_empty_messages(&store, &source, "streamed", &mut stat).unwrap();
-        assert_eq!(stat.written, 1);
+        let legacy = session_from(&transcript, "streamed").unwrap().unwrap();
+        store
+            .connection()
+            .execute(
+                "UPDATE sync_cursor SET offset = ?1, projection_version = 0",
+                [legacy.size as i64],
+            )
+            .unwrap();
+        let stat = sync_session(&store, &Opencode, &legacy).unwrap();
+        assert_eq!(stat.repaired, 1);
+        assert_eq!(
+            sync_session(&store, &Opencode, &legacy).unwrap().repaired,
+            0
+        );
+        assert_eq!(
+            store
+                .known_sessions()
+                .unwrap()
+                .get_session(&legacy.path, "streamed")
+                .unwrap()
+                .projection_version,
+            Opencode.projection_version()
+        );
         let repaired = store
             .query_turns(&TurnQuery {
                 session: Some("streamed".to_owned()),

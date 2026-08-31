@@ -1422,6 +1422,7 @@ mod tests {
                 parent: None,
                 cursor: 23,
                 modified_ms: 0,
+                projection_version: 0,
             },
         );
 

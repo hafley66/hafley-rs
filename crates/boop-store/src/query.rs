@@ -987,8 +987,10 @@ mod tests {
             tmux_socket: None,
             parent: None,
         };
-        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript)
-            .unwrap();
+        crate::ident::sync_session_with(&store, &session, None, 0, |store, session, cursor| {
+            crate::ident::project_transcript(store, session, cursor.offset)
+        })
+        .unwrap();
 
         let sessions = store.session_rows(Some("ses-1"), None).unwrap();
         assert_eq!(sessions.len(), 1);
@@ -1051,8 +1053,10 @@ mod tests {
             tmux_socket: None,
             parent: None,
         };
-        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript)
-            .unwrap();
+        crate::ident::sync_session_with(&store, &session, None, 0, |store, session, cursor| {
+            crate::ident::project_transcript(store, session, cursor.offset)
+        })
+        .unwrap();
 
         let now_ms = crate::proc::sys_now_secs() * 1000;
         store

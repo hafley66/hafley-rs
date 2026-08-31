@@ -513,8 +513,10 @@ mod tests {
             tmux_socket: None,
             parent: None,
         };
-        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript)
-            .unwrap();
+        crate::ident::sync_session_with(&store, &session, None, 0, |store, session, cursor| {
+            crate::ident::project_transcript(store, session, cursor.offset)
+        })
+        .unwrap();
 
         let totals = store
             .usage_report_rows(None, &UsageQuery::default())
@@ -686,8 +688,10 @@ mod cte_equality {
             tmux_socket: None,
             parent: None,
         };
-        crate::ident::sync_session_with(&store, &session, None, crate::ident::project_transcript)
-            .unwrap();
+        crate::ident::sync_session_with(&store, &session, None, 0, |store, session, cursor| {
+            crate::ident::project_transcript(store, session, cursor.offset)
+        })
+        .unwrap();
         (store, db_path, log_path)
     }
 

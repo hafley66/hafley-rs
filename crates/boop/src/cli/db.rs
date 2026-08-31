@@ -130,6 +130,13 @@ pub(crate) struct AdapterPhase {
     candidates: usize,
     backfill_ms: u128,
     pending: usize,
+    new_sessions: usize,
+    cursor_advanced: usize,
+    source_modified: usize,
+    projection_upgrades: usize,
+    project_ms: u128,
+    written: u64,
+    repaired: u64,
 }
 
 impl AdapterPhase {
@@ -140,6 +147,13 @@ impl AdapterPhase {
             candidates: 0,
             backfill_ms: 0,
             pending: 0,
+            new_sessions: 0,
+            cursor_advanced: 0,
+            source_modified: 0,
+            projection_upgrades: 0,
+            project_ms: 0,
+            written: 0,
+            repaired: 0,
         }
     }
 
@@ -150,7 +164,103 @@ impl AdapterPhase {
             "candidates": self.candidates,
             "backfill_ms": self.backfill_ms as u64,
             "pending": self.pending,
+            "new_sessions": self.new_sessions,
+            "cursor_advanced": self.cursor_advanced,
+            "source_modified": self.source_modified,
+            "projection_upgrades": self.projection_upgrades,
+            "project_ms": self.project_ms as u64,
+            "written": self.written,
+            "repaired": self.repaired,
         })
+    }
+}
+
+/// Why one discovered session enters the projection queue. Reasons are
+/// independent so telemetry retains combined cases such as source growth plus
+/// an adapter projection upgrade.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct SyncDecision {
+    new_session: bool,
+    cursor_advanced: bool,
+    source_modified: bool,
+    projection_upgrade: bool,
+}
+
+impl SyncDecision {
+    fn for_session(
+        session: &SessionRef,
+        known: &boop::harness::KnownSessions,
+        projection_version: u32,
+    ) -> Self {
+        let Some(known) = known.get_session(&session.path, &session.session_id) else {
+            return SyncDecision {
+                new_session: true,
+                ..SyncDecision::default()
+            };
+        };
+        SyncDecision {
+            new_session: false,
+            cursor_advanced: known.cursor != session.size,
+            source_modified: known.modified_ms != session.modified_ms,
+            projection_upgrade: known.projection_version < projection_version,
+        }
+    }
+
+    fn needed(self) -> bool {
+        self.new_session || self.cursor_advanced || self.source_modified || self.projection_upgrade
+    }
+
+    fn count(self, phase: &mut AdapterPhase) {
+        phase.new_sessions += usize::from(self.new_session);
+        phase.cursor_advanced += usize::from(self.cursor_advanced);
+        phase.source_modified += usize::from(self.source_modified);
+        phase.projection_upgrades += usize::from(self.projection_upgrade);
+    }
+
+    fn labels(self) -> String {
+        [
+            (self.new_session, "new"),
+            (self.cursor_advanced, "cursor"),
+            (self.source_modified, "modified"),
+            (self.projection_upgrade, "projection"),
+        ]
+        .into_iter()
+        .filter_map(|(present, label)| present.then_some(label))
+        .collect::<Vec<_>>()
+        .join(",")
+    }
+}
+
+struct PendingSession<'a> {
+    adapter: &'a dyn Harness,
+    session: SessionRef,
+    decision: SyncDecision,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum SyncStage {
+    Lock,
+    Open,
+    StaleCheck,
+    Inventory,
+    Discovery,
+    Projection,
+    NativeChildren,
+    Complete,
+}
+
+impl SyncStage {
+    fn label(self) -> &'static str {
+        match self {
+            SyncStage::Lock => "lock",
+            SyncStage::Open => "open",
+            SyncStage::StaleCheck => "stale-check",
+            SyncStage::Inventory => "inventory",
+            SyncStage::Discovery => "discovery",
+            SyncStage::Projection => "projection",
+            SyncStage::NativeChildren => "native-children",
+            SyncStage::Complete => "complete",
+        }
     }
 }
 
@@ -170,7 +280,15 @@ pub(crate) struct SyncPhases {
     pending: usize,
     project_ms: u128,
     projected: u64,
+    repaired: u64,
+    db_before_bytes: u64,
+    db_after_bytes: u64,
+    wal_before_bytes: u64,
+    wal_after_bytes: u64,
     yielded: bool,
+    stage: SyncStage,
+    begun: bool,
+    terminal: bool,
     adapters: Vec<AdapterPhase>,
 }
 
@@ -188,7 +306,15 @@ impl SyncPhases {
             pending: 0,
             project_ms: 0,
             projected: 0,
+            repaired: 0,
+            db_before_bytes: 0,
+            db_after_bytes: 0,
+            wal_before_bytes: 0,
+            wal_after_bytes: 0,
             yielded: false,
+            stage: SyncStage::Lock,
+            begun: false,
+            terminal: false,
             adapters: Vec::new(),
         }
     }
@@ -206,7 +332,7 @@ impl SyncPhases {
     /// A pass that found the lock held. The record is the convoy's own
     /// receipt: N deferrals against one `start` is N callers that would each
     /// have run the same pass.
-    fn defer(&self) {
+    fn defer(&mut self) {
         let Some(path) = self.trail() else {
             return;
         };
@@ -216,9 +342,10 @@ impl SyncPhases {
             "at_ms": self.at_ms,
         });
         boop::trail::append_sync_trail(&path, &record.to_string());
+        self.terminal = true;
     }
 
-    fn begin(&self) {
+    fn begin(&mut self) {
         let Some(path) = self.trail() else {
             return;
         };
@@ -229,9 +356,20 @@ impl SyncPhases {
             "budget_ms": self.budget_ms.map(|budget| budget as u64),
         });
         boop::trail::append_sync_trail(&path, &record.to_string());
+        self.begun = true;
     }
 
-    fn finish(&self, elapsed_ms: u128) {
+    fn finish(&mut self, elapsed_ms: u128) {
+        self.stage = SyncStage::Complete;
+        let db_growth = self.db_after_bytes as i128 - self.db_before_bytes as i128;
+        let wal_growth = self.wal_after_bytes as i128 - self.wal_before_bytes as i128;
+        let disk_growth = db_growth.max(0).saturating_add(wal_growth.max(0));
+        let mutations = self.projected.saturating_add(self.repaired);
+        let bytes_per_mutation = if mutations == 0 {
+            0
+        } else {
+            (disk_growth as u128 / mutations as u128) as u64
+        };
         let record = serde_json::json!({
             "kind": "done",
             "pid": self.pid,
@@ -246,11 +384,21 @@ impl SyncPhases {
             "pending": self.pending,
             "project_ms": self.project_ms as u64,
             "projected": self.projected,
+            "repaired": self.repaired,
+            "db_before_bytes": self.db_before_bytes,
+            "db_after_bytes": self.db_after_bytes,
+            "db_growth_bytes": db_growth,
+            "wal_before_bytes": self.wal_before_bytes,
+            "wal_after_bytes": self.wal_after_bytes,
+            "wal_growth_bytes": wal_growth,
+            "disk_growth_bytes": disk_growth,
+            "bytes_per_mutation": bytes_per_mutation,
             "adapters": self.adapters.iter().map(AdapterPhase::row).collect::<Vec<_>>(),
         });
         if let Some(path) = self.trail() {
             boop::trail::append_sync_trail(&path, &record.to_string());
         }
+        self.terminal = true;
         if self.yielded {
             tracing::warn!(
                 elapsed_ms = elapsed_ms as u64,
@@ -259,6 +407,55 @@ impl SyncPhases {
                 "transcript sync yielded on its budget"
             );
         }
+        let growth = self
+            .db_after_bytes
+            .saturating_sub(self.db_before_bytes)
+            .saturating_add(self.wal_after_bytes.saturating_sub(self.wal_before_bytes));
+        if elapsed_ms >= 1_000 || growth >= 16 * 1024 * 1024 {
+            tracing::warn!(
+                elapsed_ms = elapsed_ms as u64,
+                known_ms = self.known_ms as u64,
+                pending = self.pending,
+                projected = self.projected,
+                repaired = self.repaired,
+                db_growth_bytes = growth,
+                bytes_per_mutation,
+                "slow or write-heavy transcript sync"
+            );
+        }
+    }
+}
+
+impl Drop for SyncPhases {
+    fn drop(&mut self) {
+        if !self.begun || self.terminal {
+            return;
+        }
+        let record = serde_json::json!({
+            "kind": "aborted",
+            "pid": self.pid,
+            "at_ms": self.at_ms,
+            "elapsed_ms": now_ms().saturating_sub(self.at_ms),
+            "known_ms": self.known_ms as u64,
+            "known": self.known,
+            "pending": self.pending,
+            "project_ms": self.project_ms as u64,
+            "projected": self.projected,
+            "repaired": self.repaired,
+            "stage": self.stage.label(),
+            "adapters": self.adapters.iter().map(AdapterPhase::row).collect::<Vec<_>>(),
+        });
+        if let Some(path) = self.trail() {
+            boop::trail::append_sync_trail(&path, &record.to_string());
+        }
+        tracing::error!(
+            known = self.known,
+            pending = self.pending,
+            projected = self.projected,
+            repaired = self.repaired,
+            stage = self.stage.label(),
+            "transcript sync aborted before completion"
+        );
     }
 }
 
@@ -434,9 +631,15 @@ pub(crate) fn sync_all_budgeted(
     if report {
         info!(rebuild, "transcript sync started");
     }
+    phases.stage = SyncStage::Open;
     let mark = std::time::Instant::now();
-    let store = ident::Store::open(db_path)?;
+    let store = ident::Store::open(db_path.clone())?;
+    phases.db_before_bytes = store.db_bytes().unwrap_or_default();
+    phases.wal_before_bytes = std::fs::metadata(format!("{}-wal", db_path.display()))
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
     phases.open_ms = mark.elapsed().as_millis();
+    phases.stage = SyncStage::StaleCheck;
     let mark = std::time::Instant::now();
     if rebuild {
         store.rebuild()?;
@@ -444,12 +647,20 @@ pub(crate) fn sync_all_budgeted(
         refuse_stale(&store)?;
     }
     phases.stale_check_ms = mark.elapsed().as_millis();
+    phases.stage = SyncStage::Inventory;
     let mark = std::time::Instant::now();
     let known = store.known_sessions()?;
-    let repair_sessions = store.sessions_with_empty_request_turns()?;
     phases.known_ms = mark.elapsed().as_millis();
     phases.known = known.len();
+    if phases.known_ms >= 250 {
+        tracing::warn!(
+            duration_ms = phases.known_ms as u64,
+            sessions = phases.known,
+            "slow transcript sync inventory query"
+        );
+    }
     let mut pending = Vec::new();
+    phases.stage = SyncStage::Discovery;
     // One read decides whether the v12 cursor backfill has anything left to do.
     // It is a migration, not a steady-state write: once no row carries
     // `modified_ms = 0` the per-candidate UPDATE is 3893 no-op write
@@ -461,6 +672,14 @@ pub(crate) fn sync_all_budgeted(
         let candidates = adapter.sync_candidates(&known)?;
         leg.candidates_ms = mark.elapsed().as_millis();
         leg.candidates = candidates.len();
+        if leg.candidates_ms >= 250 {
+            tracing::warn!(
+                harness = adapter.id().as_str(),
+                duration_ms = leg.candidates_ms as u64,
+                candidates = leg.candidates,
+                "slow transcript candidate discovery"
+            );
+        }
         let mark = std::time::Instant::now();
         if backfill_pending {
             store.begin()?;
@@ -475,11 +694,16 @@ pub(crate) fn sync_all_budgeted(
         }
         leg.backfill_ms = mark.elapsed().as_millis();
         for session in candidates {
-            let needs_legacy_repair = adapter.id() == boop::harness::HarnessId::Opencode
-                && repair_sessions.contains(&session.session_id);
-            if session_needs_sync(&session, &known) || needs_legacy_repair {
+            let decision =
+                SyncDecision::for_session(&session, &known, adapter.projection_version());
+            if decision.needed() {
                 leg.pending += 1;
-                pending.push((adapter.as_ref(), session));
+                decision.count(&mut leg);
+                pending.push(PendingSession {
+                    adapter: adapter.as_ref(),
+                    session,
+                    decision,
+                });
             }
         }
         phases.adapters.push(leg);
@@ -492,15 +716,22 @@ pub(crate) fn sync_all_budgeted(
     phases.routes_ms = mark.elapsed().as_millis();
     phases.pending = pending.len();
     let mut stat = ident::SyncStat::default();
+    phases.stage = SyncStage::Projection;
     let project_mark = std::time::Instant::now();
-    for (adapter, session) in pending {
+    for pending_session in pending {
         if phases.spent(started) {
             phases.yielded = true;
             break;
         }
+        let adapter = pending_session.adapter;
+        let session = pending_session.session;
+        let decision = pending_session.decision;
+        let session_started = std::time::Instant::now();
         tracing::debug!(
             harness = adapter.id().as_str(),
             session_id = session.session_id,
+            source_path = %session.path.display(),
+            reasons = decision.labels(),
             "transcript session sync started"
         );
         let pid = sync_session_pid(liveness, || {
@@ -511,7 +742,6 @@ pub(crate) fn sync_all_budgeted(
         let from = store.cursor_offset(&session.session_id, &session.path.display().to_string())?;
         store.begin()?;
         let result = (|| {
-            store.project_discovered_session(&session)?;
             let stat = ident::sync_session_with_pid(&store, adapter, &session, pid)?;
             project_native_children(&store, adapter, &session, from)?;
             Ok(stat)
@@ -520,6 +750,45 @@ pub(crate) fn sync_all_budgeted(
             Ok(session_stat) => {
                 store.commit()?;
                 stat.add(session_stat);
+                phases.projected += session_stat.written;
+                phases.repaired += session_stat.repaired;
+                let duration_ms = session_started.elapsed().as_millis();
+                if let Some(phase) = phases
+                    .adapters
+                    .iter_mut()
+                    .find(|phase| phase.harness == adapter.id())
+                {
+                    phase.project_ms += duration_ms;
+                    phase.written += session_stat.written;
+                    phase.repaired += session_stat.repaired;
+                }
+                tracing::debug!(
+                    harness = adapter.id().as_str(),
+                    session_id = session.session_id,
+                    source_path = %session.path.display(),
+                    reasons = decision.labels(),
+                    cursor_from = from,
+                    cursor_to = session.size,
+                    duration_ms = duration_ms as u64,
+                    written = session_stat.written,
+                    repaired = session_stat.repaired,
+                    dropped = session_stat.dropped,
+                    usage_new = session_stat.usage_written,
+                    usage_updated = session_stat.usage_updated,
+                    "transcript session sync finished"
+                );
+                if duration_ms >= 250 {
+                    tracing::warn!(
+                        harness = adapter.id().as_str(),
+                        session_id = session.session_id,
+                        source_path = %session.path.display(),
+                        reasons = decision.labels(),
+                        duration_ms = duration_ms as u64,
+                        written = session_stat.written,
+                        repaired = session_stat.repaired,
+                        "slow transcript session projection"
+                    );
+                }
             }
             Err(error) => {
                 let _ = store.rollback();
@@ -528,7 +797,7 @@ pub(crate) fn sync_all_budgeted(
         }
     }
     phases.project_ms = project_mark.elapsed().as_millis();
-    phases.projected = stat.written;
+    phases.stage = SyncStage::NativeChildren;
     let native_child_mail_dir = mail_dir(mail_dir_arg)?;
     let native_child_routes = bus::read_routes(&native_child_mail_dir)?;
     deliver_native_child_completions(
@@ -554,18 +823,24 @@ pub(crate) fn sync_all_budgeted(
         },
     )?;
     let elapsed_ms = started.elapsed().as_millis();
+    phases.db_after_bytes = store.db_bytes().unwrap_or(phases.db_before_bytes);
+    phases.wal_after_bytes = std::fs::metadata(format!("{}-wal", db_path.display()))
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
     phases.finish(elapsed_ms);
     if report {
         let counts = store.counts()?;
         let db_bytes = store.db_bytes()?;
         let sparse = store.sparse_sessions()?.len();
-        let rate = (stat.written as u128)
+        let mutations = stat.written.saturating_add(stat.repaired);
+        let rate = (mutations as u128)
             .saturating_mul(1000)
             .checked_div(elapsed_ms.max(1))
             .unwrap_or(0) as u64;
         println!(
-            "events={} dropped={} usage_new={} usage_updated={} sparse_sessions={sparse} elapsed_ms={elapsed_ms} rate={rate}/s db_bytes={db_bytes} counts={}",
+            "events={} repaired={} dropped={} usage_new={} usage_updated={} sparse_sessions={sparse} elapsed_ms={elapsed_ms} rate={rate}/s db_bytes={db_bytes} counts={}",
             stat.written,
+            stat.repaired,
             stat.dropped,
             stat.usage_written,
             stat.usage_updated,
@@ -573,6 +848,8 @@ pub(crate) fn sync_all_budgeted(
         );
         info!(
             events = stat.written,
+            repaired = stat.repaired,
+            mutations,
             dropped = stat.dropped,
             usage_new = stat.usage_written,
             usage_updated = stat.usage_updated,
@@ -694,17 +971,6 @@ fn native_child_completion_message(
     }
 }
 
-pub(crate) fn session_needs_sync(
-    session: &boop::harness::SessionRef,
-    known: &boop::harness::KnownSessions,
-) -> bool {
-    known
-        .get_session(&session.path, &session.session_id)
-        .is_none_or(|known| {
-            known.cursor != session.size || known.modified_ms != session.modified_ms
-        })
-}
-
 pub(crate) fn sync_session_pid(
     liveness: SyncLiveness,
     acquire: impl FnOnce() -> Option<i64>,
@@ -806,7 +1072,7 @@ fn sync_native_session(
     adapter: &dyn Harness,
     session: &SessionRef,
 ) -> Result<()> {
-    if !session_needs_sync(session, known) {
+    if !SyncDecision::for_session(session, known, adapter.projection_version()).needed() {
         return Ok(());
     }
     let from = store.cursor_offset(&session.session_id, &session.path.display().to_string())?;
@@ -819,7 +1085,7 @@ fn sync_native_session(
     match result {
         Ok(()) => {
             store.commit()?;
-            known.upsert_ref(session, session.size);
+            known.upsert_ref(session, session.size, adapter.projection_version());
             Ok(())
         }
         Err(error) => {
@@ -2340,6 +2606,44 @@ mod tests {
             tmux_socket: None,
             parent: None,
         }
+    }
+
+    #[test]
+    fn sync_decision_preserves_each_independent_queue_reason() {
+        let mut session = session_with_cwd(Some("/repo"));
+        let mut known = boop::harness::KnownSessions::new();
+        let fresh = SyncDecision::for_session(&session, &known, 1);
+        assert_eq!(
+            (
+                fresh.new_session,
+                fresh.cursor_advanced,
+                fresh.source_modified,
+                fresh.projection_upgrade,
+                fresh.labels(),
+            ),
+            (true, false, false, false, "new".to_owned())
+        );
+
+        known.upsert_ref(&session, 0, 0);
+        session.size = 9;
+        session.modified_ms = 10;
+        let changed = SyncDecision::for_session(&session, &known, 1);
+        assert_eq!(
+            (
+                changed.new_session,
+                changed.cursor_advanced,
+                changed.source_modified,
+                changed.projection_upgrade,
+                changed.labels(),
+            ),
+            (
+                false,
+                true,
+                true,
+                true,
+                "cursor,modified,projection".to_owned(),
+            )
+        );
     }
 
     #[test]

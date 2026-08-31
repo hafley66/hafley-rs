@@ -225,9 +225,23 @@ pub fn sync_session_with_pid(
     session: &SessionRef,
     pid: Option<i64>,
 ) -> Result<SyncStat> {
-    boop_store::ident::sync_session_with(store, session, pid, |store, session, from| {
-        adapter.ingest(store, session, from)
-    })
+    let projection_version = adapter.projection_version();
+    boop_store::ident::sync_session_with(
+        store,
+        session,
+        pid,
+        projection_version,
+        |store, session, cursor| {
+            let migration = if cursor.projection_version < projection_version {
+                adapter.migrate_projection(store, session, cursor.projection_version)?
+            } else {
+                SyncStat::default()
+            };
+            let mut ingested = adapter.ingest(store, session, cursor.offset)?;
+            ingested.stat.add(migration);
+            Ok(ingested)
+        },
+    )
 }
 
 /// One agent harness that writes transcripts to this machine. Harnesses are
@@ -242,6 +256,12 @@ pub trait Harness: Send + Sync {
 
     fn tui_composer(&self) -> TuiComposer {
         TuiComposer::None
+    }
+
+    /// Version of the durable rows produced by this adapter. Incrementing it
+    /// schedules each known session once, then the cursor records completion.
+    fn projection_version(&self) -> u32 {
+        0
     }
 
     fn terminal_input_region(&self, rows: &[&str]) -> Option<TerminalInputRegion> {
@@ -269,10 +289,11 @@ pub trait Harness: Send + Sync {
         Ok(Vec::new())
     }
 
-    /// Candidates for incremental sync. The store supplies metadata for paths
-    /// it has already projected, so a file-backed harness can stat those
-    /// paths without reopening and parsing their first record. New paths keep
-    /// the harness's full discovery path.
+    /// Candidates for incremental sync. An adapter may return every discovered
+    /// session or prefilter from `known`; the shared planner makes the final
+    /// cursor, mtime, and projection-version decision. The store supplies
+    /// metadata for paths it has already projected, so a file-backed harness
+    /// can stat those paths without parsing their first record.
     fn sync_candidates(&self, _known: &KnownSessions) -> anyhow::Result<Vec<SessionRef>> {
         self.sessions()
     }
@@ -324,6 +345,17 @@ pub trait Harness: Send + Sync {
         from: u64,
     ) -> anyhow::Result<Ingested> {
         boop_store::ident::project_transcript(store, session, from)
+    }
+
+    /// Upgrade durable rows written by an older adapter contract. The cursor
+    /// version is committed only after this and ordinary ingestion succeed.
+    fn migrate_projection(
+        &self,
+        _store: &boop_store::ident::Store,
+        _session: &SessionRef,
+        _from_version: u32,
+    ) -> anyhow::Result<SyncStat> {
+        Ok(SyncStat::default())
     }
 
     /// Observe collaboration child lifecycle facts in transcript bytes after

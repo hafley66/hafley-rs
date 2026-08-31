@@ -63,6 +63,9 @@ pub struct KnownSession {
     pub parent: Option<String>,
     pub cursor: u64,
     pub modified_ms: u64,
+    /// Adapter projection contract already applied to this cursor. A higher
+    /// harness version schedules one bounded migration pass for the session.
+    pub projection_version: u32,
 }
 
 /// Persisted transcript metadata grouped by source path. File-backed
@@ -71,7 +74,7 @@ pub struct KnownSession {
 #[derive(Default)]
 pub struct KnownSessions {
     by_path: HashMap<PathBuf, Vec<KnownSession>>,
-    path_by_harness_session: HashMap<String, HashMap<String, PathBuf>>,
+    paths_by_harness_session: HashMap<String, HashMap<String, Vec<PathBuf>>>,
 }
 
 impl KnownSessions {
@@ -80,25 +83,14 @@ impl KnownSessions {
     }
 
     pub fn insert(&mut self, path: PathBuf, session: KnownSession) {
-        let previous_path = self
-            .path_by_harness_session
+        let paths = self
+            .paths_by_harness_session
             .entry(session.harness.clone())
             .or_default()
-            .insert(session.session_id.clone(), path.clone());
-        if let Some(previous_path) = previous_path {
-            if previous_path != path {
-                let mut remove_path = false;
-                if let Some(sessions) = self.by_path.get_mut(&previous_path) {
-                    sessions.retain(|current| {
-                        current.harness != session.harness
-                            || current.session_id != session.session_id
-                    });
-                    remove_path = sessions.is_empty();
-                }
-                if remove_path {
-                    self.by_path.remove(&previous_path);
-                }
-            }
+            .entry(session.session_id.clone())
+            .or_default();
+        if !paths.contains(&path) {
+            paths.push(path.clone());
         }
         let sessions = self.by_path.entry(path).or_default();
         if let Some(current) = sessions.iter_mut().find(|current| {
@@ -110,7 +102,7 @@ impl KnownSessions {
         }
     }
 
-    pub fn upsert_ref(&mut self, session: &SessionRef, cursor: u64) {
+    pub fn upsert_ref(&mut self, session: &SessionRef, cursor: u64, projection_version: u32) {
         let known = KnownSession {
             harness: session.harness.as_str().to_owned(),
             session_id: session.session_id.clone(),
@@ -120,6 +112,7 @@ impl KnownSessions {
             parent: session.parent.clone(),
             cursor,
             modified_ms: session.modified_ms,
+            projection_version,
         };
         self.insert(session.path.clone(), known);
     }
@@ -137,28 +130,35 @@ impl KnownSessions {
     }
 
     /// The stored source path and metadata for one harness session. Session ids
-    /// are only interpreted inside their harness namespace.
+    /// are only interpreted inside their harness namespace. When a copied
+    /// transcript gives one session id multiple paths, the newest source wins
+    /// this session-only lookup while path-qualified lookups retain every row.
     pub fn find(&self, harness: &str, session_id: &str) -> Option<(&Path, &KnownSession)> {
-        let path = self.path_by_harness_session.get(harness)?.get(session_id)?;
-        let session = self
-            .by_path
-            .get(path)?
+        self.paths_by_harness_session
+            .get(harness)?
+            .get(session_id)?
             .iter()
-            .find(|session| session.harness == harness && session.session_id == session_id)?;
-        Some((path.as_path(), session))
+            .filter_map(|path| {
+                let session = self.by_path.get(path)?.iter().find(|session| {
+                    session.harness == harness && session.session_id == session_id
+                })?;
+                Some((path.as_path(), session))
+            })
+            .max_by_key(|(_, session)| session.modified_ms)
     }
 
     /// How many transcript paths this store already knows; a caller measuring
     /// a sync pass reports it beside the pass's own wall.
     pub fn len(&self) -> usize {
-        self.path_by_harness_session
+        self.paths_by_harness_session
             .values()
-            .map(HashMap::len)
+            .flat_map(HashMap::values)
+            .map(Vec::len)
             .sum()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.path_by_harness_session.is_empty()
+        self.paths_by_harness_session.is_empty()
     }
 }
 
@@ -373,5 +373,49 @@ impl std::str::FromStr for ParentDeathPolicy {
             "orphan" => Ok(ParentDeathPolicy::Orphan),
             other => anyhow::bail!("on-parent-death must be kill, reparent or orphan: `{other}`"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{KnownSession, KnownSessions};
+
+    fn known(modified_ms: u64) -> KnownSession {
+        KnownSession {
+            harness: "claude".to_owned(),
+            session_id: "copied-session".to_owned(),
+            nickname: "copied-session".to_owned(),
+            cwd: None,
+            git_branch: None,
+            parent: None,
+            cursor: 10,
+            modified_ms,
+            projection_version: 0,
+        }
+    }
+
+    #[test]
+    fn copied_session_id_retains_each_path_and_session_lookup_uses_newest() {
+        let older = std::path::PathBuf::from("/transcripts/older.jsonl");
+        let newer = std::path::PathBuf::from("/transcripts/newer.jsonl");
+        let mut sessions = KnownSessions::new();
+        sessions.insert(older.clone(), known(10));
+        sessions.insert(newer.clone(), known(20));
+
+        assert_eq!(sessions.len(), 2);
+        assert_eq!(
+            (
+                sessions
+                    .get_session(&older, "copied-session")
+                    .map(|session| session.modified_ms),
+                sessions
+                    .get_session(&newer, "copied-session")
+                    .map(|session| session.modified_ms),
+                sessions
+                    .find("claude", "copied-session")
+                    .map(|(path, session)| (path.to_owned(), session.modified_ms)),
+            ),
+            (Some(10), Some(20), Some((newer, 20)))
+        );
     }
 }
