@@ -201,9 +201,8 @@ pub(crate) fn run_native_tui(
     // ids across 4565 rows and any reader holding a pane had to guess its
     // session from a pool of every recent session of that harness.
     //
-    // Opened separately from `store` above: that handle is gated on
-    // `native_tui_projector`, which claude does not set, and registering a pane
-    // is not transcript projection.
+    // Opened separately from `store` above: registering a pane is required even
+    // for a harness that opts out of resident transcript projection.
     if let Some(session) = plan.session_id.as_deref() {
         if let Err(error) = record_pane(store.as_ref(), session, child.id(), &pane) {
             eprintln!("boop: pane {pane} not recorded for session {session}: {error}");
@@ -230,12 +229,18 @@ pub(crate) fn run_native_tui(
     // independently bounded. The global known-session join ran once above;
     // every pass below reuses and incrementally updates that resident cache.
     const EXIT_POLL: Duration = Duration::from_millis(250);
-    let project_every = std::env::var("BOOP_NATIVE_PROJECT_EVERY_MS")
+    let parent_project_every = std::env::var("BOOP_NATIVE_PROJECT_EVERY_MS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .map(Duration::from_millis)
+        .unwrap_or(Duration::from_secs(1));
+    let discover_every = std::env::var("BOOP_NATIVE_DISCOVER_EVERY_MS")
         .ok()
         .and_then(|value| value.parse().ok())
         .map(Duration::from_millis)
         .unwrap_or(Duration::from_secs(30));
-    let mut last_project = std::time::Instant::now() - project_every;
+    let mut last_parent_project = std::time::Instant::now() - parent_project_every;
+    let mut last_discover = std::time::Instant::now() - discover_every;
     loop {
         if let Some(status) = child.try_wait().context("observe native TUI exit")? {
             if status.success() {
@@ -277,11 +282,6 @@ pub(crate) fn run_native_tui(
             write_route(&dir, name, route.clone())?;
             continue;
         }
-        if last_project.elapsed() < project_every {
-            std::thread::sleep(EXIT_POLL);
-            continue;
-        }
-        last_project = std::time::Instant::now();
         // A fresh TUI opens its session at its first prompt, after the route
         // was written; the route learns the id the first tick it exists.
         if route.session_id.is_none() {
@@ -298,15 +298,27 @@ pub(crate) fn run_native_tui(
             }
         }
         if let Some(store) = store.as_ref() {
-            if let Err(error) = crate::cli::db::sync_native_child_route_once(
-                store,
-                known.as_mut().expect("projector store has a session cache"),
-                adapter,
-                name,
-                &dir,
-                |message| crate::cli::mail::deliver_hail(registry, &dir, message, None),
-            ) {
-                warn!(%error, route = name, "native child projector pass failed");
+            let known = known.as_mut().expect("projector store has a session cache");
+            if last_discover.elapsed() >= discover_every {
+                last_discover = std::time::Instant::now();
+                if let Err(error) = crate::cli::db::sync_native_child_route_once(
+                    store,
+                    known,
+                    adapter,
+                    name,
+                    &dir,
+                    |message| crate::cli::mail::deliver_hail(registry, &dir, message, None),
+                ) {
+                    warn!(%error, route = name, "native discovery projector pass failed");
+                }
+            }
+            if last_parent_project.elapsed() >= parent_project_every {
+                last_parent_project = std::time::Instant::now();
+                if let Err(error) =
+                    crate::cli::db::sync_native_parent_route_once(store, known, adapter, name, &dir)
+                {
+                    warn!(%error, route = name, "native parent projector pass failed");
+                }
             }
         }
         std::thread::sleep(EXIT_POLL);

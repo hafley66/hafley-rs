@@ -770,6 +770,60 @@ pub(crate) fn sync_native_child_route_once(
     )
 }
 
+/// Advance only the parent transcript named by a native route. Once discovery
+/// has inserted the session into `KnownSessions`, this path performs one
+/// in-memory lookup and one adapter-specific source check instead of walking
+/// the harness's complete transcript root.
+pub(crate) fn sync_native_parent_route_once(
+    store: &ident::Store,
+    known: &mut boop::harness::KnownSessions,
+    adapter: &dyn Harness,
+    route_name: &str,
+    dir: &Path,
+) -> Result<()> {
+    let routes = bus::read_routes(dir)?;
+    let route = routes
+        .get(route_name)
+        .with_context(|| format!("native route `{route_name}` is not registered"))?;
+    let parent_session = route
+        .session_id
+        .as_deref()
+        .context("native route has no managed app-server thread id")?;
+    let Some(session) = adapter.sync_candidate(known, parent_session)? else {
+        return Ok(());
+    };
+    sync_native_session(store, known, adapter, &session)
+}
+
+fn sync_native_session(
+    store: &ident::Store,
+    known: &mut boop::harness::KnownSessions,
+    adapter: &dyn Harness,
+    session: &SessionRef,
+) -> Result<()> {
+    if !session_needs_sync(session, known) {
+        return Ok(());
+    }
+    let from = store.cursor_offset(&session.session_id, &session.path.display().to_string())?;
+    store.begin()?;
+    let result = (|| {
+        store.project_discovered_session(session)?;
+        ident::sync_session_with_pid(store, adapter, session, None)?;
+        project_native_children(store, adapter, session, from)
+    })();
+    match result {
+        Ok(()) => {
+            store.commit()?;
+            known.upsert_ref(session, session.size);
+            Ok(())
+        }
+        Err(error) => {
+            let _ = store.rollback();
+            Err(error)
+        }
+    }
+}
+
 /// Project the children belonging to one parent whose managed app-server
 /// thread was written to the route before the TUI started.
 fn sync_native_child_route_with_parent(
@@ -798,27 +852,7 @@ fn sync_native_child_route_with_parent(
         session.session_id == parent_session
             || session.parent.as_deref() == Some(parent_session.as_str())
     }) {
-        if !session_needs_sync(session, known) {
-            continue;
-        }
-        let from = store.cursor_offset(&session.session_id, &session.path.display().to_string())?;
-        store.begin()?;
-        let result = (|| {
-            store.project_discovered_session(session)?;
-            let stat = ident::sync_session_with_pid(store, adapter, session, None)?;
-            project_native_children(store, adapter, session, from)?;
-            Ok(stat)
-        })();
-        match result {
-            Ok(_) => {
-                store.commit()?;
-                known.upsert_ref(session, session.size);
-            }
-            Err(error) => {
-                let _ = store.rollback();
-                return Err(error);
-            }
-        }
+        sync_native_session(store, known, adapter, session)?;
     }
     let focused_routes = routes
         .get(route_name)
@@ -1604,6 +1638,7 @@ mod tests {
 
     struct CodexFixtureHarness {
         session: SessionRef,
+        candidate_scans: std::sync::atomic::AtomicUsize,
     }
 
     impl Harness for CodexFixtureHarness {
@@ -1623,6 +1658,8 @@ mod tests {
             &self,
             _known: &boop::harness::KnownSessions,
         ) -> Result<Vec<SessionRef>> {
+            self.candidate_scans
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let mut session = self.session.clone();
             session.size = std::fs::metadata(&session.path)?.len();
             Ok(vec![session])
@@ -2015,6 +2052,7 @@ mod tests {
                 tmux_socket: None,
                 parent: None,
             },
+            candidate_scans: std::sync::atomic::AtomicUsize::new(0),
         };
         let store = ident::Store::open(dir.join("boop.db")).unwrap();
         let mut known = store.known_sessions().unwrap();
@@ -2035,11 +2073,20 @@ mod tests {
             .as_bytes(),
         )
         .unwrap();
+        assert_eq!(
+            watcher
+                .candidate_scans
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
         drop(file);
-        sync_native_child_route_once(&store, &mut known, &watcher, "codex-parent", &dir, |_| {
-            Ok(())
-        })
-        .unwrap();
+        sync_native_parent_route_once(&store, &mut known, &watcher, "codex-parent", &dir).unwrap();
+        assert_eq!(
+            watcher
+                .candidate_scans
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
 
         let rows = store
             .turn_rows(&ident::TurnQuery {
@@ -2104,6 +2151,7 @@ mod tests {
                 tmux_socket: None,
                 parent: Some(PARENT.into()),
             },
+            candidate_scans: std::sync::atomic::AtomicUsize::new(0),
         };
         let running = Arc::new(AtomicBool::new(true));
         let worker_running = Arc::clone(&running);

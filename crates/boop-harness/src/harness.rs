@@ -277,6 +277,38 @@ pub trait Harness: Send + Sync {
         self.sessions()
     }
 
+    /// Refresh one already-known session without walking the harness's session
+    /// roots. Full discovery is responsible for inserting unknown sessions.
+    fn sync_candidate(
+        &self,
+        known: &KnownSessions,
+        session_id: &str,
+    ) -> anyhow::Result<Option<SessionRef>> {
+        if let Some((path, session)) = known.find(self.id().as_str(), session_id) {
+            let metadata = std::fs::metadata(path)?;
+            let modified_ms = metadata
+                .modified()
+                .ok()
+                .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|duration| duration.as_millis() as u64)
+                .unwrap_or(session.modified_ms);
+            return Ok(Some(SessionRef {
+                harness: self.id(),
+                session_id: session.session_id.clone(),
+                nickname: session.nickname.clone(),
+                path: path.to_path_buf(),
+                cwd: session.cwd.clone(),
+                git_branch: session.git_branch.clone(),
+                modified_ms,
+                size: metadata.len(),
+                tmux: None,
+                tmux_socket: None,
+                parent: session.parent.clone(),
+            }));
+        }
+        Ok(None)
+    }
+
     /// Read forward from `offset` bytes. Returns the events decoded and the
     /// new offset to resume from. A partial trailing line is NOT consumed and
     /// NOT counted in the returned offset.

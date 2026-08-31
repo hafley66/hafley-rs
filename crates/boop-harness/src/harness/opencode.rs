@@ -6,12 +6,12 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use serde_json::Value;
 
 use crate::harness::{
-    Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, LanePolicy, MailPolicy,
-    OneShotSpec, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
+    Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, KnownSessions, LanePolicy,
+    MailPolicy, OneShotSpec, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
 };
 use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
@@ -25,7 +25,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     lanes: LanePolicy::Allowed,
     variant: VariantSupport::Flag,
     mail: MailPolicy::Door,
-    native_tui_projector: false,
+    native_tui_projector: true,
     wrapper_owns_alternate_screen: false,
 };
 
@@ -68,6 +68,17 @@ impl Harness for Opencode {
             return Ok(Vec::new());
         };
         sessions_from(&path)
+    }
+
+    fn sync_candidate(
+        &self,
+        known: &KnownSessions,
+        session_id: &str,
+    ) -> Result<Option<SessionRef>> {
+        let Some((path, _)) = known.find(self.id().as_str(), session_id) else {
+            return Ok(None);
+        };
+        session_from(path, session_id)
     }
 
     fn session_roots(&self) -> Result<Vec<PathBuf>> {
@@ -342,6 +353,35 @@ fn sessions_from(path: &std::path::Path) -> Result<Vec<SessionRef>> {
         });
     }
     Ok(sessions)
+}
+
+fn session_from(path: &std::path::Path, session_id: &str) -> Result<Option<SessionRef>> {
+    let connection = open_read_only(path)?;
+    connection
+        .query_row(
+            "SELECT id, directory, parent_id, slug, time_updated,
+                    COALESCE((SELECT MAX(rowid) FROM message WHERE session_id = session.id), 0)
+               FROM session WHERE id = ?1",
+            [session_id],
+            |row| {
+                let id = row.get::<_, String>(0)?;
+                Ok(SessionRef {
+                    harness: HarnessId::Opencode,
+                    session_id: id.clone(),
+                    nickname: row.get::<_, Option<String>>(3)?.unwrap_or(id),
+                    path: path.to_owned(),
+                    cwd: row.get(1)?,
+                    git_branch: None,
+                    modified_ms: row.get::<_, i64>(4)? as u64,
+                    size: row.get::<_, i64>(5)? as u64,
+                    tmux: None,
+                    tmux_socket: None,
+                    parent: row.get(2)?,
+                })
+            },
+        )
+        .optional()
+        .context("query one opencode session")
 }
 
 fn record(stat: &mut SyncStat, inserted: usize) {
@@ -846,7 +886,7 @@ mod tests {
     use super::{
         launch_command, messages_after, sessions_from, visit_parts_for_messages, Opencode, Part,
     };
-    use crate::harness::{sync_session, Harness, SpawnSpec};
+    use crate::harness::{sync_session, Harness, KnownSessions, SpawnSpec};
     use boop_store::ident::{Store, TurnQuery};
     use boop_store::testing::TempRepo;
 
@@ -931,6 +971,47 @@ mod tests {
             .unwrap();
         let sessions = sessions_from(&path).unwrap();
         crate::harness::assert_fixture_sessions_project(&Opencode, &sessions, 1);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn exact_sync_candidate_refreshes_the_session_rowid_cursor() {
+        let path = std::env::temp_dir().join(format!(
+            "boop-opencode-exact-session-{}-{:?}.db",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        std::fs::copy("tests/fixtures/opencode/bench/opencode.db", &path).unwrap();
+        let initial = sessions_from(&path)
+            .unwrap()
+            .into_iter()
+            .find(|session| session.session_id == "ses_bench_0001")
+            .unwrap();
+        let mut known = KnownSessions::new();
+        known.upsert_ref(&initial, initial.size);
+
+        let refreshed = Opencode
+            .sync_candidate(&known, &initial.session_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (
+                refreshed.session_id.as_str(),
+                refreshed.nickname.as_str(),
+                refreshed.cwd.as_deref(),
+                refreshed.parent.as_deref(),
+                refreshed.size,
+            ),
+            (
+                initial.session_id.as_str(),
+                initial.nickname.as_str(),
+                initial.cwd.as_deref(),
+                initial.parent.as_deref(),
+                initial.size,
+            )
+        );
+        assert_ne!(refreshed.size, std::fs::metadata(&path).unwrap().len());
         let _ = std::fs::remove_file(path);
     }
 

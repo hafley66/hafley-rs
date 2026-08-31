@@ -39,7 +39,8 @@ pub struct SessionRef {
     pub git_branch: Option<String>,
     /// Last modified time in milliseconds since the epoch.
     pub modified_ms: u64,
-    /// Size of the file in bytes.
+    /// Forward-read cursor: file bytes for transcript files, adapter-defined
+    /// monotonic position for database-backed transcripts.
     pub size: u64,
     /// The tmux session that runs this harness (a transport handle the
     /// control facet targets); `None` when there is no live pane.
@@ -68,7 +69,10 @@ pub struct KnownSession {
 /// harnesses normally have one session per path; database-backed harnesses can
 /// retain many session cursors in one file without collapsing them.
 #[derive(Default)]
-pub struct KnownSessions(HashMap<PathBuf, Vec<KnownSession>>);
+pub struct KnownSessions {
+    by_path: HashMap<PathBuf, Vec<KnownSession>>,
+    path_by_harness_session: HashMap<String, HashMap<String, PathBuf>>,
+}
 
 impl KnownSessions {
     pub fn new() -> Self {
@@ -76,7 +80,34 @@ impl KnownSessions {
     }
 
     pub fn insert(&mut self, path: PathBuf, session: KnownSession) {
-        self.0.entry(path).or_default().push(session);
+        let previous_path = self
+            .path_by_harness_session
+            .entry(session.harness.clone())
+            .or_default()
+            .insert(session.session_id.clone(), path.clone());
+        if let Some(previous_path) = previous_path {
+            if previous_path != path {
+                let mut remove_path = false;
+                if let Some(sessions) = self.by_path.get_mut(&previous_path) {
+                    sessions.retain(|current| {
+                        current.harness != session.harness
+                            || current.session_id != session.session_id
+                    });
+                    remove_path = sessions.is_empty();
+                }
+                if remove_path {
+                    self.by_path.remove(&previous_path);
+                }
+            }
+        }
+        let sessions = self.by_path.entry(path).or_default();
+        if let Some(current) = sessions.iter_mut().find(|current| {
+            current.harness == session.harness && current.session_id == session.session_id
+        }) {
+            *current = session;
+        } else {
+            sessions.push(session);
+        }
     }
 
     pub fn upsert_ref(&mut self, session: &SessionRef, cursor: u64) {
@@ -90,37 +121,44 @@ impl KnownSessions {
             cursor,
             modified_ms: session.modified_ms,
         };
-        let sessions = self.0.entry(session.path.clone()).or_default();
-        if let Some(current) = sessions
-            .iter_mut()
-            .find(|current| current.session_id == session.session_id)
-        {
-            *current = known;
-        } else {
-            sessions.push(known);
-        }
+        self.insert(session.path.clone(), known);
     }
 
     pub fn get(&self, path: &Path) -> Option<&KnownSession> {
-        let sessions = self.0.get(path)?;
+        let sessions = self.by_path.get(path)?;
         (sessions.len() == 1).then(|| &sessions[0])
     }
 
     pub fn get_session(&self, path: &Path, session_id: &str) -> Option<&KnownSession> {
-        self.0
+        self.by_path
             .get(path)?
             .iter()
             .find(|session| session.session_id == session_id)
     }
 
+    /// The stored source path and metadata for one harness session. Session ids
+    /// are only interpreted inside their harness namespace.
+    pub fn find(&self, harness: &str, session_id: &str) -> Option<(&Path, &KnownSession)> {
+        let path = self.path_by_harness_session.get(harness)?.get(session_id)?;
+        let session = self
+            .by_path
+            .get(path)?
+            .iter()
+            .find(|session| session.harness == harness && session.session_id == session_id)?;
+        Some((path.as_path(), session))
+    }
+
     /// How many transcript paths this store already knows; a caller measuring
     /// a sync pass reports it beside the pass's own wall.
     pub fn len(&self) -> usize {
-        self.0.values().map(Vec::len).sum()
+        self.path_by_harness_session
+            .values()
+            .map(HashMap::len)
+            .sum()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.path_by_harness_session.is_empty()
     }
 }
 
