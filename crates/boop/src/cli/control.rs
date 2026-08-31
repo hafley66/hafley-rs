@@ -1,6 +1,7 @@
 //! `boop tui`: launch a harness's own interactive TUI, register the pane as
 //! that harness's coordinator route, and project while it runs.
 
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;
@@ -10,7 +11,7 @@ use anyhow::{Context, Result};
 use boop::bus::Route;
 use boop::harness::{Harness, NativeTuiSpec};
 use boop::registry::Registry;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::cli::{mail_dir, write_route};
 
@@ -35,19 +36,23 @@ fn respawn_wanted(status: std::process::ExitStatus, respawns: u32, uptime: Durat
         && uptime >= RESPAWN_MIN_UPTIME
 }
 
-/// The session this launch opened, read from the harness's own live registry:
-/// the newest one under `cwd` that the registry first saw after `opened_ms`.
+/// The session this launch opened or resumed, read from the harness's own live
+/// registry. A new root starts after `opened_ms`; an old root must be the only
+/// same-cwd session whose observation advanced from the pre-launch snapshot.
 fn opened_session(
     adapter: &dyn Harness,
     cwd: &Path,
     opened_ms: u64,
+    prior_observations: &HashMap<String, u64>,
     wait: Duration,
 ) -> Option<String> {
     let canonical = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
     let deadline = std::time::Instant::now() + wait;
     loop {
         let live = adapter.live().live_sessions().unwrap_or_default();
-        if let Some(session) = newest_opened_session(live, &canonical, opened_ms) {
+        if let Some(session) =
+            newest_opened_session(live, &canonical, opened_ms, prior_observations)
+        {
             return Some(session);
         }
         if std::time::Instant::now() >= deadline {
@@ -61,26 +66,53 @@ fn newest_opened_session(
     live: Vec<boop::live::LiveSession>,
     canonical_cwd: &Path,
     opened_ms: u64,
+    prior_observations: &HashMap<String, u64>,
 ) -> Option<String> {
-    live.into_iter()
+    let candidates = live
+        .into_iter()
         .filter(|session| {
-            // A harness that records a start time decides by it: a thread
-            // another TUI keeps updating in the same cwd is not this one.
             session
-                .started_ms
-                .map_or(session.observed_ms >= opened_ms, |started| {
-                    started >= opened_ms
-                })
-                && session
-                    .cwd
-                    .as_ref()
-                    .map(|dir| std::fs::canonicalize(dir).unwrap_or_else(|_| dir.clone()))
-                    .as_deref()
-                    == Some(canonical_cwd)
+                .cwd
+                .as_ref()
+                .map(|dir| std::fs::canonicalize(dir).unwrap_or_else(|_| dir.clone()))
+                .as_deref()
+                == Some(canonical_cwd)
                 && session.scope != boop::live::LiveSessionScope::Child
         })
+        .collect::<Vec<_>>();
+    if let Some(session) = candidates
+        .iter()
+        .filter(|session| {
+            session.started_ms.map_or_else(
+                || {
+                    session.observed_ms >= opened_ms
+                        && !prior_observations.contains_key(&session.session_id)
+                },
+                |started| started >= opened_ms,
+            )
+        })
         .max_by_key(|session| session.observed_ms)
-        .map(|session| session.session_id)
+    {
+        return Some(session.session_id.clone());
+    }
+    let mut resumed = candidates.into_iter().filter(|session| {
+        session.observed_ms >= opened_ms
+            && prior_observations
+                .get(&session.session_id)
+                .is_some_and(|prior| session.observed_ms > *prior)
+    });
+    let session = resumed.next()?;
+    resumed.next().is_none().then_some(session.session_id)
+}
+
+fn session_observations(adapter: &dyn Harness) -> HashMap<String, u64> {
+    adapter
+        .live()
+        .live_sessions()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|session| (session.session_id, session.observed_ms))
+        .collect()
 }
 
 /// Holds the pane in the terminal's alternate screen for a harness whose own
@@ -176,6 +208,7 @@ pub(crate) fn run_native_tui(
         .as_ref()
         .map(boop::Store::known_sessions)
         .transpose()?;
+    let prior_observations = session_observations(adapter);
     let opened_ms = boop::live::now_ms();
     let _alternate_screen =
         AlternateScreen::enter(adapter.capabilities().wrapper_owns_alternate_screen);
@@ -191,9 +224,11 @@ pub(crate) fn run_native_tui(
     let mut respawns: u32 = 0;
     let mut spawned_at = std::time::Instant::now();
     if plan.session_id.is_none() {
-        plan.session_id = opened_session(adapter, cwd, opened_ms, SESSION_WAIT);
+        plan.session_id =
+            opened_session(adapter, cwd, opened_ms, &prior_observations, SESSION_WAIT);
         if let Some(session) = plan.session_id.as_deref() {
             plan.source_path = Some(format!("native-session={session}"));
+            info!(%session, harness = %adapter.id(), "native session route resolved");
         }
     }
     // The pane id is the only thing tying this tmux cell to a boop session. It
@@ -285,11 +320,15 @@ pub(crate) fn run_native_tui(
         // A fresh TUI opens its session at its first prompt, after the route
         // was written; the route learns the id the first tick it exists.
         if route.session_id.is_none() {
-            match opened_session(adapter, cwd, opened_ms, Duration::ZERO) {
+            match opened_session(adapter, cwd, opened_ms, &prior_observations, Duration::ZERO) {
                 Some(session) => {
                     route.source_path = Some(format!("native-session={session}"));
-                    route.session_id = Some(session);
+                    route.session_id = Some(session.clone());
                     write_route(&dir, name, route.clone())?;
+                    info!(route = name, %session, "native session route recovered after launch");
+                    if let Err(error) = record_pane(store.as_ref(), &session, child.id(), &pane) {
+                        warn!(%error, %pane, %session, "recovered native pane was not recorded");
+                    }
                 }
                 None => {
                     std::thread::sleep(EXIT_POLL);
@@ -328,6 +367,7 @@ pub(crate) fn run_native_tui(
 #[cfg(test)]
 mod tests {
     use super::{newest_opened_session, respawn_wanted, RESPAWN_MIN_UPTIME};
+    use std::collections::HashMap;
     use std::os::unix::process::ExitStatusExt;
     use std::process::ExitStatus;
     use std::time::Duration;
@@ -385,9 +425,71 @@ mod tests {
                 vec![root, guardian],
                 std::path::Path::new("/tmp/turn-attribution-parent"),
                 1_788_113_899_000,
+                &HashMap::new(),
             )
             .as_deref(),
             Some("01a053e4-d12c-parent")
+        );
+    }
+
+    #[test]
+    fn one_old_root_updated_after_launch_is_recovered() {
+        let mut root = session(
+            "01a0550d-old-root",
+            1_788_100_000_000,
+            boop::live::LiveSessionScope::Root,
+        );
+        root.observed_ms = 1_788_200_001_000;
+        let prior = HashMap::from([(root.session_id.clone(), 1_788_199_999_000)]);
+
+        assert_eq!(
+            newest_opened_session(
+                vec![root],
+                std::path::Path::new("/tmp/turn-attribution-parent"),
+                1_788_200_000_000,
+                &prior,
+            )
+            .as_deref(),
+            Some("01a0550d-old-root")
+        );
+    }
+
+    #[test]
+    fn unchanged_or_ambiguous_old_roots_are_not_recovered() {
+        let mut unchanged = session(
+            "unchanged",
+            1_788_100_000_000,
+            boop::live::LiveSessionScope::Root,
+        );
+        unchanged.observed_ms = 1_788_199_999_000;
+        let mut first = unchanged.clone();
+        first.session_id = "first".into();
+        first.observed_ms = 1_788_200_001_000;
+        let mut second = first.clone();
+        second.session_id = "second".into();
+        let prior = HashMap::from([
+            ("unchanged".into(), 1_788_199_999_000),
+            ("first".into(), 1_788_199_999_000),
+            ("second".into(), 1_788_199_999_000),
+        ]);
+
+        assert_eq!(
+            newest_opened_session(
+                vec![unchanged],
+                std::path::Path::new("/tmp/turn-attribution-parent"),
+                1_788_200_000_000,
+                &prior,
+            ),
+            None
+        );
+        assert_eq!(
+            newest_opened_session(
+                vec![first, second],
+                std::path::Path::new("/tmp/turn-attribution-parent"),
+                1_788_200_000_000,
+                &prior,
+            ),
+            None
         );
     }
 }
