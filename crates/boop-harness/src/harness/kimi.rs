@@ -54,6 +54,10 @@ impl Harness for Kimi {
         &CAPABILITIES
     }
 
+    fn tui_composer(&self) -> crate::harness::TuiComposer {
+        crate::harness::TuiComposer::Kimi
+    }
+
     fn live(&self) -> &dyn crate::live::LiveSessions {
         &DOOR
     }

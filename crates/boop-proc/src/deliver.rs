@@ -372,6 +372,8 @@ fn projected(id: HarnessId, row: LiveRow) -> LiveSession {
         door: door_address(row.door_kind.as_deref(), row.door_addr.as_deref()),
         observed_ms: boop_harness::live::now_ms(),
         started_ms: None,
+        scope: boop_harness::live::LiveSessionScope::Unknown,
+        parent_session: None,
     }
 }
 
@@ -459,6 +461,8 @@ mod tests {
                 },
                 observed_ms: boop_harness::live::now_ms(),
                 started_ms: None,
+                scope: boop_harness::live::LiveSessionScope::Unknown,
+                parent_session: None,
             }])
         }
     }

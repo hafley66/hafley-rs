@@ -53,6 +53,10 @@ impl Harness for Codex {
         &CAPABILITIES
     }
 
+    fn tui_composer(&self) -> crate::harness::TuiComposer {
+        crate::harness::TuiComposer::Codex
+    }
+
     fn live(&self) -> &dyn crate::live::LiveSessions {
         &DOOR
     }

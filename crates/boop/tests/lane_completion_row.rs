@@ -6,7 +6,7 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use boop::channel::{Delivery, LaneChannel, TurnEvent};
+use boop::channel::{Delivery, LaneChannel, TurnEvent, TurnReceipt};
 
 fn tempdir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("boop-completion-{tag}-{}", std::process::id()));
@@ -30,7 +30,13 @@ impl LaneChannel for DoneChannel {
         Ok(Delivery::MidTurn)
     }
     fn next_event(&mut self, _timeout: Duration) -> anyhow::Result<Option<TurnEvent>> {
-        Ok(Some(TurnEvent::ok("completed")))
+        Ok(Some(TurnEvent::ok_with_receipt(
+            "completed",
+            TurnReceipt {
+                text: "boop".into(),
+                tool_calls: 0,
+            },
+        )))
     }
     fn close(&mut self) -> anyhow::Result<()> {
         Ok(())

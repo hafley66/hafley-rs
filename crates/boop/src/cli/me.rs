@@ -180,7 +180,7 @@ pub(crate) fn run_me_favorite(index: i64, note: Option<&str>) -> Result<()> {
         "selected assistant message is empty"
     );
     let source = format!("{}:{}:assistant:{}", row.harness, session, row.turn);
-    let id = store.favorite_add(&row.said, note.unwrap_or(""), &source, now_ms())?;
+    let id = store.favorite_add(&row.said, note, &source, now_ms())?;
     line(&format!("favorite {id}"));
     Ok(())
 }
@@ -349,6 +349,8 @@ mod tests {
                 door: boop::live::DoorAddress::None,
                 observed_ms: 1,
                 started_ms: None,
+                scope: boop::live::LiveSessionScope::Unknown,
+                parent_session: None,
             }])
         }
     }

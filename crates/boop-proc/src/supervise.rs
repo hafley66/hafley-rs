@@ -23,6 +23,15 @@ const STALL_LIMIT_ENV: &str = "BOOP_STALL_LIMIT_SECS";
 /// was killed mid-wait at the old bound.
 const DEFAULT_STALL_LIMIT: Duration = Duration::from_secs(30 * 60);
 
+/// Fresh lanes prove that the harness can complete one minimal turn before
+/// the supervisor releases the brief into the conversation.
+const START_ACK_PROMPT: &str =
+    "This is a transport readiness probe. Do not inspect the repository.\n\
+     Respond exactly with: boop\n\
+     Any tool call fails the probe. Do not reason, explain, or add punctuation.";
+const START_ACK_LIMIT_ENV: &str = "BOOP_START_ACK_LIMIT_SECS";
+const DEFAULT_START_ACK_LIMIT: Duration = Duration::from_secs(30);
+
 /// How long this turn has been quiet. `activity` is the newest harness write of
 /// this turn; without one the clock runs from the turn's own start.
 fn idle_ms(now_ms: u64, turn_started: u64, activity: Option<u64>) -> u64 {
@@ -65,10 +74,36 @@ fn stall_limit() -> Duration {
     parse_stall_limit(std::env::var(STALL_LIMIT_ENV).ok().as_deref())
 }
 
+fn parse_start_ack_limit(raw: Option<&str>) -> Duration {
+    raw.and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(DEFAULT_START_ACK_LIMIT)
+}
+
+fn start_ack_limit() -> Duration {
+    parse_start_ack_limit(std::env::var(START_ACK_LIMIT_ENV).ok().as_deref())
+}
+
 /// Whether a quiet RUNNING turn is past the point its child is treated as
 /// gone. A parked lane between turns never calls this.
 fn stalled(idle_ms: u64, limit: Duration) -> bool {
     idle_ms > limit.as_millis() as u64
+}
+
+fn start_ack_failure(end: &TurnEvent) -> Option<String> {
+    if !end.is_done() {
+        return Some(end.detail().to_owned());
+    }
+    let Some(receipt) = end.receipt() else {
+        return Some("harness supplied no output receipt".to_owned());
+    };
+    if receipt.text == "boop" && receipt.tool_calls == 0 {
+        return None;
+    }
+    Some(format!(
+        "expected text \"boop\" with zero tool calls; got text {:?}, tool_calls={}",
+        receipt.text, receipt.tool_calls
+    ))
 }
 
 /// The text a resumed conversation opens with instead of the full brief.
@@ -652,6 +687,7 @@ fn supervise(
     // already holds the brief.
     let mut brief_completed = lane.resume.is_some();
     let mut brief_turn_pending = lane.resume.is_none();
+    let mut start_ack_pending = lane.resume.is_none();
     // A lane retired on the idle shutdown is revived by a send; the mail that
     // revived it is its opening turn, never the flake nudge.
     let revived = lane.resume.is_some()
@@ -687,7 +723,7 @@ fn supervise(
             println!("[boop] resuming conversation {conversation}");
             RESUME_NUDGE.to_owned()
         }
-        None => brief.clone(),
+        None => START_ACK_PROMPT.to_owned(),
     };
     let mut flake_resumes = 0u32;
     let mut result_written = false;
@@ -707,7 +743,11 @@ fn supervise(
     loop {
         info!(turn_bytes = turn.len(), "lane turn starting");
         record_residency(&lane.mail_dir, &lane.lane, RESIDENCY_LIVE);
-        let limit = stall_limit();
+        let limit = if start_ack_pending {
+            start_ack_limit()
+        } else {
+            stall_limit()
+        };
         let turn_started = boop_acp::channel::now_ms();
         events.record(
             "turn-start",
@@ -766,32 +806,45 @@ fn supervise(
             let this_turn_activity = channel
                 .last_activity_ms()
                 .filter(|written| *written >= turn_started);
-            let idle_ms = idle_ms(
-                boop_acp::channel::now_ms(),
-                turn_started,
-                this_turn_activity,
-            );
-            if stalled(idle_ms, limit) {
-                warn!(idle_ms, "lane turn stalled; killing the harness child");
-                println!("[boop] turn stalled ({}s idle), retrying", idle_ms / 1000);
-                if let Err(error) = channel.close() {
-                    events.record(
-                        "error",
-                        TraceRecorder::session(channel),
-                        Some(turn_started),
-                        Some(boop_acp::channel::now_ms()),
-                        None,
-                        Some("failed"),
-                        None,
-                        None,
-                        "stalled channel close failed",
-                    );
-                    return Err(error);
+            let now_ms = boop_acp::channel::now_ms();
+            let idle_ms = idle_ms(now_ms, turn_started, this_turn_activity);
+            let start_ack_elapsed_ms = now_ms.saturating_sub(turn_started);
+            if (start_ack_pending && start_ack_elapsed_ms > limit.as_millis() as u64)
+                || (!start_ack_pending && stalled(idle_ms, limit))
+            {
+                let (detail, reported_ms) = if start_ack_pending {
+                    (
+                        format!(
+                            "startup acknowledgment timed out after {}s",
+                            start_ack_elapsed_ms / 1000
+                        ),
+                        start_ack_elapsed_ms,
+                    )
+                } else {
+                    (
+                        format!("stalled: {}s with no harness activity", idle_ms / 1000),
+                        idle_ms,
+                    )
+                };
+                warn!(reported_ms, detail, "lane harness child killed");
+                println!("[boop] {detail}; stopping");
+                if !start_ack_pending {
+                    if let Err(error) = channel.close() {
+                        events.record(
+                            "error",
+                            TraceRecorder::session(channel),
+                            Some(turn_started),
+                            Some(boop_acp::channel::now_ms()),
+                            None,
+                            Some("failed"),
+                            None,
+                            None,
+                            "stalled channel close failed",
+                        );
+                        return Err(error);
+                    }
                 }
-                break TurnEvent::flaked(format!(
-                    "stalled: {}s with no harness activity",
-                    idle_ms / 1000
-                ));
+                break TurnEvent::flaked(detail);
             }
             if let Some(ended) = watch.probe(lane, boop_store::tmux::mux()) {
                 if let Err(error) = channel.close() {
@@ -823,6 +876,11 @@ fn supervise(
             for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
                 seen.insert(hail.id.clone());
                 record_hail_transition(events, &hail, "claimed-by-supervisor", "inbox drain");
+                if start_ack_pending {
+                    println!("[boop] hail {} held until startup acknowledgment", hail.id);
+                    held.push(hail);
+                    continue;
+                }
                 let delivery = match channel.steer(&hail_text(&hail, &mood)) {
                     Ok(delivery) => delivery,
                     Err(error) => {
@@ -879,7 +937,9 @@ fn supervise(
         println!("[boop] turn ended: {}", end.detail());
         // Every turn end reports itself. The parent's picture of this lane
         // never depends on the model choosing to run `tell-parent`.
-        yield_to_parent(lane, end.detail());
+        if !start_ack_pending {
+            yield_to_parent(lane, end.detail());
+        }
         let finish = boop_acp::channel::now_ms();
         events.record(
             "turn-finish",
@@ -905,6 +965,27 @@ fn supervise(
             "lane turn ended"
         );
         remember_conversation(lane, channel);
+        if start_ack_pending {
+            if let Some(failure) = start_ack_failure(&end) {
+                if let Err(error) = channel.close() {
+                    warn!(lane = lane.lane, error = %error, "close after startup acknowledgment failure failed");
+                }
+                return Ok(Ended {
+                    exit_code: 1,
+                    detail: Some(format!("startup acknowledgment failed: {failure}")),
+                    retired: false,
+                });
+            }
+            start_ack_pending = false;
+            println!("[boop] startup acknowledged; submitting brief");
+            let arrived = std::mem::take(&mut held);
+            opening_hails = arrived.clone();
+            turn = std::iter::once(brief.clone())
+                .chain(arrived.iter().map(|hail| hail_text(hail, &mood)))
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            continue;
+        }
         if brief_turn_pending && end.is_done() {
             brief_completed = true;
             brief_turn_pending = false;
@@ -1736,6 +1817,7 @@ fn record_delivery(events: &TraceRecorder, dir: &Path, hail: &Hail, tier: Delive
 #[cfg(test)]
 mod tests {
     use super::*;
+    use boop_acp::channel::TurnReceipt;
 
     fn write_box(dir: &Path, rows: &[bus::Message]) {
         use std::io::Write;
@@ -1883,6 +1965,44 @@ mod tests {
         assert_eq!(parse_stall_limit(None), DEFAULT_STALL_LIMIT);
         assert_eq!(parse_stall_limit(Some("garbage")), DEFAULT_STALL_LIMIT);
         assert_eq!(parse_stall_limit(Some("120")), Duration::from_secs(120));
+    }
+
+    #[test]
+    fn the_start_ack_limit_config_key_overrides_the_default() {
+        assert_eq!(parse_start_ack_limit(None), DEFAULT_START_ACK_LIMIT);
+        assert_eq!(
+            parse_start_ack_limit(Some("garbage")),
+            DEFAULT_START_ACK_LIMIT
+        );
+        assert_eq!(parse_start_ack_limit(Some("12")), Duration::from_secs(12));
+    }
+
+    #[test]
+    fn the_start_ack_requires_exact_text_and_zero_tool_calls() {
+        let accepted = TurnEvent::ok_with_receipt(
+            "completed",
+            TurnReceipt {
+                text: "boop".into(),
+                tool_calls: 0,
+            },
+        );
+        assert_eq!(start_ack_failure(&accepted), None);
+
+        let tool_using = TurnEvent::ok_with_receipt(
+            "completed",
+            TurnReceipt {
+                text: "boop".into(),
+                tool_calls: 1,
+            },
+        );
+        assert_eq!(
+            start_ack_failure(&tool_using).as_deref(),
+            Some("expected text \"boop\" with zero tool calls; got text \"boop\", tool_calls=1")
+        );
+        assert_eq!(
+            start_ack_failure(&TurnEvent::ok("completed")).as_deref(),
+            Some("harness supplied no output receipt")
+        );
     }
 
     /// Activity before this turn opened is not this turn's; the clock then runs
@@ -2114,10 +2234,16 @@ mod tests {
         }
 
         fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
-            Ok(Some(if self.turns.lock().unwrap().len() == 1 {
+            Ok(Some(if self.turns.lock().unwrap().len() == 2 {
                 TurnEvent::flaked("aborted stream")
             } else {
-                TurnEvent::ok("completed")
+                TurnEvent::ok_with_receipt(
+                    "completed",
+                    TurnReceipt {
+                        text: "boop".into(),
+                        tool_calls: 0,
+                    },
+                )
             }))
         }
 
@@ -2140,8 +2266,55 @@ mod tests {
         });
 
         wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
-        assert_eq!(*turns.lock().unwrap(), ["do the work\n", "do the work\n"]);
+        assert_eq!(
+            *turns.lock().unwrap(),
+            [START_ACK_PROMPT, "do the work\n", "do the work\n"]
+        );
         assert_eq!(result_rows(&dir)[0].body, "lane mine done rc=0");
+    }
+
+    #[derive(Clone, Default)]
+    struct StartAckFailsChannel {
+        turns: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    }
+
+    impl LaneChannel for StartAckFailsChannel {
+        fn conversation_id(&self) -> Option<String> {
+            Some("unresponsive-thread-id".to_owned())
+        }
+
+        fn start_turn(&mut self, text: &str) -> Result<()> {
+            self.turns.lock().unwrap().push(text.to_owned());
+            Ok(())
+        }
+
+        fn steer(&mut self, _text: &str) -> Result<Delivery> {
+            unreachable!("mail is held during startup acknowledgment")
+        }
+
+        fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
+            Ok(Some(TurnEvent::flaked("provider never acknowledged")))
+        }
+
+        fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_failed_start_ack_stops_before_the_brief_without_retrying() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let mut channel = StartAckFailsChannel::default();
+        let turns = channel.turns.clone();
+
+        assert_eq!(run(lane, &mut channel).unwrap(), 1);
+        assert_eq!(*turns.lock().unwrap(), [START_ACK_PROMPT]);
+        assert_eq!(
+            result_rows(&dir)[0].body,
+            "lane mine done rc=1 (startup acknowledgment failed: provider never acknowledged)"
+        );
+        assert!(rows_of_kind(&dir, "yield").is_empty());
     }
 
     #[derive(Clone, Default)]
@@ -2169,7 +2342,13 @@ mod tests {
         }
 
         fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
-            Ok(Some(TurnEvent::ok("completed")))
+            Ok(Some(TurnEvent::ok_with_receipt(
+                "completed",
+                TurnReceipt {
+                    text: "boop".into(),
+                    tool_calls: 0,
+                },
+            )))
         }
 
         fn close(&mut self) -> Result<()> {
@@ -2203,7 +2382,7 @@ mod tests {
     // before any turn contains the brief. The supervisor used the presence of
     // that id as resume evidence and sent RESUME_NUDGE as the first turn.
     #[test]
-    fn a_fresh_identified_channel_receives_the_full_brief() {
+    fn a_fresh_identified_channel_acknowledges_before_receiving_the_full_brief() {
         let dir = tempdir();
         let lane = parented_lane(&dir, "mine", "coordinator");
         let mut channel = FreshIdentifiedChannel::default();
@@ -2213,7 +2392,8 @@ mod tests {
         });
 
         wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
-        assert_eq!(*turns.lock().unwrap(), ["do the work\n"]);
+        assert_eq!(*turns.lock().unwrap(), [START_ACK_PROMPT, "do the work\n"]);
+        assert_eq!(rows_of_kind(&dir, "yield").len(), 1);
     }
 
     // SABOTAGE RECEIPT: restore `end.is_done() => Some((0, ..))` unconditionally
@@ -2323,7 +2503,13 @@ mod tests {
         }
 
         fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
-            Ok(Some(TurnEvent::ok("completed")))
+            Ok(Some(TurnEvent::ok_with_receipt(
+                "completed",
+                TurnReceipt {
+                    text: "boop".into(),
+                    tool_calls: 0,
+                },
+            )))
         }
 
         fn close(&mut self) -> Result<()> {
@@ -2346,12 +2532,12 @@ mod tests {
         });
 
         wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
-        assert_eq!(*turns.lock().unwrap(), ["do the work\n"]);
+        assert_eq!(*turns.lock().unwrap(), [START_ACK_PROMPT, "do the work\n"]);
         assert!(!*closed.lock().unwrap(), "a parked lane closed its channel");
 
         append_row(&dir, &message("wake", "mine", "hail")).unwrap();
-        wait_for(|| turns.lock().unwrap().len() == 2, Duration::from_secs(5));
-        assert!(turns.lock().unwrap()[1].contains("body of wake"));
+        wait_for(|| turns.lock().unwrap().len() == 3, Duration::from_secs(5));
+        assert!(turns.lock().unwrap()[2].contains("body of wake"));
         assert!(
             !*closed.lock().unwrap(),
             "waking a parked lane closed its channel"
@@ -2399,9 +2585,9 @@ mod tests {
             let _ = run(lane, &mut channel);
         });
 
-        wait_for(|| turns.lock().unwrap().len() == 1, Duration::from_secs(5));
-        append_row(&dir, &message("wake", "mine", "hail")).unwrap();
         wait_for(|| turns.lock().unwrap().len() == 2, Duration::from_secs(5));
+        append_row(&dir, &message("wake", "mine", "hail")).unwrap();
+        wait_for(|| turns.lock().unwrap().len() == 3, Duration::from_secs(5));
         assert!(
             rows_of_kind(&dir, "yield").is_empty(),
             "a lane with a prior result row mails no idle yield"

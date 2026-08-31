@@ -164,6 +164,8 @@ impl RegistryFile {
             door,
             observed_ms: self.updated_at.unwrap_or_else(now_ms),
             started_ms: self.started_at,
+            scope: crate::live::LiveSessionScope::Unknown,
+            parent_session: None,
         }
     }
 }

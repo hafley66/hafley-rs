@@ -51,6 +51,10 @@ impl Harness for Opencode {
         &CAPABILITIES
     }
 
+    fn tui_composer(&self) -> crate::harness::TuiComposer {
+        crate::harness::TuiComposer::Opencode
+    }
+
     fn live(&self) -> &dyn crate::live::LiveSessions {
         &DOOR
     }

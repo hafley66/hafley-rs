@@ -73,6 +73,8 @@ impl LiveSessions for OneSession {
             },
             observed_ms: 7,
             started_ms: None,
+            scope: boop_harness::live::LiveSessionScope::Unknown,
+            parent_session: None,
         }])
     }
 }

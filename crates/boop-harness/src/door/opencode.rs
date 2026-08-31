@@ -315,6 +315,8 @@ impl LiveSessions for OpencodeDoor {
                 pid: None,
                 tmux_pane: None,
                 started_ms: entry.time.created,
+                scope: crate::live::LiveSessionScope::Unknown,
+                parent_session: None,
                 session_id: entry.id,
             })
             .collect::<Vec<_>>();

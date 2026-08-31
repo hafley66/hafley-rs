@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 
 use crate::door::{Delivered, Door, IdleNotice};
 use crate::harness::{HarnessId, NativeTuiPlan, NativeTuiSpec};
-use crate::live::{now_ms, DoorAddress, LiveSession, LiveSessions, LiveStatus};
+use crate::live::{now_ms, DoorAddress, LiveSession, LiveSessionScope, LiveSessions, LiveStatus};
 
 /// Overrides the state database the thread list is read from.
 pub const STATE_DB_ENV: &str = "BOOP_CODEX_STATE_DB";
@@ -89,7 +89,7 @@ impl LiveSessions for CodexDoor {
         .with_context(|| format!("open {}", db.display()))?;
         let mut statement = connection.prepare(
             "SELECT id, cwd, COALESCE(updated_at_ms, updated_at * 1000), \
-             COALESCE(created_at_ms, created_at * 1000) \
+             COALESCE(created_at_ms, created_at * 1000), source \
              FROM threads WHERE archived = 0 ORDER BY updated_at DESC",
         )?;
         let rows = statement.query_map([], |row| {
@@ -98,15 +98,23 @@ impl LiveSessions for CodexDoor {
                 row.get::<_, Option<String>>(1)?,
                 row.get::<_, Option<i64>>(2)?.unwrap_or(0) as u64,
                 row.get::<_, Option<i64>>(3)?.map(|ms| ms as u64),
+                row.get::<_, String>(4)?,
             ))
         })?;
         let floor = now_ms().saturating_sub(RECENT_MS);
         let mut live = Vec::new();
         for row in rows {
-            let (id, cwd, updated_ms, created_ms) = row?;
+            let (id, cwd, updated_ms, created_ms, source) = row?;
             if updated_ms < floor {
                 continue;
             }
+            let source = serde_json::from_str::<serde_json::Value>(&source).ok();
+            let subagent = source.as_ref().and_then(|value| value.get("subagent"));
+            let parent_session = subagent
+                .and_then(|value| value.get("thread_spawn"))
+                .and_then(|value| value.get("parent_thread_id"))
+                .and_then(|value| value.as_str())
+                .map(str::to_owned);
             live.push(LiveSession {
                 harness: HarnessId::Codex,
                 session_id: id.clone(),
@@ -122,7 +130,43 @@ impl LiveSessions for CodexDoor {
                 },
                 observed_ms: updated_ms,
                 started_ms: created_ms,
+                scope: if subagent.is_some() {
+                    LiveSessionScope::Child
+                } else {
+                    LiveSessionScope::Root
+                },
+                parent_session,
             });
+        }
+        // Guardian sources carry no parent id. Codex creates the guardian
+        // immediately after its interactive thread, so recover the closest
+        // preceding root in the same cwd. Explicit thread_spawn parents above
+        // remain authoritative.
+        let roots = live
+            .iter()
+            .filter(|session| session.scope == LiveSessionScope::Root)
+            .map(|session| {
+                (
+                    session.session_id.clone(),
+                    session.cwd.clone(),
+                    session.started_ms,
+                )
+            })
+            .collect::<Vec<_>>();
+        for session in live.iter_mut().filter(|session| {
+            session.scope == LiveSessionScope::Child && session.parent_session.is_none()
+        }) {
+            session.parent_session = roots
+                .iter()
+                .filter(|(_, cwd, started)| {
+                    cwd == &session.cwd
+                        && match (started, session.started_ms) {
+                            (Some(root), Some(child)) => root <= &child,
+                            _ => false,
+                        }
+                })
+                .max_by_key(|(_, _, started)| *started)
+                .map(|(id, _, _)| id.clone());
         }
         Ok(live)
     }
@@ -434,12 +478,65 @@ mod tests {
         assert_eq!(session.harness, HarnessId::Codex);
         assert_eq!(session.cwd, Some(PathBuf::from("/Users/someone/projects")));
         assert_eq!(session.status, LiveStatus::Unknown);
+        assert_eq!(session.scope, LiveSessionScope::Root);
+        assert_eq!(session.parent_session, None);
         assert_eq!(
             session.door,
             DoorAddress::AppServer {
                 socket: fixture.dir.join("daemon.sock"),
                 thread: "01a02a8b-live".into(),
             }
+        );
+    }
+
+    #[test]
+    fn the_thread_source_marks_guardian_and_spawned_threads_as_children() {
+        let fixture = Fixture::new("thread-scope");
+        let connection = rusqlite::Connection::open(fixture.dir.join("state_5.sqlite")).unwrap();
+        let now = now_ms() as i64;
+        for (id, source) in [
+            ("guardian", r#"{"subagent":{"other":"guardian"}}"#),
+            (
+                "spawned",
+                r#"{"subagent":{"thread_spawn":{"parent_thread_id":"parent","depth":1}}}"#,
+            ),
+        ] {
+            connection
+                .execute(
+                    "INSERT INTO threads (id, rollout_path, created_at, updated_at, source, \
+                 model_provider, cwd, title, sandbox_policy, approval_mode, archived, \
+                 created_at_ms, updated_at_ms) \
+                 VALUES (?1, '', ?2, ?2, ?3, 'openai', '/Users/someone/projects', '', \
+                 'workspace', 'on-request', 0, ?4, ?4)",
+                    rusqlite::params![id, now / 1000, source, now],
+                )
+                .unwrap();
+        }
+        let scopes = fixture
+            .door()
+            .live_sessions()
+            .unwrap()
+            .into_iter()
+            .map(|session| (session.session_id, session.scope))
+            .collect::<std::collections::HashMap<_, _>>();
+        assert_eq!(scopes.get("guardian"), Some(&LiveSessionScope::Child));
+        assert_eq!(scopes.get("spawned"), Some(&LiveSessionScope::Child));
+        assert_eq!(scopes.get("01a02a8b-live"), Some(&LiveSessionScope::Root));
+
+        let parents = fixture
+            .door()
+            .live_sessions()
+            .unwrap()
+            .into_iter()
+            .map(|session| (session.session_id, session.parent_session))
+            .collect::<std::collections::HashMap<_, _>>();
+        assert_eq!(
+            parents.get("spawned").and_then(Option::as_deref),
+            Some("parent")
+        );
+        assert_eq!(
+            parents.get("guardian").and_then(Option::as_deref),
+            Some("01a02a8b-live")
         );
     }
 

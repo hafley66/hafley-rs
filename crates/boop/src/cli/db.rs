@@ -964,7 +964,7 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
                 let store = open_store()?;
                 let id = store.favorite_add(
                     &body,
-                    note.as_deref().unwrap_or(""),
+                    note.as_deref(),
                     source.as_deref().unwrap_or(""),
                     now_ms(),
                 )?;

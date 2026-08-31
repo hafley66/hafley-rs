@@ -33,7 +33,8 @@ pub struct Store {
 /// 14 = the door a live session answers on, and one delivery row per hail.
 /// 15 = ordered delivery-transition receipts beside the current-state ledger.
 /// 16 = the typed error code a refused transition carries.
-pub const SCHEMA_VERSION: i64 = 18;
+/// 19 = an absent favorite note is stored as NULL.
+pub const SCHEMA_VERSION: i64 = 19;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -636,6 +637,31 @@ impl Store {
                 self.connection.execute_batch(MAILBOX_SCHEMA)?;
                 self.connection.execute_batch("PRAGMA user_version = 18;")?;
             }
+            if self.schema_version()? < 19 {
+                let note_is_required = self.connection.query_row(
+                    "SELECT \"notnull\" FROM pragma_table_info('agent_favorite') WHERE name = 'note'",
+                    [],
+                    |row| row.get::<_, bool>(0),
+                )?;
+                if note_is_required {
+                    self.connection.execute_batch(
+                        "CREATE TABLE agent_favorite_v19 (
+                           favorite_id INTEGER PRIMARY KEY,
+                           markdown_id INTEGER NOT NULL,
+                           note TEXT,
+                           source TEXT NOT NULL DEFAULT '',
+                           created_ts INTEGER NOT NULL
+                         );
+                         INSERT INTO agent_favorite_v19
+                           (favorite_id, markdown_id, note, source, created_ts)
+                           SELECT favorite_id, markdown_id, note, source, created_ts
+                             FROM agent_favorite;
+                         DROP TABLE agent_favorite;
+                         ALTER TABLE agent_favorite_v19 RENAME TO agent_favorite;",
+                    )?;
+                }
+                self.connection.execute_batch("PRAGMA user_version = 19;")?;
+            }
             self.stamp_version()?;
             Ok(())
         })();
@@ -652,7 +678,7 @@ impl Store {
     /// Drop every table, recreate the schema, stamp the version; the caller
     /// re-syncs from byte 0. Favorites alone cross the drop by value.
     pub fn rebuild(&self) -> Result<()> {
-        let mut favorites: Vec<(String, String, String, i64, i64)> = Vec::new();
+        let mut favorites: Vec<(String, Option<String>, String, i64, i64)> = Vec::new();
         {
             let mut statement = self.connection.prepare(
                 "SELECT m.body, f.note, f.source, f.created_ts, m.first_ts
@@ -1306,7 +1332,13 @@ impl Store {
 
     /// Pin one markdown body as a favorite. The body dedupes through
     /// markdown_cache; note and source ride on the favorite row itself.
-    pub fn favorite_add(&self, body: &str, note: &str, source: &str, ts: u64) -> Result<i64> {
+    pub fn favorite_add(
+        &self,
+        body: &str,
+        note: Option<&str>,
+        source: &str,
+        ts: u64,
+    ) -> Result<i64> {
         let markdown_id = self.intern_markdown(body, ts)?;
         self.connection.execute(
             "INSERT INTO agent_favorite (markdown_id, note, source, created_ts)
@@ -2724,7 +2756,7 @@ CREATE TABLE IF NOT EXISTS markdown_cache (
 CREATE TABLE IF NOT EXISTS agent_favorite (
   favorite_id INTEGER PRIMARY KEY,
   markdown_id INTEGER NOT NULL,
-  note TEXT NOT NULL DEFAULT '',
+  note TEXT,
   source TEXT NOT NULL DEFAULT '',
   created_ts INTEGER NOT NULL
 );
@@ -4313,11 +4345,128 @@ mod tests {
     /// Favorites are user-authored with no transcript behind them; rebuild
     /// drops every projected row and the favorite comes back intact.
     #[test]
+    fn a_favorite_note_is_null_when_omitted() {
+        let (db_path, store) = fresh_store("fav-null-note");
+        let id = store.favorite_add("# keep\n", None, "chat", 1).unwrap();
+        let note: Option<String> = store
+            .connection
+            .query_row(
+                "SELECT note FROM agent_favorite WHERE favorite_id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(note, None);
+        assert_eq!(
+            store.query_favorite(id).unwrap(),
+            vec![serde_json::json!({
+                "favorite_id": id,
+                "note": null,
+                "source": "chat",
+                "created_ts": 1,
+                "bytes": 7,
+                "body": "# keep\n",
+            })]
+        );
+        drop(store);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[test]
+    fn v18_favorite_migration_preserves_rows_and_ids() {
+        let (db_path, store) = fresh_store("fav-v18-migration");
+        let markdown_id = store.intern_markdown("# legacy\n", 7).unwrap();
+        store
+            .connection
+            .execute_batch(
+                "DROP TABLE agent_favorite;
+                 CREATE TABLE agent_favorite (
+                   favorite_id INTEGER PRIMARY KEY,
+                   markdown_id INTEGER NOT NULL,
+                   note TEXT NOT NULL DEFAULT '',
+                   source TEXT NOT NULL DEFAULT '',
+                   created_ts INTEGER NOT NULL
+                 );",
+            )
+            .unwrap();
+        store
+            .connection
+            .execute(
+                "INSERT INTO agent_favorite
+                   (favorite_id, markdown_id, note, source, created_ts)
+                 VALUES (41, ?1, 'headspace', 'chat', 11),
+                        (42, ?1, '', 'url', 12)",
+                params![markdown_id],
+            )
+            .unwrap();
+        store
+            .connection
+            .execute_batch("PRAGMA user_version = 18")
+            .unwrap();
+        drop(store);
+
+        let store = Store::open(db_path.clone()).unwrap();
+        let mut statement = store
+            .connection
+            .prepare(
+                "SELECT favorite_id, markdown_id, note, source, created_ts
+                   FROM agent_favorite
+                  ORDER BY favorite_id",
+            )
+            .unwrap();
+        let rows = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                (
+                    41,
+                    markdown_id,
+                    Some("headspace".to_owned()),
+                    "chat".to_owned(),
+                    11,
+                ),
+                (42, markdown_id, Some(String::new()), "url".to_owned(), 12),
+            ]
+        );
+        drop(statement);
+        let note_is_required: bool = store
+            .connection
+            .query_row(
+                "SELECT \"notnull\" FROM pragma_table_info('agent_favorite') WHERE name = 'note'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(note_is_required, false);
+        assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
+        assert_eq!(
+            store.favorite_add("# new\n", None, "manual", 13).unwrap(),
+            43
+        );
+        drop(store);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[test]
     fn a_favorite_is_edited_in_place_and_deleted_by_id() {
         let db_path = temp_path("fav-crud");
         let _ = std::fs::remove_file(&db_path);
         let store = Store::open(db_path).unwrap();
-        let id = store.favorite_add("# keep\n", "first", "src-a", 1).unwrap();
+        let id = store
+            .favorite_add("# keep\n", Some("first"), "src-a", 1)
+            .unwrap();
         assert!(store.favorite_edit(id, Some("second"), None).unwrap());
         let (note, source): (String, String) = store
             .connection
@@ -4345,7 +4494,12 @@ mod tests {
         {
             let store = Store::open(db_path.clone()).unwrap();
             let id = store
-                .favorite_add("# kept\n\n| a | b |\n", "the writers table", "chat", 42)
+                .favorite_add(
+                    "# kept\n\n| a | b |\n",
+                    Some("the writers table"),
+                    "chat",
+                    42,
+                )
                 .unwrap();
             assert!(id > 0);
             store.rebuild().unwrap();

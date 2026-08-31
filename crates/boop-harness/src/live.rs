@@ -17,6 +17,16 @@ pub enum LiveStatus {
     Unknown,
 }
 
+/// Whether a harness-native session is the interactive root or one of its
+/// internal collaboration/approval children. `Unknown` preserves launch
+/// support for registries that do not expose this distinction.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum LiveSessionScope {
+    Root,
+    Child,
+    Unknown,
+}
+
 /// Where a message is written to reach a running session.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum DoorAddress {
@@ -48,6 +58,10 @@ pub struct LiveSession {
     /// When the session began, from the harness's own record; `None` where
     /// the registry keeps no start time.
     pub started_ms: Option<u64>,
+    pub scope: LiveSessionScope,
+    /// Interactive root owning this child when the harness exposes or permits
+    /// recovery of the relation. Root and unrelated sessions carry `None`.
+    pub parent_session: Option<String>,
 }
 
 /// The live-session registry of one harness.
@@ -116,6 +130,8 @@ mod tests {
             door: DoorAddress::None,
             observed_ms: 0,
             started_ms: None,
+            scope: LiveSessionScope::Unknown,
+            parent_session: None,
         }
     }
 

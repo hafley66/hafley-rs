@@ -50,6 +50,7 @@ while IFS= read -r line; do
       printf '{"jsonrpc":"2.0","id":"%s","result":{"configOptions":[]}}\n' "$id"
       ;;
     *'"method":"session/prompt"'*)
+      printf '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"retire-acp-session","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"boop"}}}}\n'
       printf '{"jsonrpc":"2.0","id":"%s","result":{"stopReason":"end_turn"}}\n' "$id"
       ;;
   esac

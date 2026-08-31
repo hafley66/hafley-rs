@@ -108,6 +108,8 @@ mod tests {
             door: DoorAddress::None,
             observed_ms: 0,
             started_ms: None,
+            scope: crate::live::LiveSessionScope::Unknown,
+            parent_session: None,
         }
     }
 

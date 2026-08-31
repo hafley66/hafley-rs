@@ -59,6 +59,10 @@ impl Harness for Claude {
         &CAPABILITIES
     }
 
+    fn tui_composer(&self) -> crate::harness::TuiComposer {
+        crate::harness::TuiComposer::Claude
+    }
+
     fn live(&self) -> &dyn crate::live::LiveSessions {
         &DOOR
     }

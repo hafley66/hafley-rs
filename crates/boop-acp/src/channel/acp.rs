@@ -6,18 +6,19 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use agent_client_protocol::schema::v1::{
-    CancelNotification, ClientCapabilities, CreateTerminalRequest, CreateTerminalResponse,
-    InitializeRequest, KillTerminalRequest, KillTerminalResponse, LoadSessionRequest,
-    NewSessionRequest, PermissionOptionKind, PromptRequest, ReleaseTerminalRequest,
-    ReleaseTerminalResponse, RequestPermissionOutcome, RequestPermissionRequest,
-    RequestPermissionResponse, SelectedPermissionOutcome, SessionConfigKind, SessionConfigOption,
-    SessionConfigOptionValue, SessionConfigSelectOptions, SessionId, SessionNotification,
-    SessionUpdate, SetSessionConfigOptionRequest, StopReason, TerminalOutputRequest,
-    TerminalOutputResponse, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
+    CancelNotification, ClientCapabilities, ContentBlock, CreateTerminalRequest,
+    CreateTerminalResponse, InitializeRequest, KillTerminalRequest, KillTerminalResponse,
+    LoadSessionRequest, NewSessionRequest, PermissionOptionKind, PromptRequest,
+    ReleaseTerminalRequest, ReleaseTerminalResponse, RequestPermissionOutcome,
+    RequestPermissionRequest, RequestPermissionResponse, SelectedPermissionOutcome,
+    SessionConfigKind, SessionConfigOption, SessionConfigOptionValue, SessionConfigSelectOptions,
+    SessionId, SessionNotification, SessionUpdate, SetSessionConfigOptionRequest, StopReason,
+    TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
+    WaitForTerminalExitResponse,
 };
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Agent, ConnectionTo, LineDirection};
@@ -26,7 +27,7 @@ use boop_store::session::ModelSpec;
 use tracing::{debug, info, warn};
 
 use crate::channel::terminal::{await_exit, Terminals};
-use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
+use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent, TurnReceipt};
 
 /// The config option every ACP agent names its model with.
 const MODEL_CONFIG_ID: &str = "model";
@@ -322,6 +323,8 @@ async fn connect(
     notes: Sender<Note>,
 ) -> Result<(), agent_client_protocol::Error> {
     let clock = Arc::clone(&plan.clock);
+    let turn_receipt = Arc::new(Mutex::new(TurnReceipt::default()));
+    let observed_receipt = Arc::clone(&turn_receipt);
     let mut commands = commands;
     let terminals = Arc::new(Terminals::new(plan.cwd.clone()));
     agent_client_protocol::Client
@@ -330,6 +333,10 @@ async fn connect(
         .on_receive_notification(
             async move |notification: SessionNotification, _connection| {
                 clock.store(crate::channel::now_ms(), Ordering::Relaxed);
+                observe_turn(
+                    &mut observed_receipt.lock().expect("turn receipt mutex poisoned"),
+                    &notification.update,
+                );
                 debug!(
                     conversation_id = %notification.session_id.0,
                     kind = update_kind(&notification.update),
@@ -435,6 +442,8 @@ async fn connect(
             while let Some(command) = commands.recv().await {
                 match command {
                     Command::Prompt(text) => {
+                        *turn_receipt.lock().expect("turn receipt mutex poisoned") =
+                            TurnReceipt::default();
                         let outcome = connection
                             .send_request(PromptRequest::new(
                                 session.clone(),
@@ -443,7 +452,13 @@ async fn connect(
                             .block_task()
                             .await
                             .map(|response| response.stop_reason);
-                        if notes.send(Note::Turn(turn_verdict(outcome))).is_err() {
+                        let receipt = std::mem::take(
+                            &mut *turn_receipt.lock().expect("turn receipt mutex poisoned"),
+                        );
+                        if notes
+                            .send(Note::Turn(turn_verdict(outcome, Some(receipt))))
+                            .is_err()
+                        {
                             break;
                         }
                     }
@@ -667,11 +682,29 @@ fn select_value_ids(
 
 /// The turn verdict for one `session/prompt` outcome. A JSON-RPC error is a
 /// flake the agent never saw; a non-`end_turn` stop reason is its own answer.
-fn turn_verdict(outcome: Result<StopReason, agent_client_protocol::Error>) -> TurnEvent {
+fn turn_verdict(
+    outcome: Result<StopReason, agent_client_protocol::Error>,
+    receipt: Option<TurnReceipt>,
+) -> TurnEvent {
     match outcome {
-        Ok(StopReason::EndTurn) => TurnEvent::ok("end_turn"),
+        Ok(StopReason::EndTurn) => match receipt {
+            Some(receipt) => TurnEvent::ok_with_receipt("end_turn", receipt),
+            None => TurnEvent::ok("end_turn"),
+        },
         Ok(other) => TurnEvent::failed(format!("stop_reason={}", stop_reason_name(other))),
         Err(error) => TurnEvent::flaked(error.message),
+    }
+}
+
+fn observe_turn(receipt: &mut TurnReceipt, update: &SessionUpdate) {
+    match update {
+        SessionUpdate::AgentMessageChunk(chunk) => {
+            if let ContentBlock::Text(text) = &chunk.content {
+                receipt.text.push_str(&text.text);
+            }
+        }
+        SessionUpdate::ToolCall(_) => receipt.tool_calls += 1,
+        _ => {}
     }
 }
 
@@ -725,8 +758,9 @@ fn update_kind(update: &SessionUpdate) -> &'static str {
 mod tests {
     use super::*;
     use agent_client_protocol::schema::v1::{
-        PermissionOption, PermissionOptionId, SessionConfigId, SessionConfigSelectOption,
-        SessionConfigValueId, ToolCallUpdate, ToolCallUpdateFields,
+        ContentChunk, PermissionOption, PermissionOptionId, SessionConfigId,
+        SessionConfigSelectOption, SessionConfigValueId, TextContent, ToolCall, ToolCallId,
+        ToolCallUpdate, ToolCallUpdateFields,
     };
 
     /// The `error` member of a JSON-RPC error response, as written on the wire.
@@ -742,9 +776,12 @@ mod tests {
     // `session/prompt`; anything but `Flaked` costs the supervisor its retry.
     #[test]
     fn a_prompt_error_frame_is_a_retryable_flake() {
-        let verdict = turn_verdict(Err(prompt_error_frame(
-            "AI_APICallError: Upstream request failed: Endpoint is unavailable.",
-        )));
+        let verdict = turn_verdict(
+            Err(prompt_error_frame(
+                "AI_APICallError: Upstream request failed: Endpoint is unavailable.",
+            )),
+            None,
+        );
         assert!(verdict.retryable(), "{verdict:?}");
         assert_eq!(
             verdict.detail(),
@@ -754,8 +791,11 @@ mod tests {
 
     #[test]
     fn end_turn_is_the_only_clean_verdict() {
-        assert!(turn_verdict(Ok(StopReason::EndTurn)).is_done());
-        assert_eq!(turn_verdict(Ok(StopReason::EndTurn)).detail(), "end_turn");
+        assert!(turn_verdict(Ok(StopReason::EndTurn), None).is_done());
+        assert_eq!(
+            turn_verdict(Ok(StopReason::EndTurn), None).detail(),
+            "end_turn"
+        );
     }
 
     #[test]
@@ -766,7 +806,7 @@ mod tests {
             StopReason::MaxTokens,
             StopReason::MaxTurnRequests,
         ] {
-            let verdict = turn_verdict(Ok(reason));
+            let verdict = turn_verdict(Ok(reason), None);
             assert!(!verdict.is_done(), "{verdict:?}");
             assert!(!verdict.retryable(), "{verdict:?}");
             assert_eq!(
@@ -774,6 +814,30 @@ mod tests {
                 format!("stop_reason={}", stop_reason_name(reason))
             );
         }
+    }
+
+    #[test]
+    fn turn_observation_collects_agent_text_and_counts_tool_calls() {
+        let mut receipt = TurnReceipt::default();
+        for text in ["bo", "op"] {
+            observe_turn(
+                &mut receipt,
+                &SessionUpdate::AgentMessageChunk(ContentChunk::new(ContentBlock::Text(
+                    TextContent::new(text),
+                ))),
+            );
+        }
+        observe_turn(
+            &mut receipt,
+            &SessionUpdate::ToolCall(ToolCall::new(ToolCallId::new("call_1"), "list files")),
+        );
+        assert_eq!(
+            receipt,
+            TurnReceipt {
+                text: "boop".into(),
+                tool_calls: 1,
+            }
+        );
     }
 
     #[test]

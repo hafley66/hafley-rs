@@ -8,7 +8,7 @@ use std::process::Command;
 use std::sync::Once;
 use std::time::Duration;
 
-use boop_acp::channel::{Delivery, LaneChannel, TurnEvent};
+use boop_acp::channel::{Delivery, LaneChannel, TurnEvent, TurnReceipt};
 use boop_proc::supervise::{record_parent_policy, LaneRun, ParentDeathPolicy};
 
 /// One temp HOME and store for this whole binary; the store is opened for a
@@ -76,6 +76,7 @@ const POLL_BUDGET: usize = 60;
 #[derive(Default)]
 struct OpenTurnChannel {
     polls: usize,
+    turns_started: usize,
 }
 
 impl LaneChannel for OpenTurnChannel {
@@ -83,12 +84,23 @@ impl LaneChannel for OpenTurnChannel {
         None
     }
     fn start_turn(&mut self, _text: &str) -> anyhow::Result<()> {
+        self.turns_started += 1;
+        self.polls = 0;
         Ok(())
     }
     fn steer(&mut self, _text: &str) -> anyhow::Result<Delivery> {
         Ok(Delivery::MidTurn)
     }
     fn next_event(&mut self, _timeout: Duration) -> anyhow::Result<Option<TurnEvent>> {
+        if self.turns_started == 1 {
+            return Ok(Some(TurnEvent::ok_with_receipt(
+                "completed",
+                TurnReceipt {
+                    text: "boop".to_owned(),
+                    tool_calls: 0,
+                },
+            )));
+        }
         self.polls += 1;
         if self.polls >= POLL_BUDGET {
             return Ok(Some(TurnEvent::ok("completed")));

@@ -15,7 +15,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
-use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent};
+use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent, TurnReceipt};
 
 pub struct ClaudeChannel {
     child: Child,
@@ -25,6 +25,7 @@ pub struct ClaudeChannel {
     /// Epoch millis of the newest line the claude child wrote. The stall
     /// watchdog reads this so a healthy long turn is not killed as silent.
     last_event_ms: Arc<AtomicU64>,
+    turn_receipt: TurnReceipt,
 }
 
 impl ClaudeChannel {
@@ -88,6 +89,7 @@ impl ClaudeChannel {
             events,
             conversation,
             last_event_ms,
+            turn_receipt: TurnReceipt::default(),
         })
     }
 
@@ -108,6 +110,7 @@ impl LaneChannel for ClaudeChannel {
     }
 
     fn start_turn(&mut self, text: &str) -> Result<()> {
+        self.turn_receipt = TurnReceipt::default();
         self.write_user(text)
     }
 
@@ -135,6 +138,7 @@ impl LaneChannel for ClaudeChannel {
             if let Some(id) = event.get("session_id").and_then(Value::as_str) {
                 self.conversation = id.to_owned();
             }
+            observe_turn(&mut self.turn_receipt, &event);
             if event.get("type").and_then(Value::as_str) != Some("result") {
                 continue;
             }
@@ -146,8 +150,16 @@ impl LaneChannel for ClaudeChannel {
                 .get("is_error")
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
+            let mut receipt = std::mem::take(&mut self.turn_receipt);
+            if receipt.text.is_empty() {
+                receipt.text = event
+                    .get("result")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned();
+            }
             return Ok(Some(match errored {
-                false => TurnEvent::ok(subtype),
+                false => TurnEvent::ok_with_receipt(subtype, receipt),
                 true => TurnEvent::failed(subtype),
             }));
         }
@@ -162,6 +174,31 @@ impl LaneChannel for ClaudeChannel {
         drop(std::mem::replace(&mut self.stdin, blackhole()?));
         self.child.wait().context("wait claude child")?;
         Ok(())
+    }
+}
+
+fn observe_turn(receipt: &mut TurnReceipt, event: &Value) {
+    if event.get("type").and_then(Value::as_str) != Some("assistant") {
+        return;
+    }
+    let Some(content) = event
+        .get("message")
+        .and_then(|message| message.get("content"))
+        .and_then(Value::as_array)
+    else {
+        return;
+    };
+    for block in content {
+        match block.get("type").and_then(Value::as_str) {
+            Some("text") => receipt.text.push_str(
+                block
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+            ),
+            Some("tool_use") => receipt.tool_calls += 1,
+            _ => {}
+        }
     }
 }
 

@@ -20,6 +20,14 @@ pub enum Delivery {
     NextTurn,
 }
 
+/// Observable output from one completed turn. Harness adapters populate this
+/// when their protocol exposes assistant text and tool calls.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TurnReceipt {
+    pub text: String,
+    pub tool_calls: u32,
+}
+
 impl Delivery {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -38,7 +46,10 @@ pub enum TurnEvent {
     /// from running to an end verdict.
     Started,
     /// The turn completed cleanly.
-    Done { detail: String },
+    Done {
+        detail: String,
+        receipt: Option<TurnReceipt>,
+    },
     /// The turn failed hard (not retryable).
     Failed { detail: String },
     /// The turn died on a provider flake the agent never saw; retryable.
@@ -49,6 +60,14 @@ impl TurnEvent {
     pub fn ok(detail: impl Into<String>) -> TurnEvent {
         TurnEvent::Done {
             detail: detail.into(),
+            receipt: None,
+        }
+    }
+
+    pub fn ok_with_receipt(detail: impl Into<String>, receipt: TurnReceipt) -> TurnEvent {
+        TurnEvent::Done {
+            detail: detail.into(),
+            receipt: Some(receipt),
         }
     }
 
@@ -68,7 +87,7 @@ impl TurnEvent {
     pub fn detail(&self) -> &str {
         match self {
             TurnEvent::Started => "started",
-            TurnEvent::Done { detail }
+            TurnEvent::Done { detail, .. }
             | TurnEvent::Failed { detail }
             | TurnEvent::Flaked { detail } => detail,
         }
@@ -82,6 +101,13 @@ impl TurnEvent {
     /// True only for a provider flake the agent never saw.
     pub fn retryable(&self) -> bool {
         matches!(self, TurnEvent::Flaked { .. })
+    }
+
+    pub fn receipt(&self) -> Option<&TurnReceipt> {
+        match self {
+            TurnEvent::Done { receipt, .. } => receipt.as_ref(),
+            _ => None,
+        }
     }
 }
 
@@ -176,5 +202,19 @@ mod tests {
         assert!(TurnEvent::flaked("flake").retryable());
         assert!(!TurnEvent::failed("boom").retryable());
         assert_eq!(TurnEvent::ok("done").detail(), "done");
+    }
+
+    #[test]
+    fn turn_event_carries_an_optional_output_receipt() {
+        let event = TurnEvent::ok_with_receipt(
+            "done",
+            TurnReceipt {
+                text: "boop".into(),
+                tool_calls: 0,
+            },
+        );
+        assert_eq!(event.receipt().unwrap().text, "boop");
+        assert_eq!(event.receipt().unwrap().tool_calls, 0);
+        assert!(TurnEvent::ok("done").receipt().is_none());
     }
 }

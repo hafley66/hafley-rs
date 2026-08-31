@@ -47,32 +47,40 @@ fn opened_session(
     let deadline = std::time::Instant::now() + wait;
     loop {
         let live = adapter.live().live_sessions().unwrap_or_default();
-        let newest = live
-            .into_iter()
-            .filter(|session| {
-                // A harness that records a start time decides by it: a thread
-                // another TUI keeps updating in the same cwd is not this one.
-                session
-                    .started_ms
-                    .map_or(session.observed_ms >= opened_ms, |started| {
-                        started >= opened_ms
-                    })
-                    && session
-                        .cwd
-                        .as_ref()
-                        .map(|dir| std::fs::canonicalize(dir).unwrap_or_else(|_| dir.clone()))
-                        .as_deref()
-                        == Some(canonical.as_path())
-            })
-            .max_by_key(|session| session.observed_ms);
-        if let Some(session) = newest {
-            return Some(session.session_id);
+        if let Some(session) = newest_opened_session(live, &canonical, opened_ms) {
+            return Some(session);
         }
         if std::time::Instant::now() >= deadline {
             return None;
         }
         std::thread::sleep(Duration::from_millis(250));
     }
+}
+
+fn newest_opened_session(
+    live: Vec<boop::live::LiveSession>,
+    canonical_cwd: &Path,
+    opened_ms: u64,
+) -> Option<String> {
+    live.into_iter()
+        .filter(|session| {
+            // A harness that records a start time decides by it: a thread
+            // another TUI keeps updating in the same cwd is not this one.
+            session
+                .started_ms
+                .map_or(session.observed_ms >= opened_ms, |started| {
+                    started >= opened_ms
+                })
+                && session
+                    .cwd
+                    .as_ref()
+                    .map(|dir| std::fs::canonicalize(dir).unwrap_or_else(|_| dir.clone()))
+                    .as_deref()
+                    == Some(canonical_cwd)
+                && session.scope != boop::live::LiveSessionScope::Child
+        })
+        .max_by_key(|session| session.observed_ms)
+        .map(|session| session.session_id)
 }
 
 /// Holds the pane in the terminal's alternate screen for a harness whose own
@@ -307,7 +315,7 @@ pub(crate) fn run_native_tui(
 
 #[cfg(test)]
 mod tests {
-    use super::{respawn_wanted, RESPAWN_MIN_UPTIME};
+    use super::{newest_opened_session, respawn_wanted, RESPAWN_MIN_UPTIME};
     use std::os::unix::process::ExitStatusExt;
     use std::process::ExitStatus;
     use std::time::Duration;
@@ -326,5 +334,48 @@ mod tests {
         let failed = ExitStatus::from_raw(256);
         assert!(!respawn_wanted(failed, 0, Duration::from_secs(1)));
         assert!(!respawn_wanted(failed, 3, Duration::from_secs(3600)));
+    }
+
+    fn session(
+        id: &str,
+        started_ms: u64,
+        scope: boop::live::LiveSessionScope,
+    ) -> boop::live::LiveSession {
+        boop::live::LiveSession {
+            harness: boop::harness::HarnessId::Codex,
+            session_id: id.to_owned(),
+            pid: None,
+            cwd: Some("/tmp/turn-attribution-parent".into()),
+            tmux_pane: None,
+            status: boop::live::LiveStatus::Unknown,
+            door: boop::live::DoorAddress::None,
+            observed_ms: started_ms,
+            started_ms: Some(started_ms),
+            scope,
+            parent_session: None,
+        }
+    }
+
+    #[test]
+    fn a_guardian_started_111ms_later_does_not_take_the_parent_pane() {
+        let root = session(
+            "01a053e4-d12c-parent",
+            1_788_113_899_820,
+            boop::live::LiveSessionScope::Root,
+        );
+        let guardian = session(
+            "01a053e4-d19b-guardian",
+            1_788_113_899_931,
+            boop::live::LiveSessionScope::Child,
+        );
+        assert_eq!(
+            newest_opened_session(
+                vec![root, guardian],
+                std::path::Path::new("/tmp/turn-attribution-parent"),
+                1_788_113_899_000,
+            )
+            .as_deref(),
+            Some("01a053e4-d12c-parent")
+        );
     }
 }

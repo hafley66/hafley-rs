@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Once;
 use std::time::Duration;
 
-use boop_acp::channel::{Delivery, LaneChannel, TurnEvent};
+use boop_acp::channel::{Delivery, LaneChannel, TurnEvent, TurnReceipt};
 use boop_proc::supervise::{LaneRun, EXITED_WITHOUT_COMPLETION, RETRYING, RETRY_BUDGET_EXHAUSTED};
 
 /// One temp HOME and store for this whole binary, so the mood lookup inside a
@@ -47,6 +47,15 @@ impl LaneChannel for FlakingChannel {
         Ok(Delivery::MidTurn)
     }
     fn next_event(&mut self, _timeout: Duration) -> anyhow::Result<Option<TurnEvent>> {
+        if self.turns == 1 {
+            return Ok(Some(TurnEvent::ok_with_receipt(
+                "completed",
+                TurnReceipt {
+                    text: "boop".to_owned(),
+                    tool_calls: 0,
+                },
+            )));
+        }
         Ok(Some(TurnEvent::flaked("aborted stream")))
     }
     fn close(&mut self) -> anyhow::Result<()> {
@@ -55,19 +64,32 @@ impl LaneChannel for FlakingChannel {
 }
 
 /// A harness that completes its brief turn and stops.
-struct DoneChannel;
+#[derive(Default)]
+struct DoneChannel {
+    turns: usize,
+}
 
 impl LaneChannel for DoneChannel {
     fn conversation_id(&self) -> Option<String> {
         None
     }
     fn start_turn(&mut self, _text: &str) -> anyhow::Result<()> {
+        self.turns += 1;
         Ok(())
     }
     fn steer(&mut self, _text: &str) -> anyhow::Result<Delivery> {
         Ok(Delivery::MidTurn)
     }
     fn next_event(&mut self, _timeout: Duration) -> anyhow::Result<Option<TurnEvent>> {
+        if self.turns == 1 {
+            return Ok(Some(TurnEvent::ok_with_receipt(
+                "completed",
+                TurnReceipt {
+                    text: "boop".to_owned(),
+                    tool_calls: 0,
+                },
+            )));
+        }
         Ok(Some(TurnEvent::ok("completed")))
     }
     fn close(&mut self) -> anyhow::Result<()> {
@@ -135,7 +157,10 @@ fn each_failure_kind_reaches_the_parent_exactly_once() {
     let exit_code = boop_proc::supervise::run(lane_run(&dir), &mut channel).unwrap();
 
     assert_eq!(exit_code, 1);
-    assert_eq!(channel.turns, 6, "the brief turn plus five resumes");
+    assert_eq!(
+        channel.turns, 7,
+        "the startup acknowledgment, brief turn, and five resumes"
+    );
     assert_eq!(count(&dir, RETRYING), 1);
     assert_eq!(count(&dir, RETRY_BUDGET_EXHAUSTED), 1);
     assert_eq!(count(&dir, EXITED_WITHOUT_COMPLETION), 1);
@@ -166,7 +191,7 @@ fn a_clean_completion_hails_nothing_but_its_rc() {
     parented(&dir);
     let lane = lane_run(&dir);
     std::thread::spawn(move || {
-        let _ = boop_proc::supervise::run(lane, &mut DoneChannel);
+        let _ = boop_proc::supervise::run(lane, &mut DoneChannel::default());
     });
 
     wait_for(|| count(&dir, "result") == 1, Duration::from_secs(5));

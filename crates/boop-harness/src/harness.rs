@@ -60,6 +60,81 @@ pub enum MailPolicy {
     Keystrokes,
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct TerminalInputRegion {
+    pub start: usize,
+    pub end: usize,
+}
+
+/// The bottom composer grammar drawn by one native TUI. The detector returns
+/// indices into the supplied visible-row slice and carries no state between
+/// frames, so a resize or submit collapse is measured again from current rows.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum TuiComposer {
+    Claude,
+    Codex,
+    Kimi,
+    Opencode,
+    None,
+}
+
+impl TuiComposer {
+    pub fn input_region(self, rows: &[&str]) -> Option<TerminalInputRegion> {
+        match self {
+            TuiComposer::Codex => {
+                let end = rows.iter().rposition(|row| {
+                    let row = row.trim();
+                    row.contains(" · ")
+                        && (row.contains("Approve for me")
+                            || row.contains(" changes")
+                            || row.contains("Context"))
+                })?;
+                let start = rows[..end]
+                    .iter()
+                    .rposition(|row| row.trim_start().starts_with('›'))?;
+                Some(TerminalInputRegion { start, end })
+            }
+            TuiComposer::Claude => {
+                let border = |row: &&str| {
+                    let row = row.trim();
+                    row.chars().count() >= 8 && row.chars().all(|ch| matches!(ch, '─' | '━' | '═'))
+                };
+                let end = rows.iter().rposition(border)?;
+                let start = rows[..end].iter().rposition(border)?;
+                rows[start + 1..end]
+                    .iter()
+                    .any(|row| row.trim_start().starts_with('❯'))
+                    .then_some(TerminalInputRegion { start, end })
+            }
+            TuiComposer::Kimi => {
+                let end = rows
+                    .iter()
+                    .rposition(|row| row.trim_start().starts_with('╰'))?;
+                let start = rows[..end]
+                    .iter()
+                    .rposition(|row| row.trim_start().starts_with('╭'))?;
+                Some(TerminalInputRegion { start, end })
+            }
+            TuiComposer::Opencode => {
+                let end = rows
+                    .iter()
+                    .rposition(|row| row.trim_start().starts_with("╹▀"))?;
+                let mut start = end;
+                while start > 0 {
+                    let prior = rows[start - 1].trim_start();
+                    if prior.is_empty() || prior.starts_with('┃') {
+                        start -= 1;
+                    } else {
+                        break;
+                    }
+                }
+                (start < end).then_some(TerminalInputRegion { start, end })
+            }
+            TuiComposer::None => None,
+        }
+    }
+}
+
 /// One WARN per unprojected record kind per process. A codex session writes
 /// thousands of records of a single unprojected kind, and every WARN reaches
 /// the pane the harness TUI is drawing in; the raw-json row keeps the record
@@ -164,6 +239,14 @@ pub trait Harness: Send + Sync {
     /// What this harness declares about itself. Every branch that used to
     /// compare a harness name reads one field here.
     fn capabilities(&self) -> &'static Capabilities;
+
+    fn tui_composer(&self) -> TuiComposer {
+        TuiComposer::None
+    }
+
+    fn terminal_input_region(&self, rows: &[&str]) -> Option<TerminalInputRegion> {
+        self.tui_composer().input_region(rows)
+    }
 
     /// This harness's own live-session registry: the file, database or server
     /// it writes when a TUI is running.
@@ -446,5 +529,68 @@ mod supervisor_command_tests {
             ..spec()
         });
         assert!(!empty.contains("--bin"), "{empty}");
+    }
+}
+
+#[cfg(test)]
+mod tui_composer_tests {
+    use super::{TerminalInputRegion, TuiComposer};
+
+    #[test]
+    fn codex_finds_a_dynamic_multiline_composer_above_its_footer() {
+        let rows = [
+            "• Prior assistant output",
+            "",
+            "› first pasted line",
+            "  second pasted line",
+            "  third pasted line",
+            "",
+            "gpt-5.6-sol · ~/projects · Approve for me · Context 41%",
+        ];
+        assert_eq!(
+            TuiComposer::Codex.input_region(&rows),
+            Some(TerminalInputRegion { start: 2, end: 6 })
+        );
+    }
+
+    #[test]
+    fn claude_finds_the_prompt_between_the_last_border_pair() {
+        let rows = [
+            "⏺ assistant output",
+            "────────────────────────",
+            "❯ first line",
+            "  second line",
+            "────────────────────────",
+            "Opus 5  ctx 24%",
+        ];
+        assert_eq!(
+            TuiComposer::Claude.input_region(&rows),
+            Some(TerminalInputRegion { start: 1, end: 4 })
+        );
+    }
+
+    #[test]
+    fn kimi_and_opencode_report_their_bottom_bordered_composers() {
+        assert_eq!(
+            TuiComposer::Kimi.input_region(&[
+                "assistant output",
+                "╭────────────────────╮",
+                "│ > line one         │",
+                "│   line two         │",
+                "╰────────────────────╯",
+                "K3 thinking: max",
+            ]),
+            Some(TerminalInputRegion { start: 1, end: 4 })
+        );
+        assert_eq!(
+            TuiComposer::Opencode.input_region(&[
+                "assistant output",
+                "┃ first input line",
+                "┃ second input line",
+                "╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
+                "/repo  44%",
+            ]),
+            Some(TerminalInputRegion { start: 1, end: 3 })
+        );
     }
 }

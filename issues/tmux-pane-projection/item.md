@@ -1,10 +1,14 @@
 ---
 created: 2026-08-20
-updated: 2026-08-20
+updated: 2026-08-30
 type: feature
-status: open
+status: obsolete
 priority: high
 labels: [domain-boop, component-tmux, intent-observability]
+related: ['@terminal-snapshot-boundary']
+closed: 2026-08-30
+disposition_note: Superseded by the host-neutral TerminalSnapshot seam and parity scope in @terminal-snapshot-boundary.
+disposition_reason: superseded
 ---
 
 # Project tmux panes onto Boop turns for xterm overlays
@@ -299,3 +303,9 @@ callers. Snapshot observation is additive. The Instant proof script at
 `/Users/chrishafley/projects/instant/scripts/0_tmux-readonly-proof.sh`
 already demonstrates 600 read queries with identical before/after state and
 should be ported into the isolated Rust harness.
+
+## Comments
+
+### 2026-08-31T01:23:09Z · @intake
+
+Obsolete: Superseded by the host-neutral TerminalSnapshot seam and parity scope in @terminal-snapshot-boundary. (superseded by terminal-snapshot-boundary)
