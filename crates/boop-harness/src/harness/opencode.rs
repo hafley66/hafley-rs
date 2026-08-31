@@ -1,7 +1,7 @@
 //! The opencode adapter. opencode writes no transcript file, so this tails
 //! `message.rowid` in its SQLite store, read-only; opencode owns that store.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -207,15 +207,16 @@ impl Harness for Opencode {
 
     fn ingest(&self, store: &Store, session: &SessionRef, from: u64) -> Result<Ingested> {
         let connection = open_read_only(&session.path)?;
+        let mut stat = SyncStat::default();
+        repair_empty_messages(store, &connection, &session.session_id, &mut stat)?;
         let messages = messages_after(&connection, &session.session_id, from)?;
         if messages.is_empty() {
             return Ok(Ingested {
-                stat: SyncStat::default(),
+                stat,
                 next_cursor: from,
             });
         }
         let mut turn = store.begin_walk(&session.session_id)?;
-        let mut stat = SyncStat::default();
         let mut current_message = 0;
         let mut active_message = false;
         let mut first_turn = None;
@@ -604,6 +605,21 @@ pub struct Part {
 }
 
 impl Part {
+    fn readable_body(&self) -> Option<String> {
+        match self.kind.as_str() {
+            "text" => (!self.text.is_empty()).then(|| self.text.clone()),
+            "tool" => Some(self.tool_body()),
+            "reasoning" => (!self.text.is_empty()).then(|| format!("reasoning: {}", self.text)),
+            "patch" => Some(self.patch_body()),
+            "file" => {
+                let path = self.file_path();
+                (!path.is_empty()).then(|| format!("file {path}"))
+            }
+            kind if STRUCTURAL_PARTS.contains(&kind) => None,
+            _ => Some(self.gap_body()),
+        }
+    }
+
     /// The files one step wrote, named by the snapshot that holds them.
     fn patch_body(&self) -> String {
         let files = self
@@ -743,8 +759,15 @@ fn open_read_only(path: &std::path::Path) -> Result<Connection> {
 /// Messages after a rowid cursor. rowid is the resume point because it rises
 /// with insertion order and two messages can share a millisecond.
 fn messages_after(connection: &Connection, session: &str, after: u64) -> Result<Vec<Message>> {
+    let tracks_message_updates = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('message') WHERE name = 'time_updated')",
+        [],
+        |row| row.get::<_, bool>(0),
+    )?;
     let mut statement = connection.prepare(
-        "SELECT rowid, id, time_created, data FROM message
+        "SELECT rowid, id, time_created, data,
+                EXISTS(SELECT 1 FROM part WHERE part.message_id = message.id)
+         FROM message
          WHERE session_id = ?1 AND rowid > ?2 ORDER BY rowid",
     )?;
     let rows = statement.query_map(rusqlite::params![session, after as i64], |row| {
@@ -753,17 +776,28 @@ fn messages_after(connection: &Connection, session: &str, after: u64) -> Result<
             row.get::<_, String>(1)?,
             row.get::<_, i64>(2)?,
             row.get::<_, String>(3)?,
+            row.get::<_, bool>(4)?,
         ))
     })?;
     let mut out = Vec::new();
     for row in rows {
-        let (rowid, id, ts, raw) = row?;
+        let (rowid, id, ts, raw, has_parts) = row?;
         let data: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
         let role = data
             .get("role")
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_owned();
+        let assistant_complete = data
+            .get("time")
+            .and_then(|time| time.get("completed"))
+            .and_then(Value::as_i64)
+            .is_some()
+            || data.get("finish").and_then(Value::as_str).is_some()
+            || data.get("error").is_some_and(|error| !error.is_null());
+        if !has_parts || (tracks_message_updates && role == "assistant" && !assistant_complete) {
+            break;
+        }
         out.push(Message {
             rowid: rowid as u64,
             id,
@@ -773,6 +807,73 @@ fn messages_after(connection: &Connection, session: &str, after: u64) -> Result<
         });
     }
     Ok(out)
+}
+
+/// Older projections attached usage to an empty assistant turn before
+/// OpenCode had written that message's streamed parts. Fill those rows by the
+/// exact source message id, preserving turn ordinals and user-authored state.
+fn repair_empty_messages(
+    store: &Store,
+    connection: &Connection,
+    session_id: &str,
+    stat: &mut SyncStat,
+) -> Result<()> {
+    let empty_ids = store
+        .empty_turn_request_ids(session_id)?
+        .into_iter()
+        .collect::<HashSet<_>>();
+    if empty_ids.is_empty() {
+        return Ok(());
+    }
+    let mut statement = connection.prepare(
+        "SELECT rowid, id, time_created, data FROM message
+         WHERE session_id = ?1 ORDER BY rowid",
+    )?;
+    let rows = statement.query_map([session_id], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, i64>(2)?,
+            row.get::<_, String>(3)?,
+        ))
+    })?;
+    let mut messages = Vec::new();
+    for row in rows {
+        let (rowid, id, ts, raw) = row?;
+        if !empty_ids.contains(&id) {
+            continue;
+        }
+        let data = serde_json::from_str(&raw).unwrap_or(Value::Null);
+        messages.push(Message {
+            rowid: rowid as u64,
+            id,
+            ts: ts as u64,
+            role: data
+                .get("role")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_owned(),
+            data,
+        });
+    }
+    if messages.is_empty() {
+        return Ok(());
+    }
+    let mut bodies = vec![Vec::<String>::new(); messages.len()];
+    visit_parts_for_messages(connection, &messages, |message_index, part| {
+        if let Some(body) = part.readable_body() {
+            bodies[message_index].push(body);
+        }
+        Ok(())
+    })?;
+    for (message, parts) in messages.iter().zip(bodies) {
+        if parts.is_empty() {
+            continue;
+        }
+        stat.written +=
+            store.fill_empty_turn_for_request(session_id, &message.id, &parts.join("\n\n"))? as u64;
+    }
+    Ok(())
 }
 
 /// Visit every part for a message batch in one statement, retaining message
@@ -884,10 +985,11 @@ mod tests {
     use rusqlite::trace::{TraceEvent, TraceEventCodes};
 
     use super::{
-        launch_command, messages_after, sessions_from, visit_parts_for_messages, Opencode, Part,
+        launch_command, messages_after, repair_empty_messages, session_from, sessions_from,
+        visit_parts_for_messages, Opencode, Part,
     };
     use crate::harness::{sync_session, Harness, KnownSessions, SpawnSpec};
-    use boop_store::ident::{Store, TurnQuery};
+    use boop_store::ident::{Store, TurnQuery, UsageRow};
     use boop_store::testing::TempRepo;
 
     static PART_SELECTS: AtomicUsize = AtomicUsize::new(0);
@@ -1207,6 +1309,130 @@ mod tests {
             .collect();
         assert!(empty.is_empty(), "empty projected bodies: {empty:#?}");
         drop(store);
+        let _ = std::fs::remove_file(transcript);
+        let _ = std::fs::remove_file(store_path);
+    }
+
+    #[test]
+    fn streamed_assistant_waits_for_completion_and_legacy_empty_turn_repairs() {
+        let transcript = temp_db("streamed-transcript");
+        let store_path = temp_db("streamed-store");
+        let source = rusqlite::Connection::open(&transcript).unwrap();
+        source
+            .execute_batch(
+                "CREATE TABLE session (
+                   id TEXT PRIMARY KEY, directory TEXT, parent_id TEXT, slug TEXT, time_updated INTEGER
+                 );
+                 CREATE TABLE message (
+                   id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER,
+                   time_updated INTEGER, data TEXT
+                 );
+                 CREATE TABLE part (
+                   id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT,
+                   time_created INTEGER, time_updated INTEGER, data TEXT
+                 );
+                 INSERT INTO session VALUES ('streamed', '/tmp', NULL, 'streamed', 20);
+                 INSERT INTO message VALUES (
+                   'user-1', 'streamed', 10, 10,
+                   '{\"role\":\"user\",\"time\":{\"created\":10}}'
+                 );
+                 INSERT INTO part VALUES (
+                   'user-part', 'user-1', 'streamed', 10, 10,
+                   '{\"type\":\"text\",\"text\":\"question\"}'
+                 );
+                 INSERT INTO message VALUES (
+                   'assistant-1', 'streamed', 20, 20,
+                   '{\"role\":\"assistant\",\"modelID\":\"model\",\"tokens\":{\"input\":1,\"output\":0}}'
+                 );",
+            )
+            .unwrap();
+
+        let store = Store::open(store_path.clone()).unwrap();
+        let pending = session_from(&transcript, "streamed").unwrap().unwrap();
+        sync_session(&store, &Opencode, &pending).unwrap();
+        assert_eq!(store.begin_walk("streamed").unwrap(), 1);
+
+        source
+            .execute_batch(
+                "UPDATE message SET time_updated = 30, data =
+                   '{\"role\":\"assistant\",\"modelID\":\"model\",\"tokens\":{\"input\":1,\"output\":2},\"time\":{\"created\":20,\"completed\":30},\"finish\":\"stop\"}'
+                 WHERE id = 'assistant-1';
+                 INSERT INTO part VALUES (
+                   'assistant-part', 'assistant-1', 'streamed', 20, 30,
+                   '{\"type\":\"text\",\"text\":\"answer\"}'
+                 );
+                 UPDATE session SET time_updated = 30 WHERE id = 'streamed';",
+            )
+            .unwrap();
+        let complete = session_from(&transcript, "streamed").unwrap().unwrap();
+        sync_session(&store, &Opencode, &complete).unwrap();
+        let turns = store
+            .query_turns(&TurnQuery {
+                session: Some("streamed".to_owned()),
+                ..TurnQuery::default()
+            })
+            .unwrap();
+        assert_eq!(
+            turns
+                .iter()
+                .map(|turn| (
+                    turn["role"].as_str().unwrap(),
+                    turn["said"].as_str().unwrap()
+                ))
+                .collect::<Vec<_>>(),
+            vec![("user", "question"), ("assistant", "answer")]
+        );
+
+        store
+            .write_turn("streamed", 3, 40, "assistant", "")
+            .unwrap();
+        store
+            .write_usage(
+                "streamed",
+                3,
+                &UsageRow {
+                    ts: 40,
+                    message_id: "legacy-assistant",
+                    request_id: "",
+                    model: "model",
+                    service_tier: None,
+                    input_tokens: 1,
+                    output_tokens: 1,
+                    cache_create_5m_tokens: 0,
+                    cache_create_1h_tokens: 0,
+                    cache_read_tokens: 0,
+                    is_sidechain: false,
+                    cost_usd_recorded: None,
+                },
+            )
+            .unwrap();
+        source
+            .execute_batch(
+                "INSERT INTO message VALUES (
+                   'legacy-assistant', 'streamed', 40, 50,
+                   '{\"role\":\"assistant\",\"modelID\":\"model\",\"tokens\":{\"input\":1,\"output\":1},\"time\":{\"created\":40,\"completed\":50},\"finish\":\"stop\"}'
+                 );
+                 INSERT INTO part VALUES (
+                   'legacy-part', 'legacy-assistant', 'streamed', 40, 50,
+                   '{\"type\":\"text\",\"text\":\"recovered answer\"}'
+                 );",
+            )
+            .unwrap();
+        let mut stat = boop_store::ident::SyncStat::default();
+        repair_empty_messages(&store, &source, "streamed", &mut stat).unwrap();
+        assert_eq!(stat.written, 1);
+        let repaired = store
+            .query_turns(&TurnQuery {
+                session: Some("streamed".to_owned()),
+                turn_from: Some(3),
+                turn_to: Some(3),
+                ..TurnQuery::default()
+            })
+            .unwrap();
+        assert_eq!(repaired[0]["said"], "recovered answer");
+
+        drop(store);
+        drop(source);
         let _ = std::fs::remove_file(transcript);
         let _ = std::fs::remove_file(store_path);
     }

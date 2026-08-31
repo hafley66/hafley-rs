@@ -7,7 +7,7 @@
 //! because it is never a key. `boop sync` projects transcripts into these
 //! tables; `boop follow` is the same projection in a poll loop.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -2608,6 +2608,69 @@ impl Store {
         said: &str,
     ) -> Result<usize> {
         self.add_turn(session, turn, ts, role, said)
+    }
+
+    /// Fill the legacy empty assistant turn attached to one source request.
+    /// OpenCode used to advance its message cursor before streamed parts
+    /// arrived, leaving the usage-bearing turn permanently empty.
+    pub fn fill_empty_turn_for_request(
+        &self,
+        session: &str,
+        message_id: &str,
+        said: &str,
+    ) -> Result<usize> {
+        let sid = self.session_id(session)?;
+        Ok(self.connection.execute(
+            "UPDATE agent_turn SET said = ?3
+             WHERE session_id = ?1 AND COALESCE(said, '') = ''
+               AND turn = (
+                 SELECT usage.turn
+                 FROM agent_usage usage
+                 JOIN dict_request request ON request.id = usage.request_ref
+                 WHERE usage.session_id = ?1 AND request.message_id = ?2
+               )",
+            params![sid, message_id, said],
+        )?)
+    }
+
+    /// Source request ids whose usage row is attached to an empty turn.
+    pub fn empty_turn_request_ids(&self, session: &str) -> Result<Vec<String>> {
+        let sid = self.session_id(session)?;
+        let mut statement = self.connection.prepare_cached(
+            "SELECT request.message_id
+             FROM agent_turn turn
+             JOIN agent_usage usage
+               ON usage.session_id = turn.session_id AND usage.turn = turn.turn
+             JOIN dict_request request ON request.id = usage.request_ref
+             WHERE turn.session_id = ?1 AND COALESCE(turn.said, '') = ''",
+        )?;
+        let rows = statement.query_map([sid], |row| row.get::<_, String>(0))?;
+        let mut ids = Vec::new();
+        for row in rows {
+            ids.push(row?);
+        }
+        Ok(ids)
+    }
+
+    /// Sessions with an empty turn attached to a source request. OpenCode's
+    /// adapter uses this one query to schedule legacy repair without probing
+    /// every discovered session independently.
+    pub fn sessions_with_empty_request_turns(&self) -> Result<HashSet<String>> {
+        let mut statement = self.connection.prepare_cached(
+            "SELECT DISTINCT session.value
+             FROM agent_turn turn
+             JOIN agent_usage usage
+               ON usage.session_id = turn.session_id AND usage.turn = turn.turn
+             JOIN dict_request request ON request.id = usage.request_ref
+             JOIN dict_session session ON session.id = turn.session_id
+             WHERE COALESCE(turn.said, '') = '' AND request.message_id LIKE 'msg_%'",
+        )?;
+        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+        let mut sessions = HashSet::new();
+        for row in rows {
+            sessions.insert(row?);
+        }
+        Ok(sessions)
     }
 
     pub fn write_tool_fact(

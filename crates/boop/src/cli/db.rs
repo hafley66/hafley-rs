@@ -446,6 +446,7 @@ pub(crate) fn sync_all_budgeted(
     phases.stale_check_ms = mark.elapsed().as_millis();
     let mark = std::time::Instant::now();
     let known = store.known_sessions()?;
+    let repair_sessions = store.sessions_with_empty_request_turns()?;
     phases.known_ms = mark.elapsed().as_millis();
     phases.known = known.len();
     let mut pending = Vec::new();
@@ -474,7 +475,9 @@ pub(crate) fn sync_all_budgeted(
         }
         leg.backfill_ms = mark.elapsed().as_millis();
         for session in candidates {
-            if session_needs_sync(&session, &known) {
+            let needs_legacy_repair = adapter.id() == boop::harness::HarnessId::Opencode
+                && repair_sessions.contains(&session.session_id);
+            if session_needs_sync(&session, &known) || needs_legacy_repair {
                 leg.pending += 1;
                 pending.push((adapter.as_ref(), session));
             }
@@ -697,7 +700,9 @@ pub(crate) fn session_needs_sync(
 ) -> bool {
     known
         .get_session(&session.path, &session.session_id)
-        .is_none_or(|known| known.cursor != session.size)
+        .is_none_or(|known| {
+            known.cursor != session.size || known.modified_ms != session.modified_ms
+        })
 }
 
 pub(crate) fn sync_session_pid(
