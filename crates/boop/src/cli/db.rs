@@ -737,12 +737,12 @@ pub(crate) fn run_follow(registry: &Registry) -> Result<()> {
     }
 }
 
-/// One bounded resident-wrapper pass for a native parent route. It discovers
-/// only that route's child transcripts, advances their stored cursors, and
-/// flushes the committed completion outbox through the supplied native
-/// delivery callback. Its route carries the exact parent thread obtained from
-/// the managed app-server before the native TUI started. A child transcript
-/// cannot bind or alter a parent route.
+/// One bounded resident-wrapper pass for a native parent route. It advances
+/// the exact parent transcript displayed in the pane plus that route's child
+/// transcripts, then flushes the committed completion outbox through the
+/// supplied native delivery callback. Its route carries the exact parent
+/// thread obtained from the managed app-server before the native TUI started.
+/// A child transcript cannot bind or alter a parent route.
 pub(crate) fn sync_native_child_route_once(
     store: &ident::Store,
     known: &mut boop::harness::KnownSessions,
@@ -794,10 +794,10 @@ fn sync_native_child_route_with_parent(
         write_route(dir, route_name, enriched.clone())?;
         routes.insert(route_name.into(), enriched);
     }
-    for session in candidates
-        .iter()
-        .filter(|session| session.parent.as_deref() == Some(parent_session.as_str()))
-    {
+    for session in candidates.iter().filter(|session| {
+        session.session_id == parent_session
+            || session.parent.as_deref() == Some(parent_session.as_str())
+    }) {
         if !session_needs_sync(session, known) {
             continue;
         }
@@ -1634,16 +1634,11 @@ mod tests {
 
         fn ingest(
             &self,
-            _store: &ident::Store,
+            store: &ident::Store,
             session: &SessionRef,
             from: u64,
         ) -> Result<boop::harness::Ingested> {
-            let mut file = std::fs::File::open(&session.path)?;
-            let result = boop::tail::read_complete_lines(&mut file, from)?;
-            Ok(boop::harness::Ingested {
-                stat: ident::SyncStat::default(),
-                next_cursor: result.next_offset,
-            })
+            boop::harness::codex::Codex.ingest(store, session, from)
         }
 
         fn observe_native_children(
@@ -1983,6 +1978,89 @@ mod tests {
                 .get("resident-parent")
                 .and_then(|route| route.session_id.as_deref()),
             Some("parent-session")
+        );
+    }
+
+    #[test]
+    fn resident_native_poller_projects_appended_parent_assistant_turns() {
+        use std::io::Write;
+
+        const PARENT: &str = "01a0550d-6c91-75c0-ac24-5af571c76193";
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let transcript = dir.join("codex-parent.jsonl");
+        std::fs::write(
+            &transcript,
+            r#"{"timestamp":"2026-08-31T12:00:00.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"first visible assistant message"}],"phase":"final_answer"}}
+"#,
+        )
+        .unwrap();
+        let mut route = route_with(None);
+        route.kind = "coordinator".into();
+        route.harness = Some(HarnessId::Codex);
+        route.cwd = Some("/resident".into());
+        route.session_id = Some(PARENT.into());
+        write_route(&dir, "codex-parent", route).unwrap();
+        let watcher = CodexFixtureHarness {
+            session: SessionRef {
+                harness: HarnessId::Codex,
+                session_id: PARENT.into(),
+                nickname: PARENT.into(),
+                path: transcript.clone(),
+                cwd: Some("/resident".into()),
+                git_branch: None,
+                modified_ms: 0,
+                size: 0,
+                tmux: None,
+                tmux_socket: None,
+                parent: None,
+            },
+        };
+        let store = ident::Store::open(dir.join("boop.db")).unwrap();
+        let mut known = store.known_sessions().unwrap();
+        sync_native_child_route_once(&store, &mut known, &watcher, "codex-parent", &dir, |_| {
+            Ok(())
+        })
+        .unwrap();
+
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&transcript)
+            .unwrap();
+        file.write_all(
+            concat!(
+                r#"{"timestamp":"2026-08-31T12:00:01.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"second visible assistant message"}],"phase":"final_answer"}}"#,
+                "\n",
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+        drop(file);
+        sync_native_child_route_once(&store, &mut known, &watcher, "codex-parent", &dir, |_| {
+            Ok(())
+        })
+        .unwrap();
+
+        let rows = store
+            .turn_rows(&ident::TurnQuery {
+                session: Some(PARENT.into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(
+            rows.iter()
+                .map(|row| (row.turn, row.role.as_str(), row.said.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                (1, "assistant", "first visible assistant message"),
+                (2, "assistant", "second visible assistant message"),
+            ]
+        );
+        assert_eq!(
+            store
+                .cursor_offset(PARENT, &transcript.display().to_string())
+                .unwrap(),
+            std::fs::metadata(&transcript).unwrap().len()
         );
     }
 
