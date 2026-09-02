@@ -329,10 +329,15 @@ enum ShellKind {
 }
 
 /// Outside tmux there is no pane to key the route on, so each wrapper runs
-/// the bare binary instead of failing on the missing TMUX_PANE.
+/// the bare binary; codex first registers codex-<dir> and stamps BOOP_SESSION.
 const BASH_SHELL_INIT: &str = r#"codex() {
-  [ -n "$TMUX_PANE" ] || { command codex "$@"; return; }
-  command boop tui codex --cwd "$PWD" -- "$@"
+  if [ -n "$TMUX_PANE" ]; then
+    command boop tui codex --cwd "$PWD" -- "$@"
+    return
+  fi
+  local name="codex-${PWD##*/}"
+  command boop beep agent register --kind coordinator "$name" >/dev/null 2>&1
+  BOOP_SESSION="$name" command codex "$@"
 }
 
 claude() {

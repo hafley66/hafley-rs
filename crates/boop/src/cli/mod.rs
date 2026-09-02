@@ -307,8 +307,10 @@ ME: the caller's own conversation.
 SHELL: `eval \"$(boop shell-init bash)\"` defines codex, claude, ccz, kimi and
   opencode as functions that run `boop tui <harness> --cwd $PWD -- \"$@\"`,
   registering the pane. Outside tmux (no TMUX_PANE) each function runs the bare
-  binary. Every wrapped TUI logs to ~/.agent/lanes/<harness>-<pane>/supervise.log
-  and never into its own screen. `codex resume` with no id opens the picker.
+  binary; codex first registers a pane-less coordinator route codex-<dir> and
+  stamps BOOP_SESSION, so its session keeps a boop id. Every wrapped TUI logs
+  to ~/.agent/lanes/<harness>-<pane>/supervise.log and never into its own
+  screen. `codex resume` with no id opens the picker.
 
 IDENTITY: two rungs only: `--as <name>`, then the BOOP_SESSION env stamp.
   `boop tui` writes the stamp; a session that predates it passes
