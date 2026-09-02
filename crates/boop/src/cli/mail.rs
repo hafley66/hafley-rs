@@ -263,7 +263,10 @@ pub(crate) fn deliver_hail(
         if let Some(reply) = landing.reply.as_deref().filter(|text| !text.is_empty()) {
             println!("{reply}");
         }
-        println!("{}", landing.line(&message.id, to, &harness_id));
+        println!(
+            "{}",
+            landing.line(&message.id, &message.from, to, &harness_id)
+        );
         return Ok(());
     }
     // The door rung is the only line that names a harness; a route naming none
@@ -283,7 +286,10 @@ pub(crate) fn deliver_hail(
     if landing.rung.carried_the_body() {
         append_acks(dir, std::slice::from_ref(message))?;
     }
-    println!("{}", landing.line(&message.id, to, &harness_id));
+    println!(
+        "{}",
+        landing.line(&message.id, &message.from, to, &harness_id)
+    );
     confirm_transition_recorded(&store, &message.id, to)?;
     Ok(())
 }
@@ -500,20 +506,29 @@ fn fan_out_to_children(
         match reach {
             ChildReach::Hook => {
                 landed += 1;
-                println!("landed {name} {} (hook inbox)", message.id);
+                println!("landed {name} {} from {} (hook inbox)", message.id, caller);
             }
             ChildReach::Supervisor => {
                 landed += 1;
-                println!("landed {name} {} (lane supervisor)", message.id);
+                println!(
+                    "landed {name} {} from {} (lane supervisor)",
+                    message.id, caller
+                );
             }
             ChildReach::Pane => match deliver_through_door(registry, route, &message.body)? {
                 Delivered::Injected => {
                     landed += 1;
-                    println!("landed {name} {} (through the door)", message.id);
+                    println!(
+                        "landed {name} {} from {} (through the door)",
+                        message.id, caller
+                    );
                 }
                 Delivered::QueuedForTurnBoundary => {
                     landed += 1;
-                    println!("landed {name} {} (next turn boundary)", message.id);
+                    println!(
+                        "landed {name} {} from {} (next turn boundary)",
+                        message.id, caller
+                    );
                 }
                 Delivered::Unreachable(why) => {
                     unreachable += 1;

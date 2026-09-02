@@ -113,24 +113,24 @@ impl Landing {
     /// The one line a send verb prints: which rung took it, for whom, and the
     /// message id the reply will name. `harness` names the door when one
     /// answered and reads `harness` for a route that names none.
-    pub fn line(&self, message_id: &str, to: &str, harness: &str) -> String {
+    pub fn line(&self, message_id: &str, from: &str, to: &str, harness: &str) -> String {
         match self.rung {
-            Rung::Door => format!("delivered {message_id} -> {to} through the {harness} door"),
-            Rung::Acpx => format!("delivered {message_id} -> {to} through the acpx queue"),
+            Rung::Door => format!("delivered {message_id} from {from} -> {to} through the {harness} door"),
+            Rung::Acpx => format!("delivered {message_id} from {from} -> {to} through the acpx queue"),
             Rung::TurnBoundary => format!(
-                "held {message_id} -> {to} for the next turn boundary ({})",
+                "held {message_id} from {from} -> {to} for the next turn boundary ({})",
                 self.detail
             ),
             Rung::HookInbox => format!(
-                "queued {message_id} -> {to} in the installed inbox hook ({})",
+                "queued {message_id} from {from} -> {to} in the installed inbox hook ({})",
                 self.detail
             ),
             Rung::PanePaste => format!(
-                "pasted {message_id} -> {to} into its pane ({})",
+                "pasted {message_id} from {from} -> {to} into its pane ({})",
                 self.detail
             ),
             Rung::Mailbox => format!(
-                "held {message_id} -> {to} in the mailbox ({}); the supervisor retries it",
+                "held {message_id} from {from} -> {to} in the mailbox ({}); the supervisor retries it",
                 self.detail
             ),
         }
@@ -571,8 +571,8 @@ mod tests {
         assert_eq!(landing.rung, Rung::Door, "{landing:?}");
         assert!(landing.rung.carried_the_body());
         assert_eq!(
-            landing.line("m-1", "claude-77", "claude"),
-            "delivered m-1 -> claude-77 through the claude door"
+            landing.line("m-1", "coordinator", "claude-77", "claude"),
+            "delivered m-1 from coordinator -> claude-77 through the claude door"
         );
 
         let (_, history) = store

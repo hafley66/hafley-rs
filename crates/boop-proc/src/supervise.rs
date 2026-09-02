@@ -1629,7 +1629,7 @@ fn deliver_outbound(lane: &LaneRun, row: &bus::Message) -> Option<String> {
                 rung = landing.rung.as_str(),
                 "lane outbound row delivered"
             );
-            Some(landing.line(&row.id, &row.to, "harness"))
+            Some(landing.line(&row.id, &row.from, &row.to, "harness"))
         }
         Err(error) => {
             warn!(lane = lane.lane, message_id = row.id, error = %error, "outbound delivery failed");
