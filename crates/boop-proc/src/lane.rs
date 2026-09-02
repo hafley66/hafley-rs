@@ -24,7 +24,7 @@ const DEFAULT_SPAWN_HARNESS: HarnessId = HarnessId::Opencode;
 
 /// Model-family prefix -> owning harness on a flat-rate plan. The default ban
 /// table; config `opencode-banned` wins when set.
-const PLAN_FAMILY_TO_HARNESS: [(&str, &str); 10] = [
+const PLAN_FAMILY_TO_HARNESS: [(&str, &str); 9] = [
     ("gpt", "codex"),
     ("codex", "codex"),
     ("o3", "codex"),
@@ -34,7 +34,6 @@ const PLAN_FAMILY_TO_HARNESS: [(&str, &str); 10] = [
     ("sonnet", "claude"),
     ("haiku", "claude"),
     ("fable", "claude"),
-    ("gemini", "gemini"),
 ];
 
 /// Every name one spawn answers to.
@@ -1068,10 +1067,9 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("claude"), "{err}");
-        let err = harness_for_spawn(&registry, Some("opencode"), Some("google/gemini-3-pro"))
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("gemini"), "{err}");
+        // gemini is allowed through opencode (user 2026-09-02): only codex and claude are plan-owned
+        let ok = harness_for_spawn(&registry, Some("opencode"), Some("google/gemini-3-pro"));
+        assert!(ok.is_ok(), "gemini must spawn through opencode: {ok:?}");
         assert_eq!(
             harness_for_spawn(
                 &registry,

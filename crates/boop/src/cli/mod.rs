@@ -322,8 +322,8 @@ IDENTITY: two rungs only: `--as <name>`, then the BOOP_SESSION env stamp.
 PRESETS: model spelling is presets only; `boop config presets` lists name,
   harness, model, effort, bin. Lane defaults: flash4 or pro4; luna for codex
   (sol only on an explicit ask); k3 for kimi; glm53 for claude through z.ai
-  (bin ccz). The codex/gpt, claude and gemini families through opencode are
-  refused at spawn: each has a flat-rate harness and opencode bills them metered.
+  (bin ccz). The codex/gpt and claude families through opencode are refused at
+  spawn: each has a flat-rate harness and opencode bills them metered. Gemini is allowed.
 
 LAWS:
   1 Every lane spawn goes through `lane create`; a bare tmux spawn leaves no

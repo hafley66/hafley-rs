@@ -1,5 +1,5 @@
 //! Every row of the preset table, spawned as a dry run against the real
-//! binary (issue presets-only-model-spelling: `luna` and `gem37` were both
+//! binary (issue presets-only-model-spelling: `luna` and `solx` (gpt through opencode) were both
 //! found only at spawn, one by an ACP model rejection and one by the bail).
 
 use std::collections::BTreeMap;
@@ -11,7 +11,7 @@ const TABLE: &str = include_str!("fixtures/preset_table.json");
 
 /// The one row whose harness refuses its model: no gemini harness exists and
 /// opencode would pay metered credit for the family.
-const REFUSED: &str = "gem37";
+const REFUSED: &str = "solx";
 
 #[derive(serde::Deserialize)]
 struct Row {
@@ -210,5 +210,5 @@ fn the_banned_preset_is_refused_by_name() {
     assert!(!output.status.success(), "{REFUSED} must not dry run");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("BANNED from opencode"), "{stderr}");
-    assert!(stderr.contains("gemini"), "{stderr}");
+    assert!(stderr.contains("codex"), "{stderr}");
 }

@@ -120,6 +120,10 @@
         "kimi-fast": {
             "harness": "kimi",
             "model": "kimi-code/kimi-for-coding-highspeed"
+        },
+        "solx": {
+            "harness": "opencode",
+            "model": "openrouter/openai/gpt-5.6-sol"
         }
     },
     "model-harness": {
