@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
@@ -19,6 +19,9 @@ use crate::cli::{mail_dir, write_route};
 /// registry. The route is written either way; an unresolved session leaves the
 /// `sessionId` field empty rather than carrying a guess.
 const SESSION_WAIT: Duration = Duration::from_secs(10);
+
+/// How often the wrapper re-pushes its route's held mail through the door.
+const DRAIN_EVERY: Duration = Duration::from_secs(5);
 
 /// Respawn ceiling for one wrapper process; past it a dying TUI is a defect
 /// to look at, never a loop to ride.
@@ -58,7 +61,7 @@ fn opened_session(
             opened_ms,
             prior_observations,
             Some(my_pane),
-            &claimed_sessions(dir, my_pane, &canonical),
+            &boop::mail::claimed_sessions(dir, Some(my_pane), &canonical),
         );
         if let Some(session) = picked {
             // The pane's own registry row is proof enough; a registry-derived
@@ -66,7 +69,7 @@ fn opened_session(
             let exact = live
                 .iter()
                 .any(|held| held.session_id == session && held.tmux_pane.as_deref() == Some(my_pane));
-            if exact || claim_open_session(dir, &session) {
+            if exact || boop::mail::claim_open_session(dir, &session) {
                 return Some(session);
             }
         }
@@ -131,66 +134,6 @@ fn newest_opened_session(
     });
     let session = resumed.next()?;
     resumed.next().is_none().then_some(session.session_id)
-}
-
-/// Sessions other registry routes already carry in one cwd. A second
-/// same-cwd wrapper must never bind a session a running pane owns.
-fn claimed_sessions(dir: &Path, my_pane: &str, canonical_cwd: &Path) -> BTreeSet<String> {
-    let Ok(routes) = boop::bus::read_routes(dir) else {
-        return BTreeSet::new();
-    };
-    let mut claimed = BTreeSet::new();
-    for route in routes.into_values() {
-        let Some(session) = route.session_id else {
-            continue;
-        };
-        let Some(cwd) = route.cwd.as_deref() else {
-            continue;
-        };
-        let route_cwd = std::fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
-        if route_cwd != canonical_cwd {
-            continue;
-        }
-        let pane = route
-            .tmux
-            .as_deref()
-            .map(|target| boop::live::pane_of_target(target).unwrap_or_else(|| target.to_owned()));
-        if pane.as_deref() == Some(my_pane) {
-            continue;
-        }
-        claimed.insert(session);
-    }
-    claimed
-}
-
-/// One registry-derived bind takes an exclusive marker: two wrappers waking
-/// on one poll tick take two sessions, one each. A pane-exact bind skips it.
-fn claim_open_session(dir: &Path, session_id: &str) -> bool {
-    prune_claims(dir);
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(dir.join(format!("tui-claim-{session_id}")))
-        .is_ok()
-}
-
-/// Claim markers older than a day are dead wrappers' leftovers.
-fn prune_claims(dir: &Path) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        if !entry.file_name().to_string_lossy().starts_with("tui-claim-") {
-            continue;
-        }
-        let age = entry
-            .metadata()
-            .and_then(|meta| meta.modified())
-            .map(|modified| modified.elapsed().unwrap_or_default());
-        if age.is_ok_and(|age| age > Duration::from_secs(24 * 60 * 60)) {
-            let _ = std::fs::remove_file(entry.path());
-        }
-    }
 }
 
 fn session_observations(adapter: &dyn Harness) -> HashMap<String, u64> {
@@ -371,6 +314,7 @@ pub(crate) fn run_native_tui(
         .unwrap_or(Duration::from_secs(30));
     let mut last_parent_project = std::time::Instant::now() - parent_project_every;
     let mut last_discover = std::time::Instant::now() - discover_every;
+    let mut last_drain = std::time::Instant::now() - DRAIN_EVERY;
     loop {
         if let Some(status) = child.try_wait().context("observe native TUI exit")? {
             if status.success() {
@@ -439,6 +383,20 @@ pub(crate) fn run_native_tui(
                 }
             }
         }
+        // Held mail pushes itself: rows parked before this pane had a
+        // session go out the door on the first tick after one binds.
+        if route.session_id.is_some() && last_drain.elapsed() >= DRAIN_EVERY {
+            last_drain = std::time::Instant::now();
+            match boop::Store::default_path().and_then(boop::Store::open) {
+                Ok(store) => {
+                    let pushed = boop::mail::drain_route_held_mail(&dir, registry, &store, name);
+                    if pushed > 0 {
+                        info!(route = name, pushed, "held mail drained through the door");
+                    }
+                }
+                Err(error) => warn!(%error, route = name, "held-mail drain could not open the store"),
+            }
+        }
         if let Some(store) = store.as_ref() {
             let known = known.as_mut().expect("projector store has a session cache");
             if last_discover.elapsed() >= discover_every {
@@ -469,7 +427,7 @@ pub(crate) fn run_native_tui(
 
 #[cfg(test)]
 mod tests {
-    use super::{claim_open_session, newest_opened_session, respawn_wanted, RESPAWN_MIN_UPTIME};
+    use super::{newest_opened_session, respawn_wanted, RESPAWN_MIN_UPTIME};
     use std::collections::{BTreeSet, HashMap};
     use std::os::unix::process::ExitStatusExt;
     use std::process::ExitStatus;
@@ -649,9 +607,9 @@ mod tests {
     fn two_registry_derived_binds_take_two_sessions_one_each() {
         let dir = std::env::temp_dir().join(format!("boop-claim-test-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
-        assert!(claim_open_session(&dir, "aa"));
-        assert!(!claim_open_session(&dir, "aa"));
-        assert!(claim_open_session(&dir, "bb"));
+        assert!(boop::mail::claim_open_session(&dir, "aa"));
+        assert!(!boop::mail::claim_open_session(&dir, "aa"));
+        assert!(boop::mail::claim_open_session(&dir, "bb"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

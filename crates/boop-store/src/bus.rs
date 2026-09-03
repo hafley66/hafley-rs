@@ -66,6 +66,99 @@ pub fn read_routes(dir: &Path) -> Result<BTreeMap<String, Route>> {
     routes_in(&open_store(dir)?)
 }
 
+/// Write one registry route. The registry json file is the write path; the
+/// next store open imports it, so readers never block on a writer.
+pub fn write_route(dir: &Path, name: &str, route: &Route) -> Result<()> {
+    let path = dir.join("registry.json");
+    cas_update_json(&path, |current| {
+        current.insert(name.to_owned(), route_to_json(route));
+        Ok(())
+    })
+}
+
+fn route_to_json(route: &Route) -> serde_json::Value {
+    use serde_json::json;
+    let mut object = serde_json::Map::new();
+    object.insert("kind".into(), json!(route.kind));
+    if let Some(harness) = &route.harness {
+        object.insert("harness".into(), json!(harness));
+    }
+    if let Some(tmux) = &route.tmux {
+        object.insert("tmux".into(), json!(tmux));
+    }
+    if let Some(cwd) = &route.cwd {
+        object.insert("cwd".into(), json!(cwd));
+    }
+    if let Some(model) = &route.model {
+        object.insert("model".into(), json!(model));
+    }
+    if let Some(mode) = &route.mode {
+        object.insert("mode".into(), json!(mode));
+    }
+    if let Some(session_id) = &route.session_id {
+        object.insert("sessionId".into(), json!(session_id));
+    }
+    if let Some(source_path) = &route.source_path {
+        object.insert("sourcePath".into(), json!(source_path));
+    }
+    if let Some(parent) = &route.parent {
+        object.insert("parent".into(), json!(parent));
+    }
+    if let Some(goal) = &route.goal {
+        object.insert("goal".into(), json!(goal));
+    }
+    if let Some(registered_at) = &route.registered_at {
+        object.insert("registeredAt".into(), json!(registered_at));
+    }
+    if let Some(base_sha) = &route.base_sha {
+        object.insert("baseSha".into(), json!(base_sha));
+    }
+    if let Some(worktree_dir) = &route.worktree_dir {
+        object.insert("worktreeDir".into(), json!(worktree_dir));
+    }
+    if let Some(app_server_socket) = &route.app_server_socket {
+        object.insert("appServerSocket".into(), json!(app_server_socket));
+    }
+    serde_json::Value::Object(object)
+}
+
+/// Every undelivered envelope addressed to one route: `to_timestamp` still
+/// open and no door has ever accepted it. A drain re-pushes these.
+pub fn held_messages(store: &crate::ident::Store, route: &str) -> Result<Vec<Message>> {
+    let mut statement = store.connection().prepare(
+        "SELECT m.message_id, m.from_route, m.to_route, m.from_timestamp, m.to_timestamp,
+                m.kind, m.reply_to, m.body, m.ref_id, m.rc, m.detail
+         FROM agent_mail m
+         WHERE m.to_route = ?1 AND m.to_timestamp IS NULL
+           AND COALESCE(
+               (SELECT t.outcome FROM agent_delivery_transition t
+                WHERE t.message_id = m.message_id
+                ORDER BY t.sequence DESC LIMIT 1), 'appended')
+               <> 'accepted-by-harness'
+         ORDER BY m.seq",
+    )?;
+    let rows = statement.query_map([route], |row| {
+        Ok(Message {
+            id: row.get(0)?,
+            from: row.get(1)?,
+            to: row.get(2)?,
+            from_timestamp: row.get(3)?,
+            to_timestamp: row.get(4)?,
+            kind: row.get(5)?,
+            reply_to: row.get(6)?,
+            body: row.get(7)?,
+            r#ref: row.get(8)?,
+            rc: row.get(9)?,
+            detail: row.get(10)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
 pub fn route_from_value(entry: &Value) -> Route {
     let object = match entry.as_object() {
         Some(object) => object,

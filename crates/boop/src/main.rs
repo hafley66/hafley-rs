@@ -341,7 +341,7 @@ const BASH_SHELL_INIT: &str = r#"boop_wrap() {
     fi
     return
   fi
-  command boop beep agent register --kind coordinator "$name" >/dev/null 2>&1
+  command boop beep agent register --kind coordinator --harness "$harness" --cwd "$PWD" "$name" >/dev/null 2>&1
   BOOP_SESSION="$name" command "$bin" "$@"
 }
 codex() { boop_wrap "codex-${PWD##*/}" codex codex "$@"; }
@@ -602,7 +602,24 @@ fn missing_beep_argument(name: &str) -> ! {
 }
 
 fn sync_before_local_command(registry: &Registry) -> Result<()> {
-    sync_before_read(registry)
+    sync_before_read(registry)?;
+    drain_all_held_mail_best_effort(registry);
+    Ok(())
+}
+
+/// Held mail re-pushes itself on every sync-carrying command: a row parked
+/// for a route that could not take it leaves the mailbox once one can.
+fn drain_all_held_mail_best_effort(registry: &Registry) {
+    let Ok(dir) = cli::mail_dir(None) else {
+        return;
+    };
+    let Ok(store) = boop::Store::default_path().and_then(boop::Store::open) else {
+        return;
+    };
+    let pushed = boop::mail::drain_all_held_mail(&dir, registry, &store);
+    if pushed > 0 {
+        tracing::info!(pushed, "held mail drained through doors");
+    }
 }
 
 /// Whether `boop wait <id>` names a registered lane, so it dispatches to
@@ -1094,6 +1111,13 @@ enum AgentCmd {
         /// own, so nothing polls on its behalf.
         #[arg(long, value_enum, default_value_t = ParentDeathPolicy::Orphan)]
         on_parent_death: ParentDeathPolicy,
+        /// The harness a door push addresses. Without it the route is a
+        /// mailbox, not an address: nothing can push to it.
+        #[arg(long)]
+        harness: Option<String>,
+        /// The directory the agent works in; a hook inbox drains rows here.
+        #[arg(long)]
+        cwd: Option<PathBuf>,
         /// The tree this agent works in. Warmed like a lane spawn's worktree,
         /// with the preamble printed here: a native has no injected first turn.
         #[arg(long)]

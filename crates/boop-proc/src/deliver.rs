@@ -1,13 +1,18 @@
 //! The delivery ladder: where one hail lands, in order, and the transition
 //! each rung records. Every send path in boop walks this one function.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::Result;
 
 use boop_harness::door::Delivered;
 use boop_harness::harness::{Harness, MailPolicy};
-use boop_harness::live::{pane_of_target, DoorAddress, LiveSession, LiveStatus};
+use boop_harness::live::{
+    pane_of_target, DoorAddress, LiveSession, LiveSessionScope, LiveSessions, LiveStatus,
+};
+use boop_store::bus;
 use boop_harness::Registry;
 use boop_store::bus::{Message, Route};
 use boop_store::harness_id::HarnessId;
@@ -377,6 +382,172 @@ fn projected(id: HarnessId, row: LiveRow) -> LiveSession {
     }
 }
 
+/// Claim markers older than a day are dead wrappers' leftovers.
+const CLAIM_TTL: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// One registry-derived bind takes an exclusive marker: two wrappers waking
+/// on one poll tick take two sessions, one each.
+pub fn claim_open_session(dir: &Path, session_id: &str) -> bool {
+    prune_claims(dir);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(dir.join(format!("tui-claim-{session_id}")))
+        .is_ok()
+}
+
+/// Delete claim markers past the claim TTL.
+pub fn prune_claims(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if !entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with("tui-claim-")
+        {
+            continue;
+        }
+        let age = entry
+            .metadata()
+            .and_then(|meta| meta.modified())
+            .map(|modified| modified.elapsed().unwrap_or_default());
+        if age.is_ok_and(|age| age > CLAIM_TTL) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
+/// Sessions other registry routes already carry in one cwd, minus `my_pane`.
+pub fn claimed_sessions(
+    dir: &Path,
+    my_pane: Option<&str>,
+    canonical_cwd: &Path,
+) -> BTreeSet<String> {
+    let mut claimed = BTreeSet::new();
+    let Ok(routes) = bus::read_routes(dir) else {
+        return claimed;
+    };
+    for route in routes.into_values() {
+        let Some(session) = route.session_id else {
+            continue;
+        };
+        let Some(cwd) = route.cwd.as_deref() else {
+            continue;
+        };
+        let route_cwd = std::fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
+        if route_cwd != canonical_cwd {
+            continue;
+        }
+        let pane = route
+            .tmux
+            .as_deref()
+            .map(|target| pane_of_target(target).unwrap_or_else(|| target.to_owned()));
+        if pane.as_deref() == my_pane {
+            continue;
+        }
+        claimed.insert(session);
+    }
+    claimed
+}
+
+/// Bind an unbound route to the one unclaimed live root session in its cwd.
+/// Zero or several candidates bind nothing: wrong-session is worse than none.
+pub fn bind_route_session(
+    dir: &Path,
+    route_name: &str,
+    route: &mut Route,
+    live: &dyn LiveSessions,
+) -> bool {
+    if route.session_id.is_some() || route.harness.is_none() {
+        return false;
+    }
+    let Some(cwd) = route.cwd.as_deref() else {
+        return false;
+    };
+    let canonical = std::fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
+    let claimed = claimed_sessions(dir, None, &canonical);
+    let candidates: Vec<LiveSession> = live
+        .live_sessions()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|session| {
+            session.scope != LiveSessionScope::Child
+                && !claimed.contains(&session.session_id)
+                && session
+                    .cwd
+                    .as_ref()
+                    .map(|dir| std::fs::canonicalize(dir).unwrap_or_else(|_| dir.clone()))
+                    .as_deref()
+                    == Some(&canonical)
+        })
+        .collect();
+    let [session] = candidates.as_slice() else {
+        return false;
+    };
+    if !claim_open_session(dir, &session.session_id) {
+        return false;
+    }
+    route.session_id = Some(session.session_id.clone());
+    route.source_path = Some(format!("native-session={}", session.session_id));
+    let _ = bus::write_route(dir, route_name, route);
+    true
+}
+
+/// Re-push one route's parked rows, binding a session first when the
+/// registry names exactly one. Door-taken rows are stamped, never replayed.
+pub fn drain_route_held_mail(
+    dir: &Path,
+    registry: &Registry,
+    store: &Store,
+    route_name: &str,
+) -> usize {
+    let Some(mut route) = bus::read_routes(dir).ok().and_then(|mut routes| routes.remove(route_name))
+    else {
+        return 0;
+    };
+    if route.kind == "lane" {
+        return 0; // the lane supervisor reads its own rows
+    }
+    if route.session_id.is_none() {
+        if let Some(harness) = route.harness {
+            bind_route_session(dir, route_name, &mut route, registry.get(harness).live());
+        }
+    }
+    let Ok(held) = bus::held_messages(store, route_name) else {
+        return 0;
+    };
+    let routes = match bus::read_routes(dir) {
+        Ok(routes) => routes,
+        Err(_) => return 0,
+    };
+    let mut pushed = 0usize;
+    for message in held {
+        let Ok(landing) = deliver_hail(registry, store, &routes, &message) else {
+            continue;
+        };
+        if landing.rung.carried_the_body() {
+            let _ = bus::ack_messages(store, &[message.id.clone()], &bus::now_iso());
+            pushed += 1;
+        }
+    }
+    pushed
+}
+
+/// Bind and re-push for every non-lane route: one pass per sync-carrying
+/// command and one pass per wrapper tick keep "read your mail" unnecessary.
+pub fn drain_all_held_mail(dir: &Path, registry: &Registry, store: &Store) -> usize {
+    let Ok(routes) = bus::read_routes(dir) else {
+        return 0;
+    };
+    let mut pushed = 0usize;
+    for name in routes.into_keys() {
+        pushed += drain_route_held_mail(dir, registry, store, &name);
+    }
+    pushed
+}
+
 /// A door address as the two `agent_live` columns spell it. The claude socket
 /// token is a per-process secret and is never projected into the store.
 pub fn door_columns(door: &DoorAddress) -> (&'static str, Option<String>) {
@@ -528,6 +699,132 @@ mod tests {
             rc: None,
             detail: None,
         }
+    }
+
+    /// A pane-less root session in the test cwd, the shape a bare codex
+    /// outside tmux presents once its first turn exists.
+    fn root_session(id: &str, cwd: PathBuf) -> LiveSession {
+        LiveSession {
+            harness: HarnessId::Claude,
+            session_id: id.to_owned(),
+            pid: Some(7),
+            cwd: Some(cwd),
+            tmux_pane: None,
+            status: LiveStatus::Idle,
+            door: DoorAddress::UnixSocket {
+                path: "/tmp/boop-bound.sock".into(),
+                token: None,
+            },
+            observed_ms: 0,
+            started_ms: None,
+            scope: LiveSessionScope::Root,
+            parent_session: None,
+        }
+    }
+
+    struct OneLive(PathBuf);
+
+    impl LiveSessions for OneLive {
+        fn live_sessions(&self) -> Result<Vec<LiveSession>> {
+            Ok(vec![root_session("ses-one", self.0.clone())])
+        }
+    }
+
+    struct TwoLive(PathBuf);
+
+    impl LiveSessions for TwoLive {
+        fn live_sessions(&self) -> Result<Vec<LiveSession>> {
+            Ok(vec![
+                root_session("ses-one", self.0.clone()),
+                root_session("ses-two", self.0.clone()),
+            ])
+        }
+    }
+
+    fn unbound_route(cwd: &Path) -> Route {
+        Route {
+            kind: "coordinator".to_owned(),
+            harness: Some(HarnessId::Claude),
+            tmux: None,
+            cwd: Some(cwd.display().to_string()),
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: None,
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+            app_server_socket: None,
+        }
+    }
+
+    /// RECEIPT. A pane-less route binds the one candidate; a second route
+    /// binds nothing because the first claim took the only session.
+    #[test]
+    fn a_paneless_route_binds_one_candidate_and_never_two() {
+        let dir = std::env::temp_dir().join(format!("boop-bind-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mut route = unbound_route(&dir);
+        assert!(bind_route_session(&dir, "agent-a", &mut route, &OneLive(dir.clone())));
+        assert_eq!(route.session_id.as_deref(), Some("ses-one"));
+
+        let mut second = unbound_route(&dir);
+        assert!(!bind_route_session(&dir, "agent-b", &mut second, &OneLive(dir.clone())));
+
+        let mut third = unbound_route(&dir);
+        assert!(!bind_route_session(&dir, "agent-c", &mut third, &TwoLive(dir.clone())));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. A held row leaves the mailbox the first drain after its
+    /// route's door can take it, stamped so no read replays it.
+    #[test]
+    fn held_mail_pushes_itself_once_the_route_can_take_it() {
+        let dir = std::env::temp_dir().join(format!("boop-drain-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let registry = Registry::with(vec![Box::new(FakeClaude)]);
+        let mut route = unbound_route(&dir);
+        route.session_id = Some("ses-fake-claude".to_owned());
+        route.tmux = Some("%77".to_owned());
+        bus::write_route(&dir, "claude-bare", &route).unwrap();
+
+        let message = Message {
+            id: "m-drain".to_owned(),
+            from: "wave-b-parent".to_owned(),
+            to: "claude-bare".to_owned(),
+            from_timestamp: "2026-09-03T00:00:00Z".to_owned(),
+            to_timestamp: None,
+            kind: "request".to_owned(),
+            reply_to: None,
+            body: "push me".to_owned(),
+            r#ref: None,
+            rc: None,
+            detail: None,
+        };
+        bus::append(&dir, "bus", &message).unwrap();
+        let store = bus::open_store(&dir).unwrap();
+        assert_eq!(bus::held_messages(&store, "claude-bare").unwrap().len(), 1);
+
+        let pushed = drain_route_held_mail(&dir, &registry, &store, "claude-bare");
+        assert_eq!(pushed, 1, "the held row leaves through the claude door");
+        let taken = bus::messages_in(&store)
+            .unwrap()
+            .into_iter()
+            .find(|row| row.id == "m-drain")
+            .unwrap();
+        assert!(taken.to_timestamp.is_some(), "the row is stamped taken");
+        assert_eq!(
+            bus::held_messages(&store, "claude-bare").unwrap().len(),
+            0,
+            "a second drain never replays a taken row"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// RECEIPT. A claude coordinator whose project carries no

@@ -1218,6 +1218,8 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
             kind,
             parent,
             on_parent_death,
+            harness,
+            cwd,
             worktree,
             mail_dir: mail_dir_arg,
         } => {
@@ -1228,6 +1230,12 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
                 anyhow::bail!("no worktree at {}", tree.display());
             }
             let dir = mail_dir(mail_dir_arg.as_deref())?;
+            let harness_id = harness
+                .as_deref()
+                .and_then(boop_store::harness_id::HarnessId::parse);
+            if harness.is_some() && harness_id.is_none() {
+                anyhow::bail!("unknown harness `{}`", harness.unwrap());
+            }
             boop::supervise::record_parent_policy(&dir, &name, on_parent_death)?;
             let started = worktree
                 .as_deref()
@@ -1238,9 +1246,12 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
                 &name,
                 Route {
                     kind,
-                    harness: None,
+                    harness: harness_id,
                     tmux: None,
-                    cwd: worktree.as_ref().map(|dir| dir.display().to_string()),
+                    cwd: cwd
+                        .as_ref()
+                        .map(|dir| dir.display().to_string())
+                        .or_else(|| worktree.as_ref().map(|dir| dir.display().to_string())),
                     model: None,
                     mode: None,
                     session_id: None,
@@ -2771,6 +2782,8 @@ mod tests {
             kind: "native".into(),
             parent: Some("coordinator".into()),
             on_parent_death: crate::ParentDeathPolicy::Orphan,
+            harness: None,
+            cwd: None,
             worktree: None,
             mail_dir: Some(dir.clone()),
         })
