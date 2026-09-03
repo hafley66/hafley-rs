@@ -124,17 +124,24 @@ fn route_to_json(route: &Route) -> serde_json::Value {
 
 /// Every undelivered envelope addressed to one route: `to_timestamp` still
 /// open and no door has ever accepted it. A drain re-pushes these.
+///
+/// "Ever" is the rail (failure mode 14): one `accepted-by-harness` row, or
+/// one row whose detail names a door, anywhere in the message's history,
+/// keeps it out of this list. The pre-fix query read only the latest
+/// transition, and a re-push that landed one rung lower rewrote that latest
+/// word every 5 s, so a row a claude session already held was pushed at it
+/// again on every wrapper tick and every sync-carrying command.
 pub fn held_messages(store: &crate::ident::Store, route: &str) -> Result<Vec<Message>> {
     let mut statement = store.connection().prepare(
         "SELECT m.message_id, m.from_route, m.to_route, m.from_timestamp, m.to_timestamp,
                 m.kind, m.reply_to, m.body, m.ref_id, m.rc, m.detail
          FROM agent_mail m
          WHERE m.to_route = ?1 AND m.to_timestamp IS NULL
-           AND COALESCE(
-               (SELECT t.outcome FROM agent_delivery_transition t
-                WHERE t.message_id = m.message_id
-                ORDER BY t.sequence DESC LIMIT 1), 'appended')
-               <> 'accepted-by-harness'
+           AND NOT EXISTS (
+               SELECT 1 FROM agent_delivery_transition t
+               WHERE t.message_id = m.message_id
+                 AND (t.outcome = 'accepted-by-harness'
+                      OR t.detail IN ('door', 'door queue')))
          ORDER BY m.seq",
     )?;
     let rows = statement.query_map([route], |row| {

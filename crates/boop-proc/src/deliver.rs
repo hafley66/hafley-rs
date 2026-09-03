@@ -25,6 +25,7 @@ use boop_store::ident::{DeliveryState, LiveRow, Store};
 /// | rung | condition | transition recorded |
 /// |---|---|---|
 /// | `Door` | a live door session takes the text into the running turn | accepted-by-harness |
+/// | `DoorQueue` | a live door session holds the text itself and reads it at its next turn boundary | accepted-by-harness |
 /// | `Acpx` | the caller drives the recipient's own acpx queue | accepted-by-harness |
 /// | `TurnBoundary` | the recipient's supervisor holds it, or a door harness whose door answered nothing holds it for its next turn | held-for-turn-boundary |
 /// | `HookInbox` | the recipient's project carries an installed inbox hook | queued-in-hook-inbox |
@@ -33,6 +34,7 @@ use boop_store::ident::{DeliveryState, LiveRow, Store};
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Rung {
     Door,
+    DoorQueue,
     Acpx,
     TurnBoundary,
     HookInbox,
@@ -44,7 +46,7 @@ impl Rung {
     /// The transition this rung records. One rung, one state.
     pub fn state(self) -> DeliveryState {
         match self {
-            Rung::Door | Rung::Acpx => DeliveryState::AcceptedByHarness,
+            Rung::Door | Rung::DoorQueue | Rung::Acpx => DeliveryState::AcceptedByHarness,
             Rung::TurnBoundary => DeliveryState::HeldForTurnBoundary,
             Rung::HookInbox => DeliveryState::QueuedInHookInbox,
             Rung::PanePaste => DeliveryState::PastedIntoPane,
@@ -56,6 +58,7 @@ impl Rung {
     pub fn as_str(self) -> &'static str {
         match self {
             Rung::Door => "door",
+            Rung::DoorQueue => "door queue",
             Rung::Acpx => "acpx queue",
             Rung::TurnBoundary => "turn boundary",
             Rung::HookInbox => "hook inbox",
@@ -66,9 +69,12 @@ impl Rung {
 
     /// Whether this rung put the message body itself in front of the
     /// recipient. The paste rung leaves a notice, never the body, so it does
-    /// not ack the row: the recipient still drains it.
+    /// not ack the row: the recipient still drains it. A door queue holds the
+    /// body inside the harness, so the row is acked the same as an injection:
+    /// a drain that re-pushed it would put a second copy in front of the
+    /// recipient (failure mode 14).
     pub fn carried_the_body(self) -> bool {
-        matches!(self, Rung::Door | Rung::Acpx)
+        matches!(self, Rung::Door | Rung::DoorQueue | Rung::Acpx)
     }
 }
 
@@ -121,6 +127,9 @@ impl Landing {
     pub fn line(&self, message_id: &str, from: &str, to: &str, harness: &str) -> String {
         match self.rung {
             Rung::Door => format!("delivered {message_id} from {from} -> {to} through the {harness} door"),
+            Rung::DoorQueue => format!(
+                "delivered {message_id} from {from} -> {to} into the {harness} door queue; it reads it at its next turn boundary"
+            ),
             Rung::Acpx => format!("delivered {message_id} from {from} -> {to} through the acpx queue"),
             Rung::TurnBoundary => format!(
                 "held {message_id} from {from} -> {to} for the next turn boundary ({})",
@@ -269,7 +278,7 @@ fn land(
     store.record_live_door(&live.session_id, kind, addr.as_deref())?;
     Ok(match harness.door().deliver(&live, &message.body)? {
         Delivered::Injected => Landing::new(Rung::Door, "door"),
-        Delivered::QueuedForTurnBoundary => Landing::new(Rung::TurnBoundary, "door queue"),
+        Delivered::QueuedForTurnBoundary => Landing::new(Rung::DoorQueue, "door queue"),
         Delivered::Unreachable(why) => door_route_below_the_door(route, to, why),
     })
 }
@@ -602,12 +611,23 @@ mod tests {
     use std::time::Duration;
 
     /// A claude door that always takes the row, so the test measures which
-    /// rung the ladder stops on rather than a real socket.
+    /// rung the ladder stops on rather than a real socket. It answers what the
+    /// real claude door answers (`door/claude.rs` `deliver`): the harness
+    /// queues the body for its next turn boundary. A double that answered
+    /// `Injected` here blessed a drain that re-pushed every queued row
+    /// (failure mode 14). Every body it takes is appended to `DOOR_LOG`.
     struct FakeClaudeDoor;
 
+    static DOOR_LOG: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+    fn door_log() -> Vec<String> {
+        DOOR_LOG.lock().unwrap().clone()
+    }
+
     impl Door for FakeClaudeDoor {
-        fn deliver(&self, _session: &LiveSession, _body: &str) -> Result<Delivered> {
-            Ok(Delivered::Injected)
+        fn deliver(&self, _session: &LiveSession, body: &str) -> Result<Delivered> {
+            DOOR_LOG.lock().unwrap().push(body.to_owned());
+            Ok(Delivered::QueuedForTurnBoundary)
         }
 
         fn notify_idle(&self, _session: &LiveSession, _timeout: Duration) -> Result<IdleNotice> {
@@ -824,6 +844,70 @@ mod tests {
             0,
             "a second drain never replays a taken row"
         );
+        for _ in 0..3 {
+            assert_eq!(drain_route_held_mail(&dir, &registry, &store, "claude-bare"), 0);
+            assert_eq!(drain_all_held_mail(&dir, &registry, &store), 0);
+        }
+        let copies = door_log().iter().filter(|body| body.as_str() == "push me").count();
+        assert_eq!(copies, 1, "the door took the body exactly once over seven drains");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT (failure mode 14). A row the ledger shows a door already took,
+    /// in the pre-fix shape (`held-for-turn-boundary` / `door queue`, no
+    /// stamp), is never offered to the door again. The live store held 752
+    /// such rows on 2026-09-03; one coordinator had each of its 22 pushed 29
+    /// times.
+    #[test]
+    fn a_row_a_door_already_queued_is_never_pushed_again() {
+        let dir = std::env::temp_dir().join(format!("boop-requeue-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let registry = Registry::with(vec![Box::new(FakeClaude)]);
+        let mut route = unbound_route(&dir);
+        route.session_id = Some("ses-fake-claude".to_owned());
+        route.tmux = Some("%77".to_owned());
+        bus::write_route(&dir, "claude-old", &route).unwrap();
+
+        let message = Message {
+            id: "m-legacy".to_owned(),
+            from: "lane-x".to_owned(),
+            to: "claude-old".to_owned(),
+            from_timestamp: "2026-09-03T00:00:00Z".to_owned(),
+            to_timestamp: None,
+            kind: "result".to_owned(),
+            reply_to: None,
+            body: "already in front of you".to_owned(),
+            r#ref: None,
+            rc: None,
+            detail: None,
+        };
+        bus::append(&dir, "bus", &message).unwrap();
+        let store = bus::open_store(&dir).unwrap();
+        for (outcome, detail) in [("appended", "mailbox"), ("held-for-turn-boundary", "door queue")] {
+            store
+                .append_delivery_transition(
+                    "m-legacy",
+                    "claude-old",
+                    Some(HarnessId::Claude),
+                    outcome,
+                    detail,
+                    None,
+                    boop_harness::live::now_ms(),
+                )
+                .unwrap();
+        }
+
+        assert!(
+            bus::held_messages(&store, "claude-old").unwrap().is_empty(),
+            "a door-queued row is not held, whatever its latest outcome word"
+        );
+        assert_eq!(drain_route_held_mail(&dir, &registry, &store, "claude-old"), 0);
+        assert!(
+            !door_log().iter().any(|body| body == "already in front of you"),
+            "the door was handed a row it already holds"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -865,11 +949,11 @@ mod tests {
 
         let landing =
             deliver_hail_with(&registry, &store, &routes, &message("claude-77"), &NoPane).unwrap();
-        assert_eq!(landing.rung, Rung::Door, "{landing:?}");
+        assert_eq!(landing.rung, Rung::DoorQueue, "{landing:?}");
         assert!(landing.rung.carried_the_body());
         assert_eq!(
             landing.line("m-1", "coordinator", "claude-77", "claude"),
-            "delivered m-1 from coordinator -> claude-77 through the claude door"
+            "delivered m-1 from coordinator -> claude-77 into the claude door queue; it reads it at its next turn boundary"
         );
 
         let (_, history) = store

@@ -517,6 +517,7 @@ fn fan_out_to_children(
             }
             ChildReach::Pane => match deliver_through_door(registry, route, &message.body)? {
                 Delivered::Injected => {
+                    append_acks(dir, std::slice::from_ref(&message))?;
                     landed += 1;
                     println!(
                         "landed {name} {} from {} (through the door)",
@@ -524,6 +525,9 @@ fn fan_out_to_children(
                     );
                 }
                 Delivered::QueuedForTurnBoundary => {
+                    // The harness holds the body; stamp the row or the held-mail
+                    // drain pushes a second copy (failure mode 14).
+                    append_acks(dir, std::slice::from_ref(&message))?;
                     landed += 1;
                     println!(
                         "landed {name} {} from {} (next turn boundary)",

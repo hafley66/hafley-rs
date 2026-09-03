@@ -5,6 +5,7 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 14 | 2026-09-03 | a hail a claude session already held was pushed at it again every 5 s, 29 copies per row |
 | 13 | 2026-08-20 | 512 concurrent `boop db` reads each ran their own transcript sync, and the machine stopped |
 | 12 | 2026-08-21 | a lane that ended its turn to report a finding was closed and read `dead` |
 | 11 | 2026-08-19 | an opencode ACP session starts on a dead model endpoint and retries forever in silence |
@@ -18,6 +19,82 @@ without the fix, the rail that stops it recurring. Newest first.
 | 3 | 2026-08-17 | ~/.cargo/bin/boop is whatever the last session built, and nothing printed says which |
 | 2 | 2026-08-17 | a respawned agent window is re-fed a brief it cannot place, or the wrong text entirely |
 | 1 | 2026-08-17 | a lane can die with no result row, no log, no trace |
+
+---
+
+## 14. a hail a claude session already held was pushed at it again every 5 s, 29 copies per row
+
+**Incident.** 2026-09-03. A claude coordinator (`claude-299`) saw its 21
+lane hails replayed as fresh peer messages on every turn and every tool round,
+until the session's context was spent. The live store, read at 15:38:
+
+| count | what |
+|---|---|
+| 2484 | `door queue` transitions in `agent_delivery_transition` |
+| 29-30 | pushes of each of the 22 `claude-299` rows |
+| 752 | open rows across 15 claude routes that a door had already taken at least once |
+| 283 | of those addressed to one route (`claude-3611`), waiting to fire as a batch |
+
+```mermaid
+sequenceDiagram
+    participant W as boop tui wrapper (5 s tick) / any sync-carrying boop command
+    participant D as drain_route_held_mail
+    participant S as claude door (unix socket)
+    participant L as ledger
+    W->>D: held_messages(route)
+    D->>S: deliver(body)
+    S-->>D: QueuedForTurnBoundary
+    D->>L: held-for-turn-boundary / door queue
+    Note over D: rung TurnBoundary, carried_the_body() = false, no ack
+    W->>D: 5 s later: held_messages(route) returns the same row
+```
+
+**RCA.** Three lines agreed with each other and disagreed with the claude door.
+
+| where | what it said |
+|---|---|
+| `boop-harness/src/door/claude.rs` `deliver` | a socket write answers `Delivered::QueuedForTurnBoundary`: the session holds the body and reads it at its next turn boundary |
+| `boop-proc/src/deliver.rs` `land` | mapped that answer to `Rung::TurnBoundary`, the rung for "nothing took it, hold it for a retry" |
+| `Rung::carried_the_body` | false for `TurnBoundary`, so `drain_route_held_mail` never acked the row |
+| `boop-store/src/bus.rs` `held_messages` | read only the latest transition word, which every re-push rewrote to `held-for-turn-boundary` |
+| `deliver.rs` tests `FakeClaudeDoor` | answered `Delivered::Injected`, so `held_mail_pushes_itself_once_the_route_can_take_it` passed against a door the real binary never runs |
+
+Commit 45e0cf2 (2026-09-02, "held mail pushes itself") added the 5 s tick and
+the per-command drain on top of that mapping. Before it, a mis-filed row sat
+in the mailbox; after it, every reader of the mailbox re-fired the row.
+
+**Fix.**
+
+| # | change | file |
+|---|---|---|
+| 1 | `Rung::DoorQueue`: state `accepted-by-harness`, `carried_the_body()` true, so the drain stamps the row. `Delivered::QueuedForTurnBoundary` lands there | `boop-proc/src/deliver.rs` |
+| 2 | `held_messages` excludes a row with any `accepted-by-harness` transition or any `door` / `door queue` detail in its whole history, so the pre-fix ledger rows stop replaying without a store migration | `boop-store/src/bus.rs` |
+| 3 | `fan_out_to_children` acks a row its door took; it wrote the row and skipped the ledger, which left it held | `boop/src/cli/mail.rs` |
+| 4 | `FakeClaudeDoor` answers `QueuedForTurnBoundary` and logs every body it takes | `deliver.rs` tests |
+
+**Fail-pre-fix tests.**
+
+| test | pre-fix result |
+|---|---|
+| `held_mail_pushes_itself_once_the_route_can_take_it` | with the double answering the real door's word: `pushed` was 0, the row stayed held, and seven further drains each handed the door another copy |
+| `a_row_a_door_already_queued_is_never_pushed_again` | a row with a `held-for-turn-boundary` / `door queue` history came back from `held_messages` and reached the door |
+| `a_claude_coordinator_takes_its_row_at_the_door_with_no_hooks_installed` | asserted `Rung::Door`; now `Rung::DoorQueue` with the same `accepted-by-harness` outcome |
+
+**Rail.** A door that answers anything but `Unreachable` has the body, and the
+row is stamped in the same call. `held_messages` asks "did a door ever take
+this", never "what was the last word". A test double for a door answers the
+same variant the real door answers, or the test is measuring nothing.
+
+**Live store.** The 752 open rows read as held by no drain once this binary is
+installed. Stamping them is one statement, for a store that should not carry
+open rows a door already took:
+
+```sql
+UPDATE agent_mail SET to_timestamp = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+ WHERE to_timestamp IS NULL
+   AND message_id IN (SELECT message_id FROM agent_delivery_transition
+                      WHERE detail IN ('door','door queue'));
+```
 
 ---
 
