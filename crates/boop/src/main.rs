@@ -328,37 +328,28 @@ enum ShellKind {
     Bash,
 }
 
-/// Outside tmux there is no pane to key the route on, so each wrapper runs
-/// the bare binary; codex first registers codex-<dir> and stamps BOOP_SESSION.
-const BASH_SHELL_INIT: &str = r#"codex() {
+/// Outside tmux there is no pane to key the route on, so every wrapper
+/// registers <entry>-<dir> as a pane-less coordinator and stamps BOOP_SESSION.
+const BASH_SHELL_INIT: &str = r#"boop_wrap() {
+  local name="$1" harness="$2" bin="$3"
+  shift 3
   if [ -n "$TMUX_PANE" ]; then
-    command boop tui codex --cwd "$PWD" -- "$@"
+    if [ "$bin" = "$harness" ]; then
+      command boop tui "$harness" --cwd "$PWD" -- "$@"
+    else
+      command boop tui "$harness" --bin "$bin" --cwd "$PWD" -- "$@"
+    fi
     return
   fi
-  local name="codex-${PWD##*/}"
   command boop beep agent register --kind coordinator "$name" >/dev/null 2>&1
-  BOOP_SESSION="$name" command codex "$@"
+  BOOP_SESSION="$name" command "$bin" "$@"
 }
-
-claude() {
-  [ -n "$TMUX_PANE" ] || { command claude "$@"; return; }
-  command boop tui claude --cwd "$PWD" -- "$@"
-}
-
-ccz() {
-  [ -n "$TMUX_PANE" ] || { command ccz "$@"; return; }
-  command boop tui claude --bin ccz --cwd "$PWD" -- "$@"
-}
-
-kimi() {
-  [ -n "$TMUX_PANE" ] || { command kimi "$@"; return; }
-  command boop tui kimi --cwd "$PWD" -- "$@"
-}
-
-opencode() {
-  [ -n "$TMUX_PANE" ] || { command opencode "$@"; return; }
-  command boop tui opencode --cwd "$PWD" -- "$@"
-}"#;
+codex() { boop_wrap "codex-${PWD##*/}" codex codex "$@"; }
+claude() { boop_wrap "claude-${PWD##*/}" claude claude "$@"; }
+ccz() { boop_wrap "ccz-${PWD##*/}" claude ccz "$@"; }
+kimi() { boop_wrap "kimi-${PWD##*/}" kimi kimi "$@"; }
+opencode() { boop_wrap "opencode-${PWD##*/}" opencode opencode "$@"; }
+"#;
 
 fn print_shell_init(shell: ShellKind) {
     match shell {
