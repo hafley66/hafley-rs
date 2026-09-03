@@ -1,9 +1,9 @@
 //! `boop tui`: launch a harness's own interactive TUI, register the pane as
 //! that harness's coordinator route, and project while it runs.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
@@ -41,19 +41,34 @@ fn respawn_wanted(status: std::process::ExitStatus, respawns: u32, uptime: Durat
 /// same-cwd session whose observation advanced from the pre-launch snapshot.
 fn opened_session(
     adapter: &dyn Harness,
+    dir: &Path,
     cwd: &Path,
     opened_ms: u64,
     prior_observations: &HashMap<String, u64>,
     wait: Duration,
+    my_pane: &str,
 ) -> Option<String> {
     let canonical = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
     let deadline = std::time::Instant::now() + wait;
     loop {
         let live = adapter.live().live_sessions().unwrap_or_default();
-        if let Some(session) =
-            newest_opened_session(live, &canonical, opened_ms, prior_observations)
-        {
-            return Some(session);
+        let picked = newest_opened_session(
+            live.clone(),
+            &canonical,
+            opened_ms,
+            prior_observations,
+            Some(my_pane),
+            &claimed_sessions(dir, my_pane, &canonical),
+        );
+        if let Some(session) = picked {
+            // The pane's own registry row is proof enough; a registry-derived
+            // pick needs the claim marker.
+            let exact = live
+                .iter()
+                .any(|held| held.session_id == session && held.tmux_pane.as_deref() == Some(my_pane));
+            if exact || claim_open_session(dir, &session) {
+                return Some(session);
+            }
         }
         if std::time::Instant::now() >= deadline {
             return None;
@@ -67,6 +82,8 @@ fn newest_opened_session(
     canonical_cwd: &Path,
     opened_ms: u64,
     prior_observations: &HashMap<String, u64>,
+    my_pane: Option<&str>,
+    claimed: &BTreeSet<String>,
 ) -> Option<String> {
     let candidates = live
         .into_iter()
@@ -78,8 +95,19 @@ fn newest_opened_session(
                 .as_deref()
                 == Some(canonical_cwd)
                 && session.scope != boop::live::LiveSessionScope::Child
+                && !claimed.contains(&session.session_id)
         })
         .collect::<Vec<_>>();
+    // The pane's own registry row outranks the newest-session heuristic:
+    // a pane names exactly one session.
+    if let Some(pane) = my_pane {
+        if let Some(session) = candidates
+            .iter()
+            .find(|session| session.tmux_pane.as_deref() == Some(pane))
+        {
+            return Some(session.session_id.clone());
+        }
+    }
     if let Some(session) = candidates
         .iter()
         .filter(|session| {
@@ -103,6 +131,66 @@ fn newest_opened_session(
     });
     let session = resumed.next()?;
     resumed.next().is_none().then_some(session.session_id)
+}
+
+/// Sessions other registry routes already carry in one cwd. A second
+/// same-cwd wrapper must never bind a session a running pane owns.
+fn claimed_sessions(dir: &Path, my_pane: &str, canonical_cwd: &Path) -> BTreeSet<String> {
+    let Ok(routes) = boop::bus::read_routes(dir) else {
+        return BTreeSet::new();
+    };
+    let mut claimed = BTreeSet::new();
+    for route in routes.into_values() {
+        let Some(session) = route.session_id else {
+            continue;
+        };
+        let Some(cwd) = route.cwd.as_deref() else {
+            continue;
+        };
+        let route_cwd = std::fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
+        if route_cwd != canonical_cwd {
+            continue;
+        }
+        let pane = route
+            .tmux
+            .as_deref()
+            .map(|target| boop::live::pane_of_target(target).unwrap_or_else(|| target.to_owned()));
+        if pane.as_deref() == Some(my_pane) {
+            continue;
+        }
+        claimed.insert(session);
+    }
+    claimed
+}
+
+/// One registry-derived bind takes an exclusive marker: two wrappers waking
+/// on one poll tick take two sessions, one each. A pane-exact bind skips it.
+fn claim_open_session(dir: &Path, session_id: &str) -> bool {
+    prune_claims(dir);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(dir.join(format!("tui-claim-{session_id}")))
+        .is_ok()
+}
+
+/// Claim markers older than a day are dead wrappers' leftovers.
+fn prune_claims(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if !entry.file_name().to_string_lossy().starts_with("tui-claim-") {
+            continue;
+        }
+        let age = entry
+            .metadata()
+            .and_then(|meta| meta.modified())
+            .map(|modified| modified.elapsed().unwrap_or_default());
+        if age.is_ok_and(|age| age > Duration::from_secs(24 * 60 * 60)) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
 }
 
 fn session_observations(adapter: &dyn Harness) -> HashMap<String, u64> {
@@ -224,8 +312,15 @@ pub(crate) fn run_native_tui(
     let mut respawns: u32 = 0;
     let mut spawned_at = std::time::Instant::now();
     if plan.session_id.is_none() {
-        plan.session_id =
-            opened_session(adapter, cwd, opened_ms, &prior_observations, SESSION_WAIT);
+        plan.session_id = opened_session(
+            adapter,
+            &dir,
+            cwd,
+            opened_ms,
+            &prior_observations,
+            SESSION_WAIT,
+            &pane,
+        );
         if let Some(session) = plan.session_id.as_deref() {
             plan.source_path = Some(format!("native-session={session}"));
             info!(%session, harness = %adapter.id(), "native session route resolved");
@@ -320,7 +415,15 @@ pub(crate) fn run_native_tui(
         // A fresh TUI opens its session at its first prompt, after the route
         // was written; the route learns the id the first tick it exists.
         if route.session_id.is_none() {
-            match opened_session(adapter, cwd, opened_ms, &prior_observations, Duration::ZERO) {
+            match opened_session(
+                adapter,
+                &dir,
+                cwd,
+                opened_ms,
+                &prior_observations,
+                Duration::ZERO,
+                &pane,
+            ) {
                 Some(session) => {
                     route.source_path = Some(format!("native-session={session}"));
                     route.session_id = Some(session.clone());
@@ -366,8 +469,8 @@ pub(crate) fn run_native_tui(
 
 #[cfg(test)]
 mod tests {
-    use super::{newest_opened_session, respawn_wanted, RESPAWN_MIN_UPTIME};
-    use std::collections::HashMap;
+    use super::{claim_open_session, newest_opened_session, respawn_wanted, RESPAWN_MIN_UPTIME};
+    use std::collections::{BTreeSet, HashMap};
     use std::os::unix::process::ExitStatusExt;
     use std::process::ExitStatus;
     use std::time::Duration;
@@ -426,6 +529,8 @@ mod tests {
                 std::path::Path::new("/tmp/turn-attribution-parent"),
                 1_788_113_899_000,
                 &HashMap::new(),
+                None,
+                &BTreeSet::new(),
             )
             .as_deref(),
             Some("01a053e4-d12c-parent")
@@ -448,6 +553,8 @@ mod tests {
                 std::path::Path::new("/tmp/turn-attribution-parent"),
                 1_788_200_000_000,
                 &prior,
+                None,
+                &BTreeSet::new(),
             )
             .as_deref(),
             Some("01a0550d-old-root")
@@ -479,6 +586,8 @@ mod tests {
                 std::path::Path::new("/tmp/turn-attribution-parent"),
                 1_788_200_000_000,
                 &prior,
+                None,
+                &BTreeSet::new(),
             ),
             None
         );
@@ -488,8 +597,61 @@ mod tests {
                 std::path::Path::new("/tmp/turn-attribution-parent"),
                 1_788_200_000_000,
                 &prior,
+                None,
+                &BTreeSet::new(),
             ),
             None
         );
+    }
+
+    /// RECEIPT. Two same-cwd panes of one harness bound the newest session
+    /// twice; a pane's own registry row outranks the newest-session heuristic.
+    #[test]
+    fn a_pane_exact_session_wins_over_a_newer_unpaned_one() {
+        let mut own = session("own-pane", 1_000, boop::live::LiveSessionScope::Root);
+        own.tmux_pane = Some("%415".into());
+        let newer = session("newer", 2_000, boop::live::LiveSessionScope::Root);
+        assert_eq!(
+            newest_opened_session(
+                vec![newer, own],
+                std::path::Path::new("/tmp/turn-attribution-parent"),
+                900,
+                &HashMap::new(),
+                Some("%415"),
+                &BTreeSet::new(),
+            )
+            .as_deref(),
+            Some("own-pane")
+        );
+    }
+
+    /// RECEIPT. codex's registry records no pane; its binding is registry-derived.
+    #[test]
+    fn a_session_another_pane_claimed_is_never_taken_again() {
+        let first = session("first", 1_000, boop::live::LiveSessionScope::Root);
+        let second = session("second", 2_000, boop::live::LiveSessionScope::Root);
+        let claimed = BTreeSet::from(["second".to_string()]);
+        assert_eq!(
+            newest_opened_session(
+                vec![first, second],
+                std::path::Path::new("/tmp/turn-attribution-parent"),
+                900,
+                &HashMap::new(),
+                None,
+                &claimed,
+            )
+            .as_deref(),
+            Some("first")
+        );
+    }
+
+    #[test]
+    fn two_registry_derived_binds_take_two_sessions_one_each() {
+        let dir = std::env::temp_dir().join(format!("boop-claim-test-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        assert!(claim_open_session(&dir, "aa"));
+        assert!(!claim_open_session(&dir, "aa"));
+        assert!(claim_open_session(&dir, "bb"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
