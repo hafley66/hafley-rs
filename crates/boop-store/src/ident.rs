@@ -36,7 +36,7 @@ pub struct Store {
 /// 19 = an absent favorite note is stored as NULL.
 /// 21 = each transcript cursor records its adapter projection contract.
 /// 22 = cost views over the usage ledger; see `COST_VIEW_SCHEMA`.
-pub const SCHEMA_VERSION: i64 = 23;
+pub const SCHEMA_VERSION: i64 = 24;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -169,6 +169,9 @@ pub struct TurnCommentTarget {
     pub session: String,
     pub turn: i64,
     pub role: String,
+    /// The first assistant turn after `turn` once the comment was sent, read
+    /// off `agent_turn_comment_reply`. `None` while pending or un-ingested.
+    pub reply_turn: Option<i64>,
 }
 
 /// One stored terminal comment with its resolved targets.
@@ -785,6 +788,10 @@ impl Store {
             if self.schema_version()? < 23 {
                 self.connection.execute_batch(DOOR_BLOWOUT_SCHEMA)?;
                 self.connection.execute_batch("PRAGMA user_version = 23;")?;
+            }
+            if self.schema_version()? < 24 {
+                self.connection.execute_batch(TURN_COMMENT_REPLY_SCHEMA)?;
+                self.connection.execute_batch("PRAGMA user_version = 24;")?;
             }
             self.stamp_version()?;
             Ok(())
@@ -1625,13 +1632,24 @@ impl Store {
     /// Every comment not yet sent, targets attached. Target roles come off
     /// agent_turn where the turn is ingested; an unknown turn reads as ''.
     pub fn turn_comments_pending(&self) -> Result<Vec<TurnComment>> {
+        self.load_turn_comments("sent_ts IS NULL")
+    }
+
+    /// Every comment already delivered into a prompt, targets attached with
+    /// the reply turn each one drew. These are the annotations a terminal
+    /// paints back onto the turns they quote.
+    pub fn turn_comments_sent(&self) -> Result<Vec<TurnComment>> {
+        self.load_turn_comments("sent_ts IS NOT NULL")
+    }
+
+    fn load_turn_comments(&self, filter: &str) -> Result<Vec<TurnComment>> {
         let mut comments: Vec<TurnComment> = Vec::new();
         {
-            let mut statement = self.connection.prepare(
+            let mut statement = self.connection.prepare(&format!(
                 "SELECT comment_id, client_id, kind, quote, note, enabled, tab_name,
                         created_ts, updated_ts
-                   FROM agent_turn_comment WHERE sent_ts IS NULL ORDER BY comment_id",
-            )?;
+                   FROM agent_turn_comment WHERE {filter} ORDER BY comment_id"
+            ))?;
             let rows = statement.query_map([], |row| {
                 Ok(TurnComment {
                     comment_id: row.get(0)?,
@@ -1651,11 +1669,14 @@ impl Store {
             }
         }
         let mut statement = self.connection.prepare(
-            "SELECT t.comment_id, s.value, t.turn, COALESCE(r.value, '')
+            "SELECT t.comment_id, s.value, t.turn, COALESCE(r.value, ''), v.reply_turn
                FROM agent_turn_comment_target t
                JOIN dict_session s ON s.id = t.session_id
                LEFT JOIN agent_turn a ON a.session_id = t.session_id AND a.turn = t.turn
                LEFT JOIN dict_role r ON r.id = a.role_id
+               LEFT JOIN agent_turn_comment_reply v
+                 ON v.comment_id = t.comment_id AND v.session_id = t.session_id
+                AND v.target_turn = t.turn
               ORDER BY t.comment_id, t.turn",
         )?;
         let targets = statement.query_map([], |row| {
@@ -1665,6 +1686,7 @@ impl Store {
                     session: row.get(1)?,
                     turn: row.get(2)?,
                     role: row.get(3)?,
+                    reply_turn: row.get(4)?,
                 },
             ))
         })?;
@@ -3155,6 +3177,30 @@ fn domain_of(url: &str) -> String {
         .to_owned()
 }
 
+/// Schema v24: the comment reply view, on its own so an older store adds it
+/// in place. The same text sits inside `SCHEMA` for a fresh store.
+const TURN_COMMENT_REPLY_SCHEMA: &str = "
+-- The reply to a sent comment: the first assistant turn in the target
+-- session after the target turn, stamped no earlier than the send. Nothing
+-- links a comment to its answer on the wire, so the answer is read back off
+-- agent_turn here. A pending comment has no row; a sent one whose reply is
+-- not ingested yet reads reply_turn NULL.
+CREATE VIEW IF NOT EXISTS agent_turn_comment_reply AS
+SELECT c.comment_id,
+       t.session_id,
+       t.turn AS target_turn,
+       (SELECT MIN(a.turn)
+          FROM agent_turn a
+          JOIN dict_role r ON r.id = a.role_id
+         WHERE a.session_id = t.session_id
+           AND a.turn > t.turn
+           AND r.value = 'assistant'
+           AND (a.ts IS NULL OR a.ts >= c.sent_ts)) AS reply_turn
+  FROM agent_turn_comment c
+  JOIN agent_turn_comment_target t ON t.comment_id = c.comment_id
+ WHERE c.sent_ts IS NOT NULL;
+";
+
 /// Schema v23: the door budget ledger, on its own so an older store adds it
 /// in place. The same text sits inside `SCHEMA` for a fresh store.
 const DOOR_BLOWOUT_SCHEMA: &str = "
@@ -3496,6 +3542,26 @@ CREATE TABLE IF NOT EXISTS agent_door_blowout (
 );
 CREATE INDEX IF NOT EXISTS idx_door_blowout_route
   ON agent_door_blowout(route, at_ms);
+
+-- The reply to a sent comment: the first assistant turn in the target
+-- session after the target turn, stamped no earlier than the send. Nothing
+-- links a comment to its answer on the wire, so the answer is read back off
+-- agent_turn here. A pending comment has no row; a sent one whose reply is
+-- not ingested yet reads reply_turn NULL.
+CREATE VIEW IF NOT EXISTS agent_turn_comment_reply AS
+SELECT c.comment_id,
+       t.session_id,
+       t.turn AS target_turn,
+       (SELECT MIN(a.turn)
+          FROM agent_turn a
+          JOIN dict_role r ON r.id = a.role_id
+         WHERE a.session_id = t.session_id
+           AND a.turn > t.turn
+           AND r.value = 'assistant'
+           AND (a.ts IS NULL OR a.ts >= c.sent_ts)) AS reply_turn
+  FROM agent_turn_comment c
+  JOIN agent_turn_comment_target t ON t.comment_id = c.comment_id
+ WHERE c.sent_ts IS NOT NULL;
 
 -- Historical liveness: [from_ts, to_ts) intervals, open when to_ts IS NULL,
 -- folded from observations so a state change closes an interval and repeated
@@ -3909,6 +3975,52 @@ mod tests {
             .unwrap();
         assert!(store.turn_comment_delete("selection:2:0").unwrap());
         assert!(!store.turn_comment_delete("selection:2:0").unwrap());
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// RECEIPT. A sent comment reads the first assistant turn stamped after
+    /// the send as its reply; an assistant turn that landed before the send
+    /// is not it, and a pending comment names no reply at all.
+    #[test]
+    fn a_sent_comment_reads_the_assistant_turn_that_answered_it() {
+        let (path, store) = fresh_store("turn_comment_reply");
+        for (turn, ts, role, said) in [
+            (3, 100, "user", "what is a relation here?"),
+            (4, 110, "assistant", "an earlier answer"),
+            (5, 150, "user", "Selected context: ..."),
+            (6, 160, "assistant", "the reply"),
+        ] {
+            store.write_turn("sess-a", turn, ts, role, said).unwrap();
+        }
+        let targets = vec![("sess-a".to_string(), 3)];
+        store
+            .turn_comment_upsert(&TurnCommentUpsert {
+                client_id: "selection:9:0",
+                kind: "selection",
+                quote: "relation",
+                note: Some("what is a relation here?"),
+                enabled: true,
+                tab_name: Some("tab-1"),
+                targets: &targets,
+                ts: 120,
+            })
+            .unwrap();
+        let pending = store.turn_comments_pending().unwrap();
+        assert_eq!(pending[0].targets[0].reply_turn, None, "pending: no reply yet");
+        assert!(store.turn_comments_sent().unwrap().is_empty());
+
+        store
+            .turn_comment_mark_sent(&["selection:9:0".to_string()], 140)
+            .unwrap();
+        let sent = store.turn_comments_sent().unwrap();
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].targets[0].turn, 3);
+        assert_eq!(sent[0].targets[0].reply_turn, Some(6), "turn 4 predates the send");
+        let (_, rows) = store
+            .passthrough("SELECT comment_id, target_turn, reply_turn FROM agent_turn_comment_reply")
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["reply_turn"].as_i64(), Some(6));
         let _ = std::fs::remove_file(path);
     }
 
