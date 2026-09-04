@@ -1183,6 +1183,23 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
         },
         BeepCmd::Lane { cmd } => run_beep_lane(registry, cmd),
         BeepCmd::Agent { cmd } => run_agent(cmd),
+        #[cfg(feature = "agent-read")]
+        BeepCmd::Fork {
+            comment,
+            preset,
+            cwd,
+            parent,
+            dry_run,
+            mail_dir,
+        } => run_fork(
+            registry,
+            comment,
+            preset,
+            cwd,
+            parent,
+            dry_run,
+            mail_dir.as_deref(),
+        ),
         BeepCmd::Message { cmd } => match cmd {
             MessageCmd::Ack {
                 lane,
@@ -1323,6 +1340,132 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
             Ok(())
         }
     }
+}
+
+/// `boop beep fork <comment-id>`: one lane off one stored comment. The brief
+/// is written under `<mail_dir>/forks/`, the lane is `fork/comment-<id>`, and
+/// the link lands in `agent_turn_comment_fork` once the spawn returns.
+#[cfg(feature = "agent-read")]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_fork(
+    registry: &Registry,
+    comment_id: i64,
+    preset: Option<String>,
+    cwd: Option<String>,
+    parent: Option<String>,
+    dry_run: bool,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let store = bus::open_store(&dir)?;
+    let comment = store
+        .turn_comment(comment_id)?
+        .with_context(|| format!("no comment {comment_id} in agent_turn_comment"))?;
+    let mut turns = Vec::new();
+    for target in &comment.targets {
+        let query = boop::ident::TurnQuery {
+            session: Some(target.session.clone()),
+            turn_from: Some(target.turn as u64),
+            turn_to: Some(target.turn as u64),
+            ..Default::default()
+        };
+        turns.extend(store.turn_rows(&query)?);
+    }
+    let brief = fork_brief(&comment, &turns);
+    let brief_path = dir.join("forks").join(format!("comment-{comment_id}.md"));
+    std::fs::create_dir_all(brief_path.parent().expect("forks dir has a parent"))?;
+    std::fs::write(&brief_path, &brief)?;
+    let branch = format!("fork/comment-{comment_id}");
+    let lane = branch.replace('/', "-");
+    let goal = comment
+        .note
+        .as_deref()
+        .filter(|note| !note.trim().is_empty())
+        .unwrap_or(comment.quote.as_str())
+        .lines()
+        .next()
+        .unwrap_or("")
+        .chars()
+        .take(120)
+        .collect::<String>();
+    println!("brief {}", brief_path.display());
+    run_beep_lane(
+        registry,
+        LaneCmd::Create {
+            branch: Some(branch.clone()),
+            brief: Some(brief_path.clone()),
+            goal: Some(goal),
+            mood: None,
+            trace: None,
+            no_start: false,
+            cwd,
+            base_sha: None,
+            expect_path: Vec::new(),
+            expect_commit_subject: Vec::new(),
+            expect_commits_at_least: None,
+            parent,
+            on_parent_death: Default::default(),
+            harness: None,
+            model: None,
+            preset,
+            variant: None,
+            bin: None,
+            wait: false,
+            wait_timeout: 3600,
+            lane: None,
+            tmux: None,
+            socket: None,
+            mail_dir: Some(dir.clone()),
+            dry_run,
+            reclaim: false,
+        },
+    )?;
+    if dry_run {
+        return Ok(());
+    }
+    store.record_turn_comment_fork(&boop::ident::TurnCommentFork {
+        comment_id,
+        lane: lane.clone(),
+        branch,
+        brief: brief_path.display().to_string(),
+        created_ts: boop::live::now_ms() as i64,
+    })?;
+    println!("forked comment {comment_id} -> lane {lane}");
+    Ok(())
+}
+
+/// The brief a forked lane reads: the note as the ask, the quote, then every
+/// quoted turn in full so the lane sees what the comment pointed at.
+#[cfg(feature = "agent-read")]
+fn fork_brief(comment: &boop::ident::TurnComment, turns: &[boop::rows::TurnRow]) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("# Fork of comment {}\n\n", comment.comment_id));
+    match comment.note.as_deref().filter(|note| !note.trim().is_empty()) {
+        Some(note) => out.push_str(&format!("## Ask\n\n{}\n\n", note.trim())),
+        None => out.push_str("## Ask\n\nAct on the quoted text.\n\n"),
+    }
+    out.push_str(&format!("## Quote\n\n> {}\n\n", comment.quote.trim().replace('\n', "\n> ")));
+    if !turns.is_empty() {
+        out.push_str("## Quoted turns\n\n");
+        for turn in turns {
+            out.push_str(&format!(
+                "### {} turn {} ({})\n\n{}\n\n",
+                turn.session,
+                turn.turn,
+                if turn.role.is_empty() { "?" } else { turn.role.as_str() },
+                turn.said.trim()
+            ));
+        }
+    }
+    for target in &comment.targets {
+        if !turns.iter().any(|turn| turn.session == target.session && turn.turn == target.turn) {
+            out.push_str(&format!(
+                "- {} turn {} is quoted but not ingested; read it with `boop db turns --session {}`\n",
+                target.session, target.turn, target.session
+            ));
+        }
+    }
+    out
 }
 
 pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
@@ -2713,6 +2856,51 @@ pub(crate) fn render_ndjson(nodes: &[LaneNode]) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::cli::testkit::{route_with, temp_mail_dir};
+
+    /// RECEIPT. The brief a fork lane reads carries the note as the ask, the
+    /// quote, the ingested turn in full, and names the turn it could not read.
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn a_fork_brief_carries_the_ask_the_quote_and_the_quoted_turns() {
+        let comment = boop::ident::TurnComment {
+            comment_id: 7,
+            client_id: "c-7".into(),
+            kind: "ask".into(),
+            quote: "line one\nline two".into(),
+            note: Some("make this a test".into()),
+            enabled: true,
+            tab_name: None,
+            created_ts: 0,
+            updated_ts: 0,
+            targets: vec![
+                boop::ident::TurnCommentTarget {
+                    session: "ses-a".into(),
+                    turn: 3,
+                    role: "assistant".into(),
+                    reply_turn: None,
+                },
+                boop::ident::TurnCommentTarget {
+                    session: "ses-a".into(),
+                    turn: 9,
+                    role: String::new(),
+                    reply_turn: None,
+                },
+            ],
+        };
+        let turns = vec![boop::rows::TurnRow {
+            session: "ses-a".into(),
+            harness: "claude".into(),
+            turn: 3,
+            ts: 0,
+            role: "assistant".into(),
+            said: "the turn body".into(),
+        }];
+        let brief = fork_brief(&comment, &turns);
+        assert!(brief.contains("## Ask\n\nmake this a test"), "{brief}");
+        assert!(brief.contains("> line one\n> line two"), "{brief}");
+        assert!(brief.contains("### ses-a turn 3 (assistant)\n\nthe turn body"), "{brief}");
+        assert!(brief.contains("ses-a turn 9 is quoted but not ingested"), "{brief}");
+    }
     use boop::bus::{self, read_routes, Route};
     use boop::proc::{ProcReader, ProcessInfo, SysinfoSnapshot};
     use boop::registry::Registry;

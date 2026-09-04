@@ -36,7 +36,7 @@ pub struct Store {
 /// 19 = an absent favorite note is stored as NULL.
 /// 21 = each transcript cursor records its adapter projection contract.
 /// 22 = cost views over the usage ledger; see `COST_VIEW_SCHEMA`.
-pub const SCHEMA_VERSION: i64 = 24;
+pub const SCHEMA_VERSION: i64 = 25;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -172,6 +172,17 @@ pub struct TurnCommentTarget {
     /// The first assistant turn after `turn` once the comment was sent, read
     /// off `agent_turn_comment_reply`. `None` while pending or un-ingested.
     pub reply_turn: Option<i64>,
+}
+
+/// One lane forked off a comment; `lane` is the lane id, `brief` the path
+/// the lane read.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TurnCommentFork {
+    pub comment_id: i64,
+    pub lane: String,
+    pub branch: String,
+    pub brief: String,
+    pub created_ts: i64,
 }
 
 /// One stored terminal comment with its resolved targets.
@@ -792,6 +803,10 @@ impl Store {
             if self.schema_version()? < 24 {
                 self.connection.execute_batch(TURN_COMMENT_REPLY_SCHEMA)?;
                 self.connection.execute_batch("PRAGMA user_version = 24;")?;
+            }
+            if self.schema_version()? < 25 {
+                self.connection.execute_batch(TURN_COMMENT_FORK_SCHEMA)?;
+                self.connection.execute_batch("PRAGMA user_version = 25;")?;
             }
             self.stamp_version()?;
             Ok(())
@@ -1631,6 +1646,50 @@ impl Store {
 
     /// Every comment not yet sent, targets attached. Target roles come off
     /// agent_turn where the turn is ingested; an unknown turn reads as ''.
+    /// One comment by its row id, targets attached; `None` for an unknown id.
+    pub fn turn_comment(&self, comment_id: i64) -> Result<Option<TurnComment>> {
+        Ok(self
+            .load_turn_comments(&format!("comment_id = {comment_id}"))?
+            .into_iter()
+            .next())
+    }
+
+    /// Record the lane `boop beep fork` spawned off a comment.
+    pub fn record_turn_comment_fork(&self, fork: &TurnCommentFork) -> Result<()> {
+        self.connection.execute(
+            "INSERT OR REPLACE INTO agent_turn_comment_fork
+               (comment_id, lane, branch, brief, created_ts)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                fork.comment_id,
+                fork.lane,
+                fork.branch,
+                fork.brief,
+                fork.created_ts
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Every lane forked off one comment, oldest first.
+    pub fn turn_comment_forks(&self, comment_id: i64) -> Result<Vec<TurnCommentFork>> {
+        let mut statement = self.connection.prepare(
+            "SELECT comment_id, lane, branch, brief, created_ts
+               FROM agent_turn_comment_fork WHERE comment_id = ?1
+              ORDER BY created_ts, lane",
+        )?;
+        let rows = statement.query_map(params![comment_id], |row| {
+            Ok(TurnCommentFork {
+                comment_id: row.get(0)?,
+                lane: row.get(1)?,
+                branch: row.get(2)?,
+                brief: row.get(3)?,
+                created_ts: row.get(4)?,
+            })
+        })?;
+        rows.collect::<std::result::Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
     pub fn turn_comments_pending(&self) -> Result<Vec<TurnComment>> {
         self.load_turn_comments("sent_ts IS NULL")
     }
@@ -3201,6 +3260,22 @@ SELECT c.comment_id,
  WHERE c.sent_ts IS NOT NULL;
 ";
 
+/// Schema v25: the comment fork link, on its own so an older store adds it
+/// in place. The same text sits inside `SCHEMA` for a fresh store.
+const TURN_COMMENT_FORK_SCHEMA: &str = "
+-- One lane forked off a stored comment (`boop beep fork <comment-id>`): the
+-- quoted turns and the note became the lane's brief. A terminal paints this
+-- link back under the quoted turn once the lane answers.
+CREATE TABLE IF NOT EXISTS agent_turn_comment_fork (
+  comment_id INTEGER NOT NULL,
+  lane TEXT NOT NULL,
+  branch TEXT NOT NULL,
+  brief TEXT NOT NULL,
+  created_ts INTEGER NOT NULL,
+  PRIMARY KEY (comment_id, lane)
+) WITHOUT ROWID;
+";
+
 /// Schema v23: the door budget ledger, on its own so an older store adds it
 /// in place. The same text sits inside `SCHEMA` for a fresh store.
 const DOOR_BLOWOUT_SCHEMA: &str = "
@@ -3309,6 +3384,18 @@ CREATE TABLE IF NOT EXISTS agent_turn_comment_target (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS idx_turn_comment_target
   ON agent_turn_comment_target(session_id, turn);
+
+-- One lane forked off a stored comment (`boop beep fork <comment-id>`): the
+-- quoted turns and the note became the lane's brief. A terminal paints this
+-- link back under the quoted turn once the lane answers.
+CREATE TABLE IF NOT EXISTS agent_turn_comment_fork (
+  comment_id INTEGER NOT NULL,
+  lane TEXT NOT NULL,
+  branch TEXT NOT NULL,
+  brief TEXT NOT NULL,
+  created_ts INTEGER NOT NULL,
+  PRIMARY KEY (comment_id, lane)
+) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS agent_trace (
   trace_id INTEGER PRIMARY KEY,
@@ -3975,6 +4062,45 @@ mod tests {
             .unwrap();
         assert!(store.turn_comment_delete("selection:2:0").unwrap());
         assert!(!store.turn_comment_delete("selection:2:0").unwrap());
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// RECEIPT. A comment reads back by its row id with its targets, a fork
+    /// off it round-trips, and an unknown id is `None` rather than an error.
+    #[test]
+    fn a_comment_reads_by_id_and_keeps_the_lanes_forked_off_it() {
+        use super::TurnCommentFork;
+        let (path, store) = fresh_store("turn_comment_fork");
+        let targets = vec![("ses-fork".to_string(), 4)];
+        let id = store
+            .turn_comment_upsert(&TurnCommentUpsert {
+                client_id: "selection:9:0",
+                kind: "ask",
+                quote: "fork me",
+                note: Some("as a lane"),
+                enabled: true,
+                tab_name: None,
+                targets: &targets,
+                ts: 10,
+            })
+            .unwrap();
+        let comment = store.turn_comment(id).unwrap().expect("the row exists");
+        assert_eq!(comment.quote, "fork me");
+        assert_eq!(comment.targets.len(), 1);
+        assert_eq!(comment.targets[0].session, "ses-fork");
+        assert!(store.turn_comment(id + 1000).unwrap().is_none());
+
+        let fork = TurnCommentFork {
+            comment_id: id,
+            lane: "fork-comment-1".into(),
+            branch: "fork/comment-1".into(),
+            brief: "/tmp/forks/comment-1.md".into(),
+            created_ts: 20,
+        };
+        store.record_turn_comment_fork(&fork).unwrap();
+        store.record_turn_comment_fork(&fork).unwrap();
+        assert_eq!(store.turn_comment_forks(id).unwrap(), vec![fork]);
+        assert!(store.turn_comment_forks(id + 1000).unwrap().is_empty());
         let _ = std::fs::remove_file(path);
     }
 

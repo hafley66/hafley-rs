@@ -829,6 +829,28 @@ enum BeepCmd {
         #[command(subcommand)]
         cmd: MessageCmd,
     },
+    /// Fork a lane off a stored terminal comment: the quoted turns and the
+    /// note become the brief, the lane runs on `--preset` from the caller's
+    /// repo, and the link is kept in `agent_turn_comment_fork`.
+    #[cfg(feature = "agent-read")]
+    Fork {
+        /// `comment_id` in `agent_turn_comment`.
+        comment: i64,
+        /// The config preset the lane spawns from: harness, model, effort.
+        #[arg(long)]
+        preset: Option<String>,
+        /// Repo to branch from; defaults to the repo the caller stands in.
+        #[arg(long)]
+        cwd: Option<String>,
+        /// Defaults to the caller, then to the one registered coordinator.
+        #[arg(long)]
+        parent: Option<String>,
+        /// Print the brief path and the lane's `cmd:` line without spawning.
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
     /// pid, rss, cpu, uptime, child count per live lane.
     Ps {
         lane: Option<String>,
@@ -1420,8 +1442,8 @@ enum DbCmd {
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
         format: QueryFormat,
     },
-    /// Every table with its columns, so a query never starts with a probe of
-    /// `sqlite_master`.
+    /// Every table and view with its columns and join keys, so a query never
+    /// starts with a probe of `sqlite_master`.
     #[cfg(feature = "agent-read")]
     Schema {
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
