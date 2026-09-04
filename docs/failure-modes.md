@@ -85,6 +85,35 @@ row is stamped in the same call. `held_messages` asks "did a door ever take
 this", never "what was the last word". A test double for a door answers the
 same variant the real door answers, or the test is measuring nothing.
 
+**Rail 2: the door budget** (`deliver.rs` `DoorBudget`, `door_verdict`;
+store table `agent_door_blowout`). Whatever the ladder gets wrong next, one
+route takes at most its live connects' worth of door pushes per window.
+
+| term | value |
+|---|---|
+| live connects | lane routes naming the recipient as parent, floored at `BOOP_DOOR_FLOOR` (2) |
+| window | `BOOP_DOOR_WINDOW_SECS` (60) |
+| cool-off | `BOOP_DOOR_COOLDOWN_SECS` (300) |
+| trip | pushes in window >= live connects, or the same body already went through the door this window |
+
+```mermaid
+stateDiagram-v2
+    [*] --> Open
+    Open --> Open: push, pushes < budget
+    Open --> CoolingOff: pushes >= budget or replayed body\n(agent_door_blowout row, cooled-off transition)
+    CoolingOff --> CoolingOff: drain skips the route, writes nothing
+    CoolingOff --> Open: at_ms + cooldown_ms passes
+```
+
+A tripped row stays held and drips out at the budget after the cool-off.
+Receipts: `a_burst_past_the_recipients_live_connects_trips_and_cools_off`
+(6 rows, 1 lane: 2 through, 1 trip, 5 quiet ticks write nothing),
+`a_cool_off_ends_and_the_drip_resumes_at_budget` (5 rows land 2 + 2 + 1),
+`a_body_the_door_already_took_this_window_trips_at_once`. The ledger is the
+only state, so every boop process and every wrapper tick reads one answer;
+an in-process limiter crate (`governor`, `leaky-bucket`, `tower::limit`)
+resets on every `boop` invocation and was not the shape of this problem.
+
 **Live store.** The 752 open rows read as held by no drain once this binary is
 installed. Stamping them is one statement, for a store that should not carry
 open rows a door already took:

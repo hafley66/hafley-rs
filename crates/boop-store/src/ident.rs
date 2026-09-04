@@ -35,7 +35,8 @@ pub struct Store {
 /// 16 = the typed error code a refused transition carries.
 /// 19 = an absent favorite note is stored as NULL.
 /// 21 = each transcript cursor records its adapter projection contract.
-pub const SCHEMA_VERSION: i64 = 21;
+/// 22 = cost views over the usage ledger; see `COST_VIEW_SCHEMA`.
+pub const SCHEMA_VERSION: i64 = 23;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -275,6 +276,28 @@ pub enum DeliveryState {
     ParentDoorDelivered,
     /// A parent-addressed row did not reach the parent's door.
     ParentDoorFailed,
+    /// The route's door budget is blown; the row is held through the cool-off
+    /// and the drain retries it after (failure mode 14, rail 2).
+    CooledOff,
+}
+
+/// One door budget trip (`agent_door_blowout`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DoorBlowoutRow {
+    pub route: String,
+    pub at_ms: u64,
+    pub pushes: usize,
+    pub budget: usize,
+    pub window_ms: u64,
+    pub cooldown_ms: u64,
+    pub why: String,
+}
+
+impl DoorBlowoutRow {
+    /// The instant the cool-off ends.
+    pub fn until_ms(&self) -> u64 {
+        self.at_ms.saturating_add(self.cooldown_ms)
+    }
 }
 
 impl DeliveryState {
@@ -295,6 +318,7 @@ impl DeliveryState {
             DeliveryState::NoReply => "no-reply",
             DeliveryState::ParentDoorDelivered => "parent-door-delivered",
             DeliveryState::ParentDoorFailed => "parent-door-failed",
+            DeliveryState::CooledOff => "cooled-off",
         }
     }
 
@@ -310,13 +334,14 @@ impl DeliveryState {
                 | DeliveryState::PastedIntoPane
                 | DeliveryState::HeldInMailbox
                 | DeliveryState::ParentDoorDelivered
+                | DeliveryState::CooledOff
         )
     }
 
     /// Read one stored `outcome` word back. Unknown text is `None` rather than
     /// a guess, so a store written by a newer boop reads as unknown.
     pub fn parse(word: &str) -> Option<DeliveryState> {
-        const ALL: [DeliveryState; 15] = [
+        const ALL: [DeliveryState; 16] = [
             DeliveryState::Appended,
             DeliveryState::ClaimedBySupervisor,
             DeliveryState::SubmittedToHarness,
@@ -332,6 +357,7 @@ impl DeliveryState {
             DeliveryState::NoReply,
             DeliveryState::ParentDoorDelivered,
             DeliveryState::ParentDoorFailed,
+            DeliveryState::CooledOff,
         ];
         ALL.into_iter().find(|state| state.as_str() == word)
     }
@@ -549,6 +575,9 @@ impl Store {
             self.connection
                 .execute_batch(MAILBOX_SCHEMA)
                 .with_context(|| format!("initialise mailbox schema at {}", path.display()))?;
+            self.connection
+                .execute_batch(COST_VIEW_SCHEMA)
+                .with_context(|| format!("initialise cost views at {}", path.display()))?;
             self.seed_moods()?;
             if self.schema_version()? == 0 {
                 self.stamp_version()?;
@@ -749,6 +778,14 @@ impl Store {
                     "sync cursor projection-version migration finished"
                 );
             }
+            if self.schema_version()? < 22 {
+                self.connection.execute_batch(COST_VIEW_SCHEMA)?;
+                self.connection.execute_batch("PRAGMA user_version = 22;")?;
+            }
+            if self.schema_version()? < 23 {
+                self.connection.execute_batch(DOOR_BLOWOUT_SCHEMA)?;
+                self.connection.execute_batch("PRAGMA user_version = 23;")?;
+            }
             self.stamp_version()?;
             Ok(())
         })();
@@ -802,6 +839,7 @@ impl Store {
         }
         self.connection.execute_batch(SCHEMA)?;
         self.connection.execute_batch(MAILBOX_SCHEMA)?;
+        self.connection.execute_batch(COST_VIEW_SCHEMA)?;
         self.seed_moods()?;
         self.stamp_version()?;
         for (body, note, source, created_ts, first_ts) in favorites {
@@ -2414,6 +2452,99 @@ impl Store {
         Ok(())
     }
 
+    /// Door pushes at `route` since `since_ms`: every transition whose detail
+    /// names a door, counted over the whole history.
+    pub fn door_pushes_since(&self, route: &str, since_ms: u64) -> Result<usize> {
+        let count: i64 = self.connection.query_row(
+            "SELECT COUNT(*) FROM agent_delivery_transition
+             WHERE route = ?1 AND at_ms >= ?2 AND detail IN ('door', 'door queue')",
+            params![route, since_ms as i64],
+            |row| row.get(0),
+        )?;
+        Ok(count as usize)
+    }
+
+    /// Whether a door already took this exact body for `route` since
+    /// `since_ms`. A second copy inside the window is a replay, whatever the
+    /// message id says.
+    pub fn door_pushed_body_since(&self, route: &str, body: &str, since_ms: u64) -> Result<bool> {
+        let count: i64 = self.connection.query_row(
+            "SELECT COUNT(*) FROM agent_delivery_transition t
+             JOIN agent_mail m ON m.message_id = t.message_id
+             WHERE t.route = ?1 AND t.at_ms >= ?2
+               AND t.detail IN ('door', 'door queue') AND m.body = ?3",
+            params![route, since_ms as i64, body],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    /// The newest door budget trip for `route`, if any.
+    pub fn latest_door_blowout(&self, route: &str) -> Result<Option<DoorBlowoutRow>> {
+        let mut statement = self.connection.prepare(
+            "SELECT route, at_ms, pushes, budget, window_ms, cooldown_ms, why
+             FROM agent_door_blowout WHERE route = ?1
+             ORDER BY at_ms DESC, blowout_id DESC LIMIT 1",
+        )?;
+        let mut rows = statement.query_map(params![route], |row| {
+            Ok(DoorBlowoutRow {
+                route: row.get(0)?,
+                at_ms: row.get::<_, i64>(1)? as u64,
+                pushes: row.get::<_, i64>(2)? as usize,
+                budget: row.get::<_, i64>(3)? as usize,
+                window_ms: row.get::<_, i64>(4)? as u64,
+                cooldown_ms: row.get::<_, i64>(5)? as u64,
+                why: row.get(6)?,
+            })
+        })?;
+        rows.next().transpose().map_err(Into::into)
+    }
+
+    /// Every door budget trip for `route`, newest first.
+    pub fn door_blowouts(&self, route: &str) -> Result<Vec<DoorBlowoutRow>> {
+        let mut statement = self.connection.prepare(
+            "SELECT route, at_ms, pushes, budget, window_ms, cooldown_ms, why
+             FROM agent_door_blowout WHERE route = ?1
+             ORDER BY at_ms DESC, blowout_id DESC",
+        )?;
+        let rows = statement.query_map(params![route], |row| {
+            Ok(DoorBlowoutRow {
+                route: row.get(0)?,
+                at_ms: row.get::<_, i64>(1)? as u64,
+                pushes: row.get::<_, i64>(2)? as usize,
+                budget: row.get::<_, i64>(3)? as usize,
+                window_ms: row.get::<_, i64>(4)? as u64,
+                cooldown_ms: row.get::<_, i64>(5)? as u64,
+                why: row.get(6)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+
+    /// Record one door budget trip. The row is the cool-off: no door push at
+    /// `route` lands until `at_ms + cooldown_ms`.
+    pub fn record_door_blowout(&self, row: &DoorBlowoutRow) -> Result<()> {
+        self.connection.execute(
+            "INSERT INTO agent_door_blowout
+               (route, at_ms, pushes, budget, window_ms, cooldown_ms, why)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                row.route,
+                row.at_ms as i64,
+                row.pushes as i64,
+                row.budget as i64,
+                row.window_ms as i64,
+                row.cooldown_ms as i64,
+                row.why
+            ],
+        )?;
+        Ok(())
+    }
+
     /// Every liveness interval for one session (or all when `session` is
     /// `None`), joined back to the TEXT status surface.
     pub fn live_span(&self, session: Option<&str>) -> Result<Vec<crate::rows::LiveSpanRow>> {
@@ -3024,6 +3155,27 @@ fn domain_of(url: &str) -> String {
         .to_owned()
 }
 
+/// Schema v23: the door budget ledger, on its own so an older store adds it
+/// in place. The same text sits inside `SCHEMA` for a fresh store.
+const DOOR_BLOWOUT_SCHEMA: &str = "
+-- One row per door budget trip (failure mode 14, rail 2): a route was about
+-- to take more door pushes inside `window_ms` than its live connects allow.
+-- The newest row for a route holds every door push at it until
+-- `at_ms + cooldown_ms`.
+CREATE TABLE IF NOT EXISTS agent_door_blowout (
+  blowout_id INTEGER PRIMARY KEY,
+  route TEXT NOT NULL,
+  at_ms INTEGER NOT NULL,
+  pushes INTEGER NOT NULL,
+  budget INTEGER NOT NULL,
+  window_ms INTEGER NOT NULL,
+  cooldown_ms INTEGER NOT NULL,
+  why TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_door_blowout_route
+  ON agent_door_blowout(route, at_ms);
+";
+
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS dict_session (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS dict_harness (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
@@ -3328,6 +3480,23 @@ CREATE TABLE IF NOT EXISTS agent_delivery_transition (
 CREATE INDEX IF NOT EXISTS idx_delivery_transition_route
   ON agent_delivery_transition(message_id, route);
 
+-- One row per door budget trip (failure mode 14, rail 2): a route was about
+-- to take more door pushes inside `window_ms` than its live connects allow.
+-- The newest row for a route holds every door push at it until
+-- `at_ms + cooldown_ms`.
+CREATE TABLE IF NOT EXISTS agent_door_blowout (
+  blowout_id INTEGER PRIMARY KEY,
+  route TEXT NOT NULL,
+  at_ms INTEGER NOT NULL,
+  pushes INTEGER NOT NULL,
+  budget INTEGER NOT NULL,
+  window_ms INTEGER NOT NULL,
+  cooldown_ms INTEGER NOT NULL,
+  why TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_door_blowout_route
+  ON agent_door_blowout(route, at_ms);
+
 -- Historical liveness: [from_ts, to_ts) intervals, open when to_ts IS NULL,
 -- folded from observations so a state change closes an interval and repeated
 -- identical observations extend nothing.
@@ -3378,6 +3547,80 @@ CREATE TABLE IF NOT EXISTS mood (
   name_id INTEGER NOT NULL UNIQUE,
   template TEXT NOT NULL
 );
+";
+
+/// Cost views: `v_usage_cost` holds the rate formula once; the skill views
+/// price the activation turn and its window to the next user turn.
+pub(crate) const COST_VIEW_SCHEMA: &str = "
+CREATE VIEW IF NOT EXISTS v_usage_cost AS
+SELECT usage.session_id,
+       usage.turn,
+       usage.ts,
+       dict_session.value AS session,
+       dict_harness.value AS harness,
+       dict_model.value AS model,
+       usage.input_tokens,
+       usage.output_tokens,
+       usage.cache_create_5m_tokens,
+       usage.cache_create_1h_tokens,
+       usage.cache_read_tokens,
+       usage.is_sidechain,
+       COALESCE(usage.cost_usd_recorded,
+                (usage.input_tokens * price.input_per_mtok
+                 + usage.output_tokens * price.output_per_mtok
+                 + usage.cache_create_5m_tokens * price.cache_write_5m_per_mtok
+                 + usage.cache_create_1h_tokens * price.cache_write_1h_per_mtok
+                 + usage.cache_read_tokens * price.cache_read_per_mtok) / 1e6) AS cost_usd
+FROM agent_usage AS usage
+JOIN agent_session ON agent_session.session_id = usage.session_id
+JOIN dict_session ON dict_session.id = agent_session.session_id
+JOIN dict_harness ON dict_harness.id = agent_session.harness_id
+JOIN dict_model ON dict_model.id = usage.model_id
+LEFT JOIN model_price AS price ON price.model_id = usage.model_id;
+
+CREATE VIEW IF NOT EXISTS v_skill_cost_act AS
+SELECT dict_skill.value AS skill,
+       v_usage_cost.session AS session,
+       v_usage_cost.harness AS harness,
+       v_usage_cost.turn AS act_turn,
+       v_usage_cost.ts AS ts,
+       v_usage_cost.model AS model,
+       v_usage_cost.input_tokens,
+       v_usage_cost.output_tokens,
+       v_usage_cost.cache_read_tokens,
+       v_usage_cost.cost_usd
+FROM agent_skill
+JOIN dict_skill ON dict_skill.id = agent_skill.skill_id
+JOIN v_usage_cost ON v_usage_cost.session_id = agent_skill.session_id
+                 AND v_usage_cost.turn = agent_skill.turn;
+
+CREATE VIEW IF NOT EXISTS v_skill_cost_window AS
+WITH act AS (
+  SELECT agent_skill.session_id AS session_id,
+         agent_skill.skill_id AS skill_id,
+         agent_skill.turn AS act_turn,
+         (SELECT MIN(agent_turn.turn) FROM agent_turn
+          WHERE agent_turn.session_id = agent_skill.session_id
+            AND agent_turn.role_id = (SELECT id FROM dict_role WHERE value = 'user')
+            AND agent_turn.turn > agent_skill.turn) AS next_user_turn
+  FROM agent_skill
+)
+SELECT dict_skill.value AS skill,
+       dict_session.value AS session,
+       act.act_turn,
+       act.next_user_turn,
+       COUNT(v_usage_cost.turn) AS usage_rows,
+       CAST(TOTAL(v_usage_cost.is_sidechain) AS INTEGER) AS sidechain_rows,
+       CAST(TOTAL(v_usage_cost.input_tokens) AS INTEGER) AS input_tokens,
+       CAST(TOTAL(v_usage_cost.output_tokens) AS INTEGER) AS output_tokens,
+       TOTAL(v_usage_cost.cost_usd) AS cost_usd
+FROM act
+JOIN dict_skill ON dict_skill.id = act.skill_id
+JOIN dict_session ON dict_session.id = act.session_id
+LEFT JOIN v_usage_cost ON v_usage_cost.session_id = act.session_id
+                      AND v_usage_cost.turn >= act.act_turn
+                      AND v_usage_cost.turn < COALESCE(act.next_user_turn, 1000000000)
+GROUP BY act.session_id, act.skill_id;
 ";
 
 /// The mailbox and its routes. `agent_mail_needs_transition` refuses an
@@ -3497,6 +3740,113 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let store = Store::open(path.clone()).unwrap();
         (path, store)
+    }
+
+    #[test]
+    fn cost_views_exist_after_fresh_open_migration_and_rebuild() {
+        let view_count = |store: &Store| -> i64 {
+            store
+                .connection
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'view'
+                     AND name IN ('v_usage_cost', 'v_skill_cost_act', 'v_skill_cost_window')",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        let (path, store) = fresh_store("cost_views_lifecycle");
+        assert_eq!(view_count(&store), 3);
+        drop(store);
+        let rewind = Connection::open(&path).unwrap();
+        rewind
+            .execute_batch(
+                "DROP VIEW v_usage_cost;
+                 DROP VIEW v_skill_cost_act;
+                 DROP VIEW v_skill_cost_window;
+                 PRAGMA user_version = 21;",
+            )
+            .unwrap();
+        drop(rewind);
+        let store = Store::open(path.clone()).unwrap();
+        assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
+        assert_eq!(view_count(&store), 3);
+        store.rebuild().unwrap();
+        assert_eq!(view_count(&store), 3);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn cost_views_compute_rates_coalesce_and_window() {
+        let (path, store) = fresh_store("cost_views_math");
+        store
+            .connection
+            .execute_batch(
+                "INSERT INTO dict_session (id, value) VALUES (1, 's1');
+                 INSERT INTO dict_harness (id, value) VALUES (1, 'claude');
+                 INSERT INTO dict_skill (id, value) VALUES (1, 'my-skill');
+                 INSERT INTO dict_role (id, value) VALUES (1, 'user');
+                 INSERT INTO dict_model (id, value) VALUES (1, 'm1');
+                 INSERT INTO dict_price_source (id, value) VALUES (1, 'test');
+                 INSERT INTO agent_session (session_id, harness_id, started_ts) VALUES (1, 1, 100);
+                 INSERT INTO agent_turn (session_id, turn, role_id) VALUES (1, 1, 1), (1, 2, 2), (1, 3, 1);
+                 INSERT INTO agent_skill (session_id, turn, skill_id) VALUES (1, 2, 1);
+                 INSERT INTO model_price (model_id, input_per_mtok, output_per_mtok,
+                     cache_write_5m_per_mtok, cache_write_1h_per_mtok, cache_read_per_mtok,
+                     source_id, fetched_ts)
+                   VALUES (1, 2.0, 1.0, 0.0, 0.0, 0.0, 1, 0);
+                 INSERT INTO agent_usage (session_id, turn, ts, request_ref, model_id,
+                     input_tokens, output_tokens)
+                   VALUES (1, 2, 100, 1, 1, 1000000, 1000000);",
+            )
+            .unwrap();
+        let act: (String, f64) = store
+            .connection
+            .query_row(
+                "SELECT skill, cost_usd FROM v_skill_cost_act",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(act, ("my-skill".to_string(), 3.0));
+        let window: (i64, i64, i64, f64) = store
+            .connection
+            .query_row(
+                "SELECT act_turn, next_user_turn, usage_rows, cost_usd FROM v_skill_cost_window",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(window, (2, 3, 1, 3.0));
+        store
+            .connection
+            .execute("UPDATE agent_usage SET cost_usd_recorded = 9.0 WHERE turn = 2", [])
+            .unwrap();
+        let recorded: f64 = store
+            .connection
+            .query_row("SELECT cost_usd FROM v_skill_cost_window", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(recorded, 9.0);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn schema_rows_lists_views_and_join_keys() {
+        let (path, store) = fresh_store("schema_rows_joins");
+        let rows = store.schema_rows().unwrap();
+        fn name(row: &serde_json::Value) -> Option<&str> {
+            row.get("table").and_then(serde_json::Value::as_str)
+        }
+        assert!(rows.iter().any(|row| name(row) == Some("v_usage_cost")));
+        assert!(rows.iter().any(|row| name(row) == Some("v_skill_cost_window")));
+        let skill = rows
+            .iter()
+            .find(|row| name(row) == Some("agent_skill"))
+            .unwrap();
+        let joins = serde_json::to_string(skill.get("joins").unwrap()).unwrap();
+        assert!(joins.contains("dict_skill(id)"), "{joins}");
+        assert!(joins.contains("grain"), "{joins}");
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
@@ -4262,7 +4612,7 @@ mod tests {
         drop(connection);
 
         let store = Store::open(path.clone()).unwrap();
-        assert_eq!(store.schema_version().unwrap(), 21);
+        assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
         let projection_column: i64 = store
             .connection()
             .query_row(

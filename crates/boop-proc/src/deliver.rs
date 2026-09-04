@@ -31,6 +31,7 @@ use boop_store::ident::{DeliveryState, LiveRow, Store};
 /// | `HookInbox` | the recipient's project carries an installed inbox hook | queued-in-hook-inbox |
 /// | `PanePaste` | the route owns no door at all and names a live pane | pasted-into-pane |
 /// | `Mailbox` | nothing answered; the row waits and the supervisor retries it | held-in-mailbox |
+/// | `CoolOff` | the route's door budget is blown; the row waits out the cool-off and the drain retries it | cooled-off |
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Rung {
     Door,
@@ -40,6 +41,7 @@ pub enum Rung {
     HookInbox,
     PanePaste,
     Mailbox,
+    CoolOff,
 }
 
 impl Rung {
@@ -51,6 +53,7 @@ impl Rung {
             Rung::HookInbox => DeliveryState::QueuedInHookInbox,
             Rung::PanePaste => DeliveryState::PastedIntoPane,
             Rung::Mailbox => DeliveryState::HeldInMailbox,
+            Rung::CoolOff => DeliveryState::CooledOff,
         }
     }
 
@@ -64,6 +67,7 @@ impl Rung {
             Rung::HookInbox => "hook inbox",
             Rung::PanePaste => "pane paste",
             Rung::Mailbox => "mailbox",
+            Rung::CoolOff => "cool-off",
         }
     }
 
@@ -147,6 +151,10 @@ impl Landing {
                 "held {message_id} from {from} -> {to} in the mailbox ({}); the supervisor retries it",
                 self.detail
             ),
+            Rung::CoolOff => format!(
+                "held {message_id} from {from} -> {to}: door budget blown ({}); the drain retries it after the cool-off",
+                self.detail
+            ),
         }
     }
 
@@ -192,6 +200,133 @@ impl PanePaster for TmuxPaster {
     }
 }
 
+/// How many door pushes one route may take inside one window (failure mode
+/// 14, rail 2). The budget is the recipient's live connects: the lane routes
+/// that name it as parent, floored so a coordinator with no lanes still takes
+/// a human's hail. Past it the route is in a blowout and cools off; a body the
+/// door already took this window is a replay and trips at once.
+///
+/// | field | default | env |
+/// |---|---|---|
+/// | `window` | 60 s | `BOOP_DOOR_WINDOW_SECS` |
+/// | `cooldown` | 300 s | `BOOP_DOOR_COOLDOWN_SECS` |
+/// | `floor` | 2 | `BOOP_DOOR_FLOOR` |
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DoorBudget {
+    pub window: Duration,
+    pub cooldown: Duration,
+    pub floor: usize,
+}
+
+impl Default for DoorBudget {
+    fn default() -> Self {
+        DoorBudget {
+            window: Duration::from_secs(60),
+            cooldown: Duration::from_secs(300),
+            floor: 2,
+        }
+    }
+}
+
+impl DoorBudget {
+    /// The defaults, each overridden by its env var when that parses.
+    pub fn from_env() -> Self {
+        let base = DoorBudget::default();
+        let secs = |name: &str, fallback: Duration| {
+            std::env::var(name)
+                .ok()
+                .and_then(|text| text.trim().parse::<u64>().ok())
+                .map_or(fallback, Duration::from_secs)
+        };
+        DoorBudget {
+            window: secs("BOOP_DOOR_WINDOW_SECS", base.window),
+            cooldown: secs("BOOP_DOOR_COOLDOWN_SECS", base.cooldown),
+            floor: std::env::var("BOOP_DOOR_FLOOR")
+                .ok()
+                .and_then(|text| text.trim().parse::<usize>().ok())
+                .unwrap_or(base.floor),
+        }
+    }
+
+    /// Pushes `route` may take per window: its registered lane children,
+    /// never below the floor.
+    pub fn allowance(&self, route: &str, routes: &BTreeMap<String, Route>) -> usize {
+        crate::lane::children_of(route, routes)
+            .len()
+            .max(self.floor)
+    }
+}
+
+/// What the budget says about one push at one route right now.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DoorVerdict {
+    /// Under budget; push.
+    Open,
+    /// A trip is in force until `until_ms`; hold, record nothing new.
+    CoolingOff { until_ms: u64 },
+    /// This push would cross the budget; record the trip and hold.
+    Blowout {
+        pushes: usize,
+        budget: usize,
+        why: String,
+    },
+}
+
+/// The budget check for one body at one route. Reads only the ledger, so
+/// every boop process on the machine sees the same answer.
+pub fn door_verdict(
+    store: &Store,
+    route: &str,
+    routes: &BTreeMap<String, Route>,
+    body: &str,
+    budget: &DoorBudget,
+    now_ms: u64,
+) -> Result<DoorVerdict> {
+    if let Some(trip) = store.latest_door_blowout(route)? {
+        if trip.until_ms() > now_ms {
+            return Ok(DoorVerdict::CoolingOff {
+                until_ms: trip.until_ms(),
+            });
+        }
+    }
+    let window_ms = budget.window.as_millis() as u64;
+    let since = now_ms.saturating_sub(window_ms);
+    let pushes = store.door_pushes_since(route, since)?;
+    let allowed = budget.allowance(route, routes);
+    if pushes >= allowed {
+        return Ok(DoorVerdict::Blowout {
+            pushes,
+            budget: allowed,
+            why: format!(
+                "{pushes} door pushes in {}s against {allowed} live connects",
+                budget.window.as_secs()
+            ),
+        });
+    }
+    if store.door_pushed_body_since(route, body, since)? {
+        return Ok(DoorVerdict::Blowout {
+            pushes,
+            budget: allowed,
+            why: format!(
+                "the same body already went through the door inside {}s",
+                budget.window.as_secs()
+            ),
+        });
+    }
+    Ok(DoorVerdict::Open)
+}
+
+/// Whether `route` is inside a cool-off right now. A drain asks this once
+/// per route and skips the whole route silently, so a cool-off writes no
+/// transition per tick.
+pub fn cooling_off(store: &Store, route: &str, now_ms: u64) -> bool {
+    store
+        .latest_door_blowout(route)
+        .ok()
+        .flatten()
+        .is_some_and(|trip| trip.until_ms() > now_ms)
+}
+
 /// Put one queued message in front of its recipient and record every step.
 /// Two transitions at minimum: `appended` when the row exists, then the rung
 /// the ladder stopped on. A sender that sees no second row has a store it
@@ -213,6 +348,19 @@ pub fn deliver_hail_with(
     message: &Message,
     paster: &dyn PanePaster,
 ) -> Result<Landing> {
+    deliver_hail_budgeted(registry, store, routes, message, paster, &DoorBudget::from_env())
+}
+
+/// `deliver_hail_with` with the door budget supplied, for a test that must
+/// not read the environment.
+pub fn deliver_hail_budgeted(
+    registry: &Registry,
+    store: &Store,
+    routes: &BTreeMap<String, Route>,
+    message: &Message,
+    paster: &dyn PanePaster,
+    budget: &DoorBudget,
+) -> Result<Landing> {
     let route = routes.get(message.to.as_str());
     let harness = route.and_then(|route| route.harness);
     if !store.has_delivery_transition(&message.id)? {
@@ -226,7 +374,7 @@ pub fn deliver_hail_with(
             boop_harness::live::now_ms(),
         )?;
     }
-    let landing = land(registry, store, routes, message, paster)?;
+    let landing = land(registry, store, routes, message, paster, budget)?;
     landing.record(store, &message.id, &message.to, harness)?;
     Ok(landing)
 }
@@ -237,6 +385,7 @@ fn land(
     routes: &BTreeMap<String, Route>,
     message: &Message,
     paster: &dyn PanePaster,
+    budget: &DoorBudget,
 ) -> Result<Landing> {
     let to = message.to.as_str();
     let Some(route) = routes.get(to) else {
@@ -276,6 +425,33 @@ fn land(
     };
     let (kind, addr) = door_columns(&live.door);
     store.record_live_door(&live.session_id, kind, addr.as_deref())?;
+    let now_ms = boop_harness::live::now_ms();
+    match door_verdict(store, to, routes, &message.body, budget, now_ms)? {
+        DoorVerdict::Open => {}
+        DoorVerdict::CoolingOff { until_ms } => {
+            return Ok(Landing::new(
+                Rung::CoolOff,
+                format!("cooling off for {}s more", until_ms.saturating_sub(now_ms) / 1000),
+            ));
+        }
+        DoorVerdict::Blowout {
+            pushes,
+            budget: allowed,
+            why,
+        } => {
+            store.record_door_blowout(&boop_store::ident::DoorBlowoutRow {
+                route: to.to_owned(),
+                at_ms: now_ms,
+                pushes,
+                budget: allowed,
+                window_ms: budget.window.as_millis() as u64,
+                cooldown_ms: budget.cooldown.as_millis() as u64,
+                why: why.clone(),
+            })?;
+            tracing::warn!(route = to, pushes, budget = allowed, %why, "door budget blown; cooling off");
+            return Ok(Landing::new(Rung::CoolOff, why));
+        }
+    }
     Ok(match harness.door().deliver(&live, &message.body)? {
         Delivered::Injected => Landing::new(Rung::Door, "door"),
         Delivered::QueuedForTurnBoundary => Landing::new(Rung::DoorQueue, "door queue"),
@@ -512,12 +688,28 @@ pub fn drain_route_held_mail(
     store: &Store,
     route_name: &str,
 ) -> usize {
+    drain_route_held_mail_budgeted(dir, registry, store, route_name, &DoorBudget::from_env())
+}
+
+/// `drain_route_held_mail` with the door budget supplied. A route inside a
+/// cool-off is skipped whole and writes nothing; the first trip inside the
+/// loop ends the pass, so one tick records at most one `cooled-off` row.
+pub fn drain_route_held_mail_budgeted(
+    dir: &Path,
+    registry: &Registry,
+    store: &Store,
+    route_name: &str,
+    budget: &DoorBudget,
+) -> usize {
     let Some(mut route) = bus::read_routes(dir).ok().and_then(|mut routes| routes.remove(route_name))
     else {
         return 0;
     };
     if route.kind == "lane" {
         return 0; // the lane supervisor reads its own rows
+    }
+    if cooling_off(store, route_name, boop_harness::live::now_ms()) {
+        return 0;
     }
     if route.session_id.is_none() {
         if let Some(harness) = route.harness {
@@ -533,11 +725,16 @@ pub fn drain_route_held_mail(
     };
     let mut pushed = 0usize;
     for message in held {
-        let Ok(landing) = deliver_hail(registry, store, &routes, &message) else {
+        let Ok(landing) =
+            deliver_hail_budgeted(registry, store, &routes, &message, &TmuxPaster, budget)
+        else {
             continue;
         };
+        if landing.rung == Rung::CoolOff {
+            break;
+        }
         if landing.rung.carried_the_body() {
-            let _ = bus::ack_messages(store, &[message.id.clone()], &bus::now_iso());
+            let _ = bus::ack_messages(store, std::slice::from_ref(&message.id), &bus::now_iso());
             pushed += 1;
         }
     }
@@ -850,6 +1047,181 @@ mod tests {
         }
         let copies = door_log().iter().filter(|body| body.as_str() == "push me").count();
         assert_eq!(copies, 1, "the door took the body exactly once over seven drains");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn budget(window_ms: u64, cooldown_ms: u64, floor: usize) -> DoorBudget {
+        DoorBudget {
+            window: Duration::from_millis(window_ms),
+            cooldown: Duration::from_millis(cooldown_ms),
+            floor,
+        }
+    }
+
+    /// A coordinator route bound to the fake claude session, with `lanes`
+    /// child lane routes naming it as parent, and `bodies` held rows.
+    fn burst_fixture(tag: &str, lanes: usize, bodies: &[&str]) -> (PathBuf, Store) {
+        let dir = std::env::temp_dir().join(format!("boop-burst-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let name = format!("claude-{tag}");
+        let mut route = unbound_route(&dir);
+        route.session_id = Some("ses-fake-claude".to_owned());
+        route.tmux = Some("%77".to_owned());
+        bus::write_route(&dir, &name, &route).unwrap();
+        for index in 0..lanes {
+            let mut lane = unbound_route(&dir);
+            lane.kind = "lane".to_owned();
+            lane.parent = Some(name.clone());
+            bus::write_route(&dir, &format!("{tag}-lane-{index}"), &lane).unwrap();
+        }
+        for (index, body) in bodies.iter().enumerate() {
+            bus::append(
+                &dir,
+                "bus",
+                &Message {
+                    id: format!("m-{tag}-{index}"),
+                    from: format!("{tag}-lane-0"),
+                    to: name.clone(),
+                    from_timestamp: "2026-09-03T00:00:00Z".to_owned(),
+                    to_timestamp: None,
+                    kind: "result".to_owned(),
+                    reply_to: None,
+                    body: (*body).to_owned(),
+                    r#ref: None,
+                    rc: None,
+                    detail: None,
+                },
+            )
+            .unwrap();
+        }
+        let store = bus::open_store(&dir).unwrap();
+        (dir, store)
+    }
+
+    fn transitions(store: &Store, message_id: &str) -> Vec<(String, String)> {
+        store
+            .delivery_rows(message_id)
+            .unwrap()
+            .into_iter()
+            .map(|row| (row.outcome, row.detail))
+            .collect()
+    }
+
+    /// RECEIPT (failure mode 14, rail 2). Six rows for a coordinator with one
+    /// live lane: the budget is the floor (2), so two go through the door,
+    /// the third trips the breaker, and every later tick inside the cool-off
+    /// pushes nothing and writes nothing.
+    #[test]
+    fn a_burst_past_the_recipients_live_connects_trips_and_cools_off() {
+        let (dir, store) = burst_fixture(
+            "burst",
+            1,
+            &["b-one", "b-two", "b-three", "b-four", "b-five", "b-six"],
+        );
+        let registry = Registry::with(vec![Box::new(FakeClaude)]);
+        let budget = budget(60_000, 60_000, 2);
+
+        let pushed =
+            drain_route_held_mail_budgeted(&dir, &registry, &store, "claude-burst", &budget);
+        assert_eq!(pushed, 2, "the budget is the floor for one live lane");
+        let taken: Vec<_> = door_log()
+            .into_iter()
+            .filter(|body| body.starts_with("b-"))
+            .collect();
+        assert_eq!(taken, ["b-one", "b-two"]);
+
+        let trips = store.door_blowouts("claude-burst").unwrap();
+        assert_eq!(trips.len(), 1, "{trips:?}");
+        assert_eq!((trips[0].pushes, trips[0].budget), (2, 2));
+        assert!(trips[0].why.contains("2 door pushes in 60s against 2 live connects"), "{}", trips[0].why);
+
+        assert_eq!(
+            transitions(&store, "m-burst-2"),
+            [
+                ("appended".to_owned(), "mailbox".to_owned()),
+                ("cooled-off".to_owned(), trips[0].why.clone()),
+            ]
+        );
+        let untouched = [("appended".to_owned(), "mailbox".to_owned())];
+        for later in ["m-burst-3", "m-burst-4", "m-burst-5"] {
+            assert_eq!(transitions(&store, later), untouched, "{later} was touched past the trip");
+        }
+        assert_eq!(bus::held_messages(&store, "claude-burst").unwrap().len(), 4);
+
+        let (_, before) = store
+            .passthrough("SELECT COUNT(*) AS n FROM agent_delivery_transition")
+            .unwrap();
+        for _ in 0..5 {
+            assert_eq!(
+                drain_route_held_mail_budgeted(&dir, &registry, &store, "claude-burst", &budget),
+                0
+            );
+        }
+        let (_, after) = store
+            .passthrough("SELECT COUNT(*) AS n FROM agent_delivery_transition")
+            .unwrap();
+        assert_eq!(before, after, "a cooling route writes no transition per tick");
+        assert_eq!(store.door_blowouts("claude-burst").unwrap().len(), 1);
+        assert_eq!(
+            door_log().iter().filter(|body| body.starts_with("b-")).count(),
+            2,
+            "the door took nothing during the cool-off"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. Once the cool-off ends the drain drips at the budget again:
+    /// five rows, floor 2, land as 2 + 2 + 1 across three windows.
+    #[test]
+    fn a_cool_off_ends_and_the_drip_resumes_at_budget() {
+        let (dir, store) = burst_fixture("drip", 0, &["d-1", "d-2", "d-3", "d-4", "d-5"]);
+        let registry = Registry::with(vec![Box::new(FakeClaude)]);
+        let budget = budget(300, 300, 2);
+        let mut per_pass = Vec::new();
+        for _ in 0..3 {
+            per_pass.push(drain_route_held_mail_budgeted(
+                &dir,
+                &registry,
+                &store,
+                "claude-drip",
+                &budget,
+            ));
+            std::thread::sleep(Duration::from_millis(400));
+        }
+        assert_eq!(per_pass, [2, 2, 1]);
+        let taken: Vec<_> = door_log()
+            .into_iter()
+            .filter(|body| body.starts_with("d-"))
+            .collect();
+        assert_eq!(taken, ["d-1", "d-2", "d-3", "d-4", "d-5"]);
+        assert_eq!(store.door_blowouts("claude-drip").unwrap().len(), 2);
+        assert!(bus::held_messages(&store, "claude-drip").unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. A body the door took this window is a replay whatever its id:
+    /// it trips at once, under budget.
+    #[test]
+    fn a_body_the_door_already_took_this_window_trips_at_once() {
+        let (dir, store) = burst_fixture("replay", 0, &["r-same", "r-same", "r-other"]);
+        let registry = Registry::with(vec![Box::new(FakeClaude)]);
+        let budget = budget(60_000, 60_000, 10);
+
+        let pushed =
+            drain_route_held_mail_budgeted(&dir, &registry, &store, "claude-replay", &budget);
+        assert_eq!(pushed, 1);
+        let trip = store.latest_door_blowout("claude-replay").unwrap().unwrap();
+        assert!(trip.why.contains("same body"), "{}", trip.why);
+        assert_eq!(
+            door_log().iter().filter(|body| body.as_str() == "r-same").count(),
+            1
+        );
+        assert_eq!(
+            transitions(&store, "m-replay-2"),
+            [("appended".to_owned(), "mailbox".to_owned())],
+            "the row after the trip was touched"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
