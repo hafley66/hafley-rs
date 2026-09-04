@@ -316,6 +316,44 @@ pub fn door_verdict(
     Ok(DoorVerdict::Open)
 }
 
+/// The verdict with its bookkeeping, for every path that pushes at a door:
+/// the ladder, the children fan-out, and the acpx queue. `None` means push.
+/// `Some` is the cool-off landing to record instead; a fresh trip writes its
+/// `agent_door_blowout` row here, a route already cooling off writes nothing.
+pub fn door_gate(
+    store: &Store,
+    route: &str,
+    routes: &BTreeMap<String, Route>,
+    body: &str,
+    budget: &DoorBudget,
+    now_ms: u64,
+) -> Result<Option<Landing>> {
+    Ok(match door_verdict(store, route, routes, body, budget, now_ms)? {
+        DoorVerdict::Open => None,
+        DoorVerdict::CoolingOff { until_ms } => Some(Landing::new(
+            Rung::CoolOff,
+            format!("cooling off for {}s more", until_ms.saturating_sub(now_ms) / 1000),
+        )),
+        DoorVerdict::Blowout {
+            pushes,
+            budget: allowed,
+            why,
+        } => {
+            store.record_door_blowout(&boop_store::ident::DoorBlowoutRow {
+                route: route.to_owned(),
+                at_ms: now_ms,
+                pushes,
+                budget: allowed,
+                window_ms: budget.window.as_millis() as u64,
+                cooldown_ms: budget.cooldown.as_millis() as u64,
+                why: why.clone(),
+            })?;
+            tracing::warn!(route, pushes, budget = allowed, %why, "door budget blown; cooling off");
+            Some(Landing::new(Rung::CoolOff, why))
+        }
+    })
+}
+
 /// Whether `route` is inside a cool-off right now. A drain asks this once
 /// per route and skips the whole route silently, so a cool-off writes no
 /// transition per tick.
@@ -426,31 +464,8 @@ fn land(
     let (kind, addr) = door_columns(&live.door);
     store.record_live_door(&live.session_id, kind, addr.as_deref())?;
     let now_ms = boop_harness::live::now_ms();
-    match door_verdict(store, to, routes, &message.body, budget, now_ms)? {
-        DoorVerdict::Open => {}
-        DoorVerdict::CoolingOff { until_ms } => {
-            return Ok(Landing::new(
-                Rung::CoolOff,
-                format!("cooling off for {}s more", until_ms.saturating_sub(now_ms) / 1000),
-            ));
-        }
-        DoorVerdict::Blowout {
-            pushes,
-            budget: allowed,
-            why,
-        } => {
-            store.record_door_blowout(&boop_store::ident::DoorBlowoutRow {
-                route: to.to_owned(),
-                at_ms: now_ms,
-                pushes,
-                budget: allowed,
-                window_ms: budget.window.as_millis() as u64,
-                cooldown_ms: budget.cooldown.as_millis() as u64,
-                why: why.clone(),
-            })?;
-            tracing::warn!(route = to, pushes, budget = allowed, %why, "door budget blown; cooling off");
-            return Ok(Landing::new(Rung::CoolOff, why));
-        }
+    if let Some(cooled) = door_gate(store, to, routes, &message.body, budget, now_ms)? {
+        return Ok(cooled);
     }
     Ok(match harness.door().deliver(&live, &message.body)? {
         Delivered::Injected => Landing::new(Rung::Door, "door"),
@@ -1047,6 +1062,39 @@ mod tests {
         }
         let copies = door_log().iter().filter(|body| body.as_str() == "push me").count();
         assert_eq!(copies, 1, "the door took the body exactly once over seven drains");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT (failure mode 14, rail 2). The one gate every door path calls.
+    /// Floor 1 with one push in the ledger: the gate trips once and writes one
+    /// blowout row; every later call inside the cool-off answers cool-off and
+    /// writes nothing.
+    #[test]
+    fn the_door_gate_trips_once_then_only_reports_the_cool_off() {
+        let (dir, store) = burst_fixture("gate", 0, &["g-one"]);
+        let routes = bus::read_routes(&dir).unwrap();
+        let budget = budget(60_000, 60_000, 1);
+        let now = boop_harness::live::now_ms();
+        assert!(door_gate(&store, "claude-gate", &routes, "g-one", &budget, now)
+            .unwrap()
+            .is_none());
+        Landing::new(Rung::Door, "door")
+            .record(&store, "m-gate-0", "claude-gate", None)
+            .unwrap();
+        let tripped = door_gate(&store, "claude-gate", &routes, "g-two", &budget, now)
+            .unwrap()
+            .expect("the second push crosses a floor of one");
+        assert!(matches!(tripped.rung, Rung::CoolOff));
+        assert_eq!(store.door_blowouts("claude-gate").unwrap().len(), 1);
+        let cooling = door_gate(&store, "claude-gate", &routes, "g-three", &budget, now + 1)
+            .unwrap()
+            .expect("the cool-off is in force");
+        assert!(matches!(cooling.rung, Rung::CoolOff));
+        assert_eq!(
+            store.door_blowouts("claude-gate").unwrap().len(),
+            1,
+            "a route already cooling off records no second trip"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -242,9 +242,6 @@ pub(crate) fn deliver_hail(
         routes.insert(to.to_owned(), route);
     }
     if let Some(route) = routes.get(to).filter(|route| is_acpx(route)) {
-        let response = crate::cli::acpx::deliver(route, &message.body)?;
-        append_acks(dir, std::slice::from_ref(message))?;
-        let landing = Landing::acpx(response.trim_end().to_owned());
         let harness_id = route
             .harness
             .map_or_else(|| "acpx".to_owned(), |id| id.to_string());
@@ -259,6 +256,24 @@ pub(crate) fn deliver_hail(
                 boop::live::now_ms(),
             )?;
         }
+        // The acpx queue is a door like any other: a burst past the worker's
+        // budget cools the route off and the row waits, unstamped, for a retry.
+        let budget = boop::mail::DoorBudget::from_env();
+        if let Some(cooled) = boop::mail::door_gate(
+            &store,
+            to,
+            &routes,
+            &message.body,
+            &budget,
+            boop::live::now_ms(),
+        )? {
+            cooled.record(&store, &message.id, to, route.harness)?;
+            println!("{}", cooled.line(&message.id, &message.from, to, &harness_id));
+            return Ok(());
+        }
+        let response = crate::cli::acpx::deliver(route, &message.body)?;
+        append_acks(dir, std::slice::from_ref(message))?;
+        let landing = Landing::acpx(response.trim_end().to_owned());
         landing.record(&store, &message.id, to, route.harness)?;
         if let Some(reply) = landing.reply.as_deref().filter(|text| !text.is_empty()) {
             println!("{reply}");
@@ -472,7 +487,11 @@ fn fan_out_to_children(
         println!("no child of {caller} is registered");
         return Ok(());
     }
-    let (mut landed, mut unreachable, mut dead) = (0usize, 0usize, 0usize);
+    // Every pane leg pushes at a door, so it pays the door budget and leaves
+    // the same ledger rows the ladder would; a fan-out is not a side channel.
+    let store = bus::open_store(dir)?;
+    let budget = boop::mail::DoorBudget::from_env();
+    let (mut landed, mut cooled, mut unreachable, mut dead) = (0usize, 0usize, 0usize, 0usize);
     for (name, route) in children {
         let reach = child_reach(route, name, None);
         match &reach {
@@ -515,30 +534,59 @@ fn fan_out_to_children(
                     message.id, caller
                 );
             }
-            ChildReach::Pane => match deliver_through_door(registry, route, &message.body)? {
-                Delivered::Injected => {
-                    append_acks(dir, std::slice::from_ref(&message))?;
-                    landed += 1;
-                    println!(
-                        "landed {name} {} from {} (through the door)",
-                        message.id, caller
-                    );
+            ChildReach::Pane => {
+                let now_ms = boop::live::now_ms();
+                store.append_delivery_transition(
+                    &message.id,
+                    name,
+                    route.harness,
+                    boop::DeliveryState::Appended.as_str(),
+                    "mailbox",
+                    None,
+                    now_ms,
+                )?;
+                if let Some(cooling) = boop::mail::door_gate(
+                    &store,
+                    name,
+                    routes,
+                    &message.body,
+                    &budget,
+                    now_ms,
+                )? {
+                    cooling.record(&store, &message.id, name, route.harness)?;
+                    cooled += 1;
+                    println!("cooled-off {name} {} ({})", message.id, cooling.detail());
+                    continue;
                 }
-                Delivered::QueuedForTurnBoundary => {
-                    // The harness holds the body; stamp the row or the held-mail
-                    // drain pushes a second copy (failure mode 14).
-                    append_acks(dir, std::slice::from_ref(&message))?;
-                    landed += 1;
-                    println!(
-                        "landed {name} {} from {} (next turn boundary)",
-                        message.id, caller
-                    );
+                match deliver_through_door(registry, route, &message.body)? {
+                    Delivered::Injected => {
+                        append_acks(dir, std::slice::from_ref(&message))?;
+                        Landing::new(boop::mail::Rung::Door, "door")
+                            .record(&store, &message.id, name, route.harness)?;
+                        landed += 1;
+                        println!(
+                            "landed {name} {} from {} (through the door)",
+                            message.id, caller
+                        );
+                    }
+                    Delivered::QueuedForTurnBoundary => {
+                        // The harness holds the body; stamp the row or the held-mail
+                        // drain pushes a second copy (failure mode 14).
+                        append_acks(dir, std::slice::from_ref(&message))?;
+                        Landing::new(boop::mail::Rung::DoorQueue, "door queue")
+                            .record(&store, &message.id, name, route.harness)?;
+                        landed += 1;
+                        println!(
+                            "landed {name} {} from {} (next turn boundary)",
+                            message.id, caller
+                        );
+                    }
+                    Delivered::Unreachable(why) => {
+                        unreachable += 1;
+                        println!("no-route {name} ({why})");
+                    }
                 }
-                Delivered::Unreachable(why) => {
-                    unreachable += 1;
-                    println!("no-route {name} ({why})");
-                }
-            },
+            }
             ChildReach::NoRoute(_) | ChildReach::Dead(_) => unreachable!("reported above"),
         }
     }
@@ -546,7 +594,7 @@ fn fan_out_to_children(
         unreachable += 1;
         println!("no-route {session} ({NATIVE_CHILD_REASON})");
     }
-    println!("{landed} landed, {unreachable} no-route, {dead} dead");
+    println!("{landed} landed, {cooled} cooled-off, {unreachable} no-route, {dead} dead");
     Ok(())
 }
 

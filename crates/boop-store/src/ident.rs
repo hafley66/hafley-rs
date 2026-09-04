@@ -2479,7 +2479,7 @@ impl Store {
     pub fn door_pushes_since(&self, route: &str, since_ms: u64) -> Result<usize> {
         let count: i64 = self.connection.query_row(
             "SELECT COUNT(*) FROM agent_delivery_transition
-             WHERE route = ?1 AND at_ms >= ?2 AND detail IN ('door', 'door queue')",
+             WHERE route = ?1 AND at_ms >= ?2 AND detail IN ('door', 'door queue', 'acpx queue')",
             params![route, since_ms as i64],
             |row| row.get(0),
         )?;
@@ -2494,7 +2494,7 @@ impl Store {
             "SELECT COUNT(*) FROM agent_delivery_transition t
              JOIN agent_mail m ON m.message_id = t.message_id
              WHERE t.route = ?1 AND t.at_ms >= ?2
-               AND t.detail IN ('door', 'door queue') AND m.body = ?3",
+               AND t.detail IN ('door', 'door queue', 'acpx queue') AND m.body = ?3",
             params![route, since_ms as i64, body],
             |row| row.get(0),
         )?;

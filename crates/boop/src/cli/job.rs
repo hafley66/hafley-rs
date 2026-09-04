@@ -1308,6 +1308,12 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
                 detail: None,
             };
             append_message(&dir, &message)?;
+            // The row walks the ladder now; a drain that only ticks every few
+            // seconds is a fallback for this push, never its only carrier.
+            let registry = Registry::discover();
+            if let Err(error) = crate::cli::mail::deliver_hail(&registry, &dir, &message, None) {
+                warn!(%error, to = message.to, "result row appended; the held-mail drain carries it");
+            }
             let path = dir.join("registry.json");
             bus::cas_update_json(&path, |current| {
                 current.remove(&name);

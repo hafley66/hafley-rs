@@ -114,6 +114,15 @@ only state, so every boop process and every wrapper tick reads one answer;
 an in-process limiter crate (`governor`, `leaky-bucket`, `tower::limit`)
 resets on every `boop` invocation and was not the shape of this problem.
 
+**Rail 2, every door.** `door_gate` is the one call that reads the verdict
+and writes the trip; the ladder's `land`, the `children` fan-out pane leg,
+and the acpx queue all pass through it, and `acpx queue` transitions count
+as pushes. The fan-out leaves the same `appended` / `door` / `door queue` /
+`cooled-off` rows the ladder does, so a fan-out push is visible to the next
+verdict. `boop beep agent done` walks the ladder for its result row instead
+of leaving it to the 5 s tick. Receipt:
+`the_door_gate_trips_once_then_only_reports_the_cool_off`.
+
 **Live store.** The 752 open rows read as held by no drain once this binary is
 installed. Stamping them is one statement, for a store that should not carry
 open rows a door already took:

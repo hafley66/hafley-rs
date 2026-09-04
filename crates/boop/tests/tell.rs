@@ -243,7 +243,7 @@ fn beep_children_lands_on_the_hook_child_and_reports_the_routeless_child_as_no_r
         lines[1].starts_with("landed hook-child ") && lines[1].ends_with("(hook inbox)"),
         "stdout: {text}"
     );
-    assert_eq!(lines[2], "1 landed, 1 no-route, 0 dead", "stdout: {text}");
+    assert_eq!(lines[2], "1 landed, 0 cooled-off, 1 no-route, 0 dead", "stdout: {text}");
 
     let rows = fixture.bus_rows();
     assert_eq!(rows.len(), 1, "bus rows: {rows:?}");
@@ -304,7 +304,7 @@ fn beep_children_names_a_native_subagent_child_as_no_route() {
         lines[0].starts_with("no-route coord-6/agent-a1b2 (native subagent"),
         "stdout: {text}"
     );
-    assert_eq!(lines[1], "0 landed, 1 no-route, 0 dead", "stdout: {text}");
+    assert_eq!(lines[1], "0 landed, 0 cooled-off, 1 no-route, 0 dead", "stdout: {text}");
     assert!(
         fixture.bus_rows().is_empty(),
         "rows: {:?}",
