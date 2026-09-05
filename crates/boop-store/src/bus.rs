@@ -1,9 +1,10 @@
 //! Bus-compatible registry and mailbox store.
 //!
-//! `bus` keeps the lane registry at `~/.agent/mail/registry.json` and the
-//! message log as NDJSON `.ndjson` files beside it. `boop` reads and writes
-//! the SAME files in the SAME shape so both tools can run against one registry
-//! during the changeover. No new registry format, no migration.
+//! Routes live in the `agent_route` table and envelopes in `agent_mail` in the
+//! store a mail dir addresses (see [`open_store`]). Legacy `registry.json` and
+//! `bus.ndjson` files left beside the database are imported once on open, so a
+//! `boop` that predates the mailbox keeps appending to them while a newer one
+//! tails.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -66,60 +67,11 @@ pub fn read_routes(dir: &Path) -> Result<BTreeMap<String, Route>> {
     routes_in(&open_store(dir)?)
 }
 
-/// Write one registry route. The registry json file is the write path; the
-/// next store open imports it, so readers never block on a writer.
+/// Write one registry route into the route table. The table is the store's
+/// write path; readers and writers share the same SQLite connection.
 pub fn write_route(dir: &Path, name: &str, route: &Route) -> Result<()> {
-    let path = dir.join("registry.json");
-    cas_update_json(&path, |current| {
-        current.insert(name.to_owned(), route_to_json(route));
-        Ok(())
-    })
-}
-
-fn route_to_json(route: &Route) -> serde_json::Value {
-    use serde_json::json;
-    let mut object = serde_json::Map::new();
-    object.insert("kind".into(), json!(route.kind));
-    if let Some(harness) = &route.harness {
-        object.insert("harness".into(), json!(harness));
-    }
-    if let Some(tmux) = &route.tmux {
-        object.insert("tmux".into(), json!(tmux));
-    }
-    if let Some(cwd) = &route.cwd {
-        object.insert("cwd".into(), json!(cwd));
-    }
-    if let Some(model) = &route.model {
-        object.insert("model".into(), json!(model));
-    }
-    if let Some(mode) = &route.mode {
-        object.insert("mode".into(), json!(mode));
-    }
-    if let Some(session_id) = &route.session_id {
-        object.insert("sessionId".into(), json!(session_id));
-    }
-    if let Some(source_path) = &route.source_path {
-        object.insert("sourcePath".into(), json!(source_path));
-    }
-    if let Some(parent) = &route.parent {
-        object.insert("parent".into(), json!(parent));
-    }
-    if let Some(goal) = &route.goal {
-        object.insert("goal".into(), json!(goal));
-    }
-    if let Some(registered_at) = &route.registered_at {
-        object.insert("registeredAt".into(), json!(registered_at));
-    }
-    if let Some(base_sha) = &route.base_sha {
-        object.insert("baseSha".into(), json!(base_sha));
-    }
-    if let Some(worktree_dir) = &route.worktree_dir {
-        object.insert("worktreeDir".into(), json!(worktree_dir));
-    }
-    if let Some(app_server_socket) = &route.app_server_socket {
-        object.insert("appServerSocket".into(), json!(app_server_socket));
-    }
-    serde_json::Value::Object(object)
+    let store = open_store(dir)?;
+    upsert_route(&store, name, route)
 }
 
 /// Every undelivered envelope addressed to one route: `to_timestamp` still
@@ -397,10 +349,10 @@ pub fn cas_update_json(
                 .with_context(|| format!("registry.json is invalid JSON at {}", path.display()))?,
             None => Map::new(),
         };
-        let digest = raw.as_deref().map(sha256_hex);
+        let digest = raw.as_deref().map(hash_hex);
         mutate(&mut current)?;
         let fresh = fs::read(path).ok();
-        if fresh.as_deref().map(sha256_hex) == digest {
+        if fresh.as_deref().map(hash_hex) == digest {
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).context("create registry parent dir")?;
             }
@@ -425,7 +377,7 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
+fn hash_hex(bytes: &[u8]) -> String {
     use std::hash::{Hash, Hasher};
     // A fast digest is enough for CAS detection; this is not a security check.
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -618,7 +570,7 @@ fn import_registry_file(store: &crate::ident::Store, path: &Path) -> Result<()> 
     if text.trim().is_empty() {
         return Ok(());
     }
-    let digest = sha256_hex(text.as_bytes());
+    let digest = hash_hex(text.as_bytes());
     let (_, seen) = import_mark(store, path)?;
     if seen == digest {
         return Ok(());
