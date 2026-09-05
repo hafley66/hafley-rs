@@ -1,5 +1,4 @@
 //! The claude adapter: transcripts under `~/.claude/projects/<encoded-cwd>/`.
-#![allow(dead_code)]
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -529,26 +528,9 @@ pub(crate) fn read_claude(path: &std::path::Path, session_id: &str, after_seq: O
     out
 }
 
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LivePeer {
-    pid: u32,
-    session_id: String,
-    proc_start: String,
-    messaging_socket_path: PathBuf,
-    #[serde(default)]
-    updated_at: u64,
-}
-
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PeerKey {
-    peer_token: String,
-    proc_start: String,
-}
-
 /// The claude command line a spawn runs. Resuming an existing session wins
 /// over a fresh prompt.
+#[allow(dead_code)] // used only by tests
 fn launch_command(spec: &SpawnSpec) -> String {
     let mut command = match &spec.resume_session {
         Some(id) => format!("claude --resume {id}"),
