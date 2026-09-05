@@ -5,7 +5,8 @@ use crate::harness::claude::Claude;
 use crate::harness::codex::Codex;
 use crate::harness::kimi::Kimi;
 use crate::harness::opencode::Opencode;
-use crate::harness::{Harness, HarnessId};
+use crate::harness::{Harness, HarnessId, SessionRef};
+use crate::transcript::{Message, SessionMeta};
 
 pub struct Registry {
     harnesses: Vec<Box<dyn Harness>>,
@@ -48,6 +49,67 @@ impl Registry {
     /// The adapter a CLI argument names. `None` when the text names no harness.
     pub fn by_name(&self, name: &str) -> Option<&dyn Harness> {
         HarnessId::parse(name).map(|id| self.get(id))
+    }
+
+    /// Every session boop-harness can see for one harness, filtered to `cwd`
+    /// when one is given. Nothing here parses a transcript.
+    pub fn sessions_in_cwd(&self, id: HarnessId, cwd: Option<&str>) -> Vec<SessionRef> {
+        let harness = self.get(id);
+        harness
+            .sessions()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|session| cwd.is_none_or(|wanted| session.cwd.as_deref() == Some(wanted)))
+            .filter(|session| harness.lists_session(session))
+            .collect()
+    }
+
+    /// Every session for one harness, shaped and sorted newest first (then id
+    /// ascending).
+    pub fn describe_all(&self, id: HarnessId, cwd: Option<&str>) -> Vec<SessionMeta> {
+        let mut sessions: Vec<SessionMeta> = self
+            .sessions_in_cwd(id, cwd)
+            .iter()
+            .filter_map(|session| self.get(id).describe(session))
+            .collect();
+        sessions.sort_by(|a, b| {
+            b.last_activity_ms
+                .cmp(&a.last_activity_ms)
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        sessions
+    }
+
+    /// Newest-first resumable ids for a cwd. No transcript is parsed: the order
+    /// is the mtime boop-harness already stated for each session.
+    pub fn session_ids_for_cwd(&self, id: HarnessId, cwd: &str) -> Vec<String> {
+        let mut found: Vec<(u64, String)> = self
+            .sessions_in_cwd(id, Some(cwd))
+            .iter()
+            .map(|session| {
+                (
+                    session.modified_ms,
+                    self.get(id).resume_id(session).to_string(),
+                )
+            })
+            .collect();
+        found.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+        found.into_iter().map(|(_, id)| id).collect()
+    }
+
+    /// Every turn in one session, resolved by id. `after_seq` returns only
+    /// newer turns (the watcher's incremental read).
+    pub fn messages_by_id(
+        &self,
+        id: HarnessId,
+        session_id: &str,
+        cwd: &str,
+        after_seq: Option<u64>,
+    ) -> Vec<Message> {
+        let Some(session) = self.get(id).session_by_id(session_id, Some(cwd)) else {
+            return Vec::new();
+        };
+        self.get(id).messages(&session, after_seq)
     }
 }
 

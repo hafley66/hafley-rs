@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 use crate::harness::{
@@ -230,6 +230,267 @@ impl Harness for Codex {
         let lines = tail::read_complete_lines(&mut file, 0)?.lines;
         Ok(native_completion_satisfies_delivery(&lines, child_session))
     }
+
+    fn describe(&self, session: &SessionRef) -> Option<crate::transcript::SessionMeta> {
+        let head = crate::transcript::head_values(&session.path);
+        let first = head.first()?;
+        let meta = first.get("payload").unwrap_or(first);
+        let mut model = None;
+        let mut provider = None;
+        let mut input_tokens = None;
+        for value in head
+            .iter()
+            .chain(crate::transcript::tail_values(&session.path).iter())
+        {
+            if value.get("type").and_then(Value::as_str) == Some("turn_context") {
+                model = value
+                    .pointer("/payload/model")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+                provider = value
+                    .pointer("/payload/model_provider")
+                    .or_else(|| value.pointer("/payload/modelProvider"))
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
+            }
+            if value.pointer("/payload/type").and_then(Value::as_str) == Some("token_count") {
+                input_tokens = value
+                    .pointer("/payload/info/total_token_usage/input_tokens")
+                    .and_then(Value::as_u64);
+            }
+        }
+        let parent_kind = (session.parent.is_some()
+            || meta.get("thread_source").and_then(Value::as_str) == Some("subagent"))
+        .then_some("subagent");
+        Some(crate::transcript::SessionMeta {
+            id: session.session_id.clone(),
+            harness: HarnessId::Codex,
+            cwd: session.cwd.clone().unwrap_or_default(),
+            source_path: Some(session.path.to_string_lossy().into_owned()),
+            title: None,
+            model,
+            provider,
+            input_tokens,
+            parent_id: session.parent.clone(),
+            parent_kind,
+            created_at_ms: first
+                .get("timestamp")
+                .and_then(Value::as_str)
+                .map(crate::transcript::iso_to_ms)
+                .unwrap_or(0),
+            last_activity_ms: session.modified_ms,
+        })
+    }
+
+    fn messages(
+        &self,
+        session: &SessionRef,
+        after_seq: Option<u64>,
+    ) -> Vec<crate::transcript::Message> {
+        read_codex(&session.path, &session.session_id, after_seq)
+    }
+
+    fn session_by_id(&self, session_id: &str, _cwd: Option<&str>) -> Option<SessionRef> {
+        let base = codex_sessions_dir().ok()?;
+        let path = codex_session_path(&base, session_id)?;
+        let nickname = path.file_stem()?.to_str()?.to_string();
+        Some(SessionRef {
+            harness: HarnessId::Codex,
+            session_id: session_id.to_string(),
+            nickname,
+            path,
+            cwd: None,
+            git_branch: None,
+            modified_ms: 0,
+            size: 0,
+            tmux: None,
+            tmux_socket: None,
+            parent: None,
+        })
+    }
+}
+
+/// The exact rollout transcript for a codex session id, found by walking the
+/// sessions dir for a jsonl whose file name contains the id.
+fn codex_session_path(base: &Path, session_id: &str) -> Option<PathBuf> {
+    fn walk(dir: &Path, id: &str) -> Option<PathBuf> {
+        for entry in std::fs::read_dir(dir).ok()?.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(found) = walk(&path, id) {
+                    return Some(found);
+                }
+            } else if path.extension().and_then(|e| e.to_str()) == Some("jsonl")
+                && path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.contains(id))
+            {
+                return Some(path);
+            }
+        }
+        None
+    }
+    walk(base, session_id)
+}
+
+// ---- codex transcript reader (moved from instant ledger.rs, verbatim).
+
+/// The string itself, or its JSON form when it is not a string.
+pub(crate) fn codex_value_text(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        Value::Array(items) => items
+            .iter()
+            .filter_map(|item| {
+                item.get("text")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .or_else(|| item.as_str().map(str::to_string))
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => value.to_string(),
+    }
+}
+
+fn read_codex(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate::transcript::Message> {
+    let Ok(file) = std::fs::File::open(path) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let mut tool_names = std::collections::HashMap::<String, String>::new();
+    for (seq, line) in std::io::BufReader::new(file).lines().enumerate() {
+        let seq = seq as u64;
+        if after_seq.is_some_and(|n| seq <= n) {
+            continue;
+        }
+        let Ok(v) = line
+            .ok()
+            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+            .ok_or(())
+        else {
+            continue;
+        };
+        let Some(payload) = v.get("payload") else {
+            continue;
+        };
+        let kind = payload.get("type").and_then(Value::as_str).unwrap_or("");
+        let (id, role, subtype, text) = match kind {
+            "message" => {
+                let Some(role) = payload.get("role").and_then(Value::as_str) else {
+                    continue;
+                };
+                if role != "user" && role != "assistant" {
+                    continue;
+                }
+                let text = payload
+                    .get("content")
+                    .and_then(|c| c.as_array())
+                    .map(|parts| {
+                        parts
+                            .iter()
+                            .filter_map(|part| part.get("text").and_then(Value::as_str))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    })
+                    .unwrap_or_default();
+                if text.trim().is_empty() {
+                    continue;
+                }
+                (
+                    payload
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string(),
+                    role.to_string(),
+                    None,
+                    text,
+                )
+            }
+            "custom_tool_call" | "function_call" => {
+                let name = payload
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("tool")
+                    .to_string();
+                if let Some(call_id) = payload.get("call_id").and_then(Value::as_str) {
+                    tool_names.insert(call_id.to_string(), name.clone());
+                }
+                let key = if kind == "custom_tool_call" {
+                    "input"
+                } else {
+                    "arguments"
+                };
+                let input = payload.get(key).map(codex_value_text).unwrap_or_default();
+                (
+                    payload
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string(),
+                    "assistant".to_string(),
+                    Some(name),
+                    crate::transcript::cap(&input, 400),
+                )
+            }
+            "custom_tool_call_output" | "function_call_output" => {
+                let call_id = payload.get("call_id").and_then(Value::as_str).unwrap_or("");
+                let subtype = tool_names
+                    .get(call_id)
+                    .map(|name| format!("{name} result"))
+                    .unwrap_or_else(|| "tool result".to_string());
+                let output = payload
+                    .get("output")
+                    .map(codex_value_text)
+                    .unwrap_or_default();
+                (
+                    String::new(),
+                    "assistant".to_string(),
+                    Some(subtype),
+                    crate::transcript::cap(&output, 400),
+                )
+            }
+            "reasoning" => (
+                payload
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                "assistant".to_string(),
+                Some("reasoning".to_string()),
+                "reasoning trace".to_string(),
+            ),
+            _ => continue,
+        };
+        let id = if id.is_empty() {
+            format!("codex-{seq}")
+        } else {
+            id
+        };
+        // Codex timestamps its JSONL envelope, rather than the message payload.
+        // Preserve that wall-clock value so the sidebar does not fall back to
+        // its sequence number (`#2897`) as a synthetic time.
+        let ts = v
+            .get("timestamp")
+            .and_then(Value::as_str)
+            .map(crate::transcript::iso_to_ms)
+            .unwrap_or(0);
+        out.push(crate::transcript::Message {
+            harness: HarnessId::Codex,
+            session_id: session_id.to_string(),
+            id,
+            seq,
+            role,
+            subtype,
+            ts,
+            preview: crate::transcript::cap(&text, 180),
+            text,
+            locator: format!("codex:{}#L{}", path.display(), seq + 1),
+        });
+    }
+    out
 }
 
 fn codex_sessions_dir() -> anyhow::Result<PathBuf> {

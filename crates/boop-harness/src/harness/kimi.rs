@@ -7,6 +7,7 @@
 #![allow(dead_code)]
 
 use std::fs::File;
+use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
@@ -171,6 +172,268 @@ impl Harness for Kimi {
             next_cursor: result.next_offset,
         })
     }
+
+    fn describe(&self, session: &SessionRef) -> Option<crate::transcript::SessionMeta> {
+        let state = kimi_state_path(&session.path);
+        let (input_tokens, model, provider) = kimi_wire_meta(&session.path);
+        Some(crate::transcript::SessionMeta {
+            id: session.session_id.clone(),
+            harness: HarnessId::Kimi,
+            cwd: session.cwd.clone().unwrap_or_default(),
+            source_path: Some(session.path.to_string_lossy().into_owned()),
+            title: None,
+            model,
+            provider,
+            input_tokens,
+            parent_id: None,
+            parent_kind: None,
+            created_at_ms: crate::transcript::created(&state),
+            last_activity_ms: session.modified_ms.max(crate::transcript::mtime(&state)),
+        })
+    }
+
+    fn messages(
+        &self,
+        session: &SessionRef,
+        after_seq: Option<u64>,
+    ) -> Vec<crate::transcript::Message> {
+        read_kimi(&session.path, &session.session_id, after_seq)
+    }
+
+    /// A session is a strip row only when it is the main agent; kimi writes
+    /// one wire.jsonl per agent under a session, and the strip lists the
+    /// session, so only its main agent is a row.
+    fn lists_session(&self, session: &SessionRef) -> bool {
+        session.parent.is_none()
+    }
+
+    fn session_by_id(&self, session_id: &str, _cwd: Option<&str>) -> Option<SessionRef> {
+        let base = kimi_sessions_dir().ok()?;
+        let path = kimi_session_path(&base, session_id)?;
+        Some(SessionRef {
+            harness: HarnessId::Kimi,
+            session_id: session_id.to_string(),
+            nickname: "main".to_string(),
+            path,
+            cwd: None,
+            git_branch: None,
+            modified_ms: 0,
+            size: 0,
+            tmux: None,
+            tmux_socket: None,
+            parent: None,
+        })
+    }
+}
+
+/// The main agent's `wire.jsonl` for a kimi session id, found by walking the
+/// workspaces under the sessions dir.
+fn kimi_session_path(root: &Path, session_id: &str) -> Option<PathBuf> {
+    for workspace in std::fs::read_dir(root).ok()?.flatten() {
+        let path = workspace
+            .path()
+            .join(format!("session_{session_id}"))
+            .join("agents")
+            .join("main")
+            .join("wire.jsonl");
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    None
+}
+
+// ---- kimi transcript reader and shaping (moved from instant, verbatim).
+
+// Sum the input-side usage from the last kimi wire.jsonl line that carries one,
+// plus the model on that line; output tokens are not the context reading.
+fn kimi_wire_meta(wire: &Path) -> (Option<u64>, Option<String>, Option<String>) {
+    let mut tokens = None;
+    let mut model = None;
+    let mut provider = None;
+    let Ok(file) = std::fs::File::open(wire) else {
+        return (tokens, model, provider);
+    };
+    for line in std::io::BufReader::new(file).lines().map_while(Result::ok) {
+        let Some(value) = crate::transcript::json(&line) else {
+            continue;
+        };
+        if let Some(usage) = value.get("usage") {
+            tokens = Some(
+                wire_num(usage, "inputOther")
+                    + wire_num(usage, "inputCacheRead")
+                    + wire_num(usage, "inputCacheCreation"),
+            );
+        }
+        if let Some(name) = value.get("model").and_then(Value::as_str) {
+            model = Some(name.to_string());
+        }
+        if let Some(name) = value.get("provider").and_then(Value::as_str) {
+            provider = Some(name.to_string());
+        }
+    }
+    (tokens, model, provider)
+}
+
+fn wire_num(value: &Value, key: &str) -> u64 {
+    value.get(key).and_then(Value::as_u64).unwrap_or(0)
+}
+
+/// `<session dir>/agents/<agent>/wire.jsonl` -> `<session dir>/state.json`.
+fn kimi_state_path(wire: &Path) -> PathBuf {
+    wire.ancestors().nth(3).unwrap_or(wire).join("state.json")
+}
+
+fn read_kimi(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate::transcript::Message> {
+    let Ok(file) = std::fs::File::open(path) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let mut tool_names = std::collections::HashMap::<String, String>::new();
+    for (seq, line) in std::io::BufReader::new(file).lines().enumerate() {
+        let seq = seq as u64;
+        if after_seq.is_some_and(|n| seq <= n) {
+            continue;
+        }
+        let Ok(v) = line
+            .ok()
+            .and_then(|line| serde_json::from_str::<Value>(&line).ok())
+            .ok_or(())
+        else {
+            continue;
+        };
+        let ts = v.get("time").and_then(Value::as_u64).unwrap_or(0);
+        let (id, role, subtype, text) = match v.get("type").and_then(Value::as_str) {
+            Some("turn.prompt") => {
+                let text = v
+                    .get("input")
+                    .and_then(Value::as_array)
+                    .map(|items| {
+                        items
+                            .iter()
+                            .filter_map(|item| item.get("text").and_then(Value::as_str))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    })
+                    .unwrap_or_default();
+                if text.is_empty() {
+                    continue;
+                }
+                (String::new(), "user".to_string(), None, text)
+            }
+            Some("context.append_loop_event") => {
+                let Some(event) = v.get("event") else {
+                    continue;
+                };
+                match event.get("type").and_then(Value::as_str) {
+                    Some("content.part") => {
+                        let Some(part) = event.get("part") else {
+                            continue;
+                        };
+                        match part.get("type").and_then(Value::as_str) {
+                            Some("text") => (
+                                part.get("uuid")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("")
+                                    .to_string(),
+                                "assistant".to_string(),
+                                None,
+                                part.get("text")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("")
+                                    .to_string(),
+                            ),
+                            Some("think") => (
+                                part.get("uuid")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("")
+                                    .to_string(),
+                                "assistant".to_string(),
+                                Some("thinking".to_string()),
+                                crate::transcript::cap(
+                                    part.get("think")
+                                        .and_then(Value::as_str)
+                                        .unwrap_or("thinking trace"),
+                                    600,
+                                ),
+                            ),
+                            _ => continue,
+                        }
+                    }
+                    Some("tool.call") => {
+                        let name = event
+                            .get("name")
+                            .and_then(Value::as_str)
+                            .unwrap_or("tool")
+                            .to_string();
+                        if let Some(call_id) = event.get("toolCallId").and_then(Value::as_str) {
+                            tool_names.insert(call_id.to_string(), name.clone());
+                        }
+                        (
+                            event
+                                .get("uuid")
+                                .and_then(Value::as_str)
+                                .unwrap_or("")
+                                .to_string(),
+                            "assistant".to_string(),
+                            Some(name),
+                            crate::transcript::cap(
+                                &event.get("args").map(super::codex::codex_value_text).unwrap_or_default(),
+                                400,
+                            ),
+                        )
+                    }
+                    Some("tool.result") => {
+                        let call_id = event
+                            .get("toolCallId")
+                            .and_then(Value::as_str)
+                            .unwrap_or("");
+                        let subtype = tool_names
+                            .get(call_id)
+                            .map(|name| format!("{name} result"))
+                            .unwrap_or_else(|| "tool result".to_string());
+                        let text = event
+                            .get("result")
+                            .map(super::codex::codex_value_text)
+                            .unwrap_or_default();
+                        (
+                            event
+                                .get("uuid")
+                                .and_then(Value::as_str)
+                                .unwrap_or("")
+                                .to_string(),
+                            "assistant".to_string(),
+                            Some(subtype),
+                            crate::transcript::cap(&text, 400),
+                        )
+                    }
+                    _ => continue,
+                }
+            }
+            _ => continue,
+        };
+        if text.trim().is_empty() {
+            continue;
+        }
+        let id = if id.is_empty() {
+            format!("kimi-{seq}")
+        } else {
+            id
+        };
+        out.push(crate::transcript::Message {
+            harness: HarnessId::Kimi,
+            session_id: session_id.to_string(),
+            id,
+            seq,
+            role,
+            subtype,
+            ts,
+            preview: crate::transcript::cap(&text, 180),
+            text,
+            locator: format!("kimi:{}#L{}", path.display(), seq + 1),
+        });
+    }
+    out
 }
 
 fn kimi_sessions_dir() -> anyhow::Result<PathBuf> {

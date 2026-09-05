@@ -425,6 +425,48 @@ pub trait Harness: Send + Sync {
     ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
         anyhow::bail!("harness `{}` has no lane channel", self.id())
     }
+
+    /// One session shaped for a UI strip. `None` when the session is not a row
+    /// (a claude sidechain with no discoverable parent, an archived opencode
+    /// session).
+    fn describe(&self, _session: &SessionRef) -> Option<crate::transcript::SessionMeta> {
+        None
+    }
+
+    /// Every turn in one session, oldest first. `after_seq` returns only newer
+    /// turns (the watcher's incremental read).
+    fn messages(
+        &self,
+        _session: &SessionRef,
+        _after_seq: Option<u64>,
+    ) -> Vec<crate::transcript::Message> {
+        Vec::new()
+    }
+
+    /// The id the harness resumes on. claude names a subagent transcript
+    /// `<parent>/<stem>` while `claude --resume` takes the stem alone.
+    fn resume_id<'a>(&self, session: &'a SessionRef) -> &'a str {
+        &session.session_id
+    }
+
+    /// The exact `SessionRef` for a session id, or `None`. claude resolves the
+    /// transcript file (direct or a `subagents/` child) under the cwd's project
+    /// dir; codex and kimi walk their sessions dir for the id; opencode reads
+    /// its db row.
+    fn session_by_id(
+        &self,
+        _session_id: &str,
+        _cwd: Option<&str>,
+    ) -> Option<SessionRef> {
+        None
+    }
+
+    /// Whether a session is a row for the UI strip. The default lists every
+    /// session; kimi writes one wire.jsonl per agent under a session and lists
+    /// only its main agent.
+    fn lists_session(&self, _session: &SessionRef) -> bool {
+        true
+    }
 }
 
 /// The one command a lane pane runs, whatever the harness: the boop

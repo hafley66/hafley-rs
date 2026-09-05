@@ -7,6 +7,7 @@ pub mod harness;
 pub mod identity;
 pub mod live;
 pub mod registry;
+pub mod transcript;
 pub mod worktree;
 
 pub use door::{Delivered, Door, IdleNotice};
@@ -19,3 +20,4 @@ pub use harness::{
 pub use identity::Identity;
 pub use live::{DoorAddress, LiveSession, LiveSessions, LiveStatus};
 pub use registry::Registry;
+pub use transcript::{Message, SessionMeta};

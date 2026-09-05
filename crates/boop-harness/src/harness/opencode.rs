@@ -2,7 +2,7 @@
 //! `message.rowid` in its SQLite store, read-only; opencode owns that store.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -325,6 +325,164 @@ impl Harness for Opencode {
         repair_empty_messages(store, &connection, &session.session_id, &mut stat)?;
         Ok(stat)
     }
+
+    fn describe(&self, session: &SessionRef) -> Option<crate::transcript::SessionMeta> {
+        let connection = open_read_only(&session.path).ok()?;
+        // tokens.total is OpenCode's complete context reading; tokens.input
+        // excludes cache reads. An archived row is not a resumable session.
+        let sql = "SELECT s.title,s.time_created,(SELECT MAX(COALESCE(json_extract(m.data,'$.tokens.total'),json_extract(m.data,'$.tokens.input'))) FROM message m WHERE m.session_id=s.id),(SELECT json_extract(m.data,'$.modelID') FROM message m WHERE m.session_id=s.id AND json_extract(m.data,'$.modelID') IS NOT NULL ORDER BY m.time_created DESC LIMIT 1),(SELECT json_extract(m.data,'$.providerID') FROM message m WHERE m.session_id=s.id AND json_extract(m.data,'$.providerID') IS NOT NULL ORDER BY m.time_created DESC LIMIT 1) FROM session s WHERE s.id=?1 AND s.time_archived IS NULL";
+        let mut statement = connection.prepare(sql).ok()?;
+        let row = statement
+            .query_row([&session.session_id], |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, Option<i64>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                ))
+            })
+            .ok()?;
+        let (title, created_at_ms, input_tokens, model, provider) = row;
+        Some(crate::transcript::SessionMeta {
+            id: session.session_id.clone(),
+            harness: HarnessId::Opencode,
+            cwd: session.cwd.clone().unwrap_or_default(),
+            source_path: None,
+            title,
+            model,
+            provider,
+            input_tokens: input_tokens.map(|n| n as u64),
+            parent_id: session.parent.clone(),
+            parent_kind: session.parent.as_ref().map(|_| "subagent"),
+            created_at_ms: created_at_ms as u64,
+            last_activity_ms: session.modified_ms,
+        })
+    }
+
+    fn messages(
+        &self,
+        session: &SessionRef,
+        after_seq: Option<u64>,
+    ) -> Vec<crate::transcript::Message> {
+        read_opencode(&session.path, &session.session_id, after_seq)
+    }
+
+    fn session_by_id(&self, session_id: &str, _cwd: Option<&str>) -> Option<SessionRef> {
+        let path = store_path()?;
+        session_from(&path, session_id).ok().flatten()
+    }
+}
+
+// ---- opencode transcript reader (moved from instant ledger.rs, verbatim).
+
+// Pull an opencode message's text from its `part` rows. Each part's `data` is a
+// json block: text/reasoning carry a `text` field; a tool part carries its name
+// + `state.input` (the command/args) + `state.output`. reasoning + tool feed the
+// searchable `full`; only text parts feed `display`.
+fn opencode_message_text(conn: &rusqlite::Connection, message_id: &str) -> crate::transcript::Extracted {
+    let mut full = String::new();
+    let mut display = String::new();
+    if let Ok(mut stmt) =
+        conn.prepare("SELECT data FROM part WHERE message_id = ?1 ORDER BY time_created, id")
+    {
+        let rows = stmt.query_map([message_id], |row| row.get::<_, String>(0));
+        if let Ok(rows) = rows {
+            for data in rows.flatten() {
+                if let Ok(v) = serde_json::from_str::<Value>(&data) {
+                    match v.get("type").and_then(|t| t.as_str()) {
+                        Some("text") => {
+                            if let Some(t) = v.get("text").and_then(|t| t.as_str()) {
+                                full.push_str(t);
+                                full.push('\n');
+                                display.push_str(t);
+                                display.push('\n');
+                            }
+                        }
+                        Some("reasoning") => {
+                            if let Some(t) = v.get("text").and_then(|t| t.as_str()) {
+                                if !t.is_empty() {
+                                    full.push_str(&crate::transcript::cap(t, 600));
+                                    full.push('\n');
+                                }
+                            }
+                        }
+                        Some("tool") => {
+                            let name = v.get("tool").and_then(|n| n.as_str()).unwrap_or("tool");
+                            full.push_str(&format!("[{name}] "));
+                            if let Some(input) = v.pointer("/state/input") {
+                                full.push_str(&crate::transcript::cap(&input.to_string(), 400));
+                            }
+                            if let Some(out) = v.pointer("/state/output").and_then(|o| o.as_str()) {
+                                full.push(' ');
+                                full.push_str(&crate::transcript::cap(out, 400));
+                            }
+                            full.push('\n');
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    crate::transcript::Extracted {
+        full: full.trim_end().to_string(),
+        display: display.trim_end().to_string(),
+    }
+}
+
+fn read_opencode(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate::transcript::Message> {
+    let Ok(conn) = rusqlite::Connection::open_with_flags(
+        path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ) else {
+        return Vec::new();
+    };
+    let after = after_seq.unwrap_or(0) as i64;
+    let mut out = Vec::new();
+    let Ok(mut stmt) = conn.prepare(
+        "SELECT id, time_created, data FROM message \
+         WHERE session_id = ?1 AND time_created > ?2 \
+         ORDER BY time_created, id",
+    ) else {
+        return Vec::new();
+    };
+    let rows = stmt.query_map(rusqlite::params![session_id, after], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    });
+    let Ok(rows) = rows else { return Vec::new() };
+    for (id, time_created, data) in rows.flatten() {
+        let role = serde_json::from_str::<Value>(&data)
+            .ok()
+            .and_then(|v| v.get("role").and_then(|r| r.as_str()).map(String::from))
+            .unwrap_or_else(|| "assistant".to_string());
+        let ex = opencode_message_text(&conn, &id);
+        if ex.full.is_empty() {
+            continue;
+        }
+        let preview = crate::transcript::preview_of(if ex.display.is_empty() {
+            &ex.full
+        } else {
+            &ex.display
+        });
+        out.push(crate::transcript::Message {
+            harness: HarnessId::Opencode,
+            session_id: session_id.to_string(),
+            id: id.clone(),
+            seq: time_created as u64,
+            role,
+            subtype: None,
+            ts: time_created as u64,
+            preview,
+            text: ex.full,
+            locator: format!("opencode:#msg={id}"),
+        });
+    }
+    out
 }
 
 /// The last message rowid opencode holds per session. `size` is what the sync
@@ -430,7 +588,7 @@ fn sync_candidates_from_connection(
         .iter()
         .map(|(id, _, _, _, _)| id.as_str())
         .collect::<Vec<_>>();
-    let cursors = last_message_rowids_for(&connection, &ids)?;
+    let cursors = last_message_rowids_for(connection, &ids)?;
     Ok(changed
         .into_iter()
         .map(|(id, directory, parent, slug, modified_ms)| SessionRef {

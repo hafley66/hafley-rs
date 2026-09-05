@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 use crate::harness::{
@@ -164,6 +164,369 @@ impl Harness for Claude {
         }
         Ok(())
     }
+
+    fn describe(&self, session: &SessionRef) -> Option<crate::transcript::SessionMeta> {
+        let head = crate::transcript::head_values(&session.path);
+        let sidechain = head
+            .iter()
+            .any(|value| value.get("isSidechain").and_then(Value::as_bool) == Some(true));
+        if sidechain && session.parent.is_none() {
+            return None;
+        }
+        let created_at_ms = head
+            .iter()
+            .find_map(|value| value.get("timestamp").and_then(Value::as_str))
+            .map(crate::transcript::iso_to_ms)
+            .unwrap_or(0);
+        let input_tokens = crate::transcript::tail_values(&session.path)
+            .iter()
+            .rev()
+            .chain(head.iter().rev())
+            .find_map(|value| crate::transcript::usage(value, 0))
+            .map(|u| {
+                u.get("input_tokens").and_then(Value::as_u64).unwrap_or(0)
+                    + u.get("cache_read_input_tokens")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0)
+                    + u.get("cache_creation_input_tokens")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0)
+            });
+        Some(crate::transcript::SessionMeta {
+            id: session.nickname.clone(),
+            harness: HarnessId::Claude,
+            cwd: session.cwd.clone().unwrap_or_default(),
+            source_path: Some(session.path.to_string_lossy().into_owned()),
+            title: None,
+            model: None,
+            provider: Some("anthropic".to_string()),
+            input_tokens,
+            parent_kind: session.parent.as_ref().map(|_| "subagent"),
+            parent_id: session.parent.clone(),
+            created_at_ms,
+            last_activity_ms: session.modified_ms,
+        })
+    }
+
+    fn messages(
+        &self,
+        session: &SessionRef,
+        after_seq: Option<u64>,
+    ) -> Vec<crate::transcript::Message> {
+        read_claude(&session.path, &session.session_id, after_seq)
+    }
+
+    fn resume_id<'a>(&self, session: &'a SessionRef) -> &'a str {
+        &session.nickname
+    }
+
+    fn session_by_id(&self, session_id: &str, cwd: Option<&str>) -> Option<SessionRef> {
+        let base = claude_projects_dir().ok()?;
+        let cwd = cwd?;
+        let path = claude_session_path(&base, cwd, session_id)?;
+        let nickname = path.file_stem()?.to_str()?.to_string();
+        Some(SessionRef {
+            harness: HarnessId::Claude,
+            session_id: session_id.to_string(),
+            nickname,
+            path,
+            cwd: Some(cwd.to_string()),
+            git_branch: None,
+            modified_ms: 0,
+            size: 0,
+            tmux: None,
+            tmux_socket: None,
+            parent: None,
+        })
+    }
+}
+
+/// The cwd-encoded claude project directory under a home root.
+pub(crate) fn claude_project_dir(home: &std::path::Path, cwd: &str) -> std::path::PathBuf {
+    home.join(".claude/projects").join(
+        cwd.chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect::<String>(),
+    )
+}
+
+/// The exact transcript file for a claude session id: the direct
+/// `<id>.jsonl`, or a `subagents/<id>.jsonl` under one project folder.
+pub(crate) fn claude_session_path(
+    home: &std::path::Path,
+    cwd: &str,
+    session_id: &str,
+) -> Option<std::path::PathBuf> {
+    let project = claude_project_dir(home, cwd);
+    let direct = project.join(format!("{session_id}.jsonl"));
+    if direct.is_file() {
+        return Some(direct);
+    }
+    std::fs::read_dir(project).ok()?.flatten().find_map(|entry| {
+        let path = entry
+            .path()
+            .join("subagents")
+            .join(format!("{session_id}.jsonl"));
+        path.is_file().then_some(path)
+    })
+}
+
+// ---- claude transcript reader (moved from instant ledger.rs, verbatim).
+
+// A claude `type:"user"` line covers three different things on the wire: a
+// real typed message, a tool result routed back through the user role (it
+// carries a sibling `toolUseResult` field and a `tool_result` content block),
+// and injected content such as skill/slash-command bodies (`isMeta: true`).
+// Classify on content block types and the isMeta flag, never on "string vs
+// array": a real message can still be an array of blocks (image + text).
+pub(crate) fn content_has_tool_result(content: &serde_json::Value) -> bool {
+    content.as_array().is_some_and(|blocks| {
+        blocks
+            .iter()
+            .any(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_result"))
+    })
+}
+
+// Sessions written before `promptSource` existed leave only the tag the CLI
+// wraps injected content in. Each of these is a whole message on its own, never
+// a prefix on something the user typed.
+pub(crate) const INJECTED_TAGS: [&str; 9] = [
+    "command-name",
+    "command-message",
+    "command-args",
+    "local-command-stdout",
+    "local-command-stderr",
+    "bash-input",
+    "bash-stdout",
+    "bash-stderr",
+    "system-reminder",
+];
+
+pub(crate) fn first_text(content: &serde_json::Value) -> Option<&str> {
+    if let Some(s) = content.as_str() {
+        return Some(s);
+    }
+    content.as_array()?.iter().find_map(|b| {
+        if b.get("type").and_then(|t| t.as_str()) == Some("text") {
+            b.get("text").and_then(|t| t.as_str())
+        } else {
+            None
+        }
+    })
+}
+
+fn injected_tag(content: &serde_json::Value) -> Option<String> {
+    let (tag, _) = first_text(content)?
+        .trim_start()
+        .strip_prefix('<')?
+        .split_once('>')?;
+    INJECTED_TAGS.contains(&tag).then(|| tag.to_string())
+}
+
+fn classify_user_line(v: &serde_json::Value, content: &serde_json::Value) -> (String, Option<String>) {
+    if content_has_tool_result(content) {
+        return ("tool".to_string(), Some("tool_result".to_string()));
+    }
+    let flag = |key: &str| v.get(key).and_then(|b| b.as_bool()).unwrap_or(false);
+    let origin = v
+        .get("origin")
+        .and_then(|o| o.get("kind"))
+        .and_then(|k| k.as_str());
+    // The CLI stamps everything it writes on the user's behalf: task
+    // notifications, compaction summaries, slash-command bodies, hook output.
+    // None of it was typed, so none of it is a user row. `promptSource` is
+    // "typed" or "queued" for real input and "system" for injections.
+    if v.get("promptSource").and_then(|p| p.as_str()) == Some("system") {
+        return (
+            "meta".to_string(),
+            Some(origin.unwrap_or("system").to_string()),
+        );
+    }
+    if flag("isCompactSummary") {
+        return ("meta".to_string(), Some("compact-summary".to_string()));
+    }
+    if flag("isMeta") {
+        // Subtype stays None when nothing names the injection: the sidebar
+        // label is `role · subtype`, which would otherwise read "meta · meta".
+        return (
+            "meta".to_string(),
+            origin.map(str::to_string).or_else(|| injected_tag(content)),
+        );
+    }
+    if let Some(tag) = injected_tag(content) {
+        return ("meta".to_string(), Some(tag));
+    }
+    // Includes "[Request interrupted by user]": that's something the user
+    // actually did, so it stays a user row on purpose.
+    ("user".to_string(), None)
+}
+
+fn tool_result_text(content: Option<&serde_json::Value>) -> String {
+    match content {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => String::new(),
+    }
+}
+
+fn diagram_write_fence(name: &str, input: &serde_json::Value) -> Option<String> {
+    if !name.eq_ignore_ascii_case("write") && !name.eq_ignore_ascii_case("write_file") {
+        return None;
+    }
+    let path = input
+        .get("file_path")
+        .or_else(|| input.get("path"))
+        .and_then(Value::as_str)?;
+    let content = input.get("content").and_then(Value::as_str)?;
+    let lower = path.to_ascii_lowercase();
+    let language = if lower.ends_with(".d2") {
+        "d2"
+    } else if lower.ends_with(".mmd") || lower.ends_with(".mermaid") {
+        "mermaid"
+    } else {
+        return None;
+    };
+    Some(format!("[{name}] {path}\n```{language}\n{content}\n```"))
+}
+
+// Flatten a claude `message.content` (string OR array of typed blocks). thinking
+// carries its real text; tool_use serializes its input; tool_result its output —
+// all into `full`. Only text blocks feed `display`.
+fn claude_text(content: &serde_json::Value) -> crate::transcript::Extracted {
+    match content {
+        Value::String(s) => crate::transcript::Extracted {
+            full: s.clone(),
+            display: s.clone(),
+        },
+        Value::Array(blocks) => {
+            let mut full = String::new();
+            let mut display = String::new();
+            for b in blocks {
+                match b.get("type").and_then(|t| t.as_str()) {
+                    Some("text") => {
+                        if let Some(t) = b.get("text").and_then(|t| t.as_str()) {
+                            full.push_str(t);
+                            full.push('\n');
+                            display.push_str(t);
+                            display.push('\n');
+                        }
+                    }
+                    Some("thinking") => {
+                        if let Some(t) = b.get("thinking").and_then(|t| t.as_str()) {
+                            full.push_str(&crate::transcript::cap(t, 600));
+                            full.push('\n');
+                        }
+                    }
+                    Some("tool_use") => {
+                        let name = b.get("name").and_then(|n| n.as_str()).unwrap_or("tool");
+                        if let Some(input) = b.get("input") {
+                            if let Some(fence) = diagram_write_fence(name, input) {
+                                full.push_str(&fence);
+                            } else {
+                                full.push_str(&format!("[{name}] "));
+                                full.push_str(&crate::transcript::cap(&input.to_string(), 400));
+                            }
+                        } else {
+                            full.push_str(&format!("[{name}]"));
+                        }
+                        full.push('\n');
+                    }
+                    Some("tool_result") => {
+                        let t = tool_result_text(b.get("content"));
+                        if !t.is_empty() {
+                            full.push_str(&crate::transcript::cap(&t, 400));
+                            full.push('\n');
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            crate::transcript::Extracted {
+                full: full.trim_end().to_string(),
+                display: display.trim_end().to_string(),
+            }
+        }
+        _ => crate::transcript::Extracted {
+            full: String::new(),
+            display: String::new(),
+        },
+    }
+}
+
+// Read every turn from one claude jsonl. `after_seq` skips lines already seen
+// (the watcher passes the last line index). Only user/assistant rows become
+// messages; system/mode/snapshot lines are skipped but still advance `seq` so
+// the line index stays an exact file offset.
+pub(crate) fn read_claude(path: &std::path::Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate::transcript::Message> {
+    let Ok(file) = std::fs::File::open(path) else {
+        return Vec::new();
+    };
+    let path_str = path.to_string_lossy().to_string();
+    let mut out = Vec::new();
+    for (i, line) in std::io::BufReader::new(file).lines().enumerate() {
+        let seq = i as u64;
+        if let Some(a) = after_seq {
+            if seq <= a {
+                continue;
+            }
+        }
+        let Ok(line) = line else { continue };
+        let Ok(v) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        let msg_type = match v.get("type").and_then(|t| t.as_str()) {
+            Some(t @ ("user" | "assistant")) => t,
+            _ => continue,
+        };
+        let content = v
+            .get("message")
+            .and_then(|m| m.get("content"))
+            .cloned()
+            .unwrap_or(Value::Null);
+        let (role, subtype) = if msg_type == "assistant" {
+            ("assistant".to_string(), None)
+        } else {
+            classify_user_line(&v, &content)
+        };
+        let ex = claude_text(&content);
+        if ex.full.is_empty() {
+            continue;
+        }
+        // Preview from the prose; fall back to full for tool-only turns.
+        let preview = crate::transcript::preview_of(if ex.display.is_empty() {
+            &ex.full
+        } else {
+            &ex.display
+        });
+        let text = ex.full;
+        let id = v
+            .get("uuid")
+            .and_then(|u| u.as_str())
+            .unwrap_or("")
+            .to_string();
+        let ts = v
+            .get("timestamp")
+            .and_then(|t| t.as_str())
+            .map(crate::transcript::iso_to_ms)
+            .unwrap_or(0);
+        out.push(crate::transcript::Message {
+            harness: HarnessId::Claude,
+            session_id: session_id.to_string(),
+            id,
+            seq,
+            role,
+            subtype,
+            ts,
+            preview,
+            text,
+            locator: format!("claude:{path_str}#L{}", seq + 1),
+        });
+    }
+    out
 }
 
 #[derive(serde::Deserialize)]

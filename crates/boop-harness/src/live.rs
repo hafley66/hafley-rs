@@ -2,12 +2,13 @@
 //! harness's own registry: a file it writes per process, its state database,
 //! or its server. No tmux scraping, no transcript mtime.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 
 use crate::harness::HarnessId;
+use crate::Registry;
 
 /// What a live session is doing at the moment it was observed.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -105,6 +106,77 @@ pub fn pid_alive(pid: u32) -> bool {
 pub fn pane_of_target(target: &str) -> Option<String> {
     let pane = target.rsplit('.').next()?.trim();
     pane.starts_with('%').then(|| pane.to_string())
+}
+
+/// The harness session standing in a tmux pane, answered by each harness's own
+/// live registry rather than by a transcript mtime or a tmux scrape. `pane` is
+/// the resolved pane id; `mail_dir` is the resolved mailbox for the route
+/// fallback.
+pub fn session_in_pane(
+    registry: &Registry,
+    pane: &str,
+    mail_dir: &Path,
+) -> anyhow::Result<Option<String>> {
+    for harness in registry.all() {
+        if let Ok(Some(live)) = harness.live().live_session_in_pane(pane) {
+            let sessions = harness.live().live_sessions().unwrap_or_default();
+            return Ok(Some(interactive_session_id(&live, &sessions)));
+        }
+    }
+    route_session_in_pane(pane, mail_dir)
+        .map(|session| session.map(|session| resolve_registered_session(registry, &session)))
+}
+
+/// Read-time repair for routes written before child sessions were classified.
+/// An explicit native parent wins. The closest preceding root in the same cwd
+/// covers Codex guardian rows whose source omits its parent thread id.
+pub(crate) fn interactive_session_id(bound: &LiveSession, sessions: &[LiveSession]) -> String {
+    if bound.scope != LiveSessionScope::Child {
+        return bound.session_id.clone();
+    }
+    if let Some(parent) = &bound.parent_session {
+        return parent.clone();
+    }
+    sessions
+        .iter()
+        .filter(|candidate| {
+            candidate.scope == LiveSessionScope::Root
+                && candidate.cwd == bound.cwd
+                && match (candidate.started_ms, bound.started_ms) {
+                    (Some(root), Some(child)) => root <= child,
+                    _ => false,
+                }
+        })
+        .max_by_key(|candidate| candidate.started_ms)
+        .map(|candidate| candidate.session_id.clone())
+        .unwrap_or_else(|| bound.session_id.clone())
+}
+
+fn resolve_registered_session(registry: &Registry, session: &str) -> String {
+    for harness in registry.all() {
+        let Ok(sessions) = harness.live().live_sessions() else {
+            continue;
+        };
+        if let Some(bound) = sessions
+            .iter()
+            .find(|candidate| candidate.session_id == session)
+        {
+            return interactive_session_id(bound, &sessions);
+        }
+    }
+    session.to_owned()
+}
+
+// Only claude fills `LiveSession.tmux_pane`; the other three fall back to the
+// boop route registry.
+fn route_session_in_pane(pane: &str, mail_dir: &Path) -> anyhow::Result<Option<String>> {
+    let routes = boop_store::bus::read_routes(mail_dir)?;
+    Ok(routes.into_values().find_map(|route| {
+        let held = route.tmux.as_deref()?;
+        (held.trim_start_matches('%') == pane.trim_start_matches('%'))
+            .then_some(route.session_id)
+            .flatten()
+    }))
 }
 
 #[cfg(test)]
