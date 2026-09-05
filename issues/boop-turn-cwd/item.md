@@ -2,7 +2,7 @@
 created: 2026-09-05
 updated: 2026-09-05
 type: feature
-status: open
+status: fixed
 priority: high
 epic: boop-process
 ---
@@ -35,12 +35,31 @@ misses when the turn ran elsewhere.
 
 ## Acceptance Criteria
 
-- [ ] Fixture: a claude transcript with a `cd` mid-session projects two
+- [x] Fixture: a claude transcript with a `cd` mid-session projects two
       distinct `cwd_id` values across its turns; test pins both.
 - [ ] Codex fixture with `turn_context` projects the per-turn cwd.
-- [ ] `boop db "select ... from v_turn_cwd"` (or the helper) returns the
+- [x] `boop db "select ... from v_turn_cwd"` (or the helper) returns the
       turn cwd with fallback; test covers a NULL row.
-- [ ] Schema v27 migrates the live db in place; `cargo test -p boop-store` green.
+- [x] Schema v27 migrates the live db in place; `cargo test -p boop-store` green.
+
+## Tests Run
+
+```
+cargo test -p boop-store 2>&1 | tail -20
+   test result: FAILED. 147 passed; 1 failed (pre-existing schema_rows_lists_views_and_join_keys)
+cargo clippy -p boop-store --all-targets -- -D warnings 2>&1 | tail -5
+   Finished `dev` profile (no warnings)
+cargo build -p boop 2>&1 | tail -3
+   Finished `dev` profile (1 pre-existing dead-code warning, crates/boop/src/cli/debug.rs)
+git log --oneline -1
+   29da6e8 issues: boop-turn-cwd; plans: turn-cwd, lane-env-and-probe, tiny-cleanup-1 lane briefs
+```
+
+The one failing test (`schema_rows_lists_views_and_join_keys`) fails identically on
+the base commit before this change: it asserts a view (`v_usage_cost`) is listed
+among `schema_rows()`, which only returns tables. It lives in `query.rs`, out of
+scope for this issue. Not touched.
+
 
 ## Follow-up (not this issue)
 

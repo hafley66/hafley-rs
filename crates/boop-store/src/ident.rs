@@ -36,7 +36,7 @@ pub struct Store {
 /// 19 = an absent favorite note is stored as NULL.
 /// 21 = each transcript cursor records its adapter projection contract.
 /// 22 = cost views over the usage ledger; see `COST_VIEW_SCHEMA`.
-pub const SCHEMA_VERSION: i64 = 26;
+pub const SCHEMA_VERSION: i64 = 27;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -815,6 +815,19 @@ impl Store {
                     tracing::info!(stamped, "door-taken mail rows stamped taken");
                 }
             }
+            if self.schema_version()? < 27 {
+                let has_cwd = self.connection.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM pragma_table_info('agent_turn') WHERE name = 'cwd_id')",
+                    [],
+                    |row| row.get::<_, bool>(0),
+                )?;
+                if !has_cwd {
+                    self.connection
+                        .execute("ALTER TABLE agent_turn ADD COLUMN cwd_id INTEGER", [])?;
+                }
+                self.connection.execute_batch(TURN_CWD_VIEW_SCHEMA)?;
+                self.connection.execute_batch("PRAGMA user_version = 27;")?;
+            }
             self.stamp_version()?;
             Ok(())
         })();
@@ -948,13 +961,22 @@ impl Store {
 
     /// Returns rows inserted: 0 means the ordinal was already taken, which the
     /// caller counts as a defect rather than swallowing.
-    fn add_turn(&self, session: &str, turn: u64, ts: u64, role: &str, said: &str) -> Result<usize> {
+    fn add_turn(
+        &self,
+        session: &str,
+        turn: u64,
+        ts: u64,
+        role: &str,
+        said: &str,
+        cwd: Option<&str>,
+    ) -> Result<usize> {
         let sid = self.session_id(session)?;
         let role_id = self.intern("dict_role", role)?;
+        let cwd_id = cwd.map(|c| self.intern("dict_cwd", c)).transpose()?;
         Ok(self.connection.execute(
-            "INSERT OR IGNORE INTO agent_turn (session_id, turn, ts, role_id, said)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![sid, turn as i64, ts as i64, role_id, said],
+            "INSERT OR IGNORE INTO agent_turn (session_id, turn, ts, role_id, said, cwd_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![sid, turn as i64, ts as i64, role_id, said, cwd_id],
         )?)
     }
 
@@ -2924,7 +2946,7 @@ impl Store {
         role: &str,
         said: &str,
     ) -> Result<usize> {
-        self.add_turn(session, turn, ts, role, said)
+        self.add_turn(session, turn, ts, role, said, None)
     }
 
     /// Fill legacy empty assistant turns attached to source requests.
@@ -3015,6 +3037,11 @@ fn project_line(
         .get("type")
         .and_then(serde_json::Value::as_str)
         .unwrap_or("");
+    // Claude stamps every record with the directory it ran in; a Bash `cd`
+    // mid-session changes it, so the turn's own cwd differs from the session's.
+    let cwd = object
+        .get("cwd")
+        .and_then(serde_json::Value::as_str);
 
     if record_type == "pr-link" {
         let pr_url = object
@@ -3024,7 +3051,7 @@ fn project_line(
             .unwrap_or("");
         if !pr_url.is_empty() {
             walk.turn += 1;
-            let inserted = store.add_turn(&sid, walk.turn, ts, "system", "")?;
+            let inserted = store.add_turn(&sid, walk.turn, ts, "system", "", cwd)?;
             walk.record(inserted);
             store.add_pr(&sid, walk.turn, pr_url)?;
         }
@@ -3072,7 +3099,7 @@ fn project_line(
                     .and_then(serde_json::Value::as_str)
                     .unwrap_or("");
                 walk.turn += 1;
-                let inserted = store.add_turn(&sid, walk.turn, ts, role, said)?;
+                let inserted = store.add_turn(&sid, walk.turn, ts, role, said, cwd)?;
                 walk.record(inserted);
                 first_turn.get_or_insert(walk.turn);
             }
@@ -3083,7 +3110,7 @@ fn project_line(
                     .unwrap_or("");
                 let input = block.get("input");
                 walk.turn += 1;
-                let inserted = store.add_turn(&sid, walk.turn, ts, "tool", "")?;
+                let inserted = store.add_turn(&sid, walk.turn, ts, "tool", "", cwd)?;
                 walk.record(inserted);
                 first_turn.get_or_insert(walk.turn);
                 emit_tool_fact(store, &sid, walk.turn, ts, name, input)?;
@@ -3101,7 +3128,7 @@ fn project_line(
             (true, Some(turn)) => turn,
             (true, None) => {
                 walk.turn += 1;
-                let inserted = store.add_turn(&sid, walk.turn, ts, role, "")?;
+                let inserted = store.add_turn(&sid, walk.turn, ts, role, "", cwd)?;
                 walk.record(inserted);
                 walk.turn
             }
@@ -3283,8 +3310,22 @@ CREATE TABLE IF NOT EXISTS agent_turn_comment_fork (
 ) WITHOUT ROWID;
 ";
 
-/// Schema v26, a one-time backfill. Every mailbox row a door already took
-/// but nothing stamped: the pre-fix send paths recorded the landing and left
+/// Schema v27: one cwd per turn, added in place so an older store gets the
+/// column and the fallback view without a rebuild. The same text sits inside
+/// `SCHEMA` for a fresh store. The ALTER is guarded by a column check in
+/// `initialise_or_migrate`, so a re-entered migration stays idempotent.
+const TURN_CWD_VIEW_SCHEMA: &str = "
+CREATE VIEW IF NOT EXISTS v_turn_cwd AS
+SELECT t.session_id,
+       t.turn,
+       cwd.value AS cwd
+  FROM agent_turn t
+  JOIN agent_session s ON s.session_id = t.session_id
+  LEFT JOIN dict_cwd cwd ON cwd.id = COALESCE(t.cwd_id, s.cwd_id);
+";
+
+/// Schema v26, a one-time backfill. Every mailbox row a door already took but
+/// nothing stamped: the pre-fix send paths recorded the landing and left
 /// `to_timestamp` open, so the row fell between the two readers. It is not
 /// held (`bus::held_messages` drops a row whose ledger names a door) and it
 /// is not unread (`boop wait --me` drops a row whose ledger says landed), so
@@ -3494,8 +3535,20 @@ CREATE TABLE IF NOT EXISTS agent_turn (
   ts INTEGER,
   role_id INTEGER NOT NULL,
   said TEXT,
+  cwd_id INTEGER,
   PRIMARY KEY (session_id, turn)
 ) WITHOUT ROWID;
+
+-- The directory one turn ran in, falling back to the session's cwd when the
+-- turn records none (kimi/opencode and legacy rows before schema v27). Readers
+-- resolve relative refs against this instead of the session-wide cwd.
+CREATE VIEW IF NOT EXISTS v_turn_cwd AS
+SELECT t.session_id,
+       t.turn,
+       cwd.value AS cwd
+  FROM agent_turn t
+  JOIN agent_session s ON s.session_id = t.session_id
+  LEFT JOIN dict_cwd cwd ON cwd.id = COALESCE(t.cwd_id, s.cwd_id);
 
 CREATE TABLE IF NOT EXISTS agent_touch (
   session_id INTEGER NOT NULL,
@@ -4296,6 +4349,141 @@ mod tests {
         assert_eq!(stamp("m-queued").as_deref(), Some("2023-11-14T22:13:20Z"));
         assert!(stamp("m-injected").is_some());
         assert_eq!(stamp("m-open"), None, "a mailbox row is still waiting");
+        drop(migrated);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Schema v27. A claude session `cd`s mid-session (a Bash tool ran in a
+    /// worktree), so the per-turn `cwd` on each record diverges from the
+    /// session-wide one; the projected turns must carry both values.
+    #[test]
+    fn v27_claude_fixture_projects_two_distinct_turn_cwds() {
+        let db_path = temp_path("v27-claude-cwd");
+        let _ = std::fs::remove_file(&db_path);
+        let store = Store::open(db_path.clone()).unwrap();
+
+        let fixture = Path::new("tests/fixtures/claude-cwd.jsonl");
+        let session = SessionRef {
+            harness: HarnessId::Claude,
+            session_id: "cwd-ses".to_owned(),
+            nickname: "cwd-ses".to_owned(),
+            path: fixture.to_path_buf(),
+            cwd: Some("/repo".to_owned()),
+            git_branch: Some("main".to_owned()),
+            modified_ms: 0,
+            size: 0,
+            tmux: None,
+            tmux_socket: None,
+            parent: None,
+        };
+        let _ = sync_session_with(&store, &session, None, 7, project_cursor).unwrap();
+
+        let mut statement = store
+            .connection
+            .prepare(
+                "SELECT v.turn, v.cwd FROM v_turn_cwd v
+                 JOIN dict_session d ON d.id = v.session_id
+                 WHERE d.value = 'cwd-ses' ORDER BY v.turn",
+            )
+            .unwrap();
+        let rows: Vec<(i64, String)> = statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let cwds: Vec<String> = rows.iter().map(|(_, cwd)| cwd.clone()).collect();
+        drop(statement);
+        assert_eq!(
+            cwds,
+            vec!["/repo", "/repo", "/repo/sub", "/repo/sub"],
+            "the cd mid-session projects two distinct per-turn cwds"
+        );
+
+        drop(store);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    /// Schema v27. A turn with no per-turn cwd (codex writes through
+    /// `write_turn` which passes None; kimi/opencode are session-level only)
+    /// reads the session cwd through the view's COALESCE.
+    #[test]
+    fn v27_view_falls_back_to_session_cwd_for_null_turn() {
+        let (path, store) = fresh_store("v27-null-fallback");
+        let cwd_id = store.intern("dict_cwd", "/repo").unwrap();
+        let sid = store.session_id("null-ses").unwrap();
+        let harness_id = store.intern("dict_harness", "claude").unwrap();
+        store
+            .connection
+            .execute(
+                "INSERT INTO agent_session (session_id, harness_id, cwd_id, started_ts)
+                 VALUES (?1, ?2, ?3, 100)",
+                params![sid, harness_id, cwd_id],
+            )
+            .unwrap();
+        store.write_turn("null-ses", 1, 100, "user", "hello").unwrap();
+
+        let (turn, cwd): (i64, String) = store
+            .connection
+            .query_row(
+                "SELECT v.turn, v.cwd FROM v_turn_cwd v
+                 JOIN dict_session d ON d.id = v.session_id
+                 WHERE d.value = 'null-ses' AND v.turn = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(turn, 1);
+        assert_eq!(cwd, "/repo", "NULL turn cwd falls back to the session cwd");
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Schema v27 migrates a live v26 store in place: the ALTER adds the column
+    /// and the view appears, no backfill scan of existing turns.
+    #[test]
+    fn v27_migrates_live_db_in_place_without_backfill() {
+        let (path, store) = fresh_store("v27-migrate");
+        store
+            .connection
+            .execute_batch(
+                "DROP VIEW IF EXISTS v_turn_cwd;
+                 ALTER TABLE agent_turn RENAME TO agent_turn_v26;
+                 CREATE TABLE agent_turn (
+                   session_id INTEGER NOT NULL,
+                   turn INTEGER NOT NULL,
+                   ts INTEGER,
+                   role_id INTEGER NOT NULL,
+                   said TEXT,
+                   PRIMARY KEY (session_id, turn)
+                 ) WITHOUT ROWID;
+                 INSERT INTO agent_turn (session_id, turn, role_id)
+                   SELECT session_id, turn, role_id FROM agent_turn_v26;
+                 DROP TABLE agent_turn_v26;
+                 PRAGMA user_version = 26;",
+            )
+            .unwrap();
+        drop(store);
+
+        let migrated = Store::open(path.clone()).unwrap();
+        assert_eq!(migrated.schema_version().unwrap(), SCHEMA_VERSION);
+        let has_col: bool = migrated
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM pragma_table_info('agent_turn') WHERE name = 'cwd_id')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(has_col, "v27 ALTER added agent_turn.cwd_id in place");
+        let view: i64 = migrated
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'view' AND name = 'v_turn_cwd'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(view, 1, "v_turn_cwd exists after in-place migration");
         drop(migrated);
         let _ = std::fs::remove_file(&path);
     }

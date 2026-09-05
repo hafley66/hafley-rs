@@ -1,0 +1,4 @@
+{"type":"user","sessionId":"cwd-ses","timestamp":"2026-08-01T00:00:00.100Z","cwd":"/repo","message":"read the top level"}
+{"type":"assistant","sessionId":"cwd-ses","timestamp":"2026-08-01T00:00:01.000Z","cwd":"/repo","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cd sub"}}]}}
+{"type":"user","sessionId":"cwd-ses","timestamp":"2026-08-01T00:00:02.000Z","cwd":"/repo/sub","message":"now read this"}
+{"type":"assistant","sessionId":"cwd-ses","timestamp":"2026-08-01T00:00:03.000Z","cwd":"/repo/sub","message":{"content":[{"type":"text","text":"after the cd"}]}}
