@@ -81,7 +81,7 @@ reader: `bus::held_messages` drops it because its ledger names a door, and
 `boop wait --me` drops it because `already_in_front_of_the_recipient` reads
 `landed()`. The stamp moved into `deliver_hail_budgeted` itself, so every
 caller of the ladder stamps alike, and schema v26 backfills the rows written
-before the move (the six live rows included).
+before the move (the six live rows included). Commit eb3c8b8.
 
 `NOT_UNREAD_KINDS` is not the reason `boop wait --me` timed out: it is
 `["ack", "dispatch"]`, so `yield`, `result` and `head_rewound` are already
