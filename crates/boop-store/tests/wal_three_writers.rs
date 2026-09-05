@@ -40,7 +40,7 @@ fn event(lane: &str, index: usize) -> TraceEvent {
         lane: lane.to_owned(),
         trace: Some("trace-wal-writers".to_owned()),
         session: None,
-        kind: "note".to_owned(),
+        kind: "note".into(),
         from_lane: None,
         to_lane: None,
         started_ts: Some(now),

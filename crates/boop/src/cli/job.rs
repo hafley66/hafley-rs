@@ -1278,7 +1278,7 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
                 &dir,
                 &name,
                 Route {
-                    kind,
+                    kind: kind.into(),
                     harness: harness_id,
                     tmux: None,
                     cwd: cwd
@@ -1746,7 +1746,7 @@ pub(crate) fn run_lane_list(
             "{} {} {} {} {} {} {} {}{}",
             pad(state, 4),
             pad(name, 16),
-            pad(&route.kind, 12),
+            pad(route.kind.as_str(), 12),
             pad(route.harness.map_or("-", HarnessId::as_str), 10),
             pad(route.mode.as_deref().unwrap_or("-"), 6),
             pad(route.model.as_deref().unwrap_or("-"), 46),

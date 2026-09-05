@@ -36,7 +36,7 @@ pub(crate) fn run_lane_debug(lane: &str, since: &str, mail_dir_arg: Option<&Path
             };
             line(&format!(
                 "kind      {}\nharness   {}\nmodel     {}\nsession   {}\ncwd       {}\nparent    {}\ntmux      {}\nliveness  {liveness}",
-                route.kind,
+                route.kind.as_str(),
                 route.harness.map_or("-", HarnessId::as_str),
                 route.model.as_deref().unwrap_or("-"),
                 route.session_id.as_deref().unwrap_or("-"),

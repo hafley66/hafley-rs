@@ -24,7 +24,7 @@ pub struct Message {
     pub to: String,
     pub from_timestamp: String,
     pub to_timestamp: Option<String>,
-    pub kind: String,
+    pub kind: MessageKind,
     pub reply_to: Option<String>,
     pub body: String,
     pub r#ref: Option<String>,
@@ -37,7 +37,7 @@ pub struct Message {
 #[derive(Clone, Debug)]
 pub struct Route {
     /// `lane` is the default for registry rows written before kinds existed.
-    pub kind: String,
+    pub kind: RouteKind,
     pub harness: Option<HarnessId>,
     pub tmux: Option<String>,
     pub cwd: Option<String>,
@@ -61,6 +61,103 @@ pub struct Route {
     /// The managed Codex app-server socket shared by a native TUI and Boop.
     pub app_server_socket: Option<String>,
 }
+
+/// The kind of a mailbox envelope, one per wire string a row can carry. A
+/// value this build does not name keeps the wire string in `Other` so an older
+/// row still loads and round-trips byte for byte.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MessageKind {
+    Request,
+    Result,
+    Note,
+    Dispatch,
+    Hail,
+    Ack,
+    Completion,
+    Yield,
+    Reparented,
+    Retrying,
+    RetryBudgetExhausted,
+    ExitedWithoutCompletion,
+    OpenFailed,
+    HeadRewound,
+    Other(String),
+}
+
+/// The kind of a registry route, one per wire string a row can carry.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RouteKind {
+    Lane,
+    Coordinator,
+    Native,
+    Shell,
+    Other(String),
+}
+
+macro_rules! kind_impls {
+    ($name:ident { $($variant:ident => $wire:literal,)* }) => {
+        impl $name {
+            /// The wire string this kind serializes to.
+            pub fn as_str(&self) -> &str {
+                match self {
+                    $($name::$variant => $wire,)*
+                    $name::Other(value) => value,
+                }
+            }
+        }
+
+        impl From<&str> for $name {
+            fn from(value: &str) -> Self {
+                match value {
+                    $($wire => $name::$variant,)*
+                    other => $name::Other(other.to_owned()),
+                }
+            }
+        }
+
+        impl From<String> for $name {
+            fn from(value: String) -> Self {
+                $name::from(value.as_str())
+            }
+        }
+
+        impl PartialEq<&str> for $name {
+            fn eq(&self, other: &&str) -> bool {
+                self.as_str() == *other
+            }
+        }
+
+        impl PartialEq<String> for $name {
+            fn eq(&self, other: &String) -> bool {
+                self.as_str() == other.as_str()
+            }
+        }
+    };
+}
+
+kind_impls!(MessageKind {
+    Request => "request",
+    Result => "result",
+    Note => "note",
+    Dispatch => "dispatch",
+    Hail => "hail",
+    Ack => "ack",
+    Completion => "completion",
+    Yield => "yield",
+    Reparented => "reparented",
+    Retrying => "retrying",
+    RetryBudgetExhausted => "retry_budget_exhausted",
+    ExitedWithoutCompletion => "exited_without_completion",
+    OpenFailed => "open_failed",
+    HeadRewound => "head_rewound",
+});
+
+kind_impls!(RouteKind {
+    Lane => "lane",
+    Coordinator => "coordinator",
+    Native => "native",
+    Shell => "shell",
+});
 
 /// Read the route map out of the mailbox `dir` addresses.
 pub fn read_routes(dir: &Path) -> Result<BTreeMap<String, Route>> {
@@ -103,7 +200,7 @@ pub fn held_messages(store: &crate::ident::Store, route: &str) -> Result<Vec<Mes
             to: row.get(2)?,
             from_timestamp: row.get(3)?,
             to_timestamp: row.get(4)?,
-            kind: row.get(5)?,
+            kind: row.get::<_, String>(5)?.into(),
             reply_to: row.get(6)?,
             body: row.get(7)?,
             r#ref: row.get(8)?,
@@ -132,7 +229,9 @@ pub fn route_from_value(entry: &Value) -> Route {
         None => return Route::unset(),
     };
     Route {
-        kind: string_field(object, "kind").unwrap_or_else(|| "lane".into()),
+        kind: string_field(object, "kind")
+            .map(RouteKind::from)
+            .unwrap_or(RouteKind::Lane),
         harness: string_field(object, "harness")
             .as_deref()
             .and_then(HarnessId::parse),
@@ -214,7 +313,9 @@ pub fn parse_line(line: &str) -> Option<Message> {
     let id = string_field(object, "id")?;
     let to = string_field(object, "to")?;
     let body = string_field(object, "body").unwrap_or_default();
-    let kind = string_field(object, "kind").unwrap_or_else(|| "note".into());
+    let kind = string_field(object, "kind")
+        .map(MessageKind::from)
+        .unwrap_or(MessageKind::Note);
     let (legacy_rc, legacy_detail) = match kind == "result" {
         true => rc_from_body(&body),
         false => (None, None),
@@ -314,7 +415,7 @@ pub fn message_line(message: &Message) -> String {
         to: &message.to,
         from_timestamp: &message.from_timestamp,
         to_timestamp: message.to_timestamp.as_deref(),
-        kind: &message.kind,
+        kind: message.kind.as_str(),
         reply_to: message.reply_to.as_deref(),
         body: &message.body,
         r#ref: message.r#ref.as_deref(),
@@ -696,7 +797,7 @@ fn write_message(
             message.to,
             message.from_timestamp,
             message.to_timestamp,
-            message.kind,
+            message.kind.as_str(),
             message.reply_to,
             message.body,
             message.r#ref,
@@ -746,7 +847,7 @@ pub fn messages_in(store: &crate::ident::Store) -> Result<Vec<Message>> {
             to: row.get(2)?,
             from_timestamp: row.get(3)?,
             to_timestamp: row.get(4)?,
-            kind: row.get(5)?,
+            kind: row.get::<_, String>(5)?.into(),
             reply_to: row.get(6)?,
             body: row.get(7)?,
             r#ref: row.get(8)?,
@@ -778,7 +879,7 @@ pub fn routes_in(store: &crate::ident::Store) -> Result<BTreeMap<String, Route>>
         Ok((
             row.get::<_, String>(0)?,
             Route {
-                kind: row.get(1)?,
+                kind: row.get::<_, String>(1)?.into(),
                 harness: harness.as_deref().and_then(HarnessId::parse),
                 tmux: row.get(3)?,
                 cwd: row.get(4)?,
@@ -811,7 +912,7 @@ fn upsert_route(store: &crate::ident::Store, id: &str, route: &Route) -> Result<
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         rusqlite::params![
             id,
-            route.kind,
+            route.kind.as_str(),
             route.harness.map(|id| id.as_str().to_owned()),
             route.tmux,
             route.cwd,
@@ -833,7 +934,7 @@ fn upsert_route(store: &crate::ident::Store, id: &str, route: &Route) -> Result<
 /// The registry as the JSON shape every caller's mutation is written against.
 pub fn route_to_value(route: &Route) -> Value {
     let mut object = Map::new();
-    object.insert("kind".into(), Value::String(route.kind.clone()));
+    object.insert("kind".into(), Value::String(route.kind.as_str().to_owned()));
     let pairs: [(&str, Option<String>); 13] = [
         ("harness", route.harness.map(|id| id.as_str().to_owned())),
         ("tmux", route.tmux.clone()),
@@ -1298,6 +1399,30 @@ mod tests {
         let child = routes.get("child").unwrap();
         assert_eq!(child.goal, None);
         assert_eq!(child.harness, Some(HarnessId::Opencode));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. A kind this build has never named still loads as `Other` and
+    /// round-trips its wire string, so an older row is not dropped or rewritten.
+    #[test]
+    fn an_unknown_message_kind_round_trips_through_other() {
+        let line = r#"{"id":"m-unk","from":"a","to":"b","from_timestamp":"2026-01-01T00:00:00Z","kind":"future_kind","body":"x"}"#;
+        let parsed = parse_line(line).expect("an unknown kind still parses");
+        assert_eq!(parsed.kind.as_str(), "future_kind");
+        assert_eq!(parse_line(&super::message_line(&parsed)).unwrap(), parsed);
+    }
+
+    /// RECEIPT. A route row carrying an unknown kind still loads as `Other`.
+    #[test]
+    fn a_route_with_an_unknown_kind_still_loads() {
+        let dir = temp_dir("unkkind");
+        std::fs::write(
+            dir.join("registry.json"),
+            r#"{"r": {"kind": "future_route_kind"}}"#,
+        )
+        .unwrap();
+        let routes = read_routes(&dir).unwrap();
+        assert_eq!(routes["r"].kind.as_str(), "future_route_kind");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
