@@ -1782,6 +1782,7 @@ mod tests {
         lanes: LanePolicy::Allowed,
         variant: VariantSupport::None,
         mail: MailPolicy::Keystrokes,
+        image_paste_keys: None,
         native_tui_projector: false,
         wrapper_owns_alternate_screen: false,
     };

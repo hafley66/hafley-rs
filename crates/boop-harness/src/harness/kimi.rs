@@ -28,6 +28,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     lanes: LanePolicy::Allowed,
     variant: VariantSupport::None,
     mail: MailPolicy::Keystrokes,
+    image_paste_keys: None,
     native_tui_projector: true,
     wrapper_owns_alternate_screen: false,
 };

@@ -851,6 +851,28 @@ enum BeepCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
+    /// Put a file on the OS pasteboard and press the recipient's paste key in
+    /// its pane, so a TUI that reads images off the pasteboard (claude, codex:
+    /// Ctrl+V) takes the picture the way a hand paste would. Text and files the
+    /// harness cannot read that way land as a quoted path instead.
+    Paste {
+        /// The file to paste.
+        path: PathBuf,
+        /// Recipient route; its registered pane and harness pick the key.
+        #[arg(long, conflicts_with = "pane")]
+        route: Option<String>,
+        /// A tmux pane or target instead of a route (`%12`, `sess:0.1`).
+        #[arg(long)]
+        pane: Option<String>,
+        /// Harness at that pane when `--pane` names no route (default claude).
+        #[arg(long)]
+        harness: Option<String>,
+        /// Type the quoted path even for an image.
+        #[arg(long)]
+        as_path: bool,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
     /// pid, rss, cpu, uptime, child count per live lane.
     Ps {
         lane: Option<String>,

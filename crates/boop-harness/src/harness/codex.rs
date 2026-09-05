@@ -25,6 +25,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     lanes: LanePolicy::Allowed,
     variant: VariantSupport::ModelSuffixEffort,
     mail: MailPolicy::Door,
+    image_paste_keys: Some("C-v"),
     native_tui_projector: true,
     // false so codex renders on the primary screen: its transcript then lands in
     // tmux history, which is the only scrollback a codex pane ever gets.

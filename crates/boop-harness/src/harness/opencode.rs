@@ -27,6 +27,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     lanes: LanePolicy::Allowed,
     variant: VariantSupport::Flag,
     mail: MailPolicy::Door,
+    image_paste_keys: None,
     native_tui_projector: true,
     wrapper_owns_alternate_screen: false,
 };

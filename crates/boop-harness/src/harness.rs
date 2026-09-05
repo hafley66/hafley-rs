@@ -25,6 +25,10 @@ pub struct Capabilities {
     pub variant: VariantSupport,
     /// Where a hail lands. Was `boop/src/cli/me.rs:121`.
     pub mail: MailPolicy,
+    /// The tmux key chord that makes the TUI read an image off the OS
+    /// pasteboard (`boop beep paste`). claude and codex read it on Ctrl+V;
+    /// a harness with no such key takes a path instead.
+    pub image_paste_keys: Option<&'static str>,
     /// Whether the native TUI wrapper runs the store projector alongside it.
     /// Was `boop/src/cli/control.rs:44`.
     pub native_tui_projector: bool,

@@ -1183,6 +1183,22 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
         },
         BeepCmd::Lane { cmd } => run_beep_lane(registry, cmd),
         BeepCmd::Agent { cmd } => run_agent(cmd),
+        BeepCmd::Paste {
+            path,
+            route,
+            pane,
+            harness,
+            as_path,
+            mail_dir,
+        } => crate::cli::paste::run_paste(
+            registry,
+            &path,
+            route.as_deref(),
+            pane.as_deref(),
+            harness.as_deref(),
+            as_path,
+            mail_dir.as_deref(),
+        ),
         #[cfg(feature = "agent-read")]
         BeepCmd::Fork {
             comment,

@@ -4,6 +4,7 @@ pub(crate) mod db;
 pub(crate) mod debug;
 pub(crate) mod job;
 pub(crate) mod mail;
+pub(crate) mod paste;
 pub(crate) mod me;
 
 use std::path::{Path, PathBuf};

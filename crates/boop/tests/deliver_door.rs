@@ -21,6 +21,7 @@ static DOOR: Capabilities = Capabilities {
     lanes: LanePolicy::Allowed,
     variant: VariantSupport::None,
     mail: MailPolicy::Door,
+    image_paste_keys: Some("C-v"),
     native_tui_projector: false,
     wrapper_owns_alternate_screen: false,
 };
@@ -30,6 +31,7 @@ static KEYSTROKES: Capabilities = Capabilities {
     lanes: LanePolicy::Allowed,
     variant: VariantSupport::None,
     mail: MailPolicy::Keystrokes,
+    image_paste_keys: Some("C-v"),
     native_tui_projector: false,
     wrapper_owns_alternate_screen: false,
 };
