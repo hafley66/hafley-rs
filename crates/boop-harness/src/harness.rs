@@ -477,25 +477,25 @@ pub fn supervisor_command(spec: &SpawnSpec) -> String {
     // pinning every core (load 20.8 on 12 cores measured 2026-08-22).
     let mut command = format!(
         "nice -n 10 boop beep lane run --lane {} --harness {} --brief {} --mail-dir {}",
-        quote(&spec.lane),
-        quote(spec.harness.as_str()),
-        quote(&spec.prompt),
-        quote(&spec.mail_dir.display().to_string()),
+        shell_quote(&spec.lane),
+        shell_quote(spec.harness.as_str()),
+        shell_quote(&spec.prompt),
+        shell_quote(&spec.mail_dir.display().to_string()),
     );
     if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
-        command.push_str(&format!(" --model {}", quote(model)));
+        command.push_str(&format!(" --model {}", shell_quote(model)));
     }
     if let Some(effort) = spec.effort.as_deref().filter(|value| !value.is_empty()) {
-        command.push_str(&format!(" --effort {}", quote(effort)));
+        command.push_str(&format!(" --effort {}", shell_quote(effort)));
     }
     if let Some(variant) = spec.variant.as_deref().filter(|value| !value.is_empty()) {
-        command.push_str(&format!(" --variant {}", quote(variant)));
+        command.push_str(&format!(" --variant {}", shell_quote(variant)));
     }
     if let Some(bin) = spec.bin.as_deref().filter(|value| !value.is_empty()) {
-        command.push_str(&format!(" --bin {}", quote(bin)));
+        command.push_str(&format!(" --bin {}", shell_quote(bin)));
     }
     if let Some(session) = &spec.resume_session {
-        command.push_str(&format!(" --resume {}", quote(session)));
+        command.push_str(&format!(" --resume {}", shell_quote(session)));
     }
     spec.with_on_exit(match &spec.env_stamp {
         Some(stamp) => format!("{stamp} {command}"),
@@ -503,7 +503,9 @@ pub fn supervisor_command(spec: &SpawnSpec) -> String {
     })
 }
 
-fn quote(value: &str) -> String {
+/// Single-quote a value for the shell; the only escape a single-quoted string
+/// needs is the quote itself (`'\''` closes, escapes, reopens).
+pub fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
 }
 
@@ -639,6 +641,27 @@ mod supervisor_command_tests {
             ..spec()
         });
         assert!(!empty.contains("--bin"), "{empty}");
+    }
+}
+
+#[cfg(test)]
+mod shell_quote_tests {
+    use super::shell_quote;
+
+    #[test]
+    fn quotes_the_edge_cases() {
+        let cases = [
+            ("plain", "'plain'"),
+            ("has space", "'has space'"),
+            ("o'brien", r"'o'\''brien'"),
+            ("line\nbreak", "'line\nbreak'"),
+            ("costs $5", "'costs $5'"),
+            ("a `tick`", "'a `tick`'"),
+            ("", "''"),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(shell_quote(input), expected, "input {input:?}");
+        }
     }
 }
 
