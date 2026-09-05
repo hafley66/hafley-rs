@@ -76,7 +76,8 @@ impl Rung {
     /// not ack the row: the recipient still drains it. A door queue holds the
     /// body inside the harness, so the row is acked the same as an injection:
     /// a drain that re-pushed it would put a second copy in front of the
-    /// recipient (failure mode 14).
+    /// recipient (failure mode 14). `deliver_hail_budgeted` reads this and
+    /// stamps the row, so every caller of the ladder stamps alike.
     pub fn carried_the_body(self) -> bool {
         matches!(self, Rung::Door | Rung::DoorQueue | Rung::Acpx)
     }
@@ -414,6 +415,14 @@ pub fn deliver_hail_budgeted(
     }
     let landing = land(registry, store, routes, message, paster, budget)?;
     landing.record(store, &message.id, &message.to, harness)?;
+    // The ladder stamps the row itself. A rung that carried the body put the
+    // text in front of the recipient, so the mailbox row is history: leaving
+    // it open is how the supervisor's parent rows sat unstamped while the
+    // ledger already said `accepted-by-harness`, invisible to both
+    // `held_messages` and `boop wait --me` (head-rewound-door-retry).
+    if landing.rung.carried_the_body() {
+        bus::ack_messages(store, std::slice::from_ref(&message.id), &bus::now_iso())?;
+    }
     Ok(landing)
 }
 
@@ -749,8 +758,7 @@ pub fn drain_route_held_mail_budgeted(
             break;
         }
         if landing.rung.carried_the_body() {
-            let _ = bus::ack_messages(store, std::slice::from_ref(&message.id), &bus::now_iso());
-            pushed += 1;
+            pushed += 1; // `deliver_hail_budgeted` stamped the row
         }
     }
     pushed
@@ -1328,6 +1336,97 @@ mod tests {
             !door_log().iter().any(|body| body == "already in front of you"),
             "the door was handed a row it already holds"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT (head-rewound-door-retry). The ladder stamps the row, not the
+    /// caller. The supervisor's parent hail calls `deliver_hail` and nothing
+    /// else, so a door-queue landing that left `to_timestamp` open produced a
+    /// row no reader owned: `held_messages` drops it because its ledger names
+    /// a door, and `boop wait --me` drops it because its ledger says landed.
+    #[test]
+    fn a_door_queue_landing_stamps_the_row_at_the_ladder() {
+        let (dir, store) = burst_fixture("stamp", 0, &["stamp me at the ladder"]);
+        let registry = Registry::with(vec![Box::new(FakeClaude)]);
+        let routes = bus::read_routes(&dir).unwrap();
+        let message = bus::messages_in(&store)
+            .unwrap()
+            .into_iter()
+            .find(|row| row.id == "m-stamp-0")
+            .unwrap();
+
+        let landing = deliver_hail_budgeted(
+            &registry,
+            &store,
+            &routes,
+            &message,
+            &NoPane,
+            &budget(60_000, 60_000, 10),
+        )
+        .unwrap();
+
+        assert_eq!(landing.rung, Rung::DoorQueue);
+        let taken = bus::messages_in(&store)
+            .unwrap()
+            .into_iter()
+            .find(|row| row.id == "m-stamp-0")
+            .unwrap();
+        assert!(
+            taken.to_timestamp.is_some(),
+            "the rung carried the body, so the row is history"
+        );
+        assert!(
+            bus::held_messages(&store, "claude-stamp").unwrap().is_empty(),
+            "nothing re-pushes a row the door holds"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT (head-rewound-door-retry). The gate reads the ledger by
+    /// `detail`, so the shape a pre-fix binary wrote every 5s
+    /// (`held-for-turn-boundary` / `door queue`) counts as a door push. The
+    /// live store held 357 of them for one message on 2026-09-05; the current
+    /// gate trips on the second push of that body rather than passing it.
+    #[test]
+    fn the_gate_counts_a_pre_fix_door_queue_row() {
+        let (dir, store) = burst_fixture("prefix", 0, &["the same body twice"]);
+        let routes = bus::read_routes(&dir).unwrap();
+        let budget = budget(60_000, 60_000, 10);
+        let now = boop_harness::live::now_ms();
+        store
+            .append_delivery_transition(
+                "m-prefix-0",
+                "claude-prefix",
+                Some(HarnessId::Claude),
+                "held-for-turn-boundary",
+                "door queue",
+                None,
+                now,
+            )
+            .unwrap();
+
+        assert_eq!(
+            store.door_pushes_since("claude-prefix", now - 60_000).unwrap(),
+            1,
+            "the pre-fix outcome word does not hide the push"
+        );
+        let tripped = door_gate(
+            &store,
+            "claude-prefix",
+            &routes,
+            "the same body twice",
+            &budget,
+            now,
+        )
+        .unwrap()
+        .expect("the same body inside the window is a replay");
+        assert!(matches!(tripped.rung, Rung::CoolOff));
+        assert!(store
+            .latest_door_blowout("claude-prefix")
+            .unwrap()
+            .unwrap()
+            .why
+            .contains("same body"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

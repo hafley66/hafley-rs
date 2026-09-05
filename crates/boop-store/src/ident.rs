@@ -36,7 +36,7 @@ pub struct Store {
 /// 19 = an absent favorite note is stored as NULL.
 /// 21 = each transcript cursor records its adapter projection contract.
 /// 22 = cost views over the usage ledger; see `COST_VIEW_SCHEMA`.
-pub const SCHEMA_VERSION: i64 = 25;
+pub const SCHEMA_VERSION: i64 = 26;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -807,6 +807,13 @@ impl Store {
             if self.schema_version()? < 25 {
                 self.connection.execute_batch(TURN_COMMENT_FORK_SCHEMA)?;
                 self.connection.execute_batch("PRAGMA user_version = 25;")?;
+            }
+            if self.schema_version()? < 26 {
+                let stamped = self.connection.execute(STAMP_DOOR_TAKEN_ROWS, [])?;
+                self.connection.execute_batch("PRAGMA user_version = 26;")?;
+                if stamped > 0 {
+                    tracing::info!(stamped, "door-taken mail rows stamped taken");
+                }
             }
             self.stamp_version()?;
             Ok(())
@@ -3276,6 +3283,28 @@ CREATE TABLE IF NOT EXISTS agent_turn_comment_fork (
 ) WITHOUT ROWID;
 ";
 
+/// Schema v26, a one-time backfill. Every mailbox row a door already took
+/// but nothing stamped: the pre-fix send paths recorded the landing and left
+/// `to_timestamp` open, so the row fell between the two readers. It is not
+/// held (`bus::held_messages` drops a row whose ledger names a door) and it
+/// is not unread (`boop wait --me` drops a row whose ledger says landed), so
+/// it sits in `agent_mail` forever. The stamp is the door transition's own
+/// time, so the row reads as taken when it was taken.
+const STAMP_DOOR_TAKEN_ROWS: &str = "
+UPDATE agent_mail SET to_timestamp = (
+    SELECT strftime('%Y-%m-%dT%H:%M:%SZ', MAX(t.at_ms) / 1000, 'unixepoch')
+      FROM agent_delivery_transition t
+     WHERE t.message_id = agent_mail.message_id
+       AND (t.outcome = 'accepted-by-harness' OR t.detail IN ('door', 'door queue'))
+)
+WHERE to_timestamp IS NULL
+  AND EXISTS (
+    SELECT 1 FROM agent_delivery_transition t
+     WHERE t.message_id = agent_mail.message_id
+       AND (t.outcome = 'accepted-by-harness' OR t.detail IN ('door', 'door queue'))
+  )
+";
+
 /// Schema v23: the door budget ledger, on its own so an older store adds it
 /// in place. The same text sits inside `SCHEMA` for a fresh store.
 const DOOR_BLOWOUT_SCHEMA: &str = "
@@ -4218,6 +4247,56 @@ mod tests {
             vec!["event-b", "event-c"]
         );
         drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// RECEIPT (head-rewound-door-retry). The v26 backfill stamps every
+    /// mailbox row a door already took and leaves the rest open. Six such
+    /// rows sat in the live store on 2026-09-05: held by nothing because
+    /// their ledger names a door, unread by nothing because their ledger says
+    /// landed.
+    #[test]
+    fn v26_stamps_the_rows_a_door_already_took() {
+        let (path, store) = fresh_store("door-taken-stamp");
+        for (id, outcome, detail) in [
+            ("m-queued", "held-for-turn-boundary", "door queue"),
+            ("m-injected", "accepted-by-harness", "door"),
+            ("m-open", "held-in-mailbox", "mailbox"),
+        ] {
+            store
+                .append_delivery_transition(id, "claude-1", None, outcome, detail, None, 1_700_000_000_000)
+                .unwrap();
+            store
+                .connection
+                .execute(
+                    "INSERT INTO agent_mail
+                       (message_id, mailbox, from_route, to_route, from_timestamp, kind, body)
+                     VALUES (?1, 'bus', 'lane-a', 'claude-1', '2026-09-05T00:00:00Z', 'result', ?1)",
+                    params![id],
+                )
+                .unwrap();
+        }
+        store
+            .connection
+            .execute_batch("PRAGMA user_version = 25")
+            .unwrap();
+        drop(store);
+
+        let migrated = Store::open(path.clone()).unwrap();
+        let stamp = |id: &str| -> Option<String> {
+            migrated
+                .connection
+                .query_row(
+                    "SELECT to_timestamp FROM agent_mail WHERE message_id = ?1",
+                    params![id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        assert_eq!(stamp("m-queued").as_deref(), Some("2023-11-14T22:13:20Z"));
+        assert!(stamp("m-injected").is_some());
+        assert_eq!(stamp("m-open"), None, "a mailbox row is still waiting");
+        drop(migrated);
         let _ = std::fs::remove_file(&path);
     }
 
@@ -5509,7 +5588,7 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(note_is_required, false);
+        assert!(!note_is_required, "the note column takes NULL");
         assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
         assert_eq!(
             store.favorite_add("# new\n", None, "manual", 13).unwrap(),
