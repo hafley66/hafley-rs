@@ -2012,6 +2012,61 @@ mod tests {
     }
 
     #[test]
+    fn guardian_reviews_do_not_mail_the_parent_but_delegated_workers_still_do() {
+        // Reduced from the 2026-09-04 approval-review transcript that was
+        // mailed into an ordinary art session. Both kinds have a parent ID;
+        // source.subagent distinguishes a guardian from a delegated worker.
+        for (kind, source, expected_deliveries) in [
+            ("guardian", serde_json::json!({"subagent": {"other": "guardian"}}), 0),
+            ("worker", serde_json::json!({"subagent": {"thread_spawn": {
+                "parent_thread_id": "parent-session", "agent_path": "/root/worker", "depth": 1
+            }}}), 1),
+        ] {
+            let dir = temp_mail_dir();
+            std::fs::create_dir_all(&dir).unwrap();
+            let store = ident::Store::open(dir.join("boop.db")).unwrap();
+            let mut session = native_child_session(&dir);
+            session.harness = HarnessId::Codex;
+            let metadata = serde_json::json!({
+                "timestamp": "2026-09-04T23:52:18.253Z",
+                "type": "session_meta",
+                "payload": {"id": "child-session", "parent_thread_id": "parent-session", "source": source}
+            }).to_string();
+            let completion = r#"{"timestamp":"2026-09-04T23:52:23.369Z","type":"event_msg","payload":{"type":"task_complete"}}"#;
+            std::fs::write(&session.path, format!("{metadata}\n{completion}\n")).unwrap();
+            let routes = native_parent_routes();
+            let mut delivered = Vec::new();
+
+            // Discovery must keep the structural parent even for a guardian.
+            store.project_discovered_session(&session).unwrap();
+            // Exercise a full read, an incremental read past session_meta,
+            // and a repeated scan through the real mailbox/receipt path.
+            for from in [0, metadata.len() as u64 + 1, 0] {
+                project_native_children(&store, &boop::harness::codex::Codex, &session, from).unwrap();
+                deliver_native_child_completions(
+                    &store, &routes, &dir, |_, _, _| Ok(false),
+                    |message| {
+                        delivered.push(message.clone());
+                        append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+                    },
+                ).unwrap();
+            }
+            assert_eq!(delivered.len(), expected_deliveries, "{kind}: queued payloads {delivered:?}");
+            assert_eq!(completion_rows(&dir).len(), expected_deliveries, "{kind}: mailbox");
+            let edges = store.edge_rows(None).unwrap();
+            let kinds: Vec<_> = edges.iter().map(|edge| edge.edge.as_str()).collect();
+            let expected = if kind == "guardian" {
+                vec!["spawned"]
+            } else {
+                vec!["completed", "completion-delivered", "completion-mailed", "spawned"]
+            };
+            let mut kinds = kinds;
+            kinds.sort_unstable();
+            assert_eq!(kinds, expected, "{kind}: persisted lifecycle");
+        }
+    }
+
+    #[test]
     fn native_child_projector_is_harness_neutral_and_idempotent() {
         let dir = temp_mail_dir();
         std::fs::create_dir_all(&dir).unwrap();

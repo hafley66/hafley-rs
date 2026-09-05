@@ -195,6 +195,13 @@ impl Harness for Codex {
         let Some(parent_session) = session.parent.as_deref() else {
             return Ok(Vec::new());
         };
+        // Approval reviewers also carry parent_thread_id. Their task_complete
+        // records must not wake that parent as if delegated work had finished.
+        // Read the header independently of `from`: incremental tails usually
+        // start after session_meta, and the cached SessionRef keeps ancestry.
+        if first_session_meta(&session.path).is_some_and(|meta| meta.is_guardian) {
+            return Ok(Vec::new());
+        }
         let mut file = File::open(&session.path)
             .with_context(|| format!("open transcript {}", session.path.display()))?;
         let result = tail::read_complete_lines(&mut file, from)?;
@@ -252,6 +259,7 @@ struct SessionMeta {
     parent: Option<String>,
     cwd: Option<String>,
     nickname: String,
+    is_guardian: bool,
 }
 
 fn first_session_meta(path: &Path) -> Option<SessionMeta> {
@@ -287,6 +295,10 @@ fn first_session_meta(path: &Path) -> Option<SessionMeta> {
         parent,
         cwd,
         nickname,
+        is_guardian: value
+            .pointer("/payload/source/subagent/other")
+            .and_then(Value::as_str)
+            == Some("guardian"),
     })
 }
 
