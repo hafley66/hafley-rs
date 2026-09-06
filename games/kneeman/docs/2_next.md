@@ -122,7 +122,20 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Command: CONFIRMED=1 COMBAT=1 RECONNECT=1 REPLACE_TAB=1 node /private/tmp/1_game3_online.cjs.
    Log: /private/tmp/game3-replacement-tab.log; screenshots: /private/tmp/game3-online-5JwRaI.
    Host replacement, changed device/network and physical phones remain unverified.
-   Next: remaining input customization gates and burst-loss/host-replacement acceptance.
+   Host-tab replacement fails on the published build after 549 initial matching frames.
+   Both clients report Guest (handle 1), no offer/resume follows, and both eventually go offline;
+   the resumed-running assertion times out at 45 seconds, runner exit 1.
+   Command: CONFIRMED=1 COMBAT=1 RECONNECT=1 REPLACE_TAB=1 REPLACE_HOST=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-host-replacement.log; screenshots: /private/tmp/game3-online-GdOtuP.
+   Client cause: rtc::resolve_rematched(true, 2, 1, (0, Host)) returns (1, Guest).
+   mesh::handle_signal applies that override to the surviving guest, while the fresh page
+   takes the relay's Guest assignment. Existing rtc tests explicitly pin the old override.
+   Next fix: separate relay offer/answer role from persistent fighter slot; exchange/adopt the
+   retained snapshot and slot assignment before starting GGRS. Cover both join orders, either
+   tab replacement, retained-tab reconnect, character-slot continuity and Tune authority.
+   Changing only the role override would permit fighter swaps and can select a fresh host's
+   spawn/default Tune over the surviving match. No runtime/server change made for this receipt.
+   Remaining input customization and burst-loss acceptance follow this reconnect fix.
 5. Extract reusable menu widgets as they are exercised by controls and character import.
 
 Art remains part of the game: gallery/camera frames, workshop PNG clips and metadata, SVG/drawn
