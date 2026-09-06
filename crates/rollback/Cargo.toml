@@ -1,0 +1,13 @@
+[package]
+name = "rollback"
+version.workspace = true
+edition = "2024"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Generic GGRS rollback simulation and sync-test coordination"
+publish = false
+
+[dependencies]
+ggrs = "0.13"
+serde = { version = "1", features = ["derive"] }
