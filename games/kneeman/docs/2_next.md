@@ -131,12 +131,21 @@ Log: /private/tmp/game3-reconnect-fixed.log. Screenshots: /private/tmp/game3-onl
 Buffer API source: https://docs.godotengine.org/en/4.5/classes/class_websocketpeer.html.
 Published the reconnect fix on 2026-09-06 with the existing dedicated game3 profile;
 nginx validation/reload succeeded. Remote WASM matches the tested local artifact,
-and the original /game/ pack hash remains unchanged. Injected send-error handling
-still needs a browser failure-path test; the successful burst is browser-verified.
+and the original /game/ pack hash remains unchanged. The successful burst is browser-verified.
 Production-only rerun also passed: 549 initial and 180 resumed confirmed hashes match,
 resumed ticks 748/747, disconnect timeout reaches offline, no browser exceptions, exit 0.
 Log: /private/tmp/game3-reconnect-production.log. Screenshots: /private/tmp/game3-online-hJorWF.
 Command: CONFIRMED=1 COMBAT=1 RECONNECT=1 node /private/tmp/1_game3_online.cjs.
+Send-error follow-up on the published build: after a successful 549-frame confirmed
+comparison, interrupt the data channel and report WebSocket.bufferedAmount as 256 KiB
+immediately after the resume send. Exactly one Tune send fails with ERR_OUT_OF_MEMORY.
+Both peers return offline and each advances more than 30 simulation ticks from tick 935;
+no browser exceptions, runner exit 0. The injected bufferedAmount exists only in the
+isolated browser subclass; server configuration and deployed artifacts are unchanged.
+Command: CONFIRMED=1 COMBAT=1 RECONNECT=1 FAIL_RESUME_TUNE=1 node /private/tmp/1_game3_online.cjs.
+Log: /private/tmp/game3-send-failure.log. Screenshots: /private/tmp/game3-online-vLu53Q.
+This covers the Tune-send rejection branch. Separate room/resume rejection injection,
+replacement-tab rejoin and burst-loss cases remain unverified.
 Remote hashes matched the tested artifact:
 
 - Game3 index.pck: fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df
