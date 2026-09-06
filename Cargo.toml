@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/*", "games/*"]
+exclude = ["games/kneeman/app"]
 resolver = "2"
 
 [workspace.package]

@@ -1,0 +1,75 @@
+app := justfile_directory() / "app"
+tools := justfile_directory() / "tools"
+art_python := env_var_or_default("ART_PYTHON", "python3")
+
+default:
+    @just --list
+
+# The application owns its pinned Godot/Emscripten toolchain and Cargo configuration.
+rust:
+    cd "{{ app }}" && cargo build -p smash_sim --target-dir "{{ app }}/target"
+
+game-test:
+    cd "{{ app }}" && cargo test -p kneeman --lib && cargo test -p smash_sim --lib
+
+synctest:
+    cd "{{ app }}" && cargo test -p kneeman --lib v1::net::tests::synctest
+
+ship-cascade:
+    cd "{{ app }}" && cargo test -p smash_sim --lib ship_receipt
+
+check:
+    cd "{{ app }}" && cargo check --workspace
+
+run: rust
+    "{{ env_var_or_default("GODOT45", env_var("HOME") / "godot45/Godot.app/Contents/MacOS/Godot") }}" --path "{{ app }}/godot"
+
+import: rust
+    "{{ env_var_or_default("GODOT45", env_var("HOME") / "godot45/Godot.app/Contents/MacOS/Godot") }}" --headless --editor --quit --path "{{ app }}/godot"
+
+assets-from source:
+    rsync -a --include='*/' --include='*.png' --include='*.jpg' --include='*.webp' --exclude='*' "{{ source }}/" "{{ app }}/godot/assets/"
+
+[private]
+_web profile action:
+    node "{{ app }}/deploy/scripts/1_web.mjs" "{{ profile }}" "{{ action }}"
+
+web-plan profile="game3": (_web profile "plan")
+
+web-check:
+    node --test "{{ app }}/deploy/scripts/2_web.test.mjs"
+
+game3-build: (_web "game3" "export")
+
+game3-publish: game3-build
+    just _web game3 publish
+
+web-dev: (_web "local" "dev")
+
+web-serve: (_web "local" "serve")
+
+web-probe: (_web "local" "probe")
+
+web-export-check profile="game3": (_web profile "check-export")
+
+# Uses Pillow from ART_PYTHON; imports a new character, preserving existing roster entries.
+art-import capture:
+    {{ art_python }} "{{ tools }}/0_import_character.py" "{{ capture }}"
+
+art-test:
+    {{ art_python }} "{{ tools }}/1_import_character_test.py"
+
+packs:
+    {{ art_python }} "{{ tools }}/fetch_packs.py"
+
+roa-search query pages="1":
+    {{ art_python }} "{{ tools }}/roa_search.py" "{{ query }}" --pages "{{ pages }}"
+
+roa-get +ids:
+    {{ art_python }} "{{ tools }}/roa_get.py" {{ ids }}
+
+steam-login:
+    {{ art_python }} "{{ tools }}/steam_qr.py" login
+
+refs character="app/godot/assets/falcon":
+    {{ art_python }} "{{ tools }}/pose-capture/make_refs.py" "{{ character }}"

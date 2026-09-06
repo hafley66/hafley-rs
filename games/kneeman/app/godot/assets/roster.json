@@ -1,0 +1,30 @@
+{
+  "characters": [
+    {
+      "dir": "falcon",
+      "scale": 1.5556,
+      "offset_y": -45.0,
+      "sheet": "strip",
+      "frame_px": 0,
+      "clips": [
+        { "name": "run", "files": ["run_strip8"], "frames": 8, "fps": 16.0, "loop": true },
+        { "name": "jump", "files": ["jump_strip4"], "frames": 4, "fps": 1.0, "loop": false },
+        { "name": "idle", "files": ["idle_strip6"], "frames": 6, "fps": 10.0, "loop": true },
+        { "name": "fall", "files": ["fall_strip1"], "frames": 1, "fps": 1.0, "loop": false }
+      ]
+    },
+    {
+      "dir": "lucas",
+      "scale": 3.8889,
+      "offset_y": -18.0,
+      "sheet": "strip",
+      "frame_px": 0,
+      "clips": [
+        { "name": "run", "files": ["run_strip9"], "frames": 9, "fps": 16.0, "loop": true },
+        { "name": "jump", "files": ["jump_strip13"], "frames": 13, "fps": 1.0, "loop": false },
+        { "name": "idle", "files": ["idle_strip30"], "frames": 30, "fps": 10.0, "loop": true },
+        { "name": "fall", "files": ["fall_strip2"], "frames": 2, "fps": 1.0, "loop": false }
+      ]
+    }
+  ]
+}

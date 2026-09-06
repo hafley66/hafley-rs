@@ -1,0 +1,13 @@
+# Kneeman's Godot application workspace. The simulation is the parent game crate.
+# All shared path dependencies resolve within the containing hafley-rs repository.
+# Keep the Godot nightly, Emscripten flags and vendor patches scoped to this app.
+[workspace]
+resolver = "2"
+members = [
+  "crates/godot-shell",
+]
+exclude = ["vendor/gdext-egui", "vendor/ggrs"]
+
+[patch.crates-io]
+gdext-egui = { path = "vendor/gdext-egui" }
+ggrs = { path = "vendor/ggrs" }

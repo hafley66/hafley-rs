@@ -1,0 +1,6 @@
+# Explicit operator inputs. Existing roster entries are preserved.
+# Each new pack name must be unused; imported art is never silently overwritten.
+# [[pack]]
+# name = "my-workshop-character"
+# path = "tools/.cache/workshop/WORKSHOP_ID/sprites"
+# kind = "rivals_strip"

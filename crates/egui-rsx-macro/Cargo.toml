@@ -1,0 +1,31 @@
+[package]
+name = "egui-rsx-macro"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+# Exact pin: dioxus-rsx tracks dioxus internals and churns between releases.
+# 0.6.2 is the last 0.6.x; its AST (CallBody/BodyNode/...) parses standalone via syn.
+dioxus-rsx = "=0.6.2"
+# syn "full" gives us Expr/Pat parsing inside for/if. dioxus-rsx also wants
+# extra-traits/visit/visit-mut + proc-macro2 span-locations; cargo unifies those.
+syn = { version = "=2.0.118", features = ["full"] }
+quote = "=1.0.46"
+proc-macro2 = "=1.0.106"
+# Only used by the EGUI_RSX_DUMP debug path to pretty-print the expansion into expanded.rs.
+prettyplease = "=0.2.37"
+# CSS parsing + selector matching + specificity at expansion time. Lightweight CSS2 parser (the
+# one resvg/usvg use); no full CSS engine (lightningcss) needed. See README for the choice.
+simplecss = "=0.2.2"
+# Lab 5 slice 2: SVG rasterization for `background-image: svg-load("x.svg")`. The macro reads the
+# SVG, rasterizes via tiny-skia (pure-Rust Skia subset), and bakes the RGBA bytes as a literal
+# `ColorImage` into the expansion. resvg orchestrates usvg (SVG tree) + tiny-skia (rasterizer);
+# all three are pure-Rust, no native deps, so they build on any host (proc-macros always build for
+# the HOST triple, never the wasm target — these never appear in the wasm binary).
+resvg = "=0.47.0"
+usvg = "=0.47.0"
+tiny-skia = "=0.12.0"

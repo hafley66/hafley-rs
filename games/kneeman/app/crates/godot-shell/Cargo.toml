@@ -1,0 +1,53 @@
+[package]
+name = "smash_sim"
+version = "0.1.0"
+edition = "2024"
+
+# cdylib == the native module Godot loads over GDExtension (like a napi-rs addon).
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+kneeman_core = { package = "kneeman", path = "../../../../../games/kneeman" }
+# V1 game mechanics and rollback glue live in the shared Kneeman game crate.
+smash_rollback = { package = "rollback", path = "../../../../../crates/rollback" } # v1::net's Game/RollbackSim traits (ggrs session glue)
+# default features carry glamx/libm + simba/libm_force -> deterministic native+wasm; see
+# labs/det-lib-spike/FINDINGS.md; DO NOT set default-features=false on glam or parry2d.
+glam = { version = "0.30", features = ["serde"] }
+serde = { version = "1", features = ["derive", "rc"] } # `rc`: (de)serialize Arc<[CharSpec]> (shared roster)
+blake3 = "1"    # v1::world: 32-byte content hashes (WorldId/AssetId/EventId)
+futures-signals = "0.3"
+ggrs = "0.13"     # for the NonBlockingSocket trait the Godot WebRTC transport implements
+bincode = "1.3"   # ggrs Message wire (same bincode the matchbox impl used); also v1's canonical world-hash encoder
+# godot-rust (gdext). Desktop uses the prebuilt API; wasm adds the web-export features below.
+godot = "0.4"
+
+# egui debug overlay. gdext-egui pulls `open` (compile_error! on emscripten), gated off wasm via
+# the vendored patch in ../vendor/gdext-egui (see root Cargo.toml [patch.crates-io]).
+egui = "0.33"
+gdext-egui = "0.4"
+# rsx-egui macro + #[component] (Labs 1-7 in ../../labs/rsx-egui-mvp/). proc-macro only: heavy
+# deps (resvg/usvg/tiny-skia/simplecss) compile for the HOST triple, never link into the cdylib
+# (native or wasm). The macro emits standard egui 0.33 calls -- works under gdext-egui.
+egui-rsx-macro = { path = "../../../../../crates/egui-rsx-macro" }
+# GIF background decode (plans/gif-background-library.md, task G1). Pure Rust (weezl LZW +
+# color_quant, no threads/rayon), builds for wasm32-unknown-emscripten same as native.
+gif = "0.14.2"
+serde_json = "1"
+
+# Web export (wasm32-unknown-emscripten): regenerate the API against the Godot binary (api-custom,
+# fixes the 32-bit offset overflow), enable the experimental wasm path + lazy function tables.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+godot = { version = "0.4", features = ["api-custom", "experimental-wasm", "lazy-function-tables"] }
+
+[features]
+default = []
+storage = ["kneeman_core/storage"] # game's SqliteStore (bundled C sqlite)
+matchbox = ["kneeman_core/matchbox"] # game's optional WebRTC transport
+wasm = ["matchbox", "kneeman_core/wasm"] # browser transport and GGRS time shims
+
+[dev-dependencies]
+cascade = { path = "../../../../../games/cascade" }
+
+[build-dependencies]
+blake3 = "1"

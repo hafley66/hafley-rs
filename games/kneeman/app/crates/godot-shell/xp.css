@@ -1,0 +1,118 @@
+/* Lab 3 stylesheet — the XP/Luna look, resolved at MACRO-EXPANSION time (same pipeline as Lab 2).
+   Every rule names the xp.css selector it was derived from so the translation is auditable.
+   Source tree: /Users/chrishafley/projects/instant/node_modules/xp.css (READ-ONLY reference).
+   Lab 3 properties: `box-shadow` (inset bevel stacks) and `background: linear-gradient(...)`.
+   Lab 5: the `:root` block + `var()` + `calc()` are resolved by the macro pre-pass BEFORE
+   simplecss sees the sheet, so every declaration value reaches the property parsers as a
+   concrete literal. The `button` rule's outer bevel uses `calc(var(--bevel) * -1)` to prove the
+   calc evaluator handles sign flips on a px variable — resolves to `-1px`, byte-identical to the
+   pre-Lab-5 literal. */
+
+/* :root <- gui/_variables.scss `:root` block (subset; values copied verbatim). These resolve at
+   macro time and never reach simplecss — `:root` is not a pseudo-class simplecss 0.2.2 knows. */
+:root {
+  --window-frame: #0a0a0a;
+  --button-highlight: #ffffff;
+  --button-shadow: #808080;
+  --button-face: #dfdfdf;
+  --bevel: 1px;
+}
+
+/* .window <- gui/_window.scss .window `box-shadow: var(--border-window-outer), var(--border-window-inner)`
+   expanded from gui/_variables.scss (window borders flip button-face/highlight):
+   --border-window-outer: inset -1px -1px window-frame(#0a0a0a), inset 1px 1px button-face(#dfdfdf)
+   --border-window-inner: inset -2px -2px button-shadow(#808080), inset 2px 2px button-highlight(#fff)
+   background surface + padding from XP.css .window { background:#ece9d8; padding:3px }. */
+.window {
+  background: #ece9d8;
+  padding: 3px;
+  box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf,
+              inset -2px -2px #808080, inset 2px 2px #ffffff;
+}
+
+/* .title-bar <- XP.css (Luna) .title-bar
+   `background: linear-gradient(180deg,#0997ff,#0053ee 8%,#0050ee 40%,#06f 88%,#06f 93%,#005bff 95%,#003dd7 96%,#003dd7)`.
+   Kept as a multi-stop vertical blue (dropped the duplicate 88%/93% #06f anchor; #06f = #0066ff). */
+.title-bar {
+  background: linear-gradient(180deg, #0997ff, #0053ee 8%, #0050ee 40%, #0066ff 88%,
+              #005bff 95%, #003dd7 96%, #003dd7);
+  padding: 4px;
+}
+
+/* .title-text <- gui/_window.scss .title-bar-text { font-weight:bold; color:white } + XP.css font-size:13px. */
+.title-text { color: #ffffff; font-size: 13px; }
+
+/* .window-body <- gui/_window.scss .window-body { margin: var(--element-spacing)=8px } (mapped to padding). */
+.window-body { padding: 8px; }
+
+/* button <- gui/_buttons.scss `box-shadow: var(--border-raised-outer), var(--border-raised-inner)`
+   expanded from gui/_variables.scss. The outer bevel is rewritten via var()+calc() to exercise the
+   Lab 5 resolver: `calc(var(--bevel) * -1)` flips the 1px sign to land at -1px, identical to the
+   pre-Lab-5 literal. Inner bevel stays literal (2px) so a regression in EITHER path is visible.
+   background = --button-face; text color hand-picked (98 buttons use inherited window text #222). */
+button {
+  background: var(--button-face);
+  color: #222222;
+  box-shadow: inset calc(var(--bevel) * -1) calc(var(--bevel) * -1) var(--window-frame),
+              inset var(--bevel) var(--bevel) var(--button-highlight),
+              inset -2px -2px var(--button-shadow),
+              inset 2px 2px var(--button-face);
+}
+
+/* button:hover <- NOT in xp.css (98/Luna buttons don't hover-highlight); demo-only fill lift so the
+   07 hover screenshot differs from 06. Bevel unchanged (no :hover box-shadow rule). */
+button:hover { background: #e8e8e0; }
+
+/* button:active <- gui/_buttons.scss &:active `box-shadow: var(--border-sunken-outer), var(--border-sunken-inner)`
+   = the INVERTED bevel (light now bottom-right, dark top-left):
+   --border-sunken-outer: inset -1px -1px button-highlight(#fff), inset 1px 1px window-frame(#0a0a0a)
+   --border-sunken-inner: inset -2px -2px button-face(#dfdfdf), inset 2px 2px button-shadow(#808080). */
+button:active {
+  background: #d6d2ca;
+  box-shadow: inset -1px -1px #ffffff, inset 1px 1px #0a0a0a,
+              inset -2px -2px #dfdfdf, inset 2px 2px #808080;
+}
+
+/* .groupbox <- gui/_groupbox.scss fieldset. xp.css draws the etched border with an SVG
+   border-image (groupbox-border.svg), which egui can't do; substitute the classic Windows etched
+   2-tone groove = --border-sunken-outer (inset white bottom-right + dark-grey top-left). */
+.groupbox {
+  background: #ece9d8;
+  padding: 8px;
+  box-shadow: inset -1px -1px #ffffff, inset 1px 1px #808080;
+}
+
+/* .legend <- gui/_groupbox.scss legend { background: var(--surface) } + dark XP caption text. */
+.legend { color: #003c74; font-size: 12px; }
+
+/* label <- default window body text (gui/_global.scss body color:#222). */
+label { color: #222222; font-size: 12px; }
+
+/* Lab 5 slice 2 demo: a checkbox-shaped checkmark glyph painted from checkmark.svg via the
+   svg-load() pipeline. The macro rasterizes the 7x7 SVG at 4x -> 28x28, bakes the RGBA bytes as
+   a literal, and the runtime uploads once via ctx.load_texture. The .check is a plain (non-flex)
+   div; emit_element honors `width`/`height` via ui.set_min_size so an empty content-less div
+   still gets a sized cell. Source SVG: gui/icon/checkmark.svg (copied verbatim into demo/). */
+.check { width: 28px; height: 28px; background-image: svg-load("checkmark.svg", 4); }
+
+/* Lab 5 slice 3 demo: ::before/::after pseudo-elements. .checkbox is a div with a label inside;
+   ::before paints the 13x13 etched checkbox SQUARE (white fill + 4-layer inset bevel = the
+   --border-field stack from gui/_variables.scss) at the top of the cell (block-flow); ::after
+   paints a 7x7 checkmark texture at the bottom. The macro pre-pass extracts the pseudo rules
+   (simplecss 0.2.2 has no pseudo-element support), resolves var()/calc() in their decls, matches
+   each pseudo's base selector against the element, and folds matching decls into ElemStyles'
+   before/after slots. emit_pseudo renders each slot as a virtual child div. */
+.checkbox::before {
+  content: "";
+  width: 13px;
+  height: 13px;
+  background: var(--button-highlight);
+  box-shadow: inset -1px -1px var(--button-highlight), inset 1px 1px var(--button-shadow),
+              inset -2px -2px var(--button-face), inset 2px 2px var(--window-frame);
+}
+.checkbox::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  background-image: svg-load("checkmark.svg", 2);
+}
