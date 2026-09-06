@@ -92,9 +92,19 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    reaches Shield while P1 stays Stand. Reset clears pad overrides; injected storage denial
    reports session-only save failure and preserves the prior saved defaults. After reload,
    P2 A jumps again. No browser exceptions; offline /rtc, /turn and /ev 404s are expected here.
-   Not published. Final pad-cell contrast adjustment is awaiting export UI verification.
-   Next: remapped-input capture/replay, cancellation/held-axis threshold checks, then publish
-   the tested export. Movement/c-stick remapping, mobile layout/menu controls and physical
+   Final pad-cell contrast verified at 1440x1000. Escape cancels pad capture and leaves
+   settings unchanged; axis 0.5 stays pending while 0.8 captures the signed axis. Capture
+   starts at tick 138; remapped P1 button 7 and P2 positive axis 2 produce jumps, and Verify
+   matches all 68 input ticks. Restore + 68 Replay steps returns tick 206 and identical
+   checksum 90542123335d966b9b418e45386e5abfb3689e76007c8fb380a4b252000091d4;
+   another Replay step leaves it unchanged. Screenshots: /private/tmp/game3-input-browser-EFYSMg,
+   1_controls through 8_replayed. No browser exceptions. These samples cover capture threshold
+   behavior; a complete analog gameplay threshold sweep remains open.
+   Online regression on this final export passes: 549 initial and 180 resumed confirmed frames,
+   ticks 747/746, preserved handles/characters and offline timeout recovery, exit 0.
+   Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-pad-remap-online.log; screenshots: /private/tmp/game3-online-PJG0C7.
+   Next: publish the tested export. Movement/c-stick remapping, mobile layout/menu controls and physical
    device checks remain open.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
