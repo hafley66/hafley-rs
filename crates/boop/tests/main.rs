@@ -2,6 +2,8 @@
 //! file's tests is `--test main -- <module>`, and `autotests = false` in
 //! Cargo.toml is what stops cargo minting a second target per file.
 
+#[path = "1_reminder.rs"]
+mod reminder;
 #[path = "boop_start_warm.rs"]
 mod boop_start_warm;
 #[cfg(feature = "dl6")]

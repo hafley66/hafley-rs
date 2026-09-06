@@ -36,7 +36,8 @@ pub struct Store {
 /// 19 = an absent favorite note is stored as NULL.
 /// 21 = each transcript cursor records its adapter projection contract.
 /// 22 = cost views over the usage ledger; see `COST_VIEW_SCHEMA`.
-pub const SCHEMA_VERSION: i64 = 27;
+/// 28 = durable expiring reminders over the mailbox.
+pub const SCHEMA_VERSION: i64 = 28;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -592,6 +593,7 @@ impl Store {
             self.connection
                 .execute_batch(COST_VIEW_SCHEMA)
                 .with_context(|| format!("initialise cost views at {}", path.display()))?;
+            self.connection.execute_batch(crate::reminder::SCHEMA)?;
             self.seed_moods()?;
             if self.schema_version()? == 0 {
                 self.stamp_version()?;
@@ -844,6 +846,7 @@ impl Store {
     /// Drop every table, recreate the schema, stamp the version; the caller
     /// re-syncs from byte 0. Favorites alone cross the drop by value.
     pub fn rebuild(&self) -> Result<()> {
+        anyhow::ensure!(self.reminders()?.is_empty(), "store has durable reminders; use a separate projection store instead of rebuilding reminder history");
         let mut favorites: Vec<(String, Option<String>, String, i64, i64)> = Vec::new();
         {
             let mut statement = self.connection.prepare(
@@ -881,6 +884,7 @@ impl Store {
         }
         self.connection.execute_batch(SCHEMA)?;
         self.connection.execute_batch(MAILBOX_SCHEMA)?;
+        self.connection.execute_batch(crate::reminder::SCHEMA)?;
         self.connection.execute_batch(COST_VIEW_SCHEMA)?;
         self.seed_moods()?;
         self.stamp_version()?;

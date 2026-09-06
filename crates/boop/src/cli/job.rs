@@ -1212,6 +1212,7 @@ fn lane_expect(args: &LaneArgs) -> Option<boop::trail::Expect> {
 
 pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
     match cmd {
+        BeepCmd::Remind { cmd } => crate::cli::reminder::run(registry, cmd),
         BeepCmd::Harness { cmd } => match cmd {
             HarnessCmd::List => run_harnesses(registry),
             HarnessCmd::Get { harness } => run_harness_get(registry, &harness),
@@ -1287,6 +1288,7 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
             parent,
             on_parent_death,
             harness,
+            session,
             cwd,
             worktree,
             mail_dir: mail_dir_arg,
@@ -1322,7 +1324,7 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
                         .or_else(|| worktree.as_ref().map(|dir| dir.display().to_string())),
                     model: None,
                     mode: None,
-                    session_id: None,
+                    session_id: session,
                     source_path: None,
                     parent,
                     goal: None,
@@ -3027,6 +3029,7 @@ mod tests {
         let _session = LiveTmuxSession::new(&coord_name);
         write_route(&dir, "coordinator", tmux_route(&coord_name)).unwrap();
         run_agent(AgentCmd::Register {
+            session: None,
             name: "native-child".into(),
             kind: "native".into(),
             parent: Some("coordinator".into()),

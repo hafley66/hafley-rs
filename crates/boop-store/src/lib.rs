@@ -10,6 +10,8 @@
 pub mod _0_session_graph;
 #[cfg(feature = "agent-read")]
 pub mod activity;
+#[path = "1_reminder.rs"]
+pub mod reminder;
 pub mod bus;
 pub mod event;
 pub mod harness_id;

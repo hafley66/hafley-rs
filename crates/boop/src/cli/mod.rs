@@ -1,3 +1,5 @@
+#[path = "1_reminder.rs"]
+pub(crate) mod reminder;
 pub(crate) mod acpx;
 pub(crate) mod control;
 pub(crate) mod db;
@@ -202,6 +204,25 @@ DELIVERY: what one send does after the row is written.
   (lane children, floor BOOP_DOOR_FLOOR=2, window BOOP_DOOR_WINDOW_SECS=60);
   past that it is cooled off for BOOP_DOOR_COOLDOWN_SECS=300, the row lands
   `cooled-off`, and the trip is a row in agent_door_blowout.
+
+REMINDERS: recurring sends to an existing explicit route, no agent spawn:
+    boop beep remind add <name> <route> <body> --every 30m --until <unix-seconds-or-RFC3339>
+    boop beep remind run [--once] [--mail-dir <dir>]
+    boop beep remind list [--mail-dir <dir>]
+    boop beep remind cancel <name> [--mail-dir <dir>]
+  First occurrence follows one interval; expiry is exclusive and mandatory.
+  One active schedule and outstanding occurrence per route. Turn-ended or a
+  threaded reply releases the next occurrence; admission/ack alone does not.
+  One runner per mail directory, at most 32 active schedules. Missed intervals
+  collapse. Definite refusals retry the same envelope at the interval.
+  Uncertain delivery after a crash remains outstanding for inspection.
+  Run stays foreground and observes door turn ends until expiry. --once is a
+  single tick for supervisor/threaded-reply receipts; use foreground for doors.
+  Restart it with the same mail dir. At most 32 completion observers run.
+  Cancel/expiry prevent future delivery; already accepted work cannot be recalled.
+  Native doors and existing supervised lanes are supported. ACPX mode is held
+  unavailable because its existing queue enables approve-all permissions.
+  list exposes the message id; db agent_delivery_transition carries the receipts.
 
 SEND: one verb, `boop beep`. It sends and then blocks for the answer:
     boop beep <route> <body> [--timeout <s>] [--kind <k>] [--as <name>]

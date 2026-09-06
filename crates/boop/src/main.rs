@@ -831,6 +831,11 @@ fn supervised_lane(command: &SubCmd) -> Option<&str> {
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum BeepCmd {
+    /// Expiring recurring reminders to existing routes.
+    Remind {
+        #[command(subcommand)]
+        cmd: cli::reminder::ReminderCmd,
+    },
     /// Harness adapters and what each can do.
     Harness {
         #[command(subcommand)]
@@ -1185,6 +1190,9 @@ enum AgentCmd {
         /// mailbox, not an address: nothing can push to it.
         #[arg(long)]
         harness: Option<String>,
+        /// Exact existing harness session/thread id; requires --harness.
+        #[arg(long, requires = "harness")]
+        session: Option<String>,
         /// The directory the agent works in; a hook inbox drains rows here.
         #[arg(long)]
         cwd: Option<PathBuf>,

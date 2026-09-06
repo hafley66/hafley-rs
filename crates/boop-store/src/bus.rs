@@ -242,7 +242,15 @@ pub fn held_messages(store: &crate::ident::Store, route: &str) -> Result<Vec<Mes
     })?;
     let mut out = Vec::new();
     for row in rows {
-        out.push(row?);
+        let mut message = row?;
+        if message.to_timestamp.is_none()
+            && !store.reminder_message_active(&message, now_ms() as i64)?
+        {
+            message.to_timestamp = Some("reminder-inactive".into());
+        }
+        if message.to_timestamp.as_deref() != Some("reminder-inactive") {
+            out.push(message);
+        }
     }
     Ok(out)
 }
@@ -791,7 +799,7 @@ pub fn insert_message(
     finish(connection, result)
 }
 
-fn write_message(
+pub(crate) fn write_message(
     store: &crate::ident::Store,
     mailbox: &str,
     message: &Message,
@@ -889,7 +897,13 @@ pub fn messages_in(store: &crate::ident::Store) -> Result<Vec<Message>> {
     })?;
     let mut out = Vec::new();
     for row in rows {
-        out.push(row?);
+        let mut message = row?;
+        if message.to_timestamp.is_none()
+            && !store.reminder_message_active(&message, now_ms() as i64)?
+        {
+            message.to_timestamp = Some("reminder-inactive".into());
+        }
+        out.push(message);
     }
     Ok(out)
 }
@@ -1132,7 +1146,9 @@ mod tests {
                 "{wire} is a supervisor row"
             );
         }
-        for wire in ["request", "hail", "note", "dispatch", "ack", "reply", "retry"] {
+        for wire in [
+            "request", "hail", "note", "dispatch", "ack", "reply", "retry",
+        ] {
             assert!(
                 !crate::bus::MessageKind::from(wire).supervisor_row(),
                 "{wire} keeps the door"

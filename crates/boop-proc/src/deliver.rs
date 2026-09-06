@@ -407,6 +407,11 @@ pub fn deliver_hail_budgeted(
     paster: &dyn PanePaster,
     budget: &DoorBudget,
 ) -> Result<Landing> {
+    if !store.reminder_message_active(message, boop_harness::live::now_ms() as i64)? {
+        let landing = Landing::new(Rung::MailboxOnly, "reminder cancelled or expired");
+        landing.record(store, &message.id, &message.to, None)?;
+        return Ok(landing);
+    }
     let route = routes.get(message.to.as_str());
     let harness = route.and_then(|route| route.harness);
     if !store.has_delivery_transition(&message.id)? {
@@ -773,7 +778,12 @@ pub fn drain_route_held_mail_budgeted(
         // A supervisor row is never pushed, so re-walking the ladder for it
         // every tick would only stamp a second `held-in-mailbox` on a row the
         // recipient collects with `boop wait`.
-        if message.kind.supervisor_row() {
+        if message.kind.supervisor_row()
+            || message
+                .r#ref
+                .as_deref()
+                .is_some_and(|r| r.starts_with("reminder:"))
+        {
             continue;
         }
         let Ok(landing) =
@@ -856,6 +866,87 @@ mod tests {
     use boop_harness::harness::{Capabilities, ReadChunk, SessionRef};
     use boop_harness::live::DoorAddress;
     use std::time::Duration;
+
+    #[test]
+    fn reminder_adapter_receipts_and_expiry() {
+        struct Adapter(HarnessId);
+        impl Harness for Adapter {
+            fn id(&self) -> HarnessId {
+                self.0
+            }
+            fn capabilities(&self) -> &'static Capabilities {
+                Registry::discover().get(self.0).capabilities()
+            }
+            fn live(&self) -> &dyn LiveSessions {
+                &FAKE_LIVE
+            }
+            fn door(&self) -> &dyn Door {
+                &FAKE_DOOR
+            }
+            fn sessions(&self) -> Result<Vec<SessionRef>> {
+                Ok(vec![])
+            }
+            fn read_from(&self, _: &SessionRef, offset: u64) -> Result<ReadChunk> {
+                Ok(ReadChunk {
+                    events: vec![],
+                    next_offset: offset,
+                    reset: false,
+                    skipped: 0,
+                })
+            }
+        }
+        for id in [
+            HarnessId::Codex,
+            HarnessId::Claude,
+            HarnessId::Opencode,
+            HarnessId::Kimi,
+        ] {
+            let dir = std::env::temp_dir()
+                .join(format!("boop-reminder-adapter-{}-{id}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let mut route = unbound_route(&dir);
+            route.harness = Some(id);
+            route.session_id = Some("ses-fake-claude".into());
+            if id == HarnessId::Kimi {
+                route.kind = "lane".into();
+            }
+            bus::write_route(&dir, "recipient", &route).unwrap();
+            let store = bus::open_store(&dir).unwrap();
+            let now = boop_harness::live::now_ms() as i64;
+            store
+                .reminder_add(
+                    "fixture",
+                    "recipient",
+                    "fixture reminder",
+                    1,
+                    now + 60_000,
+                    now,
+                )
+                .unwrap();
+            let message = store.reminder_claim("fixture", now + 1).unwrap().unwrap();
+            let registry = Registry::with(vec![Box::new(Adapter(id))]);
+            let routes = bus::routes_in(&store).unwrap();
+            let landing = deliver_hail_with(&registry, &store, &routes, &message, &NoPane).unwrap();
+            let expected = if id == HarnessId::Kimi {
+                "held-for-turn-boundary"
+            } else {
+                "accepted-by-harness"
+            };
+            assert_eq!(landing.outcome(), expected);
+            let rows = store.delivery_rows(&message.id).unwrap();
+            assert_eq!(
+                rows.iter().map(|r| r.outcome.as_str()).collect::<Vec<_>>(),
+                vec!["appended", expected]
+            );
+            println!("fixture harness={id} message={} transitions=appended,{expected}; recipient read unproven",message.id);
+            assert!(store.reminder_claim("fixture", now + 2).unwrap().is_none());
+            store.reminder_cancel("fixture").unwrap();
+            let stopped = deliver_hail_with(&registry, &store, &routes, &message, &NoPane).unwrap();
+            assert_eq!(stopped.detail, "reminder cancelled or expired");
+            drop(store);
+            std::fs::remove_dir_all(&dir).unwrap();
+        }
+    }
 
     /// A claude door that always takes the row, so the test measures which
     /// rung the ladder stops on rather than a real socket. It answers what the
