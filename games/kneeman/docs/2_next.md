@@ -160,6 +160,36 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    harness, nondefault Tune retention, guest replacement, malformed/start-send rejection and
    retained-tab reconnect under the final artifact. The old FAIL_RESUME_TUNE injector targets the superseded pair message;
    adapt it to SDP/start send failures. Server configuration remains unchanged.
+   Reverse-order follow-up: a browser-local delayed WebSocket constructor makes the fresh
+   replacement arrive before the survivor. Host replacement now passes 549 initial and 181
+   resumed confirmed frames, game ticks 760/760, unchanged fighter handles/characters and
+   timeout recovery. Initial offer gravity is changed to 17.25 (valid Tune first f32);
+   the fresh host later offers default 4284, while the survivor's retained answer supplies
+   17.25 and a snapshot. Both sessions agree. Runner exit 0, no browser exceptions.
+   Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 REPLACE_TAB=1 REPLACE_HOST=1 FORCE_FRESH_HOST=1 TUNE_RECEIPT=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-fresh-host-tune-fixed.log; screenshots: /private/tmp/game3-online-cxwfB1.
+   The preceding native-wrapper attempt lacked instance OPEN/CLOSING constants required by
+   GodotWebSocket.send/close and failed before sending the answer; /private/tmp/game3-fresh-host-native-socket.log
+   is a harness failure. Correcting those constants required no game-source change.
+   Malformed startup browser gates pass sequentially for version=0, slot=8, invalid state
+   and invalid Tune. Each produces exactly one named startup rejection; both peers return
+   offline and advance more than 30 ticks afterward, no browser exceptions, runner exit 0.
+   Commands: LOCAL_EXPORT=1 RECONNECT=1 BAD_START={version,slot,state,tune} node /private/tmp/1_game3_online.cjs
+   (run one value at a time). Logs: /private/tmp/game3-bad-start-{version,slot,state,tune}.log.
+   Screenshots respectively: /private/tmp/game3-online-EK3gex, game3-online-XcbVQP,
+   game3-online-hgtoHE and game3-online-n70Cmm, all under /private/tmp.
+   SDP/start send failure also passes: after 549 confirmed combat frames, report 256 KiB
+   bufferedAmount on one reconnect signaling socket. Exactly one ERR_OUT_OF_MEMORY is logged;
+   both peers return offline and advance more than 30 ticks from 944/942, no browser exceptions.
+   Runner exit 0. Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 FAIL_START=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-start-send-failure.log; screenshots: /private/tmp/game3-online-JN2fqL.
+   Guest replacement with fresh-first ordering passes too: 549 initial and 181 resumed
+   confirmed frames, ticks 759/759, preserved handles/characters and retained gravity 17.25
+   despite the new transport host offering 4284. Subsequent close recovers offline, exit 0.
+   Same reverse-order command without REPLACE_HOST. Log: /private/tmp/game3-guest-replacement-reversed.log;
+   screenshots: /private/tmp/game3-online-2XXzwM. Tested export WASM SHA-256:
+   7526f6b3c2d4a009405cb6063a80405a7c06e70e63007a80d299e0466b4425b0.
+   Publication is now the next gate; cross-network/physical-phone and burst-loss checks remain open.
 5. Extract reusable menu widgets as they are exercised by controls and character import.
 
 Art remains part of the game: gallery/camera frames, workshop PNG clips and metadata, SVG/drawn
