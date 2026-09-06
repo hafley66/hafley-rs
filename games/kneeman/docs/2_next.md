@@ -24,7 +24,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 
 ## Next, in order
 
-1. Publish the browser-tested build to /game3/. Ad-hoc Playwright passed capture/export/import,
+1. Complete online acceptance for the published /game3/ build. Ad-hoc Playwright passed capture/export/import,
    saved-frame reload, mobile viewport capture, tick-120 freeze, keyboard/menu interaction and
    debugger rendering, fixture pause/step/capture/verify/restore. Finish two-peer input/checksum agreement.
    Physical phones and two-peer networking remain untested.
@@ -58,7 +58,17 @@ SQLite/document/state-query architecture experiments while working through this 
 User requested continuous iteration, small code growth, frequent scoped commits/pushes, and
 resource restraint. Use CARGO_BUILD_JOBS=1, one browser run, and no redundant concurrent builds.
 Latest local browser artifacts: /private/tmp/game3-playwright-fyAxQi (Falcon/Lucas visible).
-Current changes are not published yet; original /game/ must remain intact.
+Published through 66dd491 to /game3/ on 2026-09-06. Original /game/ remains intact.
+Production browser reached offline simulation and Controls, then resumed the game. Artifacts:
+/private/tmp/game3-input-browser-e91D3j. A second boot identified HTTP 400 at /rtc, which the
+debug panel uses as an HTTP status endpoint as well as the WebSocket signaling route. This
+does not establish WebSocket failure; test two-peer signaling/checksums before claiming netplay.
+Remote hashes matched the tested artifact:
+
+- Game3 index.pck: fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df
+- Game3 smash_sim.wasm: 56abd0712209504321736da2d6cd64a992fd332b1ace1b14934c1742e519fc66
+- Preserved /game/ index.pck: 5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795
+
 Game3 reminder runs every 30 minutes and expires 2026-09-07 00:00 EDT (epoch 1788753600).
 Temporary script: /private/tmp/0_game3_overnight_boop.sh; stop marker:
 /private/tmp/game3-overnight-boop.stop. It currently uses codex queue pending the Boop replacement.
