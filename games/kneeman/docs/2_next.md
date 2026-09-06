@@ -57,8 +57,15 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Logs: /private/tmp/game3-channel-guard-tests.log, game3-channel-guard-build.log and
    game3-channel-guard-browser.log. Runtime browser coverage is two-player; the matching
    mesh guard compiles but has no new three-player browser receipt. Cross-network and
-   physical phones remain open. Next: publish this verified guard and repeat production
-   reconnect, then continue movement/c-stick input customization.
+   physical phones remain open. Local screenshots: /private/tmp/game3-online-vQQXAt.
+   Published through 53c1ec5 on 2026-09-06; nginx validation/reload passed. Remote WASM
+   matches the tested artifact: 77f7ab85dbad13c7fe44861978b687965cae41970667e2818da6f58fd7ce6991.
+   Both Game3 and original /game/ pack hashes remain unchanged. Production rerun (same
+   command without LOCAL_EXPORT) passes 542 initial and 180 resumed confirmed frames,
+   with 240/1225 messages dropped per peer and maximum consecutive loss 24. Fighter slots
+   and characters remain stable; peer closure reaches offline; no ERR_UNCONFIGURED or
+   browser exceptions, exit 0. Log: /private/tmp/game3-channel-guard-production.log;
+   screenshots: /private/tmp/game3-online-ccyvLA. Next: movement/c-stick input customization.
 2. Complete semantic/physical input separation and customization: use Godot InputMap for device
    bindings, preserve the semantic tick packet, and make Controls edit/persist bindings and derive
    its displayed prompts from those bindings. Cover movement, c-stick, jump/short hop, attack,
