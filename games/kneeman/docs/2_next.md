@@ -35,7 +35,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    its displayed prompts from those bindings. Cover movement, c-stick, jump/short hop, attack,
    special, shield/dodge, grab/throw and menu for keyboard, both gamepads and mobile touch.
    Test press/hold/release, focus loss, reconnect, simultaneous inputs, remap/reload/reset and replay.
-   Remaining gaps: gamepad axes/triggers and P2 device isolation/remapping, pad prompt strings,
+   Remaining gaps: gamepad axes/triggers and P2 remapping, pad prompt strings,
    fixed touch actions/layout and menu remapping. Reuse RawPad -> PadMemory -> InputFrame.
    Keyboard browser evidence: remap F, reload after 100 ms retains F, Escape cancels in Controls,
    reset/reload restores defaults. Web controls now use synchronous localStorage with ConfigFile
@@ -43,6 +43,19 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Storage.setItem SecurityError shows session-only failure and preserves the prior saved F.
    Artifacts: /private/tmp/game3-input-browser-0CeMWA. Tests: 428 game + 68 shell.
    Compact Controls layout checked at 1440x1000; physical devices remain untested.
+   P1 pad actions now bind to the first connected device instead of device -1 (all pads).
+   Connection changes rebind those InputMap events and clear edge memory. Keyboard/touch
+   bindings remain intact. Browser synthetic-pad receipt: pad 1 moves only fighter 2 upward
+   on jump (410 -> 388.65); pad 0 moves only fighter 1 (410 -> 384.24); removing pad 0
+   reassigns pad 1 to fighter 1. Each assertion checks the other fighter stays within 1 unit.
+   Log: /private/tmp/game3-pad-browser.log; runner: /private/tmp/1_game3_pad.cjs.
+   430 game + 69 shell tests pass. Jump isolation/reassignment is runtime-verified; other pad
+   buttons and physical devices still need runtime coverage. A native GDScript probe failed
+   to parse because joy_connection_changed is a signal there; it provides no test evidence.
+   Published with the existing game3 profile; nginx validation/reload passed and the original
+   /game/ pack remains unchanged. PRODUCTION=1 node /private/tmp/1_game3_pad.cjs repeats all
+   three isolated-jump assertions against the live artifacts, exit 0 without browser exceptions.
+   Production log: /private/tmp/game3-pad-production.log; image: /private/tmp/game3-pad-isolation.png.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
 4. Extend the recorded-input tests for the selected PM mechanic; expose its replay in the debugger.
@@ -149,7 +162,7 @@ replacement-tab rejoin and burst-loss cases remain unverified.
 Remote hashes matched the tested artifact:
 
 - Game3 index.pck: fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df
-- Game3 smash_sim.wasm: cab3b208e8572892bad3fbb589c43f4cfdd1741084e3862eca4fde0ddb7b5968
+- Game3 smash_sim.wasm: 7814ae2dcc71f94d8815d9e813f3a88c133ab287543f1c90a20e8e3c80469fcf
 - Preserved /game/ index.pck: 5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795
 
 Game3 reminder runs every 30 minutes and expires 2026-09-07 00:00 EDT (epoch 1788753600).

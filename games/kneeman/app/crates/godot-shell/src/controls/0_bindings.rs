@@ -1,6 +1,6 @@
 //! Keyboard remapping at the device boundary. Godot owns event matching and persistence;
 //! simulation/replay values contain no physical keys. Pad events survive keyboard edits.
-use godot::classes::{ConfigFile, Input, InputEvent, InputEventKey, InputMap};
+use godot::classes::{ConfigFile, Input, InputEvent, InputEventKey, InputEventJoypadButton, InputEventJoypadMotion, InputMap};
 use godot::global::{Key, KeyLocation};
 use godot::prelude::*;
 use std::cell::{Cell, RefCell};
@@ -78,6 +78,31 @@ pub fn load() {
             }
         }
     }
+    sync_player_one_pad();
+    Input::singleton().connect("joy_connection_changed", &Callable::from_fn(
+        "sync_player_one_pad", |_| { sync_player_one_pad(); },
+    ));
+}
+
+// Named gameplay actions belong to P1. P2 samples its own pad directly. Keep
+// InputMap's button matching, but never leave its pad events on device -1 (all).
+fn sync_player_one_pad() {
+    let device = Input::singleton().get_connected_joypads().get(0)
+        .map(|id| id as i32).unwrap_or(i32::MAX);
+    let mut map = InputMap::singleton();
+    for row in super::P1_MANUAL {
+        for &name in row.keyboard {
+            for mut event in map.action_get_events(name).iter_shared() {
+                if event.clone().try_cast::<InputEventJoypadButton>().is_ok()
+                    || event.clone().try_cast::<InputEventJoypadMotion>().is_ok() {
+                    map.action_erase_event(name, &event);
+                    event.set_device(device);
+                    map.action_add_event(name, &event);
+                }
+            }
+        }
+    }
+    super::release_all();
 }
 
 fn replace(name: &str, event: &Gd<InputEvent>) {
