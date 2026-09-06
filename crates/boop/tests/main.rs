@@ -37,6 +37,8 @@ mod native_projector_contention;
 mod no_sync_hatch;
 #[path = "preset_dry_run.rs"]
 mod preset_dry_run;
+#[path = "presets_json.rs"]
+mod presets_json;
 #[path = "registry_kinds.rs"]
 mod registry_kinds;
 #[path = "session_mood.rs"]

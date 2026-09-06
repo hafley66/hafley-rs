@@ -9,7 +9,7 @@ use boop::{config, lane};
 
 use crate::cli::db::open_ro_store;
 use crate::cli::{line, now_ms};
-use crate::{ConfigCmd, HostCmd};
+use crate::{ConfigCmd, HostCmd, PresetsFormat};
 
 /// `boop debug <lane>`: what happened to one lane, in the order a reader asks
 /// it. Five sections, each of which prints `none` rather than nothing:
@@ -224,7 +224,10 @@ pub(crate) fn run_config(registry: &Registry, cmd: ConfigCmd) -> Result<()> {
     match cmd {
         ConfigCmd::Path => line(&config::default_path()?.display().to_string()),
         ConfigCmd::Show => line(&config::show(&config::default_path()?)?),
-        ConfigCmd::Presets => line(&presets_table(registry)?),
+        ConfigCmd::Presets { format } => match format {
+            PresetsFormat::Table => line(&presets_table(registry)?),
+            PresetsFormat::Json => line(&presets_json(registry)?),
+        },
     }
     Ok(())
 }
@@ -245,18 +248,22 @@ fn first_line(text: &str) -> String {
 /// One row per preset: harness, model, effort, variant, executable, and
 /// whether it can spawn at all. A row whose harness refuses the model reads
 /// DEAD with the refusal, so a broken preset is found here and not at spawn.
-pub(crate) fn presets_table(registry: &Registry) -> Result<String> {
+#[derive(serde::Serialize)]
+pub(crate) struct PresetRow {
+    pub name: String,
+    pub harness: String,
+    pub model: String,
+    pub effort: Option<String>,
+    pub variant: Option<String>,
+    pub bin: Option<String>,
+    pub status: String,
+    pub default: bool,
+}
+
+pub(crate) fn presets_rows(registry: &Registry) -> Result<Vec<PresetRow>> {
     let path = config::default_path()?;
     let config = config::load(&path)?;
-    let mut rows: Vec<[String; 7]> = vec![[
-        "PRESET".into(),
-        "HARNESS".into(),
-        "MODEL".into(),
-        "EFFORT".into(),
-        "VARIANT".into(),
-        "BIN".into(),
-        "STATUS".into(),
-    ]];
+    let mut rows = Vec::new();
     for name in config.model_presets.keys() {
         let preset = config::resolve_preset(name, &path)?;
         let (harness, status) = match lane::preset_spawn_check(registry, &preset) {
@@ -269,26 +276,53 @@ pub(crate) fn presets_table(registry: &Registry) -> Result<String> {
                 format!("DEAD {}", first_line(&error.to_string())),
             ),
         };
-        rows.push([
-            name.clone(),
+        rows.push(PresetRow {
+            name: name.clone(),
             harness,
-            preset.model,
-            preset.effort.unwrap_or_default(),
-            preset.variant.unwrap_or_default(),
-            preset.bin.unwrap_or_default(),
+            model: preset.model,
+            effort: preset.effort,
+            variant: preset.variant,
+            bin: preset.bin,
             status,
-        ]);
+            default: config.default_model_preset.as_deref() == Some(name),
+        });
     }
-    if rows.len() == 1 {
+    Ok(rows)
+}
+
+pub(crate) fn presets_table(registry: &Registry) -> Result<String> {
+    let path = config::default_path()?;
+    let rows = presets_rows(registry)?;
+    if rows.is_empty() {
         return Ok(format!("no model presets in {}", path.display()));
     }
+    let mut cells: Vec<[String; 7]> = vec![[
+        "PRESET".into(),
+        "HARNESS".into(),
+        "MODEL".into(),
+        "EFFORT".into(),
+        "VARIANT".into(),
+        "BIN".into(),
+        "STATUS".into(),
+    ]];
+    for row in rows {
+        cells.push([
+            row.name,
+            row.harness,
+            row.model,
+            row.effort.unwrap_or_default(),
+            row.variant.unwrap_or_default(),
+            row.bin.unwrap_or_default(),
+            row.status,
+        ]);
+    }
     let mut widths = [0usize; 7];
-    for row in &rows {
+    for row in &cells {
         for (width, cell) in widths.iter_mut().zip(row) {
             *width = (*width).max(cell.len());
         }
     }
-    let table = rows
+    let table = cells
         .iter()
         .map(|row| {
             row.iter()
@@ -302,6 +336,10 @@ pub(crate) fn presets_table(registry: &Registry) -> Result<String> {
         .collect::<Vec<_>>()
         .join("\n");
     Ok(table)
+}
+
+pub(crate) fn presets_json(registry: &Registry) -> Result<String> {
+    Ok(serde_json::to_string_pretty(&presets_rows(registry)?)?)
 }
 
 #[cfg(test)]

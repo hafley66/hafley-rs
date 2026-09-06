@@ -332,7 +332,17 @@ enum ConfigCmd {
     Show,
     /// One row per model preset: name, model, variant, the harness the model
     /// spelling names, and which row `default-model-preset` points at.
-    Presets,
+    Presets {
+        #[arg(long, value_enum, default_value_t = PresetsFormat::Table)]
+        format: PresetsFormat,
+    },
+}
+
+#[derive(Clone, Copy, ValueEnum, Default)]
+enum PresetsFormat {
+    #[default]
+    Table,
+    Json,
 }
 
 #[derive(Clone, Copy, ValueEnum)]

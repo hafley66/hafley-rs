@@ -120,7 +120,7 @@ edge and stay invisible to tracking:
   Overrides: --lane <id>, --tmux <name>, --base-sha <sha>.
   Model preset: --preset flash4 resolves through the platform config directory's
   boop/config.json; `boop config presets` lists every name with its model, bin
-  and harness.
+  and harness, and `--format json` prints the rows machine-shaped.
   Alternate binary: --bin ccz runs the harness as that executable instead of its
   own (ccz is claude under the z.ai env); a preset's `bin` key sets it per name.
   Completion assertions: --expect-path <rel> (repeatable) names a worktree file
@@ -329,7 +329,8 @@ IDENTITY: two rungs only: `--as <name>`, then the BOOP_SESSION env stamp.
   with the candidates listed. `boop whoami` prints which rung named you.
 
 PRESETS: model spelling is presets only; `boop config presets` lists name,
-  harness, model, effort, bin. Lane defaults: flash4 or pro4; luna for codex
+  harness, model, effort, bin (`--format json` prints the same rows as a JSON
+  array). Lane defaults: flash4 or pro4; luna for codex
   (sol only on an explicit ask); k3 for kimi; glm53 for claude through z.ai
   (bin ccz). The codex/gpt and claude families through opencode are refused at
   spawn: each has a flat-rate harness and opencode bills them metered. Gemini is allowed.
