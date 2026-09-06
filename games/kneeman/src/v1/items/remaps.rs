@@ -39,6 +39,7 @@ pub(crate) struct ItemRemaps(pub &'static [Remap]);
 pub(crate) fn remaps(kind: ItemKind) -> ItemRemaps {
     match kind {
         ItemKind::None => ItemRemaps(&[]),
+        ItemKind::TerrainCell => ItemRemaps(&[]),
         ItemKind::LaserGun => ItemRemaps(&[Remap {
             lane: IntentLane::CStick,
             label: "aim",

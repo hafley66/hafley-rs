@@ -126,6 +126,7 @@ pub(crate) fn ac_fire(n: &mut SimState, idx: usize, aim: Vector2, _t: &Tune) {
         thrown: false,
         mount: -1,
         hp: crate::v1::items::hurt::item_hp(spec.shot), // projectile shots opt out (0.0)
+        cell: None,
     };
     debug_assert!(item_logic(spec.shot).land != crate::v1::item::Land::Settle);
     n.fighters[idx].arm_cd = spec.cadence;

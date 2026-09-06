@@ -32,10 +32,14 @@ pub struct ItemConfig {
     pub model_id: u8,      // shell sprite key (rendering only; sim ignores it)
     pub hit: Hitbox,       // projectile / explosion damage + knockback (one box; transcendent)
     pub zone_exempt: bool, // this kind's items are never quiet-despawned by the blast zone
+    /// Tetris only: positive HP fires four damageable cells; zero preserves the whole outline.
+    #[serde(default)]
+    pub cell_durability: f32,
 }
 
 impl ItemConfig {
     pub const LASER: Self = Self {
+        cell_durability: 0.0,
         spawn_weight: 1.0,
         ammo: 16,
         cooldown: 6,       // ~10 shots/sec on clean taps
@@ -62,6 +66,7 @@ impl ItemConfig {
     /// Cadence/speed/lifetime live in `ac::arm_spec` (the trigger); this row is the ROUND —
     /// spawn_weight/ammo/cooldown unused until a hand-held cannon item exists.
     pub const PLASMA: Self = Self {
+        cell_durability: 0.0,
         spawn_weight: 0.0,
         ammo: 0,
         cooldown: 0,
@@ -89,6 +94,7 @@ impl ItemConfig {
     /// standable + strikeable the moment it locks). `speed` is the lob px/s; `hit` unused for now
     /// (piece-vs-fighter impact is the traveling-ink→fighter follow-up).
     pub const TETRIS: Self = Self {
+        cell_durability: 10.0,
         spawn_weight: 0.6,
         ammo: 8,      // eight pieces per gun
         cooldown: 30, // deliberate lob, ~2/sec
@@ -106,6 +112,7 @@ impl ItemConfig {
     /// Red gun: low ammo, lobs a slow arcing bomb that detonates on contact or fuse and blasts
     /// everyone nearby (the funny "shoot it at your homies" weapon). Big radial knockback = a kill.
     pub const BOMB: Self = Self {
+        cell_durability: 0.0,
         spawn_weight: 0.7, // a bit rarer than the laser
         ammo: 4,           // four lobs and the gun is spent
         cooldown: 28,      // deliberate, ~2 shots/sec; no real autofire
@@ -181,7 +188,8 @@ pub enum ItemKind {
     TetrisDropper, // TetrisGun's sibling: same permanent TETRIS-row piece, pure vertical drop
     // spawned in front of the fighter instead of an arc lob (items/tetris_drop.rs)
     Station, // a mounted ship station (crate::v1::station): socketed to a `SHIP_STATIONS` anchor via
-             // `Item.mount`, inert as an item; interacting LOCKS the fighter (`Fighter.station`)
+    // `Item.mount`, inert as an item; interacting LOCKS the fighter (`Fighter.station`)
+    TerrainCell, // detached terrain, using ordinary hand-item pickup, catch, drop, and throw
 }
 
 /// A passive character mod, granted by picking up a badge item. Bitmask bits in
@@ -277,6 +285,7 @@ pub struct Item {
     /// `0.0` = a kind that opts out of being strikeable (stations, badges, projectiles, `None`).
     /// Appended at the struct's END (bincode is positional; never reorder the fields above).
     pub hp: f32,
+    pub cell: Option<crate::v1::terrain_cells::TerrainCell>,
 }
 
 impl Item {
@@ -294,6 +303,7 @@ impl Item {
         thrown: false,
         mount: -1,
         hp: 0.0, // unstrikeable by default; spawn sites set it from `items::hurt::item_hp(kind)`
+        cell: None,
     };
     pub fn active(&self) -> bool {
         !matches!(self.kind, ItemKind::None)
@@ -518,7 +528,34 @@ pub(crate) fn fire_gun(
         -1.0
     };
     let muzzle = f.pos + Vector2::new((HOLD_OFFSET.x + 20.0) * f.facing, HOLD_OFFSET.y);
-    if gun == ItemKind::TetrisGun || gun == ItemKind::TetrisDropper {
+    if (gun == ItemKind::TetrisGun || gun == ItemKind::TetrisDropper) && cfg.cell_durability > 0.0 {
+        let rng = n.rng;
+        let (shape, at, velocity) = if gun == ItemKind::TetrisDropper {
+            (
+                crate::v1::items::tetris_drop::shape_from_aim_y(aim_y),
+                f.pos + Vector2::new(TETRIS_DROP_OFFSET_X * f.facing, -TETRIS_DROP_ABOVE_Y),
+                Vector2::new(0.0, TETRIS_DROP_SEED_VY),
+            )
+        } else {
+            (
+                (roll_rng(n) % TETROMINO_SHAPES as u64) as u8,
+                muzzle + Vector2::new(0.0, -40.0),
+                (dir * 0.8 + Vector2::new(0.0, -1.0)) * cfg.speed * DT,
+            )
+        };
+        if !crate::v1::terrain_cells::spawn_cells(
+            n,
+            shape,
+            at,
+            velocity,
+            t.strokes.get(n.items[k].stroke),
+            idx as i8,
+            cfg.cell_durability,
+        ) {
+            n.rng = rng;
+            return;
+        }
+    } else if gun == ItemKind::TetrisGun || gun == ItemKind::TetrisDropper {
         // the shot IS ink: the piece claims a path slot (not an item slot) and is Traveling from
         // birth — integrate_ink arcs/drops it, stacks it, locks it into standable/strikeable
         // terrain. TetrisDropper is TetrisGun's sibling (items/tetris_drop.rs): same slot search,

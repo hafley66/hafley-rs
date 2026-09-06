@@ -27,6 +27,7 @@ const IDLE: InputFrame = InputFrame {
 /// `spawn_kind` already drop items in (queue-2026-07-03's "drop in from above" spawn).
 fn falling_item(kind: ItemKind, above: f32) -> Item {
     Item {
+        cell: None,
         kind,
         pos: Vector2::new(600.0, GROUND_Y - above),
         vel: Vector2::ZERO,
@@ -187,6 +188,7 @@ fn a_thrown_settle_kind_that_lands_harmlessly_still_disarms_to_a_ground_item() {
     s.fighters[0].pos = Vector2::new(-2000.0, GROUND_Y);
     s.fighters[1].pos = Vector2::new(-2000.0, GROUND_Y);
     s.items[0] = Item {
+        cell: None,
         thrown: true,
         owner: 0, // the (absent-from-the-action) thrower; passes through them regardless
         vel: Vector2::new(0.0, -50.0),

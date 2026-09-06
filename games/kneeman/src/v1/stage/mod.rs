@@ -521,11 +521,13 @@ pub struct InkPath {
     // release fires the finished shape along it (TODO: slingshot-by-swipe)
     // ── birth tick base (per-node offsets now live in `InkNode.born_off`) ──
     pub stroke_born: u64, // this stroke's base tick; NOT rebased when trim_front drops node 0 (the
-                          // remaining offsets stay correct against the unchanged base — see `node_born`)
+    // remaining offsets stay correct against the unchanged base — see `node_born`)
+    pub cell: Option<crate::v1::terrain_cells::TerrainCell>,
 }
 
 impl InkPath {
     pub const EMPTY: Self = Self {
+        cell: None,
         start: 0,
         len: 0,
         kind: ToolKind::TrailPen,
@@ -1419,6 +1421,16 @@ impl PunchableFace for InkPath {
     }
     fn absorb(&mut self, l: crate::v1::combat::Launch, contact: Vector2, t: &Tune) {
         self.percent += l.dmg;
+        if let Some(cell) = self.cell {
+            // Cell attachment is authored durability policy. Intact cells retain their motion;
+            // depleted cells inherit the ordinary strike launch when converted into an item.
+            if self.percent >= cell.durability {
+                self.vel = l.vel * DT;
+            } else {
+                self.shake = (l.dmg * HITLAG_PER_DMG) as i64 + 2;
+            }
+            return;
+        }
         if l.speed >= t.ink_launch_speed {
             // ink vel is px/frame (integrate_ink adds gravity and steps pos += vel with no DT).
             self.vel = l.vel * DT;

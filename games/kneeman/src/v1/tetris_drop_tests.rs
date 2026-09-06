@@ -25,7 +25,9 @@ const IDLE: InputFrame = InputFrame {
 };
 
 fn tune() -> Tune {
-    Tune::from_char(&CharData::KNEEMAN)
+    let mut tune = Tune::from_char(&CharData::KNEEMAN);
+    tune.tetris.cell_durability = 0.0; // retained whole-outline mode; cell mode has its own replay
+    tune
 }
 
 /// A held TetrisDropper (fighter 0, `facing`, `gas` shots left), standing at (600, GROUND_Y).
@@ -39,6 +41,7 @@ fn holding_dropper(facing: f32, gas: f32) -> SimState {
     s.fighters[0].facing = facing;
     s.fighters[0].holding = 0;
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::TetrisDropper,
         pos: Vector2::new(600.0, GROUND_Y - 240.0),
         vel: Vector2::ZERO,

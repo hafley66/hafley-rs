@@ -306,6 +306,7 @@ crate::slice! {
             // fighters inline; ApplyItemActs (in acts.rs) is the ONE place they land.
             let item_acts = update_items(n, t);
             <ApplyItemActs as Slice>::reduce(n, item_acts, t, fx);
+            crate::v1::terrain_cells::detach_depleted(n);
         }
     }
 }

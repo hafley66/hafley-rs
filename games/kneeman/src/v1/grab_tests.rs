@@ -24,6 +24,7 @@ const IDLE: InputFrame = InputFrame {
 
 fn laser_gun_at(pos: Vector2) -> Item {
     Item {
+        cell: None,
         kind: ItemKind::LaserGun,
         pos,
         vel: Vector2::ZERO,
@@ -165,12 +166,14 @@ fn setup_thrown_arrival_at(t: &Tune, catcher_holding: i8, kind: ItemKind, dx: f3
     s.fighters[1].pos = Vector2::new(900.0, GROUND_Y); // the thrower, already let go of it
     if catcher_holding >= 0 {
         s.items[catcher_holding as usize] = Item {
+            cell: None,
             owner: 0,
             ..laser_gun_at(Vector2::new(0.0, 0.0))
         };
     }
     let (bc, _) = hurtbox(&s.fighters[0]);
     s.items[0] = Item {
+        cell: None,
         kind,
         thrown: true,
         owner: 1,
@@ -290,6 +293,7 @@ fn hover(s: &mut SimState) {
 fn arrive_at_p0(s: &mut SimState) {
     let (bc, _) = hurtbox(&s.fighters[0]);
     s.items[0] = Item {
+        cell: None,
         thrown: true,
         owner: 1,
         vel: Vector2::new(200.0, 0.0),

@@ -25,7 +25,8 @@ pub(crate) fn item_hp(kind: ItemKind) -> f32 {
         | ItemKind::Pen
         | ItemKind::TetrisGun
         | ItemKind::InkGun
-        | ItemKind::TetrisDropper => 20.0,
+        | ItemKind::TetrisDropper
+        | ItemKind::TerrainCell => 20.0,
         _ => 0.0,
     }
 }

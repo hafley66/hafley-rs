@@ -644,7 +644,8 @@ fn firing_the_tetris_gun_spawns_a_piece_not_a_projectile() {
 
 #[test]
 fn full_board_evicts_the_oldest_stroke_and_a_dry_fire_keeps_ammo() {
-    let t = crate::v1::Tune::default();
+    let mut t = crate::v1::Tune::default();
+    t.tetris.cell_durability = 0.0; // whole-outline eviction policy; cells allocate atomically
     let mut n = crate::v1::SimState::spawn();
     crate::v1::spawn_kind(
         &mut n,
@@ -826,6 +827,7 @@ fn flying_piece_detonates_a_bomb() {
     let (mut s, t) = billiard_pair(12.0);
     s.paths[1] = InkPath::EMPTY; // just the traveler
     s.items[0] = crate::v1::Item {
+        cell: None,
         kind: crate::v1::ItemKind::Bomb,
         pos: Vector2::new(460.0, 300.0), // in the traveler's face
         vel: Vector2::ZERO,

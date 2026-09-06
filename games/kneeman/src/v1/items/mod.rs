@@ -26,6 +26,8 @@ mod pen;
 mod plasma;
 pub(crate) mod remaps;
 mod rocket;
+#[path = "0_terrain_cell.rs"]
+mod terrain_cell;
 pub(crate) mod tetris_drop; // exposes `shape_from_aim_y` to item.rs's fire_gun, not just spec()
 mod tetris_gun;
 mod wings;

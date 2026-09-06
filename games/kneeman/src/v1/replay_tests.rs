@@ -649,6 +649,7 @@ fn a_pen_stamps_its_registry_preset_onto_the_path() {
     };
     s.fighters[0].holding = 0;
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::Pen,
         owner: 0,
         gas: t.ink_budget,
@@ -676,6 +677,7 @@ fn holding_a_pen_and_attacking_lays_an_ink_path() {
     let (mut s, t) = settled();
     s.fighters[0].holding = 0;
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::Pen,
         owner: 0,
         gas: t.ink_budget,
@@ -703,6 +705,7 @@ fn holding_a_pen_and_attacking_lays_an_ink_path() {
 fn attack_over_gun_picks_it_up() {
     let (mut s, t) = settled();
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::LaserGun,
         pos: s.fighters[0].pos, // overlap the body
         vel: Vector2::ZERO,
@@ -733,6 +736,7 @@ fn attack_over_gun_picks_it_up() {
 fn grab_over_an_item_picks_it_up() {
     let (mut s, t) = settled();
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::LaserGun,
         pos: s.fighters[0].pos, // standing over it
         vel: Vector2::ZERO,
@@ -765,6 +769,7 @@ fn firing_a_held_gun_spawns_a_bolt_and_spends_ammo() {
     let mut s = SimState::spawn();
     s.fighters[0].holding = 0;
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::LaserGun,
         pos: s.fighters[0].pos,
         vel: Vector2::ZERO,
@@ -795,6 +800,7 @@ fn grab_drops_a_held_gun() {
     let mut s = SimState::spawn();
     s.fighters[0].holding = 0;
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::LaserGun,
         pos: s.fighters[0].pos,
         vel: Vector2::ZERO,
@@ -841,6 +847,7 @@ fn an_unowned_gun_off_stage_keeps_falling_and_despawns_at_the_blast_zone() {
     // the right ledge, above the pit, at rest.
     let (mut s, t) = settled();
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::LaserGun,
         pos: Vector2::new(1400.0, 700.0), // off the span (x > FLOOR_RIGHT), above the floor y
         gas: 16.0,
@@ -881,6 +888,7 @@ fn a_bomb_off_stage_despawns_quietly_without_exploding() {
     // cross BLAST_Y (1600) BEFORE its fuse (t.bomb.range) ends, then vanish with NO explosion.
     let (mut s, t) = settled();
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::Bomb,
         pos: Vector2::new(1400.0, 700.0),
         vel: Vector2::ZERO,
@@ -937,6 +945,7 @@ fn an_empty_pen_settles_on_the_ground_then_despawns() {
     // the floor, and unload (despawn) — unlike a spent gun, which vanishes instantly.
     let (mut s, t) = settled();
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::Pen,
         pos: Vector2::new(600.0, 760.0 - 60.0), // over the stage, above the floor
         owner: -1,
@@ -960,6 +969,7 @@ fn an_empty_pen_settles_on_the_ground_then_despawns() {
     // a FULL pen resting on the floor must NOT unload — only an empty one does.
     let (mut s2, t2) = settled();
     s2.items[0] = Item {
+        cell: None,
         kind: ItemKind::Pen,
         pos: Vector2::new(400.0, 760.0 - 60.0),
         owner: -1,
@@ -991,6 +1001,7 @@ fn throwing_a_held_item_knocks_back_a_victim() {
     s.fighters[1].state = CharState::Stand;
     s.fighters[1].ground_plat = 0;
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::LaserGun,
         pos: Vector2::new(600.0, 760.0 - 70.0), // chest height, in the flight path
         owner: 0,
@@ -1035,6 +1046,7 @@ fn a_neutral_grab_while_holding_soft_tosses_instead_of_throwing() {
     let mut s = SimState::spawn();
     s.fighters[0].holding = 0;
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::LaserGun,
         pos: s.fighters[0].pos,
         owner: 0,
@@ -1066,6 +1078,7 @@ fn a_flick_just_after_the_grab_press_still_up_throws() {
     let (mut s, t) = settled();
     s.fighters[0].holding = 0;
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::Pen,
         owner: 0,
         gas: 100.0,
@@ -1573,6 +1586,7 @@ fn a_dropped_item_settles_on_a_soft_platform() {
     // fell straight through to GROUND_Y. PLATFORMS[1]: left 280, right 540, y 575.
     let (mut s, t) = settled();
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::LaserGun,
         pos: Vector2::new(400.0, 500.0), // above the left soft platform
         vel: Vector2::ZERO,
@@ -1601,6 +1615,7 @@ fn a_dropped_item_settles_on_a_soft_platform() {
 fn a_bomb_detonates_on_a_platform_top() {
     let (mut s, t) = settled();
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::Bomb,
         pos: Vector2::new(700.0, 500.0), // above the right soft platform (660..920 @ 575)
         vel: Vector2::new(0.0, 100.0),
@@ -1634,6 +1649,7 @@ fn a_bomb_detonates_on_a_platform_top() {
 fn cstick_aims_a_held_gun_and_suppresses_the_smash_macro() {
     let (mut s, t) = settled();
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::LaserGun,
         pos: s.fighters[0].pos,
         vel: Vector2::ZERO,
@@ -1682,6 +1698,7 @@ fn cstick_aims_a_held_gun_and_suppresses_the_smash_macro() {
 fn ink_gun_mid_draw() -> (SimState, Tune) {
     let (mut s, t) = settled();
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::InkGun,
         owner: 0,
         gas: t.ink_budget,
@@ -1859,6 +1876,7 @@ fn no_dodge_charge_means_no_save() {
 fn picking_up_a_gun_does_not_auto_fire_it() {
     let (mut s, t) = settled();
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::LaserGun,
         pos: s.fighters[0].pos,
         owner: -1,
@@ -1892,6 +1910,7 @@ fn a_cstick_flick_throws_a_held_item_without_turning() {
     s.fighters[0].holding = 0;
     s.fighters[0].facing = 1.0;
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::Pen,
         owner: 0,
         gas: 100.0,
@@ -1926,6 +1945,7 @@ fn a_throw_inherits_the_throwers_momentum() {
     s.fighters[0].holding = 0;
     s.fighters[0].vel = Vector2::new(600.0, 0.0); // mid-dash
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::Pen,
         owner: 0,
         gas: 100.0,
@@ -1961,6 +1981,7 @@ fn a_dash_attack_scoops_an_item_it_passes_over() {
     // starts a dash attack instead of a direct pickup.
     let fy = s.fighters[0].pos.y;
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::LaserGun,
         pos: Vector2::new(s.fighters[0].pos.x + 320.0, fy),
         vel: Vector2::ZERO,

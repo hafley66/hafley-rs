@@ -31,10 +31,13 @@ mod state_budget {
     //    is unchanged -- the arena migration decoupled geometry from path COUNT, so more slots only
     //    add 120 B handles, not geometry (was InkPath=384, SimState=26_624, wire=30_186 pre-arena;
     //    520/33_152/36_714 before the born[] shrink before that) ──
-    const INKPATH_MEM: usize = 120;
+    // 2026-09-06: optional 24-byte terrain identity/durability/break metadata on each path
+    // and item adds 6,144 resident bytes. Empty options add 256 bytes to the spawn wire image;
+    // live cells additionally encode their metadata. Geometry still uses the existing arena.
+    const INKPATH_MEM: usize = 144;
     const FIGHTER_MEM: usize = 408;
-    const SIMSTATE_MEM: usize = 43_272;
-    const WIRE_BYTES: u64 = 46_432;
+    const SIMSTATE_MEM: usize = 49_416;
+    const WIRE_BYTES: u64 = 46_688;
 
     #[test]
     fn pinned_sizes_hold() {
@@ -58,9 +61,8 @@ mod state_budget {
 
     #[test]
     fn wire_size_is_fixed_regardless_of_active_fighters() {
-        // Dormant fighter/item/path slots still encode: the wire size is CONSTANT, which is what
-        // lets a peer checksum/snapshot without knowing the roster. If this drifts, the net
-        // resume-snapshot and checksum both move.
+        // Dormant slots still encode, so roster size does not affect this spawn baseline.
+        // Active terrain-cell metadata adds payload beyond this baseline.
         assert_eq!(state_size_bytes(&SimState::spawn()), WIRE_BYTES);
         assert_eq!(state_size_bytes(&SimState::spawn_n(4)), WIRE_BYTES);
         assert_eq!(state_size_bytes(&SimState::spawn_n(1)), WIRE_BYTES);
@@ -135,7 +137,7 @@ mod state_budget {
         // At today's (post-arena) InkPath size, growing the HANDLE count costs (holding InkPath
         // fixed; `nodes[]` is unaffected since it's sized by `NODE_POOL`, not `MAX_DRAWN`):
         assert_eq!(projected_state_mem(MAX_DRAWN, INKPATH_MEM), SIMSTATE_MEM); // identity check
-        assert_eq!(projected_state_mem(256, INKPATH_MEM), 27_912 + 256 * 120); // 58_632 B (1.36x)
+        assert_eq!(projected_state_mem(256, INKPATH_MEM), 30_984 + 256 * 144);
     }
 
     #[test]

@@ -18,6 +18,7 @@ use super::laser_gun::{LaserBoltKind, LaserGunKind};
 use super::pen::PenKind;
 use super::plasma::PlasmaBallKind;
 use super::rocket::RocketKind;
+use super::terrain_cell::TerrainCellKind;
 use super::tetris_drop::TetrisDropperKind;
 use super::tetris_gun::TetrisGunKind;
 use super::wings::WingsBadgeKind;
@@ -39,6 +40,7 @@ pub(crate) fn spec_for(kind: ItemKind) -> ItemSpec {
         ItemKind::PlasmaBall => PlasmaBallKind.spec(),
         ItemKind::Rocket => RocketKind.spec(),
         ItemKind::Station => StationKind.spec(),
+        ItemKind::TerrainCell => TerrainCellKind.spec(),
         ItemKind::TetrisDropper => TetrisDropperKind.spec(),
         ItemKind::TetrisGun => TetrisGunKind.spec(),
         ItemKind::WingsBadge => WingsBadgeKind.spec(),

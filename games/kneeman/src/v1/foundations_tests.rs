@@ -546,6 +546,7 @@ fn ledge_roll_comes_up_intangible_and_inward() {
 /// A wings badge resting at the fighter's feet.
 fn badge_at_feet(s: &mut SimState, x: f32) {
     s.items[0] = Item {
+        cell: None,
         kind: ItemKind::WingsBadge,
         pos: Vector2::new(x, GROUND_Y),
         vel: Vector2::ZERO,

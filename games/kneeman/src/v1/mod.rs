@@ -26,6 +26,11 @@ macro_rules! sim_log {
 }
 
 pub mod state; // ground-truth enums: CharState/Act/ThrowDir + the input-buffer Action/Lane/Slot
+#[path = "0_terrain_cells.rs"]
+pub mod terrain_cells;
+#[cfg(test)]
+#[path = "0_terrain_cells_tests.rs"]
+mod terrain_cells_tests;
 pub use state::{Act, Action, CharState, Slot, ThrowDir};
 pub(crate) use state::{Lane, airborne};
 pub mod fighter; // one fighter as a plain value: the Fighter struct + its impl, plus respawn
