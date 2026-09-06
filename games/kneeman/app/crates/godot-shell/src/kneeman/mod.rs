@@ -645,14 +645,15 @@ impl INode2D for KneeMan {
             // Finger up: drop any wedge this finger held, and free the stick if it owned it.
             Touch::Up { finger } => {
                 TOUCH_BTNS.with_borrow_mut(|v| {
-                    v.retain(|&(f, actions)| {
-                        if f == finger {
-                            crate::controls::release_actions(actions);
-                            false
-                        } else {
-                            true
+                    for (_, actions) in v.iter().filter(|(f, _)| *f == finger) {
+                        for action in *actions {
+                            // An overlapping finger can still own this same action.
+                            if !v.iter().any(|(f, held)| *f != finger && held.contains(action)) {
+                                crate::controls::release_actions(std::slice::from_ref(action));
+                            }
                         }
-                    })
+                    }
+                    v.retain(|(f, _)| *f != finger);
                 });
                 if TOUCH_FINGER.get() == finger {
                     TOUCH_FINGER.set(-1);

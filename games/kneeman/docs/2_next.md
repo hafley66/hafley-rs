@@ -393,7 +393,26 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
    Log: /private/tmp/game3-touch-online.log; screenshots: /private/tmp/game3-online-XHGVrr.
    Next bounded task: touch action/layout customization through the existing settings path.
-   Multi-finger shared-action ownership and physical-device focus/rotation need coverage.
+   Multi-finger follow-up reproduced premature guard release: two fingers hold the guard
+   wedge, lifting one changed Shield to Stand while the other remained down. Browser log:
+   /private/tmp/game3-touch-shared-before.log; screenshots: /private/tmp/game3-touch-RPAz1B.
+   The release branch now checks remaining finger owners before releasing each action.
+   Runtime delta is +8/-7 in KneeMan::input, with no new types or simulation changes.
+   432 game + 73 shell tests and the web export pass. Both two-finger lift orders retain
+   Shield until the last lift, then return to Stand. Prior hidden-input/menu/controller/
+   simulated-blur checks also pass. Touch replay restores tick 133, verifies all 73 recorded
+   ticks through 206, and matches the final checksum and EOF behavior. No browser exceptions.
+   Command: node /private/tmp/4_game3_touch.cjs. Logs: /private/tmp/game3-touch-shared-tests.log,
+   game3-touch-shared-build.log and game3-touch-shared-fixed.log. Screenshots:
+   /private/tmp/game3-touch-nxunLK. Physical-device focus/rotation and shared ownership
+   across touch versus keyboard/pad sources remain unverified. Publication remains pending.
+   Same export online gate passes 543 initial and 180 resumed confirmed frames, resumed
+   ticks 746/746, stable slots/characters and offline recovery. Both peers drop 240 messages
+   from 1228/1226 sends, with maximum burst 24 and 60 ms send delay. Exactly one queued
+   close, zero closed-send errors/browser exceptions, exit 0. Command: LOCAL_EXPORT=1
+   CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24
+   NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-touch-shared-online.log; screenshots: /private/tmp/game3-online-bukEOi.
    Native keyboard menu navigation
    remains egui's fixed keys. PM moveset parity, three-player and cross-network checks
    remain open; no fighter-mechanic equivalence is claimed by this input checkpoint.
