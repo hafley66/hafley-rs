@@ -309,6 +309,18 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    checksum 4173f332821851e0379ac30ffaf5e8008c04335f5f6f711133f4d1eaed906876;
    EOF unchanged, no browser exceptions, exit 0. Command: node /private/tmp/2_game3_sticks.cjs.
    Log: /private/tmp/game3-pause-directions-replay.log; screenshots: /private/tmp/game3-sticks-Fjbef2.
+   Published through 4d57d21 on 2026-09-06 with the dedicated game3 profile; nginx validation
+   and reload pass. Deployed WASM matches tested SHA-256
+   71c4d490b9156e70923092f297aaa4381ccc5a09661dee95e53fe307bf6fba05.
+   Game3 pack and protected original /game/ pack hashes remain unchanged. Production UI
+   receipt passes: keyboard P saves, resumes, old Escape leaves ticks advancing 54 -> 93,
+   held P pauses once at 95. P2 trigger remap survives reload and holds at tick 53; pad
+   reset preserves P, keyboard reset clears it, and Escape opens after reload. Start labels
+   render for both pads. No browser exceptions, runner exit 0.
+   Log: /private/tmp/game3-pause-production.log; screenshots: /private/tmp/game3-input-browser-bLKvTd.
+   Next bounded input work: editable menu navigation, followed by touch action/layout
+   customization. The PM move ledger and physical/cross-network/three-player acceptance
+   remain incomplete; this checkpoint does not change fighter mechanics.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
    Text-reference checkpoint: docs/3_pm_baseline.md pins PM-CC revision 6e63ffa9 and exact
