@@ -71,7 +71,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    its displayed prompts from those bindings. Cover movement, c-stick, jump/short hop, attack,
    special, shield/dodge, grab/throw and menu for keyboard, both gamepads and mobile touch.
    Test press/hold/release, focus loss, reconnect, simultaneous inputs, remap/reload/reset and replay.
-   Remaining gaps: menu bindings, fixed touch actions/layout and physical devices.
+   Remaining gaps: menu-navigation bindings, fixed touch actions/layout and physical devices.
    Reuse RawPad -> PadMemory -> InputFrame.
    Keyboard browser evidence: remap F, reload after 100 ms retains F, Escape cancels in Controls,
    reset/reload restores defaults. Web controls now use synchronous localStorage with ConfigFile
@@ -278,6 +278,37 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Log: /private/tmp/game3-dpad-production.log; screenshots: /private/tmp/game3-sticks-y7FlIC.
    D-pad remapping is published in Controls -> Gamepad movement / c-stick. Next: menu/touch
    customization; cross-network/physical-device and three-player checks remain open.
+   Pause/open-menu now uses editable InputMap actions for keyboard and both pads, with the
+   existing capture/save/reset paths. Menu navigation remains fixed. UI pause stays outside
+   InputFrame; capture/cancel suppresses navigation and mapped pad A cannot also activate a
+   focused menu entry. Runtime delta: +24/-24 lines across four files.
+   Interactive local-export receipt: /private/tmp/game3-input-browser-Ui7AVH. Keyboard P
+   saves, backs Controls -> Menu -> gameplay, and holds without repeated transitions;
+   old Escape no longer opens from gameplay. Escape cancels capture without changing settings.
+   P1 pause -> A saves, backs to Menu without activating the focused Items entry, holds
+   without repetition, and resumes gameplay. Removed P1 Start leaves ticks advancing
+   149 -> 192; default P2 Start pauses at 195. P2 pause -> positive trigger axis 4 saves,
+   survives reload and holds at tick 40. Reset pads removes both pad overrides while
+   retaining keyboard P; Reset keyboard clears that entry and Escape opens after reload.
+   Screenshots 2_cancel through 17_reset_escape; synthetic pads, no browser exceptions.
+   Offline /rtc, /turn and /ev 404s are expected. The subsequent label-only edit displays
+   Start by name. Final 432 game + 73 shell tests pass; /private/tmp/game3-pause-final-tests.log.
+   Initial export failed on sandboxed Godot editor-settings writes; the approved retry
+   passes: /private/tmp/game3-pause-final-build-approved.log. Physical-device, touch-layout,
+   three-player and cross-network checks remain open.
+   Final export online gate passes 545 initial confirmed frames and 180 resumed frames
+   after exactly one queued-message closure; resumed game ticks 744/742. Both peers have
+   24-message maximum loss bursts (224/1207 and 227/1210 dropped/sent), with 60 ms send
+   delay. Slots/characters remain stable and peer closure reaches offline; no channel or
+   browser errors, exit 0. Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1
+   QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1
+   node /private/tmp/1_game3_online.cjs. Log: /private/tmp/game3-pause-online.log;
+   screenshots: /private/tmp/game3-online-D9KNja.
+   Final direction/replay gate also passes 20 horizontal movement assertions and both
+   isolated c-stick smashes. Restore tick 137, replay 50 recorded steps to tick 187,
+   checksum 4173f332821851e0379ac30ffaf5e8008c04335f5f6f711133f4d1eaed906876;
+   EOF unchanged, no browser exceptions, exit 0. Command: node /private/tmp/2_game3_sticks.cjs.
+   Log: /private/tmp/game3-pause-directions-replay.log; screenshots: /private/tmp/game3-sticks-Fjbef2.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
    Text-reference checkpoint: docs/3_pm_baseline.md pins PM-CC revision 6e63ffa9 and exact

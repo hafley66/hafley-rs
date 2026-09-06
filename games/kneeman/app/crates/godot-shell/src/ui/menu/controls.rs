@@ -5,7 +5,7 @@ use crate::controls::bindings;
 use crate::ui::themes::Theme;
 use egui_rsx_macro::egui_rsx;
 
-/// Keyboard and both pads edit InputMap. Menu and touch remain fixed.
+/// Keyboard and both pads edit InputMap. Menu navigation and touch remain fixed.
 pub struct Controls;
 
 // P2 (couch co-op) is a second gamepad only: the keyboard now belongs entirely to P1 (WASD move +
@@ -68,7 +68,6 @@ impl Screen for Controls {
                                                 }
                                             }
                                             if row.action == "Fast-fall" { ui.label(chip(&bindings::label("move_down"))); }
-                                            if row.action == "Pause" { ui.label(chip("Esc")); }
                                         });
                                         if let Some(&(name, _)) = bindings::PAD_ACTIONS.iter().find(|(name, _)| row.keyboard.contains(name)) {
                                             if ui.add(egui::Button::new(chip(&bindings::pad_label(name))).fill(egui::Color32::TRANSPARENT)).clicked() { bindings::begin_pad(name, 0); }

@@ -136,15 +136,14 @@ impl INode for DebugUi {
             if let Some(mut viewport) = self.base().get_viewport() { viewport.set_input_as_handled(); }
             return;
         }
-        // Gamepad drives the pause menu. Start opens/backs it (like Esc); while it's open, dpad + A
+        // Pause is sampled in process, including events consumed by egui. A remapped pause
+        // must not also activate a focused widget or one of the debug shortcuts below.
+        if event.is_action("pause") || event.is_action("p2_pause") { return; }
+        // Gamepad drives the pause menu. While it's open, dpad + A
         // + B become synthetic key events (Tab focus-nav / Enter activate / Esc back) that egui and
         // this handler already understand -- so no custom focus model and no bridge changes.
         if let Ok(pad) = event.clone().try_cast::<InputEventJoypadButton>() {
             if pad.is_pressed() && !pad.is_echo() {
-                if pad.get_button_index() == JoyButton::START {
-                    self.open_pause_menu();
-                    return;
-                }
                 // ○/B closes the debug panel when it's the thing on screen (menu not open).
                 if pad.get_button_index() == JoyButton::B && !self.is_menu_open() && self.show {
                     self.show = false;
@@ -169,20 +168,6 @@ impl INode for DebugUi {
             self.show = !self.show;
             return;
         }
-        // Esc maps to the SAME semantic toggle intent as the gamepad (START/B): menu_esc ->
-        // Intent::Esc, resolved in process(). In practice this path fires only while the menu is
-        // CLOSED (opening it): once it's open, a rail entry is focused, the egui bridge marks key
-        // events handled, and this handler never sees Escape -- the dismiss comes from the menu's
-        // own consume_key (ui/menu/mod.rs), gated so the opening press can't also close it. The
-        // lone keyboard-specific case is closing the debug panel when IT, not the menu, is up.
-        if key.get_keycode() == Key::ESCAPE {
-            if !self.is_menu_open() && self.show {
-                self.show = false;
-            } else {
-                self.menu_esc = true;
-            }
-            return;
-        }
         if key.is_meta_pressed() && key.is_shift_pressed() {
             match key.get_keycode() {
                 Key::J => self.show = !self.show,
@@ -201,6 +186,12 @@ impl INode for DebugUi {
             return;
         };
         let ctx = bridge.bind().current_frame().clone();
+        // InputMap remains observable when egui marks a focused widget's event handled.
+        // The router's esc_resolved gate prevents the same press from also being consumed there.
+        if crate::controls::bindings::menu_pressed() {
+            if !self.is_menu_open() && self.show { self.show = false; }
+            else { self.menu_esc = true; }
+        }
         // Counter `project.godot`'s canvas_items stretch (design 1600x900) so the egui layer's
         // own "points" land at a stable physical size regardless of the real window size --
         // see ui/scale.rs and plans/menu-responsive-remap.md #1. Godot scales every CanvasItem

@@ -9,6 +9,7 @@ const PATH: &str = "user://controls.cfg";
 pub const PAD_ACTIONS: &[(&str, &str)] = &[
     ("jump", "p2_jump"), ("shorthop", "p2_shorthop"), ("attack", "p2_attack"),
     ("shield", "p2_shield"), ("grab", "p2_grab"), ("special", "p2_special"),
+    ("pause", "p2_pause"),
 ];
 pub const PAD_STICKS: &[(&str, &str)] = &[
     ("pad_left", "p2_pad_left"), ("pad_right", "p2_pad_right"),
@@ -97,7 +98,7 @@ pub fn load() {
     if DEFAULTS.with_borrow(|rows| !rows.is_empty()) { return; }
     let mut map = InputMap::singleton();
     for (name, key) in [("aim_up", Key::UP), ("aim_down", Key::DOWN),
-        ("aim_left", Key::LEFT), ("aim_right", Key::RIGHT)] {
+        ("aim_left", Key::LEFT), ("aim_right", Key::RIGHT), ("pause", Key::ESCAPE)] {
         if !map.has_action(name) {
             map.add_action(name);
             let mut event = InputEventKey::new_gd();
@@ -110,6 +111,7 @@ pub fn load() {
     // P2 gets its own action names and independent resources. Both pads keep the
     // existing defaults, including R2 attack, while InputMap owns event matching.
     map.action_add_event("attack", &pad_event(&[1, JoyAxis::TRIGGER_RIGHT.ord(), 1]).unwrap());
+    map.action_add_event("pause", &pad_event(&[0, JoyButton::START.ord(), 0]).unwrap());
     for (i, &(name, _)) in PAD_STICKS.iter().enumerate() {
         map.add_action_ex(name).deadzone(0.0).done();
         let axis = [JoyAxis::LEFT_X, JoyAxis::LEFT_Y, JoyAxis::RIGHT_X, JoyAxis::RIGHT_Y][i / 2];
@@ -196,6 +198,7 @@ pub fn pad_label(name: &str) -> String {
                     JoyButton::X => "X".into(), JoyButton::Y => "Y".into(),
                     JoyButton::BACK => "Back".into(), JoyButton::LEFT_SHOULDER => "L1".into(),
                     JoyButton::RIGHT_SHOULDER => "R1".into(),
+                    JoyButton::START => "Start".into(),
                     JoyButton::DPAD_LEFT => "D-pad left".into(), JoyButton::DPAD_RIGHT => "D-pad right".into(),
                     JoyButton::DPAD_UP => "D-pad up".into(), JoyButton::DPAD_DOWN => "D-pad down".into(),
                     other => format!("Button {}", other.ord()),
@@ -234,6 +237,12 @@ pub fn cancel() { PENDING.set(None); PAD_PLAYER.set(None); }
 pub fn pending() -> Option<&'static str> { PENDING.get() }
 pub fn take_cancelled() -> bool { CANCELLED.replace(false) }
 pub fn status() -> String { STATUS.with_borrow(Clone::clone) }
+
+/// UI intent, outside the semantic simulation packet. Capture/cancel must not also navigate.
+pub fn menu_pressed() -> bool {
+    PENDING.get().is_none() && !CANCELLED.get()
+        && ["pause", "p2_pause"].iter().any(|name| Input::singleton().is_action_just_pressed(*name))
+}
 
 /// Called before gameplay event handling. Escape cancels; repeats/releases never bind.
 pub fn capture(event: &Gd<InputEvent>) -> bool {

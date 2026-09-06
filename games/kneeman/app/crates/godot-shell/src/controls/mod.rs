@@ -166,7 +166,7 @@ pub const P1_MANUAL: &[ManualRow] = &[
     },
     ManualRow {
         action: "Pause",
-        keyboard: &[], // Menu navigation remains fixed in this checkpoint.
+        keyboard: &["pause"],
         gamepad: "Start",
     },
 ];
@@ -437,7 +437,8 @@ fn p2_pad_action(a: GameAction) -> &'static str {
 fn p2_actions_match_the_binding_registry() {
     let actions = [GameAction::Jump, GameAction::ShortHop, GameAction::Attack,
         GameAction::Shield, GameAction::Grab, GameAction::Special];
-    assert_eq!(actions.map(p2_pad_action).as_slice(), bindings::PAD_ACTIONS.iter().map(|r| r.1).collect::<Vec<_>>());
+    // Gameplay actions occupy the prefix; the UI samples pause separately.
+    assert_eq!(actions.map(p2_pad_action).as_slice(), bindings::PAD_ACTIONS.iter().take(actions.len()).map(|r| r.1).collect::<Vec<_>>());
 }
 
 /// Player two's frame for local two-player: the SECOND connected gamepad, all-neutral when it isn't
