@@ -119,6 +119,9 @@ impl Coordinator {
         .unwrap();
     }
 
+    /// One hail from a lane. `request` is the kind under test: the hook inbox
+    /// is a rung of the ladder, and a supervisor kind never walks far enough
+    /// down to reach it (supervisor-rows-off-the-door).
     fn hail(&self, body: &str) -> String {
         let out = self.boop(&[
             "beep",
@@ -127,7 +130,7 @@ impl Coordinator {
             "--as",
             "fake-lane",
             "--kind",
-            "result",
+            "request",
             "--no-wait",
         ]);
         assert!(

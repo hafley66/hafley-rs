@@ -226,6 +226,9 @@ WAIT: every agent can background a shell, so the universal push is a block.
     boop wait <message-id>          the reply to what you just sent
     boop wait <lane>                a registered lane's result row, its rc
     boop wait --me [--as <name>]    the next unread mail addressed to you
+  A wait is the ONLY way a lane's progress reaches you: yield, commit,
+  head_rewound and result rows stop at the mailbox by law 9, so a coordinator
+  running lanes keeps one `boop wait --me &` armed.
   Default timeout 540s (under the 10-minute cap a background shell gives you),
   `--wait-timeout <s>` overrides it, and a timeout exits 124 printing the
   re-run line on stdout AND stderr. A lane whose typed expectations are unmet
@@ -348,6 +351,10 @@ LAWS:
   8 Codex native subagents need sandbox_mode=danger-full-access plus ACP
     session mode agent-full-access, or their boop calls cannot write the mail
     dir or .git/worktrees.
+  9 A supervisor row (yield, commit, head_rewound, result, open_failed, the
+    retry notices) never enters a parent's transcript. It waits in the mailbox
+    and the parent collects it: `boop wait <lane>` for an rc, a backgrounded
+    `boop wait --me &` for the batch. Only a reply and a hail take a door.
 
 BUILD: hafley-rs crates/boop; `cargo install --path crates/boop --force` from
   main installs ~/.cargo/bin/boop. `boop --version` prints version and sha.",

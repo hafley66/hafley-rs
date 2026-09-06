@@ -559,3 +559,49 @@ fn me_still_takes_a_row_held_in_the_mailbox_for_a_native_route() {
         "stdout: {stdout}"
     );
 }
+
+/// RECEIPT. Taking supervisor rows off the door does not take them off the
+/// mailbox: `boop wait --me` is the one thing that hands a coordinator its
+/// lanes' yield and commit lines, and it still does
+/// (supervisor-rows-off-the-door).
+#[test]
+fn me_still_takes_the_yield_and_commit_rows_its_lanes_wrote() {
+    let fixture = Fixture::new("supervisor-rows");
+    for (id, kind, body) in [
+        ("m-idle", "yield", "idle feature-turn-cwd turn=3 head=abc1234"),
+        ("m-commit", "yield", "commit feature-turn-cwd abc1234..def5678 dirty=0"),
+        ("m-done", "result", "lane feature-turn-cwd done rc=0"),
+    ] {
+        append(
+            &fixture.mail.join("boop.db"),
+            serde_json::json!({
+                "id": id,
+                "from": "feature-turn-cwd",
+                "to": "claude-498",
+                "from_timestamp": boop::bus::now_iso(),
+                "to_timestamp": null,
+                "kind": kind,
+                "reply_to": null,
+                "body": body,
+                "ref": null,
+            }),
+        );
+    }
+
+    let output = fixture
+        .boop(&["wait", "--me", "--as", "claude-498", "--wait-timeout", "10"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0), "the mailbox answers --me");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    for body in [
+        "idle feature-turn-cwd turn=3",
+        "commit feature-turn-cwd abc1234..def5678",
+        "lane feature-turn-cwd done rc=0",
+    ] {
+        assert!(
+            stdout.contains(body),
+            "`wait --me` hands back the supervisor row `{body}`: {stdout}"
+        );
+    }
+}

@@ -440,3 +440,37 @@ done
 fn mailbox_text(db: &Path) -> String {
     serde_json::Value::Array(boop_store::testing::mail_rows(db)).to_string()
 }
+
+/// RECEIPT. A result row the ladder stopped at the mailbox rather than pushing
+/// at its parent's door still carries its rc to `boop wait <lane>`: the exit
+/// code is read off the row, and the row is unstamped because nothing put it
+/// in front of anyone (supervisor-rows-off-the-door).
+#[test]
+fn a_wait_reads_the_rc_off_a_result_row_the_ladder_held_in_the_mailbox() {
+    let dir = mail_dir("mailbox-only-rc");
+    seed_lane_route(&dir, "feature-quiet-door");
+    seed_result(&dir, "feature-quiet-door", 9);
+    let store = boop::Store::open(dir.join("boop.db")).unwrap();
+    store
+        .append_delivery_transition(
+            "m-seed",
+            "sprefa-coordinator",
+            None,
+            "held-in-mailbox",
+            "result row; no door",
+            None,
+            1_756_000_000_000,
+        )
+        .unwrap();
+
+    assert_eq!(wait_exit(&dir, "feature-quiet-door", "5"), 9);
+    let unstamped = boop_store::testing::mail_rows(&dir.join("boop.db"))
+        .into_iter()
+        .filter(|row| row["id"] == "m-seed")
+        .all(|row| row["to_timestamp"].is_null());
+    assert!(
+        unstamped,
+        "a row no rung carried stays open for `boop wait --me`"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -152,6 +152,38 @@ kind_impls!(MessageKind {
     HeadRewound => "head_rewound",
 });
 
+impl MessageKind {
+    /// Whether a lane's supervisor minted this row about its own run, rather
+    /// than an agent or a human typing it.
+    ///
+    /// | supervisor row | who reads it |
+    /// |---|---|
+    /// | `result`, `open_failed`, `exited_without_completion` | `boop wait <lane>`, `boop wait --me` |
+    /// | `yield`, `head_rewound`, `reparented` | `boop wait --me` |
+    /// | `retrying`, `retry_budget_exhausted`, `completion` | `boop wait --me` |
+    ///
+    /// The delivery ladder reads this and stops such a row at the mailbox: a
+    /// door push costs the recipient a whole harness turn on a line it never
+    /// asked for, and one lane fan-out fills a coordinator's transcript with
+    /// progress notes (supervisor-rows-off-the-door). Every other kind, the
+    /// `request` a `boop beep` mints and the `hail` a human sends among them,
+    /// walks the whole ladder as before.
+    pub fn supervisor_row(&self) -> bool {
+        matches!(
+            self,
+            MessageKind::Result
+                | MessageKind::Completion
+                | MessageKind::Yield
+                | MessageKind::Reparented
+                | MessageKind::Retrying
+                | MessageKind::RetryBudgetExhausted
+                | MessageKind::ExitedWithoutCompletion
+                | MessageKind::OpenFailed
+                | MessageKind::HeadRewound
+        )
+    }
+}
+
 kind_impls!(RouteKind {
     Lane => "lane",
     Coordinator => "coordinator",
@@ -1078,6 +1110,34 @@ mod tests {
             row.detail.as_deref(),
             Some("stalled: 300s with no harness activity")
         );
+    }
+
+    /// The kinds a lane's supervisor mints get no door; every kind an agent or
+    /// a human types keeps one (supervisor-rows-off-the-door).
+    #[test]
+    fn the_supervisor_kinds_are_the_ones_a_lane_run_mints_about_itself() {
+        for wire in [
+            "result",
+            "completion",
+            "yield",
+            "reparented",
+            "retrying",
+            "retry_budget_exhausted",
+            "exited_without_completion",
+            "open_failed",
+            "head_rewound",
+        ] {
+            assert!(
+                crate::bus::MessageKind::from(wire).supervisor_row(),
+                "{wire} is a supervisor row"
+            );
+        }
+        for wire in ["request", "hail", "note", "dispatch", "ack", "reply", "retry"] {
+            assert!(
+                !crate::bus::MessageKind::from(wire).supervisor_row(),
+                "{wire} keeps the door"
+            );
+        }
     }
 
     /// A non-result body mentioning `rc=` is prose, never an exit code.

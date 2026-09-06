@@ -1538,13 +1538,10 @@ fn mail_to_parent_kind(lane: &LaneRun, kind: &str, body: String, detail: Option<
         debug!(lane = lane.lane, kind, "no registered parent; no row");
         return;
     };
-    // Yield rows stay trail-only for a coordinator parent: the mailbox keeps
-    // the history and the coordinator spends a turn only on a decision row.
-    let deliver = !(matches!(kind, YIELD | HEAD_REWOUND)
-        && routes
-            .get(&parent)
-            .is_some_and(|route| route.kind == "coordinator"));
-    mail_parent(lane, &parent, kind, body, detail, deliver);
+    // Which rung this row may take is the ladder's call, not this function's:
+    // `MessageKind::supervisor_row` stops a yield, a head rewind or a result
+    // at the mailbox for every parent kind, and the transition row says so.
+    mail_parent(lane, &parent, kind, body, detail);
 }
 
 /// Whether this lane has already written a `result` or `request` row to its
@@ -1574,17 +1571,10 @@ fn yield_to_parent(lane: &LaneRun, reason: &str) {
     mail_to_parent_kind(lane, YIELD, idle_body(lane, reason), Some(reason));
 }
 
-/// Append one row from this lane to its parent. `hail_parent_once` and
-/// `yield_to_parent` share it, so both leave the same shape in the mailbox.
-/// `deliver` off appends the trail row and skips the delivery ladder.
-fn mail_parent(
-    lane: &LaneRun,
-    parent: &str,
-    kind: &str,
-    body: String,
-    detail: Option<&str>,
-    deliver: bool,
-) {
+/// Append one row from this lane to its parent and walk the delivery ladder
+/// with it. `hail_parent_once` and `yield_to_parent` share it, so both leave
+/// the same shape in the mailbox.
+fn mail_parent(lane: &LaneRun, parent: &str, kind: &str, body: String, detail: Option<&str>) {
     let row = bus::Message {
         id: bus::mint_id(),
         from: lane.lane.clone(),
@@ -1601,7 +1591,7 @@ fn mail_parent(
     match append_row(&lane.mail_dir, &row) {
         Ok(()) => {
             info!(lane = lane.lane, parent, kind, "lane parent row written");
-            let landed = deliver.then(|| deliver_outbound(lane, &row)).flatten();
+            let landed = deliver_outbound(lane, &row);
             println!(
                 "[boop] {kind} hailed to {parent}: {}",
                 landed.unwrap_or_else(|| "held in the mailbox".to_owned())
@@ -2594,10 +2584,26 @@ mod tests {
         );
     }
 
-    /// QUIET rule 2. A yield row written before any result still lands in the
-    /// mailbox trail, and a coordinator parent route reads none of it.
+    /// The landing outcomes one message wears, oldest first.
+    fn outcomes_of(dir: &Path, message_id: &str) -> Vec<String> {
+        let store = bus::open_store(dir).unwrap();
+        let (_, history) = store
+            .passthrough(&format!(
+                "SELECT outcome FROM agent_delivery_transition \
+                 WHERE message_id = '{message_id}' ORDER BY sequence"
+            ))
+            .unwrap();
+        history
+            .iter()
+            .map(|row| row["outcome"].as_str().unwrap_or_default().to_owned())
+            .collect()
+    }
+
+    /// QUIET rule 2. A yield row lands in the mailbox trail and stops there,
+    /// and the ladder says where it waits rather than leaving it unowned
+    /// (supervisor-rows-off-the-door).
     #[test]
-    fn an_idle_yield_before_any_result_reaches_the_trail_but_not_the_coordinator() {
+    fn an_idle_yield_reaches_the_trail_and_stops_at_the_mailbox() {
         let dir = tempdir();
         let lane = parented_lane(&dir, "mine", "coord");
         std::fs::write(
@@ -2615,26 +2621,18 @@ mod tests {
         assert_eq!(rows.len(), 1, "one trail row per park");
         assert_eq!(rows[0].to, "coord");
         assert!(rows[0].body.contains(" dirty="), "body: {}", rows[0].body);
-        let store = bus::open_store(&dir).unwrap();
-        let (_, history) = store
-            .passthrough(&format!(
-                "SELECT outcome FROM agent_delivery_transition \
-                 WHERE message_id = '{}' ORDER BY sequence",
-                rows[0].id
-            ))
-            .unwrap();
         assert_eq!(
-            history.len(),
-            1,
-            "the mailbox append is the only transition: {history:?}"
+            outcomes_of(&dir, &rows[0].id),
+            ["appended", "held-in-mailbox"],
+            "the yield row waits in the mailbox and says so"
         );
-        assert_eq!(history[0]["outcome"].as_str(), Some("appended"));
     }
 
-    /// QUIET rule 2 boundary. Only yield rows go quiet for a coordinator;
-    /// the decision row walks the delivery ladder as before.
+    /// QUIET rule 2, widened. The result row is a supervisor row like the rest:
+    /// `boop wait <lane>` reads its rc off the mailbox, so pushing it at a
+    /// coordinator's door only spent a turn.
     #[test]
-    fn a_result_row_still_delivers_to_a_coordinator_parent() {
+    fn a_result_row_to_a_coordinator_parent_also_stops_at_the_mailbox() {
         let dir = tempdir();
         let lane = parented_lane(&dir, "mine", "coord");
         std::fs::write(
@@ -2650,23 +2648,17 @@ mod tests {
         record_result(&lane, 0, None);
         let rows = result_rows(&dir);
         assert_eq!(rows.len(), 1);
-        let store = bus::open_store(&dir).unwrap();
-        let (_, history) = store
-            .passthrough(&format!(
-                "SELECT outcome FROM agent_delivery_transition \
-                 WHERE message_id = '{}' ORDER BY sequence",
-                rows[0].id
-            ))
-            .unwrap();
-        assert!(
-            history.len() > 1,
-            "the result row walked the ladder: {history:?}"
+        assert_eq!(
+            outcomes_of(&dir, &rows[0].id),
+            ["appended", "held-in-mailbox"],
+            "the result row waits in the mailbox and says so"
         );
     }
 
-    /// QUIET rule 2 boundary. A lane-to-lane parent keeps today's delivery.
+    /// QUIET rule 2 boundary. The exemption is the kind, not the parent's kind:
+    /// a lane parent gets the same mailbox-only landing a coordinator does.
     #[test]
-    fn a_lane_parent_still_receives_yield_rows() {
+    fn a_lane_parent_reads_its_yield_rows_off_the_mailbox_too() {
         let dir = tempdir();
         let lane = parented_lane(&dir, "mine", "up");
         std::fs::write(
@@ -2683,18 +2675,7 @@ mod tests {
         let rows = rows_of_kind(&dir, "yield");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].to, "up");
-        let store = bus::open_store(&dir).unwrap();
-        let (_, history) = store
-            .passthrough(&format!(
-                "SELECT outcome FROM agent_delivery_transition \
-                 WHERE message_id = '{}' ORDER BY sequence",
-                rows[0].id
-            ))
-            .unwrap();
-        assert!(
-            history.len() > 1,
-            "the lane parent route took the row: {history:?}"
-        );
+        assert_eq!(outcomes_of(&dir, &rows[0].id), ["appended", "held-in-mailbox"]);
     }
 
     /// RECEIPT (Item 0). A parentless lane parks with no row to write, and the

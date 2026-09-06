@@ -112,11 +112,11 @@ fn hail_to_a_coordinator_with_no_live_session_is_held_for_its_turn_boundary() {
         &[
             "beep",
             "ping-coord",
-            "lane fake-lane done rc=0",
+            "answer me when you can",
             "--as",
             "fake-lane",
             "--kind",
-            "result",
+            "request",
             "--no-wait",
         ],
     );
@@ -151,8 +151,59 @@ fn hail_to_a_coordinator_with_no_live_session_is_held_for_its_turn_boundary() {
     let captured = tmux(&["capture-pane", "-p", "-t", &session.0]);
     let pane = String::from_utf8_lossy(&captured.stdout);
     assert!(
-        !pane.contains("lane fake-lane done rc=0"),
+        !pane.contains("answer me when you can"),
         "the pane received keystrokes: {pane}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// RECEIPT. The same coordinator route, one kind lower: a lane's `result` row
+/// stops at the mailbox instead of walking to the turn-boundary rung, so
+/// nothing holds it for the coordinator's next turn
+/// (supervisor-rows-off-the-door).
+#[test]
+fn a_supervisor_result_row_to_the_same_coordinator_stops_at_the_mailbox() {
+    let dir = mail_dir("supervisor");
+    let session = TestSession::new("supervisor");
+    write_coordinator_route(&dir, "ping-coord", &session.0);
+    let hailed = boop(
+        &dir,
+        &[
+            "beep",
+            "ping-coord",
+            "lane fake-lane done rc=0",
+            "--as",
+            "fake-lane",
+            "--kind",
+            "result",
+            "--no-wait",
+        ],
+    );
+    assert!(hailed.status.success(), "stderr: {:?}", hailed.stderr);
+    let stdout = String::from_utf8_lossy(&hailed.stdout);
+    assert!(
+        stdout.contains("in the mailbox (result row; no door)"),
+        "the landing line names the kind that skipped the door: {stdout}"
+    );
+    assert!(
+        stdout.contains("reads it with `boop wait`"),
+        "the landing line names the verb that collects it: {stdout}"
+    );
+
+    let ledger = Command::new(BOOP)
+        .args([
+            "db",
+            "select d.outcome, d.detail from agent_delivery d order by d.at_ms desc limit 1",
+        ])
+        .env("BOOP_DB", dir.join("boop.db"))
+        .env("HOME", dir.join("home"))
+        .output()
+        .unwrap();
+    let row = String::from_utf8_lossy(&ledger.stdout);
+    assert!(row.contains("held-in-mailbox"), "ledger: {row}");
+    assert!(
+        !row.contains("held-for-turn-boundary"),
+        "a result row never reaches the turn-boundary rung: {row}"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

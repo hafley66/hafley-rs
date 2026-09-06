@@ -30,6 +30,7 @@ use boop_store::ident::{DeliveryState, LiveRow, Store};
 /// | `TurnBoundary` | the recipient's supervisor holds it, or a door harness whose door answered nothing holds it for its next turn | held-for-turn-boundary |
 /// | `HookInbox` | the recipient's project carries an installed inbox hook | queued-in-hook-inbox |
 /// | `PanePaste` | the route owns no door at all and names a live pane | pasted-into-pane |
+/// | `MailboxOnly` | a supervisor row about a lane's run; it never takes a door | held-in-mailbox |
 /// | `Mailbox` | nothing answered; the row waits and the supervisor retries it | held-in-mailbox |
 /// | `CoolOff` | the route's door budget is blown; the row waits out the cool-off and the drain retries it | cooled-off |
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -40,6 +41,7 @@ pub enum Rung {
     TurnBoundary,
     HookInbox,
     PanePaste,
+    MailboxOnly,
     Mailbox,
     CoolOff,
 }
@@ -52,7 +54,7 @@ impl Rung {
             Rung::TurnBoundary => DeliveryState::HeldForTurnBoundary,
             Rung::HookInbox => DeliveryState::QueuedInHookInbox,
             Rung::PanePaste => DeliveryState::PastedIntoPane,
-            Rung::Mailbox => DeliveryState::HeldInMailbox,
+            Rung::MailboxOnly | Rung::Mailbox => DeliveryState::HeldInMailbox,
             Rung::CoolOff => DeliveryState::CooledOff,
         }
     }
@@ -66,6 +68,7 @@ impl Rung {
             Rung::TurnBoundary => "turn boundary",
             Rung::HookInbox => "hook inbox",
             Rung::PanePaste => "pane paste",
+            Rung::MailboxOnly => "mailbox only",
             Rung::Mailbox => "mailbox",
             Rung::CoolOff => "cool-off",
         }
@@ -146,6 +149,10 @@ impl Landing {
             ),
             Rung::PanePaste => format!(
                 "pasted {message_id} from {from} -> {to} into its pane ({})",
+                self.detail
+            ),
+            Rung::MailboxOnly => format!(
+                "held {message_id} from {from} -> {to} in the mailbox ({}); {to} reads it with `boop wait`",
                 self.detail
             ),
             Rung::Mailbox => format!(
@@ -435,6 +442,20 @@ fn land(
     budget: &DoorBudget,
 ) -> Result<Landing> {
     let to = message.to.as_str();
+    // Rung 0. A supervisor's own rows about a lane's run are a trail, never an
+    // interruption. Pushing one at a live door spends a whole harness turn of
+    // the recipient's on a line it never asked for, and six lanes yielding
+    // fill a coordinator's transcript with progress notes it cannot act on
+    // (supervisor-rows-off-the-door). Every parent kind gets the same answer:
+    // the row waits in the mailbox and `boop wait <lane>` / `boop wait --me`
+    // hands it back. A `request`, a `hail` or any other typed kind walks the
+    // rest of the ladder unchanged.
+    if message.kind.supervisor_row() {
+        return Ok(Landing::new(
+            Rung::MailboxOnly,
+            format!("{} row; no door", message.kind.as_str()),
+        ));
+    }
     let Some(route) = routes.get(to) else {
         return Ok(Landing::new(
             Rung::Mailbox,
@@ -749,6 +770,12 @@ pub fn drain_route_held_mail_budgeted(
     };
     let mut pushed = 0usize;
     for message in held {
+        // A supervisor row is never pushed, so re-walking the ladder for it
+        // every tick would only stamp a second `held-in-mailbox` on a row the
+        // recipient collects with `boop wait`.
+        if message.kind.supervisor_row() {
+            continue;
+        }
         let Ok(landing) =
             deliver_hail_budgeted(registry, store, &routes, &message, &TmuxPaster, budget)
         else {
@@ -1115,7 +1142,9 @@ mod tests {
     }
 
     /// A coordinator route bound to the fake claude session, with `lanes`
-    /// child lane routes naming it as parent, and `bodies` held rows.
+    /// child lane routes naming it as parent, and `bodies` held rows. The rows
+    /// wear `request`: the budget is about how many bodies a door may take, and
+    /// a supervisor kind never reaches the door to be counted.
     fn burst_fixture(tag: &str, lanes: usize, bodies: &[&str]) -> (PathBuf, Store) {
         let dir = std::env::temp_dir().join(format!("boop-burst-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -1141,7 +1170,7 @@ mod tests {
                     to: name.clone(),
                     from_timestamp: "2026-09-03T00:00:00Z".to_owned(),
                     to_timestamp: None,
-                    kind: "result".into(),
+                    kind: "request".into(),
                     reply_to: None,
                     body: (*body).to_owned(),
                     r#ref: None,
@@ -1285,7 +1314,9 @@ mod tests {
     /// in the pre-fix shape (`held-for-turn-boundary` / `door queue`, no
     /// stamp), is never offered to the door again. The live store held 752
     /// such rows on 2026-09-03; one coordinator had each of its 22 pushed 29
-    /// times.
+    /// times. The captured rows were `result`s; this one wears `request`,
+    /// because a `result` no longer reaches the door at all and the rail under
+    /// test is the requeue, not the kind.
     #[test]
     fn a_row_a_door_already_queued_is_never_pushed_again() {
         let dir = std::env::temp_dir().join(format!("boop-requeue-{}", std::process::id()));
@@ -1304,7 +1335,7 @@ mod tests {
             to: "claude-old".to_owned(),
             from_timestamp: "2026-09-03T00:00:00Z".to_owned(),
             to_timestamp: None,
-            kind: "result".into(),
+            kind: "request".into(),
             reply_to: None,
             body: "already in front of you".to_owned(),
             r#ref: None,

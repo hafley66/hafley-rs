@@ -520,3 +520,78 @@ fn a_door_harness_with_no_live_session_is_held_and_never_pasted() {
     );
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// The same envelope as `message`, wearing the kind under test.
+fn message_of_kind(id: &str, to: &str, kind: &str, body: &str) -> Message {
+    Message {
+        kind: kind.into(),
+        ..message(id, to, body)
+    }
+}
+
+// FAIL-PRE-FIX: a lane supervisor's own rows walked the whole ladder and took
+// the door rung of whatever parent they named, so one afternoon of six lanes
+// put roughly thirty progress notes into a coordinator's transcript, each one
+// a full harness turn (supervisor-rows-off-the-door).
+#[test]
+fn a_supervisor_row_never_takes_the_door_of_a_live_route() {
+    for (label, kind, id) in [
+        ("result", "result", "m-sup-result"),
+        ("yield", "yield", "m-sup-yield"),
+        ("head_rewound", "head_rewound", "m-sup-rewound"),
+        (
+            "exited_without_completion",
+            "exited_without_completion",
+            "m-sup-exit",
+        ),
+    ] {
+        let dir = temp_dir(&format!("supervisor-{label}"));
+        let store = store(&dir);
+        let registry = Registry::with(vec![Box::new(echo(HarnessId::Kimi, &DOOR, &dir))]);
+        let routes = routes("tui", route(HarnessId::Kimi, Some("projects:@1.%1"), None));
+        let message = message_of_kind(id, "tui", kind, "lane feature-x done rc=0");
+
+        let landing = deliver_hail_with(&registry, &store, &routes, &message, &NoPane).unwrap();
+        assert_eq!(
+            landing.rung,
+            Rung::MailboxOnly,
+            "a {kind} row stops at the mailbox"
+        );
+        assert!(
+            !dir.join("door.log").exists(),
+            "a {kind} row opened the door of a live claude pane"
+        );
+
+        let rows = store.delivery_rows(id).unwrap();
+        assert_eq!(
+            rows.iter()
+                .map(|row| (row.outcome.as_str(), row.detail.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                ("appended", "mailbox"),
+                ("held-in-mailbox", format!("{kind} row; no door").as_str()),
+            ],
+            "one transition row says where a {kind} row waits"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+/// RECEIPT. The exemption is the kind, never the route: the answer to a
+/// `boop beep` reaches the same live door on the same route as before.
+#[test]
+fn a_reply_to_a_beep_still_takes_the_door_of_the_same_route() {
+    let dir = temp_dir("supervisor-reply");
+    let store = store(&dir);
+    let registry = Registry::with(vec![Box::new(echo(HarnessId::Kimi, &DOOR, &dir))]);
+    let routes = routes("tui", route(HarnessId::Kimi, Some("projects:@1.%1"), None));
+    let message = message_of_kind("m-sup-reply", "tui", "request", "the answer is 4");
+
+    let landing = deliver_hail_with(&registry, &store, &routes, &message, &NoPane).unwrap();
+    assert_eq!(landing.rung, Rung::Door);
+    assert_eq!(
+        std::fs::read_to_string(dir.join("door.log")).unwrap(),
+        "live-1 <- the answer is 4"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}

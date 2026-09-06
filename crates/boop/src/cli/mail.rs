@@ -241,7 +241,13 @@ pub(crate) fn deliver_hail(
     if let Some(route) = revive_if_retired(dir, to, routes.get(to))? {
         routes.insert(to.to_owned(), route);
     }
-    if let Some(route) = routes.get(to).filter(|route| is_acpx(route)) {
+    // The acpx queue is a door the ladder never sees, so it takes the same
+    // supervisor-row exemption the ladder does: a lane's result or yield row
+    // waits in the mailbox rather than spending a worker's turn.
+    if let Some(route) = routes
+        .get(to)
+        .filter(|route| is_acpx(route) && !message.kind.supervisor_row())
+    {
         let harness_id = route
             .harness
             .map_or_else(|| "acpx".to_owned(), |id| id.to_string());
