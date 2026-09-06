@@ -71,7 +71,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    its displayed prompts from those bindings. Cover movement, c-stick, jump/short hop, attack,
    special, shield/dodge, grab/throw and menu for keyboard, both gamepads and mobile touch.
    Test press/hold/release, focus loss, reconnect, simultaneous inputs, remap/reload/reset and replay.
-   Remaining gaps: D-pad/menu bindings, fixed touch actions/layout and physical devices.
+   Remaining gaps: menu bindings, fixed touch actions/layout and physical devices.
    Reuse RawPad -> PadMemory -> InputFrame.
    Keyboard browser evidence: remap F, reload after 100 ms retains F, Escape cancels in Controls,
    reset/reload restores defaults. Web controls now use synchronous localStorage with ConfigFile
@@ -211,6 +211,30 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Log: /private/tmp/game3-stick-remap-production.log; screenshots: /private/tmp/game3-sticks-qybkwc.
    Next: D-pad/menu/touch customization and physical-device checks. Movement and c-stick
    remapping is available under Controls -> Gamepad movement / c-stick.
+   Local D-pad follow-up: four digital movement overrides per pad now use device-scoped
+   InputMap actions and the existing capture/save/reset path. Default button priority is
+   preserved; mapped axes activate digitally at the action's 0.5 threshold. Opposite D-pad
+   directions cancel, allowing the stick fallback. The Controls direction section includes
+   these rows and Fast-fall points to editable directions. Runtime delta: +31/-20 lines.
+   Final unit/export gates pass: 432 game + 73 shell tests; logs
+   /private/tmp/game3-dpad-remap-final-tests.log and game3-dpad-remap-final-build.log.
+   Before the final hint-only edit, node /private/tmp/2_game3_sticks.cjs passes 20 horizontal
+   movement assertions: both players, deadzones, keyboard/D-pad priority, opposing D-pad
+   cancellation, button/signed-axis remaps, reload, old-binding removal and device isolation.
+   D-pad-axis samples 0.3 and 0.8 reject/activate respectively. Both isolated remapped c-stick
+   smashes pass. A recording containing remapped D-pad inputs restores tick 138 and replays
+   51 steps to tick 189 with the captured checksum
+   56d73e638756b4be56f5f6315b670e24881962b8224696af3c7e97e3a47308d5;
+   EOF is unchanged. Exit 0; /private/tmp/game3-dpad-remap-browser.log,
+   screenshots /private/tmp/game3-sticks-V8sbYK. These thresholds describe Game3, not PM parity.
+   Final export UI receipt: /private/tmp/game3-input-browser-eCWocm. Scrolling exposes all
+   12 direction rows per player. P1 D-pad-up -> button 7 and P2 D-pad-down -> button 8 save
+   independently. Remapped P1 jump moves y 410 -> 358.9 while P2 stays 410; remapped P2 drop
+   moves y 410 -> 577.36993 while P1 stays 410. Reset pads clears both overrides; reload
+   preserves the reset. Default D-pad-up repeats P1's isolated jump; default D-pad-down
+   moves P2 y 410 -> 482.16995 while P1 stays 410. No browser exceptions; local relay-route
+   404s are expected. Synthetic pads only. Not yet published: next run final default-button/
+   reconnect gates, publish, then implement menu/touch customization.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
    Text-reference checkpoint: docs/3_pm_baseline.md pins PM-CC revision 6e63ffa9 and exact

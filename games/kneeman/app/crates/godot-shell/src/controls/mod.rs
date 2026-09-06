@@ -25,7 +25,7 @@ use std::cell::Cell;
 use godot::classes::{
     Input, InputEvent, InputEventScreenDrag, InputEventScreenTouch,
 };
-use godot::global::{JoyButton, Key};
+use godot::global::Key;
 use godot::prelude::*;
 
 use crate::input_frame::InputFrame;
@@ -66,7 +66,7 @@ pub fn release_all() {
     }
     P1_MEM.set(PadMemory::default());
     P2_MEM.set(PadMemory::default());
-    for &(p1, p2) in bindings::PAD_ACTIONS.iter().chain(bindings::PAD_STICKS) {
+    for &(p1, p2) in bindings::PAD_ACTIONS.iter().chain(bindings::PAD_STICKS).chain(bindings::PAD_DPAD) {
         input.action_release(p1);
         input.action_release(p2);
     }
@@ -313,8 +313,7 @@ pub fn poll(touch_stick: (f32, f32), touch_cstick: (f32, f32)) -> InputFrame {
     );
     // Pad-only actions preserve keyboard priority and raw analog magnitudes. D-pad still
     // overrides the movement stick; the existing deadzones apply after sampling.
-    if let Some(dev) = input.get_connected_joypads().get(0) {
-        let dev = dev as i32;
+    if !input.get_connected_joypads().is_empty() {
         let dz = 0.2;
         let sx = input.get_action_raw_strength("pad_right") - input.get_action_raw_strength("pad_left");
         let sy = input.get_action_raw_strength("pad_down") - input.get_action_raw_strength("pad_up");
@@ -326,10 +325,10 @@ pub fn poll(touch_stick: (f32, f32), touch_cstick: (f32, f32)) -> InputFrame {
             c_x = rx;
             c_y = ry;
         }
-        let dpx = input.is_joy_button_pressed(dev, JoyButton::DPAD_RIGHT) as i32 as f32
-            - input.is_joy_button_pressed(dev, JoyButton::DPAD_LEFT) as i32 as f32;
-        let dpy = input.is_joy_button_pressed(dev, JoyButton::DPAD_DOWN) as i32 as f32
-            - input.is_joy_button_pressed(dev, JoyButton::DPAD_UP) as i32 as f32;
+        let dpx = input.is_action_pressed("pad_dpad_right") as i32 as f32
+            - input.is_action_pressed("pad_dpad_left") as i32 as f32;
+        let dpy = input.is_action_pressed("pad_dpad_down") as i32 as f32
+            - input.is_action_pressed("pad_dpad_up") as i32 as f32;
         let px = if dpx != 0.0 {
             dpx
         } else if sx.abs() > dz {
@@ -452,7 +451,7 @@ pub fn poll_p2() -> InputFrame {
     let mut aim_y = 0.0;
     let mut c_x = 0.0;
     let mut c_y = 0.0;
-    if let Some(dev) = pad2 {
+    if pad2.is_some() {
         let sx = input.get_action_raw_strength("p2_pad_right") - input.get_action_raw_strength("p2_pad_left");
         let sy = input.get_action_raw_strength("p2_pad_down") - input.get_action_raw_strength("p2_pad_up");
         let rx = input.get_action_raw_strength("p2_pad_aim_right") - input.get_action_raw_strength("p2_pad_aim_left");
@@ -461,10 +460,10 @@ pub fn poll_p2() -> InputFrame {
             c_x = rx;
             c_y = ry;
         }
-        let dpx = input.is_joy_button_pressed(dev, JoyButton::DPAD_RIGHT) as i32 as f32
-            - input.is_joy_button_pressed(dev, JoyButton::DPAD_LEFT) as i32 as f32;
-        let dpy = input.is_joy_button_pressed(dev, JoyButton::DPAD_DOWN) as i32 as f32
-            - input.is_joy_button_pressed(dev, JoyButton::DPAD_UP) as i32 as f32;
+        let dpx = input.is_action_pressed("p2_pad_dpad_right") as i32 as f32
+            - input.is_action_pressed("p2_pad_dpad_left") as i32 as f32;
+        let dpy = input.is_action_pressed("p2_pad_dpad_down") as i32 as f32
+            - input.is_action_pressed("p2_pad_dpad_up") as i32 as f32;
         dir = if dpx != 0.0 {
             dpx
         } else if sx.abs() > STICK_DEADZONE {

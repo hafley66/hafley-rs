@@ -16,6 +16,10 @@ pub const PAD_STICKS: &[(&str, &str)] = &[
     ("pad_aim_left", "p2_pad_aim_left"), ("pad_aim_right", "p2_pad_aim_right"),
     ("pad_aim_up", "p2_pad_aim_up"), ("pad_aim_down", "p2_pad_aim_down"),
 ];
+pub const PAD_DPAD: &[(&str, &str)] = &[
+    ("pad_dpad_left", "p2_pad_dpad_left"), ("pad_dpad_right", "p2_pad_dpad_right"),
+    ("pad_dpad_up", "p2_pad_dpad_up"), ("pad_dpad_down", "p2_pad_dpad_down"),
+];
 
 fn saved_pad(values: &[i32]) -> Option<(i32, i32, i32)> {
     let [kind, index, sign] = *values else { return None; };
@@ -111,7 +115,12 @@ pub fn load() {
         let axis = [JoyAxis::LEFT_X, JoyAxis::LEFT_Y, JoyAxis::RIGHT_X, JoyAxis::RIGHT_Y][i / 2];
         map.action_add_event(name, &pad_event(&[1, axis.ord(), if i % 2 == 0 { -1 } else { 1 }]).unwrap());
     }
-    for &(p1, p2) in PAD_ACTIONS.iter().chain(PAD_STICKS) {
+    for (i, &(name, _)) in PAD_DPAD.iter().enumerate() {
+        map.add_action_ex(name).deadzone(0.5).done();
+        let button = [JoyButton::DPAD_LEFT, JoyButton::DPAD_RIGHT, JoyButton::DPAD_UP, JoyButton::DPAD_DOWN][i];
+        map.action_add_event(name, &pad_event(&[0, button.ord(), 0]).unwrap());
+    }
+    for &(p1, p2) in PAD_ACTIONS.iter().chain(PAD_STICKS).chain(PAD_DPAD) {
         map.add_action_ex(p2).deadzone(0.5).done();
         for event in map.action_get_events(p1).iter_shared().filter(is_pad) {
             map.action_add_event(p2, &event.duplicate().unwrap().cast::<InputEvent>());
@@ -152,7 +161,7 @@ pub fn load() {
 // Bind gameplay events to each player's connected device; absent pads match no device.
 fn sync_pads() {
     let mut map = InputMap::singleton();
-    for &(p1, p2) in PAD_ACTIONS.iter().chain(PAD_STICKS) {
+    for &(p1, p2) in PAD_ACTIONS.iter().chain(PAD_STICKS).chain(PAD_DPAD) {
         for (player, name) in [p1, p2].into_iter().enumerate() {
             let device = Input::singleton().get_connected_joypads().get(player)
                 .map(|id| id as i32).unwrap_or(i32::MAX);
@@ -186,7 +195,10 @@ pub fn pad_label(name: &str) -> String {
                     JoyButton::A => "A".into(), JoyButton::B => "B".into(),
                     JoyButton::X => "X".into(), JoyButton::Y => "Y".into(),
                     JoyButton::BACK => "Back".into(), JoyButton::LEFT_SHOULDER => "L1".into(),
-                    JoyButton::RIGHT_SHOULDER => "R1".into(), other => format!("Button {}", other.ord()),
+                    JoyButton::RIGHT_SHOULDER => "R1".into(),
+                    JoyButton::DPAD_LEFT => "D-pad left".into(), JoyButton::DPAD_RIGHT => "D-pad right".into(),
+                    JoyButton::DPAD_UP => "D-pad up".into(), JoyButton::DPAD_DOWN => "D-pad down".into(),
+                    other => format!("Button {}", other.ord()),
                 }
             } else {
                 let axis = event.cast::<InputEventJoypadMotion>();
