@@ -22,7 +22,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Keyboard bindings | Live InputMap editing for movement, c-stick and gameplay buttons; ConfigFile persistence/reset, side-aware labels, malformed-key validation and focus-loss clearing. 428 game + 68 shell tests pass |
 | Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
 | Production netplay | Two isolated Chromium contexts joined a unique private room through production signaling/WebRTC. Two runs matched 180 and 181 same-tick snapshot hashes with scripted movement; peer close -> reconnecting -> offline after timeout, no browser exceptions |
-| Pad menu bindings | Local implementation: six actions per pad reuse capture/save/reset; navigation, hold/release/disconnect, pause precedence and resumed neutral input verified below |
+| Pad menu bindings | Published through 7c1bd9f: six actions per pad reuse capture/save/reset; production navigation, hold/release/disconnect, pause precedence and resumed neutral input verified below |
 
 ## Next, in order
 
@@ -357,6 +357,21 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1
    node /private/tmp/1_game3_online.cjs. Log: /private/tmp/game3-menu-online.log;
    screenshots: /private/tmp/game3-online-xbshKj.
+   Published through 7c1bd9f on 2026-09-06 using the existing dedicated profile; nginx
+   validation/reload passes. Remote WASM matches tested SHA-256
+   4f80e0aadf8ae0aaa45d9c734a2c23b49b4c1059f33a16f6c5c4bf04fd669f7c.
+   Both Game3 and protected original /game/ pack hashes remain unchanged. Full production
+   menu run passes all 12 action comparisons, old-binding removal/device isolation,
+   both axis-back thresholds/holds, direction repeat/release/disconnect, one-step character
+   selection through held axis accept, pause precedence, independent resets and neutral
+   resumed gameplay. Exit 0, no browser exceptions. Command: PRODUCTION=1 node
+   /private/tmp/3_game3_menu.cjs. Log: /private/tmp/game3-menu-production.log;
+   screenshots: /private/tmp/game3-menu-gEL7Cz. Physical pads remain untested.
+   Next bounded task: verify touch gestures in kneeman/touch.rs and KneeMan::input across
+   menu opening, controller connection and focus loss, then add touch action/layout
+   customization through the existing settings path. Native keyboard menu navigation
+   remains egui's fixed keys. PM moveset parity, three-player and cross-network checks
+   remain open; no fighter-mechanic equivalence is claimed by this input checkpoint.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
    Text-reference checkpoint: docs/3_pm_baseline.md pins PM-CC revision 6e63ffa9 and exact
