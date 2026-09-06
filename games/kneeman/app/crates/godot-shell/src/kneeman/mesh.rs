@@ -62,6 +62,9 @@ impl NonBlockingSocket<usize> for MeshSocket {
         let Some(ch) = self.channels[*addr].as_mut() else {
             return;
         };
+        if ch.get_ready_state() != ChannelState::OPEN {
+            return;
+        }
         let bytes = bincode::serialize(msg).expect("serialize ggrs message");
         ch.put_packet(&PackedByteArray::from(bytes.as_slice()));
     }

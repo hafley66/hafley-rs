@@ -10,7 +10,7 @@
 //! gameplay. Fresh fighters start host=0 / guest=1; startup negotiation preserves fighter
 //! slots independently of transport roles when rebuilding a match.
 
-use godot::classes::web_rtc_data_channel::WriteMode;
+use godot::classes::web_rtc_data_channel::{ChannelState, WriteMode};
 use godot::classes::{Json, WebRtcDataChannel};
 use godot::prelude::*;
 
@@ -120,6 +120,10 @@ pub struct RtcSocket {
 
 impl NonBlockingSocket<usize> for RtcSocket {
     fn send_to(&mut self, msg: &Message, _addr: &usize) {
+        // GGRS can send while the transport teardown is still being observed.
+        if self.channel.get_ready_state() != ChannelState::OPEN {
+            return;
+        }
         let bytes = bincode::serialize(msg).expect("serialize ggrs message");
         let packet = PackedByteArray::from(bytes.as_slice());
         self.channel.put_packet(&packet);

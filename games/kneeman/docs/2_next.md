@@ -46,9 +46,19 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    The initial sandboxed browser launch failed before navigation; only the completed subsequent
    runs supply acceptance evidence. Forced channel closure still logs ERR_UNCONFIGURED from
    sends against non-open channels: 5 lines in the 8-message run, 15 in the 24-message run.
-   RtcSocket::send_to and MeshSocket::send_to currently call put_packet without an open-state
-   guard. Next bounded error-condition task: guard those sends, then repeat reconnect/loss
-   acceptance on the rebuilt export. Cross-network and physical phones remain open.
+   Follow-up: RtcSocket::send_to and MeshSocket::send_to now return before serialization
+   when the channel is not OPEN. 432 game + 73 shell tests pass, and the rebuilt export
+   passes the 24-message/60 ms test: 547 initial and 180 resumed confirmed frames match,
+   226/227 messages dropped, maximum consecutive run 24 for both peers. Fighter slots and
+   characters survive reconnect; peer closure reaches offline. The new console assertion
+   finds zero ERR_UNCONFIGURED lines, with no browser exceptions; exit 0.
+   Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 DELAY_MS=60 BURST_LENGTH=24
+   NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Logs: /private/tmp/game3-channel-guard-tests.log, game3-channel-guard-build.log and
+   game3-channel-guard-browser.log. Runtime browser coverage is two-player; the matching
+   mesh guard compiles but has no new three-player browser receipt. Cross-network and
+   physical phones remain open. Next: publish this verified guard and repeat production
+   reconnect, then continue movement/c-stick input customization.
 2. Complete semantic/physical input separation and customization: use Godot InputMap for device
    bindings, preserve the semantic tick packet, and make Controls edit/persist bindings and derive
    its displayed prompts from those bindings. Cover movement, c-stick, jump/short hop, attack,
