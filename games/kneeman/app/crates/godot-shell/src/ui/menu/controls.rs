@@ -5,7 +5,7 @@ use crate::controls::bindings;
 use crate::ui::themes::Theme;
 use egui_rsx_macro::egui_rsx;
 
-/// Keyboard and both pads edit InputMap. Movement/c-stick axes and touch remain fixed.
+/// Keyboard and both pads edit InputMap. D-pad, menu and touch remain fixed.
 pub struct Controls;
 
 // P2 (couch co-op) is a second gamepad only: the keyboard now belongs entirely to P1 (WASD move +
@@ -72,7 +72,9 @@ impl Screen for Controls {
                                         });
                                         if let Some(&(name, _)) = bindings::PAD_ACTIONS.iter().find(|(name, _)| row.keyboard.contains(name)) {
                                             if ui.add(egui::Button::new(chip(&bindings::pad_label(name))).fill(egui::Color32::TRANSPARENT)).clicked() { bindings::begin_pad(name, 0); }
-                                        } else { ui.label(chip(row.gamepad)); }
+                                        } else { ui.label(chip(if row.action == "Move" || row.action == "C-stick (aim/attack)" {
+                                            "Edit directions below"
+                                        } else { row.gamepad })); }
                                         ui.end_row();
                                     }
                                 });
@@ -114,5 +116,20 @@ impl Screen for Controls {
                 }
             }
         }
+        ui.collapsing("Gamepad movement / c-stick", |ui| {
+            ui.label("Signed directions accept an axis or button. D-pad keeps movement priority.");
+            egui::Grid::new("pad_sticks").num_columns(3).striped(true).show(ui, |ui| {
+                for label in ["Direction", "Player 1", "Player 2"] { ui.label(label); }
+                ui.end_row();
+                for &(p1, p2) in bindings::PAD_STICKS {
+                    ui.label(p1.strip_prefix("pad_").unwrap_or(p1));
+                    for (player, name) in [p1, p2].into_iter().enumerate() {
+                        if ui.add(egui::Button::new(chip(&bindings::pad_label(name)))
+                            .fill(egui::Color32::TRANSPARENT)).clicked() { bindings::begin_pad(name, player); }
+                    }
+                    ui.end_row();
+                }
+            });
+        });
     }
 }

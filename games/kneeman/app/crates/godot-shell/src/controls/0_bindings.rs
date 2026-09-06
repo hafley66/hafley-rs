@@ -10,6 +10,12 @@ pub const PAD_ACTIONS: &[(&str, &str)] = &[
     ("jump", "p2_jump"), ("shorthop", "p2_shorthop"), ("attack", "p2_attack"),
     ("shield", "p2_shield"), ("grab", "p2_grab"), ("special", "p2_special"),
 ];
+pub const PAD_STICKS: &[(&str, &str)] = &[
+    ("pad_left", "p2_pad_left"), ("pad_right", "p2_pad_right"),
+    ("pad_up", "p2_pad_up"), ("pad_down", "p2_pad_down"),
+    ("pad_aim_left", "p2_pad_aim_left"), ("pad_aim_right", "p2_pad_aim_right"),
+    ("pad_aim_up", "p2_pad_aim_up"), ("pad_aim_down", "p2_pad_aim_down"),
+];
 
 fn saved_pad(values: &[i32]) -> Option<(i32, i32, i32)> {
     let [kind, index, sign] = *values else { return None; };
@@ -100,7 +106,12 @@ pub fn load() {
     // P2 gets its own action names and independent resources. Both pads keep the
     // existing defaults, including R2 attack, while InputMap owns event matching.
     map.action_add_event("attack", &pad_event(&[1, JoyAxis::TRIGGER_RIGHT.ord(), 1]).unwrap());
-    for &(p1, p2) in PAD_ACTIONS {
+    for (i, &(name, _)) in PAD_STICKS.iter().enumerate() {
+        map.add_action_ex(name).deadzone(0.0).done();
+        let axis = [JoyAxis::LEFT_X, JoyAxis::LEFT_Y, JoyAxis::RIGHT_X, JoyAxis::RIGHT_Y][i / 2];
+        map.action_add_event(name, &pad_event(&[1, axis.ord(), if i % 2 == 0 { -1 } else { 1 }]).unwrap());
+    }
+    for &(p1, p2) in PAD_ACTIONS.iter().chain(PAD_STICKS) {
         map.add_action_ex(p2).deadzone(0.5).done();
         for event in map.action_get_events(p1).iter_shared().filter(is_pad) {
             map.action_add_event(p2, &event.duplicate().unwrap().cast::<InputEvent>());
@@ -141,7 +152,7 @@ pub fn load() {
 // Bind gameplay events to each player's connected device; absent pads match no device.
 fn sync_pads() {
     let mut map = InputMap::singleton();
-    for &(p1, p2) in PAD_ACTIONS {
+    for &(p1, p2) in PAD_ACTIONS.iter().chain(PAD_STICKS) {
         for (player, name) in [p1, p2].into_iter().enumerate() {
             let device = Input::singleton().get_connected_joypads().get(player)
                 .map(|id| id as i32).unwrap_or(i32::MAX);

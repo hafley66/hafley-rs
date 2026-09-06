@@ -25,7 +25,7 @@ use std::cell::Cell;
 use godot::classes::{
     Input, InputEvent, InputEventScreenDrag, InputEventScreenTouch,
 };
-use godot::global::{JoyAxis, JoyButton, Key};
+use godot::global::{JoyButton, Key};
 use godot::prelude::*;
 
 use crate::input_frame::InputFrame;
@@ -66,7 +66,10 @@ pub fn release_all() {
     }
     P1_MEM.set(PadMemory::default());
     P2_MEM.set(PadMemory::default());
-    for &(_, name) in bindings::PAD_ACTIONS { input.action_release(name); }
+    for &(p1, p2) in bindings::PAD_ACTIONS.iter().chain(bindings::PAD_STICKS) {
+        input.action_release(p1);
+        input.action_release(p2);
+    }
     P1_DOWN_PREV.set(false);
     P2_PREV_MASK.set(0);
 }
@@ -308,17 +311,17 @@ pub fn poll(touch_stick: (f32, f32), touch_cstick: (f32, f32)) -> InputFrame {
         input.is_action_pressed("aim_left"),
         input.is_action_pressed("aim_right"),
     );
-    // Web: the default ui_* movement actions don't carry the pad's stick/dpad, so read the first
-    // connected joypad directly and merge it in (keyboard still works; pad wins when held).
+    // Pad-only actions preserve keyboard priority and raw analog magnitudes. D-pad still
+    // overrides the movement stick; the existing deadzones apply after sampling.
     if let Some(dev) = input.get_connected_joypads().get(0) {
         let dev = dev as i32;
         let dz = 0.2;
-        let sx = input.get_joy_axis(dev, JoyAxis::LEFT_X);
-        let sy = input.get_joy_axis(dev, JoyAxis::LEFT_Y);
+        let sx = input.get_action_raw_strength("pad_right") - input.get_action_raw_strength("pad_left");
+        let sy = input.get_action_raw_strength("pad_down") - input.get_action_raw_strength("pad_up");
         // right stick = the c-stick (smash / aerial macro); deadzone like the move stick. Keyboard
         // arrows take priority (already folded above); the pad only fills in when they're neutral.
-        let rx = input.get_joy_axis(dev, JoyAxis::RIGHT_X);
-        let ry = input.get_joy_axis(dev, JoyAxis::RIGHT_Y);
+        let rx = input.get_action_raw_strength("pad_aim_right") - input.get_action_raw_strength("pad_aim_left");
+        let ry = input.get_action_raw_strength("pad_aim_down") - input.get_action_raw_strength("pad_aim_up");
         if c_x == 0.0 && c_y == 0.0 && (rx * rx + ry * ry).sqrt() > dz {
             c_x = rx;
             c_y = ry;
@@ -450,10 +453,10 @@ pub fn poll_p2() -> InputFrame {
     let mut c_x = 0.0;
     let mut c_y = 0.0;
     if let Some(dev) = pad2 {
-        let sx = input.get_joy_axis(dev, JoyAxis::LEFT_X);
-        let sy = input.get_joy_axis(dev, JoyAxis::LEFT_Y);
-        let rx = input.get_joy_axis(dev, JoyAxis::RIGHT_X);
-        let ry = input.get_joy_axis(dev, JoyAxis::RIGHT_Y);
+        let sx = input.get_action_raw_strength("p2_pad_right") - input.get_action_raw_strength("p2_pad_left");
+        let sy = input.get_action_raw_strength("p2_pad_down") - input.get_action_raw_strength("p2_pad_up");
+        let rx = input.get_action_raw_strength("p2_pad_aim_right") - input.get_action_raw_strength("p2_pad_aim_left");
+        let ry = input.get_action_raw_strength("p2_pad_aim_down") - input.get_action_raw_strength("p2_pad_aim_up");
         if (rx * rx + ry * ry).sqrt() > STICK_DEADZONE {
             c_x = rx;
             c_y = ry;

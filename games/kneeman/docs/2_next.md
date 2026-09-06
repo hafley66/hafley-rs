@@ -71,8 +71,8 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    its displayed prompts from those bindings. Cover movement, c-stick, jump/short hop, attack,
    special, shield/dodge, grab/throw and menu for keyboard, both gamepads and mobile touch.
    Test press/hold/release, focus loss, reconnect, simultaneous inputs, remap/reload/reset and replay.
-   Remaining gaps: movement/c-stick axis remapping, menu bindings,
-   fixed touch actions/layout and menu remapping. Reuse RawPad -> PadMemory -> InputFrame.
+   Remaining gaps: D-pad/menu bindings, fixed touch actions/layout and physical devices.
+   Reuse RawPad -> PadMemory -> InputFrame.
    Keyboard browser evidence: remap F, reload after 100 ms retains F, Escape cancels in Controls,
    reset/reload restores defaults. Web controls now use synchronous localStorage with ConfigFile
    serialization and a legacy user:// fallback; native retains ConfigFile disk writes. Injected
@@ -151,6 +151,39 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    To remap: Controls -> click the player's Pad label -> press the desired button/axis.
    Movement/c-stick remapping, mobile layout/menu controls and physical
    device checks remain open.
+   Local stick-remapping follow-up: eight signed directions per pad now have separate
+   InputMap actions, using raw action strength and the existing movement/radial c-stick
+   deadzones. Keyboard priority, D-pad-over-stick priority, touch fallback and semantic
+   packets are unchanged. Controls -> Gamepad movement / c-stick edits either player's
+   direction using the existing button/axis capture, persistence and Reset pads path.
+   432 game + 73 shell tests pass; /private/tmp/game3-stick-remap-tests.log.
+   Export passes; /private/tmp/game3-stick-remap-build.log. Opt-in web snapshots expose x
+   positions for directional acceptance. Code delta before this ledger: +50/-17 lines.
+   Interactive evidence: /private/tmp/game3-input-browser-xolzZV, screenshots 1_controls
+   through 5_movement. P1 right -> Godot button 7 ignores wrong-device input during capture,
+   persists, produces Dash/Stand, survives reload and disables the old positive axis 0.
+   Automated local browser run: 12 movement assertions cover both players at 0.1/0.3/0.8,
+   keyboard and D-pad priority, saved button/negative-axis remaps and old-binding removal;
+   every assertion checks the other fighter's x stays unchanged. Both players' saved
+   c-stick-up -> button 8 reaches Usmash while the other remains Stand, and old axis 3-
+   no longer triggers the smash. Browser state observations do not establish PM thresholds.
+   Command: node /private/tmp/2_game3_sticks.cjs. Log: /private/tmp/game3-stick-remap-browser.log;
+   screenshots: /private/tmp/game3-sticks-SmrUoN. Exit 0 without browser exceptions. The first
+   runner attempt failed on its own pre-boot __smash lookup; it supplies no game evidence.
+   Replay follow-up reruns those assertions, then records remapped P1 button movement,
+   P2 signed-axis movement and a remapped c-stick smash. Restore returns tick 138;
+   50 acknowledged Replay steps reach tick 188 and the captured checksum
+   b54eaedf99857ee926185d313b8addfa550b1ecf1e1929f976ab3d92334e3695.
+   An additional EOF step leaves tick/checksum unchanged. Exit 0; log:
+   /private/tmp/game3-stick-remap-replay-stepped.log, screenshots:
+   /private/tmp/game3-sticks-naWPRA. The preceding fast-click runner stopped one tick short;
+   its Verify screenshot matched all 50 ticks, but step-through acceptance required the
+   corrected runner to wait for each requested tick before issuing the next click.
+   Final default-pad regression passes 14 isolated button assertions and 3 jump/reassignment
+   assertions, exit 0 without browser exceptions. Command: BUTTONS=1 node
+   /private/tmp/1_game3_pad.cjs; log: /private/tmp/game3-stick-remap-defaults.log.
+   Not yet published. Next: verify the final Controls layout/reset path, online regression,
+   publish the tested export, then complete D-pad/menu/touch customization.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
    Text-reference checkpoint: docs/3_pm_baseline.md pins PM-CC revision 6e63ffa9 and exact
