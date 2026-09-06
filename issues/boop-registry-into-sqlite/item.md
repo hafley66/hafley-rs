@@ -1,12 +1,13 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-09-05
 type: improvement
-status: open
+status: done
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation, needs-chris]
 size: L
+closed: 2026-09-05
 ---
 
 # Lane registry is a hand-rolled JSON CAS beside a SQLite store
@@ -38,6 +39,9 @@ Blocked on `@boop-db-wal-lock`. The dual key spellings here are the suspected ca
 - [ ] Migration reads the existing `registry.json` once and does not lose a live route.
 
 ## Tests Run
+
+`bus::write_route` now upserts `agent_route` directly via `upsert_route`; `import_legacy`/`import_registry_file` retained for old mail dirs. `sha256_hex` renamed `hash_hex` (it is a DefaultHasher, not SHA-256). `cas_update_json` retained for `lane-residency.json`/`parent-policy.json`. Module doc fixed. deliver.rs/control.rs/me.rs callers compile unchanged (commit 6dacddd).
+
 
 ## Implementation Notes
 

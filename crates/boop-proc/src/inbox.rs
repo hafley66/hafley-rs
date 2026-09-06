@@ -174,7 +174,7 @@ pub fn installed_for(cwd: &Path, name: &str) -> bool {
 pub fn batch_text(rows: &[Message], template: &str) -> String {
     rows.iter()
         .map(|row| {
-            crate::supervise::render_mail(template, &row.kind, &row.id, &row.from, &row.body)
+            crate::supervise::render_mail(template, row.kind.as_str(), &row.id, &row.from, &row.body)
         })
         .collect::<Vec<_>>()
         .join("\n\n")

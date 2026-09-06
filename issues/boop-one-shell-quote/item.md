@@ -1,12 +1,13 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-09-05
 type: improvement
-status: open
+status: done
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation]
 size: S
+closed: 2026-09-05
 ---
 
 # Shell quoting duplicated eight times across the spawn path
@@ -40,6 +41,9 @@ Sites:
 - [ ] `cargo test -p boop -j4` green.
 
 ## Tests Run
+
+`shell_quote` unified as `pub fn` in crates/boop-harness/src/harness.rs; claude.rs and opencode.rs copies deleted (opencode's `shell_quote_double` kept). boop-mux's `quote_arg` left in place: boop-mux does not depend on boop-harness. Table test `quotes_the_edge_cases` added (commit 51381ff).
+
 
 ## Implementation Notes
 

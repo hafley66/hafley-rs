@@ -62,6 +62,9 @@ pub(crate) struct DispatchArgs {
     pub(crate) on_exit: Option<String>,
     /// Run the repo's `boop-start` recipe in a new worktree before spawning.
     pub(crate) warm_start: bool,
+    /// `KEY=VAL` pairs the lane's spawn inherits, shell-quoted onto the
+    /// supervisor command after boop's own stamps.
+    pub(crate) env: Vec<(String, String)>,
 }
 
 pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
@@ -120,6 +123,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             &args.to,
             harness_id.as_str(),
             args.parent.as_deref(),
+            &args.env,
         )),
         model: args.model.clone(),
         effort: args.effort.clone(),
@@ -187,18 +191,27 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
     Ok(())
 }
 
-/// The environment a spawn's command carries: a UTF-8 locale, then the child's
-/// own identity. The pane's inherited locale is the tmux server's, not a shell's.
+/// The environment a spawn's command carries: a UTF-8 locale, the child's own
+/// identity, then the `KEY=VAL` pairs a `lane create --env` named. The pane's
+/// inherited locale is the tmux server's, not a shell's.
 pub(crate) fn spawn_env_stamp(
     lane_id: &str,
     harness_id: &str,
     parent_lane: Option<&str>,
+    env: &[(String, String)],
 ) -> String {
-    format!(
+    let mut stamp = format!(
         "{} {}",
         lane::locale_stamp(),
         identity::child_stamp(lane_id, lane_id, harness_id, parent_lane)
-    )
+    );
+    for (key, value) in env {
+        stamp.push(' ');
+        stamp.push_str(key);
+        stamp.push('=');
+        stamp.push_str(&shell_quote(value));
+    }
+    stamp
 }
 
 /// The registered harness adapter for a dispatched `--harness`. A named
@@ -824,6 +837,7 @@ pub(crate) struct LaneArgs {
     pub(crate) expect_path: Vec<String>,
     pub(crate) expect_commit_subject: Vec<String>,
     pub(crate) expect_commits_at_least: Option<u32>,
+    pub(crate) env: Vec<(String, String)>,
 }
 
 /// Falls back to a `*coordinator*` name match only when no route declares
@@ -1004,6 +1018,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
                 &identity.lane,
                 harness_id.as_str(),
                 parent.parent.as_deref(),
+                &args.env,
             )),
             model: model.clone(),
             variant: variant.clone(),
@@ -1128,6 +1143,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             warm_start: !args.no_start,
             variant: variant.clone(),
             bin: bin.clone(),
+            env: args.env.clone(),
         },
     )?;
     if let Some(expect) = expect.as_ref() {
@@ -1147,6 +1163,25 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
 
 pub(crate) fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
+}
+
+/// The boop-owned stamps a `--env` must never clobber; the supervisor reads
+/// its own identity from these and a user pair would lie about the lane.
+const BOOP_ENV_STAMPS: &[&str] = &["BOOP_SESSION", "BOOP_LANE", "BOOP_HARNESS", "BOOP_PARENT"];
+
+/// Turns the clap-validated `--env` values into `(key, value)` pairs, refusing
+/// a key that collides with a boop-owned stamp.
+fn parse_env_pairs(values: Vec<String>) -> Result<Vec<(String, String)>> {
+    let mut out = Vec::with_capacity(values.len());
+    for value in values {
+        // The clap value_parser already guarantees a `=` and a non-empty key.
+        let (key, val) = value.split_once('=').expect("--env value parses as KEY=VAL");
+        if BOOP_ENV_STAMPS.contains(&key) {
+            anyhow::bail!("--env key `{key}` collides with a boop-owned stamp; pick another name");
+        }
+        out.push((key.to_owned(), val.to_owned()));
+    }
+    Ok(out)
 }
 
 pub(crate) fn completion_recipient(parent: Option<&str>, wait: bool, lane: &str) -> Option<String> {
@@ -1278,7 +1313,7 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
                 &dir,
                 &name,
                 Route {
-                    kind,
+                    kind: kind.into(),
                     harness: harness_id,
                     tmux: None,
                     cwd: cwd
@@ -1419,6 +1454,7 @@ pub(crate) fn run_fork(
             expect_path: Vec::new(),
             expect_commit_subject: Vec::new(),
             expect_commits_at_least: None,
+            env: Vec::new(),
             parent,
             on_parent_death: Default::default(),
             harness: None,
@@ -1524,6 +1560,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             expect_path,
             expect_commit_subject,
             expect_commits_at_least,
+            env,
         } => {
             // Recorded before the spawn: the route the dispatch writes replaces
             // whatever is under this lane's key.
@@ -1535,6 +1572,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
                     on_parent_death,
                 )?;
             }
+            let env = parse_env_pairs(env)?;
             run_lane(
                 registry,
                 LaneArgs {
@@ -1563,6 +1601,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
                     expect_path,
                     expect_commit_subject,
                     expect_commits_at_least,
+                    env,
                 },
             )
         }
@@ -1746,7 +1785,7 @@ pub(crate) fn run_lane_list(
             "{} {} {} {} {} {} {} {}{}",
             pad(state, 4),
             pad(name, 16),
-            pad(&route.kind, 12),
+            pad(route.kind.as_str(), 12),
             pad(route.harness.map_or("-", HarnessId::as_str), 10),
             pad(route.mode.as_deref().unwrap_or("-"), 6),
             pad(route.model.as_deref().unwrap_or("-"), 46),

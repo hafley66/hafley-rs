@@ -1,6 +1,5 @@
 //! The codex adapter: transcripts under `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
 //! Every line wraps a `payload` object whose own `type` names the real record.
-#![allow(dead_code)]
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};

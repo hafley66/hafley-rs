@@ -31,7 +31,7 @@ fn row(worker: usize, index: usize) -> Message {
         to: "receipt-coordinator".to_owned(),
         from_timestamp: bus::now_iso(),
         to_timestamp: None,
-        kind: "note".to_owned(),
+        kind: "note".into(),
         reply_to: None,
         body: format!("worker {worker} row {index}"),
         r#ref: None,

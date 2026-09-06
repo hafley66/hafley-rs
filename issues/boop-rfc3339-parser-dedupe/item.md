@@ -1,12 +1,13 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-09-05
 type: improvement
-status: open
+status: done
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation]
 size: S
+closed: 2026-09-05
 ---
 
 # A general RFC-3339 parser lives inside the claude adapter
@@ -38,6 +39,9 @@ Build-vs-buy: state in the PR body why a hand-rolled parser survives, or delete 
 - [ ] Table test over the formats seen in the live trail: `Z` suffix, offset form, fractional seconds, missing fraction.
 
 ## Tests Run
+
+No other hand-rolled RFC-3339 parser in `crates`: `iso_to_ms` (crates/boop-harness/src/transcript.rs:63) is the only one; `boop_store::session::parse_iso_ms` (crates/boop-store/src/session.rs:256) uses the established `time` crate. Grep confirmed no `fn .*rfc3339`, `split('T')`, or `parse::<u64>` on timestamp strings; the `parse::<u64>` sites are env-var duration strings.
+
 
 ## Implementation Notes
 

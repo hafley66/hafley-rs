@@ -1,5 +1,4 @@
 //! The claude adapter: transcripts under `~/.claude/projects/<encoded-cwd>/`.
-#![allow(dead_code)]
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -529,42 +528,21 @@ pub(crate) fn read_claude(path: &std::path::Path, session_id: &str, after_seq: O
     out
 }
 
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LivePeer {
-    pid: u32,
-    session_id: String,
-    proc_start: String,
-    messaging_socket_path: PathBuf,
-    #[serde(default)]
-    updated_at: u64,
-}
-
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PeerKey {
-    peer_token: String,
-    proc_start: String,
-}
-
 /// The claude command line a spawn runs. Resuming an existing session wins
 /// over a fresh prompt.
+#[allow(dead_code)] // used only by tests
 fn launch_command(spec: &SpawnSpec) -> String {
     let mut command = match &spec.resume_session {
         Some(id) => format!("claude --resume {id}"),
-        None => format!("claude {}", shell_quote(&spec.prompt)),
+        None => format!("claude {}", super::shell_quote(&spec.prompt)),
     };
     if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
-        command.push_str(&format!(" --model {}", shell_quote(model)));
+        command.push_str(&format!(" --model {}", super::shell_quote(model)));
     }
     spec.with_on_exit(match &spec.env_stamp {
         Some(stamp) => format!("{stamp} {command}"),
         None => command,
     })
-}
-
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', r"'\''"))
 }
 
 // The old per-byte time sample repeated one byte 8 times (measured live:

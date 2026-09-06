@@ -4,7 +4,6 @@
 //! Kimi currently exposes no process identity variable to tool subprocesses.
 //! Kimi-code follow-up: export `KIMI_SESSION_ID=<active session uuid>` to tool
 //! subprocesses.
-#![allow(dead_code)]
 
 use std::fs::File;
 use std::io::BufRead;

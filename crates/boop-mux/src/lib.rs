@@ -7,7 +7,6 @@
 //! The trait is the seam boop binds to; `Tmux` is the one implementation. The
 //! socket is a per-call argument, not trait state, because call sites mix a
 //! `None` (default socket) with per-harness sockets in one process.
-#![allow(dead_code)]
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -690,14 +689,6 @@ pub(crate) fn exact_target(name: &str) -> String {
     format!("={name}")
 }
 
-fn tmux_command(socket: Option<&str>) -> Command {
-    let mut builder = Command::new("tmux");
-    if let Some(socket) = socket {
-        builder.arg("-L").arg(socket);
-    }
-    builder
-}
-
 /// Kill a throwaway test server AND unlink its socket: tmux leaves the socket
 /// file behind on macOS, so kill-server alone still litters /tmp.
 pub fn kill_test_server(socket: &str) {
@@ -998,10 +989,12 @@ mod tests {
 
     /// A scratch pane that records every byte it is sent. `sink` waits for the
     /// pane to run before returning, so a send cannot race the redirect.
+    #[allow(dead_code)] // bracketed-paste sink scaffolding, no live test yet
     struct Sink {
         path: std::path::PathBuf,
     }
 
+    #[allow(dead_code)] // bracketed-paste sink scaffolding, no live test yet
     fn sink(server: &TestServer, name: &str, bracketed: bool) -> Sink {
         let path = std::env::temp_dir().join(format!(
             "boop-sink-{}-{}",
@@ -1027,6 +1020,7 @@ mod tests {
     impl Sink {
         /// The bytes the pane has received, polled until they match `want` or
         /// the deadline passes; a mismatch returns what did arrive.
+        #[allow(dead_code)] // bracketed-paste sink scaffolding, no live test yet
         fn received(&self, want: &str) -> String {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
             let mut last = String::new();

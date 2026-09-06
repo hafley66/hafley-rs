@@ -233,11 +233,11 @@ pub fn pending(dir: &Path, lane: &str, seen: &BTreeSet<String>) -> Result<Vec<Ha
         .into_iter()
         .filter(|row| row.to == lane)
         .filter(|row| !seen.contains(&row.id))
-        .filter(|row| deliverable(&row.kind))
+        .filter(|row| deliverable(row.kind.as_str()))
         .map(|row| Hail {
             id: row.id,
             from: row.from,
-            kind: row.kind,
+            kind: row.kind.as_str().to_owned(),
             body: row.body,
         })
         .collect())
@@ -350,7 +350,7 @@ fn reparent(lane: &LaneRun, dead: &str) -> Option<String> {
         to: adopter.clone(),
         from_timestamp: bus::now_iso(),
         to_timestamp: None,
-        kind: boop_store::trail::REPARENTED.to_owned(),
+        kind: boop_store::trail::REPARENTED.into(),
         reply_to: None,
         body: format!("lane {} reparented to {adopter}: {dead} is gone", lane.lane),
         r#ref: None,
@@ -491,7 +491,7 @@ impl TraceRecorder {
             lane: self.lane.clone(),
             trace: self.trace.clone(),
             session,
-            kind: kind.to_owned(),
+            kind: kind.into(),
             from_lane: from_lane.map(str::to_owned),
             to_lane: to_lane.map(str::to_owned),
             started_ts,
@@ -1591,7 +1591,7 @@ fn mail_parent(
         to: parent.to_owned(),
         from_timestamp: bus::now_iso(),
         to_timestamp: None,
-        kind: kind.to_owned(),
+        kind: kind.into(),
         reply_to: None,
         body,
         r#ref: None,
@@ -1657,7 +1657,7 @@ fn hail_parent_once(lane: &LaneRun, kind: &str, attempt: u32, reason: &str) {
         to: parent.clone(),
         from_timestamp: bus::now_iso(),
         to_timestamp: None,
-        kind: kind.to_owned(),
+        kind: kind.into(),
         reply_to: None,
         body: failure_body(lane, kind, attempt, reason),
         r#ref: None,

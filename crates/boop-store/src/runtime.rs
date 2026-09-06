@@ -67,7 +67,7 @@ impl ResolvedRoute {
     fn from_route(lane: &str, route: &Route) -> Self {
         ResolvedRoute {
             lane: lane.to_owned(),
-            kind: route.kind.clone(),
+            kind: route.kind.as_str().to_owned(),
             harness: route.harness,
             tmux: route.tmux.clone(),
             cwd: route.cwd.clone(),
