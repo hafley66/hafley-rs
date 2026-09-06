@@ -35,10 +35,12 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Test press/hold/release, focus loss, reconnect, simultaneous inputs, remap/reload/reset and replay.
    Remaining gaps: gamepad axes/triggers and P2 device isolation/remapping, pad prompt strings,
    fixed touch actions/layout and menu remapping. Reuse RawPad -> PadMemory -> InputFrame.
-   Keyboard browser evidence: remap F, reload after 6.5 seconds retains F, Escape cancels in
-   Controls, reset restores defaults. Godot web persistence is asynchronous: reload after only
-   300 ms lost the new binding. Add durable-save acknowledgement before claiming immediate
-   reload safety. Compact Controls layout checked at 1440x1000; physical devices remain untested.
+   Keyboard browser evidence: remap F, reload after 100 ms retains F, Escape cancels in Controls,
+   reset/reload restores defaults. Web controls now use synchronous localStorage with ConfigFile
+   serialization and a legacy user:// fallback; native retains ConfigFile disk writes. Injected
+   Storage.setItem SecurityError shows session-only failure and preserves the prior saved F.
+   Artifacts: /private/tmp/game3-input-browser-0CeMWA. Tests: 428 game + 68 shell.
+   Compact Controls layout checked at 1440x1000; physical devices remain untested.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
 4. Extend the recorded-input tests for the selected PM mechanic; expose its replay in the debugger.

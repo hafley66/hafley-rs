@@ -7,6 +7,33 @@ use std::cell::{Cell, RefCell};
 
 const PATH: &str = "user://controls.cfg";
 
+// The web filesystem flushes asynchronously. Small settings use synchronous browser storage;
+// ConfigFile still owns serialization, and existing user:// bindings migrate on the next edit.
+fn read_config(cfg: &mut Gd<ConfigFile>) -> godot::global::Error {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let text = crate::net::js_eval("(() => { try { return localStorage.getItem(location.pathname + ':controls:v1'); } catch (_) { return null; } })()")
+            .try_to::<GString>();
+        if let Ok(text) = text { return cfg.parse(&text); }
+    }
+    cfg.load(PATH)
+}
+
+fn write_config(cfg: &mut Gd<ConfigFile>) -> Result<(), String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let text = serde_json::to_string(&cfg.encode_to_text().to_string()).map_err(|e| e.to_string())?;
+        let result = crate::net::js_eval(&format!("(() => {{ try {{ localStorage.setItem(location.pathname + ':controls:v1', {text}); return ''; }} catch (e) {{ return String(e); }} }})()"))
+            .try_to::<GString>().map_err(|_| "Browser storage unavailable".to_string())?;
+        if result.is_empty() { Ok(()) } else { Err(result.to_string()) }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let result = cfg.save(PATH);
+        if result == godot::global::Error::OK { Ok(()) } else { Err(format!("{result:?}")) }
+    }
+}
+
 fn saved_key(values: &[i32]) -> Option<(Key, KeyLocation)> {
     let [code, location] = *values else { return None; };
     let key = Key::try_from_ord(code)?;
@@ -33,7 +60,7 @@ pub fn load() {
         }
     }
     let mut cfg = ConfigFile::new_gd();
-    let loaded = cfg.load(PATH) == godot::global::Error::OK;
+    let loaded = read_config(&mut cfg) == godot::global::Error::OK;
     for row in super::P1_MANUAL {
         for &name in row.keyboard {
             DEFAULTS.with_borrow_mut(|rows| rows.push((name, map.action_get_events(name))));
@@ -96,12 +123,12 @@ pub fn capture(event: &Gd<InputEvent>) -> bool {
     binding.set_location(key.get_location());
     replace(name, &binding.upcast());
     let mut cfg = ConfigFile::new_gd();
-    let _ = cfg.load(PATH);
+    let _ = read_config(&mut cfg);
     cfg.set_value("keys", name, &PackedInt32Array::from(&[code.ord(), key.get_location().ord()]).to_variant());
-    let result = cfg.save(PATH);
-    STATUS.with_borrow_mut(|s| *s = if result == godot::global::Error::OK {
-        format!("Saved {name}. Shared keys trigger every bound action.")
-    } else { format!("Binding applied for this session; save failed: {result:?}") });
+    STATUS.with_borrow_mut(|s| *s = match write_config(&mut cfg) {
+        Ok(()) => format!("Saved {name}. Shared keys trigger every bound action."),
+        Err(error) => format!("Binding applied for this session; save failed: {error}"),
+    });
     true
 }
 
@@ -120,10 +147,12 @@ pub fn reset() {
         }
     });
     let mut cfg = ConfigFile::new_gd();
-    let _ = cfg.load(PATH);
+    let _ = read_config(&mut cfg);
     if cfg.has_section("keys") { cfg.erase_section("keys"); }
-    let result = cfg.save(PATH);
-    STATUS.with_borrow_mut(|s| *s = format!("Keyboard defaults restored; save: {result:?}"));
+    STATUS.with_borrow_mut(|s| *s = match write_config(&mut cfg) {
+        Ok(()) => "Keyboard defaults restored and saved.".into(),
+        Err(error) => format!("Keyboard defaults restored for this session; save failed: {error}"),
+    });
 }
 
 #[cfg(test)]
