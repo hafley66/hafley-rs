@@ -4,9 +4,9 @@
 //! regrowing them (see that file's own comment). `session.rs`/`mod.rs` keep thin delegating
 //! wrappers for the handful of `#[func]`/lifecycle methods that used to hold this code inline.
 //!
-//! k<=2 reproduces the ORIGINAL single-peer host/guest handshake byte-for-byte (same wire shape, no
-//! "to"/"from"/"handle"/"count" fields sent, same gating) — see `legacy_connect`/`begin_session`'s
-//! early branch. k>2 is new: every unordered pair `(i, j)`, `i < j`, gets its OWN
+//! k<=2 negotiates startup snapshot, Tune and fighter slots inside versioned offer/answer
+//! envelopes. Transport host/guest follows the relay independently of fighter slots.
+//! k>2: every unordered pair `(i, j)`, `i < j`, gets its OWN
 //! `WebRtcPeerConnection` + negotiated data channel id 1 (per-connection, so id 1 can't collide
 //! across pairs); `rtc::is_initiator` says which side of the pair creates the offer.
 //!
@@ -101,9 +101,7 @@ pub(super) fn handle_signal(k: &mut KneeMan, text: &GString) {
                 let handle = opt_int(&d, "handle");
                 let count = opt_int(&d, "count");
                 let (handle, count) = rtc::resolve_matched(handle, count, role);
-                // Reconnect re-pair: keep the pre-drop handle/role, whatever re-dial order the
-                // relay saw -- see `resolve_rematched`'s doc for the mid-match player-swap this
-                // prevents.
+                // Fighter slots survive reconnect; transport roles follow relay join order.
                 let (handle, role) = rtc::resolve_rematched(
                     k.phase == Phase::Reconnecting,
                     count,
@@ -123,6 +121,7 @@ pub(super) fn handle_signal(k: &mut KneeMan, text: &GString) {
             }
         }
         "offer" => {
+            if k.party_count <= 2 && !accept_pair_start(k, &d, true) { return; }
             let from = resolve_from(k, &d);
             k.sig.offer_in += 1;
             k.note_peer_build(rtc::dget_str(&d, "hash"));
@@ -141,6 +140,7 @@ pub(super) fn handle_signal(k: &mut KneeMan, text: &GString) {
             }
         }
         "answer" => {
+            if k.party_count <= 2 && !accept_pair_start(k, &d, false) { return; }
             let from = resolve_from(k, &d);
             k.sig.answer_in += 1;
             k.note_peer_build(rtc::dget_str(&d, "hash"));
@@ -184,6 +184,7 @@ pub(super) fn handle_signal(k: &mut KneeMan, text: &GString) {
         // Reconnect resume (k==2 only — see `abort_party` for the k>2 punt): the host ships the sim
         // state to start the rebuilt session from.
         "resume" => {
+            if k.party_count <= 2 { return; } // pairs negotiate atomically inside SDP
             let b64 = rtc::dget_str(&d, "state");
             if let Some(snap) = crate::net::decode_state(&b64) {
                 k.resume_snapshot = Some(snap);
@@ -193,6 +194,7 @@ pub(super) fn handle_signal(k: &mut KneeMan, text: &GString) {
         // Host's authoritative ruleset, broadcast to the whole party: adopt it so every reducer runs
         // identical physics.
         "tune" => {
+            if k.party_count <= 2 { return; }
             let b64 = rtc::dget_str(&d, "tune");
             if let Some(t) = crate::net::decode_tune(&b64) {
                 k.tune.set(t);
@@ -302,7 +304,7 @@ pub(super) fn setup_peer(k: &mut KneeMan, role: Role) {
             crate::analytics::jstr(&rtc::to_json(&cfg).to_string())
         ),
     );
-    if k.local_handle == 0 && !host_broadcast(k) {
+    if role == Role::Host && !host_broadcast(k) {
         k.reset_offline();
         return;
     }
@@ -326,9 +328,8 @@ pub(super) fn setup_peer(k: &mut KneeMan, role: Role) {
     );
 }
 
-/// Host-only broadcast: mint the private reconnect room (once) or ship the resume snapshot on a
-/// reconnect, then ship the authoritative Tune. Byte-for-byte the pre-mesh behavior — the relay (not
-/// this client) decides whether these fan out to one guest or a whole party.
+/// Host-only room broadcast and legacy mesh startup. Pairs carry their snapshot/Tune
+/// atomically in SDP, including when the retained state belongs to the transport guest.
 fn host_broadcast(k: &mut KneeMan) -> bool {
     if k.room.is_none() {
         let code = crate::net::mint_room_code(&k.identity.get_cloned().name);
@@ -346,7 +347,7 @@ fn host_broadcast(k: &mut KneeMan) -> bool {
             code,
             deadline_ms: None,
         });
-    } else if let Some(snap) = k.resume_snapshot {
+    } else if k.party_count > 2 && let Some(snap) = k.resume_snapshot {
         let mut d = VarDictionary::new();
         d.set("kind", "resume");
         d.set("state", crate::net::encode_state(&snap));
@@ -358,6 +359,7 @@ fn host_broadcast(k: &mut KneeMan) -> bool {
             }
         }
     }
+    if k.party_count <= 2 { return true; }
     let mut d = VarDictionary::new();
     d.set("kind", "tune");
     d.set("tune", crate::net::encode_tune(&k.tune.get_cloned()));
@@ -465,9 +467,55 @@ pub(super) fn on_sdp_created(k: &mut KneeMan, sdp_type: GString, sdp: GString, p
     d.set("pchar", k.charsel.get_cloned()[0].clamp(0, cap));
     if k.party_count > 2 {
         d.set("to", peer as i64);
+    } else {
+        d.set("start_version", 1);
+        d.set("start_slot", k.local_handle as i64);
+        d.set("start_tune", crate::net::encode_tune(&k.tune.get_cloned()));
+        if let Some(state) = k.resume_snapshot {
+            d.set("start_state", crate::net::encode_state(&state));
+        }
     }
     if let Some(mut ws) = k.ws.clone() {
-        ws.send_text(&rtc::to_json(&d));
+        let error = ws.send_text(&rtc::to_json(&d));
+        if error != godot::global::Error::OK {
+            godot_error!("netplay: SDP/start send failed: {error:?}");
+            k.reset_offline();
+        }
+    }
+}
+
+/// Resolve startup before applying remote SDP, so even an immediately opened data
+/// channel cannot begin with a different snapshot, Tune or fighter-slot assignment.
+fn accept_pair_start(k: &mut KneeMan, d: &VarDictionary, offer: bool) -> bool {
+    let decoded = (|| {
+        if opt_int(d, "start_version") != Some(1) { return Err("Unsupported pair startup version"); }
+        let slot = opt_int(d, "start_slot").filter(|s| (0..2).contains(s))
+            .ok_or("Invalid startup fighter slot")? as usize;
+        let tune = crate::net::decode_tune(&rtc::dget_str(d, "start_tune"))
+            .ok_or("Invalid startup Tune")?;
+        let snapshot = if d.contains_key("start_state") {
+            Some(crate::net::decode_state(&rtc::dget_str(d, "start_state"))
+                .ok_or("Invalid startup snapshot")?)
+        } else { None };
+        let (adopt, local_slot) = if offer {
+            rtc::resolve_pair_offer(k.resume_snapshot.map(|_| k.local_handle), snapshot.map(|_| slot))?
+        } else {
+            if k.resume_snapshot.is_some() && slot != 1 - k.local_handle {
+                return Err("Answer changed retained fighter slot");
+            }
+            (true, 1 - slot)
+        };
+        Ok((adopt, local_slot, snapshot, tune))
+    })();
+    match decoded {
+        Ok((adopt, slot, snapshot, tune)) => {
+            if adopt { k.resume_snapshot = snapshot; k.tune.set(tune); }
+            k.local_handle = slot;
+            k.got_resume = true;
+            k.got_tune = true;
+            true
+        }
+        Err(error) => { godot_error!("netplay: pair startup rejected: {error}"); k.reset_offline(); false }
     }
 }
 
@@ -518,8 +566,9 @@ pub(super) fn begin_session(k: &mut KneeMan) {
         begin_mesh_session(k);
         return;
     }
-    let Some(role) = k.role else { return };
-    let (local_handle, remote) = role.handles();
+    if k.role.is_none() { return; }
+    let local_handle = k.local_handle;
+    let remote = 1 - local_handle;
     let Some(channel) = k.channel.clone() else {
         return;
     };

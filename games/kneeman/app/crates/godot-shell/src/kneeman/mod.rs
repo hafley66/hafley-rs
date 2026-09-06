@@ -166,8 +166,8 @@ pub struct KneeMan {
     net: Option<Box<dyn Netplay<State = SimState, Input = NetInput>>>, // model-agnostic session seam (rollback today)
     room: Option<Room>, // match's room identity; survives a drop so we can rejoin
     resume_snapshot: Option<SimState>, // sim state captured at a drop, to resume the rebuilt session from
-    got_resume: bool,                  // guest: received the host's resume snapshot this reconnect
-    got_tune: bool, // guest: adopted the host's authoritative ruleset (Tune) this match
+    got_resume: bool, // pair: accepted the remote SDP startup selection (including fresh starts)
+    got_tune: bool, // pair startup or mesh host supplied the authoritative Tune
     party_count: usize, // k: this match's player count (matched.count; back-compat default 2)
     mesh: Option<Box<mesh::MeshSession>>, // k>2 per-peer state; None on the untouched k<=2 path
 

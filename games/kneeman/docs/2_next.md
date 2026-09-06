@@ -136,6 +136,30 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Changing only the role override would permit fighter swaps and can select a fresh host's
    spawn/default Tune over the surviving match. No runtime/server change made for this receipt.
    Remaining input customization and burst-loss acceptance follow this reconnect fix.
+   Local fix: transport roles now follow the relay while fighter slots remain independent.
+   Pair SDP carries start_version=1, slot, optional snapshot and Tune. The answerer selects
+   the offer's retained state when present, otherwise its own retained state; fresh pairs use
+   the offer's Tune. Both roles wait for this startup exchange before creating GGRS state.
+   Pair-only legacy resume/Tune frames are ignored; mixed old/new clients require reload.
+   Unknown startup versions and malformed startup payloads reject back to offline.
+   432 game + 72 shell tests pass, including retained-slot policy for both join orders,
+   either replaced slot and invalid/conflicting claims. Log: /private/tmp/game3-pair-start-tests.log.
+   Rebuilt export + existing relay now passes the reproduced host replacement: 549 initial
+   and 181 resumed confirmed frames match, resumed ticks 760/759, original fighter handles
+   and character slots retained, subsequent peer close reaches offline; runner exit 0.
+   Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 REPLACE_TAB=1 REPLACE_HOST=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-host-replacement-fixed.log; screenshots: /private/tmp/game3-online-wk89Ru.
+   The attempted forced-order/nondefault-Tune test using Playwright routeWebSocket never reached
+   initial matching and timed out at 90 seconds. It provides no join-order/Tune evidence.
+   Log: /private/tmp/game3-fresh-host-tune.log; screenshots: /private/tmp/game3-online-kIWMus.
+   Retained-tab reconnect passes on this export too: 549 initial and 180 resumed confirmed
+   frames, preserved handles/characters, game ticks 745/746, then offline timeout recovery;
+   runner exit 0. Log: /private/tmp/game3-pair-start-retained.log;
+   screenshots: /private/tmp/game3-online-EnKfpf. Same command without REPLACE_TAB/REPLACE_HOST.
+   Not published. Before publication: verify the fresh-transport-host ordering with a working
+   harness, nondefault Tune retention, guest replacement, malformed/start-send rejection and
+   retained-tab reconnect under the final artifact. The old FAIL_RESUME_TUNE injector targets the superseded pair message;
+   adapt it to SDP/start send failures. Server configuration remains unchanged.
 5. Extract reusable menu widgets as they are exercised by controls and character import.
 
 Art remains part of the game: gallery/camera frames, workshop PNG clips and metadata, SVG/drawn

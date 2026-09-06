@@ -507,16 +507,10 @@ impl KneeMan {
             mesh::maybe_begin_session(self);
         } else if let Some(ch) = self.channel.clone() {
             if ch.get_ready_state() == ChannelState::OPEN && self.net.is_none() {
-                // On reconnect the guest must hold until the host's resume snapshot lands, or the two
-                // rebuilt sessions would start from different states. First match (or host) has nothing
-                // to wait for there.
-                let waiting_for_resume = self.phase == Phase::Reconnecting
-                    && self.role == Some(Role::Guest)
-                    && !self.got_resume;
-                // Every match: the guest also holds until the host's ruleset (Tune) lands, so both
-                // reducers build from identical physics. The host has nothing to wait for (it's the
-                // authority + sender).
-                let waiting_for_tune = self.role == Some(Role::Guest) && !self.got_tune;
+                // Both roles wait for atomic SDP startup negotiation. A fresh transport host
+                // may need the surviving guest's snapshot, Tune and complementary fighter slot.
+                let waiting_for_resume = !self.got_resume;
+                let waiting_for_tune = !self.got_tune;
                 if !waiting_for_resume && !waiting_for_tune {
                     self.begin_session();
                 }

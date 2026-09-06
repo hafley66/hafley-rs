@@ -7,7 +7,8 @@
 //! Topology: two browsers reach the signaling relay (`wss://.../rtc`), get paired host+guest, trade
 //! SDP/ICE, then open ONE negotiated data channel (both sides create id=1, so no
 //! `data_channel_received` plumbing). ggrs runs peer-to-peer over that channel; the relay sees no
-//! gameplay. Handle order is fixed host=0 / guest=1 so both peers agree (see `crate::netplay::start_p2p`).
+//! gameplay. Fresh fighters start host=0 / guest=1; startup negotiation preserves fighter
+//! slots independently of transport roles when rebuilding a match.
 
 use godot::classes::web_rtc_data_channel::WriteMode;
 use godot::classes::{Json, WebRtcDataChannel};
@@ -295,12 +296,8 @@ pub fn resolve_matched(handle: Option<i64>, count: Option<i64>, role: Role) -> (
     (h, k)
 }
 
-/// Mid-match reconnect re-pair (k==2): the relay assigns handle 0 to whichever peer's socket
-/// re-dialed the private room FIRST (`join_party` is raw join order), so a transport blip could
-/// SWAP the pair's handles -- and with the resume snapshot keeping every fighter in its old slot,
-/// each player came back driving the OTHER character. Keep the pre-drop handle instead; both
-/// peers apply this, so the offer/answer + resume/tune duties stay a consistent host/guest pair.
-/// A fresh match (or the k>2 path, which never reconnects -- it aborts) takes the relay's word.
+/// Preserve the fighter slot on reconnect, but always use the relay's transport role.
+/// A replacement tab has no previous slot; offer/answer startup negotiation assigns it.
 pub fn resolve_rematched(
     reconnecting: bool,
     count: usize,
@@ -308,15 +305,24 @@ pub fn resolve_rematched(
     fresh: (usize, Role),
 ) -> (usize, Role) {
     if reconnecting && count <= 2 {
-        let role = if prev_handle == 0 {
-            Role::Host
-        } else {
-            Role::Guest
-        };
-        (prev_handle, role)
+        (prev_handle, fresh.1)
     } else {
         fresh
     }
+}
+
+/// Answerer's startup choice: adopt the offer's snapshot when present; otherwise keep
+/// our retained match. With neither retained, adopt the offer's Tune and fresh slot 1.
+pub fn resolve_pair_offer(local: Option<usize>, offered: Option<usize>) -> Result<(bool, usize), &'static str> {
+    if local.into_iter().chain(offered).any(|slot| slot > 1) {
+        return Err("Invalid retained fighter slot");
+    }
+    if local.is_some() && local == offered { return Err("Conflicting retained fighter slots"); }
+    Ok(match (local, offered) {
+        (_, Some(slot)) => (true, 1 - slot),
+        (Some(slot), None) => (false, slot),
+        (None, None) => (true, 1),
+    })
 }
 
 /// Pair initiator rule (WIRE PROTOCOL v2 #3): for the unordered pair `(local, peer)`, the LOWER
@@ -411,11 +417,11 @@ mod tests {
         // host/0 -- the reconnect override hands its old identity back. Both sides of the swap:
         assert_eq!(
             resolve_rematched(true, 2, 1, (0, Role::Host)),
-            (1, Role::Guest)
+            (1, Role::Host)
         );
         assert_eq!(
             resolve_rematched(true, 2, 0, (1, Role::Guest)),
-            (0, Role::Host)
+            (0, Role::Guest)
         );
         // ...and a lucky re-dial order that already matches is a no-op.
         assert_eq!(
@@ -436,6 +442,19 @@ mod tests {
             resolve_rematched(true, 4, 1, (2, Role::Guest)),
             (2, Role::Guest)
         );
+    }
+
+    #[test]
+    fn pair_start_preserves_retained_slots_for_either_replacement_and_join_order() {
+        assert_eq!(resolve_pair_offer(None, None), Ok((true, 1)));
+        for slot in 0..2 {
+            assert_eq!(resolve_pair_offer(Some(slot), None), Ok((false, slot)));
+            assert_eq!(resolve_pair_offer(None, Some(slot)), Ok((true, 1 - slot)));
+            assert_eq!(resolve_pair_offer(Some(1 - slot), Some(slot)), Ok((true, 1 - slot)));
+            assert_eq!(resolve_pair_offer(Some(slot), Some(slot)), Err("Conflicting retained fighter slots"));
+        }
+        assert_eq!(resolve_pair_offer(Some(2), None), Err("Invalid retained fighter slot"));
+        assert_eq!(resolve_pair_offer(None, Some(2)), Err("Invalid retained fighter slot"));
     }
 
     #[test]
