@@ -64,7 +64,19 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    and disconnect reassignment. Fighters are separated through controller movement first:
    the initial close-range probe timed out after a grab and is not a passing receipt.
    Command: BUTTONS=1 node /private/tmp/1_game3_pad.cjs.
-   Log: /private/tmp/game3-pad-buttons-separated.log. This grab-alias export is not published yet.
+   Log: /private/tmp/game3-pad-buttons-separated.log. The grab-alias export was subsequently
+   published through 0dc1f1e on 2026-09-06. Before publish, /private/tmp/game3-pad-trigger.log
+   additionally verified R2 -> Jab and right shoulder -> Air for both players, each with
+   the other player remaining Stand. The existing game3 publish profile validated/reloaded nginx;
+   deployed WASM matches the local artifact and the original /game/ pack remains unchanged.
+   Production rerun passed 14 isolated button-state assertions (7 per player), isolated jumps
+   and controller reassignment, exit 0 without browser exceptions. Holding each jump control
+   for 45 simulation ticks produced observed shoulder/A upward excursions of 73.15/291.83
+   units for P1 and 76.93/306.74 for P2. Heights are browser samples, not exact-apex or PM-parity
+   measurements; the gate asserts both positive and A exceeds shoulder by more than 10 units.
+   Command: PRODUCTION=1 BUTTONS=1 HEIGHTS=1 node /private/tmp/1_game3_pad.cjs.
+   Log: /private/tmp/game3-pad-full-production.log. Physical devices and analog threshold
+   sweeps remain untested; these are synthetic browser gamepad inputs.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
 4. Extend the recorded-input tests for the selected PM mechanic; expose its replay in the debugger.
@@ -171,7 +183,7 @@ replacement-tab rejoin and burst-loss cases remain unverified.
 Remote hashes matched the tested artifact:
 
 - Game3 index.pck: fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df
-- Game3 smash_sim.wasm: 7814ae2dcc71f94d8815d9e813f3a88c133ab287543f1c90a20e8e3c80469fcf
+- Game3 smash_sim.wasm: 59c52fdce74589387bc236478a35b17347134a1ab11db301eb7be08afeb79ea5
 - Preserved /game/ index.pck: 5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795
 
 Game3 reminder runs every 30 minutes and expires 2026-09-07 00:00 EDT (epoch 1788753600).
