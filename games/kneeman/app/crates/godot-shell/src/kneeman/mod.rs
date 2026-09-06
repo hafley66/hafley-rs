@@ -522,9 +522,8 @@ impl INode2D for KneeMan {
             .as_ref()
             .map(|d| d.bind().is_menu_open())
             .unwrap_or(false);
-        if menu_open {
-            self.update_touch(); // still runs while paused so the touch UI hides behind the menu
-        }
+        // Cancel hidden gestures before either local or rollback input is sampled.
+        self.update_touch();
         match self.phase {
             Phase::Offline => {
                 if debug_step || (!menu_open && !self.debugger.paused) {
@@ -602,11 +601,7 @@ impl INode2D for KneeMan {
                 | N::APPLICATION_FOCUS_OUT
         ) {
             crate::controls::release_all();
-            TOUCH_STICK.set((0.0, 0.0));
-            TOUCH_CSTICK.set((0.0, 0.0));
-            TOUCH_FINGER.set(-1);
-            TOUCH_CSTICK_FINGER.set(-1);
-            TOUCH_BTNS.with_borrow_mut(Vec::clear);
+            touch::release_touch();
         }
     }
 
@@ -618,6 +613,9 @@ impl INode2D for KneeMan {
         let Some(touch) = crate::controls::classify_touch(&event) else {
             return;
         };
+        if TOUCH_DIAMOND.get().is_none() {
+            return;
+        }
         match touch {
             // Finger down: claim a face button (right) or the floating stick (left).
             Touch::Down { finger, pos } => {

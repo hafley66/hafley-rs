@@ -23,6 +23,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
 | Production netplay | Two isolated Chromium contexts joined a unique private room through production signaling/WebRTC. Two runs matched 180 and 181 same-tick snapshot hashes with scripted movement; peer close -> reconnecting -> offline after timeout, no browser exceptions |
 | Pad menu bindings | Published through 7c1bd9f: six actions per pad reuse capture/save/reset; production navigation, hold/release/disconnect, pause precedence and resumed neutral input verified below |
+| Touch cancellation | Hidden touches rejected; owned sticks/buttons released before simulation input sampling on menu/controller transitions, and on focus changes. Local export/replay/online gates pass; publication pending |
 
 ## Next, in order
 
@@ -367,9 +368,33 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    resumed gameplay. Exit 0, no browser exceptions. Command: PRODUCTION=1 node
    /private/tmp/3_game3_menu.cjs. Log: /private/tmp/game3-menu-production.log;
    screenshots: /private/tmp/game3-menu-gEL7Cz. Physical pads remain untested.
-   Next bounded task: verify touch gestures in kneeman/touch.rs and KneeMan::input across
-   menu opening, controller connection and focus loss, then add touch action/layout
-   customization through the existing settings path. Native keyboard menu navigation
+   Touch follow-up: reproduced hidden left-stick capture with a connected controller:
+   fighter X changed from [480,720] to [620.14,720]. Log:
+   /private/tmp/game3-touch-hidden-before.log; screenshots: /private/tmp/game3-touch-WRnFlc.
+   Hidden layout now gates input capture. release_touch drains owned button actions and
+   clears both sticks/finger IDs; layout/availability updates run before input sampling,
+   including paused frames. Focus notifications reuse this cleanup. Runtime delta: +22/-11
+   across three shell files; no simulation or packet changes.
+   432 game + 73 shell tests pass, including Falcon/items/terrain/replay regressions.
+   Export passes after retrying the sandbox-denied Godot editor-settings write.
+   Logs: /private/tmp/game3-touch-tests.log and /private/tmp/game3-touch-build.log.
+   One touch-enabled Chromium with a synthetic controller passes hidden input neutrality,
+   visible P1-only movement, cancellation on connect/menu, stale-finger rejection after
+   disconnect/resume, and held guard release on connection and simulated window blur.
+   Recorded touch movement/attack/c-stick replays 72 frames from tick 133 to 205 with
+   matching restored/start and replay/end checksums; stepping at EOF preserves the result.
+   Command: node /private/tmp/4_game3_touch.cjs. Log: /private/tmp/game3-touch-replay.log;
+   screenshots: /private/tmp/game3-touch-46jTcF. Physical touch devices remain untested.
+   Same export online gate passes 547 initial and 180 resumed confirmed frames, ticks
+   755/757, stable slots/characters, and offline recovery after peer closure. Each peer
+   drops 240 messages from 1246/1243 sends, maximum burst 24 with 60 ms send delay.
+   Exactly one queued-close injection; zero closed-send errors/browser exceptions; exit 0.
+   Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60
+   BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-touch-online.log; screenshots: /private/tmp/game3-online-XHGVrr.
+   Next bounded task: touch action/layout customization through the existing settings path.
+   Multi-finger shared-action ownership and physical-device focus/rotation need coverage.
+   Native keyboard menu navigation
    remains egui's fixed keys. PM moveset parity, three-player and cross-network checks
    remain open; no fighter-mechanic equivalence is claimed by this input checkpoint.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.

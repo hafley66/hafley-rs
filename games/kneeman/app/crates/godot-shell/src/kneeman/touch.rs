@@ -212,6 +212,21 @@ thread_local! {
     pub(super) static TOUCH_CSTICK_RAD: std::cell::Cell<f32> = const { std::cell::Cell::new(60.0) };
 }
 
+/// Cancel owned gestures when their controls become unavailable. A later drag must
+/// not resume an old gesture after the menu closes or a controller disconnects.
+pub(super) fn release_touch() {
+    TOUCH_DIAMOND.set(None);
+    TOUCH_STICK.set((0.0, 0.0));
+    TOUCH_CSTICK.set((0.0, 0.0));
+    TOUCH_FINGER.set(-1);
+    TOUCH_CSTICK_FINGER.set(-1);
+    TOUCH_BTNS.with_borrow_mut(|buttons| {
+        for (_, actions) in buttons.drain(..) {
+            crate::controls::release_actions(actions);
+        }
+    });
+}
+
 impl KneeMan {
     /// Build the on-screen touch gamepad: the floating analog stick (left) and the GameCube face
     /// cluster (right). Visuals only, built once; `update_touch` lays them out against the live
@@ -348,7 +363,7 @@ impl KneeMan {
             k.set_visible(show_touch);
         }
         if !show_touch {
-            TOUCH_DIAMOND.set(None);
+            release_touch();
             // still update the menu button below, then bail out of the gamepad layout.
             if let Some(menu) = self.menu_btn.as_mut() {
                 let w = (view.x * 0.16).clamp(150.0, 340.0);

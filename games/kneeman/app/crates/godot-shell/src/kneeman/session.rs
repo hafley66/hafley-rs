@@ -340,7 +340,6 @@ impl KneeMan {
         self.base_mut().set_position(gv(next.fighters[0].pos));
         self.render_fighters(&next);
         self.update_camera();
-        self.update_touch();
         self.base_mut().queue_redraw();
     }
 
@@ -398,7 +397,6 @@ impl KneeMan {
         self.base_mut().set_position(gv(s.fighters[0].pos));
         self.render_fighters(&s);
         self.update_camera();
-        self.update_touch();
         self.base_mut().queue_redraw();
     }
 
