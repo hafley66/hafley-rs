@@ -841,7 +841,11 @@ fn transition(
             // how tap-jump stick users reach usmash at all — their up-flick became this squat.
             let squat_aerial = n.live(Lane::Aerial) == Action::Aerial;
             let up_now = i.aim_y <= -0.35 || n.buf[Lane::Aerial as usize].aim.y <= -0.35;
-            if squat_aerial && up_now {
+            if grab_now {
+                n.clear_lane(Lane::Movement);
+                n.clear_lane(Lane::Aerial);
+                enter_grab(n);
+            } else if squat_aerial && up_now {
                 n.clear_lane(Lane::Aerial);
                 n.arm_hits();
                 n.charge = 0; // jump-cancel usmash banks like any other smash
@@ -1549,6 +1553,14 @@ fn footstool_target(n: &Fighter, foes: &[Option<(Vector2, f32)>; MAX_PLAYERS]) -
 /// Map a raw 2D flick to a throw direction by its dominant axis (screen y is down).
 /// Jump / shield are available from every actionable ground state; factor them out.
 /// Jump comes from the buffer so a slightly-early press still fires.
+fn enter_grab(n: &mut Fighter) {
+    n.clear_lane(Lane::Grab);
+    n.arm_hits();
+    n.grab_link = -1;
+    n.vel.x *= 0.25; // same planting behavior for standing and jump-canceled grabs
+    n.state = CharState::Grab;
+}
+
 fn try_ground_action(n: &mut Fighter, i: &InputFrame, atk: bool, grab: bool, t: &Tune) -> bool {
     if try_special(n) {
         return true;
@@ -1558,11 +1570,7 @@ fn try_ground_action(n: &mut Fighter, i: &InputFrame, atk: bool, grab: bool, t: 
         n.full_hop = full;
         true
     } else if grab {
-        n.clear_lane(Lane::Grab);
-        n.arm_hits();
-        n.grab_link = -1;
-        n.vel.x *= 0.25; // plant feet for the reach
-        n.state = CharState::Grab;
+        enter_grab(n);
         true
     } else if n.live(Lane::Strong) == Action::Strong {
         // c-stick on the ground: a smash in the flicked direction, aim captured at the flick.

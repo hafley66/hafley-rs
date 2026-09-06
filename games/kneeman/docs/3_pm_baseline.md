@@ -28,7 +28,7 @@ files, without establishing complete release identity, runtime timing or fighter
 | Candidate mechanic | 3.6.1 label line | Code rows | Matching 3.6 line | Game3 inspection |
 | --- | ---: | ---: | ---: | --- |
 | Last-frame jump direction | 3064 | 10 | 2766 | `za_warudo.rs` JumpSquat reads direction throughout squat and at takeoff; exact source semantics unverified |
-| Jump-canceled grab | 3803 | 9 | 3283 | JumpSquat branch handles up-smash and takeoff, without a grab transition; candidate implementation gap |
+| Jump-canceled grab | 3803 | 9 | 3283 | Provisional Game3 grab transition added; exact PM priority/momentum remain unverified |
 | L-canceling, part 1 | 4333 | 46 | 3781 | One patch part only; cannot establish full behavior or window |
 
 Reproduce from `games/kneeman`:
@@ -47,6 +47,21 @@ complete block. It reads text only and emits line receipts; it does not interpre
 3. Record Falcon run -> jump -> grab input sequences, including one tick before/at/after takeoff.
 4. Assert state transitions and full-state replay in Game3; then expose the fixture in the debugger.
 5. Compare a reference execution before marking PM parity. A matching transition name is insufficient.
+
+Game3 implementation checkpoint: the grab input is already filtered by item/holding context
+before `transition`. During JumpSquat it now enters the same Grab state as a standing grab,
+including the existing 0.25 horizontal-velocity multiplier, and clears movement/aerial lanes.
+Grab takes priority over squat up-smash/takeoff in this provisional Game3 rule. These choices
+are implementation policy, not a decoded claim about the PM patch. The patch delegates to
+Brawl routines at 0x80FA973C/0x80FAD96C; their priority and momentum semantics remain unresolved.
+
+The new regression failed at grab tick 1 before implementation. It now covers each current
+three-frame squat tick plus the first airborne tick: squat accepts, airborne rejects, and
+90-tick full-state replay matches for each case with restoration at tick 30. Browser script
+jump at 60, grab at 61, freeze at 62 reports Grab/Stand at y=410/410 with no exceptions.
+431 game + 70 shell tests pass. Run-up momentum, simultaneous-button priority, held-item
+interaction, debugger fixture selection and a PM runtime comparison remain to be tested.
+This export is locally verified and has not been published.
 
 ## Existing evidence limits
 

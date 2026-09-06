@@ -83,6 +83,13 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    archived 3.6/annotated 3.6.1 hashes. tools/0_pm_codes_receipt.mjs verifies three shared
    patch blocks. Next mechanic is jump-canceled grab; decode its patch and establish timing
    before implementing. Original release identity and Falcon character data remain unverified.
+   Provisional Game3 jump-canceled grab now shares the standing-grab entry transition.
+   431 game + 70 shell tests pass, including all current squat ticks/first airborne tick
+   and full-state replay/restore. Local browser jump at 60 -> grab at 61 -> freeze at 62:
+   Falcon Grab at y=410; other fighter Stand. Log: /private/tmp/game3-jump-grab-browser.log;
+   runner: /private/tmp/1_game3_jump_grab.cjs; image: /private/tmp/game3-jump-grab.png.
+   Not published. PM source interpretation, momentum/priority and run-up/held-item cases remain
+   open; docs/3_pm_baseline.md distinguishes this Game3 rule from unverified PM equivalence.
 4. Extend the recorded-input tests for the selected PM mechanic; expose its replay in the debugger.
 5. Extract reusable menu widgets as they are exercised by controls and character import.
 

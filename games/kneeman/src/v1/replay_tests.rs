@@ -1388,6 +1388,41 @@ fn cstick_in_the_air_throws_the_aerial() {
 
 /// `settled()` lands on the small top platform; drop the fighter over the far-left main floor and
 /// let it land there, so momentum tests have the whole 900px stage to run on.
+#[test]
+fn jump_cancel_grab_stays_grounded_and_replays_at_takeoff_boundary() {
+    let (mut initial, t) = settled_on_main();
+    initial.fighters[0].char_id = 2;
+    for grab_tick in 1..=t.jumpsquat + 1 {
+        let mut state = initial;
+        let mut replay: SimState = bincode::deserialize(&bincode::serialize(&initial).unwrap()).unwrap();
+        for tick in 0..90 {
+            let input = net::decode(net::encode(&press(|i| {
+                i.jump = tick == 0;
+                i.jump_held = true;
+                i.grab = tick == grab_tick;
+            })));
+            let before = state.fighters[0].state;
+            state = step(&state, &[&input, &idle()], &t);
+            replay = step(&replay, &[&input, &idle()], &t);
+            let bytes = bincode::serialize(&state).unwrap();
+            assert_eq!(bincode::serialize(&replay).unwrap(), bytes, "grab {grab_tick}, tick {tick}");
+            if tick == grab_tick {
+                assert_eq!(before, if grab_tick <= t.jumpsquat {
+                    CharState::JumpSquat
+                } else { CharState::Air }, "takeoff boundary at {grab_tick}");
+                if before == CharState::JumpSquat {
+                    assert_eq!(state.fighters[0].state, CharState::Grab, "grab tick {grab_tick}");
+                    assert_eq!(state.fighters[0].pos.y, initial.fighters[0].pos.y);
+                } else {
+                    assert_eq!(before, CharState::Air);
+                    assert_eq!(state.fighters[0].state, CharState::Air);
+                }
+            }
+            if tick == 30 { replay = bincode::deserialize(&bytes).unwrap(); }
+        }
+    }
+}
+
 fn settled_on_main() -> (SimState, Tune) {
     let (mut s, t) = settled();
     s.fighters[0].pos = Vector2::new(200.0, 250.0);
