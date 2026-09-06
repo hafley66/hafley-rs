@@ -302,8 +302,9 @@ pub(super) fn setup_peer(k: &mut KneeMan, role: Role) {
             crate::analytics::jstr(&rtc::to_json(&cfg).to_string())
         ),
     );
-    if k.local_handle == 0 {
-        host_broadcast(k);
+    if k.local_handle == 0 && !host_broadcast(k) {
+        k.reset_offline();
+        return;
     }
     if k.party_count > 2 {
         ensure_mesh(k);
@@ -328,14 +329,18 @@ pub(super) fn setup_peer(k: &mut KneeMan, role: Role) {
 /// Host-only broadcast: mint the private reconnect room (once) or ship the resume snapshot on a
 /// reconnect, then ship the authoritative Tune. Byte-for-byte the pre-mesh behavior — the relay (not
 /// this client) decides whether these fan out to one guest or a whole party.
-fn host_broadcast(k: &mut KneeMan) {
+fn host_broadcast(k: &mut KneeMan) -> bool {
     if k.room.is_none() {
         let code = crate::net::mint_room_code(&k.identity.get_cloned().name);
         let mut d = VarDictionary::new();
         d.set("kind", "room");
         d.set("code", code.clone());
         if let Some(mut ws) = k.ws.clone() {
-            ws.send_text(&rtc::to_json(&d));
+            let error = ws.send_text(&rtc::to_json(&d));
+            if error != godot::global::Error::OK {
+                godot_error!("netplay: room send failed: {error:?}");
+                return false;
+            }
         }
         k.room = Some(Room {
             code,
@@ -346,15 +351,24 @@ fn host_broadcast(k: &mut KneeMan) {
         d.set("kind", "resume");
         d.set("state", crate::net::encode_state(&snap));
         if let Some(mut ws) = k.ws.clone() {
-            ws.send_text(&rtc::to_json(&d));
+            let error = ws.send_text(&rtc::to_json(&d));
+            if error != godot::global::Error::OK {
+                godot_error!("netplay: resume send failed: {error:?}");
+                return false;
+            }
         }
     }
     let mut d = VarDictionary::new();
     d.set("kind", "tune");
     d.set("tune", crate::net::encode_tune(&k.tune.get_cloned()));
     if let Some(mut ws) = k.ws.clone() {
-        ws.send_text(&rtc::to_json(&d));
+        let error = ws.send_text(&rtc::to_json(&d));
+        if error != godot::global::Error::OK {
+            godot_error!("netplay: tune send failed: {error:?}");
+            return false;
+        }
     }
+    true
 }
 
 /// k<=2: the ORIGINAL single connection, unchanged (bound callbacks now carry the remote handle so

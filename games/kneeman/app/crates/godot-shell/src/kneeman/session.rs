@@ -15,6 +15,10 @@ use crate::sim::{self, InputFrame, SimState};
 use super::touch::{TOUCH_CSTICK, TOUCH_STICK};
 use super::{KneeMan, Phase, RECONNECT_WINDOW_MS, Room, SigCounts, gv, mesh};
 
+// Resume + Tune are sent together before the next poll. Their base64 envelopes
+// exceed WebSocketPeer's default 65,535-byte queue. Bound both directions equally.
+const SIGNAL_BUFFER_BYTES: i32 = 256 * 1024;
+
 /// The LOCAL single-player starting state (mod.rs:194 `init`). Default is the normal
 /// `SimState::spawn()`; set `SMASH_SCENARIO=droptest` to launch the debug drop-test playground
 /// (`SimState::spawn_drop_test`) instead -- the ship plus one of every collision-surface kind, for
@@ -434,6 +438,8 @@ impl KneeMan {
     /// re-pair with a specific opponent on reconnect. Returns false if the dial failed.
     pub(super) fn dial(&mut self, room: Option<&str>) -> bool {
         let mut ws = WebSocketPeer::new_gd();
+        ws.set_inbound_buffer_size(SIGNAL_BUFFER_BYTES);
+        ws.set_outbound_buffer_size(SIGNAL_BUFFER_BYTES);
         let id = self.identity.get_cloned();
         let c = id.color;
         let hex = format!(
@@ -661,6 +667,16 @@ impl KneeMan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signaling_buffer_fits_resume_and_tune_burst() {
+        let state = bincode::serialize(&SimState::spawn()).unwrap();
+        let tune = bincode::serialize(&sim::Tune::default()).unwrap();
+        let burst = 4 * (state.len().div_ceil(3) + tune.len().div_ceil(3));
+        assert!(burst > 65_535, "fixture must exceed the old queue");
+        assert!(burst + 16 * 1024 < SIGNAL_BUFFER_BYTES as usize,
+            "reserve room for JSON envelopes, SDP, ICE and terrain metadata");
+    }
 
     #[test]
     fn join_code_trims_surrounding_whitespace() {

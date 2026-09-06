@@ -28,7 +28,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 1. Complete online acceptance for the published /game3/ build. Ad-hoc Playwright passed capture/export/import,
    saved-frame reload, mobile viewport capture, tick-120 freeze, keyboard/menu interaction and
    debugger rendering, fixture pause/step/capture/verify/restore and two-peer movement/checksum agreement.
-   Next online gates: returning-peer reconnect, burst loss, cross-network
+   Next online gates: replacement-tab rejoin, burst loss, cross-network
    and physical phones. Current two peers ran in isolated contexts on one machine.
 2. Complete semantic/physical input separation and customization: use Godot InputMap for device
    bindings, preserve the semantic tick packet, and make Controls edit/persist bindings and derive
@@ -60,7 +60,8 @@ SQLite/document/state-query architecture experiments while working through this 
 User requested continuous iteration, small code growth, frequent scoped commits/pushes, and
 resource restraint. Use CARGO_BUILD_JOBS=1, one browser run, and no redundant concurrent builds.
 Latest local browser artifacts: /private/tmp/game3-playwright-fyAxQi (Falcon/Lucas visible).
-Published through 66dd491 to /game3/ on 2026-09-06. Original /game/ remains intact.
+Initial publish through 66dd491 to /game3/ on 2026-09-06; reconnect fix republished below.
+Original /game/ remains intact.
 Production browser reached offline simulation and Controls, then resumed the game. Artifacts:
 /private/tmp/game3-input-browser-e91D3j. HTTP GET /rtc returns 400 with "Upgrade header did not
 include websocket"; GET /status is 404. The reference relay source exposes /status, but the
@@ -102,7 +103,7 @@ separate from displayed/predicted `at`. A save/load/re-advance regression proves
 This reproduces the historical-comparison failure as prediction evidence and closes that
 specific gate. These tests do not establish PM parity or behavior under packet loss.
 Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 DELAY_MS=60 node /private/tmp/1_game3_online.cjs.
-The updated export is locally verified; it has not been published yet.
+That export was initially verified locally; the subsequent reconnect fix is now published below.
 Message-loss follow-up: local export with the production relay, 60 ms send delay,
 and every tenth outgoing data-channel message dropped after the first 30 sends.
 Both peers exercised loss (115/1186 and 116/1193 dropped/sent attempts); all 545
@@ -113,10 +114,33 @@ packet loss. Burst loss, returning-peer reconnect and cross-network behavior rem
 Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 DELAY_MS=60 DROP_EVERY=10 node /private/tmp/1_game3_online.cjs.
 Log: /private/tmp/game3-confirmed-loss.log. Screenshots: /private/tmp/game3-online-r5i2yn.
 No production publish or game source change was performed for this test.
+Reconnect follow-up: closing the live data channel while retaining both tabs reproduced
+a guest timeout. /private/tmp/game3-reconnect-wire.log shows the host sent a 62,280-byte
+resume envelope but no Tune envelope. The combined resume/Tune burst exceeds Godot's
+default 65,535-byte outbound buffer; ignored send errors hid the failure.
+The signaling socket now bounds both buffers at 256 KiB. Host room/resume/Tune send
+failures are logged and return offline. A regression sizes serialized/base64 state plus Tune
+and reserves 16 KiB for envelopes, SDP, ICE and terrain metadata. 430 game + 69 shell tests pass.
+Local rebuilt export + production relay: 549 initial confirmed frames match; both tabs
+reconnect and 180 resumed confirmed frames match, with game ticks advancing to 747/746.
+Both resume and Tune are observed sent and received. Subsequent peer close returns offline;
+runner exits 0 without browser exceptions. This covers retained-tab transport reconnection;
+page reload/replacement, physical phones and cross-network behavior remain open.
+Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 node /private/tmp/1_game3_online.cjs.
+Log: /private/tmp/game3-reconnect-fixed.log. Screenshots: /private/tmp/game3-online-cIM6ni.
+Buffer API source: https://docs.godotengine.org/en/4.5/classes/class_websocketpeer.html.
+Published the reconnect fix on 2026-09-06 with the existing dedicated game3 profile;
+nginx validation/reload succeeded. Remote WASM matches the tested local artifact,
+and the original /game/ pack hash remains unchanged. Injected send-error handling
+still needs a browser failure-path test; the successful burst is browser-verified.
+Production-only rerun also passed: 549 initial and 180 resumed confirmed hashes match,
+resumed ticks 748/747, disconnect timeout reaches offline, no browser exceptions, exit 0.
+Log: /private/tmp/game3-reconnect-production.log. Screenshots: /private/tmp/game3-online-hJorWF.
+Command: CONFIRMED=1 COMBAT=1 RECONNECT=1 node /private/tmp/1_game3_online.cjs.
 Remote hashes matched the tested artifact:
 
 - Game3 index.pck: fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df
-- Game3 smash_sim.wasm: 56abd0712209504321736da2d6cd64a992fd332b1ace1b14934c1742e519fc66
+- Game3 smash_sim.wasm: cab3b208e8572892bad3fbb589c43f4cfdd1741084e3862eca4fde0ddb7b5968
 - Preserved /game/ index.pck: 5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795
 
 Game3 reminder runs every 30 minutes and expires 2026-09-07 00:00 EDT (epoch 1788753600).
