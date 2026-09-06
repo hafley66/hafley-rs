@@ -261,7 +261,23 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
    Log: /private/tmp/game3-queued-close-fixed-cancelled.log; screenshots:
    /private/tmp/game3-online-XOiPO9. Pair runtime verified; mesh receive guard compiles but
-   no new three-player runtime receipt exists. Next: publish and verify production.
+   no new three-player runtime receipt exists. Published through 425f293 on 2026-09-06 via
+   the existing game3 profile; nginx validation/reload passed. Remote WASM matches tested
+   SHA-256 b57fd431df336e197c9e1eeb0b16720cccdd579db15cc9990f637b0c233fbcb4;
+   Game3 and original /game/ pack hashes remain unchanged. Production queued-close gate
+   (same command without LOCAL_EXPORT) passes 547 initial and 180 resumed confirmed frames,
+   fighter-slot/character continuity and offline timeout. Exactly one queued-message close
+   is injected; no ERR_UNCONFIGURED or browser exceptions, exit 0. Log:
+   /private/tmp/game3-queued-close-production.log; screenshots: /private/tmp/game3-online-DeE3bd.
+   Production direction/replay gate passes all 20 horizontal movement assertions, both
+   remapped c-stick smashes and exact replay of the recorded D-pad/stick inputs: restore
+   tick 137, replay 48 steps to tick 185 with captured checksum
+   64f8356e62a1b77ccb289a5ee54bb39882a7fea6f7191dc631decde11e690d48;
+   EOF leaves tick/checksum unchanged. Exit 0 without browser exceptions. Command:
+   PRODUCTION=1 node /private/tmp/2_game3_sticks.cjs.
+   Log: /private/tmp/game3-dpad-production.log; screenshots: /private/tmp/game3-sticks-y7FlIC.
+   D-pad remapping is published in Controls -> Gamepad movement / c-stick. Next: menu/touch
+   customization; cross-network/physical-device and three-player checks remain open.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
    Text-reference checkpoint: docs/3_pm_baseline.md pins PM-CC revision 6e63ffa9 and exact
