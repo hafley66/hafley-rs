@@ -2025,3 +2025,31 @@ fn a_dash_attack_scoops_an_item_it_passes_over() {
         "the dash attack should scoop the item on the pass-over frame"
     );
 }
+#[test]
+fn falcon_walk_in_hits_and_replays_every_tick() {
+    let tune = Tune::default();
+    let mut state = SimState::spawn();
+    state.fighters[0].char_id = 2;
+    state.fighters[1].char_id = 2;
+    let mut replay: SimState = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap();
+    let mut peak = 0.0_f32;
+    for tick in 0..360 {
+        // Land, walk together for 24 ticks, then repeat neutral attacks. No state teleport.
+        let frames = [0, 1].map(|p| InputFrame {
+            // Use a representable wire value above the movement deadzone: 0.25 truncates
+            // to 31/127, which is below that threshold after the packet round-trip.
+            dir: if (60..84).contains(&tick) { if p == 0 { 32.0 / 127.0 } else { -32.0 / 127.0 } } else { 0.0 },
+            attack: tick >= 90 && tick % 30 == 0,
+            attack_held: tick >= 90 && tick % 30 < 8,
+            ..Default::default()
+        });
+        let frames = frames.map(|frame| net::decode(net::encode(&frame)));
+        state = step(&state, &[&frames[0], &frames[1]], &tune);
+        replay = step(&replay, &[&frames[0], &frames[1]], &tune);
+        let expected = bincode::serialize(&state).unwrap();
+        assert_eq!(bincode::serialize(&replay).unwrap(), expected, "tick {tick}");
+        if tick == 179 { replay = bincode::deserialize(&expected).unwrap(); }
+        peak = peak.max(state.fighters[0].damage + state.fighters[1].damage);
+    }
+    assert_eq!(peak, 60.0, "the input sequence must produce actual hit damage");
+}

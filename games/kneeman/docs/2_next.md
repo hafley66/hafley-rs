@@ -28,7 +28,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 1. Complete online acceptance for the published /game3/ build. Ad-hoc Playwright passed capture/export/import,
    saved-frame reload, mobile viewport capture, tick-120 freeze, keyboard/menu interaction and
    debugger rendering, fixture pause/step/capture/verify/restore and two-peer movement/checksum agreement.
-   Next online gates: a fixture that proves hit/damage exchange, returning-peer reconnect, latency/loss, cross-network
+   Next online gates: confirmed-state comparison during hit exchange, returning-peer reconnect, latency/loss, cross-network
    and physical phones. Current two peers ran in isolated contexts on one machine.
 2. Complete semantic/physical input separation and customization: use Godot InputMap for device
    bindings, preserve the semantic tick packet, and make Controls edit/persist bindings and derive
@@ -78,6 +78,18 @@ shows both fighters at 0%: this is input-transition parity evidence, not a prove
 Run with COMBAT=1 node /private/tmp/1_game3_online.cjs. Consecutive identical input frames are
 encoded as duration runs; the initial per-tick JSON exceeded the browser URL limit before boot.
 Next combat test must assert damage/hit state, then compare its network snapshots.
+Hit fixture follow-up: `replay_tests::falcon_walk_in_hits_and_replays_every_tick` lands two
+Falcons, walks at +/-32/127 during ticks 60..84, then attacks every 30 ticks from tick 90.
+Every input passes encode/decode; 360 ticks produce peak total damage 60 and byte-identical
+replay, including a mid-run snapshot restore. Full gate: 429 game + 68 shell tests pass.
+The earlier +/-0.25 scripts quantized to +/-31/127, below the movement threshold. Their peer
+hash agreement does not prove movement. The wire-representable fixture fixes this test input.
+Production /private/tmp/game3-online-wire-hits.log and /private/tmp/game3-online-mpf1MB show
+60% damage, but strict historical hash comparison failed at ticks 93, 214, 273, 274.
+`webtest::refresh` records displayed/predicted snapshots once per physics frame; rollback
+catch-up does not replace every historical entry. Diagnose with confirmed snapshots or
+re-simulation before calling these mismatches either resolved predictions or actual desyncs.
+Keep this combat gate open. No production code was changed for the fixture.
 Remote hashes matched the tested artifact:
 
 - Game3 index.pck: fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df
