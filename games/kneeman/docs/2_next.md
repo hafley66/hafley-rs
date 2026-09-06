@@ -79,6 +79,10 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    sweeps remain untested; these are synthetic browser gamepad inputs.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
+   Text-reference checkpoint: docs/3_pm_baseline.md pins PM-CC revision 6e63ffa9 and exact
+   archived 3.6/annotated 3.6.1 hashes. tools/0_pm_codes_receipt.mjs verifies three shared
+   patch blocks. Next mechanic is jump-canceled grab; decode its patch and establish timing
+   before implementing. Original release identity and Falcon character data remain unverified.
 4. Extend the recorded-input tests for the selected PM mechanic; expose its replay in the debugger.
 5. Extract reusable menu widgets as they are exercised by controls and character import.
 

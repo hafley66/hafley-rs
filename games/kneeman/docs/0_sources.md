@@ -41,6 +41,10 @@ evidence gaps. Project M is the requested gameplay target. An original-PM checko
 exact target version and dedicated PM parity ledger remain to be established.
 Melee, Brawl and Project+ observations must retain their source/version labels.
 
+Follow-up: [3_pm_baseline.md](3_pm_baseline.md) pins a sparse PM-CC text reference and
+hash-checked shared 3.6/3.6.1 code blocks. It records source limits and selects jump-canceled
+grab for the next mechanic investigation. Original PM release authentication remains open.
+
 Historical generic-engine constraints and architectural prose are preserved in the
 source repositories. This receipt does not adopt them as new implementation requirements.
 
