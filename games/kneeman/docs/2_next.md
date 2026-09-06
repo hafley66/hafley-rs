@@ -182,8 +182,35 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Final default-pad regression passes 14 isolated button assertions and 3 jump/reassignment
    assertions, exit 0 without browser exceptions. Command: BUTTONS=1 node
    /private/tmp/1_game3_pad.cjs; log: /private/tmp/game3-stick-remap-defaults.log.
-   Not yet published. Next: verify the final Controls layout/reset path, online regression,
-   publish the tested export, then complete D-pad/menu/touch customization.
+   Final Controls/reset browser receipt: /private/tmp/game3-input-browser-ecDEqp.
+   The collapsed and expanded section render at 1440x1000; scrolling exposes all eight
+   directions per player (6_scroll.png). Live P2 right -> positive axis 3 and P1 left ->
+   button 7 save independently. Keyboard jump -> F adds a separate keys entry. Reset pads
+   removes both pad overrides, restores the labels and preserves jump=PackedInt32Array(70,0).
+   Reload retains that result; default P1 axis 0 at -0.3 moves x 480 -> 467.40002 while P2
+   stays at 720; P2 axis 0 at +0.3 moves x 720 -> 731.55 while P1 stays at 417.91006.
+   No browser exceptions; local relay-route 404s are expected. These are synthetic pads.
+   Final export online gate passes 547 initial and 180 resumed confirmed frames with 60 ms
+   delay and 24-message bursts; each peer drops 240 messages from 1240/1241 sends. Fighter
+   slots/characters persist across reconnect, peer closure reaches offline, and the console
+   guard sees no ERR_UNCONFIGURED; no browser exceptions, exit 0. Command:
+   LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 DELAY_MS=60 BURST_LENGTH=24
+   NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-stick-remap-online.log; screenshots: /private/tmp/game3-online-ZCP8UU.
+   Published through 23304b3 on 2026-09-06 via the existing game3 profile; nginx validation/
+   reload passed. Remote WASM matches tested SHA-256
+   bab4ac9199b5e23b3378a1f1f8a179d93ecaf84e613749a9a8be45eb91f8ceb3;
+   Game3 and original /game/ pack hashes remain unchanged. Production rerun passes all 12
+   movement assertions and both isolated remapped up-smashes. Captured remapped movement
+   and c-stick inputs restore tick 138, then replay 50 steps to tick 188 and the same captured
+   checksum 09453134205a017b76e74920e205d55fb75ce035168cd6e3ed29b3ca9bb13127.
+   Extra EOF step changes neither tick nor checksum. Local and production captures use
+   live browser timing; this asserts each recording against its own replay, not identical
+   input timing between runs. Exit 0 without browser exceptions.
+   Command: PRODUCTION=1 node /private/tmp/2_game3_sticks.cjs.
+   Log: /private/tmp/game3-stick-remap-production.log; screenshots: /private/tmp/game3-sticks-qybkwc.
+   Next: D-pad/menu/touch customization and physical-device checks. Movement and c-stick
+   remapping is available under Controls -> Gamepad movement / c-stick.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
    Text-reference checkpoint: docs/3_pm_baseline.md pins PM-CC revision 6e63ffa9 and exact
