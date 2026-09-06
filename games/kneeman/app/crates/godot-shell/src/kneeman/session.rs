@@ -143,7 +143,7 @@ impl KneeMan {
                 &s,
             );
             crate::webtest::debug_json(&format!(
-                r#"{{"peer_char":{},"charsel0":{},"handle":{},"char0":{},"char1":{},"y":[{},{}]}}"#,
+                r#"{{"peer_char":{},"charsel0":{},"handle":{},"char0":{},"char1":{},"y":[{},{}],"states":["{:?}","{:?}"]}}"#,
                 self.peer_char.map(|c| c as i64).unwrap_or(-1),
                 self.charsel.get_cloned()[0],
                 self.local_handle,
@@ -151,6 +151,8 @@ impl KneeMan {
                 s.fighters[1].char_id,
                 s.fighters[0].pos.y,
                 s.fighters[1].pos.y,
+                s.fighters[0].state,
+                s.fighters[1].state,
             ));
             crate::webtest::confirmed_checksums(&receipts);
         }

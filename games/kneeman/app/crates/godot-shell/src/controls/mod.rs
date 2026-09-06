@@ -431,17 +431,28 @@ const B_GRAB: u8 = 1 << 4;
 const B_SPECIAL: u8 = 1 << 5;
 const B_DOWN: u8 = 1 << 6;
 
-/// P2 gamepad button per action (same physical layout as the project.godot P1 bindings).
-fn p2_pad_button(a: GameAction) -> JoyButton {
+/// P2 gamepad buttons per action (same physical layout as the project.godot P1 bindings).
+fn p2_pad_buttons(a: GameAction) -> &'static [JoyButton] {
     match a {
-        GameAction::Jump => JoyButton::A,
-        GameAction::ShortHop => JoyButton::RIGHT_SHOULDER,
-        GameAction::Attack => JoyButton::X,
-        GameAction::Shield => JoyButton::LEFT_SHOULDER,
-        GameAction::Grab => JoyButton::BACK,
-        GameAction::Special => JoyButton::B,
-        GameAction::Down => JoyButton::DPAD_DOWN,
+        GameAction::Jump => &[JoyButton::A],
+        GameAction::ShortHop => &[JoyButton::RIGHT_SHOULDER],
+        GameAction::Attack => &[JoyButton::X],
+        GameAction::Shield => &[JoyButton::LEFT_SHOULDER],
+        GameAction::Grab => &[JoyButton::BACK, JoyButton::Y],
+        GameAction::Special => &[JoyButton::B],
+        GameAction::Down => &[JoyButton::DPAD_DOWN],
     }
+}
+
+#[test]
+fn p2_button_layout_includes_both_grab_aliases() {
+    let actions = [GameAction::Jump, GameAction::ShortHop, GameAction::Attack,
+        GameAction::Shield, GameAction::Grab, GameAction::Special, GameAction::Down];
+    assert_eq!(actions.map(|action| p2_pad_buttons(action).to_vec()), [
+        vec![JoyButton::A], vec![JoyButton::RIGHT_SHOULDER], vec![JoyButton::X],
+        vec![JoyButton::LEFT_SHOULDER], vec![JoyButton::BACK, JoyButton::Y],
+        vec![JoyButton::B], vec![JoyButton::DPAD_DOWN],
+    ]);
 }
 
 /// Player two's frame for local two-player: the SECOND connected gamepad, all-neutral when it isn't
@@ -497,7 +508,8 @@ pub fn poll_p2() -> InputFrame {
         (GameAction::Grab, B_GRAB),
         (GameAction::Special, B_SPECIAL),
     ] {
-        let down = pad2.is_some_and(|d| input.is_joy_button_pressed(d, p2_pad_button(a)));
+        let down = pad2.is_some_and(|d| p2_pad_buttons(a).iter()
+            .any(|&button| input.is_joy_button_pressed(d, button)));
         if down {
             mask |= bit;
         }

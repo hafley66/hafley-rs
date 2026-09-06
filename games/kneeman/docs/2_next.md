@@ -56,6 +56,15 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    /game/ pack remains unchanged. PRODUCTION=1 node /private/tmp/1_game3_pad.cjs repeats all
    three isolated-jump assertions against the live artifacts, exit 0 without browser exceptions.
    Production log: /private/tmp/game3-pad-production.log; image: /private/tmp/game3-pad-isolation.png.
+   P2 grab follow-up: the raw adapter accepted Back only despite the manual and P1 bindings
+   listing Y/Back. P2 now accepts both aliases; a complete button-layout regression pins
+   the mapping. 430 game + 70 shell tests pass. The opt-in web debug snapshot includes fighter
+   state names. Local export browser test covers Y/Back -> Grab, X -> Jab, L1 -> Shield,
+   B -> SpecialN for each player, asserting the other remains Stand, plus isolated jumps
+   and disconnect reassignment. Fighters are separated through controller movement first:
+   the initial close-range probe timed out after a grab and is not a passing receipt.
+   Command: BUTTONS=1 node /private/tmp/1_game3_pad.cjs.
+   Log: /private/tmp/game3-pad-buttons-separated.log. This grab-alias export is not published yet.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
 4. Extend the recorded-input tests for the selected PM mechanic; expose its replay in the debugger.
