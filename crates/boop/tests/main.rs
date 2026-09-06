@@ -4,6 +4,8 @@
 
 #[path = "1_reminder.rs"]
 mod reminder;
+#[path = "1_favorite_reason.rs"]
+mod favorite_reason;
 #[path = "boop_start_warm.rs"]
 mod boop_start_warm;
 #[cfg(feature = "dl6")]
