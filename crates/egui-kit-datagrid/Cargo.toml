@@ -1,0 +1,18 @@
+[package]
+name = "egui-kit-datagrid"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+description = "Datagrid facade for egui-kit using egui_table"
+
+[dependencies]
+egui = "=0.33.3"
+egui-kit = { path = "../egui-kit" }
+egui_table = "0.7"
+
+[[example]]
+name = "basic"
+path = "examples/0_basic.rs"

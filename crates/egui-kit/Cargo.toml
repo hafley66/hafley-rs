@@ -1,0 +1,20 @@
+[package]
+name = "egui-kit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+description = "Piecemeal, theme-token-driven components and layout helpers for egui"
+
+[dependencies]
+egui = "=0.33.3"
+
+[[example]]
+name = "piecemeal"
+path = "examples/0_piecemeal.rs"
+
+[[example]]
+name = "showcase"
+path = "examples/1_showcase.rs"
