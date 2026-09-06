@@ -1,5 +1,5 @@
-// Sealed legacy tree: kept for feel reference, never extended. Silenced wholesale rather than
-// pruned warning-by-warning so real signal elsewhere in the workspace stays visible.
+// Active Kneeman simulation, extracted from the original V1 tree. Existing lint allowances
+// remain during consolidation; game changes are verified through the fixed-input suites.
 #![allow(dead_code, unused_imports)]
 
 // Engine-agnostic vectors. `Vector2` is kept as the local name (minimal churn from the

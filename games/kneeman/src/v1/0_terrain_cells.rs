@@ -22,6 +22,36 @@ const CELLS: [[(f32, f32); 4]; 5] = [
     [(0.0, -0.5), (1.0, -0.5), (-1.0, 0.5), (0.0, 0.5)],
 ];
 
+/// Shared offline/debugger fixture. The normal stage and ship remain; four cells and a
+/// dropper exercise terrain destruction through ordinary fighter and item inputs.
+pub fn playground() -> SimState {
+    let mut state = SimState::spawn();
+    state.tick = 1;
+    state.fighters[0].char_id = 2;
+    state.fighters[1].char_id = 3;
+    state.fighters[0].pos = Vector2::new(420.0, super::GROUND_Y);
+    state.fighters[0].state = super::CharState::Stand;
+    state.fighters[0].ground_plat = 0;
+    assert!(spawn_cells(
+        &mut state,
+        0,
+        Vector2::new(550.0, 650.0),
+        Vector2::ZERO,
+        StrokeProps::TETRIS,
+        0,
+        10.0
+    ));
+    super::spawn_kind(
+        &mut state,
+        ItemKind::TetrisDropper,
+        super::ToolKind::TrailPen,
+        super::StrokeRegistry::TETRIS_ROW,
+        &super::Tune::default(),
+    );
+    state.items[1].pos = Vector2::new(300.0, 700.0);
+    state
+}
+
 /// All-or-nothing allocation: only unused paths are eligible; a full board keeps ammo.
 /// Each cell owns five arena nodes, one path, and its rollback-resident identity.
 pub fn spawn_cells(

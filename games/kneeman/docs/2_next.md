@@ -12,6 +12,8 @@ friend-photo characters, replay debugger and online play. One application in thi
 | Photo frames | Camera/gallery -> local ZIP -> validated assets/roster import; capture page bundled with web export |
 | Workshop clips | Search/download commands recovered; local strip/grid conversion uses the same roster installer |
 | Regression | Existing fixed-input/replay/rollback suites remain the game gate |
+| Falcon | Fresh sessions select Falcon/Lucas; built-in art-to-kit mapping corrected; existing movement/attack strips wired. Commit 47ea707 |
+| Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 
 ## Next, in order
 
@@ -19,8 +21,13 @@ friend-photo characters, replay debugger and online play. One application in thi
    saved-frame reload, mobile viewport capture, tick-120 freeze, keyboard/menu interaction and
    debugger rendering. Finish debugger pause/step/restore and two-peer input/checksum agreement.
    Physical phones and two-peer networking remain untested.
-2. Reusable remapping: use Godot InputMap for device bindings, preserve the existing game input
-   packet, and make the Controls UI edit/persist bindings. Cover keyboard, gamepad and touch.
+2. Complete semantic/physical input separation and customization: use Godot InputMap for device
+   bindings, preserve the semantic tick packet, and make Controls edit/persist bindings and derive
+   its displayed prompts from those bindings. Cover movement, c-stick, jump/short hop, attack,
+   special, shield/dodge, grab/throw and menu for keyboard, both gamepads and mobile touch.
+   Test press/hold/release, focus loss, reconnect, simultaneous inputs, remap/reload/reset and replay.
+   Current gaps: raw c-stick/trigger reads, hardcoded P2 buttons, manual display strings, fixed touch
+   actions and no rebinding UI. Reuse the existing RawPad -> PadMemory -> InputFrame fold.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
 4. Extend the recorded-input tests for the selected PM mechanic; expose its replay in the debugger.
@@ -32,3 +39,17 @@ background removal, and authenticated remote photo upload are not implemented by
 
 Sources are indexed in 0_sources.md; current wiring is in 1_integration.md. Avoid returning to
 SQLite/document/state-query architecture experiments while working through this list.
+
+## Active continuation
+
+User requested continuous iteration, small code growth, frequent scoped commits/pushes, and
+resource restraint. Use CARGO_BUILD_JOBS=1, one browser run, and no redundant concurrent builds.
+Latest local browser artifacts: /private/tmp/game3-playwright-fyAxQi (Falcon/Lucas visible).
+Current changes are not published yet; original /game/ must remain intact.
+Game3 reminder runs every 30 minutes and expires 2026-09-07 00:00 EDT (epoch 1788753600).
+Temporary script: /private/tmp/0_game3_overnight_boop.sh; stop marker:
+/private/tmp/game3-overnight-boop.stop. It currently uses codex queue pending the Boop replacement.
+Boop parent route game3-overnight owns two separately requested siblings:
+feature-boop-reminders-instant (Astra high: cross-harness reminders, Instant turn widget, favorite
+reasons) and feature-boop-ssh-android-research (Sol high: SSH/Tailscale/Android research).
+Use boop wait --me --as game3-overnight for receipts. Their changes need review before integration.

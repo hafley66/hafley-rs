@@ -1,6 +1,43 @@
 use super::terrain_cells::{detach_depleted, spawn_cells};
 use super::*;
 
+#[test]
+fn falcon_breaks_playground_cells_through_recorded_inputs() {
+    let initial = terrain_cells::playground();
+    let tune = Tune::default();
+    let mut state = initial;
+    let mut tape = Vec::new();
+    for tick in 0..240 {
+        let input = InputFrame {
+            attack: tick == 90 || tick == 140,
+            ..InputFrame::default()
+        };
+        state = step(&state, &[&input, &InputFrame::default()], &tune);
+        tape.push((input, net::checksum(&state)));
+    }
+    let broken: Vec<_> = state.items.iter().filter_map(|item| item.cell).collect();
+    assert!(
+        !broken.is_empty(),
+        "ordinary Falcon attacks must detach terrain cells"
+    );
+    assert!(broken.iter().all(|cell| cell.broken_at.is_some()));
+    assert_eq!(
+        broken.len()
+            + state
+                .paths
+                .iter()
+                .filter(|p| p.active() && p.cell.is_some())
+                .count(),
+        4
+    );
+    let mut replay: SimState =
+        bincode::deserialize(&bincode::serialize(&initial).unwrap()).unwrap();
+    for (input, expected) in tape {
+        replay = step(&replay, &[&input, &InputFrame::default()], &tune);
+        assert_eq!(net::checksum(&replay), expected, "tick {}", replay.tick);
+    }
+}
+
 fn armed() -> (SimState, Tune) {
     let mut state = SimState::spawn_n(1);
     state.fighters[0].pos = Vector2::new(600.0, GROUND_Y);

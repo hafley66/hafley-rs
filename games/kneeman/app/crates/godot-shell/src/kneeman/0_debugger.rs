@@ -342,33 +342,11 @@ impl KneeMan {
                 }
             }
             Some(Command::Fixture) => {
-                let mut state = SimState::spawn();
-                state.fighters[0].pos = sim::Vector2::new(420.0, 760.0);
-                state.fighters[0].state = sim::CharState::Stand;
-                state.fighters[0].ground_plat = 0;
-                state.tick = 1;
-                sim::terrain_cells::spawn_cells(
-                    &mut state,
-                    0,
-                    sim::Vector2::new(550.0, 650.0),
-                    sim::Vector2::ZERO,
-                    sim::StrokeProps::TETRIS,
-                    0,
-                    10.0,
-                );
-                state.items[1] = sim::Item {
-                    kind: sim::ItemKind::TetrisDropper,
-                    pos: sim::Vector2::new(440.0, 700.0),
-                    gas: 8.0,
-                    gas_max: 8.0,
-                    stroke: sim::StrokeRegistry::TETRIS_ROW,
-                    hp: 20.0,
-                    ..sim::Item::EMPTY
-                };
-                self.state.set(state);
+                self.state.set(sim::terrain_cells::playground());
+                self.charsel.set([2, 3]);
                 self.tune.set(Tune::default());
                 self.debugger = Debugger { paused: true, isolated: true,
-                    message: "Fixture paused. Resume; jump and strike the blue cells. The dropper is beside P1.".into(),
+                    message: "Fixture paused. Resume and strike the blue cells. Dropper left of Falcon; ship farther left.".into(),
                     ..Debugger::default() };
             }
             None => {}
