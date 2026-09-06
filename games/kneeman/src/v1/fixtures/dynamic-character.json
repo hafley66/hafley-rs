@@ -1,0 +1,168 @@
+{
+  "rule_sets": [],
+  "programs": [
+    {
+      "id": 1,
+      "program": {
+        "rules": [
+          {
+            "event": 1,
+            "phase": "PrePhysics",
+            "priority": 0,
+            "source_order": 0,
+            "selector": {
+              "kind": 10,
+              "state": null,
+              "active_set": null,
+              "flags_all": 0,
+              "flags_none": 0
+            },
+            "guards": { "start": 0, "len": 0 },
+            "ops": { "start": 0, "len": 1 }
+          },
+          {
+            "event": 2,
+            "phase": "PrePhysics",
+            "priority": 0,
+            "source_order": 1,
+            "selector": {
+              "kind": 10,
+              "state": null,
+              "active_set": null,
+              "flags_all": 0,
+              "flags_none": 0
+            },
+            "guards": { "start": 0, "len": 0 },
+            "ops": { "start": 1, "len": 1 }
+          }
+        ],
+        "guards": [],
+        "ops": [
+          {
+            "Add": {
+              "target": "SelfEntity",
+              "field": { "Int": 0 },
+              "value": { "Const": { "Int": 1 } }
+            }
+          },
+          {
+            "Recompose": {
+              "target": "SelfEntity",
+              "prefab": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "program": {
+        "rules": [
+          {
+            "event": 1,
+            "phase": "PrePhysics",
+            "priority": 0,
+            "source_order": 0,
+            "selector": {
+              "kind": 20,
+              "state": null,
+              "active_set": null,
+              "flags_all": 0,
+              "flags_none": 0
+            },
+            "guards": { "start": 0, "len": 0 },
+            "ops": { "start": 0, "len": 1 }
+          }
+        ],
+        "guards": [],
+        "ops": [
+          {
+            "Add": {
+              "target": "SelfEntity",
+              "field": { "Int": 0 },
+              "value": { "Const": { "Int": 10 } }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "prefabs": [
+    { "id": 1, "kind": 10, "program": 1 },
+    { "id": 2, "kind": 20, "program": 2 }
+  ],
+  "cases": [
+    {
+      "name": "dynamic character recomposition",
+      "entities": [
+        { "id": 100, "prefab": 1 }
+      ],
+      "active_sets": [],
+      "relations": [
+        { "kind": 9, "from": 100, "to": 200, "since": 0 }
+      ],
+      "steps": [
+        {
+          "entity": 100,
+          "event": {
+            "kind": 1,
+            "source": 100,
+            "target": 100,
+            "payload": ["None", "None", "None", "None"],
+            "payload_len": 0
+          }
+        },
+        {
+          "entity": 100,
+          "event": {
+            "kind": 1,
+            "source": 100,
+            "target": 100,
+            "payload": ["None", "None", "None", "None"],
+            "payload_len": 0
+          }
+        },
+        {
+          "entity": 100,
+          "event": {
+            "kind": 2,
+            "source": 100,
+            "target": 100,
+            "payload": ["None", "None", "None", "None"],
+            "payload_len": 0
+          }
+        },
+        {
+          "entity": 100,
+          "event": {
+            "kind": 1,
+            "source": 100,
+            "target": 100,
+            "payload": ["None", "None", "None", "None"],
+            "payload_len": 0
+          }
+        }
+      ],
+      "expect": [
+        { "EntityPrefab": { "entity": 100, "prefab": 2 } },
+        { "EntityKind": { "entity": 100, "kind": 20 } },
+        { "EntityProgram": { "entity": 100, "program": 2 } },
+        {
+          "FieldEquals": {
+            "entity": 100,
+            "field": { "Int": 0 },
+            "value": { "Int": 10 }
+          }
+        },
+        {
+          "Connected": {
+            "kind": 9,
+            "from": 100,
+            "to": 200,
+            "since": 0
+          }
+        }
+      ]
+    }
+  ]
+}
