@@ -28,8 +28,27 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 1. Complete online acceptance for the published /game3/ build. Ad-hoc Playwright passed capture/export/import,
    saved-frame reload, mobile viewport capture, tick-120 freeze, keyboard/menu interaction and
    debugger rendering, fixture pause/step/capture/verify/restore and two-peer movement/checksum agreement.
-   Next online gates: burst loss, cross-network
-   and physical phones. Current two peers ran in isolated contexts on one machine.
+   Production burst-loss checkpoint on 2026-09-06 passed with one Chromium and two isolated
+   contexts in a unique private room. Each outgoing data-channel message is delayed 60 ms;
+   after the first 30 sends, drop messages where send_count % 120 < BURST_LENGTH. Counts
+   refer to application messages, not IP packets or a measured network outage duration.
+   BURST_LENGTH=8: 546 initial confirmed frames and 180 resumed frames matched; each peer
+   dropped 80 messages, maximum consecutive run 8, from 1209/1214 sends before reconnect.
+   BURST_LENGTH=24: 549 initial confirmed frames and 181 resumed frames matched; each peer
+   dropped 240 messages, maximum consecutive run 24, from 1235/1232 sends before reconnect.
+   Both tests preserved fighter handles/characters across forced channel reconnect, advanced
+   beyond the interrupted clock, then reached offline after peer closure; exit 0 and no
+   browser exceptions. Production runtime is the existing pad-remapping publication; no deploy.
+   Commands: CONFIRMED=1 COMBAT=1 RECONNECT=1 DELAY_MS=60 BURST_LENGTH=8 (then 24)
+   node /private/tmp/1_game3_online.cjs. Logs: /private/tmp/game3-burst8-production.log and
+   /private/tmp/game3-burst24-production.log. Screenshots: /private/tmp/game3-online-TZJF6r
+   (8-message bursts) and /private/tmp/game3-online-3foHwZ (24-message bursts).
+   The initial sandboxed browser launch failed before navigation; only the completed subsequent
+   runs supply acceptance evidence. Forced channel closure still logs ERR_UNCONFIGURED from
+   sends against non-open channels: 5 lines in the 8-message run, 15 in the 24-message run.
+   RtcSocket::send_to and MeshSocket::send_to currently call put_packet without an open-state
+   guard. Next bounded error-condition task: guard those sends, then repeat reconnect/loss
+   acceptance on the rebuilt export. Cross-network and physical phones remain open.
 2. Complete semantic/physical input separation and customization: use Godot InputMap for device
    bindings, preserve the semantic tick packet, and make Controls edit/persist bindings and derive
    its displayed prompts from those bindings. Cover movement, c-stick, jump/short hop, attack,
