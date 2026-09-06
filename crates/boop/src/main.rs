@@ -28,6 +28,18 @@ use cli::me::{run_me_favorite, run_me_mood, run_whoami};
 use cli::CONCATMAP_EXAMPLES;
 use cli::{doctrine, line, mail_dir, now_ms};
 
+/// A `--env KEY=VAL` value must name a non-empty key and carry a `=`. The
+/// `=`-less and empty-key shapes are rejected here, at the clap boundary.
+fn parse_env_kv(value: &str) -> Result<String, String> {
+    let (key, _) = value
+        .split_once('=')
+        .ok_or_else(|| format!("`{value}` is not KEY=VAL; --env needs an `=`"))?;
+    if key.is_empty() {
+        return Err("--env key is empty; expected KEY=VAL".to_owned());
+    }
+    Ok(value.to_owned())
+}
+
 #[derive(Parser)]
 #[command(
     name = "boop",
@@ -968,6 +980,10 @@ enum LaneCmd {
         /// complete.
         #[arg(long = "expect-commits-at-least")]
         expect_commits_at_least: Option<u32>,
+        /// An env var the lane's spawn inherits, `KEY=VAL`. Repeatable; each
+        /// value is shell-quoted onto the supervisor's spawn command.
+        #[arg(long = "env", value_name = "KEY=VAL", value_parser = parse_env_kv)]
+        env: Vec<String>,
         /// Defaults to the caller, then to the one registered coordinator.
         #[arg(long)]
         parent: Option<String>,

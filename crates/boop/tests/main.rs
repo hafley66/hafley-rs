@@ -24,6 +24,8 @@ mod lane_carcass;
 mod lane_completion_row;
 #[path = "lane_debug.rs"]
 mod lane_debug;
+#[path = "lane_create_env.rs"]
+mod lane_create_env;
 mod lane_retire_revive;
 #[path = "lane_wait_exit.rs"]
 mod lane_wait_exit;
