@@ -129,7 +129,7 @@ mod tests {
             to: to.to_owned(),
             from_timestamp: timestamp.to_owned(),
             to_timestamp: None,
-            kind: "request".to_owned(),
+            kind: "request".into(),
             reply_to: None,
             body: format!("body of {id}"),
             r#ref: None,
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn an_inbox_wait_never_hands_back_the_lanes_own_dispatch_row() {
         let mut dispatch = row("m-d2252d54", "coordinator", "me", "2026-08-16T00:00:00Z");
-        dispatch.kind = "dispatch".to_owned();
+        dispatch.kind = "dispatch".into();
         let mail = row("m-2", "other", "me", "2026-08-16T00:00:01Z");
         let rows = vec![dispatch, mail.clone()];
         assert_eq!(unread_for(&rows, "me"), vec![mail]);

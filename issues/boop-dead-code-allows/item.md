@@ -1,12 +1,13 @@
 ---
 created: 2026-08-17
-updated: 2026-08-18
+updated: 2026-09-05
 type: improvement
-status: open
+status: done
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation]
 size: S
+closed: 2026-09-05
 ---
 
 # Crate-level dead_code allows suppress the unused-trait-method signal
@@ -34,6 +35,9 @@ Sites:
 - [x] `cargo test -p boop -j4` green and `cargo build -p boop` warning-free for `harness.rs`.
 
 ## Tests Run
+
+Module-level `#![allow(dead_code)]` removed from boop-mux/src/lib.rs and harness/{codex,kimi,claude}.rs. Deleted dead items: `tmux_command` (boop-mux), `LivePeer`/`PeerKey` (claude.rs). Narrow `#[allow(dead_code)]` with reasons kept on: claude.rs `launch_command` (test-only), boop-mux test `Sink`/`sink`/`received` scaffolding (commit de70eb1). `boop-clippy -D warnings` clean on boop-mux and boop-harness.
+
 
 `cargo test -p boop -j4 --no-fail-fast` at 69f00c1, exit 0, 402 passed / 0
 failed / 1 ignored, zero build warnings:

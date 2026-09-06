@@ -402,7 +402,7 @@ pub(crate) fn write_route(dir: &std::path::Path, lane_id: &str, route: Route) ->
 
 pub(crate) fn route_to_json(route: &Route) -> serde_json::Value {
     let mut object = serde_json::Map::new();
-    object.insert("kind".into(), serde_json::json!(route.kind));
+    object.insert("kind".into(), serde_json::json!(route.kind.as_str()));
     if let Some(harness) = &route.harness {
         object.insert("harness".into(), serde_json::json!(harness));
     }

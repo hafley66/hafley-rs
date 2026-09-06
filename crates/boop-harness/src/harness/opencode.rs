@@ -982,12 +982,12 @@ fn launch_command(spec: &SpawnSpec) -> Result<String> {
         .as_deref()
         .filter(|value| !value.is_empty())
         .context("spawn spec has no model; opencode needs one resolved by the caller")?;
-    let mut command = format!("opencode run -m {}", shell_quote(model));
+    let mut command = format!("opencode run -m {}", super::shell_quote(model));
     if let Some(variant) = spec.variant.as_deref().filter(|value| !value.is_empty()) {
-        command.push_str(&format!(" --variant {}", shell_quote(variant)));
+        command.push_str(&format!(" --variant {}", super::shell_quote(variant)));
     }
     if let Some(session) = &spec.resume_session {
-        command.push_str(&format!(" -s {}", shell_quote(session)));
+        command.push_str(&format!(" -s {}", super::shell_quote(session)));
     }
     command.push_str(&format!(
         " --auto \"$(cat {})\"",
@@ -997,11 +997,6 @@ fn launch_command(spec: &SpawnSpec) -> Result<String> {
         Some(stamp) => format!("{stamp} {command}"),
         None => command,
     }))
-}
-
-#[allow(dead_code)] // only called from launch_command, itself dead code (see above).
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', r"'\''"))
 }
 
 /// Double-quote a value for use inside an already-double-quoted `$(cat ...)`

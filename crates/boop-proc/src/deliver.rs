@@ -932,7 +932,7 @@ mod tests {
             to: to.to_owned(),
             from_timestamp: "2026-08-25T00:00:00Z".to_owned(),
             to_timestamp: None,
-            kind: "request".to_owned(),
+            kind: "request".into(),
             reply_to: None,
             body: "a row for the coordinator".to_owned(),
             r#ref: None,
@@ -983,7 +983,7 @@ mod tests {
 
     fn unbound_route(cwd: &Path) -> Route {
         Route {
-            kind: "coordinator".to_owned(),
+            kind: "coordinator".into(),
             harness: Some(HarnessId::Claude),
             tmux: None,
             cwd: Some(cwd.display().to_string()),
@@ -1040,7 +1040,7 @@ mod tests {
             to: "claude-bare".to_owned(),
             from_timestamp: "2026-09-03T00:00:00Z".to_owned(),
             to_timestamp: None,
-            kind: "request".to_owned(),
+            kind: "request".into(),
             reply_to: None,
             body: "push me".to_owned(),
             r#ref: None,
@@ -1127,7 +1127,7 @@ mod tests {
         bus::write_route(&dir, &name, &route).unwrap();
         for index in 0..lanes {
             let mut lane = unbound_route(&dir);
-            lane.kind = "lane".to_owned();
+            lane.kind = "lane".into();
             lane.parent = Some(name.clone());
             bus::write_route(&dir, &format!("{tag}-lane-{index}"), &lane).unwrap();
         }
@@ -1141,7 +1141,7 @@ mod tests {
                     to: name.clone(),
                     from_timestamp: "2026-09-03T00:00:00Z".to_owned(),
                     to_timestamp: None,
-                    kind: "result".to_owned(),
+                    kind: "result".into(),
                     reply_to: None,
                     body: (*body).to_owned(),
                     r#ref: None,
@@ -1304,7 +1304,7 @@ mod tests {
             to: "claude-old".to_owned(),
             from_timestamp: "2026-09-03T00:00:00Z".to_owned(),
             to_timestamp: None,
-            kind: "result".to_owned(),
+            kind: "result".into(),
             reply_to: None,
             body: "already in front of you".to_owned(),
             r#ref: None,
@@ -1449,7 +1449,7 @@ mod tests {
         routes.insert(
             "claude-77".to_owned(),
             Route {
-                kind: "coordinator".to_owned(),
+                kind: "coordinator".into(),
                 harness: Some(HarnessId::Claude),
                 tmux: Some("%77".to_owned()),
                 cwd: Some(dir.display().to_string()),

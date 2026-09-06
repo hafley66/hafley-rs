@@ -1,12 +1,13 @@
 ---
 created: 2026-08-17
-updated: 2026-08-18
+updated: 2026-09-05
 type: improvement
-status: open
+status: done
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation]
 size: S
+closed: 2026-09-05
 ---
 
 # TempRepo test fixture triplicated across three adapters
@@ -35,6 +36,8 @@ Sites:
 - [x] `cargo test -p boop -j4` green.
 
 ## Tests Run
+
+Single `TempRepo` at crates/boop-store/src/testing.rs:12; claude/codex/opencode adapters import `boop_store::testing::TempRepo`. Already deduped on this tree.
 
 `cargo test -p boop -j4 --no-fail-fast` at 69f00c1, exit 0, 402 passed / 0
 failed / 1 ignored, zero build warnings:

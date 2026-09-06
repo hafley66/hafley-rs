@@ -43,7 +43,7 @@ pub(crate) fn run_list(mail_dir_arg: Option<&Path>, agent: Option<&str>, all: bo
                     "{} {} {} {} {} {} {} {}",
                     pad(state, 4),
                     padded_name,
-                    pad(&route.kind, 12),
+                    pad(route.kind.as_str(), 12),
                     padded_harness,
                     padded_mode,
                     padded_model,
@@ -178,7 +178,7 @@ pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
         to: to.clone(),
         from_timestamp: bus::now_iso(),
         to_timestamp: None,
-        kind: send.kind.to_owned(),
+        kind: send.kind.to_owned().into(),
         reply_to: None,
         body,
         r#ref: None,
@@ -513,7 +513,7 @@ fn fan_out_to_children(
             to: name.to_owned(),
             from_timestamp: bus::now_iso(),
             to_timestamp: None,
-            kind: "note".to_owned(),
+            kind: "note".into(),
             reply_to: None,
             body: body.to_owned(),
             r#ref: None,
@@ -804,7 +804,7 @@ pub(crate) fn record_control_edge(message: &boop::bus::Message) -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0);
-    store.add_edge_at(&message.from, &message.to, &message.kind, timestamp)?;
+    store.add_edge_at(&message.from, &message.to, message.kind.as_str(), timestamp)?;
     Ok(())
 }
 
