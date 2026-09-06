@@ -90,6 +90,10 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    runner: /private/tmp/1_game3_jump_grab.cjs; image: /private/tmp/game3-jump-grab.png.
    Not published. PM source interpretation, momentum/priority and run-up/held-item cases remain
    open; docs/3_pm_baseline.md distinguishes this Game3 rule from unverified PM equivalence.
+   Follow-up: four run-up/held-gun/up-attack combinations now pass full-state replay over
+   100 ticks each, including snapshot restore. Fighter grab retains reduced forward momentum;
+   held-item throw keeps priority and excludes the owner from self-hits. 432 game + 70 shell
+   tests pass; /private/tmp/game3-jc-context-tests.log. No new gameplay or deployment changes.
 4. Extend the recorded-input tests for the selected PM mechanic; expose its replay in the debugger.
 5. Extract reusable menu widgets as they are exercised by controls and character import.
 

@@ -1386,8 +1386,6 @@ fn cstick_in_the_air_throws_the_aerial() {
     );
 }
 
-/// `settled()` lands on the small top platform; drop the fighter over the far-left main floor and
-/// let it land there, so momentum tests have the whole 900px stage to run on.
 #[test]
 fn jump_cancel_grab_stays_grounded_and_replays_at_takeoff_boundary() {
     let (mut initial, t) = settled_on_main();
@@ -1423,6 +1421,57 @@ fn jump_cancel_grab_stays_grounded_and_replays_at_takeoff_boundary() {
     }
 }
 
+#[test]
+fn running_jump_grab_preserves_item_priority_and_replays_competing_inputs() {
+    let (base, t) = settled_on_main();
+    for holding in [false, true] {
+        for competing in [false, true] {
+            let mut state = base;
+            state.fighters[0].char_id = 2;
+            if holding {
+                state.fighters[0].holding = 0;
+                state.items[0] = Item { kind: ItemKind::LaserGun, owner: 0,
+                    pos: state.fighters[0].pos, gas: 16.0, gas_max: 16.0, ..Item::EMPTY };
+            }
+            let mut replay = state;
+            for tick in 0..100 {
+                let input = net::decode(net::encode(&press(|i| {
+                    i.dir = if tick <= 7 { 1.0 } else { 0.0 };
+                    i.jump = tick == 6;
+                    i.jump_held = tick <= 7;
+                    i.grab = tick == 7;
+                    i.attack = competing && tick == 7;
+                    i.aim_y = if competing && tick == 7 { -1.0 } else { 0.0 };
+                })));
+                let before = state.fighters[0];
+                state = step(&state, &[&input, &idle()], &t);
+                replay = step(&replay, &[&input, &idle()], &t);
+                let bytes = bincode::serialize(&state).unwrap();
+                assert_eq!(bincode::serialize(&replay).unwrap(), bytes,
+                    "holding={holding} competing={competing} tick={tick}");
+                if tick == 7 {
+                    assert_eq!(before.state, CharState::JumpSquat);
+                    assert!(before.vel.x > 0.0);
+                    let after = state.fighters[0];
+                    if holding {
+                        assert_eq!(after.state, CharState::JumpSquat);
+                        assert_eq!(after.holding, -1);
+                        assert_eq!(state.items[0].owner, 0); // thrown item excludes its thrower
+                        assert!(state.items[0].thrown);
+                    } else {
+                        assert_eq!(after.state, CharState::Grab);
+                        assert!(after.vel.x > 0.0 && after.vel.x < before.vel.x);
+                        assert_eq!(after.pos.y, before.pos.y);
+                    }
+                }
+                if tick == 30 { replay = bincode::deserialize(&bytes).unwrap(); }
+            }
+        }
+    }
+}
+
+/// `settled()` lands on the small top platform; move the setup over the main floor
+/// and let it land, leaving room for recorded run-up inputs.
 fn settled_on_main() -> (SimState, Tune) {
     let (mut s, t) = settled();
     s.fighters[0].pos = Vector2::new(200.0, 250.0);

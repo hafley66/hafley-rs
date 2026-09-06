@@ -59,8 +59,15 @@ The new regression failed at grab tick 1 before implementation. It now covers ea
 three-frame squat tick plus the first airborne tick: squat accepts, airborne rejects, and
 90-tick full-state replay matches for each case with restoration at tick 30. Browser script
 jump at 60, grab at 61, freeze at 62 reports Grab/Stand at y=410/410 with no exceptions.
-431 game + 70 shell tests pass. Run-up momentum, simultaneous-button priority, held-item
-interaction, debugger fixture selection and a PM runtime comparison remain to be tested.
+Follow-up regression covers four 100-tick run -> jump -> grab sequences: empty/held gun,
+each with/without simultaneous up-attack. Empty-hand grabs stay grounded with reduced positive
+forward velocity and override the competing aerial input. Held guns detach as armed throws,
+retain owner 0 for self-hit exclusion, and leave the fighter in JumpSquat. Every state matches
+replay, including snapshot restoration at tick 30. The first test attempt incorrectly expected
+an unowned thrown item; `item::throw_item` documents retained ownership, so that assertion was
+corrected without changing gameplay. 432 game + 70 shell tests pass.
+Debugger fixture selection, a PM runtime comparison, exact momentum values and additional
+conflicts such as grab/shield/special remain to be tested.
 This export is locally verified and has not been published.
 
 ## Existing evidence limits
