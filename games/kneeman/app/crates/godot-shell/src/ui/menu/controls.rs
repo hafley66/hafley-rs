@@ -5,21 +5,11 @@ use crate::controls::bindings;
 use crate::ui::themes::Theme;
 use egui_rsx_macro::egui_rsx;
 
-/// Keyboard controls read/edit the live InputMap. Gamepad labels describe the current fixed pad
-/// adapter; pad and touch remapping remain separate checkpoints.
+/// Keyboard and both pads edit InputMap. Movement/c-stick axes and touch remain fixed.
 pub struct Controls;
 
 // P2 (couch co-op) is a second gamepad only: the keyboard now belongs entirely to P1 (WASD move +
 // arrow-key c-stick), so the old left-hand P2 cluster is gone. See `controls::mod::poll_p2`.
-const P2: &[(&str, &str)] = &[
-    ("L-stick / D-pad", "move"),
-    ("A", "jump"),
-    ("R1", "shorthop"),
-    ("X / R2", "attack"),
-    ("L1", "shield"),
-    ("Y / Back", "grab"),
-    ("B", "special"),
-];
 
 // Small monospace token for a key/button cell -- keeps bindings scannable at a glance instead of
 // blending into the action prose next to them.
@@ -33,11 +23,15 @@ impl Screen for Controls {
             if let Some(focus) = ui.ctx().memory(|m| m.focused()) {
                 ui.ctx().memory_mut(|m| m.surrender_focus(focus));
             }
-            ui.label(format!("Press a key for {name}. Escape cancels."));
+            ui.label(match bindings::pending_player() {
+                Some(player) => format!("Press pad {} button or move an axis for {name}. Escape cancels.", player + 1),
+                None => format!("Press a key for {name}. Escape cancels."),
+            });
             if theme.button(ui, "Cancel binding").clicked() { bindings::cancel(); }
         }
         ui.horizontal(|ui| {
             if theme.button(ui, "Reset keyboard").clicked() { bindings::reset(); }
+            if theme.button(ui, "Reset pads").clicked() { bindings::reset_pads(); }
             ui.label(bindings::status());
         });
         egui_rsx! {
@@ -76,7 +70,9 @@ impl Screen for Controls {
                                             if row.action == "Fast-fall" { ui.label(chip(&bindings::label("move_down"))); }
                                             if row.action == "Pause" { ui.label(chip("Esc")); }
                                         });
-                                        ui.label(chip(row.gamepad));
+                                        if let Some(&(name, _)) = bindings::PAD_ACTIONS.iter().find(|(name, _)| row.keyboard.contains(name)) {
+                                            if ui.add(egui::Button::new(chip(&bindings::pad_label(name))).fill(egui::Color32::TRANSPARENT)).clicked() { bindings::begin_pad(name, 0); }
+                                        } else { ui.label(chip(row.gamepad)); }
                                         ui.end_row();
                                     }
                                 });
@@ -107,9 +103,9 @@ impl Screen for Controls {
                                     }
                                     ui.end_row();
 
-                                    for (key, action) in P2 {
-                                        ui.label(chip(key));
-                                        ui.label(egui::RichText::new(*action).size(12.0));
+                                    for &(action, name) in bindings::PAD_ACTIONS {
+                                        if ui.add(egui::Button::new(chip(&bindings::pad_label(name))).fill(egui::Color32::TRANSPARENT)).clicked() { bindings::begin_pad(name, 1); }
+                                        ui.label(egui::RichText::new(action).size(12.0));
                                         ui.end_row();
                                     }
                                 });

@@ -33,16 +33,10 @@ use pad::{PadMemory, RawPad};
 
 const STICK_DEADZONE: f32 = 0.22; // pad stick magnitude below this reads as neutral
 
-// Stopgap: aiming (c-stick) occupies the right thumb, so R2/TRIGGER_RIGHT also fires attack on both
-// pads. Hardcoded here, not a general remap system (that's a separate future design).
-const TRIGGER_THRESHOLD: f32 = 0.5; // analog trigger reads above this as "held"
-
 thread_local! {
     // Per-player tap-jump memory, owned here and threaded through the pure fold each frame.
     static P1_MEM: Cell<PadMemory> = Cell::new(PadMemory::default());
     static P2_MEM: Cell<PadMemory> = Cell::new(PadMemory::default());
-    // P1's right-trigger edge tracker (analog axis has no is_action_just_pressed of its own).
-    static P1_TRIGGER_PREV: Cell<bool> = const { Cell::new(false) };
     // P1's "down" edge tracker: the merged move axis (S / stick / touch) has no just-pressed of its
     // own either, now that keyboard down no longer rides the `ui_down` action's built-in edge.
     static P1_DOWN_PREV: Cell<bool> = const { Cell::new(false) };
@@ -72,7 +66,7 @@ pub fn release_all() {
     }
     P1_MEM.set(PadMemory::default());
     P2_MEM.set(PadMemory::default());
-    P1_TRIGGER_PREV.set(false);
+    for &(_, name) in bindings::PAD_ACTIONS { input.action_release(name); }
     P1_DOWN_PREV.set(false);
     P2_PREV_MASK.set(0);
 }
@@ -314,14 +308,11 @@ pub fn poll(touch_stick: (f32, f32), touch_cstick: (f32, f32)) -> InputFrame {
         input.is_action_pressed("aim_left"),
         input.is_action_pressed("aim_right"),
     );
-    let mut trigger_held = false;
     // Web: the default ui_* movement actions don't carry the pad's stick/dpad, so read the first
     // connected joypad directly and merge it in (keyboard still works; pad wins when held).
     if let Some(dev) = input.get_connected_joypads().get(0) {
         let dev = dev as i32;
         let dz = 0.2;
-        // R2: aiming lives on the c-stick (right thumb), so the right trigger doubles as attack.
-        trigger_held = input.get_joy_axis(dev, JoyAxis::TRIGGER_RIGHT) > TRIGGER_THRESHOLD;
         let sx = input.get_joy_axis(dev, JoyAxis::LEFT_X);
         let sy = input.get_joy_axis(dev, JoyAxis::LEFT_Y);
         // right stick = the c-stick (smash / aerial macro); deadzone like the move stick. Keyboard
@@ -386,10 +377,6 @@ pub fn poll(touch_stick: (f32, f32), touch_cstick: (f32, f32)) -> InputFrame {
     }
     let down_edge = down_flag && !P1_DOWN_PREV.get();
     P1_DOWN_PREV.set(down_flag);
-    // R2 edge: the analog axis has no is_action_just_pressed of its own, so track its rising edge
-    // by hand the same way P2's raw button mask does (prev-frame memory in a thread-local Cell).
-    let trigger_pressed = trigger_held && !P1_TRIGGER_PREV.get();
-    P1_TRIGGER_PREV.set(trigger_held);
     // Hand the merged device reads to the pure core; it owns tap-jump (flick the stick up to jump,
     // no button) and the frame assembly, so behavior is identical across touch/pad/keyboard. Jump
     // also gets a dedicated button now (W, aliased into the "jump" action alongside pad button A --
@@ -407,8 +394,8 @@ pub fn poll(touch_stick: (f32, f32), touch_cstick: (f32, f32)) -> InputFrame {
         shield_pressed: pressed(&mut input, GameAction::Shield),
         down_held: held(&mut input, GameAction::Down) || pad_down,
         down_pressed: pressed(&mut input, GameAction::Down) || down_edge,
-        attack_held: held(&mut input, GameAction::Attack) || trigger_held,
-        attack_pressed: pressed(&mut input, GameAction::Attack) || trigger_pressed,
+        attack_held: held(&mut input, GameAction::Attack),
+        attack_pressed: pressed(&mut input, GameAction::Attack),
         grab_pressed: pressed(&mut input, GameAction::Grab),
         special_pressed: pressed(&mut input, GameAction::Special),
     };
@@ -420,8 +407,8 @@ pub fn poll(touch_stick: (f32, f32), touch_cstick: (f32, f32)) -> InputFrame {
 
 // --- player two (couch co-op) ------------------------------------------------------------------
 // P2 = the SECOND connected gamepad ONLY. P1 owns the keyboard through the shared semantic
-// adapter, so couch co-op is gamepad+gamepad. Read raw because named actions can't separate two
-// gamepads either.
+// adapter, so couch co-op is gamepad+gamepad. Device-scoped InputMap actions own buttons;
+// movement/c-stick axes retain the raw-device path below.
 // Bits in the held mask, for edge detection across frames:
 const B_JUMP: u8 = 1 << 0;
 const B_SHORTHOP: u8 = 1 << 1;
@@ -431,28 +418,24 @@ const B_GRAB: u8 = 1 << 4;
 const B_SPECIAL: u8 = 1 << 5;
 const B_DOWN: u8 = 1 << 6;
 
-/// P2 gamepad buttons per action (same physical layout as the project.godot P1 bindings).
-fn p2_pad_buttons(a: GameAction) -> &'static [JoyButton] {
+/// P2 device-scoped InputMap action names.
+fn p2_pad_action(a: GameAction) -> &'static str {
     match a {
-        GameAction::Jump => &[JoyButton::A],
-        GameAction::ShortHop => &[JoyButton::RIGHT_SHOULDER],
-        GameAction::Attack => &[JoyButton::X],
-        GameAction::Shield => &[JoyButton::LEFT_SHOULDER],
-        GameAction::Grab => &[JoyButton::BACK, JoyButton::Y],
-        GameAction::Special => &[JoyButton::B],
-        GameAction::Down => &[JoyButton::DPAD_DOWN],
+        GameAction::Jump => "p2_jump",
+        GameAction::ShortHop => "p2_shorthop",
+        GameAction::Attack => "p2_attack",
+        GameAction::Shield => "p2_shield",
+        GameAction::Grab => "p2_grab",
+        GameAction::Special => "p2_special",
+        GameAction::Down => "",
     }
 }
 
 #[test]
-fn p2_button_layout_includes_both_grab_aliases() {
+fn p2_actions_match_the_binding_registry() {
     let actions = [GameAction::Jump, GameAction::ShortHop, GameAction::Attack,
-        GameAction::Shield, GameAction::Grab, GameAction::Special, GameAction::Down];
-    assert_eq!(actions.map(|action| p2_pad_buttons(action).to_vec()), [
-        vec![JoyButton::A], vec![JoyButton::RIGHT_SHOULDER], vec![JoyButton::X],
-        vec![JoyButton::LEFT_SHOULDER], vec![JoyButton::BACK, JoyButton::Y],
-        vec![JoyButton::B], vec![JoyButton::DPAD_DOWN],
-    ]);
+        GameAction::Shield, GameAction::Grab, GameAction::Special];
+    assert_eq!(actions.map(p2_pad_action).as_slice(), bindings::PAD_ACTIONS.iter().map(|r| r.1).collect::<Vec<_>>());
 }
 
 /// Player two's frame for local two-player: the SECOND connected gamepad, all-neutral when it isn't
@@ -466,10 +449,7 @@ pub fn poll_p2() -> InputFrame {
     let mut aim_y = 0.0;
     let mut c_x = 0.0;
     let mut c_y = 0.0;
-    let mut trigger2_held = false;
     if let Some(dev) = pad2 {
-        // R2: same stopgap as P1 -- aiming lives on the c-stick, so the right trigger also attacks.
-        trigger2_held = input.get_joy_axis(dev, JoyAxis::TRIGGER_RIGHT) > TRIGGER_THRESHOLD;
         let sx = input.get_joy_axis(dev, JoyAxis::LEFT_X);
         let sy = input.get_joy_axis(dev, JoyAxis::LEFT_Y);
         let rx = input.get_joy_axis(dev, JoyAxis::RIGHT_X);
@@ -508,14 +488,10 @@ pub fn poll_p2() -> InputFrame {
         (GameAction::Grab, B_GRAB),
         (GameAction::Special, B_SPECIAL),
     ] {
-        let down = pad2.is_some_and(|d| p2_pad_buttons(a).iter()
-            .any(|&button| input.is_joy_button_pressed(d, button)));
+        let down = pad2.is_some() && input.is_action_pressed(p2_pad_action(a));
         if down {
             mask |= bit;
         }
-    }
-    if trigger2_held {
-        mask |= B_ATTACK;
     }
     if aim_y > 0.4 {
         mask |= B_DOWN;

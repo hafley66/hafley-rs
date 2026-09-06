@@ -1,11 +1,45 @@
-//! Keyboard remapping at the device boundary. Godot owns event matching and persistence;
+//! Keyboard/gamepad remapping at the device boundary. Godot owns event matching and persistence;
 //! simulation/replay values contain no physical keys. Pad events survive keyboard edits.
 use godot::classes::{ConfigFile, Input, InputEvent, InputEventKey, InputEventJoypadButton, InputEventJoypadMotion, InputMap};
-use godot::global::{Key, KeyLocation};
+use godot::global::{Key, KeyLocation, JoyAxis, JoyButton};
 use godot::prelude::*;
 use std::cell::{Cell, RefCell};
 
 const PATH: &str = "user://controls.cfg";
+pub const PAD_ACTIONS: &[(&str, &str)] = &[
+    ("jump", "p2_jump"), ("shorthop", "p2_shorthop"), ("attack", "p2_attack"),
+    ("shield", "p2_shield"), ("grab", "p2_grab"), ("special", "p2_special"),
+];
+
+fn saved_pad(values: &[i32]) -> Option<(i32, i32, i32)> {
+    let [kind, index, sign] = *values else { return None; };
+    match kind {
+        0 if (0..JoyButton::MAX.ord()).contains(&index) && sign == 0 => Some((kind, index, sign)),
+        1 if (0..JoyAxis::MAX.ord()).contains(&index) && [-1, 1].contains(&sign) => Some((kind, index, sign)),
+        _ => None,
+    }
+}
+fn pad_event(values: &[i32]) -> Option<Gd<InputEvent>> {
+    saved_pad(values)?;
+    match *values {
+        [0, button, 0] if (0..JoyButton::MAX.ord()).contains(&button) => {
+            let mut event = InputEventJoypadButton::new_gd();
+            event.set_button_index(JoyButton::try_from_ord(button)?);
+            Some(event.upcast())
+        }
+        [1, axis, sign] if (0..JoyAxis::MAX.ord()).contains(&axis) && [-1, 1].contains(&sign) => {
+            let mut event = InputEventJoypadMotion::new_gd();
+            event.set_axis(JoyAxis::try_from_ord(axis)?);
+            event.set_axis_value(sign as f32);
+            Some(event.upcast())
+        }
+        _ => None,
+    }
+}
+fn is_pad(event: &Gd<InputEvent>) -> bool {
+    event.clone().try_cast::<InputEventJoypadButton>().is_ok()
+        || event.clone().try_cast::<InputEventJoypadMotion>().is_ok()
+}
 
 // The web filesystem flushes asynchronously. Small settings use synchronous browser storage;
 // ConfigFile still owns serialization, and existing user:// bindings migrate on the next edit.
@@ -45,6 +79,8 @@ thread_local! {
     static PENDING: Cell<Option<&'static str>> = const { Cell::new(None) };
     static CANCELLED: Cell<bool> = const { Cell::new(false) };
     static STATUS: RefCell<String> = const { RefCell::new(String::new()) };
+    static PAD_DEFAULTS: RefCell<Vec<(&'static str, Array<Gd<InputEvent>>)>> = const { RefCell::new(Vec::new()) };
+    static PAD_PLAYER: Cell<Option<usize>> = const { Cell::new(None) };
 }
 
 pub fn load() {
@@ -61,6 +97,24 @@ pub fn load() {
     }
     let mut cfg = ConfigFile::new_gd();
     let loaded = read_config(&mut cfg) == godot::global::Error::OK;
+    // P2 gets its own action names and independent resources. Both pads keep the
+    // existing defaults, including R2 attack, while InputMap owns event matching.
+    map.action_add_event("attack", &pad_event(&[1, JoyAxis::TRIGGER_RIGHT.ord(), 1]).unwrap());
+    for &(p1, p2) in PAD_ACTIONS {
+        map.add_action_ex(p2).deadzone(0.5).done();
+        for event in map.action_get_events(p1).iter_shared().filter(is_pad) {
+            map.action_add_event(p2, &event.duplicate().unwrap().cast::<InputEvent>());
+        }
+        for name in [p1, p2] {
+            PAD_DEFAULTS.with_borrow_mut(|rows| rows.push((name, map.action_get_events(name))));
+            if loaded && cfg.has_section_key("pads", name) {
+                let saved = cfg.get_value("pads", name).try_to::<PackedInt32Array>().ok();
+                if let Some(event) = saved.and_then(|v| pad_event(v.as_slice())) {
+                    replace_pad(name, &event);
+                } else { STATUS.with_borrow_mut(|s| *s = format!("Ignored invalid saved pad binding: {name}")); }
+            }
+        }
+    }
     for row in super::P1_MANUAL {
         for &name in row.keyboard {
             DEFAULTS.with_borrow_mut(|rows| rows.push((name, map.action_get_events(name))));
@@ -78,20 +132,19 @@ pub fn load() {
             }
         }
     }
-    sync_player_one_pad();
+    sync_pads();
     Input::singleton().connect("joy_connection_changed", &Callable::from_fn(
-        "sync_player_one_pad", |_| { sync_player_one_pad(); },
+        "sync_pads", |_| { sync_pads(); },
     ));
 }
 
-// Named gameplay actions belong to P1. P2 samples its own pad directly. Keep
-// InputMap's button matching, but never leave its pad events on device -1 (all).
-fn sync_player_one_pad() {
-    let device = Input::singleton().get_connected_joypads().get(0)
-        .map(|id| id as i32).unwrap_or(i32::MAX);
+// Bind gameplay events to each player's connected device; absent pads match no device.
+fn sync_pads() {
     let mut map = InputMap::singleton();
-    for row in super::P1_MANUAL {
-        for &name in row.keyboard {
+    for &(p1, p2) in PAD_ACTIONS {
+        for (player, name) in [p1, p2].into_iter().enumerate() {
+            let device = Input::singleton().get_connected_joypads().get(player)
+                .map(|id| id as i32).unwrap_or(i32::MAX);
             for mut event in map.action_get_events(name).iter_shared() {
                 if event.clone().try_cast::<InputEventJoypadButton>().is_ok()
                     || event.clone().try_cast::<InputEventJoypadMotion>().is_ok() {
@@ -104,6 +157,34 @@ fn sync_player_one_pad() {
     }
     super::release_all();
 }
+
+fn replace_pad(name: &str, event: &Gd<InputEvent>) {
+    let mut map = InputMap::singleton();
+    for previous in map.action_get_events(name).iter_shared().filter(is_pad) {
+        map.action_erase_event(name, &previous);
+    }
+    map.action_add_event(name, event);
+    Input::singleton().action_release(name);
+}
+
+pub fn pad_label(name: &str) -> String {
+    InputMap::singleton().action_get_events(name).iter_shared().filter(is_pad)
+        .map(|event| {
+            if let Ok(button) = event.clone().try_cast::<InputEventJoypadButton>() {
+                match button.get_button_index() {
+                    JoyButton::A => "A".into(), JoyButton::B => "B".into(),
+                    JoyButton::X => "X".into(), JoyButton::Y => "Y".into(),
+                    JoyButton::BACK => "Back".into(), JoyButton::LEFT_SHOULDER => "L1".into(),
+                    JoyButton::RIGHT_SHOULDER => "R1".into(), other => format!("Button {}", other.ord()),
+                }
+            } else {
+                let axis = event.cast::<InputEventJoypadMotion>();
+                format!("Axis {}{}", axis.get_axis().ord(), if axis.get_axis_value() > 0.0 { "+" } else { "-" })
+            }
+        }).collect::<Vec<_>>().join(" / ")
+}
+pub fn begin_pad(name: &'static str, player: usize) { PENDING.set(Some(name)); PAD_PLAYER.set(Some(player)); }
+pub fn pending_player() -> Option<usize> { PAD_PLAYER.get() }
 
 fn replace(name: &str, event: &Gd<InputEvent>) {
     let mut map = InputMap::singleton();
@@ -125,8 +206,8 @@ pub fn label(name: &str) -> String {
         .collect::<Vec<_>>().join(" / ")
 }
 
-pub fn begin(name: &'static str) { PENDING.set(Some(name)); }
-pub fn cancel() { PENDING.set(None); }
+pub fn begin(name: &'static str) { PENDING.set(Some(name)); PAD_PLAYER.set(None); }
+pub fn cancel() { PENDING.set(None); PAD_PLAYER.set(None); }
 pub fn pending() -> Option<&'static str> { PENDING.get() }
 pub fn take_cancelled() -> bool { CANCELLED.replace(false) }
 pub fn status() -> String { STATUS.with_borrow(Clone::clone) }
@@ -134,6 +215,31 @@ pub fn status() -> String { STATUS.with_borrow(Clone::clone) }
 /// Called before gameplay event handling. Escape cancels; repeats/releases never bind.
 pub fn capture(event: &Gd<InputEvent>) -> bool {
     let Some(name) = PENDING.get() else { return false; };
+    if let Some(player) = PAD_PLAYER.get() {
+        if let Ok(key) = event.clone().try_cast::<InputEventKey>() {
+            if key.is_pressed() && key.get_keycode() == Key::ESCAPE { cancel(); CANCELLED.set(true); }
+            return true;
+        }
+        let device = Input::singleton().get_connected_joypads().get(player).map(|d| d as i32);
+        if Some(event.get_device()) != device { return true; }
+        let values = if let Ok(button) = event.clone().try_cast::<InputEventJoypadButton>() {
+            if !button.is_pressed() { return true; }
+            [0, button.get_button_index().ord(), 0]
+        } else if let Ok(axis) = event.clone().try_cast::<InputEventJoypadMotion>() {
+            if axis.get_axis_value().abs() < 0.75 { return true; }
+            [1, axis.get_axis().ord(), if axis.get_axis_value() > 0.0 { 1 } else { -1 }]
+        } else { return false; };
+        if let Some(binding) = pad_event(&values) {
+            replace_pad(name, &binding); sync_pads(); cancel();
+            let mut cfg = ConfigFile::new_gd(); let _ = read_config(&mut cfg);
+            cfg.set_value("pads", name, &PackedInt32Array::from(&values).to_variant());
+            STATUS.with_borrow_mut(|s| *s = match write_config(&mut cfg) {
+                Ok(()) => format!("Saved {name}. Shared controls trigger every bound action."),
+                Err(e) => format!("Pad binding applied for this session; save failed: {e}"),
+            });
+        }
+        return true;
+    }
     let Ok(key) = event.clone().try_cast::<InputEventKey>() else { return false; };
     if !key.is_pressed() || key.is_echo() { return true; }
     PENDING.set(None);
@@ -180,9 +286,38 @@ pub fn reset() {
     });
 }
 
+pub fn reset_pads() {
+    cancel();
+    let mut map = InputMap::singleton();
+    PAD_DEFAULTS.with_borrow(|rows| for (name, events) in rows {
+        for event in map.action_get_events(*name).iter_shared().filter(is_pad) { map.action_erase_event(*name, &event); }
+        for event in events.iter_shared().filter(is_pad) {
+            map.action_add_event(*name, &event.duplicate().unwrap().cast::<InputEvent>());
+        }
+    });
+    sync_pads();
+    let mut cfg = ConfigFile::new_gd(); let _ = read_config(&mut cfg);
+    if cfg.has_section("pads") { cfg.erase_section("pads"); }
+    STATUS.with_borrow_mut(|s| *s = match write_config(&mut cfg) {
+        Ok(()) => "Gamepad defaults restored and saved.".into(),
+        Err(e) => format!("Gamepad defaults restored for this session; save failed: {e}"),
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pad_values_validate_kind_range_and_direction() {
+        for button in 0..JoyButton::MAX.ord() { assert_eq!(saved_pad(&[0, button, 0]), Some((0, button, 0))); }
+        for axis in 0..JoyAxis::MAX.ord() { for sign in [-1, 1] {
+            assert_eq!(saved_pad(&[1, axis, sign]), Some((1, axis, sign)));
+        }}
+        for invalid in [&[][..], &[0, 1], &[0, -1, 0], &[0, JoyButton::MAX.ord(), 0],
+            &[0, 1, 1], &[1, -1, 1], &[1, JoyAxis::MAX.ord(), 1], &[1, 0, 0], &[1, 0, 2], &[2, 0, 0]] {
+            assert_eq!(saved_pad(invalid), None, "{invalid:?}");
+        }
+    }
 
     #[test]
     fn saved_keys_preserve_side_and_reject_malformed_or_unknown_values() {

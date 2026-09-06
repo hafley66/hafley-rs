@@ -35,7 +35,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    its displayed prompts from those bindings. Cover movement, c-stick, jump/short hop, attack,
    special, shield/dodge, grab/throw and menu for keyboard, both gamepads and mobile touch.
    Test press/hold/release, focus loss, reconnect, simultaneous inputs, remap/reload/reset and replay.
-   Remaining gaps: gamepad axes/triggers and P2 remapping, pad prompt strings,
+   Remaining gaps: movement/c-stick axis remapping, menu bindings,
    fixed touch actions/layout and menu remapping. Reuse RawPad -> PadMemory -> InputFrame.
    Keyboard browser evidence: remap F, reload after 100 ms retains F, Escape cancels in Controls,
    reset/reload restores defaults. Web controls now use synchronous localStorage with ConfigFile
@@ -77,6 +77,25 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Command: PRODUCTION=1 BUTTONS=1 HEIGHTS=1 node /private/tmp/1_game3_pad.cjs.
    Log: /private/tmp/game3-pad-full-production.log. Physical devices and analog threshold
    sweeps remain untested; these are synthetic browser gamepad inputs.
+   Local gamepad remapping now uses device-scoped InputMap actions for both players' jump,
+   short hop, attack, shield, grab and special. R2 attack is a default motion event instead
+   of a separate raw-trigger branch. Controls captures a button or signed axis from the
+   selected player's device, labels the live binding, persists validated integer triples
+   alongside keyboard settings, and resets pads independently. Semantic InputFrame is unchanged.
+   432 game + 73 shell tests pass; /private/tmp/game3-pad-remap-final-tests.log.
+   Local export defaults: 14 isolated button-state assertions plus jump isolation/reassignment
+   pass, exit 0; BUTTONS=1 node /private/tmp/1_game3_pad.cjs,
+   /private/tmp/game3-pad-remap-defaults.log. Interactive remap screenshots:
+   /private/tmp/game3-input-browser-AjkkFA. Wrong-device capture stays pending; P1 jump ->
+   Godot button 7 and P2 jump -> button 8 save separately, drive only their own fighter,
+   survive reload, and remove A's jump behavior. P2 shield -> positive axis 4 saves and
+   reaches Shield while P1 stays Stand. Reset clears pad overrides; injected storage denial
+   reports session-only save failure and preserves the prior saved defaults. After reload,
+   P2 A jumps again. No browser exceptions; offline /rtc, /turn and /ev 404s are expected here.
+   Not published. Final pad-cell contrast adjustment is awaiting export UI verification.
+   Next: remapped-input capture/replay, cancellation/held-axis threshold checks, then publish
+   the tested export. Movement/c-stick remapping, mobile layout/menu controls and physical
+   device checks remain open.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
    Text-reference checkpoint: docs/3_pm_baseline.md pins PM-CC revision 6e63ffa9 and exact
