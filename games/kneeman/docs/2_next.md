@@ -21,13 +21,15 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Keyboard bindings | Live InputMap editing for movement, c-stick and gameplay buttons; ConfigFile persistence/reset, side-aware labels, malformed-key validation and focus-loss clearing. 428 game + 68 shell tests pass |
 | Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
+| Production netplay | Two isolated Chromium contexts joined a unique private room through production signaling/WebRTC. Two runs matched 180 and 181 same-tick snapshot hashes with scripted movement; peer close -> reconnecting -> offline after timeout, no browser exceptions |
 
 ## Next, in order
 
 1. Complete online acceptance for the published /game3/ build. Ad-hoc Playwright passed capture/export/import,
    saved-frame reload, mobile viewport capture, tick-120 freeze, keyboard/menu interaction and
-   debugger rendering, fixture pause/step/capture/verify/restore. Finish two-peer input/checksum agreement.
-   Physical phones and two-peer networking remain untested.
+   debugger rendering, fixture pause/step/capture/verify/restore and two-peer movement/checksum agreement.
+   Next online gates: changing combat inputs, returning-peer reconnect, latency/loss, cross-network
+   and physical phones. Current two peers ran in isolated contexts on one machine.
 2. Complete semantic/physical input separation and customization: use Godot InputMap for device
    bindings, preserve the semantic tick packet, and make Controls edit/persist bindings and derive
    its displayed prompts from those bindings. Cover movement, c-stick, jump/short hop, attack,
@@ -60,9 +62,15 @@ resource restraint. Use CARGO_BUILD_JOBS=1, one browser run, and no redundant co
 Latest local browser artifacts: /private/tmp/game3-playwright-fyAxQi (Falcon/Lucas visible).
 Published through 66dd491 to /game3/ on 2026-09-06. Original /game/ remains intact.
 Production browser reached offline simulation and Controls, then resumed the game. Artifacts:
-/private/tmp/game3-input-browser-e91D3j. A second boot identified HTTP 400 at /rtc, which the
-debug panel uses as an HTTP status endpoint as well as the WebSocket signaling route. This
-does not establish WebSocket failure; test two-peer signaling/checksums before claiming netplay.
+/private/tmp/game3-input-browser-e91D3j. HTTP GET /rtc returns 400 with "Upgrade header did not
+include websocket"; GET /status is 404. The reference relay source exposes /status, but the
+public route is unavailable. Leave server routing unchanged pending a scoped deployment fix.
+WebSocket signaling succeeded independently. Ad-hoc test /private/tmp/1_game3_online.cjs used
+two contexts, unique private room, 900-tick scripts with opposite movement, same-tick snapshot
+hash comparison, then peer close and the 12-second reconnect timeout. Receipts:
+/private/tmp/game3-online-check.log (180 matches), /private/tmp/game3-online-disconnect.log
+(181 matches and offline recovery), /private/tmp/game3-online-ZTZfCn (screenshots).
+No simulation changes or compiler jobs were needed for this acceptance run.
 Remote hashes matched the tested artifact:
 
 - Game3 index.pck: fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df
