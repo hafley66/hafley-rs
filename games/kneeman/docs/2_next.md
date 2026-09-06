@@ -94,7 +94,16 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    100 ticks each, including snapshot restore. Fighter grab retains reduced forward momentum;
    held-item throw keeps priority and excludes the owner from self-hits. 432 game + 70 shell
    tests pass; /private/tmp/game3-jc-context-tests.log. No new gameplay or deployment changes.
-4. Extend the recorded-input tests for the selected PM mechanic; expose its replay in the debugger.
+4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
+   Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
+   Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
+   Restore returns the identical tick-60 checksum. A live Step followed by Replay step rejects
+   changed state and requests restore. Restoring then stepping all 45 inputs finishes at 105;
+   another step leaves tick/checksum unchanged. Screenshots: /private/tmp/game3-input-browser-MqzGl7
+   (4_fixture through 10_finished). No browser exceptions; local /rtc, /turn and /ev return 404
+   because this offline export server has no relay routes. 432 game + 71 shell tests pass;
+   /private/tmp/game3-replay-step-tests.log. PM equivalence remains unverified.
+   Next: verify this export with the production relay, then publish the tested checkpoint.
 5. Extract reusable menu widgets as they are exercised by controls and character import.
 
 Art remains part of the game: gallery/camera frames, workshop PNG clips and metadata, SVG/drawn

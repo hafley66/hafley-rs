@@ -18,6 +18,8 @@ enum Command {
     Verify,
     Restore,
     Fixture,
+    JumpGrab,
+    ReplayStep,
 }
 
 struct Trace {
@@ -30,6 +32,38 @@ struct Trace {
 }
 
 impl Trace {
+    fn jump_grab() -> Self {
+        let tune = Tune::default();
+        let mut state = SimState::spawn();
+        state.fighters[0].char_id = 2;
+        state.fighters[1].char_id = 3;
+        for _ in 0..60 { state = sim::step(&state, &[&InputFrame::default(); 2], &tune); }
+        let mut trace = Self::new(&state, &tune);
+        trace.recording = false;
+        for tick in 0..45 {
+            let mut input = InputFrame::default();
+            input.jump = tick == 0;
+            input.jump_held = tick < 2;
+            input.grab = tick == 1;
+            let inputs = [sim::net::decode(sim::net::encode(&input)), InputFrame::default()];
+            state = sim::step(&state, &[&inputs[0], &inputs[1]], &tune);
+            trace.frames.push((inputs, sim::net::checksum(&state)));
+        }
+        trace
+    }
+
+    fn replay_step(&self, state: &SimState, index: usize) -> Result<Option<SimState>, String> {
+        let Some((inputs, expected)) = self.frames.get(index) else { return Ok(None); };
+        let before = if index == 0 {
+            let initial: SimState = bincode::deserialize(&self.snapshot).map_err(|e| e.to_string())?;
+            sim::net::checksum(&initial)
+        } else { self.frames[index - 1].1 };
+        if sim::net::checksum(state) != before { return Err("Replay state changed; restore start first.".into()); }
+        let next = sim::step(state, &[&inputs[0], &inputs[1]], &self.tune);
+        if sim::net::checksum(&next) != *expected { return Err(format!("Replay mismatch at frame {index}.")); }
+        Ok(Some(next))
+    }
+
     fn new(state: &SimState, tune: &Tune) -> Self {
         Self {
             snapshot: bincode::serialize(state).unwrap(),
@@ -63,6 +97,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn jump_grab_fixture_steps_and_rejects_external_state_edits() {
+        let trace = Trace::jump_grab();
+        assert_eq!(trace.verify(), Ok(45));
+        let initial: SimState = bincode::deserialize(&trace.snapshot).unwrap();
+        let jump = trace.replay_step(&initial, 0).unwrap().unwrap();
+        assert_eq!(jump.fighters[0].state, sim::CharState::JumpSquat);
+        let grab = trace.replay_step(&jump, 1).unwrap().unwrap();
+        assert_eq!(grab.fighters[0].state, sim::CharState::Grab);
+        assert_eq!(grab.fighters[0].pos.y, initial.fighters[0].pos.y);
+        let mut state = grab;
+        for index in 2..trace.frames.len() { state = trace.replay_step(&state, index).unwrap().unwrap(); }
+        assert!(trace.replay_step(&state, 45).unwrap().is_none());
+        state.fighters[0].damage += 1.0;
+        assert_eq!(trace.replay_step(&state, 0).err().as_deref(), Some("Replay state changed; restore start first."));
+    }
+
+    #[test]
     fn snapshot_capture_verifies_every_tick_and_reports_first_corruption() {
         let tune = Tune::default();
         let mut state = SimState::spawn();
@@ -78,6 +129,8 @@ mod tests {
         }
         let trace = debugger.trace.as_mut().unwrap();
         assert_eq!(trace.verify(), Ok(60));
+        let initial = bincode::deserialize(&trace.snapshot).unwrap();
+        assert!(trace.replay_step(&initial, 0).unwrap().is_some());
         trace.frames[17].1 ^= 1;
         assert!(
             trace
@@ -139,6 +192,7 @@ pub(super) struct Debugger {
     history: VecDeque<Frame>,
     selected: Option<usize>,
     message: String,
+    replay_cursor: usize,
 }
 
 impl Debugger {
@@ -248,7 +302,8 @@ impl Debugger {
                 ui.horizontal_wrapped(|ui| {
                     for (label, command) in [("Pause", Command::Pause), ("Resume", Command::Resume),
                         ("Step", Command::Step), ("Capture", Command::Capture), ("Verify replay", Command::Verify),
-                        ("Restore start", Command::Restore), ("Load fixture", Command::Fixture)] {
+                        ("Restore start", Command::Restore), ("Replay step", Command::ReplayStep),
+                        ("Load fixture", Command::Fixture), ("Falcon jump-grab", Command::JumpGrab)] {
                         if ui.button(label).clicked() { self.command = Some(command); }
                     }
                 });
@@ -258,6 +313,7 @@ impl Debugger {
             if let Some(trace) = &self.trace { ui.label(format!("{} recorded ticks; {}", trace.frames.len(),
                 if trace.recording { "recording" } else { "stopped" })); }
             ui.label(&self.message);
+            if self.trace.is_some() { ui.label(format!("Replay position: {}", self.replay_cursor)); }
             ui.label("Scrub = recorded projections. Verify replay = deserialize + re-simulate + compare every tick.");
             if self.history.is_empty() { return; }
             let last = self.history.len() - 1;
@@ -312,6 +368,7 @@ impl KneeMan {
                 return true;
             }
             Some(Command::Capture) => {
+                self.debugger.replay_cursor = 0;
                 self.debugger.trace = Some(Trace::new(&self.state.get(), &self.tune.get_cloned()));
                 self.debugger.message =
                     "Recording up to 600 input-only ticks. Resume to advance.".into();
@@ -338,6 +395,7 @@ impl KneeMan {
                         self.debugger.isolated = true;
                         self.debugger.history.clear();
                         self.debugger.selected = None;
+                        self.debugger.replay_cursor = 0;
                     }
                 }
             }
@@ -348,6 +406,31 @@ impl KneeMan {
                 self.debugger = Debugger { paused: true, isolated: true,
                     message: "Fixture paused. Resume and strike the blue cells. Dropper left of Falcon; ship farther left.".into(),
                     ..Debugger::default() };
+            }
+            Some(Command::JumpGrab) => {
+                let trace = Trace::jump_grab();
+                self.state.set(bincode::deserialize::<SimState>(&trace.snapshot).unwrap());
+                self.tune.set(trace.tune.clone());
+                self.charsel.set([2, 3]);
+                self.debugger = Debugger { paused: true, isolated: true, trace: Some(trace),
+                    message: "Replay step: 1 = jump, 2 = grounded grab. Provisional Game3 rules; PM parity unverified.".into(),
+                    ..Debugger::default() };
+            }
+            Some(Command::ReplayStep) => {
+                self.debugger.paused = true;
+                if let Some(trace) = &mut self.debugger.trace {
+                    trace.recording = false;
+                    match trace.replay_step(&self.state.get(), self.debugger.replay_cursor) {
+                        Ok(Some(next)) => {
+                            self.state.set(next);
+                            self.tune.set(trace.tune.clone());
+                            self.debugger.replay_cursor += 1;
+                            self.debugger.isolated = true;
+                        }
+                        Ok(None) => self.debugger.message = "Replay finished.".into(),
+                        Err(error) => self.debugger.message = error,
+                    }
+                }
             }
             None => {}
         }
