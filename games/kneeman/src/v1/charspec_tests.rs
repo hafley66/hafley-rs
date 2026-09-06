@@ -6,6 +6,20 @@
 
 use super::*;
 
+#[test]
+fn game3_art_slots_resolve_builtin_kits_and_imports_use_baseline() {
+    let rows: Vec<_> = (0..=u8::MAX).map(chars::art_slot_row).collect();
+    assert_eq!(&rows[..4], &[0, 1, 1, 2]);
+    assert_eq!(&rows[4..], &[0; 252]);
+    let tune = Tune::default();
+    for slot in [2, 3, 4, 255] {
+        let expected = &tune.roster[rows[slot as usize]];
+        let resolved = tune.for_char(slot);
+        assert!(resolved.specials == expected.specials);
+        assert_eq!(resolved.weight, expected.weight);
+    }
+}
+
 // ── (1) KNEEMAN through the CharSpec/MatchTune split == the old flat `Tune::from_char` constants.
 
 #[test]
@@ -158,13 +172,12 @@ const IDLE: InputFrame = InputFrame {
 
 #[test]
 fn lucas_is_selectable_and_falls_floatier_than_kneeman() {
-    // char_id 5 selects Lucas's roster row (the `lucas` shell art slot; the roster is aligned to the
-    // shell art order, see chars/mod.rs). A menu pick of 5 resolves Lucas's own floaty CharSpec.
+    // Built-in art slot 3 selects Lucas's physics row 2.
     let t = Tune::default();
     assert_ne!(
-        t.for_char(5).gravity,
+        t.for_char(3).gravity,
         t.for_char(0).gravity,
-        "Lucas's row (5) resolves his own physics, not KNEEMAN's"
+        "Lucas's art slot resolves his own physics"
     );
 
     let mut s = SimState::spawn_n(2);
@@ -176,7 +189,7 @@ fn lucas_is_selectable_and_falls_floatier_than_kneeman() {
         f.fast_falling = false;
     }
     s.fighters[0].char_id = 0; // KNEEMAN
-    s.fighters[1].char_id = 5; // Lucas
+    s.fighters[1].char_id = 3; // Lucas
 
     let mut cur = s;
     for _ in 0..10 {
@@ -201,7 +214,7 @@ fn lucas_double_jump_apex_stays_bounded() {
     let t = Tune::default();
     let apex = |v: f32, g: f32| (v * v) / (2.0 * g.abs()); // v^2/(2g); resolved v is negative (up)
 
-    let lucas = t.for_char(5);
+    let lucas = t.for_char(3);
     let knee = t.for_char(0);
     let lucas_fh = apex(lucas.fullhop_v, lucas.gravity);
     let lucas_dj = apex(lucas.airjump_v, lucas.gravity);
@@ -227,9 +240,9 @@ fn lucas_ftilt_connects_as_a_disjoint_normal() {
     // A normal actually connects through `step`: Lucas's ftilt (a disjoint stick sweep, off.x
     // 96.0 -- past the DUMMY_R 48 hurtbox radius) armed and stepped into a standing victim.
     let t = Tune::default();
-    let lucas = t.for_char(5);
+    let lucas = t.for_char(3);
     let mut s = SimState::spawn();
-    s.fighters[0].char_id = 5;
+    s.fighters[0].char_id = 3;
     s.fighters[0].state = CharState::Ftilt;
     s.fighters[0].frame = lucas.ftilt.boxes[0].start; // the active frame lands this step
     s.fighters[0].pos = Vector2::new(600.0, GROUND_Y);
@@ -272,11 +285,11 @@ fn lucas_tether_grab_reaches_farther_than_kneeman() {
     // KNEEMAN's (100 + 48 + 36 = up to 184px).
     let t = Tune::default();
     assert!(
-        t.for_char(5).grab_range > t.for_char(0).grab_range * 2.0,
+        t.for_char(3).grab_range > t.for_char(0).grab_range * 2.0,
         "Lucas's grab_range more than doubles KNEEMAN's"
     );
 
-    let s = grab_fixture(&t, 5, 250.0);
+    let s = grab_fixture(&t, 3, 250.0);
     let c = step(&s, &[&IDLE, &IDLE], &t);
     assert_eq!(
         c.fighters[0].grab_link, 1,

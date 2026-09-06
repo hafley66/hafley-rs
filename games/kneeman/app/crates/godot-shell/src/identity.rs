@@ -122,13 +122,14 @@ pub(crate) fn save_ui_scale(scale: f32) {
 /// `sync_charsel` clamps against the live roster, so a stale index from a shrunk roster
 /// just clamps instead of breaking the load.
 pub(crate) fn load_charsel() -> [i64; 2] {
-    let mut out = [0, 1];
+    let mut out = [2, 3]; // Fresh sessions select Falcon and Lucas; saved picks remain intact.
     let mut cfg = godot::classes::ConfigFile::new_gd();
     if cfg.load(IDENTITY_PATH) != godot::global::Error::OK {
         return out;
     }
     for (k, key) in ["char0", "char1"].into_iter().enumerate() {
-        if let Ok(v) = cfg.get_value("player", key).try_to::<i64>() {
+        if cfg.has_section_key("player", key)
+            && let Ok(v) = cfg.get_value("player", key).try_to::<i64>() {
             out[k] = v.max(0);
         }
     }

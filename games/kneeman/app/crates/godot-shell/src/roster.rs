@@ -2,10 +2,8 @@
 //! parsing. Pure data + asset IO, lifted out of `kneeman` (the Godot node) so the file holding the
 //! node is just the node.
 //!
-//! Cosmetic only -- a character's art is never folded into `crate::sim::net::checksum`, so adding or
-//! reordering the roster cannot desync a netplay session. Each fighter slot holds an index into the
-//! roster; char-select just writes those indices. The list is four built-ins followed by whatever
-//! `assets/roster.json` declares (written by `tools/fetch_packs.py` -> `just packs`).
+//! Art bytes are cosmetic. Roster indices are checksummed fighter state and select physics through
+//! sim::chars::ART_SLOT_ROW. Preserve the built-in order; append distinct imported directories.
 
 use godot::classes::{FileAccess, Json};
 use godot::prelude::*;
@@ -56,11 +54,15 @@ pub(crate) fn roster_names() -> Vec<String> {
 /// The live roster: the built-ins, then any characters declared in `assets/roster.json`.
 pub(crate) fn roster() -> Vec<Character> {
     let mut v = vec![frog(), zombie(), falcon(), lucas()];
-    v.extend(load_roster_json());
+    for character in load_roster_json() {
+        if !v.iter().any(|existing| existing.dir == character.dir) {
+            v.push(character);
+        }
+    }
     v
 }
 
-/// V4 P1: the existing Captain Falcon horizontal strips.
+/// Captain Falcon's existing horizontal strips.
 pub(crate) fn falcon() -> Character {
     Character {
         dir: "falcon".to_string(),
@@ -70,10 +72,25 @@ pub(crate) fn falcon() -> Character {
         // Missing clips still use the presentation fallback.
         clips: vec![
             clip("idle", &["idle_strip6"], 6, 14.0, true),
-            clip("walk", &["run_strip8"], 8, 14.0, true),
+            clip("walk", &["walk_strip8"], 8, 14.0, true),
             clip("run", &["run_strip8"], 8, 20.0, true),
             clip("jump", &["jump_strip4"], 4, 12.0, false),
             clip("fall", &["fall_strip1"], 1, 1.0, false),
+            clip("dashstart", &["dashstart_strip2"], 2, 12.0, false),
+            clip("dashturn", &["dashturn_strip2"], 2, 12.0, false),
+            clip("skid", &["skid_strip3"], 3, 12.0, false),
+            clip("crouch", &["crouch_strip3"], 3, 12.0, false),
+            clip("landinglag", &["landinglag_strip1"], 1, 1.0, false),
+            clip("roll_forward", &["roll_forward_strip4"], 4, 12.0, false),
+            clip("tech", &["tech_strip1"], 1, 1.0, false),
+            clip("pratfall", &["pratfall_strip1"], 1, 1.0, false),
+            clip("wallbounce", &["wallbounce_strip1"], 1, 1.0, false),
+            clip("dtilt", &["dtilt_strip3"], 3, 12.0, false),
+            clip("utilt", &["utilt_strip5"], 5, 15.0, false),
+            clip("fstrong", &["fstrong_strip9"], 9, 18.0, false),
+            clip("ustrong", &["ustrong_strip10"], 10, 20.0, false),
+            clip("dstrong", &["dstrong_strip7"], 7, 14.0, false),
+            clip("dattack", &["dattack_strip8"], 8, 16.0, false),
             clip("jab", &["jab_strip7"], 7, 21.0, false),
             clip("nair", &["nair_strip8"], 8, 24.0, false),
             clip("fair", &["fair_strip3"], 3, 12.0, false),
@@ -88,7 +105,7 @@ pub(crate) fn falcon() -> Character {
     }
 }
 
-/// V4 P2: the existing Lucas horizontal strips.
+/// Lucas's existing horizontal strips.
 pub(crate) fn lucas() -> Character {
     Character {
         dir: "lucas".to_string(),
