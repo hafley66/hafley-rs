@@ -103,7 +103,19 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    (4_fixture through 10_finished). No browser exceptions; local /rtc, /turn and /ev return 404
    because this offline export server has no relay routes. 432 game + 71 shell tests pass;
    /private/tmp/game3-replay-step-tests.log. PM equivalence remains unverified.
-   Next: verify this export with the production relay, then publish the tested checkpoint.
+   Export + production relay passed 549 confirmed combat frames and 180 resumed frames after
+   data-channel reconnect; peer close subsequently returned offline. Runner exit 0.
+   Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-replay-online.log; screenshots: /private/tmp/game3-online-qpdlPh.
+   Published through de86527 on 2026-09-06 using the existing game3 profile. Nginx validation
+   passed; remote WASM matches local SHA-256
+   47a248bd330033e2bd49a5309f23a27df928c9b6c95baf1679e41db633cbf9dd.
+   Both pack hashes remain as recorded below, including the protected original /game/.
+   Production smoke test also reaches Grab/Stand at tick 62, Falcon y=410 and the same checksum
+   as the local debugger; exit 0 without browser exceptions.
+   Command: PRODUCTION=1 node /private/tmp/1_game3_jump_grab.cjs.
+   Log: /private/tmp/game3-jump-grab-production.log.
+   Next: replacement-tab online rejoin acceptance, then the remaining input customization gates.
 5. Extract reusable menu widgets as they are exercised by controls and character import.
 
 Art remains part of the game: gallery/camera frames, workshop PNG clips and metadata, SVG/drawn
