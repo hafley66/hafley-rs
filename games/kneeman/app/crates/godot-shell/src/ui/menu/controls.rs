@@ -5,7 +5,7 @@ use crate::controls::bindings;
 use crate::ui::themes::Theme;
 use egui_rsx_macro::egui_rsx;
 
-/// Keyboard and both pads edit InputMap. Menu navigation and touch remain fixed.
+/// Keyboard and both pads edit InputMap. Touch and native keyboard menu navigation remain fixed.
 pub struct Controls;
 
 // P2 (couch co-op) is a second gamepad only: the keyboard now belongs entirely to P1 (WASD move +
@@ -115,12 +115,13 @@ impl Screen for Controls {
                 }
             }
         }
-        ui.collapsing("Gamepad movement / c-stick", |ui| {
+        ui.collapsing("Gamepad movement / c-stick / menu", |ui| {
             ui.label("Signed directions accept an axis or button. D-pad overrides are digital (0.5 threshold).");
+            ui.label("Menu actions apply inside menus; pause takes precedence over navigation.");
             egui::Grid::new("pad_sticks").num_columns(3).striped(true).show(ui, |ui| {
                 for label in ["Direction", "Player 1", "Player 2"] { ui.label(label); }
                 ui.end_row();
-                for &(p1, p2) in bindings::PAD_STICKS.iter().chain(bindings::PAD_DPAD) {
+                for &(p1, p2) in bindings::PAD_STICKS.iter().chain(bindings::PAD_DPAD).chain(bindings::PAD_MENU) {
                     ui.label(p1.strip_prefix("pad_").unwrap_or(p1));
                     for (player, name) in [p1, p2].into_iter().enumerate() {
                         if ui.add(egui::Button::new(chip(&bindings::pad_label(name)))

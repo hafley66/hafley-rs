@@ -1,8 +1,8 @@
 use godot::classes::{
-    Camera2D, CanvasLayer, HttpRequest, INode, Input, InputEvent, InputEventJoypadButton,
+    Camera2D, CanvasLayer, HttpRequest, INode, Input, InputEvent,
     InputEventKey, InputEventMouseButton, InputEventScreenTouch, Node,
 };
-use godot::global::{JoyButton, Key, MouseButton};
+use godot::global::{Key, MouseButton};
 use godot::prelude::*;
 
 use futures_signals::signal::Mutable;
@@ -64,7 +64,7 @@ pub struct DebugUi {
     push_status: String, // web-push opt-in label mirrored from JS, shown on the Network page
     // Dpad hold-to-repeat state. Tracks which direction is currently held and drives
     // synthetic arrow key repeats from process(dt) at PAD_INITIAL_DELAY_S + PAD_REPEAT_INTERVAL_S cadence.
-    pad_held: Option<JoyButton>,
+    pad_held: Option<(&'static str, Key)>,
     pad_hold_secs: f64,
     pad_repeats_fired: u32,
     save_label: String, // text field in the Saves window; the label a manual save writes under
@@ -139,22 +139,6 @@ impl INode for DebugUi {
         // Pause is sampled in process, including events consumed by egui. A remapped pause
         // must not also activate a focused widget or one of the debug shortcuts below.
         if event.is_action("pause") || event.is_action("p2_pause") { return; }
-        // Gamepad drives the pause menu. While it's open, dpad + A
-        // + B become synthetic key events (Tab focus-nav / Enter activate / Esc back) that egui and
-        // this handler already understand -- so no custom focus model and no bridge changes.
-        if let Ok(pad) = event.clone().try_cast::<InputEventJoypadButton>() {
-            if pad.is_pressed() && !pad.is_echo() {
-                // ○/B closes the debug panel when it's the thing on screen (menu not open).
-                if pad.get_button_index() == JoyButton::B && !self.is_menu_open() && self.show {
-                    self.show = false;
-                    return;
-                }
-            }
-            if self.is_menu_open() {
-                self.gamepad_menu_nav(pad);
-            }
-            return;
-        }
         let Ok(key) = event.try_cast::<InputEventKey>() else {
             return;
         };
@@ -191,6 +175,9 @@ impl INode for DebugUi {
         if crate::controls::bindings::menu_pressed() {
             if !self.is_menu_open() && self.show { self.show = false; }
             else { self.menu_esc = true; }
+        } else if crate::controls::bindings::menu_input_ready()
+            && !["pause", "p2_pause"].iter().any(|name| Input::singleton().is_action_pressed(*name)) {
+            self.gamepad_menu_nav();
         }
         // Counter `project.godot`'s canvas_items stretch (design 1600x900) so the egui layer's
         // own "points" land at a stable physical size regardless of the real window size --
@@ -270,6 +257,8 @@ impl INode for DebugUi {
             // processes them in this frame's begin_pass before the menu is drawn.
             if self.is_menu_open() {
                 self.tick_pad_repeat(dt);
+            } else {
+                self.pad_held = None;
             }
             // Mirror the JS push status into the menu while the Network page is open (skip the JS
             // bridge call on every other screen). No-op/empty on the native build.
@@ -468,44 +457,26 @@ impl DebugUi {
         }
     }
 
-    /// Handle a gamepad button event while the pause menu is open.
-    ///
-    /// Presses: dpad directions start hold tracking and emit the initial arrow key event;
-    ///   A emits Enter (activate focused widget); B sets menu_esc (dismiss the menu, no synthetic
-    ///   Esc injected so egui never clears focus inadvertently).
-    /// Releases: clear the held direction so repeat timers stop.
-    /// Echo events are ignored (Godot joypad buttons do not echo; guard is defensive).
-    fn gamepad_menu_nav(&mut self, pad: Gd<InputEventJoypadButton>) {
-        let btn = pad.get_button_index();
-        if pad.is_pressed() && !pad.is_echo() {
-            match btn {
-                JoyButton::DPAD_DOWN
-                | JoyButton::DPAD_UP
-                | JoyButton::DPAD_LEFT
-                | JoyButton::DPAD_RIGHT => {
-                    self.pad_held = Some(btn);
-                    self.pad_hold_secs = 0.0;
-                    self.pad_repeats_fired = 0;
-                    Self::emit_nav_arrow(btn);
+    /// Device-scoped menu actions feed egui keys; Back resolves directly through the router.
+    fn gamepad_menu_nav(&mut self) {
+        for (&(p1, p2), key) in crate::controls::bindings::PAD_MENU.iter().zip([
+            Key::DOWN, Key::UP, Key::LEFT, Key::RIGHT, Key::ENTER, Key::ESCAPE,
+        ]) {
+            for name in [p1, p2] {
+                if Input::singleton().is_action_just_pressed(name) {
+                    if key == Key::ESCAPE {
+                        if self.is_menu_open() { self.menu_esc = true; }
+                        else { self.show = false; }
+                    } else if self.is_menu_open() {
+                        if key != Key::ENTER {
+                            self.pad_held = Some((name, key));
+                            self.pad_hold_secs = 0.0;
+                            self.pad_repeats_fired = 0;
+                        }
+                        Self::emit_key(key);
+                    }
+                    return;
                 }
-                JoyButton::A => Self::emit_key(Key::ENTER),
-                JoyButton::B => {
-                    self.menu_esc = true;
-                }
-                _ => {}
-            }
-        } else if !pad.is_pressed() {
-            if matches!(
-                btn,
-                JoyButton::DPAD_DOWN
-                    | JoyButton::DPAD_UP
-                    | JoyButton::DPAD_LEFT
-                    | JoyButton::DPAD_RIGHT
-            ) && self.pad_held == Some(btn)
-            {
-                self.pad_held = None;
-                self.pad_hold_secs = 0.0;
-                self.pad_repeats_fired = 0;
             }
         }
     }
@@ -513,9 +484,15 @@ impl DebugUi {
     /// Advance the hold-repeat timer by `dt` seconds and fire synthetic arrow key events for
     /// any repeat intervals that have elapsed. Called from process() while the menu is open.
     fn tick_pad_repeat(&mut self, dt: f64) {
-        let Some(btn) = self.pad_held else {
+        let Some((name, key)) = self.pad_held else {
             return;
         };
+        if !crate::controls::bindings::menu_input_ready()
+            || ["pause", "p2_pause"].iter().any(|name| Input::singleton().is_action_pressed(*name))
+            || !Input::singleton().is_action_pressed(name) {
+            self.pad_held = None;
+            return;
+        }
         self.pad_hold_secs += dt;
         let due: u32 = if self.pad_hold_secs < PAD_INITIAL_DELAY_S {
             0
@@ -524,22 +501,9 @@ impl DebugUi {
         };
         let to_fire = due.saturating_sub(self.pad_repeats_fired);
         for _ in 0..to_fire {
-            Self::emit_nav_arrow(btn);
+            Self::emit_key(key);
             self.pad_repeats_fired += 1;
         }
-    }
-
-    /// Inject a synthetic arrow key event (pressed=true) for a dpad direction. egui reads arrow
-    /// keys as directional FocusDirection (Up/Down/Left/Right), enabling 2D geometric focus nav.
-    fn emit_nav_arrow(btn: JoyButton) {
-        let key = match btn {
-            JoyButton::DPAD_DOWN => Key::DOWN,
-            JoyButton::DPAD_UP => Key::UP,
-            JoyButton::DPAD_LEFT => Key::LEFT,
-            JoyButton::DPAD_RIGHT => Key::RIGHT,
-            _ => return,
-        };
-        Self::emit_key(key);
     }
 
     /// Inject a synthetic key-press event into Godot's input pipeline (feeds the egui bridge).

@@ -22,6 +22,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Keyboard bindings | Live InputMap editing for movement, c-stick and gameplay buttons; ConfigFile persistence/reset, side-aware labels, malformed-key validation and focus-loss clearing. 428 game + 68 shell tests pass |
 | Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
 | Production netplay | Two isolated Chromium contexts joined a unique private room through production signaling/WebRTC. Two runs matched 180 and 181 same-tick snapshot hashes with scripted movement; peer close -> reconnecting -> offline after timeout, no browser exceptions |
+| Pad menu bindings | Local implementation: six actions per pad reuse capture/save/reset; navigation, hold/release/disconnect, pause precedence and resumed neutral input verified below |
 
 ## Next, in order
 
@@ -71,7 +72,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    its displayed prompts from those bindings. Cover movement, c-stick, jump/short hop, attack,
    special, shield/dodge, grab/throw and menu for keyboard, both gamepads and mobile touch.
    Test press/hold/release, focus loss, reconnect, simultaneous inputs, remap/reload/reset and replay.
-   Remaining gaps: menu-navigation bindings, fixed touch actions/layout and physical devices.
+   Remaining gaps: native keyboard menu-navigation bindings, fixed touch actions/layout and physical devices.
    Reuse RawPad -> PadMemory -> InputFrame.
    Keyboard browser evidence: remap F, reload after 100 ms retains F, Escape cancels in Controls,
    reset/reload restores defaults. Web controls now use synchronous localStorage with ConfigFile
@@ -321,6 +322,41 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Next bounded input work: editable menu navigation, followed by touch action/layout
    customization. The PM move ledger and physical/cross-network/three-player acceptance
    remain incomplete; this checkpoint does not change fighter mechanics.
+   Gamepad menu follow-up: six actions per pad (down/up/left/right/accept/back) use the
+   existing device-scoped InputMap capture, persistence and reset path. Controls -> Gamepad
+   movement / c-stick / menu exposes the additional rows. UI samples pressed edges once per
+   process frame; the existing direction repeat timer tracks the mapped action and stops on
+   release, disconnect, capture, pause or menu closure. InputFrame and simulation are unchanged.
+   Runtime delta: +56/-77 lines across three files. Final 432 game + 73 shell tests and export
+   pass: /private/tmp/game3-menu-restored-tests.log and game3-menu-restored-build.log.
+   Interactive capture/reload: /private/tmp/game3-input-browser-68QxG5. Default navigation
+   reaches Characters and backs to Menu. Wrong-device input leaves capture pending. P1 down
+   -> button 7, P2 accept -> positive axis 4 and P2 back -> button 8 save and survive reload.
+   Local navigation assertions: six remapped actions on both pads match native keyboard
+   focus/routes, with old bindings removed and wrong-device inputs ignored. Axis back at
+   0.3 stays neutral; 0.8 activates once through subsequent 0.7/0.9/0.8 samples. Direction
+   repeats stop on release and disconnect. /private/tmp/game3-menu-navigation-final.log
+   and /private/tmp/game3-menu-fA37zk record these passing assertions, then stop on a failed
+   picker-fixture precondition: mouse click did not transfer keyboard focus from the rail.
+   Further fixed-index picker assertions were invalid because identity.rs persists roster
+   picks independently of controls. Start-state receipt proves 2 -> 1 and 1 -> 0, each once:
+   /private/tmp/game3-menu-accept-start-state.log. The diagnostic edge-mask experiment was
+   removed; no engine duplicate-activation defect is claimed. Corrected fixture navigates
+   keyboard focus, derives one native decrement from the actual selection, restores it,
+   then holds axis accept. Both pads match that single decrement through all four samples.
+   Pause precedence, independent resets and unchanged fighter positions/states after 60+
+   resumed ticks also pass, no browser exceptions, exit 0. Command: HOLDS_ONLY=1 node
+   /private/tmp/3_game3_menu.cjs. Log: /private/tmp/game3-menu-holds-restored-baseline.log;
+   screenshots: /private/tmp/game3-menu-TP99BR. Screenshot comparisons permit one RGB level
+   per channel (measured glyph rasterization variation), with no positional tolerance.
+   Final export online gate passes 546 initial and 180 resumed confirmed frames, game
+   ticks 756/754, stable fighter slots/characters and offline recovery after peer closure.
+   Each peer drops 240 messages from 1249/1248 sends, maximum burst 24; sends are delayed
+   60 ms and exactly one queued-message close is injected. Zero ERR_UNCONFIGURED and
+   browser exceptions, exit 0. Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1
+   QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1
+   node /private/tmp/1_game3_online.cjs. Log: /private/tmp/game3-menu-online.log;
+   screenshots: /private/tmp/game3-online-xbshKj.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
    Text-reference checkpoint: docs/3_pm_baseline.md pins PM-CC revision 6e63ffa9 and exact
