@@ -28,7 +28,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 1. Complete online acceptance for the published /game3/ build. Ad-hoc Playwright passed capture/export/import,
    saved-frame reload, mobile viewport capture, tick-120 freeze, keyboard/menu interaction and
    debugger rendering, fixture pause/step/capture/verify/restore and two-peer movement/checksum agreement.
-   Next online gates: replacement-tab rejoin, burst loss, cross-network
+   Next online gates: host-tab replacement, burst loss, cross-network
    and physical phones. Current two peers ran in isolated contexts on one machine.
 2. Complete semantic/physical input separation and customization: use Godot InputMap for device
    bindings, preserve the semantic tick packet, and make Controls edit/persist bindings and derive
@@ -115,7 +115,14 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    as the local debugger; exit 0 without browser exceptions.
    Command: PRODUCTION=1 node /private/tmp/1_game3_jump_grab.cjs.
    Log: /private/tmp/game3-jump-grab-production.log.
-   Next: replacement-tab online rejoin acceptance, then the remaining input customization gates.
+   Production guest-tab replacement also passes: 549 initial confirmed frames, close guest,
+   create a fresh page in its isolated browser context, rejoin the same room, receive host
+   resume/Tune, then 180 shared confirmed frames match with game ticks 757/758. Closing the
+   replacement returns the host offline after timeout; runner exit 0, no browser exceptions.
+   Command: CONFIRMED=1 COMBAT=1 RECONNECT=1 REPLACE_TAB=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-replacement-tab.log; screenshots: /private/tmp/game3-online-5JwRaI.
+   Host replacement, changed device/network and physical phones remain unverified.
+   Next: remaining input customization gates and burst-loss/host-replacement acceptance.
 5. Extract reusable menu widgets as they are exercised by controls and character import.
 
 Art remains part of the game: gallery/camera frames, workshop PNG clips and metadata, SVG/drawn
