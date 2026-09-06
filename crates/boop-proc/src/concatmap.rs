@@ -1188,6 +1188,7 @@ mod tests {
                 self.next_ts as u64,
                 "assistant",
                 "reply",
+                None,
             )?;
             self.next_ts += 1;
             Ok(())
@@ -1241,10 +1242,10 @@ mod tests {
     #[test]
     fn oneshot_window_maps_each_window_exactly_once() {
         let (store, db_path) = store();
-        store.write_turn("ses", 1, 10, "assistant", "a1").unwrap();
-        store.write_turn("ses", 2, 11, "assistant", "a2").unwrap();
-        store.write_turn("ses", 3, 12, "user", "u1").unwrap();
-        store.write_turn("ses", 4, 13, "assistant", "a3").unwrap();
+        store.write_turn("ses", 1, 10, "assistant", "a1", None).unwrap();
+        store.write_turn("ses", 2, 11, "assistant", "a2", None).unwrap();
+        store.write_turn("ses", 3, 12, "user", "u1", None).unwrap();
+        store.write_turn("ses", 4, 13, "assistant", "a3", None).unwrap();
         let harness: &'static FakeHarness = Box::leak(Box::new(FakeHarness {
             calls: AtomicUsize::new(0),
             reply: "rewritten",
@@ -1274,8 +1275,8 @@ mod tests {
     #[test]
     fn poisoned_bundle_times_out_and_the_next_window_still_processes() {
         let (store, db_path) = store();
-        store.write_turn("ses", 1, 10, "assistant", "a1").unwrap();
-        store.write_turn("ses", 2, 11, "user", "u1").unwrap();
+        store.write_turn("ses", 1, 10, "assistant", "a1", None).unwrap();
+        store.write_turn("ses", 2, 11, "user", "u1", None).unwrap();
         let harness: &'static FakeHarness = Box::leak(Box::new(FakeHarness {
             calls: AtomicUsize::new(0),
             reply: "rewritten",
@@ -1299,8 +1300,8 @@ mod tests {
     #[test]
     fn a_planted_marker_skips_the_bundle_mid_flight() {
         let (store, db_path) = store();
-        store.write_turn("ses", 1, 10, "assistant", "a1").unwrap();
-        store.write_turn("ses", 2, 11, "user", "u1").unwrap();
+        store.write_turn("ses", 1, 10, "assistant", "a1", None).unwrap();
+        store.write_turn("ses", 2, 11, "user", "u1", None).unwrap();
         let state_dir = temp_dir("plant_state");
         // The first one_shot call plants a done marker for the second window
         // (id 2) before returning, as a human would mid-flight.

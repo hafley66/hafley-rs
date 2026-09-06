@@ -872,10 +872,10 @@ mod tests {
     #[test]
     fn window_sql_partitions_runs_and_binds_params() {
         let (store, path) = store();
-        store.write_turn("ses", 1, 10, "assistant", "a1").unwrap();
-        store.write_turn("ses", 2, 11, "assistant", "a2").unwrap();
-        store.write_turn("ses", 3, 12, "user", "u1").unwrap();
-        store.write_turn("ses", 4, 13, "user", "u2").unwrap();
+        store.write_turn("ses", 1, 10, "assistant", "a1", None).unwrap();
+        store.write_turn("ses", 2, 11, "assistant", "a2", None).unwrap();
+        store.write_turn("ses", 3, 12, "user", "u1", None).unwrap();
+        store.write_turn("ses", 4, 13, "user", "u2", None).unwrap();
         let sql = "WITH marked AS (
                        SELECT t.turn, t.ts, r.value AS role, t.said,
                               ROW_NUMBER() OVER (ORDER BY t.ts, t.turn)

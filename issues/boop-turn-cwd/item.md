@@ -37,7 +37,7 @@ misses when the turn ran elsewhere.
 
 - [x] Fixture: a claude transcript with a `cd` mid-session projects two
       distinct `cwd_id` values across its turns; test pins both.
-- [ ] Codex fixture with `turn_context` projects the per-turn cwd.
+- [x] Codex fixture with `turn_context` projects the per-turn cwd.
 - [x] `boop db "select ... from v_turn_cwd"` (or the helper) returns the
       turn cwd with fallback; test covers a NULL row.
 - [x] Schema v27 migrates the live db in place; `cargo test -p boop-store` green.
@@ -59,6 +59,20 @@ The one failing test (`schema_rows_lists_views_and_join_keys`) fails identically
 the base commit before this change: it asserts a view (`v_usage_cost`) is listed
 among `schema_rows()`, which only returns tables. It lives in `query.rs`, out of
 scope for this issue. Not touched.
+
+Codex lane (boop-harness: codex turn cwd from turn_context into write_turn):
+```
+cargo test -p boop-harness 2>&1 | grep -E '^test result|FAILED'
+cargo test --workspace 2>&1 | grep -E '^test result|FAILED'
+cargo clippy --workspace --all-targets -- -D warnings 2>&1 | tail -3
+```
+- `write_turn` gains `cwd: Option<&str>` (passes through to `add_turn`); every
+  other caller passes `None`.
+- `codex::project_line` tracks the latest `turn_context.payload.cwd` in walk
+  state and stamps every projected turn; new fixture
+  `tests/fixtures/transcripts/codex/codex-cwd.jsonl`; test pins `/repo` then
+  `/repo/sub` through `v_turn_cwd` via new `Store::turn_cwds`.
+
 
 
 ## Follow-up (not this issue)

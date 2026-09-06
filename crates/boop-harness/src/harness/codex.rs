@@ -171,6 +171,7 @@ impl Harness for Codex {
         let mut stat = SyncStat::default();
         let mut current_model = String::from("unknown");
         let mut turn_tokens = TurnTokens::default();
+        let mut turn_cwd = None;
         for line in &result.lines {
             project_line(
                 store,
@@ -180,6 +181,7 @@ impl Harness for Codex {
                 &mut stat,
                 &mut current_model,
                 &mut turn_tokens,
+                &mut turn_cwd,
             )?;
         }
         Ok(Ingested {
@@ -911,6 +913,7 @@ struct TurnTokens {
     cached: i64,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn project_line(
     store: &Store,
     session: &SessionRef,
@@ -919,6 +922,7 @@ fn project_line(
     stat: &mut SyncStat,
     current_model: &mut String,
     turn_tokens: &mut TurnTokens,
+    turn_cwd: &mut Option<String>,
 ) -> anyhow::Result<()> {
     let value: Value = match serde_json::from_slice(&line.bytes) {
         Ok(value) => value,
@@ -945,7 +949,7 @@ fn project_line(
             let text = message_text(payload);
             if !text.is_empty() {
                 *turn += 1;
-                let inserted = store.write_turn(&sid, *turn, ts, role, &text)?;
+                let inserted = store.write_turn(&sid, *turn, ts, role, &text, turn_cwd.as_deref())?;
                 record(stat, inserted);
             }
         }
@@ -958,14 +962,14 @@ fn project_line(
                 .unwrap_or("tool");
             *turn += 1;
             let body = tool_call_body(name, payload);
-            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body, turn_cwd.as_deref())?;
             record(stat, inserted);
             store.write_tool_fact(&sid, *turn, ts, name, None)?;
         }
         "function_call_output" | "custom_tool_call_output" => {
             *turn += 1;
             let body = tool_output_body(payload);
-            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body, turn_cwd.as_deref())?;
             record(stat, inserted);
         }
         "agent_message" => {
@@ -976,7 +980,7 @@ fn project_line(
                 .map(str::to_owned)
                 .unwrap_or_else(|| serde_json::to_string(payload).unwrap_or_default());
             *turn += 1;
-            let inserted = store.write_turn(&sid, *turn, ts, "assistant", &text)?;
+            let inserted = store.write_turn(&sid, *turn, ts, "assistant", &text, turn_cwd.as_deref())?;
             record(stat, inserted);
         }
         "patch_apply_end" => {
@@ -993,7 +997,7 @@ fn project_line(
             let files: Vec<String> = changes.keys().cloned().collect();
             *turn += 1;
             let body = patch_body(call_id, &files);
-            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body, turn_cwd.as_deref())?;
             record(stat, inserted);
             for (path, change) in changes {
                 // The store's verb vocabulary (read/write/edit/...) has no
@@ -1037,7 +1041,7 @@ fn project_line(
             let input_tokens = (count("input_tokens") - cached - cache_write).max(0);
             let attach_turn = if *turn == 0 {
                 *turn += 1;
-                let inserted = store.write_turn(&sid, *turn, ts, "assistant", "")?;
+                let inserted = store.write_turn(&sid, *turn, ts, "assistant", "", turn_cwd.as_deref())?;
                 record(stat, inserted);
                 *turn
             } else {
@@ -1094,7 +1098,7 @@ fn project_line(
             if !text.is_empty() {
                 *turn += 1;
                 let body = format!("(reasoning)\n{text}");
-                let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body)?;
+                let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body, turn_cwd.as_deref())?;
                 record(stat, inserted);
             }
         }
@@ -1105,7 +1109,7 @@ fn project_line(
             if !text.is_empty() {
                 *turn += 1;
                 let body = format!("(reasoning)\n{}", truncate_chars(text, 4000));
-                let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body)?;
+                let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body, turn_cwd.as_deref())?;
                 record(stat, inserted);
             }
         }
@@ -1132,7 +1136,7 @@ fn project_line(
                 Some(results) => format!("web_search {query}\nresults: {}", results.len()),
                 None => format!("web_search {query}"),
             };
-            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body, turn_cwd.as_deref())?;
             record(stat, inserted);
             if record_type == "web_search_end" {
                 store.write_tool_fact(
@@ -1166,9 +1170,17 @@ fn project_line(
                 .unwrap_or_default();
             *turn += 1;
             let body = format!("{name}\n{}", truncate_chars(&arguments, 2000));
-            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body, turn_cwd.as_deref())?;
             record(stat, inserted);
             store.write_tool_fact(&sid, *turn, ts, &name, None)?;
+        }
+        kind if (if kind.is_empty() { outer_type } else { kind }) == "turn_context" => {
+            // Codex carries the working directory per turn. The latest record
+            // wins until the next one: a turn_context precedes every message
+            // batch, so each projected turn is stamped with the cwd it ran in.
+            if let Some(cwd) = payload.get("cwd").and_then(Value::as_str) {
+                *turn_cwd = Some(cwd.to_owned());
+            }
         }
         kind if BOOKKEEPING.contains(&if kind.is_empty() { outer_type } else { kind }) => {
             // Session bookkeeping, no transcript content: nothing to project
@@ -1185,7 +1197,7 @@ fn project_line(
             *turn += 1;
             let raw = truncate_chars(&value.to_string(), 4000);
             let body = format!("{label} (unprojected)\n{raw}");
-            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body, turn_cwd.as_deref())?;
             record(stat, inserted);
             // One line per kind per process. Before this, a single session's
             // 9734 `sub_agent_activity` records printed 9734 WARN lines into
@@ -1718,6 +1730,34 @@ mod tests {
     fn codex_fixture_projects_through_the_graph_query() {
         let sessions = sessions_in(&std::path::PathBuf::from("tests/fixtures/codex")).unwrap();
         crate::harness::assert_fixture_sessions_project(&super::Codex, &sessions, 1);
+    }
+
+    #[test]
+    fn turn_context_cwd_projects_two_distinct_turn_cwds() {
+        let base = temp_path("codex-cwd");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let transcript = base.join("codex-cwd.jsonl");
+        std::fs::copy(
+            "tests/fixtures/transcripts/codex/codex-cwd.jsonl",
+            &transcript,
+        )
+        .unwrap();
+        let store_path = base.join("store.db");
+        let store = Store::open(store_path).unwrap();
+        let size = std::fs::metadata(&transcript).unwrap().len();
+        let session = session_for(&transcript, size);
+        sync_session(&store, &Codex, &session).unwrap();
+
+        let rows = store.turn_cwds("ses-codex-1").unwrap();
+        let cwds: Vec<String> = rows.iter().map(|(_, cwd)| cwd.clone()).collect();
+        assert_eq!(
+            cwds,
+            vec!["/repo", "/repo/sub"],
+            "each turn_context's cwd stamps the turns after it"
+        );
+        drop(store);
+        std::fs::remove_dir_all(base).unwrap();
     }
 
     #[test]

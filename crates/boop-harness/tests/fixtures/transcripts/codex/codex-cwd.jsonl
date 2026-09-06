@@ -1,0 +1,5 @@
+{"timestamp":"2026-08-01T00:00:00.100Z","ordinal":0,"type":"session_meta","payload":{"session_id":"ses-codex-cwd","id":"ses-codex-cwd","timestamp":"2026-08-01T00:00:00.100Z","cwd":"/repo","originator":"codex-tui","cli_version":"0.147.0","source":"cli"}}
+{"timestamp":"2026-08-01T00:00:00.200Z","ordinal":1,"type":"turn_context","payload":{"cwd":"/repo","model":"gpt-test"}}
+{"timestamp":"2026-08-01T00:00:01.000Z","ordinal":2,"type":"response_item","payload":{"type":"message","id":"msg_1","role":"user","content":[{"type":"input_text","text":"read the top level"}]}}
+{"timestamp":"2026-08-01T00:00:02.000Z","ordinal":3,"type":"turn_context","payload":{"cwd":"/repo/sub","model":"gpt-test"}}
+{"timestamp":"2026-08-01T00:00:03.000Z","ordinal":4,"type":"response_item","payload":{"type":"message","id":"msg_2","role":"assistant","content":[{"type":"output_text","text":"after the cd"}]}}

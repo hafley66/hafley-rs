@@ -686,14 +686,14 @@ fn write_part(
         "text" => {
             *turn += 1;
             let inserted =
-                store.write_turn(session_id, *turn, message.ts, &message.role, &part.text)?;
+                store.write_turn(session_id, *turn, message.ts, &message.role, &part.text, None)?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
         }
         "tool" => {
             *turn += 1;
             let inserted =
-                store.write_turn(session_id, *turn, message.ts, "tool", &part.tool_body())?;
+                store.write_turn(session_id, *turn, message.ts, "tool", &part.tool_body(), None)?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
             store.write_tool_fact(
@@ -715,6 +715,7 @@ fn write_part(
                 message.ts,
                 &message.role,
                 &format!("reasoning: {}", part.text),
+                None,
             )?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
@@ -724,7 +725,7 @@ fn write_part(
         "patch" => {
             *turn += 1;
             let inserted =
-                store.write_turn(session_id, *turn, message.ts, "tool", &part.patch_body())?;
+                store.write_turn(session_id, *turn, message.ts, "tool", &part.patch_body(), None)?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
         }
@@ -739,6 +740,7 @@ fn write_part(
                 message.ts,
                 &message.role,
                 &format!("file {path}"),
+                None,
             )?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
@@ -761,7 +763,7 @@ fn write_part(
         kind => {
             *turn += 1;
             let inserted =
-                store.write_turn(session_id, *turn, message.ts, "tool", &part.gap_body())?;
+                store.write_turn(session_id, *turn, message.ts, "tool", &part.gap_body(), None)?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
             // One line per kind per process; the pane an opencode TUI draws
@@ -805,7 +807,7 @@ fn finish_message(
         Some(turn) => *turn,
         None => {
             *turn += 1;
-            let inserted = store.write_turn(session_id, *turn, message.ts, &message.role, "")?;
+            let inserted = store.write_turn(session_id, *turn, message.ts, &message.role, "", None)?;
             record(stat, inserted);
             *turn
         }
@@ -1737,7 +1739,7 @@ mod tests {
         );
 
         store
-            .write_turn("streamed", 3, 40, "assistant", "")
+            .write_turn("streamed", 3, 40, "assistant", "", None)
             .unwrap();
         store
             .write_usage(

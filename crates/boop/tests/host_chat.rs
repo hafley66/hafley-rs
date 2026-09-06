@@ -79,6 +79,7 @@ impl LaneChannel for EchoChannel {
             turn as u64,
             "assistant",
             &format!("echo {text}"),
+            None,
         )?;
         Ok(())
     }

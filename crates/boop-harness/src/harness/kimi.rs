@@ -751,7 +751,7 @@ fn project_line(
         let text = append_message_text(message.get("content"));
         if !text.is_empty() {
             *turn += 1;
-            let inserted = store.write_turn(&sid, *turn, ts, role, &text)?;
+            let inserted = store.write_turn(&sid, *turn, ts, role, &text, None)?;
             record(stat, inserted);
         }
         return Ok(());
@@ -772,7 +772,7 @@ fn project_line(
             // A usage row before any content still needs a turn to hang on;
             // it says which model spent the tokens rather than nothing.
             let body = format!("[usage] {model}");
-            let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body)?;
+            let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body, None)?;
             record(stat, inserted);
             *turn
         } else {
@@ -829,7 +829,7 @@ fn project_line(
             let body = part_body(part);
             if !body.is_empty() {
                 *turn += 1;
-                let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body)?;
+                let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body, None)?;
                 record(stat, inserted);
             }
         }
@@ -837,7 +837,7 @@ fn project_line(
             let name = event.get("name").and_then(Value::as_str).unwrap_or("tool");
             *turn += 1;
             let body = tool_call_body(name, event.get("args"));
-            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body, None)?;
             record(stat, inserted);
             store.write_tool_fact(
                 &sid,
@@ -850,7 +850,7 @@ fn project_line(
         "tool.result" => {
             *turn += 1;
             let body = tool_result_body(event.get("result"));
-            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body)?;
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body, None)?;
             record(stat, inserted);
         }
         _ => {}

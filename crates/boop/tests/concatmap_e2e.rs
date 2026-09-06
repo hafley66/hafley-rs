@@ -76,10 +76,10 @@ impl Fixture {
     fn seed(&self) {
         let store = Store::open(self.db.clone()).unwrap();
         store
-            .write_turn("ses_src", 1, 10, "user", BUNDLES[0])
+            .write_turn("ses_src", 1, 10, "user", BUNDLES[0], None)
             .unwrap();
         store
-            .write_turn("ses_src", 2, 11, "user", BUNDLES[1])
+            .write_turn("ses_src", 2, 11, "user", BUNDLES[1], None)
             .unwrap();
     }
 

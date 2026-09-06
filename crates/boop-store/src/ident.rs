@@ -2945,8 +2945,23 @@ impl Store {
         ts: u64,
         role: &str,
         said: &str,
+        cwd: Option<&str>,
     ) -> Result<usize> {
-        self.add_turn(session, turn, ts, role, said, None)
+        self.add_turn(session, turn, ts, role, said, cwd)
+    }
+
+    /// The per-turn cwd for one session, in turn order, through the `v_turn_cwd`
+    /// fallback view. `(turn, cwd)` pairs, oldest turn first.
+    pub fn turn_cwds(&self, session: &str) -> Result<Vec<(i64, String)>> {
+        let mut statement = self.connection.prepare(
+            "SELECT v.turn, v.cwd FROM v_turn_cwd v
+             JOIN dict_session d ON d.id = v.session_id
+             WHERE d.value = ?1 ORDER BY v.turn",
+        )?;
+        let rows = statement
+            .query_map([session], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
     }
 
     /// Fill legacy empty assistant turns attached to source requests.
@@ -4088,10 +4103,10 @@ mod tests {
     fn turn_comment_round_trip() {
         let (path, store) = fresh_store("turn_comment");
         store
-            .write_turn("sess-a", 3, 100, "user", "please fix the thing")
+            .write_turn("sess-a", 3, 100, "user", "please fix the thing", None)
             .unwrap();
         store
-            .write_turn("sess-a", 4, 110, "assistant", "done")
+            .write_turn("sess-a", 4, 110, "assistant", "done", None)
             .unwrap();
         let targets = vec![("sess-a".to_string(), 3), ("sess-a".to_string(), 4)];
         let upsert = TurnCommentUpsert {
@@ -4198,7 +4213,7 @@ mod tests {
             (5, 150, "user", "Selected context: ..."),
             (6, 160, "assistant", "the reply"),
         ] {
-            store.write_turn("sess-a", turn, ts, role, said).unwrap();
+            store.write_turn("sess-a", turn, ts, role, said, None).unwrap();
         }
         let targets = vec![("sess-a".to_string(), 3)];
         store
@@ -4420,7 +4435,7 @@ mod tests {
                 params![sid, harness_id, cwd_id],
             )
             .unwrap();
-        store.write_turn("null-ses", 1, 100, "user", "hello").unwrap();
+        store.write_turn("null-ses", 1, 100, "user", "hello", None).unwrap();
 
         let (turn, cwd): (i64, String) = store
             .connection
@@ -4780,7 +4795,7 @@ mod tests {
             let store = Store::open(sync_path)?;
             sync_barrier.wait();
             for turn in 1..=16 {
-                store.write_turn("sync-session", turn, turn, "assistant", "fact")?;
+                store.write_turn("sync-session", turn, turn, "assistant", "fact", None)?;
             }
             Ok(())
         });
