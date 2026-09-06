@@ -28,7 +28,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 1. Complete online acceptance for the published /game3/ build. Ad-hoc Playwright passed capture/export/import,
    saved-frame reload, mobile viewport capture, tick-120 freeze, keyboard/menu interaction and
    debugger rendering, fixture pause/step/capture/verify/restore and two-peer movement/checksum agreement.
-   Next online gates: returning-peer reconnect, packet loss, cross-network
+   Next online gates: returning-peer reconnect, burst loss, cross-network
    and physical phones. Current two peers ran in isolated contexts on one machine.
 2. Complete semantic/physical input separation and customization: use Godot InputMap for device
    bindings, preserve the semantic tick packet, and make Controls edit/persist bindings and derive
@@ -103,6 +103,16 @@ This reproduces the historical-comparison failure as prediction evidence and clo
 specific gate. These tests do not establish PM parity or behavior under packet loss.
 Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 DELAY_MS=60 node /private/tmp/1_game3_online.cjs.
 The updated export is locally verified; it has not been published yet.
+Message-loss follow-up: local export with the production relay, 60 ms send delay,
+and every tenth outgoing data-channel message dropped after the first 30 sends.
+Both peers exercised loss (115/1186 and 116/1193 dropped/sent attempts); all 545
+shared confirmed frames 0..544 matched. The running screenshot shows 60% damage.
+Peer close reached reconnecting then offline without browser exceptions; runner exit 0.
+This injects application-message loss before RTCDataChannel.send, not physical network
+packet loss. Burst loss, returning-peer reconnect and cross-network behavior remain open.
+Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 DELAY_MS=60 DROP_EVERY=10 node /private/tmp/1_game3_online.cjs.
+Log: /private/tmp/game3-confirmed-loss.log. Screenshots: /private/tmp/game3-online-r5i2yn.
+No production publish or game source change was performed for this test.
 Remote hashes matched the tested artifact:
 
 - Game3 index.pck: fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df
@@ -116,3 +126,10 @@ Boop parent route game3-overnight owns two separately requested siblings:
 feature-boop-reminders-instant (Astra high: cross-harness reminders, Instant turn widget, favorite
 reasons) and feature-boop-ssh-android-research (Sol high: SSH/Tailscale/Android research).
 Use boop wait --me --as game3-overnight for receipts. Their changes need review before integration.
+Final sibling handoff: Boop f0a9566, 596c9f4 and receipt 09b6556 are pushed to
+origin feature/boop-reminders-instant. Instant 5b8ee40 and f7a647f remain local in
+/Users/chrishafley/projects/instant-worktrees/boop-reminders-instant-integration/instant.
+Boop TASKS/1_reminders_instant_handoff.REPORT.md records 404 checks and exact live/skip
+boundaries; Instant docs/0_boop_turn_widget.REPORT.md records native/browser receipts
+and an unchanged-base attribution snapshot failure. No merge, install or reminder cutover
+has occurred. Primary Boop main.rs overlap requires review before integration.
