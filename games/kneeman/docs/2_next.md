@@ -104,7 +104,16 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    ticks 747/746, preserved handles/characters and offline timeout recovery, exit 0.
    Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 node /private/tmp/1_game3_online.cjs.
    Log: /private/tmp/game3-pad-remap-online.log; screenshots: /private/tmp/game3-online-PJG0C7.
-   Next: publish the tested export. Movement/c-stick remapping, mobile layout/menu controls and physical
+   Published through 8034799 on 2026-09-06 using the dedicated game3 profile; nginx validation
+   passed. Remote WASM matches tested SHA-256
+   81fbc0d9c28cc6a8eb864d833cace334d29f7ab42a2c9706856e9446e2dade4c;
+   Game3 pack and protected original /game/ pack remain unchanged.
+   Production default-controls regression passes 14 isolated button assertions and 3 jump/
+   reassignment assertions, exit 0 without browser exceptions.
+   Command: PRODUCTION=1 BUTTONS=1 node /private/tmp/1_game3_pad.cjs.
+   Log: /private/tmp/game3-pad-remap-production.log; screenshot: /private/tmp/game3-pad-isolation.png.
+   To remap: Controls -> click the player's Pad label -> press the desired button/axis.
+   Movement/c-stick remapping, mobile layout/menu controls and physical
    device checks remain open.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
