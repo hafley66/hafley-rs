@@ -58,6 +58,7 @@ pub fn menu<T: Theme>(
     out: &mut Vec<Intent>,
 ) {
     let loc = router.location();
+    if loc.base != Route::Controls { crate::controls::bindings::cancel(); }
     if matches!(loc.base, Route::Closed) {
         return;
     }
@@ -70,7 +71,8 @@ pub fn menu<T: Theme>(
     // frame the shell just resolved a menu_esc (the press that OPENED the menu is still in egui's
     // queue that frame; emitting for it would close the menu the instant it opened).
     let esc = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
-    if esc && kbd_esc {
+    let cancelled_binding = crate::controls::bindings::take_cancelled();
+    if esc && kbd_esc && !cancelled_binding {
         out.push(Intent::Esc);
     }
 

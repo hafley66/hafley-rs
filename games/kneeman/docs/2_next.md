@@ -3,6 +3,11 @@
 Target: a playable PM-inspired fighter with the existing ship, items, stage destruction,
 friend-photo characters, replay debugger and online play. One application in this repository.
 
+Rule boundary: items may change abilities/contact/physics, and teleporting into another game may
+select different rules. Author these choices as data consumed by reusable simulation code. Rule
+selection and transitions must survive snapshots/replay/rollback. Extend the existing rule data
+when a concrete gameplay case requires it; avoid a separate document/parser architecture.
+
 ## Current work
 
 | Task | Status / acceptance |
@@ -14,20 +19,26 @@ friend-photo characters, replay debugger and online play. One application in thi
 | Regression | Existing fixed-input/replay/rollback suites remain the game gate |
 | Falcon | Fresh sessions select Falcon/Lucas; built-in art-to-kit mapping corrected; existing movement/attack strips wired. Commit 47ea707 |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
+| Keyboard bindings | Live InputMap editing for movement, c-stick and gameplay buttons; ConfigFile persistence/reset, side-aware labels, malformed-key validation and focus-loss clearing. 428 game + 68 shell tests pass |
+| Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
 
 ## Next, in order
 
 1. Publish the browser-tested build to /game3/. Ad-hoc Playwright passed capture/export/import,
    saved-frame reload, mobile viewport capture, tick-120 freeze, keyboard/menu interaction and
-   debugger rendering. Finish debugger pause/step/restore and two-peer input/checksum agreement.
+   debugger rendering, fixture pause/step/capture/verify/restore. Finish two-peer input/checksum agreement.
    Physical phones and two-peer networking remain untested.
 2. Complete semantic/physical input separation and customization: use Godot InputMap for device
    bindings, preserve the semantic tick packet, and make Controls edit/persist bindings and derive
    its displayed prompts from those bindings. Cover movement, c-stick, jump/short hop, attack,
    special, shield/dodge, grab/throw and menu for keyboard, both gamepads and mobile touch.
    Test press/hold/release, focus loss, reconnect, simultaneous inputs, remap/reload/reset and replay.
-   Current gaps: raw c-stick/trigger reads, hardcoded P2 buttons, manual display strings, fixed touch
-   actions and no rebinding UI. Reuse the existing RawPad -> PadMemory -> InputFrame fold.
+   Remaining gaps: gamepad axes/triggers and P2 device isolation/remapping, pad prompt strings,
+   fixed touch actions/layout and menu remapping. Reuse RawPad -> PadMemory -> InputFrame.
+   Keyboard browser evidence: remap F, reload after 6.5 seconds retains F, Escape cancels in
+   Controls, reset restores defaults. Godot web persistence is asynchronous: reload after only
+   300 ms lost the new binding. Add durable-save acknowledgement before claiming immediate
+   reload safety. Compact Controls layout checked at 1440x1000; physical devices remain untested.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
 4. Extend the recorded-input tests for the selected PM mechanic; expose its replay in the debugger.

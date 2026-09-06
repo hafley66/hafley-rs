@@ -17,11 +17,13 @@
 //! whole keyboard). Netplay still supplies its P2 over the wire; `poll_p2` is local-path only.
 
 pub mod pad;
+#[path = "0_bindings.rs"]
+pub mod bindings;
 
 use std::cell::Cell;
 
 use godot::classes::{
-    Input, InputEvent, InputEventKey, InputEventScreenDrag, InputEventScreenTouch,
+    Input, InputEvent, InputEventScreenDrag, InputEventScreenTouch,
 };
 use godot::global::{JoyAxis, JoyButton, Key};
 use godot::prelude::*;
@@ -48,17 +50,8 @@ thread_local! {
     static P2_PREV_MASK: Cell<u8> = const { Cell::new(0) };
 }
 
-/// Release every input this module reads: all named actions (incl. the WASD `move_*` axis pair)
-/// and synthetic keyups for the four arrow keys `poll` reads RAW for the c-stick. Called on both
-/// window-focus edges (`KneeMan::on_notification`): a keyup the browser never delivers -- focus
-/// stolen mid-hold, or macOS eating the Shift release of a Cmd+Shift+4 screenshot -- leaves that
-/// key pressed FOREVER in Godot's event-driven state. A stuck Shift is a stuck shield: every
-/// grounded direction rolls, the air dodge never fires (no fresh shield_pressed edge is
-/// possible), and the shield lane outranks the c-stick. `action_release` clears action state (no
-/// event ever un-releases it); `parse_input_event` keyups clear the raw `is_physical_key_pressed`
-/// reads AND any `ui_*` menu action riding those keys. The engine's `release_pressed_events` is
-/// exactly this, but gdext 0.4.5's generated `Input` binding doesn't expose it. Worst case is one
-/// neutral frame for a key genuinely held across a refocus.
+/// Release gameplay actions and edge memory on focus changes. C-stick keys now use actions too;
+/// no synthetic event dispatch is needed from inside the node's notification callback.
 pub fn release_all() {
     let mut input = Input::singleton();
     for a in [
@@ -74,15 +67,14 @@ pub fn release_all() {
             input.action_release(*name);
         }
     }
-    for name in ["move_left", "move_right", "move_up", "move_down"] {
-        input.action_release(name);
+    for row in P1_MANUAL {
+        for name in row.keyboard { input.action_release(*name); }
     }
-    for key in [Key::UP, Key::DOWN, Key::LEFT, Key::RIGHT, Key::SPACE] {
-        let mut ev = InputEventKey::new_gd();
-        ev.set_physical_keycode(key);
-        ev.set_pressed(false);
-        input.parse_input_event(&ev);
-    }
+    P1_MEM.set(PadMemory::default());
+    P2_MEM.set(PadMemory::default());
+    P1_TRIGGER_PREV.set(false);
+    P1_DOWN_PREV.set(false);
+    P2_PREV_MASK.set(0);
 }
 
 /// The action universe. Every game-meaningful input is one of these; nothing downstream names a
@@ -118,11 +110,11 @@ impl GameAction {
 }
 
 /// One row of the pause-menu control manual: an action label plus how player one reaches it on
-/// keyboard and gamepad. Display-only strings, not read back into `poll` -- keep them in sync with
-/// `project.godot [input]` (P1's named actions) and the raw stick/axis reads below by hand.
+/// keyboard and gamepad. Keyboard entries are live InputMap action names. Pad descriptions still
+/// describe the fixed raw-device adapter below.
 pub struct ManualRow {
     pub action: &'static str,
-    pub keyboard: &'static str,
+    pub keyboard: &'static [&'static str],
     pub gamepad: &'static str,
 }
 
@@ -132,52 +124,52 @@ pub struct ManualRow {
 pub const P1_MANUAL: &[ManualRow] = &[
     ManualRow {
         action: "Move",
-        keyboard: "WASD",
+        keyboard: &["move_up", "move_left", "move_down", "move_right"],
         gamepad: "L-stick / D-pad",
     },
     ManualRow {
         action: "Jump*",
-        keyboard: "W",
+        keyboard: &["jump"],
         gamepad: "A",
     },
     ManualRow {
         action: "Short hop",
-        keyboard: "X",
+        keyboard: &["shorthop"],
         gamepad: "R1",
     },
     ManualRow {
         action: "Attack / pick up",
-        keyboard: "L Cmd",
+        keyboard: &["attack"],
         gamepad: "X / R2",
     },
     ManualRow {
         action: "Special",
-        keyboard: "Space",
+        keyboard: &["special"],
         gamepad: "B",
     },
     ManualRow {
         action: "Grab / throw",
-        keyboard: "R Shift",
+        keyboard: &["grab"],
         gamepad: "Y/Back",
     },
     ManualRow {
         action: "Shield/dodge",
-        keyboard: "L Shift",
+        keyboard: &["shield"],
         gamepad: "L1",
     },
     ManualRow {
         action: "Fast-fall",
-        keyboard: "S",
+        keyboard: &[], // Same move-down binding; avoid a duplicate persistence row.
         gamepad: "D-pad Down",
     },
     ManualRow {
         action: "C-stick (aim/attack)",
-        keyboard: "Arrows",
+        keyboard: &["aim_up", "aim_left", "aim_down", "aim_right"],
         gamepad: "R-stick",
     },
     ManualRow {
         action: "Pause",
-        keyboard: "Esc",
+        keyboard: &[], // Menu navigation remains fixed in this checkpoint.
         gamepad: "Start",
     },
 ];
@@ -212,7 +204,7 @@ pub fn keyboard_manual() -> String {
             if index > 0 {
                 text.push_str(if index == 5 { "\n" } else { " · " });
             }
-            text.push_str(row.keyboard);
+            text.push_str(&row.keyboard.iter().map(|name| bindings::label(name)).collect::<Vec<_>>().join("/"));
             text.push(' ');
             text.push_str(row.action);
             text
@@ -313,14 +305,14 @@ pub fn poll(touch_stick: (f32, f32), touch_cstick: (f32, f32)) -> InputFrame {
     let mut dir = input.get_axis("move_left", "move_right");
     let mut aim_y = input.get_axis("move_up", "move_down"); // -1 up .. +1 down
     let mut pad_down = false;
-    // Keyboard c-stick: the arrow keys, read raw and folded into a unit-deflection vector by the
+    // Keyboard c-stick: remappable actions folded into a unit-deflection vector by the
     // pure core. The adapter keeps aim/attack on the same semantic lane everywhere, including
     // gamepad and touch equivalents.
     let (mut c_x, mut c_y) = pad::dpad_to_cstick(
-        input.is_physical_key_pressed(Key::UP),
-        input.is_physical_key_pressed(Key::DOWN),
-        input.is_physical_key_pressed(Key::LEFT),
-        input.is_physical_key_pressed(Key::RIGHT),
+        input.is_action_pressed("aim_up"),
+        input.is_action_pressed("aim_down"),
+        input.is_action_pressed("aim_left"),
+        input.is_action_pressed("aim_right"),
     );
     let mut trigger_held = false;
     // Web: the default ui_* movement actions don't carry the pad's stick/dpad, so read the first

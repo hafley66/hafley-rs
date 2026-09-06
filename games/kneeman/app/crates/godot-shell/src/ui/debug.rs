@@ -132,6 +132,10 @@ impl INode for DebugUi {
     }
 
     fn input(&mut self, event: Gd<InputEvent>) {
+        if crate::controls::bindings::capture(&event) {
+            if let Some(mut viewport) = self.base().get_viewport() { viewport.set_input_as_handled(); }
+            return;
+        }
         // Gamepad drives the pause menu. Start opens/backs it (like Esc); while it's open, dpad + A
         // + B become synthetic key events (Tab focus-nav / Enter activate / Esc back) that egui and
         // this handler already understand -- so no custom focus model and no bridge changes.

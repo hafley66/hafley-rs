@@ -265,6 +265,7 @@ impl INode2D for KneeMan {
     }
 
     fn ready(&mut self) {
+        crate::controls::bindings::load();
         let pos = self.state.get().fighters[0].pos;
         self.base_mut().set_position(gv(pos));
         self.base_mut().set_z_index(OVERLAY_Z); // see OVERLAY_Z: sits above every fighter sprite
@@ -601,6 +602,11 @@ impl INode2D for KneeMan {
                 | N::APPLICATION_FOCUS_OUT
         ) {
             crate::controls::release_all();
+            TOUCH_STICK.set((0.0, 0.0));
+            TOUCH_CSTICK.set((0.0, 0.0));
+            TOUCH_FINGER.set(-1);
+            TOUCH_CSTICK_FINGER.set(-1);
+            TOUCH_BTNS.with_borrow_mut(Vec::clear);
         }
     }
 

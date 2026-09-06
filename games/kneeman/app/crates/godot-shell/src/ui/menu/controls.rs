@@ -1,13 +1,12 @@
 use super::Screen;
 use super::router::{Intent, MenuCtx};
 use crate::controls::P1_MANUAL;
+use crate::controls::bindings;
 use crate::ui::themes::Theme;
 use egui_rsx_macro::egui_rsx;
 
-/// The game manual (display only -- no rebinding). `Nav::default`'s `last_page` lands new players
-/// here, so it is the first thing a fresh pause shows: player 1's keyboard + gamepad bindings, read
-/// from `controls::P1_MANUAL` (that module owns every raw device read; this screen only renders the
-/// static table it exports).
+/// Keyboard controls read/edit the live InputMap. Gamepad labels describe the current fixed pad
+/// adapter; pad and touch remapping remain separate checkpoints.
 pub struct Controls;
 
 // P2 (couch co-op) is a second gamepad only: the keyboard now belongs entirely to P1 (WASD move +
@@ -29,7 +28,18 @@ fn chip(text: &str) -> egui::RichText {
 }
 
 impl Screen for Controls {
-    fn view<T: Theme>(&self, ui: &mut egui::Ui, _theme: &T, _cx: &MenuCtx, _out: &mut Vec<Intent>) {
+    fn view<T: Theme>(&self, ui: &mut egui::Ui, theme: &T, _cx: &MenuCtx, _out: &mut Vec<Intent>) {
+        if let Some(name) = bindings::pending() {
+            if let Some(focus) = ui.ctx().memory(|m| m.focused()) {
+                ui.ctx().memory_mut(|m| m.surrender_focus(focus));
+            }
+            ui.label(format!("Press a key for {name}. Escape cancels."));
+            if theme.button(ui, "Cancel binding").clicked() { bindings::cancel(); }
+        }
+        ui.horizontal(|ui| {
+            if theme.button(ui, "Reset keyboard").clicked() { bindings::reset(); }
+            ui.label(bindings::status());
+        });
         egui_rsx! {
             stylesheet: "xp.css",
             div { class: "groupbox",
@@ -54,7 +64,18 @@ impl Screen for Controls {
 
                                     for row in P1_MANUAL {
                                         ui.label(egui::RichText::new(row.action).size(12.0));
-                                        ui.label(chip(row.keyboard));
+                                        ui.horizontal(|ui| {
+                                            for &name in row.keyboard {
+                                                let response = ui.add(egui::Button::new(chip(&bindings::label(name)))
+                                                    .fill(egui::Color32::TRANSPARENT)).on_hover_text(name);
+                                                if response.clicked() {
+                                                    response.surrender_focus();
+                                                    bindings::begin(name);
+                                                }
+                                            }
+                                            if row.action == "Fast-fall" { ui.label(chip(&bindings::label("move_down"))); }
+                                            if row.action == "Pause" { ui.label(chip("Esc")); }
+                                        });
                                         ui.label(chip(row.gamepad));
                                         ui.end_row();
                                     }
