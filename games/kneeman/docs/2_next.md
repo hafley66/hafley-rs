@@ -28,7 +28,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 1. Complete online acceptance for the published /game3/ build. Ad-hoc Playwright passed capture/export/import,
    saved-frame reload, mobile viewport capture, tick-120 freeze, keyboard/menu interaction and
    debugger rendering, fixture pause/step/capture/verify/restore and two-peer movement/checksum agreement.
-   Next online gates: changing combat inputs, returning-peer reconnect, latency/loss, cross-network
+   Next online gates: a fixture that proves hit/damage exchange, returning-peer reconnect, latency/loss, cross-network
    and physical phones. Current two peers ran in isolated contexts on one machine.
 2. Complete semantic/physical input separation and customization: use Godot InputMap for device
    bindings, preserve the semantic tick packet, and make Controls edit/persist bindings and derive
@@ -71,6 +71,13 @@ hash comparison, then peer close and the 12-second reconnect timeout. Receipts:
 /private/tmp/game3-online-check.log (180 matches), /private/tmp/game3-online-disconnect.log
 (181 matches and offline recovery), /private/tmp/game3-online-ZTZfCn (screenshots).
 No simulation changes or compiler jobs were needed for this acceptance run.
+Changing-input follow-up: /private/tmp/game3-online-combat.log and
+/private/tmp/game3-online-Mu6Lzj matched 550 same-tick hashes through movement, attack/held,
+jump/held, special and shield inputs, followed by reconnect timeout -> offline. Final screenshot
+shows both fighters at 0%: this is input-transition parity evidence, not a proven hit exchange.
+Run with COMBAT=1 node /private/tmp/1_game3_online.cjs. Consecutive identical input frames are
+encoded as duration runs; the initial per-tick JSON exceeded the browser URL limit before boot.
+Next combat test must assert damage/hit state, then compare its network snapshots.
 Remote hashes matched the tested artifact:
 
 - Game3 index.pck: fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df
