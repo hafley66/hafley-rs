@@ -76,6 +76,9 @@ pub trait Netplay {
     /// Drain session-level events noticed since the last call (desync reports, peer drops already
     /// folded into [`Advance::PeerGone`] too — see [`NetplayEvent`]). Call once per `poll()`.
     fn drain_events(&mut self) -> Vec<NetplayEvent>;
+    /// Opt into bounded saved-frame evidence. Only frames confirmed after handled rollback
+    /// requests are returned. Frame numbers are GGRS frames, not a game's own clock.
+    fn confirmed_checksums(&mut self) -> Vec<(ggrs::Frame, u128)>;
 }
 
 /// Rollback-p2p netplay over ggrs, generic over the game. Owns the session + the authoritative
@@ -86,6 +89,8 @@ pub struct GgrsNetplay<S: RollbackSim> {
     local_handle: usize,
     peer_gone: bool,
     events: Vec<NetplayEvent>,
+    checksums: Option<std::collections::BTreeMap<ggrs::Frame, u128>>,
+    confirmed: ggrs::Frame,
 }
 
 impl<S: RollbackSim> GgrsNetplay<S> {
@@ -96,6 +101,8 @@ impl<S: RollbackSim> GgrsNetplay<S> {
             local_handle,
             peer_gone: false,
             events: Vec::new(),
+            checksums: None,
+            confirmed: -1,
         }
     }
 }
@@ -152,7 +159,15 @@ impl<S: RollbackSim> Netplay for GgrsNetplay<S> {
         }
         match self.session.advance_frame() {
             Ok(reqs) => {
-                self.game.handle(reqs);
+                if let Some(history) = self.checksums.as_mut() {
+                    self.game.handle_observed(reqs, |frame, checksum| {
+                        history.insert(frame, checksum);
+                        while history.len() > 600 { history.pop_first(); }
+                    });
+                } else {
+                    self.game.handle(reqs);
+                }
+                self.confirmed = self.session.confirmed_frame();
                 Advance::Stepped
             }
             Err(GgrsError::PredictionThreshold) => Advance::Stalled, // too far ahead; skip a frame
@@ -162,6 +177,11 @@ impl<S: RollbackSim> Netplay for GgrsNetplay<S> {
 
     fn state(&self) -> &S::State {
         &self.game.state
+    }
+
+    fn confirmed_checksums(&mut self) -> Vec<(ggrs::Frame, u128)> {
+        self.checksums.get_or_insert_with(Default::default).range(..=self.confirmed)
+            .map(|(&frame, &hash)| (frame, hash)).collect()
     }
 }
 

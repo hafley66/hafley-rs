@@ -130,6 +130,7 @@ impl KneeMan {
     /// always reads the tick/checksum/phase the sim just settled on.
     pub(super) fn publish_webtest(&mut self) {
         if crate::webtest::test_mode() {
+            let receipts = self.net.as_mut().map(|net| net.confirmed_checksums()).unwrap_or_default();
             let s = self.state.get();
             crate::webtest::refresh(
                 s.tick,
@@ -145,6 +146,7 @@ impl KneeMan {
                 s.fighters[0].char_id,
                 s.fighters[1].char_id,
             ));
+            crate::webtest::confirmed_checksums(&receipts);
         }
     }
 

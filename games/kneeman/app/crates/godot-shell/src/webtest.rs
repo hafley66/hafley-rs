@@ -200,5 +200,16 @@ pub(crate) fn refresh(tick: u64, phase: &str, running: bool, state: &SimState) {
     );
     crate::net::js_eval(&code);
 }
+/// Separate from displayed/predicted `at`: these are corrected GGRS saved-frame checksums.
+pub(crate) fn confirmed_checksums(receipts: &[(i32, u128)]) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let rows: Vec<_> = receipts.iter().map(|(frame, hash)| (*frame, format!("{hash:032x}"))).collect();
+        let json = serde_json::to_string(&rows).expect("checksum tuples serialize");
+        crate::net::js_eval(&format!("window.__smash.confirmedAt=Object.fromEntries({json});"));
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = receipts;
+}
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn refresh(_tick: u64, _phase: &str, _running: bool, _state: &SimState) {}

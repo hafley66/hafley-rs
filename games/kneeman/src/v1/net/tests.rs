@@ -3,6 +3,33 @@
 use super::*;
 use crate::v1::net::replay::{InputLog, replay};
 
+#[test]
+fn saved_checksum_observer_replaces_a_predicted_frame_after_restore() {
+    use ggrs::{GameStateCell, GgrsRequest, InputStatus};
+    let mut game = Game::<Smash>::new(Tune::default());
+    let initial = game.state;
+    let start = GameStateCell::default();
+    let next = GameStateCell::default();
+    let mut observed = Vec::new();
+    let neutral = NetInput::default();
+    let moving = encode(&InputFrame { dir: 1.0, ..Default::default() });
+    game.handle_observed::<usize>(vec![
+        GgrsRequest::SaveGameState { cell: start.clone(), frame: 0 },
+        GgrsRequest::AdvanceFrame { inputs: vec![(neutral, InputStatus::Predicted); 2] },
+        GgrsRequest::SaveGameState { cell: next.clone(), frame: 1 },
+        GgrsRequest::LoadGameState { cell: start, frame: 0 },
+        GgrsRequest::AdvanceFrame { inputs: vec![(moving, InputStatus::Confirmed), (neutral, InputStatus::Confirmed)] },
+        GgrsRequest::SaveGameState { cell: next.clone(), frame: 1 },
+    ], |frame, hash| observed.push((frame, hash)));
+    let predicted = Smash::advance(&initial, &[neutral, neutral], &game.cfg);
+    let corrected = Smash::advance(&initial, &[moving, neutral], &game.cfg);
+    assert_ne!(checksum(&predicted), checksum(&corrected));
+    assert_eq!(observed, vec![(0, checksum(&initial)), (1, checksum(&predicted)), (1, checksum(&corrected))]);
+    let history: std::collections::BTreeMap<_, _> = observed.into_iter().collect();
+    assert_eq!(history[&1], checksum(&corrected));
+    assert_eq!(checksum(&next.load().unwrap()), checksum(&corrected));
+}
+
 /// Deterministic pseudo-random input stream so the sim visits many states (move, jump, dash,
 /// shield, attack, dodge) under rollback. Same seed -> same stream on both "peers".
 fn gen_input(seed: &mut u64) -> NetInput {

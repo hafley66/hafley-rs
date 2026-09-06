@@ -28,7 +28,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 1. Complete online acceptance for the published /game3/ build. Ad-hoc Playwright passed capture/export/import,
    saved-frame reload, mobile viewport capture, tick-120 freeze, keyboard/menu interaction and
    debugger rendering, fixture pause/step/capture/verify/restore and two-peer movement/checksum agreement.
-   Next online gates: confirmed-state comparison during hit exchange, returning-peer reconnect, latency/loss, cross-network
+   Next online gates: returning-peer reconnect, packet loss, cross-network
    and physical phones. Current two peers ran in isolated contexts on one machine.
 2. Complete semantic/physical input separation and customization: use Godot InputMap for device
    bindings, preserve the semantic tick packet, and make Controls edit/persist bindings and derive
@@ -90,6 +90,19 @@ Production /private/tmp/game3-online-wire-hits.log and /private/tmp/game3-online
 catch-up does not replace every historical entry. Diagnose with confirmed snapshots or
 re-simulation before calling these mismatches either resolved predictions or actual desyncs.
 Keep this combat gate open. No production code was changed for the fixture.
+Confirmed-state follow-up: shared rollback `Game::handle_observed` reports saved-frame hashes,
+including replacements during re-simulation. Netplay keeps an opt-in 600-entry map and exposes
+only frames confirmed after the rollback requests were handled; browser `confirmedAt` is
+separate from displayed/predicted `at`. A save/load/re-advance regression proves replacement.
+430 game + 68 shell tests pass. Local production export with the existing production relay:
+- /private/tmp/game3-confirmed-browser.log: 549 confirmed hashes match; 60% damage screenshot.
+- /private/tmp/game3-confirmed-delay.log: 60 ms delayed data-channel sends, 34 displayed-history
+  mismatches but all 546 compared confirmed hashes match; disconnect -> reconnect timeout -> offline.
+- Screenshots: /private/tmp/game3-online-Ffb7A9 and /private/tmp/game3-online-1bxM30.
+This reproduces the historical-comparison failure as prediction evidence and closes that
+specific gate. These tests do not establish PM parity or behavior under packet loss.
+Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 DELAY_MS=60 node /private/tmp/1_game3_online.cjs.
+The updated export is locally verified; it has not been published yet.
 Remote hashes matched the tested artifact:
 
 - Game3 index.pck: fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df

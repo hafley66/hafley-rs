@@ -58,14 +58,24 @@ impl<S: RollbackSim> Game<S> {
     where
         A: Clone + PartialEq + Eq + Hash + Debug + Send + Sync + 'static,
     {
+        self.handle_observed(requests, |_, _| {});
+    }
+
+    /// Observe saved frame checksums, including corrected frames during rollback catch-up.
+    pub fn handle_observed<A>(&mut self, requests: Vec<GgrsRequest<GgrsConfig<S, A>>>, mut saved: impl FnMut(ggrs::Frame, u128))
+    where
+        A: Clone + PartialEq + Eq + Hash + Debug + Send + Sync + 'static,
+    {
         for request in requests {
             match request {
                 GgrsRequest::SaveGameState { cell, frame } => {
+                    let checksum = S::checksum(&self.state);
                     cell.save(
                         frame,
                         Some(self.state.clone()),
-                        Some(S::checksum(&self.state)),
+                        Some(checksum),
                     );
+                    saved(frame, checksum);
                 }
                 GgrsRequest::LoadGameState { cell, .. } => {
                     self.state = cell.load().expect("ggrs load on a saved frame");
