@@ -571,25 +571,115 @@ impl Store {
         self.rows(&sql, values)
     }
 
-    /// Every user table with its columns, `{table, columns}` per row.
+    /// `*_id` stem to its join target: matching dict table by successively
+    /// shorter stems, then the columns that point outside the dict tables.
+    fn join_target(stem: &str, dict_tables: &std::collections::HashSet<String>) -> Option<String> {
+        let mut candidate = stem.to_string();
+        loop {
+            let dict = format!("dict_{candidate}");
+            if dict_tables.contains(&dict) {
+                return Some(format!("{dict}(id)"));
+            }
+            match candidate.rsplit_once('_') {
+                Some((prefix, _)) => candidate = prefix.to_string(),
+                None => break,
+            }
+        }
+        match stem {
+            "session" | "parent_session" | "child_session" | "root_session" | "lane"
+            | "from_lane" | "to_lane" => Some("dict_session(id)".to_string()),
+            "parent_lane" => Some("agent_lane(lane_id)".to_string()),
+            "markdown" => Some("markdown_cache(markdown_id)".to_string()),
+            _ => None,
+        }
+    }
+
+    /// Every user table and view as `{table, kind, columns, joins}`; joins
+    /// derive from foreign keys, `dict_<stem>` name matches, and the grain.
     pub fn schema_rows(&self) -> Result<Vec<Row>> {
-        let tables = self.rows(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        let objects = self.rows(
+            "SELECT name, type FROM sqlite_master
+             WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'
+             ORDER BY type, name",
             Vec::new(),
         )?;
-        let mut out = Vec::with_capacity(tables.len());
-        for table in tables {
-            let Some(name) = table.get("name").and_then(serde_json::Value::as_str) else {
+        let dict_tables: std::collections::HashSet<String> = objects
+            .iter()
+            .filter_map(|row| row.get("name").and_then(serde_json::Value::as_str))
+            .filter(|name| name.starts_with("dict_"))
+            .map(str::to_string)
+            .collect();
+        let mut out = Vec::with_capacity(objects.len());
+        for object in objects {
+            let Some(name) = object.get("name").and_then(serde_json::Value::as_str) else {
                 continue;
             };
-            let columns = self
+            let kind = object
+                .get("type")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("table");
+            let columns: Vec<String> = self
                 .rows(&format!("PRAGMA table_info({name})"), Vec::new())?
                 .into_iter()
-                .filter_map(|row| row.get("name").cloned())
-                .collect::<Vec<_>>();
-            out.push(serde_json::json!({ "table": name, "columns": columns }));
+                .filter_map(|row| {
+                    row.get("name")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_string)
+                })
+                .collect();
+            let mut joins = if kind == "table" {
+                self.declared_foreign_keys(name)?
+            } else {
+                Vec::new()
+            };
+            let covered: std::collections::HashSet<String> = joins
+                .iter()
+                .filter_map(|join| join.split(" -> ").next().map(str::to_string))
+                .collect();
+            for column in &columns {
+                let Some(stem) = column.strip_suffix("_id") else {
+                    continue;
+                };
+                if covered.contains(column) || stem == "favorite" {
+                    continue;
+                }
+                if let Some(target) = Self::join_target(stem, &dict_tables) {
+                    joins.push(format!("{column} -> {target}"));
+                }
+            }
+            let has = |needle: &str| columns.iter().any(|column| column == needle);
+            if has("session_id") && has("turn") {
+                joins.push(
+                    "(session_id, turn) grain: shared key of agent_turn, agent_usage, \
+                     agent_skill, agent_touch, agent_cmd, agent_fetch, agent_pr, agent_span"
+                        .to_string(),
+                );
+            }
+            out.push(serde_json::json!({
+                "table": name,
+                "kind": kind,
+                "columns": columns,
+                "joins": joins,
+            }));
         }
         Ok(out)
+    }
+
+    /// `from -> table(to)` for every declared foreign key of one table.
+    fn declared_foreign_keys(&self, table: &str) -> Result<Vec<String>> {
+        Ok(self
+            .rows(&format!("PRAGMA foreign_key_list({table})"), Vec::new())?
+            .into_iter()
+            .filter_map(|row| {
+                let from = row.get("from").and_then(serde_json::Value::as_str)?;
+                let to_table = row.get("table").and_then(serde_json::Value::as_str)?;
+                let to = row
+                    .get("to")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("id");
+                Some(format!("{from} -> {to_table}({to})"))
+            })
+            .collect())
     }
 
     /// Sessions as the query surface exposes them, least recent first.
