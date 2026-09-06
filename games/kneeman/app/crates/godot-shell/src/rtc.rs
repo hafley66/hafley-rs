@@ -133,6 +133,10 @@ impl NonBlockingSocket<usize> for RtcSocket {
         let mut out = Vec::new();
         let n = self.channel.get_available_packet_count();
         for _ in 0..n {
+            // A closing JS channel can still report packets until its close callback runs.
+            if self.channel.get_ready_state() != ChannelState::OPEN {
+                break;
+            }
             let packet = self.channel.get_packet();
             if let Ok(msg) = bincode::deserialize::<Message>(packet.as_slice()) {
                 out.push((self.remote, msg));

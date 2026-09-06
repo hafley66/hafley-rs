@@ -233,8 +233,35 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    moves y 410 -> 577.36993 while P1 stays 410. Reset pads clears both overrides; reload
    preserves the reset. Default D-pad-up repeats P1's isolated jump; default D-pad-down
    moves P2 y 410 -> 482.16995 while P1 stays 410. No browser exceptions; local relay-route
-   404s are expected. Synthetic pads only. Not yet published: next run final default-button/
-   reconnect gates, publish, then implement menu/touch customization.
+   404s are expected. Synthetic pads only. Final default-button gate passes 14 isolated
+   button assertions and 3 jump/reassignment assertions, exit 0;
+   BUTTONS=1 node /private/tmp/1_game3_pad.cjs, /private/tmp/game3-dpad-defaults.log.
+   The release online gate matches 547 initial and 180 resumed confirmed frames but fails
+   its zero-ERR_UNCONFIGURED assertion with four messages on forced closure; publication
+   paused. Log: /private/tmp/game3-dpad-online.log. Both send paths were already guarded.
+   Targeted reproduction on the still-published artifact closes after a message is queued
+   and delays Godot's onclose callback by 500 ms. It emits six errors explicitly attributed
+   to get_packet (modules/webrtc/webrtc_data_channel_js.cpp:106), then recovers 180 matching
+   frames after 549 initial matches. The error assertion fails, exit 1. Command:
+   CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 NO_CLOSED_SEND_ERRORS=1
+   node /private/tmp/1_game3_online.cjs. Log: /private/tmp/game3-queued-close-before.log;
+   screenshots: /private/tmp/game3-online-kEuOiq.
+   [Godot 4.5 source](https://github.com/godotengine/godot/blob/4.5/modules/webrtc/webrtc_data_channel_js.cpp)
+   exposes queue_count independently and rejects get_packet on non-open channels. Pair and
+   mesh receive loops now check OPEN before each read. 432 game + 73 shell tests and export
+   pass; /private/tmp/game3-rtc-receive-tests.log and game3-rtc-receive-build.log.
+   First guarded run had zero channel errors and matched 543 initial/180 resumed frames,
+   but failed on a null-function exception from the injector's delayed callback after Godot
+   teardown. Log: /private/tmp/game3-queued-close-fixed.log. The injector now cancels the
+   timer when Godot clears onclose, matching its callback teardown contract.
+   Corrected run passes 549 initial and 180 resumed confirmed frames, exactly one injected
+   queued-message closure, preserved fighter slots/characters, offline timeout recovery,
+   zero ERR_UNCONFIGURED and zero browser exceptions; exit 0. It also uses 60 ms delay and
+   24-message bursts. Command: LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1
+   DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-queued-close-fixed-cancelled.log; screenshots:
+   /private/tmp/game3-online-XOiPO9. Pair runtime verified; mesh receive guard compiles but
+   no new three-player runtime receipt exists. Next: publish and verify production.
 3. Establish original Project M version/source receipts and its behavior ledger alongside Melee.
    Use one fighter mechanic at a time, with transition order, clocks, inputs and expected results.
    Text-reference checkpoint: docs/3_pm_baseline.md pins PM-CC revision 6e63ffa9 and exact

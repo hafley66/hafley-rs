@@ -77,6 +77,9 @@ impl NonBlockingSocket<usize> for MeshSocket {
             }
             let Some(ch) = ch.as_mut() else { continue };
             for _ in 0..ch.get_available_packet_count() {
+                if ch.get_ready_state() != ChannelState::OPEN {
+                    break;
+                }
                 let packet = ch.get_packet();
                 if let Ok(msg) = bincode::deserialize::<Message>(packet.as_slice()) {
                     out.push((h, msg));
