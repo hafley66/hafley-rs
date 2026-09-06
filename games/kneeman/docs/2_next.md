@@ -23,7 +23,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
 | Production netplay | Two isolated Chromium contexts joined a unique private room through production signaling/WebRTC. Two runs matched 180 and 181 same-tick snapshot hashes with scripted movement; peer close -> reconnecting -> offline after timeout, no browser exceptions |
 | Pad menu bindings | Published through 7c1bd9f: six actions per pad reuse capture/save/reset; production navigation, hold/release/disconnect, pause precedence and resumed neutral input verified below |
-| Touch cancellation | Hidden touches rejected; owned sticks/buttons released before simulation input sampling on menu/controller transitions, and on focus changes. Local export/replay/online gates pass; publication pending |
+| Touch cancellation | Published through 2647139: hidden gestures cancelled, shared touch actions retained until last lift. Production touch/replay and online loss/reconnect gates pass |
 
 ## Next, in order
 
@@ -413,6 +413,24 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24
    NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
    Log: /private/tmp/game3-touch-shared-online.log; screenshots: /private/tmp/game3-online-bukEOi.
+   Published through 2647139 with the existing game3 profile. nginx validation/reload passes.
+   Remote WASM matches tested SHA-256
+   ffcb5e4b1fea735600780a9602b4bc302c996584ccc48e6f6d0cbf9ce06524b5.
+   Game3 pack remains fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df;
+   protected original /game/ pack remains
+   5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795.
+   Production touch run passes hidden-input neutrality, gesture cancellation, guard release,
+   both shared-guard lift orders and 74-tick replay from 134 to 208 with matching checksums
+   and EOF behavior; exit 0, no browser exceptions. Command: PRODUCTION=1 node
+   /private/tmp/4_game3_touch.cjs. Logs: /private/tmp/game3-touch-publish.log and
+   /private/tmp/game3-touch-production.log; screenshots: /private/tmp/game3-touch-hRGRXh.
+   Production online run matches 549 initial and 180 resumed confirmed frames, resumed
+   ticks 754/751. Each peer drops 240 messages from 1234/1232 sends, maximum burst 24,
+   with 60 ms send delay. Queued-close recovery preserves slots/characters; peer closure
+   reaches offline; zero closed-send errors/browser exceptions, exit 0. Command:
+   CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24
+   NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-touch-online-production.log; screenshots: /private/tmp/game3-online-gpl8iJ.
    Native keyboard menu navigation
    remains egui's fixed keys. PM moveset parity, three-player and cross-network checks
    remain open; no fighter-mechanic equivalence is claimed by this input checkpoint.

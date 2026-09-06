@@ -66,9 +66,10 @@ retain owner 0 for self-hit exclusion, and leave the fighter in JumpSquat. Every
 replay, including snapshot restoration at tick 30. The first test attempt incorrectly expected
 an unowned thrown item; `item::throw_item` documents retained ownership, so that assertion was
 corrected without changing gameplay. 432 game + 70 shell tests pass.
-Debugger fixture selection, a PM runtime comparison, exact momentum values and additional
-conflicts such as grab/shield/special remain to be tested.
-This export is locally verified and has not been published.
+Debugger fixture selection and step/verify/restore are tested and published through de86527;
+docs/2_next.md records the 45-tick debugger receipt and production tick-62 Grab/Stand smoke
+test. A PM runtime comparison, exact momentum values and additional conflicts such as
+grab/shield/special remain to be tested.
 
 ## Existing evidence limits
 
