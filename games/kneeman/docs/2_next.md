@@ -28,7 +28,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 1. Complete online acceptance for the published /game3/ build. Ad-hoc Playwright passed capture/export/import,
    saved-frame reload, mobile viewport capture, tick-120 freeze, keyboard/menu interaction and
    debugger rendering, fixture pause/step/capture/verify/restore and two-peer movement/checksum agreement.
-   Next online gates: host-tab replacement, burst loss, cross-network
+   Next online gates: burst loss, cross-network
    and physical phones. Current two peers ran in isolated contexts on one machine.
 2. Complete semantic/physical input separation and customization: use Godot InputMap for device
    bindings, preserve the semantic tick packet, and make Controls edit/persist bindings and derive
@@ -156,7 +156,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    frames, preserved handles/characters, game ticks 745/746, then offline timeout recovery;
    runner exit 0. Log: /private/tmp/game3-pair-start-retained.log;
    screenshots: /private/tmp/game3-online-EnKfpf. Same command without REPLACE_TAB/REPLACE_HOST.
-   Not published. Before publication: verify the fresh-transport-host ordering with a working
+   Initial publication gates (receipts below): verify the fresh-transport-host ordering with a working
    harness, nondefault Tune retention, guest replacement, malformed/start-send rejection and
    retained-tab reconnect under the final artifact. The old FAIL_RESUME_TUNE injector targets the superseded pair message;
    adapt it to SDP/start send failures. Server configuration remains unchanged.
@@ -189,7 +189,16 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Same reverse-order command without REPLACE_HOST. Log: /private/tmp/game3-guest-replacement-reversed.log;
    screenshots: /private/tmp/game3-online-2XXzwM. Tested export WASM SHA-256:
    7526f6b3c2d4a009405cb6063a80405a7c06e70e63007a80d299e0466b4425b0.
-   Publication is now the next gate; cross-network/physical-phone and burst-loss checks remain open.
+   Published the tested export on 2026-09-06 using the existing game3 profile; nginx validation
+   passed. Remote WASM matches that hash; Game3 and protected original /game/ packs are unchanged.
+   Cross-network/physical-phone and burst-loss checks remain open.
+   Production-only reverse host replacement passes after publication: 549 initial and 180
+   resumed confirmed frames, ticks 761/759, stable handles/characters, retained gravity 17.25
+   over the fresh host's 4284 proposal, then offline timeout recovery. Exit 0, no browser exceptions.
+   Same command without LOCAL_EXPORT. Log: /private/tmp/game3-pair-start-production.log;
+   screenshots: /private/tmp/game3-online-43Wya7. Reload both clients for start_version=1.
+   Next bounded implementation: gamepad binding customization in controls/0_bindings.rs,
+   controls/mod.rs and ui/menu/controls.rs, keeping the semantic InputFrame unchanged.
 5. Extract reusable menu widgets as they are exercised by controls and character import.
 
 Art remains part of the game: gallery/camera frames, workshop PNG clips and metadata, SVG/drawn
