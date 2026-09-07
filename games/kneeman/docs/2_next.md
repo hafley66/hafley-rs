@@ -19,7 +19,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Regression | Existing fixed-input/replay/rollback suites remain the game gate |
 | Falcon | Fresh sessions select Falcon/Lucas; built-in art-to-kit mapping corrected; existing movement/attack strips wired. Commit 47ea707 |
 | Falcon Dive | Published through 5e0eacd: grounded startup fix, catch/whiff debugger fixtures and optional-fire-art guard. Production replay and online Dive acceptance pass |
-| Special ship carry | Native-tested correction: grounded specials receive full hull translation in the post-hull rider phase. Export/browser/publication pending |
+| Special ship carry | Published through b26def1: grounded specials receive full hull translation in the post-hull rider phase. Native support tests and local/production runtime regressions pass |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Keyboard bindings | Live InputMap editing for movement, c-stick and gameplay buttons; ConfigFile persistence/reset, side-aware labels, malformed-key validation and focus-loss clearing. 428 game + 68 shell tests pass |
 | Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
@@ -511,6 +511,33 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    dive_input_preserves_ship_support_until_launch_and_replays_air_entry.
    Next: export/browser/online acceptance and publish this carry correction. Current
    production remains 5e0eacd; no browser run or deploy was performed for this change yet.
+   Web follow-up: export succeeds with CARGO_BUILD_JOBS=1 just game3-build. Local browser
+   catch/whiff fixtures each verify 180 ticks, preserve their prior final checksums, and pass
+   restore/EOF without optional-fire-art errors or browser exceptions. Command:
+   node /private/tmp/5_game3_dive.cjs. Logs: /private/tmp/game3-carry-build.log and
+   /private/tmp/game3-carry-browser.log; screenshots: /private/tmp/game3-dive-StCiDe.
+   This is runtime regression coverage; moving-hull startup itself is currently native-tested.
+   Local export online regression observes Dive/catch on both peers, matches 551 initial
+   and 180 resumed confirmed frames, and resumes at ticks 755/753. Each peer drops 240
+   of 1236 messages with maximum burst 24 and 60 ms send delay. Queued-close recovery
+   preserves slots/characters; peer closure reaches offline. No optional-art load errors,
+   closed-send errors or browser exceptions; exit 0. Command: LOCAL_EXPORT=1 DIVE=1
+   CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24
+   NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs. Log:
+   /private/tmp/game3-carry-online.log; screenshots: /private/tmp/game3-online-TeDZH3.
+   Published through b26def1 with the existing game3 profile; nginx validation/reload passes.
+   Remote WASM matches tested SHA-256
+   5defb6bcdb055f1232a9e66868f375d8e7264bc5e5723d19ae3a633f264b5ba4.
+   Both Game3 and protected original /game/ pack hashes remain unchanged. Publish log:
+   /private/tmp/game3-carry-publish.log. Production online regression observes Dive/catch on
+   both peers, matches 549 initial and 180 resumed confirmed frames, and resumes at ticks
+   759/757. Each peer drops 240 messages from 1239/1237 sends with maximum burst 24 and
+   60 ms send delay. Queued-close recovery preserves slots/characters; peer closure reaches
+   offline. No optional-art load errors, closed-send errors or browser exceptions; exit 0.
+   Command: DIVE=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60
+   BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-carry-production.log; screenshots: /private/tmp/game3-online-NCG1ve.
+   Direct moving-hull browser interaction, physical devices and PM parity remain unverified.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
