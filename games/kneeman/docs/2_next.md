@@ -684,6 +684,26 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Test-only delta: +36 lines. No runtime or publication change.
    Next: rebuild the export and verify new/old pair startup rejects the unknown move kind
    without desync or crash, then browser-test the kick recovery on matching builds.
+   Export/mixed-build follow-up: game3-build passes for a1dc227, log
+   /private/tmp/game3-kick-build.log. Local WASM SHA-256:
+   05afb1b89708a9ef177f3b25ce34a9a84b8974ea7bc1ca085543c13efbeb87dc.
+   One local-export host paired with one published guest rejects startup exactly once with
+   Invalid startup Tune, then both clients run offline for more than 30 further ticks without
+   browser exceptions. No corrupt-packet mutation is injected: BAD_START=mixed selects the
+   existing rejection assertions while MIXED routes only one context to the new export.
+   Command: LOCAL_EXPORT=1 MIXED=1 BAD_START=mixed RECONNECT=1
+   node /private/tmp/1_game3_online.cjs. Log: /private/tmp/game3-kick-mixed.log;
+   artifacts: /private/tmp/game3-online-b1bgD2. Exit 0.
+   Reverse direction (published host, new guest) passes 543 initial and 180 resumed confirmed
+   frames, game ticks 750/749. Each peer drops 240 messages from 1225/1226 sends, maximum burst
+   24 with 60 ms delay. Slots/characters survive queued channel close/reconnect; peer closure
+   reaches offline. No closed-send errors/browser exceptions; exit 0. This verifies compatibility
+   with the old host's startup data, not availability of the new kick behavior in that session.
+   Command: LOCAL_EXPORT=1 MIXED=old-host CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1
+   DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-kick-old-host.log; artifacts: /private/tmp/game3-online-6ujM5n.
+   No publication or game-source changes. Next: matching-new-build kick recovery acceptance;
+   retain the partial-move limits in docs/3_pm_baseline.md.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
