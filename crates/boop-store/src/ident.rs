@@ -847,12 +847,13 @@ impl Store {
     }
 
     /// Drop every table, recreate the schema, stamp the version; the caller
-    /// re-syncs from byte 0. Favorites alone cross the drop by value.
+    /// re-syncs from byte 0. The user-authored rows cross the drop by value:
+    /// favorites, and the tags and links hanging off them.
     pub fn rebuild(&self) -> Result<()> {
-        let mut favorites: Vec<(String, Option<String>, String, i64, i64)> = Vec::new();
+        let mut favorites: Vec<(i64, String, Option<String>, String, i64, i64)> = Vec::new();
         {
             let mut statement = self.connection.prepare(
-                "SELECT m.body, f.note, f.source, f.created_ts, m.first_ts
+                "SELECT f.favorite_id, m.body, f.note, f.source, f.created_ts, m.first_ts
                    FROM agent_favorite f
                    JOIN markdown_cache m ON m.markdown_id = f.markdown_id
                   ORDER BY f.favorite_id",
@@ -864,12 +865,14 @@ impl Store {
                     row.get(2)?,
                     row.get(3)?,
                     row.get(4)?,
+                    row.get(5)?,
                 ))
             })?;
             for row in rows {
                 favorites.push(row?);
             }
         }
+        let tags = self.tags_snapshot()?;
         let mut names = Vec::new();
         {
             let mut statement = self.connection.prepare(
@@ -889,14 +892,19 @@ impl Store {
         self.connection.execute_batch(COST_VIEW_SCHEMA)?;
         self.seed_moods()?;
         self.stamp_version()?;
-        for (body, note, source, created_ts, first_ts) in favorites {
+        // A favorite comes back with a fresh rowid; the tag links naming it
+        // follow that move.
+        let mut moved: BTreeMap<i64, i64> = BTreeMap::new();
+        for (favorite_id, body, note, source, created_ts, first_ts) in favorites {
             let markdown_id = self.intern_markdown(&body, first_ts as u64)?;
             self.connection.execute(
                 "INSERT INTO agent_favorite (markdown_id, note, source, created_ts)
                  VALUES (?1, ?2, ?3, ?4)",
                 params![markdown_id, note, source, created_ts],
             )?;
+            moved.insert(favorite_id, self.connection.last_insert_rowid());
         }
+        self.tags_restore(&tags, &moved)?;
         self.connection.execute_batch("VACUUM")?;
         Ok(())
     }

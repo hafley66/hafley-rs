@@ -1,6 +1,8 @@
 //! One tag table every surface shares: favorites, comments, turns and lanes
 //! link into `agent_tag` / `agent_tag_link`, and a search reads the tag column.
 
+use std::collections::BTreeMap;
+
 use anyhow::{bail, Result};
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -208,6 +210,73 @@ impl Store {
     }
 }
 
+/// The tag rows and their links as they stand. `Store::rebuild` holds one of
+/// these across the table drop, the way it holds favorites.
+pub(crate) struct TagSnapshot {
+    pub(crate) tags: Vec<Tag>,
+    pub(crate) links: Vec<(String, String, i64)>,
+}
+
+impl Store {
+    /// Every tag row and every link, counts and timestamps included.
+    pub(crate) fn tags_snapshot(&self) -> Result<TagSnapshot> {
+        let tags = self.tag_rows(
+            "SELECT tag, created_ts, last_used_ts, uses FROM agent_tag ORDER BY tag",
+            params![],
+        )?;
+        let mut links = Vec::new();
+        {
+            let mut statement = self.connection().prepare(
+                "SELECT tag, source, ts FROM agent_tag_link ORDER BY tag, source",
+            )?;
+            let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+            for row in rows {
+                links.push(row?);
+            }
+        }
+        Ok(TagSnapshot { tags, links })
+    }
+
+    /// Write a snapshot back onto a fresh schema. A favorite that came back
+    /// wearing a new id moves its links with it; every other source is copied
+    /// as it was.
+    pub(crate) fn tags_restore(
+        &self,
+        snapshot: &TagSnapshot,
+        moved: &BTreeMap<i64, i64>,
+    ) -> Result<()> {
+        for tag in &snapshot.tags {
+            self.connection().execute(
+                "INSERT OR REPLACE INTO agent_tag (tag, created_ts, last_used_ts, uses)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![tag.tag, tag.created_ts, tag.last_used_ts, tag.uses],
+            )?;
+        }
+        for (tag, source, ts) in &snapshot.links {
+            self.connection().execute(
+                "INSERT OR REPLACE INTO agent_tag_link (tag, source, ts) VALUES (?1, ?2, ?3)",
+                params![tag, moved_source(source, moved), ts],
+            )?;
+        }
+        Ok(())
+    }
+}
+
+/// The source a link wears after a rebuild: `favorite:<old>` follows the
+/// favorite to its new id, anything else stands.
+fn moved_source(source: &str, moved: &BTreeMap<i64, i64>) -> String {
+    let Some(old) = source
+        .strip_prefix("favorite:")
+        .and_then(|id| id.parse::<i64>().ok())
+    else {
+        return source.to_owned();
+    };
+    match moved.get(&old) {
+        Some(new) => format!("favorite:{new}"),
+        None => source.to_owned(),
+    }
+}
+
 fn read_tag(row: &rusqlite::Row<'_>) -> rusqlite::Result<Tag> {
     Ok(Tag {
         tag: row.get(0)?,
@@ -352,6 +421,46 @@ mod tests {
         assert_eq!(store.tag("rust").unwrap().unwrap().uses, 1);
         assert_eq!(store.tags_backfill_favorites().unwrap(), 0);
         assert_eq!(store.tag("rust").unwrap().unwrap().uses, 1);
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Tags are user-authored like favorites: a rebuild drops every projected
+    /// row and the counts, the timestamps and both link kinds come back.
+    #[test]
+    fn tags_and_their_links_survive_a_rebuild() {
+        let (path, store) = fresh_store("rebuild");
+        let dropped = store.favorite_add("# gone\n", None, "chat", 4).unwrap();
+        let favorite = store
+            .favorite_add("# pinned\n", Some("kept"), "chat", 5)
+            .unwrap();
+        store.favorite_delete(dropped).unwrap();
+        store
+            .tag_apply("rust", &format!("favorite:{favorite}"), 10)
+            .unwrap();
+        store
+            .tag_apply("perf", &format!("favorite:{favorite}"), 11)
+            .unwrap();
+        store.tag_apply("rust", "lane:x", 12).unwrap();
+        let before = store.tags_list().unwrap();
+
+        store.rebuild().unwrap();
+
+        assert_eq!(store.tags_list().unwrap(), before);
+        let moved: i64 = store
+            .connection()
+            .query_row("SELECT favorite_id FROM agent_favorite", [], |row| row.get(0))
+            .unwrap();
+        assert_ne!(moved, favorite, "the surviving favorite took a lower id");
+        assert_eq!(
+            store.tags_for(&format!("favorite:{moved}")).unwrap(),
+            ["rust", "perf"]
+        );
+        assert_eq!(store.tags_for("lane:x").unwrap(), ["rust"]);
+        assert_eq!(
+            store.sources_for("rust").unwrap(),
+            [format!("favorite:{moved}"), "lane:x".to_owned()]
+        );
         drop(store);
         let _ = std::fs::remove_file(&path);
     }
