@@ -238,11 +238,14 @@ fn a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation() {
     //    the parent, so no retire note is minted.
     wait_for("pane exit", || !fx.pane_alive(), Duration::from_secs(20));
     assert!(fx.trail("spawn.json").exists(), "spawn record missing");
+    // The pin carries the cwd the supervisor ran in, so the revive below
+    // resumes only because it runs in that same worktree.
+    let pin: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(fx.trail("conversation")).unwrap()).unwrap();
+    assert_eq!(pin["conversation"], "retire-acp-session");
     assert_eq!(
-        std::fs::read_to_string(fx.trail("conversation"))
-            .unwrap()
-            .trim(),
-        "retire-acp-session"
+        std::fs::canonicalize(pin["cwd"].as_str().unwrap()).unwrap(),
+        std::fs::canonicalize(&fx.repo).unwrap()
     );
     let log_before = fx.rpc_log();
     assert_eq!(log_before.matches("\"method\":\"session/new\"").count(), 1);

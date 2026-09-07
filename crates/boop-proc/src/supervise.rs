@@ -122,6 +122,32 @@ fn empty_brief_turn(end: &TurnEvent) -> Option<usize> {
     (receipt.tool_calls == 0 && chars < EMPTY_BRIEF_CHARS).then_some(chars)
 }
 
+/// How many typed assertions the lane was spawned with.
+fn declared_count(expect: &boop_store::trail::Expect) -> usize {
+    expect.paths.len()
+        + expect.commit_subjects.len()
+        + usize::from(expect.commits_at_least.is_some())
+}
+
+/// Whether the lane declared output through `--expect-*` and produced none of
+/// it. A lane that declared nothing owes nothing, so its short answer stands.
+fn produced_nothing_yet(lane: &LaneRun) -> bool {
+    let Some(expect) = boop_store::trail::read_expect(&lane.lane) else {
+        return false;
+    };
+    let declared = declared_count(&expect);
+    if declared == 0 {
+        return false;
+    }
+    let base_sha = bus::read_routes(&lane.mail_dir)
+        .ok()
+        .and_then(|routes| routes.get(&lane.lane)?.base_sha.clone());
+    evaluate_expect(&lane.cwd, base_sha.as_deref(), &expect)
+        .0
+        .len()
+        == declared
+}
+
 /// The text a resumed conversation opens with instead of the full brief.
 const RESUME_NUDGE: &str = "The previous turn ended on a provider error you never saw. \
      Re-read your last steps and continue the brief from where you left off.";
@@ -1028,7 +1054,9 @@ fn supervise(
             continue;
         }
         if brief_turn_pending && end.is_done() {
-            if let Some(chars) = empty_brief_turn(&end) {
+            // Only a lane that owes declared output is re-prompted: without
+            // `--expect-*` a four-character answer is a complete brief turn.
+            if let Some(chars) = empty_brief_turn(&end).filter(|_| produced_nothing_yet(lane)) {
                 if empty_briefs < EMPTY_BRIEF_REFEEDS {
                     empty_briefs += 1;
                     warn!(chars, "lane brief turn produced nothing; re-sending the brief");
@@ -1321,7 +1349,8 @@ fn commit_subjects(cwd: &Path, base_sha: Option<&str>) -> Vec<String> {
 
 /// Fold the lane's typed expectations into a result: an unmet assertion turns a
 /// clean process exit into rc 4 and lists the unmet items in the detail. A
-/// process failure keeps its own rc; the detail still names what was missing.
+/// process failure keeps its own rc and its own reason, which the unmet list
+/// follows: the parent needs why the lane stopped as well as what is missing.
 fn apply_expectations(
     lane: &LaneRun,
     exit_code: i32,
@@ -1339,7 +1368,11 @@ fn apply_expectations(
     if unmet.0.is_empty() {
         return (exit_code, detail.map(str::to_owned));
     }
-    let detail = format!("incomplete: {}", unmet.0.join("; "));
+    let unmet = format!("incomplete: {}", unmet.0.join("; "));
+    let detail = match detail {
+        Some(reason) => format!("{reason}; {unmet}"),
+        None => unmet,
+    };
     (
         if exit_code == 0 {
             INCOMPLETE_EXIT
@@ -2620,11 +2653,25 @@ mod tests {
         assert_eq!(*turns.lock().unwrap(), [START_ACK_PROMPT, "do the work\n"]);
     }
 
+    /// A lane that owes one file, the shape the re-feed is gated on.
+    fn owes_a_file(lane: &LaneRun) {
+        boop_store::trail::write_expect(
+            &lane.lane,
+            &boop_store::trail::Expect {
+                paths: vec!["done.txt".to_owned()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    }
+
     #[derive(Clone, Default)]
     struct EmptyBriefChannel {
         turns: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
         /// Brief turns that come back `finish: stop`, four characters, no tool.
         empties: usize,
+        /// What a working turn writes, the way a real turn commits.
+        writes: Option<PathBuf>,
     }
 
     impl LaneChannel for EmptyBriefChannel {
@@ -2653,6 +2700,9 @@ mod tests {
                     },
                 )));
             }
+            if let (Some(path), true) = (&self.writes, brief_turn >= 1) {
+                std::fs::write(path, "done\n").unwrap();
+            }
             Ok(Some(fake_turn(turns.last())))
         }
 
@@ -2667,8 +2717,10 @@ mod tests {
     fn an_empty_brief_turn_is_re_sent_once() {
         let dir = tempdir();
         let lane = parented_lane(&dir, "empty-once", "coordinator");
+        owes_a_file(&lane);
         let mut channel = EmptyBriefChannel {
             empties: 1,
+            writes: Some(dir.join("done.txt")),
             ..EmptyBriefChannel::default()
         };
         let turns = channel.turns.clone();
@@ -2684,12 +2736,13 @@ mod tests {
         assert_eq!(result_rows(&dir)[0].body, "lane empty-once done rc=0");
     }
 
-    /// The second empty brief turn is the lane's answer: the parent's row says
-    /// why rather than reporting a missing commit.
+    /// The second empty brief turn is the lane's answer: the parent's row leads
+    /// with why, ahead of what the lane still owes.
     #[test]
     fn a_brief_turn_that_is_empty_twice_fails_the_lane() {
         let dir = tempdir();
         let lane = parented_lane(&dir, "empty-twice", "coordinator");
+        owes_a_file(&lane);
         let mut channel = EmptyBriefChannel {
             empties: 2,
             ..EmptyBriefChannel::default()
@@ -2702,8 +2755,30 @@ mod tests {
         );
         assert_eq!(
             result_rows(&dir)[0].body,
-            "lane empty-twice done rc=1 (brief turn produced nothing twice)"
+            "lane empty-twice done rc=1 \
+             (brief turn produced nothing twice; incomplete: missing path done.txt)"
         );
+    }
+
+    /// A lane with no `--expect-*` owes nothing, so its short brief turn is
+    /// complete and no brief is re-sent.
+    #[test]
+    fn a_lane_that_declared_no_output_keeps_its_short_brief_turn() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "no-expect", "coordinator");
+        assert!(!produced_nothing_yet(&lane));
+        let mut channel = EmptyBriefChannel {
+            empties: 9,
+            ..EmptyBriefChannel::default()
+        };
+        let turns = channel.turns.clone();
+        std::thread::spawn(move || {
+            let _ = run(lane, &mut channel);
+        });
+
+        wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
+        assert_eq!(*turns.lock().unwrap(), [START_ACK_PROMPT, "do the work\n"]);
+        assert_eq!(result_rows(&dir)[0].body, "lane no-expect done rc=0");
     }
 
     /// The empty-turn rail reads the receipt, never the stop reason.
