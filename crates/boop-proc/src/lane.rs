@@ -552,6 +552,47 @@ fn carcass_in_listing(repo: &Path, listing: &str, lane: &str) -> Option<LaneCarc
     None
 }
 
+/// True when the session exists AND a pane of it still runs a process. A
+/// session whose panes are all dead answers `has-session` yes and is not alive.
+pub fn pane_process_alive(session: &str) -> Result<bool> {
+    let output = std::process::Command::new("tmux")
+        .args([
+            "list-panes",
+            "-t",
+            &format!("={session}"),
+            "-F",
+            "#{pane_dead} #{pane_pid}",
+        ])
+        .output()
+        .context("run tmux list-panes")?;
+    if !output.status.success() {
+        // No such session, or no tmux server at all: nothing of this lane runs.
+        return Ok(false);
+    }
+    let listing = String::from_utf8_lossy(&output.stdout);
+    Ok(pane_alive_in_listing(&listing, pid_alive))
+}
+
+/// The liveness decision over `tmux list-panes -F '#{pane_dead} #{pane_pid}'`
+/// output, split out so a test can hand it a dead pane without a tmux server.
+pub fn pane_alive_in_listing(listing: &str, pid_alive: impl Fn(u32) -> bool) -> bool {
+    listing.lines().any(|line| {
+        let mut fields = line.split_whitespace();
+        let dead = fields.next().unwrap_or("1");
+        let pid = fields.next().and_then(|pid| pid.parse::<u32>().ok());
+        // `pane_dead 0` is tmux's own answer; the pid is the cross-check for a
+        // pane tmux still calls live whose process is already reaped.
+        dead == "0" && pid.is_none_or(&pid_alive)
+    })
+}
+
+/// True when a signal 0 reaches the pid, which is the cheapest liveness probe
+/// that needs no process-table snapshot.
+fn pid_alive(pid: u32) -> bool {
+    // SAFETY: `kill` with signal 0 sends nothing; it only reports reachability.
+    unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
+}
+
 /// `lane delete` on a lane whose route is gone: the DOA case, where the on-exit
 /// epilogue dropped the route and left the worktree and branch standing.
 pub fn delete_carcass(
@@ -1236,6 +1277,31 @@ mod tests {
             .to_string();
         assert!(error.contains("is live on tmux target"), "{error}");
         assert!(error.contains("dead lanes only"), "{error}");
+    }
+
+    /// FAIL-PRE-FIX. `has-session` said yes for a session whose only pane was
+    /// dead, so `lane delete` refused a lane nothing was running.
+    #[test]
+    fn a_session_whose_panes_are_all_dead_is_not_alive() {
+        assert!(!super::pane_alive_in_listing("1 4242\n", |_| true));
+        assert!(!super::pane_alive_in_listing("", |_| true));
+        assert!(super::pane_alive_in_listing("0 4242\n", |_| true));
+        assert!(
+            super::pane_alive_in_listing("1 1\n0 4242\n", |_| true),
+            "one live pane keeps the session alive"
+        );
+        assert!(
+            !super::pane_alive_in_listing("0 4242\n", |_| false),
+            "a pane tmux calls live whose pid is reaped is dead"
+        );
+    }
+
+    /// RECEIPT. Nothing runs under a session name no tmux server holds, so the
+    /// probe answers false rather than erroring.
+    #[test]
+    fn pane_process_alive_is_false_for_a_session_that_does_not_exist() {
+        let name = format!("boop-absent-{}", std::process::id());
+        assert!(!super::pane_process_alive(&name).unwrap());
     }
 
     /// A pane-less coordinator cannot receive the completion injection that
