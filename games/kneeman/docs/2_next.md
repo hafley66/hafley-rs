@@ -1114,6 +1114,29 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Next executable coverage: put a grounded victim beside the landing fixture and assert
    the landing-only hit through two-peer startup/rollback; retain a geometrically overlapping
    airborne control. Wall motion still requires the reference inputs listed above.
+   Direct landing-contact browser fixture: examples/2_kick_landing_start.rs now accepts
+   --contact-ground and --contact-air, matching the existing native overlap/cooldown cases.
+   Build from repository root with CARGO_BUILD_JOBS=1 cargo run -p kneeman
+   --example 2_kick_landing_start -- --contact-ground > /private/tmp/game3-kick-contact-ground.bin;
+   then target/debug/examples/2_kick_landing_start --contact-air > /private/tmp/game3-kick-contact-air.bin.
+   The ad-hoc online runner's LAND_HIT=ground/air mode injects this snapshot, sends 900 idle
+   input ticks and decodes each peer's saved state with examples/3_shared_hit_tune --state.
+   It requires damage [0,10] for ground and [0,0] for air using unmodified default move data.
+   Production ground run passes: LAND_HIT=ground CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1
+   DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Both snapshots [0,10], 545 initial + 180 resumed confirmed comparisons, ticks 750/751;
+   240/1243 and 240/1244 messages dropped, max run 24. Offline recovery and browser/closed-send
+   error gates pass, exit 0. /private/tmp/game3-contact-ground-production.log;
+   /private/tmp/game3-online-5WJQNf. The same command with LAND_HIT=air passes: both snapshots
+   [0,0], 542 initial + 181 resumed confirmed comparisons, ticks 756/754; 240/1226 and 240/1228
+   messages dropped, max run 24. Offline recovery and both error gates pass, exit 0;
+   /private/tmp/game3-contact-air-production.log; /private/tmp/game3-online-J2Fu1V.
+   These browser cases use the positive-facing fixture; native contact tests cover both facings.
+   Only fixture generation and documentation changed. The example compiles; the latest full
+   native gate remains 451 game + 76 shell from the preceding checkpoint, not rerun here.
+   No export/publication or art/deploy changes. Next: bring this contact fixture into the
+   existing debugger's recorded-input controls so the tested interaction can be inspected
+   without ad-hoc browser injection. PM wall action/motion evidence remains open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
