@@ -622,8 +622,30 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    /private/tmp/game3-cell-correction-tests.log. Test-only delta: +44 lines.
    No runtime change, export, browser run or publication. Requests are explicitly constructed
    through the existing GGRS Game handler; transport scheduling and two-peer cell contact are
-   not covered by this receipt. Next: exercise the cell sequence through two-peer transport
-   with confirmed-state comparison, using existing start-state and input mechanisms.
+   not covered by this receipt.
+   Two-peer production follow-up: examples/0_cell_start.rs writes the existing playground
+   state as a 46,740-byte bincode snapshot. From the repository root:
+   CARGO_BUILD_JOBS=1 cargo run -p kneeman --example 0_cell_start > /private/tmp/game3-cell-start.bin.
+   The ad-hoc runner encodes that snapshot into the initial private-room offer; the existing
+   offer/answer path gives both peers the same state. No runtime/startup protocol changes.
+   CELLS=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24
+   NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs passes on published f9a486d.
+   Both peers reach cells 18/19/20 with damage 9/0/0, empty cell-item pools and no held item.
+   542 initial confirmed frames match; each peer drops 240 application messages from 1225/1229
+   send attempts, maximum burst 24, with 60 ms send delay. After the queued channel close,
+   180 resumed frames match at game ticks 750/750; handles/characters remain stable and peer
+   closure reaches offline. No closed-send errors or browser exceptions; exit 0.
+   Log: /private/tmp/game3-cell-online-fixture.log; screenshots: /private/tmp/game3-online-NkT7Uy.
+   Initial browser preflight expected an offline raw snapshot property that is not exposed;
+   it stopped before matchmaking and supplies no online evidence. The native exporter uses
+   the public terrain_cells API from the root workspace; export log:
+   /private/tmp/game3-cell-start-build.log. 435 game + 76 shell tests pass after adding it,
+   /private/tmp/game3-cell-online-native-tests.log. No web rebuild or publication was needed.
+   The browser asserts the final cell-contact result and confirmed-state agreement; individual
+   one-tick pickup/throw visuals are covered by the separate paused replay receipt above.
+   Next: inspect Falcon's inherited special slots against the existing reference ledger and
+   select the next missing move with an executable input sequence. Physical/cross-network
+   devices and exact Project M move data remain unverified.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
