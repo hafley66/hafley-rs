@@ -158,8 +158,9 @@ fn hail_to_a_coordinator_with_no_live_session_is_held_for_its_turn_boundary() {
 }
 
 /// RECEIPT. The same coordinator route, one kind lower: a lane's `result` row
-/// stops at the mailbox instead of walking to the turn-boundary rung, so
-/// nothing holds it for the coordinator's next turn
+/// is an end row (Chris, 2026-09-07), so it walks the ladder like a hail and,
+/// with no live claude session behind the route, is held for the
+/// coordinator's next turn boundary. A `yield` row still stops at the mailbox
 /// (supervisor-rows-off-the-door).
 #[test]
 fn a_supervisor_result_row_to_the_same_coordinator_stops_at_the_mailbox() {
@@ -182,8 +183,28 @@ fn a_supervisor_result_row_to_the_same_coordinator_stops_at_the_mailbox() {
     assert!(hailed.status.success(), "stderr: {:?}", hailed.stderr);
     let stdout = String::from_utf8_lossy(&hailed.stdout);
     assert!(
-        stdout.contains("in the mailbox (result row; no door)"),
-        "the landing line names the kind that skipped the door: {stdout}"
+        stdout.contains("for the next turn boundary"),
+        "an end row walks the ladder like a hail: {stdout}"
+    );
+
+    let progress = boop(
+        &dir,
+        &[
+            "beep",
+            "ping-coord",
+            "idle fake-lane turn=1 head=abc dirty=0",
+            "--as",
+            "fake-lane",
+            "--kind",
+            "yield",
+            "--no-wait",
+        ],
+    );
+    assert!(progress.status.success(), "stderr: {:?}", progress.stderr);
+    let stdout = String::from_utf8_lossy(&progress.stdout);
+    assert!(
+        stdout.contains("in the mailbox (yield row; no door)"),
+        "a progress row names the kind that skipped the door: {stdout}"
     );
     assert!(
         stdout.contains("reads it with `boop wait`"),
@@ -193,7 +214,7 @@ fn a_supervisor_result_row_to_the_same_coordinator_stops_at_the_mailbox() {
     let ledger = Command::new(BOOP)
         .args([
             "db",
-            "select d.outcome, d.detail from agent_delivery d order by d.at_ms desc limit 1",
+            "select d.outcome, d.detail from agent_delivery d where d.detail like 'yield row%' order by d.at_ms desc limit 1",
         ])
         .env("BOOP_DB", dir.join("boop.db"))
         .env("HOME", dir.join("home"))
@@ -203,7 +224,7 @@ fn a_supervisor_result_row_to_the_same_coordinator_stops_at_the_mailbox() {
     assert!(row.contains("held-in-mailbox"), "ledger: {row}");
     assert!(
         !row.contains("held-for-turn-boundary"),
-        "a result row never reaches the turn-boundary rung: {row}"
+        "a yield row never reaches the turn-boundary rung: {row}"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
