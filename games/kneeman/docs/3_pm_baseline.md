@@ -166,7 +166,8 @@ The previously published `FallRefreshJump` discriminant 5 keeps its completion-t
 the new variant is appended at 6. Old host Tune data remains executable by the new runtime.
 An old guest cannot decode a new host's kind and rejects startup in the mixed-build browser
 test. Matching-new and old-host/new-guest loss/reconnect gates also pass; receipts are in
-2_next.md. Publication remains pending. Ground/air trajectories, dedicated landing
+2_next.md. Published through bc50afd; production recovery/loss/reconnect acceptance passes
+548 initial and 180 resumed confirmed frames. Ground/air trajectories, dedicated landing
 behavior, wall interaction and exact PM animation timing still require work.
 
 ## Remaining source limits
