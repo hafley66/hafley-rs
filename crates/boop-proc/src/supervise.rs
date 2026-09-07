@@ -106,6 +106,22 @@ fn start_ack_failure(end: &TurnEvent) -> Option<String> {
     ))
 }
 
+/// Below this many characters, with no tool call, a clean brief turn is a
+/// provider hiccup: opencode answered 4 tokens and the lane failed on a commit.
+const EMPTY_BRIEF_CHARS: usize = 32;
+/// Re-feeds of the brief before the lane is failed loudly.
+const EMPTY_BRIEF_REFEEDS: u32 = 1;
+/// The result detail a lane wears when the brief never took.
+const EMPTY_BRIEF_TWICE: &str = "brief turn produced nothing twice";
+
+/// The character count of a brief turn that did nothing; `None` when the turn
+/// called a tool, wrote real text, or reported no receipt at all.
+fn empty_brief_turn(end: &TurnEvent) -> Option<usize> {
+    let receipt = end.receipt()?;
+    let chars = receipt.text.trim().chars().count();
+    (receipt.tool_calls == 0 && chars < EMPTY_BRIEF_CHARS).then_some(chars)
+}
+
 /// The text a resumed conversation opens with instead of the full brief.
 const RESUME_NUDGE: &str = "The previous turn ended on a provider error you never saw. \
      Re-read your last steps and continue the brief from where you left off.";
@@ -663,6 +679,26 @@ pub fn arm_signal_trail(lane: &LaneRun) {
     });
 }
 
+/// The id in `lane.resume`, kept only when the pin proves this spawn owns it:
+/// an unchecked id revived a dead lane's conversation in another checkout.
+fn accepted_resume(lane: &LaneRun) -> Option<String> {
+    let id = lane.resume.clone()?;
+    match pinned_conversation_for(&lane.mail_dir, &lane.lane, &lane.cwd) {
+        Ok(pinned) if pinned == id => Some(id),
+        Ok(pinned) => {
+            warn!(lane = lane.lane, resume = id, pinned, "lane resume is not the pinned conversation");
+            println!("[boop] fresh conversation: pinned for this cwd is {pinned}, not {id}");
+            None
+        }
+        Err(refusal) => {
+            let reason = refusal.reason();
+            warn!(lane = lane.lane, resume = id, reason, "lane resume refused");
+            println!("[boop] fresh conversation: {reason}");
+            None
+        }
+    }
+}
+
 fn supervise(
     lane: &LaneRun,
     channel: &mut dyn LaneChannel,
@@ -685,14 +721,15 @@ fn supervise(
     // app-server returns its new thread id from `thread/start` before the first
     // turn, so only the caller's explicit resume input proves that the thread
     // already holds the brief.
-    let mut brief_completed = lane.resume.is_some();
-    let mut brief_turn_pending = lane.resume.is_none();
-    let mut start_ack_pending = lane.resume.is_none();
+    let resume = accepted_resume(lane);
+    let mut brief_completed = resume.is_some();
+    let mut brief_turn_pending = resume.is_none();
+    let mut start_ack_pending = resume.is_none();
     // A lane retired on the idle shutdown is revived by a send; the mail that
     // revived it is its opening turn, never the flake nudge.
-    let revived = lane.resume.is_some()
+    let revived = resume.is_some()
         && read_residency(&lane.mail_dir, &lane.lane).as_deref() == Some(RESIDENCY_RETIRED);
-    let mut turn = match &lane.resume {
+    let mut turn = match &resume {
         Some(conversation) if revived => {
             info!(
                 conversation_id = conversation,
@@ -720,12 +757,16 @@ fn supervise(
                 conversation_id = conversation,
                 "lane resuming pinned conversation"
             );
-            println!("[boop] resuming conversation {conversation}");
+            println!(
+                "[boop] resuming conversation {conversation} (pinned for {})",
+                lane.cwd.display()
+            );
             RESUME_NUDGE.to_owned()
         }
         None => START_ACK_PROMPT.to_owned(),
     };
     let mut flake_resumes = 0u32;
+    let mut empty_briefs = 0u32;
     let mut result_written = false;
     let mut head_watch = HeadWatch::new(&lane.cwd);
 
@@ -987,6 +1028,26 @@ fn supervise(
             continue;
         }
         if brief_turn_pending && end.is_done() {
+            if let Some(chars) = empty_brief_turn(&end) {
+                if empty_briefs < EMPTY_BRIEF_REFEEDS {
+                    empty_briefs += 1;
+                    warn!(chars, "lane brief turn produced nothing; re-sending the brief");
+                    println!(
+                        "[boop] brief turn produced nothing ({chars} chars, no tool call); \
+                         re-sending the brief ({empty_briefs}/{EMPTY_BRIEF_REFEEDS})"
+                    );
+                    turn = brief.clone();
+                    continue;
+                }
+                if let Err(error) = channel.close() {
+                    warn!(lane = lane.lane, error = %error, "close after an empty brief turn failed");
+                }
+                return Ok(Ended {
+                    exit_code: 1,
+                    detail: Some(EMPTY_BRIEF_TWICE.to_owned()),
+                    retired: false,
+                });
+            }
             brief_completed = true;
             brief_turn_pending = false;
         }
@@ -1686,7 +1747,7 @@ fn remember_conversation(lane: &LaneRun, channel: &dyn LaneChannel) {
         conversation_id_kind = channel.conversation_id_kind(),
         "lane conversation resolved"
     );
-    record_conversation(&lane.mail_dir, &lane.lane, &id);
+    record_conversation(&lane.mail_dir, &lane.lane, &lane.cwd, &id);
     let store = match boop_store::Store::default_path().and_then(boop_store::Store::open) {
         Ok(store) => store,
         Err(error) => {
@@ -1721,19 +1782,71 @@ fn remember_conversation(lane: &LaneRun, channel: &dyn LaneChannel) {
     }
 }
 
-/// The conversation id a previous supervisor pinned for this lane, if any.
-/// Read by the cold-restart path so a respawn continues instead of restarting.
-pub fn pinned_conversation(dir: &Path, lane: &str) -> Option<String> {
-    bus::read_routes(dir)
-        .ok()
-        .and_then(|routes| routes.get(lane)?.session_id.clone())
-        .or_else(|| boop_store::trail::read_conversation(lane))
+/// Why a resume was refused; printed as one `[boop] fresh conversation:` line
+/// so a coordinator reading the pane knows which path ran.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ResumeRefusal {
+    NoPin,
+    LegacyPin,
+    CwdMismatch { pinned: String, now: String },
+    RouteGone,
 }
 
-/// Write the harness's own conversation id onto the lane's registry route so a
-/// later resume finds it without a transcript scan.
-fn record_conversation(dir: &Path, lane: &str, conversation: &str) {
-    if let Err(error) = boop_store::trail::write_conversation(lane, conversation) {
+impl ResumeRefusal {
+    /// The reason as the pane prints it.
+    pub fn reason(&self) -> String {
+        match self {
+            ResumeRefusal::NoPin => "no pin".to_owned(),
+            ResumeRefusal::LegacyPin => "legacy pin".to_owned(),
+            ResumeRefusal::CwdMismatch { pinned, now } => {
+                format!("pinned for {pinned} but running in {now}")
+            }
+            ResumeRefusal::RouteGone => "route gone".to_owned(),
+        }
+    }
+}
+
+/// The conversation a previous supervisor pinned for this lane, ONLY if it was
+/// pinned for the same cwd: a lane name is reused across repos and respawns.
+pub fn pinned_conversation_for(
+    dir: &Path,
+    lane: &str,
+    cwd: &Path,
+) -> Result<String, ResumeRefusal> {
+    let routes = bus::read_routes(dir).map_err(|_| ResumeRefusal::RouteGone)?;
+    if let Some(route) = routes.get(lane) {
+        let here = route.cwd.as_deref().is_some_and(|at| Path::new(at) == cwd);
+        if let (Some(id), true) = (route.session_id.clone(), here) {
+            return Ok(id);
+        }
+    }
+    let Some(pin) = boop_store::trail::read_conversation_pin(lane) else {
+        return Err(ResumeRefusal::NoPin);
+    };
+    if pin.legacy() {
+        return Err(ResumeRefusal::LegacyPin);
+    }
+    if pin.belongs_to(cwd) {
+        return Ok(pin.conversation);
+    }
+    Err(ResumeRefusal::CwdMismatch {
+        pinned: pin.cwd,
+        now: cwd.display().to_string(),
+    })
+}
+
+/// The pinned conversation for the caller's own working directory; `None` when
+/// the pin belongs to another spawn and the lane must start fresh.
+pub fn pinned_conversation(dir: &Path, lane: &str) -> Option<String> {
+    let cwd = std::env::current_dir().ok()?;
+    pinned_conversation_for(dir, lane, &cwd).ok()
+}
+
+/// Write the harness's own conversation id onto the lane's registry route and
+/// its trail pin, stamped with the cwd this supervisor is running in.
+fn record_conversation(dir: &Path, lane: &str, cwd: &Path, conversation: &str) {
+    let pin = boop_store::trail::ConversationPin::recorded(conversation, cwd);
+    if let Err(error) = boop_store::trail::write_conversation_pin(lane, &pin) {
         warn!(lane, conversation_id = conversation, error = %error, "conversation trail write failed");
     }
     let path = dir.join("registry.json");
@@ -1873,24 +1986,60 @@ mod tests {
         assert_eq!(ended.detail.as_deref(), Some("pane-gone: %7"));
     }
 
+    // FAIL-PRE-FIX: the pin was a bare id, so a respawn of a dead lane's name
+    // resumed its conversation, in another checkout, with no brief.
     #[test]
-    fn a_pinned_conversation_round_trips_through_the_registry_route() {
-        // HOME is process-wide in this test binary and the trail copy lives
+    fn a_pinned_conversation_answers_only_the_cwd_it_was_pinned_for() {
+        // HOME is process-wide in this test binary and the trail pin lives
         // under it, so the lane name is unique to this test.
         let dir = tempdir();
-        assert_eq!(pinned_conversation(&dir, "pinned-round-trip"), None);
-        record_conversation(&dir, "pinned-round-trip", "ses_route_1");
+        let lane = "pinned-round-trip";
         assert_eq!(
-            pinned_conversation(&dir, "pinned-round-trip").as_deref(),
-            Some("ses_route_1")
+            pinned_conversation_for(&dir, lane, &dir),
+            Err(ResumeRefusal::NoPin)
         );
-        // The trail copy answers when the route is gone.
+        record_conversation(&dir, lane, &dir, "ses_route_1");
+        assert_eq!(
+            pinned_conversation_for(&dir, lane, &dir).as_deref(),
+            Ok("ses_route_1")
+        );
+        // The trail pin answers when the route is gone.
         std::fs::remove_file(dir.join("registry.json")).ok();
         assert_eq!(
-            pinned_conversation(&dir, "pinned-round-trip").as_deref(),
-            Some("ses_route_1")
+            pinned_conversation_for(&dir, lane, &dir).as_deref(),
+            Ok("ses_route_1")
         );
-        assert_eq!(pinned_conversation(&dir, "pinned-other"), None);
+        let other = dir.join("other-checkout");
+        assert_eq!(
+            pinned_conversation_for(&dir, lane, &other),
+            Err(ResumeRefusal::CwdMismatch {
+                pinned: dir.display().to_string(),
+                now: other.display().to_string(),
+            })
+        );
+        assert_eq!(
+            pinned_conversation_for(&dir, "pinned-other", &dir),
+            Err(ResumeRefusal::NoPin)
+        );
+    }
+
+    /// A trail written before the pin format names no spawn, so it never
+    /// resumes; the lane starts fresh and receives its brief.
+    #[test]
+    fn a_legacy_plain_text_trail_never_resumes() {
+        let dir = tempdir();
+        let lane = "pinned-legacy";
+        let trail = boop_store::trail::lane_dir(lane).unwrap();
+        std::fs::create_dir_all(&trail).unwrap();
+        std::fs::write(
+            trail.join(boop_store::trail::CONVERSATION_FILE),
+            "ses_legacy\n",
+        )
+        .unwrap();
+        assert_eq!(
+            pinned_conversation_for(&dir, lane, &dir),
+            Err(ResumeRefusal::LegacyPin)
+        );
     }
 
     #[test]
@@ -2194,6 +2343,22 @@ mod tests {
         );
     }
 
+    /// What a fake harness answers `text` with: the probe word for the
+    /// readiness probe, a working turn for anything else.
+    fn fake_turn(text: Option<&String>) -> TurnEvent {
+        let receipt = match text.map(String::as_str) {
+            Some(START_ACK_PROMPT) => TurnReceipt {
+                text: "boop".into(),
+                tool_calls: 0,
+            },
+            _ => TurnReceipt {
+                text: "read the brief, edited the file and committed it".into(),
+                tool_calls: 2,
+            },
+        };
+        TurnEvent::ok_with_receipt("completed", receipt)
+    }
+
     /// A clean turn parks `run`, so a caller reads the shared handle from
     /// another thread and polls; `run` is never joined back.
     fn wait_for(mut ready: impl FnMut() -> bool, timeout: Duration) {
@@ -2224,16 +2389,11 @@ mod tests {
         }
 
         fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
-            Ok(Some(if self.turns.lock().unwrap().len() == 2 {
+            let turns = self.turns.lock().unwrap();
+            Ok(Some(if turns.len() == 2 {
                 TurnEvent::flaked("aborted stream")
             } else {
-                TurnEvent::ok_with_receipt(
-                    "completed",
-                    TurnReceipt {
-                        text: "boop".into(),
-                        tool_calls: 0,
-                    },
-                )
+                fake_turn(turns.last())
             }))
         }
 
@@ -2332,13 +2492,7 @@ mod tests {
         }
 
         fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
-            Ok(Some(TurnEvent::ok_with_receipt(
-                "completed",
-                TurnReceipt {
-                    text: "boop".into(),
-                    tool_calls: 0,
-                },
-            )))
+            Ok(Some(fake_turn(self.turns.lock().unwrap().last())))
         }
 
         fn close(&mut self) -> Result<()> {
@@ -2416,11 +2570,18 @@ mod tests {
         );
     }
 
+    /// Pin `id` to this lane for the cwd its supervisor runs in, the only
+    /// shape a resume is taken from.
+    fn pin_resume(lane: &mut LaneRun, id: &str) {
+        record_conversation(&lane.mail_dir, &lane.lane, &lane.cwd, id);
+        lane.resume = Some(id.to_owned());
+    }
+
     #[test]
     fn an_explicit_resume_receives_the_resume_nudge() {
         let dir = tempdir();
-        let mut lane = parented_lane(&dir, "mine", "coordinator");
-        lane.resume = Some("existing-thread-id".to_owned());
+        let mut lane = parented_lane(&dir, "resume-nudge", "coordinator");
+        pin_resume(&mut lane, "existing-thread-id");
         let mut channel = FreshIdentifiedChannel::default();
         let turns = channel.turns.clone();
         std::thread::spawn(move || {
@@ -2429,7 +2590,146 @@ mod tests {
 
         wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
         assert_eq!(*turns.lock().unwrap(), [RESUME_NUDGE]);
-        assert_eq!(result_rows(&dir)[0].body, "lane mine done rc=0");
+        assert_eq!(result_rows(&dir)[0].body, "lane resume-nudge done rc=0");
+    }
+
+    // FAIL-PRE-FIX: the trail pin outlives `lane delete`, the worktree and the
+    // branch, so a respawn resumed a dead lane and answered "No brief".
+    #[test]
+    fn a_resume_pinned_for_another_cwd_starts_fresh_and_says_so() {
+        let dir = tempdir();
+        let mut lane = parented_lane(&dir, "wrong-cwd", "coordinator");
+        let pin = boop_store::trail::ConversationPin::recorded("ses_dead", Path::new("/a"));
+        boop_store::trail::write_conversation_pin("wrong-cwd", &pin).unwrap();
+        lane.resume = Some("ses_dead".to_owned());
+        lane.cwd = PathBuf::from("/b");
+        let refusal = pinned_conversation_for(&dir, "wrong-cwd", Path::new("/b")).unwrap_err();
+        assert_eq!(
+            format!("[boop] fresh conversation: {}", refusal.reason()),
+            "[boop] fresh conversation: pinned for /a but running in /b"
+        );
+        assert_eq!(accepted_resume(&lane), None);
+
+        lane.cwd = dir.clone();
+        let mut channel = FreshIdentifiedChannel::default();
+        let turns = channel.turns.clone();
+        std::thread::spawn(move || {
+            let _ = run(lane, &mut channel);
+        });
+        wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
+        assert_eq!(*turns.lock().unwrap(), [START_ACK_PROMPT, "do the work\n"]);
+    }
+
+    #[derive(Clone, Default)]
+    struct EmptyBriefChannel {
+        turns: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+        /// Brief turns that come back `finish: stop`, four characters, no tool.
+        empties: usize,
+    }
+
+    impl LaneChannel for EmptyBriefChannel {
+        fn conversation_id(&self) -> Option<String> {
+            Some("flake-thread-id".to_owned())
+        }
+
+        fn start_turn(&mut self, text: &str) -> Result<()> {
+            self.turns.lock().unwrap().push(text.to_owned());
+            Ok(())
+        }
+
+        fn steer(&mut self, _text: &str) -> Result<Delivery> {
+            Ok(Delivery::MidTurn)
+        }
+
+        fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
+            let turns = self.turns.lock().unwrap();
+            let brief_turn = turns.len().saturating_sub(1);
+            if brief_turn >= 1 && brief_turn <= self.empties {
+                return Ok(Some(TurnEvent::ok_with_receipt(
+                    "stop",
+                    TurnReceipt {
+                        text: "ok.".into(),
+                        tool_calls: 0,
+                    },
+                )));
+            }
+            Ok(Some(fake_turn(turns.last())))
+        }
+
+        fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    // FAIL-PRE-FIX: a brief turn that stopped with 4 output tokens and no tool
+    // call counted as the brief, and the lane died rc=1 in 25 s.
+    #[test]
+    fn an_empty_brief_turn_is_re_sent_once() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "empty-once", "coordinator");
+        let mut channel = EmptyBriefChannel {
+            empties: 1,
+            ..EmptyBriefChannel::default()
+        };
+        let turns = channel.turns.clone();
+        std::thread::spawn(move || {
+            let _ = run(lane, &mut channel);
+        });
+
+        wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
+        assert_eq!(
+            *turns.lock().unwrap(),
+            [START_ACK_PROMPT, "do the work\n", "do the work\n"]
+        );
+        assert_eq!(result_rows(&dir)[0].body, "lane empty-once done rc=0");
+    }
+
+    /// The second empty brief turn is the lane's answer: the parent's row says
+    /// why rather than reporting a missing commit.
+    #[test]
+    fn a_brief_turn_that_is_empty_twice_fails_the_lane() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "empty-twice", "coordinator");
+        let mut channel = EmptyBriefChannel {
+            empties: 2,
+            ..EmptyBriefChannel::default()
+        };
+        let turns = channel.turns.clone();
+        assert_eq!(run(lane, &mut channel).unwrap(), 1);
+        assert_eq!(
+            *turns.lock().unwrap(),
+            [START_ACK_PROMPT, "do the work\n", "do the work\n"]
+        );
+        assert_eq!(
+            result_rows(&dir)[0].body,
+            "lane empty-twice done rc=1 (brief turn produced nothing twice)"
+        );
+    }
+
+    /// The empty-turn rail reads the receipt, never the stop reason.
+    #[test]
+    fn an_empty_brief_turn_is_a_tool_free_turn_under_thirty_two_characters() {
+        assert_eq!(
+            empty_brief_turn(&TurnEvent::ok_with_receipt(
+                "stop",
+                TurnReceipt {
+                    text: " ok. ".into(),
+                    tool_calls: 0,
+                },
+            )),
+            Some(3)
+        );
+        assert_eq!(
+            empty_brief_turn(&TurnEvent::ok_with_receipt(
+                "stop",
+                TurnReceipt {
+                    text: "ok.".into(),
+                    tool_calls: 1,
+                },
+            )),
+            None
+        );
+        assert_eq!(empty_brief_turn(&TurnEvent::ok("stop")), None);
     }
 
     // FAIL-PRE-FIX: a panic inside the supervisor unwound straight past
@@ -2493,13 +2793,7 @@ mod tests {
         }
 
         fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
-            Ok(Some(TurnEvent::ok_with_receipt(
-                "completed",
-                TurnReceipt {
-                    text: "boop".into(),
-                    tool_calls: 0,
-                },
-            )))
+            Ok(Some(fake_turn(self.turns.lock().unwrap().last())))
         }
 
         fn close(&mut self) -> Result<()> {
@@ -2546,8 +2840,8 @@ mod tests {
     #[test]
     fn the_brief_reaches_the_channel_before_a_resume_nudge_opens_the_lane() {
         let dir = tempdir();
-        let mut lane = parented_lane(&dir, "mine", "coordinator");
-        lane.resume = Some("existing-thread-id".to_owned());
+        let mut lane = parented_lane(&dir, "resume-brief", "coordinator");
+        pin_resume(&mut lane, "existing-thread-id");
         let mut channel = FreshIdentifiedChannel::default();
         let turns = channel.turns.clone();
         let brief = channel.brief.clone();
