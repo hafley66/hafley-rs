@@ -283,6 +283,7 @@ fn kick_travel_uses_loadout_velocity_and_keeps_ground_launch_across_an_edge() {
 fn aerial_falcon_kick_lands_during_startup_or_travel_and_replays() {
     let tune = Tune::default();
     let kick = tune.for_char(2).specials[3];
+    let landing = kick.landing.unwrap();
     for (height, recovery) in [(1.0, false), (10.0, false), (180.0, false), (10.0, true)] {
         let mut state = SimState::spawn();
         state.fighters[0].char_id = 2;
@@ -311,8 +312,8 @@ fn aerial_falcon_kick_lands_during_startup_or_travel_and_replays() {
             let fighter = state.fighters[0];
             if !landed && fighter.grounded() {
                 assert_eq!(before.state, if height == 1.0 { CharState::Air } else { CharState::SpecialD });
-                assert_eq!(fighter.state, CharState::SpecialD);
-                assert_eq!(fighter.frame, kick.hit.active_end());
+                assert_eq!(fighter.state, CharState::SpecialLandD);
+                assert_eq!(fighter.frame, 0);
                 assert_eq!(before.frame < kick.hit.startup, height <= 10.0 && !recovery);
                 assert_eq!(fighter.pos.y, GROUND_Y);
                 assert_eq!(fighter.air_jumps, 1);
@@ -322,10 +323,12 @@ fn aerial_falcon_kick_lands_during_startup_or_travel_and_replays() {
             }
             if landed {
                 assert!(fighter.grounded());
-                assert_eq!(fighter.state, if tick - landing_tick < kick.hit.recovery {
-                    CharState::SpecialD
+                assert_eq!(fighter.state, if tick - landing_tick < landing.total() {
+                    CharState::SpecialLandD
                 } else { CharState::Stand });
-                assert!(kick.hit.box_at(fighter.frame).is_none() || fighter.state == CharState::Stand);
+                if fighter.state == CharState::SpecialLandD {
+                    assert_eq!(landing.box_at(fighter.frame).is_some(), tick == landing_tick);
+                }
             }
         }
         assert!(landed);
@@ -381,6 +384,55 @@ fn falcon_kick_wall_contact_blocks_travel_and_replays() {
                 }
             }
             assert!(contact, "facing {facing}, grounded {grounded}");
+        }
+    }
+}
+
+#[test]
+fn kick_landing_hits_ground_targets_once_with_fresh_identity_and_replays() {
+    let tune = Tune::default();
+    let kick = tune.for_char(2).specials[3];
+    for facing in [-1.0, 1.0] {
+        for grounded in [false, true] {
+            let mut state = SimState::spawn();
+            let attacker = &mut state.fighters[0];
+            attacker.char_id = 2;
+            attacker.pos = Vector2::new(900.0, GROUND_Y - 1.0);
+            attacker.vel = Vector2::new(0.0, 120.0);
+            attacker.facing = facing;
+            attacker.state = CharState::SpecialD;
+            attacker.frame = kick.hit.startup + 1;
+            attacker.ground_plat = -1;
+            attacker.ground_ink = -1;
+            attacker.hit_cd = [[100; MAX_PLAYERS]; MAX_HB];
+            let victim = &mut state.fighters[1];
+            victim.pos = Vector2::new(900.0 + facing * 60.0,
+                if grounded { GROUND_Y } else { GROUND_Y - 10.0 });
+            victim.state = if grounded { CharState::Stand } else { CharState::Air };
+            victim.ground_plat = 0; // intentionally stale for the Air case
+            victim.vel.y = if grounded { 0.0 } else { -60.0 };
+            victim.invuln = 0;
+            // Even the airborne victim overlaps the new landing geometry: filtering must decide.
+            let (center, radius) = hurtbox(victim);
+            assert!(kick.landing.unwrap().live_boxes().iter().any(|hit| {
+                let (c, r) = hitbox_center(&state.fighters[0], hit);
+                geo::circles_touch(c, r, center, radius)
+            }));
+            let mut replay = state;
+            for tick in 0..60 {
+                state = step(&state, &[&idle(), &idle()], &tune);
+                replay = step(&replay, &[&idle(), &idle()], &tune);
+                assert_eq!(net::checksum(&state), net::checksum(&replay));
+                assert_eq!(state.fighters[1].damage, if grounded { 10.0 } else { 0.0 },
+                    "facing {facing}, grounded {grounded}, tick {tick}");
+                if tick == 0 {
+                    assert_eq!(state.fighters[0].state, CharState::SpecialLandD);
+                    assert_eq!(state.fighters[0].frame, 0);
+                    assert!(state.fighters[0].hit_cd.iter().flatten().all(|cd| *cd < 100));
+                    replay = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap();
+                }
+            }
+            assert_eq!(state.fighters[0].state, CharState::Stand);
         }
     }
 }

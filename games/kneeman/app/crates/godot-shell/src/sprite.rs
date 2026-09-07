@@ -150,6 +150,7 @@ pub(crate) fn clip_for(f: &Fighter) -> &'static str {
         SpecialS => "fspecial",
         SpecialU => "uspecial",
         SpecialD => "dspecial",
+        SpecialLandN | SpecialLandS | SpecialLandU | SpecialLandD => "landinglag",
         Helpless => "pratfall",
         // launched/hitstun: tumble through the air (the sim drives the slide); rising vs falling pose.
         Launched => {

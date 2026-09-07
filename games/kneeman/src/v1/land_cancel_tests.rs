@@ -47,6 +47,42 @@ fn special_recovery_maps_each_slot_to_its_own_recovery_clock() {
     }
 }
 
+#[test]
+fn optional_landing_attack_retains_slot_and_handles_empty_or_missing_data() {
+    let mut t = tune();
+    for (slot, (start, end)) in [
+        (CharState::SpecialN, CharState::SpecialLandN),
+        (CharState::SpecialS, CharState::SpecialLandS),
+        (CharState::SpecialU, CharState::SpecialLandU),
+        (CharState::SpecialD, CharState::SpecialLandD),
+    ].into_iter().enumerate() {
+        t.specials[slot].hit.land_cancel = LandCancel::SpecialRecovery;
+        t.specials[slot].landing = Some(AttackData::one(0, 1, 7, Hitbox {
+            damage: slot as f32 + 1.0, ..Hitbox::NONE
+        }));
+        assert_eq!(land_transition(&t, start), (end, Some(0)));
+        assert_eq!(attack_for(&t, end).unwrap().boxes[0].damage, slot as f32 + 1.0);
+        assert_eq!(bincode::serialize(&end).unwrap(), (49 + slot as u32).to_le_bytes());
+        t.specials[slot].hit.land_cancel = LandCancel::Continue;
+        assert_eq!(land_transition(&t, start), (start, None));
+        t.specials[slot].hit.land_cancel = LandCancel::SpecialRecovery;
+        t.specials[slot].landing = Some(AttackData::new(0, 0, [Hitbox::NONE; MAX_HB], 0));
+        assert_eq!(land_transition(&t, start), (CharState::Stand, Some(0)));
+        t.specials[slot].landing = None;
+        for grounded in [false, true] {
+            let mut fighter = SimState::spawn().fighters[0];
+            fighter.state = end;
+            fighter.ground_plat = if grounded { 0 } else { -1 };
+            run_special_landing(&mut fighter, &t);
+            assert_eq!(fighter.state, if grounded { CharState::Stand } else { CharState::Air });
+        }
+    }
+    assert_eq!(bincode::serialize(&CharState::TechWall).unwrap(), 48u32.to_le_bytes());
+    let mut json = serde_json::to_value(t.specials[0]).unwrap();
+    json.as_object_mut().unwrap().remove("landing");
+    assert!(serde_json::from_value::<SpecialMove>(json).unwrap().landing.is_none());
+}
+
 /// Pin TODAY's behavior before touching anything: every attack-bearing state (the five aerials
 /// plus the four specials) and every non-attack airborne state (Air/AirDodge/Helpless, which have
 /// no `AttackData` at all) resets to `Landing` on touchdown. This is what

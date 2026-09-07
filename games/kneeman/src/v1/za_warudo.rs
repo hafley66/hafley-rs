@@ -389,6 +389,9 @@ pub(crate) fn reduce_next_state(
 
     // ── integrate + collide ─────────────────────────────────────────────────
     let landing_frame = integrate_collide(&mut n, f.pos, paths, nodes, i, t, r.sgn, prev);
+    if landing_frame == Some(0) && crate::v1::special_landing_slot(n.state).is_some() {
+        n.arm_hits();
+    }
 
     // blast zone -> respawn. `zone` None = ZoneMode::Off; a zone_exempt char never KOs here.
     if zone.is_some_and(|z| !t.zone_exempt && out_of_zone(n.pos, &z)) {
@@ -1218,6 +1221,8 @@ fn transition(
         CharState::SpecialS => run_special(n, 1, i, t),
         CharState::SpecialU => run_special(n, 2, i, t),
         CharState::SpecialD => run_special(n, 3, i, t),
+        CharState::SpecialLandN | CharState::SpecialLandS |
+        CharState::SpecialLandU | CharState::SpecialLandD => crate::v1::run_special_landing(n, t),
         CharState::Helpless => {
             // special-fall: drift only, gravity pulls, no actions until you land (integrate -> Landing)
             air_drift(n, i, t, sgn);

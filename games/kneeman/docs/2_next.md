@@ -1030,6 +1030,29 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    No export/browser/publication in this checkpoint. Next: add the landing-hit phase through
    special move data, then regenerate fixtures and verify version-3 rejection/online behavior
    before publication. PM timing and world-scale conversion remain unverified.
+   Landing-contact checkpoint: SpecialMove.landing optionally supplies AttackData, using the
+   existing frame clock, hit targeting and shared hit IDs. Four appended SpecialLand states
+   retain the selected special slot without adding Fighter fields. Ground contact starts frame
+   zero and rearms cooldowns; absent landing data retains the previous recovery-only path.
+   Falcon Kick selects three ground-only ID-0 shapes: damage 10, angle 80, BKB 65, KBG 35,
+   from the generated PM3.6 SpecialAirLwEnd reference in docs/4_falcon_script_reference.md.
+   One active tick, 18 recovery ticks and 6 pixels per reference unit are authored Game3
+   choices, with no claim of verified PM duration or scale. The phase uses landinglag sprites;
+   telegraphs now resolve the fighter's character loadout. JSON omission defaults to None;
+   the added binary Tune field shares this unpublished startup-version-3 checkpoint.
+   Native gate: 450 game + 76 shell tests pass, including both facings, geometrically
+   overlapping airborne rejection, one grounded hit, fresh identity after travel, serialized
+   contact replay, all four slot mappings, empty/missing data and append-only state tags.
+   Log: /private/tmp/game3-landing-phase-contact-gate.log. Fresh production export passes
+   LOCAL_EXPORT=1 LAND=1 KICK=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60
+   BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs. The runner
+   now asserts SpecialLandD at ground contact. All 61 sequence frames, 549 initial and 181
+   resumed confirmed comparisons match; resumed ticks 756/758. Each peer drops 240 messages
+   from 1238/1237 attempts, maximum run 24. Offline recovery passes with no closed-send
+   errors/browser exceptions, exit 0. /private/tmp/game3-landing-contact-online.log;
+   screenshots /private/tmp/game3-online-PKHhGY. Browser coverage observes the phase and
+   network state; grounded damage/airborne rejection are native-test assertions.
+   Publication and mixed-version rejection remain pending at this source checkpoint.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;

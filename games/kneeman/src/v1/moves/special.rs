@@ -18,7 +18,28 @@ pub(crate) fn special_slot(st: CharState) -> Option<usize> {
     }
 }
 pub(crate) fn is_special(st: CharState) -> bool {
-    special_slot(st).is_some()
+    special_slot(st).is_some() || special_landing_slot(st).is_some()
+}
+
+pub(crate) fn special_landing_slot(st: CharState) -> Option<usize> {
+    match st {
+        CharState::SpecialLandN => Some(0),
+        CharState::SpecialLandS => Some(1),
+        CharState::SpecialLandU => Some(2),
+        CharState::SpecialLandD => Some(3),
+        _ => None,
+    }
+}
+
+pub(crate) fn run_special_landing(n: &mut Fighter, t: &Tune) {
+    let slot = special_landing_slot(n.state).unwrap();
+    let total = t.specials[slot].landing.map(|attack| attack.total()).unwrap_or(0);
+    n.vel.x = move_toward(n.vel.x, 0.0,
+        if n.grounded() { t.ground_friction * DT } else { t.air_friction * DT });
+    if !n.grounded() { n.vel.y = (n.vel.y + t.gravity * DT).min(t.max_fall); }
+    if n.frame >= total - 1 {
+        n.state = if n.grounded() { CharState::Stand } else { CharState::Air };
+    }
 }
 
 /// Which special the stick selects at the press: up / down / side / neutral.
@@ -75,6 +96,9 @@ pub struct SpecialMove {
     // full gravity so the fighter actually drops out of the move. The launch burst at `hit.startup`
     // still fires (it sets vel.y to `move_y`), but the clamp catches it on subsequent frames.
     pub hang_vel: f32,
+    /// Optional contact attack selected by SpecialRecovery. Its clock starts at ground contact.
+    #[serde(default)]
+    pub landing: Option<AttackData>,
 }
 
 impl SpecialMove {
@@ -84,6 +108,21 @@ impl SpecialMove {
         move_x: 900.0,
         move_y: 900.0,
         hit: AttackData { land_cancel: crate::v1::LandCancel::SpecialRecovery, ..Self::DROP.hit },
+        // Reference combat values; one active tick and 6 px/unit geometry remain authored.
+        landing: Some({
+            let hit = Hitbox {
+                start: 0, len: 1, r: 30.0, damage: 10.0, angle: 80.0, bkb: 65.0, kbg: 35.0,
+                targets: crate::v1::HitTargets::Ground, ..Hitbox::NONE
+            };
+            let mut attack = AttackData::new(0, 18, [
+                Hitbox { off: Vector2::new(51.0, -24.0), ..hit },
+                Hitbox { off: Vector2::new(-51.0, -24.0), ..hit },
+                Hitbox { off: Vector2::new(0.0, -24.0), ..hit },
+                Hitbox::NONE,
+            ], 3);
+            attack.land_cancel = crate::v1::LandCancel::Continue;
+            attack
+        }),
         ..Self::DROP
     };
     // Default kit (Falcon-ish): heavy neutral-B punch, a side lunge, a rising recovery, a down drive.
@@ -113,6 +152,7 @@ impl SpecialMove {
         // fighters stall, falling fighters hang. Clamp lifts the moment active closes (frame 18),
         // so recovery returns to full gravity and he actually drops out of the whiff.
         hang_vel: 60.0,
+        landing: None,
     };
     pub(crate) const LUNGE: Self = Self {
         kind: SpecialKind::Lunge,
@@ -134,6 +174,7 @@ impl SpecialMove {
         move_y: -120.0,
         no_gravity: false,
         hang_vel: 0.0,
+        landing: None,
     };
     pub(crate) const RISE: Self = Self {
         kind: SpecialKind::Rise,
@@ -155,6 +196,7 @@ impl SpecialMove {
         move_y: -1500.0,
         no_gravity: false,
         hang_vel: 0.0,
+        landing: None,
     };
     pub(crate) const DROP: Self = Self {
         kind: SpecialKind::Fall,
@@ -176,6 +218,7 @@ impl SpecialMove {
         move_y: 700.0,
         no_gravity: false,
         hang_vel: 0.0,
+        landing: None,
     };
     // Falcon up-B: the command grab. A wind-up hang (startup, braked in space like the punch),
     // then the rise fires at `b.start` with the hug live through the climb -- so both-grounded
@@ -214,6 +257,7 @@ impl SpecialMove {
         move_y: -1300.0, // the rise burst at b.start; gravity arcs it back down over the window
         no_gravity: false, // gravity runs from launch (the hang phase zeroes vel explicitly instead)
         hang_vel: 0.0,
+        landing: None,
     };
 }
 

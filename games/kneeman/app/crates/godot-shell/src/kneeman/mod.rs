@@ -940,9 +940,11 @@ impl KneeMan {
                         | CharState::SpecialS
                         | CharState::SpecialU
                         | CharState::SpecialD
+                        | CharState::SpecialLandN | CharState::SpecialLandS
+                        | CharState::SpecialLandU | CharState::SpecialLandD
                 );
                 if telegraphed {
-                    for hb in sim::live_hitboxes(f, t).into_iter().flatten() {
+                    for hb in sim::live_hitboxes(f, &t.for_char(f.char_id)).into_iter().flatten() {
                         let (hc, hr) = hb;
                         let c = gv(hc) - origin;
                         self.base_mut().draw_circle(c, hr, tele_col);

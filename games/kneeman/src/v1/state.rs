@@ -64,6 +64,11 @@ pub enum CharState {
     // NOT on a floor, so it gets its own AIRBORNE intangible state instead of borrowing the grounded
     // `TechInPlace` (which snapped the fighter to the floor -- the wall-tech teleport, debt #4).
     TechWall,
+    // Appended: landing phases retain their originating loadout slot without a Fighter field.
+    SpecialLandN,
+    SpecialLandS,
+    SpecialLandU,
+    SpecialLandD,
 }
 
 /// The "next action" a fighter's state machine emits each frame: a pure descriptor of an effect it

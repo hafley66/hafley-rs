@@ -694,7 +694,8 @@ pub fn attack_for(t: &Tune, st: CharState) -> Option<AttackData> {
         CharState::DashAttack => Some(t.dash_attack),
         CharState::LedgeAttack => Some(t.ledge_attack),
         CharState::GetupAttack => Some(t.getup_attack),
-        _ => special_slot(st).map(|s| t.specials[s].hit),
+        _ => special_slot(st).map(|s| t.specials[s].hit)
+            .or_else(|| special_landing_slot(st).and_then(|s| t.specials[s].landing)),
     }
 }
 
@@ -709,6 +710,12 @@ pub fn land_transition(t: &Tune, st: CharState) -> (CharState, Option<i64>) {
     match attack_for(t, st) {
         Some(atk) if atk.land_cancel == LandCancel::Continue => (st, None),
         Some(atk) if atk.land_cancel == LandCancel::SpecialRecovery && special_slot(st).is_some() => {
+            let slot = special_slot(st).unwrap();
+            if let Some(landing) = t.specials[slot].landing {
+                let state = [CharState::SpecialLandN, CharState::SpecialLandS,
+                    CharState::SpecialLandU, CharState::SpecialLandD][slot];
+                return (if landing.total() > 0 { state } else { CharState::Stand }, Some(0));
+            }
             if atk.recovery <= 0 { (CharState::Stand, Some(0)) }
             else { (st, Some(atk.active_end())) }
         }

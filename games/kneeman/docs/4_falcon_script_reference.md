@@ -56,8 +56,11 @@ The landing script's wait 2 versus displayed single active frame remains unresol
 do not choose a duration by reading the operand alone. The current parser also operates at
 subaction level, so these pages do not prove the wall-trigger guard or action-level routing.
 
-Next implementation has direct candidates for grounded-only landing hitboxes and their combat
-values. Remaining evidence: effective duration, bone/world-to-Game3 scale, landing recovery,
-wall-entry guard and motion. Reuse the current combat pipeline, but verify multiple spatial
-hitboxes can share one hit identity so their overlap cannot triple-hit a fighter. Preserve
-ground-launch provenance across a ledge and snapshot reload when implementing the wall route.
+Game3 now supplies grounded-only landing shapes through SpecialMove.landing. Combat values
+are damage 10, angle 80, BKB 65 and KBG 35; three spatial shapes share hit ID 0. Geometry uses
+an authored 6 pixels per reference unit, radius 30 and offsets (+/-51,-24) and (0,-24).
+One active tick plus 18 recovery ticks is authored timing. Native tests verify one grounded
+hit, overlapping airborne rejection, fresh contact cooldowns and serialized replay.
+Remaining evidence: effective duration, bone/world-to-Game3 scale, landing recovery,
+wall-entry guard and motion. Preserve ground-launch provenance across a ledge and snapshot
+reload when implementing the wall route. Browser/publication status is in docs/2_next.md.
