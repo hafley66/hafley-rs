@@ -190,8 +190,10 @@ no recovery evidence. Ground interior starts at x=600 to allow the longer drive.
 
 442 game + 76 shell tests pass. The movement export passes the two-peer recovery/loss/reconnect
 gate. The corrected editor's local browser readback retains ground speed 500 after a drag
-from 900 and section close/reopen, with air speed unchanged. Final mixed-build and online-guard
-acceptance and publication remain pending.
+from 900 and section close/reopen, with air speed unchanged. Published through c0d831a after
+mixed-build acceptance. Production online guard rendering and corrected saved-frame agreement
+pass across all 61 recovery-sequence frames and through reconnect; 2_next.md records the failed
+guest-prediction observation and the subsequent passing gate separately.
 Previously published kinds keep their behavior; the new enum payload requires mixed-build
 startup acceptance. Speeds and phase timing remain authored Game3 values. Dedicated landing,
 wall response and reference-authenticated PM motion/hit data remain incomplete.

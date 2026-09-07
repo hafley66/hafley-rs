@@ -20,6 +20,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Falcon | Fresh sessions select Falcon/Lucas; built-in art-to-kit mapping corrected; existing movement/attack strips wired. Commit 47ea707 |
 | Falcon Dive | Published through 5e0eacd: grounded startup fix, catch/whiff debugger fixtures and optional-fire-art guard. Production replay and online Dive acceptance pass |
 | Falcon kick restoration | Published through bc50afd: airborne down-special restores the selected loadout's air jumps at recovery entry, while still locked. Native interruption/boundary tests and production two-peer recovery pass; full kick phases remain unported |
+| Falcon kick travel | Published through c0d831a: editable ground/air launch data, velocity-preserving travel and offline character-kit controls. Production corrected-frame recovery and online editor restriction pass; dedicated landing/wall behavior remains open |
 | Special ship carry | Published through 83e3456: carry correction plus Ship Dive debugger fixture. Native and production browser checks prove startup follows the moving hull, then launches and replays |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Cell item/contact sequence | Published through f9a486d: Cell replay uses the same 240-tick wire-input sequence as the native test. Local and production pickup/throw/contact, restore/EOF and changed-state rejection pass |
@@ -830,6 +831,38 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    screenshots: /private/tmp/game3-dive-VjgVAl/3_kick_controls.png and 4_kick_edited.png.
    Exit 0 without browser exceptions. This proves local UI readback, not reload persistence
    or online editing. Final mixed-build/online-guard acceptance and publication remain pending.
+   Final travel acceptance: new-host/published-guest rejects startup once and both resume offline;
+   /private/tmp/game3-kick-drive-mixed.log, artifacts /private/tmp/game3-online-8jJ173.
+   Published-host/new-guest passes 548 initial + 180 resumed frames (751/752), with 240/1237
+   and 240/1241 dropped/sent messages; /private/tmp/game3-kick-drive-old-host.log,
+   artifacts /private/tmp/game3-online-hDM6uY. Both use the preceding MIXED commands.
+   Matching final export with GUARD=1 passes 545 + 180 frames (797/798) and renders the
+   offline-only special-editing message during Running. Log: game3-kick-drive-guard-browser.log;
+   artifacts /private/tmp/game3-online-10zm9U. Other Feel groups are outside this guard's scope.
+   Published c0d831a with the existing profile; nginx validation/reload passes. Remote WASM is
+   d2fde0a7a4b96974ecbd12e693ac2a00a96fb3fb3ee179d8d94c6af3ba7614d8; Game3 and protected
+   original /game/ pack hashes remain unchanged. Log: /private/tmp/game3-kick-drive-publish.log.
+   First production run failed the guest displayed-history ascent assertion. Its retained log
+   has matching corrected saved hashes on both peers for every frame 0..60, while guest visual
+   samples at 50/54 still show pre-correction prediction. /private/tmp/game3-kick-drive-production.log
+   records that failure; the run stopped before reconnect acceptance.
+   The ad-hoc harness now observes the controlling peer's ascent and explicitly requires both
+   corrected saved-frame maps to contain equal hashes for all 61 sequence frames; guest sampled
+   predictions remain logged. No runtime edit was made for this correction.
+   Production rerun passes those 61 frames, 544 initial + 181 resumed frames (811/810), the
+   online guard rendering, queued reconnect and peer-close offline/error gates. Command:
+   GUARD=1 KICK=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24
+   NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-kick-drive-production-confirmed.log; artifacts /private/tmp/game3-online-j6D9wo.
+   Production cell regression on this same runtime also passes break/pickup/throw/contact:
+   both peers end with holding -1, cells [[18,9],[19,0],[20,0]], and no remaining items.
+   543 initial + 180 resumed confirmed frames match (738/737), with loss, queued reconnect,
+   peer-close offline recovery and zero closed-send errors/browser exceptions, exit 0.
+   Command: CELLS=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24
+   NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-kick-drive-cells-production.log; artifacts /private/tmp/game3-online-MRPKBM.
+   This publication required no new compiler job; 442 game + 76 shell remains the native gate.
+   Next: dedicated Kick landing/wall behavior with deterministic contact/replay fixtures.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
