@@ -30,7 +30,7 @@ use boop_store::ident::{DeliveryState, LiveRow, Store};
 /// | `TurnBoundary` | the recipient's supervisor holds it, or a door harness whose door answered nothing holds it for its next turn | held-for-turn-boundary |
 /// | `HookInbox` | the recipient's project carries an installed inbox hook | queued-in-hook-inbox |
 /// | `PanePaste` | the route owns no door at all and names a live pane | pasted-into-pane |
-/// | `MailboxOnly` | a supervisor row about a lane's run; it never takes a door | held-in-mailbox |
+/// | `MailboxOnly` | a supervisor's progress row about a lane's run; a lane's end row takes the door like a hail | held-in-mailbox |
 /// | `Mailbox` | nothing answered; the row waits and the supervisor retries it | held-in-mailbox |
 /// | `CoolOff` | the route's door budget is blown; the row waits out the cool-off and the drain retries it | cooled-off |
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -442,15 +442,9 @@ fn land(
     budget: &DoorBudget,
 ) -> Result<Landing> {
     let to = message.to.as_str();
-    // Rung 0. A supervisor's own rows about a lane's run are a trail, never an
-    // interruption. Pushing one at a live door spends a whole harness turn of
-    // the recipient's on a line it never asked for, and six lanes yielding
-    // fill a coordinator's transcript with progress notes it cannot act on
-    // (supervisor-rows-off-the-door). Every parent kind gets the same answer:
-    // the row waits in the mailbox and `boop wait <lane>` / `boop wait --me`
-    // hands it back. A `request`, a `hail` or any other typed kind walks the
-    // rest of the ladder unchanged.
-    if message.kind.supervisor_row() {
+    // Rung 0, narrowed 2026-09-07: an end row pushes so a parent hears of a
+    // death unasked; six lanes yielding flood a transcript (2026-09-05).
+    if message.kind.lane_progress_row() {
         return Ok(Landing::new(
             Rung::MailboxOnly,
             format!("{} row; no door", message.kind.as_str()),
@@ -770,10 +764,9 @@ pub fn drain_route_held_mail_budgeted(
     };
     let mut pushed = 0usize;
     for message in held {
-        // A supervisor row is never pushed, so re-walking the ladder for it
-        // every tick would only stamp a second `held-in-mailbox` on a row the
-        // recipient collects with `boop wait`.
-        if message.kind.supervisor_row() {
+        // A progress row is never pushed, so re-walking the ladder would only
+        // stamp a second `held-in-mailbox`; an end row retries like a hail.
+        if message.kind.lane_progress_row() {
             continue;
         }
         let Ok(landing) =
@@ -1144,7 +1137,7 @@ mod tests {
     /// A coordinator route bound to the fake claude session, with `lanes`
     /// child lane routes naming it as parent, and `bodies` held rows. The rows
     /// wear `request`: the budget is about how many bodies a door may take, and
-    /// a supervisor kind never reaches the door to be counted.
+    /// a progress kind never reaches the door to be counted.
     fn burst_fixture(tag: &str, lanes: usize, bodies: &[&str]) -> (PathBuf, Store) {
         let dir = std::env::temp_dir().join(format!("boop-burst-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -1182,6 +1175,77 @@ mod tests {
         }
         let store = bus::open_store(&dir).unwrap();
         (dir, store)
+    }
+
+    /// One held row of `kind` for a coordinator route bound to the fake door.
+    fn kind_fixture(tag: &str, kind: &str) -> (PathBuf, Store, Message) {
+        let (dir, store) = burst_fixture(tag, 0, &[]);
+        let message = Message {
+            id: format!("m-{tag}-row"),
+            from: format!("{tag}-lane-0"),
+            to: format!("claude-{tag}"),
+            from_timestamp: "2026-09-07T00:00:00Z".to_owned(),
+            to_timestamp: None,
+            kind: kind.into(),
+            reply_to: None,
+            body: format!("{tag} {kind} row"),
+            r#ref: None,
+            rc: None,
+            detail: None,
+        };
+        bus::append(&dir, "bus", &message).unwrap();
+        (dir, store, message)
+    }
+
+    fn land_one(dir: &Path, store: &Store, message: &Message, budget: &DoorBudget) -> Landing {
+        let registry = Registry::with(vec![Box::new(FakeClaude)]);
+        let routes = bus::read_routes(dir).unwrap();
+        deliver_hail_budgeted(&registry, store, &routes, message, &NoPane, budget).unwrap()
+    }
+
+    /// RECEIPT (2026-09-07). A lane's end row walks the ladder like a hail and
+    /// leaves through the door of a live route; the fake claude door queues it.
+    #[test]
+    fn a_lane_end_row_takes_the_door_of_a_live_route() {
+        for (tag, kind) in [("endresult", "result"), ("endexit", "exited_without_completion")] {
+            let (dir, store, message) = kind_fixture(tag, kind);
+            let landing = land_one(&dir, &store, &message, &budget(60_000, 60_000, 10));
+            assert_eq!(landing.rung, Rung::DoorQueue, "a {kind} row takes the door");
+            assert_eq!(landing.rung.state(), DeliveryState::AcceptedByHarness);
+            assert!(landing.rung.carried_the_body());
+            assert!(door_log().iter().any(|body| body == &message.body), "{kind} never reached the door");
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+
+    /// RECEIPT (supervisor-rows-off-the-door). A progress row stays in the
+    /// mailbox whatever the route: the 2026-09-05 flood must not return.
+    #[test]
+    fn a_lane_progress_row_stays_off_the_door() {
+        for (tag, kind) in [("progyield", "yield"), ("progrewound", "head_rewound")] {
+            let (dir, store, message) = kind_fixture(tag, kind);
+            let landing = land_one(&dir, &store, &message, &budget(60_000, 60_000, 10));
+            assert_eq!(landing.rung, Rung::MailboxOnly, "a {kind} row stops at the mailbox");
+            assert_eq!(landing.detail, format!("{kind} row; no door"));
+            assert!(!door_log().iter().any(|body| body == &message.body), "{kind} opened a door");
+            assert_eq!(bus::held_messages(&store, &message.to).unwrap().len(), 1);
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+
+    /// RECEIPT (2026-09-07). An end row is a hail now, so it answers to the
+    /// door budget: a blown budget cools it off rather than mailboxing it.
+    #[test]
+    fn an_end_row_under_a_blown_budget_cools_off() {
+        let (dir, store, message) = kind_fixture("endbudget", "result");
+        Landing::new(Rung::Door, "door")
+            .record(&store, "m-endbudget-earlier", "claude-endbudget", None)
+            .unwrap();
+        let landing = land_one(&dir, &store, &message, &budget(60_000, 60_000, 1));
+        assert_eq!(landing.rung, Rung::CoolOff, "{landing:?}");
+        assert_eq!(landing.rung.state(), DeliveryState::CooledOff);
+        assert_eq!(store.door_blowouts("claude-endbudget").unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     fn transitions(store: &Store, message_id: &str) -> Vec<(String, String)> {
