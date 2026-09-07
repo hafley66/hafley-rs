@@ -219,6 +219,30 @@ Tests cover entry-tick, startup, active travel and recovery contact, full recove
 closed hit windows, snapshot reload, all four ordinary special slots and old discriminants.
 Dedicated landing hitboxes, wall response and exact PM timing remain open.
 
+### Kick wall-contact baseline
+
+`falcon_kick_wall_contact_blocks_travel_and_replays` covers both facings and ground/air
+starts against drawn vertical walls. Each 60-tick input sequence crosses into the wall
+during travel, checks no ECB penetration, zero horizontal velocity and refreshed jumps,
+then reloads a serialized contact snapshot and compares every subsequent full-state checksum.
+Current contact retains SpecialD, advances its clock normally and leaves its travel hitbox
+active. This test records existing collision behavior, not a completed Kick wall-ending phase.
+
+Read-only Melee checkout `cca1beeab039b1a5e8dfe581de7e2e8fb8f0aeef`,
+`src/melee/ft/kinds/ftCaptain/ftcaptainspeciallw.c:310`:
+`ftCa_SpecialLw_Coll` checks `cmd_vars[0]` plus the facing-selected wall flag, clears flags,
+converts to air and enters `ftCa_MS_SpecialHiThrow1`. Its animation callback at line 210
+enters Fall when animation ends; its physics callback at line 304 delegates to
+`ft_80085134`. The aerial-start collision callback at line 379 only invokes the landing
+helper. These callbacks alone do not establish the script gate interval, wall-ending
+velocity or duration, or Project M behavior.
+
+Reproducing this Melee transition requires distinguishing ground-launched travel that has left a ledge
+from an air-launched Kick, preserve that distinction in snapshots, close the travel hitbox
+on the gated transition, and expose ending motion/timing through move data. Current Kick
+stores launch velocity but no explicit launch provenance. Do not infer provenance from
+velocity equality: move velocities are configurable and collision can modify them.
+
 ## Remaining source limits
 
 Recovered `pm-falcon-kit.md` asserts that missing PM changelog entries make Melee values

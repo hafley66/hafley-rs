@@ -929,6 +929,18 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    /private/tmp/game3-kick-land-dive-production.log; /private/tmp/game3-dive-2oB3tI.
    No art/import or deployment-code changes in this checkpoint; art-test/web-check were not
    rerun. One compiler job and one browser run at a time were retained throughout.
+   Wall-contact baseline: falcon_kick_wall_contact_blocks_travel_and_replays covers ground
+   and air starts in both directions against drawn walls for 60 ticks each, with serialized
+   contact reload and full-state checksum comparison. No penetration; incoming horizontal
+   velocity stops, jumps refresh, SpecialD's clock advances and its travel hitbox stays active.
+   This records the missing wall-ending transition explicitly. Melee source at checkout
+   cca1beeab039b1a5e8dfe581de7e2e8fb8f0aeef uses a script-gated separate ending for the
+   ground-launched motion; the aerial-start callback only tests landing. Source details and
+   missing gate/velocity/duration evidence are in docs/3_pm_baseline.md.
+   Gate: CARGO_BUILD_JOBS=1 just game-test passes 444 game + 76 shell tests, exit 0;
+   /private/tmp/game3-kick-wall-contact-gate.log. Test/docs only; production remains unchanged,
+   browser/export not rerun. Next: obtain wall-ending script/attribute evidence and encode
+   launch provenance plus configurable wall-ending motion without guessing from velocity.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;

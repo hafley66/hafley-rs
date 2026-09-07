@@ -333,6 +333,58 @@ fn aerial_falcon_kick_lands_during_startup_or_travel_and_replays() {
     }
 }
 
+#[test]
+fn falcon_kick_wall_contact_blocks_travel_and_replays() {
+    let tune = Tune::default();
+    let kick = tune.for_char(2).specials[3];
+    for facing in [-1.0, 1.0] {
+        for grounded in [false, true] {
+            let mut state = SimState::spawn();
+            let start = Vector2::new(900.0, if grounded { GROUND_Y } else { 600.0 });
+            let wall_x = start.x + facing * 75.0;
+            state.paths[0] = build_stroke(
+                &mut state.nodes, &mut state.free, StrokeProps::PEN, 0,
+                &[Vector2::new(wall_x, 300.0), Vector2::new(wall_x, GROUND_Y + 40.0)],
+            );
+            let fighter = &mut state.fighters[0];
+            fighter.char_id = 2;
+            fighter.pos = start;
+            fighter.facing = facing;
+            fighter.state = if grounded { CharState::Stand } else { CharState::Air };
+            fighter.ground_plat = if grounded { 0 } else { -1 };
+            fighter.ground_ink = -1;
+            fighter.air_jumps = 0;
+            let mut replay = state;
+            let mut contact = false;
+            for tick in 0..60 {
+                let input = net::decode(net::encode(&InputFrame {
+                    special: tick == 0,
+                    aim_y: if tick == 0 { 1.0 } else { 0.0 },
+                    ..idle()
+                }));
+                let before = state.fighters[0];
+                state = step(&state, &[&input, &idle()], &tune);
+                replay = step(&replay, &[&input, &idle()], &tune);
+                assert_eq!(net::checksum(&state), net::checksum(&replay));
+                let fighter = state.fighters[0];
+                assert!((fighter.pos.x - wall_x) * facing <= -ECB_HALF_W + 1.0,
+                    "wall penetration: facing {facing}, grounded {grounded}, tick {tick}");
+                if !contact && before.vel.x * facing > 0.0 && fighter.vel.x == 0.0 {
+                    assert_eq!(fighter.state, CharState::SpecialD);
+                    assert!(fighter.frame < kick.hit.active_end());
+                    assert!(kick.hit.box_at(fighter.frame).is_some());
+                    assert_eq!(fighter.air_jumps, 1);
+                    assert!((fighter.pos.x - start.x) * facing > 0.0);
+                    assert_eq!(fighter.frame, before.frame + 1);
+                    contact = true;
+                    replay = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap();
+                }
+            }
+            assert!(contact, "facing {facing}, grounded {grounded}");
+        }
+    }
+}
+
 /// Build a frame by mutating the neutral default — `press(|i| i.attack = true)`.
 fn press(f: impl FnOnce(&mut InputFrame)) -> InputFrame {
     let mut i = InputFrame::default();
