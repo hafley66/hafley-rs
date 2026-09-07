@@ -114,7 +114,14 @@ edge and stay invisible to tracking:
   tmux cannot hold) and worktree `.boop-worktrees/feature/schema-emit` (the same
   name as a path). No prefix is dropped and no `lane/` prefix is added.
   Kinds are feature/fix/refactor/chore, a convention the CLI prints, not a gate.
-  --cwd defaults to the repo you stand in, --base-sha to origin/main's head
+  REPO: --cwd wins; without it the repo holding --brief wins (and prints
+  `repo: <toplevel> (from the brief; caller stands in <other>)` when your shell
+  stands elsewhere); only a brief outside any repo falls back to your own cwd.
+  A dead name resets itself: `lane create` on a name whose worktree, branch or
+  tmux session is left over removes all three and the conversation pin before
+  spawning; a live pane refuses and names the hail instead. --reclaim is a
+  no-op alias now.
+  --base-sha defaults to origin/main's head
   (resolved at spawn and printed), --parent to you then to the one registered
   coordinator; the harness is the preset's.
   Overrides: --lane <id>, --tmux <name>, --base-sha <sha>.

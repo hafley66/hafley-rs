@@ -1019,7 +1019,8 @@ enum LaneCmd {
         /// Skip the repo's `boop-start` warmup in the new worktree.
         #[arg(long)]
         no_start: bool,
-        /// Repo to branch from; defaults to the repo the caller stands in.
+        /// Repo to branch from. Without it the brief's own repo wins, and
+        /// only a brief outside any repo falls back to the caller's cwd.
         #[arg(long)]
         cwd: Option<String>,
         /// Defaults to origin/main's head, resolved and printed at spawn.
@@ -1092,8 +1093,8 @@ enum LaneCmd {
         /// Print the worktree, branch, base sha and the literal `cmd:` line without spawning.
         #[arg(long)]
         dry_run: bool,
-        /// Remove a dead lane's worktree and branch before spawning. A live
-        /// route or a live pane on the name refuses.
+        /// Folded (dead-lane-self-reset): a dead name is reset on every
+        /// create, so this is a no-op alias kept for old scripts.
         #[arg(long)]
         reclaim: bool,
     },
@@ -1129,6 +1130,16 @@ enum LaneCmd {
     },
     /// One lane's route and state.
     Get {
+        lane: String,
+        /// Also print what the lane changed in its tree: commits past its base
+        /// sha, uncommitted files, and the paths those commits touched.
+        #[arg(long)]
+        touched: bool,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// The lane's worktree path alone, for `cd "$(boop beep lane where x)"`.
+    Where {
         lane: String,
         #[arg(long)]
         mail_dir: Option<PathBuf>,

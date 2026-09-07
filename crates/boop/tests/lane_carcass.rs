@@ -181,40 +181,28 @@ fn is_worktree(path: &Path) -> bool {
     path.join(".git").exists()
 }
 
-/// RECEIPT. The carcass blocks a plain respawn, the bail names `--reclaim`,
-/// and the flagged respawn rebuilds the same worktree in one command.
+/// FAIL-PRE-FIX (dead-lane-self-reset). A plain respawn bailed on `a branch
+/// named '...' already exists`; it now resets the dead name and says so.
 #[test]
-fn a_reclaim_respawns_the_name_a_dead_lane_left_behind() {
+fn a_plain_respawn_resets_the_name_a_dead_lane_left_behind() {
     let doa = Doa::new("reclaim");
     let branch = "feature/carcass-reclaim";
     let lane = "feature-carcass-reclaim";
     doa.spawn_a_carcass(branch, lane);
 
-    let blocked = doa.create(branch, false);
-    let complaint = text(&blocked.stderr);
-    assert!(!blocked.status.success(), "the carcass blocks a respawn");
+    let respawned = doa.create(branch, false);
+    let out = text(&respawned.stdout);
     assert!(
-        complaint.contains("worktree path already exists"),
-        "{complaint}"
+        respawned.status.success(),
+        "a dead name respawns with no flag: {}",
+        text(&respawned.stderr)
     );
-    assert!(complaint.contains("--reclaim"), "{complaint}");
     assert!(
-        complaint.contains("boop beep lane delete feature-carcass-reclaim"),
-        "{complaint}"
-    );
-
-    let reclaimed = doa.create(branch, true);
-    let out = text(&reclaimed.stdout);
-    assert!(
-        reclaimed.status.success(),
-        "--reclaim respawns the name: {}",
-        text(&reclaimed.stderr)
-    );
-    assert!(out.contains("reclaim: removed worktree"), "{out}");
-    assert!(
-        out.contains("reclaim: removed branch feature/carcass-reclaim"),
+        out.contains(&format!("reclaim: {lane} was dead; removed ")),
         "{out}"
     );
+    assert!(out.contains(".boop-worktrees/feature/carcass-reclaim"), "{out}");
+    assert!(out.contains(&format!("branch {branch}")), "{out}");
     assert!(
         is_worktree(&doa.worktree_of(branch)),
         "the respawn built the worktree again"
