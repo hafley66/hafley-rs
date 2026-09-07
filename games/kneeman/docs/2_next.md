@@ -742,6 +742,22 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    No new compiler job or runtime edit was required for publication. Next: drive grounded
    down-special through its active window and landing/edge transitions, then add the missing
    kick-specific ground/air phases with authored values distinguished from PM reference data.
+   Ground/landing probe: the first fixture incorrectly placed a grounded fighter at x=1100,
+   outside the main floor's [150, 1050] span. Correcting the fixture to x=900 passes without
+   a runtime edit. Two native tests now cover six cases: both facings from floor interior
+   and outward-facing edges, plus aerial landing during startup and travel. Grounded kicks
+   stay pinned vertically and move along facing; edge kicks lose support while retaining
+   SpecialD and finish in Air. Aerial contact enters Landing, restores the jump budget and
+   reaches Stand without restarting the special. Wire-quantized inputs match full-state
+   replay checksums, including serialized reloads at launch, before completion and on landing.
+   These assertions characterize existing Game3 behavior; separate kick phases and PM timing
+   remain unported. No runtime, browser artifact or deployment changes in this checkpoint.
+   Focused logs: /private/tmp/game3-ground-kick-edges.log and game3-kick-landing.log.
+   Full gate: CARGO_BUILD_JOBS=1 just game-test passes 440 game + 76 shell tests;
+   /private/tmp/game3-kick-ground-landing-tests.log. Browser tests were not rerun for this
+   test-only change; the preceding production receipt remains the runtime evidence.
+   Next: represent the missing kick ending phase and its jump-refresh boundary using the
+   existing fixed-tick state model; distinguish authored timing from verified reference values.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
