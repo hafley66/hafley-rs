@@ -210,7 +210,10 @@ override is returned through collision and applied after the ordinary state-cloc
 including when landing coincides with entering the special. No stored timer or Fighter field
 was added. Ordinary aerials retain normal landing behavior if assigned this specials-only rule.
 Published Continue/ResetToLanding discriminants and behavior remain intact; an old decoder
-must reject startup data carrying the appended rule. Browser acceptance and publication are pending.
+must reject startup data carrying the appended rule. Mixed-build browser tests confirm old-client
+rejection with offline recovery and new-client acceptance of the old host's Tune. Published through
+32d2dd3; production landing passes all 61 corrected sequence-frame comparisons and reconnect.
+Exact commands, hashes and fault-injection receipts are in docs/2_next.md.
 
 Tests cover entry-tick, startup, active travel and recovery contact, full recovery duration,
 closed hit windows, snapshot reload, all four ordinary special slots and old discriminants.

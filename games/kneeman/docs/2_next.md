@@ -889,7 +889,46 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    /private/tmp/game3-kick-land-fixture-tests.log. New-host/old-client startup rejects the
    unknown Tune and both clients advance offline, exit 0:
    /private/tmp/game3-kick-land-mixed-new-host.log; /private/tmp/game3-online-WJqe0r.
-   Old-host compatibility and publication remain pending. Physical devices and PM parity remain open.
+   Old-host/new-client passes 548 initial + 180 resumed checks, ticks 754/752, with 240/1232
+   and 240/1233 messages dropped (max run 24), offline recovery and no closed-send errors,
+   exit 0: /private/tmp/game3-kick-land-mixed-old-host.log; /private/tmp/game3-online-AdP0zX.
+   Command: LOCAL_EXPORT=1 MIXED=old-host CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1
+   DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   This uses the old host's Tune, so it does not exercise the new landing rule.
+   Published through 32d2dd3 using the existing Game3 profile; nginx validation passed.
+   Remote WASM matches the local export SHA-256
+   791dcad27d3f8c737b2afe971b90d08da0203f4d682c044428e0a19012108665.
+   Game3 pack remains fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df;
+   protected original /game/ pack remains
+   5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795.
+   Production landing rerun (same command without LOCAL_EXPORT) passes all 61 corrected
+   sequence-frame checks, 546 initial + 180 resumed comparisons, ticks 738/740, and offline
+   recovery. Dropped 234/1217 and 230/1213 messages, max run 24; no closed-send errors or
+   browser exceptions, exit 0. /private/tmp/game3-kick-land-production.log;
+   /private/tmp/game3-online-frKr1M. Screenshot 0_running.png shows both fighter sprites and
+   the stage rendered. Physical devices and PM parity remain open.
+   Production item/destruction regression: CELLS=1 CONFIRMED=1 COMBAT=1 RECONNECT=1
+   QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1
+   node /private/tmp/1_game3_online.cjs passes 549 initial + 181 resumed comparisons,
+   ticks 753/755. Both peers reach {holding:-1,cells:[[18,9],[19,0],[20,0]],items:[]}.
+   Dropped 240/1234 and 240/1233 messages, max run 24, offline recovery and no closed-send
+   errors/browser exceptions, exit 0. /private/tmp/game3-kick-land-cells-production.log;
+   /private/tmp/game3-online-Ng57i3. Dedicated Kick wall response and landing hitboxes remain
+   the next bounded gameplay work; exact PM data is still unverified.
+   Production debugger: PRODUCTION=1 node /private/tmp/6_game3_cells.cjs passes all 240
+   recorded ticks, pickup at 161, throw at 164, damage/item consumption at 165, exact restore,
+   end-of-input no-op and changed-state refusal, exit 0 without browser exceptions.
+   /private/tmp/game3-kick-land-replay-production.log; /private/tmp/game3-cells-nTjmFv.
+   Visual readback: 1_verify.png reports all 240 checksums match; 3_changed_state.png says
+   "Replay state changed; restore start first." Tick/checksum remain unchanged on refusal.
+   Production Dive/ship regression: PRODUCTION=1 node /private/tmp/5_game3_dive.cjs passes
+   catch [SpecialU, GrabHold, Air, Landing, Stand], whiff [SpecialU, Landing, Stand], and ship
+   [SpecialU, Landing, Stand]. All three step 60->240, restore exact starts and reject extra
+   end-of-input advancement. Ship launch stays at hull-relative (0,306) through ticks 61..71
+   while the hull moves; tick 72 leaves it. No browser exceptions, exit 0.
+   /private/tmp/game3-kick-land-dive-production.log; /private/tmp/game3-dive-2oB3tI.
+   No art/import or deployment-code changes in this checkpoint; art-test/web-check were not
+   rerun. One compiler job and one browser run at a time were retained throughout.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
