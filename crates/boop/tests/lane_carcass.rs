@@ -292,6 +292,94 @@ fn a_create_clears_a_stale_pin_with_nothing_else_left_to_remove() {
     assert!(!pin.exists(), "the stale pin is gone");
 }
 
+/// The lane's `expect.json` as the trail holds it, `None` when absent.
+fn trail_expect(doa: &Doa, lane: &str) -> Option<serde_json::Value> {
+    let path = doa
+        .root
+        .join(".agent")
+        .join("lanes")
+        .join(lane)
+        .join("expect.json");
+    let text = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// FAIL-PRE-FIX (expect-inherited-across-spawns). `write_expect` ran only when
+/// a flag named one, so a respawn was failed by the first spawn's subject.
+#[test]
+fn a_create_with_no_expect_flag_clears_the_names_old_expectation() {
+    let doa = Doa::new("expect");
+    let branch = "feature/carcass-expect";
+    let lane = "feature-carcass-expect";
+    let trail = doa.root.join(".agent").join("lanes").join(lane);
+    std::fs::create_dir_all(&trail).unwrap();
+    std::fs::write(
+        trail.join("expect.json"),
+        r#"{"paths":[],"commit_subjects":["boop: a subject this brief never asked for"],"commits_at_least":null}"#,
+    )
+    .unwrap();
+
+    let created = doa.create(branch, false);
+    let out = text(&created.stdout);
+    assert!(
+        created.status.success(),
+        "the name spawns: {}",
+        text(&created.stderr)
+    );
+    assert!(
+        out.contains(&format!("reclaim: {lane} expectation cleared")),
+        "{out}"
+    );
+    assert_eq!(
+        trail_expect(&doa, lane),
+        Some(serde_json::json!({
+            "paths": [],
+            "commit_subjects": [],
+            "commits_at_least": null,
+        })),
+        "the create owns the expectation, and it names nothing"
+    );
+}
+
+/// RECEIPT. An expectation the create DID name still reaches the trail, and
+/// it is the only one there.
+#[test]
+fn a_create_with_an_expect_flag_still_writes_it() {
+    let doa = Doa::new("expect-flag");
+    let branch = "feature/carcass-expect-flag";
+    let lane = "feature-carcass-expect-flag";
+
+    let mut command = doa.boop();
+    let created = command
+        .args(["beep", "lane", "create", "--branch", branch])
+        .arg("--cwd")
+        .arg(&doa.repo)
+        .arg("--brief")
+        .arg(&doa.brief)
+        .args(["--harness", "codex", "--model", "gpt-test"])
+        .arg("--socket")
+        .arg(&doa.socket)
+        .args(["--parent", "sprefa-coordinator"])
+        .arg("--mail-dir")
+        .arg(&doa.mail)
+        .args(["--no-start", "--expect-path", "x"])
+        .output()
+        .unwrap();
+    assert!(
+        created.status.success(),
+        "the name spawns: {}",
+        text(&created.stderr)
+    );
+    assert_eq!(
+        trail_expect(&doa, lane),
+        Some(serde_json::json!({
+            "paths": ["x"],
+            "commit_subjects": [],
+            "commits_at_least": null,
+        }))
+    );
+}
+
 /// RECEIPT. A worktree holding uncommitted work is not a carcass; reclaim
 /// refuses it and leaves both the tree and the branch standing.
 #[test]

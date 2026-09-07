@@ -971,6 +971,10 @@ pub(crate) fn reset_dead_identity(
             identity.lane
         ));
     }
+    if boop::trail::read_expect(&identity.lane).is_some() {
+        clear_expect(&identity.lane);
+        lines.push(format!("reclaim: {} expectation cleared", identity.lane));
+    }
     let Some(worktree) = identity.worktree_dir.as_deref() else {
         return Ok(lines);
     };
@@ -1011,6 +1015,19 @@ pub(crate) fn reset_dead_identity(
 fn clear_conversation_pin(lane: &str) {
     if let Err(error) = boop::trail::clear_conversation(lane) {
         warn!(lane, error = %error, "conversation pin clear failed");
+    }
+}
+
+/// Drop the lane's stale expectation, so the create that follows is judged by
+/// its own brief and not by the subject an earlier spawn of the name asked for.
+fn clear_expect(lane: &str) {
+    let Ok(dir) = boop::trail::lane_dir(lane) else {
+        return;
+    };
+    match std::fs::remove_file(dir.join(boop::trail::EXPECT_FILE)) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => warn!(lane, error = %error, "expectation clear failed"),
     }
 }
 
@@ -1210,10 +1227,10 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         if let Some(mood) = &args.mood {
             println!("mood: {mood}");
         }
-        if let Some(expect) = expect.as_ref() {
+        if expect != boop::trail::Expect::default() {
             println!(
                 "expect: {}",
-                serde_json::to_string(expect).unwrap_or_default()
+                serde_json::to_string(&expect).unwrap_or_default()
             );
         }
         if args.wait {
@@ -1235,6 +1252,9 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         println!("{line}");
     }
     let lane_id = identity.lane.clone();
+    // Before the spawn, and written even when empty: a previous spawn's file
+    // would fail this run on a subject the brief never asked for.
+    boop::trail::write_expect(&lane_id, &expect)?;
     let trace = args
         .trace
         .clone()
@@ -1288,9 +1308,6 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             spawn_id,
         },
     )?;
-    if let Some(expect) = expect.as_ref() {
-        boop::trail::write_expect(&lane_id, expect)?;
-    }
     info!(
         lane = lane_id,
         harness = harness_id.as_str(),
@@ -1338,20 +1355,14 @@ pub(crate) fn completion_recipient(parent: Option<&str>, wait: bool, lane: &str)
         .or_else(|| wait.then(|| format!("__wait__{lane}")))
 }
 
-/// The typed completion expectations a `lane create` call named, `None` when no
-/// expectation flag was given.
-fn lane_expect(args: &LaneArgs) -> Option<boop::trail::Expect> {
-    if args.expect_path.is_empty()
-        && args.expect_commit_subject.is_empty()
-        && args.expect_commits_at_least.is_none()
-    {
-        return None;
-    }
-    Some(boop::trail::Expect {
+/// The completion expectations a `lane create` named, empty when it named
+/// none. Every create writes its own, so no name inherits an old subject.
+fn lane_expect(args: &LaneArgs) -> boop::trail::Expect {
+    boop::trail::Expect {
         paths: args.expect_path.clone(),
         commit_subjects: args.expect_commit_subject.clone(),
         commits_at_least: args.expect_commits_at_least,
-    })
+    }
 }
 
 // ---------------------------------------------------------------------------
