@@ -37,7 +37,9 @@ pub struct Store {
 /// 21 = each transcript cursor records its adapter projection contract.
 /// 22 = cost views over the usage ledger; see `COST_VIEW_SCHEMA`.
 /// 28 = agent_tag + agent_tag_link, the one tag table every surface shares.
-pub const SCHEMA_VERSION: i64 = 28;
+/// 29 = the same tag tables re-applied: another build stamped 28 without
+/// creating them, and a current version stops the migration at the gate.
+pub const SCHEMA_VERSION: i64 = 29;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -603,7 +605,42 @@ impl Store {
         if store.schema_version()? < SCHEMA_VERSION {
             store.initialise_or_migrate(&path)?;
         }
+        store.heal_user_authored()?;
         Ok(store)
+    }
+
+    /// A version another build stamped can read as current over a store that
+    /// build never finished writing, and the migration stops at that gate.
+    /// `SCHEMA` is all `IF NOT EXISTS`, so re-running it puts a missing table
+    /// back without touching a stored row.
+    fn heal_user_authored(&self) -> Result<()> {
+        let missing = self.missing_user_authored()?;
+        if missing.is_empty() {
+            return Ok(());
+        }
+        tracing::warn!(
+            tables = missing.join(", "),
+            version = self.schema_version()?,
+            "user-authored tables missing from a current-version store; re-applying the schema"
+        );
+        self.connection.execute_batch(SCHEMA)?;
+        Ok(())
+    }
+
+    /// Which tables on the user-authored inventory the store does not have.
+    fn missing_user_authored(&self) -> Result<Vec<String>> {
+        let mut missing = Vec::new();
+        for table in USER_AUTHORED {
+            let present: bool = self.connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
+                params![table],
+                |row| row.get(0),
+            )?;
+            if !present {
+                missing.push((*table).to_owned());
+            }
+        }
+        Ok(missing)
     }
 
     /// Open the store read-only for the raw-SQL surface. No schema projection
@@ -899,6 +936,10 @@ impl Store {
             if self.schema_version()? < 28 {
                 self.connection.execute_batch(TAG_SCHEMA)?;
                 self.connection.execute_batch("PRAGMA user_version = 28;")?;
+            }
+            if self.schema_version()? < 29 {
+                self.connection.execute_batch(TAG_SCHEMA)?;
+                self.connection.execute_batch("PRAGMA user_version = 29;")?;
             }
             self.stamp_version()?;
             Ok(())
@@ -5929,6 +5970,63 @@ mod tests {
             }
         }
         tables
+    }
+
+    fn has_table(store: &Store, table: &str) -> bool {
+        store
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
+                params![table],
+                |row| row.get::<_, bool>(0),
+            )
+            .unwrap()
+    }
+
+    /// FAIL-PRE-FIX (live, 2026-09-07). Another build stamped `~/.agent/boop.db`
+    /// 28 without creating the tag tables, so every `boop tag` verb read
+    /// `no such table: agent_tag`: the version gate returned before the v28
+    /// step could run.
+    #[test]
+    fn a_store_stamped_28_without_the_tag_tables_gets_them_on_open() {
+        let (path, store) = fresh_store("stamped-28-no-tags");
+        store
+            .connection
+            .execute_batch(
+                "DROP TABLE agent_tag;
+                 DROP TABLE agent_tag_link;
+                 PRAGMA user_version = 28;",
+            )
+            .unwrap();
+        drop(store);
+
+        let store = Store::open(path.clone()).unwrap();
+        assert!(has_table(&store, "agent_tag"));
+        assert!(has_table(&store, "agent_tag_link"));
+        assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
+        store.tag_apply("rust", "lane:x", 10).unwrap();
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A version collision between branches is recoverable without a bump: a
+    /// current store missing a user-authored table gets it back on open.
+    #[test]
+    fn a_current_store_missing_a_user_table_heals_on_open() {
+        let (path, store) = fresh_store("heal-user-table");
+        store
+            .connection
+            .execute_batch("DROP TABLE agent_tag;")
+            .unwrap();
+        assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
+        drop(store);
+
+        let store = Store::open(path.clone()).unwrap();
+        assert!(has_table(&store, "agent_tag"));
+        assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
+        assert!(store.missing_user_authored().unwrap().is_empty());
+        drop(store);
+        let _ = std::fs::remove_file(&path);
     }
 
     /// RECEIPT. The inventory and the schema cannot drift: a listed table must

@@ -90,6 +90,18 @@ fn stalled(idle_ms: u64, limit: Duration) -> bool {
     idle_ms > limit.as_millis() as u64
 }
 
+/// The word a fresh lane answers the readiness probe with.
+const START_ACK_WORD: &str = "boop";
+
+/// Whether the probe was answered. Flash models return the word with a leading
+/// space, a capital, or one terminal mark; none of that is a failed transport.
+fn start_ack_word(text: &str) -> bool {
+    let text = text.trim();
+    text.strip_suffix(['.', '!', '?'])
+        .unwrap_or(text)
+        .eq_ignore_ascii_case(START_ACK_WORD)
+}
+
 fn start_ack_failure(end: &TurnEvent) -> Option<String> {
     if !end.is_done() {
         return Some(end.detail().to_owned());
@@ -97,7 +109,7 @@ fn start_ack_failure(end: &TurnEvent) -> Option<String> {
     let Some(receipt) = end.receipt() else {
         return Some("harness supplied no output receipt".to_owned());
     };
-    if receipt.text == "boop" && receipt.tool_calls == 0 {
+    if start_ack_word(&receipt.text) && receipt.tool_calls == 0 {
         return None;
     }
     Some(format!(
@@ -2300,6 +2312,37 @@ mod tests {
         assert_eq!(
             start_ack_failure(&TurnEvent::ok("completed")).as_deref(),
             Some("harness supplied no output receipt")
+        );
+    }
+
+    // FAIL-PRE-FIX: deepseek-v4-flash-0731 answered the probe " boop" and the
+    // lane exited rc=1 before the brief.
+    #[test]
+    fn the_start_ack_trims_the_word_and_ignores_its_case() {
+        for text in [" boop", "boop ", "Boop", "BOOP", "boop.", "boop!", "boop?"] {
+            assert!(start_ack_word(text), "{text} answers the probe");
+        }
+        for text in ["boop boop", "ready", "boop..", "b oop", ""] {
+            assert!(!start_ack_word(text), "{text} is not the probe word");
+        }
+        let spaced = TurnEvent::ok_with_receipt(
+            "completed",
+            TurnReceipt {
+                text: " boop".into(),
+                tool_calls: 0,
+            },
+        );
+        assert_eq!(start_ack_failure(&spaced), None);
+        let two_words = TurnEvent::ok_with_receipt(
+            "completed",
+            TurnReceipt {
+                text: "boop boop".into(),
+                tool_calls: 0,
+            },
+        );
+        assert_eq!(
+            start_ack_failure(&two_words).as_deref(),
+            Some("expected text \"boop\" with zero tool calls; got text \"boop boop\", tool_calls=0")
         );
     }
 
