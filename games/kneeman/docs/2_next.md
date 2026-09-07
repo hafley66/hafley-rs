@@ -603,9 +603,18 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Start/end checksums match local execution above. No browser exceptions; exit 0.
    Logs: /private/tmp/game3-cell-trace-publish.log and game3-cell-trace-production.log.
    Screenshots: /private/tmp/game3-cells-WVSKHF. No rebuild or online rerun for publication.
-   Next: run this same cell lifecycle through the existing GGRS SyncTest/Game path, comparing
-   every authoritative state with offline stepping across pickup/throw/contact boundaries.
-   This fixture's two-peer online cell-contact behavior remains unverified.
+   GGRS follow-up: cell_lifecycle_matches_offline_through_ggrs_rollback runs all 240 shared
+   wire-input ticks through SyncTest/Game with check distance 7. Every saved-frame checksum
+   (including re-simulation saves) and every final per-input state matches the offline trace.
+   The test inspects actual LoadGameState requests and requires restores crossing input
+   indices 90, 140 and 162, covering break, pickup and throw/contact. Test-only delta: +33 lines.
+   434 game + 76 shell tests pass; /private/tmp/game3-cell-ggrs-final-tests.log.
+   Initial distance 8 was rejected by GGRS because check distance must be less than the
+   default prediction window; corrected to 7 without changing production configuration.
+   No runtime/export/browser/deployment changes. This is all-local rollback with known inputs;
+   this fixture's delayed-input correction and two-peer online cell-contact remain unverified.
+   Next: inject missing attack/grab predictions across these lifecycle transitions, restore
+   and deliver the recorded inputs, and require corrected state and saved receipts to converge.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

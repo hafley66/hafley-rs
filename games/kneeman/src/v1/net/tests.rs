@@ -172,6 +172,39 @@ fn pure_replay_matches_the_ggrs_handler() {
 }
 
 #[test]
+fn cell_lifecycle_matches_offline_through_ggrs_rollback() {
+    let tune = Tune::default();
+    let initial = crate::v1::terrain_cells::playground();
+    let inputs: Vec<_> = crate::v1::terrain_cells::playground_inputs().map(|i| encode(&i)).collect();
+    let mut offline = initial;
+    let mut expected = vec![checksum(&offline)];
+    for &input in &inputs {
+        offline = Smash::advance(&offline, &[input, NetInput::default()], &tune);
+        expected.push(checksum(&offline));
+    }
+    let mut session = synctest_session(7);
+    let mut game = Game::from_state(initial, tune);
+    let mut crossed = [false; 3];
+    for (index, &input) in inputs.iter().enumerate() {
+        session.add_local_input(0, input).unwrap();
+        session.add_local_input(1, NetInput::default()).unwrap();
+        let requests = session.advance_frame().unwrap();
+        for request in &requests {
+            if let ggrs::GgrsRequest::LoadGameState { frame, .. } = request {
+                for (seen, boundary) in crossed.iter_mut().zip([90, 140, 162]) {
+                    *seen |= *frame <= boundary && index as i32 > boundary;
+                }
+            }
+        }
+        game.handle_observed(requests, |frame, hash| {
+            assert_eq!(hash, expected[frame as usize], "saved rollback frame {frame}");
+        });
+        assert_eq!(checksum(&game.state), expected[index + 1], "input index {index}");
+    }
+    assert_eq!(crossed, [true; 3], "actual restores must cross break, pickup and throw");
+}
+
+#[test]
 fn encode_decode_roundtrip() {
     let i = InputFrame {
         dir: 1.0,
