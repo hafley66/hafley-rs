@@ -58,8 +58,11 @@ impl Harness for Opencode {
         crate::harness::TuiComposer::Opencode
     }
 
+    /// 2: a terminal partless assistant message no longer stops the walk
+    /// (`2_opencode-model-switch.md`); every v1 cursor re-walks once from its
+    /// stored offset so a session stalled on such a row drains.
     fn projection_version(&self) -> u32 {
-        1
+        2
     }
 
     fn live(&self) -> &dyn crate::live::LiveSessions {
