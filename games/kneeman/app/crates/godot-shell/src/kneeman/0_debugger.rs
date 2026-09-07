@@ -10,6 +10,9 @@ const HISTORY: usize = 240;
 const CAPTURE: usize = 600;
 
 #[derive(Clone, Copy)]
+enum DiveStart { Catch, Whiff, Ship }
+
+#[derive(Clone, Copy)]
 enum Command {
     Pause,
     Resume,
@@ -19,7 +22,7 @@ enum Command {
     Restore,
     Fixture,
     JumpGrab,
-    Dive(bool),
+    Dive(DiveStart),
     ReplayStep,
 }
 
@@ -33,13 +36,27 @@ struct Trace {
 }
 
 impl Trace {
-    fn falcon_dive(catch: bool) -> Self {
+    fn falcon_dive(start: DiveStart) -> Self {
         let tune = Tune::default();
         let mut state = SimState::spawn();
         state.fighters[0].char_id = 2;
         state.fighters[1].char_id = 3;
         for _ in 0..60 { state = sim::step(&state, &[&InputFrame::default(); 2], &tune); }
-        state.fighters[1].pos.x = state.fighters[0].pos.x + if catch { 90.0 } else { 300.0 };
+        match start {
+            DiveStart::Catch => state.fighters[1].pos.x = state.fighters[0].pos.x + 90.0,
+            DiveStart::Whiff => state.fighters[1].pos.x = state.fighters[0].pos.x + 300.0,
+            DiveStart::Ship => {
+                state.paths[sim::SHIP_SLOT].pos = sim::Vector2::new(600.0, 100.0);
+                state.paths[sim::SHIP_SLOT].vel = sim::Vector2::new(1.0, -1.0);
+                let fighter = &mut state.fighters[0];
+                fighter.pos = sim::Vector2::new(600.0, 100.0 + sim::SHIP_R);
+                fighter.vel = sim::Vector2::ZERO;
+                fighter.ground_plat = 0;
+                fighter.ground_ink = sim::SHIP_SLOT as i8;
+                state.fighters[1].pos = sim::Vector2::new(900.0, sim::PLATFORMS[0].y);
+                state.fighters[1].ground_plat = 0;
+            }
+        }
         let mut trace = Self::new(&state, &tune);
         trace.recording = false;
         for tick in 0..180 {
@@ -120,7 +137,7 @@ mod tests {
     fn falcon_dive_inputs_catch_or_whiff_and_replay_through_landing() {
         use sim::CharState;
         for catch in [true, false] {
-            let trace = Trace::falcon_dive(catch);
+            let trace = Trace::falcon_dive(if catch { DiveStart::Catch } else { DiveStart::Whiff });
             assert_eq!(trace.verify(), Ok(180));
             let mut state: SimState = bincode::deserialize(&trace.snapshot).unwrap();
             let ground_y = state.fighters[0].pos.y;
@@ -144,6 +161,25 @@ mod tests {
             assert_eq!(state.fighters[0].state, CharState::Stand);
             assert!(trace.replay_step(&state, 180).unwrap().is_none());
         }
+    }
+
+    #[test]
+    fn ship_dive_fixture_rides_then_launches_and_replays() {
+        let trace = Trace::falcon_dive(DiveStart::Ship);
+        assert_eq!(trace.verify(), Ok(180));
+        let mut state: SimState = bincode::deserialize(&trace.snapshot).unwrap();
+        for index in 0..180 {
+            state = trace.replay_step(&state, index).unwrap().unwrap();
+            let fighter = &state.fighters[0];
+            if index <= 10 {
+                assert_eq!(fighter.state, sim::CharState::SpecialU);
+                assert_eq!(fighter.ground_ink, sim::SHIP_SLOT as i8);
+                let relative = fighter.pos - state.paths[sim::SHIP_SLOT].pos;
+                assert!((relative - sim::Vector2::new(0.0, sim::SHIP_R)).length() < 0.1);
+            }
+            if index == 11 { assert!(!fighter.grounded()); assert!(fighter.vel.y < 0.0); }
+        }
+        assert!(trace.replay_step(&state, 180).unwrap().is_none());
     }
 
     #[test]
@@ -354,7 +390,8 @@ impl Debugger {
                         ("Step", Command::Step), ("Capture", Command::Capture), ("Verify replay", Command::Verify),
                         ("Restore start", Command::Restore), ("Replay step", Command::ReplayStep),
                         ("Load fixture", Command::Fixture), ("Falcon jump-grab", Command::JumpGrab),
-                        ("Dive catch", Command::Dive(true)), ("Dive whiff", Command::Dive(false))] {
+                        ("Dive catch", Command::Dive(DiveStart::Catch)), ("Dive whiff", Command::Dive(DiveStart::Whiff)),
+                        ("Ship Dive", Command::Dive(DiveStart::Ship))] {
                         if ui.button(label).clicked() { self.command = Some(command); }
                     }
                 });

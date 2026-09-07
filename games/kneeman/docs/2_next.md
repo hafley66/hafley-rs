@@ -537,7 +537,25 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Command: DIVE=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60
    BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
    Log: /private/tmp/game3-carry-production.log; screenshots: /private/tmp/game3-online-NCG1ve.
-   Direct moving-hull browser interaction, physical devices and PM parity remain unverified.
+   Moving-hull debugger follow-up adds Ship Dive beside the catch/whiff fixtures. It starts
+   Falcon on a translating hull and records 180 wire-quantized input ticks. The opt-in web
+   debug snapshot exposes the hull position; simulation and network rules are unchanged.
+   433 game + 75 shell tests and the production export pass. Local browser assertions at
+   ticks 61..71 keep Falcon within 0.1 units of the expected hull-relative position while
+   the hull moves; tick 72 lifts him more than 10 units off that floor. Catch, whiff and
+   ship fixtures each verify/replay 180 ticks, restore the initial checksum and preserve
+   the terminal checksum on EOF. No browser exceptions or optional-fire-texture errors.
+   Ship trace: tick 60 checksum 53f46c886c9815b2b1759aeae045771f083e848b117a298ac31600edd4c9d43c;
+   tick 240 checksum f4a0dc7c4f8c3647013f87300da1fd94a9ee16dbd24906c3549a182ea4d51fb4.
+   Command: node /private/tmp/5_game3_dive.cjs. Logs:
+   /private/tmp/game3-ship-fixture-final-tests.log, game3-ship-fixture-build.log and
+   game3-ship-fixture-browser.log. Screenshots: /private/tmp/game3-dive-dBj5vD.
+   Initial fixture placement accidentally allowed an opponent catch; corrected placement
+   isolates hull startup. The failed fixture run supplies no passing acceptance evidence.
+   Runtime/test delta before this ledger: +45/-6 lines across two shell files.
+   Next: publish this tested debugger fixture and repeat its browser assertions on /game3/.
+   Online was not rerun for this debugger-only change; the preceding published-runtime
+   receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
