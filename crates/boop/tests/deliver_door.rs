@@ -205,6 +205,10 @@ impl PanePaster for RecordingPane {
             .push((pane.to_owned(), notice.to_owned()));
         Some(pane.to_owned())
     }
+
+    fn alive(&self, _target: &str) -> bool {
+        true
+    }
 }
 
 fn routes(name: &str, route: Route) -> BTreeMap<String, Route> {

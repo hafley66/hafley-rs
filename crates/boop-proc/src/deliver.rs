@@ -191,6 +191,12 @@ impl Landing {
 pub trait PanePaster {
     /// Paste one notice into `pane`. `Some(pane)` means the pane took it.
     fn paste(&self, pane: &str, notice: &str) -> Option<String>;
+
+    /// Whether `target` names a pane this paster can reach. The default asks
+    /// the mux; a paster that must not touch a real terminal answers itself.
+    fn alive(&self, target: &str) -> bool {
+        boop_store::tmux::mux().target_alive(None, target)
+    }
 }
 
 /// The paster every send path uses: one `tmux send-keys -l` into a live pane,
@@ -543,7 +549,7 @@ fn hook_inbox(route: &Route, to: &str) -> bool {
 /// prompt holds it, so nothing is submitted on the recipient's behalf.
 fn paste_into_pane(route: &Route, to: &str, paster: &dyn PanePaster) -> Option<String> {
     let target = route.tmux.as_deref().filter(|target| !target.is_empty())?;
-    if !boop_store::tmux::mux().target_alive(None, target) {
+    if !paster.alive(target) {
         return None;
     }
     let pane = pane_of_target(target).unwrap_or_else(|| target.to_owned());
