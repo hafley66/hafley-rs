@@ -170,6 +170,32 @@ test. Matching-new and old-host/new-guest loss/reconnect gates also pass; receip
 548 initial and 180 resumed confirmed frames. Ground/air trajectories, dedicated landing
 behavior, wall interaction and exact PM animation timing still require work.
 
+### Ground/air travel checkpoint
+
+Appended `Kick { ground_speed }` selects a horizontal grounded launch and an airborne
+`(facing * move_x, move_y)` launch. Authored default speeds are 900 px/s for each component;
+startup/active/recovery remain 8/10/18. During the active interval, normal gravity/drag/drift
+are suspended. The snapshot's velocity preserves launch direction across loss of support;
+existing contact resolution and hitlag still apply. Recovery resumes normal physics and
+restores airborne jumps once. No new per-fighter fields or timers were introduced.
+
+The ground speed is editable beside the existing special-move velocity controls. This section
+targets player 1's shared character-kit row and permits edits only offline. Other Feel groups
+retain their existing flat-row behavior. Native
+tests cover non-default data, both facings, serialized velocity across an edge, ground/air
+travel, recovery/interruption, landing and the left-edge path onto the existing ship.
+The recovery fixture moved to y=-250 to keep the inward path above the sails without crossing
+the upper blast boundary. Earlier fixture probes at y=-600 crossed that boundary and supply
+no recovery evidence. Ground interior starts at x=600 to allow the longer drive.
+
+442 game + 76 shell tests pass. The movement export passes the two-peer recovery/loss/reconnect
+gate. The corrected editor's local browser readback retains ground speed 500 after a drag
+from 900 and section close/reopen, with air speed unchanged. Final mixed-build and online-guard
+acceptance and publication remain pending.
+Previously published kinds keep their behavior; the new enum payload requires mixed-build
+startup acceptance. Speeds and phase timing remain authored Game3 values. Dedicated landing,
+wall response and reference-authenticated PM motion/hit data remain incomplete.
+
 ## Remaining source limits
 
 Recovered `pm-falcon-kit.md` asserts that missing PM changelog entries make Melee values

@@ -19,13 +19,14 @@ fn falcon_air_kick_restores_jump_at_recovery_and_replays() {
         for facing in [-1.0, 1.0] {
             let mut tune = Tune::default();
             if restores != (char_id == 2) {
-                let kind = if restores { SpecialKind::FallRefreshOnRecovery } else { SpecialKind::Fall };
+                let kind = if restores { SpecialMove::FALCON_KICK.kind } else { SpecialKind::Fall };
                 if char_id == 0 { tune.specials[3].kind = kind; }
                 else { std::sync::Arc::make_mut(&mut tune.roster)[chars::art_slot_row(char_id)].specials[3].kind = kind; }
             }
             let mut state = SimState::spawn();
             state.fighters[0].char_id = char_id;
-            state.fighters[0].pos = Vector2::new(1100.0, 0.0);
+            // Keep the faster inward kick above the ship's sails until the second air jump.
+            state.fighters[0].pos = Vector2::new(1100.0, -250.0);
             state.fighters[0].state = CharState::Air;
             state.fighters[0].ground_plat = -1;
             state.fighters[0].ground_ink = -1;
@@ -188,7 +189,7 @@ fn grounded_falcon_kick_reaches_active_window_without_landing_cancel() {
     let kick = tune.for_char(2).specials[3];
     for facing in [-1.0, 1.0] {
         for at_edge in [false, true] {
-            let x = if !at_edge { 900.0 } else if facing > 0.0 {
+            let x = if !at_edge { 600.0 } else if facing > 0.0 {
                 PLATFORMS[0].right - 1.0
             } else {
                 PLATFORMS[0].left + 1.0
@@ -230,7 +231,50 @@ fn grounded_falcon_kick_reaches_active_window_without_landing_cancel() {
             }
             assert_eq!(left_floor, at_edge);
             assert!((state.fighters[0].pos.x - x) * facing > 0.0);
-            assert_eq!(state.fighters[0].state, if at_edge { CharState::Air } else { CharState::Stand });
+            let lands_on_ship = at_edge && facing < 0.0;
+            assert_eq!(state.fighters[0].state,
+                if at_edge && !lands_on_ship { CharState::Air } else { CharState::Stand });
+            if lands_on_ship {
+                assert_eq!(state.fighters[0].ground_ink as usize, stage::SHIP_SLOT);
+            }
+        }
+    }
+}
+
+#[test]
+fn kick_travel_uses_loadout_velocity_and_keeps_ground_launch_across_an_edge() {
+    for facing in [-1.0, 1.0] {
+        for grounded in [false, true] {
+            let mut tune = Tune::default().for_char(2);
+            tune.specials[3].kind = SpecialKind::Kick { ground_speed: 720.0 };
+            tune.specials[3].move_x = 480.0;
+            tune.specials[3].move_y = 840.0;
+            let kick = tune.specials[3];
+            let mut fighter = SimState::spawn().fighters[0];
+            fighter.state = CharState::SpecialD;
+            fighter.ground_plat = if grounded { 0 } else { -1 };
+            fighter.facing = facing;
+            fighter.air_jumps = 0;
+            fighter.fast_falling = true;
+            let expected = if grounded { Vector2::new(facing * 720.0, 0.0) }
+                else { Vector2::new(facing * 480.0, 840.0) };
+            for frame in kick.hit.startup..kick.hit.active_end() {
+                fighter.frame = frame;
+                run_special(&mut fighter, 3, &InputFrame { dir: -facing, ..idle() }, &tune);
+                assert_eq!(fighter.vel, expected);
+                assert!(!fighter.fast_falling);
+                assert_eq!(fighter.state, CharState::SpecialD);
+                assert_eq!(fighter.air_jumps, 0);
+                // Contact has removed support; the serialized velocity retains launch direction.
+                fighter.ground_plat = -1;
+                fighter = bincode::deserialize(&bincode::serialize(&fighter).unwrap()).unwrap();
+            }
+            fighter.frame = kick.hit.active_end();
+            run_special(&mut fighter, 3, &idle(), &tune);
+            assert!(fighter.vel.x.abs() < expected.x.abs());
+            assert!(fighter.vel.y > expected.y);
+            assert_eq!(fighter.air_jumps, 1);
+            assert_eq!(fighter.state, CharState::SpecialD);
         }
     }
 }

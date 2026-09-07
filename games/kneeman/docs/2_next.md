@@ -798,6 +798,38 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    artifacts: /private/tmp/game3-online-FTJPzU. Next: separate grounded/airborne Kick travel
    policy and its motion data, followed by dedicated landing/wall transitions. Exact PM timing,
    physical-device and cross-network acceptance remain open.
+   Ground/air travel implementation: appended Kick { ground_speed } selects a horizontal
+   ground launch or the existing move_x/move_y air vector, preserves velocity during the
+   active interval, and resumes normal physics at recovery with the existing one-shot refresh.
+   Default speeds are authored 900 px/s components; existing 8/10/18 frames remain. No new
+   Fighter fields. Ground speed is exposed in the special-move debugger controls. Published
+   kinds retain their behavior. 442 game + 76 shell tests pass;
+   /private/tmp/game3-kick-drive-full-tests.log. Tests cover custom speeds, both facings,
+   serialized travel velocity, launch direction across loss of support, recovery, interruption,
+   landing and the left-edge route onto the ship. Full-state replay checks remain in place.
+   The interior/recovery fixtures now allow the longer travel without unintended edge/sail
+   contact; the failed upper-blast-boundary probe is documented in 3_pm_baseline.md.
+   Export/browser acceptance and publication are pending. Next: verify the new web artifact,
+   mixed-build startup and debugger control, then publish; dedicated landing/wall behavior follows.
+   First movement export passes both peers' recovery sequence, 548 initial and 180 resumed
+   confirmed frames, ticks 754/752, 240/1234 and 240/1236 dropped/sent messages (max burst 24,
+   60 ms delay), queued reconnect and offline/error gates. Command: LOCAL_EXPORT=1 KICK=1
+   CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24
+   NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-kick-drive-browser.log; artifacts: /private/tmp/game3-online-fvrjnu.
+   Editor follow-up: special sliders previously wrote the flat KneeMan row, so Falcon's new
+   control would not appear. The section now uses player 1's art-slot-to-kit mapping and writes
+   the corresponding shared roster row. Editing is rejected outside offline mode, preserving
+   the host's startup Tune during online play. Other Feel groups keep their existing behavior.
+   Final native gate: 442 game + 76 shell tests, /private/tmp/game3-kick-drive-guard-tests.log.
+   Final editor export completes; /private/tmp/game3-kick-drive-guard-build.log. Local browser
+   readback shows Falcon ground speed 900 -> 500 after a held drag, retains 500 after section
+   close/reopen, and leaves air move_x at 900. Instantaneous click/numeric-entry probes did
+   not change the value; they supply no editing acceptance. Command: PREVIEW=1 FEEL=1
+   node /private/tmp/5_game3_dive.cjs. Log: /private/tmp/game3-kick-drive-feel-drag.log;
+   screenshots: /private/tmp/game3-dive-VjgVAl/3_kick_controls.png and 4_kick_edited.png.
+   Exit 0 without browser exceptions. This proves local UI readback, not reload persistence
+   or online editing. Final mixed-build/online-guard acceptance and publication remain pending.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

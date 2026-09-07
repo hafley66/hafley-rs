@@ -779,11 +779,21 @@ fn draw_panel(
         egui::CollapsingHeader::new("attack · dtilt (pothole)").default_open(false).show(ui, |ui| {
             c |= attack_sliders(ui, &mut t.dtilt);
         });
+        ui.label("Specials: player 1's shared character kit");
         for (idx, label) in [(0, "neutral-B"), (1, "side-B"), (2, "up-B"), (3, "down-B")] {
             egui::CollapsingHeader::new(format!("special · {label}")).default_open(false).show(
                 ui,
                 |ui| {
-                    let m = &mut t.specials[idx];
+                    if net_cell.get().phase != "offline" {
+                        ui.label("Edit specials offline; online matches use the host's startup Tune.");
+                        return;
+                    }
+                    let row = crate::sim::art_slot_row(s.fighters[0].char_id);
+                    let m = if row == 0 { &mut t.specials[idx] }
+                        else { &mut std::sync::Arc::make_mut(&mut t.roster)[row].specials[idx] };
+                    if let crate::sim::SpecialKind::Kick { ground_speed } = &mut m.kind {
+                        c |= slider(ui, ground_speed, 0.0..=1500.0, "ground drive speed");
+                    }
                     c |= slider(ui, &mut m.move_x, -1500.0..=1500.0, "move_x (forward)");
                     c |= slider(ui, &mut m.move_y, -2500.0..=1500.0, "move_y (neg=up)");
                     c |= attack_sliders(ui, &mut m.hit);

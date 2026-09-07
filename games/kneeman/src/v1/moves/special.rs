@@ -54,6 +54,8 @@ pub enum SpecialKind {
     FallRefreshJump,
     // Recovery is the ending phase. Keep FallRefreshJump's published completion semantics.
     FallRefreshOnRecovery,
+    // Authored ground/air launch, velocity-preserving travel, then recovery-entry jump refresh.
+    Kick { ground_speed: f32 },
 }
 
 #[derive(Copy, Clone, PartialEq, Serialize, Deserialize)]
@@ -76,8 +78,13 @@ pub struct SpecialMove {
 }
 
 impl SpecialMove {
-    // Provisional kick loadout: retain authored DROP motion/hit data until phase-specific port.
-    pub(crate) const FALCON_KICK: Self = Self { kind: SpecialKind::FallRefreshOnRecovery, ..Self::DROP };
+    // Authored Game3 speeds, not decoded PM attributes. Keep existing hit/recovery timing.
+    pub(crate) const FALCON_KICK: Self = Self {
+        kind: SpecialKind::Kick { ground_speed: 900.0 },
+        move_x: 900.0,
+        move_y: 900.0,
+        ..Self::DROP
+    };
     // Default kit (Falcon-ish): heavy neutral-B punch, a side lunge, a rising recovery, a down drive.
     pub(crate) const PUNCH: Self = Self {
         kind: SpecialKind::Punch,
@@ -291,6 +298,21 @@ pub(crate) fn run_special(n: &mut Fighter, slot: usize, i: &InputFrame, t: &Tune
         n.vel.x = -n.vel.x;
         n.b_reversed = true;
     }
+    if let SpecialKind::Kick { ground_speed } = m.kind {
+        if n.frame >= m.hit.startup && n.frame < m.hit.active_end() {
+            if n.frame == m.hit.startup {
+                n.vel = if n.grounded() {
+                    Vector2::new(n.facing * ground_speed, 0.0)
+                } else {
+                    Vector2::new(n.facing * m.move_x, m.move_y)
+                };
+                n.fast_falling = false;
+            }
+            // Velocity records the launch choice. Leaving a ledge keeps the horizontal drive;
+            // contact resolution may change velocity, and hitlag already freezes the frame clock.
+            return;
+        }
+    }
     // Up-B lifts off on frame 0 (instant recovery, no ground-snap); the rest burst at the active
     // window. The hitbox window (startup..) is independent of this movement timing.
     let launch_frame = if m.kind == SpecialKind::Rise {
@@ -317,7 +339,7 @@ pub(crate) fn run_special(n: &mut Fighter, slot: usize, i: &InputFrame, t: &Tune
             }
             // DiveGrab is routed out at the top of `run_special` (stationary command grab), so it
             // never reaches this launch dispatch; the arm exists only for match exhaustiveness.
-            SpecialKind::DiveGrab => {}
+            SpecialKind::DiveGrab | SpecialKind::Kick { .. } => {}
         }
     }
     if !n.grounded() {
@@ -358,7 +380,7 @@ pub(crate) fn run_special(n: &mut Fighter, slot: usize, i: &InputFrame, t: &Tune
     }
     // The existing recovery interval supplies the authored ending phase. Refresh once on entry,
     // while SpecialD remains locked; no extra mutable phase field is needed in snapshots.
-    if m.kind == SpecialKind::FallRefreshOnRecovery
+    if matches!(m.kind, SpecialKind::FallRefreshOnRecovery | SpecialKind::Kick { .. })
         && n.frame == m.hit.active_end()
         && !n.grounded()
     {

@@ -70,6 +70,7 @@ pub mod tune; // character attributes (CharData) + derived pixel-space feel conf
 pub use tune::*;
 pub mod acts;
 mod chars; // per-character CharSpec rows (plans/mod-api.md Tier 1): one file per character
+pub use chars::art_slot_row;
 pub mod tune_paths; // GENERATED (.dl/gen-tune-paths.dl): TunePath enum + lens ZSTs over Tune (core-rx-refactor.md row 10)
 mod za_warudo; // the per-fighter state machine (reduce_next_state): freeze, re-derive, resume // actuate a fighter's emitted Act into the SimState: apply_act + footstool
 pub(crate) use acts::apply_act;
