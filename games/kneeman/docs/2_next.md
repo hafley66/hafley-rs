@@ -674,6 +674,16 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    /private/tmp/game3-kick-boundary-tests.log. Test-only change; no runtime/deployment change.
    Browser and mixed-build startup gates remain pending, as do actual hit interruption,
    landing during kick and the separate ground/air move phases.
+   Actual-hit follow-up adds a 40-tick two-fighter input sequence: Falcon down-special and
+   the opponent's aerial start together. Combat changes SpecialD to Launched, increases
+   damage and sets hitstun. Falcon stays airborne with zero jumps throughout; every state
+   matches replay, including restoration from the impact snapshot. The initial opponent
+   attack at index 3 lost to the kick and only caused attacker hitlag; it did not meet the
+   interruption assertion. Moving the opponent input to index 0 exercises the intended hit.
+   438 game + 76 shell tests pass; /private/tmp/game3-kick-hit-final-tests.log.
+   Test-only delta: +36 lines. No runtime or publication change.
+   Next: rebuild the export and verify new/old pair startup rejects the unknown move kind
+   without desync or crash, then browser-test the kick recovery on matching builds.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

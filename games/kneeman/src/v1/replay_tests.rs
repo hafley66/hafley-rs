@@ -100,6 +100,42 @@ fn kick_jump_restore_requires_airborne_completion_and_survives_interruption() {
     }
 }
 
+#[test]
+fn an_aerial_hit_interrupts_kick_without_restoring_the_spent_jump() {
+    let tune = Tune::default();
+    let mut state = SimState::spawn();
+    for (index, fighter) in state.fighters[..2].iter_mut().enumerate() {
+        fighter.char_id = if index == 0 { 2 } else { 0 };
+        fighter.pos = Vector2::new(1100.0 + index as f32 * 50.0, -100.0);
+        fighter.state = CharState::Air;
+        fighter.ground_plat = -1;
+        fighter.ground_ink = -1;
+        fighter.air_jumps = 0;
+        fighter.facing = if index == 0 { 1.0 } else { -1.0 };
+    }
+    let mut replay = state;
+    let mut interrupted = false;
+    for tick in 0..40 {
+        let inputs = [
+            InputFrame { special: tick == 0, aim_y: if tick == 0 { 1.0 } else { 0.0 }, ..idle() },
+            InputFrame { attack: tick == 0, ..idle() },
+        ].map(|i| net::decode(net::encode(&i)));
+        let before = state.fighters[0];
+        state = step(&state, &[&inputs[0], &inputs[1]], &tune);
+        replay = step(&replay, &[&inputs[0], &inputs[1]], &tune);
+        assert_eq!(net::checksum(&state), net::checksum(&replay));
+        let fighter = state.fighters[0];
+        if before.state == CharState::SpecialD && fighter.state == CharState::Launched {
+            assert!(fighter.damage > before.damage && fighter.hitstun > 0);
+            interrupted = true;
+            replay = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap();
+        }
+        assert!(!fighter.grounded());
+        assert_eq!(fighter.air_jumps, 0);
+    }
+    assert!(interrupted, "the opponent's aerial must interrupt SpecialD through combat");
+}
+
 /// Build a frame by mutating the neutral default — `press(|i| i.attack = true)`.
 fn press(f: impl FnOnce(&mut InputFrame)) -> InputFrame {
     let mut i = InputFrame::default();
