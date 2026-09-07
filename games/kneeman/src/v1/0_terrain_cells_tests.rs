@@ -9,13 +9,7 @@ fn falcon_breaks_picks_up_and_throws_cells_through_recorded_inputs() {
     let mut tape = Vec::new();
     let mut snapshots = vec![(0, bincode::serialize(&initial).unwrap())];
     let mut held_slot = None;
-    for tick in 0..240 {
-        let input = net::decode(net::encode(&InputFrame {
-            attack: tick == 90 || tick == 140,
-            grab: tick == 162,
-            dir: if tick == 162 { 1.0 } else { 0.0 },
-            ..InputFrame::default()
-        }));
+    for (tick, input) in terrain_cells::playground_inputs().enumerate() {
         state = step(&state, &[&input, &InputFrame::default()], &tune);
         if tick == 159 {
             let broken: Vec<_> = state.items.iter().filter_map(|item| item.cell).collect();

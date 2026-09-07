@@ -143,7 +143,7 @@ impl KneeMan {
                 &s,
             );
             crate::webtest::debug_json(&format!(
-                r#"{{"peer_char":{},"charsel0":{},"handle":{},"char0":{},"char1":{},"x":[{},{}],"y":[{},{}],"states":["{:?}","{:?}"],"ship":[{},{}]}}"#,
+                r#"{{"peer_char":{},"charsel0":{},"handle":{},"char0":{},"char1":{},"x":[{},{}],"y":[{},{}],"states":["{:?}","{:?}"],"ship":[{},{}],"terrain":{}}}"#,
                 self.peer_char.map(|c| c as i64).unwrap_or(-1),
                 self.charsel.get_cloned()[0],
                 self.local_handle,
@@ -157,6 +157,12 @@ impl KneeMan {
                 s.fighters[1].state,
                 s.paths[sim::SHIP_SLOT].pos.x,
                 s.paths[sim::SHIP_SLOT].pos.y,
+                serde_json::json!({
+                    "holding": s.fighters[0].holding,
+                    "cells": s.paths.iter().filter_map(|p| p.cell.map(|c| (c.id.get(), p.percent))).collect::<Vec<_>>(),
+                    "items": s.items.iter().enumerate().filter_map(|(slot, i)| i.cell.map(|c|
+                        (c.id.get(), slot, i.owner, i.thrown))).collect::<Vec<_>>(),
+                }),
             ));
             crate::webtest::confirmed_checksums(&receipts);
         }

@@ -22,6 +22,16 @@ const CELLS: [[(f32, f32); 4]; 5] = [
     [(0.0, -0.5), (1.0, -0.5), (-1.0, 0.5), (0.0, 0.5)],
 ];
 
+/// Recorded playground actions: break, pick up, then throw into the neighboring cell.
+pub fn playground_inputs() -> impl Iterator<Item = super::InputFrame> {
+    (0..240).map(|tick| super::net::decode(super::net::encode(&super::InputFrame {
+        attack: tick == 90 || tick == 140,
+        grab: tick == 162,
+        dir: if tick == 162 { 1.0 } else { 0.0 },
+        ..super::InputFrame::default()
+    })))
+}
+
 /// Shared offline/debugger fixture. The normal stage and ship remain; four cells and a
 /// dropper exercise terrain destruction through ordinary fighter and item inputs.
 pub fn playground() -> SimState {

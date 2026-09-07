@@ -21,7 +21,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Falcon Dive | Published through 5e0eacd: grounded startup fix, catch/whiff debugger fixtures and optional-fire-art guard. Production replay and online Dive acceptance pass |
 | Special ship carry | Published through 83e3456: carry correction plus Ship Dive debugger fixture. Native and production browser checks prove startup follows the moving hull, then launches and replays |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
-| Cell item/contact sequence | Native 240-tick wire-input test breaks, picks up and throws a cell into another cell; full-state replay from four snapshots passes. 433 game + 75 shell tests pass; debugger sequence still to wire |
+| Cell item/contact sequence | Cell replay debugger button uses the same 240-tick wire-input sequence as the native test. Local browser pickup/throw/contact, restore/EOF and changed-state rejection pass; publication pending |
 | Keyboard bindings | Live InputMap editing for movement, c-stick and gameplay buttons; ConfigFile persistence/reset, side-aware labels, malformed-key validation and focus-loss clearing. 428 game + 68 shell tests pass |
 | Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
 | Production netplay | Two isolated Chromium contexts joined a unique private room through production signaling/WebRTC. Two runs matched 180 and 181 same-tick snapshot hashes with scripted movement; peer close -> reconnecting -> offline after timeout, no browser exceptions |
@@ -577,8 +577,22 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    after the thrown cell is consumed; lifecycle assertions now check preservation before throw
    and consumption with target damage on contact. No simulation fix or PM equivalence claim.
    Test delta: +40/-23 lines; no export/browser/online rerun for this test-only change.
-   Next: expose this exact input sequence through the existing Terrain & replay trace controls
-   and verify its visible pickup/throw/impact, restore and EOF in the browser.
+   Debugger follow-up: Cell replay loads the same playground_inputs iterator used by the native
+   regression. Existing step/verify/restore controls execute all 240 ticks. Opt-in web snapshots
+   expose terrain identities/damage and cell item ownership/thrown state; simulation rules and
+   wire packets are unchanged. 433 game + 76 shell tests and production export pass.
+   Local browser at tick 161 holds cell 17, tick 164 throws it with owner 0, and tick 165
+   consumes it on contact with cell 18 (9 damage); cells 19/20 retain zero damage. The viewer
+   shows cell 18 at 1 HP. Verify reports all 240 checksums matched. Replay reaches tick 241,
+   EOF preserves its checksum, Restore returns the exact tick-1 snapshot. A live Step then
+   Replay step refuses the changed state without mutation and displays the restore instruction.
+   No browser exceptions; exit 0. Command: node /private/tmp/6_game3_cells.cjs.
+   Logs: /private/tmp/game3-cell-trace-final-tests.log, game3-cell-trace-build.log and
+   game3-cell-trace-browser.log. Screenshots: /private/tmp/game3-cells-EjgCQU.
+   Start checksum: 897a702604273ba2aff48dfe9948c52d37ce04151d50fcc5586550ef6a6a92de;
+   end checksum: 60c616e456951ffb58efd8b5c4a41ea7145294b00b6919cec90f7f175efa4935.
+   Runtime/test delta before this ledger: +57/-10 lines across four files.
+   Next: publish the tested Cell replay fixture and repeat these assertions on /game3/.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

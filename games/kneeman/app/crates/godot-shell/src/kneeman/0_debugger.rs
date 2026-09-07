@@ -21,6 +21,7 @@ enum Command {
     Verify,
     Restore,
     Fixture,
+    CellReplay,
     JumpGrab,
     Dive(DiveStart),
     ReplayStep,
@@ -36,6 +37,19 @@ struct Trace {
 }
 
 impl Trace {
+    fn cells() -> Self {
+        let tune = Tune::default();
+        let mut state = sim::terrain_cells::playground();
+        let mut trace = Self::new(&state, &tune);
+        trace.recording = false;
+        for input in sim::terrain_cells::playground_inputs() {
+            let inputs = [input, InputFrame::default()];
+            state = sim::step(&state, &[&inputs[0], &inputs[1]], &tune);
+            trace.frames.push((inputs, sim::net::checksum(&state)));
+        }
+        trace
+    }
+
     fn falcon_dive(start: DiveStart) -> Self {
         let tune = Tune::default();
         let mut state = SimState::spawn();
@@ -132,6 +146,27 @@ impl Trace {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cell_trace_replays_pickup_throw_contact_and_eof() {
+        let trace = Trace::cells();
+        assert_eq!(trace.verify(), Ok(240));
+        let mut state: SimState = bincode::deserialize(&trace.snapshot).unwrap();
+        for index in 0..240 {
+            state = trace.replay_step(&state, index).unwrap().unwrap();
+            if index == 159 {
+                let slot = usize::try_from(state.fighters[0].holding).unwrap();
+                assert_eq!(state.items[slot].kind, sim::ItemKind::TerrainCell);
+            }
+            if index == 162 { assert!(state.items.iter().any(|i| i.cell.is_some() && i.thrown)); }
+            if index == 163 {
+                assert!(!state.items.iter().any(|i| i.cell.is_some()));
+                assert_eq!(state.paths.iter().filter_map(|p| p.cell.map(|c| (c.id.get(), p.percent)))
+                    .collect::<Vec<_>>(), vec![(18, trace.tune.throw_item.hit.damage), (19, 0.0), (20, 0.0)]);
+            }
+        }
+        assert!(trace.replay_step(&state, 240).unwrap().is_none());
+    }
 
     #[test]
     fn falcon_dive_inputs_catch_or_whiff_and_replay_through_landing() {
@@ -391,7 +426,7 @@ impl Debugger {
                         ("Restore start", Command::Restore), ("Replay step", Command::ReplayStep),
                         ("Load fixture", Command::Fixture), ("Falcon jump-grab", Command::JumpGrab),
                         ("Dive catch", Command::Dive(DiveStart::Catch)), ("Dive whiff", Command::Dive(DiveStart::Whiff)),
-                        ("Ship Dive", Command::Dive(DiveStart::Ship))] {
+                        ("Ship Dive", Command::Dive(DiveStart::Ship)), ("Cell replay", Command::CellReplay)] {
                         if ui.button(label).clicked() { self.command = Some(command); }
                     }
                 });
@@ -495,8 +530,10 @@ impl KneeMan {
                     message: "Fixture paused. Resume and strike the blue cells. Dropper left of Falcon; ship farther left.".into(),
                     ..Debugger::default() };
             }
-            Some(Command::JumpGrab | Command::Dive(_)) => {
+            Some(Command::JumpGrab | Command::Dive(_) | Command::CellReplay) => {
                 let (trace, message) = match command {
+                    Some(Command::CellReplay) => (Trace::cells(),
+                        "Replay step: 91 = strike, 141 = pickup, 163 = throw, 164 = cell impact. Game3 item rules."),
                     Some(Command::Dive(catch)) => (Trace::falcon_dive(catch),
                         "Replay step: Falcon Dive startup, rise, catch/explosion or whiff, landing. Game3 rules; PM parity unverified."),
                     _ => (Trace::jump_grab(),
