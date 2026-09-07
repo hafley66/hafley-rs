@@ -6,6 +6,7 @@ pub(crate) mod job;
 pub(crate) mod mail;
 pub(crate) mod paste;
 pub(crate) mod me;
+pub(crate) mod tag;
 
 use std::path::{Path, PathBuf};
 
@@ -314,6 +315,21 @@ FAVORITE: pin markdown you want to keep, read it back later:
   `me` resolves the caller from BOOP_SESSION, so run it inside the pane whose
   turn you want. Bodies dedupe through markdown_cache and are immutable; note
   and source are editable.
+
+TAGS: one tag table every surface shares (favorites, comments, turns, lanes).
+  Search reads agent_tag only, never message bodies, so offering past tags
+  never drags comment prose into the list:
+    boop tag add rust perf --source favorite:12   apply; --source defaults to
+      the caller's own route, `cli` when the whoami ladder cannot name it
+    boop tag recent -n 5              the recently used tags, newest use first
+    boop tag search rus -n 20         substring match on the tag column
+    boop tag list                     every tag, most used first
+    boop tag of favorite:12           the tags one source carries
+    boop tag sources rust             the sources one tag hangs on
+    boop tag rm rust --source favorite:12
+    boop tag backfill                 favorite notes become tags, once
+  Text rows are tab-separated `tag uses last_used_iso`; `--format json` prints
+  the same rows as one array. `boop me favorite --note` tags what it pins.
 
 ME: the caller's own conversation.
     boop me mood [--as <name>]        the mood template hails render with
