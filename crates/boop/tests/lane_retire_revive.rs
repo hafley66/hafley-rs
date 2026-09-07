@@ -220,12 +220,17 @@ fn a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation() {
         .arg(&fx.mail)
         .output()
         .unwrap();
+    let create_stdout = String::from_utf8_lossy(&create.stdout).into_owned();
     assert!(
         create.status.success(),
-        "lane create failed:\n{}{}",
-        String::from_utf8_lossy(&create.stdout),
+        "lane create failed:\n{create_stdout}{}",
         String::from_utf8_lossy(&create.stderr)
     );
+    // The id this create minted, printed so a coordinator can quote it.
+    let minted = create_stdout
+        .split_once("spawn ")
+        .and_then(|(_, rest)| rest.trim_end_matches(&[')', '\n'][..]).parse::<i64>().ok())
+        .unwrap_or_else(|| panic!("no spawn id on the dispatched line:\n{create_stdout}"));
 
     // 2. the brief turn completes and the result row lands.
     wait_for(
@@ -238,11 +243,21 @@ fn a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation() {
     //    the parent, so no retire note is minted.
     wait_for("pane exit", || !fx.pane_alive(), Duration::from_secs(20));
     assert!(fx.trail("spawn.json").exists(), "spawn record missing");
+    // The record a revive replays carries the id, so the revived run is the
+    // same run and its pin still answers.
+    let record: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(fx.trail("spawn.json")).unwrap()).unwrap();
+    assert_eq!(record["spawn_id"], serde_json::json!(minted));
     // The pin carries the cwd the supervisor ran in, so the revive below
     // resumes only because it runs in that same worktree.
     let pin: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(fx.trail("conversation")).unwrap()).unwrap();
     assert_eq!(pin["conversation"], "retire-acp-session");
+    assert_eq!(
+        pin["spawn_id"],
+        serde_json::json!(minted),
+        "the pin belongs to the spawn that created the lane"
+    );
     assert_eq!(
         std::fs::canonicalize(pin["cwd"].as_str().unwrap()).unwrap(),
         std::fs::canonicalize(&fx.repo).unwrap()

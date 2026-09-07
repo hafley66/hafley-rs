@@ -67,6 +67,10 @@ pub(crate) struct DispatchArgs {
     /// `KEY=VAL` pairs the lane's spawn inherits, shell-quoted onto the
     /// supervisor command after boop's own stamps.
     pub(crate) env: Vec<(String, String)>,
+    /// The `agent_lane` row id `lane create` minted for this run, written onto
+    /// the spawn record so a resume can prove it is the same run. A bare
+    /// `dispatch` mints none.
+    pub(crate) spawn_id: Option<i64>,
 }
 
 pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
@@ -126,6 +130,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             harness_id.as_str(),
             args.parent.as_deref(),
             &args.env,
+            args.spawn_id,
         )),
         model: args.model.clone(),
         effort: args.effort.clone(),
@@ -168,6 +173,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             cwd: cwd.to_owned(),
             command: boop::harness::supervisor_command(&spec),
             route: crate::cli::route_to_json(&route),
+            spawn_id: args.spawn_id,
         };
         if let Err(error) = boop::trail::write_spawn(&args.to, &spawn) {
             warn!(lane = args.to, error = %error, "spawn record not written");
@@ -184,29 +190,40 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
         "lane dispatch registered"
     );
     println!(
-        "dispatched {} -> {} (tmux {})",
+        "dispatched {} -> {} (tmux {}{})",
         message.id,
         args.to,
-        session.tmux.as_deref().unwrap_or("-")
+        session.tmux.as_deref().unwrap_or("-"),
+        match args.spawn_id {
+            Some(id) => format!(", spawn {id}"),
+            None => String::new(),
+        }
     );
     std::thread::sleep(std::time::Duration::from_secs(args.resolve_wait));
     Ok(())
 }
 
 /// The environment a spawn's command carries: a UTF-8 locale, the child's own
-/// identity, then the `KEY=VAL` pairs a `lane create --env` named. The pane's
-/// inherited locale is the tmux server's, not a shell's.
+/// identity, the spawn id this run was minted under, then the `KEY=VAL` pairs a
+/// `lane create --env` named. The pane's inherited locale is the tmux server's,
+/// not a shell's. The spawn id rides here rather than being read back from the
+/// trail: the pane opens before the trail record is written, and a revive
+/// replays this exact command string.
 pub(crate) fn spawn_env_stamp(
     lane_id: &str,
     harness_id: &str,
     parent_lane: Option<&str>,
     env: &[(String, String)],
+    spawn_id: Option<i64>,
 ) -> String {
     let mut stamp = format!(
         "{} {}",
         lane::locale_stamp(),
         identity::child_stamp(lane_id, lane_id, harness_id, parent_lane)
     );
+    if let Some(id) = spawn_id {
+        stamp.push_str(&format!(" {}='{id}'", boop::supervise::SPAWN_ID_ENV));
+    }
     for (key, value) in env {
         stamp.push(' ');
         stamp.push_str(key);
@@ -421,6 +438,8 @@ pub(crate) fn run_lane_supervisor(
 
 /// Write what the lane was told to do, including the brief bytes as of now:
 /// the file on disk is edited afterward and then nothing recovers the text.
+/// Returns the `agent_lane` row id this spawn minted: it is the identity a
+/// resume is checked against, so the caller carries it onto the trail record.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn record_lane_purpose(
     lane: &str,
@@ -432,10 +451,10 @@ pub(crate) fn record_lane_purpose(
     parent: Option<&str>,
     goal: Option<&str>,
     brief: &Path,
-) {
-    let Ok(store) = boop::Store::default_path().and_then(boop::Store::open) else {
-        return;
-    };
+) -> Option<i64> {
+    let store = boop::Store::default_path()
+        .and_then(boop::Store::open)
+        .ok()?;
     let spawn = boop::ident::LaneSpawn {
         lane: lane.to_owned(),
         trace: Some(trace.to_owned()),
@@ -449,10 +468,15 @@ pub(crate) fn record_lane_purpose(
         brief_body: std::fs::read_to_string(brief).ok(),
         ts: boop::channel::now_ms(),
     };
-    if let Err(error) = store.record_lane_spawn(&spawn) {
-        eprintln!("[boop] lane purpose not recorded: {error}");
-    }
+    let spawn_id = match store.record_lane_spawn(&spawn) {
+        Ok(id) => Some(id),
+        Err(error) => {
+            eprintln!("[boop] lane purpose not recorded: {error}");
+            None
+        }
+    };
     let _ = store.attach_trace(lane, trace, "lane-create", boop::channel::now_ms());
+    spawn_id
 }
 
 /// Set the child's mood at spawn. No `agent_session` row exists yet: the
@@ -1136,6 +1160,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
                 harness_id.as_str(),
                 parent.parent.as_deref(),
                 &args.env,
+                None,
             )),
             model: model.clone(),
             variant: variant.clone(),
@@ -1197,6 +1222,10 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
                 identity.lane, args.wait_timeout
             );
         }
+        match boop::trail::read_spawn_id(&identity.lane) {
+            Some(id) => println!("spawn: {id} on the trail; create mints a new one"),
+            None => println!("spawn: none on the trail; create mints the first"),
+        }
         println!("reclaim: worktree, branch and tmux session removed first, if the name is dead");
         return Ok(());
     }
@@ -1210,7 +1239,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         .trace
         .clone()
         .unwrap_or_else(|| format!("trace-{}", identity.lane));
-    record_lane_purpose(
+    let spawn_id = record_lane_purpose(
         &identity.lane,
         &trace,
         harness_id.as_str(),
@@ -1256,6 +1285,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             variant: variant.clone(),
             bin: bin.clone(),
             env: args.env.clone(),
+            spawn_id,
         },
     )?;
     if let Some(expect) = expect.as_ref() {
@@ -1279,7 +1309,13 @@ pub(crate) fn shell_quote(value: &str) -> String {
 
 /// The boop-owned stamps a `--env` must never clobber; the supervisor reads
 /// its own identity from these and a user pair would lie about the lane.
-const BOOP_ENV_STAMPS: &[&str] = &["BOOP_SESSION", "BOOP_LANE", "BOOP_HARNESS", "BOOP_PARENT"];
+const BOOP_ENV_STAMPS: &[&str] = &[
+    "BOOP_SESSION",
+    "BOOP_LANE",
+    "BOOP_HARNESS",
+    "BOOP_PARENT",
+    boop::supervise::SPAWN_ID_ENV,
+];
 
 /// Turns the clap-validated `--env` values into `(key, value)` pairs, refusing
 /// a key that collides with a boop-owned stamp.
@@ -5116,6 +5152,7 @@ mod tests {
             cwd: tree.display().to_string(),
             command: "boop beep lane run --lane fix-retired".to_owned(),
             route: crate::cli::route_to_json(&touched_route(tree, base)),
+            spawn_id: None,
         }
     }
 

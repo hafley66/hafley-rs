@@ -27,6 +27,8 @@ mod lane_debug;
 #[path = "lane_create_env.rs"]
 mod lane_create_env;
 mod lane_retire_revive;
+#[path = "lane_spawn_identity.rs"]
+mod lane_spawn_identity;
 #[path = "lane_wait_exit.rs"]
 mod lane_wait_exit;
 #[path = "native_agent_liveness.rs"]

@@ -728,7 +728,16 @@ pub(crate) fn revive_if_retired(
         return Ok(None);
     }
     revived.registered_at = Some(bus::now_iso());
-    revived.session_id = boop::trail::read_conversation(name).or(revived.session_id);
+    // The replayed record keeps this run's spawn id, so the pin it wrote is
+    // still this run's pin and the revived supervisor resumes on it.
+    revived.session_id = boop::supervise::pinned_conversation_for(
+        dir,
+        name,
+        Path::new(&spawn.cwd),
+        spawn.spawn_id,
+    )
+    .ok()
+    .or(revived.session_id);
     write_route(dir, name, revived.clone())?;
     println!(
         "revive {name} (pane {} gone; respawning on the pinned conversation)",
