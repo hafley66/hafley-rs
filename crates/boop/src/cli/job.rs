@@ -972,10 +972,9 @@ pub(crate) fn reset_dead_identity(
 }
 
 /// Drop the lane's pinned conversation so the reset name opens a fresh one.
-/// MERGE NOTE: becomes `boop_store::trail::clear_conversation(lane)`.
 fn clear_conversation_pin(lane: &str) {
-    if let Ok(dir) = boop::trail::lane_dir(lane) {
-        let _ = std::fs::remove_file(dir.join(boop::trail::CONVERSATION_FILE));
+    if let Err(error) = boop::trail::clear_conversation(lane) {
+        warn!(lane, error = %error, "conversation pin clear failed");
     }
 }
 
