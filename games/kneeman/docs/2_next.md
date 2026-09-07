@@ -21,7 +21,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Falcon Dive | Published through 5e0eacd: grounded startup fix, catch/whiff debugger fixtures and optional-fire-art guard. Production replay and online Dive acceptance pass |
 | Special ship carry | Published through 83e3456: carry correction plus Ship Dive debugger fixture. Native and production browser checks prove startup follows the moving hull, then launches and replays |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
-| Cell item/contact sequence | Cell replay debugger button uses the same 240-tick wire-input sequence as the native test. Local browser pickup/throw/contact, restore/EOF and changed-state rejection pass; publication pending |
+| Cell item/contact sequence | Published through f9a486d: Cell replay uses the same 240-tick wire-input sequence as the native test. Local and production pickup/throw/contact, restore/EOF and changed-state rejection pass |
 | Keyboard bindings | Live InputMap editing for movement, c-stick and gameplay buttons; ConfigFile persistence/reset, side-aware labels, malformed-key validation and focus-loss clearing. 428 game + 68 shell tests pass |
 | Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
 | Production netplay | Two isolated Chromium contexts joined a unique private room through production signaling/WebRTC. Two runs matched 180 and 181 same-tick snapshot hashes with scripted movement; peer close -> reconnecting -> offline after timeout, no browser exceptions |
@@ -592,7 +592,20 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Start checksum: 897a702604273ba2aff48dfe9948c52d37ce04151d50fcc5586550ef6a6a92de;
    end checksum: 60c616e456951ffb58efd8b5c4a41ea7145294b00b6919cec90f7f175efa4935.
    Runtime/test delta before this ledger: +57/-10 lines across four files.
-   Next: publish the tested Cell replay fixture and repeat these assertions on /game3/.
+   Published through f9a486d using the dedicated Game3 profile; nginx validation/reload passes.
+   Remote WASM matches tested SHA-256
+   84a5d71d329289880f642ea9b8abac7d4a5bc400669213507520b5a157e7c065.
+   Game3 pack remains fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df;
+   protected original /game/ pack remains
+   5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795.
+   PRODUCTION=1 node /private/tmp/6_game3_cells.cjs passes exact cell ownership, throw and
+   impact readbacks, all 240 replay steps, unchanged EOF, restore and changed-state rejection.
+   Start/end checksums match local execution above. No browser exceptions; exit 0.
+   Logs: /private/tmp/game3-cell-trace-publish.log and game3-cell-trace-production.log.
+   Screenshots: /private/tmp/game3-cells-WVSKHF. No rebuild or online rerun for publication.
+   Next: run this same cell lifecycle through the existing GGRS SyncTest/Game path, comparing
+   every authoritative state with offline stepping across pickup/throw/contact boundaries.
+   This fixture's two-peer online cell-contact behavior remains unverified.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
