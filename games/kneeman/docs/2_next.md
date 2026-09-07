@@ -21,6 +21,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Falcon Dive | Published through 5e0eacd: grounded startup fix, catch/whiff debugger fixtures and optional-fire-art guard. Production replay and online Dive acceptance pass |
 | Special ship carry | Published through 83e3456: carry correction plus Ship Dive debugger fixture. Native and production browser checks prove startup follows the moving hull, then launches and replays |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
+| Cell item/contact sequence | Native 240-tick wire-input test breaks, picks up and throws a cell into another cell; full-state replay from four snapshots passes. 433 game + 75 shell tests pass; debugger sequence still to wire |
 | Keyboard bindings | Live InputMap editing for movement, c-stick and gameplay buttons; ConfigFile persistence/reset, side-aware labels, malformed-key validation and focus-loss clearing. 428 game + 68 shell tests pass |
 | Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
 | Production netplay | Two isolated Chromium contexts joined a unique private room through production signaling/WebRTC. Two runs matched 180 and 181 same-tick snapshot hashes with scripted movement; peer close -> reconnecting -> offline after timeout, no browser exceptions |
@@ -563,8 +564,21 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    as local execution and no browser exceptions or optional-fire-texture errors; exit 0.
    Logs: /private/tmp/game3-ship-fixture-publish.log and game3-ship-fixture-production.log.
    Screenshots: /private/tmp/game3-dive-OtE1qQ. No new compiler job was required for publication.
-   Next: inspect combined item/contact/destruction replay coverage and add a missing executable
-   gameplay sequence using the existing fixture/trace interfaces.
+   Cell/contact follow-up extends the existing playground regression without runtime changes:
+   zero-based input indices 90 and 140 attack, 162 grabs with forward direction. All inputs
+   pass through net::encode/decode. By index 159 Falcon holds the detached cell; the four
+   original cell identities remain represented in terrain/items. At 162 the cell is thrown,
+   retaining owner 0 for self-hit exclusion. At 163 it is consumed on impact: cell 18 takes
+   the authored throw damage (currently 9), cells 19/20 remain undamaged, and Falcon remains
+   at zero damage. Every subsequent checksum matches replays from the initial snapshot and
+   snapshots after indices 139, 161 and 163, covering pickup, throw and post-contact restore.
+   433 game + 75 shell tests pass, log /private/tmp/game3-cell-sequence-tests.log.
+   Initial diagnostic runs retained the old final-state cell-presence assertion, which fails
+   after the thrown cell is consumed; lifecycle assertions now check preservation before throw
+   and consumption with target damage on contact. No simulation fix or PM equivalence claim.
+   Test delta: +40/-23 lines; no export/browser/online rerun for this test-only change.
+   Next: expose this exact input sequence through the existing Terrain & replay trace controls
+   and verify its visible pickup/throw/impact, restore and EOF in the browser.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

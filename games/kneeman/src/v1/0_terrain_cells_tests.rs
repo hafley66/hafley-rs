@@ -2,39 +2,56 @@ use super::terrain_cells::{detach_depleted, spawn_cells};
 use super::*;
 
 #[test]
-fn falcon_breaks_playground_cells_through_recorded_inputs() {
+fn falcon_breaks_picks_up_and_throws_cells_through_recorded_inputs() {
     let initial = terrain_cells::playground();
     let tune = Tune::default();
     let mut state = initial;
     let mut tape = Vec::new();
+    let mut snapshots = vec![(0, bincode::serialize(&initial).unwrap())];
+    let mut held_slot = None;
     for tick in 0..240 {
-        let input = InputFrame {
+        let input = net::decode(net::encode(&InputFrame {
             attack: tick == 90 || tick == 140,
+            grab: tick == 162,
+            dir: if tick == 162 { 1.0 } else { 0.0 },
             ..InputFrame::default()
-        };
+        }));
         state = step(&state, &[&input, &InputFrame::default()], &tune);
+        if tick == 159 {
+            let broken: Vec<_> = state.items.iter().filter_map(|item| item.cell).collect();
+            assert!(!broken.is_empty(), "ordinary Falcon attacks must detach terrain cells");
+            assert!(broken.iter().all(|cell| cell.broken_at.is_some()));
+            assert_eq!(broken.len() + state.paths.iter()
+                .filter(|p| p.active() && p.cell.is_some()).count(), 4);
+            let slot = usize::try_from(state.fighters[0].holding).unwrap();
+            assert_eq!(state.items[slot].kind, ItemKind::TerrainCell);
+            assert_eq!(state.items[slot].owner, 0);
+            assert!(!state.items[slot].thrown);
+            held_slot = Some(slot);
+        }
+        if tick == 162 {
+            let item = state.items[held_slot.unwrap()];
+            assert_eq!(state.fighters[0].holding, -1);
+            assert!(item.thrown && item.vel.x > 0.0);
+            assert_eq!(item.owner, 0, "throw excludes its owner from self-hits");
+        }
+        if tick == 163 {
+            assert!(!state.items[held_slot.unwrap()].active(), "spent on contact");
+            assert_eq!(state.paths.iter().filter_map(|p| p.cell.map(|c| (c.id.get(), p.percent)))
+                .collect::<Vec<_>>(), vec![(18, tune.throw_item.hit.damage), (19, 0.0), (20, 0.0)]);
+            assert_eq!(state.fighters[0].damage, 0.0);
+        }
         tape.push((input, net::checksum(&state)));
+        if [139, 161, 163].contains(&tick) {
+            snapshots.push((tape.len(), bincode::serialize(&state).unwrap()));
+        }
     }
-    let broken: Vec<_> = state.items.iter().filter_map(|item| item.cell).collect();
-    assert!(
-        !broken.is_empty(),
-        "ordinary Falcon attacks must detach terrain cells"
-    );
-    assert!(broken.iter().all(|cell| cell.broken_at.is_some()));
-    assert_eq!(
-        broken.len()
-            + state
-                .paths
-                .iter()
-                .filter(|p| p.active() && p.cell.is_some())
-                .count(),
-        4
-    );
-    let mut replay: SimState =
-        bincode::deserialize(&bincode::serialize(&initial).unwrap()).unwrap();
-    for (input, expected) in tape {
-        replay = step(&replay, &[&input, &InputFrame::default()], &tune);
-        assert_eq!(net::checksum(&replay), expected, "tick {}", replay.tick);
+    for (offset, bytes) in snapshots {
+        let mut replay: SimState = bincode::deserialize(&bytes).unwrap();
+        for (input, expected) in &tape[offset..] {
+            replay = step(&replay, &[input, &InputFrame::default()], &tune);
+            assert_eq!(net::checksum(&replay), *expected, "restore {offset}, tick {}", replay.tick);
+        }
     }
 }
 
