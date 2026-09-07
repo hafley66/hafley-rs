@@ -210,61 +210,9 @@ impl Store {
     }
 }
 
-/// The tag rows and their links as they stand. `Store::rebuild` holds one of
-/// these across the table drop, the way it holds favorites.
-pub(crate) struct TagSnapshot {
-    pub(crate) tags: Vec<Tag>,
-    pub(crate) links: Vec<(String, String, i64)>,
-}
-
-impl Store {
-    /// Every tag row and every link, counts and timestamps included.
-    pub(crate) fn tags_snapshot(&self) -> Result<TagSnapshot> {
-        let tags = self.tag_rows(
-            "SELECT tag, created_ts, last_used_ts, uses FROM agent_tag ORDER BY tag",
-            params![],
-        )?;
-        let mut links = Vec::new();
-        {
-            let mut statement = self.connection().prepare(
-                "SELECT tag, source, ts FROM agent_tag_link ORDER BY tag, source",
-            )?;
-            let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
-            for row in rows {
-                links.push(row?);
-            }
-        }
-        Ok(TagSnapshot { tags, links })
-    }
-
-    /// Write a snapshot back onto a fresh schema. A favorite that came back
-    /// wearing a new id moves its links with it; every other source is copied
-    /// as it was.
-    pub(crate) fn tags_restore(
-        &self,
-        snapshot: &TagSnapshot,
-        moved: &BTreeMap<i64, i64>,
-    ) -> Result<()> {
-        for tag in &snapshot.tags {
-            self.connection().execute(
-                "INSERT OR REPLACE INTO agent_tag (tag, created_ts, last_used_ts, uses)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![tag.tag, tag.created_ts, tag.last_used_ts, tag.uses],
-            )?;
-        }
-        for (tag, source, ts) in &snapshot.links {
-            self.connection().execute(
-                "INSERT OR REPLACE INTO agent_tag_link (tag, source, ts) VALUES (?1, ?2, ?3)",
-                params![tag, moved_source(source, moved), ts],
-            )?;
-        }
-        Ok(())
-    }
-}
-
 /// The source a link wears after a rebuild: `favorite:<old>` follows the
 /// favorite to its new id, anything else stands.
-fn moved_source(source: &str, moved: &BTreeMap<i64, i64>) -> String {
+pub(crate) fn moved_source(source: &str, moved: &BTreeMap<i64, i64>) -> String {
     let Some(old) = source
         .strip_prefix("favorite:")
         .and_then(|id| id.parse::<i64>().ok())
@@ -449,9 +397,11 @@ mod tests {
         assert_eq!(store.tags_list().unwrap(), before);
         let moved: i64 = store
             .connection()
-            .query_row("SELECT favorite_id FROM agent_favorite", [], |row| row.get(0))
+            .query_row("SELECT favorite_id FROM agent_favorite", [], |row| {
+                row.get(0)
+            })
             .unwrap();
-        assert_ne!(moved, favorite, "the surviving favorite took a lower id");
+        assert_eq!(moved, favorite, "a favorite comes back wearing its own id");
         assert_eq!(
             store.tags_for(&format!("favorite:{moved}")).unwrap(),
             ["rust", "perf"]
@@ -463,6 +413,118 @@ mod tests {
         );
         drop(store);
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// A comment, its two targets and its fork are user-authored too: the
+    /// rebuild carries every column, the comment id included, so the tag on
+    /// `comment:<id>` still names it afterwards.
+    #[test]
+    fn a_comment_its_targets_and_its_fork_survive_a_rebuild() {
+        let (path, store) = fresh_store("rebuild-comment");
+        let earlier = [("ses-z".to_owned(), 1)];
+        store
+            .turn_comment_upsert(&crate::ident::TurnCommentUpsert {
+                client_id: "item-0",
+                kind: "selection",
+                quote: "gone",
+                note: None,
+                enabled: true,
+                tab_name: None,
+                targets: &earlier,
+                ts: 99,
+            })
+            .unwrap();
+        store.turn_comment_delete("item-0").unwrap();
+        let targets = [("ses-a".to_owned(), 7), ("ses-b".to_owned(), 9)];
+        let comment_id = store
+            .turn_comment_upsert(&crate::ident::TurnCommentUpsert {
+                client_id: "item-1",
+                kind: "selection",
+                quote: "the line as read",
+                note: Some("fix this"),
+                enabled: true,
+                tab_name: Some("pane-3"),
+                targets: &targets,
+                ts: 100,
+            })
+            .unwrap();
+        store
+            .record_turn_comment_fork(&crate::ident::TurnCommentFork {
+                comment_id,
+                lane: "feature-x".to_owned(),
+                branch: "feature/x".to_owned(),
+                brief: "/tmp/brief.md".to_owned(),
+                created_ts: 101,
+            })
+            .unwrap();
+        store
+            .tag_apply("review", &format!("comment:{comment_id}"), 102)
+            .unwrap();
+        let before = store.turn_comment(comment_id).unwrap().unwrap();
+
+        store.rebuild().unwrap();
+
+        let after = store.turn_comment(comment_id).unwrap().unwrap();
+        assert_eq!(after.comment_id, before.comment_id);
+        assert_eq!(after.client_id, "item-1");
+        assert_eq!(after.quote, "the line as read");
+        assert_eq!(after.note.as_deref(), Some("fix this"));
+        assert!(after.enabled);
+        assert_eq!(after.tab_name.as_deref(), Some("pane-3"));
+        assert_eq!((after.created_ts, after.updated_ts), (100, 100));
+        assert_eq!(
+            after
+                .targets
+                .iter()
+                .map(|target| (target.session.clone(), target.turn))
+                .collect::<Vec<_>>(),
+            [("ses-a".to_owned(), 7), ("ses-b".to_owned(), 9)],
+            "a target keeps its session by name, not by dict id"
+        );
+        assert_eq!(
+            store.turn_comment_forks(comment_id).unwrap(),
+            [crate::ident::TurnCommentFork {
+                comment_id,
+                lane: "feature-x".to_owned(),
+                branch: "feature/x".to_owned(),
+                brief: "/tmp/brief.md".to_owned(),
+                created_ts: 101,
+            }]
+        );
+        assert_eq!(
+            store.tags_for(&format!("comment:{comment_id}")).unwrap(),
+            ["review"]
+        );
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A favorite is markdown plus a note; the body re-interns and every other
+    /// column, its id included, reads back as it was.
+    #[test]
+    fn a_favorite_survives_a_rebuild_whole() {
+        let (path, store) = fresh_store("rebuild-favorite");
+        let id = store
+            .favorite_add("# pinned\n", Some("why"), "ses-a:12", 42)
+            .unwrap();
+        let before = store.query_favorite(id).unwrap();
+
+        store.rebuild().unwrap();
+
+        assert_eq!(store.query_favorite(id).unwrap(), before);
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The guard behind the tag-link restore: if a favorite ever came back
+    /// with a new id, its links would follow it.
+    #[test]
+    fn a_link_source_follows_a_moved_favorite() {
+        let moved = BTreeMap::from([(2, 1)]);
+        assert_eq!(moved_source("favorite:2", &moved), "favorite:1");
+        assert_eq!(moved_source("favorite:9", &moved), "favorite:9");
+        assert_eq!(moved_source("lane:x", &moved), "lane:x");
+        assert_eq!(moved_source("comment:2", &moved), "comment:2");
     }
 
     #[test]
