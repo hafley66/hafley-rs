@@ -402,7 +402,10 @@ fn repin_ink_riders(n: &mut SimState, snap: &[InkPath; MAX_DRAWN]) {
             continue;
         };
         let stale_carry = path_surface_vel(&snap[slot]);
-        let carry_applied = if grounded {
+        // Grounded specials pin against the old hull without applying its horizontal carry.
+        let carry_applied = if grounded && f.grounded() && crate::v1::is_special(f.state) {
+            Vector2::ZERO
+        } else if grounded {
             Vector2::new(stale_carry.x, 0.0)
         } else {
             stale_carry

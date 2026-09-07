@@ -27,6 +27,64 @@ fn falcon_tune() -> Tune {
     Tune::resolve(&CharSpec::falcon(), &MatchTune::default())
 }
 
+#[test]
+fn dive_input_preserves_ship_support_until_launch_and_replays_air_entry() {
+    let t = falcon_tune();
+    let startup = t.specials[2].hit.boxes[0].start;
+    for support in [Some(Vector2::ZERO), Some(Vector2::new(1.0, -1.0)), None] {
+        let mut state = SimState::spawn();
+        state.paths[SHIP_SLOT].pos = Vector2::new(600.0, 100.0);
+        state.paths[SHIP_SLOT].vel = support.unwrap_or(Vector2::ZERO);
+        state.fighters[1].pos = Vector2::new(1100.0, GROUND_Y);
+        let fighter = &mut state.fighters[0];
+        fighter.vel = Vector2::ZERO;
+        if support.is_some() {
+            let x = state.paths[SHIP_SLOT].pos.x;
+            let y = ink_floor_y_at(&state.paths[SHIP_SLOT], x, &state.nodes).unwrap();
+            fighter.pos = Vector2::new(x, y);
+            fighter.state = CharState::Stand;
+            fighter.ground_plat = 0;
+            fighter.ground_ink = SHIP_SLOT as i8;
+        } else {
+            fighter.pos = Vector2::new(1600.0, 0.0);
+            fighter.state = CharState::Air;
+            fighter.ground_plat = -1;
+            fighter.ground_ink = -1;
+        }
+        let initial = state;
+        let mut inputs = Vec::new();
+        let mut expected = Vec::new();
+        for tick in 0..90 {
+            let input = net::decode(net::encode(&InputFrame {
+                special: tick == 0, aim_y: if tick == 0 { -1.0 } else { 0.0 }, ..IDLE
+            }));
+            state = step(&state, &[&input, &IDLE], &t);
+            let fighter = &state.fighters[0];
+            // The entry input sets frame zero; run_special begins on the next tick.
+            if tick <= startup {
+                assert_eq!(fighter.state, CharState::SpecialU, "support={support:?}, tick={tick}");
+                assert_eq!(fighter.grounded(), support.is_some());
+                if support.is_some() {
+                    let y = ink_floor_y_near(&state.paths[SHIP_SLOT], fighter.pos.x, fighter.pos.y, &state.nodes).unwrap();
+                    assert!((fighter.pos.y - y).abs() < 0.1, "startup must ride the current hull: support={support:?}, tick={tick}, feet={}, floor={y}", fighter.pos.y);
+                }
+            }
+            if tick == startup + 1 {
+                assert!(!fighter.grounded(), "launch releases support: support={support:?}, state={:?}, frame={}, pos={:?}, vel={:?}", fighter.state, fighter.frame, fighter.pos, fighter.vel);
+                assert!(fighter.vel.y < 0.0, "launch rises");
+            }
+            inputs.push(input);
+            expected.push(net::checksum(&state));
+        }
+        let mut replay: SimState = bincode::deserialize(&bincode::serialize(&initial).unwrap()).unwrap();
+        for (tick, (input, expected)) in inputs.iter().zip(expected).enumerate() {
+            replay = step(&replay, &[input, &IDLE], &t);
+            assert_eq!(net::checksum(&replay), expected, "support={support:?}, tick={tick}");
+            if tick == 12 { replay = bincode::deserialize(&bincode::serialize(&replay).unwrap()).unwrap(); }
+        }
+    }
+}
+
 /// P0 airborne mid-up-B (`SpecialU` running Falcon's `DiveGrab`) at `g.frame == frame`, facing
 /// right; P1 airborne at `vx`. `frame` is the PRE-step frame -- `reduce_next_state` ticks it once
 /// before `resolve_grab` reads it, so the hug window [10, 26) is live for a pre-step frame in [9, 25).

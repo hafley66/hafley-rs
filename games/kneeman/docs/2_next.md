@@ -19,6 +19,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Regression | Existing fixed-input/replay/rollback suites remain the game gate |
 | Falcon | Fresh sessions select Falcon/Lucas; built-in art-to-kit mapping corrected; existing movement/attack strips wired. Commit 47ea707 |
 | Falcon Dive | Published through 5e0eacd: grounded startup fix, catch/whiff debugger fixtures and optional-fire-art guard. Production replay and online Dive acceptance pass |
+| Special ship carry | Native-tested correction: grounded specials receive full hull translation in the post-hull rider phase. Export/browser/publication pending |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Keyboard bindings | Live InputMap editing for movement, c-stick and gameplay buttons; ConfigFile persistence/reset, side-aware labels, malformed-key validation and focus-loss clearing. 428 game + 68 shell tests pass |
 | Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
@@ -495,6 +496,21 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    screenshots: /private/tmp/game3-online-mTuCOZ.
    Next: cover startup on moving/drawn support and airborne entry before changing
    additional Falcon rules. PM timing/hitbox equivalence and physical-device checks remain open.
+   Support-boundary follow-up adds stationary-ship, diagonally moving-ship and open-air
+   up-special sequences. Each verifies startup support, launch and 90-tick checksum replay,
+   including snapshot restoration after input index 12. The first launch expectation was one tick
+   early: input enters frame zero, execution begins next tick. The corrected moving case
+   exposed a 0.1584 px first-tick floor offset: grounded specials had not applied horizontal
+   carry, but repin_ink_riders subtracted it as though they had. The post-hull correction now
+   applies full translation for grounded specials. An intermediate special-branch carry
+   attempt failed the teleport sweep's real-floor invariant and was removed.
+   Final gate: 433 game + 74 shell tests pass, including the teleport sweep and all three
+   support sequences. Runtime delta: +4/-1 in step.rs; no fields or tuning changes.
+   Command: CARGO_BUILD_JOBS=1 just game-test. Log:
+   /private/tmp/game3-dive-support-final-tests.log. Focused test:
+   dive_input_preserves_ship_support_until_launch_and_replays_air_entry.
+   Next: export/browser/online acceptance and publish this carry correction. Current
+   production remains 5e0eacd; no browser run or deploy was performed for this change yet.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
