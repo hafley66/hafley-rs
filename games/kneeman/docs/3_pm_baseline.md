@@ -95,6 +95,41 @@ Published through 5e0eacd. Production catch/whiff replay, restore and EOF checks
 two-peer Dive under injected delay/loss also passes confirmed-state and reconnect checks.
 Exact commands, hashes and receipts are in docs/2_next.md.
 
+## Remaining Falcon special slots: implementation inventory
+
+Inspected chars/falcon.rs, chars/kneeman.rs and moves/special.rs after online cell receipt
+99f5ee1. Falcon copies KneeMan's CharSpec and replaces only specials[2].
+
+| Slot | Current definition | Authored startup / active / recovery | Mechanic gap |
+| --- | --- | --- | --- |
+| Neutral | PUNCH / Punch | 14 / 4 / 26 | PM turnaround count, startup resets and damage increments are not represented by the existing one-shot b_reversed flag |
+| Side | LUNGE / Lunge | 8 / 6 / 22 | No Raptor Boost contact-triggered uppercut or separate ground/air ending phases |
+| Up | FALCON_DIVE / DiveGrab | 10 / 26 / 20 | Published catch/whiff/recovery tests; exact PM data still unverified |
+| Down | DROP / Fall | 8 / 10 / 18 | One impulse for ground/air, no kick-specific landing phase or aerial-jump restoration |
+
+These are current Game3 values, not PM frame data. Generic Lunge clears ground support
+at its launch frame. Fall applies the same (220, 700) facing-relative impulse whether
+started grounded or airborne. run_special has no air_jumps assignment; normal landing
+or ledge refresh elsewhere cannot establish an airborne kick refresh.
+
+Reference recheck: [PMUnofficial Captain Falcon](https://pmunofficial.com/en/characters/captain-falcon/)
+labels its public version 3.6+mf and explicitly describes aerial Falcon Kick refreshing the
+second jump, plus side-special/Kick B-reverses. This supports a behavior target, without
+authenticating an original 3.6 binary or specifying the jump-reset frame.
+[Melee decomp SpecialLw](https://github.com/doldecomp/melee/blob/master/src/melee/ft/chara/ftCaptain/ftCa_SpecialLw.c)
+was read as a separate Melee reference: distinct ground/air entry, motion-end and collision
+callbacks select ending states. Air ending returns through ftCo_Fall_Enter. Animation command
+variables and generic callbacks participate; this file alone does not identify jump-reset
+timing. The URL is a moving branch, not a pinned PM receipt.
+
+Next bounded move: Falcon Kick. Before implementation, trace the Melee jump-count write and
+animation-command boundary or acquire a PM execution receipt. Then define a Game3-authored
+sequence that consumes the air jump, presses down-special away from floors, completes the
+move and presses jump again. Cover interruption, ground start, landing during travel,
+left/right direction and full-state replay. Keep inherited KneeMan Fall behavior isolated
+from Falcon-specific changes. Exact PM impulse/frame/hitbox/landing data remain unresolved;
+the recovered pm-falcon-kit.md's mixed Melee/PM numbers are not sufficient to claim parity.
+
 ## Remaining source limits
 
 Recovered `pm-falcon-kit.md` asserts that missing PM changelog entries make Melee values

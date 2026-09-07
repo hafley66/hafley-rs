@@ -643,9 +643,15 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    /private/tmp/game3-cell-online-native-tests.log. No web rebuild or publication was needed.
    The browser asserts the final cell-contact result and confirmed-state agreement; individual
    one-tick pickup/throw visuals are covered by the separate paused replay receipt above.
-   Next: inspect Falcon's inherited special slots against the existing reference ledger and
-   select the next missing move with an executable input sequence. Physical/cross-network
-   devices and exact Project M move data remain unverified.
+   Special-slot inventory is now in docs/3_pm_baseline.md: neutral/side/down still inherit
+   PUNCH/LUNGE/DROP; only up-special is replaced. Next move selected: Falcon Kick, including
+   airborne jump restoration and ground/air behavior. The PM character page confirms jump
+   restoration but provides no exact reset frame. Melee's SpecialLw callbacks show separate
+   phases; animation-command/generic callback tracing is needed before assigning timing.
+   Next: trace the jump-count write and form an air-jump -> down-special -> air-jump sequence,
+   with interruption/landing cases, without changing KneeMan's inherited Fall behavior.
+   This inventory changed no runtime or deployment and required no compiler/browser run.
+   Physical/cross-network devices and exact Project M move data remain unverified.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
