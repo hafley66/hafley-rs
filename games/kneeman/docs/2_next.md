@@ -1163,6 +1163,26 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    projection change: /private/tmp/game3-kick-debugger-damage-tests.log. The shared fixture
    example compiles, and both generated snapshots compare byte-identical to the prior writer.
    Publication pending. No art/import/deploy source changes; art-test/web-check not rerun.
+   Published 00315e9 via the existing Game3 profile; nginx validation/reload passed.
+   Remote WASM matches tested SHA-256
+   2dd3f961c67b55455a8a1b0552a3cb189515b7a5d94b2aad72915304324b4f9d.
+   Game3 pack remains fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df;
+   protected /game/ pack remains
+   5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795.
+   /private/tmp/game3-kick-debugger-publish.log. PRODUCTION=1 node
+   /private/tmp/7_game3_kick_contact.cjs passes both fixtures and all local assertions with
+   identical start/end checksums, no browser exceptions, exit 0;
+   /private/tmp/game3-kick-debugger-production.log; /private/tmp/game3-kick-debugger-mQv9Zi.
+   To inspect: open the debugger with backtick, choose Kick ground or Kick air, then Replay
+   step. Verify replay checks 60 ticks; Restore start resets the fixture. Simulation/protocol
+   remain unchanged; no new online run on this debugger-only artifact yet.
+   Production Cell replay regression passes after the shared Restore change: PRODUCTION=1
+   node /private/tmp/6_game3_cells.cjs, exit 0. Pickup/throw/contact, 240 input steps, exact
+   restore, EOF and changed-state rejection pass without browser exceptions;
+   /private/tmp/game3-kick-debugger-cells-production.log; /private/tmp/game3-cells-IduZ43.
+   Next gameplay work remains Kick wall entry/motion and the remaining Falcon move phases;
+   reference gaps are in docs/3_pm_baseline.md and docs/4_falcon_script_reference.md. The
+   contact fixture is now inspectable and does not require another abstraction layer.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;

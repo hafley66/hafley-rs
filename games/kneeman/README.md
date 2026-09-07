@@ -31,6 +31,12 @@ See [source receipts](docs/0_sources.md) and [integration status](docs/1_integra
 The active task list is [2_next.md](docs/2_next.md). Art capture/import commands are in
 [tools/README.md](tools/README.md). There is one active simulation and boot scene.
 
+For contact/replay inspection, press backtick to open **Terrain & replay**. **Kick ground**
+and **Kick air** load 60-tick Falcon landing traces with an overlapping grounded or airborne
+opponent. **Replay step** advances one recorded input; **Verify replay** checks every tick;
+**Restore start** restores the snapshot. Ground contact deals 10 damage; the airborne control
+takes 0. These fixtures use authored Game3 timing, with PM parity gaps recorded in the ledger.
+
 ```rust,ignore
 pub fn step(state: &SimState, inputs: &[&InputFrame], tune: &Tune) -> SimState;
 pub fn net::checksum(state: &SimState) -> u128;
