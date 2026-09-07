@@ -1,6 +1,29 @@
 //! Fixed simulation starts shared by the replay debugger and browser fixture writers.
 use crate::v1::*;
 
+pub fn fair_contact(late: bool) -> SimState {
+    let mut state = SimState::spawn();
+    let fighter = &mut state.fighters[0];
+    fighter.char_id = 2;
+    fighter.state = CharState::Fair;
+    fighter.frame = if late { 16 } else { 13 };
+    fighter.pos = Vector2::new(600.0, 300.0);
+    fighter.vel = Vector2::ZERO;
+    fighter.ground_plat = -1;
+    fighter.ground_ink = -1;
+    let tune = Tune::default();
+    let kit = tune.for_char(2);
+    let center = hitbox_center(fighter, kit.fair.box_at(fighter.frame + 1).unwrap()).0;
+    let victim = &mut state.fighters[1];
+    victim.invuln = 0;
+    victim.state = CharState::Air;
+    victim.ground_plat = -1;
+    victim.ground_ink = -1;
+    victim.vel = Vector2::ZERO;
+    victim.pos += center - hurtbox(victim).0;
+    state
+}
+
 pub fn kick_travel(air_entry: bool) -> SimState {
     let mut state = kick_contact(false);
     let fighter = &mut state.fighters[0];

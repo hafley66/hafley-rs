@@ -51,28 +51,10 @@ fn fair_phases_are_character_local_and_share_hit_identity() {
 #[cfg(test)]
 #[test]
 fn fair_early_and_late_contacts_replay_without_a_second_hit() {
-    use crate::v1::{CharState, InputFrame, SimState, Tune, Vector2, moves, net, step};
+    use crate::v1::{InputFrame, SimState, Tune, net, step};
     let tune = Tune::default();
-    for (frame, expected) in [(13,18.0),(16,6.0)] {
-        let mut state = SimState::spawn();
-        let fighter = &mut state.fighters[0];
-        fighter.char_id = 2;
-        fighter.state = CharState::Fair;
-        fighter.frame = frame;
-        fighter.pos = Vector2::new(600.0, 100.0);
-        fighter.vel = Vector2::ZERO;
-        fighter.ground_plat = -1;
-        fighter.ground_ink = -1;
-        let kit = tune.for_char(2);
-        let hit = kit.fair.box_at(frame + 1).unwrap();
-        let center = moves::hitbox_center(fighter, hit).0;
-        let victim = &mut state.fighters[1];
-        victim.invuln = 0;
-        victim.state = CharState::Air;
-        victim.ground_plat = -1;
-        victim.ground_ink = -1;
-        victim.vel = Vector2::ZERO;
-        victim.pos += center - moves::hurtbox(victim).0;
+    for (late, expected) in [(false,18.0),(true,6.0)] {
+        let mut state = crate::fixtures::fair_contact(late);
         let mut restored: SimState = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap();
         for _ in 0..60 {
             state = step(&state, &[&InputFrame::default(); 2], &tune);

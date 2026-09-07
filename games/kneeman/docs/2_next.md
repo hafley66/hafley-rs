@@ -1402,6 +1402,42 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    art-test/web-check not rerun. No browser or publication receipt for this FAIR override yet.
    Next gate: actual early/late browser contact and recorded input replay, then
    host-owned Tune compatibility and loss/reconnect before publication. Production still 93a0356.
+   Forward-air replay tooling: fixtures::fair_contact is shared by the native test, the
+   new examples/5_fair_start writer (--early / --late), and existing Trace::idle debugger.
+   Fair early / Fair late buttons load 60 ticks; README documents them. No second trace engine.
+   Initial local browser pass at the original fixture height verifies 18/6 damage through all
+   60 replay ticks, Verify, exact Restore, EOF and changed-state rejection. However, contact
+   screenshots put the fighters above the viewport, so this was not visual acceptance.
+   /private/tmp/game3-fair-debugger-browser.log; /private/tmp/game3-kick-debugger-xQNKw7.
+   The shared start is now y=300 instead of 100. The final native gate passes 459 game + 78
+   shell tests; /private/tmp/game3-fair-visible-tests.log. Replacement web export and example
+   build pass; /private/tmp/game3-fair-visible-build.log and game3-fair-visible-example.log.
+   FAIR=1 node /private/tmp/7_game3_kick_contact.cjs passes both 60-tick replays at 18/6 damage,
+   Verify, Restore, EOF and changed-state rejection, no browser exceptions, exit 0.
+   /private/tmp/game3-fair-visible-browser.log; /private/tmp/game3-kick-debugger-gXPrrg.
+   Inspected 2_early_clear.png and 2_late_clear.png show both fighters and contact with
+   panels hidden. Snapshot files regenerated at /private/tmp/game3-kick-contact-fair-{early,late}.bin.
+   New-host/production-guest Tune ownership passes: LOCAL_EXPORT=1 MIXED=1 LAND_HIT=fair-early
+   CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24
+   NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs. Both peers deal 18 despite
+   the guest's older default kit; 543 initial + 187 resumed confirmed comparisons match,
+   ticks 772/767. Drops 240/1247 and 240/1245, max run 24. Offline/error recovery and browser
+   exception gates pass, exit 0. /private/tmp/game3-fair-new-host.log;
+   screenshots /private/tmp/game3-online-tAJhkZ. Reverse host ownership and all-new late
+   contact acceptance remain before publication; production is unchanged.
+   Reverse ownership also passes with MIXED=old-host FAIR_EXPECT=6 and the same other flags:
+   both peers deal 6 using the production host's prior Tune at this fixture frame. 547 initial
+   and 180 resumed confirmed comparisons match, ticks 752/754. Both drop 240/1237 messages,
+   max run 24; offline recovery and browser/closed-send gates pass, exit 0.
+   /private/tmp/game3-fair-old-host.log; /private/tmp/game3-online-gCUlIN. Together these runs
+   verify host-owned data across differing default kits without a version bump.
+   All-new late-phase contact passes with LOCAL_EXPORT=1 LAND_HIT=fair-late and the same
+   confirmed/combat/reconnect/queued-close/delay/loss/error flags, without MIXED or FAIR_EXPECT.
+   Both peers deal 6; 548 initial + 180 resumed comparisons match, ticks 757/755. Drops
+   240/1237 and 240/1238, max run 24. Offline/browser/closed-send gates pass, exit 0.
+   /private/tmp/game3-fair-late-online.log; /private/tmp/game3-online-LH37nc.
+   The lower shared fixture and debugger changes introduce no new gameplay semantics beyond
+   the 9025110 Falcon kit; final native gate remains 459 game + 78 shell.
    Angle-361 resolution, effective PM timing/geometry, wall action/motion, larger parties and
    physical-device/cross-network acceptance remain open. No reminder or Boop changes.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

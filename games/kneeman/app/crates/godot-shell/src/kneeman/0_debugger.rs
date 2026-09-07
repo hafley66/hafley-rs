@@ -26,6 +26,7 @@ enum Command {
     Dive(DiveStart),
     KickContact(bool),
     KickTravel(bool),
+    FairContact(bool),
     ReplayStep,
 }
 
@@ -491,7 +492,8 @@ impl Debugger {
                         ("Dive catch", Command::Dive(DiveStart::Catch)), ("Dive whiff", Command::Dive(DiveStart::Whiff)),
                         ("Ship Dive", Command::Dive(DiveStart::Ship)), ("Cell replay", Command::CellReplay),
                         ("Kick ground", Command::KickContact(true)), ("Kick air", Command::KickContact(false)),
-                        ("Travel ground", Command::KickTravel(false)), ("Travel air", Command::KickTravel(true))] {
+                        ("Travel ground", Command::KickTravel(false)), ("Travel air", Command::KickTravel(true)),
+                        ("Fair early", Command::FairContact(false)), ("Fair late", Command::FairContact(true))] {
                         if ui.button(label).clicked() { self.command = Some(command); }
                     }
                 });
@@ -596,8 +598,10 @@ impl KneeMan {
                     message: "Fixture paused. Resume and strike the blue cells. Dropper left of Falcon; ship farther left.".into(),
                     ..Debugger::default() };
             }
-            Some(Command::JumpGrab | Command::Dive(_) | Command::CellReplay | Command::KickContact(_) | Command::KickTravel(_)) => {
+            Some(Command::JumpGrab | Command::Dive(_) | Command::CellReplay | Command::KickContact(_) | Command::KickTravel(_) | Command::FairContact(_)) => {
                 let (trace, message) = match command {
+                    Some(Command::FairContact(late)) => (Trace::idle(sim::fixtures::fair_contact(late)),
+                        "Replay step 1: Falcon forward-air contact. Early: 18 damage; late: 6. Authored geometry/timing mapping; PM parity unverified."),
                     Some(Command::KickTravel(air)) => (Trace::idle(sim::fixtures::kick_travel(air)),
                         "Replay step 1: late Kick travel. Ground entry: 9 damage; air entry: 11. Authored timing; PM parity unverified."),
                     Some(Command::KickContact(grounded)) => (Trace::idle(sim::fixtures::kick_contact(grounded)),

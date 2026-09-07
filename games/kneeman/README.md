@@ -38,6 +38,8 @@ opponent. **Replay step** advances one recorded input; **Verify replay** checks 
 takes 0. These fixtures use authored Game3 timing, with PM parity gaps recorded in the ledger.
 **Travel ground** and **Travel air** start at the same late-travel contact, with the entry
 context selecting 9 or 11 damage. Each includes 60 replay ticks.
+**Fair early** and **Fair late** load Falcon forward-air contacts dealing 18 or 6 damage.
+Each reuses the native contact fixture and includes 60 ticks for Verify/Replay step/Restore.
 
 Offline **feel → special** controls edit player 1's shared character kit. Expand **ground /
 shared hit**, **air-entry hit**, or **landing hit** to edit the existing attack rows; optional
