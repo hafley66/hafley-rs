@@ -19,7 +19,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Regression | Existing fixed-input/replay/rollback suites remain the game gate |
 | Falcon | Fresh sessions select Falcon/Lucas; built-in art-to-kit mapping corrected; existing movement/attack strips wired. Commit 47ea707 |
 | Falcon Dive | Published through 5e0eacd: grounded startup fix, catch/whiff debugger fixtures and optional-fire-art guard. Production replay and online Dive acceptance pass |
-| Special ship carry | Published through b26def1: grounded specials receive full hull translation in the post-hull rider phase. Native support tests and local/production runtime regressions pass |
+| Special ship carry | Published through 83e3456: carry correction plus Ship Dive debugger fixture. Native and production browser checks prove startup follows the moving hull, then launches and replays |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Keyboard bindings | Live InputMap editing for movement, c-stick and gameplay buttons; ConfigFile persistence/reset, side-aware labels, malformed-key validation and focus-loss clearing. 428 game + 68 shell tests pass |
 | Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
@@ -553,7 +553,18 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Initial fixture placement accidentally allowed an opponent catch; corrected placement
    isolates hull startup. The failed fixture run supplies no passing acceptance evidence.
    Runtime/test delta before this ledger: +45/-6 lines across two shell files.
-   Next: publish this tested debugger fixture and repeat its browser assertions on /game3/.
+   Published through 83e3456 with the dedicated Game3 profile; nginx validation/reload passes.
+   Remote WASM matches the tested export:
+   3415d650919cf80ea9dbcd2f68f48b7dab8e76ec25a96fc34855539664a0dddb.
+   Game3 pack remains fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df;
+   original /game/ pack remains 5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795.
+   PRODUCTION=1 node /private/tmp/5_game3_dive.cjs passes all three 180-tick replays,
+   moving-hull startup/launch assertions, restore and EOF, with the same endpoint checksums
+   as local execution and no browser exceptions or optional-fire-texture errors; exit 0.
+   Logs: /private/tmp/game3-ship-fixture-publish.log and game3-ship-fixture-production.log.
+   Screenshots: /private/tmp/game3-dive-OtE1qQ. No new compiler job was required for publication.
+   Next: inspect combined item/contact/destruction replay coverage and add a missing executable
+   gameplay sequence using the existing fixture/trace interfaces.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
