@@ -853,11 +853,18 @@ enum BeepCmd {
     },
     /// Fork a lane off a stored terminal comment: the quoted turns and the
     /// note become the brief, the lane runs on `--preset` from the caller's
-    /// repo, and the link is kept in `agent_turn_comment_fork`.
+    /// repo, and the link is kept in `agent_turn_comment_fork`. The `join` and
+    /// `diff` verbs bring the fork back.
     #[cfg(feature = "agent-read")]
+    #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
     Fork {
-        /// `comment_id` in `agent_turn_comment`.
-        comment: i64,
+        /// `comment_id` in `agent_turn_comment`. Required by the bare spawn
+        /// spelling `boop beep fork <id>`; `join` and `diff` take their own.
+        comment: Option<i64>,
+        /// `join` merges a fork's branch and replies to its parent; `diff`
+        /// prints the diff a join would merge.
+        #[command(subcommand)]
+        cmd: Option<ForkCmd>,
         /// The config preset the lane spawns from: harness, model, effort.
         #[arg(long)]
         preset: Option<String>,
@@ -912,6 +919,46 @@ enum BeepCmd {
         all: bool,
         #[arg(long, value_enum, default_value_t = PstreeFormat::Text)]
         format: PstreeFormat,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+}
+
+/// The return trip for a forked lane: merge its branch home and reply to its
+/// parent, or read the diff a join would merge.
+#[cfg(feature = "agent-read")]
+#[derive(Subcommand)]
+enum ForkCmd {
+    /// Merge the fork's branch into the caller's repo and deliver the lane's
+    /// last assistant turn to the fork's parent.
+    Join {
+        /// `comment_id` in `agent_turn_comment`.
+        comment: i64,
+        /// The forked lane, when one comment forked off several.
+        #[arg(long)]
+        lane: Option<String>,
+        /// Skip the merge; only write and deliver the reply.
+        #[arg(long)]
+        no_merge: bool,
+        /// Skip the reply; only merge.
+        #[arg(long)]
+        no_reply: bool,
+        /// Print the git command and the recipient, run nothing.
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Print `git diff <base>..<branch>` for the fork.
+    Diff {
+        /// `comment_id` in `agent_turn_comment`.
+        comment: i64,
+        /// The forked lane, when one comment forked off several.
+        #[arg(long)]
+        lane: Option<String>,
+        /// Print `--stat` instead of the full diff.
+        #[arg(long)]
+        stat: bool,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },

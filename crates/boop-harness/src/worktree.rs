@@ -299,7 +299,7 @@ fn merge_ff_only(repo: &PathBuf, sha: &str) -> Result<()> {
 /// The spawn path's git children (`worktree add`, `merge --ff-only`) share the
 /// one child deadline: a stale `index.lock` would otherwise hang the whole
 /// spawn with nothing to kill it.
-fn run_git(repo: &PathBuf, args: &[&str]) -> Result<()> {
+pub fn run_git(repo: &PathBuf, args: &[&str]) -> Result<()> {
     let mut cmd = Command::new("git");
     cmd.arg("-C").arg(repo).args(args);
     let output = run_captured_with_deadline(cmd, "git", SPAWN_CHILD_TIMEOUT)
