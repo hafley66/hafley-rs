@@ -249,6 +249,8 @@ pub(crate) fn run_native_tui(
         .args(&plan.args)
         .env("BOOP_SESSION", name)
         .env("BOOP_LANE", name)
+        .env("BOOP_HARNESS", adapter.id().as_str())
+        .env("BOOP_PARENT", "")
         .current_dir(cwd)
         .spawn()
         .with_context(|| format!("start native {} TUI", adapter.id()))?;
@@ -347,6 +349,8 @@ pub(crate) fn run_native_tui(
                 .args(&next.args)
                 .env("BOOP_SESSION", name)
                 .env("BOOP_LANE", name)
+                .env("BOOP_HARNESS", adapter.id().as_str())
+                .env("BOOP_PARENT", "")
                 .current_dir(cwd)
                 .spawn()
                 .with_context(|| format!("respawn native {} TUI", adapter.id()))?;

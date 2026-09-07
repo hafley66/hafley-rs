@@ -351,7 +351,8 @@ enum ShellKind {
 }
 
 /// Outside tmux there is no pane to key the route on, so every wrapper
-/// registers <entry>-<dir> as a pane-less coordinator and stamps BOOP_SESSION.
+/// registers <entry>-<dir> as a pane-less coordinator and stamps its full
+/// caller identity.
 const BASH_SHELL_INIT: &str = r#"boop_wrap() {
   local name="$1" harness="$2" bin="$3"
   shift 3
@@ -364,7 +365,7 @@ const BASH_SHELL_INIT: &str = r#"boop_wrap() {
     return
   fi
   command boop beep agent register --kind coordinator --harness "$harness" --cwd "$PWD" "$name" >/dev/null 2>&1
-  BOOP_SESSION="$name" command "$bin" "$@"
+  BOOP_SESSION="$name" BOOP_LANE="$name" BOOP_HARNESS="$harness" BOOP_PARENT= command "$bin" "$@"
 }
 codex() { boop_wrap "codex-${PWD##*/}" codex codex "$@"; }
 claude() { boop_wrap "claude-${PWD##*/}" claude claude "$@"; }
@@ -1744,8 +1745,18 @@ enum CursorCmd {
 mod tests {
     use super::*;
     use clap::{CommandFactory, Parser, Subcommand};
+    use std::os::unix::fs::PermissionsExt;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     use boop::ident;
+
+    static SHELL_INIT_TEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+    fn executable(path: &std::path::Path, body: &str) {
+        std::fs::write(path, body).expect("write shell-init stub");
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
+            .expect("make shell-init stub executable");
+    }
 
     /// Every shell command the help text prints, extracted from the two help
     /// constants themselves. A line counts as an example when it *starts* with
@@ -2134,5 +2145,41 @@ mod tests {
         assert_eq!(cli.name.as_deref(), Some("root"));
         assert!(cli.mail_dir.is_none());
         assert!(cli.command.is_none());
+    }
+
+    #[test]
+    fn shell_wrapper_replaces_inherited_identity_stamps_outside_tmux() {
+        let root = std::env::temp_dir().join(format!(
+            "boop-shell-init-{}-{}",
+            std::process::id(),
+            SHELL_INIT_TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("make shell-init fixture");
+        let capture = root.join("captured");
+        executable(&root.join("boop"), "#!/bin/sh\nexit 0\n");
+        executable(
+            &root.join("harness"),
+            "#!/bin/sh\nprintf '%s\\n' \"$BOOP_SESSION\" \"$BOOP_LANE\" \"$BOOP_HARNESS\" \"$BOOP_PARENT\" > \"$CAPTURE\"\n",
+        );
+        let mut paths = vec![root.clone()];
+        paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
+        let path = std::env::join_paths(paths).expect("join shell-init PATH");
+        let script = format!("{BASH_SHELL_INIT}\nboop_wrap coord-x harness harness");
+        let output = std::process::Command::new("bash")
+            .args(["-c", &script])
+            .env("CAPTURE", &capture)
+            .env("PATH", path)
+            .env("BOOP_SESSION", "foreign-session")
+            .env("BOOP_LANE", "foreign-lane")
+            .env("BOOP_HARNESS", "foreign-harness")
+            .env("BOOP_PARENT", "foreign-parent")
+            .env_remove("TMUX_PANE")
+            .output()
+            .expect("run shell wrapper with stubs");
+        let stamped = std::fs::read_to_string(&capture).expect("read shell-wrapper stamps");
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(stamped, "coord-x\ncoord-x\nharness\n\n");
     }
 }

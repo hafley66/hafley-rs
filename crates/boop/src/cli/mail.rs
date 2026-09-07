@@ -482,13 +482,12 @@ fn fan_out_to_children(
     routes: &BTreeMap<String, Route>,
     send: &Outbound<'_>,
 ) -> Result<()> {
-    let (caller, _, _) = caller_identity(registry, routes, send.as_name)?;
+    let (caller, route, _) = caller_identity(registry, routes, send.as_name)?;
     let body = send
         .body
         .context("a body is required to mail the caller's children")?;
-    let identity = identity::resolve_with(registry, routes).unwrap_or_default();
     let children = lane::children_of(&caller, routes);
-    let spawned = spawned_children(identity.session.as_deref(), routes);
+    let spawned = spawned_children(Some(caller_session(&caller, route)), routes);
     if children.is_empty() && spawned.is_empty() {
         println!("no child of {caller} is registered");
         return Ok(());
@@ -602,6 +601,18 @@ fn fan_out_to_children(
     }
     println!("{landed} landed, {cooled} cooled-off, {unreachable} no-route, {dead} dead");
     Ok(())
+}
+
+/// The store records native subagent edges under the harness-native session
+/// when a route has one, and under the route name for stamped lane spawns.
+/// This is chosen with the caller route so an explicit `--as` cannot mix its
+/// registered children with another process's inherited session stamp.
+fn caller_session<'a>(caller: &'a str, route: &'a Route) -> &'a str {
+    route
+        .session_id
+        .as_deref()
+        .filter(|session| !session.is_empty())
+        .unwrap_or(caller)
 }
 
 /// One body to a child that holds a pane, through its harness's own door.

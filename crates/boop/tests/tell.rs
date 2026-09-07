@@ -287,7 +287,7 @@ fn beep_children_with_no_children_at_all_says_so_and_exits_clean() {
 fn beep_children_names_a_native_subagent_child_as_no_route() {
     let fixture = Fixture::new("native");
     fixture.write_registry(serde_json::json!({
-        "coord-6": {"kind": "coordinator", "sessionId": "coord-6"},
+        "coord-6": {"kind": "coordinator"},
     }));
     let store = boop::Store::open(fixture.root.join("boop.db")).unwrap();
     store
@@ -310,6 +310,45 @@ fn beep_children_names_a_native_subagent_child_as_no_route() {
         "rows: {:?}",
         fixture.bus_rows()
     );
+}
+
+/// `--as` selects both the caller's registered children and the native
+/// session whose persisted spawn edges belong to that route. An inherited env
+/// stamp for another caller must not contribute either list.
+#[test]
+fn beep_children_as_uses_the_selected_routes_native_session_not_the_env_stamp() {
+    let fixture = Fixture::new("children-as-session");
+    fixture.write_registry(serde_json::json!({
+        "caller-a": {"kind": "coordinator", "sessionId": "native-a"},
+        "registered-a": {"kind": "lane", "parent": "caller-a"},
+        "caller-b": {"kind": "coordinator", "sessionId": "native-b"},
+        "registered-b": {"kind": "lane", "parent": "caller-b"},
+    }));
+    let store = boop::Store::open(fixture.root.join("boop.db")).unwrap();
+    store
+        .add_edge_at("native-a", "persisted-a", "spawned", 7)
+        .unwrap();
+    store
+        .add_edge_at("native-b", "persisted-b", "spawned", 8)
+        .unwrap();
+    drop(store);
+
+    let output = Command::new(BOOP)
+        .args(["beep", "children", "status check", "--as", "caller-a"])
+        .arg("--mail-dir")
+        .arg(fixture.mail())
+        .env("HOME", fixture.root.join("home"))
+        .env("BOOP_DB", fixture.root.join("boop.db"))
+        .env("BOOP_SESSION", "caller-b")
+        .env("BOOP_LANE", "caller-b")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let text = stdout(&output);
+    assert!(text.contains("no-route registered-a"), "stdout: {text}");
+    assert!(text.contains("no-route persisted-a"), "stdout: {text}");
+    assert!(!text.contains("registered-b"), "stdout: {text}");
+    assert!(!text.contains("persisted-b"), "stdout: {text}");
 }
 
 #[test]

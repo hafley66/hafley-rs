@@ -154,9 +154,7 @@ pub fn child_stamp(session: &str, lane: &str, harness: &str, parent: Option<&str
         shell_word(lane),
         shell_word(harness)
     );
-    if let Some(parent) = parent {
-        stamp.push_str(&format!(" BOOP_PARENT={}", shell_word(parent)));
-    }
+    stamp.push_str(&format!(" BOOP_PARENT={}", shell_word(parent.unwrap_or(""))));
     stamp
 }
 
@@ -263,9 +261,16 @@ mod tests {
     }
 
     #[test]
-    fn a_stamp_with_no_parent_omits_the_variable() {
+    fn a_stamp_with_no_parent_clears_an_inherited_parent() {
         let stamp = child_stamp("child-1", "lane-a", "claude", None);
-        assert!(!stamp.contains("BOOP_PARENT"), "{stamp}");
+        let script = format!("{stamp} sh -c 'printf \"<%s>\" \"$BOOP_PARENT\"'");
+        let output = std::process::Command::new("sh")
+            .args(["-c", &script])
+            .env("BOOP_PARENT", "inherited-parent")
+            .output()
+            .expect("run the child stamp under an inherited parent");
+        assert!(output.status.success(), "stamp: {stamp}");
+        assert_eq!(output.stdout, b"<>", "stamp: {stamp}");
     }
 
     mod temp_env {
