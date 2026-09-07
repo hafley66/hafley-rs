@@ -1,6 +1,6 @@
 ---
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-07
 type: feature
 status: untriaged
 priority: normal
@@ -54,3 +54,9 @@ Read-only live-store queries verified schema, favorite joins, duplicate pairs an
 ## Implementation Notes
 
 Durable favorite-to-message references can replace future source-string parsing while retaining compatibility for historical records. No compiler/kernel work is in scope.
+
+## Comments
+
+### 2026-09-07T19:38:55Z · @codex
+
+User requested recording the Boop and Soopy findings in their respective hafley-rs domains. This remains the Boop finding: compact SQL favorite windows, human-message provenance, and project-context joins. Preserve the existing no-new-query-CLI acceptance criterion. No new Boop execution defect was established by the Soopy peer evaluation. Soopy mutation CLI, dry-run contract, transaction guarantees and producer evidence are separately tracked as @soopy-mutation-cli, @soopy-dryrun-contract, @soopy-transaction-contract and @soopy-producer-receipts. User owns the agent workflow; this request does not authorize introducing a new agent orchestration model.
