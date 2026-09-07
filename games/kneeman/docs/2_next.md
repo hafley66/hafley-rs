@@ -758,6 +758,34 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    test-only change; the preceding production receipt remains the runtime evidence.
    Next: represent the missing kick ending phase and its jump-refresh boundary using the
    existing fixed-tick state model; distinguish authored timing from verified reference values.
+   Recovery-entry implementation: Falcon selects appended FallRefreshOnRecovery. The existing
+   attack recovery interval is its authored ending phase, with a one-shot airborne jump refresh
+   at active_end() while SpecialD remains locked until total(). Current authored frames are
+   18 and 36. No new Fighter fields or snapshot timers. The published FallRefreshJump kind
+   retains completion-time behavior for old host Tune data; new-host/old-guest startup requires
+   rejection because the appended discriminant is unknown to old decoders.
+   Native gate passes 441 game + 76 shell tests, /private/tmp/game3-kick-ending-final-tests.log.
+   Coverage includes both facings and swapped loadouts, a recovery jump press that stays locked,
+   serialized snapshots before/after entry, actual aerial interruption before/after refresh,
+   no repeated refresh later in recovery or on completion, and the published discriminant's
+   old timing. Ground/edge/landing replay regressions also pass. Export completes, with WASM
+   SHA-256 273a8bdee3093b638e1c9887fd519615de4ba91b25274be12aaa7cb7724ca530;
+   /private/tmp/game3-kick-ending-build.log. Matching-new-build browser recovery passes both
+   air-jump -> Kick -> air-jump sequences, 544 initial and 180 resumed confirmed frames,
+   ticks 740/737, stable slots/characters and peer-close offline recovery. Loss injection drops
+   232/1215 and 233/1216 messages, maximum burst 24, with 60 ms send delay; no closed-send
+   errors or browser exceptions. Command: LOCAL_EXPORT=1 KICK=1 CONFIRMED=1 COMBAT=1
+   RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1
+   node /private/tmp/1_game3_online.cjs. Log: /private/tmp/game3-kick-ending-browser.log;
+   artifacts: /private/tmp/game3-online-zbC53k. New-host/published-guest rejection also passes:
+   LOCAL_EXPORT=1 MIXED=1 BAD_START=mixed RECONNECT=1 with the same runner, no payload corruption.
+   Log: /private/tmp/game3-kick-ending-mixed.log; artifacts: /private/tmp/game3-online-W3I536.
+   Published-host/new-guest acceptance also passes with the old host's Tune: 546 initial
+   and 180 resumed confirmed frames, ticks 752/755, loss/reconnect/offline and error gates pass.
+   Command: LOCAL_EXPORT=1 MIXED=old-host CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1
+   DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 with the same runner.
+   Log: /private/tmp/game3-kick-ending-old-host.log; artifacts: /private/tmp/game3-online-sOplgi.
+   Publication is pending; full kick phases and PM timing remain incomplete.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

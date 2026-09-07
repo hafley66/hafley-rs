@@ -130,7 +130,7 @@ left/right direction and full-state replay. Keep inherited KneeMan Fall behavior
 from Falcon-specific changes. Exact PM impulse/frame/hitbox/landing data remain unresolved;
 the recovered pm-falcon-kit.md's mixed Melee/PM numbers are not sufficient to claim parity.
 
-### Kick jump restoration checkpoint
+### Published completion-time kick checkpoint
 
 The missing Melee write is in [ftCommon_8007D5D4](https://github.com/doldecomp/melee/blob/master/src/melee/ft/ftcommon.c):
 it sets x1968_jumpsUsed to 1. SpecialAirLw_Anim calls it when the travel animation finishes,
@@ -152,12 +152,29 @@ The new test failed with 0 remaining jumps where 1 was expected before the imple
 Ground/air trajectories, ending/landing hitboxes, interruption and exact PM frames still need
 implementation/acceptance. Do not mark full Falcon Kick or PM parity complete.
 
+### Recovery-entry kick checkpoint
+
+Falcon's loadout now selects appended `FallRefreshOnRecovery`. Its ending interval uses
+the existing `AttackData` recovery range: `[active_end(), total())`. On the first ending
+tick, an airborne fighter restores `max_air_jumps` once, while remaining in SpecialD until
+the interval ends. Grounded entry does not refresh. The current authored boundary is frame
+18 within a 36-frame move; these values come from Game3's DROP data, not decoded PM scripts.
+No Fighter fields or timers were added. Native tests cover the locked recovery jump press,
+snapshots before/after entry, actual hits before/after refresh, and non-repeating entry effects.
+
+The previously published `FallRefreshJump` discriminant 5 keeps its completion-time behavior;
+the new variant is appended at 6. Old host Tune data remains executable by the new runtime.
+An old guest cannot decode a new host's kind and rejects startup in the mixed-build browser
+test. Matching-new and old-host/new-guest loss/reconnect gates also pass; receipts are in
+2_next.md. Publication remains pending. Ground/air trajectories, dedicated landing
+behavior, wall interaction and exact PM animation timing still require work.
+
 ## Remaining source limits
 
 Recovered `pm-falcon-kit.md` asserts that missing PM changelog entries make Melee values
 PM ground truth. That inference is unverified and must not supply acceptance expectations.
-Current `src/v1/chars/falcon.rs` inherits KneeMan's kit and replaces only special slot 2
-with Falcon Dive. The generic tuning still labels jumpsquat as universal three frames;
+Current `src/v1/chars/falcon.rs` inherits KneeMan's kit and replaces special slots 2 and 3
+with Falcon Dive and Kick. The generic tuning still labels jumpsquat as universal three frames;
 the recovered document claims Falcon four frames. Character timing needs direct data evidence.
 No original release PAC attributes, Falcon hitbox scripts or complete PM runtime traces have
 been validated here. Original 3.6 artifact authentication and per-character extraction remain open.

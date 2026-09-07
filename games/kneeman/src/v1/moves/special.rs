@@ -52,6 +52,8 @@ pub enum SpecialKind {
     DiveGrab,
     // Appended for positional bincode compatibility. Restores jumps only on airborne completion.
     FallRefreshJump,
+    // Recovery is the ending phase. Keep FallRefreshJump's published completion semantics.
+    FallRefreshOnRecovery,
 }
 
 #[derive(Copy, Clone, PartialEq, Serialize, Deserialize)]
@@ -75,7 +77,7 @@ pub struct SpecialMove {
 
 impl SpecialMove {
     // Provisional kick loadout: retain authored DROP motion/hit data until phase-specific port.
-    pub(crate) const FALCON_KICK: Self = Self { kind: SpecialKind::FallRefreshJump, ..Self::DROP };
+    pub(crate) const FALCON_KICK: Self = Self { kind: SpecialKind::FallRefreshOnRecovery, ..Self::DROP };
     // Default kit (Falcon-ish): heavy neutral-B punch, a side lunge, a rising recovery, a down drive.
     pub(crate) const PUNCH: Self = Self {
         kind: SpecialKind::Punch,
@@ -310,7 +312,9 @@ pub(crate) fn run_special(n: &mut Fighter, slot: usize, i: &InputFrame, t: &Tune
                 n.fast_falling = false;
                 n.ground_plat = -1;
             }
-            SpecialKind::Fall | SpecialKind::FallRefreshJump => n.vel = Vector2::new(n.facing * m.move_x, m.move_y),
+            SpecialKind::Fall | SpecialKind::FallRefreshJump | SpecialKind::FallRefreshOnRecovery => {
+                n.vel = Vector2::new(n.facing * m.move_x, m.move_y);
+            }
             // DiveGrab is routed out at the top of `run_special` (stationary command grab), so it
             // never reaches this launch dispatch; the arm exists only for match exhaustiveness.
             SpecialKind::DiveGrab => {}
@@ -351,6 +355,14 @@ pub(crate) fn run_special(n: &mut Fighter, slot: usize, i: &InputFrame, t: &Tune
     } else {
         // grounded: bleed horizontal to a planted stop
         n.vel.x = move_toward(n.vel.x, 0.0, t.ground_friction * DT);
+    }
+    // The existing recovery interval supplies the authored ending phase. Refresh once on entry,
+    // while SpecialD remains locked; no extra mutable phase field is needed in snapshots.
+    if m.kind == SpecialKind::FallRefreshOnRecovery
+        && n.frame == m.hit.active_end()
+        && !n.grounded()
+    {
+        n.air_jumps = t.max_air_jumps.clamp(0, u8::MAX as i64) as u8;
     }
     if n.frame >= m.hit.total() - 1 {
         if m.kind == SpecialKind::FallRefreshJump && !n.grounded() {

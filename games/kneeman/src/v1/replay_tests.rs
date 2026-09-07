@@ -14,12 +14,12 @@ fn idle() -> InputFrame {
 }
 
 #[test]
-fn falcon_air_kick_restores_jump_after_completion_and_replays() {
+fn falcon_air_kick_restores_jump_at_recovery_and_replays() {
     for (char_id, restores) in [(0, false), (2, true), (0, true), (2, false)] {
         for facing in [-1.0, 1.0] {
             let mut tune = Tune::default();
             if restores != (char_id == 2) {
-                let kind = if restores { SpecialKind::FallRefreshJump } else { SpecialKind::Fall };
+                let kind = if restores { SpecialKind::FallRefreshOnRecovery } else { SpecialKind::Fall };
                 if char_id == 0 { tune.specials[3].kind = kind; }
                 else { std::sync::Arc::make_mut(&mut tune.roster)[chars::art_slot_row(char_id)].specials[3].kind = kind; }
             }
@@ -34,7 +34,7 @@ fn falcon_air_kick_restores_jump_after_completion_and_replays() {
             let mut completed = false;
             for tick in 0..60 {
                 let input = net::decode(net::encode(&InputFrame {
-                    jump: tick == 0 || tick == 45,
+                    jump: tick == 0 || tick == 25 || tick == 45,
                     special: tick == 3,
                     aim_y: if tick == 3 { 1.0 } else { 0.0 },
                     ..idle()
@@ -43,12 +43,22 @@ fn falcon_air_kick_restores_jump_after_completion_and_replays() {
                 state = step(&state, &[&input, &idle()], &tune);
                 replay = step(&replay, &[&input, &idle()], &tune);
                 assert_eq!(net::checksum(&state), net::checksum(&replay));
-                if tick == 20 { replay = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap(); }
+                if [20, 23, 35].contains(&tick) {
+                    replay = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap();
+                }
                 let fighter = state.fighters[0];
                 if tick == 0 { assert_eq!(fighter.air_jumps, 0); }
-                if fighter.state == CharState::SpecialD { assert_eq!(fighter.air_jumps, 0); }
+                if fighter.state == CharState::SpecialD {
+                    let ending = before.state == CharState::SpecialD
+                        && before.frame >= tune.for_char(char_id).specials[3].hit.active_end();
+                    assert_eq!(fighter.air_jumps, u8::from(restores && ending));
+                }
                 if before.state == CharState::SpecialD && fighter.state == CharState::Air {
                     completed = true;
+                    assert_eq!(fighter.air_jumps, u8::from(restores));
+                }
+                if tick == 25 {
+                    assert_eq!(fighter.state, CharState::SpecialD);
                     assert_eq!(fighter.air_jumps, u8::from(restores));
                 }
                 if tick == 45 {
@@ -63,7 +73,28 @@ fn falcon_air_kick_restores_jump_after_completion_and_replays() {
 }
 
 #[test]
-fn kick_jump_restore_requires_airborne_completion_and_survives_interruption() {
+fn published_kick_kind_retains_completion_time_refresh() {
+    let mut tune = Tune::default().for_char(2);
+    // Published Tune discriminant remains valid and retains its previous simulation behavior.
+    let legacy: SpecialKind = bincode::deserialize(&5u32.to_le_bytes()).unwrap();
+    assert!(legacy == SpecialKind::FallRefreshJump);
+    tune.specials[3].kind = legacy;
+    let mut fighter = SimState::spawn().fighters[0];
+    fighter.state = CharState::SpecialD;
+    fighter.ground_plat = -1;
+    fighter.air_jumps = 0;
+    fighter.frame = tune.specials[3].hit.active_end();
+    run_special(&mut fighter, 3, &idle(), &tune);
+    assert_eq!(fighter.air_jumps, 0);
+    assert_eq!(fighter.state, CharState::SpecialD);
+    fighter.frame = tune.specials[3].hit.total() - 1;
+    run_special(&mut fighter, 3, &idle(), &tune);
+    assert_eq!(fighter.air_jumps, 1);
+    assert_eq!(fighter.state, CharState::Air);
+}
+
+#[test]
+fn kick_jump_restore_requires_airborne_recovery_entry_and_survives_interruption() {
     let tune = Tune::default().for_char(2);
     for grounded in [false, true] {
         for remaining in [0, 1] {
@@ -72,12 +103,21 @@ fn kick_jump_restore_requires_airborne_completion_and_survives_interruption() {
             fighter.ground_plat = if grounded { 0 } else { -1 };
             fighter.ground_ink = -1;
             fighter.air_jumps = remaining;
-            fighter.frame = tune.specials[3].hit.total() - 2;
+            fighter.frame = tune.specials[3].hit.active_end() - 1;
             run_special(&mut fighter, 3, &idle(), &tune);
             assert_eq!(fighter.air_jumps, remaining);
             fighter.frame += 1;
             run_special(&mut fighter, 3, &idle(), &tune);
             assert_eq!(fighter.air_jumps, if grounded { remaining } else { 1 });
+            assert_eq!(fighter.state, CharState::SpecialD);
+            // A later tick must not repeat the entry effect, including on move completion.
+            fighter.air_jumps = 0;
+            fighter.frame += 1;
+            run_special(&mut fighter, 3, &idle(), &tune);
+            assert_eq!(fighter.air_jumps, 0);
+            fighter.frame = tune.specials[3].hit.total() - 1;
+            run_special(&mut fighter, 3, &idle(), &tune);
+            assert_eq!(fighter.air_jumps, 0);
         }
     }
     // Restored interruption snapshot: a hit has replaced SpecialD with Launched before completion.
@@ -101,39 +141,45 @@ fn kick_jump_restore_requires_airborne_completion_and_survives_interruption() {
 }
 
 #[test]
-fn an_aerial_hit_interrupts_kick_without_restoring_the_spent_jump() {
+fn aerial_hit_preserves_kick_jump_budget_before_and_after_recovery_entry() {
     let tune = Tune::default();
-    let mut state = SimState::spawn();
-    for (index, fighter) in state.fighters[..2].iter_mut().enumerate() {
-        fighter.char_id = if index == 0 { 2 } else { 0 };
-        fighter.pos = Vector2::new(1100.0 + index as f32 * 50.0, -100.0);
-        fighter.state = CharState::Air;
-        fighter.ground_plat = -1;
-        fighter.ground_ink = -1;
-        fighter.air_jumps = 0;
-        fighter.facing = if index == 0 { 1.0 } else { -1.0 };
-    }
-    let mut replay = state;
-    let mut interrupted = false;
-    for tick in 0..40 {
-        let inputs = [
-            InputFrame { special: tick == 0, aim_y: if tick == 0 { 1.0 } else { 0.0 }, ..idle() },
-            InputFrame { attack: tick == 0, ..idle() },
-        ].map(|i| net::decode(net::encode(&i)));
-        let before = state.fighters[0];
-        state = step(&state, &[&inputs[0], &inputs[1]], &tune);
-        replay = step(&replay, &[&inputs[0], &inputs[1]], &tune);
-        assert_eq!(net::checksum(&state), net::checksum(&replay));
-        let fighter = state.fighters[0];
-        if before.state == CharState::SpecialD && fighter.state == CharState::Launched {
-            assert!(fighter.damage > before.damage && fighter.hitstun > 0);
-            interrupted = true;
-            replay = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap();
+    for ending in [false, true] {
+        let mut state = SimState::spawn();
+        for (index, fighter) in state.fighters[..2].iter_mut().enumerate() {
+            fighter.char_id = if index == 0 { 2 } else { 0 };
+            fighter.pos = Vector2::new(1100.0 + index as f32 * 50.0, -100.0);
+            fighter.state = CharState::Air;
+            fighter.ground_plat = -1;
+            fighter.ground_ink = -1;
+            fighter.air_jumps = 0;
+            fighter.facing = if index == 0 { 1.0 } else { -1.0 };
         }
-        assert!(!fighter.grounded());
-        assert_eq!(fighter.air_jumps, 0);
+        if ending {
+            state.fighters[0].state = CharState::SpecialD;
+            state.fighters[0].frame = tune.for_char(2).specials[3].hit.active_end();
+        }
+        let mut replay = state;
+        let mut interrupted = false;
+        for tick in 0..40 {
+            let inputs = [
+                InputFrame { special: tick == 0 && !ending, aim_y: if tick == 0 && !ending { 1.0 } else { 0.0 }, ..idle() },
+                InputFrame { attack: tick == 0, ..idle() },
+            ].map(|i| net::decode(net::encode(&i)));
+            let before = state.fighters[0];
+            state = step(&state, &[&inputs[0], &inputs[1]], &tune);
+            replay = step(&replay, &[&inputs[0], &inputs[1]], &tune);
+            assert_eq!(net::checksum(&state), net::checksum(&replay));
+            let fighter = state.fighters[0];
+            if before.state == CharState::SpecialD && fighter.state == CharState::Launched {
+                assert!(fighter.damage > before.damage && fighter.hitstun > 0);
+                interrupted = true;
+                replay = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap();
+            }
+            assert!(!fighter.grounded());
+            assert_eq!(fighter.air_jumps, u8::from(ending));
+        }
+        assert!(interrupted, "the opponent's aerial must interrupt SpecialD through combat");
     }
-    assert!(interrupted, "the opponent's aerial must interrupt SpecialD through combat");
 }
 
 #[test]
