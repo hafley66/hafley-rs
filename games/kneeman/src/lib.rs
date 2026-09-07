@@ -7,5 +7,7 @@ pub mod input_frame;
 pub mod asset_wire;
 #[path = "2_netplay.rs"]
 pub mod netplay;
+#[path = "3_fixtures.rs"]
+pub mod fixtures;
 mod v1;
 pub use v1::*;

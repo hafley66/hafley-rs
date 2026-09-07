@@ -24,6 +24,7 @@ enum Command {
     CellReplay,
     JumpGrab,
     Dive(DiveStart),
+    KickContact(bool),
     ReplayStep,
 }
 
@@ -37,6 +38,19 @@ struct Trace {
 }
 
 impl Trace {
+    fn kick_contact(grounded: bool) -> Self {
+        let tune = Tune::default();
+        let mut state = sim::fixtures::kick_contact(grounded);
+        let mut trace = Self::new(&state, &tune);
+        trace.recording = false;
+        for _ in 0..60 {
+            let inputs = [InputFrame::default(); 2];
+            state = sim::step(&state, &[&inputs[0], &inputs[1]], &tune);
+            trace.frames.push((inputs, sim::net::checksum(&state)));
+        }
+        trace
+    }
+
     fn cells() -> Self {
         let tune = Tune::default();
         let mut state = sim::terrain_cells::playground();
@@ -145,6 +159,26 @@ impl Trace {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn kick_contact_replays_ground_hit_and_air_rejection() {
+        for grounded in [false, true] {
+            let trace = super::Trace::kick_contact(grounded);
+            assert_eq!(trace.verify(), Ok(60));
+            let mut state: super::SimState = bincode::deserialize(&trace.snapshot).unwrap();
+            for index in 0..60 {
+                state = trace.replay_step(&state, index).unwrap().unwrap();
+                assert_eq!(state.fighters[1].damage, if grounded { 10.0 } else { 0.0 });
+                if index == 0 {
+                    assert_eq!(state.fighters[0].state, super::sim::CharState::SpecialLandD);
+                    assert_eq!(state.fighters[0].frame, 0);
+                }
+            }
+            assert_eq!(state.fighters[0].state, super::sim::CharState::Stand);
+            assert!(trace.replay_step(&state, 60).unwrap().is_none());
+            assert!(trace.replay_step(&state, 0).is_err());
+        }
+    }
+
     use super::*;
 
     #[test]
@@ -426,7 +460,8 @@ impl Debugger {
                         ("Restore start", Command::Restore), ("Replay step", Command::ReplayStep),
                         ("Load fixture", Command::Fixture), ("Falcon jump-grab", Command::JumpGrab),
                         ("Dive catch", Command::Dive(DiveStart::Catch)), ("Dive whiff", Command::Dive(DiveStart::Whiff)),
-                        ("Ship Dive", Command::Dive(DiveStart::Ship)), ("Cell replay", Command::CellReplay)] {
+                        ("Ship Dive", Command::Dive(DiveStart::Ship)), ("Cell replay", Command::CellReplay),
+                        ("Kick ground", Command::KickContact(true)), ("Kick air", Command::KickContact(false))] {
                         if ui.button(label).clicked() { self.command = Some(command); }
                     }
                 });
@@ -512,6 +547,7 @@ impl KneeMan {
                 if let Some(trace) = &mut self.debugger.trace {
                     trace.recording = false;
                     if let Ok(state) = bincode::deserialize::<SimState>(&trace.snapshot) {
+                        self.charsel.set([state.fighters[0].char_id as i64, state.fighters[1].char_id as i64]);
                         self.state.set(state);
                         self.tune.set(trace.tune.clone());
                         self.debugger.paused = true;
@@ -530,8 +566,10 @@ impl KneeMan {
                     message: "Fixture paused. Resume and strike the blue cells. Dropper left of Falcon; ship farther left.".into(),
                     ..Debugger::default() };
             }
-            Some(Command::JumpGrab | Command::Dive(_) | Command::CellReplay) => {
+            Some(Command::JumpGrab | Command::Dive(_) | Command::CellReplay | Command::KickContact(_)) => {
                 let (trace, message) = match command {
+                    Some(Command::KickContact(grounded)) => (Trace::kick_contact(grounded),
+                        "Replay step 1: Kick landing contact. Ground target: 10 damage; air target: 0. Authored timing; PM parity unverified."),
                     Some(Command::CellReplay) => (Trace::cells(),
                         "Replay step: 91 = strike, 141 = pickup, 163 = throw, 164 = cell impact. Game3 item rules."),
                     Some(Command::Dive(catch)) => (Trace::falcon_dive(catch),
@@ -539,9 +577,10 @@ impl KneeMan {
                     _ => (Trace::jump_grab(),
                         "Replay step: 1 = jump, 2 = grounded grab. Provisional Game3 rules; PM parity unverified."),
                 };
-                self.state.set(bincode::deserialize::<SimState>(&trace.snapshot).unwrap());
+                let state: SimState = bincode::deserialize(&trace.snapshot).unwrap();
+                self.charsel.set([state.fighters[0].char_id as i64, state.fighters[1].char_id as i64]);
+                self.state.set(state);
                 self.tune.set(trace.tune.clone());
-                self.charsel.set([2, 3]);
                 self.debugger = Debugger { paused: true, isolated: true, trace: Some(trace),
                     message: message.into(),
                     ..Debugger::default() };

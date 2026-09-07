@@ -143,7 +143,7 @@ impl KneeMan {
                 &s,
             );
             crate::webtest::debug_json(&format!(
-                r#"{{"peer_char":{},"charsel0":{},"handle":{},"char0":{},"char1":{},"x":[{},{}],"y":[{},{}],"states":["{:?}","{:?}"],"ship":[{},{}],"terrain":{}}}"#,
+                r#"{{"peer_char":{},"charsel0":{},"handle":{},"char0":{},"char1":{},"x":[{},{}],"y":[{},{}],"states":["{:?}","{:?}"],"damage":[{},{}],"ship":[{},{}],"terrain":{}}}"#,
                 self.peer_char.map(|c| c as i64).unwrap_or(-1),
                 self.charsel.get_cloned()[0],
                 self.local_handle,
@@ -155,6 +155,8 @@ impl KneeMan {
                 s.fighters[1].pos.y,
                 s.fighters[0].state,
                 s.fighters[1].state,
+                s.fighters[0].damage,
+                s.fighters[1].damage,
                 s.paths[sim::SHIP_SLOT].pos.x,
                 s.paths[sim::SHIP_SLOT].pos.y,
                 serde_json::json!({

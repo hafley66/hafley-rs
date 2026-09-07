@@ -1137,6 +1137,32 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    No export/publication or art/deploy changes. Next: bring this contact fixture into the
    existing debugger's recorded-input controls so the tested interaction can be inspected
    without ad-hoc browser injection. PM wall action/motion evidence remains open.
+   Contact debugger implementation: Terrain & replay adds Kick ground / Kick air. Both load
+   the shared fixtures::kick_contact start and record 60 idle-input frames through the existing
+   Trace path. The browser snapshot writer uses the same initializer; no duplicate scene,
+   simulation state field, rules parser or protocol version was added. Native shell test
+   checks both damage outcomes at every tick, the contact state/frame, all replay checksums,
+   EOF and changed-state rejection. Full gate: 451 game + 77 shell tests, exit 0;
+   /private/tmp/game3-kick-debugger-tests.log. Browser/export verification pending.
+   Initial browser check exposed a shell mutation: fixture loading forced [2,3] character
+   selections, while the contact snapshot's second fighter is character 0. sync_charsel
+   changed that snapshot while paused; Replay step correctly refused it. Logs:
+   /private/tmp/game3-kick-debugger-browser.log and game3-kick-debugger-browser2.log;
+   screenshots /private/tmp/game3-kick-debugger-JMl2Jr. Trace loading and Restore now derive
+   both character selections from the restored snapshot. Verification rerun pending.
+   The corrected snapshot reaches contact. Its first browser rerun then failed in the harness:
+   stateAt is online-only and sampled every 60 ticks, so it cannot read offline tick 1.
+   /private/tmp/game3-kick-debugger-fixed-browser.log. Added damage to the existing dumpstate-gated
+   debug projection; the offline harness now reads that field without changing simulation state.
+   Corrected export passes node /private/tmp/7_game3_kick_contact.cjs: both controls load,
+   first Replay step reaches SpecialLandD and damage [0,10]/[0,0], all 60 steps complete,
+   EOF preserves state, Restore matches the initial checksum, and a live Step causes Replay
+   step to refuse the changed state. Verify screenshot reports all 60 checksums matched.
+   /private/tmp/game3-kick-debugger-verified-browser.log; /private/tmp/game3-kick-debugger-bvTvP9;
+   exit 0, no browser exceptions. Final native gate remains 451 + 77, rerun after the debug
+   projection change: /private/tmp/game3-kick-debugger-damage-tests.log. The shared fixture
+   example compiles, and both generated snapshots compare byte-identical to the prior writer.
+   Publication pending. No art/import/deploy source changes; art-test/web-check not rerun.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
