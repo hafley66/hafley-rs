@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang=en>
+
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.min.js"
+        integrity="sha384-QJHtvGhmr9XOIpI6YVutG+2QOK9T+ZnN4kzFN1RtK3zEFEIsxhlmWl5/YESvpZ13"
+        crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="/assets_static/f99dda98e9ea729bbc11d3794aa7b1508768d64a23d5b357ac56a1bd59021.css">
+
+    <link rel="preload" href="/assets_static/f2f335e45dc75131f6b2af9abef41f69e867b573fa919119c90cb87e256e47.wasm" as="fetch" crossorigin="anonymous">
+    <link rel="preload" href="/assets_static/188d916524202a6522c9e4d86ca74d82abbc2639da528758e8caae1bd25bf.js" as="script" crossorigin="anonymous">
+
+    <link rel="shortcut icon" type="image/png" href="/assets_static/a657b8bd777e09b9c84c6772816af783d086c9ad7b7bdac5bf29cb6f4ba5f.png">
+
+    <title>PM3.6 - Captain Falcon - Subaction - AttackAirF</title>
+
+    <!--twitter-->
+    <meta name="twitter:card" content="summary_large_image">
+    </meta>
+    <meta name="twitter:title" content="PM3.6 - Captain Falcon - Subaction - AttackAirF">
+    </meta>
+    <meta name="twitter:image" content="/PM3.6/Captain Falcon/subactions/AttackAirF.gif">
+    </meta>
+    <!-- Discord caps at 78 lines or 276 characters ignoring '\n' -->
+    <!-- Twitter caps at 3 lines -->
+    <meta name="twitter:description" content="Frames:40
+IASA:36
+AutoCancel:1-6, 36-40
+LandingLag:19
+
+Frames:14-16
+Damage:18,18
+ShieldStun:10,10
+BKB:24,24
+KBG:100,100
+Angle:32,32
+Effect:All Electric
+
+Frames:17-30
+Damage:6,6
+ShieldStun:4,4
+BKB:35,35
+KBG:80,80
+Angle:361,361">
+    </meta>
+</head>
+
+<body class="text-white">
+    <nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
+        <div class="container-fluid">
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">Rukai Data</a>
+                </li>
+            </ul>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar"
+                aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="mainNavbar">
+                <ul class="navbar-nav mr-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/Brawl">Brawl</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/P+">P+</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/PM3.6">PM3.6</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/PM3.02">PM3.02</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/LXP2.1">LXP2.1</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+<div class="container-fluid">
+    <div class="row">
+        <!-- Display nothing from xs to sm, display something from md to xl -->
+        <nav class="d-none d-md-block col-2 sidebar sidebar-left">
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Bowser/subactions/AttackAirF.html">Bowser</a></li>
+                <li><a class="nav-link active" href="/PM3.6/Captain Falcon/subactions/AttackAirF.html">Captain Falcon</a></li>
+                <li><a class="nav-link" href="/PM3.6/Charizard/subactions/AttackAirF.html">Charizard</a></li>
+                <li><a class="nav-link" href="/PM3.6/Diddy Kong/subactions/AttackAirF.html">Diddy Kong</a></li>
+                <li><a class="nav-link" href="/PM3.6/Donkey Kong/subactions/AttackAirF.html">Donkey Kong</a></li>
+                <li><a class="nav-link" href="/PM3.6/Falco/subactions/AttackAirF.html">Falco</a></li>
+                <li><a class="nav-link" href="/PM3.6/Fox/subactions/AttackAirF.html">Fox</a></li>
+                <li><a class="nav-link" href="/PM3.6/Game &amp; Watch/subactions/AttackAirF.html">Game &amp; Watch</a></li>
+                <li><a class="nav-link" href="/PM3.6/Ganondorf/subactions/AttackAirF.html">Ganondorf</a></li>
+                <li><a class="nav-link" href="/PM3.6/Giga Bowser/subactions/AttackAirF.html">Giga Bowser</a></li>
+                <li><a class="nav-link" href="/PM3.6/Ice Climbers/subactions/AttackAirF.html">Ice Climbers</a></li>
+                <li><a class="nav-link" href="/PM3.6/Ike/subactions/AttackAirF.html">Ike</a></li>
+                <li><a class="nav-link" href="/PM3.6/Ivysaur/subactions/AttackAirF.html">Ivysaur</a></li>
+                <li><a class="nav-link" href="/PM3.6/Jigglypuff/subactions/AttackAirF.html">Jigglypuff</a></li>
+                <li><a class="nav-link" href="/PM3.6/King Dedede/subactions/AttackAirF.html">King Dedede</a></li>
+                <li><a class="nav-link" href="/PM3.6/Kirby/subactions/AttackAirF.html">Kirby</a></li>
+                <li><a class="nav-link" href="/PM3.6/Link/subactions/AttackAirF.html">Link</a></li>
+                <li><a class="nav-link" href="/PM3.6/Lucario/subactions/AttackAirF.html">Lucario</a></li>
+                <li><a class="nav-link" href="/PM3.6/Lucas/subactions/AttackAirF.html">Lucas</a></li>
+                <li><a class="nav-link" href="/PM3.6/Luigi/subactions/AttackAirF.html">Luigi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Mario/subactions/AttackAirF.html">Mario</a></li>
+                <li><a class="nav-link" href="/PM3.6/Marth/subactions/AttackAirF.html">Marth</a></li>
+                <li><a class="nav-link" href="/PM3.6/Meta Knight/subactions/AttackAirF.html">Meta Knight</a></li>
+                <li><a class="nav-link" href="/PM3.6/Mewtwo/subactions/AttackAirF.html">Mewtwo</a></li>
+                <li><a class="nav-link" href="/PM3.6/Ness/subactions/AttackAirF.html">Ness</a></li>
+                <li><a class="nav-link" href="/PM3.6/Olimar/subactions/AttackAirF.html">Olimar</a></li>
+                <li><a class="nav-link" href="/PM3.6/Peach/subactions/AttackAirF.html">Peach</a></li>
+                <li><a class="nav-link" href="/PM3.6/Pikachu/subactions/AttackAirF.html">Pikachu</a></li>
+                <li><a class="nav-link" href="/PM3.6/Pit/subactions/AttackAirF.html">Pit</a></li>
+                <li><a class="nav-link" href="/PM3.6/R.O.B/subactions/AttackAirF.html">R.O.B</a></li>
+                <li><a class="nav-link" href="/PM3.6/Roy/subactions/AttackAirF.html">Roy</a></li>
+                <li><a class="nav-link" href="/PM3.6/Samus/subactions/AttackAirF.html">Samus</a></li>
+                <li><a class="nav-link" href="/PM3.6/Sheik/subactions/AttackAirF.html">Sheik</a></li>
+                <li><a class="nav-link" href="/PM3.6/Snake/subactions/AttackAirF.html">Snake</a></li>
+                <li><a class="nav-link" href="/PM3.6/Sonic/subactions/AttackAirF.html">Sonic</a></li>
+                <li><a class="nav-link" href="/PM3.6/Squirtle/subactions/AttackAirF.html">Squirtle</a></li>
+                <li><a class="nav-link" href="/PM3.6/Toon Link/subactions/AttackAirF.html">Toon Link</a></li>
+                <li><a class="nav-link" href="/PM3.6/Wario/subactions/AttackAirF.html">Wario</a></li>
+                <li><a class="nav-link" href="/PM3.6/Wario-Man/subactions/AttackAirF.html">Wario-Man</a></li>
+                <li><a class="nav-link" href="/PM3.6/Wolf/subactions/AttackAirF.html">Wolf</a></li>
+                <li><a class="nav-link" href="/PM3.6/Yoshi/subactions/AttackAirF.html">Yoshi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Zelda/subactions/AttackAirF.html">Zelda</a></li>
+                <li><a class="nav-link" href="/PM3.6/Zero Suit Samus/subactions/AttackAirF.html">Zero Suit Samus</a></li>
+            </ul>
+        </nav>
+
+        <!-- take up 12 columns from xs to sm, take up 8 columns from md to xl -->
+        <div class="col-12 col-md-8">
+            <h1>PM3.6 - Captain Falcon - Subaction - AttackAirF</h1>
+            <div id="fighter-render">
+            </div>
+            <p>
+                |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_1">1</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_2">2</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_3">3</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_4">4</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_5">5</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_6">6</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_7">7</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_8">8</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_9">9</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_10">10</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_11">11</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_12">12</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_13">13</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_14">14</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_15">15</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_16">16</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_17">17</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_18">18</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_19">19</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_20">20</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_21">21</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_22">22</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_23">23</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_24">24</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_25">25</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_26">26</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_27">27</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_28">28</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_29">29</a> |
+                <a href="javascript:;" class="frame-button hitbox-frame-button" id="set_frame_30">30</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_31">31</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_32">32</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_33">33</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_34">34</a> |
+                <a href="javascript:;" class="frame-button standard-frame-button" id="set_frame_35">35</a> |
+                <a href="javascript:;" class="frame-button iasa-frame-button" id="set_frame_36">36</a> |
+                <a href="javascript:;" class="frame-button iasa-frame-button" id="set_frame_37">37</a> |
+                <a href="javascript:;" class="frame-button iasa-frame-button" id="set_frame_38">38</a> |
+                <a href="javascript:;" class="frame-button iasa-frame-button" id="set_frame_39">39</a> |
+                <a href="javascript:;" class="frame-button iasa-frame-button" id="set_frame_40">40</a> |
+            </p>
+            <div>
+                <button type="button" id="run-toggle" class="btn btn-sm btn-primary">Run</button>
+                <button type="button" id="previous-frame" class="btn btn-sm btn-primary">Previous
+                    Frame</button>
+                <button type="button" id="next-frame" class="btn btn-sm btn-primary">Next
+                    Frame</button>
+                <button type="button" id="face-left" class="btn btn-sm btn-primary">Face
+                    Left</button>
+                <button type="button" id="face-right" class="btn btn-sm btn-primary">Face
+                    Right</button>
+            </div>
+            <div class="form-check form-check-inline">
+                <select class="form-control" id="invulnerable-select" style="margin-right:10px;margin-top:4px;">
+                    <option>Hit</option>
+                    <option>Grab</option>
+                    <option>Trap Item</option>
+                </select>
+                <label class="form-check-label" for="invulnerable-select">Invulnerable</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" id="wireframe-checkbox">
+                <label class="form-check-label" for="wireframe-checkbox">Wireframe</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" id="ecb-checkbox">
+                <label class="form-check-label" for="ecb-checkbox">ECB</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" id="perspective-checkbox">
+                <label class="form-check-label" for="perspective-checkbox">Perspective</label>
+            </div>
+
+            <h2>Stats</h2>
+            <table>
+                <tr>
+                    <td><abbr title="Interruptible As Soon As. The first frame the subaction can be interrupted with another subaction.">IASA</abbr>:</td>
+                    </td>
+                    <td>36</td>
+                </tr>
+                <tr>
+                    <td><abbr title="The frames during which landing will auto cancel.">Auto Cancel Window</abbr>:</td>
+                    </td>
+                    <td>1-6, 36-40</td>
+                </tr>
+                <tr>
+                    <td><abbr title="The amount of lag taken when auto cancelling. This is the same amount as when landing outside of an attack">Auto Cancel Lag</abbr>:</td>
+                    </td>
+                    <td>4</td>
+                </tr>
+                <tr>
+                    <td><abbr title="Number of frames of landing lag without l-cancelling">Landing Lag</abbr>:</td>
+                    </td>
+                    <td>19</td>
+                </tr>
+                <tr>
+                    <td><abbr title="Number of frames of landing lag with l-cancelling. This is half of the regular landing lag, rounded down.">Landing Lag (L-Cancel)</abbr>:</td>
+                    </td>
+                    <td>9</td>
+                </tr>
+                <tr>
+                    <td>Hitboxes active:</td>
+                    </td>
+                    <td>14-30</td>
+                </tr>
+                <tr>
+                    <td><abbr title="All hitboxes within hitbox set 0 can hit the same enemy again on these frames.">Hitbox set 0 hits</abbr>:</td>
+                    </td>
+                    <td>14</td>
+                </tr>
+                <tr>
+                    <td><abbr title="Internal subaction index. Useful for modding with PSA.">Subaction Index</abbr>:</td>
+                    </td>
+                    <td>0x63</td>
+                </tr>
+            </table>
+
+
+
+            <h2>Hitboxes</h2>
+            <p>Move staling reduces damage up to 45%. Move staling also reduces final knockback, shieldstun and hitlag
+                because damage is used in their formulas.</p>
+            <h3>Frames:14-16</h3>
+            <div style="overflow-x: auto;">
+                <table class="hitbox-table">
+                    <thead>
+                        <tr>
+                            <th><abbr title="Hitboxes in different sets can rehit the same enemy across multiple frames. i.e. a multi-hit move. Hitboxes in different sets can also hit in the same frame, the damage is the total of all hit hitboxes however the knockback and angle is taken from the hitbox with the most knockback.">Set</abbr></th>
+                            <th><abbr title="Lower hitbox IDs take priority over higher ones. i.e. if hitbox 0 and 1 are both hit, hitbox 0 is used">ID</abbr></th>
+                            <th><abbr title="Damage">Dmg</abbr></th>
+                            <th><abbr title="Base knockback">BKB</abbr></th>
+                            <th><abbr title="Knockback growth">KBG</abbr></th>
+                            <th><abbr title="Specifies the angle used when the fighter faces to the right. It is flipped across the y-axis when the angle flipper has a direction to the left.">Angle</abbr></th>
+                            <th>Effect</th>
+                            <th>Sound</th>
+                            <th>Shieldstun</th>
+                            <th>Hitlag</th>
+                            <th>Targets</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="hitbox-table-id-0">
+                            <!-- this.1 is the hitbox ID -->
+                            <td>0</td>
+                            <td>0</td>
+                            <td>18</td>
+                            <td>24</td>
+                            <td>100</td>
+                            <td><canvas class="hitbox-angle-render" width="0" height="0" hitbox-id="0" angle="32"></canvas>32</td>
+                            <td>Electric</td>
+                            <td>Kick</td>
+                            <td>10</td>
+                            <td>8</td>
+                            <td><img title="Fighter on the ground" class="spritesheet-fighter-ground " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Fighter in the air" class="spritesheet-fighter-air " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Waddle Dee and Waddle Doo" class="spritesheet-waddle " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Pikmin" class="spritesheet-pikmin " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="ROB Gyro" class="spritesheet-gyro " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Snake's Grenade" class="spritesheet-snake-grenade " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Mr Saturn" class="spritesheet-mr-saturn " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Stage hurtboxes not including walls, ceilings and floors." class="spritesheet-stage-non-wall-ceiling-floor " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Walls, Ceilings and Floors" class="spritesheet-wall-ceiling-floor " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Toon Link and Link's Bombs" class="spritesheet-link-bomb " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Bob-ombs" class="spritesheet-bobomb " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /></td>
+                        <tr class="hitbox-table-id-1">
+                            <!-- this.1 is the hitbox ID -->
+                            <td>0</td>
+                            <td>1</td>
+                            <td>18</td>
+                            <td>24</td>
+                            <td>100</td>
+                            <td><canvas class="hitbox-angle-render" width="0" height="0" hitbox-id="1" angle="32"></canvas>32</td>
+                            <td>Electric</td>
+                            <td>Kick</td>
+                            <td>10</td>
+                            <td>8</td>
+                            <td><img title="Fighter on the ground" class="spritesheet-fighter-ground " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Fighter in the air" class="spritesheet-fighter-air " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Waddle Dee and Waddle Doo" class="spritesheet-waddle " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Pikmin" class="spritesheet-pikmin " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="ROB Gyro" class="spritesheet-gyro " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Snake's Grenade" class="spritesheet-snake-grenade " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Mr Saturn" class="spritesheet-mr-saturn " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Stage hurtboxes not including walls, ceilings and floors." class="spritesheet-stage-non-wall-ceiling-floor " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Walls, Ceilings and Floors" class="spritesheet-wall-ceiling-floor " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Toon Link and Link's Bombs" class="spritesheet-link-bomb " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Bob-ombs" class="spritesheet-bobomb " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /></td>
+                    </tbody>
+                </table>
+            </div>
+            <h3>Frames:17-30</h3>
+            <div style="overflow-x: auto;">
+                <table class="hitbox-table">
+                    <thead>
+                        <tr>
+                            <th><abbr title="Hitboxes in different sets can rehit the same enemy across multiple frames. i.e. a multi-hit move. Hitboxes in different sets can also hit in the same frame, the damage is the total of all hit hitboxes however the knockback and angle is taken from the hitbox with the most knockback.">Set</abbr></th>
+                            <th><abbr title="Lower hitbox IDs take priority over higher ones. i.e. if hitbox 0 and 1 are both hit, hitbox 0 is used">ID</abbr></th>
+                            <th><abbr title="Damage">Dmg</abbr></th>
+                            <th><abbr title="Base knockback">BKB</abbr></th>
+                            <th><abbr title="Knockback growth">KBG</abbr></th>
+                            <th><abbr title="Specifies the angle used when the fighter faces to the right. It is flipped across the y-axis when the angle flipper has a direction to the left.">Angle</abbr></th>
+                            <th>Effect</th>
+                            <th>Sound</th>
+                            <th>Shieldstun</th>
+                            <th>Hitlag</th>
+                            <th>Targets</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="hitbox-table-id-0">
+                            <!-- this.1 is the hitbox ID -->
+                            <td>0</td>
+                            <td>0</td>
+                            <td>6</td>
+                            <td>35</td>
+                            <td>80</td>
+                            <td><canvas class="hitbox-angle-render" width="0" height="0" hitbox-id="0" angle="361"></canvas><abbr title="Sakurai Angle:&#013;When hit in the air angle is 45. When hit on the ground, if knockback < 32 then angle is 0 (they remain in nontumble grounded hitstun regardless of knockback), otherwise angle is 44.">361</abbr></td>
+                            <td>Normal</td>
+                            <td>Kick</td>
+                            <td>4</td>
+                            <td>4</td>
+                            <td><img title="Fighter on the ground" class="spritesheet-fighter-ground " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Fighter in the air" class="spritesheet-fighter-air " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Waddle Dee and Waddle Doo" class="spritesheet-waddle " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Pikmin" class="spritesheet-pikmin " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="ROB Gyro" class="spritesheet-gyro " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Snake's Grenade" class="spritesheet-snake-grenade " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Mr Saturn" class="spritesheet-mr-saturn " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Stage hurtboxes not including walls, ceilings and floors." class="spritesheet-stage-non-wall-ceiling-floor " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Walls, Ceilings and Floors" class="spritesheet-wall-ceiling-floor " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Toon Link and Link's Bombs" class="spritesheet-link-bomb " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Bob-ombs" class="spritesheet-bobomb " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /></td>
+                        <tr class="hitbox-table-id-1">
+                            <!-- this.1 is the hitbox ID -->
+                            <td>0</td>
+                            <td>1</td>
+                            <td>6</td>
+                            <td>35</td>
+                            <td>80</td>
+                            <td><canvas class="hitbox-angle-render" width="0" height="0" hitbox-id="1" angle="361"></canvas><abbr title="Sakurai Angle:&#013;When hit in the air angle is 45. When hit on the ground, if knockback < 32 then angle is 0 (they remain in nontumble grounded hitstun regardless of knockback), otherwise angle is 44.">361</abbr></td>
+                            <td>Normal</td>
+                            <td>Kick</td>
+                            <td>4</td>
+                            <td>4</td>
+                            <td><img title="Fighter on the ground" class="spritesheet-fighter-ground " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Fighter in the air" class="spritesheet-fighter-air " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Waddle Dee and Waddle Doo" class="spritesheet-waddle " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Pikmin" class="spritesheet-pikmin " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="ROB Gyro" class="spritesheet-gyro " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Snake's Grenade" class="spritesheet-snake-grenade " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Mr Saturn" class="spritesheet-mr-saturn " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Stage hurtboxes not including walls, ceilings and floors." class="spritesheet-stage-non-wall-ceiling-floor " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Walls, Ceilings and Floors" class="spritesheet-wall-ceiling-floor " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Toon Link and Link's Bombs" class="spritesheet-link-bomb " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /><img title="Bob-ombs" class="spritesheet-bobomb " src="/assets_static/13f729b96eb96e1a74f8601e958009c604a145d68aa8b696de740752e98d9e.png" /></td>
+                    </tbody>
+                </table>
+            </div>
+
+            <h2>Scripts</h2>
+            <h3 id="script-main">Main</h3>
+            <ol><li>AsyncWait(6.0)</li><li>BoolVariableSetTrue { variable: RandomAccessBool(EnableLandingLag) }</li><li>AsyncWait(13.0)</li><li>CreateHitBox(HitBoxArguments { bone_index: 8, hitbox_id: 0, set_id: 0, damage: Constant(18.0), trajectory: 32, wdsk: 0, kbg: 100, shield_damage: 0, bkb: 24, size: 5.08, x_offset: 0.0, y_offset: -4.17, z_offset: 0.0, tripping_rate: 0.0, hitlag_mult: 1.0, sdi_mult: 1.0, effect: Electric, unk1: false, sound_level: 3, unk2: false, sound: Kick, unk3: 0, ground: true, aerial: true, unk4: 0, sse_type: Knee, clang: true, unk5: true, direct: true, unk6: 0 })</li><li>CreateHitBox(HitBoxArguments { bone_index: 6, hitbox_id: 1, set_id: 0, damage: Constant(18.0), trajectory: 32, wdsk: 0, kbg: 100, shield_damage: 0, bkb: 24, size: 3.52, x_offset: 4.17, y_offset: 0.0, z_offset: 0.0, tripping_rate: 0.0, hitlag_mult: 1.0, sdi_mult: 1.0, effect: Electric, unk1: false, sound_level: 3, unk2: false, sound: Kick, unk3: 0, ground: true, aerial: true, unk4: 0, sse_type: Knee, clang: true, unk5: true, direct: true, unk6: 0 })</li><li>SyncWait(3.0)</li><li>CreateHitBox(HitBoxArguments { bone_index: 8, hitbox_id: 0, set_id: 0, damage: Constant(6.0), trajectory: 361, wdsk: 0, kbg: 80, shield_damage: 0, bkb: 35, size: 5.08, x_offset: 0.0, y_offset: -4.17, z_offset: 0.0, tripping_rate: 0.0, hitlag_mult: 1.0, sdi_mult: 1.0, effect: Normal, unk1: false, sound_level: 0, unk2: false, sound: Kick, unk3: 0, ground: true, aerial: true, unk4: 0, sse_type: Knee, clang: true, unk5: true, direct: true, unk6: 0 })</li><li>CreateHitBox(HitBoxArguments { bone_index: 6, hitbox_id: 1, set_id: 0, damage: Constant(6.0), trajectory: 361, wdsk: 0, kbg: 80, shield_damage: 0, bkb: 35, size: 3.52, x_offset: 4.17, y_offset: 0.0, z_offset: 0.0, tripping_rate: 0.0, hitlag_mult: 1.0, sdi_mult: 1.0, effect: Normal, unk1: false, sound_level: 0, unk2: false, sound: Kick, unk3: 0, ground: true, aerial: true, unk4: 0, sse_type: Knee, clang: true, unk5: true, direct: true, unk6: 0 })</li><li>AsyncWait(30.0)</li><li>DeleteAllHitBoxes</li><li>AsyncWait(35.0)</li><li>BoolVariableSetFalse { variable: RandomAccessBool(EnableLandingLag) }</li><li>AllowInterrupts</li></ol>
+            <h3 id="script-gfx">GFX</h3>
+            <ol><li>Goto(<a href='/PM3.6/Captain Falcon/scripts/0x9019c168.html'>0x9019c168</a>)</li></ol>
+            <h3 id="script-sfx">SFX</h3>
+            <ol><li>AsyncWait(13.0)</li><li>SoundEffect1(3596)</li><li>loop 4 times: <ol><li>if (EnteringOrIsInHitLag) <ol><li>IfStatementAnd ((LongtermAccessFloat(CurryAngle1) GreaterThan scalar(8)))</li><li>if (ButtonHeld value(6)) <ol><li>IfStatementOr (ButtonHeld value(7))</li><li>IfStatementOr (ButtonHeld value(8))</li><li>SoundEffectStop(1366)</li><li>SoundEffect1(1366)</li></ol></li></ol></li><li>SyncWait(1.0)</li></ol></li></ol>
+            <h3 id="script-other">Other</h3>
+            <ol><li>AsyncWait(13.0)</li><li>Rumble { unk1: 13, unk2: 0 }</li></ol>
+
+
+        </div>
+
+        <!-- Display nothing from xs to sm, display something from md to xl -->
+        <nav class="d-none d-md-block col-2 sidebar sidebar-right">
+            <h2>Jabs</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Attack100.html">Attack100</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Attack100Start.html">Attack100Start</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Attack11.html">Attack11</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Attack12.html">Attack12</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Attack13.html">Attack13</a></li>
+            </ul>
+            <h2>Tilt Attacks</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackHi3.html">AttackHi3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackLw3.html">AttackLw3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackS3Hi.html">AttackS3Hi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackS3Lw.html">AttackS3Lw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackS3S.html">AttackS3S</a></li>
+            </ul>
+            <h2>Smash Attacks</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackHi4.html">AttackHi4</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackHi4Hold.html">AttackHi4Hold</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackHi4Start.html">AttackHi4Start</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackLw4.html">AttackLw4</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackLw4Hold.html">AttackLw4Hold</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackLw4Start.html">AttackLw4Start</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackS4Hi.html">AttackS4Hi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackS4Hold.html">AttackS4Hold</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackS4Lw.html">AttackS4Lw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackS4S.html">AttackS4S</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackS4Start.html">AttackS4Start</a></li>
+            </ul>
+            <h2>Dash Attack</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackDash.html">AttackDash</a></li>
+            </ul>
+            <h2>Aerial Attacks</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackAirB.html">AttackAirB</a></li>
+                <li><a class="nav-link active" href="/PM3.6/Captain Falcon/subactions/AttackAirF.html">AttackAirF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackAirHi.html">AttackAirHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackAirLw.html">AttackAirLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackAirN.html">AttackAirN</a></li>
+            </ul>
+            <h2>Grabs</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Catch.html">Catch</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CatchAttack.html">CatchAttack</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CatchCut.html">CatchCut</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CatchDash.html">CatchDash</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CatchTurn.html">CatchTurn</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CatchWait.html">CatchWait</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrowB.html">ThrowB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrowF.html">ThrowF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrowHi.html">ThrowHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrowLw.html">ThrowLw</a></li>
+            </ul>
+            <h2>Ledge Options</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CliffAttackQuick.html">CliffAttackQuick</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CliffAttackSlow.html">CliffAttackSlow</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CliffCatch.html">CliffCatch</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CliffClimbQuick.html">CliffClimbQuick</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CliffClimbSlow.html">CliffClimbSlow</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CliffEscapeQuick.html">CliffEscapeQuick</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CliffEscapeSlow.html">CliffEscapeSlow</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CliffJumpQuick1.html">CliffJumpQuick1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CliffJumpQuick2.html">CliffJumpQuick2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CliffJumpSlow1.html">CliffJumpSlow1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CliffJumpSlow2.html">CliffJumpSlow2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CliffWait.html">CliffWait</a></li>
+            </ul>
+            <h2>Dodge</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/EscapeAir.html">EscapeAir</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/EscapeB.html">EscapeB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/EscapeF.html">EscapeF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/EscapeN.html">EscapeN</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Guard.html">Guard</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/GuardDamage.html">GuardDamage</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/GuardOff.html">GuardOff</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/GuardOn.html">GuardOn</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/GuardOn_1.html">GuardOn_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Guard_1.html">Guard_1</a></li>
+            </ul>
+            <h2>Knockdown</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownAttackD.html">DownAttackD</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownAttackU.html">DownAttackU</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownBackD.html">DownBackD</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownBackU.html">DownBackU</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownBoundD.html">DownBoundD</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownBoundU.html">DownBoundU</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownDamageD.html">DownDamageD</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownDamageD3.html">DownDamageD3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownDamageU.html">DownDamageU</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownDamageU3.html">DownDamageU3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownEatD.html">DownEatD</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownEatU.html">DownEatU</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownForwardD.html">DownForwardD</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownForwardU.html">DownForwardU</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownSpotD.html">DownSpotD</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownSpotU.html">DownSpotU</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownStandD.html">DownStandD</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownStandU.html">DownStandU</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownWaitD.html">DownWaitD</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DownWaitU.html">DownWaitU</a></li>
+            </ul>
+            <h2>Trip</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Slip.html">Slip</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SlipAttack.html">SlipAttack</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SlipDash.html">SlipDash</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SlipDown.html">SlipDown</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SlipEscapeB.html">SlipEscapeB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SlipEscapeF.html">SlipEscapeF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SlipStand.html">SlipStand</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SlipTurn.html">SlipTurn</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SlipWait.html">SlipWait</a></li>
+            </ul>
+            <h2>Movement</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageFall.html">DamageFall</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Dash.html">Dash</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Fall.html">Fall</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FallAerial.html">FallAerial</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FallAerialB.html">FallAerialB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FallAerialF.html">FallAerialF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FallB.html">FallB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FallF.html">FallF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FallSpecial.html">FallSpecial</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FallSpecialB.html">FallSpecialB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FallSpecialF.html">FallSpecialF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/HeavyWalk1.html">HeavyWalk1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/HeavyWalk2.html">HeavyWalk2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/JumpAerialB.html">JumpAerialB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/JumpAerialF.html">JumpAerialF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/JumpB.html">JumpB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/JumpB_1.html">JumpB_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/JumpF.html">JumpF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/JumpF_1.html">JumpF_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/JumpSquat.html">JumpSquat</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LandingAirB.html">LandingAirB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LandingAirF.html">LandingAirF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LandingAirHi.html">LandingAirHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LandingAirLw.html">LandingAirLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LandingAirN.html">LandingAirN</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LandingFallSpecial.html">LandingFallSpecial</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LandingHeavy.html">LandingHeavy</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LandingLight.html">LandingLight</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightWalkEat.html">LightWalkEat</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightWalkGet.html">LightWalkGet</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/MissFoot.html">MissFoot</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Ottotto.html">Ottotto</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/OttottoWait.html">OttottoWait</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/PassiveWallJump.html">PassiveWallJump</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Run.html">Run</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/RunBrake.html">RunBrake</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Squat.html">Squat</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SquatRv.html">SquatRv</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SquatWait.html">SquatWait</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Turn.html">Turn</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/TurnRun.html">TurnRun</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/TurnRunBrake.html">TurnRunBrake</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Wait1.html">Wait1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Wait2.html">Wait2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Wait3.html">Wait3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/WalkBrake.html">WalkBrake</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/WalkFast.html">WalkFast</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/WalkMiddle.html">WalkMiddle</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/WalkSlow.html">WalkSlow</a></li>
+            </ul>
+            <h2>Footstool</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/StepAirPose.html">StepAirPose</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/StepBack.html">StepBack</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/StepFall.html">StepFall</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/StepJump.html">StepJump</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/StepPose.html">StepPose</a></li>
+            </ul>
+            <h2>Specials</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirHi.html">SpecialAirHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirLw.html">SpecialAirLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirLwEnd.html">SpecialAirLwEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirLwEndAir.html">SpecialAirLwEndAir</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirN.html">SpecialAirN</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirNTurn.html">SpecialAirNTurn</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirS.html">SpecialAirS</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirSStart.html">SpecialAirSStart</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirSStartGround.html">SpecialAirSStartGround</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialHi.html">SpecialHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialHiCatch.html">SpecialHiCatch</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialHiThrow.html">SpecialHiThrow</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialLw.html">SpecialLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialLwEnd.html">SpecialLwEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialLwEndAir.html">SpecialLwEndAir</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialLwWall.html">SpecialLwWall</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialN.html">SpecialN</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialNTurn.html">SpecialNTurn</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialS.html">SpecialS</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialSStart.html">SpecialSStart</a></li>
+            </ul>
+            <h2>Techs</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Passive.html">Passive</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/PassiveCeil.html">PassiveCeil</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/PassiveStandB.html">PassiveStandB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/PassiveStandF.html">PassiveStandF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/PassiveWall.html">PassiveWall</a></li>
+            </ul>
+            <h2>Stun</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FuraFura.html">FuraFura</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FuraFuraEnd.html">FuraFuraEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FuraFuraStartD.html">FuraFuraStartD</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FuraFuraStartU.html">FuraFuraStartU</a></li>
+            </ul>
+            <h2>Sleep</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FuraSleepEnd.html">FuraSleepEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FuraSleepLoop.html">FuraSleepLoop</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FuraSleepStart.html">FuraSleepStart</a></li>
+            </ul>
+            <h2>Swim</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swim.html">Swim</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SwimDrown.html">SwimDrown</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SwimDrownOut.html">SwimDrownOut</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SwimEnd.html">SwimEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SwimF.html">SwimF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SwimRise.html">SwimRise</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SwimTurn.html">SwimTurn</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SwimUp.html">SwimUp</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SwimUpDamage.html">SwimUpDamage</a></li>
+            </ul>
+            <h2>Final Smash</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FinalAirEnd.html">FinalAirEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FinalAirRideL.html">FinalAirRideL</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FinalAirRideR.html">FinalAirRideR</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FinalAirStart.html">FinalAirStart</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FinalEnd.html">FinalEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FinalRideL.html">FinalRideL</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FinalRideR.html">FinalRideR</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/FinalStart.html">FinalStart</a></li>
+            </ul>
+            <h2>Taunts and Victory</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AppealHiL.html">AppealHiL</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AppealHiR.html">AppealHiR</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AppealLw.html">AppealLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AppealLw_1.html">AppealLw_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AppealS.html">AppealS</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AppealS_1.html">AppealS_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Lose.html">Lose</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Win1.html">Win1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Win1Wait.html">Win1Wait</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Win2.html">Win2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Win2Wait.html">Win2Wait</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Win3.html">Win3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Win3Wait.html">Win3Wait</a></li>
+            </ul>
+            <h2>Item Throw</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/HeavyThrowB.html">HeavyThrowB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/HeavyThrowB_1.html">HeavyThrowB_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/HeavyThrowF.html">HeavyThrowF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/HeavyThrowF_1.html">HeavyThrowF_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/HeavyThrowHi.html">HeavyThrowHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/HeavyThrowHi_1.html">HeavyThrowHi_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/HeavyThrowLw.html">HeavyThrowLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/HeavyThrowLw_1.html">HeavyThrowLw_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowAirB.html">LightThrowAirB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowAirB_1.html">LightThrowAirB_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowAirF.html">LightThrowAirF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowAirF_1.html">LightThrowAirF_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowAirHi.html">LightThrowAirHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowAirHi_1.html">LightThrowAirHi_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowAirLw.html">LightThrowAirLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowAirLw_1.html">LightThrowAirLw_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowB.html">LightThrowB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowB_1.html">LightThrowB_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowDash.html">LightThrowDash</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowDrop.html">LightThrowDrop</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowF.html">LightThrowF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowF_1.html">LightThrowF_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowHi.html">LightThrowHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowHi_1.html">LightThrowHi_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowLw.html">LightThrowLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightThrowLw_1.html">LightThrowLw_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SmashThrowAirB.html">SmashThrowAirB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SmashThrowAirF.html">SmashThrowAirF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SmashThrowAirHi.html">SmashThrowAirHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SmashThrowAirLw.html">SmashThrowAirLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SmashThrowB.html">SmashThrowB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SmashThrowDash.html">SmashThrowDash</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SmashThrowF.html">SmashThrowF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SmashThrowHi.html">SmashThrowHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SmashThrowLw.html">SmashThrowLw</a></li>
+            </ul>
+            <h2>Item</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/GekikaraWait.html">GekikaraWait</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemAssist.html">ItemAssist</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemBig.html">ItemBig</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemDragoonGet.html">ItemDragoonGet</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemDragoonRide.html">ItemDragoonRide</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemDragoonRide_1.html">ItemDragoonRide_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemHammerAir.html">ItemHammerAir</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemHammerAir_1.html">ItemHammerAir_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemHammerMove.html">ItemHammerMove</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemHammerMove_1.html">ItemHammerMove_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemHammerWait.html">ItemHammerWait</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemHammerWait_1.html">ItemHammerWait_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemHandGrip.html">ItemHandGrip</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemHandHave.html">ItemHandHave</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemHandPickUp.html">ItemHandPickUp</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemHandSmash.html">ItemHandSmash</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLauncher.html">ItemLauncher</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLauncherAir.html">ItemLauncherAir</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLauncherAirFire.html">ItemLauncherAirFire</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLauncherAirFire_1.html">ItemLauncherAirFire_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLauncherFall.html">ItemLauncherFall</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLauncherFire.html">ItemLauncherFire</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLauncherFire_1.html">ItemLauncherFire_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLauncher_1.html">ItemLauncher_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLegsBrakeB.html">ItemLegsBrakeB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLegsBrakeF.html">ItemLegsBrakeF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLegsDashB.html">ItemLegsDashB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLegsDashF.html">ItemLegsDashF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLegsFastB.html">ItemLegsFastB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLegsFastF.html">ItemLegsFastF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLegsJumpSquat.html">ItemLegsJumpSquat</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLegsLanding.html">ItemLegsLanding</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLegsMiddleB.html">ItemLegsMiddleB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLegsMiddleF.html">ItemLegsMiddleF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLegsSlowB.html">ItemLegsSlowB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLegsSlowF.html">ItemLegsSlowF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemLegsWait.html">ItemLegsWait</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeAirEnd.html">ItemScopeAirEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeAirEnd_1.html">ItemScopeAirEnd_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeAirFire.html">ItemScopeAirFire</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeAirFire_1.html">ItemScopeAirFire_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeAirRapid.html">ItemScopeAirRapid</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeAirRapid_1.html">ItemScopeAirRapid_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeAirStart.html">ItemScopeAirStart</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeAirStart_1.html">ItemScopeAirStart_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeEnd.html">ItemScopeEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeEnd_1.html">ItemScopeEnd_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeFire.html">ItemScopeFire</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeFire_1.html">ItemScopeFire_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeRapid.html">ItemScopeRapid</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeRapid_1.html">ItemScopeRapid_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeStart.html">ItemScopeStart</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScopeStart_1.html">ItemScopeStart_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScrew.html">ItemScrew</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScrewFall.html">ItemScrewFall</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScrew_1.html">ItemScrew_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemScrew_2.html">ItemScrew_2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemShoot.html">ItemShoot</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemShootAir.html">ItemShootAir</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemShootAir_1.html">ItemShootAir_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemShootAir_2.html">ItemShootAir_2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemShoot_1.html">ItemShoot_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemShoot_2.html">ItemShoot_2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ItemSmall.html">ItemSmall</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SquatWaitItem.html">SquatWaitItem</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/WaitItem.html">WaitItem</a></li>
+            </ul>
+            <h2>Misc</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/.html"></a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AirCatch.html">AirCatch</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AirCatchHit.html">AirCatchHit</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AirCatchPose.html">AirCatchPose</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AirCatch_1.html">AirCatch_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/AttackEnd.html">AttackEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureCut.html">CaptureCut</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureDamageBigSnake.html">CaptureDamageBigSnake</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureDamageBigSnake_1.html">CaptureDamageBigSnake_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureDamageDxSnake.html">CaptureDamageDxSnake</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureDamageDxSnake_1.html">CaptureDamageDxSnake_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureDamageHi.html">CaptureDamageHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureDamageLw.html">CaptureDamageLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureDamageSnake.html">CaptureDamageSnake</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureDamageSnake_1.html">CaptureDamageSnake_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureJump.html">CaptureJump</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CapturePulledBigSnake.html">CapturePulledBigSnake</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CapturePulledBigSnake_1.html">CapturePulledBigSnake_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CapturePulledDxSnake.html">CapturePulledDxSnake</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CapturePulledDxSnake_1.html">CapturePulledDxSnake_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CapturePulledHi.html">CapturePulledHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CapturePulledLw.html">CapturePulledLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CapturePulledSnake.html">CapturePulledSnake</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CapturePulledSnake_1.html">CapturePulledSnake_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureWaitBigSnake.html">CaptureWaitBigSnake</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureWaitBigSnake_1.html">CaptureWaitBigSnake_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureWaitDxSnake.html">CaptureWaitDxSnake</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureWaitDxSnake_1.html">CaptureWaitDxSnake_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureWaitHi.html">CaptureWaitHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureWaitLw.html">CaptureWaitLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureWaitSnake.html">CaptureWaitSnake</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/CaptureWaitSnake_1.html">CaptureWaitSnake_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageAir1.html">DamageAir1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageAir2.html">DamageAir2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageAir3.html">DamageAir3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageElec.html">DamageElec</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageFace.html">DamageFace</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageFlyHi.html">DamageFlyHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageFlyLw.html">DamageFlyLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageFlyN.html">DamageFlyN</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageFlyRoll.html">DamageFlyRoll</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageFlyTop.html">DamageFlyTop</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageHi1.html">DamageHi1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageHi2.html">DamageHi2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageHi3.html">DamageHi3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageLw1.html">DamageLw1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageLw2.html">DamageLw2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageLw3.html">DamageLw3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageN1.html">DamageN1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageN2.html">DamageN2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/DamageN3.html">DamageN3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Dark.html">Dark</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/EntryL.html">EntryL</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/EntryR.html">EntryR</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/GanonSpecialHiCapture.html">GanonSpecialHiCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/GanonSpecialHiDxCapture.html">GanonSpecialHiDxCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/HeavyGet.html">HeavyGet</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LadderCatchAirL.html">LadderCatchAirL</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LadderCatchAirR.html">LadderCatchAirR</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LadderCatchEndL.html">LadderCatchEndL</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LadderCatchEndR.html">LadderCatchEndR</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LadderCatchL.html">LadderCatchL</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LadderCatchR.html">LadderCatchR</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LadderDown.html">LadderDown</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LadderUp.html">LadderUp</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LadderWait.html">LadderWait</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightEat.html">LightEat</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/LightGet.html">LightGet</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Pass.html">Pass</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Rebound.html">Rebound</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/RopeCatch.html">RopeCatch</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/RopeFishing.html">RopeFishing</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirNBigBitten.html">SpecialAirNBigBitten</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirNBigBittenEnd.html">SpecialAirNBigBittenEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirNBigBittenStart.html">SpecialAirNBigBittenStart</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirNBitten.html">SpecialAirNBitten</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirNBittenEnd.html">SpecialAirNBittenEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirNBittenStart.html">SpecialAirNBittenStart</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirNDxBitten.html">SpecialAirNDxBitten</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirNDxBittenEnd.html">SpecialAirNDxBittenEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirNDxBittenStart.html">SpecialAirNDxBittenStart</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirSCapture.html">SpecialAirSCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirSCatchCapture.html">SpecialAirSCatchCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirSDxCapture.html">SpecialAirSDxCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirSDxCatchCapture.html">SpecialAirSDxCatchCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirSDxFallCapture.html">SpecialAirSDxFallCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialAirSFallCapture.html">SpecialAirSFallCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialHiCapture.html">SpecialHiCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialHiDxCapture.html">SpecialHiDxCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialNBigBitten.html">SpecialNBigBitten</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialNBigBittenEnd.html">SpecialNBigBittenEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialNBigBittenStart.html">SpecialNBigBittenStart</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialNBitten.html">SpecialNBitten</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialNBittenEnd.html">SpecialNBittenEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialNBittenStart.html">SpecialNBittenStart</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialNDxBitten.html">SpecialNDxBitten</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialNDxBittenEnd.html">SpecialNDxBittenEnd</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialNDxBittenStart.html">SpecialNDxBittenStart</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialNEgg.html">SpecialNEgg</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialSCapture.html">SpecialSCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialSDxCapture.html">SpecialSDxCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialSDxStickAttackCapture.html">SpecialSDxStickAttackCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialSDxStickCapture.html">SpecialSDxStickCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialSDxStickJumpCapture.html">SpecialSDxStickJumpCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialSDxZitabata.html">SpecialSDxZitabata</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialSStickAttackCapture.html">SpecialSStickAttackCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialSStickCapture.html">SpecialSStickCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialSStickJumpCapture.html">SpecialSStickJumpCapture</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SpecialSZitabata.html">SpecialSZitabata</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Spycloak.html">Spycloak</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/StopCeil.html">StopCeil</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/StopCeil_1.html">StopCeil_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/StopWall.html">StopWall</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swallowed.html">Swallowed</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing1.html">Swing1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing1_1.html">Swing1_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing1_2.html">Swing1_2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing1_3.html">Swing1_3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing1_4.html">Swing1_4</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing3.html">Swing3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing3_1.html">Swing3_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing3_2.html">Swing3_2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing3_3.html">Swing3_3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing3_4.html">Swing3_4</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing41.html">Swing41</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing41Hold.html">Swing41Hold</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing41Hold_1.html">Swing41Hold_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing41Hold_2.html">Swing41Hold_2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing41Hold_3.html">Swing41Hold_3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing41Start.html">Swing41Start</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing41Start_1.html">Swing41Start_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing41Start_2.html">Swing41Start_2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing41Start_3.html">Swing41Start_3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing41_1.html">Swing41_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing41_2.html">Swing41_2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing41_3.html">Swing41_3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing42.html">Swing42</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing42_1.html">Swing42_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing42_2.html">Swing42_2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing42_3.html">Swing42_3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/Swing4Bat.html">Swing4Bat</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SwingDash.html">SwingDash</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SwingDash_1.html">SwingDash_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SwingDash_2.html">SwingDash_2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SwingDash_3.html">SwingDash_3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/SwingDash_4.html">SwingDash_4</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownB.html">ThrownB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownDxB.html">ThrownDxB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownDxF.html">ThrownDxF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownDxFB.html">ThrownDxFB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownDxFF.html">ThrownDxFF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownDxFHi.html">ThrownDxFHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownDxFLw.html">ThrownDxFLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownDxHi.html">ThrownDxHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownDxLw.html">ThrownDxLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownDxZitabata.html">ThrownDxZitabata</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownF.html">ThrownF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownFB.html">ThrownFB</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownFF.html">ThrownFF</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownFHi.html">ThrownFHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownFLw.html">ThrownFLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownGirlZitabata.html">ThrownGirlZitabata</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownHi.html">ThrownHi</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownLw.html">ThrownLw</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/ThrownZitabata.html">ThrownZitabata</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/VisualScene02.html">VisualScene02</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/VisualScene03.html">VisualScene03</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/WallDamage.html">WallDamage</a></li>
+            </ul>
+            <h2>None</h2>
+            <ul class="nav nav-pills flex-column">
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE.html">NONE</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE_1.html">NONE_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE_10.html">NONE_10</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE_11.html">NONE_11</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE_12.html">NONE_12</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE_13.html">NONE_13</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE_2.html">NONE_2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE_3.html">NONE_3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE_4.html">NONE_4</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE_5.html">NONE_5</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE_6.html">NONE_6</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE_7.html">NONE_7</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE_8.html">NONE_8</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/NONE_9.html">NONE_9</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/_1.html">_1</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/_2.html">_2</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/_3.html">_3</a></li>
+                <li><a class="nav-link" href="/PM3.6/Captain Falcon/subactions/_4.html">_4</a></li>
+            </ul>
+        </nav>
+    </div>
+</div>
+
+<script type="module">
+    import init, { run } from "/assets_static/188d916524202a6522c9e4d86ca74d82abbc2639da528758e8caae1bd25bf.js";
+    const fighter_subaction_data = "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";
+    // TODO: apparently we wont need to do just async wrapper + init call nonsense in the future
+    (async function () {
+        await init();
+        run(fighter_subaction_data);
+    })();
+</script>
+
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+
+
+</body>
+
+</html>

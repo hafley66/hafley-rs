@@ -1,0 +1,15 @@
+config_version=5
+
+[application]
+config/name="Wireframe fighter lab"
+run/main_scene="res://4_main.tscn"
+
+[display]
+window/size/viewport_width=800
+window/size/viewport_height=600
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+
+[filesystem]
+import/blender/enabled=false

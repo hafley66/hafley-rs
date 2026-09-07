@@ -1,0 +1,2360 @@
+{
+  "fixture": "Scripted travel and action schedule; extracted PM poses and damage; discrete sphere/box collision",
+  "fps": 60,
+  "frames": [
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 1,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 0
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 2,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 1
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 3,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 2
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 4,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 3
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 5,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 4
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 6,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 5
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 7,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 6
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 8,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 7
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 9,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 8
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 10,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 9
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 11,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 10
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 12,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 11
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 13,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 12
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 14,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 13
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 15,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 14
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 16,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 15
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 17,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 16
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 18,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 17
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 19,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 18
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 20,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 19
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 21,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 20
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 22,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 21
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 23,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 22
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 24,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 23
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 25,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 24
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 26,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 25
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 27,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 26
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 28,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 27
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 29,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 28
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 30,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 29
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 31,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 30
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 32,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 31
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 33,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 32
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 34,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 33
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 35,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 34
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 36,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 35
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 37,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 36
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 38,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 37
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 39,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 38
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 40,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 39
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 41,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 40
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 42,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 41
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 43,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 42
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 44,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 43
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 45,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 44
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 46,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 45
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 47,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 46
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 48,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 47
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 49,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 48
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 50,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 49
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 51,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 50
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 52,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 51
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 53,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 52
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 54,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 53
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 55,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 54
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 56,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 55
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 57,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 56
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 58,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 57
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 59,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 58
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 60,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 59
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 1,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        -12.0
+      ],
+      "tick": 60
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 2,
+      "hit": null,
+      "root": [
+        0.0,
+        0.9319999814033508,
+        -11.100000381469727
+      ],
+      "tick": 61
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 3,
+      "hit": null,
+      "root": [
+        0.0,
+        1.8279999494552612,
+        -10.199999809265137
+      ],
+      "tick": 62
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 4,
+      "hit": null,
+      "root": [
+        0.0,
+        2.687999963760376,
+        -9.300000190734863
+      ],
+      "tick": 63
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 5,
+      "hit": null,
+      "root": [
+        0.0,
+        3.51200008392334,
+        -8.399999618530273
+      ],
+      "tick": 64
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 6,
+      "hit": null,
+      "root": [
+        0.0,
+        4.300000190734863,
+        -7.5
+      ],
+      "tick": 65
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 7,
+      "hit": null,
+      "root": [
+        0.0,
+        5.052000045776367,
+        -6.600000381469727
+      ],
+      "tick": 66
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 8,
+      "hit": null,
+      "root": [
+        0.0,
+        5.76800012588501,
+        -5.700000286102295
+      ],
+      "tick": 67
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 9,
+      "hit": null,
+      "root": [
+        0.0,
+        6.447999954223633,
+        -4.800000190734863
+      ],
+      "tick": 68
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 10,
+      "hit": null,
+      "root": [
+        0.0,
+        7.0920000076293945,
+        -3.90000057220459
+      ],
+      "tick": 69
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 11,
+      "hit": null,
+      "root": [
+        0.0,
+        7.699999809265137,
+        -3.0
+      ],
+      "tick": 70
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 12,
+      "hit": null,
+      "root": [
+        0.0,
+        8.272000312805176,
+        -2.1000003814697266
+      ],
+      "tick": 71
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 13,
+      "hit": null,
+      "root": [
+        0.0,
+        8.807999610900879,
+        -1.2000007629394531
+      ],
+      "tick": 72
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 14,
+      "hit": null,
+      "root": [
+        0.0,
+        9.307999610900879,
+        -0.3000001907348633
+      ],
+      "tick": 73
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 15,
+      "hit": null,
+      "root": [
+        0.0,
+        9.772000312805176,
+        0.5999994277954102
+      ],
+      "tick": 74
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 16,
+      "hit": null,
+      "root": [
+        0.0,
+        10.200000762939453,
+        1.5
+      ],
+      "tick": 75
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 17,
+      "hit": null,
+      "root": [
+        0.0,
+        10.592000007629395,
+        2.3999996185302734
+      ],
+      "tick": 76
+    },
+    {
+      "action": "JumpF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 18,
+      "hit": null,
+      "root": [
+        0.0,
+        10.947999954223633,
+        3.299999237060547
+      ],
+      "tick": 77
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 1,
+      "hit": null,
+      "root": [
+        0.0,
+        11.268000602722168,
+        4.19999885559082
+      ],
+      "tick": 78
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 2,
+      "hit": null,
+      "root": [
+        0.0,
+        11.552000045776367,
+        5.100000381469727
+      ],
+      "tick": 79
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 3,
+      "hit": null,
+      "root": [
+        0.0,
+        11.800000190734863,
+        6.0
+      ],
+      "tick": 80
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 4,
+      "hit": null,
+      "root": [
+        0.0,
+        12.011999130249023,
+        6.899999618530273
+      ],
+      "tick": 81
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 5,
+      "hit": null,
+      "root": [
+        0.0,
+        12.188000679016113,
+        7.799999237060547
+      ],
+      "tick": 82
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 6,
+      "hit": null,
+      "root": [
+        0.0,
+        12.328001022338867,
+        8.69999885559082
+      ],
+      "tick": 83
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 7,
+      "hit": null,
+      "root": [
+        0.0,
+        12.431999206542969,
+        9.599998474121094
+      ],
+      "tick": 84
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 8,
+      "hit": null,
+      "root": [
+        0.0,
+        12.5,
+        10.5
+      ],
+      "tick": 85
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 9,
+      "hit": null,
+      "root": [
+        0.0,
+        12.531998634338379,
+        11.399999618530273
+      ],
+      "tick": 86
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 10,
+      "hit": null,
+      "root": [
+        0.0,
+        12.528000831604004,
+        12.299999237060547
+      ],
+      "tick": 87
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 11,
+      "hit": null,
+      "root": [
+        0.0,
+        12.488001823425293,
+        13.19999885559082
+      ],
+      "tick": 88
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 12,
+      "hit": null,
+      "root": [
+        0.0,
+        12.41200065612793,
+        14.099998474121094
+      ],
+      "tick": 89
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 0.0,
+      "frame": 13,
+      "hit": null,
+      "root": [
+        0.0,
+        12.30000114440918,
+        15.0
+      ],
+      "tick": 90
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 14,
+      "hit": [
+        0,
+        18.0
+      ],
+      "root": [
+        0.0,
+        12.152000427246094,
+        15.899999618530273
+      ],
+      "tick": 91
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 15,
+      "hit": null,
+      "root": [
+        0.0,
+        11.968000411987305,
+        16.799999237060547
+      ],
+      "tick": 92
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 16,
+      "hit": null,
+      "root": [
+        0.0,
+        11.748001098632812,
+        17.69999885559082
+      ],
+      "tick": 93
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 17,
+      "hit": null,
+      "root": [
+        0.0,
+        11.492000579833984,
+        18.599998474121094
+      ],
+      "tick": 94
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 18,
+      "hit": null,
+      "root": [
+        0.0,
+        11.200000762939453,
+        19.5
+      ],
+      "tick": 95
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 19,
+      "hit": null,
+      "root": [
+        0.0,
+        10.872001647949219,
+        20.0
+      ],
+      "tick": 96
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 20,
+      "hit": null,
+      "root": [
+        0.0,
+        10.507999420166016,
+        20.0
+      ],
+      "tick": 97
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 21,
+      "hit": null,
+      "root": [
+        0.0,
+        10.107999801635742,
+        20.0
+      ],
+      "tick": 98
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 22,
+      "hit": null,
+      "root": [
+        0.0,
+        9.672000885009766,
+        20.0
+      ],
+      "tick": 99
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 23,
+      "hit": null,
+      "root": [
+        0.0,
+        9.200000762939453,
+        20.0
+      ],
+      "tick": 100
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 24,
+      "hit": null,
+      "root": [
+        0.0,
+        8.692001342773438,
+        20.0
+      ],
+      "tick": 101
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 25,
+      "hit": null,
+      "root": [
+        0.0,
+        8.147998809814453,
+        20.0
+      ],
+      "tick": 102
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 26,
+      "hit": null,
+      "root": [
+        0.0,
+        7.568000793457031,
+        20.0
+      ],
+      "tick": 103
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 27,
+      "hit": null,
+      "root": [
+        0.0,
+        6.952003479003906,
+        20.0
+      ],
+      "tick": 104
+    },
+    {
+      "action": "AttackAirF",
+      "contact": true,
+      "damage": 18.0,
+      "frame": 28,
+      "hit": null,
+      "root": [
+        0.0,
+        6.3000030517578125,
+        20.0
+      ],
+      "tick": 105
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 29,
+      "hit": null,
+      "root": [
+        0.0,
+        5.612003326416016,
+        20.0
+      ],
+      "tick": 106
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 30,
+      "hit": null,
+      "root": [
+        0.0,
+        4.88800048828125,
+        20.0
+      ],
+      "tick": 107
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 31,
+      "hit": null,
+      "root": [
+        0.0,
+        4.127998352050781,
+        20.0
+      ],
+      "tick": 108
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 32,
+      "hit": null,
+      "root": [
+        0.0,
+        3.332000732421875,
+        20.0
+      ],
+      "tick": 109
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 33,
+      "hit": null,
+      "root": [
+        0.0,
+        2.5,
+        20.0
+      ],
+      "tick": 110
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 34,
+      "hit": null,
+      "root": [
+        0.0,
+        1.6319999694824219,
+        20.0
+      ],
+      "tick": 111
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 35,
+      "hit": null,
+      "root": [
+        0.0,
+        0.727996826171875,
+        20.0
+      ],
+      "tick": 112
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 36,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 113
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 37,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 114
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 38,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 115
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 39,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 116
+    },
+    {
+      "action": "AttackAirF",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 40,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 117
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 1,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 118
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 2,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 119
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 3,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 120
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 4,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 121
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 5,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 122
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 6,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 123
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 7,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 124
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 8,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 125
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 9,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 126
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 10,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 127
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 11,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 128
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 12,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 129
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 13,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 130
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 14,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 131
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 15,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 132
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 16,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 133
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 17,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 134
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 18,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 135
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 19,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 136
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 20,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 137
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 21,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 138
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 22,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 139
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 23,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 140
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 24,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 141
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 25,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 142
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 26,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 143
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 27,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 144
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 28,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 145
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 29,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 146
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 30,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 147
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 31,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 148
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 32,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 149
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 33,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 150
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 34,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 151
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 35,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 152
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 36,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 153
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 37,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 154
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 38,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 155
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 39,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 156
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 40,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 157
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 41,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 158
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 42,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 159
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 43,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 160
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 44,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 161
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 45,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 162
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 46,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 163
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 47,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 164
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 48,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 165
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 49,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 166
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 50,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 167
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 51,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 168
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 52,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 169
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 53,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 170
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 54,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 171
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 55,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 172
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 56,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 173
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 57,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 174
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 58,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 175
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 59,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 176
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 60,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 177
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 61,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 178
+    },
+    {
+      "action": "Wait1",
+      "contact": false,
+      "damage": 18.0,
+      "frame": 1,
+      "hit": null,
+      "root": [
+        0.0,
+        0.0,
+        20.0
+      ],
+      "tick": 179
+    }
+  ],
+  "target": [
+    0.0,
+    24.0,
+    28.0
+  ],
+  "target_half_extents": [
+    3.0,
+    6.0,
+    4.0
+  ],
+  "ticks": 180
+}
