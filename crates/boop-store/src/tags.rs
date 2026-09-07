@@ -36,11 +36,12 @@ pub fn normalize_tag(raw: &str) -> Option<String> {
     }
 }
 
-/// The tags a free-text note carries: split on ',' and whitespace, each
-/// normalised, first spelling wins on a repeat.
+/// The tags a free-text note carries: split on ',' and line breaks only, so
+/// `perf review` is one tag and a sentence is one tag, never one per word.
+/// Each piece normalised, first spelling wins on a repeat.
 pub fn tags_in(note: &str) -> Vec<String> {
     let mut tags: Vec<String> = Vec::new();
-    for word in note.split([',', ' ', '\t', '\n', '\r']) {
+    for word in note.split([',', '\n', '\r']) {
         let Some(tag) = normalize_tag(word) else {
             continue;
         };
@@ -258,9 +259,10 @@ mod tests {
     }
 
     #[test]
-    fn a_note_splits_into_tags_on_commas_and_whitespace() {
-        assert_eq!(tags_in("rust, perf review"), ["rust", "perf", "review"]);
-        assert_eq!(tags_in("rust rust,RUST"), ["rust"]);
+    fn a_note_splits_into_tags_on_commas_only() {
+        assert_eq!(tags_in("rust, perf review"), ["rust", "perf-review"]);
+        assert_eq!(tags_in("rust,RUST, Rust "), ["rust"]);
+        assert_eq!(tags_in("what does this line mean"), ["what-does-this-line-mean"]);
         assert!(tags_in("   ").is_empty());
     }
 
@@ -533,8 +535,8 @@ mod tests {
         let applied = store
             .tags_apply_note("rust, perf review", "comment:3", 9)
             .unwrap();
-        assert_eq!(applied, ["rust", "perf", "review"]);
-        assert_eq!(names(&store.tags_list().unwrap()).len(), 3);
+        assert_eq!(applied, ["rust", "perf-review"]);
+        assert_eq!(names(&store.tags_list().unwrap()).len(), 2);
         drop(store);
         let _ = std::fs::remove_file(&path);
     }
