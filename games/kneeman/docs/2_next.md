@@ -1350,6 +1350,28 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    /private/tmp/game3-online-dHeeTd. Exit 0 for both, no browser exceptions. Production unchanged.
    Next gate: version-5 grounded-victim launch in the browser and two-peer corrected
    hashes/loss/reconnect before publication. Mixed 5/4 and editor/replay gates above pass.
+   Grounded-victim fixture/oracle: examples/4_sakurai_start.rs emits an airborne late-Kick
+   start overlapping a standing victim on the main floor. --check asserts the first native
+   hit is 11 damage at 44 degrees and compares early browser snapshot position/velocity
+   against native replay (0.01-pixel / px-per-second tolerance). --trace supplies native
+   44-degree and prior 45-degree position sequences for the first 60 ticks. The ad-hoc browser
+   observes existing debug x/y without changing the runtime and requires samples that differ
+   from the old path by more than 0.05 pixels. Late tick-60/120 snapshots alone are insufficient:
+   both paths hit the ink wall at x=942 and later settle. Initial fixture private-constant build
+   error was corrected; cargo build -p kneeman --examples and the subsequent trace-example
+   build pass. Logs /private/tmp/game3-sakurai-fixtures-build2.log and game3-sakurai-trace-build.log.
+   Strengthened local version-5 acceptance passes: LOCAL_EXPORT=1 LAND_HIT=sakurai-ground
+   CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24
+   NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs. Each peer has 10 observed
+   early position witnesses matching the native path and distinguishing it from fixed 45.
+   Both tick-60/120 snapshots match native position/velocity/state/damage. Both peers report
+   [0,11] damage; 546 initial and 180 resumed confirmed comparisons match, resumed ticks
+   743/741. Dropped/sent messages 231/1214 and 236/1219, max run 24. Offline recovery,
+   browser exception and closed-send error gates pass, exit 0. Log:
+   /private/tmp/game3-sakurai-ground-online2.log; screenshots /private/tmp/game3-online-iNyxri.
+   The prior passing run in game3-sakurai-ground-online.log supplied only late trajectory
+   samples; the strengthened run supplies angle-discriminating browser evidence.
+   No simulation changes since 93a0356; the example/oracle is acceptance tooling only.
    Angle-361 resolution, effective PM timing/geometry, wall action/motion, larger parties and
    physical-device/cross-network acceptance remain open. No reminder or Boop changes.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
