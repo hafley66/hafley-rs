@@ -385,6 +385,28 @@ fn falcon_kick_wall_contact_blocks_travel_and_replays() {
     }
 }
 
+#[test]
+fn launched_support_tracks_floor_contact_and_replays() {
+    let tune = Tune::default();
+    for y in [GROUND_Y, GROUND_Y - 100.0] {
+        let mut state = SimState::spawn();
+        let fighter = &mut state.fighters[0];
+        fighter.pos = Vector2::new(900.0, y);
+        fighter.state = CharState::Launched;
+        fighter.hitstun = 10;
+        fighter.vel = Vector2::ZERO;
+        fighter.ground_plat = if y == GROUND_Y { -1 } else { 0 };
+        let mut replay = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap();
+        for tick in 0..4 {
+            state = step(&state, &[&idle(), &idle()], &tune);
+            replay = step(&replay, &[&idle(), &idle()], &tune);
+            assert_eq!(net::checksum(&state), net::checksum(&replay));
+            assert_eq!(state.fighters[0].grounded(), y == GROUND_Y, "tick {tick}");
+            assert_eq!(state.fighters[0].state, CharState::Launched);
+        }
+    }
+}
+
 /// Build a frame by mutating the neutral default — `press(|i| i.attack = true)`.
 fn press(f: impl FnOnce(&mut InputFrame)) -> InputFrame {
     let mut i = InputFrame::default();

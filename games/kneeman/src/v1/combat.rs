@@ -211,6 +211,8 @@ impl PunchableFace for Fighter {
             // attack_for(Launched) is None, so remaining hit windows never fire.
             self.state = CharState::Launched;
             self.frame = 0;
+            self.ground_plat = -1;
+            self.ground_ink = -1;
         }
     }
 }
@@ -243,7 +245,7 @@ pub(crate) fn resolve_combat(
     let mut chosen: Option<usize> = None;
     let mut best_id = u8::MAX;
     for (bi, hb) in atk.live_boxes().iter().enumerate() {
-        if !hb.live_at(a.frame) || a.hit_cd[bi][vb] > 0 {
+        if !hb.live_at(a.frame) || a.hit_cd[bi][vb] > 0 || !hb.targets_fighter(b) {
             continue;
         }
         let (hc, hr) = hitbox_center(a, hb);
@@ -299,6 +301,74 @@ pub(crate) fn resolve_combat(
         b.vel = apply_di(b.vel, b_aim, tb.di_max_angle); // victim angles the trajectory (survival DI)
     }
     a.hitlag = l.hitlag; // both fighters pop on impact (blocked hits included)
+}
+
+#[cfg(test)]
+#[test]
+fn hit_targets_filter_before_damage_and_cooldown() {
+    use crate::v1::{AttackData, CharState, HitTargets, SimState};
+    for (state, support, on_ground) in [
+        (CharState::Stand, 0, true), (CharState::Landing, 0, true),
+        (CharState::Air, 0, false), (CharState::Nair, 0, false),
+        (CharState::SpecialD, 0, true), (CharState::SpecialD, -1, false),
+        (CharState::LedgeHold, 0, false), (CharState::TechWall, 0, false),
+        (CharState::Launched, 0, true), (CharState::Launched, -1, false),
+    ] {
+        for targets in [HitTargets::Both, HitTargets::Ground, HitTargets::Air] {
+            let mut tune = Tune::default();
+            tune.jab = AttackData::one(0, 4, 0, Hitbox {
+                targets, r: 500.0, damage: 10.0, ..Hitbox::NONE
+            });
+            let tune: Tune = bincode::deserialize(&bincode::serialize(&tune).unwrap()).unwrap();
+            let mut fighters = SimState::spawn().fighters;
+            fighters[0].state = CharState::Jab;
+            fighters[0].pos = Vector2::ZERO;
+            fighters[1].pos = Vector2::ZERO;
+            fighters[1].state = state;
+            fighters[1].ground_plat = support;
+            fighters[1].invuln = 0;
+            let before = fighters[1];
+            let (attacker, victim) = fighters.split_at_mut(1);
+            resolve_combat(&mut attacker[0], 1, &mut victim[0], Vector2::ZERO, &tune, &tune);
+            let hits = targets == HitTargets::Both || (targets == HitTargets::Ground) == on_ground;
+            assert_eq!(victim[0].damage, if hits { 10.0 } else { 0.0 }, "{state:?} {targets:?}");
+            assert_eq!(attacker[0].hit_cd[0][1] > 0, hits);
+            if hits {
+                assert_eq!((victim[0].ground_plat, victim[0].ground_ink), (-1, -1));
+            } else {
+                assert_eq!(bincode::serialize(&victim[0]).unwrap(), bincode::serialize(&before).unwrap());
+            }
+        }
+    }
+    let mut json = serde_json::to_value(Hitbox::NONE).unwrap();
+    json.as_object_mut().unwrap().remove("targets");
+    assert_eq!(serde_json::from_value::<Hitbox>(json).unwrap().targets, HitTargets::Both);
+}
+
+#[cfg(test)]
+#[test]
+fn clanks_respect_fighter_target_filters() {
+    use crate::v1::{AttackData, CharState, HitTargets, SimState};
+    for grounded in [false, true] {
+        for targets in [HitTargets::Both, HitTargets::Ground, HitTargets::Air] {
+            let mut tune = Tune::default();
+            tune.jab = AttackData::one(0, 4, 0, Hitbox {
+                targets, r: 500.0, damage: 10.0, ..Hitbox::NONE
+            });
+            tune.specials[3].hit = AttackData::one(0, 4, 0, Hitbox {
+                r: 500.0, damage: 10.0, ..Hitbox::NONE
+            });
+            let mut state = SimState::spawn();
+            state.fighters[0].state = CharState::Jab;
+            state.fighters[1].state = CharState::SpecialD;
+            state.fighters[1].ground_plat = if grounded { 0 } else { -1 };
+            for fighter in &mut state.fighters[..2] { fighter.pos = Vector2::ZERO; }
+            resolve_clank(&mut state, 0, 1, &tune, &tune);
+            let clanks = targets == HitTargets::Both || (targets == HitTargets::Ground) == grounded;
+            assert_eq!(state.fighters[0].state, if clanks { CharState::Rebound } else { CharState::Jab });
+            assert_eq!(state.fighters[1].state, if clanks { CharState::Rebound } else { CharState::SpecialD });
+        }
+    }
 }
 
 #[cfg(test)]
@@ -364,11 +434,11 @@ pub(crate) fn resolve_clank(n: &mut SimState, a: usize, b: usize, ta: &Tune, tb:
     };
     let mut met: Option<(f32, f32)> = None; // (a's box damage, b's box damage)
     'boxes: for ha in da.live_boxes() {
-        if !ha.live_at(fa.frame) || ha.transcendent {
+        if !ha.live_at(fa.frame) || ha.transcendent || !ha.targets_fighter(&fb) {
             continue;
         }
         for hb in db.live_boxes() {
-            if !hb.live_at(fb.frame) || hb.transcendent {
+            if !hb.live_at(fb.frame) || hb.transcendent || !hb.targets_fighter(&fa) {
                 continue;
             }
             let (ca, ra) = hitbox_center(&fa, ha);

@@ -85,6 +85,7 @@ pub const fn spec() -> CharSpec {
             10,
             [
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 0,
                     start: 4,
                     len: 2,
@@ -99,6 +100,7 @@ pub const fn spec() -> CharSpec {
                     refresh: 0,
                 },
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 1,
                     start: 8,
                     len: 3,
@@ -123,6 +125,7 @@ pub const fn spec() -> CharSpec {
             14,
             [
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 0,
                     start: 5,
                     len: 5,
@@ -137,6 +140,7 @@ pub const fn spec() -> CharSpec {
                     refresh: 0,
                 },
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 1,
                     start: 10,
                     len: 6,
@@ -162,6 +166,7 @@ pub const fn spec() -> CharSpec {
             16,
             [
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 0,
                     start: 7,
                     len: 3,
@@ -176,6 +181,7 @@ pub const fn spec() -> CharSpec {
                     refresh: 0,
                 },
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 1,
                     start: 10,
                     len: 9,
@@ -217,6 +223,7 @@ pub const fn spec() -> CharSpec {
             12,
             [
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 0,
                     start: 6,
                     len: 4,
@@ -231,6 +238,7 @@ pub const fn spec() -> CharSpec {
                     refresh: 0,
                 },
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 1,
                     start: 10,
                     len: 5,
@@ -255,6 +263,7 @@ pub const fn spec() -> CharSpec {
             10,
             [
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 0,
                     start: 8,
                     len: 3,
@@ -269,6 +278,7 @@ pub const fn spec() -> CharSpec {
                     refresh: 0,
                 },
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 1,
                     start: 11,
                     len: 6,
@@ -294,6 +304,7 @@ pub const fn spec() -> CharSpec {
             11,
             [
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 0,
                     start: 5,
                     len: 3,
@@ -308,6 +319,7 @@ pub const fn spec() -> CharSpec {
                     refresh: 0,
                 },
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 1,
                     start: 9,
                     len: 6,
@@ -366,6 +378,7 @@ pub const fn spec() -> CharSpec {
             26,
             [
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 0,
                     start: 15,
                     len: 4,
@@ -380,6 +393,7 @@ pub const fn spec() -> CharSpec {
                     refresh: 0,
                 },
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 1,
                     start: 15,
                     len: 4,
@@ -420,6 +434,7 @@ pub const fn spec() -> CharSpec {
             24,
             [
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 0,
                     start: 9,
                     len: 3,
@@ -434,6 +449,7 @@ pub const fn spec() -> CharSpec {
                     refresh: 0,
                 },
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 1,
                     start: 14,
                     len: 3,
@@ -489,6 +505,7 @@ pub const fn spec() -> CharSpec {
             15,
             [
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 0,
                     start: 13,
                     len: 3,
@@ -503,6 +520,7 @@ pub const fn spec() -> CharSpec {
                     refresh: 0,
                 },
                 Hitbox {
+                    targets: crate::v1::HitTargets::Both,
                     id: 1,
                     start: 17,
                     len: 3,

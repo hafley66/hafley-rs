@@ -22,6 +22,14 @@ use serde::{Deserialize, Serialize};
 /// Hitboxes per move (Brawl-ish cap). Fixed so `AttackData` stays `Copy` + snapshot-cheap.
 pub const MAX_HB: usize = 4;
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum HitTargets {
+    #[default]
+    Both,
+    Ground,
+    Air,
+}
+
 /// One hitbox: a circle offset from the fighter (x flipped by facing), live only on its own frame
 /// window `[start, start + len)`. A move is up to `MAX_HB` of these on the shared state clock, so
 /// sweetspot/sourspot, sex-kicks, and rapid multi-hit are all "more boxes", never new states.
@@ -39,6 +47,9 @@ pub struct Hitbox {
     pub set_kb: f32,  // weight-independent fixed knockback (KB units); 0 = use the growth formula
     pub transcendent: bool, // skips the clank check (projectiles; aerials are de-facto transcendent)
     pub refresh: i64,       // frames a victim is immune to THIS box after a connect (multi-hit gap)
+    /// Fighter target filter. Existing JSON move definitions retain unrestricted targeting.
+    #[serde(default)]
+    pub targets: HitTargets,
 }
 
 impl Hitbox {
@@ -55,12 +66,23 @@ impl Hitbox {
         set_kb: 0.0,
         transcendent: false,
         refresh: 0,
+        targets: HitTargets::Both,
     };
 
     /// Is this box live at `frame` (relative to state start)? Inert boxes (`len == 0`) never are.
     #[inline]
     pub fn live_at(&self, frame: i64) -> bool {
         self.len > 0 && frame >= self.start && frame < self.start + self.len
+    }
+
+    pub fn targets_fighter(&self, fighter: &Fighter) -> bool {
+        let grounded = fighter.grounded() && !crate::v1::airborne(fighter.state)
+            && !matches!(fighter.state, CharState::LedgeHold | CharState::LedgeClimb);
+        match self.targets {
+            HitTargets::Both => true,
+            HitTargets::Ground => grounded,
+            HitTargets::Air => !grounded,
+        }
     }
 }
 
@@ -155,6 +177,7 @@ impl AttackData {
         recovery: 12,
         boxes: [
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 0,
                 start: 3,
                 len: 2,
@@ -169,6 +192,7 @@ impl AttackData {
                 refresh: 0,
             },
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 1,
                 start: 9,
                 len: 2,
@@ -186,6 +210,7 @@ impl AttackData {
             // to follow up with a rising aerial (the sex-kick juggle). Low growth keeps it a true
             // combo at low %, not a blow-away.
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 2,
                 start: 15,
                 len: 3,
@@ -211,6 +236,7 @@ impl AttackData {
         recovery: 14,
         boxes: [
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 0,
                 start: 5,
                 len: 5,
@@ -225,6 +251,7 @@ impl AttackData {
                 refresh: 0,
             },
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 1,
                 start: 10,
                 len: 7,
@@ -256,6 +283,7 @@ impl AttackData {
         boxes: [
             // foot at tuck-exit: spike opens, near waist height. (radii scaled 1.5x for reach)
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 0,
                 start: 6,
                 len: 2,
@@ -271,6 +299,7 @@ impl AttackData {
             },
             // foot mid-extension: same id, next window, driven further down-and-out.
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 0,
                 start: 8,
                 len: 2,
@@ -286,6 +315,7 @@ impl AttackData {
             },
             // foot near full extension: spike closes out.
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 0,
                 start: 10,
                 len: 2,
@@ -301,6 +331,7 @@ impl AttackData {
             },
             // sourspot tail: foot fully extended, sends up-and-away on whiffed spike timing.
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 1,
                 start: 12,
                 len: 5,
@@ -338,6 +369,7 @@ impl AttackData {
         recovery: 10,
         boxes: [
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 0,
                 start: 5,
                 len: 3,
@@ -352,6 +384,7 @@ impl AttackData {
                 refresh: 0,
             },
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 1,
                 start: 8,
                 len: 6,
@@ -378,6 +411,7 @@ impl AttackData {
         recovery: 16,
         boxes: [
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 0,
                 start: 7,
                 len: 3,
@@ -392,6 +426,7 @@ impl AttackData {
                 refresh: 0,
             },
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 1,
                 start: 10,
                 len: 10,
@@ -434,6 +469,7 @@ impl AttackData {
         recovery: 12,
         boxes: [
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 0,
                 start: 6,
                 len: 4,
@@ -448,6 +484,7 @@ impl AttackData {
                 refresh: 0,
             },
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 1,
                 start: 10,
                 len: 4,
@@ -550,6 +587,7 @@ impl AttackData {
         recovery: 16,
         boxes: [
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 0,
                 start: 12,
                 len: 3,
@@ -564,6 +602,7 @@ impl AttackData {
                 refresh: 0,
             },
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 1,
                 start: 16,
                 len: 3,
@@ -589,6 +628,7 @@ impl AttackData {
         recovery: 22,
         boxes: [
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 0,
                 start: 8,
                 len: 3,
@@ -603,6 +643,7 @@ impl AttackData {
                 refresh: 0,
             },
             Hitbox {
+                targets: crate::v1::HitTargets::Both,
                 id: 1,
                 start: 13,
                 len: 3,

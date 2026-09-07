@@ -1016,6 +1016,20 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    /private/tmp/game3-online-R1r2ud. No new compiler job this turn; 445 game + 76 shell remains
    the native gate. Next: grounded-target filtering and the data-driven landing hit phase;
    larger-party version browser coverage and PM timing verification remain open.
+   Target filtering implemented: Hitbox.targets is HitTargets::{Both,Ground,Air}; existing
+   definitions use Both, and missing JSON fields default to Both. Combat filters before
+   overlap/cooldown consumption; clanks require both shapes to accept the other fighter.
+   Ground targeting requires support and excludes airborne/ledge states even when support
+   fields are stale. Launch now clears support; launched floor contact restores its owner,
+   while leaving the floor or bouncing clears it. No Fighter field additions.
+   Three tests cover target/state combinations, no-mutation rejection, Tune roundtrip,
+   old JSON default, clank filtering, and serialized floor-contact replay. Full gate passes
+   448 game + 76 shell tests: /private/tmp/game3-hit-target-final-gate.log, exit 0.
+   Hitbox/Tune binary layout changes are gated by startup version 3; version 2 remains live
+   in production. Old binary Tune compatibility is not implied by the JSON default.
+   No export/browser/publication in this checkpoint. Next: add the landing-hit phase through
+   special move data, then regenerate fixtures and verify version-3 rejection/online behavior
+   before publication. PM timing and world-scale conversion remain unverified.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;

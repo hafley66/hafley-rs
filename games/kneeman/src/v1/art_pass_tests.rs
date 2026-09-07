@@ -140,6 +140,7 @@ fn lowest_id_box_wins() {
         },
     );
     atk.boxes[1] = Hitbox {
+        targets: crate::v1::HitTargets::Both,
         id: 1,
         start: 0,
         len: 4,

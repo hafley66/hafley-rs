@@ -467,10 +467,13 @@ fn hitstun_slide(
             n.pos.y = h.y;
             n.vel.y = 0.0;
             n.vel += h.vel; // rider inherit (the surf-vel seam, plans/body-unify.md step 4)
+            set_ground(&mut n, h.owner);
             touch_refresh(&mut n, t); // grounded contact, any surface
             n.cling_used = 0; // landed: fresh airtime cling budget
         }
         None => {
+            n.ground_plat = -1;
+            n.ground_ink = -1;
             // hitstun does not gate a ledge catch: launched past the lip still snaps, and
             // the catch IS the recovery -- this mechanic consumes the stun (override layer).
             // The directional zone (plans/ledge-ship-fixes.md #1/#3) is what keeps this from
@@ -533,6 +536,8 @@ fn hitstun_slide(
     // in-match dair stomp bounces the victim off the floor rather than dead-stopping to knockdown.
     if landed && n.tumble && impact_vy > t.tumble_speed {
         n.vel.y = -impact_vy * t.floor_bounce; // still launched + tumbling; hitstun keeps ticking
+        n.ground_plat = -1;
+        n.ground_ink = -1;
         landed = false; // consumed the landing as a bounce; skip the tech/knockdown resolution
     }
 
