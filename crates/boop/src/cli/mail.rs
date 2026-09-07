@@ -242,11 +242,11 @@ pub(crate) fn deliver_hail(
         routes.insert(to.to_owned(), route);
     }
     // The acpx queue is a door the ladder never sees, so it takes the same
-    // supervisor-row exemption the ladder does: a lane's result or yield row
-    // waits in the mailbox rather than spending a worker's turn.
+    // progress-row exemption the ladder does: a lane's yield row waits in the
+    // mailbox rather than spending a worker's turn; its end row is pushed.
     if let Some(route) = routes
         .get(to)
-        .filter(|route| is_acpx(route) && !message.kind.supervisor_row())
+        .filter(|route| is_acpx(route) && !message.kind.lane_progress_row())
     {
         let harness_id = route
             .harness
