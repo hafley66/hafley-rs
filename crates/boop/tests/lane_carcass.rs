@@ -261,6 +261,37 @@ fn lane_delete_clears_a_carcass_and_names_what_it_removed() {
     );
 }
 
+/// FAIL-PRE-FIX (gap 2). The reset ran only when a worktree or branch stood,
+/// so a name cleaned by hand spawned onto the dead lane's conversation.
+#[test]
+fn a_create_clears_a_stale_pin_with_nothing_else_left_to_remove() {
+    let doa = Doa::new("pin");
+    let branch = "feature/carcass-pin";
+    let lane = "feature-carcass-pin";
+    let pin_dir = doa.root.join(".agent").join("lanes").join(lane);
+    std::fs::create_dir_all(&pin_dir).unwrap();
+    let pin = pin_dir.join("conversation");
+    std::fs::write(
+        &pin,
+        r#"{"conversation":"ses_old","cwd":"/removed-by-hand","pinned_ts":1}"#,
+    )
+    .unwrap();
+    assert!(!doa.worktree_of(branch).exists(), "nothing else is left");
+
+    let created = doa.create(branch, false);
+    let out = text(&created.stdout);
+    assert!(
+        created.status.success(),
+        "the name spawns: {}",
+        text(&created.stderr)
+    );
+    assert!(
+        out.contains(&format!("reclaim: {lane} conversation pin cleared")),
+        "{out}"
+    );
+    assert!(!pin.exists(), "the stale pin is gone");
+}
+
 /// RECEIPT. A worktree holding uncommitted work is not a carcass; reclaim
 /// refuses it and leaves both the tree and the branch standing.
 #[test]

@@ -924,19 +924,11 @@ pub(crate) fn reset_dead_identity(
     identity: &lane::LaneIdentity,
     routes: &BTreeMap<String, Route>,
     pane_alive: &dyn Fn(&str) -> bool,
-) -> Result<Option<String>> {
-    let Some(worktree) = identity.worktree_dir.as_deref() else {
-        return Ok(None);
-    };
+) -> Result<Vec<String>> {
     let session = routes
         .get(&identity.lane)
         .and_then(|route| route.tmux.clone())
         .unwrap_or_else(|| identity.tmux.clone());
-    let session_present = tmux::mux().has_session(None, &session).unwrap_or(false);
-    let branch_present = lane::rev_parse(repo, &identity.branch).is_some();
-    if !worktree.exists() && !branch_present && !session_present {
-        return Ok(None);
-    }
     if pane_alive(&session) || pane_alive(&identity.tmux) {
         anyhow::bail!(
             "lane `{}` is live on tmux target {session}; create takes dead lanes only\n\
@@ -945,11 +937,28 @@ pub(crate) fn reset_dead_identity(
             identity.lane
         );
     }
+    // A name whose worktree was cleaned by hand still holds its pin, and an
+    // inherited conversation is the wrong opening turn for a fresh brief.
+    let mut lines = Vec::new();
+    if boop::trail::read_conversation_pin(&identity.lane).is_some() {
+        clear_conversation_pin(&identity.lane);
+        lines.push(format!(
+            "reclaim: {} conversation pin cleared",
+            identity.lane
+        ));
+    }
+    let Some(worktree) = identity.worktree_dir.as_deref() else {
+        return Ok(lines);
+    };
+    let session_present = tmux::mux().has_session(None, &session).unwrap_or(false);
+    let branch_present = lane::rev_parse(repo, &identity.branch).is_some();
+    if !worktree.exists() && !branch_present && !session_present {
+        return Ok(lines);
+    }
     let removed = lane::reclaim_for_spawn(repo, identity, routes, |target| pane_alive(target))?;
     if session_present {
         tmux::mux().kill_session(None, &session)?;
     }
-    clear_conversation_pin(&identity.lane);
     let mut parts = Vec::new();
     if let Some(path) = &removed.worktree {
         parts.push(format!("worktree {}", path.display()));
@@ -960,15 +969,18 @@ pub(crate) fn reset_dead_identity(
     if session_present {
         parts.push(format!("tmux {session}"));
     }
-    if parts.is_empty() {
-        return Ok(None);
+    if !parts.is_empty() {
+        info!(lane = identity.lane, removed = parts.join(", "), "dead lane name reset");
+        lines.insert(
+            0,
+            format!(
+                "reclaim: {} was dead; removed {}",
+                identity.lane,
+                parts.join(", ")
+            ),
+        );
     }
-    info!(lane = identity.lane, removed = parts.join(", "), "dead lane name reset");
-    Ok(Some(format!(
-        "reclaim: {} was dead; removed {}",
-        identity.lane,
-        parts.join(", ")
-    )))
+    Ok(lines)
 }
 
 /// Drop the lane's pinned conversation so the reset name opens a fresh one.
@@ -1188,7 +1200,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         println!("reclaim: worktree, branch and tmux session removed first, if the name is dead");
         return Ok(());
     }
-    if let Some(line) = reset_dead_identity(&repo, &identity, &routes, &|target| {
+    for line in reset_dead_identity(&repo, &identity, &routes, &|target| {
         lane::pane_process_alive(target).unwrap_or(false)
     })? {
         println!("{line}");
@@ -2412,14 +2424,49 @@ pub(crate) fn where_line(route: &Route, lane: &str) -> Result<String> {
     Ok(tree.display().to_string())
 }
 
+/// The route a lane inspection reads, and the state to report when the
+/// registry has no row: a retired lane's epilogue already dropped its route.
+pub(crate) fn inspect_route(
+    lane: &str,
+    routes: &BTreeMap<String, Route>,
+    spawn: Option<&boop::trail::Spawn>,
+    retired: bool,
+) -> Result<(Route, Option<&'static str>)> {
+    if let Some(route) = routes.get(lane) {
+        return Ok((route.clone(), None));
+    }
+    let Some(spawn) = spawn else {
+        anyhow::bail!(
+            "no route and no spawn record for lane {lane}; \
+             it was never spawned through lane create"
+        )
+    };
+    let mut route = bus::route_from_value(&spawn.route);
+    // A record written before the route was copied into it still names the
+    // pane and the directory its supervisor ran in.
+    if route.tmux.is_none() {
+        route.tmux = Some(spawn.tmux.clone());
+    }
+    if route.cwd.is_none() {
+        route.cwd = Some(spawn.cwd.clone());
+    }
+    Ok((route, Some(if retired { "retired" } else { "dead" })))
+}
+
+/// True when the lane's last recorded residency was the idle shutdown. The
+/// residency file outlives the route the pane epilogue drops.
+fn lane_retired(dir: &Path, lane: &str) -> bool {
+    boop::supervise::read_residency(dir, lane).as_deref()
+        == Some(boop::supervise::RESIDENCY_RETIRED)
+}
+
 /// `beep lane where`: the lane's tree and nothing else.
 pub(crate) fn run_lane_where(mail_dir_arg: Option<&Path>, lane: &str) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
-    let Some(route) = routes.get(lane) else {
-        anyhow::bail!("no registry route for lane `{lane}`")
-    };
-    println!("{}", where_line(route, lane)?);
+    let spawn = boop::trail::read_spawn(lane);
+    let (route, _) = inspect_route(lane, &routes, spawn.as_ref(), lane_retired(&dir, lane))?;
+    println!("{}", where_line(&route, lane)?);
     Ok(())
 }
 
@@ -2477,9 +2524,9 @@ pub(crate) fn touched_lines(route: &Route, lane: &str) -> Result<Vec<String>> {
 pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str, touched: bool) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
-    let Some(route) = routes.get(lane) else {
-        anyhow::bail!("no registry route for lane `{lane}`")
-    };
+    let spawn = boop::trail::read_spawn(lane);
+    let (route, gone) = inspect_route(lane, &routes, spawn.as_ref(), lane_retired(&dir, lane))?;
+    let route = &route;
     let live = tmux::mux().live_sessions(None);
     let expect = boop::trail::read_expect(lane)
         .and_then(|expect| serde_json::to_value(expect).ok())
@@ -2488,7 +2535,7 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str, touched: boo
         "{}",
         serde_json::json!({
             "lane": lane,
-            "state": lane_state(&dir, lane, &live, route, &routes),
+            "state": gone.unwrap_or_else(|| lane_state(&dir, lane, &live, route, &routes)),
             "harness": route.harness,
             "tmux": route.tmux,
             "cwd": route.cwd,
@@ -4936,9 +4983,8 @@ mod tests {
         let identity = carcass_of(&repo, "fix/navmenu-flip-hover");
         let worktree = identity.worktree_dir.clone().unwrap();
 
-        let line = reset_dead_identity(&repo.dir, &identity, &BTreeMap::new(), &|_| false)
-            .unwrap()
-            .expect("a dead name reports its reset");
+        let lines = reset_dead_identity(&repo.dir, &identity, &BTreeMap::new(), &|_| false).unwrap();
+        let line = lines.first().expect("a dead name reports its reset").clone();
         assert!(
             line.starts_with("reclaim: fix-navmenu-flip-hover was dead; removed "),
             "{line}"
@@ -4955,8 +5001,8 @@ mod tests {
         assert!(
             reset_dead_identity(&repo.dir, &identity, &BTreeMap::new(), &|_| false)
                 .unwrap()
-                .is_none(),
-            "a free name reports nothing"
+                .is_empty(),
+            "a free name with no pin reports nothing"
         );
     }
 
@@ -5059,6 +5105,70 @@ mod tests {
             "{lines:?}"
         );
         assert!(!lines.contains(&"touched none".to_owned()), "{lines:?}");
+    }
+
+    /// A spawn record for a lane whose route is gone, carrying `tree` as the
+    /// worktree it ran in and `base` as the sha it branched from.
+    fn spawn_record(tree: &Path, base: &str) -> boop::trail::Spawn {
+        boop::trail::Spawn {
+            tmux: "fix-retired".to_owned(),
+            socket: None,
+            cwd: tree.display().to_string(),
+            command: "boop beep lane run --lane fix-retired".to_owned(),
+            route: crate::cli::route_to_json(&touched_route(tree, base)),
+        }
+    }
+
+    /// FAIL-PRE-FIX (gap 1). `where` and `--touched` answered `no registry
+    /// route` on retired lanes, the ones a coordinator actually inspects.
+    #[test]
+    fn where_and_touched_read_the_spawn_record_when_the_route_is_gone() {
+        let repo = GitRepo::new("retired-spawn");
+        let identity = carcass_of(&repo, "fix/retired");
+        let tree = identity.worktree_dir.unwrap();
+        let base = repo.git(&["rev-parse", "HEAD"]);
+        std::fs::write(tree.join("done.txt"), "work\n").unwrap();
+        repo.git_in(&tree, &["add", "-A"]);
+        repo.git_in(&tree, &["commit", "-qm", "the retired lane committed"]);
+        let spawn = spawn_record(&tree, &base);
+
+        let (route, state) =
+            inspect_route("fix-retired", &BTreeMap::new(), Some(&spawn), true).unwrap();
+        assert_eq!(state, Some("retired"));
+        assert_eq!(where_line(&route, "fix-retired").unwrap(), tree.display().to_string());
+        let lines = touched_lines(&route, "fix-retired").unwrap();
+        assert_eq!(lines[0], format!("worktree {}", tree.display()));
+        assert!(lines[1].contains("commits_past_base 1"), "{:?}", lines[1]);
+        assert!(
+            lines.iter().any(|line| line.ends_with("the retired lane committed")),
+            "{lines:?}"
+        );
+        assert!(lines.contains(&"changed done.txt".to_owned()), "{lines:?}");
+
+        let (_, dead) =
+            inspect_route("fix-retired", &BTreeMap::new(), Some(&spawn), false).unwrap();
+        assert_eq!(dead, Some("dead"));
+    }
+
+    /// RECEIPT. A live registry row still outranks the spawn record, and a
+    /// name with neither says so rather than blaming the registry.
+    #[test]
+    fn a_live_route_outranks_the_record_and_a_stranger_names_neither() {
+        let mut routes = BTreeMap::new();
+        routes.insert("fix-live".to_owned(), tmux_route("fix-live"));
+        let spawn = spawn_record(Path::new("/stale"), "abc");
+        let (route, state) = inspect_route("fix-live", &routes, Some(&spawn), true).unwrap();
+        assert_eq!(state, None, "a routed lane reads its live state");
+        assert_eq!(route.tmux.as_deref(), Some("fix-live"));
+
+        let error = inspect_route("never-was", &BTreeMap::new(), None, false)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            error,
+            "no route and no spawn record for lane never-was; \
+             it was never spawned through lane create"
+        );
     }
 
     /// RECEIPT. `lane where` prints one path so `cd "$(...)"` is the whole use.
