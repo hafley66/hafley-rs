@@ -91,6 +91,9 @@ Both assert ascent, full checksum replay and EOF. Browser stepping also verifies
 and shows the explosion's 18% damage. The optional fire texture is absent in this checkout;
 the renderer now checks resource existence before using its existing procedural fallback,
 avoiding repeated load errors. Exact PM startup/catch/launch/momentum remain unverified.
+Published through 5e0eacd. Production catch/whiff replay, restore and EOF checks pass;
+two-peer Dive under injected delay/loss also passes confirmed-state and reconnect checks.
+Exact commands, hashes and receipts are in docs/2_next.md.
 
 ## Remaining source limits
 

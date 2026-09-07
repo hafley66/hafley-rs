@@ -18,7 +18,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Workshop clips | Search/download commands recovered; local strip/grid conversion uses the same roster installer |
 | Regression | Existing fixed-input/replay/rollback suites remain the game gate |
 | Falcon | Fresh sessions select Falcon/Lucas; built-in art-to-kit mapping corrected; existing movement/attack strips wired. Commit 47ea707 |
-| Falcon Dive | Grounded startup no longer immediately land-cancels. Catch/whiff fixtures and final export replay/online gates pass; publication pending |
+| Falcon Dive | Published through 5e0eacd: grounded startup fix, catch/whiff debugger fixtures and optional-fire-art guard. Production replay and online Dive acceptance pass |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Keyboard bindings | Live InputMap editing for movement, c-stick and gameplay buttons; ConfigFile persistence/reset, side-aware labels, malformed-key validation and focus-loss clearing. 428 game + 68 shell tests pass |
 | Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
@@ -475,8 +475,26 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24
    NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
    Log: /private/tmp/game3-dive-final-online.log; screenshots: /private/tmp/game3-online-5HRVUS.
-   Next: publish this tested export and repeat Dive acceptance in production, then cover
-   startup on moving/drawn support and airborne entry before changing additional Falcon rules.
+   Published through 5e0eacd with the existing game3 profile; nginx validation/reload passes.
+   Remote WASM matches tested SHA-256
+   efb7b9963434b1c937b8ea4ee4762ed7f00b00d11dec7b05c310a866782f8066.
+   Game3 and protected original /game/ pack hashes remain unchanged. Publish log:
+   /private/tmp/game3-dive-publish.log. Production catch and whiff fixtures each verify all
+   180 tick checksums and traverse the same state paths as the native/local fixtures.
+   Restore and EOF pass; explosion screenshot shows victim damage 18. Both final checksums
+   match the local export. Zero optional-fire-art errors or browser exceptions; exit 0.
+   Command: PRODUCTION=1 node /private/tmp/5_game3_dive.cjs.
+   Log: /private/tmp/game3-dive-production.log; screenshots: /private/tmp/game3-dive-x85uUc.
+   Production online Dive run observes SpecialU and GrabHold on both peers, matches 547
+   initial and 180 resumed confirmed frames, and resumes at ticks 760/758. Each peer drops
+   240 messages from 1246/1243 sends, maximum burst 24 with 60 ms send delay. Queued-close
+   recovery retains slots/characters; peer closure reaches offline. No optional-fire-art,
+   closed-send errors or browser exceptions; exit 0. Command: DIVE=1 CONFIRMED=1 COMBAT=1
+   RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1
+   node /private/tmp/1_game3_online.cjs. Log: /private/tmp/game3-dive-online-production.log;
+   screenshots: /private/tmp/game3-online-mTuCOZ.
+   Next: cover startup on moving/drawn support and airborne entry before changing
+   additional Falcon rules. PM timing/hitbox equivalence and physical-device checks remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
