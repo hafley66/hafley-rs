@@ -21,6 +21,8 @@ ggrs = "=0.13.0"
 serde = { version = "1", features = ["derive"] }
 ssbm_utils = "=0.4.0"
 rapier3d = { version = "=0.35.3", features = ["serde-serialize", "enhanced-determinism"] }
+core-labs = { path = "../core-labs" }
+rusqlite = { version = "=0.40.2", features = ["bundled", "vtab"] }
 
 [[bin]]
 name = "falcon-lab"
