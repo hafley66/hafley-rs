@@ -36,7 +36,8 @@ pub struct Store {
 /// 19 = an absent favorite note is stored as NULL.
 /// 21 = each transcript cursor records its adapter projection contract.
 /// 22 = cost views over the usage ledger; see `COST_VIEW_SCHEMA`.
-pub const SCHEMA_VERSION: i64 = 27;
+/// 28 = agent_tag + agent_tag_link, the one tag table every surface shares.
+pub const SCHEMA_VERSION: i64 = 28;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -827,6 +828,10 @@ impl Store {
                 }
                 self.connection.execute_batch(TURN_CWD_VIEW_SCHEMA)?;
                 self.connection.execute_batch("PRAGMA user_version = 27;")?;
+            }
+            if self.schema_version()? < 28 {
+                self.connection.execute_batch(TAG_SCHEMA)?;
+                self.connection.execute_batch("PRAGMA user_version = 28;")?;
             }
             self.stamp_version()?;
             Ok(())
@@ -3343,6 +3348,29 @@ CREATE TABLE IF NOT EXISTS agent_turn_comment_fork (
 ) WITHOUT ROWID;
 ";
 
+/// Schema v28: the shared tag table, on its own so an older store adds it in
+/// place. The same text sits inside `SCHEMA` for a fresh store.
+const TAG_SCHEMA: &str = "
+-- One row per tag, with the count and last use the recent list orders by.
+-- `boop tag search` reads this column and never a message body.
+CREATE TABLE IF NOT EXISTS agent_tag (
+  tag TEXT PRIMARY KEY,
+  created_ts INTEGER NOT NULL,
+  last_used_ts INTEGER NOT NULL,
+  uses INTEGER NOT NULL DEFAULT 0
+) WITHOUT ROWID;
+-- What a tag hangs on. `source` is plain text every surface spells the same
+-- way ('favorite:<id>', 'comment:<id>', 'turn:<session>:<turn>', 'lane:<name>'),
+-- never a dict id, so a caller can link a thing the store has no table for.
+CREATE TABLE IF NOT EXISTS agent_tag_link (
+  tag TEXT NOT NULL,
+  source TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  PRIMARY KEY (tag, source)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_tag_link_source ON agent_tag_link(source);
+";
+
 /// Schema v27: one cwd per turn, added in place so an older store gets the
 /// column and the fallback view without a rebuild. The same text sits inside
 /// `SCHEMA` for a fresh store. The ALTER is guarded by a column check in
@@ -3499,6 +3527,26 @@ CREATE TABLE IF NOT EXISTS agent_turn_comment_fork (
   created_ts INTEGER NOT NULL,
   PRIMARY KEY (comment_id, lane)
 ) WITHOUT ROWID;
+
+-- One row per tag, with the count and last use the recent list orders by.
+-- `boop tag search` reads this column and never a message body.
+CREATE TABLE IF NOT EXISTS agent_tag (
+  tag TEXT PRIMARY KEY,
+  created_ts INTEGER NOT NULL,
+  last_used_ts INTEGER NOT NULL,
+  uses INTEGER NOT NULL DEFAULT 0
+) WITHOUT ROWID;
+
+-- What a tag hangs on. `source` is plain text every surface spells the same
+-- way ('favorite:<id>', 'comment:<id>', 'turn:<session>:<turn>', 'lane:<name>'),
+-- never a dict id, so a caller can link a thing the store has no table for.
+CREATE TABLE IF NOT EXISTS agent_tag_link (
+  tag TEXT NOT NULL,
+  source TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  PRIMARY KEY (tag, source)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_tag_link_source ON agent_tag_link(source);
 
 CREATE TABLE IF NOT EXISTS agent_trace (
   trace_id INTEGER PRIMARY KEY,

@@ -22,6 +22,7 @@ pub mod runtime;
 pub mod session;
 #[cfg(feature = "agent-read")]
 pub mod summary;
+pub mod tags;
 pub mod tail;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
@@ -39,6 +40,7 @@ pub use _0_session_graph::{
 #[cfg(feature = "agent-read")]
 pub use activity::{ActivityCount, ActivityScope, ToolResultAvailability};
 pub use harness_id::HarnessId;
+pub use tags::{normalize_tag, tags_in, Tag};
 pub use ident::{
     DeliveryState, Store, SyncStat, TraceErrorRow, TraceEvent, TraceEventRow,
     TRACE_EVENT_RETENTION_LIMIT,

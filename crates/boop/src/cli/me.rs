@@ -181,6 +181,11 @@ pub(crate) fn run_me_favorite(index: i64, note: Option<&str>) -> Result<()> {
     );
     let source = format!("{}:{}:assistant:{}", row.harness, session, row.turn);
     let id = store.favorite_add(&row.said, note, &source, now_ms())?;
+    // The note stays free text on the row; its tags also land in agent_tag,
+    // so the CLI path and the instant path feed one table.
+    if let Some(note) = note {
+        store.tags_apply_note(note, &format!("favorite:{id}"), now_ms() as i64)?;
+    }
     line(&format!("favorite {id}"));
     Ok(())
 }
