@@ -37,6 +37,11 @@ opponent. **Replay step** advances one recorded input; **Verify replay** checks 
 **Restore start** restores the snapshot. Ground contact deals 10 damage; the airborne control
 takes 0. These fixtures use authored Game3 timing, with PM parity gaps recorded in the ledger.
 
+Offline **feel → special** controls edit player 1's shared character kit. Expand **ground /
+shared hit**, **air-entry hit**, or **landing hit** to edit the existing attack rows; optional
+rows appear only when the move defines them. **Step** uses the current edited tuning.
+**Replay step** uses the trace's captured tuning; **Restore start** restores that tuning too.
+
 ```rust,ignore
 pub fn step(state: &SimState, inputs: &[&InputFrame], tune: &Tune) -> SimState;
 pub fn net::checksum(state: &SimState) -> u128;

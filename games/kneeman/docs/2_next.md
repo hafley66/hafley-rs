@@ -1257,9 +1257,29 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    report [0,11] damage; 550 initial + 180 resumed confirmed comparisons match, ticks 754/756.
    Drops 240/1238 and 240/1236 messages, max run 24. Offline recovery, browser exceptions and
    closed-send error gates pass, exit 0; /private/tmp/game3-v4-production.log;
-   /private/tmp/game3-online-Yooxbx. Next bounded UI task: reuse attack_sliders for optional
-   air_hit and landing rows in the existing offline specials editor (ui/debug.rs currently
-   edits only m.hit). Preserve the online edit guard and shared character-row ownership.
+   /private/tmp/game3-online-Yooxbx.
+   Offline phase-editor checkpoint: the existing specials editor now reuses attack_sliders
+   for ground/shared, optional air-entry and optional landing rows. The existing online
+   guard and player-1 shared character-row ownership are unchanged; no new tuning fields
+   or protocol version. Native gate: 454 game + 77 shell pass; fresh game3-build succeeds.
+   Logs: /private/tmp/game3-phase-editor-tests.log and game3-phase-editor-build.log.
+   Local browser drag changes the first landing hit from 10 to 20.5 damage on live Step.
+   Restore start returns the original checksum and the next Step deals 10 again. No browser
+   exceptions, exit 0; /private/tmp/game3-phase-editor-browser2.log; screenshots
+   /private/tmp/game3-phase-editor-BqQENq. Runner: node /private/tmp/8_game3_phase_editor.cjs.
+   Earlier layout-only previews and the failed numeric text-entry attempt supply no edit
+   acceptance. Air-entry controls render; independent air-entry editing is not yet exercised.
+   README distinguishes live Step tuning from Replay step's captured tuning.
+   Local online export gate passes with GUARD=1 LAND_HIT=travel-air LOCAL_EXPORT=1
+   CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24
+   NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs. Both peers report [0,11];
+   542 initial + 180 resumed confirmed comparisons match, resumed ticks 792/792.
+   Message drops: 233/1216 and 238/1221, max run 24. The inspected online down-special
+   panel shows the offline-only message and no attack controls. Disconnect/offline recovery,
+   closed-send error and browser exception gates pass, exit 0. Log:
+   /private/tmp/game3-phase-editor-online.log; screenshots /private/tmp/game3-online-u6j61Q.
+   No art/deploy-source changes; art-test and web-check were not rerun.
+   Next bounded task: verify air-entry edits independently of ground and landing rows.
    Angle-361 resolution, effective PM timing/geometry, wall action/motion, larger parties and
    physical-device/cross-network acceptance remain open. No reminder or Boop changes.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

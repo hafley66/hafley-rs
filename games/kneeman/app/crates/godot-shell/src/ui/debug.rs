@@ -796,7 +796,17 @@ fn draw_panel(
                     }
                     c |= slider(ui, &mut m.move_x, -1500.0..=1500.0, "move_x (forward)");
                     c |= slider(ui, &mut m.move_y, -2500.0..=1500.0, "move_y (neg=up)");
-                    c |= attack_sliders(ui, &mut m.hit);
+                    for (label, attack) in [
+                        ("ground / shared hit", Some(&mut m.hit)),
+                        ("air-entry hit", m.air_hit.as_mut()),
+                        ("landing hit", m.landing.as_mut()),
+                    ] {
+                        if let Some(attack) = attack {
+                            egui::CollapsingHeader::new(label).default_open(false).show(ui, |ui| {
+                                c |= attack_sliders(ui, attack);
+                            });
+                        }
+                    }
                 },
             );
         }
