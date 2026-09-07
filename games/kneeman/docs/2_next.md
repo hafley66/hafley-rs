@@ -24,6 +24,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Falcon kick landing | Published c197e67: optional landing attack, ground-only hit targeting, shared hit identity and contact replay. 450 game + 76 shell tests and local web landing/reconnect pass. PM timing/scale and wall response remain open; production receipt below |
 | Falcon kick travel phases | Published 62d7cdc runtime, version 4: separate ground/air entry rows, strong/middle/late damage, shared cooldowns and serialized entry context. 454 game + 77 shell tests and local browser acceptance pass; production receipt below |
 | Special phase editor | Published 4899180: offline ground/shared, optional air-entry and landing attack controls reuse existing sliders. Production landing damage edit/restore passes; local online restriction and reconnect pass |
+| Travel replay controls | Published ea5b58a: ground/air late-travel snapshots shared with the browser fixture writer. 454 game + 78 shell tests and local edited capture/replay pass; production receipt below |
 | Special ship carry | Published through 83e3456: carry correction plus Ship Dive debugger fixture. Native and production browser checks prove startup follows the moving hull, then launches and replays |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Cell item/contact sequence | Published through f9a486d: Cell replay uses the same 240-tick wire-input sequence as the native test. Local and production pickup/throw/contact, restore/EOF and changed-state rejection pass |
@@ -1310,6 +1311,15 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    reset tuning and therefore do not independently establish that sibling-row invariant.
    No art/deployment-source changes; art-test/web-check not rerun. Simulation rules unchanged;
    no new online test in this debugger-only checkpoint.
+   Published ea5b58a using the existing Game3 profile; nginx validation/reload passes.
+   /private/tmp/game3-travel-editor-publish.log. Remote WASM matches
+   40a994688206535606b6a7a5170c033ad76e651e4252f6b474717fd3b124d2c7.
+   Game3 pack remains fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df;
+   protected /game/ remains 5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795.
+   PRODUCTION=1 node /private/tmp/9_game3_travel_editor.cjs repeats the exact 60 edited
+   capture/replay checksums, 20.5 damage, initial restore, EOF and default 9/11/10 checks;
+   no browser exceptions, exit 0. /private/tmp/game3-travel-editor-production.log;
+   screenshots /private/tmp/game3-travel-editor-I9i7a7. No PM parity claim added.
    Next bounded gameplay task: inspect reference-backed angle-361 resolution against existing
    knockback and contact data before replacing Falcon's documented 45-degree approximation.
    Angle-361 resolution, effective PM timing/geometry, wall action/motion, larger parties and
