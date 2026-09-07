@@ -1387,6 +1387,21 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Next bounded gameplay task: compare Falcon forward-air sweetspot/sourspot data with the PM3.6
    AttackAirF reference, then author differences in the existing character kit and hitbox rows.
    chars/falcon.rs currently inherits normal attacks from KneeMan; preserve KneeMan's own kit.
+   Falcon forward-air working checkpoint: chars/falcon.rs overrides only FAIR. Four spatial/
+   temporal rows share hit identity 0; early damage/BKB/KBG/angle 18/24/100/32, late
+   6/35/80/361. Phase labels 14–16 and 17–30 are mapped to Fighter.frame; total 36.
+   KneeMan remains unchanged. Existing authored geometry remains; PM bone transforms,
+   electric effects, hitlag and auto-cancel/landing-window parity are open. Reference hash,
+   exact values and mapping limits are in docs/4_falcon_script_reference.md.
+   Native gate passes 459 game + 78 shell tests; /private/tmp/game3-falcon-fair-tests3.log.
+   Tests pin all rows and boundaries, preserve KneeMan data, and replay early/late contacts
+   through 60 ticks without a second hit (18 / 6 total damage). The intermediate contact
+   test compile error used a center/radius tuple as a vector; corrected before this gate.
+   No new runtime rules or wire fields: version remains 5 and the host carries the kit in Tune.
+   Web export passes: /private/tmp/game3-falcon-fair-build.log. No art/deploy source changes;
+   art-test/web-check not rerun. No browser or publication receipt for this FAIR override yet.
+   Next gate: actual early/late browser contact and recorded input replay, then
+   host-owned Tune compatibility and loss/reconnect before publication. Production still 93a0356.
    Angle-361 resolution, effective PM timing/geometry, wall action/motion, larger parties and
    physical-device/cross-network acceptance remain open. No reminder or Boop changes.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

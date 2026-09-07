@@ -80,6 +80,8 @@ does not reselect the travel row. Wall guards and animation-driven recoil remain
 
 ## Angle-361 source checkpoint
 
+Forward-air data is recorded separately below; sentinel interpretation also applies to its late phase.
+
 Read-only Melee revision `cca1beeab039b1a5e8dfe581de7e2e8fb8f0aeef`:
 `src/melee/ft/kinds/ftCommon/ftCo_Damage.c:80`, `ftCo_Damage_CalcAngle`.
 Ordinary angles convert directly to radians. Sentinel 361 reads the **victim's**
@@ -136,3 +138,29 @@ Local editor/replay and mixed 5/4 rejection pass. Published version 5 passes gro
 early trajectory checks against native replay and a counterfactual fixed-45 path, plus two-peer
 message-loss/reconnect acceptance. Exact receipts are in docs/2_next.md. This verifies Game3's
 implemented behavior; PM engine address mapping and exact original-runtime equivalence remain open.
+
+## Forward-air character override
+
+[PM3.6 AttackAirF](https://rukaidata.com/PM3.6/Captain%20Falcon/subactions/AttackAirF.html)
+reports these hitbox phases (both shapes in set 0):
+
+| Displayed frames | Damage | BKB | KBG | Angle | Effect |
+| --- | --- | --- | --- | --- | --- |
+| 14–16 | 18 | 24 | 100 | 32 | Electric |
+| 17–30 | 6 | 35 | 80 | 361 | Normal |
+
+IASA is 36. Auto-cancel windows are 1–6 and 36–40; landing lag is 19, or 9 with L-cancel.
+The two shapes use bones 8/6 and radii 5.08/3.52. The script creates the early shapes
+after AsyncWait(13), replaces them after SyncWait(3), and deletes them at AsyncWait(30).
+HTTP response: `/private/tmp/game3-pm-falcon-fair.response` (gzip); decompressed SHA-256
+`01b63dfbd97f6cc4c1536f809809164c514adc9fc2b1633f76bc6e22ffe690db`.
+
+Game3's Falcon override maps displayed phase labels directly to `Fighter.frame`: starts 14/17,
+lengths 3/14, final active end 31 and recovery 5, yielding total 36. This is an explicit
+Game3 timing mapping, not verified animation-time or original-engine parity. Four rows retain
+the two pre-existing authored shapes (offsets (58,-56)/(56,-54), radii 44/38), repeating them
+for the late phase. All rows use shared hit identity 0 to prevent a second hit on a prior
+victim when the temporal phase changes. Reference bone-space geometry, electric effects,
+hitlag multipliers, auto-cancel windows and move-specific landing/L-cancel lag remain unported.
+KneeMan keeps its previous FAIR unchanged. Runtime logic and serialized shape are unchanged;
+this override changes the Falcon data carried in the host's startup Tune, so startup stays 5.
