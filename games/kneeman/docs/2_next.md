@@ -613,8 +613,17 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    default prediction window; corrected to 7 without changing production configuration.
    No runtime/export/browser/deployment changes. This is all-local rollback with known inputs;
    this fixture's delayed-input correction and two-peer online cell-contact remain unverified.
-   Next: inject missing attack/grab predictions across these lifecycle transitions, restore
-   and deliver the recorded inputs, and require corrected state and saved receipts to converge.
+   Missing-input follow-up adds three handler-level correction cases at input indices 90,
+   140 and 162. Each saves the boundary state, advances seven neutral Predicted input ticks,
+   saves each resulting frame, then loads the boundary and delivers the recorded Confirmed
+   inputs through the remaining 240-tick sequence. Predicted endpoint checksums must differ
+   from corrected endpoints. Every corrected state, overwritten saved cell and observer-map
+   receipt matches independent offline stepping. 435 game + 76 shell tests pass;
+   /private/tmp/game3-cell-correction-tests.log. Test-only delta: +44 lines.
+   No runtime change, export, browser run or publication. Requests are explicitly constructed
+   through the existing GGRS Game handler; transport scheduling and two-peer cell contact are
+   not covered by this receipt. Next: exercise the cell sequence through two-peer transport
+   with confirmed-state comparison, using existing start-state and input mechanisms.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

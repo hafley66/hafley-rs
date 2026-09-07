@@ -30,6 +30,50 @@ fn saved_checksum_observer_replaces_a_predicted_frame_after_restore() {
     assert_eq!(checksum(&next.load().unwrap()), checksum(&corrected));
 }
 
+#[test]
+fn missing_cell_actions_correct_state_and_saved_receipts_after_rollback() {
+    use ggrs::{GameStateCell, GgrsRequest, InputStatus};
+    let tune = Tune::default();
+    let inputs: Vec<_> = crate::v1::terrain_cells::playground_inputs().map(|i| encode(&i)).collect();
+    for boundary in [90, 140, 162] {
+        let mut offline = crate::v1::terrain_cells::playground();
+        for &input in &inputs[..boundary] {
+            offline = Smash::advance(&offline, &[input, NetInput::default()], &tune);
+        }
+        let mut game = Game::<Smash>::from_state(offline, tune.clone());
+        let start = GameStateCell::default();
+        let cells: Vec<_> = (0..7).map(|_| GameStateCell::default()).collect();
+        let mut observed = std::collections::BTreeMap::new();
+        game.handle::<usize>(vec![GgrsRequest::SaveGameState { cell: start.clone(), frame: boundary as i32 }]);
+        for (offset, cell) in cells.iter().enumerate() {
+            game.handle_observed::<usize>(vec![
+                GgrsRequest::AdvanceFrame { inputs: vec![(NetInput::default(), InputStatus::Predicted); 2] },
+                GgrsRequest::SaveGameState { cell: cell.clone(), frame: (boundary + offset + 1) as i32 },
+            ], |frame, hash| { observed.insert(frame, hash); });
+        }
+        let predicted = checksum(&game.state);
+        game.handle::<usize>(vec![GgrsRequest::LoadGameState { cell: start, frame: boundary as i32 }]);
+        assert_eq!(checksum(&game.state), checksum(&offline));
+        for (offset, &input) in inputs[boundary..].iter().enumerate() {
+            offline = Smash::advance(&offline, &[input, NetInput::default()], &tune);
+            let frame = (boundary + offset + 1) as i32;
+            let mut requests = vec![GgrsRequest::AdvanceFrame { inputs: vec![
+                (input, InputStatus::Confirmed), (NetInput::default(), InputStatus::Confirmed),
+            ] }];
+            if let Some(cell) = cells.get(offset) {
+                requests.push(GgrsRequest::SaveGameState { cell: cell.clone(), frame });
+            }
+            game.handle_observed::<usize>(requests, |frame, hash| { observed.insert(frame, hash); });
+            assert_eq!(checksum(&game.state), checksum(&offline), "boundary {boundary}, frame {frame}");
+            if let Some(cell) = cells.get(offset) {
+                assert_eq!(observed[&frame], checksum(&offline));
+                assert_eq!(checksum(&cell.load().unwrap()), checksum(&offline));
+            }
+            if offset == 6 { assert_ne!(predicted, checksum(&offline), "missing action must change state"); }
+        }
+    }
+}
+
 /// Deterministic pseudo-random input stream so the sim visits many states (move, jump, dash,
 /// shield, attack, dodge) under rollback. Same seed -> same stream on both "peers".
 fn gen_input(seed: &mut u64) -> NetInput {
