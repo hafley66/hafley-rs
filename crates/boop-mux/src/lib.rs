@@ -14,6 +14,55 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use anyhow::{Context, Result};
 use tracing::{debug, warn};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Pane {
+    pub session: String,
+    pub id: String,
+    pub target: String,
+    pub tty: String,
+    pub pid: Option<u32>,
+    pub current_path: String,
+    pub current_command: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Session {
+    pub name: String,
+    pub windows: u32,
+    pub attached: bool,
+    pub activity: i64,
+    pub created: i64,
+    pub panes: Vec<Pane>,
+}
+
+impl Session {
+    pub fn paths(&self) -> Vec<String> {
+        distinct(self.panes.iter().map(|pane| pane.current_path.as_str()))
+    }
+
+    pub fn commands(&self) -> Vec<String> {
+        distinct(self.panes.iter().map(|pane| pane.current_command.as_str()))
+    }
+}
+
+/// A `tmux` invocation on the selected server (`-L <socket>`), or the default.
+fn tmux_command(socket: Option<&str>) -> Command {
+    let mut builder = Command::new("tmux");
+    if let Some(socket) = socket {
+        builder.arg("-L").arg(socket);
+    }
+    builder
+}
+
+fn distinct<'a>(values: impl Iterator<Item = &'a str>) -> Vec<String> {
+    let mut seen = std::collections::BTreeSet::new();
+    values
+        .filter(|value| !value.is_empty())
+        .filter(|value| seen.insert((*value).to_owned()))
+        .map(str::to_owned)
+        .collect()
+}
+
 /// The tmux multiplexer operations boop drives. Object-safe: every method takes
 /// `&self` and returns a concrete or `anyhow` type.
 pub trait Multiplexer {
@@ -32,6 +81,15 @@ pub trait Multiplexer {
     /// One-shot `tmux list-sessions`. `None` means tmux itself is unreachable,
     /// which is NOT the same as "no sessions".
     fn live_sessions(&self, socket: Option<&str>) -> Option<LiveSessions>;
+    /// Typed observations for every pane on the selected server. Pane id is
+    /// retained so consumers never collapse a multi-pane session to paths[0].
+    fn list_panes(&self, _socket: Option<&str>) -> Option<Vec<Pane>> {
+        None
+    }
+    /// Session metadata joined to typed pane observations from one snapshot.
+    fn live_sessions_detailed(&self, _socket: Option<&str>) -> Option<Vec<Session>> {
+        None
+    }
     /// One-shot exact `has-session` probe.
     fn has_session(&self, socket: Option<&str>, session: &str) -> Result<bool>;
     /// One-shot exact `kill-session`.
@@ -167,6 +225,50 @@ impl Multiplexer for Tmux {
             }
         }
         Some(names)
+    }
+
+    fn list_panes(&self, socket: Option<&str>) -> Option<Vec<Pane>> {
+        let mut builder = tmux_command(socket);
+        let output = builder
+            .args([
+                "list-panes",
+                "-a",
+                "-F",
+                "#{session_name}\t#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{pane_tty}\t#{pane_pid}\t#{pane_current_path}\t#{pane_current_command}",
+            ])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        Some(parse_panes(&String::from_utf8_lossy(&output.stdout)))
+    }
+
+    fn live_sessions_detailed(&self, socket: Option<&str>) -> Option<Vec<Session>> {
+        let panes = self.list_panes(socket)?;
+        let mut panes_by_session = std::collections::BTreeMap::<String, Vec<Pane>>::new();
+        for pane in panes {
+            panes_by_session
+                .entry(pane.session.clone())
+                .or_default()
+                .push(pane);
+        }
+        let mut builder = tmux_command(socket);
+        let output = builder
+            .args([
+                "list-sessions",
+                "-F",
+                "#{session_name}\t#{session_windows}\t#{session_attached}\t#{session_activity}\t#{session_created}",
+            ])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        Some(parse_sessions(
+            &String::from_utf8_lossy(&output.stdout),
+            &mut panes_by_session,
+        ))
     }
 
     fn has_session(&self, socket: Option<&str>, session: &str) -> Result<bool> {
@@ -683,6 +785,43 @@ impl LiveSessions {
     }
 }
 
+fn parse_panes(text: &str) -> Vec<Pane> {
+    text.lines()
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            Some(Pane {
+                session: fields.next()?.to_owned(),
+                id: fields.next()?.to_owned(),
+                target: fields.next()?.to_owned(),
+                tty: fields.next()?.trim_start_matches("/dev/").to_owned(),
+                pid: fields.next()?.parse().ok(),
+                current_path: fields.next()?.to_owned(),
+                current_command: fields.next()?.to_owned(),
+            })
+        })
+        .collect()
+}
+
+fn parse_sessions(
+    text: &str,
+    panes_by_session: &mut std::collections::BTreeMap<String, Vec<Pane>>,
+) -> Vec<Session> {
+    text.lines()
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            let name = fields.next()?.to_owned();
+            Some(Session {
+                windows: fields.next()?.parse().unwrap_or(1),
+                attached: fields.next()? != "0",
+                activity: fields.next()?.parse().unwrap_or(0),
+                created: fields.next()?.parse().unwrap_or(0),
+                panes: panes_by_session.remove(&name).unwrap_or_default(),
+                name,
+            })
+        })
+        .collect()
+}
+
 /// The exact-match target form. `-t name` prefix-matches a sibling session
 /// (`-t boop` matches `boop-shell-v2`); `-t =name` pins to the exact name.
 pub(crate) fn exact_target(name: &str) -> String {
@@ -721,7 +860,9 @@ mod tests {
     use std::process::Command;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use super::{parse_event, ControlClient, ControlEvent, Notification, Tmux};
+    use super::{
+        parse_event, parse_panes, parse_sessions, ControlClient, ControlEvent, Notification, Tmux,
+    };
     use crate::Multiplexer;
 
     static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -791,6 +932,36 @@ mod tests {
             message.contains("tmux new-session failed"),
             "expected 'tmux new-session failed' in {message:?}"
         );
+    }
+
+    #[test]
+    fn parses_pane_identity_and_current_location() {
+        let panes =
+            parse_panes("alpha\t%4\talpha:1.2\t/dev/ttys004\t42\t/repo/worktree/src\tclaude\n");
+        assert_eq!(
+            panes,
+            vec![super::Pane {
+                session: "alpha".into(),
+                id: "%4".into(),
+                target: "alpha:1.2".into(),
+                tty: "ttys004".into(),
+                pid: Some(42),
+                current_path: "/repo/worktree/src".into(),
+                current_command: "claude".into(),
+            }]
+        );
+    }
+
+    #[test]
+    fn detailed_session_retains_each_pane() {
+        let panes = parse_panes(
+            "alpha\t%4\talpha:0.0\t/dev/ttys004\t42\t/repo/main\tclaude\nalpha\t%5\talpha:0.1\t/dev/ttys005\t43\t/repo/wt\tzsh\n",
+        );
+        let mut by_session = std::collections::BTreeMap::from([("alpha".into(), panes)]);
+        let sessions = parse_sessions("alpha\t1\t1\t100\t20\n", &mut by_session);
+        assert_eq!(sessions[0].paths(), vec!["/repo/main", "/repo/wt"]);
+        assert_eq!(sessions[0].commands(), vec!["claude", "zsh"]);
+        assert_eq!(sessions[0].panes.len(), 2);
     }
 
     #[test]

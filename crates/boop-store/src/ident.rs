@@ -54,6 +54,12 @@ pub struct LiveRow {
     pub door_addr: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PaneSessionRow {
+    pub session: String,
+    pub nickname: String,
+}
+
 /// The attribute key a session's mood is stored under.
 pub const MOOD_ATTR_KEY: &str = "mood";
 /// The mood every session falls back to, and the template used when the store
@@ -2709,6 +2715,38 @@ impl Store {
             )
             .optional()?;
         Ok(row)
+    }
+
+    /// The live agent session occupying one tmux pane. `agent_live_span`
+    /// retains prior occupants; this query reads the current-state cache only.
+    pub fn session_in_pane(&self, pane: &str) -> Result<Option<PaneSessionRow>> {
+        self.connection
+            .query_row(
+                "SELECT session.value, COALESCE(agent_session.nickname, session.value)
+                   FROM agent_live
+                   JOIN dict_pane pane ON pane.id = agent_live.tmux_pane_id
+                   JOIN agent_session ON agent_session.session_id = agent_live.session_id
+                   JOIN dict_session session ON session.id = agent_live.session_id
+                  WHERE pane.value = ?1",
+                [pane],
+                |row| {
+                    Ok(PaneSessionRow {
+                        session: row.get(0)?,
+                        nickname: row.get(1)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    pub fn set_session_nickname(&self, session: &str, nickname: &str) -> Result<bool> {
+        let changed = self.connection.execute(
+            "UPDATE agent_session SET nickname = ?2
+              WHERE session_id = (SELECT id FROM dict_session WHERE value = ?1)",
+            params![session, nickname],
+        )?;
+        Ok(changed > 0)
     }
 
     /// Append one observable delivery transition. The current-state ledger
@@ -6384,6 +6422,31 @@ mod tests {
         assert!(store.delivery_rows("m-nothing").unwrap().is_empty());
         drop(store);
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn pane_occupant_nickname_is_mutable_without_changing_session_identity() {
+        let (path, store) = fresh_store("pane-nickname");
+        store
+            .upsert_session_row("session-1", "claude", "old", Some("/repo"), None, 1)
+            .unwrap();
+        store
+            .record_status("session-1", 2, "live", Some(42), Some("%7"))
+            .unwrap();
+        assert_eq!(
+            store.session_in_pane("%7").unwrap(),
+            Some(super::PaneSessionRow {
+                session: "session-1".into(),
+                nickname: "old".into(),
+            })
+        );
+        assert!(store.set_session_nickname("session-1", "compiler").unwrap());
+        assert_eq!(
+            store.session_in_pane("%7").unwrap().unwrap().nickname,
+            "compiler"
+        );
+        drop(store);
+        let _ = std::fs::remove_file(path);
     }
 
     /// ACCEPTANCE (Job 4). The pid-observing sync stores the lane pane pid on
