@@ -1072,6 +1072,11 @@ fn messages_after(connection: &Connection, session: &str, after: u64) -> Result<
             .is_some()
             || data.get("finish").and_then(Value::as_str).is_some()
             || data.get("error").is_some_and(|error| !error.is_null());
+        // A terminal assistant message with no parts (aborted turn, 429 on the
+        // switched-to model) never gains parts; skip it so the cursor moves on.
+        if role == "assistant" && assistant_complete && !has_parts {
+            continue;
+        }
         if !has_parts || (tracks_message_updates && role == "assistant" && !assistant_complete) {
             break;
         }
@@ -1805,6 +1810,160 @@ mod tests {
         drop(source);
         let _ = std::fs::remove_file(transcript);
         let _ = std::fs::remove_file(store_path);
+    }
+
+    // FAIL-PRE-FIX: a 429 on the switched-to model left a terminal assistant
+    // message with zero parts; the walk broke on it and the cursor stalled there.
+    #[test]
+    fn a_model_switch_survives_a_partless_errored_assistant_message() {
+        let transcript = temp_db("switch-transcript");
+        let store_path = temp_db("switch-store");
+        let source = rusqlite::Connection::open(&transcript).unwrap();
+        source
+            .execute_batch(
+                "CREATE TABLE session (
+                   id TEXT PRIMARY KEY, directory TEXT, parent_id TEXT, slug TEXT, time_updated INTEGER
+                 );
+                 CREATE TABLE message (
+                   id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER,
+                   time_updated INTEGER, data TEXT
+                 );
+                 CREATE TABLE part (
+                   id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT,
+                   time_created INTEGER, time_updated INTEGER, data TEXT
+                 );
+                 INSERT INTO session VALUES ('switched', '/tmp', NULL, 'switched', 12);
+                 INSERT INTO message VALUES (
+                   'switch-user-1', 'switched', 10, 10,
+                   '{\"role\":\"user\",\"time\":{\"created\":10}}'
+                 );
+                 INSERT INTO part VALUES (
+                   'switch-user-1-p', 'switch-user-1', 'switched', 10, 10,
+                   '{\"type\":\"text\",\"text\":\"build the tagger\"}'
+                 );
+                 INSERT INTO message VALUES (
+                   'switch-assistant-1', 'switched', 11, 11,
+                   '{\"role\":\"assistant\",\"modelID\":\"deepseek/deepseek-v4-flash-0731\",\"providerID\":\"openrouter\",\"tokens\":{\"input\":1,\"output\":2},\"time\":{\"created\":11,\"completed\":11},\"finish\":\"stop\"}'
+                 );
+                 INSERT INTO part VALUES (
+                   'switch-assistant-1-p', 'switch-assistant-1', 'switched', 11, 11,
+                   '{\"type\":\"text\",\"text\":\"first answer\"}'
+                 );
+                 INSERT INTO message VALUES (
+                   'switch-user-2', 'switched', 12, 12,
+                   '{\"role\":\"user\",\"time\":{\"created\":12}}'
+                 );
+                 INSERT INTO part VALUES (
+                   'switch-user-2-p', 'switch-user-2', 'switched', 12, 12,
+                   '{\"type\":\"text\",\"text\":\"switch model now\"}'
+                 );",
+            )
+            .unwrap();
+
+        let store = Store::open(store_path.clone()).unwrap();
+        let before = session_from(&transcript, "switched").unwrap().unwrap();
+        sync_session(&store, &Opencode, &before).unwrap();
+        let turns = projected_turns(&store, "switched");
+        assert_eq!(
+            turns,
+            vec![
+                (1, "user".to_owned(), "build the tagger".to_owned()),
+                (2, "assistant".to_owned(), "first answer".to_owned()),
+                (3, "user".to_owned(), "switch model now".to_owned()),
+            ],
+            "phase one: {turns:?}"
+        );
+
+        // The switched-to model 429s: a terminal assistant message, no parts.
+        source
+            .execute_batch(
+                "INSERT INTO message VALUES (
+                   'switch-errored', 'switched', 13, 14,
+                   '{\"role\":\"assistant\",\"modelID\":\"z-ai/glm-5.3-flash\",\"providerID\":\"openrouter\",\"cost\":0,\"tokens\":{\"input\":0,\"output\":0,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}},\"time\":{\"created\":13,\"completed\":14},\"error\":{\"name\":\"APIError\",\"data\":{\"message\":\"[DeepInfra] z-ai/glm-5.3-flash is temporarily rate-limited upstream\",\"statusCode\":429}}}'
+                 );
+                 INSERT INTO message VALUES (
+                   'switch-user-3', 'switched', 15, 15,
+                   '{\"role\":\"user\",\"time\":{\"created\":15}}'
+                 );
+                 INSERT INTO part VALUES (
+                   'switch-user-3-p', 'switch-user-3', 'switched', 15, 15,
+                   '{\"type\":\"text\",\"text\":\"and the answer?\"}'
+                 );
+                 INSERT INTO message VALUES (
+                   'switch-assistant-2', 'switched', 16, 16,
+                   '{\"role\":\"assistant\",\"modelID\":\"z-ai/glm-5.3-flash\",\"providerID\":\"openrouter\",\"tokens\":{\"input\":3,\"output\":4},\"time\":{\"created\":16,\"completed\":16},\"finish\":\"stop\"}'
+                 );
+                 INSERT INTO part VALUES (
+                   'switch-assistant-2-r', 'switch-assistant-2', 'switched', 16, 16,
+                   '{\"type\":\"reasoning\",\"text\":\"parsing the retry\"}'
+                 );
+                 INSERT INTO part VALUES (
+                   'switch-assistant-2-t', 'switch-assistant-2', 'switched', 16, 16,
+                   '{\"type\":\"text\",\"text\":\"second answer\"}'
+                 );
+                 UPDATE session SET time_updated = 16 WHERE id = 'switched';",
+            )
+            .unwrap();
+        let after = session_from(&transcript, "switched").unwrap().unwrap();
+        sync_session(&store, &Opencode, &after).unwrap();
+        let turns = projected_turns(&store, "switched");
+        assert_eq!(
+            turns,
+            vec![
+                (1, "user".to_owned(), "build the tagger".to_owned()),
+                (2, "assistant".to_owned(), "first answer".to_owned()),
+                (3, "user".to_owned(), "switch model now".to_owned()),
+                (4, "user".to_owned(), "and the answer?".to_owned()),
+                (
+                    5,
+                    "assistant".to_owned(),
+                    "reasoning: parsing the retry".to_owned()
+                ),
+                (6, "assistant".to_owned(), "second answer".to_owned()),
+            ],
+            "every post-error turn keeps its role and index: {turns:?}"
+        );
+        let cursor: i64 = store
+            .connection()
+            .query_row(
+                "SELECT c.offset FROM sync_cursor c
+                 JOIN dict_session d ON d.id = c.session_id
+                 WHERE d.value = 'switched'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(cursor, 6, "the cursor advances past the partless message");
+
+        sync_session(&store, &Opencode, &after).unwrap();
+        assert_eq!(
+            projected_turns(&store, "switched").len(),
+            6,
+            "a settled cursor rewrites nothing"
+        );
+
+        drop(store);
+        drop(source);
+        let _ = std::fs::remove_file(transcript);
+        let _ = std::fs::remove_file(store_path);
+    }
+
+    fn projected_turns(store: &Store, session: &str) -> Vec<(i64, String, String)> {
+        store
+            .query_turns(&TurnQuery {
+                session: Some(session.to_owned()),
+                ..TurnQuery::default()
+            })
+            .unwrap()
+            .iter()
+            .map(|turn| {
+                (
+                    turn["turn"].as_i64().unwrap_or_default(),
+                    turn["role"].as_str().unwrap_or_default().to_owned(),
+                    turn["said"].as_str().unwrap_or_default().to_owned(),
+                )
+            })
+            .collect()
     }
 
     /// One scratch database path per test, per process.
