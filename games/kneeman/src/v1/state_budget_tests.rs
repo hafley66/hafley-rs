@@ -37,7 +37,8 @@ mod state_budget {
     const INKPATH_MEM: usize = 144;
     const FIGHTER_MEM: usize = 408;
     const SIMSTATE_MEM: usize = 49_416;
-    const WIRE_BYTES: u64 = 46_688;
+    // Special-entry context adds one serialized bool per fighter; resident padding absorbs it.
+    const WIRE_BYTES: u64 = 46_692;
 
     #[test]
     fn pinned_sizes_hold() {

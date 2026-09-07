@@ -215,7 +215,7 @@ crate::slice! {
                 if f.hitlag > 0 {
                     continue;
                 }
-                let Some(atk) = attack_for(&tunes[p], f.state) else {
+                let Some(atk) = attack_for(&tunes[p], f.state, f.special_started_air) else {
                     continue;
                 };
                 for hb in atk.live_boxes() {

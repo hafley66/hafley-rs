@@ -5,7 +5,7 @@ use crate::v1::chars::kneeman;
 use crate::v1::{CharSpec, SpecialMove};
 
 /// KneeMan's kit with DiveGrab up-special and jump-restoring down-special.
-/// Kick still uses the authored DROP motion/hit data; full PM phases remain unported.
+/// Kick uses separate ground/air damage phases with authored timing, geometry and angle-361 approximation.
 pub fn spec() -> CharSpec {
     let mut s = kneeman::spec();
     s.specials[2] = SpecialMove::FALCON_DIVE;

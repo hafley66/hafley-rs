@@ -99,6 +99,9 @@ pub struct SpecialMove {
     /// Optional contact attack selected by SpecialRecovery. Its clock starts at ground contact.
     #[serde(default)]
     pub landing: Option<AttackData>,
+    /// Air-entry attack data; None shares the ordinary hit row.
+    #[serde(default)]
+    pub air_hit: Option<AttackData>,
 }
 
 impl SpecialMove {
@@ -107,7 +110,8 @@ impl SpecialMove {
         kind: SpecialKind::Kick { ground_speed: 900.0 },
         move_x: 900.0,
         move_y: 900.0,
-        hit: AttackData { land_cancel: crate::v1::LandCancel::SpecialRecovery, ..Self::DROP.hit },
+        hit: Self::kick_hit(false),
+        air_hit: Some(Self::kick_hit(true)),
         // Reference combat values; one active tick and 6 px/unit geometry remain authored.
         landing: Some({
             let hit = Hitbox {
@@ -126,6 +130,25 @@ impl SpecialMove {
         ..Self::DROP
     };
     // Default kit (Falcon-ish): heavy neutral-B punch, a side lunge, a rising recovery, a down drive.
+    // PM3.6 damage/KB with authored geometry and 3/4/3-tick phases.
+    // Fixed 45 degrees approximates the reference's 361 sentinel until angle resolution is ported.
+    const fn kick_hit(air: bool) -> AttackData {
+        let base = Hitbox { id: 0, refresh: 0, ..Self::DROP.hit.boxes[0] };
+        let mut attack = AttackData::new(8, 18, [
+            Hitbox { start: 8, len: 3, damage: 15.0, angle: 45.0,
+                bkb: if air { 40.0 } else { 60.0 }, kbg: 70.0, ..base },
+            Hitbox { start: 11, len: 4, damage: if air { 13.0 } else { 12.0 },
+                angle: if air { 45.0 } else { 60.0 }, bkb: if air { 40.0 } else { 60.0 },
+                kbg: if air { 65.0 } else { 60.0 }, ..base },
+            Hitbox { start: 15, len: 3, damage: if air { 11.0 } else { 9.0 },
+                angle: if air { 45.0 } else { 75.0 }, bkb: if air { 40.0 } else { 60.0 },
+                kbg: if air { 60.0 } else { 50.0 }, ..base },
+            Hitbox::NONE,
+        ], 3);
+        attack.land_cancel = crate::v1::LandCancel::SpecialRecovery;
+        attack
+    }
+
     pub(crate) const PUNCH: Self = Self {
         kind: SpecialKind::Punch,
         hit: AttackData::one(
@@ -153,6 +176,7 @@ impl SpecialMove {
         // so recovery returns to full gravity and he actually drops out of the whiff.
         hang_vel: 60.0,
         landing: None,
+        air_hit: None,
     };
     pub(crate) const LUNGE: Self = Self {
         kind: SpecialKind::Lunge,
@@ -175,6 +199,7 @@ impl SpecialMove {
         no_gravity: false,
         hang_vel: 0.0,
         landing: None,
+        air_hit: None,
     };
     pub(crate) const RISE: Self = Self {
         kind: SpecialKind::Rise,
@@ -197,6 +222,7 @@ impl SpecialMove {
         no_gravity: false,
         hang_vel: 0.0,
         landing: None,
+        air_hit: None,
     };
     pub(crate) const DROP: Self = Self {
         kind: SpecialKind::Fall,
@@ -219,6 +245,7 @@ impl SpecialMove {
         no_gravity: false,
         hang_vel: 0.0,
         landing: None,
+        air_hit: None,
     };
     // Falcon up-B: the command grab. A wind-up hang (startup, braked in space like the punch),
     // then the rise fires at `b.start` with the hug live through the climb -- so both-grounded
@@ -258,6 +285,7 @@ impl SpecialMove {
         no_gravity: false, // gravity runs from launch (the hang phase zeroes vel explicitly instead)
         hang_vel: 0.0,
         landing: None,
+        air_hit: None,
     };
 }
 
@@ -277,6 +305,7 @@ pub(crate) fn try_special(n: &mut Fighter) -> bool {
         n.ground_plat = -1;
     }
     let slot = special_dir(aim);
+    n.special_started_air = !n.grounded();
     if slot == 1 && aim.x != 0.0 {
         n.facing = sign(aim.x); // side-B turns you toward the stick
     }
@@ -294,7 +323,8 @@ pub(crate) fn try_special(n: &mut Fighter) -> bool {
 /// Run one frame of a special. The launch burst lands when the active window opens; gravity/friction
 /// run by whether we're airborne (`ground_plat < 0`). Up-B ends in Helpless if it finishes in the air.
 pub(crate) fn run_special(n: &mut Fighter, slot: usize, i: &InputFrame, t: &Tune) {
-    let m = t.specials[slot];
+    let mut m = t.specials[slot];
+    if n.special_started_air { m.hit = m.air_hit.unwrap_or(m.hit); }
     // Falcon up-B command grab (queue-2026-07-03 item 4, travel added 2026-07-04): a punch-style
     // wind-up hang, then the rise launches the same frame the hug window opens.
     // It runs inside `SpecialU` (no new CharState / sprite clip): the move emits NO combat hitbox
@@ -346,7 +376,7 @@ pub(crate) fn run_special(n: &mut Fighter, slot: usize, i: &InputFrame, t: &Tune
     if let SpecialKind::Kick { ground_speed } = m.kind {
         if n.frame >= m.hit.startup && n.frame < m.hit.active_end() {
             if n.frame == m.hit.startup {
-                n.vel = if n.grounded() {
+                n.vel = if !n.special_started_air {
                     Vector2::new(n.facing * ground_speed, 0.0)
                 } else {
                     Vector2::new(n.facing * m.move_x, m.move_y)

@@ -163,7 +163,7 @@ pub(crate) fn resolve_grab(
         && t.specials[2].kind == SpecialKind::DiveGrab
         && g.grab_link < 0
     {
-        let b = t.specials[2].hit.boxes[0];
+        let b = crate::v1::attack_for(t, CharState::SpecialU, g.special_started_air).unwrap().boxes[0];
         let active = g.frame >= b.start && g.frame < b.start + b.len;
         let catchable = !matches!(v.state, CharState::Grabbed | CharState::GrabHold)
             && v.invuln == 0
@@ -237,7 +237,7 @@ pub(crate) fn resolve_grab(
             v.facing = -g.facing;
             g.grab_timer -= 1; // no mash term: a command grab is not shakeable
             if g.grab_timer <= 0 {
-                let b = t.specials[2].hit.boxes[0];
+                let b = crate::v1::attack_for(t, CharState::SpecialU, g.special_started_air).unwrap().boxes[0];
                 // Fixed-angle launch through the shared `strike` ritual: the victim's % still scales
                 // the SPEED via the normal knockback formula, but the ANGLE is the box's, mirrored by
                 // the attacker's facing. We deliberately do NOT apply victim DI here (`resolve_combat`

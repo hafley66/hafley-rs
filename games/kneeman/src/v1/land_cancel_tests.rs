@@ -33,14 +33,14 @@ fn special_recovery_maps_each_slot_to_its_own_recovery_clock() {
     for (slot, state) in [CharState::SpecialN, CharState::SpecialS, CharState::SpecialU, CharState::SpecialD].into_iter().enumerate() {
         t.specials[slot].hit.land_cancel = LandCancel::SpecialRecovery;
         t.specials[slot].hit.boxes[0].len += slot as i64;
-        assert_eq!(land_transition(&t, state), (state, Some(t.specials[slot].hit.active_end())));
+        assert_eq!(land_transition(&t, state, false), (state, Some(t.specials[slot].hit.active_end())));
         t.specials[slot].hit.recovery = 0;
-        assert_eq!(land_transition(&t, state), (CharState::Stand, Some(0)));
+        assert_eq!(land_transition(&t, state, false), (CharState::Stand, Some(0)));
     }
     // Aerial states use their airborne integrator after landing, so this policy is specials-only.
     t.nair.land_cancel = LandCancel::SpecialRecovery;
-    assert_eq!(land_transition(&t, CharState::Nair), (CharState::Landing, None));
-    assert_eq!(land_transition(&t, CharState::Air), (CharState::Landing, None));
+    assert_eq!(land_transition(&t, CharState::Nair, false), (CharState::Landing, None));
+    assert_eq!(land_transition(&t, CharState::Air, false), (CharState::Landing, None));
     for (tag, expected) in [(0u32, LandCancel::Continue), (1, LandCancel::ResetToLanding), (2, LandCancel::SpecialRecovery)] {
         let decoded: LandCancel = bincode::deserialize(&tag.to_le_bytes()).unwrap();
         assert_eq!(decoded, expected);
@@ -60,14 +60,14 @@ fn optional_landing_attack_retains_slot_and_handles_empty_or_missing_data() {
         t.specials[slot].landing = Some(AttackData::one(0, 1, 7, Hitbox {
             damage: slot as f32 + 1.0, ..Hitbox::NONE
         }));
-        assert_eq!(land_transition(&t, start), (end, Some(0)));
-        assert_eq!(attack_for(&t, end).unwrap().boxes[0].damage, slot as f32 + 1.0);
+        assert_eq!(land_transition(&t, start, false), (end, Some(0)));
+        assert_eq!(attack_for(&t, end, false).unwrap().boxes[0].damage, slot as f32 + 1.0);
         assert_eq!(bincode::serialize(&end).unwrap(), (49 + slot as u32).to_le_bytes());
         t.specials[slot].hit.land_cancel = LandCancel::Continue;
-        assert_eq!(land_transition(&t, start), (start, None));
+        assert_eq!(land_transition(&t, start, false), (start, None));
         t.specials[slot].hit.land_cancel = LandCancel::SpecialRecovery;
         t.specials[slot].landing = Some(AttackData::new(0, 0, [Hitbox::NONE; MAX_HB], 0));
-        assert_eq!(land_transition(&t, start), (CharState::Stand, Some(0)));
+        assert_eq!(land_transition(&t, start, false), (CharState::Stand, Some(0)));
         t.specials[slot].landing = None;
         for grounded in [false, true] {
             let mut fighter = SimState::spawn().fighters[0];
@@ -80,6 +80,7 @@ fn optional_landing_attack_retains_slot_and_handles_empty_or_missing_data() {
     assert_eq!(bincode::serialize(&CharState::TechWall).unwrap(), 48u32.to_le_bytes());
     let mut json = serde_json::to_value(t.specials[0]).unwrap();
     json.as_object_mut().unwrap().remove("landing");
+    json.as_object_mut().unwrap().remove("air_hit");
     assert!(serde_json::from_value::<SpecialMove>(json).unwrap().landing.is_none());
 }
 
@@ -106,7 +107,7 @@ fn default_matches_todays_unconditional_landing_reset() {
         CharState::Helpless,
     ] {
         assert_eq!(
-            land_transition(&t, st),
+            land_transition(&t, st, false),
             (CharState::Landing, None),
             "{st:?} should still reset to Landing by default"
         );
@@ -118,10 +119,10 @@ fn default_matches_todays_unconditional_landing_reset() {
 #[test]
 fn continue_keeps_the_state_the_reset_variant_would_have_left() {
     let mut t = tune();
-    assert_eq!(land_transition(&t, CharState::SpecialN), (CharState::Landing, None));
+    assert_eq!(land_transition(&t, CharState::SpecialN, false), (CharState::Landing, None));
     t.specials[0].hit.land_cancel = LandCancel::Continue;
     assert_eq!(
-        land_transition(&t, CharState::SpecialN),
+        land_transition(&t, CharState::SpecialN, false),
         (CharState::SpecialN, None),
         "Continue keeps the act running in place instead of aborting to Landing"
     );

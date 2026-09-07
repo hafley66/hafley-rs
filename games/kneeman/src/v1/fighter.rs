@@ -135,6 +135,9 @@ pub struct Fighter {
     /// key (`ledge_ink` doc). Meaningful only while `ledge_ink >= 0`. Appended at the struct's END
     /// (positional bincode).
     pub ledge_node: u8,
+    /// Special-entry context, retained through ledge travel and rollback. Reset on each special.
+    #[serde(default)]
+    pub special_started_air: bool,
 }
 
 impl Fighter {
@@ -175,6 +178,7 @@ impl Fighter {
             stick_was_hard_y: false,
             cstick_held: false,
             b_reversed: false,
+            special_started_air: false,
             pickup_hold: false,
             shield_hp: SHIELD_MAX,
             shield_stun: 0,

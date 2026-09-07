@@ -195,6 +195,8 @@ fn grounded_falcon_kick_reaches_active_window_without_landing_cancel() {
                 PLATFORMS[0].left + 1.0
             };
             let mut state = SimState::spawn();
+            // Keep this travel/landing test's ship fixed. Dynamic struck-hull recoil is tested below.
+            state.paths[stage::SHIP_SLOT].mass = 0.0;
             state.fighters[0].char_id = 2;
             state.fighters[0].pos = Vector2::new(x, GROUND_Y);
             state.fighters[0].state = CharState::Stand;
@@ -212,7 +214,7 @@ fn grounded_falcon_kick_reaches_active_window_without_landing_cancel() {
                 replay = step(&replay, &[&input, &idle()], &tune);
                 assert_eq!(net::checksum(&state), net::checksum(&replay));
                 let fighter = state.fighters[0];
-                if tick < kick.hit.boxes[0].start + kick.hit.boxes[0].len {
+                if tick < kick.hit.active_end() {
                     assert_eq!(fighter.state, CharState::SpecialD, "tick {tick}");
                 }
                 if !at_edge {
@@ -242,6 +244,85 @@ fn grounded_falcon_kick_reaches_active_window_without_landing_cancel() {
 }
 
 #[test]
+fn kick_phases_select_entry_context_and_share_cooldowns() {
+    let tune = Tune::default().for_char(2);
+    for air in [false, true] {
+        let mut fighter = SimState::spawn().fighters[0];
+        fighter.state = CharState::SpecialD;
+        fighter.special_started_air = air;
+        let hit = attack_for(&tune, fighter.state, fighter.special_started_air).unwrap();
+        assert_eq!(hit.live_boxes().iter().map(|h| (h.start, h.len, h.damage, h.bkb, h.kbg, h.id)).collect::<Vec<_>>(),
+            if air { vec![(8,3,15.0,40.0,70.0,0),(11,4,13.0,40.0,65.0,0),(15,3,11.0,40.0,60.0,0)] }
+            else { vec![(8,3,15.0,60.0,70.0,0),(11,4,12.0,60.0,60.0,0),(15,3,9.0,60.0,50.0,0)] });
+        for (phase, first) in [8, 11, 15].into_iter().enumerate() {
+            let mut attacker = fighter;
+            attacker.pos = Vector2::new(600.0, 400.0);
+            let mut victim = SimState::spawn().fighters[1];
+            victim.pos = attacker.pos;
+            for frame in first..18 {
+                attacker.frame = frame;
+                attacker.hitlag = 0;
+                victim.hitlag = 0;
+                resolve_combat(&mut attacker, 1, &mut victim, Vector2::ZERO, &tune, &tune);
+                assert_eq!(victim.damage, hit.boxes[phase].damage);
+                attacker.tick_hit_cd();
+                attacker = bincode::deserialize(&bincode::serialize(&attacker).unwrap()).unwrap();
+                assert_eq!(attacker.special_started_air, air);
+            }
+        }
+    }
+    let mut state = SimState::spawn();
+    let before = net::checksum(&state);
+    state.fighters[0].special_started_air = true;
+    assert_ne!(net::checksum(&state), before);
+}
+
+#[test]
+fn special_entry_replaces_stale_origin_and_preserves_it_across_restore() {
+    let tune = Tune::default();
+    for air in [false, true] {
+        let mut state = SimState::spawn();
+        let fighter = &mut state.fighters[0];
+        fighter.char_id = 2;
+        fighter.pos = Vector2::new(900.0, if air { 500.0 } else { GROUND_Y });
+        fighter.state = if air { CharState::Air } else { CharState::Stand };
+        fighter.ground_plat = 0; // stale ground index must not turn Air into a ground entry
+        fighter.special_started_air = !air;
+        state = step(&state, &[&InputFrame { special: true, aim_y: 1.0, ..idle() }, &idle()], &tune);
+        assert_eq!(state.fighters[0].state, CharState::SpecialD);
+        assert_eq!(state.fighters[0].special_started_air, air);
+        let restored: SimState = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap();
+        assert_eq!(net::checksum(&restored), net::checksum(&state));
+        assert_eq!(restored.fighters[0].special_started_air, air);
+    }
+}
+
+#[test]
+fn kick_can_launch_the_dynamic_ship_into_the_attacker_and_replay() {
+    let tune = Tune::default();
+    let mut state = SimState::spawn();
+    let fighter = &mut state.fighters[0];
+    fighter.char_id = 2;
+    fighter.pos = Vector2::new(PLATFORMS[0].left + 1.0, GROUND_Y);
+    fighter.state = CharState::Stand;
+    fighter.ground_plat = 0;
+    fighter.facing = -1.0;
+    let ship_start = state.paths[stage::SHIP_SLOT].pos;
+    let mut replay = state;
+    for tick in 0..40 {
+        let input = InputFrame { special: tick == 0, aim_y: if tick == 0 { 1.0 } else { 0.0 }, ..idle() };
+        state = step(&state, &[&input, &idle()], &tune);
+        replay = step(&replay, &[&input, &idle()], &tune);
+        assert_eq!(net::checksum(&state), net::checksum(&replay));
+        if tick == 20 { replay = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap(); }
+    }
+    assert!(state.paths[stage::SHIP_SLOT].pos.distance(ship_start) > 100.0);
+    assert!(state.paths[stage::SHIP_SLOT].percent > 0.0);
+    assert!(state.fighters[0].damage > 0.0);
+    assert_eq!(state.fighters[0].state, CharState::Launched);
+}
+
+#[test]
 fn kick_travel_uses_loadout_velocity_and_keeps_ground_launch_across_an_edge() {
     for facing in [-1.0, 1.0] {
         for grounded in [false, true] {
@@ -253,6 +334,7 @@ fn kick_travel_uses_loadout_velocity_and_keeps_ground_launch_across_an_edge() {
             let mut fighter = SimState::spawn().fighters[0];
             fighter.state = CharState::SpecialD;
             fighter.ground_plat = if grounded { 0 } else { -1 };
+            fighter.special_started_air = !grounded;
             fighter.facing = facing;
             fighter.air_jumps = 0;
             fighter.fast_falling = true;
@@ -477,7 +559,7 @@ fn special_landing_crosses_a_ledge_and_relands_without_restarting_or_rearming() 
             if tick < total - 2 {
                 assert_eq!(fighter.state, CharState::SpecialLandD);
                 assert_eq!(fighter.frame, tick + 2);
-                assert!(attack_for(&tune.for_char(2), fighter.state).unwrap()
+                assert!(attack_for(&tune.for_char(2), fighter.state, fighter.special_started_air).unwrap()
                     .box_at(fighter.frame).is_none());
             }
         }

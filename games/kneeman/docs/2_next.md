@@ -1183,6 +1183,29 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Next gameplay work remains Kick wall entry/motion and the remaining Falcon move phases;
    reference gaps are in docs/3_pm_baseline.md and docs/4_falcon_script_reference.md. The
    contact fixture is now inspectable and does not require another abstraction layer.
+   Ground/air Kick travel checkpoint: SpecialMove.air_hit optionally overrides the attack row
+   chosen at special entry. Fighter.special_started_air is appended to snapshots, reset on
+   every special entry and folded into the deterministic checksum. Kick launch and travel
+   retain that context after leaving support. Combat, clanks, item/ink strikes, sprite sampling,
+   landing policy and command-grab catch/explosion read the selected row. Other moves default
+   to the shared hit row. Ground damage 15/12/9, air damage 15/13/11; shared ID 0 prevents
+   later phases re-hitting the same fighter. Reference and authored-value boundaries are in
+   docs/4_falcon_script_reference.md: current 8 startup + 3/4/3 travel + 18 recovery and geometry
+   remain authored; angle 361 is approximated by fixed 45 degrees, not a completed resolver.
+   Tests cover each phase's first contact, shared cooldown after serialization, entry resetting
+   stale context, stale platform metadata during air entry, checksum sensitivity, ground launch
+   across a ledge and the stronger strike's dynamic-hull recoil. The movement-only test uses
+   a fixed hull; a separate test preserves the dynamic hull hitting the attacker after launch.
+   The first gate exposed that changed ship interaction and the four-byte snapshot increase.
+   Resident sizes remain unchanged; spawn wire bytes increase 46,688 -> 46,692 (one bool/fighter).
+   Final gate: 454 game + 77 shell tests pass, exit 0;
+   /private/tmp/game3-kick-phases-complete-tests.log. Diagnostic ship trace:
+   /private/tmp/game3-kick-phase-ship-diagnostic.log. No export/browser/publication this checkpoint.
+   Startup version 4 gates the new Fighter/Tune binary layouts; production remains version 3
+   at 00315e9. Old binary fixtures, shared Tune and native snapshot decoders must be regenerated.
+   Next: fresh export, grounded/air contact debugger checks, Kick recovery/ship/destruction
+   regressions, then version-4/version-3 rejection in both directions and corrected-state online
+   hit/reconnect acceptance before publication. JSON defaults do not imply old binary compatibility.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;

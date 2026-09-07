@@ -677,7 +677,7 @@ pub fn knockback_units(p: f32, d: f32, w: f32, hb: &Hitbox) -> f32 {
     (((p / 10.0 + p * d / 20.0) * (200.0 / (w + 100.0)) * 1.4 + 18.0) * (hb.kbg / 100.0)) + hb.bkb
 }
 
-pub fn attack_for(t: &Tune, st: CharState) -> Option<AttackData> {
+pub fn attack_for(t: &Tune, st: CharState, special_air: bool) -> Option<AttackData> {
     match st {
         CharState::Jab => Some(t.jab),
         CharState::Nair => Some(t.nair),
@@ -694,7 +694,9 @@ pub fn attack_for(t: &Tune, st: CharState) -> Option<AttackData> {
         CharState::DashAttack => Some(t.dash_attack),
         CharState::LedgeAttack => Some(t.ledge_attack),
         CharState::GetupAttack => Some(t.getup_attack),
-        _ => special_slot(st).map(|s| t.specials[s].hit)
+        _ => special_slot(st).map(|s| if special_air {
+                t.specials[s].air_hit.unwrap_or(t.specials[s].hit)
+            } else { t.specials[s].hit })
             .or_else(|| special_landing_slot(st).and_then(|s| t.specials[s].landing)),
     }
 }
@@ -706,8 +708,8 @@ pub fn attack_for(t: &Tune, st: CharState) -> Option<AttackData> {
 /// `AttackData.land_cancel`. Returns the state and an optional exact next-frame override,
 /// applied after the ordinary transition clock. SpecialRecovery closes the active hit window
 /// and restarts the full authored recovery even when contact happens during existing recovery.
-pub fn land_transition(t: &Tune, st: CharState) -> (CharState, Option<i64>) {
-    match attack_for(t, st) {
+pub fn land_transition(t: &Tune, st: CharState, special_air: bool) -> (CharState, Option<i64>) {
+    match attack_for(t, st, special_air) {
         Some(atk) if atk.land_cancel == LandCancel::Continue => (st, None),
         Some(atk) if atk.land_cancel == LandCancel::SpecialRecovery && special_slot(st).is_some() => {
             let slot = special_slot(st).unwrap();
@@ -765,7 +767,7 @@ pub fn hitbox_center(f: &Fighter, hb: &Hitbox) -> (Vector2, f32) {
 /// `box_at` for the id-priority pick.
 pub fn live_hitboxes(f: &Fighter, t: &Tune) -> [Option<(Vector2, f32)>; MAX_HB] {
     let mut out = [None; MAX_HB];
-    if let Some(atk) = attack_for(t, f.state) {
+    if let Some(atk) = attack_for(t, f.state, f.special_started_air) {
         for (i, b) in atk.live_boxes().iter().enumerate() {
             if b.live_at(f.frame) {
                 out[i] = Some(hitbox_center(f, b));
@@ -778,7 +780,7 @@ pub fn live_hitboxes(f: &Fighter, t: &Tune) -> [Option<(Vector2, f32)>; MAX_HB] 
 /// The lowest-id hitbox live this frame, in world space (None if the move has no live box now).
 /// Kept for the single-shape debug draw (shell + web); combat uses `box_at` directly.
 pub fn active_hitbox(f: &Fighter, t: &Tune) -> Option<(Vector2, f32)> {
-    let atk = attack_for(t, f.state)?;
+    let atk = attack_for(t, f.state, f.special_started_air)?;
     atk.box_at(f.frame).map(|b| hitbox_center(f, b))
 }
 

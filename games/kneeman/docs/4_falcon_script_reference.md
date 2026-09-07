@@ -64,3 +64,15 @@ hit, overlapping airborne rejection, fresh contact cooldowns and serialized repl
 Remaining evidence: effective duration, bone/world-to-Game3 scale, landing recovery,
 wall-entry guard and motion. Preserve ground-launch provenance across a ledge and snapshot
 reload when implementing the wall route. Browser/publication status is in docs/2_next.md.
+
+## Ground/air travel rows
+
+The next Game3 checkpoint selects SpecialMove.air_hit from a serialized special-entry flag.
+Ground damage progresses 15/12/9 with BKB 60 and KBG 70/60/50; air progresses 15/13/11 with
+BKB 40 and KBG 70/65/60. Shapes share hit ID 0 across phases. These damage/KB values come
+from the retrieved ground/air scripts above. Game3 retains startup 8, ten travel ticks split
+3/4/3, recovery 18 and its existing spatial shape. Those durations and geometry are authored.
+The reference's angle-361 sentinel currently uses an explicit fixed 45-degree approximation;
+ground middle/late angles are 60/75. A reference-equivalent angle resolver remains unported.
+Special entry context survives leaving a ledge and snapshot restore; current groundedness
+does not reselect the travel row. Wall guards and animation-driven recoil remain unported.

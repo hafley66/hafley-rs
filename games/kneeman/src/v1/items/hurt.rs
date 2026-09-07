@@ -89,7 +89,7 @@ pub(crate) fn item_strikes(n: &mut SimState, np: usize, tunes: &[Tune; MAX_PLAYE
         if f.hitlag > 0 {
             continue; // frozen on impact: `frame` isn't advancing, don't re-fire the start gate
         }
-        let Some(atk) = attack_for(&tunes[a], f.state) else {
+        let Some(atk) = attack_for(&tunes[a], f.state, f.special_started_air) else {
             continue; // not in an attacking state this frame
         };
         for hb in atk.live_boxes() {

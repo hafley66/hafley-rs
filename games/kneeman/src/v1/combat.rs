@@ -237,7 +237,7 @@ pub(crate) fn resolve_combat(
     if b.invuln > 0 || b.intangible {
         return; // spawn i-frames / active dodge: no hit lands
     }
-    let Some(atk) = attack_for(ta, a.state) else {
+    let Some(atk) = attack_for(ta, a.state, a.special_started_air) else {
         return;
     };
     let (bc, br) = hurtbox(b);
@@ -429,7 +429,7 @@ pub(crate) fn resolve_clank(n: &mut SimState, a: usize, b: usize, ta: &Tune, tb:
     if fa.hitlag > 0 || fb.hitlag > 0 {
         return;
     }
-    let (Some(da), Some(db)) = (attack_for(ta, fa.state), attack_for(tb, fb.state)) else {
+    let (Some(da), Some(db)) = (attack_for(ta, fa.state, fa.special_started_air), attack_for(tb, fb.state, fb.special_started_air)) else {
         return;
     };
     let mut met: Option<(f32, f32)> = None; // (a's box damage, b's box damage)

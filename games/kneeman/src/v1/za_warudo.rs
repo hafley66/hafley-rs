@@ -1053,7 +1053,7 @@ fn transition(
         CharState::Jab => {
             // grounded swing: hard brake to a planted stop, run out the frame data, then neutral.
             n.vel.x = move_toward(n.vel.x, 0.0, t.ground_friction * 3.0 * DT);
-            let atk = attack_for(t, CharState::Jab).unwrap();
+            let atk = attack_for(t, CharState::Jab, false).unwrap();
             if n.frame >= atk.total() - 1 {
                 n.state = if i.shield_held {
                     CharState::Shield
@@ -1066,7 +1066,7 @@ fn transition(
             // crouched pothole swing: planted (feet stay put), run the frame data, then back to a
             // crouch if down is still held, else stand. Same brake as a jab.
             n.vel.x = move_toward(n.vel.x, 0.0, t.ground_friction * 3.0 * DT);
-            let atk = attack_for(t, CharState::Dtilt).unwrap();
+            let atk = attack_for(t, CharState::Dtilt, false).unwrap();
             if n.frame >= atk.total() - 1 {
                 n.state = if i.down {
                     CharState::Crouch
@@ -1078,7 +1078,7 @@ fn transition(
         CharState::DashAttack => {
             // lunge: slide through the swipe carrying the lunge speed (barely any friction), then
             // brake hard once the endlag starts so the commitment still plants you. No steering.
-            let atk = attack_for(t, CharState::DashAttack).unwrap();
+            let atk = attack_for(t, CharState::DashAttack, false).unwrap();
             let sliding = n.frame < atk.active_end(); // still swinging = the drive; then brake
             let fric = if sliding {
                 t.dashstop_friction * 0.12
@@ -1166,7 +1166,7 @@ fn transition(
             if n.vel.y > t.max_fall {
                 n.vel.y = t.max_fall;
             }
-            let atk = attack_for(t, st).unwrap();
+            let atk = attack_for(t, st, false).unwrap();
             if n.frame >= atk.total() - 1 {
                 n.state = CharState::Air;
                 n.autohop_aerial = false;
@@ -1179,7 +1179,7 @@ fn transition(
             // planted swing: same hard brake + frame-data runout as a jab. The two getup
             // swings ride the same shape — their intangible startup is the i-frame match.
             n.vel.x = move_toward(n.vel.x, 0.0, t.ground_friction * 3.0 * DT);
-            let atk = attack_for(t, st).unwrap();
+            let atk = attack_for(t, st, false).unwrap();
             if n.frame >= atk.total() - 1 {
                 n.state = if i.shield_held {
                     CharState::Shield
@@ -1191,7 +1191,7 @@ fn transition(
         st @ (CharState::Fsmash | CharState::Dsmash) => {
             // planted smash: dashstop-grade brake — the commitment is standing still and swinging.
             n.vel.x = move_toward(n.vel.x, 0.0, t.dashstop_friction * DT);
-            let atk = attack_for(t, st).unwrap();
+            let atk = attack_for(t, st, false).unwrap();
             if charge_smash(n, i, t) {
                 force_reset = true; // charging: the clock stays pinned at 0
             } else if n.frame >= atk.total() - 1 {
@@ -1206,7 +1206,7 @@ fn transition(
             // up smash keeps its slide (PM jump-cancel usmash out of a run): only normal ground
             // friction bleeds the momentum, so a running JC usmash travels through the swing.
             n.vel.x = move_toward(n.vel.x, 0.0, t.ground_friction * DT);
-            let atk = attack_for(t, CharState::Usmash).unwrap();
+            let atk = attack_for(t, CharState::Usmash, false).unwrap();
             if charge_smash(n, i, t) {
                 force_reset = true;
             } else if n.frame >= atk.total() - 1 {
@@ -1301,7 +1301,7 @@ fn integrate_collide(
                     n.coyote = 0; // landed: the grace window is spent
                     n.cling_used = 0; // landed: fresh airtime cling budget
                     set_ground(n, hit.owner);
-                    (n.state, landing_frame) = crate::v1::land_transition(t, n.state);
+                    (n.state, landing_frame) = crate::v1::land_transition(t, n.state, n.special_started_air);
                 }
             }
         }
@@ -1321,7 +1321,7 @@ fn integrate_collide(
                     touch_refresh(n, t);
                     n.cling_used = 0; // landed: fresh airtime cling budget
                     set_ground(n, hit.owner);
-                    (n.state, landing_frame) = crate::v1::land_transition(t, n.state);
+                    (n.state, landing_frame) = crate::v1::land_transition(t, n.state, n.special_started_air);
                 }
             }
         } else if n.on_ink() {

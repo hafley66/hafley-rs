@@ -176,6 +176,7 @@ pub fn checksum(s: &SimState) -> u128 {
         fold(f.stick_was_hard_y as u64);
         fold(f.cstick_held as u64);
         fold(f.b_reversed as u64);
+        fold(f.special_started_air as u64);
         fold(f.pickup_hold as u64);
         fold(f.shield_hp.to_bits() as u64);
         fold(f.shield_stun as u64);

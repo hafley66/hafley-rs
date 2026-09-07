@@ -564,6 +564,7 @@ pub const fn spec() -> CharSpec {
                 no_gravity: false,
                 hang_vel: 0.0,
                 landing: None,
+                air_hit: None,
             },
             // side-B: PK Fire. STUB: -> Missile (Act::SpecialFire + a projectile) when row 3 lands.
             SpecialMove {
@@ -587,6 +588,7 @@ pub const fn spec() -> CharSpec {
                 no_gravity: false,
                 hang_vel: 0.0,
                 landing: None,
+                air_hit: None,
             },
             // up-B: PK Thunder 2. STUB: -> Thunder (steered bolt + self-hit launch) when row 3b lands.
             // `no_gravity: true` is the Ness/Lucas floaty-recovery hook `SpecialMove` already
@@ -613,6 +615,7 @@ pub const fn spec() -> CharSpec {
                 no_gravity: true,
                 hang_vel: 0.0,
                 landing: None,
+                air_hit: None,
             },
             // down-B: PSI Magnet. STUB: -> Absorb (on_proj heal+despawn) when row 6 lands.
             SpecialMove {
@@ -636,6 +639,7 @@ pub const fn spec() -> CharSpec {
                 no_gravity: false,
                 hang_vel: 0.0,
                 landing: None,
+                air_hit: None,
             },
         ],
         throws: [

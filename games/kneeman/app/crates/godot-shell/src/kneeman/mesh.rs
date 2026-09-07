@@ -34,7 +34,7 @@ use super::{KneeMan, Phase, Room};
 /// the exact same rule off the exact same missing data, so frame 0 can't diverge over it.
 const MESH_PICK_TIMEOUT_MS: u64 = 5_000;
 // Version 3 adds hitbox target filters to Tune and tracks support through launch/contact.
-const START_VERSION: i64 = 3;
+const START_VERSION: i64 = 4;
 
 /// One pair's live connection, keyed by the REMOTE handle (see `MeshSession::links`).
 struct PeerLink {

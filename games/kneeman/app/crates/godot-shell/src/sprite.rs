@@ -272,7 +272,7 @@ pub(crate) fn resolve_clip(a: &Gd<AnimatedSprite2D>, want: &str) -> StringName {
 /// non-attacks (they keep their looping playback) and for single-frame clips. This is the hook that
 /// makes genuine multi-frame attack animations land on-window; richer per-attack art just drops in.
 pub(crate) fn sync_attack_frame(a: &mut Gd<AnimatedSprite2D>, f: &Fighter, t: &Tune) {
-    let Some(atk) = sim::attack_for(t, f.state) else {
+    let Some(atk) = sim::attack_for(t, f.state, f.special_started_air) else {
         return;
     };
     let Some(sf) = a.get_sprite_frames() else {

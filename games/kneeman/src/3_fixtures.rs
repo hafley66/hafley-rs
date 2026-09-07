@@ -8,6 +8,7 @@ pub fn kick_contact(grounded: bool) -> SimState {
     fighter.pos = Vector2::new(900.0, GROUND_Y - 1.0);
     fighter.vel = Vector2::new(0.0, 120.0);
     fighter.state = CharState::SpecialD;
+    fighter.special_started_air = true;
     fighter.frame = Tune::default().for_char(2).specials[3].hit.startup + 1;
     fighter.ground_plat = -1;
     fighter.ground_ink = -1;
