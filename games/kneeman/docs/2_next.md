@@ -990,6 +990,32 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    No publication yet. Larger-party version rejection still lacks browser coverage. Next:
    production export Falcon/cell regressions, publish, then production shared-hit acceptance;
    retain the pending grounded-target landing-hit implementation after that checkpoint.
+   Pre-publication landing regression: LOCAL_EXPORT=1 LAND=1 KICK=1 CONFIRMED=1 COMBAT=1
+   RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1
+   node /private/tmp/1_game3_online.cjs passes all 61 sequence-frame comparisons, 548 initial
+   and 181 resumed comparisons, ticks 756/754. Each peer drops 240/1237 messages, max run 24;
+   offline recovery and no closed-send errors/browser exceptions, exit 0.
+   /private/tmp/game3-hit-identity-kick-regression.log; /private/tmp/game3-online-SLZJaa.
+   Pre-publication cells regression: same flags with CELLS=1 instead of LAND/KICK pass
+   543 initial + 181 resumed comparisons, ticks 738/739; both peers reach
+   {holding:-1,cells:[[18,9],[19,0],[20,0]],items:[]}. Dropped 230/1213 and 233/1216 messages,
+   max run 24, offline recovery and no closed-send errors/browser exceptions, exit 0.
+   /private/tmp/game3-hit-identity-cells-regression.log; /private/tmp/game3-online-eG8J0g.
+   Published the export containing runtime 47ceed1 (fixture branch checkpoint 9b85655) through
+   the existing Game3 profile. Nginx validation passed; remote WASM matches local SHA-256
+   a55d2ee712af7945e3451588172a7566d9c2231f1b0c568ecf4d39689ae5fe4f.
+   Game3 pack remains fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df;
+   protected /game/ pack remains
+   5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795.
+   /private/tmp/game3-hit-identity-publish.log. Old tabs must reload for startup version 2.
+   Production shared-hit acceptance: SHARED=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1
+   DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Both snapshots show [0,10] damage, 542 initial + 180 resumed comparisons match, ticks
+   750/747. Drops 240/1225 and 238/1221 messages, max run 24; peer-close offline recovery,
+   no closed-send errors/browser exceptions, exit 0. /private/tmp/game3-shared-hit-production.log;
+   /private/tmp/game3-online-R1r2ud. No new compiler job this turn; 445 game + 76 shell remains
+   the native gate. Next: grounded-target filtering and the data-driven landing hit phase;
+   larger-party version browser coverage and PM timing verification remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
