@@ -25,6 +25,7 @@ enum Command {
     JumpGrab,
     Dive(DiveStart),
     KickContact(bool),
+    KickTravel(bool),
     ReplayStep,
 }
 
@@ -38,9 +39,8 @@ struct Trace {
 }
 
 impl Trace {
-    fn kick_contact(grounded: bool) -> Self {
+    fn idle(mut state: SimState) -> Self {
         let tune = Tune::default();
-        let mut state = sim::fixtures::kick_contact(grounded);
         let mut trace = Self::new(&state, &tune);
         trace.recording = false;
         for _ in 0..60 {
@@ -160,9 +160,38 @@ impl Trace {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn kick_travel_replays_both_entry_rows_and_preserves_captured_tuning() {
+        for air in [false, true] {
+            let trace = super::Trace::idle(super::sim::fixtures::kick_travel(air));
+            assert_eq!(trace.verify(), Ok(60));
+            let start: super::SimState = bincode::deserialize(&trace.snapshot).unwrap();
+            let mut state = start;
+            for index in 0..60 {
+                state = trace.replay_step(&state, index).unwrap().unwrap();
+                assert_eq!(state.fighters[1].damage, if air { 11.0 } else { 9.0 });
+            }
+            assert!(trace.replay_step(&state, 60).unwrap().is_none());
+            assert!(trace.replay_step(&state, 0).is_err());
+
+            let mut edited = trace.tune.clone();
+            let row = super::sim::art_slot_row(2);
+            let special = &mut std::sync::Arc::make_mut(&mut edited.roster)[row].specials[3];
+            let ground = special.hit;
+            let landing = special.landing;
+            for hit in &mut special.air_hit.as_mut().unwrap().boxes { hit.damage = 20.5; }
+            assert!(special.hit == ground, "air edit changed ground attack");
+            assert!(special.landing == landing, "air edit changed landing attack");
+            let stepped = super::sim::step(&start, &[&super::InputFrame::default(); 2], &edited);
+            assert_eq!(stepped.fighters[1].damage, if air { 20.5 } else { 9.0 });
+            let captured = trace.replay_step(&start, 0).unwrap().unwrap();
+            assert_eq!(captured.fighters[1].damage, if air { 11.0 } else { 9.0 });
+        }
+    }
+
+    #[test]
     fn kick_contact_replays_ground_hit_and_air_rejection() {
         for grounded in [false, true] {
-            let trace = super::Trace::kick_contact(grounded);
+            let trace = super::Trace::idle(super::sim::fixtures::kick_contact(grounded));
             assert_eq!(trace.verify(), Ok(60));
             let mut state: super::SimState = bincode::deserialize(&trace.snapshot).unwrap();
             for index in 0..60 {
@@ -461,7 +490,8 @@ impl Debugger {
                         ("Load fixture", Command::Fixture), ("Falcon jump-grab", Command::JumpGrab),
                         ("Dive catch", Command::Dive(DiveStart::Catch)), ("Dive whiff", Command::Dive(DiveStart::Whiff)),
                         ("Ship Dive", Command::Dive(DiveStart::Ship)), ("Cell replay", Command::CellReplay),
-                        ("Kick ground", Command::KickContact(true)), ("Kick air", Command::KickContact(false))] {
+                        ("Kick ground", Command::KickContact(true)), ("Kick air", Command::KickContact(false)),
+                        ("Travel ground", Command::KickTravel(false)), ("Travel air", Command::KickTravel(true))] {
                         if ui.button(label).clicked() { self.command = Some(command); }
                     }
                 });
@@ -566,9 +596,11 @@ impl KneeMan {
                     message: "Fixture paused. Resume and strike the blue cells. Dropper left of Falcon; ship farther left.".into(),
                     ..Debugger::default() };
             }
-            Some(Command::JumpGrab | Command::Dive(_) | Command::CellReplay | Command::KickContact(_)) => {
+            Some(Command::JumpGrab | Command::Dive(_) | Command::CellReplay | Command::KickContact(_) | Command::KickTravel(_)) => {
                 let (trace, message) = match command {
-                    Some(Command::KickContact(grounded)) => (Trace::kick_contact(grounded),
+                    Some(Command::KickTravel(air)) => (Trace::idle(sim::fixtures::kick_travel(air)),
+                        "Replay step 1: late Kick travel. Ground entry: 9 damage; air entry: 11. Authored timing; PM parity unverified."),
+                    Some(Command::KickContact(grounded)) => (Trace::idle(sim::fixtures::kick_contact(grounded)),
                         "Replay step 1: Kick landing contact. Ground target: 10 damage; air target: 0. Authored timing; PM parity unverified."),
                     Some(Command::CellReplay) => (Trace::cells(),
                         "Replay step: 91 = strike, 141 = pickup, 163 = throw, 164 = cell impact. Game3 item rules."),

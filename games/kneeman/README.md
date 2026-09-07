@@ -36,6 +36,8 @@ and **Kick air** load 60-tick Falcon landing traces with an overlapping grounded
 opponent. **Replay step** advances one recorded input; **Verify replay** checks every tick;
 **Restore start** restores the snapshot. Ground contact deals 10 damage; the airborne control
 takes 0. These fixtures use authored Game3 timing, with PM parity gaps recorded in the ledger.
+**Travel ground** and **Travel air** start at the same late-travel contact, with the entry
+context selecting 9 or 11 damage. Each includes 60 replay ticks.
 
 Offline **feel → special** controls edit player 1's shared character kit. Expand **ground /
 shared hit**, **air-entry hit**, or **landing hit** to edit the existing attack rows; optional

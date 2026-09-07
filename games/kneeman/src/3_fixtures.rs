@@ -1,6 +1,20 @@
 //! Fixed simulation starts shared by the replay debugger and browser fixture writers.
 use crate::v1::*;
 
+pub fn kick_travel(air_entry: bool) -> SimState {
+    let mut state = kick_contact(false);
+    let fighter = &mut state.fighters[0];
+    fighter.special_started_air = air_entry;
+    fighter.pos = Vector2::new(600.0, 400.0);
+    fighter.vel = Vector2::ZERO;
+    fighter.frame = 14; // next step enters the late travel phase
+    fighter.hit_cd = [[0; MAX_PLAYERS]; MAX_HB];
+    state.fighters[1].pos = Vector2::new(624.0, 410.0);
+    state.fighters[1].vel = Vector2::ZERO;
+    state.fighters[1].ground_plat = -1;
+    state
+}
+
 pub fn kick_contact(grounded: bool) -> SimState {
     let mut state = SimState::spawn();
     let fighter = &mut state.fighters[0];

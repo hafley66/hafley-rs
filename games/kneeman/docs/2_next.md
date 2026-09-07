@@ -1290,7 +1290,28 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    exit 0. Log: /private/tmp/game3-phase-editor-production.log; screenshots:
    /private/tmp/game3-phase-editor-KmTMLf. Online acceptance above used this same artifact
    locally with production signaling; no additional production-only online run this checkpoint.
-   Next bounded task: verify air-entry edits independently of ground and landing rows.
+   Travel debugger checkpoint: Travel ground / Travel air reuse the browser fixture writer's
+   late-travel snapshot through fixtures::kick_travel. The existing 60-idle-tick Trace builder
+   accepts the start state; no new simulation state or protocol. Native regression replays all
+   60 ticks for both entry modes (9 / 11 damage), checks EOF and changed-state rejection, then
+   edits only the air row to 20.5. Ground remains 9; ground and landing AttackData remain equal;
+   the original captured air trace still deals 11. Native gate: 454 game + 78 shell pass;
+   /private/tmp/game3-travel-editor-tests2.log. The fixture writer passes cargo check;
+   /private/tmp/game3-travel-editor-example.log. Web export passes;
+   /private/tmp/game3-travel-editor-build2.log. Initial test assertion formatting and a sandboxed
+   Godot settings-write failure were corrected before these passing gates.
+   Local browser changes the late air-entry hitbox to 20.5, captures the edited Tune at tick 0,
+   live-steps 60 ticks, verifies, restores the exact initial checksum, and replays all 60 stored
+   checksums with 20.5 damage throughout. EOF leaves the final checksum unchanged. Reloaded
+   default traces deal ground 9, air 11 and landing 10. No browser exceptions, exit 0;
+   node /private/tmp/9_game3_travel_editor.cjs; /private/tmp/game3-travel-editor-browser.log;
+   screenshots /private/tmp/game3-travel-editor-aCiVcX. Inspected Verify reports all 60 checksums.
+   Native tests establish unchanged sibling rows under an air edit; browser default reloads
+   reset tuning and therefore do not independently establish that sibling-row invariant.
+   No art/deployment-source changes; art-test/web-check not rerun. Simulation rules unchanged;
+   no new online test in this debugger-only checkpoint.
+   Next bounded gameplay task: inspect reference-backed angle-361 resolution against existing
+   knockback and contact data before replacing Falcon's documented 45-degree approximation.
    Angle-361 resolution, effective PM timing/geometry, wall action/motion, larger parties and
    physical-device/cross-network acceptance remain open. No reminder or Boop changes.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
