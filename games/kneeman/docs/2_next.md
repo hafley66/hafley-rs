@@ -19,6 +19,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Regression | Existing fixed-input/replay/rollback suites remain the game gate |
 | Falcon | Fresh sessions select Falcon/Lucas; built-in art-to-kit mapping corrected; existing movement/attack strips wired. Commit 47ea707 |
 | Falcon Dive | Published through 5e0eacd: grounded startup fix, catch/whiff debugger fixtures and optional-fire-art guard. Production replay and online Dive acceptance pass |
+| Falcon kick restoration | Published through a1dc227: airborne down-special completion restores the selected loadout's air jumps. Native interruption/boundary tests and production two-peer recovery pass; full kick phases remain unported |
 | Special ship carry | Published through 83e3456: carry correction plus Ship Dive debugger fixture. Native and production browser checks prove startup follows the moving hull, then launches and replays |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Cell item/contact sequence | Published through f9a486d: Cell replay uses the same 240-tick wire-input sequence as the native test. Local and production pickup/throw/contact, restore/EOF and changed-state rejection pass |
@@ -725,6 +726,22 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    unchanged. No new full native gate this turn; latest gate remains 438 game + 76 shell.
    Next: publish the tested kick export and repeat matching-build recovery assertions on
    production. This acceptance does not establish complete Falcon Kick phases or PM timing.
+   Published kick-restoration export through a1dc227 using the dedicated Game3 profile;
+   nginx validation/reload passes. Remote WASM matches tested SHA-256
+   05afb1b89708a9ef177f3b25ce34a9a84b8974ea7bc1ca085543c13efbeb87dc.
+   Game3 pack remains fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df;
+   protected /game/ pack remains 5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795.
+   Production-only rerun passes both peers' first ascent, SpecialD, no sampled landing and
+   second ascent assertions. 543 initial and 180 resumed confirmed frames match, game ticks
+   749/752. Each peer drops 240 messages from 1226/1225 sends, maximum burst 24 with 60 ms delay.
+   Queued close/reconnect preserves slots/characters; peer close reaches offline without
+   closed-send errors or browser exceptions. Exit 0. Command: KICK=1 CONFIRMED=1 COMBAT=1
+   RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1
+   node /private/tmp/1_game3_online.cjs. Logs: /private/tmp/game3-kick-publish.log and
+   game3-kick-production.log; artifacts: /private/tmp/game3-online-VZ8MQc.
+   No new compiler job or runtime edit was required for publication. Next: drive grounded
+   down-special through its active window and landing/edge transitions, then add the missing
+   kick-specific ground/air phases with authored values distinguished from PM reference data.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
