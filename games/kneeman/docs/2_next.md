@@ -25,6 +25,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Falcon kick travel phases | Published 62d7cdc runtime, version 4: separate ground/air entry rows, strong/middle/late damage, shared cooldowns and serialized entry context. 454 game + 77 shell tests and local browser acceptance pass; production receipt below |
 | Special phase editor | Published 4899180: offline ground/shared, optional air-entry and landing attack controls reuse existing sliders. Production landing damage edit/restore passes; local online restriction and reconnect pass |
 | Travel replay controls | Published ea5b58a: ground/air late-travel snapshots shared with the browser fixture writer. 454 game + 78 shell tests and local edited capture/replay pass; production receipt below |
+| Sentinel launch angle | Published 93a0356 runtime, startup 5: victim-contact/KB angle resolution. 457 game + 78 shell tests; production early 44-vs-45 trajectory, rollback/loss/reconnect pass. Exact PM engine equivalence remains unverified |
 | Special ship carry | Published through 83e3456: carry correction plus Ship Dive debugger fixture. Native and production browser checks prove startup follows the moving hull, then launches and replays |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Cell item/contact sequence | Published through f9a486d: Cell replay uses the same 240-tick wire-input sequence as the native test. Local and production pickup/throw/contact, restore/EOF and changed-state rejection pass |
@@ -1372,6 +1373,20 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    The prior passing run in game3-sakurai-ground-online.log supplied only late trajectory
    samples; the strengthened run supplies angle-discriminating browser evidence.
    No simulation changes since 93a0356; the example/oracle is acceptance tooling only.
+   Published the validated 93a0356 runtime after 5b2962b acceptance using the existing Game3
+   profile. Nginx validation/reload passed; /private/tmp/game3-sakurai-publish.log. Remote WASM:
+   9f6fa8cee4e9dd2c4cc8691ad133ee78b511b56b9aa8f94753a21041ffdb2139 matches the tested export.
+   Game3 pack remains fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df;
+   protected /game/ pack remains 5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795.
+   Production repeats the strengthened command above without LOCAL_EXPORT. Both peers have
+   10 early angle-discriminating witnesses; both tick-60/120 snapshots match native replay;
+   damage is [0,11]. All 549 initial and 187 resumed confirmed comparisons match, resumed
+   ticks 773/770. Both drop 240/1253 messages, max run 24. Offline recovery and browser/closed-send
+   error gates pass, exit 0. /private/tmp/game3-sakurai-production.log;
+   screenshots /private/tmp/game3-online-iGX9iW. Version-4 tabs must reload before pairing.
+   Next bounded gameplay task: compare Falcon forward-air sweetspot/sourspot data with the PM3.6
+   AttackAirF reference, then author differences in the existing character kit and hitbox rows.
+   chars/falcon.rs currently inherits normal attacks from KneeMan; preserve KneeMan's own kit.
    Angle-361 resolution, effective PM timing/geometry, wall action/motion, larger parties and
    physical-device/cross-network acceptance remain open. No reminder or Boop changes.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

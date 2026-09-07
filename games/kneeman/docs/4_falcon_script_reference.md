@@ -132,5 +132,7 @@ Falcon's strong ground and all air rows use 361; the editor range includes it so
 controls cannot clamp the sentinel to 180. Startup compatibility is now version 5.
 Native gate passes 457 game + 78 shell tests, including numeric boundaries, both facing signs,
 stale air/ledge support, serialized fighter restore, guard behavior and Item/InkPath response.
-Local editor/replay and mixed 5/4 rejection pass. Grounded-victim browser launch,
-version-5 two-peer loss/reconnect and publication acceptance remain pending.
+Local editor/replay and mixed 5/4 rejection pass. Published version 5 passes grounded-victim
+early trajectory checks against native replay and a counterfactual fixed-45 path, plus two-peer
+message-loss/reconnect acceptance. Exact receipts are in docs/2_next.md. This verifies Game3's
+implemented behavior; PM engine address mapping and exact original-runtime equivalence remain open.
