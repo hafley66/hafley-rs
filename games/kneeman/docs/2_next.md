@@ -941,6 +941,15 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    /private/tmp/game3-kick-wall-contact-gate.log. Test/docs only; production remains unchanged,
    browser/export not rerun. Next: obtain wall-ending script/attribute evidence and encode
    launch provenance plus configurable wall-ending motion without guessing from velocity.
+   Follow-up source retrieval found Rukai Data's generated PM3.6 Falcon subactions, including
+   SpecialLwWall and SpecialAirLwEnd. docs/4_falcon_script_reference.md records four page
+   hashes, combat values and source links. Landing exposes grounded-only hitboxes (10 damage,
+   BKB 65, KBG 35, angle 80); wall ending exposes IASA 41. Script waits versus generated
+   active-frame endpoints require resolution before assigning fixed-tick durations.
+   The parser's pinned source was inspected without compiling; action-level wall routing and
+   source release identity remain unverified. No runtime changes, tests or publication in this
+   source-only follow-up. Next: resolve effective landing-hitbox duration and shared hit identity,
+   then add the contact hit through move data and deterministic combat/replay tests.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
