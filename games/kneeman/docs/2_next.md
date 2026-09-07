@@ -963,6 +963,33 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    CARGO_BUILD_JOBS=1 just game-test passes 445 game + 76 shell tests, exit 0;
    /private/tmp/game3-hit-identity-final-gate.log. No export/browser/publication in this checkpoint.
    The landing hit itself, grounded-target filtering and exact phase duration remain pending.
+   Web export built successfully: /private/tmp/game3-hit-identity-build.log.
+   Mixed startup rejection passes both directions with one rejection and advancing offline
+   ticks on both peers, exit 0 without browser exceptions:
+   LOCAL_EXPORT=1 MIXED=1 BAD_START=mixed RECONNECT=1 node /private/tmp/1_game3_online.cjs
+   (/private/tmp/game3-hit-identity-mixed-new.log; /private/tmp/game3-online-8VqIHJ), and
+   the same command with MIXED=old-host (/private/tmp/game3-hit-identity-mixed-old.log;
+   /private/tmp/game3-online-VgxhG0). Rejection is Unsupported pair startup version.
+   Shared-hit browser fixture: examples/3_shared_hit_tune.rs emits a Tune with three
+   overlapping jab shapes sharing ID 0, damage 10, active duration 20. It applies the jab
+   to flat Tune and roster rows; --state decodes a browser snapshot from stdin and prints
+   the two fighters' damage. One P1 attack at tick 90 should deal exactly 10 damage total.
+   Initial probe failed because the harness read nonexistent state rather than stateAt:
+   /private/tmp/game3-shared-hit-online.log; /private/tmp/game3-online-cXFcQq.
+   Corrected snapshot probe found [0,0] because the initial fixture changed only flat Tune
+   while both players selected Falcon: /private/tmp/game3-shared-hit-online-corrected.log;
+   /private/tmp/game3-online-CbMSbl. Fixture now updates roster rows.
+   Corrected acceptance passes: LOCAL_EXPORT=1 SHARED=1 CONFIRMED=1 COMBAT=1 RECONNECT=1
+   QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1
+   node /private/tmp/1_game3_online.cjs. Both snapshots decode to damage [0,10]; 543 initial
+   and 181 resumed confirmed-frame comparisons match, resumed ticks 750/753. Fault injection
+   drops 240/1226 and 240/1224 messages, max run 24; offline recovery and no closed-send errors
+   or browser exceptions, exit 0. /private/tmp/game3-shared-hit-online-roster.log;
+   /private/tmp/game3-online-HaXkcP. Fixture compiled/run through cargo run --example
+   3_shared_hit_tune with CARGO_BUILD_JOBS=1. Native runtime gate remains 445 game + 76 shell.
+   No publication yet. Larger-party version rejection still lacks browser coverage. Next:
+   production export Falcon/cell regressions, publish, then production shared-hit acceptance;
+   retain the pending grounded-target landing-hit implementation after that checkpoint.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
