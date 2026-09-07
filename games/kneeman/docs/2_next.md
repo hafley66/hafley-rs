@@ -704,6 +704,27 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Log: /private/tmp/game3-kick-old-host.log; artifacts: /private/tmp/game3-online-6ujM5n.
    No publication or game-source changes. Next: matching-new-build kick recovery acceptance;
    retain the partial-move limits in docs/3_pm_baseline.md.
+   Matching-build kick recovery: examples/1_kick_start.rs serializes the native test's
+   airborne Falcon start through the public game API. Build from repository root with
+   CARGO_BUILD_JOBS=1 cargo run -p kneeman --example 1_kick_start > /private/tmp/game3-kick-start.bin.
+   Build/run passed; /private/tmp/game3-kick-start-build.log. The existing private-room
+   startup injection sends this snapshot, and semantic inputs jump at 0, down-special at 3,
+   then jump at 45. Both new-build peers show the first ascent, SpecialD, no sampled Stand/
+   Landing through tick 55, then a second ascent exceeding 30 units from the pre-jump low point.
+   This is sampled browser motion evidence combined with the native spent-jump assertions.
+   Initial runner compared ascent against an earlier higher position and failed despite
+   observing velocity reversal; corrected comparison uses ticks 45..48 versus 51..55 and
+   explicitly verifies the first jump. No simulation change was made for that correction.
+   LOCAL_EXPORT=1 KICK=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60
+   BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs passes:
+   546 initial and 180 resumed confirmed frames match, game ticks 753/752. Each peer drops
+   240/1243 messages, maximum burst 24. Fighter slots/characters survive reconnect, peer close
+   reaches offline, no closed-send errors or browser exceptions; exit 0.
+   Log: /private/tmp/game3-kick-browser-rise.log; artifacts: /private/tmp/game3-online-21yx68.
+   Only the 14-line native fixture exporter was added; game runtime and tested export remain
+   unchanged. No new full native gate this turn; latest gate remains 438 game + 76 shell.
+   Next: publish the tested kick export and repeat matching-build recovery assertions on
+   production. This acceptance does not establish complete Falcon Kick phases or PM timing.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
