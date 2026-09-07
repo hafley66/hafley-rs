@@ -19,6 +19,7 @@ enum Command {
     Restore,
     Fixture,
     JumpGrab,
+    Dive(bool),
     ReplayStep,
 }
 
@@ -32,6 +33,25 @@ struct Trace {
 }
 
 impl Trace {
+    fn falcon_dive(catch: bool) -> Self {
+        let tune = Tune::default();
+        let mut state = SimState::spawn();
+        state.fighters[0].char_id = 2;
+        state.fighters[1].char_id = 3;
+        for _ in 0..60 { state = sim::step(&state, &[&InputFrame::default(); 2], &tune); }
+        state.fighters[1].pos.x = state.fighters[0].pos.x + if catch { 90.0 } else { 300.0 };
+        let mut trace = Self::new(&state, &tune);
+        trace.recording = false;
+        for tick in 0..180 {
+            let input = InputFrame { special: tick == 0, aim_y: if tick == 0 { -1.0 } else { 0.0 },
+                ..InputFrame::default() };
+            let inputs = [sim::net::decode(sim::net::encode(&input)), InputFrame::default()];
+            state = sim::step(&state, &[&inputs[0], &inputs[1]], &tune);
+            trace.frames.push((inputs, sim::net::checksum(&state)));
+        }
+        trace
+    }
+
     fn jump_grab() -> Self {
         let tune = Tune::default();
         let mut state = SimState::spawn();
@@ -95,6 +115,36 @@ impl Trace {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn falcon_dive_inputs_catch_or_whiff_and_replay_through_landing() {
+        use sim::CharState;
+        for catch in [true, false] {
+            let trace = Trace::falcon_dive(catch);
+            assert_eq!(trace.verify(), Ok(180));
+            let mut state: SimState = bincode::deserialize(&trace.snapshot).unwrap();
+            let ground_y = state.fighters[0].pos.y;
+            let mut states = Vec::new();
+            let mut rose = false;
+            for index in 0..180 {
+                state = trace.replay_step(&state, index).unwrap().unwrap();
+                let current = state.fighters[0].state;
+                if states.last() != Some(&current) { states.push(current); }
+                rose |= state.fighters[0].pos.y < ground_y - 20.0;
+            }
+            assert!(rose, "catch={catch}, states={states:?}, final_y={}, damage={}", state.fighters[0].pos.y, state.fighters[1].damage);
+            assert_eq!(states[0], CharState::SpecialU);
+            assert_eq!(states.contains(&CharState::GrabHold), catch);
+            assert_eq!(states, if catch {
+                vec![CharState::SpecialU, CharState::GrabHold, CharState::Air, CharState::Landing, CharState::Stand]
+            } else {
+                vec![CharState::SpecialU, CharState::Landing, CharState::Stand]
+            });
+            assert_eq!(state.fighters[1].damage, if catch { 18.0 } else { 0.0 });
+            assert_eq!(state.fighters[0].state, CharState::Stand);
+            assert!(trace.replay_step(&state, 180).unwrap().is_none());
+        }
+    }
 
     #[test]
     fn jump_grab_fixture_steps_and_rejects_external_state_edits() {
@@ -303,7 +353,8 @@ impl Debugger {
                     for (label, command) in [("Pause", Command::Pause), ("Resume", Command::Resume),
                         ("Step", Command::Step), ("Capture", Command::Capture), ("Verify replay", Command::Verify),
                         ("Restore start", Command::Restore), ("Replay step", Command::ReplayStep),
-                        ("Load fixture", Command::Fixture), ("Falcon jump-grab", Command::JumpGrab)] {
+                        ("Load fixture", Command::Fixture), ("Falcon jump-grab", Command::JumpGrab),
+                        ("Dive catch", Command::Dive(true)), ("Dive whiff", Command::Dive(false))] {
                         if ui.button(label).clicked() { self.command = Some(command); }
                     }
                 });
@@ -407,13 +458,18 @@ impl KneeMan {
                     message: "Fixture paused. Resume and strike the blue cells. Dropper left of Falcon; ship farther left.".into(),
                     ..Debugger::default() };
             }
-            Some(Command::JumpGrab) => {
-                let trace = Trace::jump_grab();
+            Some(Command::JumpGrab | Command::Dive(_)) => {
+                let (trace, message) = match command {
+                    Some(Command::Dive(catch)) => (Trace::falcon_dive(catch),
+                        "Replay step: Falcon Dive startup, rise, catch/explosion or whiff, landing. Game3 rules; PM parity unverified."),
+                    _ => (Trace::jump_grab(),
+                        "Replay step: 1 = jump, 2 = grounded grab. Provisional Game3 rules; PM parity unverified."),
+                };
                 self.state.set(bincode::deserialize::<SimState>(&trace.snapshot).unwrap());
                 self.tune.set(trace.tune.clone());
                 self.charsel.set([2, 3]);
                 self.debugger = Debugger { paused: true, isolated: true, trace: Some(trace),
-                    message: "Replay step: 1 = jump, 2 = grounded grab. Provisional Game3 rules; PM parity unverified.".into(),
+                    message: message.into(),
                     ..Debugger::default() };
             }
             Some(Command::ReplayStep) => {

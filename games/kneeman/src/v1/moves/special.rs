@@ -241,19 +241,20 @@ pub(crate) fn run_special(n: &mut Fighter, slot: usize, i: &InputFrame, t: &Tune
     // wind-up hang, then the rise launches the same frame the hug window opens.
     // It runs inside `SpecialU` (no new CharState / sprite clip): the move emits NO combat hitbox
     // (FALCON_DIVE.hit is boxless -- `nbox` 0 -- so `resolve_combat` never fires), and its hug
-    // box + fixed-angle explosion are cross-fighter, owned by `resolve_grab`. Here we just unstick
-    // from any grounded index, hold the body still, and on a WHIFF (the hug window + endlag elapsed
+    // box + fixed-angle explosion are cross-fighter, owned by `resolve_grab`. Hold the body still
+    // through startup, leave the ground at launch, and on a WHIFF (the hug window + endlag elapsed
     // with no catch) drop to Helpless -- the same special-fall a real Falcon Dive that grabbed
     // nothing lands in. Char-gated purely by the loadout slot: only a `DiveGrab` up-B reaches this.
     // A connect flips this fighter to `GrabHold` (with `dive_latch`) before it can whiff out.
     if m.kind == SpecialKind::DiveGrab {
         let b = m.hit.boxes[0];
-        n.ground_plat = -1;
         if n.frame < b.start {
             // wind-up hang: braked in space, the punch-style plant before the dive
             n.vel = Vector2::ZERO;
         } else {
             if n.frame == b.start {
+                // Leaving support during the zero-velocity wind-up would immediately land-cancel.
+                n.ground_plat = -1;
                 // lift-off the same frame the hug window opens: the connect circle rides
                 // the rise (resolve_grab recomputes it from g.pos each frame), so a body-ground
                 // grabber hugs a grounded foe on the first active frames before climbing away

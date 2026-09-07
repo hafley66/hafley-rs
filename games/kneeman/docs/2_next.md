@@ -18,6 +18,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Workshop clips | Search/download commands recovered; local strip/grid conversion uses the same roster installer |
 | Regression | Existing fixed-input/replay/rollback suites remain the game gate |
 | Falcon | Fresh sessions select Falcon/Lucas; built-in art-to-kit mapping corrected; existing movement/attack strips wired. Commit 47ea707 |
+| Falcon Dive | Grounded startup no longer immediately land-cancels. Catch/whiff fixtures and final export replay/online gates pass; publication pending |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Keyboard bindings | Live InputMap editing for movement, c-stick and gameplay buttons; ConfigFile persistence/reset, side-aware labels, malformed-key validation and focus-loss clearing. 428 game + 68 shell tests pass |
 | Debugger browser receipt | Fixture tick 1, Step tick 2, Capture/Verify matched all 283 recorded ticks, Restore returned tick 2 and the identical checksum. Artifacts: /private/tmp/game3-input-browser-5pK5sw |
@@ -451,6 +452,31 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    100 ticks each, including snapshot restore. Fighter grab retains reduced forward momentum;
    held-item throw keeps priority and excludes the owner from self-hits. 432 game + 70 shell
    tests pass; /private/tmp/game3-jc-context-tests.log. No new gameplay or deployment changes.
+   Falcon Dive input checkpoint: the new grounded sequence initially produced SpecialU ->
+   Landing -> Stand without ascent or damage. run_special cleared ground support during
+   zero-velocity startup; it now clears support at launch. Existing airborne behavior is
+   unchanged. Added Dive catch / Dive whiff to Terrain & replay using existing trace controls.
+   Each fixture runs 180 wire-quantized ticks from settled tick 60. Catch traverses SpecialU,
+   GrabHold, Air, Landing, Stand and deals 18 damage; whiff lands before its airborne timeout
+   and deals zero. Native tests assert both paths/ascent/damage/replay/EOF. Browser verifies
+   all 180 checksums, steps each path, checks EOF and restores the identical start checksum.
+   432 game + 74 shell tests and export pass. Logs: /private/tmp/game3-dive-final-tests.log,
+   game3-dive-final-build.log and game3-dive-final-browser.log. Browser screenshots:
+   /private/tmp/game3-dive-meGyon; runner: node /private/tmp/5_game3_dive.cjs.
+   An earlier online run exposed repeated loads of missing optional assets/fx/fire.png;
+   resource existence now gates loading and the existing procedural effect remains visible.
+   Final browser run rejects these errors and passes with no browser exceptions. Gameplay
+   tuning and PM equivalence are unchanged/unverified; docs/3_pm_baseline.md records the scope.
+   Final export online Dive run observes SpecialU and GrabHold on both peers, matches 547
+   initial and 182 resumed confirmed frames, and resumes at ticks 758/755. Each peer drops
+   240 of 1245 messages with maximum burst 24 and 60 ms send delay. Queued-close recovery
+   retains slots/characters; peer closure reaches offline. No missing-fire-texture errors,
+   closed-send errors or browser exceptions; exit 0. Command: LOCAL_EXPORT=1 DIVE=1
+   CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24
+   NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   Log: /private/tmp/game3-dive-final-online.log; screenshots: /private/tmp/game3-online-5HRVUS.
+   Next: publish this tested export and repeat Dive acceptance in production, then cover
+   startup on moving/drawn support and airborne entry before changing additional Falcon rules.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;

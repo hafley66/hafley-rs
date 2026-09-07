@@ -71,7 +71,28 @@ docs/2_next.md records the 45-tick debugger receipt and production tick-62 Grab/
 test. A PM runtime comparison, exact momentum values and additional conflicts such as
 grab/shield/special remain to be tested.
 
-## Existing evidence limits
+## Game3 Falcon Dive execution checkpoint
+
+Grounded semantic-input coverage exposed startup cancellation: Dive cleared `ground_plat`
+while its startup velocity was zero, then the special floor sweep immediately changed it
+to Landing. The observed path was SpecialU -> Landing -> Stand with zero damage and no rise.
+Support now remains until the authored launch frame. Airborne startup retains its existing
+behavior. No PM frame values or hitboxes were inferred or changed.
+
+Terrain & replay now offers Dive catch and Dive whiff. Each starts at settled tick 60,
+with Falcon/Lucas and opponent separation 90 or 300 pixels, presses up-special for one
+wire-quantized input tick, and records 180 ticks. Native expectations:
+
+- Catch: SpecialU -> GrabHold -> Air -> Landing -> Stand; victim damage 18.
+- Whiff: SpecialU -> Landing -> Stand; victim damage 0. This grounded trajectory lands
+  before the airborne whiff timeout. Existing airborne command-grab tests cover Helpless.
+
+Both assert ascent, full checksum replay and EOF. Browser stepping also verifies restore
+and shows the explosion's 18% damage. The optional fire texture is absent in this checkout;
+the renderer now checks resource existence before using its existing procedural fallback,
+avoiding repeated load errors. Exact PM startup/catch/launch/momentum remain unverified.
+
+## Remaining source limits
 
 Recovered `pm-falcon-kit.md` asserts that missing PM changelog entries make Melee values
 PM ground truth. That inference is unverified and must not supply acceptance expectations.

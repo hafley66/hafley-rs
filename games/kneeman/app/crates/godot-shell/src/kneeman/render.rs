@@ -546,7 +546,10 @@ impl KneeMan {
         let a = age / life;
         let grow = 1.0 + a * 2.4; // scales up over its lifetime -- bigger = cheesier
         let alpha = (1.0 - a).powf(1.1);
-        if let Ok(tex) = try_load::<Texture2D>(FIRE_TEX) {
+        let texture = if godot::classes::ResourceLoader::singleton().exists(FIRE_TEX) {
+            try_load::<Texture2D>(FIRE_TEX).ok()
+        } else { None };
+        if let Some(tex) = texture {
             let (tw, th) = (tex.get_width() as f32, tex.get_height() as f32);
             let dw = 96.0 * grow;
             let dh = if tw > 0.0 { dw * (th / tw) } else { dw };
