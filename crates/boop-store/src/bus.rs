@@ -162,12 +162,8 @@ impl MessageKind {
     /// | `yield`, `head_rewound`, `reparented` | `boop wait --me` |
     /// | `retrying`, `retry_budget_exhausted`, `completion` | `boop wait --me` |
     ///
-    /// The delivery ladder reads this and stops such a row at the mailbox: a
-    /// door push costs the recipient a whole harness turn on a line it never
-    /// asked for, and one lane fan-out fills a coordinator's transcript with
-    /// progress notes (supervisor-rows-off-the-door). Every other kind, the
-    /// `request` a `boop beep` mints and the `hail` a human sends among them,
-    /// walks the whole ladder as before.
+    /// The ladder splits these: `lane_progress_row` stops at the mailbox,
+    /// `lane_end_row` takes the door (supervisor-rows-off-the-door).
     pub fn supervisor_row(&self) -> bool {
         matches!(
             self,
@@ -181,6 +177,25 @@ impl MessageKind {
                 | MessageKind::OpenFailed
                 | MessageKind::HeadRewound
         )
+    }
+
+    /// A row that ends a lane's run: the one message a parent must see without
+    /// asking, so it takes the door (2026-09-07).
+    pub fn lane_end_row(&self) -> bool {
+        matches!(
+            self,
+            MessageKind::Result
+                | MessageKind::Completion
+                | MessageKind::ExitedWithoutCompletion
+                | MessageKind::OpenFailed
+                | MessageKind::RetryBudgetExhausted
+        )
+    }
+
+    /// A row about a run in progress. These never take a door: they are a
+    /// trail, read with `boop wait`.
+    pub fn lane_progress_row(&self) -> bool {
+        self.supervisor_row() && !self.lane_end_row()
     }
 }
 
@@ -1137,6 +1152,44 @@ mod tests {
                 !crate::bus::MessageKind::from(wire).supervisor_row(),
                 "{wire} keeps the door"
             );
+        }
+    }
+
+    /// Every supervisor kind is an end row or a progress row, never both and
+    /// never neither; a typed kind is neither (2026-09-07).
+    #[test]
+    fn a_supervisor_kind_is_an_end_row_or_a_progress_row_and_never_both() {
+        for wire in ["result", "completion", "exited_without_completion", "open_failed", "retry_budget_exhausted"] {
+            let kind = crate::bus::MessageKind::from(wire);
+            assert!(kind.lane_end_row(), "{wire} ends a lane's run");
+            assert!(!kind.lane_progress_row(), "{wire} is not progress");
+        }
+        for wire in ["yield", "reparented", "retrying", "head_rewound"] {
+            let kind = crate::bus::MessageKind::from(wire);
+            assert!(kind.lane_progress_row(), "{wire} is progress");
+            assert!(!kind.lane_end_row(), "{wire} does not end a run");
+        }
+        for wire in [
+            "result",
+            "completion",
+            "yield",
+            "reparented",
+            "retrying",
+            "retry_budget_exhausted",
+            "exited_without_completion",
+            "open_failed",
+            "head_rewound",
+        ] {
+            let kind = crate::bus::MessageKind::from(wire);
+            assert_ne!(
+                kind.lane_end_row(),
+                kind.lane_progress_row(),
+                "{wire} sits on exactly one side of the split"
+            );
+        }
+        for wire in ["hail", "request", "note", "dispatch", "ack"] {
+            let kind = crate::bus::MessageKind::from(wire);
+            assert!(!kind.lane_end_row() && !kind.lane_progress_row(), "{wire} is neither");
         }
     }
 
