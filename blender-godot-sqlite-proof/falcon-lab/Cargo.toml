@@ -19,6 +19,8 @@ pollster = "=0.4.0"
 font8x8 = "0.3"
 ggrs = "=0.13.0"
 serde = { version = "1", features = ["derive"] }
+ssbm_utils = "=0.4.0"
+rapier3d = { version = "=0.35.3", features = ["serde-serialize", "enhanced-determinism"] }
 
 [[bin]]
 name = "falcon-lab"
