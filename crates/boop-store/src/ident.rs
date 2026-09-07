@@ -36,7 +36,8 @@ pub struct Store {
 /// 19 = an absent favorite note is stored as NULL.
 /// 21 = each transcript cursor records its adapter projection contract.
 /// 22 = cost views over the usage ledger; see `COST_VIEW_SCHEMA`.
-pub const SCHEMA_VERSION: i64 = 27;
+/// 28 = agent_tag + agent_tag_link, the one tag table every surface shares.
+pub const SCHEMA_VERSION: i64 = 28;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -526,6 +527,73 @@ fn enable_wal(connection: &Connection, path: &std::path::Path) -> Result<()> {
     }
 }
 
+/// Every table on this list crosses a rebuild by value: no transcript
+/// re-projects these rows, so a new user-authored table belongs here or the
+/// next rebuild drops it. `SCHEMA` marks each one `user-authored`, and a test
+/// walks both directions so the two cannot drift.
+pub const USER_AUTHORED: &[&str] = &[
+    "agent_favorite",
+    "agent_turn_comment",
+    "agent_turn_comment_target",
+    "agent_turn_comment_fork",
+    "agent_tag",
+    "agent_tag_link",
+];
+
+/// One user-authored table as it stood before the drop: the columns the
+/// restore writes back, and one value per column per row.
+pub(crate) struct CarriedTable {
+    table: String,
+    columns: Vec<String>,
+    rows: Vec<Vec<rusqlite::types::Value>>,
+}
+
+impl CarriedTable {
+    fn column(&self, name: &str) -> Result<usize> {
+        self.columns
+            .iter()
+            .position(|column| column == name)
+            .with_context(|| format!("{} carried no {name} column", self.table))
+    }
+}
+
+/// What a carried table is read through. A column holding a dict id is read
+/// as its text instead, because the drop empties the dict and the re-sync
+/// hands out ids in a different order.
+fn carry_select(table: &str) -> String {
+    match table {
+        "agent_favorite" => "SELECT f.favorite_id AS favorite_id, m.body AS body, f.note AS note,
+                                    f.source AS source, f.created_ts AS created_ts,
+                                    m.first_ts AS first_ts
+                               FROM agent_favorite f
+                               JOIN markdown_cache m ON m.markdown_id = f.markdown_id
+                              ORDER BY f.favorite_id"
+            .to_owned(),
+        "agent_turn_comment_target" => "SELECT t.comment_id AS comment_id,
+                                               s.value AS session_id,
+                                               t.turn AS turn
+                                          FROM agent_turn_comment_target t
+                                          JOIN dict_session s ON s.id = t.session_id
+                                         ORDER BY t.comment_id, t.turn"
+            .to_owned(),
+        table => format!("SELECT * FROM {table}"),
+    }
+}
+
+fn text_at(row: &[rusqlite::types::Value], at: usize, what: &str) -> Result<String> {
+    match row.get(at) {
+        Some(rusqlite::types::Value::Text(text)) => Ok(text.clone()),
+        _ => anyhow::bail!("{what} is not text"),
+    }
+}
+
+fn int_at(row: &[rusqlite::types::Value], at: usize, what: &str) -> Result<i64> {
+    match row.get(at) {
+        Some(rusqlite::types::Value::Integer(value)) => Ok(*value),
+        _ => anyhow::bail!("{what} is not an integer"),
+    }
+}
+
 impl Store {
     pub fn open(path: PathBuf) -> Result<Self> {
         let connection = Connection::open(&path)
@@ -828,6 +896,10 @@ impl Store {
                 self.connection.execute_batch(TURN_CWD_VIEW_SCHEMA)?;
                 self.connection.execute_batch("PRAGMA user_version = 27;")?;
             }
+            if self.schema_version()? < 28 {
+                self.connection.execute_batch(TAG_SCHEMA)?;
+                self.connection.execute_batch("PRAGMA user_version = 28;")?;
+            }
             self.stamp_version()?;
             Ok(())
         })();
@@ -842,29 +914,10 @@ impl Store {
     }
 
     /// Drop every table, recreate the schema, stamp the version; the caller
-    /// re-syncs from byte 0. Favorites alone cross the drop by value.
+    /// re-syncs from byte 0. Every table in `USER_AUTHORED` crosses the drop
+    /// by value, ids and timestamps included.
     pub fn rebuild(&self) -> Result<()> {
-        let mut favorites: Vec<(String, Option<String>, String, i64, i64)> = Vec::new();
-        {
-            let mut statement = self.connection.prepare(
-                "SELECT m.body, f.note, f.source, f.created_ts, m.first_ts
-                   FROM agent_favorite f
-                   JOIN markdown_cache m ON m.markdown_id = f.markdown_id
-                  ORDER BY f.favorite_id",
-            )?;
-            let rows = statement.query_map([], |row| {
-                Ok((
-                    row.get(0)?,
-                    row.get(1)?,
-                    row.get(2)?,
-                    row.get(3)?,
-                    row.get(4)?,
-                ))
-            })?;
-            for row in rows {
-                favorites.push(row?);
-            }
-        }
+        let carried = self.carry_user_authored()?;
         let mut names = Vec::new();
         {
             let mut statement = self.connection.prepare(
@@ -884,15 +937,127 @@ impl Store {
         self.connection.execute_batch(COST_VIEW_SCHEMA)?;
         self.seed_moods()?;
         self.stamp_version()?;
-        for (body, note, source, created_ts, first_ts) in favorites {
-            let markdown_id = self.intern_markdown(&body, first_ts as u64)?;
-            self.connection.execute(
-                "INSERT INTO agent_favorite (markdown_id, note, source, created_ts)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![markdown_id, note, source, created_ts],
-            )?;
-        }
+        self.restore_user_authored(&carried)?;
         self.connection.execute_batch("VACUUM")?;
+        Ok(())
+    }
+
+    /// Read every user-authored table into memory, ahead of the drop.
+    fn carry_user_authored(&self) -> Result<Vec<CarriedTable>> {
+        USER_AUTHORED
+            .iter()
+            .map(|table| self.carry_table(table))
+            .collect()
+    }
+
+    fn carry_table(&self, table: &str) -> Result<CarriedTable> {
+        let mut statement = self.connection.prepare(&carry_select(table))?;
+        let columns: Vec<String> = statement
+            .column_names()
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        let width = columns.len();
+        let mut rows = Vec::new();
+        {
+            let carried = statement.query_map([], |row| {
+                (0..width)
+                    .map(|at| row.get::<_, rusqlite::types::Value>(at))
+                    .collect::<rusqlite::Result<Vec<_>>>()
+            })?;
+            for row in carried {
+                rows.push(row?);
+            }
+        }
+        Ok(CarriedTable {
+            table: table.to_owned(),
+            columns,
+            rows,
+        })
+    }
+
+    /// Write the carried rows back onto the fresh schema, in list order so a
+    /// comment lands before the targets and forks that name it.
+    fn restore_user_authored(&self, carried: &[CarriedTable]) -> Result<()> {
+        let mut moved: BTreeMap<i64, i64> = BTreeMap::new();
+        for table in carried {
+            self.restore_table(table, &mut moved)?;
+        }
+        Ok(())
+    }
+
+    fn restore_table(&self, carried: &CarriedTable, moved: &mut BTreeMap<i64, i64>) -> Result<()> {
+        match carried.table.as_str() {
+            // The body dedupes through markdown_cache, which the drop emptied,
+            // so each favorite re-interns its own and keeps its old id.
+            "agent_favorite" => {
+                for row in &carried.rows {
+                    let favorite_id = int_at(row, carried.column("favorite_id")?, "favorite_id")?;
+                    let body = text_at(row, carried.column("body")?, "favorite body")?;
+                    let first_ts = int_at(row, carried.column("first_ts")?, "favorite first_ts")?;
+                    let markdown_id = self.intern_markdown(&body, first_ts as u64)?;
+                    self.connection.execute(
+                        "INSERT OR REPLACE INTO agent_favorite
+                           (favorite_id, markdown_id, note, source, created_ts)
+                         VALUES (?1, ?2, ?3, ?4, ?5)",
+                        params![
+                            favorite_id,
+                            markdown_id,
+                            row[carried.column("note")?],
+                            row[carried.column("source")?],
+                            row[carried.column("created_ts")?],
+                        ],
+                    )?;
+                    moved.insert(favorite_id, self.connection.last_insert_rowid());
+                }
+                Ok(())
+            }
+            // The carried session is its text; interning it now is the id the
+            // re-sync finds waiting for that session.
+            "agent_turn_comment_target" => {
+                let at = carried.column("session_id")?;
+                for row in &carried.rows {
+                    let session = text_at(row, at, "comment target session")?;
+                    let mut row = row.clone();
+                    row[at] = rusqlite::types::Value::Integer(self.session_id(&session)?);
+                    self.insert_carried(carried, &row)?;
+                }
+                Ok(())
+            }
+            // A favorite comes back wearing its own id, so this is a guard:
+            // it moves the links if that ever stops being true.
+            "agent_tag_link" => {
+                let at = carried.column("source")?;
+                for row in &carried.rows {
+                    let source = text_at(row, at, "tag link source")?;
+                    let mut row = row.clone();
+                    row[at] =
+                        rusqlite::types::Value::Text(crate::tags::moved_source(&source, moved));
+                    self.insert_carried(carried, &row)?;
+                }
+                Ok(())
+            }
+            _ => {
+                for row in &carried.rows {
+                    self.insert_carried(carried, row)?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn insert_carried(&self, carried: &CarriedTable, row: &[rusqlite::types::Value]) -> Result<()> {
+        let placeholders = (1..=carried.columns.len())
+            .map(|at| format!("?{at}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "INSERT OR REPLACE INTO {} ({}) VALUES ({placeholders})",
+            carried.table,
+            carried.columns.join(", ")
+        );
+        self.connection
+            .execute(&sql, rusqlite::params_from_iter(row.iter()))?;
         Ok(())
     }
 
@@ -1717,6 +1882,24 @@ impl Store {
             })
         })?;
         rows.collect::<std::result::Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    /// The latest assistant turn with a non-empty `said` for one session, as
+    /// `(turn, said)`. `None` when the session has no such turn. This is the
+    /// reply a `fork join` delivers back to the fork's parent.
+    pub fn last_assistant_turn(&self, session: &str) -> Result<Option<(i64, String)>> {
+        let mut statement = self.connection.prepare(
+            "SELECT t.turn, t.said FROM agent_turn t
+               JOIN dict_session ds ON ds.id = t.session_id
+               JOIN dict_role r ON r.id = t.role_id
+              WHERE ds.value = ?1 AND r.value = 'assistant'
+                AND t.said IS NOT NULL AND t.said != ''
+              ORDER BY t.turn DESC LIMIT 1",
+        )?;
+        let mut rows = statement.query_map(params![session], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?;
+        rows.next().transpose().map_err(Into::into)
     }
 
     pub fn turn_comments_pending(&self) -> Result<Vec<TurnComment>> {
@@ -3313,8 +3496,8 @@ SELECT c.comment_id,
 /// in place. The same text sits inside `SCHEMA` for a fresh store.
 const TURN_COMMENT_FORK_SCHEMA: &str = "
 -- One lane forked off a stored comment (`boop beep fork <comment-id>`): the
--- quoted turns and the note became the lane's brief. A terminal paints this
--- link back under the quoted turn once the lane answers.
+-- quoted turns and the note became the lane's brief, so the row is
+-- user-authored. A terminal paints it back under the quoted turn.
 CREATE TABLE IF NOT EXISTS agent_turn_comment_fork (
   comment_id INTEGER NOT NULL,
   lane TEXT NOT NULL,
@@ -3323,6 +3506,29 @@ CREATE TABLE IF NOT EXISTS agent_turn_comment_fork (
   created_ts INTEGER NOT NULL,
   PRIMARY KEY (comment_id, lane)
 ) WITHOUT ROWID;
+";
+
+/// Schema v28: the shared tag table, on its own so an older store adds it in
+/// place. The same text sits inside `SCHEMA` for a fresh store.
+const TAG_SCHEMA: &str = "
+-- One row per tag, user-authored: the count and last use the recent list
+-- orders by. `boop tag search` reads this column, never a message body.
+CREATE TABLE IF NOT EXISTS agent_tag (
+  tag TEXT PRIMARY KEY,
+  created_ts INTEGER NOT NULL,
+  last_used_ts INTEGER NOT NULL,
+  uses INTEGER NOT NULL DEFAULT 0
+) WITHOUT ROWID;
+-- What a user-authored tag hangs on. `source` is plain text every surface
+-- spells the same way ('favorite:<id>', 'comment:<id>', 'lane:<name>'), never
+-- a dict id, so a caller can link a thing the store has no table for.
+CREATE TABLE IF NOT EXISTS agent_tag_link (
+  tag TEXT NOT NULL,
+  source TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  PRIMARY KEY (tag, source)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_tag_link_source ON agent_tag_link(source);
 ";
 
 /// Schema v27: one cwd per turn, added in place so an older store gets the
@@ -3460,7 +3666,8 @@ CREATE TABLE IF NOT EXISTS agent_turn_comment (
 );
 
 -- The turns a comment quotes, any role: user turns are targets exactly like
--- assistant turns.
+-- assistant turns. user-authored, carried across a rebuild by session text
+-- because session_id is a dict id the re-sync hands out afresh.
 CREATE TABLE IF NOT EXISTS agent_turn_comment_target (
   comment_id INTEGER NOT NULL,
   session_id INTEGER NOT NULL,
@@ -3471,8 +3678,8 @@ CREATE INDEX IF NOT EXISTS idx_turn_comment_target
   ON agent_turn_comment_target(session_id, turn);
 
 -- One lane forked off a stored comment (`boop beep fork <comment-id>`): the
--- quoted turns and the note became the lane's brief. A terminal paints this
--- link back under the quoted turn once the lane answers.
+-- quoted turns and the note became the lane's brief, so the row is
+-- user-authored. A terminal paints it back under the quoted turn.
 CREATE TABLE IF NOT EXISTS agent_turn_comment_fork (
   comment_id INTEGER NOT NULL,
   lane TEXT NOT NULL,
@@ -3481,6 +3688,26 @@ CREATE TABLE IF NOT EXISTS agent_turn_comment_fork (
   created_ts INTEGER NOT NULL,
   PRIMARY KEY (comment_id, lane)
 ) WITHOUT ROWID;
+
+-- One row per tag, user-authored: the count and last use the recent list
+-- orders by. `boop tag search` reads this column, never a message body.
+CREATE TABLE IF NOT EXISTS agent_tag (
+  tag TEXT PRIMARY KEY,
+  created_ts INTEGER NOT NULL,
+  last_used_ts INTEGER NOT NULL,
+  uses INTEGER NOT NULL DEFAULT 0
+) WITHOUT ROWID;
+
+-- What a user-authored tag hangs on. `source` is plain text every surface
+-- spells the same way ('favorite:<id>', 'comment:<id>', 'lane:<name>'), never
+-- a dict id, so a caller can link a thing the store has no table for.
+CREATE TABLE IF NOT EXISTS agent_tag_link (
+  tag TEXT NOT NULL,
+  source TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  PRIMARY KEY (tag, source)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_tag_link_source ON agent_tag_link(source);
 
 CREATE TABLE IF NOT EXISTS agent_trace (
   trace_id INTEGER PRIMARY KEY,
@@ -3950,7 +4177,7 @@ mod tests {
 
     use super::{
         project_transcript, sync_session_with, Store, TraceEvent as LaneTraceEvent, BUSY_TIMEOUT,
-        SCHEMA_VERSION,
+        SCHEMA, SCHEMA_VERSION, USER_AUTHORED,
     };
 
     static CURSOR_SQL: AtomicUsize = AtomicUsize::new(0);
@@ -5682,6 +5909,57 @@ mod tests {
 
         drop(store);
         let _ = std::fs::remove_file(&db_path);
+    }
+
+    /// Every `CREATE TABLE` in `SCHEMA`, with the comment block written
+    /// directly above it.
+    fn schema_tables() -> Vec<(String, String)> {
+        let mut tables = Vec::new();
+        let mut comment = String::new();
+        for line in SCHEMA.lines() {
+            let line = line.trim();
+            if let Some(text) = line.strip_prefix("--") {
+                comment.push_str(text);
+                comment.push(' ');
+            } else if let Some(rest) = line.strip_prefix("CREATE TABLE IF NOT EXISTS ") {
+                let name = rest.split(['(', ' ']).next().unwrap_or_default();
+                tables.push((name.to_owned(), std::mem::take(&mut comment)));
+            } else {
+                comment.clear();
+            }
+        }
+        tables
+    }
+
+    /// RECEIPT. The inventory and the schema cannot drift: a listed table must
+    /// exist, and a table whose comment calls it user-authored must be listed,
+    /// or its rows die on the next rebuild.
+    #[test]
+    fn the_user_authored_inventory_matches_the_schema() {
+        let tables = schema_tables();
+        for name in USER_AUTHORED {
+            assert!(
+                tables.iter().any(|(table, _)| table == name),
+                "{name} is on USER_AUTHORED but SCHEMA creates no such table"
+            );
+        }
+        let marked: Vec<&str> = tables
+            .iter()
+            .filter(|(_, comment)| comment.to_lowercase().contains("user-authored"))
+            .map(|(table, _)| table.as_str())
+            .collect();
+        for table in &marked {
+            assert!(
+                USER_AUTHORED.contains(table),
+                "SCHEMA calls {table} user-authored; add it to USER_AUTHORED \
+                 or a rebuild drops its rows"
+            );
+        }
+        assert_eq!(
+            marked.len(),
+            USER_AUTHORED.len(),
+            "every listed table carries the user-authored word in SCHEMA: {marked:?}"
+        );
     }
 
     /// Favorites are user-authored with no transcript behind them; rebuild

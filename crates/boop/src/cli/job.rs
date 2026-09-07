@@ -17,7 +17,9 @@ use crate::cli::debug::default_preset_for_harness;
 use crate::cli::mail::{all_messages, run_list};
 use crate::cli::me::run_adopt;
 use crate::cli::{append_ack, append_message, line, mail_dir, pad, route_to_json, write_route};
-use crate::{AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat};
+use crate::{
+    AgentCmd, BeepCmd, ForkCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat,
+};
 
 // ---------------------------------------------------------------------------
 // dispatch (layer 1 + bus)
@@ -65,6 +67,10 @@ pub(crate) struct DispatchArgs {
     /// `KEY=VAL` pairs the lane's spawn inherits, shell-quoted onto the
     /// supervisor command after boop's own stamps.
     pub(crate) env: Vec<(String, String)>,
+    /// The `agent_lane` row id `lane create` minted for this run, written onto
+    /// the spawn record so a resume can prove it is the same run. A bare
+    /// `dispatch` mints none.
+    pub(crate) spawn_id: Option<i64>,
 }
 
 pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
@@ -124,6 +130,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             harness_id.as_str(),
             args.parent.as_deref(),
             &args.env,
+            args.spawn_id,
         )),
         model: args.model.clone(),
         effort: args.effort.clone(),
@@ -166,6 +173,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             cwd: cwd.to_owned(),
             command: boop::harness::supervisor_command(&spec),
             route: crate::cli::route_to_json(&route),
+            spawn_id: args.spawn_id,
         };
         if let Err(error) = boop::trail::write_spawn(&args.to, &spawn) {
             warn!(lane = args.to, error = %error, "spawn record not written");
@@ -182,29 +190,40 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
         "lane dispatch registered"
     );
     println!(
-        "dispatched {} -> {} (tmux {})",
+        "dispatched {} -> {} (tmux {}{})",
         message.id,
         args.to,
-        session.tmux.as_deref().unwrap_or("-")
+        session.tmux.as_deref().unwrap_or("-"),
+        match args.spawn_id {
+            Some(id) => format!(", spawn {id}"),
+            None => String::new(),
+        }
     );
     std::thread::sleep(std::time::Duration::from_secs(args.resolve_wait));
     Ok(())
 }
 
 /// The environment a spawn's command carries: a UTF-8 locale, the child's own
-/// identity, then the `KEY=VAL` pairs a `lane create --env` named. The pane's
-/// inherited locale is the tmux server's, not a shell's.
+/// identity, the spawn id this run was minted under, then the `KEY=VAL` pairs a
+/// `lane create --env` named. The pane's inherited locale is the tmux server's,
+/// not a shell's. The spawn id rides here rather than being read back from the
+/// trail: the pane opens before the trail record is written, and a revive
+/// replays this exact command string.
 pub(crate) fn spawn_env_stamp(
     lane_id: &str,
     harness_id: &str,
     parent_lane: Option<&str>,
     env: &[(String, String)],
+    spawn_id: Option<i64>,
 ) -> String {
     let mut stamp = format!(
         "{} {}",
         lane::locale_stamp(),
         identity::child_stamp(lane_id, lane_id, harness_id, parent_lane)
     );
+    if let Some(id) = spawn_id {
+        stamp.push_str(&format!(" {}='{id}'", boop::supervise::SPAWN_ID_ENV));
+    }
     for (key, value) in env {
         stamp.push(' ');
         stamp.push_str(key);
@@ -419,6 +438,8 @@ pub(crate) fn run_lane_supervisor(
 
 /// Write what the lane was told to do, including the brief bytes as of now:
 /// the file on disk is edited afterward and then nothing recovers the text.
+/// Returns the `agent_lane` row id this spawn minted: it is the identity a
+/// resume is checked against, so the caller carries it onto the trail record.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn record_lane_purpose(
     lane: &str,
@@ -430,10 +451,10 @@ pub(crate) fn record_lane_purpose(
     parent: Option<&str>,
     goal: Option<&str>,
     brief: &Path,
-) {
-    let Ok(store) = boop::Store::default_path().and_then(boop::Store::open) else {
-        return;
-    };
+) -> Option<i64> {
+    let store = boop::Store::default_path()
+        .and_then(boop::Store::open)
+        .ok()?;
     let spawn = boop::ident::LaneSpawn {
         lane: lane.to_owned(),
         trace: Some(trace.to_owned()),
@@ -447,10 +468,15 @@ pub(crate) fn record_lane_purpose(
         brief_body: std::fs::read_to_string(brief).ok(),
         ts: boop::channel::now_ms(),
     };
-    if let Err(error) = store.record_lane_spawn(&spawn) {
-        eprintln!("[boop] lane purpose not recorded: {error}");
-    }
+    let spawn_id = match store.record_lane_spawn(&spawn) {
+        Ok(id) => Some(id),
+        Err(error) => {
+            eprintln!("[boop] lane purpose not recorded: {error}");
+            None
+        }
+    };
     let _ = store.attach_trace(lane, trace, "lane-create", boop::channel::now_ms());
+    spawn_id
 }
 
 /// Set the child's mood at spawn. No `agent_session` row exists yet: the
@@ -833,7 +859,6 @@ pub(crate) struct LaneArgs {
     pub(crate) dry_run: bool,
     pub(crate) wait: bool,
     pub(crate) wait_timeout: u64,
-    pub(crate) reclaim: bool,
     pub(crate) expect_path: Vec<String>,
     pub(crate) expect_commit_subject: Vec<String>,
     pub(crate) expect_commits_at_least: Option<u32>,
@@ -874,6 +899,121 @@ pub(crate) fn start_plan(repo: &Path, no_start: bool) -> Result<String> {
     })
 }
 
+/// Which rule picked the repo a lane branches from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RepoSource {
+    CwdFlag,
+    Brief,
+    Caller,
+}
+
+/// The repo a lane branches from: `--cwd`, else the brief's repo, else the
+/// caller's. A drifted coordinator shell must not pick the tree.
+pub(crate) fn spawn_repo(
+    cwd_arg: Option<&str>,
+    brief: Option<&Path>,
+    caller: &Path,
+) -> Result<(PathBuf, RepoSource)> {
+    if let Some(cwd) = cwd_arg {
+        return Ok((PathBuf::from(cwd), RepoSource::CwdFlag));
+    }
+    if let Some(dir) = brief.filter(|path| path.is_absolute()).and_then(Path::parent) {
+        if let Ok(root) = lane::repo_root(dir) {
+            return Ok((root, RepoSource::Brief));
+        }
+    }
+    Ok((lane::repo_root(caller)?, RepoSource::Caller))
+}
+
+/// The `repo:` line a brief-picked repo prints when the caller stands somewhere
+/// else, so a drifted shell is loud instead of silent.
+pub(crate) fn repo_drift_line(repo: &Path, source: RepoSource, caller: &Path) -> Option<String> {
+    if source != RepoSource::Brief {
+        return None;
+    }
+    let standing = lane::repo_root(caller).ok()?;
+    (standing != repo).then(|| {
+        format!(
+            "repo: {} (from the brief; caller stands in {})",
+            repo.display(),
+            standing.display()
+        )
+    })
+}
+
+/// `lane create` on a name a dead lane left standing: remove its worktree,
+/// branch, tmux session and conversation pin. A live pane refuses.
+pub(crate) fn reset_dead_identity(
+    repo: &Path,
+    identity: &lane::LaneIdentity,
+    routes: &BTreeMap<String, Route>,
+    pane_alive: &dyn Fn(&str) -> bool,
+) -> Result<Vec<String>> {
+    let session = routes
+        .get(&identity.lane)
+        .and_then(|route| route.tmux.clone())
+        .unwrap_or_else(|| identity.tmux.clone());
+    if pane_alive(&session) || pane_alive(&identity.tmux) {
+        anyhow::bail!(
+            "lane `{}` is live on tmux target {session}; create takes dead lanes only\n\
+             it is live; hail it with: boop beep {} \"<text>\"",
+            identity.lane,
+            identity.lane
+        );
+    }
+    // A name whose worktree was cleaned by hand still holds its pin, and an
+    // inherited conversation is the wrong opening turn for a fresh brief.
+    let mut lines = Vec::new();
+    if boop::trail::read_conversation_pin(&identity.lane).is_some() {
+        clear_conversation_pin(&identity.lane);
+        lines.push(format!(
+            "reclaim: {} conversation pin cleared",
+            identity.lane
+        ));
+    }
+    let Some(worktree) = identity.worktree_dir.as_deref() else {
+        return Ok(lines);
+    };
+    let session_present = tmux::mux().has_session(None, &session).unwrap_or(false);
+    let branch_present = lane::rev_parse(repo, &identity.branch).is_some();
+    if !worktree.exists() && !branch_present && !session_present {
+        return Ok(lines);
+    }
+    let removed = lane::reclaim_for_spawn(repo, identity, routes, |target| pane_alive(target))?;
+    if session_present {
+        tmux::mux().kill_session(None, &session)?;
+    }
+    let mut parts = Vec::new();
+    if let Some(path) = &removed.worktree {
+        parts.push(format!("worktree {}", path.display()));
+    }
+    if let Some(branch) = &removed.branch {
+        parts.push(format!("branch {branch}"));
+    }
+    if session_present {
+        parts.push(format!("tmux {session}"));
+    }
+    if !parts.is_empty() {
+        info!(lane = identity.lane, removed = parts.join(", "), "dead lane name reset");
+        lines.insert(
+            0,
+            format!(
+                "reclaim: {} was dead; removed {}",
+                identity.lane,
+                parts.join(", ")
+            ),
+        );
+    }
+    Ok(lines)
+}
+
+/// Drop the lane's pinned conversation so the reset name opens a fresh one.
+fn clear_conversation_pin(lane: &str) {
+    if let Err(error) = boop::trail::clear_conversation(lane) {
+        warn!(lane, error = %error, "conversation pin clear failed");
+    }
+}
+
 /// Register and spawn a lane. No match on harness id here; the adapter's own
 /// `spawn`/`preview_command` decides how `prompt` becomes a real invocation.
 pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
@@ -905,10 +1045,11 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         requested_model.as_deref(),
     )?;
     let adapter = registry.get(harness_id);
-    let repo = match &args.cwd {
-        Some(cwd) => PathBuf::from(cwd),
-        None => lane::repo_root(&std::env::current_dir().context("read the current directory")?)?,
-    };
+    let here = std::env::current_dir().context("read the current directory")?;
+    let (repo, repo_source) = spawn_repo(args.cwd.as_deref(), args.brief.as_deref(), &here)?;
+    if let Some(drift) = repo_drift_line(&repo, repo_source, &here) {
+        println!("{drift}");
+    }
     let identity = lane::derive(
         &repo,
         args.branch.as_deref(),
@@ -1019,6 +1160,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
                 harness_id.as_str(),
                 parent.parent.as_deref(),
                 &args.env,
+                None,
             )),
             model: model.clone(),
             variant: variant.clone(),
@@ -1080,25 +1222,24 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
                 identity.lane, args.wait_timeout
             );
         }
-        if args.reclaim {
-            println!("reclaim: worktree and branch removed first, if the name is dead");
+        match boop::trail::read_spawn_id(&identity.lane) {
+            Some(id) => println!("spawn: {id} on the trail; create mints a new one"),
+            None => println!("spawn: none on the trail; create mints the first"),
         }
+        println!("reclaim: worktree, branch and tmux session removed first, if the name is dead");
         return Ok(());
     }
-    if args.reclaim {
-        let removed = lane::reclaim_for_spawn(&repo, &identity, &routes, |target| {
-            tmux::mux().target_alive(None, target)
-        })?;
-        for line in removed.lines() {
-            println!("reclaim: {line}");
-        }
+    for line in reset_dead_identity(&repo, &identity, &routes, &|target| {
+        lane::pane_process_alive(target).unwrap_or(false)
+    })? {
+        println!("{line}");
     }
     let lane_id = identity.lane.clone();
     let trace = args
         .trace
         .clone()
         .unwrap_or_else(|| format!("trace-{}", identity.lane));
-    record_lane_purpose(
+    let spawn_id = record_lane_purpose(
         &identity.lane,
         &trace,
         harness_id.as_str(),
@@ -1144,6 +1285,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             variant: variant.clone(),
             bin: bin.clone(),
             env: args.env.clone(),
+            spawn_id,
         },
     )?;
     if let Some(expect) = expect.as_ref() {
@@ -1167,7 +1309,13 @@ pub(crate) fn shell_quote(value: &str) -> String {
 
 /// The boop-owned stamps a `--env` must never clobber; the supervisor reads
 /// its own identity from these and a user pair would lie about the lane.
-const BOOP_ENV_STAMPS: &[&str] = &["BOOP_SESSION", "BOOP_LANE", "BOOP_HARNESS", "BOOP_PARENT"];
+const BOOP_ENV_STAMPS: &[&str] = &[
+    "BOOP_SESSION",
+    "BOOP_LANE",
+    "BOOP_HARNESS",
+    "BOOP_PARENT",
+    boop::supervise::SPAWN_ID_ENV,
+];
 
 /// Turns the clap-validated `--env` values into `(key, value)` pairs, refusing
 /// a key that collides with a boop-owned stamp.
@@ -1237,20 +1385,50 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
         #[cfg(feature = "agent-read")]
         BeepCmd::Fork {
             comment,
+            cmd,
             preset,
             cwd,
             parent,
             dry_run,
             mail_dir,
-        } => run_fork(
-            registry,
-            comment,
-            preset,
-            cwd,
-            parent,
-            dry_run,
-            mail_dir.as_deref(),
-        ),
+        } => match cmd {
+            Some(ForkCmd::Join {
+                comment,
+                lane,
+                no_merge,
+                no_reply,
+                dry_run: join_dry_run,
+                mail_dir: join_mail_dir,
+            }) => run_fork_join(
+                registry,
+                comment,
+                lane,
+                no_merge,
+                no_reply,
+                join_dry_run,
+                join_mail_dir.as_deref(),
+            ),
+            Some(ForkCmd::Diff {
+                comment,
+                lane,
+                stat,
+                mail_dir: diff_mail_dir,
+            }) => run_fork_diff(comment, lane, stat, diff_mail_dir.as_deref()),
+            None => match comment {
+                Some(comment) => run_fork(
+                    registry,
+                    comment,
+                    preset,
+                    cwd,
+                    parent,
+                    dry_run,
+                    mail_dir.as_deref(),
+                ),
+                None => anyhow::bail!(
+                    "boop beep fork needs a comment id, or one of the join / diff verbs"
+                ),
+            },
+        },
         BeepCmd::Message { cmd } => match cmd {
             MessageCmd::Ack {
                 lane,
@@ -1301,8 +1479,8 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
             let harness_id = harness
                 .as_deref()
                 .and_then(boop_store::harness_id::HarnessId::parse);
-            if harness.is_some() && harness_id.is_none() {
-                anyhow::bail!("unknown harness `{}`", harness.unwrap());
+            if let (Some(named), None) = (harness.as_deref(), harness_id) {
+                anyhow::bail!("unknown harness `{named}`");
             }
             boop::supervise::record_parent_policy(&dir, &name, on_parent_death)?;
             let started = worktree
@@ -1486,6 +1664,249 @@ pub(crate) fn run_fork(
     Ok(())
 }
 
+/// `boop beep fork join <comment-id>`: bring a forked lane home. Merges the
+/// fork's branch into the caller's repo and delivers the lane's last assistant
+/// turn to the fork's parent. Each half is skippable with `--no-merge` /
+/// `--no-reply`; `--dry-run` prints the git command and recipient and runs
+/// nothing.
+#[cfg(feature = "agent-read")]
+pub(crate) fn run_fork_join(
+    registry: &Registry,
+    comment_id: i64,
+    lane: Option<String>,
+    no_merge: bool,
+    no_reply: bool,
+    dry_run: bool,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let store = bus::open_store(&dir)?;
+    let fork = pick_fork(&store, comment_id, lane.as_deref())?;
+    let routes = bus::read_routes(&dir)?;
+    let route = routes
+        .get(&fork.lane)
+        .with_context(|| format!("no route registered for lane `{}`", fork.lane))?;
+    let base_sha = route
+        .base_sha
+        .clone()
+        .with_context(|| format!("lane `{}` route carries no base_sha", fork.lane))?;
+    let repo = repo_root()?;
+
+    let mut merge_line = String::from("merge skipped");
+    if !no_merge {
+        let cmd = format!("git -C {repo} merge --no-ff {}", fork.branch);
+        if dry_run {
+            println!("would run: {cmd}");
+        } else {
+            ensure_clean(&repo)?;
+            ensure_ahead(&repo, &base_sha, &fork.branch)?;
+            boop::worktree::run_git(
+                &PathBuf::from(&repo),
+                &["merge", "--no-ff", fork.branch.as_str()],
+            )?;
+            println!("merged {} into {repo}", fork.branch);
+            merge_line = format!("merged {}", fork.branch);
+        }
+    }
+
+    if !no_reply {
+        let session = route
+            .session_id
+            .clone()
+            .with_context(|| format!("lane `{}` route carries no session_id", fork.lane))?;
+        let said = match store.last_assistant_turn(&session)? {
+            Some((_, said)) => said,
+            None => anyhow::bail!("no assistant turn on lane `{}` to reply with", fork.lane),
+        };
+        let mut body = format!("# Reply from {} to comment {}\n\n", fork.lane, comment_id);
+        body.push_str(&format!("{merge_line}\n\n"));
+        body.push_str(&said);
+        let reply_path = dir
+            .join("forks")
+            .join(format!("comment-{comment_id}.reply.md"));
+        if dry_run {
+            println!("would write reply {}", reply_path.display());
+        } else {
+            std::fs::create_dir_all(reply_path.parent().expect("forks dir has a parent"))?;
+            std::fs::write(&reply_path, &body)?;
+            println!("reply {}", reply_path.display());
+        }
+        let parent = fork_parent(&routes, route)?;
+        if dry_run {
+            println!("would deliver to {parent}");
+        } else {
+            crate::cli::mail::run_send(
+                registry,
+                crate::cli::mail::Outbound {
+                    route: &parent,
+                    body: Some(&said),
+                    kind: "note",
+                    as_name: Some(&fork.lane),
+                    box_name: None,
+                    timeout_secs: 0,
+                    wait: false,
+                    mail_dir: Some(&dir),
+                },
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// `boop beep fork diff <comment-id>`: the diff a join would merge, printed to
+/// stdout. `--stat` adds `--stat`.
+#[cfg(feature = "agent-read")]
+pub(crate) fn run_fork_diff(
+    comment_id: i64,
+    lane: Option<String>,
+    stat: bool,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let store = bus::open_store(&dir)?;
+    let fork = pick_fork(&store, comment_id, lane.as_deref())?;
+    let routes = bus::read_routes(&dir)?;
+    let route = routes
+        .get(&fork.lane)
+        .with_context(|| format!("no route registered for lane `{}`", fork.lane))?;
+    let base_sha = route
+        .base_sha
+        .clone()
+        .with_context(|| format!("lane `{}` route carries no base_sha", fork.lane))?;
+    let repo = repo_root()?;
+    let diff = git_diff(&repo, &base_sha, &fork.branch, stat)?;
+    print!("{diff}");
+    Ok(())
+}
+
+/// The diff a join would merge, as `git -C <repo> diff <base>..<branch>`.
+/// `--stat` adds `--stat`.
+#[cfg(feature = "agent-read")]
+fn git_diff(repo: &str, base_sha: &str, branch: &str, stat: bool) -> Result<String> {
+    let range = format!("{base_sha}..{branch}");
+    let mut args = vec!["diff", range.as_str()];
+    if stat {
+        args.push("--stat");
+    }
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(&args)
+        .output()
+        .with_context(|| format!("git -C {repo} diff {range}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git diff failed in {repo}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// The one fork row a join/diff acts on. Zero rows is an error; several rows
+/// need `--lane`; a named `--lane` picks its row.
+#[cfg(feature = "agent-read")]
+fn pick_fork(
+    store: &boop::ident::Store,
+    comment_id: i64,
+    lane: Option<&str>,
+) -> Result<boop::ident::TurnCommentFork> {
+    let forks = store.turn_comment_forks(comment_id)?;
+    let names = forks
+        .iter()
+        .map(|fork| fork.lane.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    match forks.len() {
+        0 => anyhow::bail!("no lane forked off comment {comment_id}"),
+        1 => Ok(forks.into_iter().next().expect("one fork row")),
+        _ => match lane {
+            None => anyhow::bail!(
+                "comment {comment_id} forked off several lanes ({names}); pass --lane"
+            ),
+            Some(name) => forks
+                .into_iter()
+                .find(|fork| fork.lane == name)
+                .with_context(|| {
+                    format!("no lane `{name}` forked off comment {comment_id}; lanes: {names}")
+                }),
+        },
+    }
+}
+
+/// The recipient a fork reply goes to: the fork route's `parent`, else the one
+/// registered coordinator, else an error naming the ambiguity.
+#[cfg(feature = "agent-read")]
+fn fork_parent(routes: &BTreeMap<String, Route>, route: &Route) -> Result<String> {
+    if let Some(parent) = route.parent.clone().filter(|parent| !parent.is_empty()) {
+        return Ok(parent);
+    }
+    let coordinators = routes
+        .iter()
+        .filter(|(_, route)| route.kind == "coordinator")
+        .map(|(name, _)| name.as_str())
+        .collect::<Vec<_>>();
+    match coordinators.as_slice() {
+        [one] => Ok(one.to_string()),
+        [] => anyhow::bail!("no parent on the fork lane and no registered coordinator to reply to"),
+        _ => anyhow::bail!(
+            "no parent on the fork lane and several coordinators registered ({}); name one",
+            coordinators.join(", ")
+        ),
+    }
+}
+
+/// The caller's repo root, the same `lane::repo_root` rule `run_fork` uses for
+/// `--cwd`.
+#[cfg(feature = "agent-read")]
+fn repo_root() -> Result<String> {
+    let cwd = std::env::current_dir().context("read caller cwd")?;
+    Ok(lane::repo_root(&cwd)?.display().to_string())
+}
+
+/// Error when the repo has a dirty index; a merge must never run over work.
+#[cfg(feature = "agent-read")]
+fn ensure_clean(repo: &str) -> Result<()> {
+    let output = Command::new("git")
+        .args(["-C", repo, "status", "--porcelain"])
+        .output()
+        .with_context(|| format!("git -C {repo} status --porcelain"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git status failed in {repo}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    if !String::from_utf8_lossy(&output.stdout).trim().is_empty() {
+        anyhow::bail!("refusing to merge: dirty index in {repo} (git status --porcelain non-empty)");
+    }
+    Ok(())
+}
+
+/// Error when the branch has nothing past `base_sha`; nothing to merge.
+#[cfg(feature = "agent-read")]
+fn ensure_ahead(repo: &str, base_sha: &str, branch: &str) -> Result<()> {
+    let range = format!("{base_sha}..{branch}");
+    let output = Command::new("git")
+        .args(["-C", repo, "rev-list", "--count", &range])
+        .output()
+        .with_context(|| format!("git -C {repo} rev-list --count {range}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git rev-list failed in {repo}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    let count: i64 = String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse()
+        .unwrap_or(0);
+    if count == 0 {
+        anyhow::bail!("branch `{branch}` has no commits past base {base_sha}; nothing to merge");
+    }
+    Ok(())
+}
+
 /// The brief a forked lane reads: the note as the ask, the quote, then every
 /// quoted turn in full so the lane sees what the comment pointed at.
 #[cfg(feature = "agent-read")]
@@ -1555,7 +1976,8 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             wait,
             wait_timeout,
             mood,
-            reclaim,
+            // Folded: a dead name resets itself now, so the flag is a no-op alias.
+            reclaim: _,
             on_parent_death,
             expect_path,
             expect_commit_subject,
@@ -1597,7 +2019,6 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
                     dry_run,
                     wait,
                     wait_timeout,
-                    reclaim,
                     expect_path,
                     expect_commit_subject,
                     expect_commits_at_least,
@@ -1627,7 +2048,12 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             bin.as_deref(),
             mail_dir.as_deref(),
         ),
-        LaneCmd::Get { lane, mail_dir } => run_lane_get(mail_dir.as_deref(), &lane),
+        LaneCmd::Get {
+            lane,
+            touched,
+            mail_dir,
+        } => run_lane_get(mail_dir.as_deref(), &lane, touched),
+        LaneCmd::Where { lane, mail_dir } => run_lane_where(mail_dir.as_deref(), &lane),
         LaneCmd::Patch {
             lane,
             tmux,
@@ -2017,12 +2443,126 @@ fn lane_state_hop(
     }
 }
 
-pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str) -> Result<()> {
+/// The tree a lane works in: its own worktree, else the cwd it was spawned in.
+pub(crate) fn lane_tree(route: &Route) -> Option<PathBuf> {
+    route
+        .worktree_dir
+        .as_deref()
+        .or(route.cwd.as_deref())
+        .map(PathBuf::from)
+}
+
+/// The one path `lane where` prints, so `cd "$(boop beep lane where x)"` works.
+pub(crate) fn where_line(route: &Route, lane: &str) -> Result<String> {
+    let Some(tree) = lane_tree(route) else {
+        anyhow::bail!("lane `{lane}` records neither a worktree nor a cwd")
+    };
+    Ok(tree.display().to_string())
+}
+
+/// The route a lane inspection reads, and the state to report when the
+/// registry has no row: a retired lane's epilogue already dropped its route.
+pub(crate) fn inspect_route(
+    lane: &str,
+    routes: &BTreeMap<String, Route>,
+    spawn: Option<&boop::trail::Spawn>,
+    retired: bool,
+) -> Result<(Route, Option<&'static str>)> {
+    if let Some(route) = routes.get(lane) {
+        return Ok((route.clone(), None));
+    }
+    let Some(spawn) = spawn else {
+        anyhow::bail!(
+            "no route and no spawn record for lane {lane}; \
+             it was never spawned through lane create"
+        )
+    };
+    let mut route = bus::route_from_value(&spawn.route);
+    // A record written before the route was copied into it still names the
+    // pane and the directory its supervisor ran in.
+    if route.tmux.is_none() {
+        route.tmux = Some(spawn.tmux.clone());
+    }
+    if route.cwd.is_none() {
+        route.cwd = Some(spawn.cwd.clone());
+    }
+    Ok((route, Some(if retired { "retired" } else { "dead" })))
+}
+
+/// True when the lane's last recorded residency was the idle shutdown. The
+/// residency file outlives the route the pane epilogue drops.
+fn lane_retired(dir: &Path, lane: &str) -> bool {
+    boop::supervise::read_residency(dir, lane).as_deref()
+        == Some(boop::supervise::RESIDENCY_RETIRED)
+}
+
+/// `beep lane where`: the lane's tree and nothing else.
+pub(crate) fn run_lane_where(mail_dir_arg: Option<&Path>, lane: &str) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
-    let Some(route) = routes.get(lane) else {
-        anyhow::bail!("no registry route for lane `{lane}`")
+    let spawn = boop::trail::read_spawn(lane);
+    let (route, _) = inspect_route(lane, &routes, spawn.as_ref(), lane_retired(&dir, lane))?;
+    println!("{}", where_line(&route, lane)?);
+    Ok(())
+}
+
+/// Every line `git` prints for `args` in `dir`, empty when the call fails.
+fn git_lines(dir: &Path, args: &[&str]) -> Vec<String> {
+    let Ok(output) = Command::new("git").arg("-C").arg(dir).args(args).output() else {
+        return Vec::new();
     };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// What a lane changed in its tree: commits past its base sha, uncommitted
+/// files, and the paths those commits touched.
+pub(crate) fn touched_lines(route: &Route, lane: &str) -> Result<Vec<String>> {
+    let Some(tree) = lane_tree(route) else {
+        anyhow::bail!("lane `{lane}` records neither a worktree nor a cwd")
+    };
+    let mut out = vec![format!("worktree {}", tree.display())];
+    let base = route.base_sha.clone().unwrap_or_else(|| "HEAD".to_owned());
+    let head = git_lines(&tree, &["rev-parse", "HEAD"])
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "-".to_owned());
+    let range = format!("{base}..HEAD");
+    let count = git_lines(&tree, &["rev-list", "--count", &range])
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "0".to_owned());
+    out.push(format!(
+        "base {base}  head {head}  commits_past_base {count}"
+    ));
+    let commits = git_lines(&tree, &["log", "-n", "20", "--format=%h %s", &range]);
+    out.extend(commits.iter().map(|commit| format!("commit {commit}")));
+    let dirty = git_lines(&tree, &["status", "--porcelain"]);
+    for line in &dirty {
+        let (code, path) = line.split_at(line.len().min(2));
+        out.push(format!("dirty {} {}", code.trim(), path.trim()));
+    }
+    for path in git_lines(&tree, &["diff", "--name-only", &range]) {
+        out.push(format!("changed {path}"));
+    }
+    if commits.is_empty() && dirty.is_empty() {
+        out.push("touched none".to_owned());
+    }
+    Ok(out)
+}
+
+pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str, touched: bool) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let routes = bus::read_routes(&dir)?;
+    let spawn = boop::trail::read_spawn(lane);
+    let (route, gone) = inspect_route(lane, &routes, spawn.as_ref(), lane_retired(&dir, lane))?;
+    let route = &route;
     let live = tmux::mux().live_sessions(None);
     let expect = boop::trail::read_expect(lane)
         .and_then(|expect| serde_json::to_value(expect).ok())
@@ -2031,7 +2571,7 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str) -> Result<()
         "{}",
         serde_json::json!({
             "lane": lane,
-            "state": lane_state(&dir, lane, &live, route, &routes),
+            "state": gone.unwrap_or_else(|| lane_state(&dir, lane, &live, route, &routes)),
             "harness": route.harness,
             "tmux": route.tmux,
             "cwd": route.cwd,
@@ -2041,6 +2581,11 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str) -> Result<()
             "expect": expect,
         })
     );
+    if touched {
+        for line in touched_lines(route, lane)? {
+            println!("{line}");
+        }
+    }
     Ok(())
 }
 
@@ -2179,12 +2724,19 @@ fn remove_one_worktree(repo: &Path, worktree: &Path) -> Result<()> {
 pub(crate) fn run_lane_delete_carcass(lane: &str) -> Result<()> {
     let here = std::env::current_dir().context("read the current directory")?;
     let repo = lane::repo_root(&here)?;
-    let removed =
-        lane::delete_carcass(&repo, lane, |target| tmux::mux().target_alive(None, target))?;
+    let removed = lane::delete_carcass(&repo, lane, |target| {
+        lane::pane_process_alive(target).unwrap_or(false)
+    })?;
     for line in removed.lines() {
         println!("deleted {lane}: {line}");
     }
-    if removed.nothing_removed() {
+    // The session outlives its panes under remain-on-exit and holds the name.
+    let session_removed = tmux::mux().has_session(None, lane).unwrap_or(false);
+    if session_removed {
+        tmux::mux().kill_session(None, lane)?;
+        println!("deleted {lane}: removed tmux session {lane}");
+    }
+    if removed.nothing_removed() && !session_removed {
         println!("deleted {lane}: nothing left to remove");
     }
     info!(lane, "lane carcass deleted");
@@ -2911,6 +3463,12 @@ pub(crate) fn render_ndjson(nodes: &[LaneNode]) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::cli::testkit::{route_with, temp_mail_dir};
+    use std::sync::Mutex;
+
+    /// The join tests change the process cwd (repo resolution reads it), so
+    /// they serialize against each other behind this one lock.
+    #[cfg(feature = "agent-read")]
+    static CWD_LOCK: Mutex<()> = Mutex::new(());
 
     /// RECEIPT. The brief a fork lane reads carries the note as the ask, the
     /// quote, the ingested turn in full, and names the turn it could not read.
@@ -2956,6 +3514,311 @@ mod tests {
         assert!(brief.contains("### ses-a turn 3 (assistant)\n\nthe turn body"), "{brief}");
         assert!(brief.contains("ses-a turn 9 is quoted but not ingested"), "{brief}");
     }
+
+    #[cfg(feature = "agent-read")]
+    fn fork_row(comment_id: i64, lane: &str, branch: &str) -> boop::ident::TurnCommentFork {
+        boop::ident::TurnCommentFork {
+            comment_id,
+            lane: lane.into(),
+            branch: branch.into(),
+            brief: format!("/tmp/forks/comment-{comment_id}.md"),
+            created_ts: comment_id,
+        }
+    }
+
+    #[cfg(feature = "agent-read")]
+    fn fork_route(parent: Option<&str>, base_sha: &str, session_id: &str) -> Route {
+        let mut route = route_with(parent);
+        route.base_sha = Some(base_sha.into());
+        route.session_id = Some(session_id.into());
+        route
+    }
+
+    #[cfg(feature = "agent-read")]
+    fn git_in(repo: &Path, args: &[&str]) -> String {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {:?}: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_owned()
+    }
+
+    /// A fresh repo with one committed file, HEAD on its initial branch.
+    #[cfg(feature = "agent-read")]
+    fn temp_git_repo() -> PathBuf {
+        let dir = std::env::temp_dir().join(unique_name("boop-fork-repo"));
+        std::fs::create_dir_all(&dir).unwrap();
+        git_in(&dir, &["init", "-q"]);
+        git_in(&dir, &["config", "user.email", "t@t"]);
+        git_in(&dir, &["config", "user.name", "t"]);
+        std::fs::write(dir.join("a.txt"), "hello").unwrap();
+        git_in(&dir, &["add", "a.txt"]);
+        git_in(&dir, &["commit", "-q", "-m", "base"]);
+        dir
+    }
+
+    /// One fork branch with a commit past `base`, checked back out to the
+    /// initial branch. Returns `(repo, base_sha)`.
+    #[cfg(feature = "agent-read")]
+    fn repo_with_fork_commit(id: i64) -> (PathBuf, String) {
+        let repo = temp_git_repo();
+        let base = git_in(&repo, &["rev-parse", "HEAD"]);
+        let branch = format!("fork/comment-{id}");
+        git_in(&repo, &["checkout", "-q", "-b", &branch]);
+        std::fs::write(repo.join("b.txt"), "world").unwrap();
+        git_in(&repo, &["add", "b.txt"]);
+        git_in(&repo, &["commit", "-q", "-m", "fork work"]);
+        git_in(&repo, &["checkout", "-q", "-"]);
+        (repo, base)
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn pick_fork_returns_the_one_row_by_default() {
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        let fork = fork_row(7, "fork-comment-7", "fork/comment-7");
+        store.record_turn_comment_fork(&fork).unwrap();
+        assert_eq!(pick_fork(&store, 7, None).unwrap(), fork);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn pick_fork_requires_lane_when_several_match() {
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(7, "fork-comment-7-a", "fork/comment-7-a"))
+            .unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(7, "fork-comment-7-b", "fork/comment-7-b"))
+            .unwrap();
+        let error = pick_fork(&store, 7, None).unwrap_err().to_string();
+        assert!(error.contains("fork-comment-7-a"), "{error}");
+        assert!(error.contains("fork-comment-7-b"), "{error}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn pick_fork_returns_the_named_lane() {
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(7, "fork-comment-7-a", "fork/comment-7-a"))
+            .unwrap();
+        let second = fork_row(7, "fork-comment-7-b", "fork/comment-7-b");
+        store.record_turn_comment_fork(&second).unwrap();
+        assert_eq!(pick_fork(&store, 7, Some("fork-comment-7-b")).unwrap(), second);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn fork_join_merges_the_branch_and_writes_the_reply() {
+        let _guard = CWD_LOCK.lock().unwrap();
+        let (repo, base) = repo_with_fork_commit(7);
+
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(7, "fork-comment-7", "fork/comment-7"))
+            .unwrap();
+        write_route(&dir, "fork-comment-7", fork_route(Some("parent-lane"), &base, "ses-fork"))
+            .unwrap();
+        write_route(&dir, "parent-lane", route_with(None)).unwrap();
+        store
+            .write_turn("ses-fork", 1, 100, "assistant", "the fork answer", None)
+            .unwrap();
+
+        let cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&repo).unwrap();
+        let result = run_fork_join(
+            &Registry::discover(),
+            7,
+            None,
+            false,
+            false,
+            false,
+            Some(&dir),
+        );
+        std::env::set_current_dir(&cwd).unwrap();
+        result.unwrap();
+
+        assert!(
+            !git_in(&repo, &["log", "--oneline", "--merges"]).is_empty(),
+            "a merge commit must exist"
+        );
+        let reply = std::fs::read_to_string(dir.join("forks/comment-7.reply.md")).unwrap();
+        assert!(reply.contains("# Reply from fork-comment-7 to comment 7"), "{reply}");
+        assert!(reply.contains("the fork answer"), "{reply}");
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn fork_join_refuses_a_dirty_index() {
+        let _guard = CWD_LOCK.lock().unwrap();
+        let (repo, base) = repo_with_fork_commit(8);
+        std::fs::write(repo.join("a.txt"), "dirty").unwrap();
+
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(8, "fork-comment-8", "fork/comment-8"))
+            .unwrap();
+        write_route(&dir, "fork-comment-8", fork_route(Some("parent-lane"), &base, "ses-fork"))
+            .unwrap();
+        write_route(&dir, "parent-lane", route_with(None)).unwrap();
+
+        let cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&repo).unwrap();
+        let result = run_fork_join(
+            &Registry::discover(),
+            8,
+            None,
+            false,
+            false,
+            false,
+            Some(&dir),
+        );
+        std::env::set_current_dir(&cwd).unwrap();
+
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("dirty"), "{error}");
+        assert!(
+            git_in(&repo, &["log", "--oneline", "--merges"]).is_empty(),
+            "no merge may run over a dirty index"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn fork_join_refuses_a_branch_with_nothing_past_base() {
+        let _guard = CWD_LOCK.lock().unwrap();
+        let repo = temp_git_repo();
+        let base = git_in(&repo, &["rev-parse", "HEAD"]);
+        git_in(&repo, &["branch", "fork/comment-9"]);
+
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(9, "fork-comment-9", "fork/comment-9"))
+            .unwrap();
+        write_route(&dir, "fork-comment-9", fork_route(Some("parent-lane"), &base, "ses-fork"))
+            .unwrap();
+        write_route(&dir, "parent-lane", route_with(None)).unwrap();
+
+        let cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&repo).unwrap();
+        let result = run_fork_join(
+            &Registry::discover(),
+            9,
+            None,
+            false,
+            false,
+            false,
+            Some(&dir),
+        );
+        std::env::set_current_dir(&cwd).unwrap();
+
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("no commits"), "{error}");
+        assert!(
+            git_in(&repo, &["log", "--oneline", "--merges"]).is_empty(),
+            "no merge may run when the branch has nothing past base"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn fork_join_dry_run_runs_nothing() {
+        let _guard = CWD_LOCK.lock().unwrap();
+        let (repo, base) = repo_with_fork_commit(10);
+        let head_before = git_in(&repo, &["rev-parse", "HEAD"]);
+
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(10, "fork-comment-10", "fork/comment-10"))
+            .unwrap();
+        write_route(&dir, "fork-comment-10", fork_route(Some("parent-lane"), &base, "ses-fork"))
+            .unwrap();
+        write_route(&dir, "parent-lane", route_with(None)).unwrap();
+        store
+            .write_turn("ses-fork", 1, 100, "assistant", "the fork answer", None)
+            .unwrap();
+
+        let cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&repo).unwrap();
+        run_fork_join(
+            &Registry::discover(),
+            10,
+            None,
+            false,
+            false,
+            true,
+            Some(&dir),
+        )
+        .unwrap();
+        std::env::set_current_dir(&cwd).unwrap();
+
+        assert_eq!(
+            git_in(&repo, &["rev-parse", "HEAD"]),
+            head_before,
+            "dry run must not merge"
+        );
+        assert!(
+            !dir.join("forks/comment-10.reply.md").exists(),
+            "dry run must not write the reply"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn fork_diff_contains_the_changed_path() {
+        let _guard = CWD_LOCK.lock().unwrap();
+        let (repo, base) = repo_with_fork_commit(11);
+        let diff = git_diff(&repo.to_string_lossy(), &base, "fork/comment-11", false).unwrap();
+        assert!(diff.contains("b.txt"), "diff:\n{diff}");
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn beep_fork_bare_spelling_still_parses() {
+        use clap::Parser;
+        let cli = crate::Cli::try_parse_from(["boop", "beep", "fork", "7"]).unwrap();
+        let is_spawn = matches!(
+            cli.command,
+            Some(crate::SubCmd::Beep {
+                cmd: Some(crate::BeepCmd::Fork {
+                    comment: Some(7),
+                    cmd: None,
+                    ..
+                }),
+                ..
+            })
+        );
+        assert!(is_spawn, "bare `beep fork 7` must parse to the spawn form");
+    }
+
     use boop::bus::{self, read_routes, Route};
     use boop::proc::{ProcReader, ProcessInfo, SysinfoSnapshot};
     use boop::registry::Registry;
@@ -4036,5 +4899,325 @@ mod tests {
             reader.queried.get(),
             "run_ps_with must query the injected ProcReader"
         );
+    }
+
+    /// A throwaway repo with one commit, removed on drop.
+    struct GitRepo {
+        dir: PathBuf,
+    }
+
+    impl GitRepo {
+        fn new(tag: &str) -> GitRepo {
+            let dir = std::env::temp_dir().join(unique_name(&format!("boop-job-{tag}")));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            let repo = GitRepo { dir };
+            repo.git(&["init", "-q", "-b", "main"]);
+            repo.git(&["config", "user.email", "t@t"]);
+            repo.git(&["config", "user.name", "t"]);
+            std::fs::write(repo.dir.join("seed.txt"), "s").unwrap();
+            repo.git(&["add", "-A"]);
+            repo.git(&["commit", "-qm", "seed"]);
+            repo
+        }
+
+        fn git(&self, args: &[&str]) -> String {
+            self.git_in(&self.dir, args)
+        }
+
+        fn git_in(&self, at: &Path, args: &[&str]) -> String {
+            let out = Command::new("git")
+                .arg("-C")
+                .arg(at)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?} in {}: {}",
+                at.display(),
+                String::from_utf8_lossy(&out.stderr)
+            );
+            String::from_utf8_lossy(&out.stdout).trim().to_owned()
+        }
+    }
+
+    impl Drop for GitRepo {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    /// FAIL-PRE-FIX (repo drift). Three lanes branched from the shell's own
+    /// checkout instead of the one holding their brief; the brief now decides.
+    #[test]
+    fn the_repo_comes_from_the_brief_when_no_cwd_flag_names_one() {
+        let brief_repo = GitRepo::new("brief");
+        let caller_repo = GitRepo::new("caller");
+        let brief = brief_repo.dir.join("brief.md");
+        std::fs::write(&brief, "do the work\n").unwrap();
+
+        let (repo, source) = spawn_repo(None, Some(&brief), &caller_repo.dir).unwrap();
+        assert_eq!(source, RepoSource::Brief);
+        assert_eq!(repo, std::fs::canonicalize(&brief_repo.dir).unwrap());
+        let drift = repo_drift_line(&repo, source, &caller_repo.dir).expect("a drift line");
+        assert!(drift.contains(&repo.display().to_string()), "{drift}");
+        assert!(
+            drift.contains(
+                &std::fs::canonicalize(&caller_repo.dir)
+                    .unwrap()
+                    .display()
+                    .to_string()
+            ),
+            "{drift}"
+        );
+        assert!(drift.starts_with("repo: "), "{drift}");
+    }
+
+    /// RECEIPT. `--cwd` outranks the brief's repo, and no drift line follows a
+    /// repo the caller named itself.
+    #[test]
+    fn the_cwd_flag_outranks_the_briefs_repo() {
+        let brief_repo = GitRepo::new("flag-brief");
+        let named = GitRepo::new("flag-named");
+        let brief = brief_repo.dir.join("brief.md");
+        std::fs::write(&brief, "do the work\n").unwrap();
+
+        let (repo, source) = spawn_repo(
+            Some(&named.dir.display().to_string()),
+            Some(&brief),
+            &brief_repo.dir,
+        )
+        .unwrap();
+        assert_eq!(source, RepoSource::CwdFlag);
+        assert_eq!(repo, named.dir);
+        assert!(repo_drift_line(&repo, source, &brief_repo.dir).is_none());
+    }
+
+    /// A worktree and branch the lane `lane` would use, left standing with no
+    /// route, which is exactly what a dead supervisor leaves behind.
+    fn carcass_of(repo: &GitRepo, branch: &str) -> lane::LaneIdentity {
+        let identity = lane::derive(&repo.dir, Some(branch), None, None).unwrap();
+        let worktree = identity.worktree_dir.clone().unwrap();
+        std::fs::create_dir_all(worktree.parent().unwrap()).unwrap();
+        repo.git(&[
+            "worktree",
+            "add",
+            "-b",
+            branch,
+            &worktree.display().to_string(),
+            "HEAD",
+        ]);
+        identity
+    }
+
+    /// FAIL-PRE-FIX (defect 2). Respawn on a dead name reported `a branch
+    /// named '...' already exists`; the reset now needs no flag.
+    #[test]
+    fn create_resets_a_dead_name_and_says_what_it_removed() {
+        let repo = GitRepo::new("reset-dead");
+        let identity = carcass_of(&repo, "fix/navmenu-flip-hover");
+        let worktree = identity.worktree_dir.clone().unwrap();
+
+        let lines = reset_dead_identity(&repo.dir, &identity, &BTreeMap::new(), &|_| false).unwrap();
+        let line = lines.first().expect("a dead name reports its reset").clone();
+        assert!(
+            line.starts_with("reclaim: fix-navmenu-flip-hover was dead; removed "),
+            "{line}"
+        );
+        assert!(line.contains(&format!("worktree {}", worktree.display())), "{line}");
+        assert!(line.contains("branch fix/navmenu-flip-hover"), "{line}");
+        assert!(!worktree.exists(), "the worktree is gone");
+        assert!(
+            !repo
+                .git(&["branch", "--format=%(refname:short)"])
+                .contains("fix/navmenu-flip-hover"),
+            "the branch is gone"
+        );
+        assert!(
+            reset_dead_identity(&repo.dir, &identity, &BTreeMap::new(), &|_| false)
+                .unwrap()
+                .is_empty(),
+            "a free name with no pin reports nothing"
+        );
+    }
+
+    /// RECEIPT. Live work is never clobbered: the refusal names the hail.
+    #[test]
+    fn create_refuses_a_name_whose_pane_is_alive() {
+        let repo = GitRepo::new("reset-live");
+        let identity = carcass_of(&repo, "fix/live-name");
+        let worktree = identity.worktree_dir.clone().unwrap();
+
+        let error = reset_dead_identity(&repo.dir, &identity, &BTreeMap::new(), &|_| true)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("create takes dead lanes only"), "{error}");
+        assert!(
+            error.contains("hail it with: boop beep fix-live-name \"<text>\""),
+            "{error}"
+        );
+        assert!(worktree.exists(), "the live lane's worktree survives");
+    }
+
+    /// FAIL-PRE-FIX (defect 1). `delete` read a session with one dead pane as
+    /// live and refused; with pane liveness the carcass is removed.
+    #[test]
+    fn delete_takes_a_carcass_whose_only_pane_is_dead() {
+        let repo = GitRepo::new("delete-dead-pane");
+        let identity = carcass_of(&repo, "fix/dead-pane");
+        let worktree = identity.worktree_dir.clone().unwrap();
+        let dead_pane = |_: &str| lane::pane_alive_in_listing("1 4242\n", |_| true);
+
+        let removed = lane::delete_carcass(&repo.dir, "fix-dead-pane", dead_pane).unwrap();
+        let gone = removed.worktree.clone().expect("a worktree was removed");
+        assert!(
+            gone.ends_with(".boop-worktrees/fix/dead-pane"),
+            "{}",
+            gone.display()
+        );
+        assert_eq!(removed.branch, Some("fix/dead-pane".to_owned()));
+        assert!(!worktree.exists());
+
+        let repo = GitRepo::new("delete-live-pane");
+        let identity = carcass_of(&repo, "fix/live-pane");
+        let live_pane = |_: &str| lane::pane_alive_in_listing("0 4242\n", |_| true);
+        let error = lane::delete_carcass(&repo.dir, "fix-live-pane", live_pane)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("delete takes dead lanes only"), "{error}");
+        assert!(identity.worktree_dir.unwrap().exists());
+    }
+
+    /// A route pointed at `tree`, with `base` as the sha the lane branched at.
+    fn touched_route(tree: &Path, base: &str) -> Route {
+        let mut route = tmux_route("touched");
+        route.worktree_dir = Some(tree.display().to_string());
+        route.base_sha = Some(base.to_owned());
+        route
+    }
+
+    /// RECEIPT. A worktree still standing at its base sha has nothing to show.
+    #[test]
+    fn touched_reads_none_on_a_fresh_worktree() {
+        let repo = GitRepo::new("touched-none");
+        let identity = carcass_of(&repo, "fix/touched-none");
+        let tree = identity.worktree_dir.unwrap();
+        let base = repo.git(&["rev-parse", "HEAD"]);
+
+        let lines = touched_lines(&touched_route(&tree, &base), "fix-touched-none").unwrap();
+        assert_eq!(lines[0], format!("worktree {}", tree.display()));
+        assert!(lines[1].contains("commits_past_base 0"), "{:?}", lines[1]);
+        assert_eq!(lines.last().map(String::as_str), Some("touched none"));
+    }
+
+    /// FAIL-PRE-FIX (defect 4). Learning whether a lane had done anything took
+    /// three git calls by hand; one flag prints the commit and the path.
+    #[test]
+    fn touched_names_the_commit_and_the_changed_path() {
+        let repo = GitRepo::new("touched-commit");
+        let identity = carcass_of(&repo, "fix/touched-commit");
+        let tree = identity.worktree_dir.unwrap();
+        let base = repo.git(&["rev-parse", "HEAD"]);
+        std::fs::write(tree.join("added.txt"), "work\n").unwrap();
+        repo.git_in(&tree, &["add", "-A"]);
+        repo.git_in(&tree, &["commit", "-qm", "the lane did a thing"]);
+        std::fs::write(tree.join("scratch.txt"), "uncommitted\n").unwrap();
+
+        let lines = touched_lines(&touched_route(&tree, &base), "fix-touched-commit").unwrap();
+        assert!(lines[1].contains("commits_past_base 1"), "{:?}", lines[1]);
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.starts_with("commit ") && line.ends_with("the lane did a thing")),
+            "{lines:?}"
+        );
+        assert!(
+            lines.contains(&"changed added.txt".to_owned()),
+            "{lines:?}"
+        );
+        assert!(
+            lines.contains(&"dirty ?? scratch.txt".to_owned()),
+            "{lines:?}"
+        );
+        assert!(!lines.contains(&"touched none".to_owned()), "{lines:?}");
+    }
+
+    /// A spawn record for a lane whose route is gone, carrying `tree` as the
+    /// worktree it ran in and `base` as the sha it branched from.
+    fn spawn_record(tree: &Path, base: &str) -> boop::trail::Spawn {
+        boop::trail::Spawn {
+            tmux: "fix-retired".to_owned(),
+            socket: None,
+            cwd: tree.display().to_string(),
+            command: "boop beep lane run --lane fix-retired".to_owned(),
+            route: crate::cli::route_to_json(&touched_route(tree, base)),
+            spawn_id: None,
+        }
+    }
+
+    /// FAIL-PRE-FIX (gap 1). `where` and `--touched` answered `no registry
+    /// route` on retired lanes, the ones a coordinator actually inspects.
+    #[test]
+    fn where_and_touched_read_the_spawn_record_when_the_route_is_gone() {
+        let repo = GitRepo::new("retired-spawn");
+        let identity = carcass_of(&repo, "fix/retired");
+        let tree = identity.worktree_dir.unwrap();
+        let base = repo.git(&["rev-parse", "HEAD"]);
+        std::fs::write(tree.join("done.txt"), "work\n").unwrap();
+        repo.git_in(&tree, &["add", "-A"]);
+        repo.git_in(&tree, &["commit", "-qm", "the retired lane committed"]);
+        let spawn = spawn_record(&tree, &base);
+
+        let (route, state) =
+            inspect_route("fix-retired", &BTreeMap::new(), Some(&spawn), true).unwrap();
+        assert_eq!(state, Some("retired"));
+        assert_eq!(where_line(&route, "fix-retired").unwrap(), tree.display().to_string());
+        let lines = touched_lines(&route, "fix-retired").unwrap();
+        assert_eq!(lines[0], format!("worktree {}", tree.display()));
+        assert!(lines[1].contains("commits_past_base 1"), "{:?}", lines[1]);
+        assert!(
+            lines.iter().any(|line| line.ends_with("the retired lane committed")),
+            "{lines:?}"
+        );
+        assert!(lines.contains(&"changed done.txt".to_owned()), "{lines:?}");
+
+        let (_, dead) =
+            inspect_route("fix-retired", &BTreeMap::new(), Some(&spawn), false).unwrap();
+        assert_eq!(dead, Some("dead"));
+    }
+
+    /// RECEIPT. A live registry row still outranks the spawn record, and a
+    /// name with neither says so rather than blaming the registry.
+    #[test]
+    fn a_live_route_outranks_the_record_and_a_stranger_names_neither() {
+        let mut routes = BTreeMap::new();
+        routes.insert("fix-live".to_owned(), tmux_route("fix-live"));
+        let spawn = spawn_record(Path::new("/stale"), "abc");
+        let (route, state) = inspect_route("fix-live", &routes, Some(&spawn), true).unwrap();
+        assert_eq!(state, None, "a routed lane reads its live state");
+        assert_eq!(route.tmux.as_deref(), Some("fix-live"));
+
+        let error = inspect_route("never-was", &BTreeMap::new(), None, false)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            error,
+            "no route and no spawn record for lane never-was; \
+             it was never spawned through lane create"
+        );
+    }
+
+    /// RECEIPT. `lane where` prints one path so `cd "$(...)"` is the whole use.
+    #[test]
+    fn where_prints_the_worktree_path_alone() {
+        let mut route = tmux_route("wherever");
+        route.worktree_dir = Some("/tmp/boop-worktrees/fix/x".to_owned());
+        route.cwd = Some("/repo".to_owned());
+        assert_eq!(where_line(&route, "fix-x").unwrap(), "/tmp/boop-worktrees/fix/x");
+        route.worktree_dir = None;
+        assert_eq!(where_line(&route, "fix-x").unwrap(), "/repo");
+        route.cwd = None;
+        assert!(where_line(&route, "fix-x").is_err());
     }
 }

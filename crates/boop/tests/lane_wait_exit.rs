@@ -261,10 +261,17 @@ fn create_wait_returns_the_lanes_rc() {
     let mut lines = std::io::BufReader::new(stdout).lines();
     let route = lines.next().unwrap().unwrap();
     let (_, route) = route.split_once(" -> ").unwrap();
-    assert_eq!(
-        route,
-        format!("{} (tmux {})", fixture.lane, fixture.tmux),
-        "the route line must be flushed before the result row exists"
+    // The line names the spawn id this create minted; a resume is checked
+    // against that id, so the coordinator is handed it here.
+    let head = format!("{} (tmux {}, spawn ", fixture.lane, fixture.tmux);
+    let minted = route
+        .strip_prefix(&head)
+        .and_then(|rest| rest.strip_suffix(')'))
+        .and_then(|id| id.parse::<i64>().ok());
+    assert!(
+        minted.is_some_and(|id| id > 0),
+        "the route line must be flushed before the result row exists, \
+         and must name the minted spawn: {route}"
     );
     seed_current_result(&fixture.mail, &fixture.lane, 17);
     assert_eq!(child.wait().unwrap().code(), Some(17));

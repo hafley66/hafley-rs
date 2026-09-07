@@ -536,14 +536,9 @@ fn message_of_kind(id: &str, to: &str, kind: &str, body: &str) -> Message {
 #[test]
 fn a_supervisor_row_never_takes_the_door_of_a_live_route() {
     for (label, kind, id) in [
-        ("result", "result", "m-sup-result"),
         ("yield", "yield", "m-sup-yield"),
         ("head_rewound", "head_rewound", "m-sup-rewound"),
-        (
-            "exited_without_completion",
-            "exited_without_completion",
-            "m-sup-exit",
-        ),
+        ("retrying", "retrying", "m-sup-retrying"),
     ] {
         let dir = temp_dir(&format!("supervisor-{label}"));
         let store = store(&dir);
@@ -572,6 +567,35 @@ fn a_supervisor_row_never_takes_the_door_of_a_live_route() {
                 ("held-in-mailbox", format!("{kind} row; no door").as_str()),
             ],
             "one transition row says where a {kind} row waits"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+/// RECEIPT. A lane's end row is the one line a parent must see without
+/// asking (Chris, 2026-09-07): it takes the door like a hail.
+#[test]
+fn a_lane_end_row_takes_the_door_of_a_live_route() {
+    for (label, kind, id) in [
+        ("result", "result", "m-end-result"),
+        (
+            "exited_without_completion",
+            "exited_without_completion",
+            "m-end-exit",
+        ),
+    ] {
+        let dir = temp_dir(&format!("lane-end-{label}"));
+        let store = store(&dir);
+        let registry = Registry::with(vec![Box::new(echo(HarnessId::Kimi, &DOOR, &dir))]);
+        let routes = routes("tui", route(HarnessId::Kimi, Some("projects:@1.%1"), None));
+        let message = message_of_kind(id, "tui", kind, "lane feature-x done rc=1");
+
+        let landing = deliver_hail_with(&registry, &store, &routes, &message, &NoPane).unwrap();
+        assert_eq!(landing.rung, Rung::Door, "a {kind} row takes the door");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("door.log")).unwrap(),
+            "live-1 <- lane feature-x done rc=1",
+            "the {kind} row's body reached the door"
         );
         let _ = std::fs::remove_dir_all(dir);
     }

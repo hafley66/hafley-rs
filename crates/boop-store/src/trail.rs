@@ -60,6 +60,13 @@ pub struct Spawn {
     /// pane epilogue drops the route when a retired lane exits.
     #[serde(default)]
     pub route: serde_json::Value,
+    /// The `agent_lane` row id `record_lane_spawn` minted for this run. It is
+    /// the only thing that says "this is the same run": the lane name is
+    /// reused, the cwd is the same for every respawn of a branch, and the
+    /// harness conversation id moves on compaction. `None` on a record
+    /// written before the id was carried.
+    #[serde(default)]
+    pub spawn_id: Option<i64>,
 }
 
 /// The spawn record file name under a lane's trail directory.
@@ -80,23 +87,124 @@ pub fn read_spawn(lane: &str) -> Option<Spawn> {
     serde_json::from_str(&text).ok()
 }
 
+/// The spawn id this lane's current record carries, if any. A lane with no
+/// record, or one written before the id was carried, reads `None`.
+pub fn read_spawn_id(lane: &str) -> Option<i64> {
+    read_spawn(lane)?.spawn_id
+}
+
 /// The pinned conversation file under a lane's trail directory. The route
 /// also carries it, but the pane epilogue drops the route on exit; this copy
 /// is what a revive resumes.
 pub const CONVERSATION_FILE: &str = "conversation";
 
-/// Write `~/.agent/lanes/<lane>/conversation`.
-pub fn write_conversation(lane: &str, conversation: &str) -> Result<()> {
-    let dir = lane_dir(lane)?;
-    std::fs::create_dir_all(&dir).context("create lane trail dir")?;
-    std::fs::write(dir.join(CONVERSATION_FILE), conversation).context("write conversation file")
+/// The conversation id plus the spawn it belongs to. The file outlives
+/// `lane delete`, so an id alone revived a dead lane's conversation.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct ConversationPin {
+    pub conversation: String,
+    /// Absolute worktree/cwd the supervisor ran in when the id was recorded.
+    pub cwd: String,
+    /// Unix ms when the pin was written.
+    pub pinned_ts: u64,
+    /// The spawn that pinned the id. A resume is accepted only when this
+    /// equals the running spawn's own id, so a `lane create` that reuses the
+    /// name never inherits the conversation.
+    #[serde(default)]
+    pub spawn_id: Option<i64>,
 }
 
-/// Read the pinned conversation from the trail; `None` when never written.
-pub fn read_conversation(lane: &str) -> Option<String> {
+impl ConversationPin {
+    /// A pin for `conversation` as recorded now by the supervisor of spawn
+    /// `spawn_id` running in `cwd`.
+    pub fn recorded(conversation: &str, cwd: &Path, spawn_id: Option<i64>) -> ConversationPin {
+        ConversationPin {
+            conversation: conversation.to_owned(),
+            cwd: cwd.display().to_string(),
+            pinned_ts: now_ms(),
+            spawn_id,
+        }
+    }
+
+    /// Whether this pin was written by the spawn now running. Two unknown
+    /// ids are a mismatch, never a match: a record that names no spawn
+    /// proves nothing about the run reading it.
+    pub fn same_spawn(&self, spawn_id: Option<i64>) -> bool {
+        matches!((self.spawn_id, spawn_id), (Some(pinned), Some(now)) if pinned == now)
+    }
+
+    /// Whether this pin was written by a supervisor running in `cwd`. A
+    /// legacy pin carries no cwd and so belongs to no spawn.
+    pub fn belongs_to(&self, cwd: &Path) -> bool {
+        !self.cwd.is_empty() && Path::new(&self.cwd) == cwd
+    }
+
+    /// Whether this pin came from the pre-JSON plain-text file.
+    pub fn legacy(&self) -> bool {
+        self.cwd.is_empty()
+    }
+}
+
+/// Unix ms. The pin timestamp is diagnostic, so a clock before the epoch
+/// reads 0 rather than failing the write.
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_millis() as u64)
+        .unwrap_or_default()
+}
+
+/// Write `~/.agent/lanes/<lane>/conversation` as the JSON pin.
+pub fn write_conversation_pin(lane: &str, pin: &ConversationPin) -> Result<()> {
+    let dir = lane_dir(lane)?;
+    std::fs::create_dir_all(&dir).context("create lane trail dir")?;
+    let text = serde_json::to_vec_pretty(pin).context("serialize conversation pin")?;
+    std::fs::write(dir.join(CONVERSATION_FILE), text).context("write conversation file")
+}
+
+/// The pin on disk; `None` when the lane never had one. A pre-JSON plain-text
+/// file reads back with an empty `cwd`, which matches no spawn.
+pub fn read_conversation_pin(lane: &str) -> Option<ConversationPin> {
     let text = std::fs::read_to_string(lane_dir(lane).ok()?.join(CONVERSATION_FILE)).ok()?;
+    if let Ok(pin) = serde_json::from_str::<ConversationPin>(&text) {
+        return Some(pin);
+    }
     let text = text.trim();
-    (!text.is_empty()).then(|| text.to_owned())
+    (!text.is_empty()).then(|| ConversationPin {
+        conversation: text.to_owned(),
+        cwd: String::new(),
+        pinned_ts: 0,
+        spawn_id: None,
+    })
+}
+
+/// Drop the pin so the next spawn of this lane name inherits nothing. `Ok`
+/// when the file is already absent.
+pub fn clear_conversation(lane: &str) -> Result<()> {
+    let path = lane_dir(lane)?.join(CONVERSATION_FILE);
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).context("remove conversation file"),
+    }
+}
+
+/// Pin `conversation` for the caller's own working directory and for the
+/// spawn the lane's record names. A supervisor knows its lane cwd and calls
+/// `write_conversation_pin` with it instead.
+pub fn write_conversation(lane: &str, conversation: &str) -> Result<()> {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let spawn_id = read_spawn_id(lane);
+    write_conversation_pin(
+        lane,
+        &ConversationPin::recorded(conversation, &cwd, spawn_id),
+    )
+}
+
+/// The pinned conversation id, whichever spawn it belongs to. A caller that
+/// resumes reads the pin instead and checks its cwd.
+pub fn read_conversation(lane: &str) -> Option<String> {
+    read_conversation_pin(lane).map(|pin| pin.conversation)
 }
 
 /// The expectation file name under a lane's trail directory.
@@ -536,17 +644,109 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// HOME is process-wide in this binary, so every trail test shares one and
+    /// none of them removes it.
+    fn pin_home() {
+        static PIN: std::sync::Once = std::sync::Once::new();
+        PIN.call_once(|| {
+            let root = std::env::temp_dir().join(format!("boop-trail-home-{}", std::process::id()));
+            std::fs::create_dir_all(&root).unwrap();
+            std::env::set_var("HOME", &root);
+        });
+    }
+
+    /// A lane name no other test in this binary writes.
+    fn pin_lane(tag: &str) -> String {
+        pin_home();
+        format!(
+            "{tag}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        )
+    }
+
+    // FAIL-PRE-FIX: the file held the bare id, so a respawned lane name
+    // resumed the dead lane's session and the brief was never sent.
+    #[test]
+    fn a_pin_answers_only_the_cwd_it_was_written_for() {
+        let lane = pin_lane("pin");
+        assert_eq!(read_conversation_pin(&lane), None);
+        let pin = ConversationPin::recorded("ses_1", Path::new("/a"), Some(7));
+        write_conversation_pin(&lane, &pin).unwrap();
+        let read = read_conversation_pin(&lane).unwrap();
+        assert_eq!(read.conversation, "ses_1");
+        assert!(read.belongs_to(Path::new("/a")));
+        assert!(!read.belongs_to(Path::new("/b")));
+        assert!(!read.legacy());
+        assert!(read.same_spawn(Some(7)));
+        assert!(!read.same_spawn(Some(8)));
+        assert!(!read.same_spawn(None));
+        assert!(read.pinned_ts > 0);
+        assert_eq!(read_conversation(&lane).as_deref(), Some("ses_1"));
+    }
+
+    /// The pre-JSON file carries no cwd, so it belongs to no spawn.
+    #[test]
+    fn a_legacy_plain_text_pin_belongs_to_no_spawn() {
+        let lane = pin_lane("legacy");
+        let dir = lane_dir(&lane).unwrap();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(CONVERSATION_FILE), "ses_old\n").unwrap();
+        let read = read_conversation_pin(&lane).unwrap();
+        assert_eq!(read.conversation, "ses_old");
+        assert!(read.legacy());
+        assert!(!read.belongs_to(Path::new("/a")));
+        assert_eq!(read.spawn_id, None);
+        assert!(!read.same_spawn(None), "an old record must not resume");
+    }
+
+    /// `lane delete` clears the pin; a second clear is still `Ok`.
+    #[test]
+    fn clearing_a_pin_leaves_nothing_for_the_next_spawn() {
+        let lane = pin_lane("clear");
+        write_conversation(&lane, "ses_2").unwrap();
+        assert!(read_conversation_pin(&lane).is_some());
+        clear_conversation(&lane).unwrap();
+        assert_eq!(read_conversation_pin(&lane), None);
+        assert_eq!(read_conversation(&lane), None);
+        clear_conversation(&lane).unwrap();
+    }
+
+    /// The record `lane create` writes carries the store id it minted, and a
+    /// record written before the field existed reads back `None`.
+    #[test]
+    fn a_spawn_record_carries_the_id_that_minted_it() {
+        let lane = pin_lane("spawnid");
+        assert_eq!(read_spawn_id(&lane), None);
+        let spawn = Spawn {
+            tmux: "boop-spawnid".to_owned(),
+            socket: None,
+            cwd: "/repo".to_owned(),
+            command: "boop lane run".to_owned(),
+            route: serde_json::Value::Null,
+            spawn_id: Some(7),
+        };
+        write_spawn(&lane, &spawn).unwrap();
+        assert_eq!(read_spawn(&lane), Some(spawn));
+        assert_eq!(read_spawn_id(&lane), Some(7));
+        // A pin written after the record inherits the same id.
+        write_conversation(&lane, "ses_spawn").unwrap();
+        assert_eq!(read_conversation_pin(&lane).unwrap().spawn_id, Some(7));
+
+        let dir = lane_dir(&lane).unwrap();
+        std::fs::write(
+            dir.join(SPAWN_FILE),
+            br#"{"tmux":"old","socket":null,"cwd":"/repo","command":"boop lane run"}"#,
+        )
+        .unwrap();
+        assert_eq!(read_spawn_id(&lane), None);
+    }
+
     /// A typed expectation survives the write/read round trip, and an absent
     /// file reads back as `None`.
     #[test]
     fn expect_round_trips_through_the_lane_trail() {
-        let root = tempdir("expect");
-        std::env::set_var("HOME", root.join("home"));
-        let lane = format!(
-            "expect-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        );
+        let lane = pin_lane("expect");
         let expect = Expect {
             paths: vec!["plans/x.md".to_owned()],
             commit_subjects: vec!["docs: foo".to_owned()],
@@ -555,6 +755,5 @@ mod tests {
         assert_eq!(read_expect(&lane), None);
         write_expect(&lane, &expect).unwrap();
         assert_eq!(read_expect(&lane), Some(expect));
-        let _ = std::fs::remove_dir_all(&root);
     }
 }

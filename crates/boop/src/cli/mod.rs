@@ -6,6 +6,7 @@ pub(crate) mod job;
 pub(crate) mod mail;
 pub(crate) mod paste;
 pub(crate) mod me;
+pub(crate) mod tag;
 
 use std::path::{Path, PathBuf};
 
@@ -114,7 +115,14 @@ edge and stay invisible to tracking:
   tmux cannot hold) and worktree `.boop-worktrees/feature/schema-emit` (the same
   name as a path). No prefix is dropped and no `lane/` prefix is added.
   Kinds are feature/fix/refactor/chore, a convention the CLI prints, not a gate.
-  --cwd defaults to the repo you stand in, --base-sha to origin/main's head
+  REPO: --cwd wins; without it the repo holding --brief wins (and prints
+  `repo: <toplevel> (from the brief; caller stands in <other>)` when your shell
+  stands elsewhere); only a brief outside any repo falls back to your own cwd.
+  A dead name resets itself: `lane create` on a name whose worktree, branch or
+  tmux session is left over removes all three and the conversation pin before
+  spawning; a live pane refuses and names the hail instead. --reclaim is a
+  no-op alias now.
+  --base-sha defaults to origin/main's head
   (resolved at spawn and printed), --parent to you then to the one registered
   coordinator; the harness is the preset's.
   Overrides: --lane <id>, --tmux <name>, --base-sha <sha>.
@@ -307,6 +315,21 @@ FAVORITE: pin markdown you want to keep, read it back later:
   `me` resolves the caller from BOOP_SESSION, so run it inside the pane whose
   turn you want. Bodies dedupe through markdown_cache and are immutable; note
   and source are editable.
+
+TAGS: one tag table every surface shares (favorites, comments, turns, lanes).
+  Search reads agent_tag only, never message bodies, so offering past tags
+  never drags comment prose into the list:
+    boop tag add rust perf --source favorite:12   apply; --source defaults to
+      the caller's own route, `cli` when the whoami ladder cannot name it
+    boop tag recent -n 5              the recently used tags, newest use first
+    boop tag search rus -n 20         substring match on the tag column
+    boop tag list                     every tag, most used first
+    boop tag of favorite:12           the tags one source carries
+    boop tag sources rust             the sources one tag hangs on
+    boop tag rm rust --source favorite:12
+    boop tag backfill                 favorite notes become tags, once
+  Text rows are tab-separated `tag uses last_used_iso`; `--format json` prints
+  the same rows as one array. `boop me favorite --note` tags what it pins.
 
 ME: the caller's own conversation.
     boop me mood [--as <name>]        the mood template hails render with

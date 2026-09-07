@@ -1,6 +1,6 @@
 ---
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-07
 type: bug
 status: open
 priority: high
@@ -34,6 +34,29 @@ One afternoon of six lanes put roughly thirty of these into `claude-498`'s
 transcript. Chris: "is there a way we can make it so that agents are not pushing
 messages into my chat or we are useless ... i cannot stand that text so help me
 it floods my mind."
+
+## Decision 2026-09-07
+
+Chris: "i dont want boop wait i want boop to push things." The 2026-09-05 fix
+swept a lane's end rows in with its progress rows, so a lane that died rc=1 left
+`exited_without_completion` in the coordinator's mailbox with nothing pushing;
+the coordinator found out by noticing the lane missing from `lane list`.
+
+`MessageKind` now splits the supervisor kinds two ways
+(`crates/boop-store/src/bus.rs`):
+
+| classifier | kinds | ladder |
+|---|---|---|
+| `lane_end_row` | `result`, `completion`, `exited_without_completion`, `open_failed`, `retry_budget_exhausted` | the whole ladder, like a `hail`: door, door queue, turn boundary, hook inbox, mailbox, under the same door budget and cool-off |
+| `lane_progress_row` | `yield`, `reparented`, `retrying`, `head_rewound` | Rung 0 `MailboxOnly`; read with `boop wait` |
+
+Rung 0 in `land()` and the `drain_route_held_mail_budgeted` filter both read
+`lane_progress_row()` now, so an end row retries through the drain and a
+progress row still stamps one landing per row.
+
+`## Expected` and `## Acceptance Criteria` keep their 2026-09-05 text and hold
+for progress rows only: an end row now records `accepted-by-harness` at a live
+door, and the drain retries it.
 
 ## Receipts
 

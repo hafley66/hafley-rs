@@ -24,6 +24,10 @@ use cli::debug::{run_config, run_debug, run_lane_debug};
 use cli::job::{run_beep, run_lane_wait, run_wait};
 use cli::mail::{run_inbox, run_send, Outbound};
 use cli::me::{run_me_favorite, run_me_mood, run_whoami};
+use cli::tag::{
+    run_tag_add, run_tag_backfill, run_tag_list, run_tag_of, run_tag_recent, run_tag_rm,
+    run_tag_search, run_tag_sources,
+};
 #[cfg(feature = "dl6")]
 use cli::CONCATMAP_EXAMPLES;
 use cli::{doctrine, line, mail_dir, now_ms};
@@ -270,11 +274,68 @@ enum SubCmd {
         #[command(subcommand)]
         cmd: MeCmd,
     },
+    /// The shared tag table: apply tags to any surface, read the recent five
+    /// back. Search reads `agent_tag` only, never a message body.
+    Tag {
+        #[command(subcommand)]
+        cmd: TagCmd,
+    },
     /// Inspect the boop configuration the CLI reads.
     Config {
         #[command(subcommand)]
         cmd: ConfigCmd,
     },
+}
+
+#[derive(Subcommand)]
+enum TagCmd {
+    /// Apply one or more tags to a source.
+    Add {
+        #[arg(value_name = "TAG", required = true)]
+        tags: Vec<String>,
+        /// What the tags hang on: favorite:<id>, comment:<id>, lane:<name>,
+        /// or any spelling the caller keeps. Defaults to the caller's route.
+        #[arg(long)]
+        source: Option<String>,
+    },
+    /// The recently used tags, newest use first.
+    Recent {
+        #[arg(short = 'n', long = "limit", default_value_t = 5)]
+        limit: usize,
+        #[arg(long, value_enum, default_value_t = TagFormat::Text)]
+        format: TagFormat,
+    },
+    /// Substring match on the tag column; no message body is read.
+    Search {
+        query: String,
+        #[arg(short = 'n', long = "limit", default_value_t = 20)]
+        limit: usize,
+        #[arg(long, value_enum, default_value_t = TagFormat::Text)]
+        format: TagFormat,
+    },
+    /// Every tag, most used first.
+    List {
+        #[arg(long, value_enum, default_value_t = TagFormat::Text)]
+        format: TagFormat,
+    },
+    /// The tags one source carries.
+    Of { source: String },
+    /// The sources one tag hangs on.
+    Sources { tag: String },
+    /// Take one tag off one source.
+    Rm {
+        tag: String,
+        #[arg(long)]
+        source: String,
+    },
+    /// Favorite notes become tags, once.
+    Backfill,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum TagFormat {
+    Text,
+    Json,
 }
 
 /// The shared read filter, used by `chat` and `db turn`.
@@ -589,6 +650,20 @@ fn main() -> Result<()> {
                 ),
                 MeCmd::Favorite { index, note } => run_me_favorite(index, note.as_deref()),
             },
+            SubCmd::Tag { cmd } => match cmd {
+                TagCmd::Add { tags, source } => run_tag_add(&tags, source.as_deref()),
+                TagCmd::Recent { limit, format } => run_tag_recent(limit, format),
+                TagCmd::Search {
+                    query,
+                    limit,
+                    format,
+                } => run_tag_search(&query, limit, format),
+                TagCmd::List { format } => run_tag_list(format),
+                TagCmd::Of { source } => run_tag_of(&source),
+                TagCmd::Sources { tag } => run_tag_sources(&tag),
+                TagCmd::Rm { tag, source } => run_tag_rm(&tag, &source),
+                TagCmd::Backfill => run_tag_backfill(),
+            },
             SubCmd::Config { cmd } => run_config(&registry, cmd),
         },
     )
@@ -854,11 +929,18 @@ enum BeepCmd {
     },
     /// Fork a lane off a stored terminal comment: the quoted turns and the
     /// note become the brief, the lane runs on `--preset` from the caller's
-    /// repo, and the link is kept in `agent_turn_comment_fork`.
+    /// repo, and the link is kept in `agent_turn_comment_fork`. The `join` and
+    /// `diff` verbs bring the fork back.
     #[cfg(feature = "agent-read")]
+    #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
     Fork {
-        /// `comment_id` in `agent_turn_comment`.
-        comment: i64,
+        /// `comment_id` in `agent_turn_comment`. Required by the bare spawn
+        /// spelling `boop beep fork <id>`; `join` and `diff` take their own.
+        comment: Option<i64>,
+        /// `join` merges a fork's branch and replies to its parent; `diff`
+        /// prints the diff a join would merge.
+        #[command(subcommand)]
+        cmd: Option<ForkCmd>,
         /// The config preset the lane spawns from: harness, model, effort.
         #[arg(long)]
         preset: Option<String>,
@@ -913,6 +995,46 @@ enum BeepCmd {
         all: bool,
         #[arg(long, value_enum, default_value_t = PstreeFormat::Text)]
         format: PstreeFormat,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+}
+
+/// The return trip for a forked lane: merge its branch home and reply to its
+/// parent, or read the diff a join would merge.
+#[cfg(feature = "agent-read")]
+#[derive(Subcommand)]
+enum ForkCmd {
+    /// Merge the fork's branch into the caller's repo and deliver the lane's
+    /// last assistant turn to the fork's parent.
+    Join {
+        /// `comment_id` in `agent_turn_comment`.
+        comment: i64,
+        /// The forked lane, when one comment forked off several.
+        #[arg(long)]
+        lane: Option<String>,
+        /// Skip the merge; only write and deliver the reply.
+        #[arg(long)]
+        no_merge: bool,
+        /// Skip the reply; only merge.
+        #[arg(long)]
+        no_reply: bool,
+        /// Print the git command and the recipient, run nothing.
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Print `git diff <base>..<branch>` for the fork.
+    Diff {
+        /// `comment_id` in `agent_turn_comment`.
+        comment: i64,
+        /// The forked lane, when one comment forked off several.
+        #[arg(long)]
+        lane: Option<String>,
+        /// Print `--stat` instead of the full diff.
+        #[arg(long)]
+        stat: bool,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -973,7 +1095,8 @@ enum LaneCmd {
         /// Skip the repo's `boop-start` warmup in the new worktree.
         #[arg(long)]
         no_start: bool,
-        /// Repo to branch from; defaults to the repo the caller stands in.
+        /// Repo to branch from. Without it the brief's own repo wins, and
+        /// only a brief outside any repo falls back to the caller's cwd.
         #[arg(long)]
         cwd: Option<String>,
         /// Defaults to origin/main's head, resolved and printed at spawn.
@@ -1046,8 +1169,8 @@ enum LaneCmd {
         /// Print the worktree, branch, base sha and the literal `cmd:` line without spawning.
         #[arg(long)]
         dry_run: bool,
-        /// Remove a dead lane's worktree and branch before spawning. A live
-        /// route or a live pane on the name refuses.
+        /// Folded (dead-lane-self-reset): a dead name is reset on every
+        /// create, so this is a no-op alias kept for old scripts.
         #[arg(long)]
         reclaim: bool,
     },
@@ -1083,6 +1206,16 @@ enum LaneCmd {
     },
     /// One lane's route and state.
     Get {
+        lane: String,
+        /// Also print what the lane changed in its tree: commits past its base
+        /// sha, uncommitted files, and the paths those commits touched.
+        #[arg(long)]
+        touched: bool,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// The lane's worktree path alone, for `cd "$(boop beep lane where x)"`.
+    Where {
         lane: String,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
@@ -1873,6 +2006,43 @@ mod tests {
             rejected.is_empty(),
             "help examples the installed parser rejects:\n{}",
             rejected.join("\n\n")
+        );
+    }
+
+    #[test]
+    fn tag_recent_takes_a_count_and_defaults_to_five() {
+        let default = Cli::try_parse_from(["boop", "tag", "recent"]).expect("bare recent parses");
+        assert!(matches!(
+            default.command,
+            Some(SubCmd::Tag {
+                cmd: TagCmd::Recent { limit: 5, .. }
+            })
+        ));
+        let counted =
+            Cli::try_parse_from(["boop", "tag", "recent", "-n", "3"]).expect("-n 3 parses");
+        assert!(matches!(
+            counted.command,
+            Some(SubCmd::Tag {
+                cmd: TagCmd::Recent { limit: 3, .. }
+            })
+        ));
+    }
+
+    #[test]
+    fn tag_add_takes_several_tags_and_one_source() {
+        let cli = Cli::try_parse_from(["boop", "tag", "add", "a", "b", "--source", "lane:x"])
+            .expect("two tags and a source parse");
+        let Some(SubCmd::Tag {
+            cmd: TagCmd::Add { tags, source },
+        }) = cli.command
+        else {
+            panic!("boop tag add is a Tag/Add command");
+        };
+        assert_eq!(tags, ["a", "b"]);
+        assert_eq!(source.as_deref(), Some("lane:x"));
+        assert!(
+            Cli::try_parse_from(["boop", "tag", "add"]).is_err(),
+            "a tag add with no tag is a parse error"
         );
     }
 

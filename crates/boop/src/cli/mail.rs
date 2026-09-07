@@ -242,11 +242,11 @@ pub(crate) fn deliver_hail(
         routes.insert(to.to_owned(), route);
     }
     // The acpx queue is a door the ladder never sees, so it takes the same
-    // supervisor-row exemption the ladder does: a lane's result or yield row
-    // waits in the mailbox rather than spending a worker's turn.
+    // progress-row exemption the ladder does: a lane's yield row waits in the
+    // mailbox rather than spending a worker's turn; its end row is pushed.
     if let Some(route) = routes
         .get(to)
-        .filter(|route| is_acpx(route) && !message.kind.supervisor_row())
+        .filter(|route| is_acpx(route) && !message.kind.lane_progress_row())
     {
         let harness_id = route
             .harness
@@ -739,7 +739,16 @@ pub(crate) fn revive_if_retired(
         return Ok(None);
     }
     revived.registered_at = Some(bus::now_iso());
-    revived.session_id = boop::trail::read_conversation(name).or(revived.session_id);
+    // The replayed record keeps this run's spawn id, so the pin it wrote is
+    // still this run's pin and the revived supervisor resumes on it.
+    revived.session_id = boop::supervise::pinned_conversation_for(
+        dir,
+        name,
+        Path::new(&spawn.cwd),
+        spawn.spawn_id,
+    )
+    .ok()
+    .or(revived.session_id);
     write_route(dir, name, revived.clone())?;
     println!(
         "revive {name} (pane {} gone; respawning on the pinned conversation)",
