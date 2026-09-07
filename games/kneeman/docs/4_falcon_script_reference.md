@@ -72,8 +72,9 @@ Ground damage progresses 15/12/9 with BKB 60 and KBG 70/60/50; air progresses 15
 BKB 40 and KBG 70/65/60. Shapes share hit ID 0 across phases. These damage/KB values come
 from the retrieved ground/air scripts above. Game3 retains startup 8, ten travel ticks split
 3/4/3, recovery 18 and its existing spatial shape. Those durations and geometry are authored.
-The reference's angle-361 sentinel currently uses an explicit fixed 45-degree approximation;
-ground middle/late angles are 60/75. A reference-equivalent angle resolver remains unported.
+The working angle-361 resolver now uses victim contact and KB with the source formula below;
+ground middle/late angles remain 60/75. The air branch retains 45 degrees. PM-equivalent
+runtime behavior remains unverified; publication status is tracked in docs/2_next.md.
 Special entry context survives leaving a ledge and snapshot restore; current groundedness
 does not reselect the travel row. Wall guards and animation-driven recoil remain unported.
 
@@ -121,4 +122,15 @@ corrected hashes. Under the inferred Melee constants, exact KB 32 yields 1 degre
 yields 23, and 32.1 reaches the 44-degree cap. Preserve the source's +1 term. PowerPC
 instruction rounding and exact PM runtime equivalence are not established by these formulas.
 Changing launch semantics also requires a startup compatibility-version bump so old and
-new peers cannot start an apparently compatible simulation. No runtime code changed here.
+new peers cannot start an apparently compatible simulation.
+
+Implementation checkpoint: `combat::strike` resolves sentinel Angle aims after KB scaling
+by the Swing and before pixel-speed scaling affects direction. `launch_grounded` defaults
+false for Item/InkPath; Fighter overrides it using current support and state. This is explicit
+Game3 non-fighter policy. Ordinary Angle, Radial and Carry aims keep their previous path.
+Falcon's strong ground and all air rows use 361; the editor range includes it so opening
+controls cannot clamp the sentinel to 180. Startup compatibility is now version 5.
+Native gate passes 457 game + 78 shell tests, including numeric boundaries, both facing signs,
+stale air/ledge support, serialized fighter restore, guard behavior and Item/InkPath response.
+Local editor/replay and mixed 5/4 rejection pass. Grounded-victim browser launch,
+version-5 two-peer loss/reconnect and publication acceptance remain pending.

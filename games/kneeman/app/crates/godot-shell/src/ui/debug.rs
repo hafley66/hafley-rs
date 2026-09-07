@@ -1251,7 +1251,7 @@ fn hitbox_sliders(ui: &mut egui::Ui, hb: &mut Hitbox) -> bool {
     c |= slider(ui, &mut hb.off.y, -130.0..=60.0, "off.y (up = -)");
     c |= slider(ui, &mut hb.r, 6.0..=90.0, "radius");
     c |= slider(ui, &mut hb.damage, 0.0..=40.0, "damage %");
-    c |= slider(ui, &mut hb.angle, -120.0..=180.0, "angle° (- = spike)");
+    c |= slider(ui, &mut hb.angle, -120.0..=361.0, "angle° (361 = Sakurai)");
     c |= slider(ui, &mut hb.bkb, 0.0..=120.0, "bkb (base)");
     c |= slider(ui, &mut hb.kbg, 0.0..=160.0, "kbg (growth)");
     c

@@ -100,6 +100,8 @@ pub struct Swing<'h> {
 /// + KB response, no FSM, never promoted to fighter). Impls: Fighter today; InkPath and
 /// Item as body-bus steps land.
 pub trait PunchableFace {
+    /// Contact context before absorb mutates support. Free items/ink use the air branch.
+    fn launch_grounded(&self) -> bool { false }
     /// Broadphase circle. Cull with this, never resolve with it.
     fn bound(&self) -> (Vector2, f32);
     /// Narrowphase hurt volumes, world space. Fighter emits one ball today, shaped
@@ -141,10 +143,16 @@ pub fn strike<S: PunchableFace>(
     };
     let kb = knockback_units(s.percent() + sw.dmg, sw.dmg, s.heft(t), sw.hb) * sw.kb_scale;
     let speed = kb * t.kb_speed * t.knockback_mult;
+    let aim = match sw.aim {
+        Aim::Angle { deg, facing } if deg == 361.0 => Aim::Angle {
+            deg: sakurai_angle(kb, s.launch_grounded()), facing,
+        },
+        aim => aim,
+    };
     let l = Launch {
         dmg: sw.dmg,
         speed,
-        vel: sw.aim.resolve(s.bound().0) * speed,
+        vel: aim.resolve(s.bound().0) * speed,
         hitstun: (kb * t.kb_hitstun) as i64,
         tumble: speed > t.tumble_speed,
         hitlag: (sw.dmg * HITLAG_PER_DMG) as i64 + sw.hitlag_bonus,
@@ -155,7 +163,96 @@ pub fn strike<S: PunchableFace>(
     Some(l)
 }
 
+/// Melee CalcAngle formula with the PM code-list cap/threshold values.
+/// Air uses Game3's existing 45-degree approximation; see docs/4_falcon_script_reference.md.
+fn sakurai_angle(kb: f32, grounded: bool) -> f32 {
+    if !grounded { 45.0 }
+    else if kb < 32.0 { 0.0 }
+    else { (44.0 * ((kb - 32.0) / (f32::from_bits(0x42006666) - 32.0)) + 1.0).min(44.0) }
+}
+
+#[cfg(test)]
+#[test]
+fn sakurai_contact_thresholds_scaling_and_snapshot_restore() {
+    for (kb, degrees) in [(31.0, 0.0), (32.0, 1.0), (32.05, 23.0), (32.1, 44.0), (100.0, 44.0)] {
+        assert_eq!(sakurai_angle(kb, true), degrees);
+        assert_eq!(sakurai_angle(kb, false), 45.0);
+        for state in [CharState::Stand, CharState::Air, CharState::LedgeHold, CharState::LedgeClimb] {
+            for facing in [-1.0, 1.0] {
+                let mut victim = SimState::spawn().fighters[0];
+                victim.invuln = 0;
+                victim.state = state;
+                victim.ground_plat = 0; // deliberately stale for air/ledge controls
+                let mut restored: Fighter = bincode::deserialize(&bincode::serialize(&victim).unwrap()).unwrap();
+                let hb = Hitbox { set_kb: kb, angle: 361.0, ..Hitbox::NONE };
+                let swing = Swing { hb: &hb, dmg: 10.0, kb_scale: 1.0, hitlag_bonus: 4,
+                    interrupt: true, aim: Aim::Angle { deg: hb.angle, facing } };
+                let tune = Tune { kb_speed: 7.0, knockback_mult: 2.0, ..Tune::default() };
+                let launch = strike(&mut victim, &swing, Vector2::ZERO, &tune).unwrap();
+                assert_eq!(strike(&mut restored, &swing, Vector2::ZERO, &tune), Some(launch));
+                assert_eq!(bincode::serialize(&victim).unwrap(), bincode::serialize(&restored).unwrap());
+                let deg = if state == CharState::Stand { degrees } else { 45.0 };
+                let expected = Aim::Angle { deg, facing }.resolve(Vector2::ZERO) * (kb * 14.0);
+                assert!((launch.vel - expected).length() < 0.001);
+                assert_eq!(victim.ground_plat, -1);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn sentinel_keeps_guard_and_ordinary_aim_behavior() {
+    let tune = Tune::default();
+    let hb = Hitbox { set_kb: 32.0, ..Hitbox::NONE };
+    for aim in [Aim::Angle { deg: -90.0, facing: -1.0 }, Aim::Angle { deg: 75.0, facing: 1.0 },
+        Aim::Radial { center: Vector2::ZERO, up: 0.5 }, Aim::Carry { vel: Vector2::new(3.0, 4.0), up: 0.5 }] {
+        let mut victim = SimState::spawn().fighters[0];
+        victim.invuln = 0;
+        let expected = aim.resolve(victim.bound().0) * (32.0 * tune.kb_speed * tune.knockback_mult);
+        let swing = Swing { hb: &hb, dmg: 10.0, kb_scale: 1.0, hitlag_bonus: 4, interrupt: true, aim };
+        assert_eq!(strike(&mut victim, &swing, Vector2::ZERO, &tune).unwrap().vel, expected);
+    }
+    let swing = Swing { hb: &hb, dmg: 10.0, kb_scale: 1.0, hitlag_bonus: 4, interrupt: true,
+        aim: Aim::Angle { deg: 361.0, facing: -1.0 } };
+    let mut victim = SimState::spawn().fighters[0];
+    victim.invuln = 1;
+    let before = bincode::serialize(&victim).unwrap();
+    assert_eq!(strike(&mut victim, &swing, Vector2::ZERO, &tune), None);
+    assert_eq!(bincode::serialize(&victim).unwrap(), before);
+    victim.invuln = 0;
+    victim.state = CharState::Shield;
+    let hp = victim.shield_hp;
+    assert!(strike(&mut victim, &swing, Vector2::ZERO, &tune).unwrap().blocked);
+    assert_eq!(victim.shield_hp, hp - 10.0);
+    assert_eq!(victim.damage, 0.0);
+    assert_eq!(victim.vel.x, -10.0 * tune.shield_push);
+}
+
+#[cfg(test)]
+#[test]
+fn sentinel_items_and_ink_use_explicit_air_response() {
+    let tune = Tune::default();
+    let hb = Hitbox { set_kb: 32.0, ..Hitbox::NONE };
+    let swing = Swing { hb: &hb, dmg: 10.0, kb_scale: 1.0, hitlag_bonus: 2, interrupt: false,
+        aim: Aim::Angle { deg: 361.0, facing: 1.0 } };
+    let expected = Aim::Angle { deg: 45.0, facing: 1.0 }.resolve(Vector2::ZERO)
+        * (32.0 * tune.kb_speed * tune.knockback_mult);
+    let mut item = crate::v1::Item::EMPTY;
+    assert!(!item.launch_grounded());
+    assert_eq!(strike(&mut item, &swing, Vector2::ZERO, &tune).unwrap().vel, expected);
+    let mut ink = SimState::spawn().paths[crate::v1::SHIP_SLOT];
+    ink.mass = 100.0;
+    ink.drawing = false;
+    assert!(!ink.launch_grounded());
+    assert_eq!(strike(&mut ink, &swing, Vector2::ZERO, &tune).unwrap().vel, expected);
+}
+
 impl PunchableFace for Fighter {
+    fn launch_grounded(&self) -> bool {
+        self.grounded() && !crate::v1::airborne(self.state)
+            && !matches!(self.state, CharState::LedgeHold | CharState::LedgeClimb)
+    }
     fn bound(&self) -> (Vector2, f32) {
         hurtbox(self)
     }

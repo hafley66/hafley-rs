@@ -1330,6 +1330,26 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    policy and boundary/replay tests, then switch Falcon sentinel rows and bump startup
    compatibility before browser netplay acceptance. Confirm PM address consumers/air constant
    before labeling the result PM-equivalent; the Melee algorithm can be identified separately.
+   Angle-361 implementation checkpoint: shared strike resolves sentinel directions from KB
+   and pre-interruption victim contact. Item/ink receivers explicitly use the 45-degree air
+   branch; ordinary/radial/carry paths are unchanged. Falcon sentinel rows now author 361,
+   the editor accepts it, and startup version 5 rejects old launch semantics. No new serialized
+   fields. 457 game + 78 shell tests pass; /private/tmp/game3-sakurai-tests2.log. Boundary,
+   facing, support, guard, snapshot and non-fighter tests are in combat.rs. Web export passes;
+   /private/tmp/game3-sakurai-build.log. Production remains ea5b58a/version 4 until browser
+   gates pass. No art/deploy source changes; art-test/web-check not rerun.
+   Local version-5 editor check passes: node /private/tmp/9_game3_travel_editor.cjs;
+   /private/tmp/game3-sakurai-editor.log; /private/tmp/game3-travel-editor-eNTwgu. Inspected
+   controls retain 361; edited damage 20.5 captures/restores/replays all 60 exact checksums,
+   EOF is unchanged and default traces still deal 9/11/10. No browser exceptions, exit 0.
+   Mixed version checks pass both directions with LOCAL_EXPORT=1 BAD_START=mixed RECONNECT=1
+   and MIXED=1, then MIXED=old-host, using /private/tmp/1_game3_online.cjs. Each reports one
+   Unsupported pair startup version rejection and both peers advance offline. New host/old
+   guest ticks 549/366; old host/new guest 526/365. Logs /private/tmp/game3-sakurai-old-guest.log
+   and game3-sakurai-old-host.log; screenshots /private/tmp/game3-online-4kiMMo and
+   /private/tmp/game3-online-dHeeTd. Exit 0 for both, no browser exceptions. Production unchanged.
+   Next gate: version-5 grounded-victim launch in the browser and two-peer corrected
+   hashes/loss/reconnect before publication. Mixed 5/4 and editor/replay gates above pass.
    Angle-361 resolution, effective PM timing/geometry, wall action/motion, larger parties and
    physical-device/cross-network acceptance remain open. No reminder or Boop changes.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

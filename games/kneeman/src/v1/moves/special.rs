@@ -131,17 +131,17 @@ impl SpecialMove {
     };
     // Default kit (Falcon-ish): heavy neutral-B punch, a side lunge, a rising recovery, a down drive.
     // PM3.6 damage/KB with authored geometry and 3/4/3-tick phases.
-    // Fixed 45 degrees approximates the reference's 361 sentinel until angle resolution is ported.
+    // Sentinel 361 resolves from victim contact and KB in combat::strike.
     const fn kick_hit(air: bool) -> AttackData {
         let base = Hitbox { id: 0, refresh: 0, ..Self::DROP.hit.boxes[0] };
         let mut attack = AttackData::new(8, 18, [
-            Hitbox { start: 8, len: 3, damage: 15.0, angle: 45.0,
+            Hitbox { start: 8, len: 3, damage: 15.0, angle: 361.0,
                 bkb: if air { 40.0 } else { 60.0 }, kbg: 70.0, ..base },
             Hitbox { start: 11, len: 4, damage: if air { 13.0 } else { 12.0 },
-                angle: if air { 45.0 } else { 60.0 }, bkb: if air { 40.0 } else { 60.0 },
+                angle: if air { 361.0 } else { 60.0 }, bkb: if air { 40.0 } else { 60.0 },
                 kbg: if air { 65.0 } else { 60.0 }, ..base },
             Hitbox { start: 15, len: 3, damage: if air { 11.0 } else { 9.0 },
-                angle: if air { 45.0 } else { 75.0 }, bkb: if air { 40.0 } else { 60.0 },
+                angle: if air { 361.0 } else { 75.0 }, bkb: if air { 40.0 } else { 60.0 },
                 kbg: if air { 60.0 } else { 50.0 }, ..base },
             Hitbox::NONE,
         ], 3);
