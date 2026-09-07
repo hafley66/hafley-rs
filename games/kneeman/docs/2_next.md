@@ -22,6 +22,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Falcon kick restoration | Published through bc50afd: airborne down-special restores the selected loadout's air jumps at recovery entry, while still locked. Native interruption/boundary tests and production two-peer recovery pass; full kick phases remain unported |
 | Falcon kick travel | Published through c0d831a: editable ground/air launch data, velocity-preserving travel and offline character-kit controls. Production corrected-frame recovery and online editor restriction pass; dedicated landing/wall behavior remains open |
 | Falcon kick landing | Published c197e67: optional landing attack, ground-only hit targeting, shared hit identity and contact replay. 450 game + 76 shell tests and local web landing/reconnect pass. PM timing/scale and wall response remain open; production receipt below |
+| Falcon kick travel phases | 62d7cdc, unpublished version 4: separate ground/air entry rows, strong/middle/late damage, shared cooldowns and serialized entry context. 454 game + 77 shell tests pass; browser acceptance in progress |
 | Special ship carry | Published through 83e3456: carry correction plus Ship Dive debugger fixture. Native and production browser checks prove startup follows the moving hull, then launches and replays |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Cell item/contact sequence | Published through f9a486d: Cell replay uses the same 240-tick wire-input sequence as the native test. Local and production pickup/throw/contact, restore/EOF and changed-state rejection pass |
@@ -1206,6 +1207,44 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Next: fresh export, grounded/air contact debugger checks, Kick recovery/ship/destruction
    regressions, then version-4/version-3 rejection in both directions and corrected-state online
    hit/reconnect acceptance before publication. JSON defaults do not imply old binary compatibility.
+   Version-4 export/fixture checkpoint: cargo build -p kneeman --examples completed with one
+   compiler job; regenerated cell, aerial Kick, landing Kick, both contact snapshots and the
+   shared-hit Tune. The native snapshot decoder was rebuilt with the new Fighter layout.
+   Fresh game3-build succeeds; local WASM SHA-256
+   fc72d94f7e330027ae9979cdce5e340df7857eeb36b258f5fd203671e4705bfc.
+   node /private/tmp/7_game3_kick_contact.cjs passes both contact debugger controls, damage,
+   60 steps, restore, EOF and changed-state rejection, exit 0;
+   /private/tmp/game3-v4-contact-debugger.log; /private/tmp/game3-kick-debugger-Oo7fUf.
+   Version-4 host/version-3 guest rejects startup once and both advance offline; LOCAL_EXPORT=1
+   MIXED=1 BAD_START=mixed RECONNECT=1 node /private/tmp/1_game3_online.cjs, exit 0;
+   /private/tmp/game3-v4-old-guest.log; /private/tmp/game3-online-nxc2fH.
+   Reverse mixed pairing (MIXED=old-host) also rejects once and advances both peers offline,
+   exit 0; /private/tmp/game3-v4-old-host.log; /private/tmp/game3-online-RWSGVk.
+   LOCAL_EXPORT=1 KICK=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60
+   BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs passes all
+   61 recovery-sequence frames, 546 initial + 181 resumed confirmed comparisons, ticks 749/747.
+   Drops 224/1207 and 226/1209 messages, max run 24. Offline recovery and error gates pass,
+   exit 0; /private/tmp/game3-v4-kick-online.log; /private/tmp/game3-online-Z9BMUb.
+   examples/2_kick_landing_start.rs now also emits --travel-ground/--travel-air starts. Both
+   fighters overlap in the air before late travel; only special-entry context differs.
+   Regenerated into /private/tmp/game3-kick-contact-travel-{ground,air}.bin for the runner's
+   LAND_HIT=travel-ground/air modes, which require saved-state damage [0,9]/[0,11].
+   Both travel-hit modes pass with LOCAL_EXPORT=1 CONFIRMED=1 COMBAT=1 RECONNECT=1
+   QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1:
+   ground [0,9] on both peers, 544 initial + 181 resumed comparisons, ticks 747/748;
+   drops 240/1225 and 237/1220. Air [0,11] on both peers, 549 initial + 180 resumed,
+   ticks 751/753; drops 240/1235 and 240/1230. Maximum burst 24 in both runs; offline recovery
+   and error gates pass, exit 0. Logs /private/tmp/game3-v4-travel-ground-online.log and
+   game3-v4-travel-air-online.log; artifacts /private/tmp/game3-online-VPs939 and
+   /private/tmp/game3-online-Lk7QK8. node /private/tmp/6_game3_cells.cjs also passes all item,
+   destruction, replay/restore, EOF and changed-state checks, exit 0;
+   /private/tmp/game3-v4-cells-debugger.log; /private/tmp/game3-cells-o3bqYH.
+   Falcon Dive catch/whiff/ship debugger regression passes all three 180-input traces, exact
+   restores and EOF assertions, exit 0; node /private/tmp/5_game3_dive.cjs;
+   /private/tmp/game3-v4-dive-debugger.log; /private/tmp/game3-dive-UhHF78.
+   No runtime edits after 62d7cdc in this acceptance checkpoint; the example extension compiles.
+   Native gate remains 454 game + 77 shell from that runtime revision. No art/deploy source
+   changes; art-test/web-check were not rerun. Existing profile targets only /game3/.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
