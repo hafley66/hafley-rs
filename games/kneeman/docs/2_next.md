@@ -22,7 +22,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Falcon kick restoration | Published through bc50afd: airborne down-special restores the selected loadout's air jumps at recovery entry, while still locked. Native interruption/boundary tests and production two-peer recovery pass; full kick phases remain unported |
 | Falcon kick travel | Published through c0d831a: editable ground/air launch data, velocity-preserving travel and offline character-kit controls. Production corrected-frame recovery and online editor restriction pass; dedicated landing/wall behavior remains open |
 | Falcon kick landing | Published c197e67: optional landing attack, ground-only hit targeting, shared hit identity and contact replay. 450 game + 76 shell tests and local web landing/reconnect pass. PM timing/scale and wall response remain open; production receipt below |
-| Falcon kick travel phases | 62d7cdc, unpublished version 4: separate ground/air entry rows, strong/middle/late damage, shared cooldowns and serialized entry context. 454 game + 77 shell tests pass; browser acceptance in progress |
+| Falcon kick travel phases | Published 62d7cdc runtime, version 4: separate ground/air entry rows, strong/middle/late damage, shared cooldowns and serialized entry context. 454 game + 77 shell tests and local browser acceptance pass; production receipt below |
 | Special ship carry | Published through 83e3456: carry correction plus Ship Dive debugger fixture. Native and production browser checks prove startup follows the moving hull, then launches and replays |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Cell item/contact sequence | Published through f9a486d: Cell replay uses the same 240-tick wire-input sequence as the native test. Local and production pickup/throw/contact, restore/EOF and changed-state rejection pass |
@@ -1245,6 +1245,23 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    No runtime edits after 62d7cdc in this acceptance checkpoint; the example extension compiles.
    Native gate remains 454 game + 77 shell from that runtime revision. No art/deploy source
    changes; art-test/web-check were not rerun. Existing profile targets only /game3/.
+   Published the tested 62d7cdc runtime after a2d8bdc acceptance receipts. Nginx validation/
+   reload passed; /private/tmp/game3-v4-publish.log. Remote WASM matches
+   fc72d94f7e330027ae9979cdce5e340df7857eeb36b258f5fd203671e4705bfc.
+   Game3 pack remains fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df;
+   protected /game/ pack remains
+   5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795.
+   Existing tabs must reload for version-4 pair startup. Production browser check passes:
+   LAND_HIT=travel-air CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1 DELAY_MS=60
+   BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs. Both peers
+   report [0,11] damage; 550 initial + 180 resumed confirmed comparisons match, ticks 754/756.
+   Drops 240/1238 and 240/1236 messages, max run 24. Offline recovery, browser exceptions and
+   closed-send error gates pass, exit 0; /private/tmp/game3-v4-production.log;
+   /private/tmp/game3-online-Yooxbx. Next bounded UI task: reuse attack_sliders for optional
+   air_hit and landing rows in the existing offline specials editor (ui/debug.rs currently
+   edits only m.hit). Preserve the online edit guard and shared character-row ownership.
+   Angle-361 resolution, effective PM timing/geometry, wall action/motion, larger parties and
+   physical-device/cross-network acceptance remain open. No reminder or Boop changes.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
