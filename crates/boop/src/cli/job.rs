@@ -17,7 +17,9 @@ use crate::cli::debug::default_preset_for_harness;
 use crate::cli::mail::{all_messages, run_list};
 use crate::cli::me::run_adopt;
 use crate::cli::{append_ack, append_message, line, mail_dir, pad, route_to_json, write_route};
-use crate::{AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat};
+use crate::{
+    AgentCmd, BeepCmd, ForkCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat,
+};
 
 // ---------------------------------------------------------------------------
 // dispatch (layer 1 + bus)
@@ -1237,20 +1239,50 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
         #[cfg(feature = "agent-read")]
         BeepCmd::Fork {
             comment,
+            cmd,
             preset,
             cwd,
             parent,
             dry_run,
             mail_dir,
-        } => run_fork(
-            registry,
-            comment,
-            preset,
-            cwd,
-            parent,
-            dry_run,
-            mail_dir.as_deref(),
-        ),
+        } => match cmd {
+            Some(ForkCmd::Join {
+                comment,
+                lane,
+                no_merge,
+                no_reply,
+                dry_run: join_dry_run,
+                mail_dir: join_mail_dir,
+            }) => run_fork_join(
+                registry,
+                comment,
+                lane,
+                no_merge,
+                no_reply,
+                join_dry_run,
+                join_mail_dir.as_deref(),
+            ),
+            Some(ForkCmd::Diff {
+                comment,
+                lane,
+                stat,
+                mail_dir: diff_mail_dir,
+            }) => run_fork_diff(comment, lane, stat, diff_mail_dir.as_deref()),
+            None => match comment {
+                Some(comment) => run_fork(
+                    registry,
+                    comment,
+                    preset,
+                    cwd,
+                    parent,
+                    dry_run,
+                    mail_dir.as_deref(),
+                ),
+                None => anyhow::bail!(
+                    "boop beep fork needs a comment id, or one of the join / diff verbs"
+                ),
+            },
+        },
         BeepCmd::Message { cmd } => match cmd {
             MessageCmd::Ack {
                 lane,
@@ -1483,6 +1515,249 @@ pub(crate) fn run_fork(
         created_ts: boop::live::now_ms() as i64,
     })?;
     println!("forked comment {comment_id} -> lane {lane}");
+    Ok(())
+}
+
+/// `boop beep fork join <comment-id>`: bring a forked lane home. Merges the
+/// fork's branch into the caller's repo and delivers the lane's last assistant
+/// turn to the fork's parent. Each half is skippable with `--no-merge` /
+/// `--no-reply`; `--dry-run` prints the git command and recipient and runs
+/// nothing.
+#[cfg(feature = "agent-read")]
+pub(crate) fn run_fork_join(
+    registry: &Registry,
+    comment_id: i64,
+    lane: Option<String>,
+    no_merge: bool,
+    no_reply: bool,
+    dry_run: bool,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let store = bus::open_store(&dir)?;
+    let fork = pick_fork(&store, comment_id, lane.as_deref())?;
+    let routes = bus::read_routes(&dir)?;
+    let route = routes
+        .get(&fork.lane)
+        .with_context(|| format!("no route registered for lane `{}`", fork.lane))?;
+    let base_sha = route
+        .base_sha
+        .clone()
+        .with_context(|| format!("lane `{}` route carries no base_sha", fork.lane))?;
+    let repo = repo_root()?;
+
+    let mut merge_line = String::from("merge skipped");
+    if !no_merge {
+        let cmd = format!("git -C {repo} merge --no-ff {}", fork.branch);
+        if dry_run {
+            println!("would run: {cmd}");
+        } else {
+            ensure_clean(&repo)?;
+            ensure_ahead(&repo, &base_sha, &fork.branch)?;
+            boop::worktree::run_git(
+                &PathBuf::from(&repo),
+                &["merge", "--no-ff", fork.branch.as_str()],
+            )?;
+            println!("merged {} into {repo}", fork.branch);
+            merge_line = format!("merged {}", fork.branch);
+        }
+    }
+
+    if !no_reply {
+        let session = route
+            .session_id
+            .clone()
+            .with_context(|| format!("lane `{}` route carries no session_id", fork.lane))?;
+        let said = match store.last_assistant_turn(&session)? {
+            Some((_, said)) => said,
+            None => anyhow::bail!("no assistant turn on lane `{}` to reply with", fork.lane),
+        };
+        let mut body = format!("# Reply from {} to comment {}\n\n", fork.lane, comment_id);
+        body.push_str(&format!("{merge_line}\n\n"));
+        body.push_str(&said);
+        let reply_path = dir
+            .join("forks")
+            .join(format!("comment-{comment_id}.reply.md"));
+        if dry_run {
+            println!("would write reply {}", reply_path.display());
+        } else {
+            std::fs::create_dir_all(reply_path.parent().expect("forks dir has a parent"))?;
+            std::fs::write(&reply_path, &body)?;
+            println!("reply {}", reply_path.display());
+        }
+        let parent = fork_parent(&routes, route)?;
+        if dry_run {
+            println!("would deliver to {parent}");
+        } else {
+            crate::cli::mail::run_send(
+                registry,
+                crate::cli::mail::Outbound {
+                    route: &parent,
+                    body: Some(&said),
+                    kind: "note",
+                    as_name: Some(&fork.lane),
+                    box_name: None,
+                    timeout_secs: 0,
+                    wait: false,
+                    mail_dir: Some(&dir),
+                },
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// `boop beep fork diff <comment-id>`: the diff a join would merge, printed to
+/// stdout. `--stat` adds `--stat`.
+#[cfg(feature = "agent-read")]
+pub(crate) fn run_fork_diff(
+    comment_id: i64,
+    lane: Option<String>,
+    stat: bool,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let store = bus::open_store(&dir)?;
+    let fork = pick_fork(&store, comment_id, lane.as_deref())?;
+    let routes = bus::read_routes(&dir)?;
+    let route = routes
+        .get(&fork.lane)
+        .with_context(|| format!("no route registered for lane `{}`", fork.lane))?;
+    let base_sha = route
+        .base_sha
+        .clone()
+        .with_context(|| format!("lane `{}` route carries no base_sha", fork.lane))?;
+    let repo = repo_root()?;
+    let diff = git_diff(&repo, &base_sha, &fork.branch, stat)?;
+    print!("{diff}");
+    Ok(())
+}
+
+/// The diff a join would merge, as `git -C <repo> diff <base>..<branch>`.
+/// `--stat` adds `--stat`.
+#[cfg(feature = "agent-read")]
+fn git_diff(repo: &str, base_sha: &str, branch: &str, stat: bool) -> Result<String> {
+    let range = format!("{base_sha}..{branch}");
+    let mut args = vec!["diff", range.as_str()];
+    if stat {
+        args.push("--stat");
+    }
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(&args)
+        .output()
+        .with_context(|| format!("git -C {repo} diff {range}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git diff failed in {repo}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// The one fork row a join/diff acts on. Zero rows is an error; several rows
+/// need `--lane`; a named `--lane` picks its row.
+#[cfg(feature = "agent-read")]
+fn pick_fork(
+    store: &boop::ident::Store,
+    comment_id: i64,
+    lane: Option<&str>,
+) -> Result<boop::ident::TurnCommentFork> {
+    let forks = store.turn_comment_forks(comment_id)?;
+    let names = forks
+        .iter()
+        .map(|fork| fork.lane.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    match forks.len() {
+        0 => anyhow::bail!("no lane forked off comment {comment_id}"),
+        1 => Ok(forks.into_iter().next().expect("one fork row")),
+        _ => match lane {
+            None => anyhow::bail!(
+                "comment {comment_id} forked off several lanes ({names}); pass --lane"
+            ),
+            Some(name) => forks
+                .into_iter()
+                .find(|fork| fork.lane == name)
+                .with_context(|| {
+                    format!("no lane `{name}` forked off comment {comment_id}; lanes: {names}")
+                }),
+        },
+    }
+}
+
+/// The recipient a fork reply goes to: the fork route's `parent`, else the one
+/// registered coordinator, else an error naming the ambiguity.
+#[cfg(feature = "agent-read")]
+fn fork_parent(routes: &BTreeMap<String, Route>, route: &Route) -> Result<String> {
+    if let Some(parent) = route.parent.clone().filter(|parent| !parent.is_empty()) {
+        return Ok(parent);
+    }
+    let coordinators = routes
+        .iter()
+        .filter(|(_, route)| route.kind == "coordinator")
+        .map(|(name, _)| name.as_str())
+        .collect::<Vec<_>>();
+    match coordinators.as_slice() {
+        [one] => Ok(one.to_string()),
+        [] => anyhow::bail!("no parent on the fork lane and no registered coordinator to reply to"),
+        _ => anyhow::bail!(
+            "no parent on the fork lane and several coordinators registered ({}); name one",
+            coordinators.join(", ")
+        ),
+    }
+}
+
+/// The caller's repo root, the same `lane::repo_root` rule `run_fork` uses for
+/// `--cwd`.
+#[cfg(feature = "agent-read")]
+fn repo_root() -> Result<String> {
+    let cwd = std::env::current_dir().context("read caller cwd")?;
+    Ok(lane::repo_root(&cwd)?.display().to_string())
+}
+
+/// Error when the repo has a dirty index; a merge must never run over work.
+#[cfg(feature = "agent-read")]
+fn ensure_clean(repo: &str) -> Result<()> {
+    let output = Command::new("git")
+        .args(["-C", repo, "status", "--porcelain"])
+        .output()
+        .with_context(|| format!("git -C {repo} status --porcelain"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git status failed in {repo}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    if !String::from_utf8_lossy(&output.stdout).trim().is_empty() {
+        anyhow::bail!("refusing to merge: dirty index in {repo} (git status --porcelain non-empty)");
+    }
+    Ok(())
+}
+
+/// Error when the branch has nothing past `base_sha`; nothing to merge.
+#[cfg(feature = "agent-read")]
+fn ensure_ahead(repo: &str, base_sha: &str, branch: &str) -> Result<()> {
+    let range = format!("{base_sha}..{branch}");
+    let output = Command::new("git")
+        .args(["-C", repo, "rev-list", "--count", &range])
+        .output()
+        .with_context(|| format!("git -C {repo} rev-list --count {range}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git rev-list failed in {repo}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    let count: i64 = String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse()
+        .unwrap_or(0);
+    if count == 0 {
+        anyhow::bail!("branch `{branch}` has no commits past base {base_sha}; nothing to merge");
+    }
     Ok(())
 }
 
@@ -2911,6 +3186,12 @@ pub(crate) fn render_ndjson(nodes: &[LaneNode]) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::cli::testkit::{route_with, temp_mail_dir};
+    use std::sync::Mutex;
+
+    /// The join tests change the process cwd (repo resolution reads it), so
+    /// they serialize against each other behind this one lock.
+    #[cfg(feature = "agent-read")]
+    static CWD_LOCK: Mutex<()> = Mutex::new(());
 
     /// RECEIPT. The brief a fork lane reads carries the note as the ask, the
     /// quote, the ingested turn in full, and names the turn it could not read.
@@ -2956,6 +3237,311 @@ mod tests {
         assert!(brief.contains("### ses-a turn 3 (assistant)\n\nthe turn body"), "{brief}");
         assert!(brief.contains("ses-a turn 9 is quoted but not ingested"), "{brief}");
     }
+
+    #[cfg(feature = "agent-read")]
+    fn fork_row(comment_id: i64, lane: &str, branch: &str) -> boop::ident::TurnCommentFork {
+        boop::ident::TurnCommentFork {
+            comment_id,
+            lane: lane.into(),
+            branch: branch.into(),
+            brief: format!("/tmp/forks/comment-{comment_id}.md"),
+            created_ts: comment_id,
+        }
+    }
+
+    #[cfg(feature = "agent-read")]
+    fn fork_route(parent: Option<&str>, base_sha: &str, session_id: &str) -> Route {
+        let mut route = route_with(parent);
+        route.base_sha = Some(base_sha.into());
+        route.session_id = Some(session_id.into());
+        route
+    }
+
+    #[cfg(feature = "agent-read")]
+    fn git_in(repo: &Path, args: &[&str]) -> String {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {:?}: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_owned()
+    }
+
+    /// A fresh repo with one committed file, HEAD on its initial branch.
+    #[cfg(feature = "agent-read")]
+    fn temp_git_repo() -> PathBuf {
+        let dir = std::env::temp_dir().join(unique_name("boop-fork-repo"));
+        std::fs::create_dir_all(&dir).unwrap();
+        git_in(&dir, &["init", "-q"]);
+        git_in(&dir, &["config", "user.email", "t@t"]);
+        git_in(&dir, &["config", "user.name", "t"]);
+        std::fs::write(dir.join("a.txt"), "hello").unwrap();
+        git_in(&dir, &["add", "a.txt"]);
+        git_in(&dir, &["commit", "-q", "-m", "base"]);
+        dir
+    }
+
+    /// One fork branch with a commit past `base`, checked back out to the
+    /// initial branch. Returns `(repo, base_sha)`.
+    #[cfg(feature = "agent-read")]
+    fn repo_with_fork_commit(id: i64) -> (PathBuf, String) {
+        let repo = temp_git_repo();
+        let base = git_in(&repo, &["rev-parse", "HEAD"]);
+        let branch = format!("fork/comment-{id}");
+        git_in(&repo, &["checkout", "-q", "-b", &branch]);
+        std::fs::write(repo.join("b.txt"), "world").unwrap();
+        git_in(&repo, &["add", "b.txt"]);
+        git_in(&repo, &["commit", "-q", "-m", "fork work"]);
+        git_in(&repo, &["checkout", "-q", "-"]);
+        (repo, base)
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn pick_fork_returns_the_one_row_by_default() {
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        let fork = fork_row(7, "fork-comment-7", "fork/comment-7");
+        store.record_turn_comment_fork(&fork).unwrap();
+        assert_eq!(pick_fork(&store, 7, None).unwrap(), fork);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn pick_fork_requires_lane_when_several_match() {
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(7, "fork-comment-7-a", "fork/comment-7-a"))
+            .unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(7, "fork-comment-7-b", "fork/comment-7-b"))
+            .unwrap();
+        let error = pick_fork(&store, 7, None).unwrap_err().to_string();
+        assert!(error.contains("fork-comment-7-a"), "{error}");
+        assert!(error.contains("fork-comment-7-b"), "{error}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn pick_fork_returns_the_named_lane() {
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(7, "fork-comment-7-a", "fork/comment-7-a"))
+            .unwrap();
+        let second = fork_row(7, "fork-comment-7-b", "fork/comment-7-b");
+        store.record_turn_comment_fork(&second).unwrap();
+        assert_eq!(pick_fork(&store, 7, Some("fork-comment-7-b")).unwrap(), second);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn fork_join_merges_the_branch_and_writes_the_reply() {
+        let _guard = CWD_LOCK.lock().unwrap();
+        let (repo, base) = repo_with_fork_commit(7);
+
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(7, "fork-comment-7", "fork/comment-7"))
+            .unwrap();
+        write_route(&dir, "fork-comment-7", fork_route(Some("parent-lane"), &base, "ses-fork"))
+            .unwrap();
+        write_route(&dir, "parent-lane", route_with(None)).unwrap();
+        store
+            .write_turn("ses-fork", 1, 100, "assistant", "the fork answer", None)
+            .unwrap();
+
+        let cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&repo).unwrap();
+        let result = run_fork_join(
+            &Registry::discover(),
+            7,
+            None,
+            false,
+            false,
+            false,
+            Some(&dir),
+        );
+        std::env::set_current_dir(&cwd).unwrap();
+        result.unwrap();
+
+        assert!(
+            !git_in(&repo, &["log", "--oneline", "--merges"]).is_empty(),
+            "a merge commit must exist"
+        );
+        let reply = std::fs::read_to_string(dir.join("forks/comment-7.reply.md")).unwrap();
+        assert!(reply.contains("# Reply from fork-comment-7 to comment 7"), "{reply}");
+        assert!(reply.contains("the fork answer"), "{reply}");
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn fork_join_refuses_a_dirty_index() {
+        let _guard = CWD_LOCK.lock().unwrap();
+        let (repo, base) = repo_with_fork_commit(8);
+        std::fs::write(repo.join("a.txt"), "dirty").unwrap();
+
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(8, "fork-comment-8", "fork/comment-8"))
+            .unwrap();
+        write_route(&dir, "fork-comment-8", fork_route(Some("parent-lane"), &base, "ses-fork"))
+            .unwrap();
+        write_route(&dir, "parent-lane", route_with(None)).unwrap();
+
+        let cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&repo).unwrap();
+        let result = run_fork_join(
+            &Registry::discover(),
+            8,
+            None,
+            false,
+            false,
+            false,
+            Some(&dir),
+        );
+        std::env::set_current_dir(&cwd).unwrap();
+
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("dirty"), "{error}");
+        assert!(
+            git_in(&repo, &["log", "--oneline", "--merges"]).is_empty(),
+            "no merge may run over a dirty index"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn fork_join_refuses_a_branch_with_nothing_past_base() {
+        let _guard = CWD_LOCK.lock().unwrap();
+        let repo = temp_git_repo();
+        let base = git_in(&repo, &["rev-parse", "HEAD"]);
+        git_in(&repo, &["branch", "fork/comment-9"]);
+
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(9, "fork-comment-9", "fork/comment-9"))
+            .unwrap();
+        write_route(&dir, "fork-comment-9", fork_route(Some("parent-lane"), &base, "ses-fork"))
+            .unwrap();
+        write_route(&dir, "parent-lane", route_with(None)).unwrap();
+
+        let cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&repo).unwrap();
+        let result = run_fork_join(
+            &Registry::discover(),
+            9,
+            None,
+            false,
+            false,
+            false,
+            Some(&dir),
+        );
+        std::env::set_current_dir(&cwd).unwrap();
+
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("no commits"), "{error}");
+        assert!(
+            git_in(&repo, &["log", "--oneline", "--merges"]).is_empty(),
+            "no merge may run when the branch has nothing past base"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn fork_join_dry_run_runs_nothing() {
+        let _guard = CWD_LOCK.lock().unwrap();
+        let (repo, base) = repo_with_fork_commit(10);
+        let head_before = git_in(&repo, &["rev-parse", "HEAD"]);
+
+        let dir = temp_mail_dir();
+        let store = bus::open_store(&dir).unwrap();
+        store
+            .record_turn_comment_fork(&fork_row(10, "fork-comment-10", "fork/comment-10"))
+            .unwrap();
+        write_route(&dir, "fork-comment-10", fork_route(Some("parent-lane"), &base, "ses-fork"))
+            .unwrap();
+        write_route(&dir, "parent-lane", route_with(None)).unwrap();
+        store
+            .write_turn("ses-fork", 1, 100, "assistant", "the fork answer", None)
+            .unwrap();
+
+        let cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&repo).unwrap();
+        run_fork_join(
+            &Registry::discover(),
+            10,
+            None,
+            false,
+            false,
+            true,
+            Some(&dir),
+        )
+        .unwrap();
+        std::env::set_current_dir(&cwd).unwrap();
+
+        assert_eq!(
+            git_in(&repo, &["rev-parse", "HEAD"]),
+            head_before,
+            "dry run must not merge"
+        );
+        assert!(
+            !dir.join("forks/comment-10.reply.md").exists(),
+            "dry run must not write the reply"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn fork_diff_contains_the_changed_path() {
+        let _guard = CWD_LOCK.lock().unwrap();
+        let (repo, base) = repo_with_fork_commit(11);
+        let diff = git_diff(&repo.to_string_lossy(), &base, "fork/comment-11", false).unwrap();
+        assert!(diff.contains("b.txt"), "diff:\n{diff}");
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn beep_fork_bare_spelling_still_parses() {
+        use clap::Parser;
+        let cli = crate::Cli::try_parse_from(["boop", "beep", "fork", "7"]).unwrap();
+        let is_spawn = matches!(
+            cli.command,
+            Some(crate::SubCmd::Beep {
+                cmd: Some(crate::BeepCmd::Fork {
+                    comment: Some(7),
+                    cmd: None,
+                    ..
+                }),
+                ..
+            })
+        );
+        assert!(is_spawn, "bare `beep fork 7` must parse to the spawn form");
+    }
+
     use boop::bus::{self, read_routes, Route};
     use boop::proc::{ProcReader, ProcessInfo, SysinfoSnapshot};
     use boop::registry::Registry;

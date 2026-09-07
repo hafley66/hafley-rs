@@ -1719,6 +1719,24 @@ impl Store {
         rows.collect::<std::result::Result<Vec<_>, _>>().map_err(Into::into)
     }
 
+    /// The latest assistant turn with a non-empty `said` for one session, as
+    /// `(turn, said)`. `None` when the session has no such turn. This is the
+    /// reply a `fork join` delivers back to the fork's parent.
+    pub fn last_assistant_turn(&self, session: &str) -> Result<Option<(i64, String)>> {
+        let mut statement = self.connection.prepare(
+            "SELECT t.turn, t.said FROM agent_turn t
+               JOIN dict_session ds ON ds.id = t.session_id
+               JOIN dict_role r ON r.id = t.role_id
+              WHERE ds.value = ?1 AND r.value = 'assistant'
+                AND t.said IS NOT NULL AND t.said != ''
+              ORDER BY t.turn DESC LIMIT 1",
+        )?;
+        let mut rows = statement.query_map(params![session], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?;
+        rows.next().transpose().map_err(Into::into)
+    }
+
     pub fn turn_comments_pending(&self) -> Result<Vec<TurnComment>> {
         self.load_turn_comments("sent_ts IS NULL")
     }
