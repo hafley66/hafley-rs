@@ -863,6 +863,19 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Log: /private/tmp/game3-kick-drive-cells-production.log; artifacts /private/tmp/game3-online-MRPKBM.
    This publication required no new compiler job; 442 game + 76 shell remains the native gate.
    Next: dedicated Kick landing/wall behavior with deterministic contact/replay fixtures.
+   Landing-recovery implementation: Falcon selects appended LandCancel::SpecialRecovery.
+   Contact retains the special slot and moves its clock to active_end(), closing the travel
+   hitbox and starting the full authored recovery. Contact during recovery restarts it; zero
+   recovery enters Stand immediately. The collision result carries an optional exact clock
+   override, applied after ordinary state reset/advance so entry-tick landing also works.
+   No Fighter fields or extra stored timers. land_transition now returns (CharState, Option<i64>).
+   Native coverage includes entry/startup/travel/recovery contact, exact recovery duration,
+   closed hit windows, snapshot reload, ordinary-special slot mapping and old discriminants.
+   New landing hitboxes and wall response remain unimplemented; current recovery is authored
+   18 ticks, with PM landing animation/data still unverified. Web build, mixed-build startup,
+   browser landing acceptance and publication are pending for this change.
+   Final gate: CARGO_BUILD_JOBS=1 just game-test passes 443 game + 76 shell tests;
+   /private/tmp/game3-kick-land-final-tests.log. No browser run or publication in this checkpoint.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

@@ -83,6 +83,7 @@ impl SpecialMove {
         kind: SpecialKind::Kick { ground_speed: 900.0 },
         move_x: 900.0,
         move_y: 900.0,
+        hit: AttackData { land_cancel: crate::v1::LandCancel::SpecialRecovery, ..Self::DROP.hit },
         ..Self::DROP
     };
     // Default kit (Falcon-ish): heavy neutral-B punch, a side lunge, a rising recovery, a down drive.

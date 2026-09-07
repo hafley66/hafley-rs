@@ -27,6 +27,26 @@ const IDLE: InputFrame = InputFrame {
     special: false,
 };
 
+#[test]
+fn special_recovery_maps_each_slot_to_its_own_recovery_clock() {
+    let mut t = tune();
+    for (slot, state) in [CharState::SpecialN, CharState::SpecialS, CharState::SpecialU, CharState::SpecialD].into_iter().enumerate() {
+        t.specials[slot].hit.land_cancel = LandCancel::SpecialRecovery;
+        t.specials[slot].hit.boxes[0].len += slot as i64;
+        assert_eq!(land_transition(&t, state), (state, Some(t.specials[slot].hit.active_end())));
+        t.specials[slot].hit.recovery = 0;
+        assert_eq!(land_transition(&t, state), (CharState::Stand, Some(0)));
+    }
+    // Aerial states use their airborne integrator after landing, so this policy is specials-only.
+    t.nair.land_cancel = LandCancel::SpecialRecovery;
+    assert_eq!(land_transition(&t, CharState::Nair), (CharState::Landing, None));
+    assert_eq!(land_transition(&t, CharState::Air), (CharState::Landing, None));
+    for (tag, expected) in [(0u32, LandCancel::Continue), (1, LandCancel::ResetToLanding), (2, LandCancel::SpecialRecovery)] {
+        let decoded: LandCancel = bincode::deserialize(&tag.to_le_bytes()).unwrap();
+        assert_eq!(decoded, expected);
+    }
+}
+
 /// Pin TODAY's behavior before touching anything: every attack-bearing state (the five aerials
 /// plus the four specials) and every non-attack airborne state (Air/AirDodge/Helpless, which have
 /// no `AttackData` at all) resets to `Landing` on touchdown. This is what
@@ -51,7 +71,7 @@ fn default_matches_todays_unconditional_landing_reset() {
     ] {
         assert_eq!(
             land_transition(&t, st),
-            CharState::Landing,
+            (CharState::Landing, None),
             "{st:?} should still reset to Landing by default"
         );
     }
@@ -62,11 +82,11 @@ fn default_matches_todays_unconditional_landing_reset() {
 #[test]
 fn continue_keeps_the_state_the_reset_variant_would_have_left() {
     let mut t = tune();
-    assert_eq!(land_transition(&t, CharState::SpecialN), CharState::Landing);
+    assert_eq!(land_transition(&t, CharState::SpecialN), (CharState::Landing, None));
     t.specials[0].hit.land_cancel = LandCancel::Continue;
     assert_eq!(
         land_transition(&t, CharState::SpecialN),
-        CharState::SpecialN,
+        (CharState::SpecialN, None),
         "Continue keeps the act running in place instead of aborting to Landing"
     );
 }

@@ -283,15 +283,21 @@ fn kick_travel_uses_loadout_velocity_and_keeps_ground_launch_across_an_edge() {
 fn aerial_falcon_kick_lands_during_startup_or_travel_and_replays() {
     let tune = Tune::default();
     let kick = tune.for_char(2).specials[3];
-    for height in [10.0, 180.0] {
+    for (height, recovery) in [(1.0, false), (10.0, false), (180.0, false), (10.0, true)] {
         let mut state = SimState::spawn();
         state.fighters[0].char_id = 2;
         state.fighters[0].pos = Vector2::new(900.0, GROUND_Y - height);
         state.fighters[0].state = CharState::Air;
         state.fighters[0].ground_plat = -1;
         state.fighters[0].air_jumps = 0;
+        if height == 1.0 { state.fighters[0].vel.y = 120.0; }
+        if recovery {
+            state.fighters[0].state = CharState::SpecialD;
+            state.fighters[0].frame = kick.hit.active_end() + 4;
+        }
         let mut replay = state;
         let mut landed = false;
+        let mut landing_tick = 0;
         for tick in 0..60 {
             let input = net::decode(net::encode(&InputFrame {
                 special: tick == 0,
@@ -304,17 +310,22 @@ fn aerial_falcon_kick_lands_during_startup_or_travel_and_replays() {
             assert_eq!(net::checksum(&state), net::checksum(&replay));
             let fighter = state.fighters[0];
             if !landed && fighter.grounded() {
-                assert_eq!(before.state, CharState::SpecialD);
-                assert_eq!(fighter.state, CharState::Landing);
-                assert_eq!(before.frame < kick.hit.startup, height == 10.0);
+                assert_eq!(before.state, if height == 1.0 { CharState::Air } else { CharState::SpecialD });
+                assert_eq!(fighter.state, CharState::SpecialD);
+                assert_eq!(fighter.frame, kick.hit.active_end());
+                assert_eq!(before.frame < kick.hit.startup, height <= 10.0 && !recovery);
                 assert_eq!(fighter.pos.y, GROUND_Y);
                 assert_eq!(fighter.air_jumps, 1);
                 landed = true;
+                landing_tick = tick;
                 replay = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap();
             }
             if landed {
                 assert!(fighter.grounded());
-                assert_ne!(fighter.state, CharState::SpecialD);
+                assert_eq!(fighter.state, if tick - landing_tick < kick.hit.recovery {
+                    CharState::SpecialD
+                } else { CharState::Stand });
+                assert!(kick.hit.box_at(fighter.frame).is_none() || fighter.state == CharState::Stand);
             }
         }
         assert!(landed);

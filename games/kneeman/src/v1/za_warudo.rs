@@ -388,7 +388,7 @@ pub(crate) fn reduce_next_state(
     );
 
     // ── integrate + collide ─────────────────────────────────────────────────
-    integrate_collide(&mut n, f.pos, paths, nodes, i, t, r.sgn, prev);
+    let landing_frame = integrate_collide(&mut n, f.pos, paths, nodes, i, t, r.sgn, prev);
 
     // blast zone -> respawn. `zone` None = ZoneMode::Off; a zone_exempt char never KOs here.
     if zone.is_some_and(|z| !t.zone_exempt && out_of_zone(n.pos, &z)) {
@@ -397,7 +397,9 @@ pub(crate) fn reduce_next_state(
     }
 
     // frame counter resets on transition (or a forced re-enter), else advances
-    n.frame = if n.state != prev || force_reset {
+    n.frame = if let Some(frame) = landing_frame {
+        frame
+    } else if n.state != prev || force_reset {
         0
     } else {
         n.frame + 1
@@ -1249,7 +1251,8 @@ fn integrate_collide(
     t: &Tune,
     sgn: f32,
     prev_state: CharState, // pre-transition state (`climbed_onto_stage_this_frame`'s doc)
-) {
+) -> Option<i64> {
+    let mut landing_frame = None;
     let soup = Soup::collect_scoped(paths, nodes, n.pos); // scoped to the hull's own ink if contained
     let prev_y = prev_pos.y; // feet-y before this frame's motion (for platform crossing tests)
     // for the continuity invariant below: "grounded" means a ground-pinning branch actually runs
@@ -1288,7 +1291,7 @@ fn integrate_collide(
                     n.coyote = 0; // landed: the grace window is spent
                     n.cling_used = 0; // landed: fresh airtime cling budget
                     set_ground(n, hit.owner);
-                    n.state = crate::v1::land_transition(t, n.state); // Landing, or Continue (land_cancel)
+                    (n.state, landing_frame) = crate::v1::land_transition(t, n.state);
                 }
             }
         }
@@ -1308,7 +1311,7 @@ fn integrate_collide(
                     touch_refresh(n, t);
                     n.cling_used = 0; // landed: fresh airtime cling budget
                     set_ground(n, hit.owner);
-                    n.state = crate::v1::land_transition(t, n.state); // Landing, or Continue (land_cancel)
+                    (n.state, landing_frame) = crate::v1::land_transition(t, n.state);
                 }
             }
         } else if n.on_ink() {
@@ -1491,6 +1494,7 @@ fn integrate_collide(
         "grounded fighter at {:?} has no real floor surf under it (drift/float bug)",
         n.pos
     );
+    landing_frame
 }
 
 // ---- FSM-local helpers (relocated from lib: used only by reduce_next_state) ----

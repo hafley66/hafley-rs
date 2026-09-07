@@ -64,18 +64,15 @@ impl Hitbox {
     }
 }
 
-/// Landing-interrupt knob (queue-2026-07-03 item 3): what an in-progress attack does when its
-/// airborne state crosses onto ground before the move's own timeline ends. `Continue` keeps the
-/// act running in place (Falcon Punch style -- a special launched in the air keeps swinging once
-/// planted, per the existing grounded/aerial split in `run_special`/`integrate_collide`);
-/// `ResetToLanding` aborts it into the normal `Landing` state (Lucas side-B style). Every
-/// existing move defaults to `ResetToLanding`: today, EVERY air->ground touch during an attack
-/// forces `Landing` unconditionally (za_warudo's `integrate_collide`), so that is the
-/// behavior-preserving default -- `Continue` is new, opt-in per move via `land_transition`.
+/// Per-attack landing policy. Continue preserves the clock; ResetToLanding enters ordinary
+/// landing lag. SpecialRecovery retains the special slot and starts its authored recovery.
+/// Appended variants preserve the published positional bincode discriminants.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum LandCancel {
     Continue,
     ResetToLanding,
+    // Specials retain their state/slot but enter its full recovery interval on contact.
+    SpecialRecovery,
 }
 
 /// One attack's frame data: a lead-in, up to `MAX_HB` windowed hitboxes (id-ordered), and endlag.
@@ -664,11 +661,17 @@ pub fn attack_for(t: &Tune, st: CharState) -> Option<AttackData> {
 /// one FSM consult site for `LandCancel`. A state with no `AttackData` (Air/AirDodge/Helpless --
 /// the non-attack airborne states) has no move to interrupt, so it always resets to `Landing`,
 /// matching today's unconditional landing transition. An attack state defers to its own
-/// `AttackData.land_cancel`.
-pub fn land_transition(t: &Tune, st: CharState) -> CharState {
+/// `AttackData.land_cancel`. Returns the state and an optional exact next-frame override,
+/// applied after the ordinary transition clock. SpecialRecovery closes the active hit window
+/// and restarts the full authored recovery even when contact happens during existing recovery.
+pub fn land_transition(t: &Tune, st: CharState) -> (CharState, Option<i64>) {
     match attack_for(t, st) {
-        Some(atk) if atk.land_cancel == LandCancel::Continue => st,
-        _ => CharState::Landing,
+        Some(atk) if atk.land_cancel == LandCancel::Continue => (st, None),
+        Some(atk) if atk.land_cancel == LandCancel::SpecialRecovery && special_slot(st).is_some() => {
+            if atk.recovery <= 0 { (CharState::Stand, Some(0)) }
+            else { (st, Some(atk.active_end())) }
+        }
+        _ => (CharState::Landing, None),
     }
 }
 

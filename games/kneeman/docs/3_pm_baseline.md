@@ -198,6 +198,24 @@ Previously published kinds keep their behavior; the new enum payload requires mi
 startup acceptance. Speeds and phase timing remain authored Game3 values. Dedicated landing,
 wall response and reference-authenticated PM motion/hit data remain incomplete.
 
+### Special landing-recovery checkpoint
+
+Falcon Kick opts into appended `LandCancel::SpecialRecovery`. Ground contact retains the
+special slot/state and starts its full existing recovery interval, closing the travel hitbox.
+Contact during recovery restarts that interval. Current authored duration is 18 ticks; this
+does not include a separate landing hitbox or decoded PM landing-animation duration.
+
+`land_transition(&Tune, CharState)` now returns `(CharState, Option<i64>)`. The optional clock
+override is returned through collision and applied after the ordinary state-clock update,
+including when landing coincides with entering the special. No stored timer or Fighter field
+was added. Ordinary aerials retain normal landing behavior if assigned this specials-only rule.
+Published Continue/ResetToLanding discriminants and behavior remain intact; an old decoder
+must reject startup data carrying the appended rule. Browser acceptance and publication are pending.
+
+Tests cover entry-tick, startup, active travel and recovery contact, full recovery duration,
+closed hit windows, snapshot reload, all four ordinary special slots and old discriminants.
+Dedicated landing hitboxes, wall response and exact PM timing remain open.
+
 ## Remaining source limits
 
 Recovered `pm-falcon-kit.md` asserts that missing PM changelog entries make Melee values
