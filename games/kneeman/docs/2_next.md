@@ -26,6 +26,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Special phase editor | Published 4899180: offline ground/shared, optional air-entry and landing attack controls reuse existing sliders. Production landing damage edit/restore passes; local online restriction and reconnect pass |
 | Travel replay controls | Published ea5b58a: ground/air late-travel snapshots shared with the browser fixture writer. 454 game + 78 shell tests and local edited capture/replay pass; production receipt below |
 | Sentinel launch angle | Published 93a0356 runtime, startup 5: victim-contact/KB angle resolution. 457 game + 78 shell tests; production early 44-vs-45 trajectory, rollback/loss/reconnect pass. Exact PM engine equivalence remains unverified |
+| Falcon forward-air | Published through 9f0ce02: Falcon-only early/late rows and visible shared replay fixtures. 459 game + 78 shell; both production contact replays pass. Geometry/electric/landing parity gaps remain |
 | Special ship carry | Published through 83e3456: carry correction plus Ship Dive debugger fixture. Native and production browser checks prove startup follows the moving hull, then launches and replays |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Cell item/contact sequence | Published through f9a486d: Cell replay uses the same 240-tick wire-input sequence as the native test. Local and production pickup/throw/contact, restore/EOF and changed-state rejection pass |
@@ -1438,6 +1439,22 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    /private/tmp/game3-fair-late-online.log; /private/tmp/game3-online-LH37nc.
    The lower shared fixture and debugger changes introduce no new gameplay semantics beyond
    the 9025110 Falcon kit; final native gate remains 459 game + 78 shell.
+   Published 9f0ce02 with the existing dedicated Game3 profile; nginx validation/reload passes.
+   /private/tmp/game3-fair-publish.log. Remote WASM matches the tested export:
+   067dea1928162d138916503a100c3b61215a0c9dba5225858159f48cae100830.
+   Game3 pack remains fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df;
+   protected /game/ pack remains 5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795.
+   PRODUCTION=1 FAIR=1 node /private/tmp/7_game3_kick_contact.cjs passes both 60-tick
+   contact replays at 18/6 damage, Verify, exact Restore, EOF and changed-state rejection,
+   no browser exceptions, exit 0. /private/tmp/game3-fair-debugger-production.log;
+   screenshots /private/tmp/game3-kick-debugger-OWu3mC. Publication keeps startup version 5.
+   Production early-contact netplay passes: 547 initial and 180 resumed confirmed-frame
+   comparisons, resumed ticks 752/754, 18 damage on both peers. Each peer drops 240/1240
+   application messages with maximum run 24 and 60 ms injected send delay. Queued closure,
+   offline recovery and browser/closed-send error gates pass, runner exit 0.
+   /private/tmp/game3-fair-production-online.log; /private/tmp/game3-online-Zdu0JZ.
+   Next bounded task: data-driven Falcon FAIR landing lag and auto-cancel boundaries,
+   with deterministic landing/replay tests. L-cancel input timing is a separate follow-up.
    Angle-361 resolution, effective PM timing/geometry, wall action/motion, larger parties and
    physical-device/cross-network acceptance remain open. No reminder or Boop changes.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
