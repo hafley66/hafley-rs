@@ -1320,8 +1320,16 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    capture/replay checksums, 20.5 damage, initial restore, EOF and default 9/11/10 checks;
    no browser exceptions, exit 0. /private/tmp/game3-travel-editor-production.log;
    screenshots /private/tmp/game3-travel-editor-I9i7a7. No PM parity claim added.
-   Next bounded gameplay task: inspect reference-backed angle-361 resolution against existing
-   knockback and contact data before replacing Falcon's documented 45-degree approximation.
+   Angle-361 source inspection found ftCo_Damage_CalcAngle in the pinned Melee checkout and
+   identical three-value patches in the local PM 3.6 / Wi-Fi / 3.6.1 code lists. Algorithm,
+   exact float words, line receipts, inference limits and implementation acceptance are in
+   docs/4_falcon_script_reference.md, Angle-361 source checkpoint. Victim contact and KB units
+   must reach direction resolution before Fighter::absorb clears support; attacker entry
+   provenance continues to select the attack row independently. No simulation/deploy change.
+   Next bounded gameplay task: implement the documented resolver with explicit receiver
+   policy and boundary/replay tests, then switch Falcon sentinel rows and bump startup
+   compatibility before browser netplay acceptance. Confirm PM address consumers/air constant
+   before labeling the result PM-equivalent; the Melee algorithm can be identified separately.
    Angle-361 resolution, effective PM timing/geometry, wall action/motion, larger parties and
    physical-device/cross-network acceptance remain open. No reminder or Boop changes.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.

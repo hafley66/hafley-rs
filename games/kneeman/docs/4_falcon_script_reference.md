@@ -76,3 +76,49 @@ The reference's angle-361 sentinel currently uses an explicit fixed 45-degree ap
 ground middle/late angles are 60/75. A reference-equivalent angle resolver remains unported.
 Special entry context survives leaving a ledge and snapshot restore; current groundedness
 does not reselect the travel row. Wall guards and animation-driven recoil remain unported.
+
+## Angle-361 source checkpoint
+
+Read-only Melee revision `cca1beeab039b1a5e8dfe581de7e2e8fb8f0aeef`:
+`src/melee/ft/kinds/ftCommon/ftCo_Damage.c:80`, `ftCo_Damage_CalcAngle`.
+Ordinary angles convert directly to radians. Sentinel 361 reads the **victim's**
+ground/air state. Air returns common-data `x144_radians`; ground below `x14C` returns
+zero; otherwise degrees are `min(x148, x148 * ((kb - x14C)/(x150 - x14C)) + 1)`.
+At line 328 the caller supplies applied knockback, before launch-vector speed scaling.
+This source establishes the algorithm, not the numeric contents of the common-data fields.
+
+The local [Project-M-CC codes](https://github.com/Project-M-CC/Project-M-CC/tree/6e63ffa920d45e9d0236edbec4bf43057e7b3e2d/%5BDev%20Resources%5D)
+at revision `6e63ffa920d45e9d0236edbec4bf43057e7b3e2d` contain:
+
+| Write | IEEE-754 float |
+| --- | --- |
+| `04B87ABC 42300000` | 44 |
+| `04B87AC0 42000000` | 32 |
+| `04B87AC4 42006666` | 32.099998474121094 |
+
+Identical lines occur in `codes-3_6.txt:2423`, `codes-3_6-wifi.txt:2284`, and
+`codes-3_61.txt:2659`. The latter labels the patch “Melee 361 Angle [Magus]”.
+That file is UTF-16LE; decode before line-oriented inspection. These are repository
+code-list receipts, not verification that a specific running PM executable applied them.
+The mapping of these three values to cap/lower/upper parameters is an inference from the
+named patch and Melee function. PM engine address consumers and the air-angle constant
+still need independent source confirmation before claiming full PM equivalence.
+
+Implementation boundary in Game3: `combat::strike` computes KB units before multiplying
+by `Tune.kb_speed` and `knockback_mult`. `Aim::resolve` currently lacks KB and victim
+contact state. `Fighter::absorb` clears support during interruption, so capture groundedness
+before that call. Use victim contact state, independently of the attacker's serialized
+`special_started_air` that selects the attack row. Reuse the existing grounded target test
+(support present, state not airborne, excluding ledge hold/climb) rather than stale support alone.
+Shared strike receivers include Fighter, Item and InkPath; define non-fighter sentinel
+behavior explicitly when extending this path. Ordinary angles, radial and carry aims must
+retain their current results. Keep shared receiver code free of Falcon move selection.
+
+Required acceptance before switching Falcon rows to 361: ordinary-angle controls; air and
+ground victim branches; below/at/inside/above 32..32.1 KB; facing signs; pre-speed-scale KB;
+stale support; shield/invulnerability; non-fighter receivers; serialized replay and two-peer
+corrected hashes. Under the inferred Melee constants, exact KB 32 yields 1 degree, 32.05
+yields 23, and 32.1 reaches the 44-degree cap. Preserve the source's +1 term. PowerPC
+instruction rounding and exact PM runtime equivalence are not established by these formulas.
+Changing launch semantics also requires a startup compatibility-version bump so old and
+new peers cannot start an apparently compatible simulation. No runtime code changed here.
