@@ -18,6 +18,8 @@ or project, along with their tests, fixtures, and provenance. See [AGENTS.md](AG
   two GGRS peers, a delayed attack, state-labeled side-by-side capture.
 - [Sandbag launch increment](blender-godot-sqlite-proof/falcon-lab/20_launch_readme.md):
   ssbm_utils launch/hitstun, Rapier flight/landing, complete physics rollback.
+- [SQLite presentation increment](blender-godot-sqlite-proof/falcon-lab/26_sql_readme.md):
+  recycled numeric pose rows, atomic rollback correction, pinned SQL reader, wgpu capture.
 
 The Rust packages retain separate Cargo workspace roots and lockfiles. Parent
 `hafley-rs` workspace builds do not include these experimental dependencies.

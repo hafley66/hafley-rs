@@ -6,22 +6,22 @@ use std::{borrow::Cow, ffi::CStr, os::raw::c_int, sync::{Arc, RwLock}};
 pub struct EntityRow { pub frame: i64, pub entity: i64, pub value: i64 }
 
 #[derive(Debug)]
-pub struct Generation { pub id: u64, pub rows: Vec<EntityRow> }
+pub struct Generation<R = EntityRow> { pub id: u64, pub rows: Vec<R> }
 
 #[derive(Debug)]
-pub struct FrameRing {
-    slots: Vec<Arc<Generation>>,
+pub struct FrameRing<R = EntityRow> {
+    slots: Vec<Arc<Generation<R>>>,
     next: usize,
     published: Option<usize>,
 }
 
-impl FrameRing {
+impl<R> FrameRing<R> {
     pub fn new(capacity: usize) -> Self {
         assert!(capacity > 0);
         Self { slots: (0..capacity).map(|_| Arc::new(Generation { id: 0, rows: Vec::new() })).collect(), next: 0, published: None }
     }
 
-    pub fn publish(&mut self, generation: Generation) -> std::result::Result<Arc<Generation>, Generation> {
+    pub fn publish(&mut self, generation: Generation<R>) -> std::result::Result<Arc<Generation<R>>, Generation<R>> {
         for offset in 0..self.slots.len() {
             let index = (self.next + offset) % self.slots.len();
             if Arc::strong_count(&self.slots[index]) == 1 {
@@ -37,7 +37,31 @@ impl FrameRing {
         Err(generation)
     }
 
-    fn current(&self) -> Arc<Generation> { self.slots[self.published.unwrap()].clone() }
+    pub fn current(&self) -> Arc<Generation<R>> { self.slots[self.published.unwrap()].clone() }
+
+    pub fn with_row_capacity(capacity: usize, rows: usize) -> Self {
+        let mut ring = Self::new(capacity);
+        for slot in &mut ring.slots { Arc::get_mut(slot).unwrap().rows.reserve_exact(rows); }
+        ring
+    }
+
+    pub fn slot_layout(&self) -> Vec<(usize, usize)> {
+        self.slots.iter().map(|slot| (slot.rows.as_ptr() as usize, slot.rows.capacity())).collect()
+    }
+
+    /// Publish into preallocated storage; pinned slots and oversized rows refuse publication.
+    pub fn publish_rows(&mut self, id: u64, rows: &[R]) -> Option<Arc<Generation<R>>> where R: Clone {
+        for offset in 0..self.slots.len() {
+            let index = (self.next + offset) % self.slots.len();
+            if Arc::strong_count(&self.slots[index]) == 1 && rows.len() <= self.slots[index].rows.capacity() {
+                let slot = Arc::get_mut(&mut self.slots[index]).unwrap();
+                slot.id = id; slot.rows.clear(); slot.rows.extend_from_slice(rows);
+                self.published = Some(index); self.next = (index + 1) % self.slots.len();
+                return Some(self.slots[index].clone());
+            }
+        }
+        None
+    }
 }
 
 pub type SharedRing = Arc<RwLock<FrameRing>>;

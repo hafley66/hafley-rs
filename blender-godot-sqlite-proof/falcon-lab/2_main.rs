@@ -127,7 +127,7 @@ fn simulate(actions: &[HighLevelSubaction], target: [f32; 3]) -> Vec<Tick> {
         .collect()
 }
 
-fn project(p: Vector3<f32>) -> [f32; 2] {
+pub(crate) fn project(p: Vector3<f32>) -> [f32; 2] {
     // Oblique orthographic camera. Source axes: x depth, y up, z forward.
     [
         350.0 + (p.z + p.x * 0.28) * 10.0,
@@ -135,7 +135,7 @@ fn project(p: Vector3<f32>) -> [f32; 2] {
     ]
 }
 
-fn mesh_wire(
+pub(crate) fn mesh_wire(
     out: &mut Vec<gpu::Vertex>,
     points: &[Vec3],
     indices: &[[u32; 3]],

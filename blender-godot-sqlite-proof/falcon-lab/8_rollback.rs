@@ -4,6 +4,8 @@
 mod baseline;
 #[path = "1a_sandbag.rs"]
 mod sandbag;
+#[path = "21_sql_viewer.rs"]
+mod sql_viewer;
 use baseline::{Tick, gpu, text};
 use brawllib_rs::high_level_fighter::{CollisionBoxValues, HighLevelSubaction};
 use ggrs::{
@@ -184,6 +186,7 @@ struct Display {
     restored: Vec<i32>,
     advances: usize,
     total_loads: usize,
+    presented: Vec<Vec<sql_viewer::boundary::Row>>,
 }
 fn checksum(world: &World) -> u128 {
     bincode::serde::encode_to_vec(world, bincode::config::standard())
@@ -203,6 +206,7 @@ fn handle(
     let mut advances = 0;
     let mut predicted = false;
     let mut applied = 0;
+    let mut presented = Vec::new();
     for request in requests {
         match request {
             GgrsRequest::SaveGameState { cell, frame } => {
@@ -219,6 +223,7 @@ fn handle(
                 applied = inputs[0].0;
                 predicted = inputs[0].1 == InputStatus::Predicted;
                 step(world, applied, actions);
+                presented.push(sql_viewer::encode(world, actions, predicted, applied));
                 advances += 1;
             }
         }
@@ -231,6 +236,7 @@ fn handle(
         restored,
         advances,
         total_loads: *loads,
+        presented,
     }
 }
 
@@ -299,6 +305,12 @@ fn run(
             let requests = peers[id].advance_frame()?;
             let mut display = handle(&mut worlds[id], requests, actions, &mut loads[id]);
             display.confirmed = peers[id].confirmed_frame();
+            for frame in &mut display.presented {
+                frame[0].values[15] = display.restored.first().copied().unwrap_or(-1) as f64;
+                frame[0].values[16] = display.advances as f64;
+                frame[0].values[17] = display.total_loads as f64;
+                frame[0].values[18] = display.confirmed as f64;
+            }
             displays.push(display);
         }
         trace.push(displays.try_into().unwrap());
@@ -606,9 +618,13 @@ fn render(actions: &[HighLevelSubaction], trace: &[[Display; 2]], id: usize) -> 
 
 fn main() -> Result<(), Error> {
     let actions = baseline::load()?;
-    let launch = std::env::args().any(|arg| arg == "--launch");
+    let sql = std::env::args().any(|arg| arg == "--sql");
+    let launch = sql || std::env::args().any(|arg| arg == "--launch");
     let trace = run(&actions, true, launch)?;
     verify(&actions, &trace)?;
+    if sql {
+        return sql_viewer::execute(&trace, !std::env::args().any(|arg| arg == "--verify-only"));
+    }
     std::fs::write(
         if launch {
             "17_launch_trace.json"

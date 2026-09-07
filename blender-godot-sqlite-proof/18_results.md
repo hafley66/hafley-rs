@@ -91,3 +91,18 @@ on tick 97; final damage remains 18 with one hit and zero final velocity.
 `falcon-lab/18_launch.mp4` adds target phase, timer, position, velocity, and grounded
 labels. This is a mixed PM-data/Melee-calculation/Rapier fixture, with approximate
 movement rules. See `falcon-lab/20_launch_readme.md` for parameters and boundaries.
+
+## Recycled SQLite presentation
+
+`bash falcon-lab/22_run_sql.sh` tests and records the delayed peer with wgpu
+consuming numeric pose, capsule, attack, and target rows through a read-only SQLite
+virtual table. Three preallocated generations hold a 32-tick window. The tick-97
+rollback publishes all 20 corrected frames together. A held tick-91 SQL cursor
+retains damage 0 while fresh queries read damage 18; releasing it permits reuse
+of the same allocation. Oversized and fully pinned publications are rejected.
+
+Eight Falcon tests and eight core tests pass. Storage bounds apply to the
+publication buffers; this fixture still allocates simulation snapshots and
+rendering data. `falcon-lab/23_sql_boundary.mp4` labels publication generations,
+reader state, action/pose, damage, and rollback. See `falcon-lab/26_sql_readme.md`
+for schema, replay assertions, cursor-isolation scope, and reproduction commands.
