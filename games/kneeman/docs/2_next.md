@@ -23,6 +23,7 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
 | Falcon kick travel | Published through c0d831a: editable ground/air launch data, velocity-preserving travel and offline character-kit controls. Production corrected-frame recovery and online editor restriction pass; dedicated landing/wall behavior remains open |
 | Falcon kick landing | Published c197e67: optional landing attack, ground-only hit targeting, shared hit identity and contact replay. 450 game + 76 shell tests and local web landing/reconnect pass. PM timing/scale and wall response remain open; production receipt below |
 | Falcon kick travel phases | Published 62d7cdc runtime, version 4: separate ground/air entry rows, strong/middle/late damage, shared cooldowns and serialized entry context. 454 game + 77 shell tests and local browser acceptance pass; production receipt below |
+| Special phase editor | Published 4899180: offline ground/shared, optional air-entry and landing attack controls reuse existing sliders. Production landing damage edit/restore passes; local online restriction and reconnect pass |
 | Special ship carry | Published through 83e3456: carry correction plus Ship Dive debugger fixture. Native and production browser checks prove startup follows the moving hull, then launches and replays |
 | Destruction fixture | Shared simulation/debugger setup; 240 input ticks break cells and replay with matching checksums. 428 game + 67 shell tests pass |
 | Cell item/contact sequence | Published through f9a486d: Cell replay uses the same 240-tick wire-input sequence as the native test. Local and production pickup/throw/contact, restore/EOF and changed-state rejection pass |
@@ -1279,6 +1280,16 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    closed-send error and browser exception gates pass, exit 0. Log:
    /private/tmp/game3-phase-editor-online.log; screenshots /private/tmp/game3-online-u6j61Q.
    No art/deploy-source changes; art-test and web-check were not rerun.
+   Published 4899180 with the existing Game3 profile; nginx validation/reload passed.
+   /private/tmp/game3-phase-editor-publish.log. Remote WASM matches the tested artifact:
+   ef66c71edc31620071ca710aef79098e398e2f5d9261d0e6c01d97c315273600.
+   Game3 pack remains fde60bf794d12796ff28fd1661e7afb3057337e41939f64f09c8ba157347c7df;
+   protected /game/ remains 5d04f53109eaf4de6b76d55c951791a0bd1a60777068f0b3bd86d7bca6bcd795.
+   PRODUCTION=1 node /private/tmp/8_game3_phase_editor.cjs asserts exact [0,20.5] edited
+   damage, original checksum after restore, and [0,10] restored damage; no browser exceptions,
+   exit 0. Log: /private/tmp/game3-phase-editor-production.log; screenshots:
+   /private/tmp/game3-phase-editor-KmTMLf. Online acceptance above used this same artifact
+   locally with production signaling; no additional production-only online run this checkpoint.
    Next bounded task: verify air-entry edits independently of ground and landing rows.
    Angle-361 resolution, effective PM timing/geometry, wall action/motion, larger parties and
    physical-device/cross-network acceptance remain open. No reminder or Boop changes.
