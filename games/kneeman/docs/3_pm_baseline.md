@@ -243,6 +243,25 @@ on the gated transition, and expose ending motion/timing through move data. Curr
 stores launch velocity but no explicit launch provenance. Do not infer provenance from
 velocity equality: move velocities are configurable and collision can modify them.
 
+Wall-motion follow-up in the same Melee revision:
+
+- `ftcaptain.c:266` maps motion 363 to `ftCa_MF_SpecialLwRebound` and the down-special
+  move ID, despite the `SpecialHiThrow1` callback name.
+- `ft_084E.c:119` implements `ft_80085134`: every physics call assigns horizontal velocity
+  from `x6A4_transNOffset.z * facing_dir` and vertical velocity from `x6A4_transNOffset.y`.
+  `ftanim.c:246` writes this translation offset from animation state. Reproducing this path
+  needs its per-frame animation translations; the callback supplies no constant rebound impulse.
+- `ftcaptainspecialhi.c:28` delegates rebound collision to `ftCo_AirCatchHit_Coll`.
+  `ft_081B.c:519` performs collision correction and selects idle/basic landing through the
+  `ftCo_800D0EC8` vertical-velocity threshold when the floor-contact predicate succeeds.
+- Ground-start entry and aerial-start entry select different motion states at special entry
+  (`ftcaptainspeciallw.c:98,115`). A faithful provenance field would describe entry context;
+  current support or launch velocity cannot recover it after a ledge crossing.
+
+No Game3 rebound impulse or wall state was added from these observations. The command-variable
+gate interval, animation translations/duration and PM action-level routing remain missing.
+The cached PM3.6 wall subaction's IASA 41 alone does not supply those values.
+
 ## Remaining source limits
 
 Recovered `pm-falcon-kit.md` asserts that missing PM changelog entries make Melee values

@@ -1090,6 +1090,30 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    guard and motion against the references, then preserve launch provenance explicitly through
    ledge travel and snapshot reload. Effective PM landing timing/scale, larger-party startup,
    cross-network and physical-device acceptance remain open. No reminder/Boop changes.
+   Wall-reference follow-up: Melee motion 363 uses the down-special rebound flags; its
+   physics reads per-frame animation translation offsets, and its collision delegates to
+   AirCatchHit's floor handling. docs/3_pm_baseline.md records exact paths/lines. No fixed
+   rebound impulse or PM wall-entry rule was inferred. Remaining inputs are the command
+   gate interval, animation translations/duration and PM action-level routing. Entry context
+   must survive ledges if that route is implemented; current velocity cannot identify it.
+   Added special_landing_crosses_a_ledge_and_relands_without_restarting_or_rearming:
+   both facings, extended data-defined landing recovery, platform exit, second floor contact,
+   unchanged frame progression/cooldown aging, inactive hitboxes and serialized contact replay.
+   No runtime changes. Full gate: 451 game + 76 shell tests, exit 0;
+   /private/tmp/game3-landing-recontact-tests.log. Production item/destruction debugger passes
+   pickup/throw/contact, 240 Replay steps, exact restore, EOF no-op and changed-state rejection:
+   PRODUCTION=1 node /private/tmp/6_game3_cells.cjs; exit 0;
+   /private/tmp/game3-recontact-production-cells.log; /private/tmp/game3-cells-XGfICv.
+   No new export/publication; production remains c197e67. Art and deploy sources are unchanged.
+   Production shared-hit run also passes: SHARED=1 CONFIRMED=1 COMBAT=1 RECONNECT=1
+   QUEUED_CLOSE=1 DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1
+   node /private/tmp/1_game3_online.cjs. Both snapshots [0,10] damage; 549 initial + 180 resumed
+   confirmed comparisons match, ticks 757/755. Drops 240/1233 and 240/1235 messages, max run 24.
+   Peer-close offline recovery and browser/closed-send error gates pass, exit 0;
+   /private/tmp/game3-recontact-production-shared.log; /private/tmp/game3-online-YlPNRJ.
+   Next executable coverage: put a grounded victim beside the landing fixture and assert
+   the landing-only hit through two-peer startup/rollback; retain a geometrically overlapping
+   airborne control. Wall motion still requires the reference inputs listed above.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;

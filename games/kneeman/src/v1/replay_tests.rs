@@ -438,6 +438,55 @@ fn kick_landing_hits_ground_targets_once_with_fresh_identity_and_replays() {
 }
 
 #[test]
+fn special_landing_crosses_a_ledge_and_relands_without_restarting_or_rearming() {
+    let mut tune = Tune::default();
+    let landing = std::sync::Arc::make_mut(&mut tune.roster)[chars::art_slot_row(2)]
+        .specials[3].landing.as_mut().unwrap();
+    landing.recovery = 90; // extend the existing data-defined phase past a second contact
+    let total = landing.total();
+    for facing in [-1.0, 1.0] {
+        let mut state = SimState::spawn();
+        let platform = PLATFORMS[1];
+        let fighter = &mut state.fighters[0];
+        fighter.char_id = 2;
+        fighter.state = CharState::SpecialLandD;
+        fighter.frame = 1; // the contact attack's active tick has already elapsed
+        fighter.pos = Vector2::new(if facing < 0.0 { platform.left + 0.1 }
+            else { platform.right - 0.1 }, platform.y);
+        fighter.facing = facing;
+        fighter.vel = Vector2::new(facing * 120.0, 0.0);
+        fighter.ground_plat = 1;
+        fighter.ground_ink = -1;
+        fighter.hit_cd = [[120; MAX_PLAYERS]; MAX_HB];
+        let mut replay = state;
+        let mut left = false;
+        let mut relanded = false;
+        for tick in 0..total - 1 {
+            state = step(&state, &[&idle(), &idle()], &tune);
+            replay = step(&replay, &[&idle(), &idle()], &tune);
+            assert_eq!(net::checksum(&state), net::checksum(&replay));
+            let fighter = state.fighters[0];
+            if !fighter.grounded() { left = true; }
+            if left && fighter.grounded() && !relanded {
+                assert_eq!(fighter.pos.y, GROUND_Y);
+                assert_eq!(fighter.state, CharState::SpecialLandD);
+                relanded = true;
+                replay = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap();
+            }
+            assert!(fighter.hit_cd.iter().flatten().all(|cd| *cd as i64 == 119 - tick));
+            if tick < total - 2 {
+                assert_eq!(fighter.state, CharState::SpecialLandD);
+                assert_eq!(fighter.frame, tick + 2);
+                assert!(attack_for(&tune.for_char(2), fighter.state).unwrap()
+                    .box_at(fighter.frame).is_none());
+            }
+        }
+        assert!(left && relanded, "facing {facing}");
+        assert_eq!(state.fighters[0].state, CharState::Stand);
+    }
+}
+
+#[test]
 fn launched_support_tracks_floor_contact_and_replays() {
     let tune = Tune::default();
     for y in [GROUND_Y, GROUND_Y - 100.0] {
