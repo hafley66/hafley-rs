@@ -872,12 +872,24 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Native coverage includes entry/startup/travel/recovery contact, exact recovery duration,
    closed hit windows, snapshot reload, ordinary-special slot mapping and old discriminants.
    New landing hitboxes and wall response remain unimplemented; current recovery is authored
-   18 ticks, with PM landing animation/data still unverified. Web build, mixed-build startup,
-   browser landing acceptance and publication are pending for this change.
+   18 ticks, with PM landing animation/data still unverified.
    Final gate: CARGO_BUILD_JOBS=1 just game-test passes 443 game + 76 shell tests;
    /private/tmp/game3-kick-land-final-tests.log. No browser run or publication in this checkpoint.
-   Online was not rerun for this debugger-only change; the preceding published-runtime
-   receipt remains the latest online evidence. Physical devices and PM parity remain open.
+   Landing web acceptance: examples/2_kick_landing_start.rs serializes Falcon airborne at
+   (900, 580). The browser applies down-special at tick 0, observes airborne SpecialD,
+   grounded SpecialD at y=760 for a sampled span of at least 10 ticks, then grounded Stand,
+   without generic Landing. Exact 18-tick recovery is covered by the native fixture.
+   Command: LOCAL_EXPORT=1 LAND=1 KICK=1 CONFIRMED=1 COMBAT=1 RECONNECT=1 QUEUED_CLOSE=1
+   DELAY_MS=60 BURST_LENGTH=24 NO_CLOSED_SEND_ERRORS=1 node /private/tmp/1_game3_online.cjs.
+   All 61 corrected sequence-frame checks match; 550 initial and 180 resumed frames match.
+   Fault injection dropped 240/1239 and 240/1236 messages, max consecutive run 24; resumed
+   ticks 756/757. Peer-close recovery and zero closed-send errors/browser exceptions, exit 0.
+   Log: /private/tmp/game3-kick-land-browser.log; artifacts /private/tmp/game3-online-eD3iHw.
+   Fresh web export passed; native gate rerun passes 443 game + 76 shell tests in
+   /private/tmp/game3-kick-land-fixture-tests.log. New-host/old-client startup rejects the
+   unknown Tune and both clients advance offline, exit 0:
+   /private/tmp/game3-kick-land-mixed-new-host.log; /private/tmp/game3-online-WJqe0r.
+   Old-host compatibility and publication remain pending. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;
