@@ -29,7 +29,8 @@ pub struct Fighter {
     pub ground_plat: i32,     // index into PLATFORMS the fighter stands on (-1 = airborne)
     pub ground_ink: i8, // index into SimState.paths when standing on drawn ink (-1 = not on ink)
     // Per-hitbox, per-victim re-hit countdown: `hit_cd[box][victim] > 0` means that box of THIS
-    // fighter's current move can't hit that victim yet (it just connected, or is mid-window). A box
+    // fighter's current move can't hit that victim yet (it just connected, or is mid-window).
+    // Shapes with equal hitbox IDs receive the same cooldown on contact. A box
     // re-arms after its `refresh`; a fresh swing zeroes the whole grid (`arm_hits`). Replaces the old
     // `attack_hit: bool` so a 3-box jab combo / multi-hit stomp each land their own sequenced hits,
     // and a wide box hits every overlapping victim once.

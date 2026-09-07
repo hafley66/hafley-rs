@@ -27,7 +27,7 @@ pub const MAX_HB: usize = 4;
 /// sweetspot/sourspot, sex-kicks, and rapid multi-hit are all "more boxes", never new states.
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Hitbox {
-    pub id: u8,       // priority; lowest LIVE overlapping id wins per victim (sweetspot first)
+    pub id: u8,       // lowest overlapping ID wins; equal IDs share one per-victim hit cooldown
     pub start: i64,   // first active frame, relative to state start
     pub len: i64,     // active duration; live for [start, start + len). 0 = inert box
     pub off: Vector2, // center offset from fighter pos (x is forward, flipped by facing)

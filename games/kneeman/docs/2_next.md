@@ -950,6 +950,19 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    source release identity remain unverified. No runtime changes, tests or publication in this
    source-only follow-up. Next: resolve effective landing-hitbox duration and shared hit identity,
    then add the contact hit through move data and deterministic combat/replay tests.
+   Combat prerequisite implemented: equal Hitbox.id values now share per-victim cooldown
+   across their spatial and delayed shapes. Distinct IDs retain independent hits. With no
+   refresh, the shared identity locks until its last window ends; refresh uses the winning
+   shape's interval. Equal-priority shapes use array order. No Fighter/Hitbox layout additions.
+   Test shared_hit_ids_lock_overlapping_and_delayed_shapes_across_snapshot_reload checks
+   damage timelines for shared IDs, distinct IDs and refresh=2, serialized fighter reload,
+   another victim's independent cooldown and fresh-swing reset.
+   Startup protocol is now version 2: pair offers/answers reject older semantics, and larger
+   parties also check this version before applying remote SDP. Mixed-build browser rejection
+   remains pending; do not publish before that and same-version online acceptance pass.
+   CARGO_BUILD_JOBS=1 just game-test passes 445 game + 76 shell tests, exit 0;
+   /private/tmp/game3-hit-identity-final-gate.log. No export/browser/publication in this checkpoint.
+   The landing hit itself, grounded-target filtering and exact phase duration remain pending.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
    Local production export: backtick opens Terrain & replay; Falcon jump-grab restores tick 60,
    Replay step reaches JumpSquat at 61 then Grab at 62, both y=410. Verify matches all 45 ticks;

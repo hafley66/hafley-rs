@@ -33,6 +33,8 @@ use super::{KneeMan, Phase, Room};
 /// the missing ones and stamping the documented default (roster slot 0) instead. Both peers apply
 /// the exact same rule off the exact same missing data, so frame 0 can't diverge over it.
 const MESH_PICK_TIMEOUT_MS: u64 = 5_000;
+// Version 2 shares cooldown across equal hitbox IDs. Layout-compatible older reducers differ.
+const START_VERSION: i64 = 2;
 
 /// One pair's live connection, keyed by the REMOTE handle (see `MeshSession::links`).
 struct PeerLink {
@@ -101,6 +103,13 @@ fn handles_json(count: usize) -> String {
 /// offer/answer/ice's to/from once a party is > 2 (WIRE PROTOCOL v2 #1-#2).
 pub(super) fn handle_signal(k: &mut KneeMan, text: &GString) {
     let d = rtc::parse_json(text);
+    if k.party_count > 2 && matches!(rtc::dget_str(&d, "kind").as_str(), "offer" | "answer")
+        && opt_int(&d, "start_version") != Some(START_VERSION)
+    {
+        godot_error!("netplay: mesh startup rejected: Unsupported simulation version");
+        k.reset_offline();
+        return;
+    }
     match rtc::dget_str(&d, "kind").as_str() {
         "matched" => {
             if let Some(role) = Role::from_str(&rtc::dget_str(&d, "role")) {
@@ -460,6 +469,7 @@ pub(super) fn on_sdp_created(k: &mut KneeMan, sdp_type: GString, sdp: GString, p
     }
     let mut d = VarDictionary::new();
     d.set("kind", sdp_type);
+    d.set("start_version", START_VERSION);
     d.set("sdp", sdp);
     d.set("hash", rtc::BUILD_HASH); // peer flags a version mismatch from this
     let id = k.identity.get_cloned();
@@ -474,7 +484,6 @@ pub(super) fn on_sdp_created(k: &mut KneeMan, sdp_type: GString, sdp: GString, p
     if k.party_count > 2 {
         d.set("to", peer as i64);
     } else {
-        d.set("start_version", 1);
         d.set("start_slot", k.local_handle as i64);
         d.set("start_tune", crate::net::encode_tune(&k.tune.get_cloned()));
         if let Some(state) = k.resume_snapshot {
@@ -494,7 +503,7 @@ pub(super) fn on_sdp_created(k: &mut KneeMan, sdp_type: GString, sdp: GString, p
 /// channel cannot begin with a different snapshot, Tune or fighter-slot assignment.
 fn accept_pair_start(k: &mut KneeMan, d: &VarDictionary, offer: bool) -> bool {
     let decoded = (|| {
-        if opt_int(d, "start_version") != Some(1) { return Err("Unsupported pair startup version"); }
+        if opt_int(d, "start_version") != Some(START_VERSION) { return Err("Unsupported pair startup version"); }
         let slot = opt_int(d, "start_slot").filter(|s| (0..2).contains(s))
             .ok_or("Invalid startup fighter slot")? as usize;
         let tune = crate::net::decode_tune(&rtc::dget_str(d, "start_tune"))

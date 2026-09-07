@@ -222,8 +222,8 @@ impl PunchableFace for Fighter {
 /// index (keys the per-box re-hit grid). Among `a`'s boxes live this frame, off cooldown for `b`,
 /// and overlapping, the LOWEST id wins (sweetspot beats sourspot). On connect: damage + community/PM
 /// knockback + hitstun to `b`, impact freeze (hitlag) to BOTH, and the hit forces `b` into
-/// `Launched` (cancels any move `b` was mid-swing — the interrupt). `b` re-hittable per box per
-/// `refresh`, so a 3-box jab combo / multi-hit stomp each land their own pops.
+/// `Launched` (cancels any move `b` was mid-swing — the interrupt). Equal IDs share cooldown;
+/// distinct IDs remain independent. Equal-priority overlapping shapes use array order.
 pub(crate) fn resolve_combat(
     a: &mut Fighter,
     vb: usize,
@@ -257,14 +257,17 @@ pub(crate) fn resolve_combat(
     }
     let Some(bi) = chosen else { return };
     let hb = atk.boxes[bi];
-    // re-arm: a box can't re-hit this victim until `refresh` frames pass; with refresh 0 it locks for
-    // the rest of its own window (one hit per box per swing). A later box (different index) still hits.
+    // Equal IDs describe shapes of one hit. Distinct IDs retain independent multi-hit windows.
+    // With no refresh, lock through the final window of this identity, including delayed shapes.
     let cd = if hb.refresh > 0 {
         hb.refresh
     } else {
-        (hb.start + hb.len) - a.frame
+        atk.live_boxes().iter().filter(|b| b.id == hb.id)
+            .map(|b| b.start + b.len).max().unwrap() - a.frame
     };
-    a.hit_cd[bi][vb] = cd.max(1) as i16;
+    for (index, shape) in atk.live_boxes().iter().enumerate() {
+        if shape.id == hb.id { a.hit_cd[index][vb] = cd.max(1) as i16; }
+    }
 
     let base = if is_aerial_attack(a.state) && a.autohop_aerial {
         hb.damage * ta.autohop_dmg // auto short-hop aerial: reduced damage (Ultimate)
@@ -296,6 +299,56 @@ pub(crate) fn resolve_combat(
         b.vel = apply_di(b.vel, b_aim, tb.di_max_angle); // victim angles the trajectory (survival DI)
     }
     a.hitlag = l.hitlag; // both fighters pop on impact (blocked hits included)
+}
+
+#[cfg(test)]
+#[test]
+fn shared_hit_ids_lock_overlapping_and_delayed_shapes_across_snapshot_reload() {
+    use crate::v1::{AttackData, CharState, SimState};
+    for (shared, refresh, expected) in [
+        (true, 0, [10.0, 10.0, 10.0, 10.0, 10.0, 10.0]),
+        (false, 0, [10.0, 30.0, 30.0, 60.0, 60.0, 60.0]),
+        (true, 2, [10.0, 10.0, 20.0, 20.0, 30.0, 30.0]),
+    ] {
+        let mut tune = Tune::default();
+        let mut boxes = [Hitbox::NONE; crate::v1::MAX_HB];
+        for (index, shape) in boxes[..3].iter_mut().enumerate() {
+            *shape = Hitbox {
+                id: if shared { 0 } else { index as u8 },
+                start: if index == 2 { 3 } else { 0 },
+                len: if index == 2 { 3 } else { 6 },
+                r: 500.0, damage: 10.0 * (index + 1) as f32, refresh,
+                ..Hitbox::NONE
+            };
+        }
+        tune.jab = AttackData::new(0, 0, boxes, 3);
+        let mut fighters = SimState::spawn().fighters;
+        fighters[0].state = CharState::Jab;
+        fighters[0].pos = Vector2::ZERO;
+        fighters[1].pos = Vector2::ZERO;
+        fighters[1].invuln = 0;
+        let mut replay = fighters;
+        for (frame, damage) in expected.into_iter().enumerate() {
+            for pair in [&mut fighters, &mut replay] {
+                pair[0].frame = frame as i64;
+                if frame > 0 { pair[0].tick_hit_cd(); }
+                let (attacker, victim) = pair.split_at_mut(1);
+                resolve_combat(&mut attacker[0], 1, &mut victim[0], Vector2::ZERO, &tune, &tune);
+            }
+            assert_eq!(fighters[1].damage, damage, "shared={shared}, refresh={refresh}, frame={frame}");
+            let encoded = bincode::serialize(&fighters).unwrap();
+            assert_eq!(encoded, bincode::serialize(&replay).unwrap());
+            if frame == 1 { replay = bincode::deserialize(&encoded).unwrap(); }
+        }
+        // Another victim has an independent cooldown column; a fresh swing clears every column.
+        let mut other = SimState::spawn().fighters[1];
+        other.pos = Vector2::ZERO;
+        other.invuln = 0;
+        resolve_combat(&mut fighters[0], 2, &mut other, Vector2::ZERO, &tune, &tune);
+        assert_eq!(other.damage, 10.0);
+        fighters[0].arm_hits();
+        assert_eq!(fighters[0].hit_cd, [[0; crate::v1::MAX_PLAYERS]; crate::v1::MAX_HB]);
+    }
 }
 
 /// Hitbox-vs-hitbox clank check for one fighter pair, run before hits resolve. The first live
