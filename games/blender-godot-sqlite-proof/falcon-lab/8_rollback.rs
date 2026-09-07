@@ -2,6 +2,8 @@
 #[allow(dead_code)]
 #[path = "2_main.rs"]
 mod baseline;
+#[path = "1a_sandbag.rs"]
+mod sandbag;
 use baseline::{Tick, gpu, text};
 use brawllib_rs::high_level_fighter::{CollisionBoxValues, HighLevelSubaction};
 use ggrs::{
@@ -35,6 +37,7 @@ struct World {
     hit_count: usize,
     last_hit: Option<i32>,
     view: Tick,
+    bag: Option<sandbag::Sandbag>,
 }
 
 fn input(tick: i32) -> u8 {
@@ -46,6 +49,9 @@ fn input(tick: i32) -> u8 {
 }
 
 fn step(world: &mut World, bits: u8, actions: &[HighLevelSubaction]) {
+    if let Some(bag) = &mut world.bag {
+        bag.advance();
+    }
     let pressed = bits & !world.previous_input;
     if pressed & JUMP != 0 && world.view.root[1] == 0.0 {
         world.jump_at = Some(world.frame);
@@ -85,6 +91,10 @@ fn step(world: &mut World, bits: u8, actions: &[HighLevelSubaction]) {
             continue;
         }
         let p = hb.next_pos;
+        let target = world
+            .bag
+            .as_ref()
+            .map_or([0.0, 24.0, 28.0], |bag| bag.position);
         let overlap = query::intersection_test(
             &Pose::translation(
                 p.x,
@@ -92,12 +102,15 @@ fn step(world: &mut World, bits: u8, actions: &[HighLevelSubaction]) {
                 p.z + root[2] + source.x_pos,
             ),
             &Ball::new(hb.next_size),
-            &Pose::translation(0.0, 24.0, 28.0),
+            &Pose::translation(target[0], target[1], target[2]),
             &Cuboid::new(Vec3::new(3.0, 6.0, 4.0)),
         )
         .unwrap();
         view.contact |= overlap;
         if overlap && !world.attack_hit {
+            if let Some(bag) = &mut world.bag {
+                bag.launch(values, world.damage);
+            }
             world.damage += values.damage;
             world.attack_hit = true;
             world.hit_count += 1;
@@ -221,7 +234,11 @@ fn handle(
     }
 }
 
-fn run(actions: &[HighLevelSubaction], held: bool) -> Result<Vec<[Display; 2]>, Error> {
+fn run(
+    actions: &[HighLevelSubaction],
+    held: bool,
+    launch: bool,
+) -> Result<Vec<[Display; 2]>, Error> {
     let bus = Arc::new(Mutex::new(Bus {
         held,
         ..Default::default()
@@ -263,6 +280,11 @@ fn run(actions: &[HighLevelSubaction], held: bool) -> Result<Vec<[Display; 2]>, 
             .all(|p| p.current_state() == SessionState::Running)
     );
     let mut worlds = [World::default(), World::default()];
+    if launch {
+        for world in &mut worlds {
+            world.bag = Some(sandbag::Sandbag::default());
+        }
+    }
     let mut loads = [0, 0];
     let mut trace = Vec::new();
     for tick in 0..180 {
@@ -285,7 +307,11 @@ fn run(actions: &[HighLevelSubaction], held: bool) -> Result<Vec<[Display; 2]>, 
 }
 
 fn verify(actions: &[HighLevelSubaction], trace: &[[Display; 2]]) -> Result<(), Error> {
+    let launch = trace[0][0].world.bag.is_some();
     let mut reference = World::default();
+    if launch {
+        reference.bag = Some(sandbag::Sandbag::default());
+    }
     for (tick, pair) in trace.iter().enumerate() {
         step(&mut reference, input(tick as i32), actions);
         assert_eq!(
@@ -308,9 +334,9 @@ fn verify(actions: &[HighLevelSubaction], trace: &[[Display; 2]]) -> Result<(), 
         assert_eq!(peer.world.damage, 18.0);
         assert_eq!(peer.world.hit_count, 1);
     }
-    let clean = run(actions, false)?;
+    let clean = run(actions, false, launch)?;
     assert!(clean.iter().all(|pair| pair[0].world == pair[1].world));
-    let repeated = run(actions, true)?;
+    let repeated = run(actions, true, launch)?;
     assert!(
         trace
             .iter()
@@ -321,11 +347,47 @@ fn verify(actions: &[HighLevelSubaction], trace: &[[Display; 2]]) -> Result<(), 
         "ROLLBACK_OK restored={:?} advances={} final_damage=18 hit_count=1 equal_from_tick=97",
         trace[97][1].restored, trace[97][1].advances
     );
+    if launch {
+        let phases: Vec<_> = trace
+            .iter()
+            .map(|pair| pair[0].world.bag.as_ref().unwrap().phase)
+            .collect();
+        for phase in [
+            sandbag::Phase::Hovering,
+            sandbag::Phase::Hit,
+            sandbag::Phase::Hitstun,
+            sandbag::Phase::Falling,
+            sandbag::Phase::Landed,
+        ] {
+            assert!(phases.contains(&phase), "missing {phase:?}");
+        }
+        assert_eq!(phases[91], sandbag::Phase::Hit);
+        assert_eq!(phases[179], sandbag::Phase::Landed);
+        assert_eq!(trace[179][0].world.bag.as_ref().unwrap().stun, 0);
+        assert_eq!(trace[91][0].world.bag.as_ref().unwrap().stun, 26);
+        let landed = phases
+            .iter()
+            .position(|p| *p == sandbag::Phase::Landed)
+            .unwrap();
+        let falling = phases
+            .iter()
+            .position(|p| *p == sandbag::Phase::Falling)
+            .unwrap();
+        eprintln!(
+            "LAUNCH_OK kb={} hitstun=26 falling_tick={falling} landed_tick={landed} final={:?}",
+            trace[91][0].world.bag.as_ref().unwrap().knockback,
+            trace[179][0].world.bag
+        );
+    }
     Ok(())
 }
 
 fn render(actions: &[HighLevelSubaction], trace: &[[Display; 2]], id: usize) -> Result<(), Error> {
-    let mut capture = gpu::Capture::new(&format!("10_peer{id}.mp4"))?;
+    let launch = trace[0][0].world.bag.is_some();
+    let mut capture = gpu::Capture::new(&format!(
+        "{}_peer{id}.mp4",
+        if launch { "16" } else { "10" }
+    ))?;
     for (tick, pair) in trace.iter().enumerate() {
         let d = &pair[id];
         let s = &d.world.view;
@@ -336,7 +398,19 @@ fn render(actions: &[HighLevelSubaction], trace: &[[Display; 2]], id: usize) -> 
             false,
             d.world.last_hit.map(|t| t as usize),
             false,
+            d.world
+                .bag
+                .as_ref()
+                .map_or([0.0, 24.0, 28.0], |bag| bag.position),
         );
+        if launch {
+            for v in &mut vertices {
+                let x = (v[0] + 1.0) * 480.0;
+                let y = (1.0 - v[1]) * 270.0;
+                v[0] = (180.0 + (x - 350.0) * 0.65) / 480.0 - 1.0;
+                v[1] = 1.0 - (422.0 + (y - 444.0) * 0.65) / 270.0;
+            }
+        }
         text(
             &mut vertices,
             if id == 0 {
@@ -405,6 +479,32 @@ fn render(actions: &[HighLevelSubaction], trace: &[[Display; 2]], id: usize) -> 
             1.3,
             CYAN,
         );
+        if let Some(bag) = &d.world.bag {
+            text(
+                &mut vertices,
+                &format!(
+                    "BAG {} / STUN {:02} / GROUND {}",
+                    bag.phase.label(),
+                    bag.stun,
+                    bag.grounded
+                ),
+                24.0,
+                128.0,
+                1.7,
+                ORANGE,
+            );
+            text(
+                &mut vertices,
+                &format!(
+                    "POS {:.1},{:.1} / VEL {:.2},{:.2} U/TICK",
+                    bag.position[2], bag.position[1], bag.velocity[2], bag.velocity[1]
+                ),
+                24.0,
+                154.0,
+                1.5,
+                CYAN,
+            );
+        }
         let transport = if (78..97).contains(&tick) {
             "A->B PACKETS HELD / ATTACK MISSING"
         } else if tick == 97 {
@@ -460,20 +560,45 @@ fn render(actions: &[HighLevelSubaction], trace: &[[Display; 2]], id: usize) -> 
         );
         text(
             &mut vertices,
-            "0.5X PLAYBACK / EVENT HOLDS / SCRIPTED TRAVEL",
+            if launch {
+                "0.5X + HOLDS / SCRIPTED FALCON / PM DATA + MELEE KB + RAPIER"
+            } else {
+                "0.5X PLAYBACK / EVENT HOLDS / SCRIPTED TRAVEL"
+            },
             24.0,
             518.0,
             1.1,
             WHITE,
         );
         // Presentation-only holds preserve actual tick state, making events readable.
-        let repeats = if [60, 78, 91, 97, 179].contains(&tick) {
+        let phase_change = launch
+            && tick > 0
+            && trace[tick][0].world.bag.as_ref().unwrap().phase
+                != trace[tick - 1][0].world.bag.as_ref().unwrap().phase;
+        let repeats = if [60, 78, 91, 97, 179].contains(&tick) || phase_change {
             60
         } else {
             2
         };
         for _ in 0..repeats {
-            capture.frame(&vertices)?;
+            if let Some(bag) = &d.world.bag {
+                let x = 180.0 + bag.position[2] * 6.5;
+                let y = 422.0 - bag.position[1] * 6.5;
+                capture.frame_regions(
+                    &vertices,
+                    [
+                        [40, 400, 210, 430],
+                        [
+                            (x - 34.0).max(0.0) as u32,
+                            (x + 34.0) as u32,
+                            (y - 40.0).max(200.0) as u32,
+                            (y + 40.0) as u32,
+                        ],
+                    ],
+                )?;
+            } else {
+                capture.frame(&vertices)?;
+            }
         }
     }
     capture.finish()
@@ -481,9 +606,17 @@ fn render(actions: &[HighLevelSubaction], trace: &[[Display; 2]], id: usize) -> 
 
 fn main() -> Result<(), Error> {
     let actions = baseline::load()?;
-    let trace = run(&actions, true)?;
+    let launch = std::env::args().any(|arg| arg == "--launch");
+    let trace = run(&actions, true, launch)?;
     verify(&actions, &trace)?;
-    std::fs::write("11_rollback_trace.json", serde_json::to_vec_pretty(&trace)?)?;
+    std::fs::write(
+        if launch {
+            "17_launch_trace.json"
+        } else {
+            "11_rollback_trace.json"
+        },
+        serde_json::to_vec_pretty(&trace)?,
+    )?;
     if std::env::args().any(|arg| arg == "--verify-only") {
         return Ok(());
     }
@@ -495,7 +628,45 @@ mod tests {
     #[test]
     fn delayed_attack_rolls_back_and_converges() {
         let actions = super::baseline::load().unwrap();
-        let trace = super::run(&actions, true).unwrap();
+        let trace = super::run(&actions, true, false).unwrap();
         super::verify(&actions, &trace).unwrap();
+    }
+    #[test]
+    fn launched_sandbag_physics_and_timers_converge() {
+        let actions = super::baseline::load().unwrap();
+        let trace = super::run(&actions, true, true).unwrap();
+        super::verify(&actions, &trace).unwrap();
+    }
+
+    #[test]
+    fn moving_and_ground_contact_snapshots_replay_exactly() {
+        let actions = super::baseline::load().unwrap();
+        for checkpoint in [105, 128] {
+            let mut world = super::World {
+                bag: Some(super::sandbag::Sandbag::default()),
+                ..Default::default()
+            };
+            for tick in 0..checkpoint {
+                super::step(&mut world, super::input(tick), &actions);
+            }
+            let mut restored = world.clone();
+            let saved_bytes = serde_json::to_vec(&restored).unwrap();
+            for tick in checkpoint..180 {
+                super::step(&mut world, super::input(tick), &actions);
+            }
+            assert_eq!(
+                serde_json::to_vec(&restored).unwrap(),
+                saved_bytes,
+                "snapshot aliases live state"
+            );
+            for tick in checkpoint..180 {
+                super::step(&mut restored, super::input(tick), &actions);
+            }
+            assert_eq!(
+                world, restored,
+                "physics snapshot diverged at checkpoint {checkpoint}"
+            );
+            assert_eq!(world.hit_count, 1);
+        }
     }
 }

@@ -199,6 +199,7 @@ pub(crate) fn draw(
     slow: bool,
     last_hit: Option<usize>,
     hud: bool,
+    target: [f32; 3],
 ) -> Vec<gpu::Vertex> {
     let mut out = Vec::new();
     let dim = [0.15, 0.24, 0.32, 1.0];
@@ -227,10 +228,10 @@ pub(crate) fn draw(
         &mut out,
         &vertices,
         &indices,
-        Matrix4::from_translation(Vector3::from(TARGET)),
+        Matrix4::from_translation(Vector3::from(target)),
         target_color,
     );
-    let label = project(Vector3::new(0.0, 33.0, 23.0));
+    let label = project(Vector3::new(target[0], target[1] + 9.0, target[2] - 5.0));
     text(&mut out, "SANDBAG", label[0], label[1], 1.5, CYAN);
     text(
         &mut out,
@@ -405,6 +406,7 @@ fn main() -> Result<(), Error> {
                 slow,
                 last_hit,
                 true,
+                TARGET,
             );
             for _ in 0..if slow { 2 } else { 1 } {
                 capture.frame(&vertices)?;

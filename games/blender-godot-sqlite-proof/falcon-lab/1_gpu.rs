@@ -120,6 +120,14 @@ impl Capture {
     }
 
     pub fn frame(&mut self, vertices: &[Vertex]) -> Result<(), Box<dyn std::error::Error>> {
+        self.frame_regions(vertices, [[50, 600, 130, 445], [580, 690, 150, 270]])
+    }
+
+    pub fn frame_regions(
+        &mut self,
+        vertices: &[Vertex],
+        regions: [[u32; 4]; 2],
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let bytes: Vec<u8> = vertices
             .iter()
             .flatten()
@@ -192,8 +200,8 @@ impl Capture {
                     .filter(|(i, p)| {
                         let x = *i as u32 % WIDTH;
                         let y = *i as u32 / WIDTH;
-                        (50..600).contains(&x)
-                            && (130..445).contains(&y)
+                        (regions[0][0]..regions[0][1]).contains(&x)
+                            && (regions[0][2]..regions[0][3]).contains(&y)
                             && p[0] > 120
                             && p[0] < 220
                             && p[1] < 160
@@ -210,8 +218,8 @@ impl Capture {
                     .filter(|(i, p)| {
                         let x = *i as u32 % WIDTH;
                         let y = *i as u32 / WIDTH;
-                        (580..690).contains(&x)
-                            && (150..270).contains(&y)
+                        (regions[1][0]..regions[1][1]).contains(&x)
+                            && (regions[1][2]..regions[1][3]).contains(&y)
                             && ((p[0] < 100 && p[1] > 180 && p[2] > 180)
                                 || (p[0] > 220 && p[1] > 70 && p[1] < 140 && p[2] < 90))
                     })

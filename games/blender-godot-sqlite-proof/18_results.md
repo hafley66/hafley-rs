@@ -78,3 +78,16 @@ controls pass. This exercises two P2P sessions without an external network.
 
 `falcon-lab/12_rollback.mp4` displays both peers with input, action, pose, damage,
 confirmation, and rollback diagnostics. See `falcon-lab/14_rollback_readme.md`.
+
+## Sandbag launch and landing
+
+`bash falcon-lab/15_run_launch.sh` uses ssbm_utils 0.4.0 for knockback, launch
+velocity, and hitstun, then Rapier 0.35.3 for flight and floor contact. The extracted
+PM knee produces scalar knockback 67.2 and 26 hitstun ticks for the fixture's
+100-weight target at zero initial percent. Hit occurs on tick 91, timer expiration
+on 117, and landing on 126. Full physics snapshots converge after GGRS correction
+on tick 97; final damage remains 18 with one hit and zero final velocity.
+
+`falcon-lab/18_launch.mp4` adds target phase, timer, position, velocity, and grounded
+labels. This is a mixed PM-data/Melee-calculation/Rapier fixture, with approximate
+movement rules. See `falcon-lab/20_launch_readme.md` for parameters and boundaries.
