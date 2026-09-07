@@ -130,6 +130,28 @@ left/right direction and full-state replay. Keep inherited KneeMan Fall behavior
 from Falcon-specific changes. Exact PM impulse/frame/hitbox/landing data remain unresolved;
 the recovered pm-falcon-kit.md's mixed Melee/PM numbers are not sufficient to claim parity.
 
+### Kick jump restoration checkpoint
+
+The missing Melee write is in [ftCommon_8007D5D4](https://github.com/doldecomp/melee/blob/master/src/melee/ft/ftcommon.c):
+it sets x1968_jumpsUsed to 1. SpecialAirLw_Anim calls it when the travel animation finishes,
+before switching to SpecialAirLwEndAir. Thus the reference refresh is at entry to the ending
+phase, not necessarily when the fighter becomes actionable. These moving-branch sources are
+Melee evidence; they do not establish exact original PM 3.6 timing.
+
+Game3 now appends SpecialKind::FallRefreshJump and selects it only through Falcon's down-slot
+loadout. At airborne completion it restores the configured max_air_jumps. KneeMan and Lucas
+retain Fall. No Fighter fields or Tune fields were added; previous enum discriminants remain
+in order. An old decoder cannot understand the appended variant, so mixed-build Tune/startup
+compatibility must be checked before publication.
+
+This is a partial kick port: DROP's existing motion/hit data remain, and Game3 refreshes at
+completion because it has no separate kick-ending phase yet. Native semantic inputs spend
+an air jump at index 0, down-special at 3, and attempt another jump at 45. Falcon restores and
+uses the jump; KneeMan does not. Both facings replay 60 ticks with a mid-move snapshot restore.
+The new test failed with 0 remaining jumps where 1 was expected before the implementation.
+Ground/air trajectories, ending/landing hitboxes, interruption and exact PM frames still need
+implementation/acceptance. Do not mark full Falcon Kick or PM parity complete.
+
 ## Remaining source limits
 
 Recovered `pm-falcon-kit.md` asserts that missing PM changelog entries make Melee values

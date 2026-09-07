@@ -4,12 +4,11 @@
 use crate::v1::chars::kneeman;
 use crate::v1::{CharSpec, SpecialMove};
 
-/// KneeMan's kit, but the up-B (special slot 2) is the stationary command grab
-/// (`SpecialMove::FALCON_DIVE`, `SpecialKind::DiveGrab`) instead of the default Rise
-/// recovery. THIS is the char seam for the command grab -- the move is gated purely on
-/// `specials[2].kind == DiveGrab`, which `char_id` selects via the roster row.
+/// KneeMan's kit with DiveGrab up-special and jump-restoring down-special.
+/// Kick still uses the authored DROP motion/hit data; full PM phases remain unported.
 pub fn spec() -> CharSpec {
     let mut s = kneeman::spec();
     s.specials[2] = SpecialMove::FALCON_DIVE;
+    s.specials[3] = SpecialMove::FALCON_KICK;
     s
 }

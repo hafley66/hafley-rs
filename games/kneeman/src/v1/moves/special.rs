@@ -50,6 +50,8 @@ pub enum SpecialKind {
     // routes it out of the normal launch pipeline on entry, and `resolve_grab`
     // owns the catch/latch/explosion. Appended at the enum's END: bincode is positional (never reorder).
     DiveGrab,
+    // Appended for positional bincode compatibility. Restores jumps only on airborne completion.
+    FallRefreshJump,
 }
 
 #[derive(Copy, Clone, PartialEq, Serialize, Deserialize)]
@@ -72,6 +74,8 @@ pub struct SpecialMove {
 }
 
 impl SpecialMove {
+    // Provisional kick loadout: retain authored DROP motion/hit data until phase-specific port.
+    pub(crate) const FALCON_KICK: Self = Self { kind: SpecialKind::FallRefreshJump, ..Self::DROP };
     // Default kit (Falcon-ish): heavy neutral-B punch, a side lunge, a rising recovery, a down drive.
     pub(crate) const PUNCH: Self = Self {
         kind: SpecialKind::Punch,
@@ -306,7 +310,7 @@ pub(crate) fn run_special(n: &mut Fighter, slot: usize, i: &InputFrame, t: &Tune
                 n.fast_falling = false;
                 n.ground_plat = -1;
             }
-            SpecialKind::Fall => n.vel = Vector2::new(n.facing * m.move_x, m.move_y),
+            SpecialKind::Fall | SpecialKind::FallRefreshJump => n.vel = Vector2::new(n.facing * m.move_x, m.move_y),
             // DiveGrab is routed out at the top of `run_special` (stationary command grab), so it
             // never reaches this launch dispatch; the arm exists only for match exhaustiveness.
             SpecialKind::DiveGrab => {}
@@ -349,6 +353,9 @@ pub(crate) fn run_special(n: &mut Fighter, slot: usize, i: &InputFrame, t: &Tune
         n.vel.x = move_toward(n.vel.x, 0.0, t.ground_friction * DT);
     }
     if n.frame >= m.hit.total() - 1 {
+        if m.kind == SpecialKind::FallRefreshJump && !n.grounded() {
+            n.air_jumps = t.max_air_jumps.clamp(0, u8::MAX as i64) as u8;
+        }
         n.state = if m.kind == SpecialKind::Rise && !n.grounded() {
             CharState::Helpless
         } else if !n.grounded() {

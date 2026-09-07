@@ -13,6 +13,50 @@ fn idle() -> InputFrame {
     InputFrame::default()
 }
 
+#[test]
+fn falcon_air_kick_restores_jump_after_completion_and_replays() {
+    for char_id in [0, 2] {
+        for facing in [-1.0, 1.0] {
+            let tune = Tune::default();
+            let mut state = SimState::spawn();
+            state.fighters[0].char_id = char_id;
+            state.fighters[0].pos = Vector2::new(1100.0, 0.0);
+            state.fighters[0].state = CharState::Air;
+            state.fighters[0].ground_plat = -1;
+            state.fighters[0].ground_ink = -1;
+            state.fighters[0].facing = facing;
+            let mut replay = state;
+            let mut completed = false;
+            for tick in 0..60 {
+                let input = net::decode(net::encode(&InputFrame {
+                    jump: tick == 0 || tick == 45,
+                    special: tick == 3,
+                    aim_y: if tick == 3 { 1.0 } else { 0.0 },
+                    ..idle()
+                }));
+                let before = state.fighters[0];
+                state = step(&state, &[&input, &idle()], &tune);
+                replay = step(&replay, &[&input, &idle()], &tune);
+                assert_eq!(net::checksum(&state), net::checksum(&replay));
+                if tick == 20 { replay = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap(); }
+                let fighter = state.fighters[0];
+                if tick == 0 { assert_eq!(fighter.air_jumps, 0); }
+                if fighter.state == CharState::SpecialD { assert_eq!(fighter.air_jumps, 0); }
+                if before.state == CharState::SpecialD && fighter.state == CharState::Air {
+                    completed = true;
+                    assert_eq!(fighter.air_jumps, u8::from(char_id == 2));
+                }
+                if tick == 45 {
+                    assert!(completed);
+                    assert_eq!(fighter.air_jumps, 0);
+                    assert_eq!(fighter.vel.y < 0.0, char_id == 2);
+                }
+            }
+            assert!(completed);
+        }
+    }
+}
+
 /// Build a frame by mutating the neutral default — `press(|i| i.attack = true)`.
 fn press(f: impl FnOnce(&mut InputFrame)) -> InputFrame {
     let mut i = InputFrame::default();

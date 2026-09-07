@@ -652,6 +652,18 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    with interruption/landing cases, without changing KneeMan's inherited Fall behavior.
    This inventory changed no runtime or deployment and required no compiler/browser run.
    Physical/cross-network devices and exact Project M move data remain unverified.
+   Kick restoration follow-up traced the Melee callback: SpecialAirLw_Anim calls
+   ftCommon_8007D5D4 at entry to the ending animation; that helper sets jumps used to one.
+   Source links and the Game3 timing difference are recorded in docs/3_pm_baseline.md.
+   Falcon now selects an appended FallRefreshJump kind for its down-special; airborne
+   completion restores configured air jumps. Motion/hit data remain the inherited DROP data.
+   A 60-tick semantic-input test spends jump -> down-special -> jumps again, both facings,
+   with KneeMan as a non-restoring control and full-state replay after mid-move restoration.
+   The test failed before implementation; native receipts: /private/tmp/game3-kick-before.log
+   and /private/tmp/game3-kick-tests.log. Runtime/test delta: +55/-5 across three files.
+   Publication pending. Next: ground/air/interruption and loadout-isolation cases, then browser
+   and online checks including mixed-build startup rejection for the appended enum variant.
+   This partial restoration does not complete Falcon Kick's separate travel/end/landing phases.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
