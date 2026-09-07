@@ -15,9 +15,14 @@ fn idle() -> InputFrame {
 
 #[test]
 fn falcon_air_kick_restores_jump_after_completion_and_replays() {
-    for char_id in [0, 2] {
+    for (char_id, restores) in [(0, false), (2, true), (0, true), (2, false)] {
         for facing in [-1.0, 1.0] {
-            let tune = Tune::default();
+            let mut tune = Tune::default();
+            if restores != (char_id == 2) {
+                let kind = if restores { SpecialKind::FallRefreshJump } else { SpecialKind::Fall };
+                if char_id == 0 { tune.specials[3].kind = kind; }
+                else { std::sync::Arc::make_mut(&mut tune.roster)[chars::art_slot_row(char_id)].specials[3].kind = kind; }
+            }
             let mut state = SimState::spawn();
             state.fighters[0].char_id = char_id;
             state.fighters[0].pos = Vector2::new(1100.0, 0.0);
@@ -44,16 +49,54 @@ fn falcon_air_kick_restores_jump_after_completion_and_replays() {
                 if fighter.state == CharState::SpecialD { assert_eq!(fighter.air_jumps, 0); }
                 if before.state == CharState::SpecialD && fighter.state == CharState::Air {
                     completed = true;
-                    assert_eq!(fighter.air_jumps, u8::from(char_id == 2));
+                    assert_eq!(fighter.air_jumps, u8::from(restores));
                 }
                 if tick == 45 {
                     assert!(completed);
                     assert_eq!(fighter.air_jumps, 0);
-                    assert_eq!(fighter.vel.y < 0.0, char_id == 2);
+                    assert_eq!(fighter.vel.y < 0.0, restores);
                 }
             }
             assert!(completed);
         }
+    }
+}
+
+#[test]
+fn kick_jump_restore_requires_airborne_completion_and_survives_interruption() {
+    let tune = Tune::default().for_char(2);
+    for grounded in [false, true] {
+        for remaining in [0, 1] {
+            let mut fighter = SimState::spawn().fighters[0];
+            fighter.state = CharState::SpecialD;
+            fighter.ground_plat = if grounded { 0 } else { -1 };
+            fighter.ground_ink = -1;
+            fighter.air_jumps = remaining;
+            fighter.frame = tune.specials[3].hit.total() - 2;
+            run_special(&mut fighter, 3, &idle(), &tune);
+            assert_eq!(fighter.air_jumps, remaining);
+            fighter.frame += 1;
+            run_special(&mut fighter, 3, &idle(), &tune);
+            assert_eq!(fighter.air_jumps, if grounded { remaining } else { 1 });
+        }
+    }
+    // Restored interruption snapshot: a hit has replaced SpecialD with Launched before completion.
+    let mut state = SimState::spawn();
+    let fighter = &mut state.fighters[0];
+    fighter.char_id = 2;
+    fighter.pos = Vector2::new(1100.0, -200.0);
+    fighter.state = CharState::Launched;
+    fighter.ground_plat = -1;
+    fighter.ground_ink = -1;
+    fighter.air_jumps = 0;
+    fighter.hitstun = 30;
+    let mut replay: SimState = bincode::deserialize(&bincode::serialize(&state).unwrap()).unwrap();
+    for _ in 0..20 {
+        state = step(&state, &[&idle(), &idle()], &Tune::default());
+        replay = step(&replay, &[&idle(), &idle()], &Tune::default());
+        assert_eq!(net::checksum(&state), net::checksum(&replay));
+        assert_eq!(state.fighters[0].air_jumps, 0);
+        assert!(!state.fighters[0].grounded());
     }
 }
 

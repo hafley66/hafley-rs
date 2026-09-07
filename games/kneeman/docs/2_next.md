@@ -664,6 +664,16 @@ when a concrete gameplay case requires it; avoid a separate document/parser arch
    Publication pending. Next: ground/air/interruption and loadout-isolation cases, then browser
    and online checks including mixed-build startup rejection for the appended enum variant.
    This partial restoration does not complete Falcon Kick's separate travel/end/landing phases.
+   Boundary/loadout follow-up: the existing 60-tick test also swaps only the down-special
+   kind, enabling restoration for KneeMan and disabling it for Falcon. Both facings follow
+   the selected data and retain per-tick checksum replay. Direct move-boundary checks with
+   0/1 remaining jumps verify no restoration one frame early, no additional restoration while
+   grounded, and restoration on airborne completion. A serialized Launched/hitstun snapshot
+   retains zero jumps across 20 airborne replay ticks; this models the interrupted state,
+   not an actual attack connecting during the kick. 437 game + 76 shell tests pass;
+   /private/tmp/game3-kick-boundary-tests.log. Test-only change; no runtime/deployment change.
+   Browser and mixed-build startup gates remain pending, as do actual hit interruption,
+   landing during kick and the separate ground/air move phases.
    Online was not rerun for this debugger-only change; the preceding published-runtime
    receipt remains the latest online evidence. Physical devices and PM parity remain open.
 4. Debugger now exposes Falcon jump-grab and a generic Replay step for recorded input traces.
