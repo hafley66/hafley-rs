@@ -3,6 +3,7 @@ pub mod collision;
 #[path = "1_state.rs"]
 pub mod state;
 #[path = "2_ggrs.rs"]
+#[cfg(feature = "rollback")]
 pub mod ggrs_lab;
 #[path = "3_sql.rs"]
 pub mod sql;

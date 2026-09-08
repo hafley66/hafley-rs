@@ -19,17 +19,25 @@ var faults := false
 var external := false
 var controlled := false
 var control_demo := false
+var touch_left := false
+var touch_right := false
+var touch_buttons := 0
+var web_inspect := false
 var injected := [false, false, false]
 var fault_note := "FAULTS ARMED: MAIN / PROCESS / RENDER THREAD"
 
 func _ready():
 	if not ClassDB.class_exists("FalconSql"):
-		assert(GDExtensionManager.load_extension("res://0_falcon.gdextension") == GDExtensionManager.LOAD_STATUS_OK)
+		var loaded := GDExtensionManager.load_extension("res://0_falcon.gdextension")
+		assert(loaded == GDExtensionManager.LOAD_STATUS_OK)
 	extension = ClassDB.instantiate("FalconSql")
 	assert(extension.proof_version() == "falcon-sql-gdext-1")
 	external = "--external" in OS.get_cmdline_user_args()
 	control_demo = "--control-demo" in OS.get_cmdline_user_args()
-	controlled = control_demo or "--control" in OS.get_cmdline_user_args()
+	if OS.has_feature("web"):
+		control_demo = bool(JavaScriptBridge.eval("window.FALCON_DEMO === true"))
+		web_inspect = bool(JavaScriptBridge.eval("new URL(location.href).searchParams.has('inspect')"))
+	controlled = control_demo or "--control" in OS.get_cmdline_user_args() or OS.has_feature("web")
 	incremental = "--incremental" in OS.get_cmdline_user_args()
 	faults = "--faults" in OS.get_cmdline_user_args()
 	scheduled = faults or "--scheduled" in OS.get_cmdline_user_args()
@@ -86,6 +94,36 @@ func _ready():
 	captions[5].text = "3D LINE MESH / SQL ROWS + MESH UPLOAD VERIFIED"
 	captions[9].text = "0.5X + HOLDS / SCRIPTED TRAVEL / PM + MELEE KB + RAPIER"
 	print("GDEXT_STAGE_READY runtime=", Engine.get_version_info().string)
+	if OS.has_feature("web"):
+		for i in [7, 8, 9]:
+			captions[i].hide()
+		var bar := HBoxContainer.new()
+		bar.position = Vector2(24, 482)
+		bar.size = Vector2(912, 44)
+		canvas.add_child(bar)
+		for title in ["Left", "Right", "Jump", "Fair", "Reset", "Proof"]:
+			var button := Button.new()
+			button.text = title
+			button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			button.focus_mode = Control.FOCUS_NONE
+			bar.add_child(button)
+			match title:
+				"Left":
+					button.button_down.connect(func(): touch_left = true)
+					button.button_up.connect(func(): touch_left = false)
+				"Right":
+					button.button_down.connect(func(): touch_right = true)
+					button.button_up.connect(func(): touch_right = false)
+				"Jump":
+					button.button_down.connect(func(): touch_buttons |= 1)
+					button.button_up.connect(func(): touch_buttons &= ~1)
+				"Fair":
+					button.button_down.connect(func(): touch_buttons |= 2)
+					button.button_up.connect(func(): touch_buttons &= ~2)
+				"Reset":
+					button.pressed.connect(func(): JavaScriptBridge.eval("location.search = ''"))
+				"Proof":
+					button.pressed.connect(func(): JavaScriptBridge.eval("location.search = '?demo=1'"))
 
 func _upload_and_acknowledge(frame: Payload.FramePayload, generation: int) -> void:
 	var arrays := []
@@ -99,7 +137,8 @@ func _upload_and_acknowledge(frame: Payload.FramePayload, generation: int) -> vo
 	receipt.generation = generation
 	receipt.rows = frame.rows
 	receipt.vertices = uploaded[Mesh.ARRAY_VERTEX]
-	assert(extension.acknowledge(receipt.to_wire()))
+	var acknowledged: bool = extension.acknowledge(receipt.to_wire())
+	assert(acknowledged)
 
 func _process(_delta):
 	if controlled:
@@ -114,7 +153,8 @@ func _process(_delta):
 		return
 	if remaining == 0:
 		if tick == 179:
-			assert(extension.finish())
+			var finished: bool = extension.finish()
+			assert(finished)
 			assert(video_frames == 824)
 			print("GODOT_CAPTURE_OK frames=", video_frames)
 			get_tree().quit(0)
@@ -230,7 +270,8 @@ func _process_scheduled():
 	if displayed_tick == 179:
 		finish_hold -= 1
 		if finish_hold == 0:
-			assert(extension.finish_scheduled())
+			var finished: bool = extension.finish_scheduled()
+			assert(finished)
 			print("SCHEDULE_CAPTURE_OK observed_video_frames=", video_frames)
 			get_tree().quit(0)
 			set_process(false)
@@ -267,19 +308,21 @@ func _physics_process(_delta):
 		get_tree().quit(0)
 		return
 	var input := Payload.ControlInput.new()
-	input.buttons = int(Input.is_physical_key_pressed(KEY_SPACE)) | (int(Input.is_physical_key_pressed(KEY_J)) << 1)
-	input.axis = float(Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT)) - float(Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT))
+	input.buttons = touch_buttons | int(Input.is_physical_key_pressed(KEY_SPACE)) | (int(Input.is_physical_key_pressed(KEY_J)) << 1)
+	input.axis = float(touch_right or Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT)) - float(touch_left or Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT))
 	_control_step(input)
 
 func _process_control_demo():
 	if tick == extension.control_ticks() - 1 and remaining == 0:
 		if finish_hold == 60:
-			assert(extension.finish_controlled(OS.get_environment("FALCON_CONTROL_PROOF")))
+			var verified: bool = extension.finish_controlled(OS.get_environment("FALCON_CONTROL_PROOF"))
+			assert(verified)
 			captions[6].text = "SNAPSHOT REPLAY: 120 STATES EXACT / SQL + MESH EXACT"
 		finish_hold -= 1
 		if finish_hold == 0:
 			print("CONTROL_CAPTURE_OK")
-			get_tree().quit(0)
+			if not OS.has_feature("web"):
+				get_tree().quit(0)
 			set_process(false)
 		return
 	if remaining == 0:
@@ -294,6 +337,9 @@ func _control_step(input: Payload.ControlInput):
 	var meta := Rows.frame_values(frame.rows)
 	var target := Rows.target_values(frame.rows)
 	_upload_and_acknowledge(frame, state.renderer_generation)
+	if web_inspect:
+		JavaScriptBridge.eval("window.FALCON_STATUS = " + JSON.stringify(state.to_wire()))
+		JavaScriptBridge.eval("window.FALCON_META = " + JSON.stringify(meta))
 	captions[1].text = "TICK %03d / AXIS %+.1f / BUTTONS %d / SQL GEN %d" % [state.simulation_tick, state.input.axis, state.input.buttons, state.renderer_generation]
 	captions[2].text = "%s POSE %02d / PLAYER Z %.1f Y %.1f" % [["IDLE", "JUMP", "FAIR"][int(meta.action)], int(meta.pose)+1, meta.root_z, meta.root_y]
 	captions[3].text = "HITS %.0f / DAMAGE %.0f / BAG %s" % [meta.hits, meta.damage, ["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(target.phase)]]
@@ -303,3 +349,9 @@ func _control_step(input: Payload.ControlInput):
 	captions[7].text = "A/D OR ARROWS: MOVE / SPACE: JUMP / J: FAIR / ESC: EXIT"
 	captions[8].text = "RUST PARRY CONTACT / RAPIER BAG / PM POSES"
 	captions[9].text = "0.5X SCRIPTED DEMO / LAB MOVEMENT CURVE / SECOND FAIR MISSES" if control_demo else "60 HZ INPUT / LAB MOVEMENT CURVE / FACING RIGHT"
+
+func _notification(what):
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		touch_left = false
+		touch_right = false
+		touch_buttons = 0

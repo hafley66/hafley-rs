@@ -38,6 +38,29 @@ play:
 test-controls:
     sh 91_run_control.sh --test
 
+web-build:
+    sh 95_web.sh build
+
+web-check:
+    sh 95_web.sh check
+
+web-plan:
+    sh 95_web.sh plan
+
+web-verify:
+    node 94_web/4_browser.mjs
+
+# Publishes only the exact browser-verified export, preserving a remote backup.
+web-publish:
+    node 94_web/5_publish.mjs
+
+# Sequential gates; publishing rejects artifacts changed after the browser test.
+web-deploy: test web-build web-verify web-publish
+
+web-setup:
+    pnpm --dir 94_web install --frozen-lockfile
+    pnpm --dir 94_web exec playwright install chromium
+
 # live includes baseline, pause/restart, and cold attachment recordings.
 record mode="live":
     #!/usr/bin/env bash
