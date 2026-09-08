@@ -28,7 +28,10 @@ pub(crate) fn load() -> Result<Vec<HighLevelSubaction>, Error> {
     ]
     .iter()
     .map(|file| {
-        let html = std::fs::read_to_string(format!("../fixtures/falcon/{file}"))?;
+        let html = std::fs::read_to_string(format!(
+            "{}/../fixtures/falcon/{file}",
+            env!("CARGO_MANIFEST_DIR")
+        ))?;
         let payload = html
             .split("const fighter_subaction_data = \"")
             .nth(1)

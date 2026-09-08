@@ -5,7 +5,7 @@ mod baseline;
 #[path = "1a_sandbag.rs"]
 mod sandbag;
 #[path = "21_sql_viewer.rs"]
-mod sql_viewer;
+pub(crate) mod sql_viewer;
 use baseline::{Tick, gpu, text};
 use brawllib_rs::high_level_fighter::{CollisionBoxValues, HighLevelSubaction};
 use ggrs::{
@@ -614,6 +614,16 @@ fn render(actions: &[HighLevelSubaction], trace: &[[Display; 2]], id: usize) -> 
         }
     }
     capture.finish()
+}
+
+#[allow(dead_code)]
+pub(crate) fn host_fixture(
+    consume: impl FnMut(&[sql_viewer::boundary::Row], &serde_json::Value) -> Result<(), Error>,
+) -> Result<(), Error> {
+    let actions = baseline::load()?;
+    let trace = run(&actions, true, true)?;
+    verify(&actions, &trace)?;
+    sql_viewer::execute_with(&trace, false, consume)
 }
 
 fn main() -> Result<(), Error> {
