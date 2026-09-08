@@ -39,11 +39,23 @@ pub struct Sandbag {
 // Full Rapier durable state is copied, including solver/contact state.
 // This deliberately allocation-heavy snapshot fixture is not a hot-buffer benchmark.
 impl Clone for Sandbag {
+    #[tracing::instrument(
+        target = "falcon::snapshot",
+        name = "physics_clone",
+        level = "trace",
+        skip_all
+    )]
     fn clone(&self) -> Self {
         serde_json::from_slice(&serde_json::to_vec(self).unwrap()).unwrap()
     }
 }
 impl PartialEq for Sandbag {
+    #[tracing::instrument(
+        target = "falcon::verification",
+        name = "physics_equal",
+        level = "trace",
+        skip_all
+    )]
     fn eq(&self, other: &Self) -> bool {
         serde_json::to_vec(self).unwrap() == serde_json::to_vec(other).unwrap()
     }
@@ -93,6 +105,7 @@ impl Default for Sandbag {
 }
 
 impl Sandbag {
+    #[tracing::instrument(target = "falcon::physics", level = "trace", skip_all, fields(damage = hit.damage, percent_before))]
     pub fn launch(&mut self, hit: &Attack, percent_before: f32) {
         let target = Attributes::MARIO; // Only name/weight are read by this knockback helper; weight=100.
         self.knockback = calc::knockback(
@@ -125,6 +138,12 @@ impl Sandbag {
         self.grounded = false;
     }
 
+    #[tracing::instrument(
+        target = "falcon::physics",
+        name = "physics_step",
+        level = "trace",
+        skip_all
+    )]
     pub fn advance(&mut self) {
         if self.phase == Phase::Hovering {
             return;

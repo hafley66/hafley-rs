@@ -120,6 +120,7 @@ pub struct Display {
     pub total_loads: usize,
     pub presented: Vec<Vec<sql_viewer::boundary::Row>>,
 }
+#[tracing::instrument(target = "falcon::rollback", level = "trace", skip_all, fields(tick = world.frame))]
 fn checksum(world: &World) -> u128 {
     bincode::serde::encode_to_vec(world, bincode::config::standard())
         .unwrap()
@@ -144,11 +145,16 @@ fn handle(
     for request in requests {
         match request {
             GgrsRequest::SaveGameState { cell, frame } => {
+                let _span = tracing::trace_span!(target: "falcon::rollback", "save", tick = frame)
+                    .entered();
                 assert_eq!(frame, world.frame);
                 cell.save(frame, Some(world.clone()), Some(checksum(world)));
                 saved.push(frame);
             }
             GgrsRequest::LoadGameState { cell, frame } => {
+                let _span =
+                    tracing::debug_span!(target: "falcon::rollback", "restore", tick = frame)
+                        .entered();
                 *world = cell.load().unwrap();
                 assert_eq!(world.frame, frame);
                 restored.push(frame);
@@ -247,6 +253,7 @@ impl<'a> Runtime<'a> {
     pub fn tick(&self) -> usize {
         self.tick
     }
+    #[tracing::instrument(target = "falcon::runtime", level = "debug", skip_all, fields(tick = self.tick, input = bits))]
     pub fn advance(&mut self, bits: u8) -> Result<[Display; 2], Error> {
         let tick = self.tick;
         self.bus.lock().unwrap().tick = tick;
@@ -255,24 +262,27 @@ impl<'a> Runtime<'a> {
         }
         let mut displays = Vec::new();
         for id in 0..2 {
+            let _span =
+                tracing::debug_span!(target: "falcon::rollback", "peer", peer = id).entered();
             assert_eq!(self.peers[id].current_frame(), tick as i32);
             self.peers[id].add_local_input(id, if id == 0 { bits } else { 0 })?;
             let requests = self.peers[id].advance_frame()?;
-            let mut display = handle(
+            let mut peer_display = handle(
                 &mut self.worlds[id],
                 requests,
                 self.actions,
                 &mut self.loads[id],
                 &self.baked,
             );
-            display.confirmed = self.peers[id].confirmed_frame();
-            for frame in &mut display.presented {
-                frame[0].values[15] = display.restored.first().copied().unwrap_or(-1) as f64;
-                frame[0].values[16] = display.advances as f64;
-                frame[0].values[17] = display.total_loads as f64;
-                frame[0].values[18] = display.confirmed as f64;
+            peer_display.confirmed = self.peers[id].confirmed_frame();
+            tracing::debug!(target: "falcon::rollback", advances = peer_display.advances, restores = peer_display.restored.len(), saves = peer_display.saved.len(), confirmed = peer_display.confirmed, "requests_executed");
+            for frame in &mut peer_display.presented {
+                frame[0].values[15] = peer_display.restored.first().copied().unwrap_or(-1) as f64;
+                frame[0].values[16] = peer_display.advances as f64;
+                frame[0].values[17] = peer_display.total_loads as f64;
+                frame[0].values[18] = peer_display.confirmed as f64;
             }
-            displays.push(display);
+            displays.push(peer_display);
         }
 
         self.tick += 1;
@@ -627,6 +637,7 @@ pub(crate) fn incremental_host(
 }
 
 pub fn run_cli() -> Result<(), Error> {
+    baseline::telemetry::init();
     let actions = baseline::load()?;
     let sql = std::env::args().any(|arg| arg == "--sql");
     let launch = sql || std::env::args().any(|arg| arg == "--launch");

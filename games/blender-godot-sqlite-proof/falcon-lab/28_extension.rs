@@ -84,6 +84,7 @@ impl FalconSql {
 
     #[func]
     fn start(&mut self) {
+        fixture::baseline::telemetry::init();
         assert!(self.bridge.is_none());
         self.reference = serde_json::from_slice(
             &std::fs::read(concat!(
@@ -96,7 +97,11 @@ impl FalconSql {
         let (requests, request_rx) = mpsc::sync_channel(1);
         let (response_tx, responses) = mpsc::sync_channel(1);
         let incremental = self.incremental;
+        let dispatch = tracing::dispatcher::get_default(Clone::clone);
+        let parent = tracing::Span::current();
         let worker = std::thread::spawn(move || {
+            let _dispatch = tracing::dispatcher::set_default(&dispatch);
+            let _parent = parent.enter();
             if incremental {
                 return fixture::incremental_host(
                     || Ok(request_rx.recv()?),
@@ -137,6 +142,7 @@ impl FalconSql {
 
     #[func]
     fn start_scheduled(&mut self) {
+        fixture::baseline::telemetry::init();
         assert!(self.bridge.is_none() && self.scheduled.is_none());
         let shared = crate::schedule::State::default();
         let worker = crate::schedule::spawn(shared.clone(), self.faults);
@@ -153,6 +159,7 @@ impl FalconSql {
     }
 
     #[func]
+    #[tracing::instrument(target = "falcon::godot", level = "trace", skip_all, fields(consume))]
     fn poll_scheduled(&mut self, consume: bool) -> VarDictionary {
         assert!(self.pending.is_none());
         let scheduled = self.scheduled.as_ref().unwrap();
@@ -279,6 +286,7 @@ impl FalconSql {
         self.deliver(packet)
     }
 
+    #[tracing::instrument(target = "falcon::godot", level = "trace", skip_all, fields(rows = packet.rows.len() / 27, lines = packet.lines.len()))]
     fn deliver(&mut self, packet: Packet) -> VarDictionary {
         let vertices: PackedVector3Array = packet
             .lines
@@ -302,6 +310,7 @@ impl FalconSql {
     }
 
     #[func]
+    #[tracing::instrument(target = "falcon::godot", level = "trace", skip_all, fields(generation, vertices = vertices.len()))]
     fn acknowledge(
         &mut self,
         generation: i64,

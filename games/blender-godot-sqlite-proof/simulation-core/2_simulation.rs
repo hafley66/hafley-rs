@@ -35,6 +35,7 @@ pub fn fixture_input(tick: i32) -> u8 {
     }
 }
 
+#[tracing::instrument(target = "falcon::simulation", level = "trace", skip_all, fields(tick = world.frame, input = bits))]
 pub fn advance_world(world: &mut World, bits: u8, actions: &[Action]) {
     if let Some(bag) = &mut world.bag {
         bag.advance();
@@ -140,9 +141,11 @@ impl Simulation {
     pub fn state(&self) -> &World {
         &self.world
     }
+    #[tracing::instrument(target = "falcon::snapshot", level = "trace", skip_all, fields(tick = self.world.frame))]
     pub fn save(&self) -> Snapshot {
         Snapshot(self.world.clone())
     }
+    #[tracing::instrument(target = "falcon::snapshot", level = "trace", skip_all, fields(tick = snapshot.0.frame))]
     pub fn load(&mut self, snapshot: &Snapshot) {
         self.world = snapshot.0.clone();
     }

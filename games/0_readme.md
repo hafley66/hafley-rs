@@ -28,6 +28,8 @@ or project, along with their tests, fixtures, and provenance. See [AGENTS.md](AG
   worker continues through paused consumption and exhausted SQL slots, then publishes corrected history.
 - [Thread and process faults](blender-godot-sqlite-proof/falcon-lab/63_fault_readme.md):
   main/render-thread delays, whole-process suspension, external tick audit, and exact recovery.
+- [Rust tracing](blender-godot-sqlite-proof/falcon-lab/65_tracing_readme.md):
+  structured execution spans, adapter-owned JSON subscribers, and worker context propagation.
 
 The Rust packages retain separate Cargo workspace roots and lockfiles. Parent
 `hafley-rs` workspace builds do not include these experimental dependencies.

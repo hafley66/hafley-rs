@@ -27,3 +27,26 @@ Keep visual proofs incremental and preserve earlier MP4s. On-screen labels must
 report actual state: action/pose, tick, inputs, prediction/confirmation, damage,
 and rollback activity where applicable. Label slowed playback and presentation
 holds separately from simulation time. Derive labels from executed trace data.
+
+## Rust tracing standard
+
+Use `tracing` for structured Rust diagnostics and spans at execution/effect
+boundaries: simulation steps, snapshot save/load, rollback replay, publication,
+SQL reads, engine transfer, and other measured work. Record scalar identifiers
+and counts such as tick, peer, input bits, generation, rows, and replay count.
+Use `skip_all` on instrumented functions and explicitly select fields. Never
+Debug-format worlds, assets, geometry, or snapshots into telemetry.
+
+Reusable libraries emit spans/events and never install a global subscriber.
+Executables and engine adapters own subscriber/filter/output setup, respect an
+existing host subscriber, and propagate tracing context into spawned workers.
+Keep per-tick diagnostics at debug/trace, with runtime filtering; do not require
+per-tick logging during ordinary captures or benchmarks. Keep span guards scoped
+to synchronous work and out of sleeps, waits, and GPU synchronization unless
+the span explicitly measures that wait. Never hold an entered guard across await.
+
+Existing machine-consumed stdout protocols may retain their markers until their
+consumers migrate. New diagnostics use structured tracing rather than ad hoc
+prints. Test emitted fields and span relationships. Performance claims must
+separate tracing-enabled overhead from the workload; tracing alone does not
+measure allocation counts, allocated bytes, RSS, or memory bandwidth.

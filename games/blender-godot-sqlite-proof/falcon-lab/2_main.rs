@@ -376,7 +376,11 @@ fn verify(actions: &[HighLevelSubaction], trace: &[Tick]) {
     );
 }
 
+#[path = "0_tracing.rs"]
+pub(crate) mod telemetry;
+
 fn main() -> Result<(), Error> {
+    telemetry::init();
     let actions = load()?;
     let trace = simulate(&actions, TARGET);
     verify(&actions, &trace);

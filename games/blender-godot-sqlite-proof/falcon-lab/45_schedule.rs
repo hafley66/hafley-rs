@@ -181,13 +181,21 @@ pub fn run(
 
 #[cfg(feature = "gdext")]
 pub fn spawn(shared: State, faults: bool) -> std::thread::JoinHandle<Result<Vec<Status>, String>> {
+    let dispatch = tracing::dispatcher::get_default(Clone::clone);
+    let parent = tracing::Span::current();
     std::thread::spawn(move || {
+        let _dispatch = tracing::dispatcher::set_default(&dispatch);
+        let worker =
+            tracing::info_span!(target: "falcon::worker", parent: &parent, "worker", faults);
+        // Lifecycle span includes pacing waits. Per-operation spans measure work.
+        let _worker = worker.enter();
         let mut start = None;
         run(!faults, &shared, |tick| {
             let start = *start.get_or_insert_with(Instant::now);
             // 1/60 simulation steps at 25 steps/second for legible capture.
             let due = start + Duration::from_millis(tick as u64 * 40);
             std::thread::sleep(due.saturating_duration_since(Instant::now()));
+            tracing::debug!(target: "falcon::worker", parent: &worker, tick, elapsed_us = start.elapsed().as_micros() as u64, "tick_due");
             if faults {
                 println!("WORKER_TICK {tick} {}", start.elapsed().as_micros());
             }
