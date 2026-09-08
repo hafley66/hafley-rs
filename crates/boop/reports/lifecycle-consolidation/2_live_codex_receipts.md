@@ -2,6 +2,60 @@
 
 Work in progress. Actual transcript receipts are listed separately from queue admission.
 
+## Current executable matrix, run 256
+
+The central four-harness command completed with a nonzero aggregate result.
+Source implementation: `6230786`; exact frozen executable hashes and commands
+are in each entry’s numbered launch manifests. Native receipt assertions include
+route kind, parent, pane/PID, thread, trace, model/effort, intended TUI display,
+accepted delivery and two AlreadyAccepted retries with unchanged counts.
+
+| Shared scenario | Claude | Codex | OpenCode | ccz |
+| --- | --- | --- | --- | --- |
+| `native_executable` | PASS | PASS | PASS | PASS |
+| `fresh_wrapper_identity` | PASS | PASS | PASS | PASS |
+| `idle_receipt_and_accepted_retry` | PASS | PASS | PASS | PASS |
+| `busy_receipt` | PASS | PASS | PASS | PASS |
+| `exit_and_resume_across_processes` | PASS | PASS | PASS | PASS |
+| `stale_route` | PASS | PASS | PASS | PASS |
+| `compact` | PASS | PASS | PASS | PASS |
+| `resume_after_compact` | PASS | PASS | PASS | PASS |
+| `model_and_effort_change` | BLOCKED | PASS | BLOCKED | BLOCKED |
+| `settings_across_resume` | BLOCKED | PASS | BLOCKED | BLOCKED |
+| `abnormal_exit` | PASS | PASS | PASS | PASS |
+| `backend_restart` | UNSUPPORTED | PASS | PASS | UNSUPPORTED |
+| `clear_new_session` | PASS | PASS | FAIL | PASS |
+| `resume_after_clear` | PASS | PASS | BLOCKED | PASS |
+| `concurrent_session_isolation` | PASS | PASS | PASS | PASS |
+| `child_completion_parent_receipt` | PASS | PASS | PASS | PASS |
+| `concurrent_process_cleanup` | PASS | PASS | PASS | PASS |
+| `process_cleanup` | PASS | PASS | PASS | PASS |
+
+Matrices: `claude-36005/matrix.json`, `codex-52478/matrix.json`,
+`opencode-72907/matrix.json`, `ccz-92874/matrix.json`. Condensed machine results:
+`263_four-harness-results.json`. Codex passed in 183.02 seconds; Claude, OpenCode
+and ccz completed in 173.62, 244.02 and 190.81 seconds respectively.
+
+Claude/ccz settings are BLOCKED because installed controls persist user defaults;
+restoration of the two keys changed by trial 201 is still pending. Their direct
+native launch plan has no separately owned backend, hence UNSUPPORTED for that
+specific backend-restart operation. Frontend crash/resume is verified.
+
+OpenCode clear is FAIL: the TUI returned home but its route did not rebind within
+25 seconds. The driver exited that test frontend, explicitly resumed the prior
+conversation, and continued isolation/completion checks. Its settings controls
+are unverified. No failed or blocked row contributes to a passing entry result.
+
+The ccz isolation failure in trial 241 remains recorded in handoff. Current
+Claude/ccz launch arguments restrict built-in tools to Bash and exclude MCP.
+Native tool audits `263_claude-tool-isolation.json` and
+`263_ccz-tool-isolation.json` found only Bash in the recorded current threads.
+
+OpenCode installed `/doc` was captured from the test-owned backend in
+`shared-live/opencode-85957/native-api.json`. It includes session model controls.
+Native slash commands are documented in [OpenCode TUI documentation](https://opencode.ai/docs/tui/);
+documentation alone does not establish live execution or binding correctness.
+
 ## Incident reproduction, before changes
 
 Installed Boop SHA-256:

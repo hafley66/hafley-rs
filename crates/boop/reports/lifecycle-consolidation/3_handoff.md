@@ -1,271 +1,191 @@
 # Task state and join instructions
 
-Work in progress, 2026-09-08. Base `66cbe8e`; branch `refactor/boop-lifecycle-consolidation`.
-No merge, push or global install. Worktree: `/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/boop-lifecycle-consolidation`.
-Dedicated CARGO_TARGET_DIR: `/private/tmp/boop-lifecycle-consolidation-target`.
-Raw receipts: `/private/tmp/boop-lifecycle-consolidation-proof-01a08191`.
+## Current checkpoint
 
-Audit lane `refactor-boop-lifecycle-consolidation`, pane `%1811`, pane PID `22078`,
-remains live. Audit thread `01a08191-263d-7971-b11b-10b44d4bbd09` has observed
-model `gpt-6-astra`, effort `max`. Parent: `sprefa-ivm-extract-parent`.
-Join outside tmux: `tmux attach-session -t refactor-boop-lifecycle-consolidation`.
-Join inside tmux: `tmux switch-client -t refactor-boop-lifecycle-consolidation`.
-The CLI has no `beep lane join`. This lane stays open while work remains.
+Implementation head: `6230786`. The full deterministic gate passed in
+`254_central-deterministic.log`. The central four-harness live command completed
+in `256_four-harness-live.log`: Codex passed all 18 rows in 183 seconds.
+Claude/ccz passed supported lifecycle rows with the two settings rows BLOCKED;
+their separate-backend operation is UNSUPPORTED. OpenCode passed other rows,
+failed clear binding, and has settings/resume-after-clear BLOCKED. Exact results
+and paths are in `263_four-harness-results.json` and report 2.
+
+Worktree:
+`/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/boop-lifecycle-consolidation`.
+Branch: `refactor/boop-lifecycle-consolidation`, base `66cbe8e`.
+No merge, push or global install. Main checkout and other lanes remain user-owned.
+
+Dedicated target: `/private/tmp/boop-lifecycle-consolidation-target`.
+Raw receipts: `/private/tmp/boop-lifecycle-consolidation-proof-01a08191`.
+Preserve the report edits and any active test invocation when resuming this task.
+
+### Continuation after the effort correction
+
+The full live invocation has ended and its fixtures have been cleaned up. The
+scoped restart helper is `266_restart_audit.py`, with planned command in `261`.
+Its result will be `266_audit-relaunch-result.json`. Before further edits, check
+that the new native turn actually records Astra/max and that the lane is live.
+Then continue the original brief: resolve OpenCode settings controls and its
+clear/new observer through the existing adapter/protocol boundary, and investigate
+an isolated authenticated Claude settings path. Do not rerun already passing
+scenarios without a source change or unresolved assertion that requires it.
+The Claude restoration question remains pending; do not guess the old keys.
+
+## Required corrections and remaining gaps
+
+1. **Audit effort does not meet the mandate.** Current native thread
+   `01a08191-263d-7971-b11b-10b44d4bbd09` reports `gpt-6-astra`, effort `low`
+   in `259_audit-model.json`. The actual pane launch command explicitly contains
+   `boop beep lane run ... --model 'gpt-6-astra' --effort 'low'`.
+   The supervisor exposes no verified running-session effort control. The lane
+   must be relaunched with `max`; no correction or retroactive max assurance is
+   claimed. Earlier max evidence belongs to the earlier process. Commit footers
+   written during this resumed turn said max; receipt `259` contradicts that
+   attribution. The native record is authoritative. A scoped relaunch plan in
+   `261_audit-relaunch-plan.json` changes only the task lane's effort argument;
+   it has not yet executed. Verify max in the next native turn before editing.
+2. **Claude defaults restoration is pending.** Trial `201`, test
+   `shared-live/claude-10568`, used native `/model claude-sonnet-4-6` and
+   `/effort high`. Claude persisted these to `~/.claude/settings.json`, violating
+   the no-user-config-mutation requirement. Current keys are
+   `model: "claude-sonnet-4-6"`, `effortLevel: "high"`. The August 20 backup
+   cannot establish their prior values. A user question is pending for those
+   exact two keys; restore only those keys when answered. Do not infer values
+   from an earlier native model or overwrite other settings.
+3. **Claude/ccz settings E2E remains BLOCKED.** The adapter disables controls
+   known to persist user defaults. A verified process-only control or isolated
+   authenticated settings store is required. No credentials were printed,
+   copied or replaced. Functional settings results from `201` are not passing
+   isolated assurance.
+4. **ccz isolation incident.** In `241`, test `ccz-54609`, the model ignored a
+   no-tools nonce prompt and invoked native `ListAgents` and `SendMessage`.
+   It addressed unrelated `gothic-cf` with `ACK_BOOP_E2E_ccz_54609_busy`.
+   This is an isolation FAIL. No follow-up, transcript inspection or cleanup
+   touched the unrelated session. Claude/ccz now launch with
+   `--tools Bash --strict-mcp-config`. Restricted run `ccz-76047` verified
+   busy delivery and live parent completion; `255_ccz-tool-isolation.json`
+   found only Bash in its recorded native threads.
+5. **OpenCode clear/new binding remains FAIL.** In `241`, native `/clear`
+   returned the TUI to its start screen while Boop retained the old thread ID.
+   The installed API/source has a navigation-request event
+   `tui.session.select`; no verified selected-session observation has been
+   established for local clear/new navigation. Do not send to the stale route
+   or infer identity from the latest same-cwd transcript. The shared driver
+   records failed clear, explicitly exits/resumes its prior test conversation,
+   and continues independent assertions.
+6. **OpenCode model/effort control remains BLOCKED.** Explicit launch-model
+   configuration and observed native model are verified. Its existing HTTP
+   session model API is captured in
+   `shared-live/opencode-85957/native-api.json`; in-session settings and variant
+   changes still need adapter operations and native execution assertions.
+7. **Remote acceptance crash window remains unverified.** Durable acceptance
+   prevents subsequent retries. A crash after remote acceptance but before the
+   local receipt remains ambiguous; no tested native idempotency key closes it.
+8. **Compatibility obligations remain visible.** Legacy sweep uses CASS and
+   cannot prove a session within a shared-database source path without a session
+   identifier. Public summary spellings share one implementation. Typed DB views
+   retain distinct projections. Report 0 records these boundaries and unverified
+   option combinations; supported features were not removed to lower counts.
+
+## Central commands and gates
+
+From this worktree:
+
+```bash
+CARGO_TARGET_DIR=/private/tmp/boop-lifecycle-consolidation-target just boop-check deterministic
+
+CARGO_TARGET_DIR=/private/tmp/boop-lifecycle-consolidation-target \
+BOOP_E2E_ROOT=/private/tmp/boop-lifecycle-consolidation-proof-01a08191 \
+BOOP_E2E_OPENCODE_MODEL=zai-coding-plan/glm-5.3-flash \
+just boop-check live
+```
+
+Each live invocation creates a fresh per-process diagnostic directory. The
+OpenCode model above was explicitly selected from the installed provider's
+advertised models in `236_opencode-models.txt`; provider rejection never selects
+another model silently. The script can select entries with
+`bash crates/boop/scripts/0_regression_gate.sh live codex`.
+
+`254` passed the seven affected packages, boop dl6 tests and no-default-features
+check. Boop default integration: 127 passed, 1 ignored. dl6 integration:
+130 passed, 2 ignored. Boop binary: 107 passed. Harness: 179 passed, 1 ignored.
+The six ACP authenticated/machine tests, one native Claude door test and
+authenticated integration tests remain explicitly ignored by deterministic mode.
+Their fixtures are not presented as live proof.
+
+Gate `234` had a lane-carcass timeout; its focused 6-test rerun `237` passed.
+Complete gates `242` and `254` subsequently passed. Before/after reproductions
+and historical gates remain in the raw receipt manifest.
+
+## Filesystem map
+
+- `crates/boop/scripts/0_regression_gate.sh`: central deterministic/live entry.
+- `justfile`, `.github/workflows/ci.yml`: discoverable command and deterministic CI.
+- `crates/boop/tests/4_lifecycle_gate.rs`: shared lifecycle scenarios/assertions,
+  native adapter operations, frozen executable, private tmux, receipts and cleanup.
+- `crates/boop/tests/1_harness_boundaries.rs`: syn architectural guard and inventory.
+- `crates/boop/src/cli/control.rs`: native wrapper ownership, typed observations,
+  binding, restart and existing pending-mail drain.
+- `crates/boop-harness/src/harness/`, `src/door/`: harness behavior and transports.
+- `crates/boop-acp/src/channel/`: existing ACP lane and ACPX channels.
+- `crates/boop-proc/src/deliver.rs`: canonical delivery admission and retry path.
+- `crates/boop-store/src/bus.rs`: route persistence and native-owned field update.
+- `crates/boop-proc/src/config.rs`: complete preset selection used by lane creation.
+- Reports `0` through `5`: feature inventory, boundaries, live receipts, this
+  handoff, receipt hashes and per-symbol AST inventory.
 
 ## Commits
 
-- `29fad26 fix(boop): preserve route ownership when binding existing panes`
-- `2376ef5 fix(boop-store): isolate trails and coalesce lifecycle observations`
-- `b815481 feat(boop): observe wrapped Codex lifecycle through owned connections`
-- `501d44c fix(boop): retain process observations and release owned TUI resources`
-- `f4480d1 fix(boop): isolate fixture readers and avoid telemetry mailbox writes`
-- `8b6097d`: adapter-owned model inference, hook settings, native
-  worktree discovery and ACPX transport; removed unused Codex transport modules,
-  duplicate dispatch/preview helpers and fan-out door implementation; architectural
-  guard and symbol inventory. Migration and compatibility table in report 1.
-- `d2cc152`: noninteractive passthrough, stable named ownership,
-  observed settings on automatic resume and atomic process detachment. Wrapper
-  regression passed (`108_wrapper-passthrough-after.log`), harness 171 passed / 1
-  ignored (`109_harness-wrapper-suite.log`), control 11 passed (`110_native-control-suite.log`).
-- Current delivery cluster: one route admission lock covers the transport and
-  acceptance receipt. Concurrent and later retries made three calls before
-  (`111_delivery-retry-before.log`) and one after (`112_delivery-retry-after.log`).
-  ACPX and all reachable fan-out legs now use the same ladder, budget and ack.
-  Child completions stay pending on a hold (`114_child-held-before.log`); swallowed
-  delivery errors no longer mark them delivered. Effort lookup now joins the
-  session dictionary (`113_observed-effort-before.log`).
-  Fork-inherited descriptors kept locks alive after close; the deterministic
-  failure is `118_inherited-lock-before.log`. RouteLock explicitly unlocks now.
-  Gates: store 176 passed (`119_store-delivery-suite.log`), process 159 passed
-  (`120_proc-delivery-after.log`), CLI integration 122 passed
-  (`121_cli-delivery-after.log`), CLI unit 105 passed (`122_cli-unit-after.log`).
+In implementation order:
 
-Delivery retry limit: prior durable acceptance prevents another transport call.
-A process dying after remote acceptance and before its local receipt still leaves
-an ambiguous outcome. The current native queue API provides no tested idempotency
-key; crash-window exactly-once is not claimed.
+- `29fad26`: preserve route kind and omitted metadata when binding panes.
+- `2376ef5`: isolate trail storage and coalesce observations.
+- `b815481`: observe actual wrapped Codex connections.
+- `501d44c`: retain process observations and release owned resources.
+- `f4480d1`: isolate readers and avoid telemetry mailbox writes.
+- `8b6097d`: move behavioral dispatch into existing adapters and add guard.
+- `d2cc152`: preserve native CLI passthrough and observed resume settings.
+- `bb5445b`: serialize retries and retain held completion outboxes.
+- `8da1197`: restart owned backends with observed settings.
+- `55b9e28`: central gate and native adapter bindings.
+- `fa8dfc6`: native settings and bound identity priority.
+- `e19782c`: Claude queued receipt reader and caller favorites.
+- `4c94a64`: preserve parent registration during native observations.
+- `9eff9fd`: shared authenticated lifecycle driver.
+- `c906599`: busy OpenCode holding, bounded sweep and completion approval.
+- `6230786`: canonical complete preset selection and fixture restrictions.
 
-## Current gates
+## Join, resume and cleanup
 
-All cargo commands use the dedicated target directory above.
+Audit lane `refactor-boop-lifecycle-consolidation` is live in pane `%1939`,
+pane PID `88860` at the latest observation. Native thread remains
+`01a08191-263d-7971-b11b-10b44d4bbd09`. Its parent is
+`sprefa-ivm-extract-parent`. The effort correction above is still required.
 
-| Command | Result | Raw log |
-| --- | --- | --- |
-| `cargo test -p boop-store --lib` | Earlier checkpoint 176 passed; latest shared changes need rerun | `62_store-suite.log` |
-| `cargo test -p boop-harness --lib` | 169 passed, 1 ignored | `100_harness-boundary-suite.log` |
-| `cargo test -p boop-acp --lib` | 50 passed, 6 ignored | `101_acp-boundary-suite.log` |
-| `cargo test -p boop-proc --lib` | 159 passed | `95_proc-boundary-suite.log` |
-| `cargo test -p boop --bin boop` | 103 passed | `102_cli-boundary-unit.log` |
-| `cargo test -p boop --test main` | 120 passed | `103_cli-boundary-integration.log` |
-| `cargo test -p boop --test main -- t1_harness_boundaries::` | 2 passed after test-file classification correction | `106_harness-guard.log` |
+Outside tmux:
+`tmux attach-session -t refactor-boop-lifecycle-consolidation`.
 
-Seven adapter tests remain explicitly ignored for authenticated or machine-dependent
-environments. Full final affected-package and feature gates remain pending.
-Before/after logs are retained: incident registration 5 passed / 3 failed before
-fix; PID projection failed in `75_projector-pid-before.log` and passed in
-`76_projector-pid-after.log`. Fixture failures and telemetry write-lock failure
-were fixed; CLI integration passed 118/118 in `85_cli-integration-isolated-after.log`.
-Fixtures retain HOME/CODEX_HOME and use Boop reader/config/database overrides.
+Inside tmux:
+`tmux switch-client -t refactor-boop-lifecycle-consolidation`.
 
-## Authenticated Codex state
+Test wrapper resume commands and executable hashes are in each numbered
+`*_launch.json` and `*_launch.bash`. These scripts include isolated Boop
+storage and exact native session arguments. Completed fixtures have been stopped;
+create a fresh test invocation instead of treating an old pane as live.
 
-Report 2 has actual transcript receipts. Wrapped route `codex-1828`, parent
-`probe-parent`, received idle and busy nonces, changed Luna/low to Terra/medium/high,
-compacted, exited and resumed in another process. Initial thread:
-`01a081bf-5d5a-7f23-a33d-81d349d9d56f`. `/clear` created
-`01a081d7-85ca-7ca1-a8ce-f3ce84dadc50` and retained route, parent and Boop trace.
-The cleared thread received a nonce and resumed in another process. Clear reset
-Codex to Astra/xhigh; a supported per-thread change selected Luna/low before a
-bounded prompt. No user config was changed.
+`258_old-test-pane-cleanup.json` verifies removal of four dead manual-test
+sessions after checking their exact pane IDs, dead state and task-owned launch
+commands. No parent/audit pane was removed. Raw test receipts and native
+transcripts remain available; complete user transcripts are not committed.
+`265_test-workspace-cleanup.json` records removal of 22 empty, completed fixture
+working directories. No recursive deletion was used for that cleanup.
 
-Concurrent same-cwd test `codex-process-51263` used thread
-`01a081e4-1c58-7f83-9e4a-24d2d414bdf9`, independent trace and real PTY with TMUX
-variables removed. Each received exactly one distinct nonce and answer, with zero
-cross-transcript occurrences (`67_concurrency-verdict.json`). Both fixtures stopped
-at 16:48:15 UTC and private sockets disappeared. Dead test tmux cells remain.
+## Protected parent delivery
 
-Test-only message `m-322f985c` awaits resume of the cleared thread in test pane
-`%1828`, session `boop-proof-owned5-01a08191`. Expected answer:
-`ACK_BP_STALE_RESUME_01a08191_1`. This can prove stale-route recovery and the PID fix.
-Old proof processes used binary SHA-256
-`3ef0dc3101e49ce0526948d149ce7ffc1dacfc975591371a0c24f599f537e99f`.
-Record a new launch manifest before launching the current executable.
-
-Retained live failures: initial guardian misbinding, missing resume broadcast,
-synchronous proxy timeout and a pre-fix killed-wrapper orphan. The verified
-owned orphan group 5943 was cleaned up. SIGKILL/restart and remaining supervisor/
-child cases are open. Only Codex has live authenticated coverage. All five
-installed CLI help probes succeeded (`88_available-harnesses.json`).
-
-## Continuation checkpoint, 2026-09-08 18:35 UTC
-
-Current committed head is `bb5445b`. Raw receipts `124` through `127` prove
-automatic delivery of held `m-322f985c` on explicit resume, retained live PID/pane,
-and actual Terra/high settings with answer to `m-46c1c14b`. The narrow authenticated
-retry test passed in `134_authenticated-retry.log`: one native user message and
-one answer before and after two `AlreadyAccepted` attempts. Earlier compile and
-raw-reader failures remain recorded in `128`, `129`, and `131`; the corrected test
-uses production `Harness::messages`. Launch `133_retry-resume-launch.json` records
-the executable for that run. This is partial lifecycle coverage.
-
-Killing only verified test-owned backend group 12024 reproduced wrapper exit 1
-with `native TUI observation failed: read backend frame` (`136`). Uncommitted
-`cli/control.rs` now processes observed identity/settings before deciding whether
-to restart, monitors the owned backend, and reuses the existing bounded relaunch
-path for backend/observer failure. Control tests pass 11/11 (`137`); build passes
-(`138`). Live after-fix launch is `139_restart-launch.json`, test pane `%1828`,
-same cleared thread, bounded to 480 seconds. After-fix crash verification remains
-pending at this checkpoint. Test source `tests/3_live_codex.rs` is uncommitted.
-
-Acceptance now explicitly requires one central executable gate with shared
-lifecycle scenarios/assertions behind a harness trait and four configuration
-rows: Claude, Codex, OpenCode, ccz. ccz must share Claude operations. Deterministic
-checks must enter CI, with an explicit authenticated wrapper mode and per-scenario
-PASS/FAIL/UNSUPPORTED/BLOCKED results. The existing `scripts/door-e2e.sh` uses a
-production newest-thread lookup and obsolete CLI calls; do not run it as a fixture.
-Migrate its entry point into the isolated central gate. No live assurance for
-Claude/OpenCode/ccz is established yet. No native collaboration tools are allowed.
-
-Parent milestone `m-9e8d80a4` also remained held for lane supervisor (`130`).
-
-## Central gate continuation, 2026-09-08 19:03 UTC
-
-Committed `8da1197` contains Codex backend restart and authenticated retry proof.
-Subsequent work is uncommitted. Preserve all diffs, including new
-`scripts/0_regression_gate.sh` and `tests/4_lifecycle_gate.rs`.
-
-`just boop-check deterministic` runs Boop package contracts/integration, dl6 and
-no-default-feature checks; CI now calls it and excludes those packages from the
-remaining workspace step. It has NOT yet been executed as a complete gate.
-`BOOP_E2E_ROOT=<task-owned-root> just boop-check live` runs Claude, Codex, OpenCode,
-ccz through one `LifecycleHarness` scenario driver. ccz shares `Claude` operations.
-The old `scripts/door-e2e.sh` delegates to this command and no longer selects a
-production newest transcript. The live runner deliberately fails while remaining
-scenarios are unimplemented. Do not present it as complete assurance.
-
-New executable regressions and live findings:
-
-- `Claude::session_by_id` passed a projects directory into a home-root helper.
-  Isolated subprocess reader regression failed (`152`) and passes (`153`). The
-  adapter also now reports actual assistant model metadata from its native file.
-- OpenCode ignored the route's HTTP endpoint. Route-specific contract failed
-  (`150`), and six HTTP door tests pass (`154`). Owned launch now allocates a local
-  endpoint and retains its backend in `NativeTuiPlan`; explicitly addressed
-  existing servers remain borrowed. Explicit session arguments select resume.
-  Additional ownership/resume regression coverage remains required.
-- The first four-entry run is `155_central-live.log`. Claude and ccz answered
-  native peer nonces, but had no Boop trace. Codex answered but the test used the
-  wrong exit control; it now uses the previously verified Ctrl+D. OpenCode
-  received the nonce but its provider rejected GLM-5.3-Highspeed subscription
-  access. The user's actual configured model is zai-coding-plan/glm-4.6; the
-  adapter had silently substituted the provider default. That substitution is
-  removed, with a deterministic preservation test added, not yet rerun.
-- `bind_native_session` now owns trace/PID/session binding for legacy registry
-  observations and Codex events, replacing `record_pane`. Claude fresh/nonce/
-  retry/exit/resume passed in `157`, root `shared-live/claude-22765`.
-- Claude compact completed in `158`, but the next test nonce hit default door
-  throttling. Fixture-only BOOP_DOOR_FLOOR=30 now matches earlier bounded trials.
-- `159` passed compact plus resume, then failed clear rebind within 25 seconds.
-  The registry poll now identifies a new session by exact frontend PID and uses
-  the canonical binding path. After-fix run `160_shared-claude-clear-after.log`
-  is active at this checkpoint (unified exec session 80378).
-
-Raw matrix roots are under the existing raw root's `shared-live/`. Each new
-launch records script/command/build/hash with a numeric sequence. All fixture
-tmux servers have unique `boop-e2e-ENTRY-PID` sockets. Their Drop closes only that
-server. Verify backend/frontend cleanup explicitly before claiming the cleanup
-scenario passes. The previous `%1828` manual test has expired its bounded launch.
-No audit lane or protected parent has been closed.
-
-Remaining shared scenarios include busy receipt, model/effort changes, process
-restart/crash, concurrent isolation, parent completion and explicit cleanup
-assertions. Compact/clear/resume are currently implemented for native JSONL
-adapters but still being verified. OpenCode compact observation and provider
-execution remain open. Native child operations must stay within the harness
-boundary. Existing narrow `3_live_codex.rs` retry test remains to consolidate into
-the shared driver. Reports 0/1/2/4/5 and hashes still need final refresh.
-
-Latest parent milestone `m-1fcb2672` was held for lane supervisor (`146`).
-
-## Gate checkpoint, 2026-09-08 19:15 UTC
-
-The full central deterministic command passed (`169`), with the final disabled
-feature import cleanup also passing (`172`). Default Boop integration: 124 passed,
-2 authenticated tests ignored. dl6 Boop integration: 127 passed, 3 ignored.
-Boop unit: 105 passed; harness: 173 passed/1 ignored; ACP: 50 passed/6 ignored;
-proc: 159 passed; store: 176 passed. Mux/turnvis and other targets also passed in
-the central log. The dl6 missing capability field and no-default compilation
-failures (`163`, `166`, `167`) were fixed. DeliveryRow/Store::delivery_rows moved
-to core ident storage with a compatibility query re-export; host/concatmap are
-gated on their reader dependency. `dl6` explicitly enables `agent-read`.
-
-Claude full implemented shared sequence passed through clear and resume in
-`160`, raw `shared-live/claude-54743/matrix.json`. Its final result is FAIL because
-required scenarios are still unimplemented. New explicit process cleanup and
-native prerequisite checks have been added since that run and need live rerun.
-The test publisher is now registered as a separate coordinator route before
-launch. Preserve these distinctions when reporting prior receipts.
-
-OpenCode attach help (`170`) has no --model flag. Native model enumeration (`171`)
-lists glm-4.7, glm-5-turbo, glm-5.2, glm-5.2-highspeed, glm-5.3, glm-5.3-flash and
-glm-5.3-highspeed under zai-coding-plan; configured glm-4.6 is absent. The removed
-default substitution caused the Highspeed subscription rejection. Next work must
-honor explicit launch model selection through the existing owned backend and
-observe actual execution, without user config changes or new paid authority.
-
-The audit lane remains joinable. Parent milestone `m-a6a15aa1` is still held for
-lane supervisor (`165`). Full feature inventory and current AST/hashes refresh,
-shared busy/settings/crash/isolation/parent cases, and complete per-entry live
-results remain required. No final completion is claimed.
-
-## Remaining work
-
-### Resumed provider-error checkpoint
-
-Continued from `55b9e28`, preserving the uncommitted native-settings and live
-driver edits. OpenCode `--model` now becomes owned-backend process configuration,
-preserving other `OPENCODE_CONFIG_CONTENT` fields, and is removed from unsupported
-`attach` arguments. A borrowed backend rejects this override. Contract receipt
-`177_opencode-model-contract.log` passes. Actual wrapped `glm-4.7` answered in
-native thread `ses_f7d797729ffez1uoYB2b03MP51`; native assistant metadata records
-provider `zai-coding-plan`, model `glm-4.7`. Trial `178` failed because the shared
-reader includes reasoning alongside answer text. The driver now requires an exact
-standalone answer line, plus intended-TUI display and duplicate/retry checks.
-Trial `179`, root `shared-live/opencode-2811`, passed idle receipt but the resumed
-assistant returned the prior nonce. This is a failed execution, not a pass.
-
-Native settings now expose Claude's observed assistant effort and Codex's last
-turn-context effort; OpenCode retains provider/model spelling. The harness suite
-in `180_harness-settings-gate.log` passes. Shared Codex/ccz run `181` is pending.
-Fresh-wrapper PASS is deferred until actual native and TUI receipt. The shared
-driver still deliberately fails when it reaches unfinished scenarios. Busy,
-settings transitions, crash/restart, concurrency and parent receipt remain open.
-`181` completed: Codex `shared-live/codex-11014` and ccz
-`shared-live/ccz-17177` passed through clear/resume and cleanup, then failed the
-explicit unfinished-scenarios guard. `183` reproduced a generic route selecting
-thread `a` by pane when bound to `b`; `184` passes after bound session identity
-takes priority and stale bound sessions return no target. `185` passes the full
-central deterministic command, including dl6 and no-default-feature checks.
-Every new nonce receipt now also checks route model and stored effort against
-the production adapter's native metadata. Live validation of those added
-settings assertions remains pending.
-
-1. Commit the passing delivery cluster, then resume the test TUI for live proof.
-2. Review legacy non-Codex discovery/claim paths and remaining CLI contradictions.
-3. Complete bounded live stale recovery, abnormal exit, supervisor restart/reattach,
-   child completion, actual parent notification and duplicate/retry proof.
-4. Complete command/alias/hidden/config/identity/telemetry/feature inventory.
-5. Commit portable opt-in authenticated E2E coverage, finish affected-package
-   gates, update hashes and PASS/FAIL/BLOCKED ledger, clean task fixtures only.
-
-Raw drivers `0_launch_baseline.bash` and `4_resume_live.bash` evaluate generated
-Bash shell-init. `1_capture_live.py` records selected thread/turn data, route, trace,
-attributes, process tree and delivery ledger. Node helpers use the cached `ws`
-package. Complete user transcripts are not committed.
-
-## Parent push failures
-
-Milestones `m-6e05b74e`, `m-4531df56`, `m-1d4a403e`, `m-24fbea68` and latest
-`m-a3b88f59` (17:24:35 UTC, `86_parent-milestone.txt`) were held for
-`lane supervisor` on the protected parent. No parent transcript receipt is claimed.
-No repair or fixture mutation has been applied to that route or pane.
+Parent `sprefa-ivm-extract-parent`, native thread
+`01a067ea-5289-7092-9d52-3588c1af9555`, pane `%384`, session `projects-4`,
+was not repaired or used as a fixture. Milestones still return
+`held-for-turn-boundary (lane supervisor)`. Latest recorded IDs:
+`m-7dbea796` (`229`) and `m-3b67435b` (`246`). No actual parent receipt is
+claimed. A repair proposal must preserve the real parent kind and native thread;
+mail insertion or an accepted flag is not evidence of its live receipt.
