@@ -2,6 +2,10 @@
 use crate::fixture::{baseline, render, run, sql_viewer, verify};
 
 pub fn run_cli() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::args().any(|arg| arg == crate::fixture::sql_viewer::boundary::contracts::REPEAT_FLAG) {
+        baseline::telemetry::init();
+        return crate::repeat::run(!std::env::args().any(|arg| arg == "--verify-only"));
+    }
     if std::env::args().any(|arg| arg == "--process-peer") {
         baseline::telemetry::init();
         return crate::process_peer::run();

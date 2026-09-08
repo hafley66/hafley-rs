@@ -55,12 +55,13 @@ test('generation is deterministic, stale checks are read-only, unsupported types
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /arrays require equal positive minItems\/maxItems/);
     assert.deepEqual(await Promise.all(outputs.map(name => readFile(join(dir, name), 'utf8'))), expected);
-    await writeFile(join(dir, '0_presentation.tsp'), source + '\nconst MAX_ID: uint64 = 18446744073709551615;\nconst CAPACITY_ALIAS: uint32 = ROW_CAPACITY;\n');
+    await writeFile(join(dir, '0_presentation.tsp'), source + '\nconst MAX_ID: uint64 = 18446744073709551615;\nconst CAPACITY_ALIAS: uint32 = ROW_CAPACITY;\nconst LABEL: string = "two knees";\n');
     result = run();
     assert.equal(result.status, 0, result.stderr);
     const numericOutput = await readFile(join(dir, outputs[0]), 'utf8');
     assert.match(numericOutput, /MAX_ID: u64 = 18446744073709551615;/);
     assert.match(numericOutput, /CAPACITY_ALIAS: u32 = 1024;/);
+    assert.match(numericOutput, /LABEL: &'static str = "two knees";/);
     await writeFile(join(dir, '0_presentation.tsp'), source + '\nconst BAD: uint32 = -1;\n');
     assert.notEqual(run().status, 0);
     assert.equal(await readFile(join(dir, outputs[0]), 'utf8'), numericOutput);

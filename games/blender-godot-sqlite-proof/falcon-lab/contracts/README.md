@@ -56,7 +56,7 @@ artifact or an explicitly republished/re-pinned emitter before installing.
 - Named Ok/Err unions lower to Rust Result aliases. Other union shapes fail.
 - Equal positive minItems/maxItems become fixed Rust arrays. A maximum-only
   array becomes a Vec; the existing IPC adapter enforces its row limit.
-- Native integral constants generate Rust constants; YAML stores their decimal
+- Native integral and string constants generate Rust constants; YAML stores integral decimal
   values as strings to preserve uint64 precision. `0_constants.mjs` isolates the
   pinned compiler's AST/internal value API, covered by literal/reference/range tests.
 - `Latest` replaces the handwritten IPC envelope. A frozen v1 bincode fixture
@@ -74,3 +74,17 @@ transport bindings, shared-memory layout, and zero-allocation enforcement remain
 follow-ups. Generated GDScript row readers currently materialize dictionaries
 (and arrays for matrix fields); their allocation cost is not benchmarked.
 No zero-copy or zero-allocation claim is made for this slice.
+
+## Repeated-hit proof
+
+`just record repeat` runs 300 ticks in one continuous world using the existing
+stationary-target mode, then records through generated rows, SQLite, and wgpu.
+Inputs repeat the existing jump/attack fixture every 120 ticks. Assertions require
+hits at 91 and 211, cumulative damage 36, exact replay of all 120 states from a
+snapshot at tick 180, and exact SQL row readback for every displayed tick.
+The report uses generated `RepeatProof`; timings and the CLI flag are native TSP
+constants. Outputs live in a fresh temporary directory printed by the command.
+
+This verifies repeated attack registration and snapshot replay. It does not
+exercise a launched-target combo, a second network rollback, or new combat rules.
+The separate live suite continues to cover the original launched-target scenario.

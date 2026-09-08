@@ -10,6 +10,18 @@ const SLOTS: uint32 = 3;
 const ROW_CAPACITY: uint32 = 1024;
 const IPC_LIMIT: uint32 = 262144;
 const PROTOCOL_VERSION: uint32 = 1;
+const REPEAT_FLAG: string = "--repeat";
+const REPEAT_TICKS: uint32 = 300;
+const REPEAT_PERIOD: int64 = 120;
+
+model RepeatProof {
+  ticks: uint32;
+  hits: uint32;
+  damage: float64;
+  replayed: uint32;
+  @maxItems(2)
+  hit_ticks: int64[];
+}
 
 // Buffer direction determines the generated Rust borrow. No transport is implied.
 model ReadBuffer<T> { item: T; }
