@@ -1,8 +1,9 @@
 # Active Falcon lab direction
 
 Start with `just status`. `101_current.json` is the replace-in-place task pointer.
-Read `102_tasks.md` for the active execution queue, acceptance evidence and
-deferral triggers. Update task status/receipts after each tested increment.
+Read the active ledger named by its `tasks` field and the previous N numbered
+`*_tasks.md` ledgers, following the task-history rule below. Update active task
+status/receipts after each tested increment.
 Work stays in this lab and `games/shared`; sealed applications are read-only references.
 Use `just tsp`, `just test [all|core|godot|workflow|web]`, `just prove`, and
 `just deploy`. The default test suite includes core, workflow and native Godot
@@ -26,3 +27,25 @@ hashes remain unchanged when publishing Game3.
 Prefer source-backed importers for existing fighter behavior. Preserve exact
 source provenance and report unsupported executable behavior. Animation data
 and state IDs alone do not establish behavioral equivalence.
+
+## Rolling task history: one lab folder
+
+Keep task ledgers here as `<D>_tasks.md`, using the lab's author-driven numeric
+ordering. Do not create a separate tasks folder or one file per task.
+
+- On resume, read the active ledger plus N preceding task ledgers, oldest first.
+  N is `task_lookback` in `101_current.json`; default to 3 when absent. This is a
+  configurable working default. Read all available predecessors if fewer exist.
+  Order by numeric/author prefix, not modification time or plain string sorting.
+- Read those ledgers completely. Follow older references only when an unresolved
+  dependency or evidence question requires them. Report missing referenced files.
+- Continue updating the active ledger during its milestone. Create the next
+  numbered ledger when starting another milestone or replacing the queue; do not
+  create a ledger on every turn. Choose its prefix after its dependencies.
+- A successor links its predecessor and carries unresolved tasks forward by ID
+  and reference. Record completed/deferred/superseded dispositions and their
+  evidence. Never silently drop work or reopen passed proofs because context faded.
+- Preserve prior ledgers as history. Put changed decisions in the successor with
+  an explicit supersession reference rather than rewriting historical outcomes.
+- Update `101_current.json` to select the successor. Keep task details in the
+  ledgers and the pointer compact. Commit ledger/pointer changes with the work.
