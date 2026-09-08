@@ -152,11 +152,15 @@ impl OpencodeDoor {
     /// Preserve the configured model exactly. Provider rejection remains an
     /// execution outcome; a different provider default is not authorization.
     fn default_model(&self) -> Option<serde_json::Value> {
-        let config: serde_json::Value =
-            serde_json::from_str(&self.get("config", READ_TIMEOUT).ok()?).ok()?;
-        let configured = config.get("model")?.as_str()?;
+        let configured = self.configured_model()?;
         let (provider, model) = configured.split_once('/')?;
         Some(serde_json::json!({ "providerID": provider, "modelID": model }))
+    }
+
+    fn configured_model(&self) -> Option<String> {
+        let config: serde_json::Value =
+            serde_json::from_str(&self.get("config", READ_TIMEOUT).ok()?).ok()?;
+        config.get("model")?.as_str().map(str::to_owned)
     }
 
     fn get(&self, path: &str, timeout: Duration) -> Result<String> {
@@ -202,13 +206,25 @@ impl OpencodeDoor {
     /// Observe the selected TUI session from OpenCode's own event stream.
     /// The directory query binds this subscriber to the launched instance;
     /// no transcript discovery participates in `/clear` rebinding.
-    fn observe(&self, cwd: &std::path::Path) -> Result<NativeTuiObserver> {
+    fn observe(
+        &self,
+        cwd: &std::path::Path,
+        initial_session: Option<&str>,
+    ) -> Result<NativeTuiObserver> {
         let mut url = self.base()?.join("event")?;
         url.query_pairs_mut()
             .append_pair("directory", &cwd.display().to_string());
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = Arc::clone(&stop);
         let (sender, events) = mpsc::channel();
+        let configured_model = self.configured_model();
+        if let Some(session_id) = initial_session {
+            sender.send(NativeTuiEvent::Session {
+                session_id: session_id.to_owned(),
+                model: configured_model.clone(),
+                effort: None,
+            })?;
+        }
         let worker = std::thread::spawn(move || {
             while !worker_stop.load(Ordering::Acquire) {
                 let response = agent(Duration::from_secs(1)).get(url.as_str()).call();
@@ -228,7 +244,12 @@ impl OpencodeDoor {
                     let Ok(event) = serde_json::from_str::<EventLine>(payload) else {
                         continue;
                     };
-                    if let Some(event) = native_event(event) {
+                    if let Some(mut event) = native_event(event) {
+                        if let NativeTuiEvent::Session { model, .. } = &mut event {
+                            if model.is_none() {
+                                *model = configured_model.clone();
+                            }
+                        }
                         if sender.send(event).is_err() {
                             return;
                         }
@@ -569,7 +590,7 @@ impl Door for OpencodeDoor {
             "managed-opencode-serve={base};started-session={session}"
         ));
         plan.app_server_socket = Some(base.to_string());
-        plan.observer = Some(source.observe(&spec.cwd)?);
+        plan.observer = Some(source.observe(&spec.cwd, Some(&session))?);
         Ok(plan)
     }
 
@@ -906,7 +927,7 @@ mod tests {
         let stub = Stub::start(SESSIONS, STATUSES, events);
         let observer = stub
             .door()
-            .observe(std::path::Path::new("/fixture/project"))
+            .observe(std::path::Path::new("/fixture/project"), None)
             .unwrap();
         assert_eq!(
             observer
@@ -915,13 +936,16 @@ mod tests {
                 .unwrap(),
             NativeTuiEvent::Session {
                 session_id: "ses_after_clear".into(),
-                model: None,
+                model: Some("fixture/retired".into()),
                 effort: None,
             }
         );
         assert_eq!(
-            stub.seen.recv_timeout(Duration::from_secs(1)).unwrap().0,
-            "/event?directory=%2Ffixture%2Fproject"
+            [
+                stub.seen.recv_timeout(Duration::from_secs(1)).unwrap().0,
+                stub.seen.recv_timeout(Duration::from_secs(1)).unwrap().0,
+            ],
+            ["/config", "/event?directory=%2Ffixture%2Fproject"]
         );
         drop(observer);
     }
