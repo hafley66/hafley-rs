@@ -1220,7 +1220,8 @@ enum LaneCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Point a lane at a pane that already exists.
+    /// Compatibility spelling for rebinding a registered route to an existing
+    /// pane. Preserves its kind; fresh interactive registration uses agent register.
     Patch {
         lane: String,
         #[arg(long)]
@@ -1298,16 +1299,17 @@ enum LaneCmd {
 
 #[derive(Subcommand)]
 enum AgentCmd {
-    /// Add a pane-less registry row.
+    /// Register or update a native/coordinator route. Omitted fields are preserved.
     Register {
         /// The route name. Every boop call this agent makes then carries
         /// `--as <name>`: it shares its spawner's process, so no env stamp
         /// can name it.
         name: String,
         /// `native` (a subagent inside a lane or coordinator process) or
-        /// `coordinator` (a pane-less session that owns lanes).
-        #[arg(long, default_value = "native")]
-        kind: String,
+        /// `coordinator` (an interactive session that owns lanes). Defaults
+        /// to native for a new route; preserves the kind of an existing route.
+        #[arg(long)]
+        kind: Option<String>,
         /// The route completion and `boop beep parent` rows go to.
         #[arg(long)]
         parent: Option<String>,
@@ -1319,6 +1321,13 @@ enum AgentCmd {
         /// mailbox, not an address: nothing can push to it.
         #[arg(long)]
         harness: Option<String>,
+        /// Observed harness thread/session ID. Required for a pane-less
+        /// coordinator whose harness exposes no process-local identity.
+        #[arg(long)]
+        session_id: Option<String>,
+        /// Existing tmux pane, window or session to bind. Resolves to a pane ID.
+        #[arg(long)]
+        tmux: Option<String>,
         /// The directory the agent works in; a hook inbox drains rows here.
         #[arg(long)]
         cwd: Option<PathBuf>,

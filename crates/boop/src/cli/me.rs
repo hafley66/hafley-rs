@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use anyhow::{Context, Result};
 
@@ -9,18 +9,17 @@ use boop::{bus, ident, identity, tmux};
 
 use crate::cli::db::open_store;
 use crate::cli::job::waiting_as;
-use crate::cli::mail::{report_inbox_hooks, write_inbox_hooks};
-use crate::cli::{line, mail_dir, now_ms, write_route};
+use crate::cli::{line, mail_dir, now_ms};
 
 // ---------------------------------------------------------------------------
-// adopt / prune
+// Registration, including the legacy lane patch spelling.
 // ---------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_adopt(
+pub(crate) fn register_route(
     name: &str,
-    kind: &str,
-    tmux_session: &str,
+    kind: Option<&str>,
+    tmux_target: Option<&str>,
     harness: Option<&str>,
     session_id: Option<&str>,
     cwd: Option<&str>,
@@ -29,117 +28,69 @@ pub(crate) fn run_adopt(
     parent: Option<&str>,
     goal: Option<&str>,
     mail_dir_arg: Option<&Path>,
-    uninstall_hooks: bool,
-) -> Result<()> {
-    let registry = Registry::discover();
-    run_adopt_with(
-        name,
-        kind,
-        tmux_session,
-        harness,
-        session_id,
-        cwd,
-        model,
-        mode,
-        parent,
-        goal,
-        mail_dir_arg,
-        uninstall_hooks,
-        &registry,
-        tmux::mux(),
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn run_adopt_with(
-    name: &str,
-    kind: &str,
-    tmux_session: &str,
-    harness: Option<&str>,
-    session_id: Option<&str>,
-    cwd: Option<&str>,
-    model: Option<&str>,
-    mode: Option<&str>,
-    parent: Option<&str>,
-    goal: Option<&str>,
-    mail_dir_arg: Option<&Path>,
-    uninstall_hooks: bool,
+    worktree: Option<&Path>,
     registry: &Registry,
     multiplexer: &dyn tmux::Multiplexer,
 ) -> Result<()> {
-    // Taking the hooks out is about a project directory, not about a pane, and
-    // the pane is usually already gone by the time anyone wants that.
-    if uninstall_hooks {
-        let project = adopt_cwd(cwd)?;
-        let changed = write_inbox_hooks(&project, name, true)?;
-        report_inbox_hooks(&project, name, true, changed);
-        return Ok(());
-    }
-    if !multiplexer.has_session(None, tmux_session)? {
-        println!("refusing adopt {name}: no such tmux session {tmux_session}");
-        return Ok(());
-    }
+    let pane = tmux_target
+        .map(|target| {
+            anyhow::ensure!(
+                multiplexer.target_alive(None, target),
+                "no live tmux target {target}"
+            );
+            multiplexer
+                .pane_id(None, target)
+                .with_context(|| format!("no live tmux target {target}"))
+        })
+        .transpose()?;
     let dir = mail_dir(mail_dir_arg)?;
-    let existing = bus::read_routes(&dir)?.remove(name);
     let harness = harness.map(str::parse::<HarnessId>).transpose()?;
-    let discovered_session = match session_id {
-        Some(session_id) => Some(session_id.to_owned()),
-        None => live_session_id(registry, harness, multiplexer, tmux_session)?,
-    };
-    let route = Route {
-        kind: kind.into(),
+    let patch = bus::route_to_value(&Route {
+        kind: kind.unwrap_or(if pane.is_some() { "coordinator" } else { "native" }).into(),
         harness,
-        tmux: Some(tmux_session.to_owned()),
+        tmux: pane.clone(),
         cwd: cwd.map(str::to_owned),
         model: model.map(str::to_owned),
         mode: mode.map(str::to_owned),
-        session_id: discovered_session.or_else(|| existing.and_then(|route| route.session_id)),
+        session_id: session_id.map(str::to_owned),
         source_path: None,
         parent: parent.map(str::to_owned),
         goal: goal.map(str::to_owned),
         registered_at: Some(bus::now_iso()),
         base_sha: None,
-        worktree_dir: None,
+        worktree_dir: worktree.map(|path| path.display().to_string()),
         app_server_socket: None,
-    };
-    write_route(&dir, name, route)?;
-    println!("adopted {name} -> tmux {tmux_session}");
+    });
+    // Merge only supplied fields under the store's transaction. Registration
+    // and lane patch share this update path, so omitted metadata and a lane's
+    // supervisor ownership survive a rebind.
+    bus::cas_update_json(&dir.join("registry.json"), |current| {
+        let existing = current.get(name);
+        let mut fields = existing
+            .map(bus::route_from_value)
+            .map(|route| bus::route_to_value(&route))
+            .unwrap_or_else(|| serde_json::json!({}));
+        let fields = fields
+            .as_object_mut()
+            .expect("route serializes as an object");
+        for (key, value) in patch.as_object().expect("route patch is an object") {
+            if key != "kind" || kind.is_some() || existing.is_none() {
+                fields.insert(key.clone(), value.clone());
+            }
+        }
+        let merged = bus::route_from_value(&serde_json::Value::Object(fields.clone()));
+        if session_id.is_none() {
+            if let (Some(harness), Some(pane)) = (merged.harness, pane.as_deref()) {
+                if let Some(live) = registry.get(harness).live().live_session_in_pane(pane)? {
+                    fields.insert("sessionId".into(), serde_json::json!(live.session_id));
+                }
+            }
+        }
+        current.insert(name.to_owned(), serde_json::Value::Object(fields.clone()));
+        Ok(())
+    })?;
+    println!("registered {name}");
     Ok(())
-}
-
-/// The session the harness's own live registry reports in the adopted pane.
-/// A target tmux cannot resolve to a pane, or a pane no session holds, leaves
-/// the route anonymous rather than carrying a guess.
-fn live_session_id(
-    registry: &Registry,
-    harness: Option<HarnessId>,
-    multiplexer: &dyn tmux::Multiplexer,
-    tmux_target: &str,
-) -> Result<Option<String>> {
-    let (Some(harness), Some(pane)) = (harness, adopt_pane(multiplexer, tmux_target)) else {
-        return Ok(None);
-    };
-    Ok(registry
-        .get(harness)
-        .live()
-        .live_session_in_pane(&pane)?
-        .map(|session| session.session_id))
-}
-
-/// The pane id an adopt target names: written as one, or resolved by tmux.
-fn adopt_pane(multiplexer: &dyn tmux::Multiplexer, target: &str) -> Option<String> {
-    if target.starts_with('%') {
-        return Some(target.to_owned());
-    }
-    boop::live::pane_of_target(target).or_else(|| multiplexer.pane_id(None, target))
-}
-
-/// The project directory whose settings carry an adopted session's hooks.
-pub(crate) fn adopt_cwd(cwd: Option<&str>) -> Result<PathBuf> {
-    match cwd {
-        Some(cwd) => Ok(PathBuf::from(cwd)),
-        None => std::env::current_dir().context("read the current directory"),
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -400,10 +351,10 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let mux = AdoptMux;
         let registry = Registry::with(vec![Box::new(LiveClaude)]);
-        run_adopt_with(
+        register_route(
             "sprefa-coordinator",
-            "coordinator",
-            "sprefa-5:0.0",
+            Some("coordinator"),
+            Some("sprefa-5:0.0"),
             Some("claude"),
             None,
             Some("/repo"),
@@ -412,7 +363,7 @@ mod tests {
             None,
             None,
             Some(&dir),
-            false,
+            None,
             &registry,
             &mux,
         )
@@ -423,10 +374,10 @@ mod tests {
             Some("da6da0ca-5ad6-4f2f-88f7-de82e79f1e6b")
         );
 
-        run_adopt_with(
+        register_route(
             "sprefa-coordinator",
-            "coordinator",
-            "sprefa-5:0.0",
+            Some("coordinator"),
+            Some("sprefa-5:0.0"),
             Some("claude"),
             Some("explicit-session"),
             Some("/repo"),
@@ -435,7 +386,7 @@ mod tests {
             None,
             None,
             Some(&dir),
-            false,
+            None,
             &registry,
             &mux,
         )

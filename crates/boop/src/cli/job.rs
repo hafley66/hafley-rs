@@ -15,8 +15,8 @@ use tracing::{error, info, warn};
 use crate::cli::db::{resolve_harness, run_harnesses};
 use crate::cli::debug::default_preset_for_harness;
 use crate::cli::mail::{all_messages, run_list};
-use crate::cli::me::run_adopt;
-use crate::cli::{append_ack, append_message, line, mail_dir, pad, route_to_json, write_route};
+use crate::cli::me::register_route;
+use crate::cli::{append_ack, append_message, line, mail_dir, pad, write_route};
 use crate::{
     AgentCmd, BeepCmd, ForkCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat,
 };
@@ -172,7 +172,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             socket: session.tmux_socket.clone(),
             cwd: cwd.to_owned(),
             command: boop::harness::supervisor_command(&spec),
-            route: crate::cli::route_to_json(&route),
+            route: bus::route_to_value(&route),
             spawn_id: args.spawn_id,
         };
         if let Err(error) = boop::trail::write_spawn(&args.to, &spawn) {
@@ -319,7 +319,7 @@ pub(crate) fn run_resolve(to: &str, mail_dir_arg: Option<&Path>) -> Result<()> {
             println!("resolved {to} -> {session_id}");
             let path = dir.join("registry.json");
             bus::cas_update_json(&path, |current| {
-                current.insert(to.to_owned(), route_to_json(&updated));
+                current.insert(to.to_owned(), bus::route_to_value(&updated));
                 Ok(())
             })?;
             Ok(())
@@ -1476,11 +1476,16 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
             parent,
             on_parent_death,
             harness,
+            session_id,
+            tmux,
             cwd,
             worktree,
             mail_dir: mail_dir_arg,
         } => {
-            if !matches!(kind.as_str(), "coordinator" | "native") {
+            if kind
+                .as_deref()
+                .is_some_and(|kind| !matches!(kind, "coordinator" | "native"))
+            {
                 anyhow::bail!("agent kind must be coordinator or native")
             }
             if let Some(tree) = worktree.as_deref().filter(|tree| !tree.is_dir()) {
@@ -1498,30 +1503,25 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
                 .as_deref()
                 .map(boop::worktree::warm_start)
                 .transpose()?;
-            write_route(
-                &dir,
+            register_route(
                 &name,
-                Route {
-                    kind: kind.into(),
-                    harness: harness_id,
-                    tmux: None,
-                    cwd: cwd
-                        .as_ref()
-                        .map(|dir| dir.display().to_string())
-                        .or_else(|| worktree.as_ref().map(|dir| dir.display().to_string())),
-                    model: None,
-                    mode: None,
-                    session_id: None,
-                    source_path: None,
-                    parent,
-                    goal: None,
-                    registered_at: Some(bus::now_iso()),
-                    base_sha: None,
-                    worktree_dir: worktree.as_ref().map(|dir| dir.display().to_string()),
-                    app_server_socket: None,
-                },
+                kind.as_deref(),
+                tmux.as_deref(),
+                harness.as_deref(),
+                session_id.as_deref(),
+                cwd.as_deref()
+                    .or(worktree.as_deref())
+                    .map(|path| path.to_string_lossy())
+                    .as_deref(),
+                None,
+                None,
+                parent.as_deref(),
+                None,
+                Some(&dir),
+                worktree.as_deref(),
+                &Registry::discover(),
+                tmux::mux(),
             )?;
-            println!("registered {name}");
             if let Some(outcome) = started {
                 print!("{}", boop::lane::start_preamble(&outcome.status));
             }
@@ -2078,10 +2078,10 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             mail_dir,
             // A lane pane runs a supervisor that reads the mailbox itself, so
             // no hook inbox belongs on it.
-        } => run_adopt(
+        } => register_route(
             &lane,
-            "lane",
-            &tmux,
+            None,
+            Some(&tmux),
             harness.as_deref(),
             session_id.as_deref(),
             cwd.as_deref(),
@@ -2090,7 +2090,9 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             parent.as_deref(),
             goal.as_deref(),
             mail_dir.as_deref(),
-            false,
+            None,
+            registry,
+            tmux::mux(),
         ),
         LaneCmd::Delete {
             lane,
@@ -3644,8 +3646,12 @@ mod tests {
         store
             .record_turn_comment_fork(&fork_row(7, "fork-comment-7", "fork/comment-7"))
             .unwrap();
-        write_route(&dir, "fork-comment-7", fork_route(Some("parent-lane"), &base, "ses-fork"))
-            .unwrap();
+        write_route(
+            &dir,
+            "fork-comment-7",
+            fork_route(Some("parent-lane"), &base, "ses-fork"),
+        )
+        .unwrap();
         write_route(&dir, "parent-lane", route_with(None)).unwrap();
         store
             .write_turn("ses-fork", 1, 100, "assistant", "the fork answer", None)
@@ -3688,8 +3694,12 @@ mod tests {
         store
             .record_turn_comment_fork(&fork_row(8, "fork-comment-8", "fork/comment-8"))
             .unwrap();
-        write_route(&dir, "fork-comment-8", fork_route(Some("parent-lane"), &base, "ses-fork"))
-            .unwrap();
+        write_route(
+            &dir,
+            "fork-comment-8",
+            fork_route(Some("parent-lane"), &base, "ses-fork"),
+        )
+        .unwrap();
         write_route(&dir, "parent-lane", route_with(None)).unwrap();
 
         let cwd = std::env::current_dir().unwrap();
@@ -3728,8 +3738,12 @@ mod tests {
         store
             .record_turn_comment_fork(&fork_row(9, "fork-comment-9", "fork/comment-9"))
             .unwrap();
-        write_route(&dir, "fork-comment-9", fork_route(Some("parent-lane"), &base, "ses-fork"))
-            .unwrap();
+        write_route(
+            &dir,
+            "fork-comment-9",
+            fork_route(Some("parent-lane"), &base, "ses-fork"),
+        )
+        .unwrap();
         write_route(&dir, "parent-lane", route_with(None)).unwrap();
 
         let cwd = std::env::current_dir().unwrap();
@@ -3767,8 +3781,12 @@ mod tests {
         store
             .record_turn_comment_fork(&fork_row(10, "fork-comment-10", "fork/comment-10"))
             .unwrap();
-        write_route(&dir, "fork-comment-10", fork_route(Some("parent-lane"), &base, "ses-fork"))
-            .unwrap();
+        write_route(
+            &dir,
+            "fork-comment-10",
+            fork_route(Some("parent-lane"), &base, "ses-fork"),
+        )
+        .unwrap();
         write_route(&dir, "parent-lane", route_with(None)).unwrap();
         store
             .write_turn("ses-fork", 1, 100, "assistant", "the fork answer", None)
@@ -3902,10 +3920,12 @@ mod tests {
         write_route(&dir, "coordinator", tmux_route(&coord_name)).unwrap();
         run_agent(AgentCmd::Register {
             name: "native-child".into(),
-            kind: "native".into(),
+            kind: Some("native".into()),
             parent: Some("coordinator".into()),
             on_parent_death: crate::ParentDeathPolicy::Orphan,
             harness: None,
+            session_id: None,
+            tmux: None,
             cwd: None,
             worktree: None,
             mail_dir: Some(dir.clone()),
@@ -5162,7 +5182,7 @@ mod tests {
             socket: None,
             cwd: tree.display().to_string(),
             command: "boop beep lane run --lane fix-retired".to_owned(),
-            route: crate::cli::route_to_json(&touched_route(tree, base)),
+            route: bus::route_to_value(&touched_route(tree, base)),
             spawn_id: None,
         }
     }
