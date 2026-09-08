@@ -59,3 +59,44 @@ The restart is graceful renderer termination, not an unhandled crash. Simulation
 process restart, remote filesystems, host failure, and shared-memory IPC remain
 untested. Transport progress is renderer-independent here; filesystem stalls
 can still delay the synchronous source adapter.
+
+## Hop 3: repeatable suite and offline evidence
+
+Run `sh 89_run_live.sh` from this lab. It runs the 16-test Rust library suite,
+builds with two jobs, runs the relay and audit tests, checks the Godot script,
+executes baseline and lifecycle scenarios, validates both archives, and encodes
+three new MP4s in a fresh temporary directory. `--skip-build` skips only Cargo
+tests/build after a successful current-source build; Python tests and all live
+checks still execute. No checked-in recordings are overwritten.
+
+The finalized wrapper completed end to end. Its repeated baseline acknowledged
+198 generations; the lifecycle renderers acknowledged 101, 67, and 1. The live
+replacement first displayed tick 131, and the cold renderer first displayed
+tick 199. Both scenarios passed full-state/row/acknowledgement checks. All three
+encoded streams were verified as 960x540 H.264 with nonzero frame counts.
+The audit unit test accepts exact source rows and rejects changed source data.
+
+`90_live_verification.json` contains initial and repeated lifecycle evidence.
+`91_live_evidence.tar.gz` preserves both baseline and lifecycle runs' original
+and corrected peer histories, source SQL rows, packet audits, and renderer
+acknowledgements. Initial-run Godot logs are included. `92_live_frames.png` is
+the inspected pause/restart montage. Prior MP4s and prior evidence remain intact.
+
+To verify without running Godot or the network experiment:
+
+```sh
+# Extract 91_live_evidence.tar.gz into a new temporary directory, then enter
+# an extracted run, such as falcon-live-lifecycle.fnuSX7.
+python3 /absolute/path/to/falcon-lab/84_live_controller.py --verify-archive
+```
+
+This executes the built Rust full-state verifier and recomputes source-row
+digests against the stored Godot acknowledgements. It checks recorded mesh
+acknowledgement flags; a new GPU upload requires the live suite. Verification
+from a freshly extracted archive also passed. Paths inside the archive retain
+their original run-directory names.
+
+The controller owns only its spawned Godot and relay processes. Cleanup resumes
+a stopped renderer before termination, and the relay handles SIGTERM by cleaning
+up its own peer children. Per-run lifecycle watchdogs are bounded at 40 seconds.
+The completed runs left no experiment processes running.

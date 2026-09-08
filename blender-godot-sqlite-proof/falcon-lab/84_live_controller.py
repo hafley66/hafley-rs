@@ -37,6 +37,38 @@ def digest(rows):
     return f"{value:016x}"
 
 
+def verify_acks(pids):
+    source = json.loads(Path("peer-1.json").read_text())
+    summaries = []
+    for index, pid in enumerate(pids):
+        acks = records(Path(f"acks-{index}.jsonl"))
+        assert acks
+        generations = [a["source_generation"] for a in acks]
+        assert generations == sorted(set(generations))
+        for ack in acks:
+            assert ack["source_pid"] == source["pid"] != pid
+            assert ack["consumer_pid"] == pid
+            assert ack["ipc_sql_exact"] and ack["row_roundtrip_exact"] and ack["mesh_roundtrip_exact"]
+            assert ack["row_digest"] == digest(source["frames"][ack["published_tick"]]["rows"])
+        summaries.append(dict(pid=pid, acks=len(acks), first_tick=acks[0]["published_tick"],
+                              last_tick=acks[-1]["published_tick"], skipped=sum(a["skipped_generations"] for a in acks)))
+    assert summaries[-1]["last_tick"] == 199
+    return summaries
+
+
+def verify_archive():
+    report = json.loads(Path("live-verification.json").read_text())
+    subprocess.run([str(BINARY), "--process-video", "--verify-only"], check=True)
+    assert verify_acks([r["pid"] for r in report["renderers"]]) == report["renderers"]
+    if report["lifecycle"]:
+        pause = report["events"]["pause"]
+        assert min(pause["advanced"]) >= 15 and pause["duration_ms"] >= 800
+        assert pause["resumed"]["published_tick"] >= pause["after"][1]
+        assert report["events"]["restart"]["first_ack"]["renderer_generation"] == 1
+        assert report["renderers"][2]["first_tick"] == 199
+    print("ARCHIVE_OK full_states=360 corrected_pairs=200 source_rows_and_mesh_acknowledgements=exact")
+
+
 def main(lifecycle):
     root = Path.cwd()
     renderers, logs = [], []
@@ -127,21 +159,7 @@ def main(lifecycle):
                     break
             time.sleep(.01)
         subprocess.run([str(BINARY), "--process-video", "--verify-only"], check=True)
-        source = json.loads(Path("peer-1.json").read_text())
-        summaries = []
-        for index, renderer in enumerate(renderers):
-            acks = records(Path(f"acks-{index}.jsonl"))
-            assert acks
-            generations = [a["source_generation"] for a in acks]
-            assert generations == sorted(set(generations))
-            for ack in acks:
-                assert ack["source_pid"] == source["pid"] != renderer.pid
-                assert ack["consumer_pid"] == renderer.pid
-                assert ack["ipc_sql_exact"] and ack["row_roundtrip_exact"] and ack["mesh_roundtrip_exact"]
-                assert ack["row_digest"] == digest(source["frames"][ack["published_tick"]]["rows"])
-            summaries.append(dict(pid=renderer.pid, acks=len(acks), first_tick=acks[0]["published_tick"],
-                                  last_tick=acks[-1]["published_tick"], skipped=sum(a["skipped_generations"] for a in acks)))
-        assert summaries[-1]["last_tick"] == 199
+        summaries = verify_acks([renderer.pid for renderer in renderers])
         if lifecycle:
             assert len(renderers) == 3
             assert len({r.pid for r in renderers}) == 3
@@ -165,4 +183,7 @@ def main(lifecycle):
 
 
 if __name__ == "__main__":
-    main("--lifecycle" in sys.argv)
+    if "--verify-archive" in sys.argv:
+        verify_archive()
+    else:
+        main("--lifecycle" in sys.argv)

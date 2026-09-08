@@ -104,5 +104,113 @@
         "skipped": 199
       }
     ]
+  },
+  "repeat": {
+    "basic": {
+      "lifecycle": false,
+      "events": {},
+      "renderers": [
+        {
+          "pid": 74358,
+          "acks": 198,
+          "first_tick": 0,
+          "last_tick": 199,
+          "skipped": 2
+        }
+      ]
+    },
+    "lifecycle": {
+      "lifecycle": true,
+      "events": {
+        "pause": {
+          "pid": 74478,
+          "os_state": "T",
+          "before": [
+            51,
+            50
+          ],
+          "ack_count": 50,
+          "begin": 691346.587583375,
+          "after": [
+            72,
+            70
+          ],
+          "duration_ms": 806.1364999739453,
+          "advanced": [
+            21,
+            20
+          ],
+          "resumed": {
+            "consumer_pid": 74478,
+            "frame_rows": 13,
+            "ipc_sql_exact": true,
+            "mesh_roundtrip_exact": true,
+            "mesh_vertices": 2182,
+            "published_tick": 70,
+            "renderer_generation": 51,
+            "row_digest": "d9ba7012d63e769b",
+            "row_roundtrip_exact": true,
+            "skipped_generations": 19,
+            "source_elapsed_us": 2871454,
+            "source_generation": 71,
+            "source_pid": 74481
+          }
+        },
+        "restart": {
+          "before": [
+            123,
+            120
+          ],
+          "old_pid": 74478,
+          "new_pid": 74533,
+          "first_ack": {
+            "consumer_pid": 74533,
+            "frame_rows": 13,
+            "ipc_sql_exact": true,
+            "mesh_roundtrip_exact": true,
+            "mesh_vertices": 2182,
+            "published_tick": 131,
+            "renderer_generation": 1,
+            "row_digest": "afa8e1dc0571a183",
+            "row_roundtrip_exact": true,
+            "skipped_generations": 131,
+            "source_elapsed_us": 5372303,
+            "source_generation": 132,
+            "source_pid": 74481
+          },
+          "after": [
+            135,
+            131
+          ]
+        },
+        "cold_attach": {
+          "peer_exit_verified": true,
+          "renderer_pid": 74603
+        }
+      },
+      "renderers": [
+        {
+          "pid": 74478,
+          "acks": 101,
+          "first_tick": 0,
+          "last_tick": 120,
+          "skipped": 20
+        },
+        {
+          "pid": 74533,
+          "acks": 67,
+          "first_tick": 131,
+          "last_tick": 199,
+          "skipped": 133
+        },
+        {
+          "pid": 74603,
+          "acks": 1,
+          "first_tick": 199,
+          "last_tick": 199,
+          "skipped": 199
+        }
+      ]
+    }
   }
 }
