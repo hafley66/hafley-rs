@@ -222,7 +222,11 @@ pub fn write_route(dir: &Path, name: &str, route: &Route) -> Result<()> {
 /// goal and worktree metadata; return their current values to the actor cache.
 /// The ownership predicate also prevents a late observation resurrecting a
 /// completed route or replacing another kind of route.
-pub fn update_native_route(store: &crate::ident::Store, name: &str, route: &mut Route) -> Result<()> {
+pub fn update_native_route(
+    store: &crate::ident::Store,
+    name: &str,
+    route: &mut Route,
+) -> Result<()> {
     let (parent, goal, registered_at, base_sha, worktree_dir) = store.connection().query_row(
         "UPDATE agent_route SET tmux=?1,cwd=?2,model=?3,mode=?4,session_id=?5,source_path=?6,app_server_socket=?7
          WHERE route=?8 AND kind=?9 AND harness IS ?10
@@ -568,9 +572,20 @@ impl Drop for RouteLock {
 }
 
 pub fn try_route_lock(db: &Path, route: &str, operation: &str) -> Result<Option<RouteLock>> {
-    let path = PathBuf::from(format!("{}.{operation}.{}.lock", db.display(), hash_hex(route.as_bytes())));
-    if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
-    let file = fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path)?;
+    let path = PathBuf::from(format!(
+        "{}.{operation}.{}.lock",
+        db.display(),
+        hash_hex(route.as_bytes())
+    ));
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)?;
     match file.try_lock() {
         Ok(()) => Ok(Some(RouteLock(file))),
         Err(std::fs::TryLockError::WouldBlock) => Ok(None),
@@ -722,7 +737,10 @@ fn import_ndjson_tail(store: &crate::ident::Store, path: &Path) -> Result<()> {
         return Ok(());
     };
     let complete = &bytes[..=last];
-    let messages: Vec<_> = String::from_utf8_lossy(complete).lines().filter_map(parse_line).collect();
+    let messages: Vec<_> = String::from_utf8_lossy(complete)
+        .lines()
+        .filter_map(parse_line)
+        .collect();
     // Telemetry can share the configured store directory. A file containing
     // no envelopes must not take a mailbox write lock merely to mark its tail.
     // Leaving its cursor unchanged also preserves a later legacy append.
@@ -1135,11 +1153,16 @@ mod tests {
     fn route_lock_release_is_explicit_even_with_an_inherited_descriptor() {
         let root = std::env::temp_dir().join(format!("boop-lock-inherit-{}", std::process::id()));
         let db = root.join("boop.db");
-        let first = super::try_route_lock(&db, "route", "fixture").unwrap().unwrap();
+        let first = super::try_route_lock(&db, "route", "fixture")
+            .unwrap()
+            .unwrap();
         let inherited = first.0.try_clone().unwrap();
         drop(first);
         let next = super::try_route_lock(&db, "route", "fixture").unwrap();
-        assert!(next.is_some(), "the inherited file descriptor kept the completed operation locked");
+        assert!(
+            next.is_some(),
+            "the inherited file descriptor kept the completed operation locked"
+        );
         drop((inherited, next));
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -1209,7 +1232,9 @@ mod tests {
                 "{wire} is a supervisor row"
             );
         }
-        for wire in ["request", "hail", "note", "dispatch", "ack", "reply", "retry"] {
+        for wire in [
+            "request", "hail", "note", "dispatch", "ack", "reply", "retry",
+        ] {
             assert!(
                 !crate::bus::MessageKind::from(wire).supervisor_row(),
                 "{wire} keeps the door"
@@ -1221,7 +1246,13 @@ mod tests {
     /// never neither; a typed kind is neither (2026-09-07).
     #[test]
     fn a_supervisor_kind_is_an_end_row_or_a_progress_row_and_never_both() {
-        for wire in ["result", "completion", "exited_without_completion", "open_failed", "retry_budget_exhausted"] {
+        for wire in [
+            "result",
+            "completion",
+            "exited_without_completion",
+            "open_failed",
+            "retry_budget_exhausted",
+        ] {
             let kind = crate::bus::MessageKind::from(wire);
             assert!(kind.lane_end_row(), "{wire} ends a lane's run");
             assert!(!kind.lane_progress_row(), "{wire} is not progress");
@@ -1251,7 +1282,10 @@ mod tests {
         }
         for wire in ["hail", "request", "note", "dispatch", "ack"] {
             let kind = crate::bus::MessageKind::from(wire);
-            assert!(!kind.lane_end_row() && !kind.lane_progress_row(), "{wire} is neither");
+            assert!(
+                !kind.lane_end_row() && !kind.lane_progress_row(),
+                "{wire} is neither"
+            );
         }
     }
 

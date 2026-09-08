@@ -1,5 +1,5 @@
-use std::process::{Command, Stdio};
 use boop_store::testing::BoopCommandExt;
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use boop::Store;

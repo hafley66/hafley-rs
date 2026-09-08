@@ -36,14 +36,69 @@ static DOOR: crate::door::codex::CodexDoor = crate::door::codex::CodexDoor::mach
 
 impl Harness for Codex {
     fn uses_native_tui(&self, args: &[String]) -> bool {
-        super::interactive_arguments(args,
-            &["-c", "--config", "--enable", "--disable", "--remote", "--remote-auth-token-env", "-i", "--image", "-m", "--model", "--local-provider", "-p", "--profile", "-s", "--sandbox", "-C", "--cd", "--add-dir", "-a", "--ask-for-approval"],
+        super::interactive_arguments(
+            args,
+            &[
+                "-c",
+                "--config",
+                "--enable",
+                "--disable",
+                "--remote",
+                "--remote-auth-token-env",
+                "-i",
+                "--image",
+                "-m",
+                "--model",
+                "--local-provider",
+                "-p",
+                "--profile",
+                "-s",
+                "--sandbox",
+                "-C",
+                "--cd",
+                "--add-dir",
+                "-a",
+                "--ask-for-approval",
+            ],
             &["-V"],
-            &["help", "agents", "exec", "e", "review", "login", "logout", "mcp", "plugin", "mcp-server", "app-server", "remote-control", "app", "completion", "update", "doctor", "sandbox", "debug", "apply", "a", "queue", "archive", "delete", "migrate-rollouts", "unarchive", "cloud", "exec-server", "features"])
+            &[
+                "help",
+                "agents",
+                "exec",
+                "e",
+                "review",
+                "login",
+                "logout",
+                "mcp",
+                "plugin",
+                "mcp-server",
+                "app-server",
+                "remote-control",
+                "app",
+                "completion",
+                "update",
+                "doctor",
+                "sandbox",
+                "debug",
+                "apply",
+                "a",
+                "queue",
+                "archive",
+                "delete",
+                "migrate-rollouts",
+                "unarchive",
+                "cloud",
+                "exec-server",
+                "features",
+            ],
+        )
     }
 
     fn matches_model(&self, name: &str) -> bool {
-        !name.contains('/') && ["gpt", "codex", "o3", "o4"].iter().any(|prefix| name.starts_with(prefix))
+        !name.contains('/')
+            && ["gpt", "codex", "o3", "o4"]
+                .iter()
+                .any(|prefix| name.starts_with(prefix))
     }
 
     fn open_channel(
@@ -297,12 +352,21 @@ impl Harness for Codex {
     fn native_settings(&self, session: &SessionRef) -> Option<crate::harness::NativeTuiEvent> {
         let tail = crate::transcript::tail_values(&session.path);
         let head = crate::transcript::head_values(&session.path);
-        let context = tail.iter().rev().chain(head.iter().rev())
+        let context = tail
+            .iter()
+            .rev()
+            .chain(head.iter().rev())
             .find(|row| row.get("type").and_then(Value::as_str) == Some("turn_context"))?;
         Some(crate::harness::NativeTuiEvent::Settings {
             session_id: session.session_id.clone(),
-            model: context.pointer("/payload/model").and_then(Value::as_str).map(str::to_owned),
-            effort: context.pointer("/payload/effort").and_then(Value::as_str).map(str::to_owned),
+            model: context
+                .pointer("/payload/model")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            effort: context
+                .pointer("/payload/effort")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
         })
     }
 
@@ -378,7 +442,11 @@ pub(crate) fn codex_value_text(value: &Value) -> String {
     }
 }
 
-fn read_codex(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate::transcript::Message> {
+fn read_codex(
+    path: &Path,
+    session_id: &str,
+    after_seq: Option<u64>,
+) -> Vec<crate::transcript::Message> {
     let Ok(file) = std::fs::File::open(path) else {
         return Vec::new();
     };
@@ -980,7 +1048,8 @@ fn project_line(
             let text = message_text(payload);
             if !text.is_empty() {
                 *turn += 1;
-                let inserted = store.write_turn(&sid, *turn, ts, role, &text, turn_cwd.as_deref())?;
+                let inserted =
+                    store.write_turn(&sid, *turn, ts, role, &text, turn_cwd.as_deref())?;
                 record(stat, inserted);
             }
         }
@@ -1011,7 +1080,8 @@ fn project_line(
                 .map(str::to_owned)
                 .unwrap_or_else(|| serde_json::to_string(payload).unwrap_or_default());
             *turn += 1;
-            let inserted = store.write_turn(&sid, *turn, ts, "assistant", &text, turn_cwd.as_deref())?;
+            let inserted =
+                store.write_turn(&sid, *turn, ts, "assistant", &text, turn_cwd.as_deref())?;
             record(stat, inserted);
         }
         "patch_apply_end" => {
@@ -1072,7 +1142,8 @@ fn project_line(
             let input_tokens = (count("input_tokens") - cached - cache_write).max(0);
             let attach_turn = if *turn == 0 {
                 *turn += 1;
-                let inserted = store.write_turn(&sid, *turn, ts, "assistant", "", turn_cwd.as_deref())?;
+                let inserted =
+                    store.write_turn(&sid, *turn, ts, "assistant", "", turn_cwd.as_deref())?;
                 record(stat, inserted);
                 *turn
             } else {
@@ -1129,7 +1200,8 @@ fn project_line(
             if !text.is_empty() {
                 *turn += 1;
                 let body = format!("(reasoning)\n{text}");
-                let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body, turn_cwd.as_deref())?;
+                let inserted =
+                    store.write_turn(&sid, *turn, ts, "assistant", &body, turn_cwd.as_deref())?;
                 record(stat, inserted);
             }
         }
@@ -1140,7 +1212,8 @@ fn project_line(
             if !text.is_empty() {
                 *turn += 1;
                 let body = format!("(reasoning)\n{}", truncate_chars(text, 4000));
-                let inserted = store.write_turn(&sid, *turn, ts, "assistant", &body, turn_cwd.as_deref())?;
+                let inserted =
+                    store.write_turn(&sid, *turn, ts, "assistant", &body, turn_cwd.as_deref())?;
                 record(stat, inserted);
             }
         }
@@ -1378,13 +1451,21 @@ mod tests {
     #[test]
     fn native_settings_follow_last_observed_turn() {
         let path = temp_path("observed_settings");
-        write_lines(&path, &[
-            r#"{"type":"turn_context","payload":{"model":"first","effort":"low"}}"#,
-            r#"{"type":"turn_context","payload":{"model":"second","effort":"high"}}"#,
-        ]);
-        assert_eq!(Codex.native_settings(&session_for(&path, 0)), Some(crate::harness::NativeTuiEvent::Settings {
-            session_id: "ses-codex-1".into(), model: Some("second".into()), effort: Some("high".into()),
-        }));
+        write_lines(
+            &path,
+            &[
+                r#"{"type":"turn_context","payload":{"model":"first","effort":"low"}}"#,
+                r#"{"type":"turn_context","payload":{"model":"second","effort":"high"}}"#,
+            ],
+        );
+        assert_eq!(
+            Codex.native_settings(&session_for(&path, 0)),
+            Some(crate::harness::NativeTuiEvent::Settings {
+                session_id: "ses-codex-1".into(),
+                model: Some("second".into()),
+                effort: Some("high".into()),
+            })
+        );
         std::fs::remove_file(path).unwrap();
     }
 

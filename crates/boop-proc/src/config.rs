@@ -149,7 +149,10 @@ pub fn resolve_spawn_preset(
     if let Some(model) = explicit {
         return ModelPreset::from_model(model).map(Some);
     }
-    preset.or(default_preset).map(|name| resolve_preset(name, path)).transpose()
+    preset
+        .or(default_preset)
+        .map(|name| resolve_preset(name, path))
+        .transpose()
 }
 
 /// The loaded config as pretty JSON, including the defaults a missing file
@@ -280,7 +283,9 @@ mod tests {
             "any-harness",
         );
         assert_eq!(
-            resolve_spawn_preset(None, None, Some("flash4"), &path).unwrap().map(|preset| preset.model),
+            resolve_spawn_preset(None, None, Some("flash4"), &path)
+                .unwrap()
+                .map(|preset| preset.model),
             Some("openrouter/deepseek/deepseek-v4-flash-0731".into())
         );
     }
@@ -293,18 +298,29 @@ mod tests {
             "precedence",
         );
         assert_eq!(
-            resolve_spawn_preset(Some("my-model"), Some("flash4"), Some("luna"), &path).unwrap().map(|preset| preset.model),
+            resolve_spawn_preset(Some("my-model"), Some("flash4"), Some("luna"), &path)
+                .unwrap()
+                .map(|preset| preset.model),
             Some("my-model".into())
         );
         assert_eq!(
-            resolve_spawn_preset(None, Some("flash4"), Some("luna"), &path).unwrap().map(|preset| preset.model),
+            resolve_spawn_preset(None, Some("flash4"), Some("luna"), &path)
+                .unwrap()
+                .map(|preset| preset.model),
             Some("openrouter/deepseek/deepseek-v4-flash-0731".into())
         );
         assert_eq!(
-            resolve_spawn_preset(None, None, Some("luna"), &path).unwrap().map(|preset| preset.model),
+            resolve_spawn_preset(None, None, Some("luna"), &path)
+                .unwrap()
+                .map(|preset| preset.model),
             Some("gpt-5.6-luna".into())
         );
-        assert_eq!(resolve_spawn_preset(None, None, None, &path).unwrap().map(|preset| preset.model), None);
+        assert_eq!(
+            resolve_spawn_preset(None, None, None, &path)
+                .unwrap()
+                .map(|preset| preset.model),
+            None
+        );
     }
 
     #[test]
@@ -330,7 +346,9 @@ mod tests {
         ];
         for (explicit, preset, default, expected) in cases {
             assert_eq!(
-                resolve_spawn_preset(explicit, preset, default, &path).unwrap().map(|preset| preset.model),
+                resolve_spawn_preset(explicit, preset, default, &path)
+                    .unwrap()
+                    .map(|preset| preset.model),
                 expected
             );
         }

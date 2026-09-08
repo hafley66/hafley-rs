@@ -724,7 +724,12 @@ fn accepted_resume(lane: &LaneRun, spawn_id: Option<i64>) -> Option<String> {
     match pinned_conversation_for(&lane.mail_dir, &lane.lane, &lane.cwd, spawn_id) {
         Ok(pinned) if pinned == id => Some(id),
         Ok(pinned) => {
-            warn!(lane = lane.lane, resume = id, pinned, "lane resume is not the pinned conversation");
+            warn!(
+                lane = lane.lane,
+                resume = id,
+                pinned,
+                "lane resume is not the pinned conversation"
+            );
             println!("[boop] fresh conversation: pinned for this cwd is {pinned}, not {id}");
             None
         }
@@ -1070,7 +1075,10 @@ fn supervise(
             if let Some(chars) = empty_brief_turn(&end).filter(|_| produced_nothing_yet(lane)) {
                 if empty_briefs < EMPTY_BRIEF_REFEEDS {
                     empty_briefs += 1;
-                    warn!(chars, "lane brief turn produced nothing; re-sending the brief");
+                    warn!(
+                        chars,
+                        "lane brief turn produced nothing; re-sending the brief"
+                    );
                     println!(
                         "[boop] brief turn produced nothing ({chars} chars, no tool call); \
                          re-sending the brief ({empty_briefs}/{EMPTY_BRIEF_REFEEDS})"
@@ -2342,7 +2350,9 @@ mod tests {
         );
         assert_eq!(
             start_ack_failure(&two_words).as_deref(),
-            Some("expected text \"boop\" with zero tool calls; got text \"boop boop\", tool_calls=0")
+            Some(
+                "expected text \"boop\" with zero tool calls; got text \"boop boop\", tool_calls=0"
+            )
         );
     }
 
@@ -3339,7 +3349,10 @@ mod tests {
         let rows = rows_of_kind(&dir, "yield");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].to, "up");
-        assert_eq!(outcomes_of(&dir, &rows[0].id), ["appended", "held-in-mailbox"]);
+        assert_eq!(
+            outcomes_of(&dir, &rows[0].id),
+            ["appended", "held-in-mailbox"]
+        );
     }
 
     /// RECEIPT (Item 0). A parentless lane parks with no row to write, and the

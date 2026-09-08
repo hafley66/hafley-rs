@@ -568,8 +568,16 @@ fn me_still_takes_a_row_held_in_the_mailbox_for_a_native_route() {
 fn me_still_takes_the_yield_and_commit_rows_its_lanes_wrote() {
     let fixture = Fixture::new("supervisor-rows");
     for (id, kind, body) in [
-        ("m-idle", "yield", "idle feature-turn-cwd turn=3 head=abc1234"),
-        ("m-commit", "yield", "commit feature-turn-cwd abc1234..def5678 dirty=0"),
+        (
+            "m-idle",
+            "yield",
+            "idle feature-turn-cwd turn=3 head=abc1234",
+        ),
+        (
+            "m-commit",
+            "yield",
+            "commit feature-turn-cwd abc1234..def5678 dirty=0",
+        ),
         ("m-done", "result", "lane feature-turn-cwd done rc=0"),
     ] {
         append(

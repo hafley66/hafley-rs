@@ -48,8 +48,6 @@ impl HarnessId {
             .into_iter()
             .find(|harness| harness.as_str() == value)
     }
-
-
 }
 
 impl fmt::Display for HarnessId {

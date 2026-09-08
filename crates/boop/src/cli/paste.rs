@@ -53,7 +53,10 @@ pub fn path_arg(path: &Path) -> String {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PastePlan {
     /// Pasteboard gets the file as `class`, then `keys` goes to the pane.
-    Image { class: &'static str, keys: &'static str },
+    Image {
+        class: &'static str,
+        keys: &'static str,
+    },
     /// The quoted path is typed into the pane with no Enter.
     PathText(String),
 }
@@ -68,7 +71,9 @@ pub fn plan(path: &Path, image_paste_keys: Option<&'static str>, as_path: bool) 
 fn write_pasteboard(path: &Path, class: &str) -> Result<()> {
     let script = format!(
         "set the clipboard to (read (POSIX file \"{}\") as «class {class}»)",
-        path.to_string_lossy().replace('\\', "\\\\").replace('"', "\\\"")
+        path.to_string_lossy()
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
     );
     let output = Command::new("osascript")
         .args(["-e", &script])
@@ -135,7 +140,10 @@ pub(crate) fn run_paste(
                 ),
                 None => Some(HarnessId::Claude),
             };
-            (live::pane_of_target(pane).unwrap_or_else(|| pane.to_owned()), id)
+            (
+                live::pane_of_target(pane).unwrap_or_else(|| pane.to_owned()),
+                id,
+            )
         }
         (None, None) => bail!("name a recipient: --route <route> or --pane <target>"),
     };
@@ -169,7 +177,10 @@ mod tests {
         let png = PathBuf::from("/tmp/Screenshot 2026-09-04 at 8.24.07 PM.png");
         assert_eq!(
             plan(&png, Some("C-v"), false),
-            PastePlan::Image { class: "PNGf", keys: "C-v" }
+            PastePlan::Image {
+                class: "PNGf",
+                keys: "C-v"
+            }
         );
         assert_eq!(
             plan(&png, None, false),
@@ -184,6 +195,9 @@ mod tests {
             PastePlan::PathText("/tmp/notes.md".into())
         );
         assert_eq!(pasteboard_class(Path::new("a.JPG")), Some("JPEG"));
-        assert_eq!(path_arg(Path::new("/it's here/x.png")), "'/it'\\''s here/x.png'");
+        assert_eq!(
+            path_arg(Path::new("/it's here/x.png")),
+            "'/it'\\''s here/x.png'"
+        );
     }
 }

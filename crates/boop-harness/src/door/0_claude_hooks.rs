@@ -1,6 +1,6 @@
 //! Claude Code inbox hook protocol and settings handling.
 
-use serde_json::{Map, Value, json};
+use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 
 /// Seconds a hook may take. The drain is two small file reads and one append.

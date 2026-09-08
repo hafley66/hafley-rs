@@ -41,7 +41,10 @@ static KEYSTROKES: Capabilities = Capabilities {
 struct Recorder {
     log: PathBuf,
     calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
-    pause: Option<(std::sync::mpsc::SyncSender<()>, std::sync::Mutex<std::sync::mpsc::Receiver<()>>)>,
+    pause: Option<(
+        std::sync::mpsc::SyncSender<()>,
+        std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+    )>,
 }
 
 impl Door for Recorder {
@@ -49,7 +52,10 @@ impl Door for Recorder {
         if self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
             if let Some((entered, release)) = &self.pause {
                 entered.send(())?;
-                release.lock().unwrap().recv_timeout(Duration::from_secs(10))?;
+                release
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(10))?;
             }
         }
         std::fs::write(&self.log, format!("{} <- {body}", session.session_id))?;
@@ -227,7 +233,7 @@ fn routes(name: &str, route: Route) -> BTreeMap<String, Route> {
 
 #[test]
 fn concurrent_and_later_retries_do_not_resubmit_an_accepted_message() {
-    use std::sync::{Arc, Mutex, mpsc, atomic::Ordering};
+    use std::sync::{atomic::Ordering, mpsc, Arc, Mutex};
     let dir = temp_dir("retries");
     let store = store(&dir);
     let mut adapter = echo(HarnessId::Kimi, &DOOR, &dir);
@@ -238,22 +244,46 @@ fn concurrent_and_later_retries_do_not_resubmit_an_accepted_message() {
     let registry = Registry::with(vec![Box::new(adapter)]);
     let routes = routes("tui", route(HarnessId::Kimi, Some("%1"), Some("live-1")));
     let message = message("m-retry", "tui", "deliver this message once");
-    let budget = boop::mail::DoorBudget { window: Duration::ZERO, cooldown: Duration::ZERO, floor: 100 };
+    let budget = boop::mail::DoorBudget {
+        window: Duration::ZERO,
+        cooldown: Duration::ZERO,
+        floor: 100,
+    };
     let concurrent = std::thread::scope(|scope| {
         let worker = scope.spawn(|| {
             let separate = Store::open(dir.join("boop.db")).unwrap();
-            boop::mail::deliver_hail_budgeted(&registry, &separate, &routes, &message, &NoPane, &budget).unwrap()
+            boop::mail::deliver_hail_budgeted(
+                &registry, &separate, &routes, &message, &NoPane, &budget,
+            )
+            .unwrap()
         });
         arrived.recv_timeout(Duration::from_secs(10)).unwrap();
-        let concurrent = boop::mail::deliver_hail_budgeted(&registry, &store, &routes, &message, &NoPane, &budget).unwrap();
+        let concurrent = boop::mail::deliver_hail_budgeted(
+            &registry, &store, &routes, &message, &NoPane, &budget,
+        )
+        .unwrap();
         release.send(()).unwrap();
         assert!(worker.join().unwrap().rung.carried_the_body());
         concurrent
     });
-    let retry = boop::mail::deliver_hail_budgeted(&registry, &store, &routes, &message, &NoPane, &budget).unwrap();
-    let accepted = store.delivery_rows(&message.id).unwrap().iter().filter(|row| row.outcome == "accepted-by-harness").count();
-    assert_eq!((calls.load(Ordering::SeqCst), concurrent.rung, retry.detail.as_str(), accepted),
-        (1, Rung::TurnBoundary, "previously accepted by harness", 1));
+    let retry =
+        boop::mail::deliver_hail_budgeted(&registry, &store, &routes, &message, &NoPane, &budget)
+            .unwrap();
+    let accepted = store
+        .delivery_rows(&message.id)
+        .unwrap()
+        .iter()
+        .filter(|row| row.outcome == "accepted-by-harness")
+        .count();
+    assert_eq!(
+        (
+            calls.load(Ordering::SeqCst),
+            concurrent.rung,
+            retry.detail.as_str(),
+            accepted
+        ),
+        (1, Rung::TurnBoundary, "previously accepted by harness", 1)
+    );
     drop(store);
     std::fs::remove_dir_all(dir).unwrap();
 }

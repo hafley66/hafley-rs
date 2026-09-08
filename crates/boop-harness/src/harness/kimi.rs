@@ -38,10 +38,27 @@ static DOOR: crate::door::kimi::KimiDoor = crate::door::kimi::KimiDoor;
 
 impl Harness for Kimi {
     fn uses_native_tui(&self, args: &[String]) -> bool {
-        super::interactive_arguments(args,
-            &["-S", "--session", "-m", "--model", "-p", "--prompt", "--output-format", "--skills-dir", "--agent", "--agent-file", "--add-dir"],
+        super::interactive_arguments(
+            args,
+            &[
+                "-S",
+                "--session",
+                "-m",
+                "--model",
+                "-p",
+                "--prompt",
+                "--output-format",
+                "--skills-dir",
+                "--agent",
+                "--agent-file",
+                "--add-dir",
+            ],
             &["-V", "-p", "--prompt"],
-            &["help", "export", "provider", "acp", "web", "server", "login", "doctor", "vis", "migrate", "upgrade", "update"])
+            &[
+                "help", "export", "provider", "acp", "web", "server", "login", "doctor", "vis",
+                "migrate", "upgrade", "update",
+            ],
+        )
     }
 
     fn matches_model(&self, name: &str) -> bool {
@@ -294,7 +311,11 @@ fn kimi_state_path(wire: &Path) -> PathBuf {
     wire.ancestors().nth(3).unwrap_or(wire).join("state.json")
 }
 
-fn read_kimi(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate::transcript::Message> {
+fn read_kimi(
+    path: &Path,
+    session_id: &str,
+    after_seq: Option<u64>,
+) -> Vec<crate::transcript::Message> {
     let Ok(file) = std::fs::File::open(path) else {
         return Vec::new();
     };
@@ -388,7 +409,10 @@ fn read_kimi(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate
                             "assistant".to_string(),
                             Some(name),
                             crate::transcript::cap(
-                                &event.get("args").map(super::codex::codex_value_text).unwrap_or_default(),
+                                &event
+                                    .get("args")
+                                    .map(super::codex::codex_value_text)
+                                    .unwrap_or_default(),
                                 400,
                             ),
                         )

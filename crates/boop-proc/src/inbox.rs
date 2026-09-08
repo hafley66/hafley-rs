@@ -1,12 +1,12 @@
 //! Generic inbox draining with compatibility exports for Claude hook users.
 
-use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use boop_store::bus::Message;
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 
 pub use boop_harness::door::claude_hooks::{
-    Hook, drain_command, drains_by_hook, install, installed_for, settings_path, uninstall,
+    drain_command, drains_by_hook, install, installed_for, settings_path, uninstall, Hook,
 };
 
 /// One drained batch as the agent reads it, each row rendered through the
@@ -14,7 +14,13 @@ pub use boop_harness::door::claude_hooks::{
 pub fn batch_text(rows: &[Message], template: &str) -> String {
     rows.iter()
         .map(|row| {
-            crate::supervise::render_mail(template, row.kind.as_str(), &row.id, &row.from, &row.body)
+            crate::supervise::render_mail(
+                template,
+                row.kind.as_str(),
+                &row.id,
+                &row.from,
+                &row.body,
+            )
         })
         .collect::<Vec<_>>()
         .join("\n\n")
@@ -66,8 +72,8 @@ pub fn undelivered(rows: &[Message], name: &str, already: &BTreeSet<String>) -> 
 
 #[cfg(test)]
 mod tests {
-    use serde_json::{json, Map, Value};
     use super::*;
+    use serde_json::{json, Map, Value};
 
     fn message(id: &str, to: &str, body: &str) -> Message {
         Message {

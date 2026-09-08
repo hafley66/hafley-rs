@@ -225,12 +225,12 @@ impl Door for ClaudeDoor {
         let session_id = explicit_resume(&spec.args);
         let mut plan = NativeTuiPlan::direct(spec);
         plan.source_path = Some(match &session_id {
-                Some(session) => format!(
-                    "native-executable={};requested-resume={session}",
-                    spec.executable
-                ),
-                None => format!("native-executable={}", spec.executable),
-            });
+            Some(session) => format!(
+                "native-executable={};requested-resume={session}",
+                spec.executable
+            ),
+            None => format!("native-executable={}", spec.executable),
+        });
         plan.session_id = session_id;
         Ok(plan)
     }
@@ -563,8 +563,14 @@ mod tui_launch_tests {
 
     #[test]
     fn reads_it_after_the_short_flag_and_from_an_equals_form() {
-        assert_eq!(explicit_resume(&args(&["-r", "abc"])), Some("abc".to_string()));
-        assert_eq!(explicit_resume(&args(&["--resume=abc"])), Some("abc".to_string()));
+        assert_eq!(
+            explicit_resume(&args(&["-r", "abc"])),
+            Some("abc".to_string())
+        );
+        assert_eq!(
+            explicit_resume(&args(&["--resume=abc"])),
+            Some("abc".to_string())
+        );
     }
 
     #[test]
@@ -606,7 +612,13 @@ mod tui_launch_tests {
             plan.session_id.as_deref(),
             Some("f3deaaac-d198-47d5-975d-8e84a038046f")
         );
-        assert_eq!(plan.args, spec.args.iter().map(std::ffi::OsString::from).collect::<Vec<_>>());
+        assert_eq!(
+            plan.args,
+            spec.args
+                .iter()
+                .map(std::ffi::OsString::from)
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -617,6 +629,9 @@ mod tui_launch_tests {
             args: Vec::new(),
             env: Vec::new(),
         };
-        assert_eq!(ClaudeDoor::machine().tui_launch(&spec).unwrap().session_id, None);
+        assert_eq!(
+            ClaudeDoor::machine().tui_launch(&spec).unwrap().session_id,
+            None
+        );
     }
 }

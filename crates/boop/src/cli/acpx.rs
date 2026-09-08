@@ -7,8 +7,8 @@ use anyhow::{Context, Result};
 
 use boop::bus::Route;
 use boop::config;
-use boop_acp::channel::acpx;
 use boop::harness::HarnessId;
+use boop_acp::channel::acpx;
 
 use crate::cli::{mail_dir, write_route};
 

@@ -1944,7 +1944,8 @@ impl Store {
                 created_ts: row.get(4)?,
             })
         })?;
-        rows.collect::<std::result::Result<Vec<_>, _>>().map_err(Into::into)
+        rows.collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(Into::into)
     }
 
     /// The latest assistant turn with a non-empty `said` for one session, as
@@ -2371,8 +2372,13 @@ impl Store {
     /// Clear a process observation only while this PID still owns it. The
     /// ownership read and both liveness writes share one writer transaction.
     pub fn detach_process(&self, session: &str, pid: u32, ts: u64) -> Result<bool> {
-        let transaction = rusqlite::Transaction::new_unchecked(&self.connection, rusqlite::TransactionBehavior::Immediate)?;
-        let owns = self.live_row(session)?.is_some_and(|row| row.pid == Some(i64::from(pid)));
+        let transaction = rusqlite::Transaction::new_unchecked(
+            &self.connection,
+            rusqlite::TransactionBehavior::Immediate,
+        )?;
+        let owns = self
+            .live_row(session)?
+            .is_some_and(|row| row.pid == Some(i64::from(pid)));
         if owns {
             self.record_status(session, ts, "detached", None, None)?;
             self.record_live_door(session, "none", None)?;
@@ -2658,7 +2664,8 @@ impl Store {
         pid: Option<i64>,
         tmux_pane: Option<&str>,
     ) -> Result<()> {
-        self.connection.execute_batch("SAVEPOINT live_observation")?;
+        self.connection
+            .execute_batch("SAVEPOINT live_observation")?;
         let result = (|| {
             let sid = self.session_id(session)?;
             let status_id = self.intern("dict_status", status)?;
@@ -2677,7 +2684,10 @@ impl Store {
                 )
                 .optional()?;
             // Observations before the current interval cannot replace its binding.
-            if open.as_ref().is_some_and(|(from, _, _, _)| *from > ts as i64) {
+            if open
+                .as_ref()
+                .is_some_and(|(from, _, _, _)| *from > ts as i64)
+            {
                 return Ok(());
             }
             self.connection.execute(
@@ -2716,7 +2726,8 @@ impl Store {
         match result {
             Ok(()) => self.connection.execute_batch("RELEASE live_observation")?,
             Err(error) => {
-                self.connection.execute_batch("ROLLBACK TO live_observation; RELEASE live_observation")?;
+                self.connection
+                    .execute_batch("ROLLBACK TO live_observation; RELEASE live_observation")?;
                 return Err(error);
             }
         }
@@ -3214,7 +3225,11 @@ pub fn sync_session_with(
         store.record_status(
             &session.session_id,
             observed_ts,
-            if session.tmux.is_some() { "live" } else { "idle" },
+            if session.tmux.is_some() {
+                "live"
+            } else {
+                "idle"
+            },
             pid,
             session.tmux.as_deref(),
         )?;
@@ -3409,9 +3424,7 @@ fn project_line(
         .unwrap_or("");
     // Claude stamps every record with the directory it ran in; a Bash `cd`
     // mid-session changes it, so the turn's own cwd differs from the session's.
-    let cwd = object
-        .get("cwd")
-        .and_then(serde_json::Value::as_str);
+    let cwd = object.get("cwd").and_then(serde_json::Value::as_str);
 
     if record_type == "pr-link" {
         let pr_url = object
@@ -4451,11 +4464,9 @@ mod tests {
             .unwrap();
         let act: (String, f64) = store
             .connection
-            .query_row(
-                "SELECT skill, cost_usd FROM v_skill_cost_act",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
+            .query_row("SELECT skill, cost_usd FROM v_skill_cost_act", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
             .unwrap();
         assert_eq!(act, ("my-skill".to_string(), 3.0));
         let window: (i64, i64, i64, f64) = store
@@ -4469,11 +4480,16 @@ mod tests {
         assert_eq!(window, (2, 3, 1, 3.0));
         store
             .connection
-            .execute("UPDATE agent_usage SET cost_usd_recorded = 9.0 WHERE turn = 2", [])
+            .execute(
+                "UPDATE agent_usage SET cost_usd_recorded = 9.0 WHERE turn = 2",
+                [],
+            )
             .unwrap();
         let recorded: f64 = store
             .connection
-            .query_row("SELECT cost_usd FROM v_skill_cost_window", [], |row| row.get(0))
+            .query_row("SELECT cost_usd FROM v_skill_cost_window", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(recorded, 9.0);
         let _ = std::fs::remove_file(&path);
@@ -4487,7 +4503,9 @@ mod tests {
             row.get("table").and_then(serde_json::Value::as_str)
         }
         assert!(rows.iter().any(|row| name(row) == Some("v_usage_cost")));
-        assert!(rows.iter().any(|row| name(row) == Some("v_skill_cost_window")));
+        assert!(rows
+            .iter()
+            .any(|row| name(row) == Some("v_skill_cost_window")));
         let skill = rows
             .iter()
             .find(|row| name(row) == Some("agent_skill"))
@@ -4612,7 +4630,9 @@ mod tests {
             (5, 150, "user", "Selected context: ..."),
             (6, 160, "assistant", "the reply"),
         ] {
-            store.write_turn("sess-a", turn, ts, role, said, None).unwrap();
+            store
+                .write_turn("sess-a", turn, ts, role, said, None)
+                .unwrap();
         }
         let targets = vec![("sess-a".to_string(), 3)];
         store
@@ -4628,7 +4648,10 @@ mod tests {
             })
             .unwrap();
         let pending = store.turn_comments_pending().unwrap();
-        assert_eq!(pending[0].targets[0].reply_turn, None, "pending: no reply yet");
+        assert_eq!(
+            pending[0].targets[0].reply_turn, None,
+            "pending: no reply yet"
+        );
         assert!(store.turn_comments_sent().unwrap().is_empty());
 
         store
@@ -4637,7 +4660,11 @@ mod tests {
         let sent = store.turn_comments_sent().unwrap();
         assert_eq!(sent.len(), 1);
         assert_eq!(sent[0].targets[0].turn, 3);
-        assert_eq!(sent[0].targets[0].reply_turn, Some(6), "turn 4 predates the send");
+        assert_eq!(
+            sent[0].targets[0].reply_turn,
+            Some(6),
+            "turn 4 predates the send"
+        );
         let (_, rows) = store
             .passthrough("SELECT comment_id, target_turn, reply_turn FROM agent_turn_comment_reply")
             .unwrap();
@@ -4731,7 +4758,15 @@ mod tests {
             ("m-open", "held-in-mailbox", "mailbox"),
         ] {
             store
-                .append_delivery_transition(id, "claude-1", None, outcome, detail, None, 1_700_000_000_000)
+                .append_delivery_transition(
+                    id,
+                    "claude-1",
+                    None,
+                    outcome,
+                    detail,
+                    None,
+                    1_700_000_000_000,
+                )
                 .unwrap();
             store
                 .connection
@@ -4834,7 +4869,9 @@ mod tests {
                 params![sid, harness_id, cwd_id],
             )
             .unwrap();
-        store.write_turn("null-ses", 1, 100, "user", "hello", None).unwrap();
+        store
+            .write_turn("null-ses", 1, 100, "user", "hello", None)
+            .unwrap();
 
         let (turn, cwd): (i64, String) = store
             .connection
@@ -6627,14 +6664,35 @@ mod tests {
     #[test]
     fn liveness_coalesces_same_timestamp_and_rejects_older_observations() {
         let store = Store::open(":memory:".into()).unwrap();
-        store.record_status("s1", 100, "live", Some(1), Some("%1")).unwrap();
-        store.record_status("s1", 100, "closed", None, None).unwrap();
-        store.record_status("s1", 200, "live", Some(2), Some("%2")).unwrap();
-        store.record_status("s1", 150, "idle", Some(1), Some("%1")).unwrap();
+        store
+            .record_status("s1", 100, "live", Some(1), Some("%1"))
+            .unwrap();
+        store
+            .record_status("s1", 100, "closed", None, None)
+            .unwrap();
+        store
+            .record_status("s1", 200, "live", Some(2), Some("%2"))
+            .unwrap();
+        store
+            .record_status("s1", 150, "idle", Some(1), Some("%1"))
+            .unwrap();
         let spans = store.live_span(Some("s1")).unwrap();
-        assert_eq!(spans.iter().map(|s| (s.from_ts, s.to_ts, s.status.as_str())).collect::<Vec<_>>(), vec![(100, Some(200), "closed"), (200, None, "live")]);
+        assert_eq!(
+            spans
+                .iter()
+                .map(|s| (s.from_ts, s.to_ts, s.status.as_str()))
+                .collect::<Vec<_>>(),
+            vec![(100, Some(200), "closed"), (200, None, "live")]
+        );
         let current = store.live_row("s1").unwrap().unwrap();
-        assert_eq!((current.pid, current.tmux_pane.as_deref(), current.status.as_deref()), (Some(2), Some("%2"), Some("live")));
+        assert_eq!(
+            (
+                current.pid,
+                current.tmux_pane.as_deref(),
+                current.status.as_deref()
+            ),
+            (Some(2), Some("%2"), Some("live"))
+        );
     }
 
     #[test]

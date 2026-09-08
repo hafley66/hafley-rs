@@ -1,5 +1,5 @@
-use std::path::{Path, PathBuf};
 use boop_store::testing::BoopCommandExt;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const BOOP: &str = env!("CARGO_BIN_EXE_boop");

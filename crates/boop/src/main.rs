@@ -17,17 +17,17 @@ use boop::{config, identity};
 mod cli;
 
 use cli::control::run_native_tui;
-use cli::db::{run_db, run_passthrough, sync_before_read};
 #[cfg(feature = "agent-read")]
 use cli::db::run_public_agent_command;
+use cli::db::{run_db, run_passthrough, sync_before_read};
 #[cfg(feature = "dl6")]
 use cli::debug::run_host;
 use cli::debug::{run_config, run_debug, run_lane_debug};
 use cli::job::{run_beep, run_lane_wait, run_wait};
 use cli::mail::{run_inbox, run_send, Outbound};
-use cli::me::{run_me_mood, run_whoami};
 #[cfg(feature = "agent-read")]
 use cli::me::run_me_favorite;
+use cli::me::{run_me_mood, run_whoami};
 use cli::tag::{
     run_tag_add, run_tag_backfill, run_tag_list, run_tag_of, run_tag_recent, run_tag_rm,
     run_tag_search, run_tag_sources,
@@ -438,7 +438,9 @@ fn print_shell_init(shell: ShellKind) {
 
 /// Whether this invocation is asking for help, whatever verb it names.
 fn help_wanted() -> bool {
-    std::env::args().take_while(|argument| argument != "--").any(|argument| argument == "--help" || argument == "-h")
+    std::env::args()
+        .take_while(|argument| argument != "--")
+        .any(|argument| argument == "--help" || argument == "-h")
 }
 
 fn main() -> Result<()> {
@@ -458,7 +460,9 @@ fn main() -> Result<()> {
     }
     let command = cli.command.context("a command or --preset is required")?;
     match &command {
-        SubCmd::Tui { harness, name, .. } => init_tracing(name.clone().or_else(|| tui_trail(harness)).as_deref(), true)?,
+        SubCmd::Tui { harness, name, .. } => {
+            init_tracing(name.clone().or_else(|| tui_trail(harness)).as_deref(), true)?
+        }
         _ => init_tracing(supervised_lane(&command), false)?,
     }
     let registry = Registry::discover();
@@ -839,7 +843,9 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
 }
 
 #[cfg(not(feature = "agent-read"))]
-fn command_needs_startup_sync(_: &SubCmd) -> bool { false }
+fn command_needs_startup_sync(_: &SubCmd) -> bool {
+    false
+}
 
 fn run_with_startup_sync<T>(
     needs_sync: bool,
@@ -2341,11 +2347,20 @@ mod tests {
             "#!/bin/sh\nprintf '%s\\n' \"$@\" \"$BOOP_SESSION\" \"$BOOP_PARENT\" > \"$CAPTURE\"\nexit 23\n",
         );
         let mut paths = vec![root.clone()];
-        paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
+        paths.extend(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        ));
         let path = std::env::join_paths(paths).expect("join shell-init PATH");
-        for (entry, harness) in [("codex", "codex"), ("claude", "claude"), ("ccz", "claude"), ("kimi", "kimi"), ("opencode", "opencode")] {
+        for (entry, harness) in [
+            ("codex", "codex"),
+            ("claude", "claude"),
+            ("ccz", "claude"),
+            ("kimi", "kimi"),
+            ("opencode", "opencode"),
+        ] {
             for pane in ["", "%999"] {
-                let script = format!("{BASH_SHELL_INIT}\n{entry} -c 'model_reasoning_effort=low' 'a b' ''");
+                let script =
+                    format!("{BASH_SHELL_INIT}\n{entry} -c 'model_reasoning_effort=low' 'a b' ''");
                 let output = std::process::Command::new("bash")
                     .args(["-c", &script])
                     .current_dir(&root)
@@ -2356,13 +2371,33 @@ mod tests {
                     .env("TMUX_PANE", pane)
                     .output()
                     .expect("run generated shell wrapper");
-                assert_eq!(output.status.code(), Some(23), "entry={entry}, pane={pane}, stderr={}", String::from_utf8_lossy(&output.stderr));
+                assert_eq!(
+                    output.status.code(),
+                    Some(23),
+                    "entry={entry}, pane={pane}, stderr={}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
                 let stamped = std::fs::read_to_string(&capture).expect("read wrapper call");
                 let cwd = std::fs::canonicalize(&root).unwrap();
-                assert_eq!(stamped.lines().collect::<Vec<_>>(), vec![
-                    "tui", harness, "--bin", entry, "--cwd", cwd.to_str().unwrap(), "--",
-                    "-c", "model_reasoning_effort=low", "a b", "", "caller-session", "caller-parent",
-                ], "entry={entry}, pane={pane}");
+                assert_eq!(
+                    stamped.lines().collect::<Vec<_>>(),
+                    vec![
+                        "tui",
+                        harness,
+                        "--bin",
+                        entry,
+                        "--cwd",
+                        cwd.to_str().unwrap(),
+                        "--",
+                        "-c",
+                        "model_reasoning_effort=low",
+                        "a b",
+                        "",
+                        "caller-session",
+                        "caller-parent",
+                    ],
+                    "entry={entry}, pane={pane}"
+                );
             }
         }
         let _ = std::fs::remove_dir_all(&root);

@@ -1,9 +1,9 @@
 //! The codex door: `~/.codex/state_5.sqlite` says which threads exist, and the
 //! remote-control daemon's socket is where a message for one is queued.
 
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::os::unix::process::CommandExt;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -71,8 +71,13 @@ impl CodexDoor {
 }
 
 impl LiveSessions for CodexDoor {
-    fn live_session_for_route(&self, route: &boop_store::bus::Route) -> Result<Option<LiveSession>> {
-        let Some(id) = route.session_id.as_deref() else { return Ok(None); };
+    fn live_session_for_route(
+        &self,
+        route: &boop_store::bus::Route,
+    ) -> Result<Option<LiveSession>> {
+        let Some(id) = route.session_id.as_deref() else {
+            return Ok(None);
+        };
         if let Some(socket) = route.app_server_socket.as_deref() {
             // Owned TUI events identify the thread before legacy state_5
             // discovery can see it (including paginated-history threads).
@@ -83,15 +88,23 @@ impl LiveSessions for CodexDoor {
                 cwd: route.cwd.as_ref().map(PathBuf::from),
                 tmux_pane: route.tmux.clone(),
                 status: LiveStatus::Unknown,
-                door: DoorAddress::AppServer { socket: PathBuf::from(socket), thread: id.to_owned() },
-                observed_ms: now_ms(), started_ms: None,
-                scope: LiveSessionScope::Root, parent_session: None,
+                door: DoorAddress::AppServer {
+                    socket: PathBuf::from(socket),
+                    thread: id.to_owned(),
+                },
+                observed_ms: now_ms(),
+                started_ms: None,
+                scope: LiveSessionScope::Root,
+                parent_session: None,
             }));
         }
         if route.mode.as_deref() == Some("native-owned") {
             return Ok(None);
         }
-        Ok(self.live_sessions()?.into_iter().find(|session| session.session_id == id))
+        Ok(self
+            .live_sessions()?
+            .into_iter()
+            .find(|session| session.session_id == id))
     }
 
     /// `threads` is the codex thread registry: `id`, `cwd`, `updated_at_ms`,
@@ -193,19 +206,33 @@ impl Door for CodexDoor {
     /// Each wrapper owns its backend, environment and observed thread events.
     fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan> {
         // Codex rejects symlinked socket parents; macOS /tmp is a symlink.
-        let backend_root = tempfile::Builder::new().prefix("boop-codex-")
+        let backend_root = tempfile::Builder::new()
+            .prefix("boop-codex-")
             .tempdir_in(std::fs::canonicalize("/tmp")?)?;
-        let socket = backend_root.path().join("control.sock").display().to_string();
+        let socket = backend_root
+            .path()
+            .join("control.sock")
+            .display()
+            .to_string();
         let frontend = backend_root.path().join("tui.sock").display().to_string();
         let (requested_thread, forwarded) = explicit_resume(&spec.args)?;
         let mut command = Command::new(&spec.executable);
         command.args(["app-server", "--listen", &format!("unix://{socket}")]);
         command.args(server_config_args(&spec.args)?);
-        let backend = command.envs(spec.env.iter().cloned())
-            .current_dir(&spec.cwd).process_group(0)
-            .stdin(Stdio::null()).stdout(Stdio::null())
-            .stderr(boop_store::trail::child_stderr(spec.env.iter().find(|(key, _)| key == "BOOP_SESSION").map(|(_, value)| value.as_str())))
-            .spawn().context("start owned Codex app-server")?;
+        let backend = command
+            .envs(spec.env.iter().cloned())
+            .current_dir(&spec.cwd)
+            .process_group(0)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(boop_store::trail::child_stderr(
+                spec.env
+                    .iter()
+                    .find(|(key, _)| key == "BOOP_SESSION")
+                    .map(|(_, value)| value.as_str()),
+            ))
+            .spawn()
+            .context("start owned Codex app-server")?;
         let mut plan = NativeTuiPlan {
             program: spec.executable.clone(),
             args: native_tui_args(requested_thread.as_deref(), &frontend, &spec.cwd, forwarded),
@@ -220,8 +247,14 @@ impl Door for CodexDoor {
         };
         let deadline = std::time::Instant::now() + Duration::from_secs(10);
         while !Path::new(&socket).exists() {
-            anyhow::ensure!(plan.backend.as_mut().unwrap().try_wait()?.is_none(), "owned Codex app-server exited before opening its socket");
-            anyhow::ensure!(std::time::Instant::now() < deadline, "owned Codex app-server socket timed out");
+            anyhow::ensure!(
+                plan.backend.as_mut().unwrap().try_wait()?.is_none(),
+                "owned Codex app-server exited before opening its socket"
+            );
+            anyhow::ensure!(
+                std::time::Instant::now() < deadline,
+                "owned Codex app-server socket timed out"
+            );
             std::thread::sleep(Duration::from_millis(25));
         }
         plan.observer = Some(observe_tui(&frontend, &socket)?);
@@ -229,21 +262,39 @@ impl Door for CodexDoor {
     }
 
     /// Resume under a new owned backend after an abnormal process exit.
-    fn tui_relaunch(&self, spec: &NativeTuiSpec, session: &str, model: Option<&str>, effort: Option<&str>) -> Result<Option<NativeTuiPlan>> {
-        self.tui_launch(&resume_spec(spec, session, model, effort)?).map(Some)
+    fn tui_relaunch(
+        &self,
+        spec: &NativeTuiSpec,
+        session: &str,
+        model: Option<&str>,
+        effort: Option<&str>,
+    ) -> Result<Option<NativeTuiPlan>> {
+        self.tui_launch(&resume_spec(spec, session, model, effort)?)
+            .map(Some)
     }
 }
 
-fn resume_spec(spec: &NativeTuiSpec, session: &str, model: Option<&str>, effort: Option<&str>) -> Result<NativeTuiSpec> {
+fn resume_spec(
+    spec: &NativeTuiSpec,
+    session: &str,
+    model: Option<&str>,
+    effort: Option<&str>,
+) -> Result<NativeTuiSpec> {
     let mut resume = spec.clone();
     resume.args = vec!["resume".into(), session.into()];
     resume.args.extend(server_config_args(&spec.args)?);
     // These follow the original overrides so observed settings take priority.
-    if let Some(model) = model { resume.args.extend(["--model".into(), model.into()]); }
-    if let Some(effort) = effort {
-        resume.args.extend(["-c".into(), format!("model_reasoning_effort={effort}")]);
+    if let Some(model) = model {
+        resume.args.extend(["--model".into(), model.into()]);
     }
-    if spec.args.iter().any(|arg| arg == "--no-alt-screen") { resume.args.push("--no-alt-screen".into()); }
+    if let Some(effort) = effort {
+        resume
+            .args
+            .extend(["-c".into(), format!("model_reasoning_effort={effort}")]);
+    }
+    if spec.args.iter().any(|arg| arg == "--no-alt-screen") {
+        resume.args.push("--no-alt-screen".into());
+    }
     Ok(resume)
 }
 
@@ -255,10 +306,19 @@ fn server_config_args(args: &[String]) -> Result<Vec<String>> {
         match arg.as_str() {
             "-c" | "--config" | "--enable" | "--disable" => {
                 out.push(arg.clone());
-                out.push(args.next().with_context(|| format!("{arg} needs a value"))?.clone());
+                out.push(
+                    args.next()
+                        .with_context(|| format!("{arg} needs a value"))?
+                        .clone(),
+                );
             }
             "--strict-config" => out.push(arg.clone()),
-            _ if arg.starts_with("--config=") || arg.starts_with("--enable=") || arg.starts_with("--disable=") => out.push(arg.clone()),
+            _ if arg.starts_with("--config=")
+                || arg.starts_with("--enable=")
+                || arg.starts_with("--disable=") =>
+            {
+                out.push(arg.clone())
+            }
             _ => {}
         }
     }
@@ -274,13 +334,15 @@ fn tui_event(value: &serde_json::Value, selected: bool) -> Option<NativeTuiEvent
         let thread = &result["thread"];
         if thread["ephemeral"].as_bool() == Some(true)
             || thread["parentThreadId"].as_str().is_some()
-            || thread["source"].get("subAgent").is_some() {
+            || thread["source"].get("subAgent").is_some()
+        {
             return None;
         }
         return Some(NativeTuiEvent::Session {
             session_id: string(&thread["id"])?,
             model: string(&result["model"]).or_else(|| string(&thread["model"])),
-            effort: string(&result["reasoningEffort"]).or_else(|| string(&thread["reasoningEffort"])),
+            effort: string(&result["reasoningEffort"])
+                .or_else(|| string(&thread["reasoningEffort"])),
         });
     }
     let params = &value["params"];
@@ -290,12 +352,18 @@ fn tui_event(value: &serde_json::Value, selected: bool) -> Option<NativeTuiEvent
             model: string(&params["threadSettings"]["model"]),
             effort: string(&params["threadSettings"]["effort"]),
         }),
-        "thread/closed" => Some(NativeTuiEvent::Closed { session_id: string(&params["threadId"])? }),
+        "thread/closed" => Some(NativeTuiEvent::Closed {
+            session_id: string(&params["threadId"])?,
+        }),
         _ => None,
     }
 }
 
-async fn emit_tui_event(send: &std::sync::mpsc::SyncSender<NativeTuiEvent>, stop: &std::sync::atomic::AtomicBool, mut event: NativeTuiEvent) {
+async fn emit_tui_event(
+    send: &std::sync::mpsc::SyncSender<NativeTuiEvent>,
+    stop: &std::sync::atomic::AtomicBool,
+    mut event: NativeTuiEvent,
+) {
     while !stop.load(std::sync::atomic::Ordering::Acquire) {
         match send.try_send(event) {
             Ok(()) | Err(std::sync::mpsc::TrySendError::Disconnected(_)) => return,
@@ -309,15 +377,21 @@ async fn emit_tui_event(send: &std::sync::mpsc::SyncSender<NativeTuiEvent>, stop
 /// the backend directly. Observation adds no thread selection or subscription.
 fn observe_tui(frontend: &str, backend: &str) -> Result<NativeTuiObserver> {
     use std::os::unix::net::UnixListener;
-    use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
     let listener = UnixListener::bind(frontend).context("bind owned Codex TUI socket")?;
     listener.set_nonblocking(true)?;
     let backend = backend.to_owned();
     let (send, events) = std::sync::mpsc::sync_channel(64);
     let stop = Arc::new(AtomicBool::new(false));
     let stopping = stop.clone();
-    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
-    let worker = std::thread::spawn(move || runtime.block_on(async move {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let worker = std::thread::spawn(move || {
+        runtime.block_on(async move {
         let listener = match tokio::net::UnixListener::from_std(listener) {
             Ok(listener) => listener,
             Err(error) => {
@@ -350,19 +424,37 @@ fn observe_tui(frontend: &str, backend: &str) -> Result<NativeTuiObserver> {
             }
         }
         connections.shutdown().await;
-    }));
-    Ok(NativeTuiObserver { events, stop, worker: Some(worker) })
+    })
+    });
+    Ok(NativeTuiObserver {
+        events,
+        stop,
+        worker: Some(worker),
+    })
 }
 
-async fn forward_tui(client: tokio::net::UnixStream, backend: &str, send: &std::sync::mpsc::SyncSender<NativeTuiEvent>, stop: &std::sync::atomic::AtomicBool) -> Result<()> {
+async fn forward_tui(
+    client: tokio::net::UnixStream,
+    backend: &str,
+    send: &std::sync::mpsc::SyncSender<NativeTuiEvent>,
+    stop: &std::sync::atomic::AtomicBool,
+) -> Result<()> {
     use futures_util::{SinkExt, StreamExt};
     use tungstenite::Message;
     let (client, server) = tokio::time::timeout(Duration::from_secs(5), async {
-        let client = tokio_tungstenite::accept_async(client).await.context("accept TUI websocket")?;
-        let server = tokio::net::UnixStream::connect(backend).await.context("connect owned backend")?;
-        let (server, _) = tokio_tungstenite::client_async("ws://localhost/", server).await.context("connect backend websocket")?;
+        let client = tokio_tungstenite::accept_async(client)
+            .await
+            .context("accept TUI websocket")?;
+        let server = tokio::net::UnixStream::connect(backend)
+            .await
+            .context("connect owned backend")?;
+        let (server, _) = tokio_tungstenite::client_async("ws://localhost/", server)
+            .await
+            .context("connect backend websocket")?;
         anyhow::Ok((client, server))
-    }).await.context("TUI connection handshake timed out")??;
+    })
+    .await
+    .context("TUI connection handshake timed out")??;
     let (mut client_send, mut client_read) = client.split();
     let (mut server_send, mut server_read) = server.split();
     let selections = std::sync::Mutex::new(std::collections::BTreeSet::new());
@@ -371,14 +463,20 @@ async fn forward_tui(client: tokio::net::UnixStream, backend: &str, send: &std::
             let frame = frame.context("read TUI frame")?;
             if let Message::Text(text) = &frame {
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(text) {
-                    if matches!(value["method"].as_str(), Some("thread/start" | "thread/resume" | "thread/fork")) && !value["id"].is_null() {
+                    if matches!(
+                        value["method"].as_str(),
+                        Some("thread/start" | "thread/resume" | "thread/fork")
+                    ) && !value["id"].is_null()
+                    {
                         selections.lock().unwrap().insert(value["id"].to_string());
                     }
                 }
             }
             let closing = frame.is_close();
             server_send.send(frame).await.context("forward TUI frame")?;
-            if closing { break; }
+            if closing {
+                break;
+            }
         }
         anyhow::Ok(())
     };
@@ -394,8 +492,13 @@ async fn forward_tui(client: tokio::net::UnixStream, backend: &str, send: &std::
                 }
             }
             let closing = frame.is_close();
-            client_send.send(frame).await.context("forward backend frame")?;
-            if closing { break; }
+            client_send
+                .send(frame)
+                .await
+                .context("forward backend frame")?;
+            if closing {
+                break;
+            }
         }
         anyhow::Ok(())
     };
@@ -656,10 +759,7 @@ mod tests {
             parents.get("spawned").and_then(Option::as_deref),
             Some("parent")
         );
-        assert_eq!(
-            parents.get("guardian").and_then(Option::as_deref),
-            None
-        );
+        assert_eq!(parents.get("guardian").and_then(Option::as_deref), None);
     }
 
     /// RECEIPT. A machine with no state database has no codex running, which
@@ -672,8 +772,17 @@ mod tests {
 
     #[test]
     fn backend_configuration_is_forwarded_without_replaying_the_prompt() {
-        let args = ["resume", "thread-1", "-m", "gpt-6-astra", "-c", "model_reasoning_effort=max", "--enable=x", "bounded prompt"]
-            .map(str::to_owned);
+        let args = [
+            "resume",
+            "thread-1",
+            "-m",
+            "gpt-6-astra",
+            "-c",
+            "model_reasoning_effort=max",
+            "--enable=x",
+            "bounded prompt",
+        ]
+        .map(str::to_owned);
         assert_eq!(
             server_config_args(&args).unwrap(),
             ["-c", "model_reasoning_effort=max", "--enable=x"]
@@ -682,10 +791,37 @@ mod tests {
 
     #[test]
     fn automatic_resume_uses_observed_settings_and_retains_inline_mode() {
-        let spec = NativeTuiSpec { executable:"codex".into(), cwd:"/fixture".into(), env:vec![],
-            args:["-m", "old-model", "-c", "model_reasoning_effort=low", "--no-alt-screen", "initial prompt"].map(str::to_owned).to_vec() };
-        let resumed = resume_spec(&spec, "same-thread", Some("observed-model"), Some("high")).unwrap();
-        assert_eq!(resumed.args, ["resume", "same-thread", "-c", "model_reasoning_effort=low", "--model", "observed-model", "-c", "model_reasoning_effort=high", "--no-alt-screen"]);
+        let spec = NativeTuiSpec {
+            executable: "codex".into(),
+            cwd: "/fixture".into(),
+            env: vec![],
+            args: [
+                "-m",
+                "old-model",
+                "-c",
+                "model_reasoning_effort=low",
+                "--no-alt-screen",
+                "initial prompt",
+            ]
+            .map(str::to_owned)
+            .to_vec(),
+        };
+        let resumed =
+            resume_spec(&spec, "same-thread", Some("observed-model"), Some("high")).unwrap();
+        assert_eq!(
+            resumed.args,
+            [
+                "resume",
+                "same-thread",
+                "-c",
+                "model_reasoning_effort=low",
+                "--model",
+                "observed-model",
+                "-c",
+                "model_reasoning_effort=high",
+                "--no-alt-screen"
+            ]
+        );
         assert_eq!(resumed.env, spec.env);
     }
 
@@ -693,27 +829,67 @@ mod tests {
     fn native_lifecycle_events_keep_roots_settings_and_closure_separate() {
         use serde_json::json;
         let events = [
-            (json!({"id":1,"result":{"thread":{"id":"root","source":"vscode"},"model":"gpt-6-astra","reasoningEffort":"max"}}), true),
-            (json!({"id":2,"result":{"thread":{"id":"child","parentThreadId":"root","source":{"subAgent":{}}}}}), true),
-            (json!({"id":3,"result":{"thread":{"id":"guardian","ephemeral":true}}}), true),
-            (json!({"method":"thread/started","params":{"thread":{"id":"another-root"}}}), false),
-            (json!({"id":4,"result":{"thread":{"id":"read-only-query"}}}), false),
+            (
+                json!({"id":1,"result":{"thread":{"id":"root","source":"vscode"},"model":"gpt-6-astra","reasoningEffort":"max"}}),
+                true,
+            ),
+            (
+                json!({"id":2,"result":{"thread":{"id":"child","parentThreadId":"root","source":{"subAgent":{}}}}}),
+                true,
+            ),
+            (
+                json!({"id":3,"result":{"thread":{"id":"guardian","ephemeral":true}}}),
+                true,
+            ),
+            (
+                json!({"method":"thread/started","params":{"thread":{"id":"another-root"}}}),
+                false,
+            ),
+            (
+                json!({"id":4,"result":{"thread":{"id":"read-only-query"}}}),
+                false,
+            ),
             (json!({"id":5,"error":{"message":"bad resume id"}}), true),
-            (json!({"method":"thread/settings/updated","params":{"threadId":"root","threadSettings":{"model":"gpt-5.6-luna","effort":"low"}}}), false),
-            (json!({"method":"thread/closed","params":{"threadId":"root"}}), false),
-            (json!({"method":"thread/compacted","params":{"threadId":"root"}}), false),
+            (
+                json!({"method":"thread/settings/updated","params":{"threadId":"root","threadSettings":{"model":"gpt-5.6-luna","effort":"low"}}}),
+                false,
+            ),
+            (
+                json!({"method":"thread/closed","params":{"threadId":"root"}}),
+                false,
+            ),
+            (
+                json!({"method":"thread/compacted","params":{"threadId":"root"}}),
+                false,
+            ),
         ];
-        assert_eq!(events.iter().filter_map(|(value, selected)| tui_event(value, *selected)).collect::<Vec<_>>(), vec![
-            NativeTuiEvent::Session { session_id:"root".into(), model:Some("gpt-6-astra".into()), effort:Some("max".into()) },
-            NativeTuiEvent::Settings { session_id:"root".into(), model:Some("gpt-5.6-luna".into()), effort:Some("low".into()) },
-            NativeTuiEvent::Closed { session_id:"root".into() },
-        ]);
+        assert_eq!(
+            events
+                .iter()
+                .filter_map(|(value, selected)| tui_event(value, *selected))
+                .collect::<Vec<_>>(),
+            vec![
+                NativeTuiEvent::Session {
+                    session_id: "root".into(),
+                    model: Some("gpt-6-astra".into()),
+                    effort: Some("max".into())
+                },
+                NativeTuiEvent::Settings {
+                    session_id: "root".into(),
+                    model: Some("gpt-5.6-luna".into()),
+                    effort: Some("low".into())
+                },
+                NativeTuiEvent::Closed {
+                    session_id: "root".into()
+                },
+            ]
+        );
     }
 
     #[test]
     fn native_connection_forwards_large_frames_in_both_directions_and_observes_resume() {
-        use std::os::unix::net::{UnixListener, UnixStream};
         use serde_json::json;
+        use std::os::unix::net::{UnixListener, UnixStream};
         use tungstenite::Message;
         let root = tempfile::tempdir_in(std::fs::canonicalize("/tmp").unwrap()).unwrap();
         let backend = root.path().join("backend.sock");
@@ -722,33 +898,78 @@ mod tests {
         let observer = observe_tui(frontend.to_str().unwrap(), backend.to_str().unwrap()).unwrap();
         let fake = std::thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();
-            stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
-            stream.set_write_timeout(Some(Duration::from_secs(3))).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
             let mut server = tungstenite::accept(stream).unwrap();
-            for (id, session, model, effort) in [(1, "first", "gpt-5.6-luna", "low"), (2, "resumed", "gpt-5.6-terra", "high")] {
-                let request: serde_json::Value = serde_json::from_str(&server.read().unwrap().into_text().unwrap()).unwrap();
+            for (id, session, model, effort) in [
+                (1, "first", "gpt-5.6-luna", "low"),
+                (2, "resumed", "gpt-5.6-terra", "high"),
+            ] {
+                let request: serde_json::Value =
+                    serde_json::from_str(&server.read().unwrap().into_text().unwrap()).unwrap();
                 assert_eq!(request["id"], id);
                 let response = json!({"id":id,"result":{"thread":{"id":session,"ephemeral":false},"model":model,"reasoningEffort":effort},"padding":"x".repeat(512_000)});
-                server.send(Message::Text(response.to_string().into())).unwrap();
+                server
+                    .send(Message::Text(response.to_string().into()))
+                    .unwrap();
             }
             let _ = server.close(None);
         });
         let stream = UnixStream::connect(&frontend).unwrap();
-        stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
-        stream.set_write_timeout(Some(Duration::from_secs(3))).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(3)))
+            .unwrap();
+        stream
+            .set_write_timeout(Some(Duration::from_secs(3)))
+            .unwrap();
         let (mut client, _) = tungstenite::client("ws://localhost/", stream).unwrap();
         for (id, method) in [(1, "thread/start"), (2, "thread/resume")] {
-            client.send(Message::Text(json!({"id":id,"method":method,"params":{"padding":"y".repeat(512_000)}}).to_string().into())).unwrap();
+            client
+                .send(Message::Text(
+                    json!({"id":id,"method":method,"params":{"padding":"y".repeat(512_000)}})
+                        .to_string()
+                        .into(),
+                ))
+                .unwrap();
         }
         for id in [1, 2] {
-            let response: serde_json::Value = serde_json::from_str(&client.read().unwrap().into_text().unwrap()).unwrap();
-            assert_eq!((response["id"].as_i64(), response["padding"].as_str().unwrap().len()), (Some(id), 512_000));
+            let response: serde_json::Value =
+                serde_json::from_str(&client.read().unwrap().into_text().unwrap()).unwrap();
+            assert_eq!(
+                (
+                    response["id"].as_i64(),
+                    response["padding"].as_str().unwrap().len()
+                ),
+                (Some(id), 512_000)
+            );
         }
-        let events = (0..2).map(|_| observer.events.recv_timeout(Duration::from_secs(3)).unwrap()).collect::<Vec<_>>();
-        assert_eq!(events, vec![
-            NativeTuiEvent::Session {session_id:"first".into(), model:Some("gpt-5.6-luna".into()), effort:Some("low".into())},
-            NativeTuiEvent::Session {session_id:"resumed".into(), model:Some("gpt-5.6-terra".into()), effort:Some("high".into())},
-        ]);
+        let events = (0..2)
+            .map(|_| {
+                observer
+                    .events
+                    .recv_timeout(Duration::from_secs(3))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            events,
+            vec![
+                NativeTuiEvent::Session {
+                    session_id: "first".into(),
+                    model: Some("gpt-5.6-luna".into()),
+                    effort: Some("low".into())
+                },
+                NativeTuiEvent::Session {
+                    session_id: "resumed".into(),
+                    model: Some("gpt-5.6-terra".into()),
+                    effort: Some("high".into())
+                },
+            ]
+        );
         drop(client);
         drop(observer);
         fake.join().unwrap();

@@ -387,8 +387,10 @@ const SYNC_TRAIL_CAP: u64 = 512 * 1024;
 
 /// `~/.agent`.
 pub fn agent_root() -> Result<PathBuf> {
-    crate::ident::Store::default_path()?.parent()
-        .map(Path::to_path_buf).context("Boop store needs a parent directory")
+    crate::ident::Store::default_path()?
+        .parent()
+        .map(Path::to_path_buf)
+        .context("Boop store needs a parent directory")
 }
 
 /// `~/.agent/sync-trail.ndjson`, or the `BOOP_SYNC_TRAIL` override a test sets.
@@ -442,7 +444,10 @@ mod tests {
             let expected = PathBuf::from(expected);
             assert_eq!(crate::ident::Store::default_path().unwrap(), expected);
             assert_eq!(agent_root().unwrap(), expected.parent().unwrap());
-            assert_eq!(lanes_root().unwrap(), expected.parent().unwrap().join("lanes"));
+            assert_eq!(
+                lanes_root().unwrap(),
+                expected.parent().unwrap().join("lanes")
+            );
             return;
         }
         let root = tempdir("path-overrides");
@@ -450,16 +455,34 @@ mod tests {
         for (mail, db, expected) in [
             (None, None, default),
             (Some(root.join("mail")), None, root.join("mail/boop.db")),
-            (Some(root.join("mail")), Some(root.join("database/custom.db")), root.join("database/custom.db")),
+            (
+                Some(root.join("mail")),
+                Some(root.join("database/custom.db")),
+                root.join("database/custom.db"),
+            ),
         ] {
             let mut probe = std::process::Command::new(std::env::current_exe().unwrap());
-            probe.args(["--exact", "trail::tests::configured_store_and_trails_are_isolated"])
+            probe
+                .args([
+                    "--exact",
+                    "trail::tests::configured_store_and_trails_are_isolated",
+                ])
                 .env("BOOP_STORE_PATH_PROBE", expected)
-                .env_remove("BOOP_DB").env_remove("BOOP_MAIL_DIR");
-            if let Some(mail) = mail { probe.env("BOOP_MAIL_DIR", mail); }
-            if let Some(db) = db { probe.env("BOOP_DB", db); }
+                .env_remove("BOOP_DB")
+                .env_remove("BOOP_MAIL_DIR");
+            if let Some(mail) = mail {
+                probe.env("BOOP_MAIL_DIR", mail);
+            }
+            if let Some(db) = db {
+                probe.env("BOOP_DB", db);
+            }
             let output = probe.output().unwrap();
-            assert!(output.status.success(), "{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+            assert!(
+                output.status.success(),
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
         std::fs::remove_dir_all(root).unwrap();
     }

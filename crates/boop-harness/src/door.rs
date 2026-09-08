@@ -9,9 +9,9 @@ use anyhow::Result;
 use crate::harness::{NativeTuiPlan, NativeTuiSpec};
 use crate::live::{now_ms, LiveSession, LiveSessions};
 
+pub mod claude;
 #[path = "door/0_claude_hooks.rs"]
 pub mod claude_hooks;
-pub mod claude;
 pub mod codex;
 pub mod kimi;
 pub mod opencode;
@@ -46,7 +46,9 @@ impl IdleNotice {
 /// The control plane of one harness.
 pub trait Door: Send + Sync {
     /// Whether this adapter's installed hooks will drain the addressed inbox.
-    fn inbox_hook_installed(&self, _cwd: &std::path::Path, _route: &str) -> bool { false }
+    fn inbox_hook_installed(&self, _cwd: &std::path::Path, _route: &str) -> bool {
+        false
+    }
 
     /// Write `body` to `session`. Transport failure is `Unreachable`, not an
     /// `Err`; an `Err` means the request could not be formed at all.
@@ -65,7 +67,13 @@ pub trait Door: Send + Sync {
     /// A fresh process plan resuming `session` after the TUI process died
     /// under a still-wanted route. `None` means this harness has no resume
     /// story and the death is final.
-    fn tui_relaunch(&self, _spec: &NativeTuiSpec, _session: &str, _model: Option<&str>, _effort: Option<&str>) -> Result<Option<NativeTuiPlan>> {
+    fn tui_relaunch(
+        &self,
+        _spec: &NativeTuiSpec,
+        _session: &str,
+        _model: Option<&str>,
+        _effort: Option<&str>,
+    ) -> Result<Option<NativeTuiPlan>> {
         Ok(None)
     }
 }

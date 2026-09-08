@@ -68,7 +68,12 @@ impl OpencodeDoor {
 
     /// Borrow an explicitly addressed server, or own the process started here.
     /// The plan holds it before readiness checks, including startup errors.
-    fn ensure_server(&self, spec: &NativeTuiSpec, base: &Url, plan: &mut NativeTuiPlan) -> Result<()> {
+    fn ensure_server(
+        &self,
+        spec: &NativeTuiSpec,
+        base: &Url,
+        plan: &mut NativeTuiPlan,
+    ) -> Result<()> {
         if self.get("session", Duration::from_secs(2)).is_ok() {
             return Ok(());
         }
@@ -92,9 +97,11 @@ impl OpencodeDoor {
                 Ok(())
             });
         }
-        plan.backend = Some(command
-            .spawn()
-            .with_context(|| format!("start `{} serve` on {base}", spec.executable))?);
+        plan.backend = Some(
+            command
+                .spawn()
+                .with_context(|| format!("start `{} serve` on {base}", spec.executable))?,
+        );
         let deadline = Instant::now() + SERVE_START;
         while Instant::now() < deadline {
             if let Some(status) = plan.backend.as_mut().unwrap().try_wait()? {
@@ -105,7 +112,10 @@ impl OpencodeDoor {
             }
             std::thread::sleep(Duration::from_millis(250));
         }
-        anyhow::bail!("`{} serve` did not answer on {base} within {SERVE_START:?}", spec.executable)
+        anyhow::bail!(
+            "`{} serve` did not answer on {base} within {SERVE_START:?}",
+            spec.executable
+        )
     }
 
     /// `POST /session` for `directory`; the id of the session the server made.
@@ -198,30 +208,65 @@ fn native_request(spec: &NativeTuiSpec) -> Result<(NativeTuiSpec, Option<String>
     let mut model = None;
     let mut args = spec.args.iter();
     while let Some(arg) = args.next() {
-        let (option, inline) = arg.split_once('=').map_or((arg.as_str(), None), |(key, value)| (key, Some(value)));
+        let (option, inline) = arg
+            .split_once('=')
+            .map_or((arg.as_str(), None), |(key, value)| (key, Some(value)));
         match option {
-            "--session" | "-s" => resume = Some(inline.map(str::to_owned)
-                .or_else(|| args.next().cloned()).context("opencode session flag requires an id")?),
-            "--model" | "-m" => model = Some(inline.map(str::to_owned)
-                .or_else(|| args.next().cloned()).context("opencode model flag requires provider/model")?),
+            "--session" | "-s" => {
+                resume = Some(
+                    inline
+                        .map(str::to_owned)
+                        .or_else(|| args.next().cloned())
+                        .context("opencode session flag requires an id")?,
+                )
+            }
+            "--model" | "-m" => {
+                model = Some(
+                    inline
+                        .map(str::to_owned)
+                        .or_else(|| args.next().cloned())
+                        .context("opencode model flag requires provider/model")?,
+                )
+            }
             _ => prepared.args.push(arg.clone()),
         }
     }
     let explicit_model = model.is_some();
     if let Some(model) = model {
-        anyhow::ensure!(model.split_once('/').is_some_and(|(provider, name)| !provider.is_empty() && !name.is_empty()),
-            "opencode model requires provider/model");
+        anyhow::ensure!(
+            model
+                .split_once('/')
+                .is_some_and(|(provider, name)| !provider.is_empty() && !name.is_empty()),
+            "opencode model requires provider/model"
+        );
         const CONFIG: &str = "OPENCODE_CONFIG_CONTENT";
-        let content = spec.env.iter().rev().find(|(key, _)| key == CONFIG).map(|(_, value)| value.clone())
+        let content = spec
+            .env
+            .iter()
+            .rev()
+            .find(|(key, _)| key == CONFIG)
+            .map(|(_, value)| value.clone())
             .or_else(|| std::env::var(CONFIG).ok());
-        let mut config: serde_json::Value = content.as_deref().map(serde_json::from_str).transpose()
-            .context("decode native OPENCODE_CONFIG_CONTENT")?.unwrap_or_else(|| serde_json::json!({}));
-        anyhow::ensure!(config.is_object(), "native OPENCODE_CONFIG_CONTENT must be a JSON object");
+        let mut config: serde_json::Value = content
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()
+            .context("decode native OPENCODE_CONFIG_CONTENT")?
+            .unwrap_or_else(|| serde_json::json!({}));
+        anyhow::ensure!(
+            config.is_object(),
+            "native OPENCODE_CONFIG_CONTENT must be a JSON object"
+        );
         config["model"] = model.into();
         prepared.env.retain(|(key, _)| key != CONFIG);
-        prepared.env.push((CONFIG.into(), serde_json::to_string(&config)?));
+        prepared
+            .env
+            .push((CONFIG.into(), serde_json::to_string(&config)?));
     }
-    anyhow::ensure!(resume.as_ref().is_none_or(|id| !id.is_empty()), "opencode session flag requires an id");
+    anyhow::ensure!(
+        resume.as_ref().is_none_or(|id| !id.is_empty()),
+        "opencode session flag requires an id"
+    );
     Ok((prepared, resume, explicit_model))
 }
 
@@ -283,12 +328,24 @@ struct EventProperties {
 }
 
 impl LiveSessions for OpencodeDoor {
-    fn live_session_for_route(&self, route: &boop_store::bus::Route) -> Result<Option<LiveSession>> {
-        let Some(id) = route.session_id.as_deref() else { return Ok(None); };
-        let observed = route.app_server_socket.as_deref().map(Url::parse).transpose()?;
+    fn live_session_for_route(
+        &self,
+        route: &boop_store::bus::Route,
+    ) -> Result<Option<LiveSession>> {
+        let Some(id) = route.session_id.as_deref() else {
+            return Ok(None);
+        };
+        let observed = route
+            .app_server_socket
+            .as_deref()
+            .map(Url::parse)
+            .transpose()?;
         let door = observed.map(Self::at);
         let source = door.as_ref().unwrap_or(self);
-        Ok(source.live_sessions()?.into_iter().find(|session| session.session_id == id))
+        Ok(source
+            .live_sessions()?
+            .into_iter()
+            .find(|session| session.session_id == id))
     }
     /// The sessions the running server holds. A server that does not answer
     /// is a server that is not running, so the list is empty rather than an
@@ -361,12 +418,13 @@ impl Door for OpencodeDoor {
     fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan> {
         let (prepared, resume, explicit_model) = native_request(spec)?;
         let spec = &prepared;
-        let base = if self.base.is_some() || std::env::var_os(BASE_ENV).is_some_and(|v| !v.is_empty()) {
-            self.base()?
-        } else {
-            let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-            Url::parse(&format!("http://{}/", listener.local_addr()?))?
-        };
+        let base =
+            if self.base.is_some() || std::env::var_os(BASE_ENV).is_some_and(|v| !v.is_empty()) {
+                self.base()?
+            } else {
+                let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+                Url::parse(&format!("http://{}/", listener.local_addr()?))?
+            };
         let source = Self::at(base.clone());
         let mut plan = NativeTuiPlan::direct(spec);
         source.ensure_server(spec, &base, &mut plan)?;
@@ -376,7 +434,8 @@ impl Door for OpencodeDoor {
         // from the start and the first hail is its first prompt.
         let session = match resume {
             Some(id) => {
-                let _: serde_json::Value = serde_json::from_str(&source.get(&format!("session/{id}"), READ_TIMEOUT)?)?;
+                let _: serde_json::Value =
+                    serde_json::from_str(&source.get(&format!("session/{id}"), READ_TIMEOUT)?)?;
                 id
             }
             None => source.create_session(&base, &spec.cwd)?,
@@ -393,11 +452,16 @@ impl Door for OpencodeDoor {
         ];
         args.extend(spec.args.iter().map(std::ffi::OsString::from));
         plan.args = args;
-        plan.mode = if plan.backend.is_some() { "native-owned" } else { "native-remote" }.into();
+        plan.mode = if plan.backend.is_some() {
+            "native-owned"
+        } else {
+            "native-remote"
+        }
+        .into();
         plan.session_id = Some(session.clone());
         plan.source_path = Some(format!(
-                "managed-opencode-serve={base};started-session={session}"
-            ));
+            "managed-opencode-serve={base};started-session={session}"
+        ));
         plan.app_server_socket = Some(base.to_string());
         Ok(plan)
     }
@@ -407,7 +471,9 @@ impl Door for OpencodeDoor {
         // independent turns. Leave the envelope pending for the wrapper's
         // existing idle drain so the initiating prompt can finish first.
         if session.status == LiveStatus::Busy {
-            return Ok(Delivered::Unreachable("opencode is busy; awaiting idle delivery".into()));
+            return Ok(Delivered::Unreachable(
+                "opencode is busy; awaiting idle delivery".into(),
+            ));
         }
         let DoorAddress::Http { base, session: id } = &session.door else {
             return Ok(Delivered::Unreachable(format!(
@@ -447,7 +513,10 @@ impl Door for OpencodeDoor {
     /// event stream carries a `session.idle` for this session id.
     fn notify_idle(&self, session: &LiveSession, timeout: Duration) -> Result<IdleNotice> {
         let DoorAddress::Http { base, .. } = &session.door else {
-            anyhow::bail!("opencode session {} has no HTTP address", session.session_id);
+            anyhow::bail!(
+                "opencode session {} has no HTTP address",
+                session.session_id
+            );
         };
         let source = Self::at(base.clone());
         if source.statuses().get(&session.session_id) == Some(&LiveStatus::Idle) {
@@ -494,16 +563,31 @@ mod tests {
     #[test]
     fn native_model_is_owned_backend_configuration() {
         let spec = NativeTuiSpec {
-            executable: "opencode".into(), cwd: PathBuf::from("/tmp"),
-            args: vec!["--session=ses_test", "--model", "provider/model", "--print-logs"].into_iter().map(str::to_owned).collect(),
-            env: vec![("OPENCODE_CONFIG_CONTENT".into(), r#"{"model":"old/model","theme":"test"}"#.into())],
+            executable: "opencode".into(),
+            cwd: PathBuf::from("/tmp"),
+            args: vec![
+                "--session=ses_test",
+                "--model",
+                "provider/model",
+                "--print-logs",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+            env: vec![(
+                "OPENCODE_CONFIG_CONTENT".into(),
+                r#"{"model":"old/model","theme":"test"}"#.into(),
+            )],
         };
         let (prepared, resume, explicit) = native_request(&spec).unwrap();
         assert_eq!(resume.as_deref(), Some("ses_test"));
         assert!(explicit);
         assert_eq!(prepared.args, ["--print-logs"]);
         let config: serde_json::Value = serde_json::from_str(&prepared.env[0].1).unwrap();
-        assert_eq!(config, serde_json::json!({"model":"provider/model","theme":"test"}));
+        assert_eq!(
+            config,
+            serde_json::json!({"model":"provider/model","theme":"test"})
+        );
         assert_eq!(spec.args.len(), 4);
         for args in [vec!["--model"], vec!["--model=bare"], vec!["--session="]] {
             let mut invalid = spec.clone();
@@ -629,16 +713,38 @@ mod tests {
             "appServerSocket":stub.base.as_str(), "mode":"native-owned"
         }));
         let unrelated = OpencodeDoor::at(Url::parse("http://127.0.0.1:1/").unwrap());
-        let live = unrelated.live_session_for_route(&route).unwrap().expect("route-scoped live session");
-        assert_eq!(live.door, DoorAddress::Http { base: stub.base.clone(), session: "ses_new".into() });
-        assert_eq!(unrelated.notify_idle(&live, Duration::from_secs(2)).unwrap().status_line.as_deref(), Some("session.idle"));
+        let live = unrelated
+            .live_session_for_route(&route)
+            .unwrap()
+            .expect("route-scoped live session");
+        assert_eq!(
+            live.door,
+            DoorAddress::Http {
+                base: stub.base.clone(),
+                session: "ses_new".into()
+            }
+        );
+        assert_eq!(
+            unrelated
+                .notify_idle(&live, Duration::from_secs(2))
+                .unwrap()
+                .status_line
+                .as_deref(),
+            Some("session.idle")
+        );
     }
 
     #[test]
     fn first_prompt_preserves_configured_model_without_provider_fallback() {
         let stub = Stub::start(SESSIONS, STATUSES, EVENTS);
-        assert_eq!(stub.door().default_model(), Some(serde_json::json!({"providerID":"fixture","modelID":"retired"})));
-        assert_eq!(stub.seen.recv_timeout(Duration::from_secs(1)).unwrap().0, "/config");
+        assert_eq!(
+            stub.door().default_model(),
+            Some(serde_json::json!({"providerID":"fixture","modelID":"retired"}))
+        );
+        assert_eq!(
+            stub.seen.recv_timeout(Duration::from_secs(1)).unwrap().0,
+            "/config"
+        );
         assert!(stub.seen.try_recv().is_err());
     }
 
@@ -674,9 +780,18 @@ mod tests {
     fn a_busy_delivery_stays_pending_without_replacing_the_active_prompt() {
         let stub = Stub::start(SESSIONS, STATUSES, EVENTS);
         let door = stub.door();
-        let session = door.live_sessions().unwrap().into_iter().find(|session| session.session_id == "ses_new").unwrap();
-        assert!(matches!(door.deliver(&session, "pending peer message").unwrap(), Delivered::Unreachable(_)));
-        assert!(!std::iter::from_fn(|| stub.seen.try_recv().ok()).any(|(target, _)| target.ends_with("/prompt_async")));
+        let session = door
+            .live_sessions()
+            .unwrap()
+            .into_iter()
+            .find(|session| session.session_id == "ses_new")
+            .unwrap();
+        assert!(matches!(
+            door.deliver(&session, "pending peer message").unwrap(),
+            Delivered::Unreachable(_)
+        ));
+        assert!(!std::iter::from_fn(|| stub.seen.try_recv().ok())
+            .any(|(target, _)| target.ends_with("/prompt_async")));
     }
 
     #[test]

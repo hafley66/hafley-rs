@@ -211,10 +211,7 @@ pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
 /// Who the row is from: `--as`, else the identity ladder's own name, else the
 /// placeholder. A name `--as` gives is taken as written; only the alias sends
 /// need it to be a registered route.
-fn sender_name(
-    routes: &BTreeMap<String, Route>,
-    as_name: Option<&str>,
-) -> String {
+fn sender_name(routes: &BTreeMap<String, Route>, as_name: Option<&str>) -> String {
     if let Some(name) = as_name {
         return name.to_owned();
     }
@@ -469,14 +466,26 @@ fn fan_out_to_children(
         };
         append_message(dir, &message)?;
         record_control_edge(&message)?;
-        let landing = boop::mail::deliver_hail_budgeted(registry, &store, routes, &message,
-            &boop::mail::TmuxPaster, &budget)?;
-        let owned_inbox = matches!((&reach, landing.rung),
-            (ChildReach::Hook, boop::mail::Rung::HookInbox) |
-            (ChildReach::Supervisor, boop::mail::Rung::TurnBoundary));
+        let landing = boop::mail::deliver_hail_budgeted(
+            registry,
+            &store,
+            routes,
+            &message,
+            &boop::mail::TmuxPaster,
+            &budget,
+        )?;
+        let owned_inbox = matches!(
+            (&reach, landing.rung),
+            (ChildReach::Hook, boop::mail::Rung::HookInbox)
+                | (ChildReach::Supervisor, boop::mail::Rung::TurnBoundary)
+        );
         if landing.rung.carried_the_body() || owned_inbox {
             landed += 1;
-            let label = if matches!(reach, ChildReach::Supervisor) && owned_inbox { "lane supervisor" } else { landing.rung.as_str() };
+            let label = if matches!(reach, ChildReach::Supervisor) && owned_inbox {
+                "lane supervisor"
+            } else {
+                landing.rung.as_str()
+            };
             println!("landed {name} {} from {} ({label})", message.id, caller);
         } else if landing.rung == boop::mail::Rung::CoolOff {
             cooled += 1;
@@ -611,14 +620,10 @@ pub(crate) fn revive_if_retired(
     revived.registered_at = Some(bus::now_iso());
     // The replayed record keeps this run's spawn id, so the pin it wrote is
     // still this run's pin and the revived supervisor resumes on it.
-    revived.session_id = boop::supervise::pinned_conversation_for(
-        dir,
-        name,
-        Path::new(&spawn.cwd),
-        spawn.spawn_id,
-    )
-    .ok()
-    .or(revived.session_id);
+    revived.session_id =
+        boop::supervise::pinned_conversation_for(dir, name, Path::new(&spawn.cwd), spawn.spawn_id)
+            .ok()
+            .or(revived.session_id);
     write_route(dir, name, revived.clone())?;
     println!(
         "revive {name} (pane {} gone; respawning on the pinned conversation)",
@@ -668,14 +673,21 @@ pub(crate) fn revive_if_retired(
 /// How a queued row reaches a child. A route with no hook and no tmux target
 /// was never reachable; a route whose target tmux has dropped went dead. The
 /// two are different facts and are reported apart.
-pub(crate) fn child_reach(registry: &Registry, route: &Route, name: &str, socket: Option<&str>) -> ChildReach {
+pub(crate) fn child_reach(
+    registry: &Registry,
+    route: &Route,
+    name: &str,
+    socket: Option<&str>,
+) -> ChildReach {
     if boop::mail::hook_inbox(registry, route, name) {
         return ChildReach::Hook;
     }
     let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) else {
         return if route.harness.is_some() && route.session_id.is_some() {
             ChildReach::Pane
-        } else { ChildReach::NoRoute("no hook, no pane") };
+        } else {
+            ChildReach::NoRoute("no hook, no pane")
+        };
     };
     if !tmux::mux().target_alive(socket, target) {
         return ChildReach::Dead(target.to_owned());

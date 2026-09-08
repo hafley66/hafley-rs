@@ -239,8 +239,16 @@ fn extend_to(screen: &[ScreenRow], anchor: usize, limit: usize, step: Step) -> u
             break;
         }
         let row = &screen[index as usize];
-        let edge = if step == Step::Down { row.line.end } else { row.line.start };
-        let inside = if step == Step::Down { edge <= limit } else { edge >= limit };
+        let edge = if step == Step::Down {
+            row.line.end
+        } else {
+            row.line.start
+        };
+        let inside = if step == Step::Down {
+            edge <= limit
+        } else {
+            edge >= limit
+        };
         if !inside || row.normalized.is_empty() {
             break;
         }

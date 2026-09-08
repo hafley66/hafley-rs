@@ -22,10 +22,10 @@ mod install_rail;
 mod lane_carcass;
 #[path = "lane_completion_row.rs"]
 mod lane_completion_row;
-#[path = "lane_debug.rs"]
-mod lane_debug;
 #[path = "lane_create_env.rs"]
 mod lane_create_env;
+#[path = "lane_debug.rs"]
+mod lane_debug;
 mod lane_retire_revive;
 #[path = "lane_spawn_identity.rs"]
 mod lane_spawn_identity;

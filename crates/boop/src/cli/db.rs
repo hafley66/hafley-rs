@@ -14,10 +14,12 @@ use boop::{query, usage};
 use crate::cli::job::lane_state;
 use crate::cli::mail::deliver_hail;
 use crate::cli::{append_acks, append_message, line, mail_dir, now_ms, write_route};
-use crate::{ChatCmd, DbCmd, EdgeCmd, QueryArgs, QueryFormat, SyncCmd, TurnCmd};
 #[cfg(feature = "agent-read")]
-use crate::{AgentSessionGraphFormat, AgentSummaryCmd, AgentSummaryFormat, CursorCmd,
-    FactCmd, FavoriteCmd, PriceCmd, SessionCmd, UsageArgs, UsageCmd};
+use crate::{
+    AgentSessionGraphFormat, AgentSummaryCmd, AgentSummaryFormat, CursorCmd, FactCmd, FavoriteCmd,
+    PriceCmd, SessionCmd, UsageArgs, UsageCmd,
+};
+use crate::{ChatCmd, DbCmd, EdgeCmd, QueryArgs, QueryFormat, SyncCmd, TurnCmd};
 
 // ---------------------------------------------------------------------------
 // Pass 1 verbs: layer 2 (transcript)
@@ -1969,8 +1971,19 @@ mod tests {
         }
     }
 
-    fn record_parent_acceptance(store: &ident::Store, dir: &Path, message: &bus::Message) -> Result<()> {
-        store.record_delivery(&message.id, &message.to, None, "accepted-by-harness", "fixture door", now_ms())?;
+    fn record_parent_acceptance(
+        store: &ident::Store,
+        dir: &Path,
+        message: &bus::Message,
+    ) -> Result<()> {
+        store.record_delivery(
+            &message.id,
+            &message.to,
+            None,
+            "accepted-by-harness",
+            "fixture door",
+            now_ms(),
+        )?;
         append_acks(dir, std::slice::from_ref(message)).map(|_| ())
     }
 
@@ -2017,10 +2030,18 @@ mod tests {
         // mailed into an ordinary art session. Both kinds have a parent ID;
         // source.subagent distinguishes a guardian from a delegated worker.
         for (kind, source, expected_deliveries) in [
-            ("guardian", serde_json::json!({"subagent": {"other": "guardian"}}), 0),
-            ("worker", serde_json::json!({"subagent": {"thread_spawn": {
-                "parent_thread_id": "parent-session", "agent_path": "/root/worker", "depth": 1
-            }}}), 1),
+            (
+                "guardian",
+                serde_json::json!({"subagent": {"other": "guardian"}}),
+                0,
+            ),
+            (
+                "worker",
+                serde_json::json!({"subagent": {"thread_spawn": {
+                    "parent_thread_id": "parent-session", "agent_path": "/root/worker", "depth": 1
+                }}}),
+                1,
+            ),
         ] {
             let dir = temp_mail_dir();
             std::fs::create_dir_all(&dir).unwrap();
@@ -2042,23 +2063,41 @@ mod tests {
             // Exercise a full read, an incremental read past session_meta,
             // and a repeated scan through the real mailbox/receipt path.
             for from in [0, metadata.len() as u64 + 1, 0] {
-                project_native_children(&store, &boop::harness::codex::Codex, &session, from).unwrap();
+                project_native_children(&store, &boop::harness::codex::Codex, &session, from)
+                    .unwrap();
                 deliver_native_child_completions(
-                    &store, &routes, &dir, |_, _, _| Ok(false),
+                    &store,
+                    &routes,
+                    &dir,
+                    |_, _, _| Ok(false),
                     |message| {
                         delivered.push(message.clone());
                         record_parent_acceptance(&store, &dir, message)
                     },
-                ).unwrap();
+                )
+                .unwrap();
             }
-            assert_eq!(delivered.len(), expected_deliveries, "{kind}: queued payloads {delivered:?}");
-            assert_eq!(completion_rows(&dir).len(), expected_deliveries, "{kind}: mailbox");
+            assert_eq!(
+                delivered.len(),
+                expected_deliveries,
+                "{kind}: queued payloads {delivered:?}"
+            );
+            assert_eq!(
+                completion_rows(&dir).len(),
+                expected_deliveries,
+                "{kind}: mailbox"
+            );
             let edges = store.edge_rows(None).unwrap();
             let kinds: Vec<_> = edges.iter().map(|edge| edge.edge.as_str()).collect();
             let expected = if kind == "guardian" {
                 vec!["spawned"]
             } else {
-                vec!["completed", "completion-delivered", "completion-mailed", "spawned"]
+                vec![
+                    "completed",
+                    "completion-delivered",
+                    "completion-mailed",
+                    "spawned",
+                ]
             };
             let mut kinds = kinds;
             kinds.sort_unstable();
@@ -2224,19 +2263,44 @@ mod tests {
         let dir = temp_mail_dir();
         std::fs::create_dir_all(&dir).unwrap();
         let store = ident::Store::open(dir.join("boop.db")).unwrap();
-        project_native_children(&store, &fake_child_events(), &native_child_session(&dir), 0).unwrap();
+        project_native_children(&store, &fake_child_events(), &native_child_session(&dir), 0)
+            .unwrap();
         let routes = native_parent_routes();
         let mut attempted = Vec::new();
         for accepted in [false, true] {
-            deliver_native_child_completions(&store, &routes, &dir, |_, _, _| Ok(false), |message| {
-                attempted.push(message.id.clone());
-                store.record_delivery(&message.id, &message.to, None,
-                    if accepted { "accepted-by-harness" } else { "held-for-turn-boundary" }, "fixture", now_ms())
-            }).unwrap();
-            let done = store.edge_rows(None).unwrap().iter().any(|edge| edge.edge == "completion-delivered");
+            deliver_native_child_completions(
+                &store,
+                &routes,
+                &dir,
+                |_, _, _| Ok(false),
+                |message| {
+                    attempted.push(message.id.clone());
+                    store.record_delivery(
+                        &message.id,
+                        &message.to,
+                        None,
+                        if accepted {
+                            "accepted-by-harness"
+                        } else {
+                            "held-for-turn-boundary"
+                        },
+                        "fixture",
+                        now_ms(),
+                    )
+                },
+            )
+            .unwrap();
+            let done = store
+                .edge_rows(None)
+                .unwrap()
+                .iter()
+                .any(|edge| edge.edge == "completion-delivered");
             assert_eq!(done, accepted);
         }
-        assert_eq!(attempted, ["native-child-completion:parent-session:child-session"; 2]);
+        assert_eq!(
+            attempted,
+            ["native-child-completion:parent-session:child-session"; 2]
+        );
         assert_eq!(completion_rows(&dir).len(), 1);
     }
 

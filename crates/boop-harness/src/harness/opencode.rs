@@ -37,10 +37,48 @@ static DOOR: crate::door::opencode::OpencodeDoor = crate::door::opencode::Openco
 
 impl Harness for Opencode {
     fn uses_native_tui(&self, args: &[String]) -> bool {
-        super::interactive_arguments(args,
-            &["--log-level", "--port", "--hostname", "--mdns-domain", "--cors", "-m", "--model", "-s", "--session", "--prompt", "--agent", "--replay-limit"],
+        super::interactive_arguments(
+            args,
+            &[
+                "--log-level",
+                "--port",
+                "--hostname",
+                "--mdns-domain",
+                "--cors",
+                "-m",
+                "--model",
+                "-s",
+                "--session",
+                "--prompt",
+                "--agent",
+                "--replay-limit",
+            ],
             &["-v"],
-            &["help", "completion", "acp", "mcp", "run", "debug", "providers", "auth", "agent", "upgrade", "uninstall", "serve", "web", "models", "stats", "export", "import", "github", "session", "plugin", "plug", "db"])
+            &[
+                "help",
+                "completion",
+                "acp",
+                "mcp",
+                "run",
+                "debug",
+                "providers",
+                "auth",
+                "agent",
+                "upgrade",
+                "uninstall",
+                "serve",
+                "web",
+                "models",
+                "stats",
+                "export",
+                "import",
+                "github",
+                "session",
+                "plugin",
+                "plug",
+                "db",
+            ],
+        )
     }
 
     fn matches_model(&self, name: &str) -> bool {
@@ -403,7 +441,10 @@ impl Harness for Opencode {
 // json block: text/reasoning carry a `text` field; a tool part carries its name
 // + `state.input` (the command/args) + `state.output`. reasoning + tool feed the
 // searchable `full`; only text parts feed `display`.
-fn opencode_message_text(conn: &rusqlite::Connection, message_id: &str) -> crate::transcript::Extracted {
+fn opencode_message_text(
+    conn: &rusqlite::Connection,
+    message_id: &str,
+) -> crate::transcript::Extracted {
     let mut full = String::new();
     let mut display = String::new();
     if let Ok(mut stmt) =
@@ -454,7 +495,11 @@ fn opencode_message_text(conn: &rusqlite::Connection, message_id: &str) -> crate
     }
 }
 
-fn read_opencode(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate::transcript::Message> {
+fn read_opencode(
+    path: &Path,
+    session_id: &str,
+    after_seq: Option<u64>,
+) -> Vec<crate::transcript::Message> {
     let Ok(conn) = rusqlite::Connection::open_with_flags(
         path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -708,15 +753,27 @@ fn write_part(
     match part.kind.as_str() {
         "text" => {
             *turn += 1;
-            let inserted =
-                store.write_turn(session_id, *turn, message.ts, &message.role, &part.text, None)?;
+            let inserted = store.write_turn(
+                session_id,
+                *turn,
+                message.ts,
+                &message.role,
+                &part.text,
+                None,
+            )?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
         }
         "tool" => {
             *turn += 1;
-            let inserted =
-                store.write_turn(session_id, *turn, message.ts, "tool", &part.tool_body(), None)?;
+            let inserted = store.write_turn(
+                session_id,
+                *turn,
+                message.ts,
+                "tool",
+                &part.tool_body(),
+                None,
+            )?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
             store.write_tool_fact(
@@ -747,8 +804,14 @@ fn write_part(
         // the content; there is no prose to keep.
         "patch" => {
             *turn += 1;
-            let inserted =
-                store.write_turn(session_id, *turn, message.ts, "tool", &part.patch_body(), None)?;
+            let inserted = store.write_turn(
+                session_id,
+                *turn,
+                message.ts,
+                "tool",
+                &part.patch_body(),
+                None,
+            )?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
         }
@@ -785,8 +848,14 @@ fn write_part(
         // grow a real arm for it.
         kind => {
             *turn += 1;
-            let inserted =
-                store.write_turn(session_id, *turn, message.ts, "tool", &part.gap_body(), None)?;
+            let inserted = store.write_turn(
+                session_id,
+                *turn,
+                message.ts,
+                "tool",
+                &part.gap_body(),
+                None,
+            )?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
             // One line per kind per process; the pane an opencode TUI draws
@@ -830,7 +899,8 @@ fn finish_message(
         Some(turn) => *turn,
         None => {
             *turn += 1;
-            let inserted = store.write_turn(session_id, *turn, message.ts, &message.role, "", None)?;
+            let inserted =
+                store.write_turn(session_id, *turn, message.ts, &message.role, "", None)?;
             record(stat, inserted);
             *turn
         }
@@ -990,7 +1060,8 @@ pub fn store_path() -> Option<PathBuf> {
 /// opencode has ever created the file.
 pub fn opencode_db_path() -> Option<PathBuf> {
     Some(
-        super::reader_home().ok()?
+        super::reader_home()
+            .ok()?
             .join(".local")
             .join("share")
             .join("opencode")
@@ -1271,8 +1342,8 @@ mod tests {
     use rusqlite::trace::{TraceEvent, TraceEventCodes};
 
     use super::{
-        messages_after, session_from, sessions_from,
-        sync_candidates_from_connection, visit_parts_for_messages, Opencode, Part,
+        messages_after, session_from, sessions_from, sync_candidates_from_connection,
+        visit_parts_for_messages, Opencode, Part,
     };
     use crate::harness::{sync_session, Harness, KnownSessions, OneShotSpec, SpawnSpec};
     use boop_store::ident::{Store, TurnQuery, UsageRow};
@@ -2116,7 +2187,12 @@ mod tests {
 
     #[test]
     fn one_shot_requires_a_model_before_starting_a_process() {
-        let error = Opencode.one_shot(&OneShotSpec { model: None, prompt: "fixture".into() }).unwrap_err();
+        let error = Opencode
+            .one_shot(&OneShotSpec {
+                model: None,
+                prompt: "fixture".into(),
+            })
+            .unwrap_err();
         assert!(error.to_string().contains("no model"));
     }
 

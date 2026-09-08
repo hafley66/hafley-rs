@@ -34,14 +34,93 @@ static DOOR: crate::door::claude::ClaudeDoor = crate::door::claude::ClaudeDoor::
 
 impl Harness for Claude {
     fn uses_native_tui(&self, args: &[String]) -> bool {
-        super::interactive_arguments(args,
-            &["--add-dir", "--agent", "--agents", "--allowedTools", "--allowed-tools", "--append-system-prompt", "--autocompact", "--betas", "-d", "--debug", "--debug-file", "--disallowedTools", "--disallowed-tools", "--effort", "--fallback-model", "--file", "--from-pr", "--input-format", "--json-schema", "--max-budget-usd", "--mcp-config", "--model", "-n", "--name", "--output-format", "--permission-mode", "--permission-prompts", "--plugin-dir", "--plugin-url", "--prompt-suggestions", "--remote-control", "--remote-control-session-name-prefix", "-r", "--resume", "--session-id", "--setting-sources", "--settings", "--system-prompt", "--system-prompt-snapshot", "--teleport", "--tools", "-w", "--worktree"],
-            &["-v", "-p", "--print", "--bg", "--background", "--cloud", "--environment"],
-            &["help", "agents", "auth", "auto-mode", "doctor", "gateway", "import", "install", "logs", "mcp", "plugin", "plugins", "project", "respawn", "rm", "setup-token", "stop", "kill", "ultrareview", "update", "upgrade"])
+        super::interactive_arguments(
+            args,
+            &[
+                "--add-dir",
+                "--agent",
+                "--agents",
+                "--allowedTools",
+                "--allowed-tools",
+                "--append-system-prompt",
+                "--autocompact",
+                "--betas",
+                "-d",
+                "--debug",
+                "--debug-file",
+                "--disallowedTools",
+                "--disallowed-tools",
+                "--effort",
+                "--fallback-model",
+                "--file",
+                "--from-pr",
+                "--input-format",
+                "--json-schema",
+                "--max-budget-usd",
+                "--mcp-config",
+                "--model",
+                "-n",
+                "--name",
+                "--output-format",
+                "--permission-mode",
+                "--permission-prompts",
+                "--plugin-dir",
+                "--plugin-url",
+                "--prompt-suggestions",
+                "--remote-control",
+                "--remote-control-session-name-prefix",
+                "-r",
+                "--resume",
+                "--session-id",
+                "--setting-sources",
+                "--settings",
+                "--system-prompt",
+                "--system-prompt-snapshot",
+                "--teleport",
+                "--tools",
+                "-w",
+                "--worktree",
+            ],
+            &[
+                "-v",
+                "-p",
+                "--print",
+                "--bg",
+                "--background",
+                "--cloud",
+                "--environment",
+            ],
+            &[
+                "help",
+                "agents",
+                "auth",
+                "auto-mode",
+                "doctor",
+                "gateway",
+                "import",
+                "install",
+                "logs",
+                "mcp",
+                "plugin",
+                "plugins",
+                "project",
+                "respawn",
+                "rm",
+                "setup-token",
+                "stop",
+                "kill",
+                "ultrareview",
+                "update",
+                "upgrade",
+            ],
+        )
     }
 
     fn matches_model(&self, name: &str) -> bool {
-        !name.contains('/') && ["claude", "opus", "sonnet", "haiku"].iter().any(|prefix| name.starts_with(prefix))
+        !name.contains('/')
+            && ["claude", "opus", "sonnet", "haiku"]
+                .iter()
+                .any(|prefix| name.starts_with(prefix))
     }
 
     fn native_worktrees(&self, cwd: &str) -> Vec<(String, String, bool)> {
@@ -193,7 +272,8 @@ impl Harness for Claude {
             .map(crate::transcript::iso_to_ms)
             .unwrap_or(0);
         let tail = crate::transcript::tail_values(&session.path);
-        let model = claude_settings(tail.iter().rev().chain(head.iter().rev())).map(|(model, _)| model);
+        let model =
+            claude_settings(tail.iter().rev().chain(head.iter().rev())).map(|(model, _)| model);
         let input_tokens = tail
             .iter()
             .rev()
@@ -229,7 +309,9 @@ impl Harness for Claude {
         let head = crate::transcript::head_values(&session.path);
         let (model, effort) = claude_settings(tail.iter().rev().chain(head.iter().rev()))?;
         Some(crate::harness::NativeTuiEvent::Settings {
-            session_id: session.session_id.clone(), model: Some(model), effort,
+            session_id: session.session_id.clone(),
+            model: Some(model),
+            effort,
         })
     }
 
@@ -266,12 +348,24 @@ impl Harness for Claude {
     }
 }
 
-fn claude_settings<'a>(values: impl Iterator<Item = &'a Value>) -> Option<(String, Option<String>)> {
-    values.filter(|value| value["type"] == "assistant").find_map(|value| {
-        let model = value.pointer("/message/model")?.as_str()?;
-        if model.starts_with('<') { return None; }
-        Some((model.to_owned(), value.get("effort").and_then(Value::as_str).map(str::to_owned)))
-    })
+fn claude_settings<'a>(
+    values: impl Iterator<Item = &'a Value>,
+) -> Option<(String, Option<String>)> {
+    values
+        .filter(|value| value["type"] == "assistant")
+        .find_map(|value| {
+            let model = value.pointer("/message/model")?.as_str()?;
+            if model.starts_with('<') {
+                return None;
+            }
+            Some((
+                model.to_owned(),
+                value
+                    .get("effort")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+            ))
+        })
 }
 
 /// The cwd-encoded claude project directory under a home root.
@@ -295,13 +389,16 @@ pub(crate) fn claude_session_path(
     if direct.is_file() {
         return Some(direct);
     }
-    std::fs::read_dir(project).ok()?.flatten().find_map(|entry| {
-        let path = entry
-            .path()
-            .join("subagents")
-            .join(format!("{session_id}.jsonl"));
-        path.is_file().then_some(path)
-    })
+    std::fs::read_dir(project)
+        .ok()?
+        .flatten()
+        .find_map(|entry| {
+            let path = entry
+                .path()
+                .join("subagents")
+                .join(format!("{session_id}.jsonl"));
+            path.is_file().then_some(path)
+        })
 }
 
 // ---- claude transcript reader (moved from instant ledger.rs, verbatim).
@@ -356,7 +453,10 @@ fn injected_tag(content: &serde_json::Value) -> Option<String> {
     INJECTED_TAGS.contains(&tag).then(|| tag.to_string())
 }
 
-fn classify_user_line(v: &serde_json::Value, content: &serde_json::Value) -> (String, Option<String>) {
+fn classify_user_line(
+    v: &serde_json::Value,
+    content: &serde_json::Value,
+) -> (String, Option<String>) {
     if content_has_tool_result(content) {
         return ("tool".to_string(), Some("tool_result".to_string()));
     }
@@ -494,7 +594,11 @@ fn claude_text(content: &serde_json::Value) -> crate::transcript::Extracted {
 // (the watcher passes the last line index). User/assistant and delivered queued
 // command attachments become messages; other records still advance `seq` so
 // the line index stays an exact file offset.
-pub(crate) fn read_claude(path: &std::path::Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate::transcript::Message> {
+pub(crate) fn read_claude(
+    path: &std::path::Path,
+    session_id: &str,
+    after_seq: Option<u64>,
+) -> Vec<crate::transcript::Message> {
     let Ok(file) = std::fs::File::open(path) else {
         return Vec::new();
     };
@@ -513,16 +617,24 @@ pub(crate) fn read_claude(path: &std::path::Path, session_id: &str, after_seq: O
         };
         let msg_type = match v.get("type").and_then(|t| t.as_str()) {
             Some(t @ ("user" | "assistant")) => t,
-            Some("attachment") if v.pointer("/attachment/type").and_then(Value::as_str) == Some("queued_command") => "attachment",
+            Some("attachment")
+                if v.pointer("/attachment/type").and_then(Value::as_str)
+                    == Some("queued_command") =>
+            {
+                "attachment"
+            }
             _ => continue,
         };
         let content = if msg_type == "attachment" {
-            v.pointer("/attachment/prompt").cloned().unwrap_or(Value::Null)
-        } else { v
-            .get("message")
-            .and_then(|m| m.get("content"))
-            .cloned()
-            .unwrap_or(Value::Null) };
+            v.pointer("/attachment/prompt")
+                .cloned()
+                .unwrap_or(Value::Null)
+        } else {
+            v.get("message")
+                .and_then(|m| m.get("content"))
+                .cloned()
+                .unwrap_or(Value::Null)
+        };
         let (role, subtype) = if msg_type == "assistant" {
             ("assistant".to_string(), None)
         } else if msg_type == "attachment" {
@@ -1136,12 +1248,16 @@ mod tests {
     fn claude_launch_resumes_with_session_id() {
         let mut req = spec(&TmuxGuard::new());
         req.resume_session = Some("abc123".to_owned());
-        assert!(Claude.preview_command(&req).unwrap().contains("--resume 'abc123'"));
+        assert!(Claude
+            .preview_command(&req)
+            .unwrap()
+            .contains("--resume 'abc123'"));
     }
 
     #[test]
     fn busy_peer_attachment_is_a_native_message_receipt() {
-        let path = std::env::temp_dir().join(format!("boop-claude-peer-{}.jsonl", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("boop-claude-peer-{}.jsonl", std::process::id()));
         std::fs::write(&path, concat!(
             "{\"type\":\"queue-operation\",\"content\":\"nonce\"}\n",
             "{\"type\":\"attachment\",\"uuid\":\"receipt\",\"attachment\":{\"type\":\"queued_command\",\"prompt\":\"nonce\",\"origin\":{\"kind\":\"peer\"},\"isMeta\":true}}\n",
@@ -1149,8 +1265,12 @@ mod tests {
         )).unwrap();
         let rows = super::read_claude(&path, "owned", None);
         std::fs::remove_file(path).unwrap();
-        assert_eq!(rows.iter().map(|row| (row.role.as_str(), row.text.as_str(), row.seq)).collect::<Vec<_>>(),
-            [("meta", "nonce", 1), ("assistant", "ACK", 2)]);
+        assert_eq!(
+            rows.iter()
+                .map(|row| (row.role.as_str(), row.text.as_str(), row.seq))
+                .collect::<Vec<_>>(),
+            [("meta", "nonce", 1), ("assistant", "ACK", 2)]
+        );
     }
 
     #[test]

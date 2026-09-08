@@ -54,9 +54,15 @@ impl Identity {
     /// Resolve a stamped route to its native conversation. Older callers
     /// stamped the native ID directly; retain that spelling when no route exists.
     pub fn conversation<'a>(&'a self, routes: &'a BTreeMap<String, Route>) -> Result<&'a str> {
-        let caller = self.session.as_deref().context("no caller session resolved: no BOOP_SESSION stamp in this process")?;
+        let caller = self
+            .session
+            .as_deref()
+            .context("no caller session resolved: no BOOP_SESSION stamp in this process")?;
         match routes.get(caller) {
-            Some(route) => route.session_id.as_deref().with_context(|| format!("caller route {caller} has no bound native conversation")),
+            Some(route) => route
+                .session_id
+                .as_deref()
+                .with_context(|| format!("caller route {caller} has no bound native conversation")),
             None => Ok(caller),
         }
     }
@@ -149,7 +155,10 @@ pub fn child_stamp(session: &str, lane: &str, harness: &str, parent: Option<&str
         shell_word(lane),
         shell_word(harness)
     );
-    stamp.push_str(&format!(" BOOP_PARENT={}", shell_word(parent.unwrap_or(""))));
+    stamp.push_str(&format!(
+        " BOOP_PARENT={}",
+        shell_word(parent.unwrap_or(""))
+    ));
     stamp
 }
 
@@ -164,8 +173,14 @@ mod tests {
     #[test]
     fn conversation_binding_preserves_legacy_ids_and_rejects_unbound_routes() {
         let mut routes = std::collections::BTreeMap::new();
-        routes.insert("caller".into(), boop_store::bus::route_from_value(&serde_json::json!({"sessionId":"native"})));
-        let mut identity = super::Identity { session: Some("caller".into()), ..Default::default() };
+        routes.insert(
+            "caller".into(),
+            boop_store::bus::route_from_value(&serde_json::json!({"sessionId":"native"})),
+        );
+        let mut identity = super::Identity {
+            session: Some("caller".into()),
+            ..Default::default()
+        };
         assert_eq!(identity.conversation(&routes).unwrap(), "native");
         routes.get_mut("caller").unwrap().session_id = None;
         assert!(identity.conversation(&routes).is_err());

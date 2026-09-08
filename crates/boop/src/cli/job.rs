@@ -17,11 +17,9 @@ use crate::cli::debug::default_preset_for_harness;
 use crate::cli::mail::{all_messages, run_list};
 use crate::cli::me::register_route;
 use crate::cli::{append_ack, append_message, line, mail_dir, pad, write_route};
-use crate::{
-    AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat,
-};
 #[cfg(feature = "agent-read")]
 use crate::ForkCmd;
+use crate::{AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat};
 
 // ---------------------------------------------------------------------------
 // dispatch (layer 1 + bus)
@@ -749,7 +747,10 @@ pub(crate) fn cass_hit(route: &Route, message_id: &str) -> Result<bool> {
     let mut command = Command::new("cass");
     command.args(["search", message_id, "--robot", "--limit", "20"]);
     let output = boop_harness::worktree::run_captured_with_deadline(
-        command, "cass search", std::time::Duration::from_secs(20));
+        command,
+        "cass search",
+        std::time::Duration::from_secs(20),
+    );
     let output = match output {
         Ok(output) if output.status.success() => output,
         _ => return Ok(false),
@@ -777,15 +778,28 @@ pub(crate) fn scoped_to_agent(route: &Route, source_path: &str) -> bool {
     if source_path.is_empty() {
         return false;
     }
-    if let Some(expected) = route.source_path.as_deref().filter(|path| !path.starts_with("native-session=")) {
+    if let Some(expected) = route
+        .source_path
+        .as_deref()
+        .filter(|path| !path.starts_with("native-session="))
+    {
         return source_path == expected;
     }
     route
         .session_id
         .as_deref()
         .filter(|session_id| !session_id.is_empty())
-        .map(|session_id| Path::new(source_path).file_stem().and_then(|stem| stem.to_str())
-            .is_some_and(|stem| stem == session_id || stem.strip_suffix(session_id).is_some_and(|prefix| prefix.ends_with('-'))))
+        .map(|session_id| {
+            Path::new(source_path)
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .is_some_and(|stem| {
+                    stem == session_id
+                        || stem
+                            .strip_suffix(session_id)
+                            .is_some_and(|prefix| prefix.ends_with('-'))
+                })
+        })
         .unwrap_or(false)
 }
 
@@ -881,7 +895,10 @@ pub(crate) fn spawn_repo(
     if let Some(cwd) = cwd_arg {
         return Ok((PathBuf::from(cwd), RepoSource::CwdFlag));
     }
-    if let Some(dir) = brief.filter(|path| path.is_absolute()).and_then(Path::parent) {
+    if let Some(dir) = brief
+        .filter(|path| path.is_absolute())
+        .and_then(Path::parent)
+    {
         if let Ok(root) = lane::repo_root(dir) {
             return Ok((root, RepoSource::Brief));
         }
@@ -962,7 +979,11 @@ pub(crate) fn reset_dead_identity(
         parts.push(format!("tmux {session}"));
     }
     if !parts.is_empty() {
-        info!(lane = identity.lane, removed = parts.join(", "), "dead lane name reset");
+        info!(
+            lane = identity.lane,
+            removed = parts.join(", "),
+            "dead lane name reset"
+        );
         lines.insert(
             0,
             format!(
@@ -1006,7 +1027,12 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     let model_given = args.model.is_some();
     // One row decides harness, model and effort. `--model` is the hidden
     // alias: it reads as a preset of one row that names no harness.
-    let requested = config::resolve_spawn_preset(args.model.as_deref(), args.preset.as_deref(), None, &config_path)?;
+    let requested = config::resolve_spawn_preset(
+        args.model.as_deref(),
+        args.preset.as_deref(),
+        None,
+        &config_path,
+    )?;
     let requested_model = requested.as_ref().map(|preset| preset.model.clone());
     // A preset names its harness as surely as --harness does: choosing
     // `--preset opus` is the opt-in a claude tmux lane asks for.
@@ -1299,7 +1325,9 @@ fn parse_env_pairs(values: Vec<String>) -> Result<Vec<(String, String)>> {
     let mut out = Vec::with_capacity(values.len());
     for value in values {
         // The clap value_parser already guarantees a `=` and a non-empty key.
-        let (key, val) = value.split_once('=').expect("--env value parses as KEY=VAL");
+        let (key, val) = value
+            .split_once('=')
+            .expect("--env value parses as KEY=VAL");
         if BOOP_ENV_STAMPS.contains(&key) {
             anyhow::bail!("--env key `{key}` collides with a boop-owned stamp; pick another name");
         }
@@ -1848,7 +1876,9 @@ fn ensure_clean(repo: &str) -> Result<()> {
         );
     }
     if !String::from_utf8_lossy(&output.stdout).trim().is_empty() {
-        anyhow::bail!("refusing to merge: dirty index in {repo} (git status --porcelain non-empty)");
+        anyhow::bail!(
+            "refusing to merge: dirty index in {repo} (git status --porcelain non-empty)"
+        );
     }
     Ok(())
 }
@@ -1883,11 +1913,18 @@ fn ensure_ahead(repo: &str, base_sha: &str, branch: &str) -> Result<()> {
 fn fork_brief(comment: &boop::ident::TurnComment, turns: &[boop::rows::TurnRow]) -> String {
     let mut out = String::new();
     out.push_str(&format!("# Fork of comment {}\n\n", comment.comment_id));
-    match comment.note.as_deref().filter(|note| !note.trim().is_empty()) {
+    match comment
+        .note
+        .as_deref()
+        .filter(|note| !note.trim().is_empty())
+    {
         Some(note) => out.push_str(&format!("## Ask\n\n{}\n\n", note.trim())),
         None => out.push_str("## Ask\n\nAct on the quoted text.\n\n"),
     }
-    out.push_str(&format!("## Quote\n\n> {}\n\n", comment.quote.trim().replace('\n', "\n> ")));
+    out.push_str(&format!(
+        "## Quote\n\n> {}\n\n",
+        comment.quote.trim().replace('\n', "\n> ")
+    ));
     if !turns.is_empty() {
         out.push_str("## Quoted turns\n\n");
         for turn in turns {
@@ -1895,13 +1932,20 @@ fn fork_brief(comment: &boop::ident::TurnComment, turns: &[boop::rows::TurnRow])
                 "### {} turn {} ({})\n\n{}\n\n",
                 turn.session,
                 turn.turn,
-                if turn.role.is_empty() { "?" } else { turn.role.as_str() },
+                if turn.role.is_empty() {
+                    "?"
+                } else {
+                    turn.role.as_str()
+                },
                 turn.said.trim()
             ));
         }
     }
     for target in &comment.targets {
-        if !turns.iter().any(|turn| turn.session == target.session && turn.turn == target.turn) {
+        if !turns
+            .iter()
+            .any(|turn| turn.session == target.session && turn.turn == target.turn)
+        {
             out.push_str(&format!(
                 "- {} turn {} is quoted but not ingested; read it with `boop db turns --session {}`\n",
                 target.session, target.turn, target.session
@@ -2233,7 +2277,9 @@ pub(crate) fn run_lane_list(
             ));
         }
         for (route_name, route) in &routes {
-            let Some(harness) = route.harness else { continue; };
+            let Some(harness) = route.harness else {
+                continue;
+            };
             let Some(cwd) = route.cwd.as_deref() else {
                 continue;
             };
@@ -2277,8 +2323,6 @@ pub(crate) fn unregistered_sessions(
         .cloned()
         .collect()
 }
-
-
 
 /// The parent edge that answers nobody, so a surviving orphan says so on its
 /// own row. `None` while the parent route is still addressable.
@@ -3393,7 +3437,10 @@ mod tests {
         route.session_id = Some("native-id".into());
         route.source_path = Some("native-session=native-id".into());
         assert!(scoped_to_agent(&route, "/test/native-id.jsonl"));
-        assert!(scoped_to_agent(&route, "/test/rollout-date-native-id.jsonl"));
+        assert!(scoped_to_agent(
+            &route,
+            "/test/rollout-date-native-id.jsonl"
+        ));
         assert!(!scoped_to_agent(&route, "/test/native-id-other.jsonl"));
         assert!(!scoped_to_agent(&route, "/test/native-id/other.jsonl"));
         route.source_path = Some("/exact/transcript.jsonl".into());
@@ -3447,8 +3494,14 @@ mod tests {
         let brief = fork_brief(&comment, &turns);
         assert!(brief.contains("## Ask\n\nmake this a test"), "{brief}");
         assert!(brief.contains("> line one\n> line two"), "{brief}");
-        assert!(brief.contains("### ses-a turn 3 (assistant)\n\nthe turn body"), "{brief}");
-        assert!(brief.contains("ses-a turn 9 is quoted but not ingested"), "{brief}");
+        assert!(
+            brief.contains("### ses-a turn 3 (assistant)\n\nthe turn body"),
+            "{brief}"
+        );
+        assert!(
+            brief.contains("ses-a turn 9 is quoted but not ingested"),
+            "{brief}"
+        );
     }
 
     #[cfg(feature = "agent-read")]
@@ -3554,7 +3607,10 @@ mod tests {
             .unwrap();
         let second = fork_row(7, "fork-comment-7-b", "fork/comment-7-b");
         store.record_turn_comment_fork(&second).unwrap();
-        assert_eq!(pick_fork(&store, 7, Some("fork-comment-7-b")).unwrap(), second);
+        assert_eq!(
+            pick_fork(&store, 7, Some("fork-comment-7-b")).unwrap(),
+            second
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -3599,7 +3655,10 @@ mod tests {
             "a merge commit must exist"
         );
         let reply = std::fs::read_to_string(dir.join("forks/comment-7.reply.md")).unwrap();
-        assert!(reply.contains("# Reply from fork-comment-7 to comment 7"), "{reply}");
+        assert!(
+            reply.contains("# Reply from fork-comment-7 to comment 7"),
+            "{reply}"
+        );
         assert!(reply.contains("the fork answer"), "{reply}");
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&repo);
@@ -4924,13 +4983,20 @@ mod tests {
         let identity = carcass_of(&repo, "fix/navmenu-flip-hover");
         let worktree = identity.worktree_dir.clone().unwrap();
 
-        let lines = reset_dead_identity(&repo.dir, &identity, &BTreeMap::new(), &|_| false).unwrap();
-        let line = lines.first().expect("a dead name reports its reset").clone();
+        let lines =
+            reset_dead_identity(&repo.dir, &identity, &BTreeMap::new(), &|_| false).unwrap();
+        let line = lines
+            .first()
+            .expect("a dead name reports its reset")
+            .clone();
         assert!(
             line.starts_with("reclaim: fix-navmenu-flip-hover was dead; removed "),
             "{line}"
         );
-        assert!(line.contains(&format!("worktree {}", worktree.display())), "{line}");
+        assert!(
+            line.contains(&format!("worktree {}", worktree.display())),
+            "{line}"
+        );
         assert!(line.contains("branch fix/navmenu-flip-hover"), "{line}");
         assert!(!worktree.exists(), "the worktree is gone");
         assert!(
@@ -5037,10 +5103,7 @@ mod tests {
                 .any(|line| line.starts_with("commit ") && line.ends_with("the lane did a thing")),
             "{lines:?}"
         );
-        assert!(
-            lines.contains(&"changed added.txt".to_owned()),
-            "{lines:?}"
-        );
+        assert!(lines.contains(&"changed added.txt".to_owned()), "{lines:?}");
         assert!(
             lines.contains(&"dirty ?? scratch.txt".to_owned()),
             "{lines:?}"
@@ -5077,12 +5140,17 @@ mod tests {
         let (route, state) =
             inspect_route("fix-retired", &BTreeMap::new(), Some(&spawn), true).unwrap();
         assert_eq!(state, Some("retired"));
-        assert_eq!(where_line(&route, "fix-retired").unwrap(), tree.display().to_string());
+        assert_eq!(
+            where_line(&route, "fix-retired").unwrap(),
+            tree.display().to_string()
+        );
         let lines = touched_lines(&route, "fix-retired").unwrap();
         assert_eq!(lines[0], format!("worktree {}", tree.display()));
         assert!(lines[1].contains("commits_past_base 1"), "{:?}", lines[1]);
         assert!(
-            lines.iter().any(|line| line.ends_with("the retired lane committed")),
+            lines
+                .iter()
+                .any(|line| line.ends_with("the retired lane committed")),
             "{lines:?}"
         );
         assert!(lines.contains(&"changed done.txt".to_owned()), "{lines:?}");
@@ -5119,7 +5187,10 @@ mod tests {
         let mut route = tmux_route("wherever");
         route.worktree_dir = Some("/tmp/boop-worktrees/fix/x".to_owned());
         route.cwd = Some("/repo".to_owned());
-        assert_eq!(where_line(&route, "fix-x").unwrap(), "/tmp/boop-worktrees/fix/x");
+        assert_eq!(
+            where_line(&route, "fix-x").unwrap(),
+            "/tmp/boop-worktrees/fix/x"
+        );
         route.worktree_dir = None;
         assert_eq!(where_line(&route, "fix-x").unwrap(), "/repo");
         route.cwd = None;

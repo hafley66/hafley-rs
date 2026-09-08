@@ -163,18 +163,23 @@ impl Fixture {
     }
 
     fn trail(&self, file: &str) -> PathBuf {
-        self.root
-            .join("lanes")
-            .join(&self.lane)
-            .join(file)
+        self.root.join("lanes").join(&self.lane).join(file)
     }
 }
 
 impl Drop for Fixture {
     fn drop(&mut self) {
         if std::thread::panicking() {
-            eprintln!("supervise log: {}\nrpc log: {}\nmail: {}", self.supervise_log(), self.rpc_log(), self.mailbox());
-            let pane = Command::new(executable("tmux")).args(["-L", &self.socket, "capture-pane", "-p", "-t", &self.lane]).output().unwrap();
+            eprintln!(
+                "supervise log: {}\nrpc log: {}\nmail: {}",
+                self.supervise_log(),
+                self.rpc_log(),
+                self.mailbox()
+            );
+            let pane = Command::new(executable("tmux"))
+                .args(["-L", &self.socket, "capture-pane", "-p", "-t", &self.lane])
+                .output()
+                .unwrap();
             eprintln!("pane: {}", String::from_utf8_lossy(&pane.stdout));
         }
         let _ = Command::new(executable("tmux"))

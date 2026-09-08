@@ -19,8 +19,19 @@ impl BoopCommandExt for Command {
         let explicit: BTreeSet<_> = self.get_envs().map(|(key, _)| key.to_owned()).collect();
         for (key, _) in std::env::vars_os() {
             let name = key.to_string_lossy();
-            if !explicit.contains(&key) && (name.starts_with("BOOP_") || matches!(name.as_ref(),
-                "TMUX" | "TMUX_PANE" | "CODEX_THREAD_ID" | "CLAUDE_SESSION_ID" | "CLAUDE_CODE_SESSION_ID" | "OPENCODE_SESSION_ID" | "KIMI_SESSION_ID")) {
+            if !explicit.contains(&key)
+                && (name.starts_with("BOOP_")
+                    || matches!(
+                        name.as_ref(),
+                        "TMUX"
+                            | "TMUX_PANE"
+                            | "CODEX_THREAD_ID"
+                            | "CLAUDE_SESSION_ID"
+                            | "CLAUDE_CODE_SESSION_ID"
+                            | "OPENCODE_SESSION_ID"
+                            | "KIMI_SESSION_ID"
+                    ))
+            {
                 self.env_remove(key);
             }
         }
@@ -38,7 +49,11 @@ impl BoopCommandExt for Command {
 pub fn write_tmux_fixture(path: &Path, executable: &Path) {
     use std::os::unix::fs::PermissionsExt;
     let quoted = executable.display().to_string().replace('\'', "'\\''");
-    std::fs::write(path, format!("#!/bin/sh\nexec '{quoted}' -f /dev/null \"$@\"\n")).unwrap();
+    std::fs::write(
+        path,
+        format!("#!/bin/sh\nexec '{quoted}' -f /dev/null \"$@\"\n"),
+    )
+    .unwrap();
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
 }
 

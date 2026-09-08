@@ -148,9 +148,16 @@ impl Doa {
             }
             std::thread::sleep(Duration::from_millis(200));
         }
-        let log = std::fs::read_to_string(self.root.join("lanes").join(lane).join("supervise.log")).unwrap_or_default();
-        let pane = Command::new(executable("tmux")).args(["-L", &self.socket, "capture-pane", "-p", "-t", lane]).output().unwrap();
-        panic!("lane {lane} never died; supervise log: {log}; pane: {}", String::from_utf8_lossy(&pane.stdout));
+        let log = std::fs::read_to_string(self.root.join("lanes").join(lane).join("supervise.log"))
+            .unwrap_or_default();
+        let pane = Command::new(executable("tmux"))
+            .args(["-L", &self.socket, "capture-pane", "-p", "-t", lane])
+            .output()
+            .unwrap();
+        panic!(
+            "lane {lane} never died; supervise log: {log}; pane: {}",
+            String::from_utf8_lossy(&pane.stdout)
+        );
     }
 
     fn session_alive(&self, session: &str) -> bool {
@@ -203,7 +210,10 @@ fn a_plain_respawn_resets_the_name_a_dead_lane_left_behind() {
         out.contains(&format!("reclaim: {lane} was dead; removed ")),
         "{out}"
     );
-    assert!(out.contains(".boop-worktrees/feature/carcass-reclaim"), "{out}");
+    assert!(
+        out.contains(".boop-worktrees/feature/carcass-reclaim"),
+        "{out}"
+    );
     assert!(out.contains(&format!("branch {branch}")), "{out}");
     assert!(
         is_worktree(&doa.worktree_of(branch)),
@@ -296,11 +306,7 @@ fn a_create_clears_a_stale_pin_with_nothing_else_left_to_remove() {
 
 /// The lane's `expect.json` as the trail holds it, `None` when absent.
 fn trail_expect(doa: &Doa, lane: &str) -> Option<serde_json::Value> {
-    let path = doa
-        .root
-        .join("lanes")
-        .join(lane)
-        .join("expect.json");
+    let path = doa.root.join("lanes").join(lane).join("expect.json");
     let text = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&text).ok()
 }

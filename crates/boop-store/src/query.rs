@@ -868,8 +868,6 @@ impl Store {
         }
         Ok(out)
     }
-
-
 }
 
 #[cfg(test)]
@@ -924,8 +922,12 @@ mod tests {
     #[test]
     fn window_sql_partitions_runs_and_binds_params() {
         let (store, path) = store();
-        store.write_turn("ses", 1, 10, "assistant", "a1", None).unwrap();
-        store.write_turn("ses", 2, 11, "assistant", "a2", None).unwrap();
+        store
+            .write_turn("ses", 1, 10, "assistant", "a1", None)
+            .unwrap();
+        store
+            .write_turn("ses", 2, 11, "assistant", "a2", None)
+            .unwrap();
         store.write_turn("ses", 3, 12, "user", "u1", None).unwrap();
         store.write_turn("ses", 4, 13, "user", "u2", None).unwrap();
         let sql = "WITH marked AS (
@@ -1112,7 +1114,9 @@ mod tests {
 
         // Preserve the millisecond ordering of the preceding observation.
         let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
         store
             .record_status(
                 "ses-1",
@@ -1126,7 +1130,8 @@ mod tests {
         // A later transcript refresh must preserve the observed live process.
         crate::ident::sync_session_with(&store, &session, None, 0, |store, session, cursor| {
             crate::ident::project_transcript(store, session, cursor.offset)
-        }).unwrap();
+        })
+        .unwrap();
 
         // A window wide enough to include the transcript row.
         let rows = store.status_rows(60 * 24 * 3600 * 1000, now_ms).unwrap();

@@ -9,9 +9,9 @@ use boop::{config, lane};
 
 use crate::cli::db::open_ro_store;
 use crate::cli::{line, now_ms};
-use crate::{ConfigCmd, PresetsFormat};
 #[cfg(feature = "dl6")]
 use crate::HostCmd;
+use crate::{ConfigCmd, PresetsFormat};
 
 /// `boop debug <lane>`: what happened to one lane, in the order a reader asks
 /// it. Five sections, each of which prints `none` rather than nothing:

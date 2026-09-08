@@ -154,9 +154,9 @@ impl Store {
 
     /// The tags one source carries, oldest link first.
     pub fn tags_for(&self, source: &str) -> Result<Vec<String>> {
-        let mut statement = self.connection().prepare(
-            "SELECT tag FROM agent_tag_link WHERE source = ?1 ORDER BY ts ASC, tag ASC",
-        )?;
+        let mut statement = self
+            .connection()
+            .prepare("SELECT tag FROM agent_tag_link WHERE source = ?1 ORDER BY ts ASC, tag ASC")?;
         let rows = statement.query_map(params![source.trim()], |row| row.get::<_, String>(0))?;
         Ok(rows.collect::<rusqlite::Result<Vec<String>>>()?)
     }
@@ -184,9 +184,8 @@ impl Store {
                   WHERE note IS NOT NULL AND TRIM(note) <> ''
                   ORDER BY favorite_id",
             )?;
-            let rows = statement.query_map([], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-            })?;
+            let rows =
+                statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
             for row in rows {
                 notes.push(row?);
             }
@@ -262,7 +261,10 @@ mod tests {
     fn a_note_splits_into_tags_on_commas_only() {
         assert_eq!(tags_in("rust, perf review"), ["rust", "perf-review"]);
         assert_eq!(tags_in("rust,RUST, Rust "), ["rust"]);
-        assert_eq!(tags_in("what does this line mean"), ["what-does-this-line-mean"]);
+        assert_eq!(
+            tags_in("what does this line mean"),
+            ["what-does-this-line-mean"]
+        );
         assert!(tags_in("   ").is_empty());
     }
 
@@ -315,8 +317,14 @@ mod tests {
         store.tag_apply("rust", "s2", 11).unwrap();
         store.tag_apply("trust", "s3", 12).unwrap();
         store.tag_apply("docs", "s4", 13).unwrap();
-        assert_eq!(names(&store.tags_search("rus", 20).unwrap()), ["rust", "trust"]);
-        assert_eq!(names(&store.tags_search("RUS", 20).unwrap()), ["rust", "trust"]);
+        assert_eq!(
+            names(&store.tags_search("rus", 20).unwrap()),
+            ["rust", "trust"]
+        );
+        assert_eq!(
+            names(&store.tags_search("RUS", 20).unwrap()),
+            ["rust", "trust"]
+        );
         drop(store);
         let _ = std::fs::remove_file(&path);
     }

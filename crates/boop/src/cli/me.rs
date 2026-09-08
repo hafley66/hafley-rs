@@ -4,10 +4,10 @@ use anyhow::{Context, Result};
 
 use boop::bus::Route;
 use boop::harness::HarnessId;
-use boop::registry::Registry;
-use boop::{bus, identity, tmux};
 #[cfg(feature = "agent-read")]
 use boop::ident;
+use boop::registry::Registry;
+use boop::{bus, identity, tmux};
 
 #[cfg(feature = "agent-read")]
 use crate::cli::db::open_store;
@@ -51,7 +51,13 @@ pub(crate) fn register_route(
     let dir = mail_dir(mail_dir_arg)?;
     let harness = harness.map(str::parse::<HarnessId>).transpose()?;
     let patch = bus::route_to_value(&Route {
-        kind: kind.unwrap_or(if pane.is_some() { "coordinator" } else { "native" }).into(),
+        kind: kind
+            .unwrap_or(if pane.is_some() {
+                "coordinator"
+            } else {
+                "native"
+            })
+            .into(),
         harness,
         tmux: pane.clone(),
         cwd: cwd.map(str::to_owned),

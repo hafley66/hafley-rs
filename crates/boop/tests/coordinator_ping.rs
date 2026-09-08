@@ -89,7 +89,11 @@ fn write_coordinator_route(dir: &Path, name: &str, tmux: &str) {
 fn lane_patch_preserves_an_existing_lane_route() {
     let dir = mail_dir("patch");
     let session = TestSession::new("patch");
-    std::fs::write(dir.join("registry.json"), r#"{"test-lane":{"kind":"lane"}}"#).unwrap();
+    std::fs::write(
+        dir.join("registry.json"),
+        r#"{"test-lane":{"kind":"lane"}}"#,
+    )
+    .unwrap();
     let output = boop(
         &dir,
         &["beep", "lane", "patch", "test-lane", "--tmux", &session.0],
@@ -103,7 +107,10 @@ fn lane_patch_preserves_an_existing_lane_route() {
 fn lane_patch_of_a_fresh_pane_registers_a_coordinator_without_a_supervisor() {
     let dir = mail_dir("fresh-patch");
     let session = TestSession::new("fresh-patch");
-    let output = boop(&dir, &["beep", "lane", "patch", "parent", "--tmux", &session.0]);
+    let output = boop(
+        &dir,
+        &["beep", "lane", "patch", "parent", "--tmux", &session.0],
+    );
     assert!(output.status.success(), "{output:?}");
     assert_eq!(route_kind(&dir, "parent"), "coordinator");
 }

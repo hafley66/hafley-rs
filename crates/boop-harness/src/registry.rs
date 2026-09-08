@@ -49,18 +49,33 @@ impl Registry {
     /// The adapter a CLI argument names. `None` when the text names no harness.
     pub fn by_name(&self, name: &str) -> Option<&dyn Harness> {
         let id = HarnessId::parse(name)?;
-        self.harnesses.iter().rev().find(|harness| harness.id() == id).map(|boxed| boxed.as_ref())
+        self.harnesses
+            .iter()
+            .rev()
+            .find(|harness| harness.id() == id)
+            .map(|boxed| boxed.as_ref())
     }
 
     /// A named adapter resolves exactly. Omission selects the first registered
     /// adapter, matching the existing dispatch default.
     pub fn resolve(&self, name: Option<&str>) -> anyhow::Result<&dyn Harness> {
         let Some(name) = name else {
-            return self.harnesses.first().map(|boxed| boxed.as_ref())
+            return self
+                .harnesses
+                .first()
+                .map(|boxed| boxed.as_ref())
                 .ok_or_else(|| anyhow::anyhow!("no harness registered"));
         };
-        self.by_name(name).ok_or_else(|| anyhow::anyhow!("unregistered harness `{name}`; registered harnesses: {}",
-            self.harnesses.iter().map(|harness| harness.id().as_str()).collect::<Vec<_>>().join(", ")))
+        self.by_name(name).ok_or_else(|| {
+            anyhow::anyhow!(
+                "unregistered harness `{name}`; registered harnesses: {}",
+                self.harnesses
+                    .iter()
+                    .map(|harness| harness.id().as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })
     }
 
     /// Model inference is delegated to the registered adapters. Explicit
@@ -68,8 +83,14 @@ impl Registry {
     pub fn for_model(&self, model: &str) -> Option<HarnessId> {
         let spec: boop_store::session::ModelSpec = model.parse().ok()?;
         let name = spec.name.trim().to_ascii_lowercase();
-        if name.is_empty() { return None; }
-        self.harnesses.iter().rev().find(|harness| harness.matches_model(&name)).map(|harness| harness.id())
+        if name.is_empty() {
+            return None;
+        }
+        self.harnesses
+            .iter()
+            .rev()
+            .find(|harness| harness.matches_model(&name))
+            .map(|harness| harness.id())
     }
 
     /// Every session boop-harness can see for one harness, filtered to `cwd`
@@ -153,12 +174,29 @@ mod tests {
             ("kimi", &["--model", "export", "--continue"], true),
             ("kimi", &["-pprompt"], false),
             ("kimi", &["acp"], false),
-            ("opencode", &["--model", "run", "attach", "http://localhost"], true),
+            (
+                "opencode",
+                &["--model", "run", "attach", "http://localhost"],
+                true,
+            ),
             ("opencode", &["run", "prompt"], false),
         ];
-        let observed = cases.iter().map(|(id, args, _)| registry.by_name(id).unwrap()
-            .uses_native_tui(&args.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>())).collect::<Vec<_>>();
-        assert_eq!(observed, cases.iter().map(|(_, _, expected)| *expected).collect::<Vec<_>>());
+        let observed = cases
+            .iter()
+            .map(|(id, args, _)| {
+                registry
+                    .by_name(id)
+                    .unwrap()
+                    .uses_native_tui(&args.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            observed,
+            cases
+                .iter()
+                .map(|(_, _, expected)| *expected)
+                .collect::<Vec<_>>()
+        );
     }
 
     /// RECEIPT (field, 2026-08-10). `--model gpt-5.6-luna@medium` with no
@@ -169,7 +207,10 @@ mod tests {
             Registry::discover().for_model("gpt-5.6-luna@medium"),
             Some(HarnessId::Codex)
         );
-        assert_eq!(Registry::discover().for_model("kimi-k2"), Some(HarnessId::Kimi));
+        assert_eq!(
+            Registry::discover().for_model("kimi-k2"),
+            Some(HarnessId::Kimi)
+        );
         assert_eq!(
             Registry::discover().for_model("claude-opus-4"),
             Some(HarnessId::Claude)

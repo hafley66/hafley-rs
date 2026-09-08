@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use boop_store::testing::BoopCommandExt;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 use std::time::Duration;

@@ -65,8 +65,11 @@ fn every_boop_subprocess_fixture_isolates_readers_and_storage() {
             if !text.contains("CARGO_BIN_EXE_boop") {
                 continue;
             }
-            if !text.contains(".boop_test_root(") || !text.contains(".env(\"BOOP_DB\"")
-                || text.contains(".env(\"HOME\"") || text.contains(".env(\"CODEX_HOME\"") {
+            if !text.contains(".boop_test_root(")
+                || !text.contains(".env(\"BOOP_DB\"")
+                || text.contains(".env(\"HOME\"")
+                || text.contains(".env(\"CODEX_HOME\"")
+            {
                 offenders.push(name);
             }
         }
@@ -161,8 +164,10 @@ fn no_new_src_unit_test_reaches_the_machine_s_own_agent_root() {
         let pins_store = text.contains("set_var(\"BOOP_DB\"");
         // Resolving a default path alone is read-only. Opening a store is the
         // operation that can create/migrate production data.
-        let stores = text.contains("Store::default_path()") && text.contains("Store::open")
-            && names_a_fixture && !pins_store;
+        let stores = text.contains("Store::default_path()")
+            && text.contains("Store::open")
+            && names_a_fixture
+            && !pins_store;
 
         if spawns && !SPAWN_WAIVED.contains(&name.as_str()) {
             spawners.push(name.clone());
