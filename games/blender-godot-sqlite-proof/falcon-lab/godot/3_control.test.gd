@@ -35,7 +35,9 @@ func check_keyboard():
 	stage._physics_process(1.0 / 60.0)
 	assert("BUTTONS 1" in stage.captions[1].text)
 	key(KEY_SPACE, false)
-	stage._physics_process(1.0 / 60.0)
+	assert("JUMP SQUAT" in stage.captions[2].text)
+	for _i in range(5):
+		stage._physics_process(1.0 / 60.0)
 	key(KEY_J, true)
 	stage._physics_process(1.0 / 60.0)
 	assert("BUTTONS 2" in stage.captions[1].text)

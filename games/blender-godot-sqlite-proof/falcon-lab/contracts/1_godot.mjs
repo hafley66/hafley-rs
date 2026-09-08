@@ -2,6 +2,10 @@
 export function emitGodot(contract) {
   const rust = ['use godot::prelude::*;', 'use crate::fixture::sql_viewer::boundary::contracts::*;'];
   const gd = ['extends RefCounted', ''];
+  for (const [name, value] of Object.entries(contract.constants).filter(([,v]) => v.type === 'string')) {
+    gd.push(`const ${name} = ${JSON.stringify(value.value)}`);
+  }
+  gd.push('');
   const scalarType = { int32: 'int', int64: 'int', uint32: 'int', uint64: 'int', float32: 'float', float64: 'float', boolean: 'bool' };
   const variantType = { int: 'TYPE_INT', float: 'TYPE_FLOAT', bool: 'TYPE_BOOL', Array: 'TYPE_ARRAY', PackedFloat64Array: 'TYPE_PACKED_FLOAT64_ARRAY', PackedVector3Array: 'TYPE_PACKED_VECTOR3_ARRAY', PackedColorArray: 'TYPE_PACKED_COLOR_ARRAY' };
   const bounds = f => [['minimum', '>='], ['maximum', '<=']].filter(([key]) => f[key] !== undefined);

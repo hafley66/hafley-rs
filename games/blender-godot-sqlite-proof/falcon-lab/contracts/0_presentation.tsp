@@ -70,6 +70,7 @@ union FrameStatus {
 model Position { x: float32; y: float32; z: float32; }
 const CONTROL_TICKS: uint32 = 300;
 const CONTROL_SNAPSHOT: uint32 = 180;
+const CONTROL_ACTION_LABELS: string = "IDLE|JUMP|FAIR|JUMP SQUAT|FALL|FAIR LANDING|HEAVY LANDING";
 
 @godot model ControlInput {
   @minValue(0) @maxValue(3) buttons: uint32;

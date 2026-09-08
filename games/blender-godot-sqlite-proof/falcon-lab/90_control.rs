@@ -9,9 +9,23 @@ use falcon_simulation::{Simulation, World};
 
 type Error = Box<dyn std::error::Error>;
 
+/// Offline source coverage, including fields not yet interpreted by the runtime.
+pub fn inspect_import() -> Result<(), Error> {
+    let actions = baseline::load_controlled()?;
+    let rows: Vec<_> = actions.iter().map(|a| serde_json::json!({
+        "name": a.name, "frames": a.frames.len(), "iasa": a.iasa,
+        "landing_lag": a.landing_lag, "bad_interrupts": a.bad_interrupts,
+        "interruptible": a.frames.iter().enumerate().filter_map(|(i,f)| f.interruptible.then_some(i)).collect::<Vec<_>>(),
+        "landing_enabled": a.frames.iter().enumerate().filter_map(|(i,f)| f.landing_lag.then_some(i)).collect::<Vec<_>>(),
+        "scripts": a.scripts,
+    })).collect();
+    println!("{}", serde_json::to_string_pretty(&rows)?);
+    Ok(())
+}
+
 /// Offline decoder output and native presentation oracle for the browser build.
 pub fn bake_web(path: &std::path::Path) -> Result<(), Error> {
-    let actions = baseline::load()?;
+    let actions = baseline::load_controlled()?;
     let baked = fixture::bake(&actions);
     let poses: Vec<Vec<Vec<Row>>> = actions.iter().enumerate().map(|(action, a)| {
         a.frames.iter().enumerate().map(|(frame, _)| {
@@ -30,13 +44,13 @@ pub fn bake_web(path: &std::path::Path) -> Result<(), Error> {
     }).collect();
     let bytes = bincode::serde::encode_to_vec((baked, poses, inputs, expected), bincode::config::standard())?;
     std::fs::write(path, &bytes)?;
-    println!("WEB_BAKE_OK bytes={} actions=3 native_ticks={CONTROL_TICKS}", bytes.len());
+    println!("WEB_BAKE_OK bytes={} actions={} native_ticks={CONTROL_TICKS}", bytes.len(), actions.len());
     Ok(())
 }
 
 pub fn demo_input(tick: i32) -> ControlInput {
     ControlInput {
-        buttons: falcon_simulation::fixture_input(tick % 120).into(),
+        buttons: match tick { 60 | 180 | 270 => 1, 74 | 210 => 2, _ => 0 },
         axis: match tick {
             60..=95 | 180..=215 => 1.0,
             135..=160 => -1.0,
@@ -55,7 +69,7 @@ pub struct Controlled {
 
 impl Controlled {
     pub fn new(record: bool) -> Result<Self, Error> {
-        let actions = baseline::load()?;
+        let actions = baseline::load_controlled()?;
         let simulation = Simulation::new(fixture::bake(&actions).into(), true);
         Ok(Self {
             actions, simulation, boundary: Boundary::new()?,
@@ -99,7 +113,13 @@ impl Controlled {
             assert_eq!(sim.advance_controlled(input.buttons as u8, input.axis), &recorded[tick as usize]);
         }
         let hit_ticks: Vec<_> = recorded.iter().filter(|w| w.view.hit.is_some()).map(|w| i64::from(w.frame - 1)).collect();
-        assert_eq!(hit_ticks, [91]);
+        assert_eq!(hit_ticks, [87]);
+        let transitions: Vec<_> = recorded.iter().enumerate().filter(|(i,w)| *i == 0 || recorded[i-1].view.action != w.view.action)
+            .map(|(i,w)| (i, w.view.action)).collect();
+        assert_eq!(transitions, [
+            (0,0), (60,3), (64,1), (74,2), (114,4), (117,6), (120,0),
+            (180,3), (184,1), (210,2), (237,5), (256,0), (270,3), (274,1),
+        ]);
         assert!(recorded[160].view.root[2] < recorded[134].view.root[2]);
         assert!(recorded[200].view.root[1] > 0.0);
         assert_ne!(recorded[95].bag.as_ref().unwrap().position, recorded[90].bag.as_ref().unwrap().position);
@@ -112,6 +132,37 @@ impl Controlled {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn imported_flags_and_transition_snapshots_preserve_recovery() {
+        let actions = baseline::load_controlled().unwrap();
+        assert_eq!(actions.iter().map(|a| (a.name.as_str(), a.frames.len(), a.iasa, a.landing_lag, a.bad_interrupts)).collect::<Vec<_>>(), [
+            ("Wait1",61,None,None,false), ("JumpF",36,None,None,false),
+            ("AttackAirF",40,Some(35),Some(19.0),false), ("JumpSquat",4,None,None,false),
+            ("Fall",9,None,None,false), ("LandingAirF",19,Some(19),None,false),
+            ("LandingHeavy",3,Some(3),None,false),
+        ]);
+        assert_eq!(actions[2].frames.iter().enumerate().filter_map(|(i,f)| f.landing_lag.then_some(i)).collect::<Vec<_>>(), (6..35).collect::<Vec<_>>());
+        let mut sim = Simulation::new(fixture::bake(&actions).into(), true);
+        let mut snapshots = Vec::new();
+        let states: Vec<_> = (0..300).map(|t| {
+            if [60,64,114,117,120,210,237,256,270].contains(&t) { snapshots.push((t,sim.save())); }
+            let input = demo_input(t);
+            sim.advance_controlled(input.buttons as u8, input.axis).clone()
+        }).collect();
+        for (start,snapshot) in snapshots {
+            sim.load(&snapshot);
+            for t in start..300 {
+                let input = demo_input(t);
+                assert_eq!(sim.advance_controlled(input.buttons as u8,input.axis), &states[t as usize]);
+            }
+        }
+        // A jump pressed during landing is rejected; holding it is not a fresh edge.
+        let mut sim = Simulation::new(fixture::bake(&actions).into(), false);
+        for t in 0..238 { let input=demo_input(t); sim.advance_controlled(input.buttons as u8,0.0); }
+        for _ in 238..270 { assert_ne!(sim.advance_controlled(1,0.0).view.action,3); }
+        sim.advance_controlled(0,0.0);
+        assert_eq!(sim.advance_controlled(1,0.0).view.action,3);
+    }
     #[test]
     fn controlled_motion_launch_and_sql_replay_are_exact() {
         let mut run = Controlled::new(true).unwrap();

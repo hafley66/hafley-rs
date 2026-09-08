@@ -10,6 +10,7 @@ case "${1:-check}" in
     lab_probe "$3"
     ;;
   build)
+    node "$lab_dir/97a_sources.mjs"
     node "$lab_dir/contracts/1_generate.mjs" --check
     lab_cargo run --bin falcon-web-bake -- "$lab_dir/94_web/1_assets.bin"
     cd "$lab_dir/94_web"
