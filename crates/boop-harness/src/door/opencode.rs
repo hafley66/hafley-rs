@@ -242,6 +242,18 @@ impl OpencodeDoor {
             worker: Some(worker),
         })
     }
+
+    fn for_route(route: &boop_store::bus::Route) -> Result<(Self, String)> {
+        let base = route
+            .app_server_socket
+            .as_deref()
+            .context("OpenCode route has no observed server")?;
+        let session = route
+            .session_id
+            .as_deref()
+            .context("OpenCode route has no selected session")?;
+        Ok((Self::at(Url::parse(base)?), session.to_owned()))
+    }
 }
 
 /// Root-TUI arguments that `attach` does not accept are applied to the owned
@@ -367,6 +379,11 @@ struct EventLine {
     properties: EventProperties,
     #[serde(default)]
     data: EventProperties,
+}
+
+#[derive(Deserialize)]
+struct EventHistory {
+    data: Vec<EventLine>,
 }
 
 #[derive(Deserialize, Default)]
@@ -641,6 +658,56 @@ impl Door for OpencodeDoor {
             session.session_id
         )
     }
+
+    fn native_route_settings(
+        &self,
+        route: &boop_store::bus::Route,
+    ) -> Result<Option<NativeTuiEvent>> {
+        let (source, session) = Self::for_route(route)?;
+        let history: EventHistory = serde_json::from_str(
+            &source.get(&format!("api/session/{session}/history"), READ_TIMEOUT)?,
+        )?;
+        Ok(history.data.into_iter().rev().find_map(native_event))
+    }
+
+    fn change_native_settings(
+        &self,
+        route: &boop_store::bus::Route,
+        model: &str,
+        effort: &str,
+    ) -> Result<NativeTuiEvent> {
+        let (provider, id) = model
+            .split_once('/')
+            .filter(|(provider, id)| !provider.is_empty() && !id.is_empty())
+            .context("OpenCode model requires provider/model")?;
+        let (source, session) = Self::for_route(route)?;
+        let url = source
+            .base()?
+            .join(&format!("api/session/{session}/model"))?;
+        let response = agent(READ_TIMEOUT)
+            .post(url.as_str())
+            .header("content-type", "application/json")
+            .send(serde_json::to_string(&serde_json::json!({
+                "id": id,
+                "providerID": provider,
+                "variant": effort,
+            }))?)?;
+        anyhow::ensure!(
+            response.status().is_success(),
+            "OpenCode model control answered {}",
+            response.status()
+        );
+        let expected = NativeTuiEvent::Settings {
+            session_id: session,
+            model: Some(model.to_owned()),
+            effort: Some(effort.to_owned()),
+        };
+        anyhow::ensure!(
+            source.native_route_settings(route)? == Some(expected.clone()),
+            "OpenCode did not persist the requested model and effort"
+        );
+        Ok(expected)
+    }
 }
 
 #[cfg(test)]
@@ -806,6 +873,16 @@ mod tests {
                     "HTTP/1.1 204 No Content\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
                 );
             }
+            path if path.ends_with("/model") => {
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 204 No Content\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+                );
+            }
+            path if path.ends_with("/history") => write_json(
+                &mut stream,
+                r#"{"data":[{"type":"session.next.model.switched","data":{"sessionID":"ses_new","model":{"id":"model","providerID":"fixture","variant":"high"}}}]}"#,
+            ),
             _ => {
                 let _ = write!(
                     stream,
@@ -847,6 +924,35 @@ mod tests {
             "/event?directory=%2Ffixture%2Fproject"
         );
         drop(observer);
+    }
+
+    #[test]
+    fn model_and_effort_change_is_read_back_from_durable_session_history() {
+        let stub = Stub::start(SESSIONS, STATUSES, EVENTS);
+        let route = boop_store::bus::route_from_value(&serde_json::json!({
+            "harness":"opencode", "session_id":"ses_new", "kind":"coordinator",
+            "appServerSocket":stub.base.as_str(), "mode":"native-owned"
+        }));
+        assert_eq!(
+            stub.door()
+                .change_native_settings(&route, "fixture/model", "high")
+                .unwrap(),
+            NativeTuiEvent::Settings {
+                session_id: "ses_new".into(),
+                model: Some("fixture/model".into()),
+                effort: Some("high".into()),
+            }
+        );
+        let first = stub.seen.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert_eq!(first.0, "/api/session/ses_new/model");
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&first.1).unwrap(),
+            serde_json::json!({"id":"model","providerID":"fixture","variant":"high"})
+        );
+        assert_eq!(
+            stub.seen.recv_timeout(Duration::from_secs(1)).unwrap().0,
+            "/api/session/ses_new/history"
+        );
     }
 
     #[test]

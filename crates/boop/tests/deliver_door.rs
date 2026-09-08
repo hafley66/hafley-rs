@@ -24,6 +24,8 @@ static DOOR: Capabilities = Capabilities {
     image_paste_keys: Some("C-v"),
     native_tui_projector: false,
     wrapper_owns_alternate_screen: false,
+    native_backend: boop::harness::NativeBackendSupport::Unsupported,
+    native_settings: boop::harness::NativeSettingsSupport::Unsupported("fixture"),
 };
 
 static KEYSTROKES: Capabilities = Capabilities {
@@ -34,6 +36,8 @@ static KEYSTROKES: Capabilities = Capabilities {
     image_paste_keys: Some("C-v"),
     native_tui_projector: false,
     wrapper_owns_alternate_screen: false,
+    native_backend: boop::harness::NativeBackendSupport::Unsupported,
+    native_settings: boop::harness::NativeSettingsSupport::Unsupported("fixture"),
 };
 
 /// A door that keeps what it was handed. The file is the recorder, so the

@@ -49,6 +49,24 @@ pub struct Capabilities {
     /// (openai/codex#24552), so its TUI renders inline and every repaint lands
     /// in tmux scrollback. claude and opencode enter it themselves.
     pub wrapper_owns_alternate_screen: bool,
+    /// Whether `boop tui` owns a separate backend process that can be killed
+    /// and observed independently from the frontend.
+    pub native_backend: NativeBackendSupport,
+    /// Whether the adapter has an isolated native control-plane operation for
+    /// model and effort changes.
+    pub native_settings: NativeSettingsSupport,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum NativeBackendSupport {
+    SeparateProcess,
+    Unsupported,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum NativeSettingsSupport {
+    ControlPlane,
+    Unsupported(&'static str),
 }
 
 /// Whether workers of this harness run as tmux lanes.
@@ -684,7 +702,10 @@ pub trait Harness: Send + Sync {
 
 #[cfg(test)]
 mod topology_tests {
-    use super::{Harness, HarnessId, SessionRef, SessionTopology};
+    use super::{
+        Harness, HarnessId, NativeBackendSupport, NativeSettingsSupport, NativeTuiPlan,
+        NativeTuiSpec, SessionRef, SessionTopology,
+    };
     use std::path::PathBuf;
 
     fn session(parent: Option<&str>) -> SessionRef {
@@ -741,6 +762,32 @@ mod topology_tests {
             SessionTopology::WrappedChild {
                 parent_route: "wrapper-parent".into()
             }
+        );
+    }
+
+    #[test]
+    fn lifecycle_capabilities_and_ccz_executable_identity_are_declared() {
+        assert_eq!(
+            super::codex::Codex.capabilities().native_backend,
+            NativeBackendSupport::SeparateProcess
+        );
+        assert_eq!(
+            super::opencode::Opencode.capabilities().native_settings,
+            NativeSettingsSupport::ControlPlane
+        );
+        assert!(matches!(
+            super::claude::Claude.capabilities().native_settings,
+            NativeSettingsSupport::Unsupported(_)
+        ));
+        let spec = NativeTuiSpec {
+            executable: "ccz".into(),
+            cwd: PathBuf::from("/fixture"),
+            args: Vec::new(),
+            env: Vec::new(),
+        };
+        assert_eq!(
+            NativeTuiPlan::direct(&spec).source_path.as_deref(),
+            Some("native-executable=ccz")
         );
     }
 }

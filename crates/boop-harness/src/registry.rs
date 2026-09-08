@@ -248,6 +248,8 @@ mod tests {
         image_paste_keys: Some("C-v"),
         native_tui_projector: true,
         wrapper_owns_alternate_screen: false,
+        native_backend: crate::harness::NativeBackendSupport::Unsupported,
+        native_settings: crate::harness::NativeSettingsSupport::Unsupported("fixture"),
     };
 
     impl Harness for Echo {

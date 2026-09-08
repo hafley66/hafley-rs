@@ -30,6 +30,8 @@ static CAPABILITIES: Capabilities = Capabilities {
     image_paste_keys: None,
     native_tui_projector: true,
     wrapper_owns_alternate_screen: false,
+    native_backend: super::NativeBackendSupport::SeparateProcess,
+    native_settings: super::NativeSettingsSupport::ControlPlane,
 };
 
 /// The `opencode serve` this machine's TUIs are clients of.

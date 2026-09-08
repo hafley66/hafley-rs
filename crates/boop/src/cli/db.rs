@@ -1781,6 +1781,8 @@ mod tests {
         image_paste_keys: None,
         native_tui_projector: false,
         wrapper_owns_alternate_screen: false,
+        native_backend: boop::harness::NativeBackendSupport::Unsupported,
+        native_settings: boop::harness::NativeSettingsSupport::Unsupported("fixture"),
     };
 
     struct FakeHarness {

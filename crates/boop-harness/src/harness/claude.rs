@@ -26,6 +26,10 @@ static CAPABILITIES: Capabilities = Capabilities {
     image_paste_keys: Some("C-v"),
     native_tui_projector: true,
     wrapper_owns_alternate_screen: false,
+    native_backend: super::NativeBackendSupport::Unsupported,
+    native_settings: super::NativeSettingsSupport::Unsupported(
+        "Claude and ccz settings require user-scoped configuration; the lifecycle gate never reads or writes it",
+    ),
 };
 
 /// The registry directory and messaging sockets of the claude on this

@@ -29,6 +29,8 @@ static CAPABILITIES: Capabilities = Capabilities {
     // false so codex renders on the primary screen: its transcript then lands in
     // tmux history, which is the only scrollback a codex pane ever gets.
     wrapper_owns_alternate_screen: false,
+    native_backend: super::NativeBackendSupport::SeparateProcess,
+    native_settings: super::NativeSettingsSupport::ControlPlane,
 };
 
 /// The state database and remote-control socket of the codex on this machine.

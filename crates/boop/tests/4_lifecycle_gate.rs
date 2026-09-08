@@ -4,7 +4,10 @@
 use anyhow::{ensure, Context, Result};
 use boop::{
     bus,
-    harness::{shell_quote, Harness, HarnessId},
+    harness::{
+        shell_quote, Harness, HarnessId, NativeBackendSupport, NativeSettingsSupport,
+        NativeTuiEvent,
+    },
     Registry, Store,
 };
 use serde_json::{json, Value};
@@ -160,8 +163,41 @@ trait LifecycleHarness {
     fn backend(&self, _fixture: &Fixture) -> Result<Option<(u32, bool)>> {
         Ok(None)
     }
-    fn change_settings(&self, _fixture: &Fixture) -> Result<(String, String)> {
-        anyhow::bail!("BLOCKED: settings controls have not been verified for this adapter")
+    fn settings_request(&self) -> Option<(String, String)> {
+        None
+    }
+    fn change_settings(&self, fixture: &Fixture, registry: &Registry) -> Result<(String, String)> {
+        let adapter = self.adapter(registry);
+        match adapter.capabilities().native_settings {
+            NativeSettingsSupport::Unsupported(detail) => {
+                anyhow::bail!("UNSUPPORTED: {detail}")
+            }
+            NativeSettingsSupport::ControlPlane => {}
+        }
+        let (model, effort) = self
+            .settings_request()
+            .context("UNSUPPORTED: lifecycle fixture has no requested model and effort")?;
+        let route = fixture.route()?;
+        let NativeTuiEvent::Settings {
+            session_id,
+            model: observed_model,
+            effort: observed_effort,
+        } = adapter
+            .door()
+            .change_native_settings(&route, &model, &effort)?
+        else {
+            anyhow::bail!("native settings control returned a non-settings event")
+        };
+        ensure!(
+            Some(&session_id) == route.session_id.as_ref(),
+            "native settings control returned another session"
+        );
+        ensure!(
+            observed_model.as_deref() == Some(model.as_str())
+                && observed_effort.as_deref() == Some(effort.as_str()),
+            "native settings control returned different settings"
+        );
+        Ok((model, effort))
     }
     fn busy(&self, fixture: &Fixture, registry: &Registry) -> Result<bool> {
         let route = fixture.route()?;
@@ -293,13 +329,8 @@ impl LifecycleHarness for Codex {
         args.push("--no-alt-screen".into());
         args
     }
-    fn change_settings(&self, fixture: &Fixture) -> Result<(String, String)> {
-        self.rpc(
-            fixture,
-            "thread/settings/update",
-            json!({"threadId":fixture.route()?.session_id,"model":"gpt-5.6-terra","effort":"high"}),
-        )?;
-        Ok(("gpt-5.6-terra".into(), "high".into()))
+    fn settings_request(&self) -> Option<(String, String)> {
+        Some(("gpt-5.6-terra".into(), "high".into()))
     }
     fn busy(&self, fixture: &Fixture, _registry: &Registry) -> Result<bool> {
         let result = self.rpc(
@@ -379,10 +410,6 @@ impl LifecycleHarness for Claude {
         }
         args
     }
-    fn change_settings(&self, fixture: &Fixture) -> Result<(String, String)> {
-        let _ = fixture;
-        anyhow::bail!("BLOCKED: installed Claude /model and /effort persist user defaults; isolated authenticated settings storage is required")
-    }
 }
 
 struct OpenCode;
@@ -429,6 +456,13 @@ impl LifecycleHarness for OpenCode {
             args.extend(["--model".into(), model]);
         }
         args
+    }
+    fn settings_request(&self) -> Option<(String, String)> {
+        Some((
+            std::env::var("BOOP_E2E_OPENCODE_CHANGE_MODEL")
+                .unwrap_or_else(|_| "zai-coding-plan/glm-5.3".into()),
+            std::env::var("BOOP_E2E_OPENCODE_CHANGE_EFFORT").unwrap_or_else(|_| "high".into()),
+        ))
     }
 }
 
@@ -837,9 +871,12 @@ fn await_receipt(
                     .adapter(registry)
                     .session_by_id(route.session_id.as_deref().unwrap(), route.cwd.as_deref())
                     .context("receipt session disappeared")?;
-                let settings = harness
-                    .adapter(registry)
-                    .native_settings(&session)
+                let adapter = harness.adapter(registry);
+                let current = fixture.route()?;
+                let settings = adapter
+                    .door()
+                    .native_route_settings(&current)?
+                    .or_else(|| adapter.native_settings(&session))
                     .context("native settings absent after answer")?;
                 let boop::harness::NativeTuiEvent::Settings {
                     session_id,
@@ -849,7 +886,6 @@ fn await_receipt(
                 else {
                     anyhow::bail!("unexpected native settings event")
                 };
-                let current = fixture.route()?;
                 ensure!(
                     Some(&session_id) == current.session_id.as_ref(),
                     "settings belong to another thread"
@@ -1134,7 +1170,7 @@ fn authenticated_matrix() -> Result<()> {
         let receipt = resume(&fixture, harness.as_ref(), &registry, "compact_resume")?;
         cases.push(json!({"scenario":"resume_after_compact","status":"PASS","receipt":receipt}));
         active_scenario = "model_and_effort_change";
-        match harness.change_settings(&fixture) {
+        match harness.change_settings(&fixture, &registry) {
             Ok((model, effort)) => {
                 let receipt = nonce(&fixture, harness.as_ref(), &registry, "settings")?;
                 ensure!(
@@ -1154,10 +1190,10 @@ fn authenticated_matrix() -> Result<()> {
                     json!({"scenario":"settings_across_resume","status":"PASS","receipt":receipt}),
                 );
             }
-            Err(error) if error.to_string().starts_with("BLOCKED:") => {
+            Err(error) if error.to_string().starts_with("UNSUPPORTED:") => {
                 for scenario in ["model_and_effort_change", "settings_across_resume"] {
                     cases.push(
-                        json!({"scenario":scenario,"status":"BLOCKED","detail":error.to_string()}),
+                        json!({"scenario":scenario,"status":"UNSUPPORTED","detail":error.to_string()}),
                     );
                 }
             }
@@ -1222,7 +1258,11 @@ fn authenticated_matrix() -> Result<()> {
         );
         cases.push(json!({"scenario":"abnormal_exit","status":"PASS","automatic_restart":harness.automatic_restart(),"old_pid":old_pid,"new_pid":new_pid,"receipt":receipt}));
         active_scenario = "backend_restart";
-        if let Some((backend, automatic)) = harness.backend(&fixture)? {
+        let backend_support = harness.adapter(&registry).capabilities().native_backend;
+        if backend_support == NativeBackendSupport::SeparateProcess {
+            let (backend, automatic) = harness
+                .backend(&fixture)?
+                .context("adapter declares a separate backend but the fixture observed none")?;
             ensure!(
                 fixture.owned_pids()?.contains(&backend),
                 "refusing to kill a backend outside the test pane"
@@ -1272,6 +1312,10 @@ fn authenticated_matrix() -> Result<()> {
             );
             cases.push(json!({"scenario":"backend_restart","status":"PASS","automatic":automatic,"old_backend":backend,"receipt":receipt}));
         } else {
+            ensure!(
+                harness.backend(&fixture)?.is_none(),
+                "adapter declares backend restart unsupported but exposed a separate backend"
+            );
             cases.push(json!({"scenario":"backend_restart","status":"UNSUPPORTED","detail":"production native launch plan runs this harness directly, without a separate owned backend"}));
         }
         let before_clear = fixture

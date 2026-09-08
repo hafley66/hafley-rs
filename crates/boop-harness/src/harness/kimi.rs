@@ -31,6 +31,10 @@ static CAPABILITIES: Capabilities = Capabilities {
     image_paste_keys: None,
     native_tui_projector: true,
     wrapper_owns_alternate_screen: false,
+    native_backend: super::NativeBackendSupport::Unsupported,
+    native_settings: super::NativeSettingsSupport::Unsupported(
+        "Kimi exposes no native model and effort control plane",
+    ),
 };
 
 /// kimi publishes no door; the impl says so rather than guessing one.

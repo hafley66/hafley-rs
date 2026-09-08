@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use crate::harness::{NativeTuiPlan, NativeTuiSpec};
+use crate::harness::{NativeTuiEvent, NativeTuiPlan, NativeTuiSpec};
 use crate::live::{now_ms, LiveSession, LiveSessions};
 
 pub mod claude;
@@ -75,6 +75,25 @@ pub trait Door: Send + Sync {
         _effort: Option<&str>,
     ) -> Result<Option<NativeTuiPlan>> {
         Ok(None)
+    }
+
+    /// Settings currently persisted for an explicitly bound native route.
+    /// `None` means this door has no route-scoped settings reader.
+    fn native_route_settings(
+        &self,
+        _route: &boop_store::bus::Route,
+    ) -> Result<Option<NativeTuiEvent>> {
+        Ok(None)
+    }
+
+    /// Change model and effort through this route's isolated control plane.
+    fn change_native_settings(
+        &self,
+        _route: &boop_store::bus::Route,
+        _model: &str,
+        _effort: &str,
+    ) -> Result<NativeTuiEvent> {
+        anyhow::bail!("UNSUPPORTED: this harness has no isolated native settings control plane")
     }
 }
 

@@ -272,6 +272,32 @@ impl Door for CodexDoor {
         self.tui_launch(&resume_spec(spec, session, model, effort)?)
             .map(Some)
     }
+
+    fn change_native_settings(
+        &self,
+        route: &boop_store::bus::Route,
+        model: &str,
+        effort: &str,
+    ) -> Result<NativeTuiEvent> {
+        let socket = route
+            .app_server_socket
+            .as_deref()
+            .context("owned Codex socket absent")?;
+        let session = route
+            .session_id
+            .as_deref()
+            .context("Codex route has no selected thread")?;
+        app_server_rpc(
+            Path::new(socket),
+            "thread/settings/update",
+            serde_json::json!({"threadId":session,"model":model,"effort":effort}),
+        )?;
+        Ok(NativeTuiEvent::Settings {
+            session_id: session.to_owned(),
+            model: Some(model.to_owned()),
+            effort: Some(effort.to_owned()),
+        })
+    }
 }
 
 fn resume_spec(
@@ -609,6 +635,60 @@ pub fn queue_message(socket: &Path, thread: &str, text: &str) -> Result<()> {
         String::from_utf8_lossy(&output.stderr).trim()
     );
     Ok(())
+}
+
+fn app_server_rpc(
+    socket: &Path,
+    method: &str,
+    params: serde_json::Value,
+) -> Result<serde_json::Value> {
+    use std::os::unix::net::UnixStream;
+    use tungstenite::Message;
+
+    let stream = UnixStream::connect(socket)
+        .with_context(|| format!("connect Codex app-server socket {}", socket.display()))?;
+    stream.set_read_timeout(Some(Duration::from_secs(15)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(15)))?;
+    let (mut websocket, _) = tungstenite::client("ws://localhost/", stream)?;
+    for (id, called, parameters) in [
+        (
+            1,
+            "initialize",
+            serde_json::json!({"clientInfo":{"name":"boop","version":env!("CARGO_PKG_VERSION")},"capabilities":{"experimentalApi":true}}),
+        ),
+        (2, method, params),
+    ] {
+        websocket.send(Message::Text(
+            serde_json::json!({"id":id,"method":called,"params":parameters})
+                .to_string()
+                .into(),
+        ))?;
+        loop {
+            let message = websocket.read()?;
+            let Message::Text(text) = message else {
+                continue;
+            };
+            let value: serde_json::Value = serde_json::from_str(&text)?;
+            if value["id"] != id {
+                continue;
+            }
+            anyhow::ensure!(
+                value.get("error").is_none(),
+                "Codex {called}: {}",
+                value["error"]
+            );
+            if id == 2 {
+                return Ok(value["result"].clone());
+            }
+            websocket.send(Message::Text(
+                serde_json::json!({"method":"initialized","params":{}})
+                    .to_string()
+                    .into(),
+            ))?;
+            break;
+        }
+    }
+    unreachable!()
 }
 
 #[cfg(test)]
