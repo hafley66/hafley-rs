@@ -125,7 +125,7 @@ pub(crate) fn draw(rows: &[Row]) -> Vec<gpu::Vertex> {
     out
 }
 
-pub(super) fn execute(trace: &[[Display; 2]], record: bool) -> Result<(), Error> {
+pub(crate) fn execute(trace: &[[Display; 2]], record: bool) -> Result<(), Error> {
     execute_with(trace, record, |_, _| Ok(()))
 }
 
