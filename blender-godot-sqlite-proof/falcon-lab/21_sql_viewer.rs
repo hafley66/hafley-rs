@@ -1,16 +1,13 @@
 #[path = "1b_boundary.rs"]
 pub mod boundary;
-use super::{baseline, Display, Error, World, CYAN, ORANGE, WHITE};
-use baseline::{gpu, mesh_wire, project, text};
+#[path = "27_geometry.rs"]
+pub mod geometry;
+use super::{CYAN, Display, Error, ORANGE, WHITE, World, baseline};
+use baseline::{gpu, project, text};
 use boundary::{Boundary, Row};
 use brawllib_rs::high_level_fighter::{CollisionBoxValues, HighLevelSubaction};
-use cgmath::{Matrix4, Vector3};
-use parry3d::{
-    math::Vec3,
-    shape::{Ball, Capsule, Cuboid},
-};
 
-pub fn encode(
+pub(super) fn encode(
     world: &World,
     actions: &[HighLevelSubaction],
     predicted: bool,
@@ -101,66 +98,14 @@ fn draw(rows: &[Row]) -> Vec<gpu::Vertex> {
     let meta = &rows.iter().find(|r| r.kind == 0).unwrap().values;
     let target = &rows.iter().find(|r| r.kind == 1).unwrap().values;
     let mut out = Vec::new();
-    for z in (-30..140).step_by(10) {
+    for line in geometry::wire(rows) {
         gpu::line(
             &mut out,
-            project(Vector3::new(-12.0, 0.0, z as f32)),
-            project(Vector3::new(12.0, 0.0, z as f32)),
-            0.8,
-            [0.15, 0.24, 0.32, 1.0],
+            project(line.a.into()),
+            project(line.b.into()),
+            line.width,
+            line.color,
         );
-    }
-    let root = Matrix4::from_translation(Vector3::new(
-        meta[2] as f32,
-        (meta[3] + meta[12]) as f32,
-        (meta[4] + meta[11]) as f32,
-    ));
-    for row in rows {
-        let v = &row.values;
-        match row.kind {
-            1 => {
-                let (p, i) = Cuboid::new(Vec3::new(3.0, 6.0, 4.0)).to_trimesh();
-                let color = if meta[7] >= 0.0 && row.tick - (meta[7] as i64) < 10 {
-                    ORANGE
-                } else {
-                    CYAN
-                };
-                mesh_wire(
-                    &mut out,
-                    &p,
-                    &i,
-                    Matrix4::from_translation(Vector3::new(v[0] as f32, v[1] as f32, v[2] as f32)),
-                    color,
-                );
-            }
-            2 if v[23] != 0.0 => {
-                let matrix = Matrix4::from(std::array::from_fn::<_, 4, _>(|col| {
-                    std::array::from_fn::<_, 4, _>(|i| v[col * 4 + i] as f32)
-                }));
-                let (p, i) = Capsule::new(
-                    Vec3::new(v[16] as f32, v[17] as f32, v[18] as f32),
-                    Vec3::new(v[19] as f32, v[20] as f32, v[21] as f32),
-                    v[22] as f32,
-                )
-                .to_trimesh(8, 4);
-                mesh_wire(&mut out, &p, &i, root * matrix, [0.75, 0.45, 1.0, 0.85]);
-            }
-            3 if v[5] != 0.0 => {
-                let (p, i) = Ball::new(v[3] as f32).to_trimesh(12, 8);
-                mesh_wire(
-                    &mut out,
-                    &p,
-                    &i,
-                    root * Matrix4::from_translation(Vector3::new(
-                        v[0] as f32,
-                        v[1] as f32,
-                        v[2] as f32,
-                    )),
-                    ORANGE,
-                );
-            }
-            _ => {}
-        }
     }
     for v in &mut out {
         let x = (v[0] + 1.0) * 480.0;
@@ -179,7 +124,15 @@ fn draw(rows: &[Row]) -> Vec<gpu::Vertex> {
     out
 }
 
-pub fn execute(trace: &[[Display; 2]], record: bool) -> Result<(), Error> {
+pub(super) fn execute(trace: &[[Display; 2]], record: bool) -> Result<(), Error> {
+    execute_with(trace, record, |_, _| Ok(()))
+}
+
+pub(super) fn execute_with(
+    trace: &[[Display; 2]],
+    record: bool,
+    mut consume: impl FnMut(&[Row], &serde_json::Value) -> Result<(), Error>,
+) -> Result<(), Error> {
     let mut b = Boundary::new()?;
     let reader = b.reader()?;
     let mut statement = reader.prepare("SELECT * FROM presentation WHERE tick=91")?;
@@ -396,6 +349,7 @@ pub fn execute(trace: &[[Display; 2]], record: bool) -> Result<(), Error> {
             }
         }
         report.push(serde_json::json!({"simulation_tick":tick,"published_generation":b.generation,"renderer_generation":generation,"rows":count,"window_frames":frames,"held_generation":if held.is_some(){Some(held_generation)}else{None},"held_damage":if held.is_some(){Some(0)}else{None},"fresh_tick91_damage":corrected,"restored":d.restored}));
+        consume(&rows, report.last().unwrap())?;
     }
     assert_eq!(b.layout, b.ring.read().unwrap().slot_layout());
     assert!(
@@ -418,7 +372,10 @@ pub fn execute(trace: &[[Display; 2]], record: bool) -> Result<(), Error> {
     if let Some(c) = capture {
         c.finish()?;
     }
-    eprintln!("SQL_BOUNDARY_OK generations={} max_rows={max_rows} slots=3 capacity=1024 held_gen=92 old_damage=0 corrected_damage=18",b.generation);
+    eprintln!(
+        "SQL_BOUNDARY_OK generations={} max_rows={max_rows} slots=3 capacity=1024 held_gen=92 old_damage=0 corrected_damage=18",
+        b.generation
+    );
     Ok(())
 }
 

@@ -106,3 +106,17 @@ publication buffers; this fixture still allocates simulation snapshots and
 rendering data. `falcon-lab/23_sql_boundary.mp4` labels publication generations,
 reader state, action/pose, damage, and rollback. See `falcon-lab/26_sql_readme.md`
 for schema, replay assertions, cursor-isolation scope, and reproduction commands.
+
+## Godot consumption through gdext
+
+`bash falcon-lab/29_run_godot.sh` builds `godot` 0.4.5 against the 4.5 API and
+loads it into installed Godot 4.7. The existing Rust/GGRS/SQLite fixture emits
+copied rows and shared world-space line geometry through a capacity-one bridge.
+Godot renders an ArrayMesh and returns its uploaded vertices for exact comparison.
+All 180 tick/generation diagnostics match the saved wgpu trace. The existing
+held-reader, correction, and slot-reuse assertions execute inside the extension.
+
+`falcon-lab/31_godot_sql.mp4` records the Godot presentation; the 180 simulation
+ticks retain the earlier 824-frame slow-playback/hold schedule. This remains an
+offline simulation fixture with presentation-time SQL publication. See
+`falcon-lab/33_godot_readme.md` for thread ownership, capture details, and scope.
