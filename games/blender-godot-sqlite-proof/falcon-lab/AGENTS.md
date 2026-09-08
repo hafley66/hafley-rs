@@ -1,6 +1,9 @@
 # Active Falcon lab direction
 
 Start with `just status`. `101_current.json` is the replace-in-place task pointer.
+Read `102_tasks.md` for the active execution queue, acceptance evidence and
+deferral triggers. Update task status/receipts after each tested increment.
+Work stays in this lab and `games/shared`; sealed applications are read-only references.
 Use `just tsp`, `just test [all|core|godot|workflow|web]`, `just prove`, and
 `just deploy`. The default test suite includes core, workflow and native Godot
 boundaries; Web tests additionally build/export and run browser acceptance.
