@@ -709,9 +709,11 @@ impl Door for OpencodeDoor {
             .post(url.as_str())
             .header("content-type", "application/json")
             .send(serde_json::to_string(&serde_json::json!({
-                "id": id,
-                "providerID": provider,
-                "variant": effort,
+                "model": {
+                    "id": id,
+                    "providerID": provider,
+                    "variant": effort,
+                }
             }))?)?;
         anyhow::ensure!(
             response.status().is_success(),
@@ -971,7 +973,7 @@ mod tests {
         assert_eq!(first.0, "/api/session/ses_new/model");
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&first.1).unwrap(),
-            serde_json::json!({"id":"model","providerID":"fixture","variant":"high"})
+            serde_json::json!({"model":{"id":"model","providerID":"fixture","variant":"high"}})
         );
         assert_eq!(
             stub.seen.recv_timeout(Duration::from_secs(1)).unwrap().0,
