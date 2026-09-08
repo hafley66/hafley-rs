@@ -8,7 +8,7 @@ pub struct Tick {
     pub contact: bool,
     pub hit: Option<(u8, f32)>,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Attack {
     pub id: u8,
     pub position: [f32; 3],
@@ -21,13 +21,13 @@ pub struct Attack {
     pub wdsk: u32,
     pub trajectory: f32,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Frame {
     pub x_pos: f32,
     pub y_pos: f32,
     pub hit_boxes: Vec<Attack>,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Action {
     pub frames: Vec<Frame>,
 }

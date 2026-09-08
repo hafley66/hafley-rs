@@ -43,3 +43,7 @@ path = "2_main.rs"
 [[bin]]
 name = "falcon-rollback"
 path = "8_rollback.rs"
+
+[[bin]]
+name = "falcon-web-bake"
+path = "93_bake_web.rs"
