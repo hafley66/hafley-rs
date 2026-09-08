@@ -136,6 +136,31 @@ impl Registry {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn native_invocations_classify_commands_and_preserve_value_tokens() {
+        let registry = Registry::discover();
+        let cases: &[(&str, &[&str], bool)] = &[
+            ("codex", &["-m", "review", "resume", "thread"], true),
+            ("codex", &["--", "--help"], true),
+            ("codex", &["-c", "key=exec", "fork", "thread"], true),
+            ("codex", &["-c", "key=value", "exec", "prompt"], false),
+            ("codex", &["queue", "--thread", "thread"], false),
+            ("codex", &["resume", "--help"], false),
+            ("claude", &["--model", "doctor", "--resume", "thread"], true),
+            ("claude", &["--system-prompt", "mcp", "prompt"], true),
+            ("claude", &["-p", "prompt"], false),
+            ("claude", &["--background"], false),
+            ("kimi", &["--model", "export", "--continue"], true),
+            ("kimi", &["-pprompt"], false),
+            ("kimi", &["acp"], false),
+            ("opencode", &["--model", "run", "attach", "http://localhost"], true),
+            ("opencode", &["run", "prompt"], false),
+        ];
+        let observed = cases.iter().map(|(id, args, _)| registry.by_name(id).unwrap()
+            .uses_native_tui(&args.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>())).collect::<Vec<_>>();
+        assert_eq!(observed, cases.iter().map(|(_, _, expected)| *expected).collect::<Vec<_>>());
+    }
+
     /// RECEIPT (field, 2026-08-10). `--model gpt-5.6-luna@medium` with no
     /// `--harness` dry-ran as opencode; the spelling names the harness now.
     #[test]

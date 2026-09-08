@@ -2355,6 +2355,27 @@ impl Store {
         Ok(names)
     }
 
+    /// Clear a process observation only while this PID still owns it. The
+    /// ownership read and both liveness writes share one writer transaction.
+    pub fn detach_process(&self, session: &str, pid: u32, ts: u64) -> Result<bool> {
+        let transaction = rusqlite::Transaction::new_unchecked(&self.connection, rusqlite::TransactionBehavior::Immediate)?;
+        let owns = self.live_row(session)?.is_some_and(|row| row.pid == Some(i64::from(pid)));
+        if owns {
+            self.record_status(session, ts, "detached", None, None)?;
+            self.record_live_door(session, "none", None)?;
+        }
+        transaction.commit()?;
+        Ok(owns)
+    }
+
+    /// Read one observed session attribute without inheritance.
+    pub fn session_attr(&self, session: &str, key: &str) -> Result<Option<String>> {
+        Ok(self.connection.query_row(
+            "SELECT attr.value FROM agent_session_attr attr JOIN dict_attr_key key ON key.id = attr.key_id WHERE attr.session_id = ?1 AND key.value = ?2",
+            params![session, key], |row| row.get(0),
+        ).optional()?)
+    }
+
     /// One session attribute, last write wins.
     pub fn set_session_attr(&self, session: &str, key: &str, value: &str, ts: u64) -> Result<()> {
         let session_id = self.session_id(session)?;

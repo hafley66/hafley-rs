@@ -37,6 +37,13 @@ static CAPABILITIES: Capabilities = Capabilities {
 static DOOR: crate::door::kimi::KimiDoor = crate::door::kimi::KimiDoor;
 
 impl Harness for Kimi {
+    fn uses_native_tui(&self, args: &[String]) -> bool {
+        super::interactive_arguments(args,
+            &["-S", "--session", "-m", "--model", "-p", "--prompt", "--output-format", "--skills-dir", "--agent", "--agent-file", "--add-dir"],
+            &["-V", "-p", "--prompt"],
+            &["help", "export", "provider", "acp", "web", "server", "login", "doctor", "vis", "migrate", "upgrade", "update"])
+    }
+
     fn matches_model(&self, name: &str) -> bool {
         !name.contains('/') && name.starts_with("kimi")
     }

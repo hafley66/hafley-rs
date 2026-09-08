@@ -533,6 +533,20 @@ fn hash_hex(bytes: &[u8]) -> String {
     format!("{:016x}", hasher.finish())
 }
 
+/// One cross-process owner for a route operation beside its database. Keep
+/// the returned file open for the operation's lifetime. Lock files remain:
+/// unlinking one while another process has it open would split ownership.
+pub fn try_route_lock(db: &Path, route: &str, operation: &str) -> Result<Option<fs::File>> {
+    let path = PathBuf::from(format!("{}.{operation}.{}.lock", db.display(), hash_hex(route.as_bytes())));
+    if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
+    let file = fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path)?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+        Err(std::fs::TryLockError::Error(error)) => Err(error.into()),
+    }
+}
+
 /// The configured mail dir: `BOOP_MAIL_DIR`, else the directory `BOOP_DB`
 /// names, else `~/.agent/mail`. A caller that redirected the store has
 /// redirected the mailbox with it, so no verb reaches into `~/.agent` behind

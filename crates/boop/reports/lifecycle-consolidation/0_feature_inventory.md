@@ -1,5 +1,14 @@
 # Boop feature inventory
 
+Wrapper checkpoint: generated Bash functions pass help, version, CLI subcommands
+and print-mode calls directly to the native executable. Adapter-owned argument
+classification preserves values that resemble commands. The failing actual-wrapper
+fixture (`107_wrapper-passthrough-before.log`) returned exit 1 instead of 23 for all
+six calls; after the fix all arguments/exit codes match and no route is registered
+(`108_wrapper-passthrough-after.log`). `boop tui --name` supports a stable name with
+a database-scoped lifetime lock and refuses a live owner or lane supervisor.
+Automatic Codex resume applies observed model/effort and retains inline mode.
+
 Work in progress, based on `66cbe8e`. Worktree: `refactor/boop-lifecycle-consolidation`.
 Installed help and isolated reproduction receipts live under
 `/private/tmp/boop-lifecycle-consolidation-proof-01a08191`.

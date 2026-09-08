@@ -36,6 +36,13 @@ static CAPABILITIES: Capabilities = Capabilities {
 static DOOR: crate::door::opencode::OpencodeDoor = crate::door::opencode::OpencodeDoor::machine();
 
 impl Harness for Opencode {
+    fn uses_native_tui(&self, args: &[String]) -> bool {
+        super::interactive_arguments(args,
+            &["--log-level", "--port", "--hostname", "--mdns-domain", "--cors", "-m", "--model", "-s", "--session", "--prompt", "--agent", "--replay-limit"],
+            &["-v"],
+            &["help", "completion", "acp", "mcp", "run", "debug", "providers", "auth", "agent", "upgrade", "uninstall", "serve", "web", "models", "stats", "export", "import", "github", "session", "plugin", "plug", "db"])
+    }
+
     fn matches_model(&self, name: &str) -> bool {
         name.contains('/')
     }

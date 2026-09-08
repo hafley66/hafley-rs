@@ -35,6 +35,13 @@ static CAPABILITIES: Capabilities = Capabilities {
 static DOOR: crate::door::codex::CodexDoor = crate::door::codex::CodexDoor::machine();
 
 impl Harness for Codex {
+    fn uses_native_tui(&self, args: &[String]) -> bool {
+        super::interactive_arguments(args,
+            &["-c", "--config", "--enable", "--disable", "--remote", "--remote-auth-token-env", "-i", "--image", "-m", "--model", "--local-provider", "-p", "--profile", "-s", "--sandbox", "-C", "--cd", "--add-dir", "-a", "--ask-for-approval"],
+            &["-V"],
+            &["help", "agents", "exec", "e", "review", "login", "logout", "mcp", "plugin", "mcp-server", "app-server", "remote-control", "app", "completion", "update", "doctor", "sandbox", "debug", "apply", "a", "queue", "archive", "delete", "migrate-rollouts", "unarchive", "cloud", "exec-server", "features"])
+    }
+
     fn matches_model(&self, name: &str) -> bool {
         !name.contains('/') && ["gpt", "codex", "o3", "o4"].iter().any(|prefix| name.starts_with(prefix))
     }

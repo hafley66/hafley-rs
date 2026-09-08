@@ -82,6 +82,7 @@ enum SubCmd {
         /// Executable override, for example ccz with the Claude adapter.
         #[arg(long = "bin")]
         executable: Option<String>,
+        /// Stable route name for later resumes; refuses an existing live owner.
         #[arg(long)]
         name: Option<String>,
         #[arg(long)]
@@ -433,7 +434,7 @@ fn print_shell_init(shell: ShellKind) {
 
 /// Whether this invocation is asking for help, whatever verb it names.
 fn help_wanted() -> bool {
-    std::env::args().any(|argument| argument == "--help" || argument == "-h")
+    std::env::args().take_while(|argument| argument != "--").any(|argument| argument == "--help" || argument == "-h")
 }
 
 fn main() -> Result<()> {
@@ -453,7 +454,7 @@ fn main() -> Result<()> {
     }
     let command = cli.command.context("a command or --preset is required")?;
     match &command {
-        SubCmd::Tui { harness, .. } => init_tracing(tui_trail(harness).as_deref(), true)?,
+        SubCmd::Tui { harness, name, .. } => init_tracing(name.clone().or_else(|| tui_trail(harness)).as_deref(), true)?,
         _ => init_tracing(supervised_lane(&command), false)?,
     }
     let registry = Registry::discover();

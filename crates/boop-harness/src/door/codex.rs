@@ -229,12 +229,22 @@ impl Door for CodexDoor {
     }
 
     /// Resume under a new owned backend after an abnormal process exit.
-    fn tui_relaunch(&self, spec: &NativeTuiSpec, session: &str) -> Result<Option<NativeTuiPlan>> {
-        let mut resume = spec.clone();
-        resume.args = vec!["resume".into(), session.into()];
-        resume.args.extend(server_config_args(&spec.args)?);
-        self.tui_launch(&resume).map(Some)
+    fn tui_relaunch(&self, spec: &NativeTuiSpec, session: &str, model: Option<&str>, effort: Option<&str>) -> Result<Option<NativeTuiPlan>> {
+        self.tui_launch(&resume_spec(spec, session, model, effort)?).map(Some)
     }
+}
+
+fn resume_spec(spec: &NativeTuiSpec, session: &str, model: Option<&str>, effort: Option<&str>) -> Result<NativeTuiSpec> {
+    let mut resume = spec.clone();
+    resume.args = vec!["resume".into(), session.into()];
+    resume.args.extend(server_config_args(&spec.args)?);
+    // These follow the original overrides so observed settings take priority.
+    if let Some(model) = model { resume.args.extend(["--model".into(), model.into()]); }
+    if let Some(effort) = effort {
+        resume.args.extend(["-c".into(), format!("model_reasoning_effort={effort}")]);
+    }
+    if spec.args.iter().any(|arg| arg == "--no-alt-screen") { resume.args.push("--no-alt-screen".into()); }
+    Ok(resume)
 }
 
 /// Process config reaches the backend that executes tools and reads trust.
@@ -668,6 +678,15 @@ mod tests {
             server_config_args(&args).unwrap(),
             ["-c", "model_reasoning_effort=max", "--enable=x"]
         );
+    }
+
+    #[test]
+    fn automatic_resume_uses_observed_settings_and_retains_inline_mode() {
+        let spec = NativeTuiSpec { executable:"codex".into(), cwd:"/fixture".into(), env:vec![],
+            args:["-m", "old-model", "-c", "model_reasoning_effort=low", "--no-alt-screen", "initial prompt"].map(str::to_owned).to_vec() };
+        let resumed = resume_spec(&spec, "same-thread", Some("observed-model"), Some("high")).unwrap();
+        assert_eq!(resumed.args, ["resume", "same-thread", "-c", "model_reasoning_effort=low", "--model", "observed-model", "-c", "model_reasoning_effort=high", "--no-alt-screen"]);
+        assert_eq!(resumed.env, spec.env);
     }
 
     #[test]

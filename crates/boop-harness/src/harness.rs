@@ -179,6 +179,36 @@ pub struct NativeTuiSpec {
     pub env: Vec<(String, String)>,
 }
 
+/// Classify only the adapter's command/option spellings. Arguments remain
+/// untouched for the native parser, including values that resemble commands.
+pub(crate) fn interactive_arguments(
+    args: &[String],
+    value_options: &[&str],
+    exit_flags: &[&str],
+    exit_commands: &[&str],
+) -> bool {
+    let mut args = args.iter();
+    let mut first_positional = true;
+    while let Some(arg) = args.next() {
+        if arg == "--" { break; }
+        let option = arg.split_once('=').map_or(arg.as_str(), |(key, _)| key);
+        if ["--help", "-h", "--version"].contains(&option) || exit_flags.contains(&option) {
+            return false;
+        }
+        if value_options.contains(&option) {
+            if !arg.contains('=') && args.clone().next().is_some_and(|value| !value.starts_with('-')) {
+                args.next();
+            }
+        } else if let Some(short) = value_options.iter().find(|flag| flag.len() == 2 && arg.starts_with(**flag) && arg.len() > 2) {
+            if exit_flags.contains(short) { return false; }
+        } else if !arg.starts_with('-') && first_positional {
+            if exit_commands.contains(&arg.as_str()) { return false; }
+            first_positional = false;
+        }
+    }
+    true
+}
+
 /// Observed control-plane facts, decoded by the harness adapter.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NativeTuiEvent {
@@ -224,6 +254,13 @@ pub struct NativeTuiPlan {
 
 impl Drop for NativeTuiPlan {
     fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+impl NativeTuiPlan {
+    /// Stop this launch before another backend resumes its conversation.
+    pub fn stop(&mut self) {
         use wait_timeout::ChildExt;
         if let Some(observer) = &self.observer {
             observer.stop.store(true, std::sync::atomic::Ordering::Release);
@@ -250,6 +287,10 @@ impl Drop for NativeTuiPlan {
                 let _ = std::fs::remove_file(socket);
             }
         }
+        self.frontend.take();
+        self.observer.take();
+        self.backend.take();
+        self.backend_root.take();
     }
 }
 
@@ -332,6 +373,10 @@ pub trait Harness: Send + Sync {
     /// Whether this adapter accepts a normalized model spelling when no
     /// explicit harness or configured model mapping was supplied.
     fn matches_model(&self, _name: &str) -> bool { false }
+
+    /// Whether this invocation owns an interactive TUI lifecycle. CLI tools,
+    /// print mode and help execute directly without a Boop route or backend.
+    fn uses_native_tui(&self, _args: &[String]) -> bool { true }
 
     /// Native subagent worktrees reported by this harness: name, path, locked.
     fn native_worktrees(&self, _cwd: &str) -> Vec<(String, String, bool)> { Vec::new() }

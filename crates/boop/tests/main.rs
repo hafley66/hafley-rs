@@ -53,6 +53,8 @@ mod sync_discovery;
 mod t0_sqlite_contention;
 #[path = "1_harness_boundaries.rs"]
 mod t1_harness_boundaries;
+#[path = "2_native_wrapper.rs"]
+mod t2_native_wrapper;
 #[path = "tell.rs"]
 mod tell;
 #[path = "temp_home_rail.rs"]

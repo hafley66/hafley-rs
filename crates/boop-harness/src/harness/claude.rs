@@ -33,6 +33,13 @@ static CAPABILITIES: Capabilities = Capabilities {
 static DOOR: crate::door::claude::ClaudeDoor = crate::door::claude::ClaudeDoor::machine();
 
 impl Harness for Claude {
+    fn uses_native_tui(&self, args: &[String]) -> bool {
+        super::interactive_arguments(args,
+            &["--add-dir", "--agent", "--agents", "--allowedTools", "--allowed-tools", "--append-system-prompt", "--autocompact", "--betas", "-d", "--debug", "--debug-file", "--disallowedTools", "--disallowed-tools", "--effort", "--fallback-model", "--file", "--from-pr", "--input-format", "--json-schema", "--max-budget-usd", "--mcp-config", "--model", "-n", "--name", "--output-format", "--permission-mode", "--permission-prompts", "--plugin-dir", "--plugin-url", "--prompt-suggestions", "--remote-control", "--remote-control-session-name-prefix", "-r", "--resume", "--session-id", "--setting-sources", "--settings", "--system-prompt", "--system-prompt-snapshot", "--teleport", "--tools", "-w", "--worktree"],
+            &["-v", "-p", "--print", "--bg", "--background", "--cloud", "--environment"],
+            &["help", "agents", "auth", "auto-mode", "doctor", "gateway", "import", "install", "logs", "mcp", "plugin", "plugins", "project", "respawn", "rm", "setup-token", "stop", "kill", "ultrareview", "update", "upgrade"])
+    }
+
     fn matches_model(&self, name: &str) -> bool {
         !name.contains('/') && ["claude", "opus", "sonnet", "haiku"].iter().any(|prefix| name.starts_with(prefix))
     }

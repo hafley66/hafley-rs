@@ -19,10 +19,16 @@ The CLI has no `beep lane join`. This lane stays open while work remains.
 - `b815481 feat(boop): observe wrapped Codex lifecycle through owned connections`
 - `501d44c fix(boop): retain process observations and release owned TUI resources`
 - `f4480d1 fix(boop): isolate fixture readers and avoid telemetry mailbox writes`
-- Current boundary cluster: adapter-owned model inference, hook settings, native
+- `8b6097d`: adapter-owned model inference, hook settings, native
   worktree discovery and ACPX transport; removed unused Codex transport modules,
   duplicate dispatch/preview helpers and fan-out door implementation; architectural
   guard and symbol inventory. Migration and compatibility table in report 1.
+- Current wrapper cluster: noninteractive passthrough, stable named ownership,
+  observed settings on automatic resume and atomic process detachment. Wrapper
+  regression passed (`108_wrapper-passthrough-after.log`), harness 171 passed / 1
+  ignored (`109_harness-wrapper-suite.log`), control 11 passed (`110_native-control-suite.log`).
+  New delivery retry reproduction calls the transport three times for one message
+  (`111_delivery-retry-before.log`); its fix is next.
 
 ## Current gates
 
@@ -78,8 +84,7 @@ installed CLI help probes succeeded (`88_available-harnesses.json`).
 
 ## Remaining work
 
-1. Commit the passing boundary cluster. Fix wrapper noninteractive passthrough,
-   explicit route-name ownership and observed settings on automatic relaunch.
+1. Commit the passing wrapper cluster, then fix the delivery retry reproduction.
 2. Reproduce and fix concurrent/repeated delivery of one message. ACPX admission
    and hook/supervisor fan-out remain separate. Analyze child completion marking
    when parent delivery holds. Review legacy non-Codex discovery/claim paths.

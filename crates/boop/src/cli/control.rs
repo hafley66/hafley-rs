@@ -205,10 +205,7 @@ fn record_pane(
 /// wrapper. A concurrent resume may already have rebound the same route.
 fn release_native_route(store: &boop::Store, dir: &Path, name: &str, route: &Route, pid: u32) -> Result<()> {
     if let Some(session) = route.session_id.as_deref() {
-        if store.live_row(session)?.is_some_and(|row| row.pid == Some(i64::from(pid))) {
-            store.record_status(session, boop::live::now_ms(), "detached", None, None)?;
-            store.record_live_door(session, "none", None)?;
-        }
+        store.detach_process(session, pid, boop::live::now_ms())?;
     }
     boop::bus::cas_update_json(&dir.join("registry.json"), |routes| {
         if let Some(current) = routes.get_mut(name).and_then(serde_json::Value::as_object_mut) {
@@ -280,6 +277,12 @@ pub(crate) fn run_native_tui(
     executable: Option<&str>,
     tui_args: &[String],
 ) -> Result<()> {
+    let executable = executable.unwrap_or(adapter.id().as_str());
+    if !adapter.uses_native_tui(tui_args) {
+        use std::os::unix::process::CommandExt;
+        return Err(Command::new(executable).args(tui_args).current_dir(cwd).exec())
+            .with_context(|| format!("execute {executable}"));
+    }
     let mut signals = signal_hook::iterator::Signals::new([
         signal_hook::consts::SIGHUP, signal_hook::consts::SIGTERM,
     ])?;
@@ -288,14 +291,20 @@ pub(crate) fn run_native_tui(
         .filter(|pane| !pane.is_empty());
     let default_name = native_route_name(adapter.id().as_str());
     let name = name.unwrap_or(&default_name);
-    anyhow::ensure!(
-        name == default_name,
-        "native {} route name must be {default_name} for its TMUX_PANE",
-        adapter.id()
-    );
-    let executable = executable.unwrap_or(adapter.id().as_str());
     let dir = mail_dir(mail_dir_arg)?;
-    let parent = boop::bus::read_routes(&dir)?.get(name).and_then(|route| route.parent.clone())
+    let _ownership = boop::bus::try_route_lock(&boop::bus::db_path(&dir)?, name, "native-tui")?
+        .with_context(|| format!("route {name} already has a native TUI wrapper"))?;
+    let store = boop::bus::open_store(&dir)?;
+    let existing = boop::bus::read_routes(&dir)?.remove(name);
+    if let Some(existing) = &existing {
+        anyhow::ensure!(existing.kind != "lane", "route {name} belongs to a lane supervisor");
+        if let Some(session) = existing.session_id.as_deref() {
+            let live_pid = store.live_row(session)?.and_then(|row| row.pid)
+                .and_then(|pid| u32::try_from(pid).ok()).filter(|pid| boop::live::pid_alive(*pid));
+            anyhow::ensure!(live_pid.is_none(), "route {name} still owns live process {live_pid:?}");
+        }
+    }
+    let parent = existing.and_then(|route| route.parent)
         .or_else(|| boop::identity::from_env().and_then(|identity| identity.session).filter(|caller| caller != name));
     let spec = NativeTuiSpec {
         executable: executable.into(),
@@ -311,7 +320,6 @@ pub(crate) fn run_native_tui(
         ],
     };
     let mut plan = adapter.door().tui_launch(&spec)?;
-    let store = boop::bus::open_store(&dir)?;
     let mut known = adapter.capabilities().native_tui_projector
         .then(|| store.known_sessions()).transpose()?;
     let prior_observations = session_observations(adapter);
@@ -401,9 +409,13 @@ pub(crate) fn run_native_tui(
             }
             let next = match route.session_id.as_deref() {
                 Some(session) if respawn_wanted(status, respawns, spawned_at.elapsed()) => {
+                    plan.stop();
+                    store.detach_process(session, frontend_pid, boop::live::now_ms())?;
                     adapter.door().tui_relaunch(
                         &spec,
                         session,
+                        route.model.as_deref(),
+                        store.session_attr(session, "effort")?.as_deref(),
                     )?
                 }
                 _ => None,
@@ -515,6 +527,19 @@ mod tests {
     use std::os::unix::process::ExitStatusExt;
     use std::process::ExitStatus;
     use std::time::Duration;
+
+    #[test]
+    fn a_named_route_has_one_wrapper_owner_and_can_be_reacquired() {
+        let root = std::env::temp_dir().join(format!("boop-native-owner-{}", std::process::id()));
+        let db = root.join("fixture.db");
+        let first = boop::bus::try_route_lock(&db, "named", "native-tui").unwrap().unwrap();
+        assert!(boop::bus::try_route_lock(&db, "named", "native-tui").unwrap().is_none());
+        let other = boop::bus::try_route_lock(&db, "other", "native-tui").unwrap().unwrap();
+        drop(first);
+        let resumed = boop::bus::try_route_lock(&db, "named", "native-tui").unwrap().unwrap();
+        drop((other, resumed));
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn native_exit_releases_its_transport_and_preserves_a_concurrent_owner() {
