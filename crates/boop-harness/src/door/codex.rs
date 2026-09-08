@@ -92,6 +92,9 @@ impl LiveSessions for CodexDoor {
                 scope: LiveSessionScope::Root, parent_session: None,
             }));
         }
+        if route.mode.as_deref() == Some("native-owned") {
+            return Ok(None);
+        }
         Ok(self.live_sessions()?.into_iter().find(|session| session.session_id == id))
     }
 
@@ -243,6 +246,7 @@ impl Door for CodexDoor {
             source_path: Some(format!("owned-app-server={socket}")),
             app_server_socket: Some(socket.clone()),
             observer: None,
+            frontend: None,
             backend: Some(backend),
             backend_root: Some(backend_root),
         };

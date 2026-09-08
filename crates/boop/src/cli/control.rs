@@ -201,17 +201,25 @@ fn record_pane(
     )
 }
 
-fn stop_native_child(child: &mut std::process::Child) {
-    use wait_timeout::ChildExt;
-    if matches!(child.try_wait(), Ok(None)) {
-        // Installed launchers forward TERM to their native child; KILL would
-        // leave that child behind before the launcher can forward anything.
-        unsafe { libc::kill(child.id() as i32, libc::SIGTERM); }
-        if !matches!(child.wait_timeout(Duration::from_secs(2)), Ok(Some(_))) {
-            let _ = child.kill();
-            let _ = child.wait();
+/// Release only the transport and process observation still owned by this
+/// wrapper. A concurrent resume may already have rebound the same route.
+fn release_native_route(store: &boop::Store, dir: &Path, name: &str, route: &Route, pid: u32) -> Result<()> {
+    if let Some(session) = route.session_id.as_deref() {
+        if store.live_row(session)?.is_some_and(|row| row.pid == Some(i64::from(pid))) {
+            store.record_status(session, boop::live::now_ms(), "detached", None, None)?;
+            store.record_live_door(session, "none", None)?;
         }
     }
+    boop::bus::cas_update_json(&dir.join("registry.json"), |routes| {
+        if let Some(current) = routes.get_mut(name).and_then(serde_json::Value::as_object_mut) {
+            if current.get("appServerSocket").and_then(serde_json::Value::as_str) == route.app_server_socket.as_deref()
+                && current.get("sessionId").and_then(serde_json::Value::as_str) == route.session_id.as_deref()
+                && current.get("registeredAt").and_then(serde_json::Value::as_str) == route.registered_at.as_deref() {
+                current.remove("appServerSocket");
+            }
+        }
+        Ok(())
+    })
 }
 
 /// Apply only observed session transitions; late settings from a previous
@@ -303,27 +311,22 @@ pub(crate) fn run_native_tui(
         ],
     };
     let mut plan = adapter.door().tui_launch(&spec)?;
-    let store = adapter
-        .capabilities()
-        .native_tui_projector
-        .then(|| boop::bus::open_store(&dir))
-        .transpose()?;
-    let mut known = store
-        .as_ref()
-        .map(boop::Store::known_sessions)
-        .transpose()?;
+    let store = boop::bus::open_store(&dir)?;
+    let mut known = adapter.capabilities().native_tui_projector
+        .then(|| store.known_sessions()).transpose()?;
     let prior_observations = session_observations(adapter);
     let opened_ms = boop::live::now_ms();
     let _alternate_screen =
         AlternateScreen::enter(adapter.capabilities().wrapper_owns_alternate_screen);
     // The stamp every `boop` call inside this TUI reads as its identity,
     // inherited by the harness's own shell and native subagents.
-    let mut child = Command::new(&plan.program)
+    plan.frontend = Some(Command::new(&plan.program)
         .args(&plan.args)
         .envs(spec.env.iter().cloned())
         .current_dir(cwd)
         .spawn()
-        .with_context(|| format!("start native {} TUI", adapter.id()))?;
+        .with_context(|| format!("start native {} TUI", adapter.id()))?);
+    let mut frontend_pid = plan.frontend.as_ref().unwrap().id();
     let mut respawns: u32 = 0;
     let mut spawned_at = std::time::Instant::now();
     if plan.session_id.is_none() && plan.observer.is_none() {
@@ -349,7 +352,7 @@ pub(crate) fn run_native_tui(
     // Opened separately from `store` above: registering a pane is required even
     // for a harness that opts out of resident transcript projection.
     if let Some(session) = plan.session_id.as_deref() {
-        if let Err(error) = record_pane(store.as_ref(), session, child.id(), pane.as_deref()) {
+        if let Err(error) = record_pane(Some(&store), session, frontend_pid, pane.as_deref()) {
             eprintln!("boop: pane {pane:?} not recorded for session {session}: {error}");
         }
     }
@@ -388,12 +391,11 @@ pub(crate) fn run_native_tui(
     let mut last_parent_project = std::time::Instant::now() - parent_project_every;
     let mut last_discover = std::time::Instant::now() - discover_every;
     let mut last_drain = std::time::Instant::now() - DRAIN_EVERY;
-    loop {
+    let outcome = (|| -> Result<()> { loop {
         if let Some(signal) = signals.pending().next() {
-            stop_native_child(&mut child);
             anyhow::bail!("native TUI stopped by signal {signal}");
         }
-        if let Some(status) = child.try_wait().context("observe native TUI exit")? {
+        if let Some(status) = plan.frontend.as_mut().unwrap().try_wait().context("observe native TUI exit")? {
             if status.success() {
                 return Ok(());
             }
@@ -406,7 +408,7 @@ pub(crate) fn run_native_tui(
                 }
                 _ => None,
             };
-            let Some(next) = next else {
+            let Some(mut next) = next else {
                 anyhow::bail!("native {} TUI exited with {status}", adapter.id());
             };
             respawns += 1;
@@ -416,12 +418,13 @@ pub(crate) fn run_native_tui(
                 attempt = respawns,
                 "native TUI died; respawning against its session"
             );
-            child = Command::new(&next.program)
+            next.frontend = Some(Command::new(&next.program)
                 .args(&next.args)
                 .envs(spec.env.iter().cloned())
                 .current_dir(cwd)
                 .spawn()
-                .with_context(|| format!("respawn native {} TUI", adapter.id()))?;
+                .with_context(|| format!("respawn native {} TUI", adapter.id()))?);
+            frontend_pid = next.frontend.as_ref().unwrap().id();
             spawned_at = std::time::Instant::now();
             route.app_server_socket = next.app_server_socket.clone();
             route.source_path = next.source_path.clone();
@@ -431,12 +434,8 @@ pub(crate) fn run_native_tui(
             continue;
         }
         if let Some(observer) = plan.observer.as_ref() {
-            let event_store = boop::bus::open_store(&dir)?;
             for event in observer.events.try_iter() {
-                if let Err(error) = apply_native_event(&event_store, &mut route, &mut trace, event, child.id()) {
-                    stop_native_child(&mut child);
-                    return Err(error);
-                }
+                apply_native_event(&store, &mut route, &mut trace, event, frontend_pid)?;
                 write_route(&dir, name, route.clone())?;
             }
         }
@@ -457,7 +456,7 @@ pub(crate) fn run_native_tui(
                     route.session_id = Some(session.clone());
                     write_route(&dir, name, route.clone())?;
                     info!(route = name, %session, "native session route recovered after launch");
-                    if let Err(error) = record_pane(store.as_ref(), &session, child.id(), pane.as_deref()) {
+                    if let Err(error) = record_pane(Some(&store), &session, frontend_pid, pane.as_deref()) {
                         warn!(%error, ?pane, %session, "recovered native pane was not recorded");
                     }
                 }
@@ -471,22 +470,16 @@ pub(crate) fn run_native_tui(
         // session go out the door on the first tick after one binds.
         if route.session_id.is_some() && last_drain.elapsed() >= DRAIN_EVERY {
             last_drain = std::time::Instant::now();
-            match boop::Store::default_path().and_then(boop::Store::open) {
-                Ok(store) => {
-                    let pushed = boop::mail::drain_route_held_mail(&dir, registry, &store, name);
-                    if pushed > 0 {
-                        info!(route = name, pushed, "held mail drained through the door");
-                    }
-                }
-                Err(error) => warn!(%error, route = name, "held-mail drain could not open the store"),
+            let pushed = boop::mail::drain_route_held_mail(&dir, registry, &store, name);
+            if pushed > 0 {
+                info!(route = name, pushed, "held mail drained through the door");
             }
         }
-        if let Some(store) = store.as_ref() {
-            let known = known.as_mut().expect("projector store has a session cache");
+        if let Some(known) = known.as_mut() {
             if last_discover.elapsed() >= discover_every {
                 last_discover = std::time::Instant::now();
                 if let Err(error) = crate::cli::db::sync_native_child_route_once(
-                    store,
+                    &store,
                     known,
                     adapter,
                     name,
@@ -499,14 +492,20 @@ pub(crate) fn run_native_tui(
             if last_parent_project.elapsed() >= parent_project_every {
                 last_parent_project = std::time::Instant::now();
                 if let Err(error) =
-                    crate::cli::db::sync_native_parent_route_once(store, known, adapter, name, &dir)
+                    crate::cli::db::sync_native_parent_route_once(&store, known, adapter, name, &dir)
                 {
                     warn!(%error, route = name, "native parent projector pass failed");
                 }
             }
         }
         std::thread::sleep(EXIT_POLL);
+    } })();
+    drop(plan);
+    let cleanup = release_native_route(&store, &dir, name, &route, frontend_pid);
+    if let Err(error) = &cleanup {
+        warn!(%error, route = name, "native route cleanup failed");
     }
+    outcome.and(cleanup)
 }
 
 #[cfg(test)]
@@ -516,6 +515,34 @@ mod tests {
     use std::os::unix::process::ExitStatusExt;
     use std::process::ExitStatus;
     use std::time::Duration;
+
+    #[test]
+    fn native_exit_releases_its_transport_and_preserves_a_concurrent_owner() {
+        let dir = std::env::temp_dir().join(format!("boop-native-release-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = boop::bus::open_store(&dir).unwrap();
+        let mut route = crate::cli::testkit::route_with(Some("parent"));
+        route.session_id = Some("release-session".into());
+        route.mode = Some("native-owned".into());
+        route.app_server_socket = Some("/fixture/old.sock".into());
+        boop::bus::write_route(&dir, "release-route", &route).unwrap();
+        store.record_status("release-session", 1, "live", Some(123), Some("%1")).unwrap();
+        super::release_native_route(&store, &dir, "release-route", &route, 123).unwrap();
+        let released = boop::bus::read_routes(&dir).unwrap().remove("release-route").unwrap();
+        assert_eq!((released.session_id.as_deref(), released.parent.as_deref(), released.app_server_socket),
+            (Some("release-session"), Some("parent"), None));
+        let row = store.live_row("release-session").unwrap().unwrap();
+        assert_eq!((row.status.as_deref(), row.pid, row.tmux_pane), (Some("detached"), None, None));
+        let mut resumed = route.clone();
+        resumed.app_server_socket = Some("/fixture/new.sock".into());
+        boop::bus::write_route(&dir, "release-route", &resumed).unwrap();
+        store.record_status("release-session", boop::live::now_ms(), "live", Some(456), Some("%2")).unwrap();
+        super::release_native_route(&store, &dir, "release-route", &route, 123).unwrap();
+        assert_eq!(boop::bus::read_routes(&dir).unwrap()["release-route"].app_server_socket, resumed.app_server_socket);
+        assert_eq!(store.live_row("release-session").unwrap().unwrap().pid, Some(456));
+        drop(store);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn observed_transitions_preserve_parent_and_ignore_late_thread_events() {

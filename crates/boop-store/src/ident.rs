@@ -3136,17 +3136,17 @@ pub fn sync_session_with(
             .map(|duration| duration.as_millis() as u64)
             .unwrap_or(0),
     );
-    store.record_status(
-        &session.session_id,
-        observed_ts,
-        if session.tmux.is_some() {
-            "live"
-        } else {
-            "idle"
-        },
-        pid,
-        session.tmux.as_deref(),
-    )?;
+    // A transcript refresh supplies file facts. Explicit process/pane
+    // observations own liveness once present; absent fields cannot erase them.
+    if pid.is_some() || session.tmux.is_some() || store.live_row(&session.session_id)?.is_none() {
+        store.record_status(
+            &session.session_id,
+            observed_ts,
+            if session.tmux.is_some() { "live" } else { "idle" },
+            pid,
+            session.tmux.as_deref(),
+        )?;
+    }
     store.set_cursor_modified(
         &session.session_id,
         &key,

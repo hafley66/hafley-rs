@@ -205,6 +205,8 @@ pub struct NativeTuiPlan {
     pub source_path: Option<String>,
     pub app_server_socket: Option<String>,
     pub observer: Option<NativeTuiObserver>,
+    /// The launched frontend, owned here after preparation and spawn.
+    pub frontend: Option<std::process::Child>,
     /// An adapter-owned backend, started in its own process group.
     /// Shared user daemons are never stored here or stopped by this plan.
     pub backend: Option<std::process::Child>,
@@ -216,6 +218,16 @@ impl Drop for NativeTuiPlan {
         use wait_timeout::ChildExt;
         if let Some(observer) = &self.observer {
             observer.stop.store(true, std::sync::atomic::Ordering::Release);
+        }
+        if let Some(child) = self.frontend.as_mut() {
+            if matches!(child.try_wait(), Ok(None)) {
+                // Launchers forward TERM to their native frontend process.
+                unsafe { libc::kill(child.id() as i32, libc::SIGTERM); }
+                if !matches!(child.wait_timeout(std::time::Duration::from_secs(2)), Ok(Some(_))) {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+            }
         }
         if let Some(child) = self.backend.as_mut() {
             if matches!(child.try_wait(), Ok(None)) {
@@ -260,6 +272,7 @@ impl NativeTuiPlan {
             source_path: Some(format!("native-executable={}", spec.executable)),
             app_server_socket: None,
             observer: None,
+            frontend: None,
             backend: None,
             backend_root: None,
         }
@@ -653,6 +666,20 @@ pub(crate) fn assert_fixture_sessions_project(
 #[cfg(test)]
 mod supervisor_command_tests {
     use super::*;
+
+    #[test]
+    fn dropping_a_native_plan_stops_both_owned_processes() {
+        use std::os::unix::process::CommandExt;
+        let spec = NativeTuiSpec { executable: "/bin/sleep".into(), cwd: std::env::temp_dir(), args: vec![], env: vec![] };
+        let mut plan = NativeTuiPlan::direct(&spec);
+        plan.frontend = Some(std::process::Command::new("/bin/sleep").arg("600").spawn().unwrap());
+        plan.backend = Some(std::process::Command::new("/bin/sleep").arg("600").process_group(0).spawn().unwrap());
+        let pids = [plan.frontend.as_ref().unwrap().id(), plan.backend.as_ref().unwrap().id()];
+        drop(plan);
+        for pid in pids {
+            assert_eq!(unsafe { libc::kill(pid as i32, 0) }, -1, "owned process {pid} survived drop");
+        }
+    }
 
     fn spec() -> SpawnSpec {
         SpawnSpec {

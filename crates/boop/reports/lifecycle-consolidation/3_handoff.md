@@ -23,6 +23,16 @@ Completed commits:
 
 - `29fad26 fix(boop): preserve route ownership when binding existing panes`
 - `2376ef5 fix(boop-store): isolate trails and coalesce lifecycle observations`
+- `b815481 feat(boop): observe wrapped Codex lifecycle through owned connections`
+
+Post-checkpoint fixes: transcript-only refresh preserves explicit PID/pane
+observations (failing reproduction `75_projector-pid-before.log`, passing
+`76_projector-pid-after.log`). Native launch resources now own both frontend and
+backend cleanup. Exit releases the route socket and liveness only while still
+owned; a later resume is preserved. Owned unbound routes cannot select a thread
+by cwd. Control 10 passed (`78_native-cleanup-regressions.log`); process-drop
+regression passed (`79_plan-drop.log`). Integration fixture migration remains next.
+
 Current implementation work owns a separate Codex app-server process group and
 private socket per wrapped TUI. Observed protocol events carry thread/model/effort
 into the existing route and session tables. Storage overrides now include trail

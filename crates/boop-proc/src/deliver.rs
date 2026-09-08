@@ -571,8 +571,13 @@ pub fn live_session(
     if let Some(live) = harness.live().live_session_for_route(route)? {
         return Ok(Some(live));
     }
+    if route.mode.as_deref() == Some("native-owned") {
+        return Ok(None);
+    }
     let Some(session_id) = route.session_id.as_deref() else { return Ok(None); };
-    Ok(store.live_row(session_id)?.map(|row| projected(id, row)))
+    Ok(store.live_row(session_id)?
+        .filter(|row| !matches!(row.status.as_deref(), Some("detached" | "closed")))
+        .map(|row| projected(id, row)))
 }
 
 /// The last projection of one session read back as a live session. The status
@@ -675,7 +680,8 @@ pub fn bind_route_session(
     route: &mut Route,
     live: &dyn LiveSessions,
 ) -> bool {
-    if route.session_id.is_some() || route.harness.is_none() {
+    if route.session_id.is_some() || route.harness.is_none()
+        || route.app_server_socket.is_some() || route.mode.as_deref() == Some("native-owned") {
         return false;
     }
     let Some(cwd) = route.cwd.as_deref() else {
@@ -1018,6 +1024,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("boop-bind-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
+
+        let mut observed = unbound_route(&dir);
+        observed.mode = Some("native-owned".into());
+        assert!(!bind_route_session(&dir, "observed-route", &mut observed, &OneLive(dir.clone())));
+        assert_eq!(observed.session_id, None);
 
         let mut route = unbound_route(&dir);
         assert!(bind_route_session(&dir, "agent-a", &mut route, &OneLive(dir.clone())));

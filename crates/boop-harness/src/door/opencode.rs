@@ -355,6 +355,7 @@ impl Door for OpencodeDoor {
             )),
             app_server_socket: Some(base.to_string()),
             observer: None,
+            frontend: None,
             backend: None,
             backend_root: None,
         })

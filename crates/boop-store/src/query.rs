@@ -1161,6 +1161,11 @@ mod tests {
             )
             .unwrap();
 
+        // A later transcript refresh must preserve the observed live process.
+        crate::ident::sync_session_with(&store, &session, None, 0, |store, session, cursor| {
+            crate::ident::project_transcript(store, session, cursor.offset)
+        }).unwrap();
+
         // A window wide enough to include the transcript row.
         let rows = store.status_rows(60 * 24 * 3600 * 1000, now_ms).unwrap();
         assert_eq!(rows.len(), 1);

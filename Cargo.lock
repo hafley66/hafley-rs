@@ -305,7 +305,6 @@ dependencies = [
  "clap",
  "dirs",
  "hafley-observe",
- "libc",
  "peak_alloc",
  "rusqlite",
  "serde",
