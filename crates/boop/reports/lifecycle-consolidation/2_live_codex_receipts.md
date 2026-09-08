@@ -56,3 +56,22 @@ Only task-owned Codex conversations were read for these receipts. No receiver
 used `boop wait` or polled a mailbox to obtain the nonce. The driver inspected
 the owned backend and its actual rollout afterward. Full raw receipts remain
 outside Git under `/private/tmp/boop-lifecycle-consolidation-proof-01a08191`.
+# Resume, retry and owned backend recovery, 2026-09-08 18:37 UTC
+
+Raw storage remains `/private/tmp/boop-lifecycle-consolidation-proof-01a08191`.
+These receipts extend the earlier matrix; other harness live coverage remains open.
+
+| Case | Actual result | Evidence |
+|---|---|---|
+| Held stale-route nonce on explicit resume | PASS: `m-322f985c` answered automatically in cleared thread `01a081d7-85ca-7ca1-a8ce-f3ce84dadc50` | `124_stale-resume-launch.json`, `125` capture |
+| Observed settings after resume | PASS: `m-46c1c14b` answered with actual Terra/high turn metadata and retained PID/pane | `126` settings RPC, `127` capture |
+| Retry after recorded acceptance | PASS within tested window: production `Harness::messages` observed one user message and one answer before/after two `AlreadyAccepted` delivery attempts, five-second observation | `133_retry-resume-launch.json`, `134_authenticated-retry.log`; test `tests/3_live_codex.rs` |
+| Backend SIGKILL before fix | FAIL: wrapper exited 1 with `native TUI observation failed: read backend frame` | `135` capture, `136_backend-crash-before.json` |
+| Backend SIGKILL after fix | PASS: same wrapper relaunched native frontend/backend, retained thread/route/parent/trace and Terra/high; PID 22115 became 24047, old socket removed | `139_restart-launch.json`, `140` before, `141_backend-crash-after.json`, `142` after |
+| Nonce after automatic backend restart | PASS: `m-17d20441` received and answered in real turn `01a0824e-9bae-7df2-935c-42e1fd9231a2` with `ACK_BP_BACKEND_RESTART_01a08191_1` | `143_restart-nonce.txt`, `144_restart-answer_receipt.json` and native thread read |
+
+All launches used the actual generated Bash wrapper in test pane `%1828`, parent
+`probe-parent`, coordinator route `codex-1828`. Launch manifests record exact build
+hashes. No receiver-side wait/poll/paste produced these nonces. Test assertions read
+the native transcript after delivery. The remote-acceptance/local-ledger crash
+window remains unverified; this does not establish arbitrary exactly-once transport.

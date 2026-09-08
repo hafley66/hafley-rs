@@ -97,6 +97,37 @@ owned orphan group 5943 was cleaned up. SIGKILL/restart and remaining supervisor
 child cases are open. Only Codex has live authenticated coverage. All five
 installed CLI help probes succeeded (`88_available-harnesses.json`).
 
+## Continuation checkpoint, 2026-09-08 18:35 UTC
+
+Current committed head is `bb5445b`. Raw receipts `124` through `127` prove
+automatic delivery of held `m-322f985c` on explicit resume, retained live PID/pane,
+and actual Terra/high settings with answer to `m-46c1c14b`. The narrow authenticated
+retry test passed in `134_authenticated-retry.log`: one native user message and
+one answer before and after two `AlreadyAccepted` attempts. Earlier compile and
+raw-reader failures remain recorded in `128`, `129`, and `131`; the corrected test
+uses production `Harness::messages`. Launch `133_retry-resume-launch.json` records
+the executable for that run. This is partial lifecycle coverage.
+
+Killing only verified test-owned backend group 12024 reproduced wrapper exit 1
+with `native TUI observation failed: read backend frame` (`136`). Uncommitted
+`cli/control.rs` now processes observed identity/settings before deciding whether
+to restart, monitors the owned backend, and reuses the existing bounded relaunch
+path for backend/observer failure. Control tests pass 11/11 (`137`); build passes
+(`138`). Live after-fix launch is `139_restart-launch.json`, test pane `%1828`,
+same cleared thread, bounded to 480 seconds. After-fix crash verification remains
+pending at this checkpoint. Test source `tests/3_live_codex.rs` is uncommitted.
+
+Acceptance now explicitly requires one central executable gate with shared
+lifecycle scenarios/assertions behind a harness trait and four configuration
+rows: Claude, Codex, OpenCode, ccz. ccz must share Claude operations. Deterministic
+checks must enter CI, with an explicit authenticated wrapper mode and per-scenario
+PASS/FAIL/UNSUPPORTED/BLOCKED results. The existing `scripts/door-e2e.sh` uses a
+production newest-thread lookup and obsolete CLI calls; do not run it as a fixture.
+Migrate its entry point into the isolated central gate. No live assurance for
+Claude/OpenCode/ccz is established yet. No native collaboration tools are allowed.
+
+Parent milestone `m-9e8d80a4` also remained held for lane supervisor (`130`).
+
 ## Remaining work
 
 1. Commit the passing delivery cluster, then resume the test TUI for live proof.

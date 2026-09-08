@@ -55,6 +55,8 @@ mod t0_sqlite_contention;
 mod t1_harness_boundaries;
 #[path = "2_native_wrapper.rs"]
 mod t2_native_wrapper;
+#[path = "3_live_codex.rs"]
+mod t3_live_codex;
 #[path = "tell.rs"]
 mod tell;
 #[path = "temp_home_rail.rs"]

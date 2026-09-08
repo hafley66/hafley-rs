@@ -6,7 +6,6 @@ use tracing::{debug, info, warn};
 
 use boop::bus::Route;
 use boop::harness::HarnessId;
-use boop::mail::Landing;
 use boop::mailwait::Watch;
 use boop::registry::Registry;
 use boop::{bus, identity, inbox, lane, tmux};

@@ -31,10 +31,11 @@ const RESPAWN_MAX: u32 = 3;
 /// config) and a respawn would loop on it.
 const RESPAWN_MIN_UPTIME: Duration = Duration::from_secs(10);
 
-/// Whether a dead TUI earns another process against the same session. A
-/// signal death is a deliberate kill and both gates below stop loops.
-fn respawn_wanted(status: std::process::ExitStatus, respawns: u32, uptime: Duration) -> bool {
-    status.code().is_some_and(|code| code != 0)
+/// Whether a failed launch earns another process against the same session.
+/// None denotes backend/observer failure while the frontend is still alive.
+/// A frontend signal death is a deliberate kill; both gates stop restart loops.
+fn respawn_wanted(status: Option<std::process::ExitStatus>, respawns: u32, uptime: Duration) -> bool {
+    status.is_none_or(|status| status.code().is_some_and(|code| code != 0))
         && respawns < RESPAWN_MAX
         && uptime >= RESPAWN_MIN_UPTIME
 }
@@ -403,12 +404,26 @@ pub(crate) fn run_native_tui(
         if let Some(signal) = signals.pending().next() {
             anyhow::bail!("native TUI stopped by signal {signal}");
         }
-        if let Some(status) = plan.frontend.as_mut().unwrap().try_wait().context("observe native TUI exit")? {
-            if status.success() {
+        let mut observation_failure = None;
+        if let Some(observer) = plan.observer.as_ref() {
+            for event in observer.events.try_iter() {
+                if let NativeTuiEvent::Failed(error) = event {
+                    observation_failure = Some(error);
+                } else {
+                    apply_native_event(&store, &mut route, &mut trace, event, frontend_pid)?;
+                    write_route(&dir, name, route.clone())?;
+                }
+            }
+        }
+        let frontend_exit = plan.frontend.as_mut().unwrap().try_wait().context("observe native TUI exit")?;
+        let backend_exit = plan.backend.as_mut().map(|child| child.try_wait()).transpose()
+            .context("observe native backend exit")?.flatten();
+        if frontend_exit.is_some() || backend_exit.is_some() || observation_failure.is_some() {
+            if frontend_exit.is_some_and(|status| status.success()) {
                 return Ok(());
             }
             let next = match route.session_id.as_deref() {
-                Some(session) if respawn_wanted(status, respawns, spawned_at.elapsed()) => {
+                Some(session) if respawn_wanted(frontend_exit, respawns, spawned_at.elapsed()) => {
                     plan.stop();
                     store.detach_process(session, frontend_pid, boop::live::now_ms())?;
                     adapter.door().tui_relaunch(
@@ -421,12 +436,14 @@ pub(crate) fn run_native_tui(
                 _ => None,
             };
             let Some(mut next) = next else {
-                anyhow::bail!("native {} TUI exited with {status}", adapter.id());
+                anyhow::bail!("native {} launch ended: frontend={frontend_exit:?}, backend={backend_exit:?}, observer={observation_failure:?}", adapter.id());
             };
             respawns += 1;
             warn!(
                 route = name,
-                status = %status,
+                ?frontend_exit,
+                ?backend_exit,
+                ?observation_failure,
                 attempt = respawns,
                 "native TUI died; respawning against its session"
             );
@@ -444,12 +461,6 @@ pub(crate) fn run_native_tui(
             plan = next;
             write_route(&dir, name, route.clone())?;
             continue;
-        }
-        if let Some(observer) = plan.observer.as_ref() {
-            for event in observer.events.try_iter() {
-                apply_native_event(&store, &mut route, &mut trace, event, frontend_pid)?;
-                write_route(&dir, name, route.clone())?;
-            }
         }
         // A fresh TUI opens its session at its first prompt, after the route
         // was written; the route learns the id the first tick it exists.
@@ -608,17 +619,20 @@ mod tests {
     #[test]
     fn nonzero_exit_after_min_uptime_respawns() {
         let status = ExitStatus::from_raw(256);
-        assert!(respawn_wanted(status, 0, RESPAWN_MIN_UPTIME));
-        assert!(respawn_wanted(status, 2, Duration::from_secs(3600)));
+        assert!(respawn_wanted(Some(status), 0, RESPAWN_MIN_UPTIME));
+        assert!(respawn_wanted(Some(status), 2, Duration::from_secs(3600)));
+        assert!(respawn_wanted(None, 0, RESPAWN_MIN_UPTIME));
+        assert!(!respawn_wanted(None, 3, RESPAWN_MIN_UPTIME));
+        assert!(!respawn_wanted(None, 0, Duration::from_secs(1)));
     }
 
     #[test]
     fn signal_death_fast_death_and_exhaustion_end_the_wrapper() {
         let killed = ExitStatus::from_raw(9);
-        assert!(!respawn_wanted(killed, 0, Duration::from_secs(3600)));
+        assert!(!respawn_wanted(Some(killed), 0, Duration::from_secs(3600)));
         let failed = ExitStatus::from_raw(256);
-        assert!(!respawn_wanted(failed, 0, Duration::from_secs(1)));
-        assert!(!respawn_wanted(failed, 3, Duration::from_secs(3600)));
+        assert!(!respawn_wanted(Some(failed), 0, Duration::from_secs(1)));
+        assert!(!respawn_wanted(Some(failed), 3, Duration::from_secs(3600)));
     }
 
     fn session(
