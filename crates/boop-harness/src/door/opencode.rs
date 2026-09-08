@@ -10,6 +10,8 @@ use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -17,7 +19,7 @@ use serde::Deserialize;
 use url::Url;
 
 use crate::door::{Delivered, Door, IdleNotice};
-use crate::harness::{HarnessId, NativeTuiPlan, NativeTuiSpec};
+use crate::harness::{HarnessId, NativeTuiEvent, NativeTuiObserver, NativeTuiPlan, NativeTuiSpec};
 use crate::live::{now_ms, DoorAddress, LiveSession, LiveSessions, LiveStatus};
 
 /// Overrides the server a session list is read from.
@@ -196,6 +198,50 @@ impl OpencodeDoor {
             })
             .unwrap_or_default()
     }
+
+    /// Observe the selected TUI session from OpenCode's own event stream.
+    /// The directory query binds this subscriber to the launched instance;
+    /// no transcript discovery participates in `/clear` rebinding.
+    fn observe(&self, cwd: &std::path::Path) -> Result<NativeTuiObserver> {
+        let mut url = self.base()?.join("event")?;
+        url.query_pairs_mut()
+            .append_pair("directory", &cwd.display().to_string());
+        let stop = Arc::new(AtomicBool::new(false));
+        let worker_stop = Arc::clone(&stop);
+        let (sender, events) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            while !worker_stop.load(Ordering::Acquire) {
+                let response = agent(Duration::from_secs(1)).get(url.as_str()).call();
+                let Ok(response) = response else {
+                    std::thread::sleep(Duration::from_millis(100));
+                    continue;
+                };
+                let reader = BufReader::new(response.into_body().into_reader());
+                for line in reader.lines() {
+                    if worker_stop.load(Ordering::Acquire) {
+                        break;
+                    }
+                    let Ok(line) = line else { break };
+                    let Some(payload) = line.strip_prefix("data:").map(str::trim) else {
+                        continue;
+                    };
+                    let Ok(event) = serde_json::from_str::<EventLine>(payload) else {
+                        continue;
+                    };
+                    if let Some(event) = native_event(event) {
+                        if sender.send(event).is_err() {
+                            return;
+                        }
+                    }
+                }
+            }
+        });
+        Ok(NativeTuiObserver {
+            events,
+            stop,
+            worker: Some(worker),
+        })
+    }
 }
 
 /// Root-TUI arguments that `attach` does not accept are applied to the owned
@@ -319,12 +365,55 @@ struct EventLine {
     kind: String,
     #[serde(default)]
     properties: EventProperties,
+    #[serde(default)]
+    data: EventProperties,
 }
 
 #[derive(Deserialize, Default)]
 struct EventProperties {
     #[serde(rename = "sessionID", default)]
     session_id: Option<String>,
+    #[serde(default)]
+    model: Option<EventModel>,
+}
+
+#[derive(Deserialize)]
+struct EventModel {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(rename = "modelID", default)]
+    model_id: Option<String>,
+    #[serde(rename = "providerID", default)]
+    provider_id: Option<String>,
+    #[serde(default)]
+    variant: Option<String>,
+}
+
+fn native_event(event: EventLine) -> Option<NativeTuiEvent> {
+    let payload = if event.data.session_id.is_some() {
+        event.data
+    } else {
+        event.properties
+    };
+    let session_id = payload.session_id?;
+    match event.kind.as_str() {
+        "tui.session.select" => Some(NativeTuiEvent::Session {
+            session_id,
+            model: None,
+            effort: None,
+        }),
+        "session.next.model.switched" => {
+            let model = payload.model?;
+            let provider = model.provider_id?;
+            let name = model.id.or(model.model_id)?;
+            Some(NativeTuiEvent::Settings {
+                session_id,
+                model: Some(format!("{provider}/{name}")),
+                effort: model.variant,
+            })
+        }
+        _ => None,
+    }
 }
 
 impl LiveSessions for OpencodeDoor {
@@ -463,6 +552,7 @@ impl Door for OpencodeDoor {
             "managed-opencode-serve={base};started-session={session}"
         ));
         plan.app_server_socket = Some(base.to_string());
+        plan.observer = Some(source.observe(&spec.cwd)?);
         Ok(plan)
     }
 
@@ -559,6 +649,34 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
     use std::sync::mpsc;
+
+    #[test]
+    fn selected_session_and_durable_model_events_become_native_events() {
+        let selected: EventLine = serde_json::from_str(
+            r#"{"type":"tui.session.select","properties":{"sessionID":"ses_after_clear"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            native_event(selected),
+            Some(NativeTuiEvent::Session {
+                session_id: "ses_after_clear".into(),
+                model: None,
+                effort: None,
+            })
+        );
+        let switched: EventLine = serde_json::from_str(
+            r#"{"type":"session.next.model.switched","data":{"sessionID":"ses_after_clear","model":{"id":"model-b","providerID":"provider-a","variant":"high"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            native_event(switched),
+            Some(NativeTuiEvent::Settings {
+                session_id: "ses_after_clear".into(),
+                model: Some("provider-a/model-b".into()),
+                effort: Some("high".into()),
+            })
+        );
+    }
 
     #[test]
     fn native_model_is_owned_backend_configuration() {
@@ -675,7 +793,7 @@ mod tests {
             "/session" => write_json(&mut stream, sessions),
             "/session/status" => write_json(&mut stream, statuses),
             "/config" => write_json(&mut stream, r#"{"model":"fixture/retired"}"#),
-            "/event" => {
+            path if path == "/event" || path.starts_with("/event?") => {
                 let _ = write!(
                     stream,
                     "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\nconnection: close\r\n\r\n"
@@ -704,6 +822,32 @@ mod tests {
     ]"#;
     const STATUSES: &str = r#"{"ses_new":{"type":"busy"},"ses_old":{"type":"idle"}}"#;
     const EVENTS: &str = "data: {\"id\":\"evt_1\",\"type\":\"server.connected\",\"properties\":{}}\n\ndata: {\"id\":\"evt_2\",\"type\":\"session.idle\",\"properties\":{\"sessionID\":\"ses_new\"}}\n\n";
+
+    #[test]
+    fn observer_subscribes_to_the_exact_directory_and_reports_clear_selection() {
+        let events = "data: {\"type\":\"tui.session.select\",\"properties\":{\"sessionID\":\"ses_after_clear\"}}\n\n";
+        let stub = Stub::start(SESSIONS, STATUSES, events);
+        let observer = stub
+            .door()
+            .observe(std::path::Path::new("/fixture/project"))
+            .unwrap();
+        assert_eq!(
+            observer
+                .events
+                .recv_timeout(Duration::from_secs(2))
+                .unwrap(),
+            NativeTuiEvent::Session {
+                session_id: "ses_after_clear".into(),
+                model: None,
+                effort: None,
+            }
+        );
+        assert_eq!(
+            stub.seen.recv_timeout(Duration::from_secs(1)).unwrap().0,
+            "/event?directory=%2Ffixture%2Fproject"
+        );
+        drop(observer);
+    }
 
     #[test]
     fn route_uses_its_observed_http_server() {
