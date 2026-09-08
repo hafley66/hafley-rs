@@ -1,0 +1,14 @@
+{
+  "source": "https://rukaidata.com/PM3.6/Captain%20Falcon/subactions/",
+  "retrieved": "2026-09-08",
+  "decoder": "brawllib_rs 0.29.0 (MIT), bincode 2 standard serde",
+  "files": {
+    "4_pm36_Wait1.html": "b5d904b01c4c35630801de7062ed2d495904abb1b4da9d11e97c6dee38f29207",
+    "5_pm36_JumpF.html": "37a49314e4b7c8b22edd7705238e78f6b5c5cbb77e79d48d4aba882264d51d8a",
+    "1_pm36_AttackAirF.html": "01b63dfbd97f6cc4c1536f809809164c514adc9fc2b1633f76bc6e22ffe690db",
+    "6_pm36_JumpSquat.html": "d7937dbf2b6ea50aeba59c0cb2a557f64b4210048ba5cf5d0e3acab32bac6455",
+    "7_pm36_Fall.html": "b419221f88097a9d7006e1cde2960b0754ee660a0a1e45cd97fe110e8e63e321",
+    "8_pm36_LandingAirF.html": "5e03b854cc53870ff8380bba8763b6085a8b5d3ddcfdac0cd3f030e09854f3a8",
+    "9_pm36_LandingHeavy.html": "84187cb92e1c906bfaa0f97f8e5bd7b6e60ff376e5c85f99b581b63773df1dcd"
+  }
+}

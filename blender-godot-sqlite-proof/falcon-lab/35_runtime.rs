@@ -26,10 +26,14 @@ pub(crate) fn bake(actions: &[HighLevelSubaction]) -> Vec<falcon_simulation::Act
     actions
         .iter()
         .map(|a| falcon_simulation::Action {
+            iasa: a.iasa,
+            landing_lag: a.landing_lag,
             frames: a
                 .frames
                 .iter()
                 .map(|f| falcon_simulation::Frame {
+                    interruptible: f.interruptible,
+                    landing_lag: f.landing_lag,
                     x_pos: f.x_pos,
                     y_pos: f.y_pos,
                     hit_boxes: f

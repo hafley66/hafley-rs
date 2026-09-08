@@ -21,12 +21,28 @@ const CYAN: [f32; 4] = [0.25, 0.85, 0.9, 1.0];
 const ORANGE: [f32; 4] = [1.0, 0.42, 0.18, 1.0];
 
 pub(crate) fn load() -> Result<Vec<HighLevelSubaction>, Error> {
-    [
+    load_files(&[
         "4_pm36_Wait1.html",
         "5_pm36_JumpF.html",
         "1_pm36_AttackAirF.html",
-    ]
-    .iter()
+    ])
+}
+
+pub(crate) fn load_controlled() -> Result<Vec<HighLevelSubaction>, Error> {
+    let actions = load_files(&[
+        "4_pm36_Wait1.html", "5_pm36_JumpF.html", "1_pm36_AttackAirF.html",
+        "6_pm36_JumpSquat.html", "7_pm36_Fall.html", "8_pm36_LandingAirF.html",
+        "9_pm36_LandingHeavy.html",
+    ])?;
+    assert_eq!(actions.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(),
+        ["Wait1", "JumpF", "AttackAirF", "JumpSquat", "Fall", "LandingAirF", "LandingHeavy"]);
+    assert!(actions.iter().all(|a| !a.bad_interrupts));
+    assert_eq!(actions[2].landing_lag, Some(actions[5].frames.len() as f32));
+    Ok(actions)
+}
+
+fn load_files(files: &[&str]) -> Result<Vec<HighLevelSubaction>, Error> {
+    files.iter()
     .map(|file| {
         let html = std::fs::read_to_string(format!(
             "{}/../fixtures/falcon/{file}",

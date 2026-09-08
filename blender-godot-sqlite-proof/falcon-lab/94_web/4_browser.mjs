@@ -25,6 +25,17 @@ try {
   context = await browser.newContext({ viewport: { width: 960, height: 540 },
     recordVideo: { dir: output, size: { width: 960, height: 540 } } });
   page = await context.newPage();
+  await page.addInitScript(() => {
+    let meta;
+    window.FALCON_TRANSITIONS = [];
+    Object.defineProperty(window, 'FALCON_META', {
+      get: () => meta,
+      set: next => {
+        if (meta?.action !== next.action) window.FALCON_TRANSITIONS.push([window.FALCON_STATUS.simulation_tick, next.action]);
+        meta = next;
+      },
+    });
+  });
   const runtimeFailure = new Promise((_, reject) => page.on('pageerror', reject));
   runtimeFailure.catch(() => {});
   page.on('pageerror', e => { errors.push(String(e)); console.error(String(e)); });
@@ -38,6 +49,8 @@ try {
   await page.goto(url + '?demo=1&inspect=1');
   await Promise.race([page.waitForFunction(() => window.FALCON_META?.hits === 1, null, { timeout: 90000 }), runtimeFailure]);
   await page.screenshot({ path: join(output, '1_hit.png') });
+  await page.waitForFunction(() => window.FALCON_META?.action === 5, null, { timeout: 30000 });
+  await page.screenshot({ path: join(output, '1a_landing.png') });
   await page.waitForFunction(() => window.FALCON_STATUS?.simulation_tick === 299, null, { timeout: 30000 });
   if (!logs.some(s => s.includes('CONTROL_CAPTURE_OK'))) {
     await Promise.race([page.waitForEvent('console', {
@@ -46,6 +59,11 @@ try {
   }
   assert(logs.some(s => s.includes('CONTROL_OK ticks=300 hits=1 damage=18 replayed=120 rows_and_mesh=exact native_rows=exact')));
   assert(logs.some(s => s.includes('CONTROL_CAPTURE_OK')));
+  const transitions = await page.evaluate(() => window.FALCON_TRANSITIONS);
+  assert.deepEqual(transitions, [
+    [0,0], [60,3], [64,1], [74,2], [114,4], [117,6], [120,0],
+    [180,3], [184,1], [210,2], [237,5], [256,0], [270,3], [274,1],
+  ]);
   await page.screenshot({ path: join(output, '2_replay.png') });
   await page.goto(url + '?inspect=1');
   await page.waitForFunction(() => window.FALCON_STATUS?.simulation_tick > 1, null, { timeout: 90000 });
@@ -74,7 +92,7 @@ try {
   const mp4 = join(output, 'proof.mp4');
   execFileSync('sh', [resolve(root, '../95_web.sh'), 'encode', video, mp4], { stdio: 'inherit' });
   const receipt = { url, production, native_rows: 300, replayed_states: 120,
-    keyboard: true, touch: true, errors, video, mp4, output };
+    keyboard: true, touch: true, transitions, errors, video, mp4, output };
   writeFileSync(join(output, 'receipt.json'), JSON.stringify(receipt, null, 2));
   if (!production) writeFileSync(resolve(root, 'build/web-game3/verified.json'),
     JSON.stringify({ ...receipt, hashes: hashes(resolve(root, 'build/web-game3')) }, null, 2));

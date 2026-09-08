@@ -317,7 +317,7 @@ func _process_control_demo():
 		if finish_hold == 60:
 			var verified: bool = extension.finish_controlled(OS.get_environment("FALCON_CONTROL_PROOF"))
 			assert(verified)
-			captions[6].text = "SNAPSHOT REPLAY: 120 STATES EXACT / SQL + MESH EXACT"
+			captions[6].text = "0.5X DEMO / SNAPSHOT REPLAY: 120 STATES EXACT / SQL + MESH EXACT"
 		finish_hold -= 1
 		if finish_hold == 0:
 			print("CONTROL_CAPTURE_OK")
@@ -341,14 +341,14 @@ func _control_step(input: Payload.ControlInput):
 		JavaScriptBridge.eval("window.FALCON_STATUS = " + JSON.stringify(state.to_wire()))
 		JavaScriptBridge.eval("window.FALCON_META = " + JSON.stringify(meta))
 	captions[1].text = "TICK %03d / AXIS %+.1f / BUTTONS %d / SQL GEN %d" % [state.simulation_tick, state.input.axis, state.input.buttons, state.renderer_generation]
-	captions[2].text = "%s POSE %02d / PLAYER Z %.1f Y %.1f" % [["IDLE", "JUMP", "FAIR"][int(meta.action)], int(meta.pose)+1, meta.root_z, meta.root_y]
+	captions[2].text = "%s POSE %02d / PLAYER Z %.1f Y %.1f" % [Payload.CONTROL_ACTION_LABELS.split("|")[int(meta.action)], int(meta.pose)+1, meta.root_z, meta.root_y]
 	captions[3].text = "HITS %.0f / DAMAGE %.0f / BAG %s" % [meta.hits, meta.damage, ["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(target.phase)]]
 	captions[4].text = "BAG Z %.1f Y %.1f / CONTACT %s / STUN %.0f" % [target.z, target.y, str(meta.contact != 0.0), target.stun]
-	captions[5].text = "GENERATED INPUT + FRAME + RECEIPT / ROWS AND MESH EXACT"
-	captions[6].text = "SCRIPTED INPUT REPLAY / SNAPSHOT CHECK PENDING" if control_demo else "LIVE KEYBOARD / LOCAL FIXED STEP / NO NETWORK PREDICTION"
+	captions[5].text = "PM TIMINGS + POSES / LAB TRANSITIONS + MOVEMENT"
+	captions[6].text = "0.5X SCRIPTED REPLAY / SNAPSHOT CHECK PENDING" if control_demo else "LIVE KEYBOARD / LOCAL FIXED STEP / NO NETWORK PREDICTION"
 	captions[7].text = "A/D OR ARROWS: MOVE / SPACE: JUMP / J: FAIR / ESC: EXIT"
 	captions[8].text = "RUST PARRY CONTACT / RAPIER BAG / PM POSES"
-	captions[9].text = "0.5X SCRIPTED DEMO / LAB MOVEMENT CURVE / SECOND FAIR MISSES" if control_demo else "60 HZ INPUT / LAB MOVEMENT CURVE / FACING RIGHT"
+	captions[9].text = "0.5X DEMO / LANDING RECOVERY / THIRD JUMP" if control_demo else "60 HZ INPUT / LAB MOVEMENT CURVE / FACING RIGHT"
 
 func _notification(what):
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:

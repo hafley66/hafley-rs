@@ -2,6 +2,8 @@ use std::sync::Arc;
 #[path = "0_types.rs"]
 mod types;
 pub use types::*;
+#[path = "1a_actions.rs"]
+mod lifecycle;
 #[path = "1_sandbag.rs"]
 pub mod sandbag;
 use parry3d::{
@@ -45,29 +47,41 @@ fn advance_with_axis(world: &mut World, bits: u8, actions: &[Action], axis: Opti
         bag.advance();
     }
     let pressed = bits & !world.previous_input;
-    if pressed & JUMP != 0 && world.view.root[1] == 0.0 {
-        world.jump_at = Some(world.frame);
-        world.action = 1;
-        world.animation = 0;
-    }
-    if pressed & ATTACK != 0 && world.jump_at.is_some() && world.view.root[1] > 0.0 {
-        world.action = 2;
-        world.animation = 0;
-        world.attack_hit = false;
-    }
-    let air = world.jump_at.map_or(0.0, |t| (world.frame - t) as f32);
-    let root = [
-        0.0,
-        (0.95 * air - 0.018 * air * air).max(0.0),
-        axis.map_or_else(
-            || -12.0 + (0.9 * air).min(32.0),
-            |axis| (if world.frame == 0 { -12.0 } else { world.view.root[2] }) + axis * 0.9,
-        ),
-    ];
-    if world.action == 1 && air > 0.0 && root[1] == 0.0 {
-        world.action = 0;
-        world.animation = 0;
-    }
+    let imported = actions.len() == 7;
+    let root = if imported {
+        lifecycle::advance(world, pressed, actions, axis.unwrap_or(0.0))
+    } else {
+        if pressed & JUMP != 0 && world.view.root[1] == 0.0 {
+            world.jump_at = Some(world.frame);
+            world.action = 1;
+            world.animation = 0;
+        }
+        if pressed & ATTACK != 0 && world.jump_at.is_some() && world.view.root[1] > 0.0 {
+            world.action = 2;
+            world.animation = 0;
+            world.attack_hit = false;
+        }
+        let air = world.jump_at.map_or(0.0, |t| (world.frame - t) as f32);
+        let root = [
+            0.0,
+            (0.95 * air - 0.018 * air * air).max(0.0),
+            axis.map_or_else(
+                || -12.0 + (0.9 * air).min(32.0),
+                |axis| {
+                    (if world.frame == 0 {
+                        -12.0
+                    } else {
+                        world.view.root[2]
+                    }) + axis * 0.9
+                },
+            ),
+        ];
+        if world.action == 1 && air > 0.0 && root[1] == 0.0 {
+            world.action = 0;
+            world.animation = 0;
+        }
+        root
+    };
     let frame = world.animation.min(actions[world.action].frames.len() - 1);
     let source = &actions[world.action].frames[frame];
     let mut view = Tick {
@@ -116,7 +130,7 @@ fn advance_with_axis(world: &mut World, bits: u8, actions: &[Action], axis: Opti
     world.previous_input = bits;
     world.frame += 1;
     world.animation += 1;
-    if world.action == 2 && world.animation == actions[2].frames.len() {
+    if !imported && world.action == 2 && world.animation == actions[2].frames.len() {
         world.action = 0;
         world.animation = 0;
     }
@@ -133,7 +147,7 @@ pub struct Simulation {
 }
 impl Simulation {
     pub fn new(actions: Arc<[Action]>, launch: bool) -> Self {
-        assert_eq!(actions.len(), 3);
+        assert!(matches!(actions.len(), 3 | 7));
         assert!(actions.iter().all(|a| !a.frames.is_empty()));
         let mut world = World::default();
         if launch {

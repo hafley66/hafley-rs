@@ -22,6 +22,6 @@ rg -q '^CONTROL_OK ticks=300 hits=1 damage=18 replayed=120 rows_and_mesh=exact' 
 rg -q '^CONTROL_CAPTURE_OK' "$run_dir/godot.log"
 lab_encode "$run_dir/control.avi" "$run_dir/control.mp4"
 lab_probe "$run_dir/control.mp4" >"$run_dir/media.json"
-jq -e '.ticks == 300 and .hits == 1 and .damage == 18 and .replayed == 120 and .hit_ticks == [91]' "$run_dir/control-proof.json"
+jq -e '.ticks == 300 and .hits == 1 and .damage == 18 and .replayed == 120 and .hit_ticks == [87]' "$run_dir/control-proof.json"
 jq -e '.streams[0] | .codec_name == "h264" and .width == 960 and .height == 540 and (.nb_frames|tonumber)>=660' "$run_dir/media.json"
 printf 'CONTROL_CAPTURE_OK artifacts=%s\n' "$run_dir"

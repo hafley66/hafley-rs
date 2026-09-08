@@ -16,6 +16,7 @@ test-godot: check-generated
 
 # Rust library and controller checks.
 test: check-generated
+    node 97a_sources.mjs
     node --test contracts/1_generate.test.mjs
     lab_dir="$PWD"; . ./0_shell.sh; lab_cargo test --features gdext --lib -- --test-threads=1
     python3 75_udp_lab.test.py
@@ -60,6 +61,12 @@ web-deploy: test web-build web-verify web-publish
 web-setup:
     pnpm --dir 94_web install --frozen-lockfile
     pnpm --dir 94_web exec playwright install chromium
+
+import-check:
+    sh 98_import.sh check
+
+import-fetch:
+    sh 98_import.sh fetch
 
 # live includes baseline, pause/restart, and cold attachment recordings.
 record mode="live":

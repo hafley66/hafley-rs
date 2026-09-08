@@ -23,11 +23,15 @@ pub struct Attack {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Frame {
+    pub interruptible: bool,
+    pub landing_lag: bool,
     pub x_pos: f32,
     pub y_pos: f32,
     pub hit_boxes: Vec<Attack>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Action {
+    pub iasa: Option<usize>,
+    pub landing_lag: Option<f32>,
     pub frames: Vec<Frame>,
 }
