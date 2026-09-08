@@ -1148,7 +1148,9 @@ mod tests {
         })
         .unwrap();
 
-        let now_ms = crate::proc::sys_now_secs() * 1000;
+        // Preserve the millisecond ordering of the preceding observation.
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
         store
             .record_status(
                 "ses-1",

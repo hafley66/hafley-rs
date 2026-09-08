@@ -1112,6 +1112,9 @@ impl Store {
         if let Some(path) = std::env::var_os("BOOP_DB").filter(|path| !path.is_empty()) {
             return Ok(PathBuf::from(path));
         }
+        if let Some(dir) = std::env::var_os("BOOP_MAIL_DIR").filter(|dir| !dir.is_empty()) {
+            return Ok(PathBuf::from(dir).join("boop.db"));
+        }
         let home = dirs::home_dir().context("resolve home directory")?;
         Ok(home.join(".agent").join("boop.db"))
     }
@@ -2621,50 +2624,68 @@ impl Store {
         pid: Option<i64>,
         tmux_pane: Option<&str>,
     ) -> Result<()> {
-        let sid = self.session_id(session)?;
-        let status_id = self.intern("dict_status", status)?;
-        let pane_id = match tmux_pane {
-            Some(pane) => Some(self.intern("dict_pane", pane)?),
-            None => None,
-        };
-        self.connection.execute(
-            "INSERT INTO agent_live (session_id, pid, tmux_pane_id, status_id)
-             VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(session_id) DO UPDATE SET
-               pid = excluded.pid,
-               tmux_pane_id = excluded.tmux_pane_id,
-               status_id = excluded.status_id",
-            params![sid, pid, pane_id, status_id],
-        )?;
-        let open: Option<(i64, i64, Option<i64>, Option<i64>)> = self
-            .connection
-            .query_row(
-                "SELECT from_ts, status_id, pid, tmux_pane_id FROM agent_live_span
-                 WHERE session_id = ?1 AND to_ts IS NULL
-                 ORDER BY from_ts DESC LIMIT 1",
-                params![sid],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-            )
-            .optional()?;
-        let unchanged = open
-            .as_ref()
-            .map(|(_, st, pg, pn)| *st == status_id && *pg == pid && *pn == pane_id)
-            .unwrap_or(false);
-        if unchanged {
-            return Ok(());
-        }
-        if let Some((from_ts, _, _, _)) = open {
+        self.connection.execute_batch("SAVEPOINT live_observation")?;
+        let result = (|| {
+            let sid = self.session_id(session)?;
+            let status_id = self.intern("dict_status", status)?;
+            let pane_id = match tmux_pane {
+                Some(pane) => Some(self.intern("dict_pane", pane)?),
+                None => None,
+            };
+            let open: Option<(i64, i64, Option<i64>, Option<i64>)> = self
+                .connection
+                .query_row(
+                    "SELECT from_ts, status_id, pid, tmux_pane_id FROM agent_live_span
+                     WHERE session_id = ?1 AND to_ts IS NULL
+                     ORDER BY from_ts DESC LIMIT 1",
+                    params![sid],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                )
+                .optional()?;
+            // Observations before the current interval cannot replace its binding.
+            if open.as_ref().is_some_and(|(from, _, _, _)| *from > ts as i64) {
+                return Ok(());
+            }
             self.connection.execute(
-                "UPDATE agent_live_span SET to_ts = ?2
-                 WHERE session_id = ?1 AND from_ts = ?3",
-                params![sid, ts as i64, from_ts],
+                "INSERT INTO agent_live (session_id, pid, tmux_pane_id, status_id)
+                 VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(session_id) DO UPDATE SET
+                   pid = excluded.pid,
+                   tmux_pane_id = excluded.tmux_pane_id,
+                   status_id = excluded.status_id",
+                params![sid, pid, pane_id, status_id],
             )?;
+            let unchanged = open
+                .as_ref()
+                .map(|(_, st, pg, pn)| *st == status_id && *pg == pid && *pn == pane_id)
+                .unwrap_or(false);
+            if unchanged {
+                return Ok(());
+            }
+            if let Some((from_ts, _, _, _)) = open {
+                self.connection.execute(
+                    "UPDATE agent_live_span SET to_ts = ?2
+                     WHERE session_id = ?1 AND from_ts = ?3",
+                    params![sid, ts as i64, from_ts],
+                )?;
+            }
+            self.connection.execute(
+                "INSERT INTO agent_live_span (session_id, from_ts, to_ts, status_id, pid, tmux_pane_id)
+                 VALUES (?1, ?2, NULL, ?3, ?4, ?5)
+                 ON CONFLICT(session_id, from_ts) DO UPDATE SET
+                   to_ts = NULL, status_id = excluded.status_id,
+                   pid = excluded.pid, tmux_pane_id = excluded.tmux_pane_id",
+                params![sid, ts as i64, status_id, pid, pane_id],
+            )?;
+            Ok(())
+        })();
+        match result {
+            Ok(()) => self.connection.execute_batch("RELEASE live_observation")?,
+            Err(error) => {
+                self.connection.execute_batch("ROLLBACK TO live_observation; RELEASE live_observation")?;
+                return Err(error);
+            }
         }
-        self.connection.execute(
-            "INSERT INTO agent_live_span (session_id, from_ts, to_ts, status_id, pid, tmux_pane_id)
-             VALUES (?1, ?2, NULL, ?3, ?4, ?5)",
-            params![sid, ts as i64, status_id, pid, pane_id],
-        )?;
         Ok(())
     }
 
@@ -6531,6 +6552,19 @@ mod tests {
     /// ACCEPTANCE (item 2). Observations fold into [from_ts, to_ts) intervals:
     /// a state change closes the open interval, a repeated identical one
     /// extends nothing, and a historical point query uses the open-rule.
+    #[test]
+    fn liveness_coalesces_same_timestamp_and_rejects_older_observations() {
+        let store = Store::open(":memory:".into()).unwrap();
+        store.record_status("s1", 100, "live", Some(1), Some("%1")).unwrap();
+        store.record_status("s1", 100, "closed", None, None).unwrap();
+        store.record_status("s1", 200, "live", Some(2), Some("%2")).unwrap();
+        store.record_status("s1", 150, "idle", Some(1), Some("%1")).unwrap();
+        let spans = store.live_span(Some("s1")).unwrap();
+        assert_eq!(spans.iter().map(|s| (s.from_ts, s.to_ts, s.status.as_str())).collect::<Vec<_>>(), vec![(100, Some(200), "closed"), (200, None, "live")]);
+        let current = store.live_row("s1").unwrap().unwrap();
+        assert_eq!((current.pid, current.tmux_pane.as_deref(), current.status.as_deref()), (Some(2), Some("%2"), Some("live")));
+    }
+
     #[test]
     fn liveness_intervals_fold_adjacent_and_ignore_repeats() {
         let db_path = temp_path("livdb");
