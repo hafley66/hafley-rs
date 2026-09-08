@@ -10,6 +10,8 @@ import {
   EnumDeclaration, UnitVariant, TraitDeclaration, TraitMethod, TypeAlias, ConstDeclaration,
 } from '@hafley66/alloy-rs';
 import { constants } from './0_constants.mjs';
+import { rowKey } from './0_rows.mjs';
+import { emitRows } from './1_rows.mjs';
 
 const source = new URL('0_presentation.tsp', import.meta.url);
 const args = process.argv.slice(2);
@@ -27,7 +29,7 @@ const enums = [...ns.enums.values()];
 const unions = [...ns.unions.values()];
 const interfaces = [...ns.interfaces.values()];
 const known = new Set([...models, ...enums, ...unions]);
-const scalars = { int64: 'i64', uint64: 'u64', uint32: 'u32', float64: 'f64' };
+const scalars = { int64: 'i64', uint64: 'u64', uint32: 'u32', float64: 'f64', float32: 'f32' };
 const lines = children => c(List, { hardline: true, children });
 
 // Fail closed. No unsupported schema kind silently becomes String or Vec.
@@ -55,7 +57,7 @@ function shape(type, property, parameter = false) {
 }
 
 const declarations = [];
-const contract = { version: 2, namespace: ns.name, constants: constants(program, fileURLToPath(source)), models: {}, enums: {}, results: {}, interfaces: {} };
+const contract = { version: 3, namespace: ns.name, constants: constants(program, fileURLToPath(source)), models: {}, rows: {}, enums: {}, results: {}, interfaces: {} };
 for (const [name, value] of Object.entries(contract.constants)) {
   declarations.push(c(ConstDeclaration, { name, pub: true, type: scalars[value.type], children: value.value }));
 }
@@ -75,9 +77,21 @@ for (const model of models) {
     return { name: p.name, ...shape(p.type, p) };
   });
   contract.models[model.name] = fields;
+  const kind = program.stateMap(rowKey).get(model);
+  if (kind !== undefined) {
+    if (!Number.isSafeInteger(kind) || kind < 0 || Object.values(contract.rows).some(r => r.kind === kind)) throw Error(`invalid/duplicate row kind: ${kind}`);
+    let offset = 0;
+    const layout = fields.map(f => {
+      if (f.type !== 'float64' && !(f.length && f.item.type === 'float64')) throw Error(`unsupported packed field: ${model.name}.${f.name}`);
+      const field = { name: f.name, offset, length: f.length ?? 1 };
+      offset += field.length;
+      return field;
+    });
+    contract.rows[model.name] = { kind, fields: layout, width: offset };
+  }
   declarations.push(c(StructDeclaration, {
     name: model.name, pub: true, refkey: refkey(model),
-    derive: ['Debug', 'Clone', ...(isCopy(model) ? ['Copy'] : []), 'PartialEq', 'Serialize', 'Deserialize'],
+    derive: ['Debug', 'Clone', ...(isCopy(model) ? ['Copy'] : []), ...(kind !== undefined ? ['Default'] : []), 'PartialEq', 'Serialize', 'Deserialize'],
     children: lines(fields.map(f => c(StructField, { name: f.name, type: f.rust, pub: true }))),
   }));
 }
@@ -114,6 +128,10 @@ for (const iface of interfaces) {
     }))),
   }));
 }
+const capacity = contract.models.Row.find(f => f.name === 'values')?.length;
+if (!capacity || Object.values(contract.rows).some(r => r.width > capacity)) throw Error('packed row exceeds Row.values capacity');
+const rows = emitRows(contract.rows, capacity);
+declarations.push(...rows.rust);
 const tree = render(c(Output, { children: c(CrateDirectory, {
   children: c(SourceFile, { path: '2_presentation_auto.rs', externalUses: ['serde::Serialize', 'serde::Deserialize'], children: lines(declarations) }),
 }) }));
@@ -126,6 +144,7 @@ const hash = createHash('sha256').update(await readFile(source)).digest('hex');
 const outputs = new Map([
   ['2_presentation_auto.rs', `// Generated from 0_presentation.tsp; sha256:${hash}\n${rust.contents}\n`],
   ['2_presentation_auto.yaml', `# Generated from 0_presentation.tsp; sha256:${hash}\n${stringify(contract)}`],
+  ['../godot/1_rows_auto.gd', `# Generated from 0_presentation.tsp; sha256:${hash}\n${rows.gdscript}`],
 ]);
 for (const [name, body] of outputs) {
   const target = new URL(name, import.meta.url);

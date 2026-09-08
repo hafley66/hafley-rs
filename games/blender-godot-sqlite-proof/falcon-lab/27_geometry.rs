@@ -1,18 +1,13 @@
 //! World-space line geometry shared by SQL presentation hosts.
 use super::boundary::Row;
+use super::boundary::contracts::{FrameValues, TargetValues, HurtValues, AttackValues};
 use cgmath::{Matrix4, Vector3, Vector4};
 use parry3d::{
     math::Vec3,
     shape::{Ball, Capsule, Cuboid},
 };
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Line {
-    pub a: [f32; 3],
-    pub b: [f32; 3],
-    pub color: [f32; 4],
-    pub width: f32,
-}
+pub use super::boundary::contracts::Line;
 
 fn mesh(
     out: &mut Vec<Line>,
@@ -47,7 +42,7 @@ fn mesh(
 
 #[tracing::instrument(target = "falcon::presentation", level = "trace", skip_all, fields(rows = rows.len()))]
 pub fn wire(rows: &[Row]) -> Vec<Line> {
-    let meta = &rows.iter().find(|r| r.kind == 0).unwrap().values;
+    let meta = rows.iter().find_map(FrameValues::from_row).unwrap();
     let mut out = Vec::new();
     for z in (-30..140).step_by(10) {
         out.push(Line {
@@ -58,16 +53,16 @@ pub fn wire(rows: &[Row]) -> Vec<Line> {
         });
     }
     let root = Matrix4::from_translation(Vector3::new(
-        meta[2] as f32,
-        (meta[3] + meta[12]) as f32,
-        (meta[4] + meta[11]) as f32,
+        meta.root_x as f32,
+        (meta.root_y + meta.animation_y) as f32,
+        (meta.root_z + meta.animation_x) as f32,
     ));
     for row in rows {
-        let v = &row.values;
         match row.kind {
-            1 => {
+            TargetValues::KIND => {
+                let v = TargetValues::from_row(row).unwrap();
                 let (p, i) = Cuboid::new(Vec3::new(3.0, 6.0, 4.0)).to_trimesh();
-                let color = if meta[7] >= 0.0 && row.tick - (meta[7] as i64) < 10 {
+                let color = if meta.last_hit >= 0.0 && row.tick - (meta.last_hit as i64) < 10 {
                     [1.0, 0.42, 0.18, 1.0]
                 } else {
                     [0.25, 0.85, 0.9, 1.0]
@@ -76,32 +71,36 @@ pub fn wire(rows: &[Row]) -> Vec<Line> {
                     &mut out,
                     &p,
                     &i,
-                    Matrix4::from_translation(Vector3::new(v[0] as f32, v[1] as f32, v[2] as f32)),
+                    Matrix4::from_translation(Vector3::new(v.x as f32, v.y as f32, v.z as f32)),
                     color,
                 );
             }
-            2 if v[23] != 0.0 => {
+            HurtValues::KIND => {
+                let v = HurtValues::from_row(row).unwrap();
+                if v.enabled == 0.0 { continue; }
                 let matrix = Matrix4::from(std::array::from_fn::<_, 4, _>(|col| {
-                    std::array::from_fn::<_, 4, _>(|i| v[col * 4 + i] as f32)
+                    std::array::from_fn::<_, 4, _>(|i| v.matrix[col * 4 + i] as f32)
                 }));
                 let (p, i) = Capsule::new(
-                    Vec3::new(v[16] as f32, v[17] as f32, v[18] as f32),
-                    Vec3::new(v[19] as f32, v[20] as f32, v[21] as f32),
-                    v[22] as f32,
+                    Vec3::new(v.offset_x as f32, v.offset_y as f32, v.offset_z as f32),
+                    Vec3::new(v.stretch_x as f32, v.stretch_y as f32, v.stretch_z as f32),
+                    v.radius as f32,
                 )
                 .to_trimesh(8, 4);
                 mesh(&mut out, &p, &i, root * matrix, [0.75, 0.45, 1.0, 0.85]);
             }
-            3 if v[5] != 0.0 => {
-                let (p, i) = Ball::new(v[3] as f32).to_trimesh(12, 8);
+            AttackValues::KIND => {
+                let v = AttackValues::from_row(row).unwrap();
+                if v.enabled == 0.0 { continue; }
+                let (p, i) = Ball::new(v.radius as f32).to_trimesh(12, 8);
                 mesh(
                     &mut out,
                     &p,
                     &i,
                     root * Matrix4::from_translation(Vector3::new(
-                        v[0] as f32,
-                        v[1] as f32,
-                        v[2] as f32,
+                        v.x as f32,
+                        v.y as f32,
+                        v.z as f32,
                     )),
                     [1.0, 0.42, 0.18, 1.0],
                 );

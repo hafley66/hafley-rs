@@ -1,4 +1,9 @@
+import "./0_rows.mjs";
+using TypeSpec.Reflection;
 namespace FalconBoundary;
+
+// Field declaration order is the existing numeric row layout. Unused tail is zero.
+extern dec row(target: Model, kind: valueof int64);
 
 const WINDOW: int64 = 32;
 const SLOTS: uint32 = 3;
@@ -16,6 +21,76 @@ model Row {
   entity: int64;
   @minItems(24) @maxItems(24)
   values: float64[];
+}
+
+model Line {
+  @minItems(3) @maxItems(3)
+  a: float32[];
+  @minItems(3) @maxItems(3)
+  b: float32[];
+  @minItems(4) @maxItems(4)
+  color: float32[];
+  width: float32;
+}
+
+@row(0)
+model FrameValues {
+  action: float64;
+  pose: float64;
+  root_x: float64;
+  root_y: float64;
+  root_z: float64;
+  damage: float64;
+  hits: float64;
+  last_hit: float64;
+  contact: float64;
+  predicted: float64;
+  input: float64;
+  animation_x: float64;
+  animation_y: float64;
+  reserved_13: float64;
+  reserved_14: float64;
+  restored: float64;
+  advances: float64;
+  total_loads: float64;
+  confirmed: float64;
+}
+
+@row(1)
+model TargetValues {
+  x: float64;
+  y: float64;
+  z: float64;
+  vx: float64;
+  vy: float64;
+  vz: float64;
+  stun: float64;
+  phase: float64;
+  grounded: float64;
+}
+
+@row(2)
+model HurtValues {
+  @minItems(16) @maxItems(16)
+  matrix: float64[];
+  offset_x: float64;
+  offset_y: float64;
+  offset_z: float64;
+  stretch_x: float64;
+  stretch_y: float64;
+  stretch_z: float64;
+  radius: float64;
+  enabled: float64;
+}
+
+@row(3)
+model AttackValues {
+  x: float64;
+  y: float64;
+  z: float64;
+  radius: float64;
+  damage: float64;
+  enabled: float64;
 }
 
 model GenerationId {

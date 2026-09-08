@@ -122,14 +122,13 @@ pub struct Display {
 }
 impl Display {
     pub(crate) fn stamp_presented(&mut self) {
-        let metadata = [
-            self.restored.first().copied().unwrap_or(-1) as f64,
-            self.advances as f64,
-            self.total_loads as f64,
-            self.confirmed as f64,
-        ];
         for rows in &mut self.presented {
-            rows[0].values[15..19].copy_from_slice(&metadata);
+            let mut meta = sql_viewer::boundary::contracts::FrameValues::from_row(&rows[0]).unwrap();
+            meta.restored = self.restored.first().copied().unwrap_or(-1) as f64;
+            meta.advances = self.advances as f64;
+            meta.total_loads = self.total_loads as f64;
+            meta.confirmed = self.confirmed as f64;
+            meta.write_row(&mut rows[0]);
         }
     }
 }

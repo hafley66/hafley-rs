@@ -6,12 +6,20 @@ envelope. `just generate` compiles the actual TypeSpec
 program and renders Rust through `@hafley66/alloy-rs` components. It also emits
 a transport-neutral YAML description, not an OpenAPI HTTP document.
 
+`@row(kind)` models name the existing numeric payloads. Field declaration order
+is the packed layout, including explicit reserved fields. The generator rejects
+duplicate kinds, unsupported packed field types, and layouts wider than Row.
+It emits Rust read/write/packing adapters and `godot/1_rows_auto.gd` readers from
+the same layout. Existing wire order, numeric representations, and padding are
+preserved. This is a versioned packing convention, not Rust shared-memory ABI.
+
 ```sh
 just contracts-setup
 just generate
 just check-generated
 just test
 just verify
+just test-godot
 ```
 
 Run from the Falcon lab. `check-generated` performs no writes and fails when
@@ -29,6 +37,10 @@ artifact or an explicitly republished/re-pinned emitter before installing.
 
 - Existing SQL, IPC, and rendering code uses the generated `Row` without a wire
   layout change. The handwritten constructor remains outside generated code.
+- The row producer, geometry renderer, rollback metadata stamping, and Godot HUD
+  consume named fields. `Line` is also generated. Rust tests preserve unused row
+  tails; Godot tests reorder kinds and check entity lookup. The live recording
+  suite runs the Godot reader test before capture.
 - `Boundary` implements the generated `FrameQuery` trait. Query errors map to
   declared errors, insufficient capacity preserves the caller's buffer, and
   success fills only the reported prefix.
@@ -57,6 +69,8 @@ artifact or an explicitly republished/re-pinned emitter before installing.
 Epoch zero identifies the current local adapter convention, not a negotiated
 cross-process identity. Process restart/lease semantics are not implemented.
 The query adapter retains the existing allocating SQL reader internally.
-GDScript emission, transport bindings, shared-memory layout, and zero-allocation
-enforcement remain separate follow-up work. No zero-copy or zero-allocation
-claim is made for this slice.
+The complete Godot frame envelope and status dictionaries, SQL view definitions,
+transport bindings, shared-memory layout, and zero-allocation enforcement remain
+follow-ups. Generated GDScript row readers currently materialize dictionaries
+(and arrays for matrix fields); their allocation cost is not benchmarked.
+No zero-copy or zero-allocation claim is made for this slice.
