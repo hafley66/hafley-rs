@@ -1,0 +1,597 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+WARNING: The separate rendering thread feature is experimental. Feel free to try it since it will eventually become a stable feature.
+However, bear in mind that at the moment it can lead to project crashes or instability.
+So, unless you want to test the engine, set the "rendering/driver/threads/thread_model" project setting to 'Safe'.
+     at: setup2 (main/main.cpp:3516)
+OpenGL API 4.1 Metal - 88.1 - Compatibility - Using Device: Apple - Apple M2 Pro
+
+Movie Maker mode enabled, recording movie in 960×540 @ 60 FPS...
+Initialize godot-rust (API v4.5.stable.official, runtime v4.7.stable.official, safeguards strict)
+DECODE Wait1: 61 frames, 69874 bytes
+DECODE JumpF: 36 frames, 41833 bytes
+DECODE AttackAirF: 40 frames, 51400 bytes
+MAIN_THREAD_ID 1
+GDEXT_STAGE_READY runtime=4.7-stable (official)
+WORKER_TICK 0 0
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 1 45017
+WORKER_TICK 2 85024
+WORKER_TICK 3 125013
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 4 161846
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 5 205015
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 6 241775
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 7 285016
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 8 325021
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 9 362965
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 10 400033
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 11 445010
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 12 482540
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 13 525018
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 14 565015
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 15 605018
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 16 640300
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 17 680393
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 18 724717
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 19 760322
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 20 805019
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 21 844977
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 22 885011
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 23 923656
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 24 963970
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 25 1005010
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 26 1044615
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 27 1083874
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 28 1125007
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 29 1165011
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 30 1205014
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 31 1245014
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 32 1285016
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 33 1325014
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 34 1365009
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 35 1402312
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 36 1440753
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 37 1484795
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 38 1524343
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 39 1565016
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 40 1603236
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 41 1645016
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 42 1681565
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 43 1722738
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 44 1764221
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 45 1804095
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 46 1845015
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 47 1882078
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 48 1925016
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 49 1962817
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 50 2005018
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 51 2041788
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 52 2085013
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 53 2125013
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 54 2163473
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 55 2205020
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 56 2245015
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 57 2285006
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 58 2325020
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 59 2365016
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 60 2402483
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+FAULT_BEGIN main
+WORKER_TICK 61 2445012
+WORKER_TICK 62 2481663
+WORKER_TICK 63 2525023
+WORKER_TICK 64 2565016
+WORKER_TICK 65 2602863
+WORKER_TICK 66 2642402
+WORKER_TICK 67 2680498
+WORKER_TICK 68 2725014
+WORKER_TICK 69 2763939
+WORKER_TICK 70 2805018
+WORKER_TICK 71 2845017
+WORKER_TICK 72 2885013
+WORKER_TICK 73 2925018
+WORKER_TICK 74 2964917
+WORKER_TICK 75 3001645
+WORKER_TICK 76 3042088
+WORKER_TICK 77 3083795
+WORKER_TICK 78 3125017
+WORKER_TICK 79 3161184
+WORKER_TICK 80 3205015
+FAULT_END main
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 81 3242860
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 82 3285007
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 83 3325018
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 84 3364068
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 85 3405014
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 86 3442798
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 87 3485027
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 88 3520304
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 89 3562016
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 90 3605015
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+PROCESS_STOP_READY
+WORKER_TICK 91 4432681
+WORKER_TICK 92 4441130
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 93 4449191
+WORKER_TICK 94 4456831
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 95 4464851
+WORKER_TICK 96 4472746
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 97 4481917
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 98 4509076
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 99 4517734
+WORKER_TICK 100 4526232
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 101 4534755
+WORKER_TICK 102 4542611
+WORKER_TICK 103 4550688
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 104 4558679
+WORKER_TICK 105 4566641
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 106 4575011
+WORKER_TICK 107 4583915
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 108 4592357
+WORKER_TICK 109 4600472
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 110 4608448
+WORKER_TICK 111 4616635
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 112 4624853
+WORKER_TICK 113 4632680
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 114 4641161
+WORKER_TICK 115 4648862
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 116 4656913
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 117 4683770
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 118 4725012
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 119 4763064
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 120 4804633
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 121 4845015
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 122 4885009
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 123 4922011
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 124 4965013
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 125 5005012
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 126 5045010
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 127 5085007
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 128 5125194
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 129 5160871
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 130 5203927
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+RENDER_THREAD_ID 5
+FAULT_BEGIN render
+WORKER_TICK 131 5245019
+WORKER_TICK 132 5283699
+WORKER_TICK 133 5321441
+WORKER_TICK 134 5363989
+WORKER_TICK 135 5400357
+WORKER_TICK 136 5444511
+WORKER_TICK 137 5485012
+WORKER_TICK 138 5525016
+WORKER_TICK 139 5565012
+WORKER_TICK 140 5603781
+WORKER_TICK 141 5645015
+WORKER_TICK 142 5684234
+WORKER_TICK 143 5725014
+WORKER_TICK 144 5761636
+WORKER_TICK 145 5805011
+WORKER_TICK 146 5845010
+WORKER_TICK 147 5883292
+WORKER_TICK 148 5925019
+WORKER_TICK 149 5964930
+WORKER_TICK 150 6005014
+FAULT_END render
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 151 6042772
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 152 6085019
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 153 6121632
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 154 6165024
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 155 6205008
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 156 6245008
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 157 6281732
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 158 6323462
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 159 6365016
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 160 6401369
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 161 6445020
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 162 6485012
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 163 6524489
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 164 6565020
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 165 6601977
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 166 6643065
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 167 6682290
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 168 6725014
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 169 6760495
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 170 6805016
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 171 6845006
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 172 6881194
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 173 6923023
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 174 6960252
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 175 7005101
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 176 7041140
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 177 7082412
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 178 7125012
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+WORKER_TICK 179 7160955
+     GDScript backtrace (most recent call first):
+         [0] _process_scheduled (res://2_stage.gd:137)
+         [1] _process (res://2_stage.gd:75)
+FAULT_RUNTIME_OK ticks=180 full_states=360 exact consumer_latest=verified
+SCHEDULE_CAPTURE_OK observed_video_frames=324
+--------------------------------------------------------------------------------
+Done recording movie at path: /Users/chrishafley/projects/hafley-rs/games/blender-godot-sqlite-proof/falcon-lab/62_faults.avi
+338 frames at 60 FPS (movie length: 00:00:05:38), recorded in 00:00:08 (62% of real-time speed).
+CPU render time: 0.21 seconds (average: 0.63 ms/frame)
+GPU render time: 0.00 seconds (average: 0.00 ms/frame)
+Encoding time: 1.16 seconds (average: 3.43 ms/frame)
+--------------------------------------------------------------------------------
+REPEATED_RENDER_SYNC_WARNINGS 2127

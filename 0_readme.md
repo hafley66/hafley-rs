@@ -26,6 +26,8 @@ or project, along with their tests, fixtures, and provenance. See [AGENTS.md](AG
   renderer-free Rust state, one-call advances, full-state replay and save/load checks.
 - [Independent schedules](blender-godot-sqlite-proof/falcon-lab/52_schedule_readme.md):
   worker continues through paused consumption and exhausted SQL slots, then publishes corrected history.
+- [Thread and process faults](blender-godot-sqlite-proof/falcon-lab/63_fault_readme.md):
+  main/render-thread delays, whole-process suspension, external tick audit, and exact recovery.
 
 The Rust packages retain separate Cargo workspace roots and lockfiles. Parent
 `hafley-rs` workspace builds do not include these experimental dependencies.
