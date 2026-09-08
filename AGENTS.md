@@ -13,6 +13,12 @@ Keep experimental Cargo packages and lockfiles isolated from the parent workspac
 until promotion is explicitly requested. Retain source assets and evidence; ignore
 build caches and regenerable intermediate captures in Git.
 
+If a Rust build is interrupted by SIGTERM, clean the affected lab's validated
+Cargo target directory and retry a clean build before reporting verification
+blocked. Keep cleanup scoped to that lab's generated artifacts and use at most
+two compile jobs. If the clean rebuild is also interrupted, report that result
+instead of repeatedly cleaning and rebuilding.
+
 Before implementing a subsystem, inspect local vendors and domain-specific
 libraries for overlap. Record exact APIs, dependencies, licenses, and gaps.
 Start fighter-related work with

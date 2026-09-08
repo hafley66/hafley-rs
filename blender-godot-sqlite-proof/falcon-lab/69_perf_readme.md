@@ -46,8 +46,11 @@ recorded, so comparison deliberately selects `.world`.
 
 The replay regression test now checks checkpoints 0, 91, 105, 128, and 179,
 including snapshot isolation and each remaining step against legacy JSON clones.
-Repeated Cargo test builds were terminated with SIGTERM, including an escalated
-attempt. These expanded Rust tests have not executed in this pass. Two Python
-report tests passed. Existing golden and CLI assertions did execute successfully.
+Initial Cargo test builds were terminated with SIGTERM, including an escalated
+attempt. On the subsequent clean-build retry, `cargo clean` removed only this
+lab's target artifacts (5.6 GiB). The two-job, locked, offline, gdext-enabled
+library build completed in 1m 43s, and all 14 tests passed in 12.44s, including
+the expanded replay assertions. Two Python report tests passed in the original
+pass. Existing golden and CLI assertions also executed successfully.
 
 No rendering code changed and no new MP4 was recorded in this headless pass.
