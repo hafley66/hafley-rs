@@ -117,7 +117,7 @@ pub(crate) fn execute(trace: &[[Display; 2]], record: bool) -> Result<(), Error>
 pub(super) fn execute_with(
     trace: &[[Display; 2]],
     record: bool,
-    consume: impl FnMut(&[Row], &serde_json::Value) -> Result<(), Error>,
+    consume: impl FnMut(&[Row], &boundary::contracts::FixtureStatus) -> Result<(), Error>,
 ) -> Result<(), Error> {
     let mut frames = trace.iter();
     execute_stream(
@@ -131,7 +131,7 @@ pub(super) fn execute_with(
 pub(super) fn execute_stream(
     mut next: impl FnMut() -> Result<[Display; 2], Error>,
     record: bool,
-    mut consume: impl FnMut(&[Row], &serde_json::Value) -> Result<(), Error>,
+    mut consume: impl FnMut(&[Row], &boundary::contracts::FixtureStatus) -> Result<(), Error>,
     report_path: &str,
 ) -> Result<(), Error> {
     let mut b = Boundary::new()?;
@@ -359,12 +359,22 @@ pub(super) fn execute_stream(
                 )?;
             }
         }
-        report.push(serde_json::json!({"simulation_tick":tick,"published_generation":b.generation,"renderer_generation":generation,"rows":count,"window_frames":frames,"held_generation":if held.is_some(){Some(held_generation)}else{None},"held_damage":if held.is_some(){Some(0)}else{None},"fresh_tick91_damage":corrected,"restored":d.restored}));
-        let mut status = report.last().unwrap().clone();
-        status["saved"] = serde_json::json!(d.saved);
-        status["advances"] = d.advances.into();
-        status["runtime_next_tick"] = d.world.frame.into();
-        status["input_bits"] = d.applied.into();
+        let status = boundary::contracts::FixtureStatus {
+            simulation_tick: tick as i64,
+            published_generation: b.generation,
+            renderer_generation: generation,
+            rows: u32::try_from(count)?,
+            window_frames: u32::try_from(frames)?,
+            held_generation: held.as_ref().map(|_| held_generation),
+            held_damage: held.as_ref().map(|_| 0.0),
+            fresh_tick91_damage: corrected,
+            restored: d.restored.clone(),
+            saved: d.saved.clone(),
+            advances: u32::try_from(d.advances)?,
+            runtime_next_tick: i64::from(d.world.frame),
+            input_bits: u32::from(d.applied),
+        };
+        report.push(serde_json::to_value(&status)?);
         consume(&rows, &status)?;
     }
     assert_eq!(b.layout, b.ring.read().unwrap().slot_layout());

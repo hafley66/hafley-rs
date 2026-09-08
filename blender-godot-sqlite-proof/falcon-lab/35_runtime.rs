@@ -608,7 +608,7 @@ pub(crate) fn render(actions: &[HighLevelSubaction], trace: &[[Display; 2]], id:
 
 #[allow(dead_code)]
 pub(crate) fn host_fixture(
-    consume: impl FnMut(&[sql_viewer::boundary::Row], &serde_json::Value) -> Result<(), Error>,
+    consume: impl FnMut(&[sql_viewer::boundary::Row], &sql_viewer::boundary::contracts::FixtureStatus) -> Result<(), Error>,
 ) -> Result<(), Error> {
     let actions = baseline::load()?;
     let trace = run(&actions, true, true)?;
@@ -619,7 +619,7 @@ pub(crate) fn host_fixture(
 #[cfg(feature = "gdext")]
 pub(crate) fn incremental_host(
     mut request: impl FnMut() -> Result<u8, Error>,
-    consume: impl FnMut(&[sql_viewer::boundary::Row], &serde_json::Value) -> Result<(), Error>,
+    consume: impl FnMut(&[sql_viewer::boundary::Row], &sql_viewer::boundary::contracts::FixtureStatus) -> Result<(), Error>,
 ) -> Result<(), Error> {
     let actions = baseline::load()?;
     let mut runtime = Runtime::new(&actions, true, true)?;

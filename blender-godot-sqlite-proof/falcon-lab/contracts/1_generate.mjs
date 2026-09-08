@@ -7,11 +7,12 @@ import { createComponent as c } from '@alloy-js/core/jsx-runtime';
 import { stringify } from 'yaml';
 import {
   CrateDirectory, SourceFile, StructDeclaration, StructField,
-  EnumDeclaration, UnitVariant, TraitDeclaration, TraitMethod, TypeAlias, ConstDeclaration,
+  EnumDeclaration, UnitVariant, TupleVariant, TraitDeclaration, TraitMethod, TypeAlias, ConstDeclaration,
 } from '@hafley66/alloy-rs';
 import { constants } from './0_constants.mjs';
-import { rowKey } from './0_rows.mjs';
+import { rowKey, godotKey, packedKey } from './0_rows.mjs';
 import { emitRows } from './1_rows.mjs';
+import { emitGodot } from './1_godot.mjs';
 
 const source = new URL('0_presentation.tsp', import.meta.url);
 const args = process.argv.slice(2);
@@ -29,11 +30,18 @@ const enums = [...ns.enums.values()];
 const unions = [...ns.unions.values()];
 const interfaces = [...ns.interfaces.values()];
 const known = new Set([...models, ...enums, ...unions]);
-const scalars = { int64: 'i64', uint64: 'u64', uint32: 'u32', float64: 'f64', float32: 'f32' };
+const scalars = { int32: 'i32', int64: 'i64', uint64: 'u64', uint32: 'u32', float64: 'f64', float32: 'f32', boolean: 'bool' };
 const lines = children => c(List, { hardline: true, children });
 
 // Fail closed. No unsupported schema kind silently becomes String or Vec.
 function shape(type, property, parameter = false) {
+  if (type.kind === 'Union' && !type.name) {
+    const variants = [...type.variants.values()].map(v => v.type);
+    if (variants.length === 2 && variants.some(v => v.kind === 'Intrinsic' && v.name === 'null')) {
+      const item = shape(variants.find(v => v.name !== 'null'), property);
+      return { rust: `Option<${item.rust}>`, nullable: true, item };
+    }
+  }
   if (type.kind === 'Scalar' && scalars[type.name]) return { rust: scalars[type.name], type: type.name };
   if (known.has(type)) return { rust: type.name, ref: type.name };
   if (type.kind === 'Model' && type.templateMapper && (type.node === readBuffer.node || type.node === writeBuffer.node)) {
@@ -57,7 +65,7 @@ function shape(type, property, parameter = false) {
 }
 
 const declarations = [];
-const contract = { version: 3, namespace: ns.name, constants: constants(program, fileURLToPath(source)), models: {}, rows: {}, enums: {}, results: {}, interfaces: {} };
+const contract = { version: 4, namespace: ns.name, constants: constants(program, fileURLToPath(source)), models: {}, rows: {}, enums: {}, results: {}, unions: {}, godot: [], interfaces: {} };
 for (const [name, value] of Object.entries(contract.constants)) {
   const string = value.type === 'string';
   const literal = string ? '"' + Array.from(value.value, ch => {
@@ -80,9 +88,10 @@ for (const model of models) {
   if (model.baseModel || model.indexer) throw Error(`unsupported model composition: ${model.name}`);
   const fields = [...model.properties.values()].map(p => {
     if (p.optional || p.defaultValue) throw Error(`unsupported optional/default field: ${model.name}.${p.name}`);
-    return { name: p.name, ...shape(p.type, p) };
+    return { name: p.name, ...shape(p.type, p), ...(program.stateMap(packedKey).has(p) ? { packed: program.stateMap(packedKey).get(p) } : {}) };
   });
   contract.models[model.name] = fields;
+  if (program.stateSet(godotKey).has(model)) contract.godot.push(model.name);
   const kind = program.stateMap(rowKey).get(model);
   if (kind !== undefined) {
     if (!Number.isSafeInteger(kind) || kind < 0 || Object.values(contract.rows).some(r => r.kind === kind)) throw Error(`invalid/duplicate row kind: ${kind}`);
@@ -111,6 +120,16 @@ for (const enumeration of enums) {
   }));
 }
 for (const union of unions) {
+  if (program.stateSet(godotKey).has(union)) {
+    const variants = [...union.variants.values()].map(v => ({ name: v.name, ...shape(v.type) }));
+    if (variants.some(v => !contract.godot.includes(v.ref))) throw Error('Godot unions require Godot model variants');
+    contract.unions[union.name] = variants;
+    declarations.push(c(EnumDeclaration, { name: union.name, pub: true,
+      derive: ['Debug', 'Clone', 'PartialEq', 'Serialize', 'Deserialize'], attrs: ['serde(untagged)'],
+      children: lines(variants.map(v => c(TupleVariant, { name: v.name[0].toUpperCase() + v.name.slice(1), fields: [v.rust] }))),
+    }));
+    continue;
+  }
   if (union.variants.size !== 2 || !union.variants.has('Ok') || !union.variants.has('Err')) throw Error(`unsupported union: ${union.name}`);
   const ok = shape(union.variants.get('Ok').type);
   const error = shape(union.variants.get('Err').type);
@@ -138,6 +157,7 @@ const capacity = contract.models.Row.find(f => f.name === 'values')?.length;
 if (!capacity || Object.values(contract.rows).some(r => r.width > capacity)) throw Error('packed row exceeds Row.values capacity');
 const rows = emitRows(contract.rows, capacity);
 declarations.push(...rows.rust);
+const godot = emitGodot(contract);
 const tree = render(c(Output, { children: c(CrateDirectory, {
   children: c(SourceFile, { path: '2_presentation_auto.rs', externalUses: ['serde::Serialize', 'serde::Deserialize'], children: lines(declarations) }),
 }) }));
@@ -151,6 +171,8 @@ const outputs = new Map([
   ['2_presentation_auto.rs', `// Generated from 0_presentation.tsp; sha256:${hash}\n${rust.contents}\n`],
   ['2_presentation_auto.yaml', `# Generated from 0_presentation.tsp; sha256:${hash}\n${stringify(contract)}`],
   ['../godot/1_rows_auto.gd', `# Generated from 0_presentation.tsp; sha256:${hash}\n${rows.gdscript}`],
+  ['2_godot_auto.rs', `// Generated from 0_presentation.tsp; sha256:${hash}\n${godot.rust}`],
+  ['../godot/1_payload_auto.gd', `# Generated from 0_presentation.tsp; sha256:${hash}\n${godot.gdscript}`],
 ]);
 for (const [name, body] of outputs) {
   const target = new URL(name, import.meta.url);

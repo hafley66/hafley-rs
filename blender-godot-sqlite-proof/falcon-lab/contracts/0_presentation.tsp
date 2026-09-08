@@ -4,6 +4,85 @@ namespace FalconBoundary;
 
 // Field declaration order is the existing numeric row layout. Unused tail is zero.
 extern dec row(target: Model, kind: valueof int64);
+extern dec godot(target: Model | Union);
+extern dec packed(target: ModelProperty, type: valueof string);
+
+@godot
+model FixtureStatus {
+  simulation_tick: int64;
+  published_generation: uint64;
+  renderer_generation: uint64;
+  rows: uint32;
+  window_frames: uint32;
+  held_generation: uint64 | null;
+  held_damage: float64 | null;
+  fresh_tick91_damage: float64 | null;
+  @maxItems(1024) restored: int32[];
+  @maxItems(1024) saved: int32[];
+  advances: uint32;
+  runtime_next_tick: int64;
+  input_bits: uint32;
+}
+
+@godot
+model ScheduledStatus {
+  simulation_tick: int64;
+  published_tick: int64;
+  generation: uint64;
+  skipped_publications: uint32;
+  published: boolean;
+  advances: uint32;
+  @maxItems(1024) restored: int32[];
+  held_generation: uint64 | null;
+  held_damage: float64 | null;
+  fresh_tick91_damage: float64 | null;
+  rows: uint32;
+  window_frames: uint32;
+}
+
+@godot
+model ScheduledFrameStatus {
+  ...ScheduledStatus;
+  renderer_generation: uint64;
+  observed_simulation_tick: int64;
+}
+
+@godot
+model ExternalStatus {
+  source_pid: uint32;
+  source_generation: uint64;
+  renderer_generation: uint64;
+  published_tick: int64;
+  source_elapsed_us: uint64;
+  skipped_generations: uint64;
+  consumer_pid: uint32;
+  ipc_sql_exact: boolean;
+}
+
+@godot
+union FrameStatus {
+  fixture: FixtureStatus,
+  scheduled: ScheduledFrameStatus,
+  external: ExternalStatus,
+}
+
+model Position { x: float32; y: float32; z: float32; }
+model Rgba { r: float32; g: float32; b: float32; a: float32; }
+
+@godot
+model FramePayload {
+  @packed("PackedFloat64Array") @maxItems(27648) rows: float64[];
+  @packed("PackedVector3Array") @maxItems(100000) vertices: Position[];
+  @packed("PackedColorArray") @maxItems(100000) colors: Rgba[];
+  status: FrameStatus;
+}
+
+@godot
+model MeshReceipt {
+  generation: int64;
+  @packed("PackedFloat64Array") @maxItems(27648) rows: float64[];
+  @packed("PackedVector3Array") @maxItems(100000) vertices: Position[];
+}
 
 const WINDOW: int64 = 32;
 const SLOTS: uint32 = 3;

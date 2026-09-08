@@ -5,11 +5,11 @@ Movie Maker mode enabled, recording movie in 960×540 @ 60 FPS...
 Initialize godot-rust (API v4.5.stable.official, runtime v4.7.stable.official, safeguards strict)
 GDEXT_STAGE_READY runtime=4.7-stable (official)
 SCHEDULE_OK ticks=180 full_states=360 exact skipped_publications=12 consumer_latest=verified cursor_isolation=verified
-SCHEDULE_CAPTURE_OK observed_video_frames=464
+SCHEDULE_CAPTURE_OK observed_video_frames=463
 --------------------------------------------------------------------------------
 Done recording movie at path: /Users/chrishafley/projects/hafley-rs/games/blender-godot-sqlite-proof/falcon-lab/51_schedule.avi
-244 frames at 60 FPS (movie length: 00:00:04:04), recorded in 00:00:08 (50% of real-time speed).
-CPU render time: 0.22 seconds (average: 0.91 ms/frame)
+29 frames at 60 FPS (movie length: 00:00:00:29), recorded in 00:00:08 (12% of real-time speed).
+CPU render time: 0.24 seconds (average: 8.13 ms/frame)
 GPU render time: 0.00 seconds (average: 0.00 ms/frame)
-Encoding time: 1.60 seconds (average: 6.54 ms/frame)
+Encoding time: 1.71 seconds (average: 58.80 ms/frame)
 --------------------------------------------------------------------------------

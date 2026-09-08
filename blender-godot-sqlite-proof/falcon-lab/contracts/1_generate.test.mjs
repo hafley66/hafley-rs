@@ -12,11 +12,11 @@ test('generation is deterministic, stale checks are read-only, unsupported types
   await mkdir(dir);
   await mkdir(join(root, 'godot'));
   const local = fileURLToPath(new URL('.', import.meta.url));
-  const outputs = ['2_presentation_auto.rs', '2_presentation_auto.yaml', '../godot/1_rows_auto.gd'];
+  const outputs = ['2_presentation_auto.rs', '2_presentation_auto.yaml', '2_godot_auto.rs', '../godot/1_payload_auto.gd', '../godot/1_rows_auto.gd'];
   const run = (...args) => spawnSync(process.execPath, ['1_generate.mjs', ...args], { cwd: dir, encoding: 'utf8' });
   try {
     await symlink(join(local, 'node_modules'), join(dir, 'node_modules'), 'dir');
-    for (const name of ['0_presentation.tsp', '0_constants.mjs', '0_rows.mjs', '1_rows.mjs', '1_generate.mjs']) await copyFile(join(local, name), join(dir, name));
+    for (const name of ['0_presentation.tsp', '0_constants.mjs', '0_rows.mjs', '1_rows.mjs', '1_godot.mjs', '1_generate.mjs']) await copyFile(join(local, name), join(dir, name));
     let result = run();
     assert.equal(result.status, 0, result.stderr);
     const expected = await Promise.all(outputs.map(name => readFile(join(local, name), 'utf8')));

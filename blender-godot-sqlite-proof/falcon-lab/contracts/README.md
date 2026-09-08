@@ -53,7 +53,13 @@ artifact or an explicitly republished/re-pinned emitter before installing.
   checks every row and vertex before accepting that receipt and consuming the
   packet. The trait itself validates without consuming or recording a receipt.
 - ReadBuffer/WriteBuffer template instances lower to borrowed Rust slices.
-- Named Ok/Err unions lower to Rust Result aliases. Other union shapes fail.
+- Named Ok/Err unions lower to Rust Result aliases. Annotated model unions
+  generate Rust enums and Godot shape dispatch.
+- FramePayload, fixture/scheduled/external status variants, and MeshReceipt
+  generate Rust dictionary conversions and typed GDScript classes. Packed
+  arrays remain packed at the Godot boundary. Nullable fields preserve nil.
+  The stage uses these classes for status and mesh acknowledgment; audit files
+  retain JSON serialization. Boundary tests check all three variants.
 - Equal positive minItems/maxItems become fixed Rust arrays. A maximum-only
   array becomes a Vec; the existing IPC adapter enforces its row limit.
 - Native integral and string constants generate Rust constants; YAML stores integral decimal
@@ -69,9 +75,8 @@ artifact or an explicitly republished/re-pinned emitter before installing.
 Epoch zero identifies the current local adapter convention, not a negotiated
 cross-process identity. Process restart/lease semantics are not implemented.
 The query adapter retains the existing allocating SQL reader internally.
-The complete Godot frame envelope and status dictionaries, SQL view definitions,
-transport bindings, shared-memory layout, and zero-allocation enforcement remain
-follow-ups. Generated GDScript row readers currently materialize dictionaries
+SQL view definitions, remaining transport bindings, shared-memory layout, and
+zero-allocation enforcement remain follow-ups. Generated GDScript readers materialize dictionaries
 (and arrays for matrix fields); their allocation cost is not benchmarked.
 No zero-copy or zero-allocation claim is made for this slice.
 

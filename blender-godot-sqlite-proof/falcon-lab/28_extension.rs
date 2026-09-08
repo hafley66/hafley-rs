@@ -7,20 +7,24 @@ use std::thread::JoinHandle;
 
 use crate::fixture;
 use fixture::sql_viewer::geometry;
+#[path = "contracts/2_godot_auto.rs"]
+#[allow(dead_code)]
+mod payload;
+use payload::{GodotFramePayload, GodotMeshReceipt};
 use fixture::sql_viewer::boundary::contracts::{
     Acknowledgment, AckResult, BoundaryError, FrameAcknowledger, GenerationId, RowPublisher,
-    pack_rows as pack,
+    pack_rows as pack, FrameStatus, ExternalStatus, ScheduledFrameStatus,
 };
 
 struct Packet {
     rows: Vec<f64>,
     lines: Vec<geometry::Line>,
-    status: serde_json::Value,
+    status: FrameStatus,
 }
 impl FrameAcknowledger for Packet {
     fn acknowledge(&mut self, receipt: Acknowledgment) -> AckResult {
         if receipt.id.epoch != 0
-            || Some(receipt.id.generation) != self.status["renderer_generation"].as_u64()
+            || receipt.id.generation != self.status.renderer_generation()
         {
             return Err(BoundaryError::StaleGeneration);
         }
@@ -81,7 +85,11 @@ mod contract_tests {
         let mut packet = Packet {
             rows: vec![0.0, 1.0, 2.0],
             lines: vec![],
-            status: serde_json::json!({"renderer_generation": 7}),
+            status: FrameStatus::External(ExternalStatus {
+                source_pid: 1, source_generation: 1, renderer_generation: 7,
+                published_tick: 0, source_elapsed_us: 0, skipped_generations: 0,
+                consumer_pid: 2, ipc_sql_exact: true,
+            }),
         };
         let receipt = Acknowledgment {
             id: GenerationId { epoch: 0, generation: 7 },
@@ -96,7 +104,7 @@ mod contract_tests {
         ] {
             assert_eq!(FrameAcknowledger::acknowledge(&mut packet, candidate), expected);
             assert_eq!(packet.rows, vec![0.0, 1.0, 2.0]);
-            assert_eq!(packet.status, serde_json::json!({"renderer_generation": 7}));
+            assert_eq!(packet.status.renderer_generation(), 7);
         }
     }
 }
@@ -152,10 +160,13 @@ impl FalconSql {
             fixture::sql_viewer::boundary::read_frame(&external.boundary.db, tick).unwrap();
         assert_eq!(rows, latest.rows);
         external.source_generation = latest.generation;
-        let status = serde_json::json!({"source_pid":latest.pid,"source_generation":latest.generation,
-            "renderer_generation":generation,"published_tick":tick,"source_elapsed_us":latest.elapsed_us,
-            "skipped_generations":latest.generation-previous-1,"consumer_pid":std::process::id(),
-            "ipc_sql_exact":true});
+        let status = FrameStatus::External(ExternalStatus {
+            source_pid: latest.pid, source_generation: latest.generation,
+            renderer_generation: generation, published_tick: tick,
+            source_elapsed_us: latest.elapsed_us,
+            skipped_generations: latest.generation - previous - 1,
+            consumer_pid: std::process::id(), ipc_sql_exact: true,
+        });
         self.deliver(Packet {
             rows: pack(&rows),
             lines: geometry::wire(&rows),
@@ -194,7 +205,7 @@ impl FalconSql {
                         response_tx.send(Packet {
                             rows: pack(rows),
                             lines: geometry::wire(rows),
-                            status: status.clone(),
+                            status: FrameStatus::Fixture(status.clone()),
                         })?;
                         Ok(())
                     },
@@ -206,7 +217,7 @@ impl FalconSql {
                 response_tx.send(Packet {
                     rows: pack(rows),
                     lines: geometry::wire(rows),
-                    status: status.clone(),
+                    status: FrameStatus::Fixture(status.clone()),
                 })?;
                 Ok(())
             })
@@ -255,7 +266,7 @@ impl FalconSql {
         };
         result.set(
             "current",
-            GString::from(&serde_json::to_string(current).unwrap()),
+            current.to_dictionary(),
         );
         let published = state.published.as_ref().unwrap();
         let previous = self
@@ -272,9 +283,22 @@ impl FalconSql {
                 fixture::sql_viewer::boundary::read_frame(&reader, published.published_tick)
                     .unwrap();
             assert_eq!(generation, published.generation);
-            let mut status = serde_json::to_value(published).unwrap();
-            status["renderer_generation"] = generation.into();
-            status["observed_simulation_tick"] = current.simulation_tick.into();
+            let status = FrameStatus::Scheduled(ScheduledFrameStatus {
+                simulation_tick: published.simulation_tick,
+                published_tick: published.published_tick,
+                generation: published.generation,
+                skipped_publications: published.skipped_publications,
+                published: published.published,
+                advances: published.advances,
+                restored: published.restored.clone(),
+                held_generation: published.held_generation,
+                held_damage: published.held_damage,
+                fresh_tick91_damage: published.fresh_tick91_damage,
+                rows: published.rows,
+                window_frames: published.window_frames,
+                renderer_generation: generation,
+                observed_simulation_tick: current.simulation_tick,
+            });
             Some(Packet {
                 rows: pack(&rows),
                 lines: geometry::wire(&rows),
@@ -385,23 +409,22 @@ impl FalconSql {
             .flat_map(|l| [l.color; 2])
             .map(|c| Color::from_rgba(c[0], c[1], c[2], c[3]))
             .collect();
-        let mut result = VarDictionary::new();
-        result.set("rows", PackedFloat64Array::from(packet.rows.as_slice()));
-        result.set("vertices", vertices);
-        result.set("colors", colors);
-        result.set("status", GString::from(&packet.status.to_string()));
+        let result = GodotFramePayload {
+            rows: PackedFloat64Array::from(packet.rows.as_slice()),
+            vertices, colors, status: packet.status.clone(),
+        }.to_dictionary();
         self.pending = Some(packet);
         result
     }
 
     #[func]
-    #[tracing::instrument(target = "falcon::godot", level = "trace", skip_all, fields(generation, vertices = vertices.len()))]
+    #[tracing::instrument(target = "falcon::godot", level = "trace", skip_all)]
     fn acknowledge(
         &mut self,
-        generation: i64,
-        rows: PackedFloat64Array,
-        vertices: PackedVector3Array,
+        receipt: VarDictionary,
     ) -> bool {
+        let GodotMeshReceipt { generation, rows, vertices } =
+            GodotMeshReceipt::from_dictionary(&receipt);
         let packet = self.pending.as_mut().unwrap();
         assert_eq!(
             packet.rows.as_slice(),
@@ -409,8 +432,8 @@ impl FalconSql {
             "Godot row roundtrip differs"
         );
         assert_eq!(
-            packet.status["renderer_generation"].as_i64(),
-            Some(generation)
+            packet.status.renderer_generation(),
+            u64::try_from(generation).unwrap()
         );
         assert_eq!(packet.lines.len() * 2, vertices.len());
         for (expected, actual) in packet
@@ -431,7 +454,7 @@ impl FalconSql {
             mesh_vertices: u32::try_from(vertices.len()).unwrap(),
         }).unwrap();
         let packet = self.pending.take().unwrap();
-        let mut status = packet.status;
+        let mut status = serde_json::to_value(packet.status).unwrap();
         status["row_digest"] = format!("{:016x}", digest(&packet.rows)).into();
         status["frame_rows"] = (packet.rows.len() / 27).into();
         status["mesh_vertices"] = vertices.len().into();
