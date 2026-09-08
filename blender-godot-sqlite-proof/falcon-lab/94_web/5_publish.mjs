@@ -20,7 +20,7 @@ remote(`test ! -e ${backup} && cp -a /var/www/smash-godot-game3 ${backup}`);
 console.log(`Backup: ${backup}`);
 try {
   for (const [command, ...args] of app.publishCommands(selected)) {
-    const delayed = args.map(a => a === '--delete' ? '--delete-delay' : a);
+    const delayed = args.map(a => a === '--delete' ? '--delete-after' : a);
     if (command === 'rsync') delayed.unshift('--delay-updates', '--exclude=/verified.json');
     execFileSync(command, delayed, { stdio: 'inherit' });
   }
