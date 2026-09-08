@@ -1,7 +1,9 @@
-// Generated from 0_presentation.tsp; sha256:107cb63371f971260fd0828a841cbd8a499b9fb455a6e85f57b3143075da7d26
+// Generated from 0_presentation.tsp; sha256:240d347aa11cfb13520f91e99a23ada7952b8e6aa8ac2bc180eae12c1398ed1b
 use serde::Deserialize;
 use serde::Serialize;
 
+pub const CONTROL_TICKS: u32 = 300;
+pub const CONTROL_SNAPSHOT: u32 = 180;
 pub const WINDOW: i64 = 32;
 pub const SLOTS: u32 = 3;
 pub const ROW_CAPACITY: u32 = 1024;
@@ -70,10 +72,37 @@ pub struct ExternalStatus {
   pub ipc_sql_exact: bool,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ControlledStatus {
+  pub simulation_tick: i64,
+  pub renderer_generation: u64,
+  pub input: ControlInput,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ControlInput {
+  pub buttons: u32,
+  pub axis: f32,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Position {
   pub x: f32,
   pub y: f32,
   pub z: f32,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RepeatProof {
+  pub ticks: u32,
+  pub hits: u32,
+  pub damage: f64,
+  pub replayed: u32,
+  pub hit_ticks: Vec<i64>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ControlProof {
+  pub ticks: u32,
+  pub hits: u32,
+  pub damage: f64,
+  pub replayed: u32,
+  pub hit_ticks: Vec<i64>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Rgba {
@@ -94,14 +123,6 @@ pub struct MeshReceipt {
   pub generation: i64,
   pub rows: Vec<f64>,
   pub vertices: Vec<Position>,
-}
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct RepeatProof {
-  pub ticks: u32,
-  pub hits: u32,
-  pub damage: f64,
-  pub replayed: u32,
-  pub hit_ticks: Vec<i64>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Row {
@@ -207,6 +228,7 @@ pub enum BoundaryError {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum FrameStatus {
+  Controlled(ControlledStatus),
   Fixture(FixtureStatus),
   Scheduled(ScheduledFrameStatus),
   External(ExternalStatus),

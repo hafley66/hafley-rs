@@ -13,7 +13,8 @@ mod payload;
 use payload::{GodotFramePayload, GodotMeshReceipt};
 use fixture::sql_viewer::boundary::contracts::{
     Acknowledgment, AckResult, BoundaryError, FrameAcknowledger, GenerationId, RowPublisher,
-    pack_rows as pack, FrameStatus, ExternalStatus, ScheduledFrameStatus,
+    pack_rows as pack, FrameStatus, ExternalStatus, ScheduledFrameStatus, ControlInput,
+    CONTROL_TICKS,
 };
 
 struct Packet {
@@ -124,10 +125,46 @@ struct FalconSql {
     scheduled: Option<Scheduled>,
     faults: bool,
     external: Option<External>,
+    controlled: Option<crate::control::Controlled>,
 }
 
 #[godot_api]
 impl FalconSql {
+    #[func]
+    fn start_controlled(&mut self, record: bool) {
+        fixture::baseline::telemetry::init();
+        assert!(self.controlled.is_none() && self.bridge.is_none());
+        self.controlled = Some(crate::control::Controlled::new(record).unwrap());
+    }
+
+    #[func]
+    fn control_ticks(&self) -> i64 { i64::from(CONTROL_TICKS) }
+
+    #[func]
+    fn control_demo_input(&self, tick: i64) -> VarDictionary {
+        crate::control::demo_input(i32::try_from(tick).unwrap()).to_dictionary()
+    }
+
+    #[func]
+    fn advance_controlled(&mut self, input: VarDictionary) -> VarDictionary {
+        assert!(self.pending.is_none());
+        let input = ControlInput::from_dictionary(&input);
+        let (rows, status) = self.controlled.as_mut().unwrap().step(input).unwrap();
+        self.deliver(Packet { rows: pack(&rows), lines: geometry::wire(&rows),
+            status: FrameStatus::Controlled(status) })
+    }
+
+    #[func]
+    fn finish_controlled(&mut self, path: GString) -> bool {
+        assert!(self.pending.is_none());
+        assert_eq!(self.acknowledgements.len(), CONTROL_TICKS as usize);
+        let proof = self.controlled.as_ref().unwrap().verify();
+        std::fs::write(path.to_string(), serde_json::to_vec_pretty(&proof).unwrap()).unwrap();
+        godot_print!("CONTROL_OK ticks={} hits={} damage={} replayed={} rows_and_mesh=exact",
+            proof.ticks, proof.hits, proof.damage, proof.replayed);
+        true
+    }
+
     #[func]
     fn start_external(&mut self, path: GString, audit: GString) {
         fixture::baseline::telemetry::init();
@@ -469,7 +506,9 @@ impl FalconSql {
                 .unwrap();
             writeln!(file, "{}", status).unwrap();
         }
-        self.acknowledgements.push(status);
+        if self.controlled.as_ref().is_none_or(|run| run.recorded.is_some()) {
+            self.acknowledgements.push(status);
+        }
         true
     }
 

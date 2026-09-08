@@ -21,7 +21,12 @@ func _init():
 	var external := Payload.ExternalStatus.new()
 	external.renderer_generation = 94
 	external.ipc_sql_exact = true
-	for status in [fixture, scheduled, external]:
+	var controlled := Payload.ControlledStatus.new()
+	controlled.input = Payload.ControlInput.new()
+	controlled.input.axis = -1.0
+	controlled.input.buttons = 3
+	controlled.renderer_generation = 95
+	for status in [fixture, scheduled, external, controlled]:
 		var frame := Payload.FramePayload.new()
 		frame.rows = PackedFloat64Array([91, 0, 7, 18.0])
 		frame.vertices = PackedVector3Array([Vector3(1, 2, 3), Vector3(4, 5, 6)])
@@ -36,5 +41,5 @@ func _init():
 		receipt.rows = decoded.rows
 		receipt.vertices = decoded.vertices
 		assert(Payload.MeshReceipt.from_wire(receipt.to_wire()).to_wire() == receipt.to_wire())
-	print("TYPED_PAYLOAD_OK variants=3 packed_arrays=exact receipt=exact nullable=preserved")
+	print("TYPED_PAYLOAD_OK variants=4 packed_arrays=exact receipt=exact nullable=preserved")
 	quit(0)

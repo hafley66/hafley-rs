@@ -1,4 +1,4 @@
-# Generated from 0_presentation.tsp; sha256:107cb63371f971260fd0828a841cbd8a499b9fb455a6e85f57b3143075da7d26
+# Generated from 0_presentation.tsp; sha256:240d347aa11cfb13520f91e99a23ada7952b8e6aa8ac2bc180eae12c1398ed1b
 extends RefCounted
 
 class FixtureStatus:
@@ -280,6 +280,54 @@ class ExternalStatus:
 			"ipc_sql_exact": ipc_sql_exact,
 		}
 
+class ControlledStatus:
+	var simulation_tick: int
+	var renderer_generation: int
+	var input: ControlInput
+
+	static func from_wire(data: Dictionary) -> ControlledStatus:
+		var out := ControlledStatus.new()
+		assert(data.has("simulation_tick"), "Missing ControlledStatus.simulation_tick")
+		assert(typeof(data["simulation_tick"]) == TYPE_INT, "Invalid ControlledStatus.simulation_tick")
+		out.simulation_tick = data["simulation_tick"]
+		assert(data.has("renderer_generation"), "Missing ControlledStatus.renderer_generation")
+		assert(typeof(data["renderer_generation"]) == TYPE_INT, "Invalid ControlledStatus.renderer_generation")
+		out.renderer_generation = data["renderer_generation"]
+		assert(data.has("input"), "Missing ControlledStatus.input")
+		out.input = ControlInput.from_wire(data["input"])
+		return out
+
+	func to_wire() -> Dictionary:
+		return {
+			"simulation_tick": simulation_tick,
+			"renderer_generation": renderer_generation,
+			"input": input.to_wire(),
+		}
+
+class ControlInput:
+	var buttons: int
+	var axis: float
+
+	static func from_wire(data: Dictionary) -> ControlInput:
+		var out := ControlInput.new()
+		assert(data.has("buttons"), "Missing ControlInput.buttons")
+		assert(data["buttons"] >= 0, "Out of range ControlInput.buttons")
+		assert(data["buttons"] <= 3, "Out of range ControlInput.buttons")
+		assert(typeof(data["buttons"]) == TYPE_INT, "Invalid ControlInput.buttons")
+		out.buttons = data["buttons"]
+		assert(data.has("axis"), "Missing ControlInput.axis")
+		assert(data["axis"] >= -1, "Out of range ControlInput.axis")
+		assert(data["axis"] <= 1, "Out of range ControlInput.axis")
+		assert(typeof(data["axis"]) == TYPE_FLOAT, "Invalid ControlInput.axis")
+		out.axis = data["axis"]
+		return out
+
+	func to_wire() -> Dictionary:
+		return {
+			"buttons": buttons,
+			"axis": axis,
+		}
+
 class FramePayload:
 	var rows: PackedFloat64Array
 	var vertices: PackedVector3Array
@@ -341,6 +389,8 @@ class MeshReceipt:
 
 class FrameStatus:
 	static func from_wire(data: Dictionary) -> Variant:
+		if data.has("simulation_tick") and data.has("renderer_generation") and data.has("input"):
+			return ControlledStatus.from_wire(data)
 		if data.has("simulation_tick") and data.has("published_generation") and data.has("renderer_generation") and data.has("rows") and data.has("window_frames") and data.has("held_generation") and data.has("held_damage") and data.has("fresh_tick91_damage") and data.has("restored") and data.has("saved") and data.has("advances") and data.has("runtime_next_tick") and data.has("input_bits"):
 			return FixtureStatus.from_wire(data)
 		if data.has("simulation_tick") and data.has("published_tick") and data.has("generation") and data.has("skipped_publications") and data.has("published") and data.has("advances") and data.has("restored") and data.has("held_generation") and data.has("held_damage") and data.has("fresh_tick91_damage") and data.has("rows") and data.has("window_frames") and data.has("renderer_generation") and data.has("observed_simulation_tick"):

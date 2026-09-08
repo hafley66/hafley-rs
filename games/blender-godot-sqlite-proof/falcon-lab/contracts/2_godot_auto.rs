@@ -1,4 +1,4 @@
-// Generated from 0_presentation.tsp; sha256:107cb63371f971260fd0828a841cbd8a499b9fb455a6e85f57b3143075da7d26
+// Generated from 0_presentation.tsp; sha256:240d347aa11cfb13520f91e99a23ada7952b8e6aa8ac2bc180eae12c1398ed1b
 use godot::prelude::*;
 
 use crate::fixture::sql_viewer::boundary::contracts::*;
@@ -78,6 +78,58 @@ impl ExternalStatus {
     }
 }
 
+impl ExternalStatus {
+    pub fn from_dictionary(value: &VarDictionary) -> Self {
+        let out = Self {
+            source_pid: value.get("source_pid").expect("missing source_pid").try_to::<u32>().expect("invalid source_pid"),
+            source_generation: value.get("source_generation").expect("missing source_generation").try_to::<u64>().expect("invalid source_generation"),
+            renderer_generation: value.get("renderer_generation").expect("missing renderer_generation").try_to::<u64>().expect("invalid renderer_generation"),
+            published_tick: value.get("published_tick").expect("missing published_tick").try_to::<i64>().expect("invalid published_tick"),
+            source_elapsed_us: value.get("source_elapsed_us").expect("missing source_elapsed_us").try_to::<u64>().expect("invalid source_elapsed_us"),
+            skipped_generations: value.get("skipped_generations").expect("missing skipped_generations").try_to::<u64>().expect("invalid skipped_generations"),
+            consumer_pid: value.get("consumer_pid").expect("missing consumer_pid").try_to::<u32>().expect("invalid consumer_pid"),
+            ipc_sql_exact: value.get("ipc_sql_exact").expect("missing ipc_sql_exact").try_to::<bool>().expect("invalid ipc_sql_exact"),
+        };
+
+
+        out
+    }
+}
+
+impl ControlledStatus {
+    pub fn to_dictionary(&self) -> VarDictionary {
+        let mut out = VarDictionary::new();
+        out.set("simulation_tick", self.simulation_tick.to_variant());
+        out.set("renderer_generation", i64::try_from(self.renderer_generation).expect("Godot integer range").to_variant());
+        out.set("input", self.input.to_dictionary().to_variant());
+        out
+    }
+}
+
+impl ControlInput {
+    pub fn to_dictionary(&self) -> VarDictionary {
+        let mut out = VarDictionary::new();
+        out.set("buttons", i64::try_from(self.buttons).expect("Godot integer range").to_variant());
+        out.set("axis", self.axis.to_variant());
+        out
+    }
+}
+
+impl ControlInput {
+    pub fn from_dictionary(value: &VarDictionary) -> Self {
+        let out = Self {
+            buttons: value.get("buttons").expect("missing buttons").try_to::<u32>().expect("invalid buttons"),
+            axis: value.get("axis").expect("missing axis").try_to::<f32>().expect("invalid axis"),
+        };
+
+        assert!((out.buttons as f64) >= 0.0, "out of range buttons");
+        assert!((out.buttons as f64) <= 3.0, "out of range buttons");
+        assert!((out.axis as f64) >= -1.0, "out of range axis");
+        assert!((out.axis as f64) <= 1.0, "out of range axis");
+        out
+    }
+}
+
 pub struct GodotFramePayload {
     pub rows: PackedFloat64Array,
     pub vertices: PackedVector3Array,
@@ -121,6 +173,7 @@ impl GodotMeshReceipt {
         };
         assert!(out.rows.len() <= 27648, "oversized rows");
         assert!(out.vertices.len() <= 100000, "oversized vertices");
+
         out
     }
 }
@@ -128,6 +181,7 @@ impl GodotMeshReceipt {
 impl FrameStatus {
     pub fn to_dictionary(&self) -> VarDictionary {
         match self {
+            Self::Controlled(value) => value.to_dictionary(),
             Self::Fixture(value) => value.to_dictionary(),
             Self::Scheduled(value) => value.to_dictionary(),
             Self::External(value) => value.to_dictionary(),
@@ -135,6 +189,7 @@ impl FrameStatus {
     }
     pub fn renderer_generation(&self) -> u64 {
         match self {
+            Self::Controlled(value) => value.renderer_generation,
             Self::Fixture(value) => value.renderer_generation,
             Self::Scheduled(value) => value.renderer_generation,
             Self::External(value) => value.renderer_generation,

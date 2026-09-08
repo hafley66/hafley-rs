@@ -13,6 +13,8 @@ mod process_video;
 mod cli;
 #[path = "78_repeat.rs"]
 mod repeat;
+#[path = "90_control.rs"]
+mod control;
 #[path = "1c_live_rows.rs"]
 mod live_rows;
 #[cfg(any(test, feature = "gdext"))]
