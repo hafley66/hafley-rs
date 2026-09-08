@@ -300,7 +300,7 @@ impl<'a> Runtime<'a> {
         Ok(displays.try_into().unwrap())
     }
 }
-fn run(
+pub(crate) fn run(
     actions: &[HighLevelSubaction],
     held: bool,
     launch: bool,
@@ -309,7 +309,7 @@ fn run(
     (0..180).map(|tick| runtime.advance(input(tick))).collect()
 }
 
-fn verify(actions: &[HighLevelSubaction], trace: &[[Display; 2]]) -> Result<(), Error> {
+pub(crate) fn verify(actions: &[HighLevelSubaction], trace: &[[Display; 2]]) -> Result<(), Error> {
     let launch = trace[0][0].world.bag.is_some();
     let mut reference = World::default();
     if launch {
@@ -385,7 +385,7 @@ fn verify(actions: &[HighLevelSubaction], trace: &[[Display; 2]]) -> Result<(), 
     Ok(())
 }
 
-fn render(actions: &[HighLevelSubaction], trace: &[[Display; 2]], id: usize) -> Result<(), Error> {
+pub(crate) fn render(actions: &[HighLevelSubaction], trace: &[[Display; 2]], id: usize) -> Result<(), Error> {
     let launch = trace[0][0].world.bag.is_some();
     let mut capture = gpu::Capture::new(&format!(
         "{}_peer{id}.mp4",
@@ -647,40 +647,6 @@ pub(crate) fn incremental_host(
     Ok(())
 }
 
-pub fn run_cli() -> Result<(), Error> {
-    if std::env::args().any(|arg| arg == "--process-peer") {
-        baseline::telemetry::init();
-        return crate::process_peer::run();
-    }
-    if std::env::args().any(|arg| arg == "--process-video") {
-        return crate::process_video::run();
-    }
-    if std::env::args().any(|arg| arg == "--measure-release") {
-        return crate::release_measure::run();
-    }
-    baseline::telemetry::init();
-    let actions = baseline::load()?;
-    let sql = std::env::args().any(|arg| arg == "--sql");
-    let launch = sql || std::env::args().any(|arg| arg == "--launch");
-    let trace = run(&actions, true, launch)?;
-    verify(&actions, &trace)?;
-    if sql {
-        return sql_viewer::execute(&trace, !std::env::args().any(|arg| arg == "--verify-only"));
-    }
-    std::fs::write(
-        if launch {
-            "17_launch_trace.json"
-        } else {
-            "11_rollback_trace.json"
-        },
-        serde_json::to_vec_pretty(&trace)?,
-    )?;
-    if std::env::args().any(|arg| arg == "--verify-only") {
-        return Ok(());
-    }
-    render(&actions, &trace, 0)?;
-    render(&actions, &trace, 1)
-}
 #[cfg(test)]
 mod tests {
     #[test]

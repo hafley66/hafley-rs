@@ -9,13 +9,16 @@ mod release_measure;
 mod process_peer;
 #[path = "76_process_video.rs"]
 mod process_video;
+#[path = "77_cli.rs"]
+mod cli;
 #[path = "1c_live_rows.rs"]
 mod live_rows;
 #[cfg(any(test, feature = "gdext"))]
 #[path = "45_schedule.rs"]
 mod schedule;
 pub use falcon_simulation::{Simulation, Snapshot};
-pub use fixture::{Display, Runtime, run_cli};
+pub use fixture::{Display, Runtime};
+pub use cli::run_cli;
 #[cfg(test)]
 #[path = "37_incremental_tests.rs"]
 mod tests;
