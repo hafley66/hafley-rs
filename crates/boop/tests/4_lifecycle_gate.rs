@@ -1487,19 +1487,45 @@ fn authenticated_matrix() -> Result<()> {
         let completion = format!("lane {} done rc=0", fixture.route);
         let answer = format!("PARENT_DONE_{}_{}", harness.entry(), std::process::id());
         let ready = format!("PARENT_READY_{}_{}", harness.entry(), std::process::id());
-        harness.control(&other, &format!("Bounded parent-receipt test. When the peer completion message {completion:?} arrives, reply with this exact line:\n{answer}\nFor now reply with this exact line:\n{ready}"))?;
-        let deadline = Instant::now() + Duration::from_secs(35);
-        while !harness
-            .observe(&registry, &other.route()?)?
-            .iter()
-            .any(|row| row.role == "assistant" && row.text.lines().any(|line| line.trim() == ready))
-        {
-            ensure!(
-                Instant::now() < deadline,
-                "parent did not acknowledge completion expectation"
-            );
-            std::thread::sleep(Duration::from_millis(250));
+        let expectation = format!("Bounded parent-receipt test. When the peer completion message {completion:?} arrives, reply with this exact line:\n{answer}\nFor now reply with this exact line:\n{ready}");
+        let mut acknowledged = false;
+        for attempt in 0..3 {
+            let before = harness
+                .observe(&registry, &other.route()?)?
+                .iter()
+                .filter(|row| row.role == "assistant")
+                .count();
+            let prompt = if attempt == 0 {
+                expectation.clone()
+            } else {
+                format!("{expectation}\nYour preceding response did not match. The earlier isolation token is obsolete.")
+            };
+            harness.control(&other, &prompt)?;
+            let deadline = Instant::now() + Duration::from_secs(35);
+            loop {
+                let rows = harness.observe(&registry, &other.route()?)?;
+                if rows.iter().any(|row| {
+                    row.role == "assistant" && row.text.lines().any(|line| line.trim() == ready)
+                }) {
+                    acknowledged = true;
+                    break;
+                }
+                let completed_wrong_turn =
+                    rows.iter().filter(|row| row.role == "assistant").count() > before
+                        && !harness.busy(&other, &registry)?;
+                if completed_wrong_turn || Instant::now() >= deadline {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(250));
+            }
+            if acknowledged {
+                break;
+            }
         }
+        ensure!(
+            acknowledged,
+            "parent did not acknowledge completion expectation after three completed attempts"
+        );
         let command = format!(
             "{} beep agent done {} --rc 0",
             shell_quote(&fixture.binary.display().to_string()),
