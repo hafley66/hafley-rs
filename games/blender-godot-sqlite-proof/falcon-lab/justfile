@@ -1,0 +1,35 @@
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+# Rust library and controller checks.
+test:
+    lab_dir="$PWD"; . ./0_shell.sh; lab_cargo test --features gdext --lib -- --test-threads=1
+    python3 75_udp_lab.test.py
+    python3 84_live_controller.test.py
+
+# SQL checks, tracing report, and full-state golden comparison.
+verify:
+    sh 67_run_perf.sh
+
+trace: verify
+
+# Release-only measurement with no tracing subscriber.
+bench:
+    sh 71_run_release.sh
+
+# live includes baseline, pause/restart, and cold attachment recordings.
+record mode="live":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case {{quote(mode)}} in
+      live|lifecycle) sh 89_run_live.sh ;;
+      processes) sh 77_run_processes.sh ;;
+      godot) bash 29_run_godot.sh ;;
+      incremental) bash 40_run_incremental.sh ;;
+      scheduled) bash 46_run_schedule.sh ;;
+      faults) bash 55_run_faults.sh ;;
+      sql) bash 22_run_sql.sh ;;
+      launch) bash 15_run_launch.sh ;;
+      rollback) bash 9_run_rollback.sh ;;
+      knee) bash 3_run.sh ;;
+      *) printf 'Unknown recording: %s\n' {{quote(mode)}} >&2; exit 2 ;;
+    esac

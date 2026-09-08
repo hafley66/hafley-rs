@@ -13,6 +13,11 @@ Keep experimental Cargo packages and lockfiles isolated from the parent workspac
 until promotion is explicitly requested. Retain source assets and evidence; ignore
 build caches and regenerable intermediate captures in Git.
 
+Commonize shell automation within each lab. In the Falcon lab, use its justfile
+for workflow entry points and source `0_shell.sh` after setting `lab_dir` for
+Cargo policy, temporary artifact directories, encoding, and media inspection.
+Keep experiment-specific assertions and capture parameters in their scripts.
+
 If a Rust build is interrupted by SIGTERM, clean the affected lab's validated
 Cargo target directory and retry a clean build before reporting verification
 blocked. Keep cleanup scoped to that lab's generated artifacts and use at most
