@@ -39,7 +39,11 @@ try {
   await Promise.race([page.waitForFunction(() => window.FALCON_META?.hits === 1, null, { timeout: 90000 }), runtimeFailure]);
   await page.screenshot({ path: join(output, '1_hit.png') });
   await page.waitForFunction(() => window.FALCON_STATUS?.simulation_tick === 299, null, { timeout: 30000 });
-  await page.waitForTimeout(1500);
+  if (!logs.some(s => s.includes('CONTROL_CAPTURE_OK'))) {
+    await Promise.race([page.waitForEvent('console', {
+      predicate: msg => msg.text().includes('CONTROL_CAPTURE_OK'), timeout: 30000,
+    }), runtimeFailure]);
+  }
   assert(logs.some(s => s.includes('CONTROL_OK ticks=300 hits=1 damage=18 replayed=120 rows_and_mesh=exact native_rows=exact')));
   assert(logs.some(s => s.includes('CONTROL_CAPTURE_OK')));
   await page.screenshot({ path: join(output, '2_replay.png') });
