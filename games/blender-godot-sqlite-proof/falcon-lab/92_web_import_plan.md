@@ -70,6 +70,13 @@ Source leads inspected:
 Desired asset tool: a **3D model viewer with mobile photo input**, with a single
 photo as the minimum input. A full scan should not be required for the initial flow.
 
+The user already built a "take a photo and add yourself to Smash" tool for friends
+in older repositories, and researched phone scans/AI-assisted reconstruction.
+Find and reuse that implementation before adding a replacement. The existing
+Kneeman pose-capture/import tools are one discovered lead, not yet confirmed as
+the exact older tool. **2D mode and photo/sprite cutouts attached to 3D collision
+capsules are acceptable outcomes.** Full 3D reconstruction remains optional.
+
 1. Choose a Smash character/rig and an animation-frame span.
 2. Preview and align the selected pose/projection with an uploaded or captured photo.
 3. Use projected character geometry to define a silhouette/mask and crop the photo.

@@ -1,0 +1,14 @@
+config_version=5
+
+[application]
+config/name="Falcon Rust / SQLite / Godot Web"
+run/main_scene="res://3_stage.tscn"
+
+[display]
+window/size/viewport_width=960
+window/size/viewport_height=540
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.015, 0.02, 0.035, 1)

@@ -1,0 +1,15 @@
+[build]
+jobs = 2
+
+[env]
+CFLAGS_wasm32_unknown_emscripten = "-fPIC -pthread"
+
+[target.wasm32-unknown-emscripten]
+rustflags = [
+  "-C", "link-args=-pthread",
+  "-C", "target-feature=+atomics",
+  "-C", "link-args=-sSIDE_MODULE=2",
+  "-C", "llvm-args=-enable-emscripten-cxx-exceptions=0",
+  "-Z", "default-visibility=hidden",
+  "-Z", "emscripten-wasm-eh=false",
+]
