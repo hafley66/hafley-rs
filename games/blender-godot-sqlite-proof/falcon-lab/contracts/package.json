@@ -1,0 +1,16 @@
+{
+  "name": "falcon-boundary-contracts",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.5.2",
+  "scripts": {
+    "generate": "node 1_generate.mjs",
+    "check": "node 1_generate.mjs --check"
+  },
+  "dependencies": {
+    "@alloy-js/core": "0.23.0-dev.12",
+    "@hafley66/alloy-rs": "0.1.0-dev.1788882678403",
+    "@typespec/compiler": "1.10.0",
+    "yaml": "2.8.3"
+  }
+}

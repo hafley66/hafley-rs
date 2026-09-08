@@ -5,7 +5,6 @@ use rusqlite::vtab::{
     sqlite3_vtab_cursor,
 };
 use rusqlite::{Connection, Result};
-use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
     ffi::CStr,
@@ -17,13 +16,10 @@ pub const WINDOW: i64 = 32;
 pub const SLOTS: usize = 3;
 pub const ROW_CAPACITY: usize = 1024;
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Row {
-    pub tick: i64,
-    pub kind: i64,
-    pub entity: i64,
-    pub values: [f64; 24],
-}
+#[allow(dead_code)]
+#[path = "contracts/2_presentation_auto.rs"]
+pub(crate) mod contracts;
+pub use contracts::Row;
 impl Row {
     pub fn new(tick: i64, kind: i64, entity: i64) -> Self {
         Self {
@@ -184,6 +180,25 @@ impl Boundary {
     }
 }
 
+// Initial adapter retains the existing SQL materialization. Epoch zero denotes
+// this local Boundary lifetime; cross-process epoch negotiation is not wired yet.
+impl contracts::FrameQuery for Boundary {
+    fn read_frame(&mut self, tick: i64, output: &mut [Row]) -> contracts::ReadResult {
+        let (generation, rows) = read_frame(&self.db, tick).map_err(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => contracts::BoundaryError::MissingFrame,
+            _ => contracts::BoundaryError::InvalidPayload,
+        })?;
+        if rows.len() > output.len() {
+            return Err(contracts::BoundaryError::Capacity);
+        }
+        output[..rows.len()].copy_from_slice(&rows);
+        Ok(contracts::FrameRead {
+            id: contracts::GenerationId { epoch: 0, generation },
+            rows_written: rows.len() as u32,
+        })
+    }
+}
+
 #[tracing::instrument(target = "falcon::sql", level = "trace", skip_all)]
 pub fn reader_for(ring: &Ring) -> Result<Connection> {
     let db = Connection::open_in_memory()?;
@@ -204,7 +219,7 @@ pub fn read_frame(db: &Connection, tick: i64) -> Result<(u64, Vec<Row>)> {
     let records = statement
         .query_map([tick], read_row)?
         .collect::<Result<Vec<_>>>()?;
-    let generation = records.first().expect("frame missing").0;
+    let generation = records.first().ok_or(rusqlite::Error::QueryReturnedNoRows)?.0;
     assert!(records.iter().all(|r| r.0 == generation));
     Ok((generation, records.into_iter().map(|r| r.1).collect()))
 }
@@ -212,6 +227,27 @@ pub fn read_frame(db: &Connection, tick: i64) -> Result<(u64, Vec<Row>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn generated_query_contract_preserves_rows_and_errors() {
+        use contracts::{BoundaryError, FrameQuery, FrameRead, GenerationId};
+        let mut b = Boundary::new().unwrap();
+        let expected = [Row::new(7, 0, 0), Row::new(7, 1, 1)];
+        assert!(b.publish(&[expected.to_vec()]));
+        let sentinel = Row::new(-10, -20, -30);
+        let mut output = [sentinel; 3];
+        assert_eq!(FrameQuery::read_frame(&mut b, 7, &mut output[..1]), Err(BoundaryError::Capacity));
+        assert_eq!(output, [sentinel; 3]);
+        assert_eq!(FrameQuery::read_frame(&mut b, 99, &mut output), Err(BoundaryError::MissingFrame));
+        assert_eq!(output, [sentinel; 3]);
+        assert_eq!(FrameQuery::read_frame(&mut b, 7, &mut output), Ok(FrameRead {
+            id: GenerationId { epoch: 0, generation: 1 }, rows_written: 2,
+        }));
+        assert_eq!(output, [expected[0], expected[1], sentinel]);
+        b.db = Connection::open_in_memory().unwrap();
+        assert_eq!(FrameQuery::read_frame(&mut b, 7, &mut output), Err(BoundaryError::InvalidPayload));
+        assert_eq!(output, [expected[0], expected[1], sentinel]);
+    }
+
     #[test]
     fn oversized_publication_preserves_generation() {
         let mut b = Boundary::new().unwrap();

@@ -1,7 +1,18 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
+# Install the pinned contract toolchain from the local registry and npm cache.
+contracts-setup:
+    pnpm --dir contracts install --frozen-lockfile
+
+generate:
+    node contracts/1_generate.mjs
+
+check-generated:
+    node contracts/1_generate.mjs --check
+
 # Rust library and controller checks.
-test:
+test: check-generated
+    node --test contracts/1_generate.test.mjs
     lab_dir="$PWD"; . ./0_shell.sh; lab_cargo test --features gdext --lib -- --test-threads=1
     python3 75_udp_lab.test.py
     python3 84_live_controller.test.py

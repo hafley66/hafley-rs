@@ -1,0 +1,110 @@
+# Generated from 0_presentation.tsp; sha256:1b173dcef9dc2f8f39ba9f8f57ffc74a2bcfef0390fd4c2937247cb551ddd60c
+version: 1
+namespace: FalconBoundary
+models:
+  Row:
+    - name: tick
+      rust: i64
+      type: int64
+    - name: kind
+      rust: i64
+      type: int64
+    - name: entity
+      rust: i64
+      type: int64
+    - name: values
+      rust: "[f64; 24]"
+      length: 24
+      item:
+        rust: f64
+        type: float64
+  GenerationId:
+    - name: epoch
+      rust: u64
+      type: uint64
+    - name: generation
+      rust: u64
+      type: uint64
+  FrameRead:
+    - name: id
+      rust: GenerationId
+      ref: GenerationId
+    - name: rows_written
+      rust: u32
+      type: uint32
+  Acknowledgment:
+    - name: id
+      rust: GenerationId
+      ref: GenerationId
+    - name: row_digest
+      rust: u64
+      type: uint64
+    - name: mesh_vertices
+      rust: u32
+      type: uint32
+enums:
+  BoundaryError:
+    - Capacity
+    - SlotsPinned
+    - MissingFrame
+    - StaleGeneration
+    - InvalidPayload
+results:
+  PublishResult:
+    ok:
+      rust: GenerationId
+      ref: GenerationId
+    error:
+      rust: BoundaryError
+      ref: BoundaryError
+  ReadResult:
+    ok:
+      rust: FrameRead
+      ref: FrameRead
+    error:
+      rust: BoundaryError
+      ref: BoundaryError
+  AckResult:
+    ok:
+      rust: GenerationId
+      ref: GenerationId
+    error:
+      rust: BoundaryError
+      ref: BoundaryError
+interfaces:
+  RowPublisher:
+    - name: publish
+      params:
+        - name: rows
+          rust: "&[Row]"
+          buffer: read
+          item:
+            rust: Row
+            ref: Row
+      returns:
+        rust: PublishResult
+        ref: PublishResult
+  FrameQuery:
+    - name: read_frame
+      params:
+        - name: tick
+          rust: i64
+          type: int64
+        - name: output
+          rust: "&mut [Row]"
+          buffer: write
+          item:
+            rust: Row
+            ref: Row
+      returns:
+        rust: ReadResult
+        ref: ReadResult
+  FrameAcknowledger:
+    - name: acknowledge
+      params:
+        - name: receipt
+          rust: Acknowledgment
+          ref: Acknowledgment
+      returns:
+        rust: AckResult
+        ref: AckResult
