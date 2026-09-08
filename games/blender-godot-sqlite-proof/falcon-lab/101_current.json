@@ -5,6 +5,7 @@
   "coverage": "99_lifecycle_import.md",
   "plan": "92_web_import_plan.md",
   "tasks": "102_tasks.md",
+  "task_lookback": 3,
   "current_task": "G1",
   "pending": [
     "G1", "G2", "G3", "G4", "G5", "G6", "G7"
