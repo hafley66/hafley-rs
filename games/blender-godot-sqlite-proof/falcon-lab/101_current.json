@@ -8,6 +8,6 @@
   "task_lookback": 3,
   "current_task": "G1",
   "pending": [
-    "G1", "G2", "G3", "G4", "G5", "G6", "G7"
+    "G1", "G2", "G3", "G4", "G5", "G6", "G7", "P1", "P2", "P3", "P4"
   ]
 }
