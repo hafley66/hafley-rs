@@ -193,9 +193,7 @@ impl Harness for Claude {
             .map(crate::transcript::iso_to_ms)
             .unwrap_or(0);
         let tail = crate::transcript::tail_values(&session.path);
-        let model = tail.iter().rev().chain(head.iter().rev())
-            .find_map(|value| value.pointer("/message/model").and_then(Value::as_str))
-            .map(str::to_owned);
+        let model = claude_settings(tail.iter().rev().chain(head.iter().rev())).map(|(model, _)| model);
         let input_tokens = tail
             .iter()
             .rev()
@@ -223,6 +221,15 @@ impl Harness for Claude {
             parent_id: session.parent.clone(),
             created_at_ms,
             last_activity_ms: session.modified_ms,
+        })
+    }
+
+    fn native_settings(&self, session: &SessionRef) -> Option<crate::harness::NativeTuiEvent> {
+        let tail = crate::transcript::tail_values(&session.path);
+        let head = crate::transcript::head_values(&session.path);
+        let (model, effort) = claude_settings(tail.iter().rev().chain(head.iter().rev()))?;
+        Some(crate::harness::NativeTuiEvent::Settings {
+            session_id: session.session_id.clone(), model: Some(model), effort,
         })
     }
 
@@ -257,6 +264,14 @@ impl Harness for Claude {
             parent: None,
         })
     }
+}
+
+fn claude_settings<'a>(values: impl Iterator<Item = &'a Value>) -> Option<(String, Option<String>)> {
+    values.filter(|value| value["type"] == "assistant").find_map(|value| {
+        let model = value.pointer("/message/model")?.as_str()?;
+        if model.starts_with('<') { return None; }
+        Some((model.to_owned(), value.get("effort").and_then(Value::as_str).map(str::to_owned)))
+    })
 }
 
 /// The cwd-encoded claude project directory under a home root.

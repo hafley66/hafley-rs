@@ -220,6 +220,36 @@ results remain required. No final completion is claimed.
 
 ## Remaining work
 
+### Resumed provider-error checkpoint
+
+Continued from `55b9e28`, preserving the uncommitted native-settings and live
+driver edits. OpenCode `--model` now becomes owned-backend process configuration,
+preserving other `OPENCODE_CONFIG_CONTENT` fields, and is removed from unsupported
+`attach` arguments. A borrowed backend rejects this override. Contract receipt
+`177_opencode-model-contract.log` passes. Actual wrapped `glm-4.7` answered in
+native thread `ses_f7d797729ffez1uoYB2b03MP51`; native assistant metadata records
+provider `zai-coding-plan`, model `glm-4.7`. Trial `178` failed because the shared
+reader includes reasoning alongside answer text. The driver now requires an exact
+standalone answer line, plus intended-TUI display and duplicate/retry checks.
+Trial `179`, root `shared-live/opencode-2811`, passed idle receipt but the resumed
+assistant returned the prior nonce. This is a failed execution, not a pass.
+
+Native settings now expose Claude's observed assistant effort and Codex's last
+turn-context effort; OpenCode retains provider/model spelling. The harness suite
+in `180_harness-settings-gate.log` passes. Shared Codex/ccz run `181` is pending.
+Fresh-wrapper PASS is deferred until actual native and TUI receipt. The shared
+driver still deliberately fails when it reaches unfinished scenarios. Busy,
+settings transitions, crash/restart, concurrency and parent receipt remain open.
+`181` completed: Codex `shared-live/codex-11014` and ccz
+`shared-live/ccz-17177` passed through clear/resume and cleanup, then failed the
+explicit unfinished-scenarios guard. `183` reproduced a generic route selecting
+thread `a` by pane when bound to `b`; `184` passes after bound session identity
+takes priority and stale bound sessions return no target. `185` passes the full
+central deterministic command, including dl6 and no-default-feature checks.
+Every new nonce receipt now also checks route model and stored effort against
+the production adapter's native metadata. Live validation of those added
+settings assertions remains pending.
+
 1. Commit the passing delivery cluster, then resume the test TUI for live proof.
 2. Review legacy non-Codex discovery/claim paths and remaining CLI contradictions.
 3. Complete bounded live stale recovery, abnormal exit, supervisor restart/reattach,

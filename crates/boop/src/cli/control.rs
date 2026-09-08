@@ -499,9 +499,10 @@ pub(crate) fn run_native_tui(
             }
             if let Some(session) = route.session_id.as_deref()
                 .and_then(|id| adapter.session_by_id(id, route.cwd.as_deref())) {
-                if let Some(model) = adapter.describe(&session).and_then(|meta| meta.model) {
-                    if route.model.as_deref() != Some(model.as_str()) {
-                        route.model = Some(model);
+                if let Some(NativeTuiEvent::Settings { session_id, model, effort }) = adapter.native_settings(&session) {
+                    if route.model != model || store.session_attr(&session_id, "effort")? != effort {
+                        apply_native_event(&store, &mut route, &mut trace,
+                            NativeTuiEvent::Settings { session_id, model, effort }, frontend_pid)?;
                         write_route(&dir, name, route.clone())?;
                     }
                 }

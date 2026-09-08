@@ -294,6 +294,18 @@ impl Harness for Codex {
         })
     }
 
+    fn native_settings(&self, session: &SessionRef) -> Option<crate::harness::NativeTuiEvent> {
+        let tail = crate::transcript::tail_values(&session.path);
+        let head = crate::transcript::head_values(&session.path);
+        let context = tail.iter().rev().chain(head.iter().rev())
+            .find(|row| row.get("type").and_then(Value::as_str) == Some("turn_context"))?;
+        Some(crate::harness::NativeTuiEvent::Settings {
+            session_id: session.session_id.clone(),
+            model: context.pointer("/payload/model").and_then(Value::as_str).map(str::to_owned),
+            effort: context.pointer("/payload/effort").and_then(Value::as_str).map(str::to_owned),
+        })
+    }
+
     fn messages(
         &self,
         session: &SessionRef,
@@ -1361,6 +1373,19 @@ mod tests {
             tmux_socket: None,
             parent: None,
         }
+    }
+
+    #[test]
+    fn native_settings_follow_last_observed_turn() {
+        let path = temp_path("observed_settings");
+        write_lines(&path, &[
+            r#"{"type":"turn_context","payload":{"model":"first","effort":"low"}}"#,
+            r#"{"type":"turn_context","payload":{"model":"second","effort":"high"}}"#,
+        ]);
+        assert_eq!(Codex.native_settings(&session_for(&path, 0)), Some(crate::harness::NativeTuiEvent::Settings {
+            session_id: "ses-codex-1".into(), model: Some("second".into()), effort: Some("high".into()),
+        }));
+        std::fs::remove_file(path).unwrap();
     }
 
     /// Ingest one raw jsonl line and return the turns it projects.

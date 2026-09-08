@@ -563,6 +563,15 @@ pub trait Harness: Send + Sync {
         None
     }
 
+    /// Settings observed in native records. Launch arguments are intent;
+    /// adapters with richer native metadata include its actual effort here.
+    fn native_settings(&self, session: &SessionRef) -> Option<NativeTuiEvent> {
+        let model = self.describe(session)?.model?;
+        Some(NativeTuiEvent::Settings {
+            session_id: session.session_id.clone(), model: Some(model), effort: None,
+        })
+    }
+
     /// Every turn in one session, oldest first. `after_seq` returns only newer
     /// turns (the watcher's incremental read).
     fn messages(

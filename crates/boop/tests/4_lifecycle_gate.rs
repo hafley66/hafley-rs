@@ -16,13 +16,16 @@ fn claude_reader_resolves_exact_session() -> Result<()> {
         let session = adapter.session_by_id("owned-reader", Some(cwd)).context("exact fixture session was not resolved")?;
         let messages = adapter.messages(&session, None);
         ensure!(messages.iter().map(|m| (m.role.as_str(), m.text.as_str())).collect::<Vec<_>>() == vec![("assistant", "fixture-answer")]);
+        ensure!(adapter.native_settings(&session) == Some(boop::harness::NativeTuiEvent::Settings {
+            session_id: "owned-reader".into(), model: Some("fixture-model".into()), effort: Some("high".into())
+        }), "native effort metadata was not observed");
         return Ok(());
     }
     let root = std::env::temp_dir().join(format!("boop-reader-exact-{}", std::process::id()));
     std::fs::create_dir(&root)?;
     let project = root.join(".claude/projects/-test-boop-reader");
     std::fs::create_dir_all(&project)?;
-    std::fs::write(project.join("owned-reader.jsonl"), "{\"type\":\"assistant\",\"uuid\":\"a\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"fixture-answer\"}]}}\n")?;
+    std::fs::write(project.join("owned-reader.jsonl"), "{\"type\":\"assistant\",\"uuid\":\"a\",\"effort\":\"high\",\"message\":{\"model\":\"fixture-model\",\"content\":[{\"type\":\"text\",\"text\":\"fixture-answer\"}]}}\n")?;
     let result = bounded(Command::new(std::env::current_exe()?)
         .args(["--exact", "t4_lifecycle_gate::claude_reader_resolves_exact_session", "--nocapture"])
         .env("BOOP_E2E_READER_CHILD", "1").env("BOOP_READER_HOME", &root));
@@ -141,7 +144,11 @@ impl LifecycleHarness for OpenCode {
     fn entry(&self) -> &str { "opencode" }
     fn id(&self) -> HarnessId { HarnessId::Opencode }
     fn launch_args(&self, resume: Option<&str>) -> Vec<String> {
-        resume.map(|id| vec!["--session".into(), id.into()]).unwrap_or_default()
+        let mut args = resume.map(|id| vec!["--session".into(), id.into()]).unwrap_or_default();
+        if let Ok(model) = std::env::var("BOOP_E2E_OPENCODE_MODEL") {
+            args.extend(["--model".into(), model]);
+        }
+        args
     }
 }
 
@@ -273,6 +280,13 @@ fn await_route(fixture: &Fixture, harness: &dyn LifecycleHarness) -> Result<bus:
     loop {
         if let Ok(route) = fixture.route() {
             if route.session_id.is_some() {
+                let live = fixture.store()?.live_row(route.session_id.as_deref().unwrap())?;
+                if !live.and_then(|row| row.pid).is_some_and(|pid| boop::live::pid_alive(pid as u32)) {
+                    ensure!(fixture.tmux(&["display-message", "-p", "-t", &fixture.pane, "#{pane_dead}"])?.trim() != "1", "native frontend exited before live identity was established");
+                    std::thread::sleep(Duration::from_millis(250));
+                    ensure!(Instant::now() < deadline, "no live frontend identity within 35 seconds");
+                    continue;
+                }
                 ensure!(route.kind == "coordinator" && route.harness == Some(harness.id()));
                 ensure!(route.parent.as_deref() == Some("e2e-parent"));
                 ensure!(route.tmux.as_deref() == Some(fixture.pane.as_str()));
@@ -294,9 +308,15 @@ fn nonce(fixture: &Fixture, harness: &dyn LifecycleHarness, registry: &Registry,
         let route = fixture.route()?;
         if let Ok(rows) = harness.observe(registry, &route) {
             let users = rows.iter().filter(|row| matches!(row.role.as_str(), "user" | "meta") && row.text.contains(&body)).count();
-            let answers = rows.iter().filter(|row| row.role == "assistant" && row.text.trim() == answer).count();
+            let answers = rows.iter().filter(|row| row.role == "assistant" && row.text.lines().any(|line| line.trim() == answer)).count();
             ensure!(users <= 1 && answers <= 1, "duplicate native receipt: {users} user, {answers} assistant");
             if users == 1 && answers == 1 {
+                let screen = fixture.tmux(&["capture-pane", "-p", "-t", &fixture.pane, "-S", "-100"])?;
+                if !screen.contains(&answer) {
+                    ensure!(Instant::now() < deadline, "native transcript answered, but the intended TUI did not display its answer");
+                    std::thread::sleep(Duration::from_millis(500));
+                    continue;
+                }
                 let store = fixture.store()?;
                 let message = bus::messages_in(&store)?.into_iter().find(|row| row.body == body).context("missing sent envelope")?;
                 ensure!(store.delivery_accepted(&message.id, &fixture.route)?);
@@ -305,8 +325,15 @@ fn nonce(fixture: &Fixture, harness: &dyn LifecycleHarness, registry: &Registry,
                 std::thread::sleep(Duration::from_secs(5));
                 let after = harness.observe(registry, &route)?;
                 ensure!(after.iter().filter(|row| matches!(row.role.as_str(), "user" | "meta") && row.text.contains(&body)).count() == users);
-                ensure!(after.iter().filter(|row| row.role == "assistant" && row.text.trim() == answer).count() == answers);
-                return Ok(json!({"message_id":message.id,"thread":route.session_id,"user_count":users,"answer_count":answers,"send":sent}));
+                ensure!(after.iter().filter(|row| row.role == "assistant" && row.text.lines().any(|line| line.trim() == answer)).count() == answers);
+                let session = harness.adapter(registry).session_by_id(route.session_id.as_deref().unwrap(), route.cwd.as_deref()).context("receipt session disappeared")?;
+                let settings = harness.adapter(registry).native_settings(&session).context("native settings absent after answer")?;
+                let boop::harness::NativeTuiEvent::Settings { session_id, model, effort } = settings else { anyhow::bail!("unexpected native settings event") };
+                let current = fixture.route()?;
+                ensure!(Some(&session_id) == current.session_id.as_ref(), "settings belong to another thread");
+                ensure!(model.is_some() && current.model == model, "route model differs from native execution: {:?} vs {:?}", current.model, model);
+                ensure!(store.session_attr(&session_id, "effort")? == effort, "stored effort differs from native execution");
+                return Ok(json!({"message_id":message.id,"thread":route.session_id,"user_count":users,"answer_count":answers,"send":sent,"model":model,"effort":effort}));
             }
         }
         if Instant::now() >= deadline {
@@ -370,9 +397,9 @@ fn authenticated_matrix() -> Result<()> {
             "--harness", harness.id().as_str(), "--cwd", fixture.cwd.to_str().unwrap()])?;
         fixture.launch(harness.as_ref(), None)?;
         let route = await_route(&fixture, harness.as_ref())?;
+        let receipt = nonce(&fixture, harness.as_ref(), &registry, "idle")?;
         cases.push(json!({"scenario":"fresh_wrapper_identity","status":"PASS","route":fixture.route,
             "thread":route.session_id,"parent":route.parent,"pane":route.tmux,"kind":route.kind.as_str(),"mode":route.mode}));
-        let receipt = nonce(&fixture, harness.as_ref(), &registry, "idle")?;
         cases.push(json!({"scenario":"idle_receipt_and_accepted_retry","status":"PASS","receipt":receipt}));
         fixture.capture("idle")?;
         let receipt = resume(&fixture, harness.as_ref(), &registry, "resume")?;

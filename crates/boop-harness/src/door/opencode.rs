@@ -188,6 +188,43 @@ impl OpencodeDoor {
     }
 }
 
+/// Root-TUI arguments that `attach` does not accept are applied to the owned
+/// server. OPENCODE_CONFIG_CONTENT is an existing native process override;
+/// no user configuration file is written.
+fn native_request(spec: &NativeTuiSpec) -> Result<(NativeTuiSpec, Option<String>, bool)> {
+    let mut prepared = spec.clone();
+    prepared.args.clear();
+    let mut resume = None;
+    let mut model = None;
+    let mut args = spec.args.iter();
+    while let Some(arg) = args.next() {
+        let (option, inline) = arg.split_once('=').map_or((arg.as_str(), None), |(key, value)| (key, Some(value)));
+        match option {
+            "--session" | "-s" => resume = Some(inline.map(str::to_owned)
+                .or_else(|| args.next().cloned()).context("opencode session flag requires an id")?),
+            "--model" | "-m" => model = Some(inline.map(str::to_owned)
+                .or_else(|| args.next().cloned()).context("opencode model flag requires provider/model")?),
+            _ => prepared.args.push(arg.clone()),
+        }
+    }
+    let explicit_model = model.is_some();
+    if let Some(model) = model {
+        anyhow::ensure!(model.split_once('/').is_some_and(|(provider, name)| !provider.is_empty() && !name.is_empty()),
+            "opencode model requires provider/model");
+        const CONFIG: &str = "OPENCODE_CONFIG_CONTENT";
+        let content = spec.env.iter().rev().find(|(key, _)| key == CONFIG).map(|(_, value)| value.clone())
+            .or_else(|| std::env::var(CONFIG).ok());
+        let mut config: serde_json::Value = content.as_deref().map(serde_json::from_str).transpose()
+            .context("decode native OPENCODE_CONFIG_CONTENT")?.unwrap_or_else(|| serde_json::json!({}));
+        anyhow::ensure!(config.is_object(), "native OPENCODE_CONFIG_CONTENT must be a JSON object");
+        config["model"] = model.into();
+        prepared.env.retain(|(key, _)| key != CONFIG);
+        prepared.env.push((CONFIG.into(), serde_json::to_string(&config)?));
+    }
+    anyhow::ensure!(resume.as_ref().is_none_or(|id| !id.is_empty()), "opencode session flag requires an id");
+    Ok((prepared, resume, explicit_model))
+}
+
 fn agent(timeout: Duration) -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(timeout))
@@ -322,6 +359,8 @@ impl Door for OpencodeDoor {
     /// The TUI attaches to boop's server, so the session it opens is one
     /// `live_sessions` lists and `deliver` can reach.
     fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan> {
+        let (prepared, resume, explicit_model) = native_request(spec)?;
+        let spec = &prepared;
         let base = if self.base.is_some() || std::env::var_os(BASE_ENV).is_some_and(|v| !v.is_empty()) {
             self.base()?
         } else {
@@ -331,19 +370,10 @@ impl Door for OpencodeDoor {
         let source = Self::at(base.clone());
         let mut plan = NativeTuiPlan::direct(spec);
         source.ensure_server(spec, &base, &mut plan)?;
+        anyhow::ensure!(!explicit_model || plan.backend.is_some(),
+            "an OpenCode model override requires an owned backend; the configured server is borrowed");
         // The session exists before the TUI attaches, so the route names it
         // from the start and the first hail is its first prompt.
-        let mut remaining = Vec::new();
-        let mut resume = None;
-        let mut incoming = spec.args.iter();
-        while let Some(arg) = incoming.next() {
-            if matches!(arg.as_str(), "--session" | "-s") {
-                resume = Some(incoming.next().context("opencode session flag requires an id")?.clone());
-            } else if let Some(id) = arg.strip_prefix("--session=") {
-                anyhow::ensure!(!id.is_empty(), "opencode session flag requires an id");
-                resume = Some(id.to_owned());
-            } else { remaining.push(arg.clone()); }
-        }
         let session = match resume {
             Some(id) => {
                 let _: serde_json::Value = serde_json::from_str(&source.get(&format!("session/{id}"), READ_TIMEOUT)?)?;
@@ -361,7 +391,7 @@ impl Door for OpencodeDoor {
             "--dir".into(),
             spec.cwd.as_os_str().to_owned(),
         ];
-        args.extend(remaining.iter().map(std::ffi::OsString::from));
+        args.extend(spec.args.iter().map(std::ffi::OsString::from));
         plan.args = args;
         plan.mode = if plan.backend.is_some() { "native-owned" } else { "native-remote" }.into();
         plan.session_id = Some(session.clone());
@@ -454,6 +484,27 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
     use std::sync::mpsc;
+
+    #[test]
+    fn native_model_is_owned_backend_configuration() {
+        let spec = NativeTuiSpec {
+            executable: "opencode".into(), cwd: PathBuf::from("/tmp"),
+            args: vec!["--session=ses_test", "--model", "provider/model", "--print-logs"].into_iter().map(str::to_owned).collect(),
+            env: vec![("OPENCODE_CONFIG_CONTENT".into(), r#"{"model":"old/model","theme":"test"}"#.into())],
+        };
+        let (prepared, resume, explicit) = native_request(&spec).unwrap();
+        assert_eq!(resume.as_deref(), Some("ses_test"));
+        assert!(explicit);
+        assert_eq!(prepared.args, ["--print-logs"]);
+        let config: serde_json::Value = serde_json::from_str(&prepared.env[0].1).unwrap();
+        assert_eq!(config, serde_json::json!({"model":"provider/model","theme":"test"}));
+        assert_eq!(spec.args.len(), 4);
+        for args in [vec!["--model"], vec!["--model=bare"], vec!["--session="]] {
+            let mut invalid = spec.clone();
+            invalid.args = args.into_iter().map(str::to_owned).collect();
+            assert!(native_request(&invalid).is_err());
+        }
+    }
 
     /// An HTTP server on a loopback port that answers the four routes this
     /// door calls and records the request bodies it was sent.

@@ -374,6 +374,15 @@ impl Harness for Opencode {
         })
     }
 
+    fn native_settings(&self, session: &SessionRef) -> Option<crate::harness::NativeTuiEvent> {
+        let metadata = self.describe(session)?;
+        Some(crate::harness::NativeTuiEvent::Settings {
+            session_id: session.session_id.clone(),
+            model: Some(format!("{}/{}", metadata.provider?, metadata.model?)),
+            effort: None,
+        })
+    }
+
     fn messages(
         &self,
         session: &SessionRef,
