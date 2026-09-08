@@ -38,7 +38,24 @@ G2's complete inventory and unresolved behavior work remains open even when a
 supported subset enables G5. The entire site mirror need not finish before using
 its verified Falcon subset. No existing rollback proof is discarded.
 
-## G1: offline acquisition
+## Prefactoring gates, added 2026-09-08
+
+These gates apply before extending the corresponding mechanism for G1-G7. Shared
+implementation and Falcon consumption land together, without waiting for another
+game. G1-G7 remain open with their existing IDs and evidence.
+
+| ID | State | Shared mechanism | Acceptance |
+| --- | --- | --- | --- |
+| P1 | Pending | TSP row/Godot generation glue | Reuse existing emitter; game supplies schema; non-Falcon schema fixture plus unchanged Falcon outputs and consumer tests |
+| P2 | Pending | SQLite ring/query/publication | Reuse core-labs storage; game supplies layout/encoding; pinning, exhaustion, replay replacement and query-error tests pass through Falcon |
+| P3 | Pending | Capture/MP4 and workflow receipts | Shared runner accepts game commands/scenario/artifacts; existing encoder/probe reused; Falcon recording and failure/staleness checks pass without shared Falcon paths |
+| P4 | Pending | Web build/serve/deployment driver | Reuse existing driver within hafley-rs; game profile/assets/proofs remain adapters; isolated target guards and local export tests pass; no publish required |
+
+Extraction completion requires source locations and executed receipt links. Moving
+files alone does not complete a gate. Shared tests remain in normal verification.
+No generic state-machine or networking replacement is authorized by these gates.
+
+## G1: offline acquisition checks
 
 - [x] Inspect existing mirror process/log before starting another downloader.
   Cache: `../fixtures/rukaidata-mirror/`; command: `just mirror`.

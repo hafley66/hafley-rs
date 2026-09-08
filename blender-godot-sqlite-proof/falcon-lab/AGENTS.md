@@ -49,3 +49,30 @@ ordering. Do not create a separate tasks folder or one file per task.
   an explicit supersession reference rather than rewriting historical outcomes.
 - Update `101_current.json` to select the successor. Keep task details in the
   ledgers and the pointer compact. Commit ledger/pointer changes with the work.
+
+## Prefactoring by default
+
+User direction: design and implement reusable game/lab machinery in its shared
+home from the first consumer. Do not wait for a second game or a later cleanup.
+
+- Inspect existing libraries first. Extend/reuse those APIs before introducing
+  equivalents. Shared Rust, generation, storage and capture code belongs under
+  `games/shared` or an existing appropriate reusable package in `hafley-rs`.
+- Before implementing a feature, identify its shared mechanism and game-owned
+  policy/data. Record the concrete signature, ownership and consumer. Shared code
+  must not import Falcon modules or embed its paths, action IDs or expectations.
+- Falcon consumes the shared implementation in the same change. Game schemas,
+  assets, tuning, scenario inputs and independent expected results stay game-owned.
+- On the next change to existing lab-local reusable machinery, extract and wire
+  it first, preserving its tests and receipts. Track outstanding extractions in
+  the active ledger; do not silently leave a second maintained implementation.
+- Cover shared behavior independently and exercise the real Falcon consumer.
+  Generator tooling also needs a small non-Falcon schema fixture. Keep ownership,
+  bounds, failure behavior and reproducible commands explicit.
+- Apply this to TSP emitter/adaptor generation, SQLite ring/query/publication,
+  recording/encoding/verification, workflow receipts and deployment drivers.
+  Dependencies point from game adapters to shared machinery.
+- Scope the shared API to the concrete feature and known reuse requirements.
+  Additional abstraction layers require a specific responsibility and call site.
+- This policy does not authorize modifying sealed applications, broad workspace
+  migrations or deployment. Keep shared work inside the active games domain.
