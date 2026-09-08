@@ -37,6 +37,10 @@ pub fn fixture_input(tick: i32) -> u8 {
 
 #[tracing::instrument(target = "falcon::simulation", level = "trace", skip_all, fields(tick = world.frame, input = bits))]
 pub fn advance_world(world: &mut World, bits: u8, actions: &[Action]) {
+    advance_with_axis(world, bits, actions, None);
+}
+
+fn advance_with_axis(world: &mut World, bits: u8, actions: &[Action], axis: Option<f32>) {
     if let Some(bag) = &mut world.bag {
         bag.advance();
     }
@@ -55,7 +59,10 @@ pub fn advance_world(world: &mut World, bits: u8, actions: &[Action]) {
     let root = [
         0.0,
         (0.95 * air - 0.018 * air * air).max(0.0),
-        -12.0 + (0.9 * air).min(32.0),
+        axis.map_or_else(
+            || -12.0 + (0.9 * air).min(32.0),
+            |axis| (if world.frame == 0 { -12.0 } else { world.view.root[2] }) + axis * 0.9,
+        ),
     ];
     if world.action == 1 && air > 0.0 && root[1] == 0.0 {
         world.action = 0;
@@ -139,6 +146,14 @@ impl Simulation {
         &self.world
     }
     pub fn state(&self) -> &World {
+        &self.world
+    }
+    /// Horizontal position lives in snapshot-owned World.
+    /// Vertical travel retains the lab's existing jump curve.
+    #[tracing::instrument(target = "falcon::simulation", level = "trace", skip_all, fields(tick = self.world.frame, input, axis))]
+    pub fn advance_controlled(&mut self, input: u8, axis: f32) -> &World {
+        assert!(axis.is_finite() && (-1.0..=1.0).contains(&axis));
+        advance_with_axis(&mut self.world, input, &self.actions, Some(axis));
         &self.world
     }
     #[tracing::instrument(target = "falcon::snapshot", level = "trace", skip_all, fields(tick = self.world.frame))]

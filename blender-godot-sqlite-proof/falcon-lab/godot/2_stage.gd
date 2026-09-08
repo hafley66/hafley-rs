@@ -17,6 +17,8 @@ var finish_hold := 60
 var last_video_time := 0
 var faults := false
 var external := false
+var controlled := false
+var control_demo := false
 var injected := [false, false, false]
 var fault_note := "FAULTS ARMED: MAIN / PROCESS / RENDER THREAD"
 
@@ -26,10 +28,14 @@ func _ready():
 	extension = ClassDB.instantiate("FalconSql")
 	assert(extension.proof_version() == "falcon-sql-gdext-1")
 	external = "--external" in OS.get_cmdline_user_args()
+	control_demo = "--control-demo" in OS.get_cmdline_user_args()
+	controlled = control_demo or "--control" in OS.get_cmdline_user_args()
 	incremental = "--incremental" in OS.get_cmdline_user_args()
 	faults = "--faults" in OS.get_cmdline_user_args()
 	scheduled = faults or "--scheduled" in OS.get_cmdline_user_args()
-	if external:
+	if controlled:
+		extension.start_controlled(control_demo)
+	elif external:
 		extension.start_external(OS.get_environment("FALCON_LIVE_PATH"), OS.get_environment("FALCON_LIVE_AUDIT"))
 	elif faults:
 		extension.start_faults()
@@ -75,6 +81,8 @@ func _ready():
 		print("MAIN_THREAD_ID ", OS.get_thread_caller_id())
 	if external:
 		captions[0].text = "LIVE EXTERNAL PEER -> SNAPSHOT -> LOCAL SQLITE -> GODOT"
+	if controlled:
+		captions[0].text = "PLAYER INPUT -> RUST -> SQLITE -> TYPED GODOT"
 	captions[5].text = "3D LINE MESH / SQL ROWS + MESH UPLOAD VERIFIED"
 	captions[9].text = "0.5X + HOLDS / SCRIPTED TRAVEL / PM + MELEE KB + RAPIER"
 	print("GDEXT_STAGE_READY runtime=", Engine.get_version_info().string)
@@ -94,6 +102,10 @@ func _upload_and_acknowledge(frame: Payload.FramePayload, generation: int) -> vo
 	assert(extension.acknowledge(receipt.to_wire()))
 
 func _process(_delta):
+	if controlled:
+		if control_demo:
+			_process_control_demo()
+		return
 	if external:
 		_process_external()
 		return
@@ -247,3 +259,47 @@ static func _render_stall():
 	print("FAULT_BEGIN render")
 	OS.delay_msec(800)
 	print("FAULT_END render")
+
+func _physics_process(_delta):
+	if not controlled or control_demo:
+		return
+	if Input.is_physical_key_pressed(KEY_ESCAPE):
+		get_tree().quit(0)
+		return
+	var input := Payload.ControlInput.new()
+	input.buttons = int(Input.is_physical_key_pressed(KEY_SPACE)) | (int(Input.is_physical_key_pressed(KEY_J)) << 1)
+	input.axis = float(Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT)) - float(Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT))
+	_control_step(input)
+
+func _process_control_demo():
+	if tick == extension.control_ticks() - 1 and remaining == 0:
+		if finish_hold == 60:
+			assert(extension.finish_controlled(OS.get_environment("FALCON_CONTROL_PROOF")))
+			captions[6].text = "SNAPSHOT REPLAY: 120 STATES EXACT / SQL + MESH EXACT"
+		finish_hold -= 1
+		if finish_hold == 0:
+			print("CONTROL_CAPTURE_OK")
+			get_tree().quit(0)
+			set_process(false)
+		return
+	if remaining == 0:
+		tick += 1
+		_control_step(Payload.ControlInput.from_wire(extension.control_demo_input(tick)))
+		remaining = 2
+	remaining -= 1
+
+func _control_step(input: Payload.ControlInput):
+	var frame := Payload.FramePayload.from_wire(extension.advance_controlled(input.to_wire()))
+	var state = frame.status
+	var meta := Rows.frame_values(frame.rows)
+	var target := Rows.target_values(frame.rows)
+	_upload_and_acknowledge(frame, state.renderer_generation)
+	captions[1].text = "TICK %03d / AXIS %+.1f / BUTTONS %d / SQL GEN %d" % [state.simulation_tick, state.input.axis, state.input.buttons, state.renderer_generation]
+	captions[2].text = "%s POSE %02d / PLAYER Z %.1f Y %.1f" % [["IDLE", "JUMP", "FAIR"][int(meta.action)], int(meta.pose)+1, meta.root_z, meta.root_y]
+	captions[3].text = "HITS %.0f / DAMAGE %.0f / BAG %s" % [meta.hits, meta.damage, ["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(target.phase)]]
+	captions[4].text = "BAG Z %.1f Y %.1f / CONTACT %s / STUN %.0f" % [target.z, target.y, str(meta.contact != 0.0), target.stun]
+	captions[5].text = "GENERATED INPUT + FRAME + RECEIPT / ROWS AND MESH EXACT"
+	captions[6].text = "SCRIPTED INPUT REPLAY / SNAPSHOT CHECK PENDING" if control_demo else "LIVE KEYBOARD / LOCAL FIXED STEP / NO NETWORK PREDICTION"
+	captions[7].text = "A/D OR ARROWS: MOVE / SPACE: JUMP / J: FAIR / ESC: EXIT"
+	captions[8].text = "RUST PARRY CONTACT / RAPIER BAG / PM POSES"
+	captions[9].text = "0.5X SCRIPTED DEMO / LAB MOVEMENT CURVE / SECOND FAIR MISSES" if control_demo else "60 HZ INPUT / LAB MOVEMENT CURVE / FACING RIGHT"

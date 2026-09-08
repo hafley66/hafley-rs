@@ -59,7 +59,8 @@ artifact or an explicitly republished/re-pinned emitter before installing.
   generate Rust dictionary conversions and typed GDScript classes. Packed
   arrays remain packed at the Godot boundary. Nullable fields preserve nil.
   The stage uses these classes for status and mesh acknowledgment; audit files
-  retain JSON serialization. Boundary tests check all three variants.
+  retain JSON serialization. Boundary tests check fixture, scheduled, external,
+  and controlled status variants.
 - Equal positive minItems/maxItems become fixed Rust arrays. A maximum-only
   array becomes a Vec; the existing IPC adapter enforces its row limit.
 - Native integral and string constants generate Rust constants; YAML stores integral decimal
@@ -93,3 +94,22 @@ constants. Outputs live in a fresh temporary directory printed by the command.
 This verifies repeated attack registration and snapshot replay. It does not
 exercise a launched-target combo, a second network rollback, or new combat rules.
 The separate live suite continues to cover the original launched-target scenario.
+
+## Controlled-input proof
+
+`just play` runs local keyboard input: A/D or arrows move, Space jumps, J starts
+fair, Escape exits. Godot samples at its 60 Hz physics callback and sends generated
+`ControlInput` dictionaries into Rust. TSP declares button and axis bounds; both
+generated decoders enforce them. The Rust simulation also validates inputs.
+World owns horizontal position, so snapshots include movement state.
+
+`just record control` replays 300 input ticks through the same endpoint and
+records H.264 at half-speed. Assertions require a hit at 91, damage 18, launched
+bag motion, movement reversal, a second jump, exact SQL/mesh acknowledgments,
+and 120 exact replayed states after restoring tick 180. The second fair misses.
+`just test-controls` injects keyboard events through the Godot input API and
+checks resulting movement, jump, fair, and mesh acknowledgment.
+
+Horizontal motion is constant-speed, facing remains right, and vertical motion
+uses the existing lab jump curve. These controls have no new netplay integration.
+Manual mode retains no per-tick world/audit history; recording retains 300 worlds.

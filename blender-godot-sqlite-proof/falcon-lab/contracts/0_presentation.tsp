@@ -61,12 +61,28 @@ model ExternalStatus {
 
 @godot
 union FrameStatus {
+  controlled: ControlledStatus,
   fixture: FixtureStatus,
   scheduled: ScheduledFrameStatus,
   external: ExternalStatus,
 }
 
 model Position { x: float32; y: float32; z: float32; }
+const CONTROL_TICKS: uint32 = 300;
+const CONTROL_SNAPSHOT: uint32 = 180;
+
+@godot model ControlInput {
+  @minValue(0) @maxValue(3) buttons: uint32;
+  @minValue(-1) @maxValue(1) axis: float32;
+}
+
+@godot model ControlledStatus {
+  simulation_tick: int64;
+  renderer_generation: uint64;
+  input: ControlInput;
+}
+
+model ControlProof is RepeatProof;
 model Rgba { r: float32; g: float32; b: float32; a: float32; }
 
 @godot

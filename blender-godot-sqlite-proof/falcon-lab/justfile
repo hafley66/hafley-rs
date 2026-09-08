@@ -31,11 +31,19 @@ trace: verify
 bench:
     sh 71_run_release.sh
 
+# Local keyboard control: A/D or arrows, Space jump, J fair, Esc exit.
+play:
+    sh 91_run_control.sh --play
+
+test-controls:
+    sh 91_run_control.sh --test
+
 # live includes baseline, pause/restart, and cold attachment recordings.
 record mode="live":
     #!/usr/bin/env bash
     set -euo pipefail
     case {{quote(mode)}} in
+      control) sh 91_run_control.sh ;;
       repeat) sh 79_run_repeat.sh ;;
       live|lifecycle) sh 89_run_live.sh ;;
       processes) sh 77_run_processes.sh ;;

@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { compile, NodeHost, getMinItems, getMaxItems } from '@typespec/compiler';
+import { compile, NodeHost, getMinItems, getMaxItems, getMinValue, getMaxValue } from '@typespec/compiler';
 import { Output, List, render, refkey } from '@alloy-js/core';
 import { createComponent as c } from '@alloy-js/core/jsx-runtime';
 import { stringify } from 'yaml';
@@ -88,7 +88,10 @@ for (const model of models) {
   if (model.baseModel || model.indexer) throw Error(`unsupported model composition: ${model.name}`);
   const fields = [...model.properties.values()].map(p => {
     if (p.optional || p.defaultValue) throw Error(`unsupported optional/default field: ${model.name}.${p.name}`);
-    return { name: p.name, ...shape(p.type, p), ...(program.stateMap(packedKey).has(p) ? { packed: program.stateMap(packedKey).get(p) } : {}) };
+    return { name: p.name, ...shape(p.type, p),
+      ...(getMinValue(program, p) !== undefined ? { minimum: getMinValue(program, p) } : {}),
+      ...(getMaxValue(program, p) !== undefined ? { maximum: getMaxValue(program, p) } : {}),
+      ...(program.stateMap(packedKey).has(p) ? { packed: program.stateMap(packedKey).get(p) } : {}) };
   });
   contract.models[model.name] = fields;
   if (program.stateSet(godotKey).has(model)) contract.godot.push(model.name);

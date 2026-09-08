@@ -4,6 +4,7 @@ export function emitGodot(contract) {
   const gd = ['extends RefCounted', ''];
   const scalarType = { int32: 'int', int64: 'int', uint32: 'int', uint64: 'int', float32: 'float', float64: 'float', boolean: 'bool' };
   const variantType = { int: 'TYPE_INT', float: 'TYPE_FLOAT', bool: 'TYPE_BOOL', Array: 'TYPE_ARRAY', PackedFloat64Array: 'TYPE_PACKED_FLOAT64_ARRAY', PackedVector3Array: 'TYPE_PACKED_VECTOR3_ARRAY', PackedColorArray: 'TYPE_PACKED_COLOR_ARRAY' };
+  const bounds = f => [['minimum', '>='], ['maximum', '<=']].filter(([key]) => f[key] !== undefined);
   function gdType(f) {
     return f.packed ?? (f.nullable || contract.unions[f.ref] ? 'Variant' : f.ref ?? (f.maxLength ? 'Array' : scalarType[f.type]));
   }
@@ -26,14 +27,15 @@ export function emitGodot(contract) {
     const target = native ? `Godot${name}` : name;
     if (native) rust.push(`pub struct ${target} {\n${fields.map(f => `    pub ${f.name}: ${f.packed ?? f.rust},`).join('\n')}\n}`);
     rust.push(`impl ${target} {\n    pub fn to_dictionary(&self) -> VarDictionary {\n        let mut out = VarDictionary::new();\n${fields.map(f => `        out.set(${JSON.stringify(f.name)}, ${variant(f, `self.${f.name}`)});`).join('\n')}\n        out\n    }\n}`);
-    if (native && fields.every(f => f.packed || f.type === 'int64')) {
-      rust.push(`impl ${target} {\n    pub fn from_dictionary(value: &VarDictionary) -> Self {\n        let out = Self {\n${fields.map(f => `            ${f.name}: value.get(${JSON.stringify(f.name)}).expect("missing ${f.name}").try_to::<${f.packed ?? f.rust}>().expect("invalid ${f.name}"),`).join('\n')}\n        };\n${fields.filter(f => f.maxLength).map(f => `        assert!(out.${f.name}.len() <= ${f.maxLength}, "oversized ${f.name}");`).join('\n')}\n        out\n    }\n}`);
+    if (fields.every(f => f.packed || scalarType[f.type])) {
+      rust.push(`impl ${target} {\n    pub fn from_dictionary(value: &VarDictionary) -> Self {\n        let out = Self {\n${fields.map(f => `            ${f.name}: value.get(${JSON.stringify(f.name)}).expect("missing ${f.name}").try_to::<${f.packed ?? f.rust}>().expect("invalid ${f.name}"),`).join('\n')}\n        };\n${fields.filter(f => f.maxLength).map(f => `        assert!(out.${f.name}.len() <= ${f.maxLength}, "oversized ${f.name}");`).join('\n')}\n${fields.flatMap(f => bounds(f).map(([key, op]) => `        assert!((out.${f.name} as f64) ${op} ${Number.isInteger(f[key]) ? f[key] + '.0' : f[key]}, "out of range ${f.name}");`)).join('\n')}\n        out\n    }\n}`);
     }
     gd.push(`class ${name}:`, ...fields.map(f => `\tvar ${f.name}: ${gdType(f)}`), '',
       `\tstatic func from_wire(data: Dictionary) -> ${name}:`, `\t\tvar out := ${name}.new()`);
     for (const f of fields) {
       gd.push(`\t\tassert(data.has("${f.name}"), "Missing ${name}.${f.name}")`);
       const expected = variantType[gdType(f)];
+      for (const [key, op] of bounds(f)) gd.push(`\t\tassert(data["${f.name}"] ${op} ${f[key]}, "Out of range ${name}.${f.name}")`);
       if (f.nullable) gd.push(`\t\tassert(data["${f.name}"] == null or typeof(data["${f.name}"]) == ${variantType[scalarType[f.item.type]]}, "Invalid ${name}.${f.name}")`);
       if (f.maxLength) gd.push(`\t\tassert(data["${f.name}"].size() <= ${f.maxLength}, "Oversized ${name}.${f.name}")`);
       if (expected) gd.push(`\t\tassert(typeof(data["${f.name}"]) == ${expected}, "Invalid ${name}.${f.name}")`);
