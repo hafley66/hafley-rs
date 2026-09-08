@@ -2,13 +2,14 @@
 //! remote-control daemon's socket is where a message for one is queued.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::os::unix::process::CommandExt;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 
 use crate::door::{Delivered, Door, IdleNotice};
-use crate::harness::{HarnessId, NativeTuiPlan, NativeTuiSpec};
+use crate::harness::{HarnessId, NativeTuiEvent, NativeTuiObserver, NativeTuiPlan, NativeTuiSpec};
 use crate::live::{now_ms, DoorAddress, LiveSession, LiveSessionScope, LiveSessions, LiveStatus};
 
 /// Overrides the state database the thread list is read from.
@@ -74,6 +75,26 @@ fn codex_home() -> Result<PathBuf> {
 }
 
 impl LiveSessions for CodexDoor {
+    fn live_session_for_route(&self, route: &boop_store::bus::Route) -> Result<Option<LiveSession>> {
+        let Some(id) = route.session_id.as_deref() else { return Ok(None); };
+        if let Some(socket) = route.app_server_socket.as_deref() {
+            // Owned TUI events identify the thread before legacy state_5
+            // discovery can see it (including paginated-history threads).
+            return Ok(Some(LiveSession {
+                harness: HarnessId::Codex,
+                session_id: id.to_owned(),
+                pid: None,
+                cwd: route.cwd.as_ref().map(PathBuf::from),
+                tmux_pane: route.tmux.clone(),
+                status: LiveStatus::Unknown,
+                door: DoorAddress::AppServer { socket: PathBuf::from(socket), thread: id.to_owned() },
+                observed_ms: now_ms(), started_ms: None,
+                scope: LiveSessionScope::Root, parent_session: None,
+            }));
+        }
+        Ok(self.live_sessions()?.into_iter().find(|session| session.session_id == id))
+    }
+
     /// `threads` is the codex thread registry: `id`, `cwd`, `updated_at_ms`,
     /// `archived`. It records no pid and no pane, so a route supplies those.
     fn live_sessions(&self) -> Result<Vec<LiveSession>> {
@@ -198,60 +219,205 @@ impl Door for CodexDoor {
         wait_for_idle(Path::new(socket), thread, timeout)
     }
 
-    /// The TUI attaches to the daemon socket this door queues through, with
-    /// nothing between the two.
+    /// Each wrapper owns its backend, environment and observed thread events.
     fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan> {
-        let socket = self.start_daemon(&spec.executable)?;
+        // Codex rejects symlinked socket parents; macOS /tmp is a symlink.
+        let backend_root = tempfile::Builder::new().prefix("boop-codex-")
+            .tempdir_in(std::fs::canonicalize("/tmp")?)?;
+        let socket = backend_root.path().join("control.sock").display().to_string();
+        let frontend = backend_root.path().join("tui.sock").display().to_string();
         let (requested_thread, forwarded) = explicit_resume(&spec.args)?;
-        // The TUI opens its thread at its first prompt; `thread/start` on the
-        // daemon makes a thread `codex resume` refuses (no rollout until a
-        // turn), so the wrapper adopts the TUI's thread once it exists.
-        Ok(NativeTuiPlan {
+        let mut command = Command::new(&spec.executable);
+        command.args(["app-server", "--listen", &format!("unix://{socket}")]);
+        command.args(server_config_args(&spec.args)?);
+        let backend = command.envs(spec.env.iter().cloned())
+            .current_dir(&spec.cwd).process_group(0)
+            .stdin(Stdio::null()).stdout(Stdio::null())
+            .stderr(boop_store::trail::child_stderr(spec.env.iter().find(|(key, _)| key == "BOOP_SESSION").map(|(_, value)| value.as_str())))
+            .spawn().context("start owned Codex app-server")?;
+        let mut plan = NativeTuiPlan {
             program: spec.executable.clone(),
-            args: native_tui_args(requested_thread.as_deref(), &socket, &spec.cwd, forwarded),
-            mode: "native-remote".into(),
-            session_id: requested_thread.clone(),
-            source_path: Some(match &requested_thread {
-                Some(thread) => format!("managed-app-server={socket};requested-resume={thread}"),
-                None => format!("managed-app-server={socket}"),
-            }),
-            app_server_socket: Some(socket),
-        })
+            args: native_tui_args(requested_thread.as_deref(), &frontend, &spec.cwd, forwarded),
+            mode: "native-owned".into(),
+            session_id: None,
+            source_path: Some(format!("owned-app-server={socket}")),
+            app_server_socket: Some(socket.clone()),
+            observer: None,
+            backend: Some(backend),
+            backend_root: Some(backend_root),
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !Path::new(&socket).exists() {
+            anyhow::ensure!(plan.backend.as_mut().unwrap().try_wait()?.is_none(), "owned Codex app-server exited before opening its socket");
+            anyhow::ensure!(std::time::Instant::now() < deadline, "owned Codex app-server socket timed out");
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        plan.observer = Some(observe_tui(&frontend, &socket)?);
+        Ok(plan)
     }
 
-    /// `remote-control start` is idempotent, so this also revives a daemon
-    /// whose restart (auto-upgrade) killed the previous TUI's transport.
+    /// Resume under a new owned backend after an abnormal process exit.
     fn tui_relaunch(&self, spec: &NativeTuiSpec, session: &str) -> Result<Option<NativeTuiPlan>> {
-        let socket = self.start_daemon(&spec.executable)?;
-        Ok(Some(NativeTuiPlan {
-            program: spec.executable.clone(),
-            args: native_tui_args(Some(session), &socket, &spec.cwd, &[]),
-            mode: "native-remote".into(),
-            session_id: Some(session.to_string()),
-            source_path: Some(format!(
-                "managed-app-server={socket};respawn-resume={session}"
-            )),
-            app_server_socket: Some(socket),
-        }))
+        let mut resume = spec.clone();
+        resume.args = vec!["resume".into(), session.into()];
+        resume.args.extend(server_config_args(&spec.args)?);
+        self.tui_launch(&resume).map(Some)
     }
 }
 
-impl CodexDoor {
-    /// `codex remote-control start` is idempotent: it reports the socket of
-    /// the daemon already running, or starts one and reports that.
-    fn start_daemon(&self, executable: &str) -> Result<String> {
-        let output = Command::new(executable)
-            .args(["remote-control", "start", "--json"])
-            .output()
-            .context("start managed Codex remote-control daemon")?;
-        anyhow::ensure!(
-            output.status.success(),
-            "Codex remote-control start failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-        daemon_socket_from_start(&String::from_utf8_lossy(&output.stdout))
-            .context("Codex remote-control start did not report an app-server socket")
+/// Process config reaches the backend that executes tools and reads trust.
+fn server_config_args(args: &[String]) -> Result<Vec<String>> {
+    let mut out = Vec::new();
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "-c" | "--config" | "--enable" | "--disable" => {
+                out.push(arg.clone());
+                out.push(args.next().with_context(|| format!("{arg} needs a value"))?.clone());
+            }
+            "--strict-config" => out.push(arg.clone()),
+            _ if arg.starts_with("--config=") || arg.starts_with("--enable=") || arg.starts_with("--disable=") => out.push(arg.clone()),
+            _ => {}
+        }
     }
+    Ok(out)
+}
+
+/// A selected TUI response identifies the conversation. Global started events
+/// also describe background work and cannot select a route.
+fn tui_event(value: &serde_json::Value, selected: bool) -> Option<NativeTuiEvent> {
+    let string = |v: &serde_json::Value| v.as_str().map(str::to_owned);
+    if selected {
+        let result = &value["result"];
+        let thread = &result["thread"];
+        if thread["ephemeral"].as_bool() == Some(true)
+            || thread["parentThreadId"].as_str().is_some()
+            || thread["source"].get("subAgent").is_some() {
+            return None;
+        }
+        return Some(NativeTuiEvent::Session {
+            session_id: string(&thread["id"])?,
+            model: string(&result["model"]).or_else(|| string(&thread["model"])),
+            effort: string(&result["reasoningEffort"]).or_else(|| string(&thread["reasoningEffort"])),
+        });
+    }
+    let params = &value["params"];
+    match value["method"].as_str()? {
+        "thread/settings/updated" => Some(NativeTuiEvent::Settings {
+            session_id: string(&params["threadId"])?,
+            model: string(&params["threadSettings"]["model"]),
+            effort: string(&params["threadSettings"]["effort"]),
+        }),
+        "thread/closed" => Some(NativeTuiEvent::Closed { session_id: string(&params["threadId"])? }),
+        _ => None,
+    }
+}
+
+async fn emit_tui_event(send: &std::sync::mpsc::SyncSender<NativeTuiEvent>, stop: &std::sync::atomic::AtomicBool, mut event: NativeTuiEvent) {
+    while !stop.load(std::sync::atomic::Ordering::Acquire) {
+        match send.try_send(event) {
+            Ok(()) | Err(std::sync::mpsc::TrySendError::Disconnected(_)) => return,
+            Err(std::sync::mpsc::TrySendError::Full(pending)) => event = pending,
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+}
+
+/// Forward the actual TUI connection and observe its responses. Mail targets
+/// the backend directly. Observation adds no thread selection or subscription.
+fn observe_tui(frontend: &str, backend: &str) -> Result<NativeTuiObserver> {
+    use std::os::unix::net::UnixListener;
+    use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+    let listener = UnixListener::bind(frontend).context("bind owned Codex TUI socket")?;
+    listener.set_nonblocking(true)?;
+    let backend = backend.to_owned();
+    let (send, events) = std::sync::mpsc::sync_channel(64);
+    let stop = Arc::new(AtomicBool::new(false));
+    let stopping = stop.clone();
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+    let worker = std::thread::spawn(move || runtime.block_on(async move {
+        let listener = match tokio::net::UnixListener::from_std(listener) {
+            Ok(listener) => listener,
+            Err(error) => {
+                emit_tui_event(&send, &stopping, NativeTuiEvent::Failed(error.to_string())).await;
+                return;
+            }
+        };
+        let mut connections = tokio::task::JoinSet::new();
+        let mut tick = tokio::time::interval(Duration::from_millis(20));
+        loop {
+            tokio::select! {
+                _ = tick.tick() => if stopping.load(Ordering::Acquire) { break; },
+                result = listener.accept() => match result {
+                    Ok((client, _)) => {
+                        let send = send.clone();
+                        let stop = stopping.clone();
+                        let backend = backend.clone();
+                        connections.spawn(async move {
+                            if let Err(error) = forward_tui(client, &backend, &send, &stop).await {
+                                emit_tui_event(&send, &stop, NativeTuiEvent::Failed(error.to_string())).await;
+                            }
+                        });
+                    }
+                    Err(error) => {
+                        emit_tui_event(&send, &stopping, NativeTuiEvent::Failed(error.to_string())).await;
+                        break;
+                    }
+                },
+                _ = connections.join_next(), if !connections.is_empty() => {}
+            }
+        }
+        connections.shutdown().await;
+    }));
+    Ok(NativeTuiObserver { events, stop, worker: Some(worker) })
+}
+
+async fn forward_tui(client: tokio::net::UnixStream, backend: &str, send: &std::sync::mpsc::SyncSender<NativeTuiEvent>, stop: &std::sync::atomic::AtomicBool) -> Result<()> {
+    use futures_util::{SinkExt, StreamExt};
+    use tungstenite::Message;
+    let (client, server) = tokio::time::timeout(Duration::from_secs(5), async {
+        let client = tokio_tungstenite::accept_async(client).await.context("accept TUI websocket")?;
+        let server = tokio::net::UnixStream::connect(backend).await.context("connect owned backend")?;
+        let (server, _) = tokio_tungstenite::client_async("ws://localhost/", server).await.context("connect backend websocket")?;
+        anyhow::Ok((client, server))
+    }).await.context("TUI connection handshake timed out")??;
+    let (mut client_send, mut client_read) = client.split();
+    let (mut server_send, mut server_read) = server.split();
+    let selections = std::sync::Mutex::new(std::collections::BTreeSet::new());
+    let outgoing = async {
+        while let Some(frame) = client_read.next().await {
+            let frame = frame.context("read TUI frame")?;
+            if let Message::Text(text) = &frame {
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(text) {
+                    if matches!(value["method"].as_str(), Some("thread/start" | "thread/resume" | "thread/fork")) && !value["id"].is_null() {
+                        selections.lock().unwrap().insert(value["id"].to_string());
+                    }
+                }
+            }
+            let closing = frame.is_close();
+            server_send.send(frame).await.context("forward TUI frame")?;
+            if closing { break; }
+        }
+        anyhow::Ok(())
+    };
+    let incoming = async {
+        while let Some(frame) = server_read.next().await {
+            let frame = frame.context("read backend frame")?;
+            if let Message::Text(text) = &frame {
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(text) {
+                    let selected = selections.lock().unwrap().remove(&value["id"].to_string());
+                    if let Some(event) = tui_event(&value, selected) {
+                        emit_tui_event(send, stop, event).await;
+                    }
+                }
+            }
+            let closing = frame.is_close();
+            client_send.send(frame).await.context("forward backend frame")?;
+            if closing { break; }
+        }
+        anyhow::Ok(())
+    };
+    tokio::select! { result = outgoing => result, result = incoming => result }
 }
 
 /// One websocket on the remote-control socket, `initialize`, then read
@@ -342,26 +508,6 @@ fn explicit_resume(tui_args: &[String]) -> anyhow::Result<(Option<String>, &[Str
         return Ok((None, tui_args));
     };
     Ok((Some(thread.clone()), &tui_args[2..]))
-}
-
-fn daemon_socket_from_start(text: &str) -> Option<String> {
-    let value: serde_json::Value = serde_json::from_str(text.trim()).ok()?;
-    value
-        .get("daemon")
-        .and_then(|daemon| daemon.get("socketPath"))
-        .and_then(serde_json::Value::as_str)
-        .filter(|socket| socket.ends_with(".sock"))
-        .map(str::to_owned)
-        .or_else(|| find_socket(&value))
-}
-
-fn find_socket(value: &serde_json::Value) -> Option<String> {
-    match value {
-        serde_json::Value::String(value) if value.ends_with(".sock") => Some(value.clone()),
-        serde_json::Value::Array(values) => values.iter().find_map(find_socket),
-        serde_json::Value::Object(values) => values.values().find_map(find_socket),
-        _ => None,
-    }
 }
 
 /// Queue one message for a thread through the remote-control daemon. This is
@@ -549,13 +695,78 @@ mod tests {
     }
 
     #[test]
-    fn remote_control_start_socket_is_read_without_assuming_its_json_key() {
-        let output =
-            r#"{"daemon":{"socketPath":"/tmp/codex.sock","otherSocket":"/tmp/wrong.sock"}}"#;
+    fn backend_configuration_is_forwarded_without_replaying_the_prompt() {
+        let args = ["resume", "thread-1", "-m", "gpt-6-astra", "-c", "model_reasoning_effort=max", "--enable=x", "bounded prompt"]
+            .map(str::to_owned);
         assert_eq!(
-            daemon_socket_from_start(output).as_deref(),
-            Some("/tmp/codex.sock")
+            server_config_args(&args).unwrap(),
+            ["-c", "model_reasoning_effort=max", "--enable=x"]
         );
+    }
+
+    #[test]
+    fn native_lifecycle_events_keep_roots_settings_and_closure_separate() {
+        use serde_json::json;
+        let events = [
+            (json!({"id":1,"result":{"thread":{"id":"root","source":"vscode"},"model":"gpt-6-astra","reasoningEffort":"max"}}), true),
+            (json!({"id":2,"result":{"thread":{"id":"child","parentThreadId":"root","source":{"subAgent":{}}}}}), true),
+            (json!({"id":3,"result":{"thread":{"id":"guardian","ephemeral":true}}}), true),
+            (json!({"method":"thread/started","params":{"thread":{"id":"another-root"}}}), false),
+            (json!({"id":4,"result":{"thread":{"id":"read-only-query"}}}), false),
+            (json!({"id":5,"error":{"message":"bad resume id"}}), true),
+            (json!({"method":"thread/settings/updated","params":{"threadId":"root","threadSettings":{"model":"gpt-5.6-luna","effort":"low"}}}), false),
+            (json!({"method":"thread/closed","params":{"threadId":"root"}}), false),
+            (json!({"method":"thread/compacted","params":{"threadId":"root"}}), false),
+        ];
+        assert_eq!(events.iter().filter_map(|(value, selected)| tui_event(value, *selected)).collect::<Vec<_>>(), vec![
+            NativeTuiEvent::Session { session_id:"root".into(), model:Some("gpt-6-astra".into()), effort:Some("max".into()) },
+            NativeTuiEvent::Settings { session_id:"root".into(), model:Some("gpt-5.6-luna".into()), effort:Some("low".into()) },
+            NativeTuiEvent::Closed { session_id:"root".into() },
+        ]);
+    }
+
+    #[test]
+    fn native_connection_forwards_large_frames_in_both_directions_and_observes_resume() {
+        use std::os::unix::net::{UnixListener, UnixStream};
+        use serde_json::json;
+        use tungstenite::Message;
+        let root = tempfile::tempdir_in(std::fs::canonicalize("/tmp").unwrap()).unwrap();
+        let backend = root.path().join("backend.sock");
+        let frontend = root.path().join("tui.sock");
+        let listener = UnixListener::bind(&backend).unwrap();
+        let observer = observe_tui(frontend.to_str().unwrap(), backend.to_str().unwrap()).unwrap();
+        let fake = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+            stream.set_write_timeout(Some(Duration::from_secs(3))).unwrap();
+            let mut server = tungstenite::accept(stream).unwrap();
+            for (id, session, model, effort) in [(1, "first", "gpt-5.6-luna", "low"), (2, "resumed", "gpt-5.6-terra", "high")] {
+                let request: serde_json::Value = serde_json::from_str(&server.read().unwrap().into_text().unwrap()).unwrap();
+                assert_eq!(request["id"], id);
+                let response = json!({"id":id,"result":{"thread":{"id":session,"ephemeral":false},"model":model,"reasoningEffort":effort},"padding":"x".repeat(512_000)});
+                server.send(Message::Text(response.to_string().into())).unwrap();
+            }
+            let _ = server.close(None);
+        });
+        let stream = UnixStream::connect(&frontend).unwrap();
+        stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+        stream.set_write_timeout(Some(Duration::from_secs(3))).unwrap();
+        let (mut client, _) = tungstenite::client("ws://localhost/", stream).unwrap();
+        for (id, method) in [(1, "thread/start"), (2, "thread/resume")] {
+            client.send(Message::Text(json!({"id":id,"method":method,"params":{"padding":"y".repeat(512_000)}}).to_string().into())).unwrap();
+        }
+        for id in [1, 2] {
+            let response: serde_json::Value = serde_json::from_str(&client.read().unwrap().into_text().unwrap()).unwrap();
+            assert_eq!((response["id"].as_i64(), response["padding"].as_str().unwrap().len()), (Some(id), 512_000));
+        }
+        let events = (0..2).map(|_| observer.events.recv_timeout(Duration::from_secs(3)).unwrap()).collect::<Vec<_>>();
+        assert_eq!(events, vec![
+            NativeTuiEvent::Session {session_id:"first".into(), model:Some("gpt-5.6-luna".into()), effort:Some("low".into())},
+            NativeTuiEvent::Session {session_id:"resumed".into(), model:Some("gpt-5.6-terra".into()), effort:Some("high".into())},
+        ]);
+        drop(client);
+        drop(observer);
+        fake.join().unwrap();
     }
 
     #[test]

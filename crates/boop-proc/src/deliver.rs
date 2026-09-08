@@ -568,25 +568,10 @@ pub fn live_session(
     route: &Route,
     id: HarnessId,
 ) -> Result<Option<LiveSession>> {
-    if let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) {
-        let pane = pane_of_target(target).unwrap_or_else(|| target.to_owned());
-        if let Some(live) = harness.live().live_session_in_pane(&pane)? {
-            return Ok(Some(live));
-        }
-    }
-    let Some(session_id) = route.session_id.as_deref() else {
-        return Ok(None);
-    };
-    // Codex and opencode registries record no pane, so the route's session
-    // id is the match; the registry carries the door the store cannot.
-    if let Some(live) = harness
-        .live()
-        .live_sessions()?
-        .into_iter()
-        .find(|session| session.session_id == session_id)
-    {
+    if let Some(live) = harness.live().live_session_for_route(route)? {
         return Ok(Some(live));
     }
+    let Some(session_id) = route.session_id.as_deref() else { return Ok(None); };
     Ok(store.live_row(session_id)?.map(|row| projected(id, row)))
 }
 

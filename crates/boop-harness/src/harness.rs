@@ -166,6 +166,33 @@ pub struct NativeTuiSpec {
     pub executable: String,
     pub cwd: PathBuf,
     pub args: Vec<String>,
+    /// Identity and mail-root environment shared by the TUI and its backend.
+    pub env: Vec<(String, String)>,
+}
+
+/// Observed control-plane facts, decoded by the harness adapter.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NativeTuiEvent {
+    Session { session_id: String, model: Option<String>, effort: Option<String> },
+    Settings { session_id: String, model: Option<String>, effort: Option<String> },
+    Closed { session_id: String },
+    Failed(String),
+}
+
+/// A bounded adapter event stream with process-scoped observation lifetime.
+pub struct NativeTuiObserver {
+    pub events: std::sync::mpsc::Receiver<NativeTuiEvent>,
+    pub stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub worker: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Drop for NativeTuiObserver {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Release);
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
 }
 
 /// Prepared native process plus the evidence recorded in its coordinator
@@ -177,6 +204,32 @@ pub struct NativeTuiPlan {
     pub session_id: Option<String>,
     pub source_path: Option<String>,
     pub app_server_socket: Option<String>,
+    pub observer: Option<NativeTuiObserver>,
+    /// An adapter-owned backend, started in its own process group.
+    /// Shared user daemons are never stored here or stopped by this plan.
+    pub backend: Option<std::process::Child>,
+    pub backend_root: Option<tempfile::TempDir>,
+}
+
+impl Drop for NativeTuiPlan {
+    fn drop(&mut self) {
+        use wait_timeout::ChildExt;
+        if let Some(observer) = &self.observer {
+            observer.stop.store(true, std::sync::atomic::Ordering::Release);
+        }
+        if let Some(child) = self.backend.as_mut() {
+            if matches!(child.try_wait(), Ok(None)) {
+                unsafe { libc::kill(-(child.id() as i32), libc::SIGTERM); }
+                if !matches!(child.wait_timeout(std::time::Duration::from_secs(2)), Ok(Some(_))) {
+                    unsafe { libc::kill(-(child.id() as i32), libc::SIGKILL); }
+                    let _ = child.wait();
+                }
+            }
+            if let Some(socket) = self.app_server_socket.as_deref() {
+                let _ = std::fs::remove_file(socket);
+            }
+        }
+    }
 }
 
 /// A native collaboration child fact observed by one harness from its own
@@ -206,6 +259,9 @@ impl NativeTuiPlan {
             session_id: None,
             source_path: Some(format!("native-executable={}", spec.executable)),
             app_server_socket: None,
+            observer: None,
+            backend: None,
+            backend_root: None,
         }
     }
 }

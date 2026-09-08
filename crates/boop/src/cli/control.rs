@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use boop::bus::Route;
-use boop::harness::{Harness, NativeTuiSpec};
+use boop::harness::{Harness, NativeTuiEvent, NativeTuiSpec};
 use boop::registry::Registry;
 use tracing::{info, warn};
 
@@ -182,7 +182,7 @@ fn record_pane(
     open: Option<&boop::Store>,
     session: &str,
     pid: u32,
-    pane: &str,
+    pane: Option<&str>,
 ) -> anyhow::Result<()> {
     let owned;
     let store = match open {
@@ -197,12 +197,72 @@ fn record_pane(
         boop::live::now_ms(),
         "live",
         Some(i64::from(pid)),
-        Some(pane),
+        pane,
     )
+}
+
+fn stop_native_child(child: &mut std::process::Child) {
+    use wait_timeout::ChildExt;
+    if matches!(child.try_wait(), Ok(None)) {
+        // Installed launchers forward TERM to their native child; KILL would
+        // leave that child behind before the launcher can forward anything.
+        unsafe { libc::kill(child.id() as i32, libc::SIGTERM); }
+        if !matches!(child.wait_timeout(Duration::from_secs(2)), Ok(Some(_))) {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+/// Apply only observed session transitions; late settings from a previous
+/// thread cannot change the route that now names a new thread.
+fn apply_native_event(
+    store: &boop::Store,
+    route: &mut Route,
+    trace: &mut Option<String>,
+    event: NativeTuiEvent,
+    pid: u32,
+) -> Result<()> {
+    let ts = boop::live::now_ms();
+    let (session_id, model, effort) = match event {
+        NativeTuiEvent::Session { session_id, model, effort } => {
+            if let Some(previous) = route.session_id.as_deref().filter(|previous| *previous != session_id) {
+                store.record_status(previous, ts, "detached", None, None)?;
+            }
+            *trace = Some(store.trace_of(&session_id)?.or_else(|| trace.clone())
+                .unwrap_or_else(|| format!("trace-{session_id}")));
+            store.attach_trace(&session_id, trace.as_deref().unwrap(), "native-tui-session", ts)?;
+            route.session_id = Some(session_id.clone());
+            store.record_status(&session_id, ts, "live", Some(i64::from(pid)), route.tmux.as_deref())?;
+            (session_id, model, effort)
+        }
+        NativeTuiEvent::Settings { session_id, model, effort } if route.session_id.as_deref() == Some(&session_id) => (session_id, model, effort),
+        NativeTuiEvent::Closed { session_id } if route.session_id.as_deref() == Some(&session_id) => {
+            store.record_status(&session_id, ts, "closed", None, None)?;
+            route.session_id = None;
+            route.model = None;
+            return Ok(());
+        }
+        NativeTuiEvent::Failed(error) => anyhow::bail!("native TUI observation failed: {error}"),
+        _ => return Ok(()),
+    };
+    route.model = model;
+    match effort {
+        Some(effort) => store.set_session_attr(&session_id, "effort", &effort, ts)?,
+        None => { store.clear_session_attr(&session_id, "effort")?; }
+    }
+    Ok(())
 }
 
 /// Ask the selected harness adapter to prepare its native process, register
 /// this pane as its coordinator, then run the ordinary interactive TUI.
+pub(crate) fn native_route_name(harness: &str) -> String {
+    match std::env::var("TMUX_PANE").ok().filter(|pane| !pane.is_empty()) {
+        Some(pane) => format!("{harness}-{}", pane.trim_start_matches('%')),
+        None => format!("{harness}-process-{}", std::process::id()),
+    }
+}
+
 pub(crate) fn run_native_tui(
     registry: &Registry,
     adapter: &dyn Harness,
@@ -212,11 +272,13 @@ pub(crate) fn run_native_tui(
     executable: Option<&str>,
     tui_args: &[String],
 ) -> Result<()> {
+    let mut signals = signal_hook::iterator::Signals::new([
+        signal_hook::consts::SIGHUP, signal_hook::consts::SIGTERM,
+    ])?;
     let pane = std::env::var("TMUX_PANE")
         .ok()
-        .filter(|pane| !pane.is_empty())
-        .context("`boop tui` requires TMUX_PANE so its route matches harness identity")?;
-    let default_name = format!("{}-{}", adapter.id(), pane.trim_start_matches('%'));
+        .filter(|pane| !pane.is_empty());
+    let default_name = native_route_name(adapter.id().as_str());
     let name = name.unwrap_or(&default_name);
     anyhow::ensure!(
         name == default_name,
@@ -224,16 +286,27 @@ pub(crate) fn run_native_tui(
         adapter.id()
     );
     let executable = executable.unwrap_or(adapter.id().as_str());
-    let mut plan = adapter.door().tui_launch(&NativeTuiSpec {
+    let dir = mail_dir(mail_dir_arg)?;
+    let parent = boop::bus::read_routes(&dir)?.get(name).and_then(|route| route.parent.clone())
+        .or_else(|| boop::identity::from_env().and_then(|identity| identity.session).filter(|caller| caller != name));
+    let spec = NativeTuiSpec {
         executable: executable.into(),
         cwd: cwd.to_path_buf(),
         args: tui_args.to_vec(),
-    })?;
-    let dir = mail_dir(mail_dir_arg)?;
+        env: vec![
+            ("BOOP_SESSION".into(), name.into()),
+            ("BOOP_LANE".into(), name.into()),
+            ("BOOP_HARNESS".into(), adapter.id().as_str().into()),
+            ("BOOP_PARENT".into(), parent.clone().unwrap_or_default()),
+            ("BOOP_MAIL_DIR".into(), dir.display().to_string()),
+            ("BOOP_DB".into(), boop::bus::db_path(&dir)?.display().to_string()),
+        ],
+    };
+    let mut plan = adapter.door().tui_launch(&spec)?;
     let store = adapter
         .capabilities()
         .native_tui_projector
-        .then(|| boop::Store::open(boop::Store::default_path()?))
+        .then(|| boop::bus::open_store(&dir))
         .transpose()?;
     let mut known = store
         .as_ref()
@@ -247,16 +320,13 @@ pub(crate) fn run_native_tui(
     // inherited by the harness's own shell and native subagents.
     let mut child = Command::new(&plan.program)
         .args(&plan.args)
-        .env("BOOP_SESSION", name)
-        .env("BOOP_LANE", name)
-        .env("BOOP_HARNESS", adapter.id().as_str())
-        .env("BOOP_PARENT", "")
+        .envs(spec.env.iter().cloned())
         .current_dir(cwd)
         .spawn()
         .with_context(|| format!("start native {} TUI", adapter.id()))?;
     let mut respawns: u32 = 0;
     let mut spawned_at = std::time::Instant::now();
-    if plan.session_id.is_none() {
+    if plan.session_id.is_none() && plan.observer.is_none() {
         plan.session_id = opened_session(
             adapter,
             &dir,
@@ -264,7 +334,7 @@ pub(crate) fn run_native_tui(
             opened_ms,
             &prior_observations,
             SESSION_WAIT,
-            &pane,
+            pane.as_deref().unwrap_or(""),
         );
         if let Some(session) = plan.session_id.as_deref() {
             plan.source_path = Some(format!("native-session={session}"));
@@ -279,20 +349,20 @@ pub(crate) fn run_native_tui(
     // Opened separately from `store` above: registering a pane is required even
     // for a harness that opts out of resident transcript projection.
     if let Some(session) = plan.session_id.as_deref() {
-        if let Err(error) = record_pane(store.as_ref(), session, child.id(), &pane) {
-            eprintln!("boop: pane {pane} not recorded for session {session}: {error}");
+        if let Err(error) = record_pane(store.as_ref(), session, child.id(), pane.as_deref()) {
+            eprintln!("boop: pane {pane:?} not recorded for session {session}: {error}");
         }
     }
     let mut route = Route {
         kind: "coordinator".into(),
         harness: Some(adapter.id()),
-        tmux: Some(pane.clone()),
+        tmux: pane.clone(),
         cwd: Some(cwd.display().to_string()),
         model: None,
         mode: Some(plan.mode.clone()),
         session_id: plan.session_id.clone(),
         source_path: plan.source_path.clone(),
-        parent: None,
+        parent,
         goal: None,
         registered_at: Some(boop::bus::now_iso()),
         base_sha: None,
@@ -300,6 +370,7 @@ pub(crate) fn run_native_tui(
         app_server_socket: plan.app_server_socket.clone(),
     };
     write_route(&dir, name, route.clone())?;
+    let mut trace = None;
     // Child exit observation stays responsive while transcript projection is
     // independently bounded. The global known-session join ran once above;
     // every pass below reuses and incrementally updates that resident cache.
@@ -318,6 +389,10 @@ pub(crate) fn run_native_tui(
     let mut last_discover = std::time::Instant::now() - discover_every;
     let mut last_drain = std::time::Instant::now() - DRAIN_EVERY;
     loop {
+        if let Some(signal) = signals.pending().next() {
+            stop_native_child(&mut child);
+            anyhow::bail!("native TUI stopped by signal {signal}");
+        }
         if let Some(status) = child.try_wait().context("observe native TUI exit")? {
             if status.success() {
                 return Ok(());
@@ -325,11 +400,7 @@ pub(crate) fn run_native_tui(
             let next = match route.session_id.as_deref() {
                 Some(session) if respawn_wanted(status, respawns, spawned_at.elapsed()) => {
                     adapter.door().tui_relaunch(
-                        &NativeTuiSpec {
-                            executable: executable.into(),
-                            cwd: cwd.to_path_buf(),
-                            args: Vec::new(),
-                        },
+                        &spec,
                         session,
                     )?
                 }
@@ -347,22 +418,31 @@ pub(crate) fn run_native_tui(
             );
             child = Command::new(&next.program)
                 .args(&next.args)
-                .env("BOOP_SESSION", name)
-                .env("BOOP_LANE", name)
-                .env("BOOP_HARNESS", adapter.id().as_str())
-                .env("BOOP_PARENT", "")
+                .envs(spec.env.iter().cloned())
                 .current_dir(cwd)
                 .spawn()
                 .with_context(|| format!("respawn native {} TUI", adapter.id()))?;
             spawned_at = std::time::Instant::now();
             route.app_server_socket = next.app_server_socket.clone();
             route.source_path = next.source_path.clone();
+            route.session_id = next.session_id.clone();
+            plan = next;
             write_route(&dir, name, route.clone())?;
             continue;
         }
+        if let Some(observer) = plan.observer.as_ref() {
+            let event_store = boop::bus::open_store(&dir)?;
+            for event in observer.events.try_iter() {
+                if let Err(error) = apply_native_event(&event_store, &mut route, &mut trace, event, child.id()) {
+                    stop_native_child(&mut child);
+                    return Err(error);
+                }
+                write_route(&dir, name, route.clone())?;
+            }
+        }
         // A fresh TUI opens its session at its first prompt, after the route
         // was written; the route learns the id the first tick it exists.
-        if route.session_id.is_none() {
+        if route.session_id.is_none() && plan.observer.is_none() {
             match opened_session(
                 adapter,
                 &dir,
@@ -370,15 +450,15 @@ pub(crate) fn run_native_tui(
                 opened_ms,
                 &prior_observations,
                 Duration::ZERO,
-                &pane,
+                pane.as_deref().unwrap_or(""),
             ) {
                 Some(session) => {
                     route.source_path = Some(format!("native-session={session}"));
                     route.session_id = Some(session.clone());
                     write_route(&dir, name, route.clone())?;
                     info!(route = name, %session, "native session route recovered after launch");
-                    if let Err(error) = record_pane(store.as_ref(), &session, child.id(), &pane) {
-                        warn!(%error, %pane, %session, "recovered native pane was not recorded");
+                    if let Err(error) = record_pane(store.as_ref(), &session, child.id(), pane.as_deref()) {
+                        warn!(%error, ?pane, %session, "recovered native pane was not recorded");
                     }
                 }
                 None => {
@@ -436,6 +516,40 @@ mod tests {
     use std::os::unix::process::ExitStatusExt;
     use std::process::ExitStatus;
     use std::time::Duration;
+
+    #[test]
+    fn observed_transitions_preserve_parent_and_ignore_late_thread_events() {
+        use boop::harness::NativeTuiEvent::{Session, Settings, Closed};
+        let store = boop::Store::open(":memory:".into()).unwrap();
+        store.attach_trace("independent", "separate-trace", "fixture", 1).unwrap();
+        let mut route = crate::cli::testkit::route_with(Some("parent"));
+        let mut trace = None;
+        let mut timeline = Vec::new();
+        for event in [
+            Session {session_id:"first".into(), model:Some("model-a".into()), effort:Some("low".into())},
+            Settings {session_id:"first".into(), model:Some("model-b".into()), effort:Some("high".into())},
+            Closed {session_id:"first".into()},
+            Session {session_id:"new".into(), model:Some("model-b".into()), effort:Some("high".into())},
+            Settings {session_id:"first".into(), model:Some("stale".into()), effort:None},
+            Closed {session_id:"first".into()},
+            Session {session_id:"independent".into(), model:Some("model-c".into()), effort:None},
+        ] {
+            super::apply_native_event(&store, &mut route, &mut trace, event, 123).unwrap();
+            timeline.push((route.session_id.clone(), route.model.clone(), trace.clone(), route.parent.clone()));
+        }
+        let expected = [
+            (Some("first"), Some("model-a"), "trace-first"),
+            (Some("first"), Some("model-b"), "trace-first"),
+            (None, None, "trace-first"),
+            (Some("new"), Some("model-b"), "trace-first"),
+            (Some("new"), Some("model-b"), "trace-first"),
+            (Some("new"), Some("model-b"), "trace-first"),
+            (Some("independent"), Some("model-c"), "separate-trace"),
+        ].map(|(session, model, trace)| (session.map(str::to_owned), model.map(str::to_owned), Some(trace.to_owned()), Some("parent".to_owned())));
+        assert_eq!(timeline, expected);
+        assert_eq!(store.trace_of("new").unwrap().as_deref(), Some("trace-first"));
+        assert_eq!(store.live_row("new").unwrap().unwrap().status.as_deref(), Some("detached"));
+    }
 
     #[test]
     fn nonzero_exit_after_min_uptime_respawns() {

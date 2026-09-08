@@ -51,11 +51,11 @@ time = { version = "0.3", features = ["parsing", "formatting"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 hafley-observe = { path = "../hafley-observe" }
+signal-hook = "0.4"
+libc = "0.2"
+wait-timeout = "0.2.1"
 
 [dev-dependencies]
-# Deadline on a synchronous std::process::Child in tests/0_sqlite_contention.rs
-# without pulling in an async runtime.
-wait-timeout = "0.2.1"
 # The store's deterministic fixtures (throwaway git repo, fake multiplexer).
 boop-store = { version = "0.0.2", path = "../boop-store", features = ["testing"] }
 # Peak-bytes-allocated counter for tests/bench_grid.rs's own #[global_allocator].

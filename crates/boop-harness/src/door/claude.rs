@@ -219,17 +219,16 @@ impl Door for ClaudeDoor {
     /// wrapper adds is reading the resumed session id out of them.
     fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan> {
         let session_id = explicit_resume(&spec.args);
-        Ok(NativeTuiPlan {
-            source_path: Some(match &session_id {
+        let mut plan = NativeTuiPlan::direct(spec);
+        plan.source_path = Some(match &session_id {
                 Some(session) => format!(
                     "native-executable={};requested-resume={session}",
                     spec.executable
                 ),
                 None => format!("native-executable={}", spec.executable),
-            }),
-            session_id,
-            ..NativeTuiPlan::direct(spec)
-        })
+            });
+        plan.session_id = session_id;
+        Ok(plan)
     }
 
     fn deliver(&self, session: &LiveSession, body: &str) -> Result<Delivered> {
@@ -596,6 +595,7 @@ mod tui_launch_tests {
             executable: "claude".into(),
             cwd: std::path::PathBuf::from("/tmp"),
             args: args(&["--resume", "f3deaaac-d198-47d5-975d-8e84a038046f"]),
+            env: Vec::new(),
         };
         let plan = ClaudeDoor::machine().tui_launch(&spec).unwrap();
         assert_eq!(
@@ -611,6 +611,7 @@ mod tui_launch_tests {
             executable: "claude".into(),
             cwd: std::path::PathBuf::from("/tmp"),
             args: Vec::new(),
+            env: Vec::new(),
         };
         assert_eq!(ClaudeDoor::machine().tui_launch(&spec).unwrap().session_id, None);
     }

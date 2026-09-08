@@ -354,6 +354,9 @@ impl Door for OpencodeDoor {
                 "managed-opencode-serve={base};started-session={session}"
             )),
             app_server_socket: Some(base.to_string()),
+            observer: None,
+            backend: None,
+            backend_root: None,
         })
     }
 

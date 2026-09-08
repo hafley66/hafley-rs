@@ -71,6 +71,17 @@ pub trait LiveSessions: Send + Sync {
     /// harness is running, never that the lookup failed.
     fn live_sessions(&self) -> Result<Vec<LiveSession>>;
 
+    /// Resolve an explicitly registered route through the harness's own
+    /// control plane. A harness-specific endpoint belongs to its adapter.
+    fn live_session_for_route(&self, route: &boop_store::bus::Route) -> Result<Option<LiveSession>> {
+        if let Some(target) = route.tmux.as_deref() {
+            let pane = pane_of_target(target).unwrap_or_else(|| target.to_owned());
+            if let Some(live) = self.live_session_in_pane(&pane)? { return Ok(Some(live)); }
+        }
+        let Some(id) = route.session_id.as_deref() else { return Ok(None); };
+        Ok(self.live_sessions()?.into_iter().find(|session| session.session_id == id))
+    }
+
     /// The session occupying a tmux pane. `pane` is matched as written and
     /// with a leading `%` added, so both `3418` and `%3418` resolve.
     fn live_session_in_pane(&self, pane: &str) -> Result<Option<LiveSession>> {

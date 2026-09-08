@@ -1,6 +1,6 @@
 # Live Codex receipts
 
-Work in progress. No live lifecycle case has passed yet.
+Work in progress. Actual transcript receipts are listed separately from queue admission.
 
 ## Incident reproduction, before changes
 
@@ -29,6 +29,30 @@ Deterministic regression rerun: **PASS**, 8 `registry_kinds` tests, raw
 
 ## Authenticated acceptance cases
 
-Fresh wrapper, incoming nonce, busy/idle exactly once, process resume, model and
-effort changes, compact, clear/new, resume after each, crash/rebind, concurrent
-sessions, child completion and parent receipt: **PENDING**.
+| Case | Actual result and raw receipt |
+| --- | --- |
+| Fresh generated Bash wrapper | **PASS** in pane `%1828`, route `codex-1828`, parent `probe-parent`, coordinator, persisted thread `01a081bf-5d5a-7f23-a33d-81d349d9d56f`; `29_launch.json`, `30_idle_receipt.json` |
+| Idle nonce | **PASS**: `m-54ff5622`, exactly one user turn and `ACK_BP_IDLE_01a08191_3`; `30_idle_threads.json` |
+| Busy nonce | **PASS**: `m-3ab7a194` sent while status was `active`, answered after bounded `sleep 8`; `31_busy_before_send_receipt.json`, `31_busy_after_threads.json` |
+| Model/effort change | **PASS**: supported `thread/settings/update` changed Luna/low to Terra/medium/high, then Luna/low after resume. Actual turn contexts, replies and route model confirm changes. Earlier stale-route failure retained; `35_model_receipt.json`, `38_effort_receipt.json`, `49_settings_receipt.json` |
+| Explicit compact | **PASS**: actual `/compact`, UI `Context compacted`, persisted `compacted` event; same thread/session ID, subsequent `m-e01dfb45` nonce answered; `36_compact_receipt.json`, `37_postcompact_threads.json` |
+| Clean exit | **PASS**: Ctrl-D, exit 0, owned backend socket removed; `40_clean-exit.txt` |
+| Explicit process resume after compact | **PASS**: same history/thread, Terra/high, route rebound; previously held `m-27e70b21` arrived and was answered automatically; `48_resumed_receipt.json` |
+| Clear/new | **PASS for `/clear`**: new thread `01a081d7-85ca-7ca1-a8ce-f3ce84dadc50`, same Boop trace and parent; new-session default Astra/xhigh was observed, then explicitly set to Luna/low before nonce `m-18364e1a`; `51_cleared_receipt.json`, `53_postclear_receipt.json`, `53_trace-identity.json` |
+| Resume after clear | **PASS**: new process resumed the cleared thread and answered `m-1215d682`; `64_clear-resume-launch.json`, `67_concurrent-A_receipt.json` |
+| Concurrent same-cwd sessions | **PASS**: distinct routes, sockets, threads and traces; one request/answer per nonce, zero crossover. Second wrapper had no tmux identity variables; `65_concurrent-routes.json`, `67_concurrency-verdict.json` |
+| TERM and normal cleanup | **PASS for backend cleanup**: test wrapper PID 51263 verified before TERM; both test TUIs exited, both owned sockets removed; `69_test-exits.json` |
+| Stale route | **PARTIAL**: `m-322f985c` held with exact missing-socket error after exit; no wrong transcript targeted. Route transport/status cleanup remains open; `71_stale-send.txt` |
+| SIGKILL/restart/reattach, child completion/parent receipt, concurrent retry admission | **PENDING** |
+
+Initial live failures are retained: scratch cwd trust prompt, rejected socket
+directory layouts, ephemeral guardian misbinding (`23_idle-send.txt`), backend
+orphan after a pre-fix wrapper timeout (`27_timeout-cleanup.json`), and a blocked
+synchronous websocket forwarder (`45_resumed_receipt.json`). The replacement
+uses Tokio/Tungstenite with independent directions. Eleven Codex adapter tests
+pass, including simultaneous 512 KB frames (`47_codex-adapter-tests.log`).
+
+Only task-owned Codex conversations were read for these receipts. No receiver
+used `boop wait` or polled a mailbox to obtain the nonce. The driver inspected
+the owned backend and its actual rollout afterward. Full raw receipts remain
+outside Git under `/private/tmp/boop-lifecycle-consolidation-proof-01a08191`.

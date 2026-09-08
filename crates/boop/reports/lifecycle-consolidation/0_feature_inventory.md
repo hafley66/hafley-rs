@@ -6,11 +6,11 @@ Installed help and isolated reproduction receipts live under
 
 | Surface | Observed path | Regression / status |
 | --- | --- | --- |
-| Register coordinator/native | `main.rs::AgentCmd` → `cli/job.rs::run_agent` → `write_route` | Registration drops session and metadata; reproduction recorded |
-| Adopt existing pane | `beep lane patch` → `cli/me.rs::run_adopt_with` | Rejects `%pane` with exit 0; forces lane kind; regression pending |
+| Register coordinator/native | `main.rs::AgentCmd` → `cli/job.rs::run_agent` → `cli/me.rs::register_route` | Session/pane options added; merge preserves omitted metadata; 8 registry regressions pass |
+| Attach existing pane | `beep lane patch` → `cli/me.rs::register_route` | Compatibility entry shares registration; `%pane` works; missing target errors; existing kind preserved |
 | Delivery | `beep` → `cli/mail.rs::deliver_hail` → `boop-proc::deliver::land` | Lane routes short circuit to supervisor; incident reproduced |
-| Shell wrapper | `shell-init bash` → `boop_wrap` → `boop tui` inside tmux; direct harness outside | Divergent ownership paths; consolidation pending |
-| Interactive lifecycle | `cli/control.rs::run_native_tui` → `Door::tui_launch` | Session observed once; later identity transitions pending |
+| Shell wrapper | `shell-init bash` → `boop_wrap` → `boop tui` → `run_native_tui` | Codex/Claude/ccz/Kimi/OpenCode share the path inside and outside tmux; forwarding and exit regression passes |
+| Interactive lifecycle | `run_native_tui` → `Door::tui_launch` → adapter observation → existing route/session store | Actual Codex start/resume/settings/clear responses observed; raw live receipts in report 2 |
 
 Complete CLI/help/test matrix and canonical paths remain in progress.
 Recursive installed help capture includes 101 pages (see `3_help-manifest.json`).
@@ -31,4 +31,22 @@ compatibility obligation. Ordinary `write_route` uses the single-row store
 upsert instead of rewriting the complete registry through CAS.
 
 Initial incident regressions: 3 failures before changes; `registry_kinds` after
-changes: 8 passed, 0 failed. Additional compatibility tests are being run.
+changes: 8 passed, 0 failed. Registration helper unit tests: 3 passed;
+coordinator compatibility tests: 4 passed.
+
+## Native launch consolidation
+
+The generated shell functions previously had separate tmux and direct-executable
+branches. Both now use `boop tui`; default route names use pane or process identity
+so simultaneous launches in one cwd do not overwrite each other. Parent linkage
+is retained on process resume. All five entries, including the `ccz` executable
+alias, have forwarding and exit-code coverage. Bash is the supported shell and
+the user's configured variant; authenticated trials used `/opt/homebrew/bin/bash`.
+
+Codex previously used a shared daemon and cwd/time discovery. Its adapter now
+owns a private backend and observes the real TUI connection. Actual selected
+thread responses bind the route; subscribed settings update model and effort.
+`LiveSessions::live_session_for_route` owns endpoint interpretation, and the
+delivery code delegates to it. Other adapters retain their existing deterministic
+contracts. Their discovery paths and remaining competing liveness writes are
+listed in report 3 for the next consolidation chunk.
