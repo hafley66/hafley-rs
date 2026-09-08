@@ -31,6 +31,14 @@ artifact or an explicitly republished/re-pinned emitter before installing.
 - `Boundary` implements the generated `FrameQuery` trait. Query errors map to
   declared errors, insufficient capacity preserves the caller's buffer, and
   success fills only the reported prefix.
+- `Boundary` implements `RowPublisher`; borrowed rows contain an ordered replay
+  batch. Publication preserves earlier history within the existing window and
+  atomically replaces replayed ticks. The legacy nested-frame API shares this
+  implementation. The live Godot adapter calls the generated publisher directly.
+- Godot's pending packet implements `FrameAcknowledger`, validating the local
+  generation/epoch, row digest, and vertex count. The existing Godot entry point
+  checks every row and vertex before accepting that receipt and consuming the
+  packet. The trait itself validates without consuming or recording a receipt.
 - ReadBuffer/WriteBuffer template instances lower to borrowed Rust slices.
 - Named Ok/Err unions lower to Rust Result aliases. Other union shapes fail.
 - Arrays require equal positive minItems/maxItems and become fixed Rust arrays.
@@ -38,9 +46,7 @@ artifact or an explicitly republished/re-pinned emitter before installing.
 
 ## Remaining work
 
-Publish and acknowledgment traits are generated and compiled but do not yet
-replace the existing publisher or Godot acknowledgment implementations. Epoch
-zero identifies the current local query adapter convention, not a negotiated
+Epoch zero identifies the current local adapter convention, not a negotiated
 cross-process identity. Process restart/lease semantics are not implemented.
 The query adapter retains the existing allocating SQL reader internally.
 GDScript emission, transport bindings, shared-memory layout, and zero-allocation

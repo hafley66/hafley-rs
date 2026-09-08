@@ -139,29 +139,41 @@ impl Boundary {
     /// Replace all replayed ticks in one publication, never exposing an intermediate replay state.
     #[tracing::instrument(target = "falcon::sql", level = "trace", skip_all, fields(generation = self.generation + 1, frames = frames.len()))]
     pub fn publish(&mut self, frames: &[Vec<Row>]) -> bool {
-        let first = frames.first().unwrap()[0].tick;
-        let last = frames.last().unwrap()[0].tick;
+        self.publish_rows(frames.iter().flatten().copied()).is_ok()
+    }
+
+    fn publish_rows(&mut self, rows: impl Iterator<Item = Row> + Clone) -> contracts::PublishResult {
+        use contracts::BoundaryError;
+        let first = rows.clone().next().ok_or(BoundaryError::InvalidPayload)?.tick;
+        let mut last = first;
+        let mut count = 0;
+        for row in rows.clone() {
+            if row.tick < last || row.values.iter().any(|v| !v.is_finite()) {
+                return Err(BoundaryError::InvalidPayload);
+            }
+            last = row.tick;
+            count += 1;
+        }
+        let oldest = last.saturating_sub(WINDOW);
         let total = self
             .history
             .iter()
-            .filter(|r| r.tick < first && r.tick > last - WINDOW)
+            .filter(|r| r.tick < first && r.tick > oldest)
             .count()
-            + frames.iter().map(Vec::len).sum::<usize>();
+            + count;
         if total > ROW_CAPACITY {
             tracing::warn!(target: "falcon::sql", rows = total, capacity = ROW_CAPACITY, reason = "row_capacity", "publication_refused");
-            return false;
+            return Err(BoundaryError::Capacity);
         }
         self.scratch.clear();
         self.scratch.extend(
             self.history
                 .iter()
                 .copied()
-                .filter(|r| r.tick < first && r.tick > last - WINDOW),
+                .filter(|r| r.tick < first && r.tick > oldest),
         );
-        for frame in frames {
-            self.scratch.extend_from_slice(frame);
-        }
-        let next = self.generation + 1;
+        self.scratch.extend(rows);
+        let next = self.generation.checked_add(1).ok_or(BoundaryError::Capacity)?;
         if self
             .ring
             .write()
@@ -170,13 +182,20 @@ impl Boundary {
             .is_none()
         {
             tracing::warn!(target: "falcon::sql", rows = total, reason = "slots_pinned", "publication_refused");
-            return false;
+            return Err(BoundaryError::SlotsPinned);
         }
         std::mem::swap(&mut self.history, &mut self.scratch);
         self.generation = next;
         tracing::trace!(target: "falcon::sql", generation = next, rows = total, "published");
         assert_eq!(self.layout, self.ring.read().unwrap().slot_layout());
-        true
+        Ok(contracts::GenerationId { epoch: 0, generation: next })
+    }
+}
+
+impl contracts::RowPublisher for Boundary {
+    #[tracing::instrument(target = "falcon::sql", level = "trace", skip_all, fields(rows = rows.len()))]
+    fn publish(&mut self, rows: &[Row]) -> contracts::PublishResult {
+        self.publish_rows(rows.iter().copied())
     }
 }
 
@@ -227,6 +246,37 @@ pub fn read_frame(db: &Connection, tick: i64) -> Result<(u64, Vec<Row>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn generated_publisher_preserves_replay_and_refusal_semantics() {
+        use contracts::{BoundaryError, GenerationId, RowPublisher};
+        let mut b = Boundary::new().unwrap();
+        let mut pins = Vec::new();
+        for tick in 0..3 {
+            assert_eq!(RowPublisher::publish(&mut b, &[Row::new(tick, 0, 0)]),
+                Ok(GenerationId { epoch: 0, generation: tick as u64 + 1 }));
+            pins.push(b.ring.read().unwrap().current());
+        }
+        for (rows, error) in [
+            (vec![], BoundaryError::InvalidPayload),
+            (vec![Row::new(2, 0, 0), Row::new(1, 0, 0)], BoundaryError::InvalidPayload),
+            (vec![Row::new(3, 0, 0); ROW_CAPACITY + 1], BoundaryError::Capacity),
+            (vec![Row::new(3, 0, 0)], BoundaryError::SlotsPinned),
+        ] {
+            assert_eq!(RowPublisher::publish(&mut b, &rows), Err(error));
+            assert_eq!(b.generation, 3);
+            assert_eq!(read_frame(&b.db, 2).unwrap().1, vec![Row::new(2, 0, 0)]);
+        }
+        drop(pins.remove(0));
+        let replacement = [Row::new(1, 0, 42), Row::new(2, 0, 43)];
+        assert_eq!(RowPublisher::publish(&mut b, &replacement),
+            Ok(GenerationId { epoch: 0, generation: 4 }));
+        assert_eq!(read_frame(&b.db, 0).unwrap().1, vec![Row::new(0, 0, 0)]);
+        assert_eq!(read_frame(&b.db, 1).unwrap().1, vec![replacement[0]]);
+        assert_eq!(read_frame(&b.db, 2).unwrap().1, vec![replacement[1]]);
+        assert_eq!(pins[1].rows.last().unwrap().entity, 0);
+        assert_eq!(b.layout, b.ring.read().unwrap().slot_layout());
+    }
+
     #[test]
     fn generated_query_contract_preserves_rows_and_errors() {
         use contracts::{BoundaryError, FrameQuery, FrameRead, GenerationId};

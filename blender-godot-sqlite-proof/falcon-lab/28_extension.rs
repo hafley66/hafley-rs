@@ -7,11 +7,29 @@ use std::thread::JoinHandle;
 
 use crate::fixture;
 use fixture::sql_viewer::{boundary::Row, geometry};
+use fixture::sql_viewer::boundary::contracts::{
+    Acknowledgment, AckResult, BoundaryError, FrameAcknowledger, GenerationId, RowPublisher,
+};
 
 struct Packet {
     rows: Vec<f64>,
     lines: Vec<geometry::Line>,
     status: serde_json::Value,
+}
+impl FrameAcknowledger for Packet {
+    fn acknowledge(&mut self, receipt: Acknowledgment) -> AckResult {
+        if receipt.id.epoch != 0
+            || Some(receipt.id.generation) != self.status["renderer_generation"].as_u64()
+        {
+            return Err(BoundaryError::StaleGeneration);
+        }
+        if receipt.row_digest != digest(&self.rows)
+            || receipt.mesh_vertices as usize != self.lines.len() * 2
+        {
+            return Err(BoundaryError::InvalidPayload);
+        }
+        Ok(receipt.id)
+    }
 }
 struct External {
     path: std::path::PathBuf,
@@ -53,18 +71,44 @@ fn pack(rows: &[Row]) -> Vec<f64> {
         })
         .collect()
 }
-fn digest(values: &[f64]) -> String {
-    format!(
-        "{:016x}",
+fn digest(values: &[f64]) -> u64 {
         values
             .iter()
             .flat_map(|v| v.to_bits().to_le_bytes())
             .fold(0xcbf29ce484222325u64, |h, b| (h ^ u64::from(b))
                 .wrapping_mul(0x100000001b3))
-    )
 }
 
 struct FalconExtension;
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+
+    #[test]
+    fn acknowledgement_checks_identity_digest_and_vertex_count() {
+        let mut packet = Packet {
+            rows: vec![0.0, 1.0, 2.0],
+            lines: vec![],
+            status: serde_json::json!({"renderer_generation": 7}),
+        };
+        let receipt = Acknowledgment {
+            id: GenerationId { epoch: 0, generation: 7 },
+            row_digest: digest(&packet.rows), mesh_vertices: 0,
+        };
+        for (candidate, expected) in [
+            (receipt, Ok(receipt.id)),
+            (Acknowledgment { id: GenerationId { epoch: 1, generation: 7 }, ..receipt }, Err(BoundaryError::StaleGeneration)),
+            (Acknowledgment { id: GenerationId { epoch: 0, generation: 6 }, ..receipt }, Err(BoundaryError::StaleGeneration)),
+            (Acknowledgment { row_digest: receipt.row_digest ^ 1, ..receipt }, Err(BoundaryError::InvalidPayload)),
+            (Acknowledgment { mesh_vertices: 1, ..receipt }, Err(BoundaryError::InvalidPayload)),
+        ] {
+            assert_eq!(FrameAcknowledger::acknowledge(&mut packet, candidate), expected);
+            assert_eq!(packet.rows, vec![0.0, 1.0, 2.0]);
+            assert_eq!(packet.status, serde_json::json!({"renderer_generation": 7}));
+        }
+    }
+}
+
 #[gdextension]
 unsafe impl ExtensionLibrary for FalconExtension {}
 
@@ -111,11 +155,7 @@ impl FalconSql {
         assert!(latest.generation > external.source_generation);
         let previous = external.source_generation;
         let tick = latest.rows[0].tick;
-        assert!(
-            external
-                .boundary
-                .publish(std::slice::from_ref(&latest.rows))
-        );
+        RowPublisher::publish(&mut external.boundary, &latest.rows).unwrap();
         let (generation, rows) =
             fixture::sql_viewer::boundary::read_frame(&external.boundary.db, tick).unwrap();
         assert_eq!(rows, latest.rows);
@@ -370,7 +410,7 @@ impl FalconSql {
         rows: PackedFloat64Array,
         vertices: PackedVector3Array,
     ) -> bool {
-        let packet = self.pending.take().unwrap();
+        let packet = self.pending.as_mut().unwrap();
         assert_eq!(
             packet.rows.as_slice(),
             rows.as_slice(),
@@ -393,8 +433,14 @@ impl FalconSql {
                 "Godot mesh upload changed a vertex"
             );
         }
+        FrameAcknowledger::acknowledge(packet, Acknowledgment {
+            id: GenerationId { epoch: 0, generation: u64::try_from(generation).unwrap() },
+            row_digest: digest(rows.as_slice()),
+            mesh_vertices: u32::try_from(vertices.len()).unwrap(),
+        }).unwrap();
+        let packet = self.pending.take().unwrap();
         let mut status = packet.status;
-        status["row_digest"] = digest(&packet.rows).into();
+        status["row_digest"] = format!("{:016x}", digest(&packet.rows)).into();
         status["frame_rows"] = (packet.rows.len() / 27).into();
         status["mesh_vertices"] = vertices.len().into();
         status["row_roundtrip_exact"] = true.into();
