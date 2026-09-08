@@ -1,5 +1,5 @@
-# Generated from 0_presentation.tsp; sha256:644d771e64f1650f62add21f95c9815731b03675ea7cfe5e517dce3ee2eef4a7
-version: 3
+# Generated from 0_presentation.tsp; sha256:107cb63371f971260fd0828a841cbd8a499b9fb455a6e85f57b3143075da7d26
+version: 4
 namespace: FalconBoundary
 constants:
   WINDOW:
@@ -27,6 +27,256 @@ constants:
     type: int64
     value: "120"
 models:
+  FixtureStatus:
+    - name: simulation_tick
+      rust: i64
+      type: int64
+    - name: published_generation
+      rust: u64
+      type: uint64
+    - name: renderer_generation
+      rust: u64
+      type: uint64
+    - name: rows
+      rust: u32
+      type: uint32
+    - name: window_frames
+      rust: u32
+      type: uint32
+    - name: held_generation
+      rust: Option<u64>
+      nullable: true
+      item:
+        rust: u64
+        type: uint64
+    - name: held_damage
+      rust: Option<f64>
+      nullable: true
+      item:
+        rust: f64
+        type: float64
+    - name: fresh_tick91_damage
+      rust: Option<f64>
+      nullable: true
+      item:
+        rust: f64
+        type: float64
+    - name: restored
+      rust: Vec<i32>
+      maxLength: 1024
+      item:
+        rust: i32
+        type: int32
+    - name: saved
+      rust: Vec<i32>
+      maxLength: 1024
+      item:
+        rust: i32
+        type: int32
+    - name: advances
+      rust: u32
+      type: uint32
+    - name: runtime_next_tick
+      rust: i64
+      type: int64
+    - name: input_bits
+      rust: u32
+      type: uint32
+  ScheduledStatus:
+    - name: simulation_tick
+      rust: i64
+      type: int64
+    - name: published_tick
+      rust: i64
+      type: int64
+    - name: generation
+      rust: u64
+      type: uint64
+    - name: skipped_publications
+      rust: u32
+      type: uint32
+    - name: published
+      rust: bool
+      type: boolean
+    - name: advances
+      rust: u32
+      type: uint32
+    - name: restored
+      rust: Vec<i32>
+      maxLength: 1024
+      item:
+        rust: i32
+        type: int32
+    - name: held_generation
+      rust: Option<u64>
+      nullable: true
+      item:
+        rust: u64
+        type: uint64
+    - name: held_damage
+      rust: Option<f64>
+      nullable: true
+      item:
+        rust: f64
+        type: float64
+    - name: fresh_tick91_damage
+      rust: Option<f64>
+      nullable: true
+      item:
+        rust: f64
+        type: float64
+    - name: rows
+      rust: u32
+      type: uint32
+    - name: window_frames
+      rust: u32
+      type: uint32
+  ScheduledFrameStatus:
+    - name: simulation_tick
+      rust: i64
+      type: int64
+    - name: published_tick
+      rust: i64
+      type: int64
+    - name: generation
+      rust: u64
+      type: uint64
+    - name: skipped_publications
+      rust: u32
+      type: uint32
+    - name: published
+      rust: bool
+      type: boolean
+    - name: advances
+      rust: u32
+      type: uint32
+    - name: restored
+      rust: Vec<i32>
+      maxLength: 1024
+      item:
+        rust: i32
+        type: int32
+    - name: held_generation
+      rust: Option<u64>
+      nullable: true
+      item:
+        rust: u64
+        type: uint64
+    - name: held_damage
+      rust: Option<f64>
+      nullable: true
+      item:
+        rust: f64
+        type: float64
+    - name: fresh_tick91_damage
+      rust: Option<f64>
+      nullable: true
+      item:
+        rust: f64
+        type: float64
+    - name: rows
+      rust: u32
+      type: uint32
+    - name: window_frames
+      rust: u32
+      type: uint32
+    - name: renderer_generation
+      rust: u64
+      type: uint64
+    - name: observed_simulation_tick
+      rust: i64
+      type: int64
+  ExternalStatus:
+    - name: source_pid
+      rust: u32
+      type: uint32
+    - name: source_generation
+      rust: u64
+      type: uint64
+    - name: renderer_generation
+      rust: u64
+      type: uint64
+    - name: published_tick
+      rust: i64
+      type: int64
+    - name: source_elapsed_us
+      rust: u64
+      type: uint64
+    - name: skipped_generations
+      rust: u64
+      type: uint64
+    - name: consumer_pid
+      rust: u32
+      type: uint32
+    - name: ipc_sql_exact
+      rust: bool
+      type: boolean
+  Position:
+    - name: x
+      rust: f32
+      type: float32
+    - name: y
+      rust: f32
+      type: float32
+    - name: z
+      rust: f32
+      type: float32
+  Rgba:
+    - name: r
+      rust: f32
+      type: float32
+    - name: g
+      rust: f32
+      type: float32
+    - name: b
+      rust: f32
+      type: float32
+    - name: a
+      rust: f32
+      type: float32
+  FramePayload:
+    - name: rows
+      rust: Vec<f64>
+      maxLength: 27648
+      item:
+        rust: f64
+        type: float64
+      packed: PackedFloat64Array
+    - name: vertices
+      rust: Vec<Position>
+      maxLength: 100000
+      item:
+        rust: Position
+        ref: Position
+      packed: PackedVector3Array
+    - name: colors
+      rust: Vec<Rgba>
+      maxLength: 100000
+      item:
+        rust: Rgba
+        ref: Rgba
+      packed: PackedColorArray
+    - name: status
+      rust: FrameStatus
+      ref: FrameStatus
+  MeshReceipt:
+    - name: generation
+      rust: i64
+      type: int64
+    - name: rows
+      rust: Vec<f64>
+      maxLength: 27648
+      item:
+        rust: f64
+        type: float64
+      packed: PackedFloat64Array
+    - name: vertices
+      rust: Vec<Position>
+      maxLength: 100000
+      item:
+        rust: Position
+        ref: Position
+      packed: PackedVector3Array
   RepeatProof:
     - name: ticks
       rust: u32
@@ -438,6 +688,24 @@ results:
     error:
       rust: BoundaryError
       ref: BoundaryError
+unions:
+  FrameStatus:
+    - name: fixture
+      rust: FixtureStatus
+      ref: FixtureStatus
+    - name: scheduled
+      rust: ScheduledFrameStatus
+      ref: ScheduledFrameStatus
+    - name: external
+      rust: ExternalStatus
+      ref: ExternalStatus
+godot:
+  - FixtureStatus
+  - ScheduledStatus
+  - ScheduledFrameStatus
+  - ExternalStatus
+  - FramePayload
+  - MeshReceipt
 interfaces:
   RowPublisher:
     - name: publish

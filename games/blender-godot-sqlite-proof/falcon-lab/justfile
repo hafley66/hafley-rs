@@ -12,6 +12,7 @@ check-generated:
 
 test-godot: check-generated
     godot --headless --path godot --script res://1_rows_test.gd
+    godot --headless --path godot --script res://1_payload.test.gd
 
 # Rust library and controller checks.
 test: check-generated

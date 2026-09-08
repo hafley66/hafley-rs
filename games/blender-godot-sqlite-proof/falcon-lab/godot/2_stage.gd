@@ -1,6 +1,7 @@
 extends Node3D
 
 const Rows = preload("res://1_rows_auto.gd")
+const Payload = preload("res://1_payload_auto.gd")
 
 var extension
 var mesh := ArrayMesh.new()
@@ -78,7 +79,7 @@ func _ready():
 	captions[9].text = "0.5X + HOLDS / SCRIPTED TRAVEL / PM + MELEE KB + RAPIER"
 	print("GDEXT_STAGE_READY runtime=", Engine.get_version_info().string)
 
-func _upload_and_acknowledge(frame: Dictionary, generation: int) -> void:
+func _upload_and_acknowledge(frame: Payload.FramePayload, generation: int) -> void:
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = frame.vertices
@@ -86,7 +87,11 @@ func _upload_and_acknowledge(frame: Dictionary, generation: int) -> void:
 	mesh.clear_surfaces()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
 	var uploaded := mesh.surface_get_arrays(0)
-	assert(extension.acknowledge(generation, frame.rows, uploaded[Mesh.ARRAY_VERTEX]))
+	var receipt := Payload.MeshReceipt.new()
+	receipt.generation = generation
+	receipt.rows = frame.rows
+	receipt.vertices = uploaded[Mesh.ARRAY_VERTEX]
+	assert(extension.acknowledge(receipt.to_wire()))
 
 func _process(_delta):
 	if external:
@@ -105,8 +110,8 @@ func _process(_delta):
 			return
 		tick += 1
 		var bits := 1 if tick == 60 else (2 if tick == 78 else 0)
-		var frame: Dictionary = extension.advance(bits) if incremental else extension.next_frame()
-		var state: Dictionary = JSON.parse_string(frame.status)
+		var frame := Payload.FramePayload.from_wire(extension.advance(bits) if incremental else extension.next_frame())
+		var state = frame.status
 		var rows: PackedFloat64Array = frame.rows
 		var meta := Rows.frame_values(rows)
 		var target := Rows.target_values(rows)
@@ -134,9 +139,10 @@ func _process_external():
 	if last_video_time != 0 and now - last_video_time < 16667:
 		OS.delay_usec(16667 - (now - last_video_time))
 	last_video_time = Time.get_ticks_usec()
-	var frame: Dictionary = extension.poll_external()
-	if not frame.is_empty():
-		var state: Dictionary = JSON.parse_string(frame.status)
+	var wire: Dictionary = extension.poll_external()
+	if not wire.is_empty():
+		var frame := Payload.FramePayload.from_wire(wire)
+		var state = frame.status
 		var rows: PackedFloat64Array = frame.rows
 		var meta := Rows.frame_values(rows)
 		var target := Rows.target_values(rows)
@@ -179,11 +185,11 @@ func _process_scheduled():
 	if not observation.has("current"):
 		captions[1].text = "LOADING FIXTURE / WORKER HAS NOT EXECUTED A TICK"
 		return
-	var current: Dictionary = JSON.parse_string(observation.current)
+	var current := Payload.ScheduledStatus.from_wire(observation.current)
 	var paused: bool = not faults and current.simulation_tick >= 92 and current.simulation_tick < 106
 	if observation.has("frame"):
-		var frame: Dictionary = observation.frame
-		var state: Dictionary = JSON.parse_string(frame.status)
+		var frame := Payload.FramePayload.from_wire(observation.frame)
+		var state = frame.status
 		var rows: PackedFloat64Array = frame.rows
 		var meta := Rows.frame_values(rows)
 		var target := Rows.target_values(rows)
@@ -217,13 +223,13 @@ func _process_scheduled():
 			get_tree().quit(0)
 			set_process(false)
 
-func _inject_faults(current: Dictionary):
+func _inject_faults(current: Payload.ScheduledStatus):
 	if current.simulation_tick >= 60 and not injected[0]:
 		injected[0] = true
 		print("FAULT_BEGIN main")
 		OS.delay_msec(800)
 		print("FAULT_END main")
-		var after: Dictionary = JSON.parse_string(extension.poll_scheduled(false).current)
+		var after := Payload.ScheduledStatus.from_wire(extension.poll_scheduled(false).current)
 		fault_note = "MAIN THREAD: 800 MS / WORKER ADVANCED %d TICKS" % (int(after.simulation_tick) - int(current.simulation_tick))
 	elif current.simulation_tick >= 90 and not injected[1]:
 		injected[1] = true
@@ -233,7 +239,7 @@ func _inject_faults(current: Dictionary):
 		injected[2] = true
 		RenderingServer.call_on_render_thread(_render_stall)
 		RenderingServer.force_sync()
-		var after: Dictionary = JSON.parse_string(extension.poll_scheduled(false).current)
+		var after := Payload.ScheduledStatus.from_wire(extension.poll_scheduled(false).current)
 		fault_note = "RENDER THREAD: 800 MS / WORKER ADVANCED %d TICKS" % (int(after.simulation_tick) - int(current.simulation_tick))
 
 static func _render_stall():

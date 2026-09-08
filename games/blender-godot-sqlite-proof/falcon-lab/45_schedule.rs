@@ -4,7 +4,7 @@ use crate::fixture::{
     self, Runtime,
     sql_viewer::boundary::{self, Boundary, Ring, Row},
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 #[cfg(feature = "gdext")]
 use std::time::{Duration, Instant};
 use std::{
@@ -13,21 +13,7 @@ use std::{
 };
 
 type Error = Box<dyn std::error::Error>;
-#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq)]
-pub struct Status {
-    pub simulation_tick: i64,
-    pub published_tick: i64,
-    pub generation: u64,
-    pub skipped_publications: usize,
-    pub published: bool,
-    pub advances: usize,
-    pub restored: Vec<i32>,
-    pub held_generation: Option<u64>,
-    pub held_damage: Option<f64>,
-    pub fresh_tick91_damage: Option<f64>,
-    pub rows: usize,
-    pub window_frames: usize,
-}
+pub use boundary::contracts::ScheduledStatus as Status;
 #[derive(Default)]
 pub struct Shared {
     pub ring: Option<Ring>,
@@ -158,13 +144,13 @@ pub fn run(
             generation: boundary.generation,
             skipped_publications: skipped,
             published,
-            advances: display.advances,
+            advances: u32::try_from(display.advances)?,
             restored: display.restored.clone(),
             held_generation,
             held_damage: held_generation.map(|_| held_rows[0].values[5]),
             fresh_tick91_damage: fresh,
-            rows: boundary.ring.read().unwrap().current().rows.len(),
-            window_frames: pending.len(),
+            rows: u32::try_from(boundary.ring.read().unwrap().current().rows.len())?,
+            window_frames: u32::try_from(pending.len())?,
         };
         if published {
             state.published = Some(status.clone());

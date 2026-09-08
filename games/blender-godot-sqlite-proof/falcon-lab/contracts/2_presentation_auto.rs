@@ -1,4 +1,4 @@
-// Generated from 0_presentation.tsp; sha256:644d771e64f1650f62add21f95c9815731b03675ea7cfe5e517dce3ee2eef4a7
+// Generated from 0_presentation.tsp; sha256:107cb63371f971260fd0828a841cbd8a499b9fb455a6e85f57b3143075da7d26
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -10,6 +10,91 @@ pub const PROTOCOL_VERSION: u32 = 1;
 pub const REPEAT_FLAG: &'static str = "--repeat";
 pub const REPEAT_TICKS: u32 = 300;
 pub const REPEAT_PERIOD: i64 = 120;
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FixtureStatus {
+  pub simulation_tick: i64,
+  pub published_generation: u64,
+  pub renderer_generation: u64,
+  pub rows: u32,
+  pub window_frames: u32,
+  pub held_generation: Option<u64>,
+  pub held_damage: Option<f64>,
+  pub fresh_tick91_damage: Option<f64>,
+  pub restored: Vec<i32>,
+  pub saved: Vec<i32>,
+  pub advances: u32,
+  pub runtime_next_tick: i64,
+  pub input_bits: u32,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScheduledStatus {
+  pub simulation_tick: i64,
+  pub published_tick: i64,
+  pub generation: u64,
+  pub skipped_publications: u32,
+  pub published: bool,
+  pub advances: u32,
+  pub restored: Vec<i32>,
+  pub held_generation: Option<u64>,
+  pub held_damage: Option<f64>,
+  pub fresh_tick91_damage: Option<f64>,
+  pub rows: u32,
+  pub window_frames: u32,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScheduledFrameStatus {
+  pub simulation_tick: i64,
+  pub published_tick: i64,
+  pub generation: u64,
+  pub skipped_publications: u32,
+  pub published: bool,
+  pub advances: u32,
+  pub restored: Vec<i32>,
+  pub held_generation: Option<u64>,
+  pub held_damage: Option<f64>,
+  pub fresh_tick91_damage: Option<f64>,
+  pub rows: u32,
+  pub window_frames: u32,
+  pub renderer_generation: u64,
+  pub observed_simulation_tick: i64,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ExternalStatus {
+  pub source_pid: u32,
+  pub source_generation: u64,
+  pub renderer_generation: u64,
+  pub published_tick: i64,
+  pub source_elapsed_us: u64,
+  pub skipped_generations: u64,
+  pub consumer_pid: u32,
+  pub ipc_sql_exact: bool,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Position {
+  pub x: f32,
+  pub y: f32,
+  pub z: f32,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Rgba {
+  pub r: f32,
+  pub g: f32,
+  pub b: f32,
+  pub a: f32,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FramePayload {
+  pub rows: Vec<f64>,
+  pub vertices: Vec<Position>,
+  pub colors: Vec<Rgba>,
+  pub status: FrameStatus,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MeshReceipt {
+  pub generation: i64,
+  pub rows: Vec<f64>,
+  pub vertices: Vec<Position>,
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RepeatProof {
   pub ticks: u32,
@@ -118,6 +203,13 @@ pub enum BoundaryError {
   MissingFrame,
   StaleGeneration,
   InvalidPayload,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum FrameStatus {
+  Fixture(FixtureStatus),
+  Scheduled(ScheduledFrameStatus),
+  External(ExternalStatus),
 }
 pub type PublishResult = Result<GenerationId, BoundaryError>;
 pub type ReadResult = Result<FrameRead, BoundaryError>;

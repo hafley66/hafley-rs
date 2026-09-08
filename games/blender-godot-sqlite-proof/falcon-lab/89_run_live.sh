@@ -10,6 +10,7 @@ python3 "$lab_dir/75_udp_lab.test.py"
 python3 "$lab_dir/84_live_controller.test.py"
 godot --headless --path "$lab_dir/godot" --check-only --script res://2_stage.gd
 godot --headless --path "$lab_dir/godot" --script res://1_rows_test.gd
+godot --headless --path "$lab_dir/godot" --script res://1_payload.test.gd
 run_dir=$(lab_temp live-suite)
 mkdir "$run_dir/basic" "$run_dir/lifecycle"
 cd "$run_dir/basic"
