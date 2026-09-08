@@ -1,6 +1,7 @@
 //! `boop me mood` set, read and clear, and the drain path rendering queued
 //! mail through the receiver's effective mood rather than a fixed shape.
 
+use boop_store::testing::BoopCommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -36,7 +37,7 @@ impl Fixture {
     fn boop(&self, args: &[&str]) -> Output {
         Command::new(BOOP)
             .args(args)
-            .env("HOME", self.root.join("home"))
+            .boop_test_root(self.root.join("home"))
             .env("BOOP_DB", self.root.join("boop.db"))
             .output()
             .unwrap()
@@ -47,7 +48,7 @@ impl Fixture {
             .args(args)
             .arg("--mail-dir")
             .arg(self.mail())
-            .env("HOME", self.root.join("home"))
+            .boop_test_root(self.root.join("home"))
             .env("BOOP_DB", self.root.join("boop.db"))
             .output()
             .unwrap()

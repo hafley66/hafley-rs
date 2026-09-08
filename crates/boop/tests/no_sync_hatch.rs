@@ -2,6 +2,7 @@
 //! the store. The receipt is a turn COUNT, never a wall reading: a transcript
 //! appended between two runs changes the count only on the run that synced.
 
+use boop_store::testing::BoopCommandExt;
 use std::path::Path;
 use std::process::Command;
 
@@ -39,7 +40,7 @@ fn turn_count(home: &Path, no_sync: bool) -> i64 {
             "--format",
             "ndjson",
         ])
-        .env("HOME", home)
+        .boop_test_root(home)
         .env("BOOP_DB", home.join("boop.db"));
     if no_sync {
         command.env("BOOP_NO_SYNC", "1");

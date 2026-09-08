@@ -9,6 +9,7 @@
 //! 130-165 MB harness child each (2026-08-27), and nothing could bring a
 //! stopped lane back on its conversation.
 
+use boop_store::testing::BoopCommandExt;
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -100,7 +101,7 @@ impl Fixture {
                 .unwrap();
         }
         symlink(executable("git"), bin.join("git")).unwrap();
-        symlink(executable("tmux"), bin.join("tmux")).unwrap();
+        boop_store::testing::write_tmux_fixture(&bin.join("tmux"), &executable("tmux"));
         symlink(executable("nice"), bin.join("nice")).unwrap();
         symlink(executable("sed"), bin.join("sed")).unwrap();
         symlink(executable("sh"), bin.join("sh")).unwrap();
@@ -127,10 +128,9 @@ impl Fixture {
     fn boop(&self) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_boop"));
         command
-            .env_clear()
-            .env("HOME", self.root.join("home"))
+            .boop_test_root(self.root.join("home"))
             .env("BOOP_DB", self.root.join("boop.db"))
-            .env("XDG_CONFIG_HOME", self.root.join("config"))
+            .env("BOOP_CONFIG", self.root.join("config/boop/config.json"))
             .env("PATH", format!("{}:/usr/bin:/bin", self.bin.display()))
             .env("BOOP_TEST_CODEX_LOG", &self.log)
             .env("BOOP_IDLE_SHUTDOWN_SECS", "1")
@@ -164,8 +164,6 @@ impl Fixture {
 
     fn trail(&self, file: &str) -> PathBuf {
         self.root
-            .join("home")
-            .join(".agent")
             .join("lanes")
             .join(&self.lane)
             .join(file)
@@ -174,6 +172,11 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
+        if std::thread::panicking() {
+            eprintln!("supervise log: {}\nrpc log: {}\nmail: {}", self.supervise_log(), self.rpc_log(), self.mailbox());
+            let pane = Command::new(executable("tmux")).args(["-L", &self.socket, "capture-pane", "-p", "-t", &self.lane]).output().unwrap();
+            eprintln!("pane: {}", String::from_utf8_lossy(&pane.stdout));
+        }
         let _ = Command::new(executable("tmux"))
             .args(["-L", &self.socket, "kill-server"])
             .stdout(Stdio::null())

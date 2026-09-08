@@ -1,6 +1,7 @@
 //! Pins `boop-start` warm-up: a shared build target crosses two sibling
 //! spawns exactly once, and the setup sentence rides the preamble verbatim.
 
+use boop_store::testing::BoopCommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -288,10 +289,9 @@ impl DryRunFixture {
 
     fn run(&self, branch: &str, extra: &[&str]) -> std::process::Output {
         Command::new(env!("CARGO_BIN_EXE_boop"))
-            .env_clear()
-            .env("HOME", &self.root)
+            .boop_test_root(&self.root)
             .env("BOOP_DB", self.root.join("boop.db"))
-            .env("XDG_CONFIG_HOME", self.root.join("config"))
+            .env("BOOP_CONFIG", self.root.join("config/boop/config.json"))
             .env("PATH", &self.bin)
             .args(["beep", "lane", "create"])
             .args(["--branch", branch])
@@ -364,10 +364,9 @@ fn lane_create_dry_run_names_the_justfile_boop_start_runs_from() {
 fn agent_register_with_a_worktree_prints_the_preamble_to_its_own_stdout() {
     let fixture = DryRunFixture::new("register", true);
     let output = Command::new(env!("CARGO_BIN_EXE_boop"))
-        .env_clear()
-        .env("HOME", &fixture.root)
+        .boop_test_root(&fixture.root)
         .env("BOOP_DB", fixture.root.join("boop.db"))
-        .env("XDG_CONFIG_HOME", fixture.root.join("config"))
+        .env("BOOP_CONFIG", fixture.root.join("config/boop/config.json"))
         // The recipe's own body needs the system utilities, not just `just`.
         .env("PATH", format!("{}:/usr/bin:/bin", fixture.bin.display()))
         .args([

@@ -24,6 +24,18 @@ Completed commits:
 - `29fad26 fix(boop): preserve route ownership when binding existing panes`
 - `2376ef5 fix(boop-store): isolate trails and coalesce lifecycle observations`
 - `b815481 feat(boop): observe wrapped Codex lifecycle through owned connections`
+- `501d44c fix(boop): retain process observations and release owned TUI resources`
+
+Fixture isolation checkpoint: the complete CLI integration target now passes
+**118/118** (`85_cli-integration-isolated-after.log`). Fixture subprocesses use
+`BoopCommandExt::boop_test_root`, `BOOP_READER_HOME`, `BOOP_CONFIG` and explicit
+`BOOP_DB`; HOME and CODEX_HOME are preserved. Test tmux servers load `/dev/null`
+configuration. Default user `remain-on-exit` caused four intermediate failures;
+their captured panes showed completed, dead processes (`83_retire-fixture-error.log`).
+The WAL reader regression exposed a separate import defect: sync telemetry beside
+the configured DB acquired a mailbox write lock despite carrying no envelopes.
+The importer now parses before taking that lock; the reader completes while a
+writer holds its transaction (`84_telemetry-import-after.log`).
 
 Post-checkpoint fixes: transcript-only refresh preserves explicit PID/pane
 observations (failing reproduction `75_projector-pid-before.log`, passing

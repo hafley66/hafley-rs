@@ -3,6 +3,7 @@
 //! and `lane delete` bailed on the missing route. Both asserts below fail on
 //! the pre-fix tree; only `git worktree remove --force` unblocked the name.
 
+use boop_store::testing::BoopCommandExt;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -65,7 +66,7 @@ impl Doa {
             .status()
             .unwrap();
         symlink(git, bin.join("git")).unwrap();
-        symlink(executable("tmux"), bin.join("tmux")).unwrap();
+        boop_store::testing::write_tmux_fixture(&bin.join("tmux"), &executable("tmux"));
         symlink(env!("CARGO_BIN_EXE_boop"), bin.join("boop")).unwrap();
         Doa {
             root,
@@ -80,10 +81,9 @@ impl Doa {
     fn boop(&self) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_boop"));
         command
-            .env_clear()
-            .env("HOME", &self.root)
+            .boop_test_root(&self.root)
             .env("BOOP_DB", self.root.join("boop.db"))
-            .env("XDG_CONFIG_HOME", self.root.join("config"))
+            .env("BOOP_CONFIG", self.root.join("config/boop/config.json"))
             .env("PATH", &self.bin)
             .current_dir(&self.repo);
         command
@@ -148,7 +148,9 @@ impl Doa {
             }
             std::thread::sleep(Duration::from_millis(200));
         }
-        panic!("lane {lane} never died; its route or pane is still up");
+        let log = std::fs::read_to_string(self.root.join("lanes").join(lane).join("supervise.log")).unwrap_or_default();
+        let pane = Command::new(executable("tmux")).args(["-L", &self.socket, "capture-pane", "-p", "-t", lane]).output().unwrap();
+        panic!("lane {lane} never died; supervise log: {log}; pane: {}", String::from_utf8_lossy(&pane.stdout));
     }
 
     fn session_alive(&self, session: &str) -> bool {
@@ -268,7 +270,7 @@ fn a_create_clears_a_stale_pin_with_nothing_else_left_to_remove() {
     let doa = Doa::new("pin");
     let branch = "feature/carcass-pin";
     let lane = "feature-carcass-pin";
-    let pin_dir = doa.root.join(".agent").join("lanes").join(lane);
+    let pin_dir = doa.root.join("lanes").join(lane);
     std::fs::create_dir_all(&pin_dir).unwrap();
     let pin = pin_dir.join("conversation");
     std::fs::write(
@@ -296,7 +298,6 @@ fn a_create_clears_a_stale_pin_with_nothing_else_left_to_remove() {
 fn trail_expect(doa: &Doa, lane: &str) -> Option<serde_json::Value> {
     let path = doa
         .root
-        .join(".agent")
         .join("lanes")
         .join(lane)
         .join("expect.json");
@@ -311,7 +312,7 @@ fn a_create_with_no_expect_flag_clears_the_names_old_expectation() {
     let doa = Doa::new("expect");
     let branch = "feature/carcass-expect";
     let lane = "feature-carcass-expect";
-    let trail = doa.root.join(".agent").join("lanes").join(lane);
+    let trail = doa.root.join("lanes").join(lane);
     std::fs::create_dir_all(&trail).unwrap();
     std::fs::write(
         trail.join("expect.json"),

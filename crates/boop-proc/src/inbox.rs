@@ -161,7 +161,7 @@ pub fn drains_by_hook(settings: &Value, name: &str) -> bool {
 /// Whether the coordinator working in `cwd` drains by hook. The project file
 /// answers first; a coordinator may also have installed into its user settings.
 pub fn installed_for(cwd: &Path, name: &str) -> bool {
-    let user = dirs::home_dir().map(|home| home.join(".claude").join("settings.json"));
+    let user = boop_harness::harness::reader_home().ok().map(|home| home.join(".claude").join("settings.json"));
     [Some(settings_path(cwd)), user]
         .into_iter()
         .flatten()

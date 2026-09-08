@@ -9,6 +9,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 
 use crate::door::{Delivered, Door, IdleNotice};
+use crate::harness::codex::codex_home;
 use crate::harness::{HarnessId, NativeTuiEvent, NativeTuiObserver, NativeTuiPlan, NativeTuiSpec};
 use crate::live::{now_ms, DoorAddress, LiveSession, LiveSessionScope, LiveSessions, LiveStatus};
 
@@ -67,11 +68,6 @@ impl CodexDoor {
             .join("app-server-control")
             .join("app-server-control.sock"))
     }
-}
-
-fn codex_home() -> Result<PathBuf> {
-    let home = dirs::home_dir().context("resolve home directory")?;
-    Ok(home.join(".codex"))
 }
 
 impl LiveSessions for CodexDoor {

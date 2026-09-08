@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use boop_store::testing::BoopCommandExt;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 use std::time::Duration;
@@ -185,7 +186,7 @@ fn command_failure_prints_a_row_and_exits_zero() {
     std::fs::create_dir_all(root.join("home")).unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_boop"))
         .args(["host", "chat"])
-        .env("HOME", root.join("home"))
+        .boop_test_root(root.join("home"))
         .env("BOOP_DB", root.join("boop.db"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

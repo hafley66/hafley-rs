@@ -46,7 +46,7 @@ impl ClaudeDoor {
         if let Some(dir) = std::env::var_os(SESSIONS_DIR_ENV).filter(|value| !value.is_empty()) {
             return Ok(PathBuf::from(dir));
         }
-        let home = dirs::home_dir().context("resolve home directory")?;
+        let home = crate::harness::reader_home()?;
         Ok(home.join(".claude").join("sessions"))
     }
 

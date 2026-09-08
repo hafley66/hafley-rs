@@ -92,6 +92,9 @@ fn load_once() -> Result<Config, anyhow::Error> {
 }
 
 pub fn default_path() -> Result<PathBuf> {
+    if let Some(path) = std::env::var_os("BOOP_CONFIG").filter(|value| !value.is_empty()) {
+        return Ok(PathBuf::from(path));
+    }
     let root = dirs::config_dir().context("resolve the user config directory")?;
     Ok(root.join("boop").join("config.json"))
 }

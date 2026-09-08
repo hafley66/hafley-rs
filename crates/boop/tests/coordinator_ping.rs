@@ -4,6 +4,7 @@
 //! hail took the "lane supervisor delivers it" branch and every result row
 //! addressed to a coordinator queued in bus.ndjson forever, never reaching
 //! the pane.
+use boop_store::testing::BoopCommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -28,7 +29,7 @@ fn boop(dir: &Path, args: &[&str]) -> std::process::Output {
         // of 5 whole-suite runs: 374MB, `journal_mode=delete`, a 5s busy_timeout
         // and writers holding longer than that.
         .env("BOOP_DB", dir.join("boop.db"))
-        .env("HOME", dir.join("home"))
+        .boop_test_root(dir.join("home"))
         .output()
         .unwrap()
 }
@@ -147,7 +148,7 @@ fn hail_to_a_coordinator_with_no_live_session_is_held_for_its_turn_boundary() {
              left join dict_harness h on h.id = d.harness_id order by d.at_ms desc limit 1",
         ])
         .env("BOOP_DB", dir.join("boop.db"))
-        .env("HOME", dir.join("home"))
+        .boop_test_root(dir.join("home"))
         .output()
         .unwrap();
     assert!(ledger.status.success(), "stderr: {:?}", ledger.stderr);
@@ -226,7 +227,7 @@ fn a_supervisor_result_row_to_the_same_coordinator_stops_at_the_mailbox() {
             "select d.outcome, d.detail from agent_delivery d where d.detail like 'yield row%' order by d.at_ms desc limit 1",
         ])
         .env("BOOP_DB", dir.join("boop.db"))
-        .env("HOME", dir.join("home"))
+        .boop_test_root(dir.join("home"))
         .output()
         .unwrap();
     let row = String::from_utf8_lossy(&ledger.stdout);

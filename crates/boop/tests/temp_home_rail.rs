@@ -1,7 +1,5 @@
-//! A `boop` subprocess that inherits the real `HOME` re-parses the machine's
-//! whole transcript roots (`~/.codex`, `~/.claude`, `~/.local/share/opencode`,
-//! `~/.agent`) from offset zero. Every test file that spawns the binary must
-//! redirect both `HOME` and `BOOP_DB` to a temp root.
+//! Boop subprocess fixtures isolate transcript readers, configuration, route
+//! stamps and storage while preserving the real HOME and CODEX_HOME.
 
 use std::path::{Path, PathBuf};
 
@@ -43,7 +41,7 @@ const SPAWN_WAIVED: &[&str] = &[
 const STORE_WAIVED: &[&str] = &["cli/db.rs", "cli/job.rs"];
 
 #[test]
-fn every_boop_subprocess_site_redirects_home_and_boop_db() {
+fn every_boop_subprocess_fixture_isolates_readers_and_storage() {
     let this_file = Path::new(file!())
         .file_name()
         .unwrap()
@@ -67,7 +65,8 @@ fn every_boop_subprocess_site_redirects_home_and_boop_db() {
             if !text.contains("CARGO_BIN_EXE_boop") {
                 continue;
             }
-            if !text.contains(".env(\"HOME\"") || !text.contains(".env(\"BOOP_DB\"") {
+            if !text.contains(".boop_test_root(") || !text.contains(".env(\"BOOP_DB\"")
+                || text.contains(".env(\"HOME\"") || text.contains(".env(\"CODEX_HOME\"") {
                 offenders.push(name);
             }
         }
@@ -75,7 +74,7 @@ fn every_boop_subprocess_site_redirects_home_and_boop_db() {
 
     assert!(
         offenders.is_empty(),
-        "these test files spawn the boop binary without redirecting both HOME and BOOP_DB: {offenders:?}"
+        "these test files lack Boop reader/storage isolation or replace a harness home: {offenders:?}"
     );
 }
 
@@ -160,7 +159,10 @@ fn no_new_src_unit_test_reaches_the_machine_s_own_agent_root() {
         // A module whose test helper pins `BOOP_DB` (a `set_var` under a
         // `Once`, as `supervise.rs` does in `tempdir()`) reaches a temp store.
         let pins_store = text.contains("set_var(\"BOOP_DB\"");
-        let stores = text.contains("Store::default_path()") && names_a_fixture && !pins_store;
+        // Resolving a default path alone is read-only. Opening a store is the
+        // operation that can create/migrate production data.
+        let stores = text.contains("Store::default_path()") && text.contains("Store::open")
+            && names_a_fixture && !pins_store;
 
         if spawns && !SPAWN_WAIVED.contains(&name.as_str()) {
             spawners.push(name.clone());

@@ -5,6 +5,7 @@
 //! carries today; the real create prints the id it minted and writes it onto
 //! the trail record a revive replays.
 
+use boop_store::testing::BoopCommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -60,8 +61,8 @@ impl Fixture {
     /// `lane create --dry-run` for `lane`, against this fixture's own HOME.
     fn dry_run(&self, lane: &str) -> String {
         let output = Command::new(env!("CARGO_BIN_EXE_boop"))
-            .env("HOME", &self.root)
-            .env("XDG_CONFIG_HOME", self.root.join("config"))
+            .boop_test_root(&self.root)
+            .env("BOOP_CONFIG", self.root.join("config/boop/config.json"))
             .env("BOOP_DB", self.root.join("boop.db"))
             .env("BOOP_NO_SYNC", "1")
             .args(["beep", "lane", "create", "--lane", lane])
@@ -85,7 +86,7 @@ impl Fixture {
 
     /// The trail record `lane` would be revived from.
     fn write_spawn_record(&self, lane: &str, spawn_id: Option<i64>) {
-        let dir = self.root.join(".agent").join("lanes").join(lane);
+        let dir = self.root.join("lanes").join(lane);
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("spawn.json"),

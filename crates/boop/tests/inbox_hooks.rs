@@ -3,6 +3,7 @@
 //! writes no project settings; `boop inbox hooks` is the one verb that
 //! writes them, and a hail is never typed into a pane whatever the answer.
 
+use boop_store::testing::BoopCommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -69,7 +70,7 @@ impl Coordinator {
             // with `journal_mode=delete`, and live boop processes hold write
             // locks past the 5s busy_timeout.
             .env("BOOP_DB", self.root.join("boop.db"))
-            .env("HOME", self.root.join("home"))
+            .boop_test_root(self.root.join("home"))
             .output()
             .unwrap()
     }
@@ -80,7 +81,7 @@ impl Coordinator {
         Command::new(BOOP)
             .args(args)
             .env("BOOP_DB", self.root.join("boop.db"))
-            .env("HOME", self.root.join("home"))
+            .boop_test_root(self.root.join("home"))
             .output()
             .unwrap()
     }
@@ -414,7 +415,7 @@ fn a_drain_without_a_name_uses_the_identity_ladder() {
         .arg("--mail-dir")
         .arg(coord.mail())
         .env("BOOP_DB", coord.root.join("boop.db"))
-        .env("HOME", coord.root.join("home"))
+        .boop_test_root(coord.root.join("home"))
         .env("BOOP_SESSION", &coord.name)
         .env_remove("BOOP_LANE")
         .env_remove("BOOP_PARENT")

@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use boop_store::testing::BoopCommandExt;
 use std::process::Command;
 
 const BOOP: &str = env!("CARGO_BIN_EXE_boop");
@@ -13,6 +14,7 @@ fn mail_dir(name: &str) -> PathBuf {
 
 fn run(dir: &Path, args: &[&str]) -> std::process::Output {
     Command::new(BOOP)
+        .boop_test_root(dir.join("home"))
         .args(args)
         .arg("--mail-dir")
         .arg(dir)
@@ -197,7 +199,7 @@ fn a_hail_to_a_harnessless_native_row_is_held_and_the_reason_recorded() {
             "db",
             "select outcome, detail from agent_delivery order by at_ms desc limit 1",
         ])
-        .env("HOME", dir.join("home"))
+        .boop_test_root(dir.join("home"))
         .env("BOOP_DB", dir.join("boop.db"))
         .output()
         .unwrap();

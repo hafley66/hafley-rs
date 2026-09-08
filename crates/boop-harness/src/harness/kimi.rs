@@ -436,7 +436,7 @@ fn read_kimi(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate
 }
 
 fn kimi_sessions_dir() -> anyhow::Result<PathBuf> {
-    let home = dirs::home_dir().context("resolve home directory")?;
+    let home = super::reader_home()?;
     Ok(home.join(".kimi-code").join("sessions"))
 }
 

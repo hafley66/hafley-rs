@@ -1,6 +1,7 @@
 //! The blocking mail wait, taken from the real binary: what it prints, what it
 //! stamps, and the exit code plus re-run line a timeout leaves behind.
 
+use boop_store::testing::BoopCommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -28,8 +29,7 @@ impl Fixture {
     fn boop(&self, args: &[&str]) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_boop"));
         command
-            .env_clear()
-            .env("HOME", &self.home)
+            .boop_test_root(&self.home)
             .env("BOOP_DB", self.home.join("boop.db"))
             .env("PATH", "/usr/bin:/bin")
             .args(args)

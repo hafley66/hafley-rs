@@ -1,6 +1,7 @@
 //! `boop debug <lane>`: the five sections a parent reads to answer "what
 //! happened", each of which prints `none` rather than nothing.
 
+use boop_store::testing::BoopCommandExt;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -13,8 +14,7 @@ fn fixture(name: &str) -> PathBuf {
 
 fn boop(home: &PathBuf, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_boop"))
-        .env_clear()
-        .env("HOME", home)
+        .boop_test_root(home)
         .env("BOOP_DB", home.join("mail").join("boop.db"))
         .env("PATH", "/usr/bin:/bin")
         .args(args)

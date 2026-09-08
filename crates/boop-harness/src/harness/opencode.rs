@@ -970,7 +970,7 @@ pub fn store_path() -> Option<PathBuf> {
 /// opencode has ever created the file.
 pub fn opencode_db_path() -> Option<PathBuf> {
     Some(
-        dirs::home_dir()?
+        super::reader_home().ok()?
             .join(".local")
             .join("share")
             .join("opencode")

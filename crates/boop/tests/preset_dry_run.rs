@@ -2,6 +2,7 @@
 //! binary (issue presets-only-model-spelling: `luna` and `solx` (gpt through opencode) were both
 //! found only at spawn, one by an ACP model rejection and one by the bail).
 
+use boop_store::testing::BoopCommandExt;
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -81,8 +82,8 @@ impl Fixture {
 
     fn dry_run(&self, preset: &str) -> std::process::Output {
         Command::new(env!("CARGO_BIN_EXE_boop"))
-            .env("HOME", &self.root)
-            .env("XDG_CONFIG_HOME", self.root.join("config"))
+            .boop_test_root(&self.root)
+            .env("BOOP_CONFIG", self.root.join("config/boop/config.json"))
             .env("BOOP_DB", self.root.join("boop.db"))
             .env("BOOP_NO_SYNC", "1")
             .args(["beep", "lane", "create", "--lane"])

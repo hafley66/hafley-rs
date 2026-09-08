@@ -7,6 +7,41 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::tmux::{LiveSessions, Multiplexer};
 
+/// Isolate a Boop subprocess from ambient route identity, databases and reader
+/// roots while preserving the real HOME and CODEX_HOME. Explicit command env
+/// values take precedence, including values set before this call.
+pub trait BoopCommandExt {
+    fn boop_test_root(&mut self, root: impl AsRef<Path>) -> &mut Self;
+}
+
+impl BoopCommandExt for Command {
+    fn boop_test_root(&mut self, root: impl AsRef<Path>) -> &mut Self {
+        let explicit: BTreeSet<_> = self.get_envs().map(|(key, _)| key.to_owned()).collect();
+        for (key, _) in std::env::vars_os() {
+            let name = key.to_string_lossy();
+            if !explicit.contains(&key) && (name.starts_with("BOOP_") || matches!(name.as_ref(),
+                "TMUX" | "TMUX_PANE" | "CODEX_THREAD_ID" | "CLAUDE_SESSION_ID" | "CLAUDE_CODE_SESSION_ID" | "OPENCODE_SESSION_ID" | "KIMI_SESSION_ID")) {
+                self.env_remove(key);
+            }
+        }
+        let root = root.as_ref();
+        self.env("BOOP_READER_HOME", root);
+        if !explicit.contains(std::ffi::OsStr::new("BOOP_CONFIG")) {
+            self.env("BOOP_CONFIG", root.join("config/boop/config.json"));
+        }
+        self
+    }
+}
+
+/// The fixture owns its tmux socket and loads no user configuration. In
+/// particular, remain-on-exit must not change a process-exit assertion.
+pub fn write_tmux_fixture(path: &Path, executable: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let quoted = executable.display().to_string().replace('\'', "'\\''");
+    std::fs::write(path, format!("#!/bin/sh\nexec '{quoted}' -f /dev/null \"$@\"\n")).unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
 /// A throwaway git repo (one seed commit) plus a worktree path; harness
 /// adapter tests spawn against it and tear both down on drop.
 pub struct TempRepo {

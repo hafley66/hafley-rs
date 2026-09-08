@@ -557,7 +557,7 @@ fn random_hex() -> String {
 }
 
 fn claude_projects_dir() -> anyhow::Result<PathBuf> {
-    let home = dirs::home_dir().context("resolve home directory")?;
+    let home = super::reader_home()?;
     Ok(home.join(".claude").join("projects"))
 }
 

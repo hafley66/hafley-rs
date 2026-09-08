@@ -677,6 +677,13 @@ fn import_ndjson_tail(store: &crate::ident::Store, path: &Path) -> Result<()> {
         return Ok(());
     };
     let complete = &bytes[..=last];
+    let messages: Vec<_> = String::from_utf8_lossy(complete).lines().filter_map(parse_line).collect();
+    // Telemetry can share the configured store directory. A file containing
+    // no envelopes must not take a mailbox write lock merely to mark its tail.
+    // Leaving its cursor unchanged also preserves a later legacy append.
+    if messages.is_empty() {
+        return Ok(());
+    }
     let mailbox = path
         .file_stem()
         .and_then(|stem| stem.to_str())
@@ -685,11 +692,8 @@ fn import_ndjson_tail(store: &crate::ident::Store, path: &Path) -> Result<()> {
     let connection = store.connection();
     connection.execute_batch("BEGIN IMMEDIATE")?;
     let result = (|| -> Result<()> {
-        for line in String::from_utf8_lossy(complete).lines() {
-            let Some(message) = parse_line(line) else {
-                continue;
-            };
-            write_message(store, &mailbox, &message, "imported from ndjson")?;
+        for message in &messages {
+            write_message(store, &mailbox, message, "imported from ndjson")?;
         }
         set_import_mark(store, path, offset + complete.len() as i64, "")
     })();

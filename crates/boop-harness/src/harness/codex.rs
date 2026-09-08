@@ -495,8 +495,17 @@ fn read_codex(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crat
 }
 
 fn codex_sessions_dir() -> anyhow::Result<PathBuf> {
-    let home = dirs::home_dir().context("resolve home directory")?;
-    Ok(home.join(".codex").join("sessions"))
+    Ok(codex_home()?.join("sessions"))
+}
+
+pub(crate) fn codex_home() -> anyhow::Result<PathBuf> {
+    if let Some(root) = std::env::var_os("BOOP_READER_HOME").filter(|value| !value.is_empty()) {
+        return Ok(PathBuf::from(root).join(".codex"));
+    }
+    if let Some(root) = std::env::var_os("CODEX_HOME").filter(|value| !value.is_empty()) {
+        return Ok(PathBuf::from(root));
+    }
+    Ok(super::reader_home()?.join(".codex"))
 }
 
 fn random_hex() -> String {

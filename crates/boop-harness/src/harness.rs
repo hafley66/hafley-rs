@@ -13,6 +13,15 @@ pub use boop_store::session::{
     SpawnSpec,
 };
 
+/// Root for offline transcript and session-registry reads. This override is
+/// consumed only by Boop readers; it never changes a harness's credentials or
+/// the HOME/CODEX_HOME inherited by an executable.
+pub fn reader_home() -> Result<PathBuf> {
+    std::env::var_os("BOOP_READER_HOME").filter(|value| !value.is_empty())
+        .map(PathBuf::from).or_else(dirs::home_dir)
+        .ok_or_else(|| anyhow::anyhow!("resolve transcript reader home"))
+}
+
 /// The declared behaviour every former harness-name comparison now reads. One
 /// `static CAPABILITIES` per harness module is the whole table.
 pub struct Capabilities {

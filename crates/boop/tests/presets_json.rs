@@ -3,6 +3,7 @@
 //! so instant's context menu can group presets by harness without parsing the
 //! table.
 
+use boop_store::testing::BoopCommandExt;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -45,8 +46,8 @@ impl Fixture {
 
     fn run(&self, args: &[&str]) -> std::process::Output {
         Command::new(env!("CARGO_BIN_EXE_boop"))
-            .env("HOME", &self.root)
-            .env("XDG_CONFIG_HOME", self.root.join("config"))
+            .boop_test_root(&self.root)
+            .env("BOOP_CONFIG", self.root.join("config/boop/config.json"))
             .env("BOOP_DB", self.root.join("boop.db"))
             .env("BOOP_NO_SYNC", "1")
             .args(args)

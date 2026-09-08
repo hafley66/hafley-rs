@@ -15,6 +15,13 @@ Installed help and isolated reproduction receipts live under
 Complete CLI/help/test matrix and canonical paths remain in progress.
 Recursive installed help capture includes 101 pages (see `3_help-manifest.json`).
 
+Reader/config overrides: `BOOP_READER_HOME` controls only Boop's transcript and
+session registry reads. `BOOP_CONFIG` selects the Boop config file. Neither changes
+the native executable's HOME/CODEX_HOME. Codex reader and door now share one home
+resolver and respect existing CODEX_HOME outside an offline reader fixture.
+Legacy NDJSON import retains in-place tail compatibility, but files containing
+no envelopes acquire no write transaction. CLI integration: 118 passed.
+
 ## Registration consolidation
 
 `beep agent register` and compatibility `beep lane patch` now call

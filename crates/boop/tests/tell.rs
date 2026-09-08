@@ -3,6 +3,7 @@
 //! `yield` default body) and `boop beep children <body>`
 //! (per-child landed/no-route/dead).
 
+use boop_store::testing::BoopCommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -58,7 +59,7 @@ impl Fixture {
             .args(args)
             .arg("--mail-dir")
             .arg(self.mail())
-            .env("HOME", self.root.join("home"))
+            .boop_test_root(self.root.join("home"))
             .env("BOOP_DB", self.root.join("boop.db"))
             .env("BOOP_SESSION", caller)
             .env("BOOP_LANE", caller)
@@ -70,7 +71,7 @@ impl Fixture {
     fn boop(&self, args: &[&str]) -> Output {
         Command::new(BOOP)
             .args(args)
-            .env("HOME", self.root.join("home"))
+            .boop_test_root(self.root.join("home"))
             .env("BOOP_DB", self.root.join("boop.db"))
             .output()
             .unwrap()
@@ -337,7 +338,7 @@ fn beep_children_as_uses_the_selected_routes_native_session_not_the_env_stamp() 
         .args(["beep", "children", "status check", "--as", "caller-a"])
         .arg("--mail-dir")
         .arg(fixture.mail())
-        .env("HOME", fixture.root.join("home"))
+        .boop_test_root(fixture.root.join("home"))
         .env("BOOP_DB", fixture.root.join("boop.db"))
         .env("BOOP_SESSION", "caller-b")
         .env("BOOP_LANE", "caller-b")
