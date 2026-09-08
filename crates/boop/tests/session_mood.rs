@@ -156,6 +156,28 @@ fn me_mood_sets_reads_and_clears_the_named_session() {
 }
 
 #[test]
+fn me_favorite_follows_the_callers_bound_native_thread() {
+    let fixture = Fixture::new("favorite-native-binding");
+    let store = boop::Store::open(fixture.root.join("boop.db")).unwrap();
+    let session = boop::harness::SessionRef {
+        harness: boop::harness::HarnessId::Claude, session_id: "native-thread".into(), nickname: "native-thread".into(),
+        path: fixture.root.join("native.jsonl"), cwd: None, git_branch: None, modified_ms: 1, size: 0,
+        tmux: None, tmux_socket: None, parent: None,
+    };
+    store.project_discovered_session(&session).unwrap();
+    store.write_turn("native-thread", 1, 1, "assistant", "older native answer", None).unwrap();
+    store.write_turn("native-thread", 2, 2, "assistant", "latest native answer", None).unwrap();
+    store.connection().execute("INSERT INTO agent_route(route,kind,harness,session_id) VALUES ('caller-route','coordinator','claude','native-thread')", []).unwrap();
+    let output = Command::new(BOOP).args(["me", "favorite", "--note", "fixture"])
+        .boop_test_root(&fixture.root).env("BOOP_DB", fixture.root.join("boop.db"))
+        .env("BOOP_MAIL_DIR", fixture.mail()).env("BOOP_NO_SYNC", "1").env("BOOP_SESSION", "caller-route")
+        .output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let source: String = store.connection().query_row("SELECT source FROM agent_favorite", [], |row| row.get(0)).unwrap();
+    assert_eq!(source, "claude:native-thread:assistant:2");
+}
+
+#[test]
 fn an_unknown_mood_name_fails_and_names_the_known_ones() {
     let fixture = Fixture::new("unknown-mood");
     let out = fixture.boop(&["me", "mood", "shouty", "--as", "coord"]);

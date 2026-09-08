@@ -93,6 +93,15 @@ fn stderr(output: &Output) -> String {
 }
 
 #[test]
+fn beep_rejects_competing_body_spellings_before_insertion() {
+    let fixture = Fixture::new("body-conflict");
+    let output = fixture.boop_as("caller", &["beep", "target", "positional", "--body", "flag", "--no-wait"]);
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+    assert!(stderr(&output).contains("cannot be used with"));
+    assert!(fixture.bus_rows().is_empty());
+}
+
+#[test]
 fn beep_parent_lands_exactly_one_row_of_the_given_kind_addressed_to_the_recorded_parent_edge() {
     let fixture = Fixture::new("edge");
     fixture.write_registry(serde_json::json!({

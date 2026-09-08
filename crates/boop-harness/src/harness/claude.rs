@@ -491,8 +491,8 @@ fn claude_text(content: &serde_json::Value) -> crate::transcript::Extracted {
 }
 
 // Read every turn from one claude jsonl. `after_seq` skips lines already seen
-// (the watcher passes the last line index). Only user/assistant rows become
-// messages; system/mode/snapshot lines are skipped but still advance `seq` so
+// (the watcher passes the last line index). User/assistant and delivered queued
+// command attachments become messages; other records still advance `seq` so
 // the line index stays an exact file offset.
 pub(crate) fn read_claude(path: &std::path::Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate::transcript::Message> {
     let Ok(file) = std::fs::File::open(path) else {
@@ -513,15 +513,20 @@ pub(crate) fn read_claude(path: &std::path::Path, session_id: &str, after_seq: O
         };
         let msg_type = match v.get("type").and_then(|t| t.as_str()) {
             Some(t @ ("user" | "assistant")) => t,
+            Some("attachment") if v.pointer("/attachment/type").and_then(Value::as_str) == Some("queued_command") => "attachment",
             _ => continue,
         };
-        let content = v
+        let content = if msg_type == "attachment" {
+            v.pointer("/attachment/prompt").cloned().unwrap_or(Value::Null)
+        } else { v
             .get("message")
             .and_then(|m| m.get("content"))
             .cloned()
-            .unwrap_or(Value::Null);
+            .unwrap_or(Value::Null) };
         let (role, subtype) = if msg_type == "assistant" {
             ("assistant".to_string(), None)
+        } else if msg_type == "attachment" {
+            classify_user_line(&v["attachment"], &content)
         } else {
             classify_user_line(&v, &content)
         };
@@ -1132,6 +1137,20 @@ mod tests {
         let mut req = spec(&TmuxGuard::new());
         req.resume_session = Some("abc123".to_owned());
         assert!(Claude.preview_command(&req).unwrap().contains("--resume 'abc123'"));
+    }
+
+    #[test]
+    fn busy_peer_attachment_is_a_native_message_receipt() {
+        let path = std::env::temp_dir().join(format!("boop-claude-peer-{}.jsonl", std::process::id()));
+        std::fs::write(&path, concat!(
+            "{\"type\":\"queue-operation\",\"content\":\"nonce\"}\n",
+            "{\"type\":\"attachment\",\"uuid\":\"receipt\",\"attachment\":{\"type\":\"queued_command\",\"prompt\":\"nonce\",\"origin\":{\"kind\":\"peer\"},\"isMeta\":true}}\n",
+            "{\"type\":\"assistant\",\"uuid\":\"answer\",\"message\":{\"content\":\"ACK\"}}\n"
+        )).unwrap();
+        let rows = super::read_claude(&path, "owned", None);
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(rows.iter().map(|row| (row.role.as_str(), row.text.as_str(), row.seq)).collect::<Vec<_>>(),
+            [("meta", "nonce", 1), ("assistant", "ACK", 2)]);
     }
 
     #[test]

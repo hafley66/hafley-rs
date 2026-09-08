@@ -117,7 +117,7 @@ enum SubCmd {
         #[arg(value_name = "BODY")]
         body: Option<String>,
         /// The older spelling of the BODY positional.
-        #[arg(long = "body", hide = true)]
+        #[arg(long = "body", hide = true, conflicts_with = "body")]
         body_flag: Option<String>,
         /// Who the row is from, when the whoami ladder cannot say.
         #[arg(long = "as", value_name = "NAME")]

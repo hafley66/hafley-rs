@@ -115,6 +115,10 @@ pub(crate) fn run_me_favorite(index: i64, note: Option<&str>) -> Result<()> {
     let session = identity
         .session
         .context("no caller session resolved: no BOOP_SESSION stamp in this process")?;
+    let session = match routes.get(&session) {
+        Some(route) => route.session_id.clone().with_context(|| format!("caller route {session} has no bound native conversation"))?,
+        None => session,
+    };
 
     let store = open_store()?;
     let rows = store.turn_rows(&ident::TurnQuery {
