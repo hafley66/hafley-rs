@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import selectors
+import signal
 import socket
 import subprocess
 import sys
@@ -105,4 +106,5 @@ def run(binary):
 
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, lambda *_args: sys.exit(143))
     run(str(Path(sys.argv[1]).resolve()))

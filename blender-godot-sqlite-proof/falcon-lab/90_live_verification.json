@@ -1,0 +1,16 @@
+{
+  "basic": {
+    "lifecycle": false,
+    "events": {},
+    "renderers": [
+      {
+        "pid": 50481,
+        "acks": 128,
+        "first_tick": 0,
+        "last_tick": 199,
+        "skipped": 72
+      }
+    ]
+  },
+  "lifecycle": null
+}
