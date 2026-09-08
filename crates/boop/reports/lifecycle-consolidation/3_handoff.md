@@ -23,12 +23,27 @@ The CLI has no `beep lane join`. This lane stays open while work remains.
   worktree discovery and ACPX transport; removed unused Codex transport modules,
   duplicate dispatch/preview helpers and fan-out door implementation; architectural
   guard and symbol inventory. Migration and compatibility table in report 1.
-- Current wrapper cluster: noninteractive passthrough, stable named ownership,
+- `d2cc152`: noninteractive passthrough, stable named ownership,
   observed settings on automatic resume and atomic process detachment. Wrapper
   regression passed (`108_wrapper-passthrough-after.log`), harness 171 passed / 1
   ignored (`109_harness-wrapper-suite.log`), control 11 passed (`110_native-control-suite.log`).
-  New delivery retry reproduction calls the transport three times for one message
-  (`111_delivery-retry-before.log`); its fix is next.
+- Current delivery cluster: one route admission lock covers the transport and
+  acceptance receipt. Concurrent and later retries made three calls before
+  (`111_delivery-retry-before.log`) and one after (`112_delivery-retry-after.log`).
+  ACPX and all reachable fan-out legs now use the same ladder, budget and ack.
+  Child completions stay pending on a hold (`114_child-held-before.log`); swallowed
+  delivery errors no longer mark them delivered. Effort lookup now joins the
+  session dictionary (`113_observed-effort-before.log`).
+  Fork-inherited descriptors kept locks alive after close; the deterministic
+  failure is `118_inherited-lock-before.log`. RouteLock explicitly unlocks now.
+  Gates: store 176 passed (`119_store-delivery-suite.log`), process 159 passed
+  (`120_proc-delivery-after.log`), CLI integration 122 passed
+  (`121_cli-delivery-after.log`), CLI unit 105 passed (`122_cli-unit-after.log`).
+
+Delivery retry limit: prior durable acceptance prevents another transport call.
+A process dying after remote acceptance and before its local receipt still leaves
+an ambiguous outcome. The current native queue API provides no tested idempotency
+key; crash-window exactly-once is not claimed.
 
 ## Current gates
 
@@ -84,10 +99,8 @@ installed CLI help probes succeeded (`88_available-harnesses.json`).
 
 ## Remaining work
 
-1. Commit the passing wrapper cluster, then fix the delivery retry reproduction.
-2. Reproduce and fix concurrent/repeated delivery of one message. ACPX admission
-   and hook/supervisor fan-out remain separate. Analyze child completion marking
-   when parent delivery holds. Review legacy non-Codex discovery/claim paths.
+1. Commit the passing delivery cluster, then resume the test TUI for live proof.
+2. Review legacy non-Codex discovery/claim paths and remaining CLI contradictions.
 3. Complete bounded live stale recovery, abnormal exit, supervisor restart/reattach,
    child completion, actual parent notification and duplicate/retry proof.
 4. Complete command/alias/hidden/config/identity/telemetry/feature inventory.

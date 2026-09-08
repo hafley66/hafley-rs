@@ -2371,7 +2371,7 @@ impl Store {
     /// Read one observed session attribute without inheritance.
     pub fn session_attr(&self, session: &str, key: &str) -> Result<Option<String>> {
         Ok(self.connection.query_row(
-            "SELECT attr.value FROM agent_session_attr attr JOIN dict_attr_key key ON key.id = attr.key_id WHERE attr.session_id = ?1 AND key.value = ?2",
+            "SELECT attr.value FROM agent_session_attr attr JOIN dict_attr_key key ON key.id = attr.key_id JOIN dict_session session ON session.id = attr.session_id WHERE session.value = ?1 AND key.value = ?2",
             params![session, key], |row| row.get(0),
         ).optional()?)
     }
@@ -2815,6 +2815,15 @@ impl Store {
             |row| row.get(0),
         )?;
         Ok(count > 0)
+    }
+
+    /// Prior transport acceptance for this exact message and recipient.
+    /// Mailbox insertion or a hold transition is not acceptance.
+    pub fn delivery_accepted(&self, message_id: &str, route: &str) -> Result<bool> {
+        Ok(self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM agent_delivery_transition WHERE message_id = ?1 AND route = ?2 AND outcome = 'accepted-by-harness')",
+            params![message_id, route], |row| row.get(0),
+        )?)
     }
 
     /// The typed writer every delivery path goes through. `sequence` is

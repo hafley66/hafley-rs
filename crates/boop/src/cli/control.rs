@@ -600,6 +600,8 @@ mod tests {
         ].map(|(session, model, trace)| (session.map(str::to_owned), model.map(str::to_owned), Some(trace.to_owned()), Some("parent".to_owned())));
         assert_eq!(timeline, expected);
         assert_eq!(store.trace_of("new").unwrap().as_deref(), Some("trace-first"));
+        assert_eq!(store.session_attr("new", "effort").unwrap().as_deref(), Some("high"));
+        assert_eq!(store.session_attr("independent", "effort").unwrap(), None);
         assert_eq!(store.live_row("new").unwrap().unwrap().status.as_deref(), Some("detached"));
     }
 

@@ -35,6 +35,7 @@ use boop_store::ident::{DeliveryState, LiveRow, Store};
 /// | `CoolOff` | the route's door budget is blown; the row waits out the cool-off and the drain retries it | cooled-off |
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Rung {
+    AlreadyAccepted,
     Door,
     DoorQueue,
     Acpx,
@@ -50,7 +51,7 @@ impl Rung {
     /// The transition this rung records. One rung, one state.
     pub fn state(self) -> DeliveryState {
         match self {
-            Rung::Door | Rung::DoorQueue | Rung::Acpx => DeliveryState::AcceptedByHarness,
+            Rung::AlreadyAccepted | Rung::Door | Rung::DoorQueue | Rung::Acpx => DeliveryState::AcceptedByHarness,
             Rung::TurnBoundary => DeliveryState::HeldForTurnBoundary,
             Rung::HookInbox => DeliveryState::QueuedInHookInbox,
             Rung::PanePaste => DeliveryState::PastedIntoPane,
@@ -62,6 +63,7 @@ impl Rung {
     /// The word the sender prints, and the same word `boop debug` shows.
     pub fn as_str(self) -> &'static str {
         match self {
+            Rung::AlreadyAccepted => "already accepted",
             Rung::Door => "door",
             Rung::DoorQueue => "door queue",
             Rung::Acpx => "acpx queue",
@@ -82,7 +84,7 @@ impl Rung {
     /// recipient (failure mode 14). `deliver_hail_budgeted` reads this and
     /// stamps the row, so every caller of the ladder stamps alike.
     pub fn carried_the_body(self) -> bool {
-        matches!(self, Rung::Door | Rung::DoorQueue | Rung::Acpx)
+        matches!(self, Rung::AlreadyAccepted | Rung::Door | Rung::DoorQueue | Rung::Acpx)
     }
 }
 
@@ -134,6 +136,7 @@ impl Landing {
     /// answered and reads `harness` for a route that names none.
     pub fn line(&self, message_id: &str, from: &str, to: &str, harness: &str) -> String {
         match self.rung {
+            Rung::AlreadyAccepted => format!("already accepted {message_id} from {from} -> {to}; no new transport call"),
             Rung::Door => format!("delivered {message_id} from {from} -> {to} through the {harness} door"),
             Rung::DoorQueue => format!(
                 "delivered {message_id} from {from} -> {to} into the {harness} door queue; it reads it at its next turn boundary"
@@ -415,6 +418,24 @@ pub fn deliver_hail_budgeted(
 ) -> Result<Landing> {
     let route = routes.get(message.to.as_str());
     let harness = route.and_then(|route| route.harness);
+    // Admission spans the external call and its receipt, without keeping a
+    // SQLite write transaction open across transport I/O. File locks are
+    // released on process exit; in-memory stores have no shared file owner.
+    let _admission = match store.connection().path().filter(|path| !path.is_empty()) {
+        Some(path) => match bus::try_route_lock(Path::new(path), &message.to, "delivery")? {
+            Some(lock) => Some(lock),
+            None => {
+                let held = Landing::new(Rung::TurnBoundary, "another delivery attempt is in flight");
+                held.record(store, &message.id, &message.to, harness)?;
+                return Ok(held);
+            }
+        },
+        None => None,
+    };
+    if store.delivery_accepted(&message.id, &message.to)? {
+        bus::ack_messages(store, std::slice::from_ref(&message.id), &bus::now_iso())?;
+        return Ok(Landing::new(Rung::AlreadyAccepted, "previously accepted by harness"));
+    }
     if !store.has_delivery_transition(&message.id)? {
         store.append_delivery_transition(
             &message.id,
@@ -465,7 +486,17 @@ fn land(
     // A lane's own supervisor reads the mailbox directly and injects at its
     // next boundary, so the row is held rather than pushed at a door.
     if route.kind == "lane" {
+        if hook_inbox(registry, route, to) {
+            return Ok(Landing::new(Rung::HookInbox, "installed inbox hook"));
+        }
         return Ok(Landing::new(Rung::TurnBoundary, "lane supervisor"));
+    }
+    if route.mode.as_deref() == Some("acpx") {
+        if let Some(cooled) = door_gate(store, to, routes, &message.body, budget, boop_harness::live::now_ms())? {
+            return Ok(cooled);
+        }
+        let reply = boop_acp::channel::acpx::prompt(route, &message.body, true)?;
+        return Ok(Landing::acpx(reply.trim_end().to_owned()));
     }
     let Some(id) = route.harness else {
         return Ok(no_door_route(

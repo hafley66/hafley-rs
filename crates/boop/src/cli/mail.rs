@@ -240,55 +240,6 @@ pub(crate) fn deliver_hail(
     if let Some(route) = revive_if_retired(dir, to, routes.get(to))? {
         routes.insert(to.to_owned(), route);
     }
-    // The acpx queue is a door the ladder never sees, so it takes the same
-    // progress-row exemption the ladder does: a lane's yield row waits in the
-    // mailbox rather than spending a worker's turn; its end row is pushed.
-    if let Some(route) = routes
-        .get(to)
-        .filter(|route| is_acpx(route) && !message.kind.lane_progress_row())
-    {
-        let harness_id = route
-            .harness
-            .map_or_else(|| "acpx".to_owned(), |id| id.to_string());
-        if !store.has_delivery_transition(&message.id)? {
-            store.append_delivery_transition(
-                &message.id,
-                to,
-                route.harness,
-                boop::DeliveryState::Appended.as_str(),
-                "mailbox",
-                None,
-                boop::live::now_ms(),
-            )?;
-        }
-        // The acpx queue is a door like any other: a burst past the worker's
-        // budget cools the route off and the row waits, unstamped, for a retry.
-        let budget = boop::mail::DoorBudget::from_env();
-        if let Some(cooled) = boop::mail::door_gate(
-            &store,
-            to,
-            &routes,
-            &message.body,
-            &budget,
-            boop::live::now_ms(),
-        )? {
-            cooled.record(&store, &message.id, to, route.harness)?;
-            println!("{}", cooled.line(&message.id, &message.from, to, &harness_id));
-            return Ok(());
-        }
-        let response = boop_acp::channel::acpx::prompt(route, &message.body, true)?;
-        append_acks(dir, std::slice::from_ref(message))?;
-        let landing = Landing::acpx(response.trim_end().to_owned());
-        landing.record(&store, &message.id, to, route.harness)?;
-        if let Some(reply) = landing.reply.as_deref().filter(|text| !text.is_empty()) {
-            println!("{reply}");
-        }
-        println!(
-            "{}",
-            landing.line(&message.id, &message.from, to, &harness_id)
-        );
-        return Ok(());
-    }
     // The door rung is the only line that names a harness; a route naming none
     // reads the placeholder rather than inventing one.
     let harness_id = routes
@@ -303,8 +254,8 @@ pub(crate) fn deliver_hail(
         outcome = landing.outcome(),
         "hail delivery recorded"
     );
-    if landing.rung.carried_the_body() {
-        append_acks(dir, std::slice::from_ref(message))?;
+    if let Some(reply) = landing.reply.as_deref().filter(|text| !text.is_empty()) {
+        println!("{reply}");
     }
     println!(
         "{}",
@@ -417,11 +368,6 @@ fn push_wait(dir: &Path, to: &str, message_id: &str, timeout_secs: u64) -> Resul
 /// How often `push` re-reads the mailbox. The same cadence `boop wait` uses.
 const PUSH_POLL: std::time::Duration = std::time::Duration::from_millis(500);
 
-/// An acpx route is driven by the caller's own queue, not by a harness door.
-fn is_acpx(route: &Route) -> bool {
-    route.mode.as_deref() == Some("acpx")
-}
-
 /// Who is calling, for every verb that has to know: the name, its registry
 /// route, and the parent the spawner stamped into the environment.
 ///
@@ -526,33 +472,21 @@ fn fan_out_to_children(
         };
         append_message(dir, &message)?;
         record_control_edge(&message)?;
-        match reach {
-            ChildReach::Hook => {
-                landed += 1;
-                println!("landed {name} {} from {} (hook inbox)", message.id, caller);
-            }
-            ChildReach::Supervisor => {
-                landed += 1;
-                println!(
-                    "landed {name} {} from {} (lane supervisor)",
-                    message.id, caller
-                );
-            }
-            ChildReach::Pane => {
-                let landing = boop::mail::deliver_hail_budgeted(registry, &store, routes, &message,
-                    &boop::mail::TmuxPaster, &budget)?;
-                if landing.rung.carried_the_body() {
-                    landed += 1;
-                    println!("landed {name} {} from {} ({})", message.id, caller, landing.rung.as_str());
-                } else if landing.rung == boop::mail::Rung::CoolOff {
-                    cooled += 1;
-                    println!("cooled-off {name} {} ({})", message.id, landing.detail());
-                } else {
-                    unreachable += 1;
-                    println!("no-route {name} ({})", landing.detail());
-                }
-            }
-            ChildReach::NoRoute(_) | ChildReach::Dead(_) => unreachable!("reported above"),
+        let landing = boop::mail::deliver_hail_budgeted(registry, &store, routes, &message,
+            &boop::mail::TmuxPaster, &budget)?;
+        let owned_inbox = matches!((&reach, landing.rung),
+            (ChildReach::Hook, boop::mail::Rung::HookInbox) |
+            (ChildReach::Supervisor, boop::mail::Rung::TurnBoundary));
+        if landing.rung.carried_the_body() || owned_inbox {
+            landed += 1;
+            let label = if matches!(reach, ChildReach::Supervisor) && owned_inbox { "lane supervisor" } else { landing.rung.as_str() };
+            println!("landed {name} {} from {} ({label})", message.id, caller);
+        } else if landing.rung == boop::mail::Rung::CoolOff {
+            cooled += 1;
+            println!("cooled-off {name} {} ({})", message.id, landing.detail());
+        } else {
+            unreachable += 1;
+            println!("no-route {name} ({})", landing.detail());
         }
     }
     for session in spawned {

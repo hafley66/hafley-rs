@@ -9,6 +9,13 @@ six calls; after the fix all arguments/exit codes match and no route is register
 a database-scoped lifetime lock and refuses a live owner or lane supervisor.
 Automatic Codex resume applies observed model/effort and retains inline mode.
 
+Delivery checkpoint: direct sends, ACPX queues, all reachable child fan-out legs
+and resident held-mail retries share `deliver_hail_budgeted`. Route admission
+uses an explicitly released file lock; the prior-acceptance lookup runs inside
+that lock. Transport receipt and mailbox ack have one owner. Held native-child
+completions retain their durable outbox entry until transport acceptance or
+observed native transcript notification.
+
 Work in progress, based on `66cbe8e`. Worktree: `refactor/boop-lifecycle-consolidation`.
 Installed help and isolated reproduction receipts live under
 `/private/tmp/boop-lifecycle-consolidation-proof-01a08191`.

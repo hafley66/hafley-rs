@@ -536,12 +536,22 @@ fn hash_hex(bytes: &[u8]) -> String {
 /// One cross-process owner for a route operation beside its database. Keep
 /// the returned file open for the operation's lifetime. Lock files remain:
 /// unlinking one while another process has it open would split ownership.
-pub fn try_route_lock(db: &Path, route: &str, operation: &str) -> Result<Option<fs::File>> {
+pub struct RouteLock(fs::File);
+
+impl Drop for RouteLock {
+    fn drop(&mut self) {
+        // A concurrent fork can hold a duplicate descriptor until exec. Close
+        // alone would leave its shared lock held after this operation ended.
+        let _ = self.0.unlock();
+    }
+}
+
+pub fn try_route_lock(db: &Path, route: &str, operation: &str) -> Result<Option<RouteLock>> {
     let path = PathBuf::from(format!("{}.{operation}.{}.lock", db.display(), hash_hex(route.as_bytes())));
     if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
     let file = fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path)?;
     match file.try_lock() {
-        Ok(()) => Ok(Some(file)),
+        Ok(()) => Ok(Some(RouteLock(file))),
         Err(std::fs::TryLockError::WouldBlock) => Ok(None),
         Err(std::fs::TryLockError::Error(error)) => Err(error.into()),
     }
@@ -1100,6 +1110,19 @@ fn now_ms() -> u64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn route_lock_release_is_explicit_even_with_an_inherited_descriptor() {
+        let root = std::env::temp_dir().join(format!("boop-lock-inherit-{}", std::process::id()));
+        let db = root.join("boop.db");
+        let first = super::try_route_lock(&db, "route", "fixture").unwrap().unwrap();
+        let inherited = first.0.try_clone().unwrap();
+        drop(first);
+        let next = super::try_route_lock(&db, "route", "fixture").unwrap();
+        assert!(next.is_some(), "the inherited file descriptor kept the completed operation locked");
+        drop((inherited, next));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     use super::{fold, injected_line, parse_line, read_routes, unacked};
     use crate::harness_id::HarnessId;
 

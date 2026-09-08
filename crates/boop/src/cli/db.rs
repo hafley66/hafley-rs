@@ -815,12 +815,7 @@ pub(crate) fn sync_all_budgeted(
                 .get(harness)
                 .native_child_completion_visible(parent, child)
         },
-        |message| {
-            if let Err(error) = deliver_hail(registry, &native_child_mail_dir, message, None) {
-                tracing::warn!(error = %error, "deliver native child completion hail failed");
-            }
-            Ok(())
-        },
+        |message| deliver_hail(registry, &native_child_mail_dir, message, None),
     )?;
     let elapsed_ms = started.elapsed().as_millis();
     phases.db_after_bytes = store.db_bytes().unwrap_or(phases.db_before_bytes);
@@ -939,6 +934,9 @@ fn deliver_native_child_completions(
             append_acks(dir, std::slice::from_ref(&message))?;
         } else {
             deliver(&message)?;
+            if !store.delivery_accepted(&message.id, parent_route)? {
+                continue;
+            }
         }
         store.ensure_edge_at(
             &completion.parent_session,
@@ -1966,6 +1964,11 @@ mod tests {
         }
     }
 
+    fn record_parent_acceptance(store: &ident::Store, dir: &Path, message: &bus::Message) -> Result<()> {
+        store.record_delivery(&message.id, &message.to, None, "accepted-by-harness", "fixture door", now_ms())?;
+        append_acks(dir, std::slice::from_ref(message)).map(|_| ())
+    }
+
     fn native_parent_routes() -> BTreeMap<String, bus::Route> {
         let mut route = route_with(None);
         route.kind = "native".into();
@@ -2039,7 +2042,7 @@ mod tests {
                     &store, &routes, &dir, |_, _, _| Ok(false),
                     |message| {
                         delivered.push(message.clone());
-                        append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+                        record_parent_acceptance(&store, &dir, message)
                     },
                 ).unwrap();
             }
@@ -2076,7 +2079,7 @@ mod tests {
             |_, _, _| Ok(false),
             |message| {
                 delivered.push(message.clone());
-                append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+                record_parent_acceptance(&store, &dir, message)
             },
         )
         .unwrap();
@@ -2088,7 +2091,7 @@ mod tests {
             |_, _, _| Ok(false),
             |message| {
                 delivered.push(message.clone());
-                append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+                record_parent_acceptance(&store, &dir, message)
             },
         )
         .unwrap();
@@ -2199,7 +2202,7 @@ mod tests {
             |_, _, _| Ok(false),
             |message| {
                 delivered.push(message.clone());
-                append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+                record_parent_acceptance(&store, &dir, message)
             },
         )
         .unwrap();
@@ -2209,6 +2212,27 @@ mod tests {
             delivered[0].id,
             "native-child-completion:parent-session:child-session"
         );
+    }
+
+    #[test]
+    fn a_held_child_completion_remains_pending_until_transport_acceptance() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = ident::Store::open(dir.join("boop.db")).unwrap();
+        project_native_children(&store, &fake_child_events(), &native_child_session(&dir), 0).unwrap();
+        let routes = native_parent_routes();
+        let mut attempted = Vec::new();
+        for accepted in [false, true] {
+            deliver_native_child_completions(&store, &routes, &dir, |_, _, _| Ok(false), |message| {
+                attempted.push(message.id.clone());
+                store.record_delivery(&message.id, &message.to, None,
+                    if accepted { "accepted-by-harness" } else { "held-for-turn-boundary" }, "fixture", now_ms())
+            }).unwrap();
+            let done = store.edge_rows(None).unwrap().iter().any(|edge| edge.edge == "completion-delivered");
+            assert_eq!(done, accepted);
+        }
+        assert_eq!(attempted, ["native-child-completion:parent-session:child-session"; 2]);
+        assert_eq!(completion_rows(&dir).len(), 1);
     }
 
     #[test]
@@ -2238,7 +2262,7 @@ mod tests {
             |_, _, _| Ok(false),
             |message| {
                 delivered.push(message.clone());
-                append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+                record_parent_acceptance(&store, &dir, message)
             },
         )
         .unwrap();
@@ -2299,7 +2323,7 @@ mod tests {
                     "resident-parent",
                     &worker_dir,
                     |message| {
-                        append_acks(&worker_dir, std::slice::from_ref(message))?;
+                        record_parent_acceptance(&store, &worker_dir, message)?;
                         delivery_tx.send(message.id.clone()).unwrap();
                         Ok(())
                     },
@@ -2488,7 +2512,7 @@ mod tests {
                     "codex-live-parent",
                     &worker_dir,
                     |message| {
-                        append_acks(&worker_dir, std::slice::from_ref(message))?;
+                        record_parent_acceptance(&store, &worker_dir, message)?;
                         delivery_tx.send(message.id.clone()).unwrap();
                         Ok(())
                     },
