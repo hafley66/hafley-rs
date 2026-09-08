@@ -110,10 +110,15 @@ paid inference, and redistribution permissions require their own authorization.
   artifact identity, and unchanged protected `/game/` artifacts.
 - [ ] Pin and inventory Falcon's jump/fair/landing behavior dependency closure;
   create the first importer coverage receipt and source-trace comparison.
+- [x] Import the PM pose/timing/landing-flag subset and record both landing paths
+  and recovery into a third jump: `bb50078`, coverage in `99_lifecycle_import.md`.
+  Native and production browser acceptance passed. Common callbacks and the
+  source-game trace comparison remain pending.
 - [ ] Build the bounded model/animation-span/photo alignment and silhouette proof,
   after selecting existing tools and deciding texture/hidden-surface policy.
 
 Godot Web build and local Chromium runtime proof completed in `3c452b6`, with
 deployment compatibility and event-driven acceptance fixes in `f99fc15` and
 `6b6395c`. Production acceptance and recovery evidence: `96_web_results.md`.
-Importer port and photo pipeline remain pending.
+The partial PM data importer is implemented; executable common-callback translation,
+source-game trace comparison, and photo pipeline remain pending.

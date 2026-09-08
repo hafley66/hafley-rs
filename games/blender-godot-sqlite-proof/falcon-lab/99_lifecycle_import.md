@@ -69,3 +69,28 @@ and H.264 MP4. Reproduce with `just record control` or the web verification flow
 
 The source-game trace comparison and executable common-callback dependency closure
 remain unchecked in `92_web_import_plan.md`.
+
+## Executed evidence
+
+Implementation committed as `bb50078`. On 2026-09-08, 27 Rust tests, generator
+checks, controller tests, native Godot input/typed-payload checks, Web export,
+local Chromium and production Chromium acceptance passed. Both browsers checked
+all 14 transition entries above, 300 native-matching presentation frames, 120
+restored/replayed states, keyboard and synthetic touch input, with no runtime
+errors recorded. The production landing screenshot was inspected.
+
+Live proof: https://hafley.codes/game3/?demo=1
+
+Saved local artifacts (ignored build directory):
+
+```text
+94_web/build/proofs/bb50078/proof.mp4
+94_web/build/proofs/bb50078/receipt.json
+94_web/build/proofs/bb50078/1a_landing.png
+```
+
+MP4: H.264, 960×540, 13.4 seconds, 592879 bytes. Production receipt retains the
+original temporary recording paths; copies above preserve these outputs locally.
+Prior Game3 backup: `/var/www/smash-godot-game3-backup-20260908210046980`.
+Publication verified artifact hashes and unchanged protected `/game/` files.
+Log: `/private/tmp/falcon-lifecycle-publish.log`.
