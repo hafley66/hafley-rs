@@ -9,6 +9,31 @@ use falcon_simulation::{Simulation, World};
 
 type Error = Box<dyn std::error::Error>;
 
+/// Offline decoder output and native presentation oracle for the browser build.
+pub fn bake_web(path: &std::path::Path) -> Result<(), Error> {
+    let actions = baseline::load()?;
+    let baked = fixture::bake(&actions);
+    let poses: Vec<Vec<Vec<Row>>> = actions.iter().enumerate().map(|(action, a)| {
+        a.frames.iter().enumerate().map(|(frame, _)| {
+            let mut world = World::default();
+            world.frame = 1;
+            world.view.action = action;
+            world.view.frame = frame;
+            sql_viewer::encode(&world, &actions, false, 0)
+        }).collect()
+    }).collect();
+    let inputs: Vec<_> = (0..CONTROL_TICKS).map(|t| demo_input(t as i32)).collect();
+    let mut simulation = Simulation::new(baked.clone().into(), true);
+    let expected: Vec<_> = inputs.iter().map(|input| {
+        let world = simulation.advance_controlled(input.buttons as u8, input.axis);
+        sql_viewer::encode(world, &actions, false, input.buttons as u8)
+    }).collect();
+    let bytes = bincode::serde::encode_to_vec((baked, poses, inputs, expected), bincode::config::standard())?;
+    std::fs::write(path, &bytes)?;
+    println!("WEB_BAKE_OK bytes={} actions=3 native_ticks={CONTROL_TICKS}", bytes.len());
+    Ok(())
+}
+
 pub fn demo_input(tick: i32) -> ControlInput {
     ControlInput {
         buttons: falcon_simulation::fixture_input(tick % 120).into(),

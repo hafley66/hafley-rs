@@ -5,7 +5,9 @@ pub mod geometry;
 use super::{CYAN, Display, Error, ORANGE, WHITE, World, baseline};
 use baseline::{gpu, project, text};
 use boundary::{Boundary, Row};
-use boundary::contracts::{FrameValues, TargetValues, HurtValues, AttackValues};
+use boundary::contracts::{HurtValues, AttackValues};
+#[path = "0a_live_values.rs"]
+mod live_values;
 use brawllib_rs::high_level_fighter::{CollisionBoxValues, HighLevelSubaction};
 
 #[tracing::instrument(target = "falcon::presentation", level = "trace", skip_all, fields(tick = world.frame - 1, predicted, applied))]
@@ -18,41 +20,7 @@ pub(crate) fn encode(
     let s = &world.view;
     let source = &actions[s.action].frames[s.frame];
     let tick = i64::from(world.frame - 1);
-    let meta = FrameValues {
-        action: s.action as f64,
-        pose: s.frame as f64,
-        root_x: s.root[0] as f64,
-        root_y: s.root[1] as f64,
-        root_z: s.root[2] as f64,
-        damage: world.damage as f64,
-        hits: world.hit_count as f64,
-        last_hit: world.last_hit.unwrap_or(-1) as f64,
-        contact: f64::from(s.contact),
-        predicted: f64::from(predicted),
-        input: f64::from(applied),
-        animation_x: source.x_pos as f64,
-        animation_y: source.y_pos as f64,
-        ..Default::default()
-    }.into_row(tick, 0);
-    let mut rows = vec![meta];
-    let mut target = TargetValues::default();
-    if let Some(b) = &world.bag {
-        [target.x, target.y, target.z] = b.position.map(f64::from);
-        [target.vx, target.vy, target.vz] = b.velocity.map(f64::from);
-        target.stun = b.stun as f64;
-        target.phase = match b.phase {
-            super::sandbag::Phase::Hovering => 0.0,
-            super::sandbag::Phase::Hit => 1.0,
-            super::sandbag::Phase::Hitstun => 2.0,
-            super::sandbag::Phase::Falling => 3.0,
-            super::sandbag::Phase::Landed => 4.0,
-        };
-        target.grounded = f64::from(b.grounded);
-    } else {
-        target.y = 24.0;
-        target.z = 28.0;
-    }
-    rows.push(target.into_row(tick, 0));
+    let mut rows = live_values::state(world, source.x_pos as f64, source.y_pos as f64, predicted, applied).to_vec();
     for hurt in &source.hurt_boxes {
         let matrix: [[f32; 4]; 4] = hurt.bone_matrix.into();
         let a = hurt.hurt_box.offset;
