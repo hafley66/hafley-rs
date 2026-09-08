@@ -23,6 +23,36 @@ pub fn inspect_import() -> Result<(), Error> {
     Ok(())
 }
 
+/// Offline directory audit using the same decoder as the seven-action runtime.
+/// Decode one payload at a time; retain only metadata, never all pose arrays.
+pub fn inspect_catalog(directory: &std::path::Path) -> Result<(), Error> {
+    let mut files = std::fs::read_dir(directory)?.map(|entry| entry.map(|e| e.path()))
+        .collect::<Result<Vec<_>, _>>()?;
+    // The source has an unnamed subaction at `.html`; Path::extension excludes it.
+    files.retain(|path| path.is_file() && path.file_name().is_some_and(|n| n.to_string_lossy().ends_with(".html")));
+    files.sort();
+    if files.is_empty() { return Err("no cached subaction HTML found".into()); }
+    let mut rows = Vec::new();
+    let mut failed = 0;
+    for path in files {
+        let file = path.file_name().unwrap().to_string_lossy();
+        rows.push(match baseline::decode_file(&path) {
+            Ok(a) => serde_json::json!({"file": file, "name": a.name,
+                "frames": a.frames.len(), "iasa": a.iasa, "landing_lag": a.landing_lag,
+                "bad_interrupts": a.bad_interrupts, "status": "decoded",
+                "executable_common_callbacks": "not established"}),
+            Err(e) => { failed += 1; serde_json::json!({"file": file, "status": "failed", "error": e.to_string()}) }
+        });
+    }
+    println!("{}", serde_json::to_string_pretty(&serde_json::json!({
+        "decoder": "brawllib_rs 0.29.0 / bincode 2 standard serde",
+        "files": rows.len(), "failed": failed, "actions": rows,
+        "scope": "local decoded subactions; no executable common-callback or source-game equivalence claim"
+    }))?);
+    if failed != 0 { return Err(format!("{failed} cached subactions failed decoding").into()); }
+    Ok(())
+}
+
 /// Offline decoder output and native presentation oracle for the browser build.
 pub fn bake_web(path: &std::path::Path) -> Result<(), Error> {
     let actions = baseline::load_controlled()?;

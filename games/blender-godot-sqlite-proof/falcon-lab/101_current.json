@@ -1,6 +1,6 @@
 {
   "objective": "Imported fighter data, composable item rules, and snapshot-owned terrain in the active Rust lab",
-  "next": "G1: verify the existing local mirror and produce an offline Falcon completeness/provenance inventory",
+  "next": "G1: finish mirror receipt/retrieval metadata and tested truncated-file recovery; 491 Falcon subactions already decode locally, G2 runtime package remains pending",
   "acceptance": "Per-task gates in 102_tasks.md; first visible milestone is the boots/terrain replay MP4",
   "coverage": "99_lifecycle_import.md",
   "plan": "92_web_import_plan.md",

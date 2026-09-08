@@ -17,6 +17,7 @@ mod repeat;
 mod control;
 pub use control::bake_web;
 pub use control::inspect_import;
+pub use control::inspect_catalog;
 #[path = "1c_live_rows.rs"]
 mod live_rows;
 #[cfg(any(test, feature = "gdext"))]
