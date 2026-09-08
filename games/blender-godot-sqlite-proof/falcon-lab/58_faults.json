@@ -1,0 +1,933 @@
+{
+  "events": {
+    "main": {
+      "begin_s": 3.157173666986637,
+      "before": 61,
+      "end_s": 3.958217333070934,
+      "after": 81,
+      "worker_ticks_during_stall": 20
+    },
+    "process": {
+      "begin_s": 4.356911750044674,
+      "pid": 65062,
+      "os_state": "T",
+      "end_s": 5.165949042071588,
+      "worker_ticks_during_quiet_interval": 0
+    },
+    "render": {
+      "begin_s": 5.952559083001688,
+      "before": 131,
+      "end_s": 6.757289875065908,
+      "after": 151,
+      "worker_ticks_during_stall": 20
+    }
+  },
+  "threads": {
+    "MAIN_THREAD_ID": 1,
+    "RENDER_THREAD_ID": 5
+  },
+  "ticks": [
+    {
+      "tick": 0,
+      "worker_us": 0,
+      "observer_s": 0.7333527500741184
+    },
+    {
+      "tick": 1,
+      "worker_us": 45017,
+      "observer_s": 0.7783715000841767
+    },
+    {
+      "tick": 2,
+      "worker_us": 85024,
+      "observer_s": 0.8184538750210777
+    },
+    {
+      "tick": 3,
+      "worker_us": 125013,
+      "observer_s": 0.8584002919960767
+    },
+    {
+      "tick": 4,
+      "worker_us": 161846,
+      "observer_s": 0.8952000000281259
+    },
+    {
+      "tick": 5,
+      "worker_us": 205015,
+      "observer_s": 0.9384214170277119
+    },
+    {
+      "tick": 6,
+      "worker_us": 241775,
+      "observer_s": 0.9751820000819862
+    },
+    {
+      "tick": 7,
+      "worker_us": 285016,
+      "observer_s": 1.0183630000101402
+    },
+    {
+      "tick": 8,
+      "worker_us": 325021,
+      "observer_s": 1.0583747080527246
+    },
+    {
+      "tick": 9,
+      "worker_us": 362965,
+      "observer_s": 1.0963614999782294
+    },
+    {
+      "tick": 10,
+      "worker_us": 400033,
+      "observer_s": 1.1333822080632672
+    },
+    {
+      "tick": 11,
+      "worker_us": 445010,
+      "observer_s": 1.1783609580015764
+    },
+    {
+      "tick": 12,
+      "worker_us": 482540,
+      "observer_s": 1.2158939170185477
+    },
+    {
+      "tick": 13,
+      "worker_us": 525018,
+      "observer_s": 1.2583780420245603
+    },
+    {
+      "tick": 14,
+      "worker_us": 565015,
+      "observer_s": 1.2983745420351624
+    },
+    {
+      "tick": 15,
+      "worker_us": 605018,
+      "observer_s": 1.3383848749799654
+    },
+    {
+      "tick": 16,
+      "worker_us": 640300,
+      "observer_s": 1.3736531250178814
+    },
+    {
+      "tick": 17,
+      "worker_us": 680393,
+      "observer_s": 1.4137464580126107
+    },
+    {
+      "tick": 18,
+      "worker_us": 724717,
+      "observer_s": 1.4581064999802038
+    },
+    {
+      "tick": 19,
+      "worker_us": 760322,
+      "observer_s": 1.4936827080091462
+    },
+    {
+      "tick": 20,
+      "worker_us": 805019,
+      "observer_s": 1.538374957977794
+    },
+    {
+      "tick": 21,
+      "worker_us": 844977,
+      "observer_s": 1.5783404579851776
+    },
+    {
+      "tick": 22,
+      "worker_us": 885011,
+      "observer_s": 1.6183497500605881
+    },
+    {
+      "tick": 23,
+      "worker_us": 923656,
+      "observer_s": 1.6570429999846965
+    },
+    {
+      "tick": 24,
+      "worker_us": 963970,
+      "observer_s": 1.6973247500136495
+    },
+    {
+      "tick": 25,
+      "worker_us": 1005010,
+      "observer_s": 1.7383624999783933
+    },
+    {
+      "tick": 26,
+      "worker_us": 1044615,
+      "observer_s": 1.777965083019808
+    },
+    {
+      "tick": 27,
+      "worker_us": 1083874,
+      "observer_s": 1.8172196670202538
+    },
+    {
+      "tick": 28,
+      "worker_us": 1125007,
+      "observer_s": 1.8583521250402555
+    },
+    {
+      "tick": 29,
+      "worker_us": 1165011,
+      "observer_s": 1.8983644580002874
+    },
+    {
+      "tick": 30,
+      "worker_us": 1205014,
+      "observer_s": 1.9383574170060456
+    },
+    {
+      "tick": 31,
+      "worker_us": 1245014,
+      "observer_s": 1.9783698749961331
+    },
+    {
+      "tick": 32,
+      "worker_us": 1285016,
+      "observer_s": 2.018365417025052
+    },
+    {
+      "tick": 33,
+      "worker_us": 1325014,
+      "observer_s": 2.058370333048515
+    },
+    {
+      "tick": 34,
+      "worker_us": 1365009,
+      "observer_s": 2.098351916996762
+    },
+    {
+      "tick": 35,
+      "worker_us": 1402312,
+      "observer_s": 2.135661958018318
+    },
+    {
+      "tick": 36,
+      "worker_us": 1440753,
+      "observer_s": 2.174110958003439
+    },
+    {
+      "tick": 37,
+      "worker_us": 1484795,
+      "observer_s": 2.218132583075203
+    },
+    {
+      "tick": 38,
+      "worker_us": 1524343,
+      "observer_s": 2.2577005000784993
+    },
+    {
+      "tick": 39,
+      "worker_us": 1565016,
+      "observer_s": 2.298380749998614
+    },
+    {
+      "tick": 40,
+      "worker_us": 1603236,
+      "observer_s": 2.3365873750299215
+    },
+    {
+      "tick": 41,
+      "worker_us": 1645016,
+      "observer_s": 2.378369083045982
+    },
+    {
+      "tick": 42,
+      "worker_us": 1681565,
+      "observer_s": 2.414923832984641
+    },
+    {
+      "tick": 43,
+      "worker_us": 1722738,
+      "observer_s": 2.456152708036825
+    },
+    {
+      "tick": 44,
+      "worker_us": 1764221,
+      "observer_s": 2.4976212499896064
+    },
+    {
+      "tick": 45,
+      "worker_us": 1804095,
+      "observer_s": 2.537462249980308
+    },
+    {
+      "tick": 46,
+      "worker_us": 1845015,
+      "observer_s": 2.578401292092167
+    },
+    {
+      "tick": 47,
+      "worker_us": 1882078,
+      "observer_s": 2.615570167079568
+    },
+    {
+      "tick": 48,
+      "worker_us": 1925016,
+      "observer_s": 2.658367208088748
+    },
+    {
+      "tick": 49,
+      "worker_us": 1962817,
+      "observer_s": 2.696166582987644
+    },
+    {
+      "tick": 50,
+      "worker_us": 2005018,
+      "observer_s": 2.738393708015792
+    },
+    {
+      "tick": 51,
+      "worker_us": 2041788,
+      "observer_s": 2.775139958015643
+    },
+    {
+      "tick": 52,
+      "worker_us": 2085013,
+      "observer_s": 2.818363417056389
+    },
+    {
+      "tick": 53,
+      "worker_us": 2125013,
+      "observer_s": 2.8583631250075996
+    },
+    {
+      "tick": 54,
+      "worker_us": 2163473,
+      "observer_s": 2.896836542058736
+    },
+    {
+      "tick": 55,
+      "worker_us": 2205020,
+      "observer_s": 2.9384167920798063
+    },
+    {
+      "tick": 56,
+      "worker_us": 2245015,
+      "observer_s": 2.9784276670543477
+    },
+    {
+      "tick": 57,
+      "worker_us": 2285006,
+      "observer_s": 3.0183377080829814
+    },
+    {
+      "tick": 58,
+      "worker_us": 2325020,
+      "observer_s": 3.058375500026159
+    },
+    {
+      "tick": 59,
+      "worker_us": 2365016,
+      "observer_s": 3.098389125079848
+    },
+    {
+      "tick": 60,
+      "worker_us": 2402483,
+      "observer_s": 3.135878250002861
+    },
+    {
+      "tick": 61,
+      "worker_us": 2445012,
+      "observer_s": 3.178379875025712
+    },
+    {
+      "tick": 62,
+      "worker_us": 2481663,
+      "observer_s": 3.215022874996066
+    },
+    {
+      "tick": 63,
+      "worker_us": 2525023,
+      "observer_s": 3.25843187503051
+    },
+    {
+      "tick": 64,
+      "worker_us": 2565016,
+      "observer_s": 3.298383083078079
+    },
+    {
+      "tick": 65,
+      "worker_us": 2602863,
+      "observer_s": 3.33622037502937
+    },
+    {
+      "tick": 66,
+      "worker_us": 2642402,
+      "observer_s": 3.375762667041272
+    },
+    {
+      "tick": 67,
+      "worker_us": 2680498,
+      "observer_s": 3.413866417016834
+    },
+    {
+      "tick": 68,
+      "worker_us": 2725014,
+      "observer_s": 3.458368416992016
+    },
+    {
+      "tick": 69,
+      "worker_us": 2763939,
+      "observer_s": 3.497333792038262
+    },
+    {
+      "tick": 70,
+      "worker_us": 2805018,
+      "observer_s": 3.5383956250734627
+    },
+    {
+      "tick": 71,
+      "worker_us": 2845017,
+      "observer_s": 3.5783844999969006
+    },
+    {
+      "tick": 72,
+      "worker_us": 2885013,
+      "observer_s": 3.618372500059195
+    },
+    {
+      "tick": 73,
+      "worker_us": 2925018,
+      "observer_s": 3.6583770000142977
+    },
+    {
+      "tick": 74,
+      "worker_us": 2964917,
+      "observer_s": 3.698280500015244
+    },
+    {
+      "tick": 75,
+      "worker_us": 3001645,
+      "observer_s": 3.735007500043139
+    },
+    {
+      "tick": 76,
+      "worker_us": 3042088,
+      "observer_s": 3.775442500016652
+    },
+    {
+      "tick": 77,
+      "worker_us": 3083795,
+      "observer_s": 3.817162833060138
+    },
+    {
+      "tick": 78,
+      "worker_us": 3125017,
+      "observer_s": 3.858379082987085
+    },
+    {
+      "tick": 79,
+      "worker_us": 3161184,
+      "observer_s": 3.8945377920754254
+    },
+    {
+      "tick": 80,
+      "worker_us": 3205015,
+      "observer_s": 3.9383842500392348
+    },
+    {
+      "tick": 81,
+      "worker_us": 3242860,
+      "observer_s": 3.9761987080564722
+    },
+    {
+      "tick": 82,
+      "worker_us": 3285007,
+      "observer_s": 4.0183594999834895
+    },
+    {
+      "tick": 83,
+      "worker_us": 3325018,
+      "observer_s": 4.058363249991089
+    },
+    {
+      "tick": 84,
+      "worker_us": 3364068,
+      "observer_s": 4.0974242080701515
+    },
+    {
+      "tick": 85,
+      "worker_us": 3405014,
+      "observer_s": 4.138360167038627
+    },
+    {
+      "tick": 86,
+      "worker_us": 3442798,
+      "observer_s": 4.176149083068594
+    },
+    {
+      "tick": 87,
+      "worker_us": 3485027,
+      "observer_s": 4.218385042040609
+    },
+    {
+      "tick": 88,
+      "worker_us": 3520304,
+      "observer_s": 4.253642542054877
+    },
+    {
+      "tick": 89,
+      "worker_us": 3562016,
+      "observer_s": 4.2954067080281675
+    },
+    {
+      "tick": 90,
+      "worker_us": 3605015,
+      "observer_s": 4.33840508305002
+    },
+    {
+      "tick": 91,
+      "worker_us": 4432681,
+      "observer_s": 5.166171625023708
+    },
+    {
+      "tick": 92,
+      "worker_us": 4441130,
+      "observer_s": 5.174490667064674
+    },
+    {
+      "tick": 93,
+      "worker_us": 4449191,
+      "observer_s": 5.182543499977328
+    },
+    {
+      "tick": 94,
+      "worker_us": 4456831,
+      "observer_s": 5.190213500056416
+    },
+    {
+      "tick": 95,
+      "worker_us": 4464851,
+      "observer_s": 5.198224417050369
+    },
+    {
+      "tick": 96,
+      "worker_us": 4472746,
+      "observer_s": 5.206095042056404
+    },
+    {
+      "tick": 97,
+      "worker_us": 4481917,
+      "observer_s": 5.215343417017721
+    },
+    {
+      "tick": 98,
+      "worker_us": 4509076,
+      "observer_s": 5.2424473750870675
+    },
+    {
+      "tick": 99,
+      "worker_us": 4517734,
+      "observer_s": 5.251112124999054
+    },
+    {
+      "tick": 100,
+      "worker_us": 4526232,
+      "observer_s": 5.259609833010472
+    },
+    {
+      "tick": 101,
+      "worker_us": 4534755,
+      "observer_s": 5.268122208071873
+    },
+    {
+      "tick": 102,
+      "worker_us": 4542611,
+      "observer_s": 5.275963583029807
+    },
+    {
+      "tick": 103,
+      "worker_us": 4550688,
+      "observer_s": 5.284051208058372
+    },
+    {
+      "tick": 104,
+      "worker_us": 4558679,
+      "observer_s": 5.292023667017929
+    },
+    {
+      "tick": 105,
+      "worker_us": 4566641,
+      "observer_s": 5.300012583029456
+    },
+    {
+      "tick": 106,
+      "worker_us": 4575011,
+      "observer_s": 5.3083890420384705
+    },
+    {
+      "tick": 107,
+      "worker_us": 4583915,
+      "observer_s": 5.317311083083041
+    },
+    {
+      "tick": 108,
+      "worker_us": 4592357,
+      "observer_s": 5.325712625053711
+    },
+    {
+      "tick": 109,
+      "worker_us": 4600472,
+      "observer_s": 5.333830374991521
+    },
+    {
+      "tick": 110,
+      "worker_us": 4608448,
+      "observer_s": 5.341832458041608
+    },
+    {
+      "tick": 111,
+      "worker_us": 4616635,
+      "observer_s": 5.350007417029701
+    },
+    {
+      "tick": 112,
+      "worker_us": 4624853,
+      "observer_s": 5.3582177080679685
+    },
+    {
+      "tick": 113,
+      "worker_us": 4632680,
+      "observer_s": 5.366025542025454
+    },
+    {
+      "tick": 114,
+      "worker_us": 4641161,
+      "observer_s": 5.374510708032176
+    },
+    {
+      "tick": 115,
+      "worker_us": 4648862,
+      "observer_s": 5.382221375009976
+    },
+    {
+      "tick": 116,
+      "worker_us": 4656913,
+      "observer_s": 5.390266917063855
+    },
+    {
+      "tick": 117,
+      "worker_us": 4683770,
+      "observer_s": 5.41712237498723
+    },
+    {
+      "tick": 118,
+      "worker_us": 4725012,
+      "observer_s": 5.458369542029686
+    },
+    {
+      "tick": 119,
+      "worker_us": 4763064,
+      "observer_s": 5.496416917070746
+    },
+    {
+      "tick": 120,
+      "worker_us": 4804633,
+      "observer_s": 5.538026374997571
+    },
+    {
+      "tick": 121,
+      "worker_us": 4845015,
+      "observer_s": 5.578426250023767
+    },
+    {
+      "tick": 122,
+      "worker_us": 4885009,
+      "observer_s": 5.618352958001196
+    },
+    {
+      "tick": 123,
+      "worker_us": 4922011,
+      "observer_s": 5.6553514580009505
+    },
+    {
+      "tick": 124,
+      "worker_us": 4965013,
+      "observer_s": 5.698373167077079
+    },
+    {
+      "tick": 125,
+      "worker_us": 5005012,
+      "observer_s": 5.738406875054352
+    },
+    {
+      "tick": 126,
+      "worker_us": 5045010,
+      "observer_s": 5.778357000090182
+    },
+    {
+      "tick": 127,
+      "worker_us": 5085007,
+      "observer_s": 5.818345292005688
+    },
+    {
+      "tick": 128,
+      "worker_us": 5125194,
+      "observer_s": 5.858668083092198
+    },
+    {
+      "tick": 129,
+      "worker_us": 5160871,
+      "observer_s": 5.894241207977757
+    },
+    {
+      "tick": 130,
+      "worker_us": 5203927,
+      "observer_s": 5.937298499979079
+    },
+    {
+      "tick": 131,
+      "worker_us": 5245019,
+      "observer_s": 5.978379375068471
+    },
+    {
+      "tick": 132,
+      "worker_us": 5283699,
+      "observer_s": 6.017067167093046
+    },
+    {
+      "tick": 133,
+      "worker_us": 5321441,
+      "observer_s": 6.054824082995765
+    },
+    {
+      "tick": 134,
+      "worker_us": 5363989,
+      "observer_s": 6.097391542047262
+    },
+    {
+      "tick": 135,
+      "worker_us": 5400357,
+      "observer_s": 6.133720958023332
+    },
+    {
+      "tick": 136,
+      "worker_us": 5444511,
+      "observer_s": 6.177885374985635
+    },
+    {
+      "tick": 137,
+      "worker_us": 5485012,
+      "observer_s": 6.218374332995154
+    },
+    {
+      "tick": 138,
+      "worker_us": 5525016,
+      "observer_s": 6.258387833018787
+    },
+    {
+      "tick": 139,
+      "worker_us": 5565012,
+      "observer_s": 6.298362875008024
+    },
+    {
+      "tick": 140,
+      "worker_us": 5603781,
+      "observer_s": 6.337147374986671
+    },
+    {
+      "tick": 141,
+      "worker_us": 5645015,
+      "observer_s": 6.378381625050679
+    },
+    {
+      "tick": 142,
+      "worker_us": 5684234,
+      "observer_s": 6.417584042064846
+    },
+    {
+      "tick": 143,
+      "worker_us": 5725014,
+      "observer_s": 6.458380708005279
+    },
+    {
+      "tick": 144,
+      "worker_us": 5761636,
+      "observer_s": 6.495003083022311
+    },
+    {
+      "tick": 145,
+      "worker_us": 5805011,
+      "observer_s": 6.538367667002603
+    },
+    {
+      "tick": 146,
+      "worker_us": 5845010,
+      "observer_s": 6.578370708040893
+    },
+    {
+      "tick": 147,
+      "worker_us": 5883292,
+      "observer_s": 6.61665995803196
+    },
+    {
+      "tick": 148,
+      "worker_us": 5925019,
+      "observer_s": 6.658388167037629
+    },
+    {
+      "tick": 149,
+      "worker_us": 5964930,
+      "observer_s": 6.698293583001941
+    },
+    {
+      "tick": 150,
+      "worker_us": 6005014,
+      "observer_s": 6.738379542017356
+    },
+    {
+      "tick": 151,
+      "worker_us": 6042772,
+      "observer_s": 6.77617100009229
+    },
+    {
+      "tick": 152,
+      "worker_us": 6085019,
+      "observer_s": 6.818384958081879
+    },
+    {
+      "tick": 153,
+      "worker_us": 6121632,
+      "observer_s": 6.855007792008109
+    },
+    {
+      "tick": 154,
+      "worker_us": 6165024,
+      "observer_s": 6.898376708035357
+    },
+    {
+      "tick": 155,
+      "worker_us": 6205008,
+      "observer_s": 6.9383797500049695
+    },
+    {
+      "tick": 156,
+      "worker_us": 6245008,
+      "observer_s": 6.978364667040296
+    },
+    {
+      "tick": 157,
+      "worker_us": 6281732,
+      "observer_s": 7.015103167039342
+    },
+    {
+      "tick": 158,
+      "worker_us": 6323462,
+      "observer_s": 7.056819875026122
+    },
+    {
+      "tick": 159,
+      "worker_us": 6365016,
+      "observer_s": 7.098379582981579
+    },
+    {
+      "tick": 160,
+      "worker_us": 6401369,
+      "observer_s": 7.134750167024322
+    },
+    {
+      "tick": 161,
+      "worker_us": 6445020,
+      "observer_s": 7.178384875063784
+    },
+    {
+      "tick": 162,
+      "worker_us": 6485012,
+      "observer_s": 7.2183751669945195
+    },
+    {
+      "tick": 163,
+      "worker_us": 6524489,
+      "observer_s": 7.257861125050113
+    },
+    {
+      "tick": 164,
+      "worker_us": 6565020,
+      "observer_s": 7.298451000009663
+    },
+    {
+      "tick": 165,
+      "worker_us": 6601977,
+      "observer_s": 7.335337500087917
+    },
+    {
+      "tick": 166,
+      "worker_us": 6643065,
+      "observer_s": 7.376417375053279
+    },
+    {
+      "tick": 167,
+      "worker_us": 6682290,
+      "observer_s": 7.415643500047736
+    },
+    {
+      "tick": 168,
+      "worker_us": 6725014,
+      "observer_s": 7.458368082996458
+    },
+    {
+      "tick": 169,
+      "worker_us": 6760495,
+      "observer_s": 7.493893375038169
+    },
+    {
+      "tick": 170,
+      "worker_us": 6805016,
+      "observer_s": 7.538416541996412
+    },
+    {
+      "tick": 171,
+      "worker_us": 6845006,
+      "observer_s": 7.578373083029874
+    },
+    {
+      "tick": 172,
+      "worker_us": 6881194,
+      "observer_s": 7.61465187498834
+    },
+    {
+      "tick": 173,
+      "worker_us": 6923023,
+      "observer_s": 7.656557000009343
+    },
+    {
+      "tick": 174,
+      "worker_us": 6960252,
+      "observer_s": 7.693744625081308
+    },
+    {
+      "tick": 175,
+      "worker_us": 7005101,
+      "observer_s": 7.738697541994043
+    },
+    {
+      "tick": 176,
+      "worker_us": 7041140,
+      "observer_s": 7.774505582987331
+    },
+    {
+      "tick": 177,
+      "worker_us": 7082412,
+      "observer_s": 7.815779833006673
+    },
+    {
+      "tick": 178,
+      "worker_us": 7125012,
+      "observer_s": 7.858373917057179
+    },
+    {
+      "tick": 179,
+      "worker_us": 7160955,
+      "observer_s": 7.894345042062923
+    }
+  ],
+  "repeated_render_sync_warnings": 2127,
+  "scope": "main thread delay, process SIGSTOP, render thread delay; no driver hang"
+}

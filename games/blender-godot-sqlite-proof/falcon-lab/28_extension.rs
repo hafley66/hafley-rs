@@ -72,6 +72,7 @@ struct FalconSql {
     reference: Vec<serde_json::Value>,
     incremental: bool,
     scheduled: Option<Scheduled>,
+    faults: bool,
 }
 
 #[godot_api]
@@ -138,11 +139,17 @@ impl FalconSql {
     fn start_scheduled(&mut self) {
         assert!(self.bridge.is_none() && self.scheduled.is_none());
         let shared = crate::schedule::State::default();
-        let worker = crate::schedule::spawn(shared.clone());
+        let worker = crate::schedule::spawn(shared.clone(), self.faults);
         self.scheduled = Some(Scheduled {
             shared,
             worker: Some(worker),
         });
+    }
+
+    #[func]
+    fn start_faults(&mut self) {
+        self.faults = true;
+        self.start_scheduled();
     }
 
     #[func]
@@ -164,7 +171,7 @@ impl FalconSql {
             .last()
             .and_then(|v| v["renderer_generation"].as_u64());
         let packet = if consume
-            && !(92..106).contains(&current.simulation_tick)
+            && (self.faults || !(92..106).contains(&current.simulation_tick))
             && previous != Some(published.generation)
         {
             let reader =
@@ -198,25 +205,38 @@ impl FalconSql {
         let audit = scheduled.worker.take().unwrap().join().unwrap().unwrap();
         let last = self.acknowledgements.last().unwrap();
         assert_eq!(last["published_tick"], 179);
-        assert_eq!(last["skipped_publications"], 12);
+        assert_eq!(
+            last["skipped_publications"],
+            if self.faults { 0 } else { 12 }
+        );
         // The consumer skipped the injected pause, then read the latest SQL
         // publication observed under the metadata lock, without a frame queue.
         assert!(
-            self.acknowledgements
-                .windows(2)
-                .any(|pair| pair[0]["published_tick"].as_i64().unwrap() < 92
-                    && pair[1]["published_tick"].as_i64().unwrap() >= 106)
+            self.faults
+                || self
+                    .acknowledgements
+                    .windows(2)
+                    .any(|pair| pair[0]["published_tick"].as_i64().unwrap() < 92
+                        && pair[1]["published_tick"].as_i64().unwrap() >= 106)
         );
         for entry in &self.acknowledgements {
             assert_eq!(entry["published_tick"], entry["observed_simulation_tick"]);
         }
         for (path, value) in [
             (
-                "47_worker_schedule.json",
+                if self.faults {
+                    "56_fault_worker.json"
+                } else {
+                    "47_worker_schedule.json"
+                },
                 serde_json::to_value(audit).unwrap(),
             ),
             (
-                "48_schedule_consumed.json",
+                if self.faults {
+                    "57_fault_consumed.json"
+                } else {
+                    "48_schedule_consumed.json"
+                },
                 serde_json::to_value(&self.acknowledgements).unwrap(),
             ),
         ] {
@@ -226,9 +246,15 @@ impl FalconSql {
             )
             .unwrap();
         }
-        godot_print!(
-            "SCHEDULE_OK ticks=180 full_states=360 exact skipped_publications=12 consumer_latest=verified cursor_isolation=verified"
-        );
+        if self.faults {
+            godot_print!(
+                "FAULT_RUNTIME_OK ticks=180 full_states=360 exact consumer_latest=verified"
+            );
+        } else {
+            godot_print!(
+                "SCHEDULE_OK ticks=180 full_states=360 exact skipped_publications=12 consumer_latest=verified cursor_isolation=verified"
+            );
+        }
         true
     }
 

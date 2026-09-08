@@ -149,3 +149,23 @@ rollback, damage, and reader generations. The injected pause stops adapter
 consumption while the diagnostic UI continues rendering. Whole-engine/GPU stalls,
 deadline guarantees, and long-running allocation bounds remain untested. See
 `falcon-lab/52_schedule_readme.md` for ownership, policy, and reproduction.
+
+## Main-thread, render-thread, and process suspension
+
+`bash falcon-lab/55_run_faults.sh` adds bounded 800 ms delays on the Godot main
+thread and a distinct rendering thread. An external Python standard-library
+controller also SIGSTOPs its own Godot child, verifies OS state T, and SIGCONTs
+it after 800 ms. Worker tick starts are timestamped and checked externally.
+
+The first executed run advanced 20 worker ticks during each thread delay and
+zero during the confirmed process-stopped interval. After resume, the absolute
+deadline scheduler catches up by executing overdue fixed steps. All 180 ticks
+execute, all 360 peer states match the existing golden fixture, and SQL windows
+and uploaded meshes remain exact. The Rust worker shares Godot's process and
+therefore shares whole-process suspension.
+
+`falcon-lab/60_faults.mp4` records the resulting frame jumps and recovery;
+`falcon-lab/58_faults.json` carries wall-clock evidence that MovieMaker's
+frame-based timing cannot show directly. The render fault delays a CPU-side
+render callback. GPU saturation, driver hangs, device loss, and driver reset
+remain untested. See `falcon-lab/63_fault_readme.md` for reproduction and scope.

@@ -12,6 +12,9 @@ var displayed_tick := -1
 var displayed_generation := 0
 var finish_hold := 60
 var last_video_time := 0
+var faults := false
+var injected := [false, false, false]
+var fault_note := "FAULTS ARMED: MAIN / PROCESS / RENDER THREAD"
 
 func _ready():
 	if not ClassDB.class_exists("FalconSql"):
@@ -19,8 +22,11 @@ func _ready():
 	extension = ClassDB.instantiate("FalconSql")
 	assert(extension.proof_version() == "falcon-sql-gdext-1")
 	incremental = "--incremental" in OS.get_cmdline_user_args()
-	scheduled = "--scheduled" in OS.get_cmdline_user_args()
-	if scheduled:
+	faults = "--faults" in OS.get_cmdline_user_args()
+	scheduled = faults or "--scheduled" in OS.get_cmdline_user_args()
+	if faults:
+		extension.start_faults()
+	elif scheduled:
 		extension.start_scheduled()
 	elif incremental:
 		extension.start_incremental()
@@ -57,6 +63,9 @@ func _ready():
 		captions[0].text = "INPUT -> RUST TICK -> SQLITE -> GODOT"
 	if scheduled:
 		captions[0].text = "RUST CLOCK -> SQLITE / GODOT CONSUMER PAUSE"
+	if faults:
+		captions[0].text = "RUST WORKER / MAIN + PROCESS + RENDER STALLS"
+		print("MAIN_THREAD_ID ", OS.get_thread_caller_id())
 	captions[5].text = "3D LINE MESH / SQL ROWS + MESH UPLOAD VERIFIED"
 	captions[9].text = "0.5X + HOLDS / SCRIPTED TRAVEL / PM + MELEE KB + RAPIER"
 	print("GDEXT_STAGE_READY runtime=", Engine.get_version_info().string)
@@ -114,7 +123,7 @@ func _process_scheduled():
 		captions[1].text = "LOADING FIXTURE / WORKER HAS NOT EXECUTED A TICK"
 		return
 	var current: Dictionary = JSON.parse_string(observation.current)
-	var paused: bool = current.simulation_tick >= 92 and current.simulation_tick < 106
+	var paused: bool = not faults and current.simulation_tick >= 92 and current.simulation_tick < 106
 	if observation.has("frame"):
 		var frame: Dictionary = observation.frame
 		var state: Dictionary = JSON.parse_string(frame.status)
@@ -140,8 +149,13 @@ func _process_scheduled():
 	captions[7].text = "HELD SQL GEN %s DAMAGE %s / FRESH TICK91 %s" % [str(current.held_generation), str(current.held_damage), str(current.fresh_tick91_damage)]
 	captions[8].text = "ALL SLOTS PINNED: SKIP PUBLICATION, KEEP STEPPING" if not current.published else "LATEST WINDOW PUBLISHED / 3 RECYCLED SLOTS"
 	captions[9].text = "25 SIM TICKS/SEC CAPTURE / SCRIPTED INPUT / INDEPENDENT WORKER CLOCK"
+	if faults:
+		captions[5].text = fault_note
+		captions[8].text = "SAME PROCESS / FIXED-STEP CATCH-UP / GOLDEN STATES CHECKED"
 	RenderingServer.force_draw(false)
 	video_frames += 1
+	if faults:
+		_inject_faults(current)
 	if displayed_tick == 179:
 		finish_hold -= 1
 		if finish_hold == 0:
@@ -149,3 +163,28 @@ func _process_scheduled():
 			print("SCHEDULE_CAPTURE_OK observed_video_frames=", video_frames)
 			get_tree().quit(0)
 			set_process(false)
+
+func _inject_faults(current: Dictionary):
+	if current.simulation_tick >= 60 and not injected[0]:
+		injected[0] = true
+		print("FAULT_BEGIN main")
+		OS.delay_msec(800)
+		print("FAULT_END main")
+		var after: Dictionary = JSON.parse_string(extension.poll_scheduled(false).current)
+		fault_note = "MAIN THREAD: 800 MS / WORKER ADVANCED %d TICKS" % (int(after.simulation_tick) - int(current.simulation_tick))
+	elif current.simulation_tick >= 90 and not injected[1]:
+		injected[1] = true
+		print("PROCESS_STOP_READY")
+		fault_note = "PROCESS STOP REQUESTED / EXTERNAL SIGSTOP + SIGCONT"
+	elif current.simulation_tick >= 130 and not injected[2]:
+		injected[2] = true
+		RenderingServer.call_on_render_thread(_render_stall)
+		RenderingServer.force_sync()
+		var after: Dictionary = JSON.parse_string(extension.poll_scheduled(false).current)
+		fault_note = "RENDER THREAD: 800 MS / WORKER ADVANCED %d TICKS" % (int(after.simulation_tick) - int(current.simulation_tick))
+
+static func _render_stall():
+	print("RENDER_THREAD_ID ", OS.get_thread_caller_id())
+	print("FAULT_BEGIN render")
+	OS.delay_msec(800)
+	print("FAULT_END render")
