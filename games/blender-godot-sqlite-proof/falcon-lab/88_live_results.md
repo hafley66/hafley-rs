@@ -1,0 +1,36 @@
+# Live cross-process Godot presentation
+
+## Hop 1: live attachment
+
+Two independently clocked GGRS UDP peers retain simulation ownership. Each
+optionally exports its current SQL-read rows through the existing bincode 2
+serde codec to one bounded latest-only file. A same-directory atomic rename
+publishes a complete snapshot. Godot's gdext adapter imports the newest snapshot
+into its own existing SQLite FrameRing/vtab, checks rows exactly, and reuses the
+existing mesh packing/upload acknowledgement path. It starts no simulation worker.
+
+No new dependency was added. Existing bincode/serde, Rust filesystem APIs,
+rusqlite/core-labs, gdext, and Godot supply the implementation. This is local
+filesystem IPC. It does not share process-local SQLite connections or Arc slots.
+The payload is bounded at 256 KiB and 1,024 rows; version and row tick consistency
+are checked. Binary encoding preserves f64 bits. There is one committed file and
+at most one staging file per producer, with no presentation queue. Source writes
+are synchronous and can incur filesystem latency; no allocation or I/O-free claim
+is made. Files are not fsynced, so crash durability is outside this proof.
+
+In the executed baseline, source PID 51295 fed Godot PID 50481. Godot acknowledged
+128 generations, skipped 72, and displayed tick 199. All acknowledgement digests
+matched the recorded source rows, and local SQL and mesh roundtrips were exact.
+The usual 200 corrected peer pairs and 360 golden states passed. All 16 Rust
+library tests passed in 12.26s, including latest replacement and f64 bit retention.
+
+`85_live_godot.mp4` contains inspected live Godot GPU output: 435 frames,
+7.25 seconds, 960x540 H.264. MovieMaker omits periods when the renderer produces
+no frame, so movie duration differs from source wall time. Wall time, source
+generation, imported generation, skipped generations, state, damage, prediction,
+confirmation, and restore/replay metadata are labeled from actual observations.
+
+The control files are initial/lifecycle coordination only. The renderer has no
+input/control channel into the authoritative simulation. Snapshots contain only
+the current frame's presentation rows, not the full corrected historical window.
+Reattaching recovers the latest display, not missed animations or every event.

@@ -113,6 +113,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut frames = Vec::new();
     let mut corrected: Vec<Option<World>> = (0..200).map(|_| None).collect();
     let mut loads = 0;
+    let live_path = std::env::var_os("FALCON_LIVE_DIR")
+        .map(|dir| std::path::PathBuf::from(dir).join(format!("live-{id}.bin")));
     for tick in 0..200 {
         let deadline = start + Duration::from_millis(tick * period_ms);
         while Instant::now() < deadline {
@@ -151,6 +153,20 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         assert!(boundary.publish(&display.presented));
         let (generation, rows) = read_frame(&boundary.db, tick as i64)?;
         assert_eq!(rows, *display.presented.last().unwrap());
+        if let Some(path) = &live_path {
+            crate::live_rows::publish(
+                path,
+                &crate::live_rows::Latest {
+                    version: 1,
+                    pid: std::process::id(),
+                    generation,
+                    elapsed_us: start.elapsed().as_micros() as u64,
+                    rows: rows.clone(),
+                },
+            )?;
+            // Compact controller-only progress marker; it never gates simulation.
+            std::fs::write(format!("progress-{id}"), tick.to_string())?;
+        }
         frames.push(Frame {
             world: display.world,
             elapsed_us: start.elapsed().as_micros() as u64,

@@ -13,6 +13,12 @@ struct Packet {
     lines: Vec<geometry::Line>,
     status: serde_json::Value,
 }
+struct External {
+    path: std::path::PathBuf,
+    audit: std::path::PathBuf,
+    boundary: fixture::sql_viewer::boundary::Boundary,
+    source_generation: u64,
+}
 struct Bridge {
     requests: Option<SyncSender<u8>>,
     responses: Receiver<Packet>,
@@ -73,10 +79,57 @@ struct FalconSql {
     incremental: bool,
     scheduled: Option<Scheduled>,
     faults: bool,
+    external: Option<External>,
 }
 
 #[godot_api]
 impl FalconSql {
+    #[func]
+    fn start_external(&mut self, path: GString, audit: GString) {
+        fixture::baseline::telemetry::init();
+        assert!(self.bridge.is_none() && self.scheduled.is_none() && self.external.is_none());
+        self.external = Some(External {
+            path: path.to_string().into(),
+            audit: audit.to_string().into(),
+            boundary: fixture::sql_viewer::boundary::Boundary::new().unwrap(),
+            source_generation: 0,
+        });
+    }
+
+    #[func]
+    #[tracing::instrument(target = "falcon::godot", level = "trace", skip_all)]
+    fn poll_external(&mut self) -> VarDictionary {
+        assert!(self.pending.is_none());
+        let external = self.external.as_mut().unwrap();
+        if !external.path.exists() {
+            return VarDictionary::new();
+        }
+        let latest = crate::live_rows::read(&external.path).unwrap();
+        if latest.generation == external.source_generation {
+            return VarDictionary::new();
+        }
+        assert!(latest.generation > external.source_generation);
+        let previous = external.source_generation;
+        let tick = latest.rows[0].tick;
+        assert!(
+            external
+                .boundary
+                .publish(std::slice::from_ref(&latest.rows))
+        );
+        let (generation, rows) =
+            fixture::sql_viewer::boundary::read_frame(&external.boundary.db, tick).unwrap();
+        assert_eq!(rows, latest.rows);
+        external.source_generation = latest.generation;
+        let status = serde_json::json!({"source_pid":latest.pid,"source_generation":latest.generation,
+            "renderer_generation":generation,"published_tick":tick,"source_elapsed_us":latest.elapsed_us,
+            "skipped_generations":latest.generation-previous-1,"consumer_pid":std::process::id(),
+            "ipc_sql_exact":true});
+        self.deliver(Packet {
+            rows: pack(&rows),
+            lines: geometry::wire(&rows),
+            status,
+        })
+    }
     #[func]
     fn proof_version(&self) -> GString {
         "falcon-sql-gdext-1".into()
@@ -346,6 +399,15 @@ impl FalconSql {
         status["mesh_vertices"] = vertices.len().into();
         status["row_roundtrip_exact"] = true.into();
         status["mesh_roundtrip_exact"] = true.into();
+        if let Some(external) = &self.external {
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&external.audit)
+                .unwrap();
+            writeln!(file, "{}", status).unwrap();
+        }
         self.acknowledgements.push(status);
         true
     }

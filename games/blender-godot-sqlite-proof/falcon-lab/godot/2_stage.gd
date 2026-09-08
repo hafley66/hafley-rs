@@ -13,6 +13,7 @@ var displayed_generation := 0
 var finish_hold := 60
 var last_video_time := 0
 var faults := false
+var external := false
 var injected := [false, false, false]
 var fault_note := "FAULTS ARMED: MAIN / PROCESS / RENDER THREAD"
 
@@ -21,10 +22,13 @@ func _ready():
 		assert(GDExtensionManager.load_extension("res://0_falcon.gdextension") == GDExtensionManager.LOAD_STATUS_OK)
 	extension = ClassDB.instantiate("FalconSql")
 	assert(extension.proof_version() == "falcon-sql-gdext-1")
+	external = "--external" in OS.get_cmdline_user_args()
 	incremental = "--incremental" in OS.get_cmdline_user_args()
 	faults = "--faults" in OS.get_cmdline_user_args()
 	scheduled = faults or "--scheduled" in OS.get_cmdline_user_args()
-	if faults:
+	if external:
+		extension.start_external(OS.get_environment("FALCON_LIVE_PATH"), OS.get_environment("FALCON_LIVE_AUDIT"))
+	elif faults:
 		extension.start_faults()
 	elif scheduled:
 		extension.start_scheduled()
@@ -66,11 +70,16 @@ func _ready():
 	if faults:
 		captions[0].text = "RUST WORKER / MAIN + PROCESS + RENDER STALLS"
 		print("MAIN_THREAD_ID ", OS.get_thread_caller_id())
+	if external:
+		captions[0].text = "LIVE EXTERNAL PEER -> SNAPSHOT -> LOCAL SQLITE -> GODOT"
 	captions[5].text = "3D LINE MESH / SQL ROWS + MESH UPLOAD VERIFIED"
 	captions[9].text = "0.5X + HOLDS / SCRIPTED TRAVEL / PM + MELEE KB + RAPIER"
 	print("GDEXT_STAGE_READY runtime=", Engine.get_version_info().string)
 
 func _process(_delta):
+	if external:
+		_process_external()
+		return
 	if scheduled:
 		_process_scheduled()
 		return
@@ -111,6 +120,49 @@ func _process(_delta):
 		remaining = 60 if tick in [60, 78, 91, 97, 101, 117, 126, 179] else 2
 	remaining -= 1
 	video_frames += 1
+
+func _process_external():
+	var now := Time.get_ticks_usec()
+	if last_video_time != 0 and now - last_video_time < 16667:
+		OS.delay_usec(16667 - (now - last_video_time))
+	last_video_time = Time.get_ticks_usec()
+	var frame: Dictionary = extension.poll_external()
+	if not frame.is_empty():
+		var state: Dictionary = JSON.parse_string(frame.status)
+		var rows: PackedFloat64Array = frame.rows
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = frame.vertices
+		arrays[Mesh.ARRAY_COLOR] = frame.colors
+		mesh.clear_surfaces()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
+		assert(extension.acknowledge(int(state.renderer_generation), rows, mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]))
+		displayed_tick = int(state.published_tick)
+		captions[1].text = "PEER PID %d / GODOT PID %d / TICK %03d" % [state.source_pid, OS.get_process_id(), displayed_tick]
+		captions[2].text = "%s POSE %02d / INPUT %d %s / CONFIRMED %.0f" % [["IDLE", "JUMP", "FAIR"][int(rows[3])], int(rows[4])+1, int(rows[13]), "PREDICTED" if rows[12] != 0 else "KNOWN", rows[21]]
+		captions[3].text = "BAG %s / DAMAGE %.0f / STUN %.0f" % [["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(rows[37])], rows[8], rows[36]]
+		captions[4].text = "SOURCE GEN %d / LOCAL SQL GEN %d / SKIPPED %d" % [state.source_generation, state.renderer_generation, state.skipped_generations]
+		captions[5].text = "RESTORE %.0f / REPLAY %.0f / SOURCE WALL %.3fS" % [rows[18], rows[19]-1, state.source_elapsed_us / 1000000.0]
+		captions[7].text = "IPC ROWS -> SQLITE -> ARRAYMESH: EXACT / ROWS %d" % (rows.size()/27)
+		captions[8].text = "RENDERER HAS NO SIMULATION WORKER / LATEST-ONLY FEED"
+		print("LIVE_ACK ", displayed_tick, " ", int(state.source_generation))
+	elif displayed_tick == -1:
+		captions[1].text = "WAITING FOR EXTERNAL PEER SNAPSHOT"
+	var note_path := OS.get_environment("FALCON_LIVE_NOTE")
+	if FileAccess.file_exists(note_path):
+		captions[6].text = FileAccess.get_file_as_string(note_path)
+	captions[9].text = "LIVE 40/41MS PEER CLOCKS / DT 1/60 / MOVIE OMITS STOPPED WALL TIME"
+	RenderingServer.force_draw(false)
+	if FileAccess.file_exists(OS.get_environment("FALCON_LIVE_STOP")):
+		print("LIVE_EXIT requested tick=", displayed_tick)
+		get_tree().quit(0)
+		set_process(false)
+	if displayed_tick == 199:
+		finish_hold -= 1
+		if finish_hold == 0:
+			print("LIVE_EXIT final tick=199")
+			get_tree().quit(0)
+			set_process(false)
 
 func _process_scheduled():
 	# Pace capture only. The Rust worker has its own Instant-based clock.
