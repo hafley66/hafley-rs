@@ -3,6 +3,8 @@
 mod extension;
 #[path = "35_runtime.rs"]
 mod fixture;
+#[path = "70_release_measure.rs"]
+mod release_measure;
 #[cfg(any(test, feature = "gdext"))]
 #[path = "45_schedule.rs"]
 mod schedule;

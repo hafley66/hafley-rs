@@ -637,6 +637,9 @@ pub(crate) fn incremental_host(
 }
 
 pub fn run_cli() -> Result<(), Error> {
+    if std::env::args().any(|arg| arg == "--measure-release") {
+        return crate::release_measure::run();
+    }
     baseline::telemetry::init();
     let actions = baseline::load()?;
     let sql = std::env::args().any(|arg| arg == "--sql");
