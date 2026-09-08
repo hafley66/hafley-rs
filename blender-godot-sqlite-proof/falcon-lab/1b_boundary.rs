@@ -141,6 +141,7 @@ impl Boundary {
         reader_for(&self.ring)
     }
     /// Replace all replayed ticks in one publication, never exposing an intermediate replay state.
+    #[tracing::instrument(target = "falcon::sql", level = "trace", skip_all, fields(generation = self.generation + 1, frames = frames.len()))]
     pub fn publish(&mut self, frames: &[Vec<Row>]) -> bool {
         let first = frames.first().unwrap()[0].tick;
         let last = frames.last().unwrap()[0].tick;
@@ -151,6 +152,7 @@ impl Boundary {
             .count()
             + frames.iter().map(Vec::len).sum::<usize>();
         if total > ROW_CAPACITY {
+            tracing::warn!(target: "falcon::sql", rows = total, capacity = ROW_CAPACITY, reason = "row_capacity", "publication_refused");
             return false;
         }
         self.scratch.clear();
@@ -171,15 +173,18 @@ impl Boundary {
             .publish_rows(next, &self.scratch)
             .is_none()
         {
+            tracing::warn!(target: "falcon::sql", rows = total, reason = "slots_pinned", "publication_refused");
             return false;
         }
         std::mem::swap(&mut self.history, &mut self.scratch);
         self.generation = next;
+        tracing::trace!(target: "falcon::sql", generation = next, rows = total, "published");
         assert_eq!(self.layout, self.ring.read().unwrap().slot_layout());
         true
     }
 }
 
+#[tracing::instrument(target = "falcon::sql", level = "trace", skip_all)]
 pub fn reader_for(ring: &Ring) -> Result<Connection> {
     let db = Connection::open_in_memory()?;
     db.create_module(c"presentation", &MODULE, Some(ring.clone()))?;
@@ -193,6 +198,7 @@ pub fn read_row(row: &rusqlite::Row<'_>) -> Result<(u64, Row)> {
     }
     Ok((row.get::<_, i64>(3)? as u64, r))
 }
+#[tracing::instrument(target = "falcon::sql", level = "trace", skip_all, fields(tick))]
 pub fn read_frame(db: &Connection, tick: i64) -> Result<(u64, Vec<Row>)> {
     let mut statement = db.prepare("SELECT * FROM presentation WHERE tick=?1")?;
     let records = statement

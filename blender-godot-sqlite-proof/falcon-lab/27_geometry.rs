@@ -45,6 +45,7 @@ fn mesh(
     }
 }
 
+#[tracing::instrument(target = "falcon::presentation", level = "trace", skip_all, fields(rows = rows.len()))]
 pub fn wire(rows: &[Row]) -> Vec<Line> {
     let meta = &rows.iter().find(|r| r.kind == 0).unwrap().values;
     let mut out = Vec::new();

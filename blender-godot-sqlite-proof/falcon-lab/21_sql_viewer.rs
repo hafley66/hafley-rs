@@ -7,6 +7,7 @@ use baseline::{gpu, project, text};
 use boundary::{Boundary, Row};
 use brawllib_rs::high_level_fighter::{CollisionBoxValues, HighLevelSubaction};
 
+#[tracing::instrument(target = "falcon::presentation", level = "trace", skip_all, fields(tick = world.frame - 1, predicted, applied))]
 pub(super) fn encode(
     world: &World,
     actions: &[HighLevelSubaction],

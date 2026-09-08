@@ -11,3 +11,6 @@ pub use fixture::{Display, Runtime, run_cli};
 #[cfg(test)]
 #[path = "37_incremental_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "64_tracing_tests.rs"]
+mod tracing_tests;
