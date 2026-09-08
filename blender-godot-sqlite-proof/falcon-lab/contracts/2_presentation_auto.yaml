@@ -1,6 +1,22 @@
-# Generated from 0_presentation.tsp; sha256:1b173dcef9dc2f8f39ba9f8f57ffc74a2bcfef0390fd4c2937247cb551ddd60c
-version: 1
+# Generated from 0_presentation.tsp; sha256:e22f632bf4c97d3d819c510115bde62529b3863410700004705fe597a6dfac0e
+version: 2
 namespace: FalconBoundary
+constants:
+  WINDOW:
+    type: int64
+    value: "32"
+  SLOTS:
+    type: uint32
+    value: "3"
+  ROW_CAPACITY:
+    type: uint32
+    value: "1024"
+  IPC_LIMIT:
+    type: uint32
+    value: "262144"
+  PROTOCOL_VERSION:
+    type: uint32
+    value: "1"
 models:
   Row:
     - name: tick
@@ -25,6 +41,25 @@ models:
     - name: generation
       rust: u64
       type: uint64
+  Latest:
+    - name: version
+      rust: u32
+      type: uint32
+    - name: pid
+      rust: u32
+      type: uint32
+    - name: generation
+      rust: u64
+      type: uint64
+    - name: elapsed_us
+      rust: u64
+      type: uint64
+    - name: rows
+      rust: Vec<Row>
+      maxLength: 1024
+      item:
+        rust: Row
+        ref: Row
   FrameRead:
     - name: id
       rust: GenerationId

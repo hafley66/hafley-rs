@@ -1,7 +1,8 @@
 # Presentation boundary contracts
 
 `0_presentation.tsp` owns the row layout, generation/epoch envelope, error set,
-and publish/read/ack signatures. `just generate` compiles the actual TypeSpec
+publish/read/ack signatures, native boundary constants, and the `Latest` IPC
+envelope. `just generate` compiles the actual TypeSpec
 program and renders Rust through `@hafley66/alloy-rs` components. It also emits
 a transport-neutral YAML description, not an OpenAPI HTTP document.
 
@@ -41,7 +42,14 @@ artifact or an explicitly republished/re-pinned emitter before installing.
   packet. The trait itself validates without consuming or recording a receipt.
 - ReadBuffer/WriteBuffer template instances lower to borrowed Rust slices.
 - Named Ok/Err unions lower to Rust Result aliases. Other union shapes fail.
-- Arrays require equal positive minItems/maxItems and become fixed Rust arrays.
+- Equal positive minItems/maxItems become fixed Rust arrays. A maximum-only
+  array becomes a Vec; the existing IPC adapter enforces its row limit.
+- Native integral constants generate Rust constants; YAML stores their decimal
+  values as strings to preserve uint64 precision. `0_constants.mjs` isolates the
+  pinned compiler's AST/internal value API, covered by literal/reference/range tests.
+- `Latest` replaces the handwritten IPC envelope. A frozen v1 bincode fixture
+  checks byte compatibility in both directions. Limits and protocol version are
+  consumed by the SQLite/IPC adapters and peer publisher.
 - Unsupported types, optional fields, defaults, and valued enums fail explicitly.
 
 ## Remaining work

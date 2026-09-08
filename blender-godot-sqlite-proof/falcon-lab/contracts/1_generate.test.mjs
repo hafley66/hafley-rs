@@ -13,7 +13,7 @@ test('generation is deterministic, stale checks are read-only, unsupported types
   const run = (...args) => spawnSync(process.execPath, ['1_generate.mjs', ...args], { cwd: dir, encoding: 'utf8' });
   try {
     await symlink(join(local, 'node_modules'), join(dir, 'node_modules'), 'dir');
-    for (const name of ['0_presentation.tsp', '1_generate.mjs']) await copyFile(join(local, name), join(dir, name));
+    for (const name of ['0_presentation.tsp', '0_constants.mjs', '1_generate.mjs']) await copyFile(join(local, name), join(dir, name));
     let result = run();
     assert.equal(result.status, 0, result.stderr);
     const expected = await Promise.all(outputs.map(name => readFile(join(local, name), 'utf8')));
@@ -39,6 +39,15 @@ test('generation is deterministic, stale checks are read-only, unsupported types
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /arrays require equal positive minItems\/maxItems/);
     assert.deepEqual(await Promise.all(outputs.map(name => readFile(join(dir, name), 'utf8'))), expected);
+    await writeFile(join(dir, '0_presentation.tsp'), source + '\nconst MAX_ID: uint64 = 18446744073709551615;\nconst CAPACITY_ALIAS: uint32 = ROW_CAPACITY;\n');
+    result = run();
+    assert.equal(result.status, 0, result.stderr);
+    const numericOutput = await readFile(join(dir, outputs[0]), 'utf8');
+    assert.match(numericOutput, /MAX_ID: u64 = 18446744073709551615;/);
+    assert.match(numericOutput, /CAPACITY_ALIAS: u32 = 1024;/);
+    await writeFile(join(dir, '0_presentation.tsp'), source + '\nconst BAD: uint32 = -1;\n');
+    assert.notEqual(run().status, 0);
+    assert.equal(await readFile(join(dir, outputs[0]), 'utf8'), numericOutput);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

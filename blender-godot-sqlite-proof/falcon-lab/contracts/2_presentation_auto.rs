@@ -1,7 +1,12 @@
-// Generated from 0_presentation.tsp; sha256:1b173dcef9dc2f8f39ba9f8f57ffc74a2bcfef0390fd4c2937247cb551ddd60c
+// Generated from 0_presentation.tsp; sha256:e22f632bf4c97d3d819c510115bde62529b3863410700004705fe597a6dfac0e
 use serde::Deserialize;
 use serde::Serialize;
 
+pub const WINDOW: i64 = 32;
+pub const SLOTS: u32 = 3;
+pub const ROW_CAPACITY: u32 = 1024;
+pub const IPC_LIMIT: u32 = 262144;
+pub const PROTOCOL_VERSION: u32 = 1;
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Row {
   pub tick: i64,
@@ -13,6 +18,14 @@ pub struct Row {
 pub struct GenerationId {
   pub epoch: u64,
   pub generation: u64,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Latest {
+  pub version: u32,
+  pub pid: u32,
+  pub generation: u64,
+  pub elapsed_us: u64,
+  pub rows: Vec<Row>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct FrameRead {

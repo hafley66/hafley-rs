@@ -1,17 +1,10 @@
 //! Latest-only local IPC: bincode preserves f64 row bits; same-directory rename publishes atomically.
-use crate::fixture::sql_viewer::boundary::{ROW_CAPACITY, Row};
-use serde::{Deserialize, Serialize};
+use crate::fixture::sql_viewer::boundary::ROW_CAPACITY;
+pub(crate) use crate::fixture::sql_viewer::boundary::contracts::Latest;
+use crate::fixture::sql_viewer::boundary::contracts::{IPC_LIMIT, PROTOCOL_VERSION};
 use std::path::Path;
 
-#[derive(Serialize, Deserialize)]
-pub(crate) struct Latest {
-    pub version: u32,
-    pub pid: u32,
-    pub generation: u64,
-    pub elapsed_us: u64,
-    pub rows: Vec<Row>,
-}
-const LIMIT: usize = 262144;
+const LIMIT: usize = IPC_LIMIT as usize;
 
 #[tracing::instrument(target="falcon::ipc", level="trace", skip_all, fields(generation=latest.generation, rows=latest.rows.len()))]
 pub(crate) fn publish(path: &Path, latest: &Latest) -> Result<(), Box<dyn std::error::Error>> {
@@ -37,7 +30,7 @@ pub(crate) fn read(path: &Path) -> Result<Latest, Box<dyn std::error::Error>> {
         bincode::config::standard().with_limit::<LIMIT>(),
     )?;
     assert_eq!(used, bytes.len());
-    assert_eq!(latest.version, 1);
+    assert_eq!(latest.version, PROTOCOL_VERSION);
     assert!(!latest.rows.is_empty() && latest.rows.len() <= ROW_CAPACITY);
     assert!(latest.rows.iter().all(|r| r.tick == latest.rows[0].tick));
     assert_eq!(latest.rows[0].kind, 0);
@@ -46,6 +39,24 @@ pub(crate) fn read(path: &Path) -> Result<Latest, Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
+    use crate::fixture::sql_viewer::boundary::Row;
+
+    #[test]
+    fn generated_envelope_matches_v1_wire_fixture() {
+        use super::*;
+        let mut row = Row::new(0, 0, 0);
+        row.values[0] = f64::from_bits(0x3ff0000000000001);
+        let latest = Latest { version: PROTOCOL_VERSION, pid: 1, generation: 3, elapsed_us: 0, rows: vec![row] };
+        // Frozen v1 bincode layout: five envelope fields, three row integers,
+        // then 24 little-endian f64 values. No added array-length prefix.
+        let mut fixture = vec![1, 1, 3, 0, 1, 0, 0, 0];
+        fixture.extend_from_slice(&[1, 0, 0, 0, 0, 0, 240, 63]);
+        fixture.resize(8 + 24 * 8, 0);
+        assert_eq!(bincode::serde::encode_to_vec(&latest, bincode::config::standard()).unwrap(), fixture);
+        let (decoded, used): (Latest, usize) = bincode::serde::decode_from_slice(&fixture, bincode::config::standard()).unwrap();
+        assert_eq!((decoded, used), (latest, fixture.len()));
+    }
+
     #[test]
     fn latest_replaces_without_backlog_and_preserves_float_bits() {
         use super::*;
@@ -58,7 +69,7 @@ mod tests {
             publish(
                 &path,
                 &Latest {
-                    version: 1,
+                    version: PROTOCOL_VERSION,
                     pid: 1,
                     generation,
                     elapsed_us: 0,
