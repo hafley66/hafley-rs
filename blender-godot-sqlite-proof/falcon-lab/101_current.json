@@ -1,0 +1,13 @@
+{
+  "objective": "Source-backed Falcon behavior through the Rust simulation and generated presentation boundaries",
+  "next": "Inventory executable common movement callbacks and source-game trace coverage",
+  "acceptance": "just test; just prove",
+  "coverage": "99_lifecycle_import.md",
+  "plan": "92_web_import_plan.md",
+  "pending": [
+    "One authored action catalog replacing loader-order and HUD-label duplication",
+    "Shared scenario inputs/capture settings with independently authored behavioral expectations",
+    "Browser netplay transport and two-client rollback integration",
+    "LAN HTTPS serving and physical-device verification"
+  ]
+}
