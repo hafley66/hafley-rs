@@ -22,6 +22,10 @@ or project, along with their tests, fixtures, and provenance. See [AGENTS.md](AG
   recycled numeric pose rows, atomic rollback correction, pinned SQL reader, wgpu capture.
 - [gdext presentation increment](blender-godot-sqlite-proof/falcon-lab/33_godot_readme.md):
   Godot consumes the same Rust/SQL fixture, with exact row and mesh-upload checks.
+- [Incremental core](blender-godot-sqlite-proof/falcon-lab/43_incremental_readme.md):
+  renderer-free Rust state, one-call advances, full-state replay and save/load checks.
+- [Independent schedules](blender-godot-sqlite-proof/falcon-lab/52_schedule_readme.md):
+  worker continues through paused consumption and exhausted SQL slots, then publishes corrected history.
 
 The Rust packages retain separate Cargo workspace roots and lockfiles. Parent
 `hafley-rs` workspace builds do not include these experimental dependencies.

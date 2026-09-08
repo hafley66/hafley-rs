@@ -2,7 +2,9 @@ use super::*;
 use std::sync::Arc;
 
 #[derive(serde::Deserialize)]
-struct Recorded {world:falcon_simulation::World}
+struct Recorded {
+    world: falcon_simulation::World,
+}
 fn golden() -> Vec<[Recorded; 2]> {
     serde_json::from_slice(include_bytes!("17_launch_trace.json")).unwrap()
 }
@@ -20,11 +22,7 @@ fn incremental_peers_match_every_preexisting_full_state() {
             .unwrap();
         assert_eq!(runtime.tick(), tick + 1);
         for (actual, old) in pair.iter().zip(old_pair) {
-            assert_eq!(
-                actual.world,
-                old.world,
-                "full-state mismatch at {tick}"
-            );
+            assert_eq!(actual.world, old.world, "full-state mismatch at {tick}");
         }
     }
 }
@@ -49,8 +47,7 @@ fn core_save_load_replays_every_remaining_state_from_flight_and_ground() {
         for tick in checkpoint..180 {
             let state = sim.advance(falcon_simulation::fixture_input(tick));
             assert_eq!(
-                state,
-                &expected[tick as usize][0].world,
+                state, &expected[tick as usize][0].world,
                 "restored mismatch at {tick}"
             );
         }

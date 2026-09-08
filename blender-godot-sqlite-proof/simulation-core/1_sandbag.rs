@@ -98,9 +98,9 @@ impl Sandbag {
         self.knockback = calc::knockback(
             hit.damage,
             hit.damage,
-            hit.kbg as u32,
-            hit.bkb as u32,
-            hit.wdsk as u32,
+            hit.kbg,
+            hit.bkb,
+            hit.wdsk,
             false,
             &target,
             percent_before,
@@ -111,11 +111,7 @@ impl Sandbag {
             false,
             false,
         );
-        let angle = calc::resolve_sakurai_angle(
-            (hit.trajectory as f32).to_radians(),
-            self.knockback,
-            false,
-        );
+        let angle = calc::resolve_sakurai_angle(hit.trajectory.to_radians(), self.knockback, false);
         self.velocity = [
             0.0,
             calc::initial_y_velocity(self.knockback, angle, false),

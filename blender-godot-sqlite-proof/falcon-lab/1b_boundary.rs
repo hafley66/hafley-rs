@@ -1,8 +1,8 @@
 //! Engine-neutral numeric presentation rows, exposed through SQLite over recycled Rust slots.
 use core_labs::sql::{FrameRing, Generation};
 use rusqlite::vtab::{
-    sqlite3_vtab, sqlite3_vtab_cursor, Context, Filters, IndexInfo, Module, VTab, VTabConnection,
-    VTabCursor,
+    Context, Filters, IndexInfo, Module, VTab, VTabConnection, VTabCursor, sqlite3_vtab,
+    sqlite3_vtab_cursor,
 };
 use rusqlite::{Connection, Result};
 use serde::{Deserialize, Serialize};
@@ -138,9 +138,7 @@ impl Boundary {
         })
     }
     pub fn reader(&self) -> Result<Connection> {
-        let db = Connection::open_in_memory()?;
-        db.create_module(c"presentation", &MODULE, Some(self.ring.clone()))?;
-        Ok(db)
+        reader_for(&self.ring)
     }
     /// Replace all replayed ticks in one publication, never exposing an intermediate replay state.
     pub fn publish(&mut self, frames: &[Vec<Row>]) -> bool {
@@ -180,6 +178,12 @@ impl Boundary {
         assert_eq!(self.layout, self.ring.read().unwrap().slot_layout());
         true
     }
+}
+
+pub fn reader_for(ring: &Ring) -> Result<Connection> {
+    let db = Connection::open_in_memory()?;
+    db.create_module(c"presentation", &MODULE, Some(ring.clone()))?;
+    Ok(db)
 }
 
 pub fn read_row(row: &rusqlite::Row<'_>) -> Result<(u64, Row)> {
