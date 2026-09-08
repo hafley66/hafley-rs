@@ -18,6 +18,17 @@ struct Bridge {
     responses: Receiver<Packet>,
     worker: Option<JoinHandle<Result<(), String>>>,
 }
+struct Scheduled {
+    shared: crate::schedule::State,
+    worker: Option<JoinHandle<Result<Vec<crate::schedule::Status>, String>>>,
+}
+impl Drop for Scheduled {
+    fn drop(&mut self) {
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
 impl Drop for Bridge {
     fn drop(&mut self) {
         self.requests.take();
@@ -60,6 +71,7 @@ struct FalconSql {
     acknowledgements: Vec<serde_json::Value>,
     reference: Vec<serde_json::Value>,
     incremental: bool,
+    scheduled: Option<Scheduled>,
 }
 
 #[godot_api]
@@ -123,6 +135,104 @@ impl FalconSql {
     }
 
     #[func]
+    fn start_scheduled(&mut self) {
+        assert!(self.bridge.is_none() && self.scheduled.is_none());
+        let shared = crate::schedule::State::default();
+        let worker = crate::schedule::spawn(shared.clone());
+        self.scheduled = Some(Scheduled {
+            shared,
+            worker: Some(worker),
+        });
+    }
+
+    #[func]
+    fn poll_scheduled(&mut self, consume: bool) -> VarDictionary {
+        assert!(self.pending.is_none());
+        let scheduled = self.scheduled.as_ref().unwrap();
+        let state = scheduled.shared.lock().unwrap();
+        let mut result = VarDictionary::new();
+        let Some(current) = &state.current else {
+            return result;
+        };
+        result.set(
+            "current",
+            GString::from(&serde_json::to_string(current).unwrap()),
+        );
+        let published = state.published.as_ref().unwrap();
+        let previous = self
+            .acknowledgements
+            .last()
+            .and_then(|v| v["renderer_generation"].as_u64());
+        let packet = if consume
+            && !(92..106).contains(&current.simulation_tick)
+            && previous != Some(published.generation)
+        {
+            let reader =
+                fixture::sql_viewer::boundary::reader_for(state.ring.as_ref().unwrap()).unwrap();
+            let (generation, rows) =
+                fixture::sql_viewer::boundary::read_frame(&reader, published.published_tick)
+                    .unwrap();
+            assert_eq!(generation, published.generation);
+            let mut status = serde_json::to_value(published).unwrap();
+            status["renderer_generation"] = generation.into();
+            status["observed_simulation_tick"] = current.simulation_tick.into();
+            Some(Packet {
+                rows: pack(&rows),
+                lines: geometry::wire(&rows),
+                status,
+            })
+        } else {
+            None
+        };
+        drop(state);
+        if let Some(packet) = packet {
+            result.set("frame", self.deliver(packet));
+        }
+        result
+    }
+
+    #[func]
+    fn finish_scheduled(&mut self) -> bool {
+        assert!(self.pending.is_none());
+        let mut scheduled = self.scheduled.take().unwrap();
+        let audit = scheduled.worker.take().unwrap().join().unwrap().unwrap();
+        let last = self.acknowledgements.last().unwrap();
+        assert_eq!(last["published_tick"], 179);
+        assert_eq!(last["skipped_publications"], 12);
+        // The consumer skipped the injected pause, then read the latest SQL
+        // publication observed under the metadata lock, without a frame queue.
+        assert!(
+            self.acknowledgements
+                .windows(2)
+                .any(|pair| pair[0]["published_tick"].as_i64().unwrap() < 92
+                    && pair[1]["published_tick"].as_i64().unwrap() >= 106)
+        );
+        for entry in &self.acknowledgements {
+            assert_eq!(entry["published_tick"], entry["observed_simulation_tick"]);
+        }
+        for (path, value) in [
+            (
+                "47_worker_schedule.json",
+                serde_json::to_value(audit).unwrap(),
+            ),
+            (
+                "48_schedule_consumed.json",
+                serde_json::to_value(&self.acknowledgements).unwrap(),
+            ),
+        ] {
+            std::fs::write(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(path),
+                serde_json::to_vec_pretty(&value).unwrap(),
+            )
+            .unwrap();
+        }
+        godot_print!(
+            "SCHEDULE_OK ticks=180 full_states=360 exact skipped_publications=12 consumer_latest=verified cursor_isolation=verified"
+        );
+        true
+    }
+
+    #[func]
     fn next_frame(&mut self) -> VarDictionary {
         self.advance(i64::from(falcon_simulation::fixture_input(
             self.acknowledgements.len() as i32,
@@ -140,6 +250,10 @@ impl FalconSql {
             .send(u8::try_from(input).unwrap())
             .unwrap();
         let packet = bridge.responses.recv().expect("Rust fixture failed");
+        self.deliver(packet)
+    }
+
+    fn deliver(&mut self, packet: Packet) -> VarDictionary {
         let vertices: PackedVector3Array = packet
             .lines
             .iter()

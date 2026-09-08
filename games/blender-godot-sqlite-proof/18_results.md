@@ -120,3 +120,32 @@ held-reader, correction, and slot-reuse assertions execute inside the extension.
 ticks retain the earlier 824-frame slow-playback/hold schedule. This remains an
 offline simulation fixture with presentation-time SQL publication. See
 `falcon-lab/33_godot_readme.md` for thread ownership, capture details, and scope.
+
+## Incremental renderer-free simulation
+
+`simulation-core` owns the fighter and complete Rapier state without Godot,
+wgpu, decoder, or SQLite dependencies. Godot requests each incremental tick;
+both peers match all 180 earlier full-state observations. Core save/load at
+ticks 105 and 128 reproduces every subsequent state. `falcon-lab/41_incremental.mp4`
+and `falcon-lab/43_incremental_readme.md` contain the capture and boundaries.
+
+## Independent worker and stalled consumption
+
+`bash falcon-lab/46_run_schedule.sh` drives fixed simulation steps from a Rust
+worker clock while Godot polls presentation. Consumption pauses across ticks
+92 through 105. Three held SQLite readers exhaust the publication ring, causing
+12 refused publications while simulation and tick-97 rollback continue. Tick 105
+publishes the corrected window; consumption can resume at tick 106 with zero lag.
+The tick-91 cursor still reads damage 0 while fresh queries read 18.
+
+Uninterrupted and paused CPU runs compare both peers against all 360 typed
+recorded states. The capture worker repeats those checks. Successful SQL
+publications compare the entire retained window, and consumed rows and uploaded
+mesh vertices round-trip exactly. Slot pointers and capacities remain unchanged.
+Thirteen Falcon tests pass, and all-target gdext Clippy passes with warnings denied.
+
+`falcon-lab/49_schedule.mp4` displays simulation/display lag, publication refusal,
+rollback, damage, and reader generations. The injected pause stops adapter
+consumption while the diagnostic UI continues rendering. Whole-engine/GPU stalls,
+deadline guarantees, and long-running allocation bounds remain untested. See
+`falcon-lab/52_schedule_readme.md` for ownership, policy, and reproduction.

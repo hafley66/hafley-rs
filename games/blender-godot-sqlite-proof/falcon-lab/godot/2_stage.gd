@@ -7,6 +7,11 @@ var tick := -1
 var remaining := 0
 var video_frames := 0
 var incremental := false
+var scheduled := false
+var displayed_tick := -1
+var displayed_generation := 0
+var finish_hold := 60
+var last_video_time := 0
 
 func _ready():
 	if not ClassDB.class_exists("FalconSql"):
@@ -14,7 +19,10 @@ func _ready():
 	extension = ClassDB.instantiate("FalconSql")
 	assert(extension.proof_version() == "falcon-sql-gdext-1")
 	incremental = "--incremental" in OS.get_cmdline_user_args()
-	if incremental:
+	scheduled = "--scheduled" in OS.get_cmdline_user_args()
+	if scheduled:
+		extension.start_scheduled()
+	elif incremental:
 		extension.start_incremental()
 	else:
 		extension.start()
@@ -47,11 +55,16 @@ func _ready():
 	captions[0].text = "FALCON -> RECYCLED SQLITE -> GDEXT -> GODOT"
 	if incremental:
 		captions[0].text = "INPUT -> RUST TICK -> SQLITE -> GODOT"
+	if scheduled:
+		captions[0].text = "RUST CLOCK -> SQLITE / GODOT CONSUMER PAUSE"
 	captions[5].text = "3D LINE MESH / SQL ROWS + MESH UPLOAD VERIFIED"
 	captions[9].text = "0.5X + HOLDS / SCRIPTED TRAVEL / PM + MELEE KB + RAPIER"
 	print("GDEXT_STAGE_READY runtime=", Engine.get_version_info().string)
 
 func _process(_delta):
+	if scheduled:
+		_process_scheduled()
+		return
 	if remaining == 0:
 		if tick == 179:
 			assert(extension.finish())
@@ -89,3 +102,50 @@ func _process(_delta):
 		remaining = 60 if tick in [60, 78, 91, 97, 101, 117, 126, 179] else 2
 	remaining -= 1
 	video_frames += 1
+
+func _process_scheduled():
+	# Pace capture only. The Rust worker has its own Instant-based clock.
+	var now := Time.get_ticks_usec()
+	if last_video_time != 0 and now - last_video_time < 16667:
+		OS.delay_usec(16667 - (now - last_video_time))
+	last_video_time = Time.get_ticks_usec()
+	var observation: Dictionary = extension.poll_scheduled(true)
+	if not observation.has("current"):
+		captions[1].text = "LOADING FIXTURE / WORKER HAS NOT EXECUTED A TICK"
+		return
+	var current: Dictionary = JSON.parse_string(observation.current)
+	var paused: bool = current.simulation_tick >= 92 and current.simulation_tick < 106
+	if observation.has("frame"):
+		var frame: Dictionary = observation.frame
+		var state: Dictionary = JSON.parse_string(frame.status)
+		var rows: PackedFloat64Array = frame.rows
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = frame.vertices
+		arrays[Mesh.ARRAY_COLOR] = frame.colors
+		mesh.clear_surfaces()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
+		var uploaded := mesh.surface_get_arrays(0)
+		assert(extension.acknowledge(int(state.renderer_generation), rows, uploaded[Mesh.ARRAY_VERTEX]))
+		displayed_tick = int(state.published_tick)
+		displayed_generation = int(state.renderer_generation)
+		captions[2].text = "DISPLAY: %s POSE %02d / INPUT %s" % [["IDLE", "JUMP", "FAIR"][int(rows[3])], int(rows[4]) + 1, "PREDICTED" if rows[12] != 0 else "CONFIRMED"]
+		captions[3].text = "DISPLAY BAG: %s / %.0f%% / STUN %.0f" % [["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(rows[37])], rows[8], rows[36]]
+		if displayed_tick >= 106:
+			assert(displayed_tick == int(current.simulation_tick))
+	captions[1].text = "SIM %03d / DISPLAY %03d / LAG %02d / GEN %03d" % [current.simulation_tick, displayed_tick, int(current.simulation_tick) - displayed_tick, displayed_generation]
+	captions[4].text = "PUBLISHED TICK %03d GEN %03d / SKIPPED %d / ROWS %d" % [current.published_tick, current.generation, current.skipped_publications, current.rows]
+	captions[5].text = "CONSUMPTION PAUSED / WORKER CONTINUES" if paused else "CONSUMING LATEST SQL GENERATION"
+	captions[6].text = "SIM ADVANCES %d / RESTORE %s / FIXED DT 1/60" % [current.advances, str(current.restored)]
+	captions[7].text = "HELD SQL GEN %s DAMAGE %s / FRESH TICK91 %s" % [str(current.held_generation), str(current.held_damage), str(current.fresh_tick91_damage)]
+	captions[8].text = "ALL SLOTS PINNED: SKIP PUBLICATION, KEEP STEPPING" if not current.published else "LATEST WINDOW PUBLISHED / 3 RECYCLED SLOTS"
+	captions[9].text = "25 SIM TICKS/SEC CAPTURE / SCRIPTED INPUT / INDEPENDENT WORKER CLOCK"
+	RenderingServer.force_draw(false)
+	video_frames += 1
+	if displayed_tick == 179:
+		finish_hold -= 1
+		if finish_hold == 0:
+			assert(extension.finish_scheduled())
+			print("SCHEDULE_CAPTURE_OK observed_video_frames=", video_frames)
+			get_tree().quit(0)
+			set_process(false)
