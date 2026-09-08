@@ -403,6 +403,12 @@ impl Door for OpencodeDoor {
     }
 
     fn deliver(&self, session: &LiveSession, body: &str) -> Result<Delivered> {
+        // prompt_async joins an active generation instead of preserving two
+        // independent turns. Leave the envelope pending for the wrapper's
+        // existing idle drain so the initiating prompt can finish first.
+        if session.status == LiveStatus::Busy {
+            return Ok(Delivered::Unreachable("opencode is busy; awaiting idle delivery".into()));
+        }
         let DoorAddress::Http { base, session: id } = &session.door else {
             return Ok(Delivered::Unreachable(format!(
                 "opencode session `{}` names no server",
@@ -665,8 +671,17 @@ mod tests {
     /// RECEIPT. A delivery posts one text part to prompt_async and reads the
     /// 204 as injected.
     #[test]
-    fn a_delivery_posts_one_text_part() {
+    fn a_busy_delivery_stays_pending_without_replacing_the_active_prompt() {
         let stub = Stub::start(SESSIONS, STATUSES, EVENTS);
+        let door = stub.door();
+        let session = door.live_sessions().unwrap().into_iter().find(|session| session.session_id == "ses_new").unwrap();
+        assert!(matches!(door.deliver(&session, "pending peer message").unwrap(), Delivered::Unreachable(_)));
+        assert!(!std::iter::from_fn(|| stub.seen.try_recv().ok()).any(|(target, _)| target.ends_with("/prompt_async")));
+    }
+
+    #[test]
+    fn a_delivery_posts_one_text_part() {
+        let stub = Stub::start(SESSIONS, "{}", EVENTS);
         let door = stub.door();
         let session = door
             .live_sessions()

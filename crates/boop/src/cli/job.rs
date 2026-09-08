@@ -746,9 +746,10 @@ pub(crate) fn run_sweep(
 
 /// Ask `cass` whether the envelope id appears in the recipient's transcript.
 pub(crate) fn cass_hit(route: &Route, message_id: &str) -> Result<bool> {
-    let output = Command::new("cass")
-        .args(["search", message_id, "--robot", "--limit", "20"])
-        .output();
+    let mut command = Command::new("cass");
+    command.args(["search", message_id, "--robot", "--limit", "20"]);
+    let output = boop_harness::worktree::run_captured_with_deadline(
+        command, "cass search", std::time::Duration::from_secs(20));
     let output = match output {
         Ok(output) if output.status.success() => output,
         _ => return Ok(false),
@@ -776,13 +777,15 @@ pub(crate) fn scoped_to_agent(route: &Route, source_path: &str) -> bool {
     if source_path.is_empty() {
         return false;
     }
-    if let Some(expected) = route.source_path.as_deref() {
+    if let Some(expected) = route.source_path.as_deref().filter(|path| !path.starts_with("native-session=")) {
         return source_path == expected;
     }
     route
         .session_id
         .as_deref()
-        .map(|session_id| source_path.contains(session_id))
+        .filter(|session_id| !session_id.is_empty())
+        .map(|session_id| Path::new(source_path).file_stem().and_then(|stem| stem.to_str())
+            .is_some_and(|stem| stem == session_id || stem.strip_suffix(session_id).is_some_and(|prefix| prefix.ends_with('-'))))
         .unwrap_or(false)
 }
 
@@ -3388,6 +3391,20 @@ mod tests {
     use super::*;
     use crate::cli::testkit::{route_with, temp_mail_dir};
     use std::sync::Mutex;
+
+    #[test]
+    fn transcript_scope_resolves_native_markers_without_partial_id_hits() {
+        let mut route = route_with(None);
+        route.session_id = Some("native-id".into());
+        route.source_path = Some("native-session=native-id".into());
+        assert!(scoped_to_agent(&route, "/test/native-id.jsonl"));
+        assert!(scoped_to_agent(&route, "/test/rollout-date-native-id.jsonl"));
+        assert!(!scoped_to_agent(&route, "/test/native-id-other.jsonl"));
+        assert!(!scoped_to_agent(&route, "/test/native-id/other.jsonl"));
+        route.source_path = Some("/exact/transcript.jsonl".into());
+        assert!(scoped_to_agent(&route, "/exact/transcript.jsonl"));
+        assert!(!scoped_to_agent(&route, "/test/native-id.jsonl"));
+    }
 
     /// The join tests change the process cwd (repo resolution reads it), so
     /// they serialize against each other behind this one lock.

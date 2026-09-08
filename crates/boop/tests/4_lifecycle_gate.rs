@@ -93,6 +93,7 @@ trait LifecycleHarness {
     }
     fn exit(&self, fixture: &Fixture) -> Result<()> { self.control(fixture, "/exit") }
     fn automatic_restart(&self) -> bool { false }
+    fn approve_completion(&self, _fixture: &Fixture, _command: &str) -> Result<()> { Ok(()) }
     fn backend(&self, _fixture: &Fixture) -> Result<Option<(u32, bool)>> { Ok(None) }
     fn change_settings(&self, _fixture: &Fixture) -> Result<(String, String)> {
         anyhow::bail!("settings controls have not been verified for this adapter")
@@ -179,6 +180,24 @@ impl LifecycleHarness for Codex {
 // ccz changes launch/configuration, retaining exactly the Claude operations.
 struct Claude { entry: &'static str }
 impl LifecycleHarness for Claude {
+    fn approve_completion(&self, fixture: &Fixture, command: &str) -> Result<()> {
+        let deadline = Instant::now() + Duration::from_secs(35);
+        let compact = |text: &str| text.chars().filter(|c| !c.is_whitespace() && !matches!(c, '│' | '┃')).collect::<String>();
+        loop {
+            let screen = fixture.tmux(&["capture-pane", "-p", "-t", &fixture.pane, "-S", "-60"])?;
+            if screen.contains("This command requires approval") {
+                ensure!(compact(&screen).contains(&compact(command)), "approval prompt differs from the authorized test-owned completion command");
+                std::fs::write(fixture.root.join("completion-approval.txt"), screen)?;
+                fixture.tmux(&["send-keys", "-t", &fixture.pane, "Enter"])?;
+                return Ok(());
+            }
+            if bus::messages_in(&fixture.store()?)?.iter().any(|message| message.from == fixture.route && message.to == fixture.parent && message.kind == "result") {
+                return Ok(());
+            }
+            ensure!(Instant::now() < deadline, "completion command neither executed nor requested its scoped approval");
+            std::thread::sleep(Duration::from_millis(250));
+        }
+    }
     fn entry(&self) -> &str { self.entry }
     fn id(&self) -> HarnessId { HarnessId::Claude }
     fn compact_count(&self, registry: &Registry, route: &bus::Route) -> Result<usize> {
@@ -436,7 +455,14 @@ fn await_receipt(fixture: &Fixture, harness: &dyn LifecycleHarness, registry: &R
                 ensure!(Some(&session_id) == current.session_id.as_ref(), "settings belong to another thread");
                 ensure!(model.is_some() && current.model == model, "route model differs from native execution: {:?} vs {:?}", current.model, model);
                 ensure!(store.session_attr(&session_id, "effort")? == effort, "stored effort differs from native execution");
-                return Ok(json!({"message_id":message.id,"thread":route.session_id,"user_count":users,"answer_count":answers,"send":sent,"model":model,"effort":effort}));
+                let pid = store.live_row(&session_id)?.and_then(|row| row.pid).context("receipt has no native PID")?;
+                ensure!(boop::live::pid_alive(pid as u32), "receipt PID is no longer live");
+                ensure!(current.parent.as_deref() == Some(fixture.parent.as_str()) && current.tmux.as_deref() == Some(fixture.pane.as_str()), "receipt route ownership changed");
+                let pane_receipt = fixture.root.join(format!("receipt-{}.txt", message.id));
+                std::fs::write(&pane_receipt, screen)?;
+                return Ok(json!({"message_id":message.id,"thread":route.session_id,"user_count":users,"answer_count":answers,"send":sent,"model":model,"effort":effort,
+                    "route":fixture.route,"kind":current.kind.as_str(),"parent":current.parent,"pane":current.tmux,"pid":pid,
+                    "trace":store.trace_of(&session_id)?,"native_source":session.path,"pane_receipt":pane_receipt}));
             }
         }
         if Instant::now() >= deadline {
@@ -679,6 +705,7 @@ fn authenticated_matrix() -> Result<()> {
         }
         let command = format!("{} beep agent done {} --rc 0", shell_quote(&fixture.binary.display().to_string()), shell_quote(&fixture.route));
         harness.control(&fixture, &format!("Bounded child-completion test. Run exactly this shell command to complete your own test-owned Boop route. It uses your inherited test database. Do not edit any files.\n{command}\nThen reply CHILD_COMPLETION_SENT."))?;
+        harness.approve_completion(&fixture, &command)?;
         let receipt = await_receipt(&other, harness.as_ref(), &registry, &completion, &answer, "completion command executed by live child")?;
         let results: Vec<_> = bus::messages_in(&fixture.store()?)?.into_iter().filter(|message| message.from == fixture.route && message.to == other.route && message.kind == "result").collect();
         ensure!(results.len() == 1 && results[0].rc == Some(0), "child completion envelope is missing or duplicated");
