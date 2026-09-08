@@ -54,6 +54,7 @@ hafley-observe = { path = "../hafley-observe" }
 signal-hook = "0.4"
 
 [dev-dependencies]
+tungstenite = { version = "0.26", default-features = false, features = ["handshake"] }
 wait-timeout = "0.2.1"
 syn = { version = "2", features = ["full", "visit"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }

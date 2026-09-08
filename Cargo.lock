@@ -315,6 +315,7 @@ dependencies = [
  "time",
  "tracing",
  "tracing-subscriber",
+ "tungstenite",
  "url",
  "wait-timeout",
 ]
