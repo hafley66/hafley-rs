@@ -17,7 +17,7 @@ export function fingerprint() {
   const sibling = resolve(repo, '../hafley-rs-game-runtime');
   const hash = createHash('sha256');
   for (const [cwd, paths] of [
-    [repo, ['AGENTS.md', 'games/AGENTS.md', 'games/blender-godot-sqlite-proof']],
+    [repo, ['AGENTS.md', 'games/AGENTS.md', 'games/shared', 'games/blender-godot-sqlite-proof']],
     [sibling, ['tools/godot-web', 'games/kneeman/app/deploy/scripts']],
   ]) {
     const files = text('git', ['ls-files', '-co', '--exclude-standard', '-z', '--', ...paths], cwd).split('\0').filter(Boolean);

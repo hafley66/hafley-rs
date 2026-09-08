@@ -777,6 +777,7 @@ dependencies = [
  "parry3d",
  "pollster",
  "rapier3d",
+ "rollback",
  "rusqlite",
  "serde",
  "serde_json",
@@ -792,6 +793,7 @@ version = "0.1.0"
 dependencies = [
  "parry3d",
  "rapier3d",
+ "redux",
  "serde",
  "serde_json",
  "ssbm_utils",
@@ -2535,6 +2537,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "redux"
+version = "0.1.0"
+
+[[package]]
 name = "regex"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2574,6 +2580,14 @@ name = "robust"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e27ee8bb91ca0adcf0ecb116293afa12d393f9c2b9b9cd54d33e8078fe19839"
+
+[[package]]
+name = "rollback"
+version = "0.1.0"
+dependencies = [
+ "ggrs",
+ "serde",
+]
 
 [[package]]
 name = "rsqlite-vfs"

@@ -34,11 +34,22 @@ test-godot: check-generated
 
 # Rust library and controller checks.
 _test-core: check-generated
+    just test-reuse
     node 97a_sources.mjs
     node --test contracts/1_generate.test.mjs
     lab_dir="$PWD"; . ./0_shell.sh; lab_cargo test --features gdext --lib -- --test-threads=1
     python3 75_udp_lab.test.py
     python3 84_live_controller.test.py
+
+# Existing reducer algebra, deterministic pools, and shared rollback library.
+test-reuse:
+    lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo_manifest "$lab_dir/../../shared/redux/Cargo.toml" test --features serde
+    lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo_manifest "$lab_dir/../../shared/rollback/Cargo.toml" test
+
+# Resumable same-host mirror. Downloaded source bytes remain outside Git.
+mirror:
+    mkdir -p ../fixtures/rukaidata-mirror
+    wget --compression=auto --adjust-extension --recursive --level=inf --page-requisites --no-clobber --domains=rukaidata.com --wait=0.2 --random-wait --limit-rate=4m --timeout=30 --tries=3 --directory-prefix=../fixtures/rukaidata-mirror --output-file=../fixtures/rukaidata-mirror/download.log https://rukaidata.com/
 
 # SQL checks, tracing report, and full-state golden comparison.
 verify:

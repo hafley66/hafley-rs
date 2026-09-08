@@ -7,6 +7,7 @@ edition="2024"
 [lib]
 path="2_simulation.rs"
 [dependencies]
+redux = { path = "../../shared/redux" }
 serde={version="1",features=["derive"]}
 serde_json="1"
 tracing="=0.1.44"

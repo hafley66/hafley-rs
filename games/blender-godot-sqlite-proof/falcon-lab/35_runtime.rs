@@ -165,14 +165,14 @@ pub(crate) fn handle<C: Config<Input = u8, State = World>>(
                 let _span = tracing::trace_span!(target: "falcon::rollback", "save", tick = frame)
                     .entered();
                 assert_eq!(frame, world.frame);
-                cell.save(frame, Some(world.clone()), Some(checksum(world)));
+                rollback::apply_request::<C>(world, GgrsRequest::SaveGameState { cell, frame }, checksum, |_, _| unreachable!());
                 saved.push(frame);
             }
             GgrsRequest::LoadGameState { cell, frame } => {
                 let _span =
                     tracing::debug_span!(target: "falcon::rollback", "restore", tick = frame)
                         .entered();
-                *world = cell.load().unwrap();
+                rollback::apply_request::<C>(world, GgrsRequest::LoadGameState { cell, frame }, checksum, |_, _| unreachable!());
                 assert_eq!(world.frame, frame);
                 restored.push(frame);
                 *loads += 1;
@@ -180,7 +180,9 @@ pub(crate) fn handle<C: Config<Input = u8, State = World>>(
             GgrsRequest::AdvanceFrame { inputs } => {
                 applied = inputs[0].0;
                 predicted = inputs[0].1 == InputStatus::Predicted;
-                falcon_simulation::advance_world(world, applied, baked);
+                rollback::apply_request::<C>(world, GgrsRequest::AdvanceFrame { inputs }, checksum, |state, inputs| {
+                    falcon_simulation::advance_world(state, inputs[0].0, baked);
+                });
                 record(world);
                 presented.push(sql_viewer::encode(world, actions, predicted, applied));
                 advances += 1;

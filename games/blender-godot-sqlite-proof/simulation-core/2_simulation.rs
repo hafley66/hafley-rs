@@ -43,6 +43,25 @@ pub fn advance_world(world: &mut World, bits: u8, actions: &[Action]) {
 }
 
 fn advance_with_axis(world: &mut World, bits: u8, actions: &[Action], axis: Option<f32>) {
+    <Step as redux::Slice>::reduce(world, (bits, axis), actions, &mut |never| match never {});
+}
+
+/// The authoritative tick is the shared reducer boundary. Assets are immutable context;
+/// every mutable value is in World, including input-edge history.
+pub struct Step;
+impl redux::Slice for Step {
+    type Context<'a> = &'a [Action];
+    type State = World;
+    type Event = (u8, Option<f32>);
+    type Output = ();
+    type Effect = redux::Never;
+
+    fn reduce(world: &mut World, (bits, axis): Self::Event, actions: Self::Context<'_>, _: &mut impl FnMut(Self::Effect)) {
+        reduce_tick(world, bits, actions, axis);
+    }
+}
+
+fn reduce_tick(world: &mut World, bits: u8, actions: &[Action], axis: Option<f32>) {
     if let Some(bag) = &mut world.bag {
         bag.advance();
     }
