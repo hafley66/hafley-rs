@@ -129,12 +129,13 @@ fn checksum(world: &World) -> u128 {
             (h ^ u64::from(*b)).wrapping_mul(0x100000001b3)
         }) as u128
 }
-fn handle(
+pub(crate) fn handle<C: Config<Input = u8, State = World>>(
     world: &mut World,
-    requests: Vec<GgrsRequest<Game>>,
+    requests: Vec<GgrsRequest<C>>,
     actions: &[HighLevelSubaction],
     loads: &mut usize,
     baked: &[falcon_simulation::Action],
+    mut record: impl FnMut(&World),
 ) -> Display {
     let mut restored = Vec::new();
     let mut saved = Vec::new();
@@ -164,6 +165,7 @@ fn handle(
                 applied = inputs[0].0;
                 predicted = inputs[0].1 == InputStatus::Predicted;
                 falcon_simulation::advance_world(world, applied, baked);
+                record(world);
                 presented.push(sql_viewer::encode(world, actions, predicted, applied));
                 advances += 1;
             }
@@ -273,6 +275,7 @@ impl<'a> Runtime<'a> {
                 self.actions,
                 &mut self.loads[id],
                 &self.baked,
+                |_| {},
             );
             peer_display.confirmed = self.peers[id].confirmed_frame();
             tracing::debug!(target: "falcon::rollback", advances = peer_display.advances, restores = peer_display.restored.len(), saves = peer_display.saved.len(), confirmed = peer_display.confirmed, "requests_executed");
@@ -637,6 +640,13 @@ pub(crate) fn incremental_host(
 }
 
 pub fn run_cli() -> Result<(), Error> {
+    if std::env::args().any(|arg| arg == "--process-peer") {
+        baseline::telemetry::init();
+        return crate::process_peer::run();
+    }
+    if std::env::args().any(|arg| arg == "--process-video") {
+        return crate::process_video::run();
+    }
     if std::env::args().any(|arg| arg == "--measure-release") {
         return crate::release_measure::run();
     }
