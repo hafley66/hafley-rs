@@ -1,7 +1,7 @@
 //! One independently clocked GGRS peer. The existing GGRS UDP codec owns the wire format.
 use crate::fixture::{
     self,
-    sql_viewer::boundary::{Boundary, read_frame},
+    sql_viewer::boundary::{Boundary, read_frame, contracts::PROTOCOL_VERSION},
 };
 use falcon_simulation::{World, fixture_input};
 use ggrs::{
@@ -152,7 +152,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             crate::live_rows::publish(
                 path,
                 &crate::live_rows::Latest {
-                    version: 1,
+                    version: PROTOCOL_VERSION,
                     pid: std::process::id(),
                     generation,
                     elapsed_us: start.elapsed().as_micros() as u64,

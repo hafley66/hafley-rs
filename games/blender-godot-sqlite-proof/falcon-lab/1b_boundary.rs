@@ -12,9 +12,9 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-pub const WINDOW: i64 = 32;
-pub const SLOTS: usize = 3;
-pub const ROW_CAPACITY: usize = 1024;
+pub use contracts::WINDOW;
+pub const SLOTS: usize = contracts::SLOTS as usize;
+pub const ROW_CAPACITY: usize = contracts::ROW_CAPACITY as usize;
 
 #[allow(dead_code)]
 #[path = "contracts/2_presentation_auto.rs"]

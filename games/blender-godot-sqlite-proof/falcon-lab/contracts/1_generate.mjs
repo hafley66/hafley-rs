@@ -7,8 +7,9 @@ import { createComponent as c } from '@alloy-js/core/jsx-runtime';
 import { stringify } from 'yaml';
 import {
   CrateDirectory, SourceFile, StructDeclaration, StructField,
-  EnumDeclaration, UnitVariant, TraitDeclaration, TraitMethod, TypeAlias,
+  EnumDeclaration, UnitVariant, TraitDeclaration, TraitMethod, TypeAlias, ConstDeclaration,
 } from '@hafley66/alloy-rs';
+import { constants } from './0_constants.mjs';
 
 const source = new URL('0_presentation.tsp', import.meta.url);
 const args = process.argv.slice(2);
@@ -42,6 +43,10 @@ function shape(type, property, parameter = false) {
   if (type.kind === 'Model' && type.name === 'Array' && type.namespace.name === 'TypeSpec') {
     const min = getMinItems(program, property);
     const max = getMaxItems(program, property);
+    if (min === undefined && Number.isSafeInteger(max) && max > 0) {
+      const item = shape(type.indexer.value);
+      return { rust: `Vec<${item.rust}>`, maxLength: max, item };
+    }
     if (!Number.isSafeInteger(min) || min <= 0 || min !== max) throw Error('arrays require equal positive minItems/maxItems');
     const item = shape(type.indexer.value);
     return { rust: `[${item.rust}; ${min}]`, length: min, item };
@@ -50,7 +55,19 @@ function shape(type, property, parameter = false) {
 }
 
 const declarations = [];
-const contract = { version: 1, namespace: ns.name, models: {}, enums: {}, results: {}, interfaces: {} };
+const contract = { version: 2, namespace: ns.name, constants: constants(program, fileURLToPath(source)), models: {}, enums: {}, results: {}, interfaces: {} };
+for (const [name, value] of Object.entries(contract.constants)) {
+  declarations.push(c(ConstDeclaration, { name, pub: true, type: scalars[value.type], children: value.value }));
+}
+function isCopy(type, seen = new Set()) {
+  if (type.kind === 'Scalar' || type.kind === 'Enum') return true;
+  if (type.kind !== 'Model' || seen.has(type)) return false;
+  const next = new Set([...seen, type]);
+  return [...type.properties.values()].every(p => {
+    const field = shape(p.type, p);
+    return field.length ? isCopy(p.type.indexer.value, next) : !field.maxLength && isCopy(p.type, next);
+  });
+}
 for (const model of models) {
   if (model.baseModel || model.indexer) throw Error(`unsupported model composition: ${model.name}`);
   const fields = [...model.properties.values()].map(p => {
@@ -60,7 +77,7 @@ for (const model of models) {
   contract.models[model.name] = fields;
   declarations.push(c(StructDeclaration, {
     name: model.name, pub: true, refkey: refkey(model),
-    derive: ['Debug', 'Clone', 'Copy', 'PartialEq', 'Serialize', 'Deserialize'],
+    derive: ['Debug', 'Clone', ...(isCopy(model) ? ['Copy'] : []), 'PartialEq', 'Serialize', 'Deserialize'],
     children: lines(fields.map(f => c(StructField, { name: f.name, type: f.rust, pub: true }))),
   }));
 }
