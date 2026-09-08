@@ -9,7 +9,9 @@ use boop::{config, lane};
 
 use crate::cli::db::open_ro_store;
 use crate::cli::{line, now_ms};
-use crate::{ConfigCmd, HostCmd, PresetsFormat};
+use crate::{ConfigCmd, PresetsFormat};
+#[cfg(feature = "dl6")]
+use crate::HostCmd;
 
 /// `boop debug <lane>`: what happened to one lane, in the order a reader asks
 /// it. Five sections, each of which prints `none` rather than nothing:
@@ -183,6 +185,7 @@ pub(crate) fn run_debug(since: &str, lane: Option<&str>, json: bool) -> Result<(
     Ok(())
 }
 
+#[cfg(feature = "dl6")]
 pub(crate) fn run_host(cmd: HostCmd) -> Result<()> {
     match cmd {
         HostCmd::Chat => {

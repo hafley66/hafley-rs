@@ -18,8 +18,10 @@ use crate::cli::mail::{all_messages, run_list};
 use crate::cli::me::register_route;
 use crate::cli::{append_ack, append_message, line, mail_dir, pad, write_route};
 use crate::{
-    AgentCmd, BeepCmd, ForkCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat,
+    AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat,
 };
+#[cfg(feature = "agent-read")]
+use crate::ForkCmd;
 
 // ---------------------------------------------------------------------------
 // dispatch (layer 1 + bus)

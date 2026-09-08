@@ -15,18 +15,7 @@ fn opt_i64(value: Option<u64>) -> rusqlite::types::Value {
     value.map(|v| v as i64).into()
 }
 
-/// One recorded hail transition. `sequence` orders all receiver-boundary
-/// receipts for one message; `harness` stays TEXT at the read surface.
-pub struct DeliveryRow {
-    pub message_id: String,
-    pub sequence: i64,
-    pub route: String,
-    pub harness: Option<String>,
-    pub outcome: String,
-    pub detail: String,
-    pub error_code: Option<String>,
-    pub at_ms: i64,
-}
+pub use crate::ident::DeliveryRow;
 
 /// One bundle row a window SQL returns: `id` (stable done-marker key), `ts`
 /// (the cursor watermark: the max ts of the bundle's turns), and `text` (the
@@ -880,34 +869,7 @@ impl Store {
         Ok(out)
     }
 
-    /// Every recorded receiver-boundary transition for one message. Empty
-    /// means no path has observed or attempted delivery yet.
-    pub fn delivery_rows(&self, message_id: &str) -> Result<Vec<DeliveryRow>> {
-        let sql = "SELECT d.message_id, d.sequence, d.route, h.value, d.outcome, d.detail,
-                          d.error_code, d.at_ms
-                   FROM agent_delivery_transition d
-                   LEFT JOIN dict_harness h ON h.id = d.harness_id
-                   WHERE d.message_id = ?1
-                   ORDER BY d.sequence";
-        let mut statement = self.connection().prepare(sql)?;
-        let iter = statement.query_map(params![message_id], |row| {
-            Ok(DeliveryRow {
-                message_id: row.get(0)?,
-                sequence: row.get(1)?,
-                route: row.get(2)?,
-                harness: row.get(3)?,
-                outcome: row.get(4)?,
-                detail: row.get(5)?,
-                error_code: row.get(6)?,
-                at_ms: row.get(7)?,
-            })
-        })?;
-        let mut out = Vec::new();
-        for row in iter {
-            out.push(row?);
-        }
-        Ok(out)
-    }
+
 }
 
 #[cfg(test)]

@@ -66,10 +66,9 @@ impl OpencodeDoor {
         Url::parse(&text).with_context(|| format!("parse opencode base url `{text}`"))
     }
 
-    /// A server answering `GET /session` at `base`, started here when none
-    /// does. The child is detached: it outlives the TUI and every later TUI
-    /// attaches to the same one.
-    fn ensure_server(&self, executable: &str, base: &Url) -> Result<()> {
+    /// Borrow an explicitly addressed server, or own the process started here.
+    /// The plan holds it before readiness checks, including startup errors.
+    fn ensure_server(&self, spec: &NativeTuiSpec, base: &Url, plan: &mut NativeTuiPlan) -> Result<()> {
         if self.get("session", Duration::from_secs(2)).is_ok() {
             return Ok(());
         }
@@ -77,9 +76,11 @@ impl OpencodeDoor {
             .port()
             .with_context(|| format!("opencode base `{base}` names no port"))?;
         let host = base.host_str().unwrap_or("127.0.0.1").to_owned();
-        let mut command = Command::new(executable);
+        let mut command = Command::new(&spec.executable);
         command
             .args(["serve", "--port", &port.to_string(), "--hostname", &host])
+            .envs(spec.env.iter().cloned())
+            .current_dir(&spec.cwd)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
@@ -91,17 +92,20 @@ impl OpencodeDoor {
                 Ok(())
             });
         }
-        command
+        plan.backend = Some(command
             .spawn()
-            .with_context(|| format!("start `{executable} serve` on {base}"))?;
+            .with_context(|| format!("start `{} serve` on {base}", spec.executable))?);
         let deadline = Instant::now() + SERVE_START;
         while Instant::now() < deadline {
+            if let Some(status) = plan.backend.as_mut().unwrap().try_wait()? {
+                anyhow::bail!("opencode server exited during startup: {status}");
+            }
             if self.get("session", Duration::from_secs(2)).is_ok() {
                 return Ok(());
             }
             std::thread::sleep(Duration::from_millis(250));
         }
-        anyhow::bail!("`{executable} serve` did not answer on {base} within {SERVE_START:?}")
+        anyhow::bail!("`{} serve` did not answer on {base} within {SERVE_START:?}", spec.executable)
     }
 
     /// `POST /session` for `directory`; the id of the session the server made.
@@ -133,31 +137,13 @@ impl OpencodeDoor {
         Ok(messages.len())
     }
 
-    /// `{providerID, modelID}` for a first prompt: the configured `model`
-    /// when its provider lists it, else that provider's default. A config
-    /// naming a retired model (`glm-4.6` on 2026-08-23) otherwise sends a
-    /// prompt the server accepts and never answers.
+    /// Preserve the configured model exactly. Provider rejection remains an
+    /// execution outcome; a different provider default is not authorization.
     fn default_model(&self) -> Option<serde_json::Value> {
         let config: serde_json::Value =
             serde_json::from_str(&self.get("config", READ_TIMEOUT).ok()?).ok()?;
         let configured = config.get("model")?.as_str()?;
         let (provider, model) = configured.split_once('/')?;
-        let providers: serde_json::Value =
-            serde_json::from_str(&self.get("config/providers", READ_TIMEOUT).ok()?).ok()?;
-        let listed = providers
-            .get("providers")?
-            .as_array()?
-            .iter()
-            .find(|entry| entry.get("id").and_then(serde_json::Value::as_str) == Some(provider))?
-            .get("models")?;
-        let model = if listed.get(model).is_some() {
-            model.to_owned()
-        } else {
-            providers
-                .pointer(&format!("/default/{provider}"))?
-                .as_str()?
-                .to_owned()
-        };
         Some(serde_json::json!({ "providerID": provider, "modelID": model }))
     }
 
@@ -260,6 +246,13 @@ struct EventProperties {
 }
 
 impl LiveSessions for OpencodeDoor {
+    fn live_session_for_route(&self, route: &boop_store::bus::Route) -> Result<Option<LiveSession>> {
+        let Some(id) = route.session_id.as_deref() else { return Ok(None); };
+        let observed = route.app_server_socket.as_deref().map(Url::parse).transpose()?;
+        let door = observed.map(Self::at);
+        let source = door.as_ref().unwrap_or(self);
+        Ok(source.live_sessions()?.into_iter().find(|session| session.session_id == id))
+    }
     /// The sessions the running server holds. A server that does not answer
     /// is a server that is not running, so the list is empty rather than an
     /// error, and the sessions come back newest update first.
@@ -329,11 +322,35 @@ impl Door for OpencodeDoor {
     /// The TUI attaches to boop's server, so the session it opens is one
     /// `live_sessions` lists and `deliver` can reach.
     fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan> {
-        let base = self.base()?;
-        self.ensure_server(&spec.executable, &base)?;
+        let base = if self.base.is_some() || std::env::var_os(BASE_ENV).is_some_and(|v| !v.is_empty()) {
+            self.base()?
+        } else {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+            Url::parse(&format!("http://{}/", listener.local_addr()?))?
+        };
+        let source = Self::at(base.clone());
+        let mut plan = NativeTuiPlan::direct(spec);
+        source.ensure_server(spec, &base, &mut plan)?;
         // The session exists before the TUI attaches, so the route names it
         // from the start and the first hail is its first prompt.
-        let session = self.create_session(&base, &spec.cwd)?;
+        let mut remaining = Vec::new();
+        let mut resume = None;
+        let mut incoming = spec.args.iter();
+        while let Some(arg) = incoming.next() {
+            if matches!(arg.as_str(), "--session" | "-s") {
+                resume = Some(incoming.next().context("opencode session flag requires an id")?.clone());
+            } else if let Some(id) = arg.strip_prefix("--session=") {
+                anyhow::ensure!(!id.is_empty(), "opencode session flag requires an id");
+                resume = Some(id.to_owned());
+            } else { remaining.push(arg.clone()); }
+        }
+        let session = match resume {
+            Some(id) => {
+                let _: serde_json::Value = serde_json::from_str(&source.get(&format!("session/{id}"), READ_TIMEOUT)?)?;
+                id
+            }
+            None => source.create_session(&base, &spec.cwd)?,
+        };
         let mut args: Vec<std::ffi::OsString> = vec![
             "attach".into(),
             base.as_str().into(),
@@ -344,21 +361,15 @@ impl Door for OpencodeDoor {
             "--dir".into(),
             spec.cwd.as_os_str().to_owned(),
         ];
-        args.extend(spec.args.iter().map(std::ffi::OsString::from));
-        Ok(NativeTuiPlan {
-            program: spec.executable.clone(),
-            args,
-            mode: "native-remote".into(),
-            session_id: Some(session.clone()),
-            source_path: Some(format!(
+        args.extend(remaining.iter().map(std::ffi::OsString::from));
+        plan.args = args;
+        plan.mode = if plan.backend.is_some() { "native-owned" } else { "native-remote" }.into();
+        plan.session_id = Some(session.clone());
+        plan.source_path = Some(format!(
                 "managed-opencode-serve={base};started-session={session}"
-            )),
-            app_server_socket: Some(base.to_string()),
-            observer: None,
-            frontend: None,
-            backend: None,
-            backend_root: None,
-        })
+            ));
+        plan.app_server_socket = Some(base.to_string());
+        Ok(plan)
     }
 
     fn deliver(&self, session: &LiveSession, body: &str) -> Result<Delivered> {
@@ -374,8 +385,9 @@ impl Door for OpencodeDoor {
         });
         // A session with no turn yet has no model; the server stays silent
         // rather than refusing, so the first prompt names one.
-        if self.message_count(id).unwrap_or(0) == 0 {
-            if let Some(model) = self.default_model() {
+        let source = Self::at(base.clone());
+        if source.message_count(id).unwrap_or(0) == 0 {
+            if let Some(model) = source.default_model() {
                 payload["model"] = model;
             }
         }
@@ -398,11 +410,15 @@ impl Door for OpencodeDoor {
     /// The status map answers when the session is already idle; otherwise the
     /// event stream carries a `session.idle` for this session id.
     fn notify_idle(&self, session: &LiveSession, timeout: Duration) -> Result<IdleNotice> {
-        if self.statuses().get(&session.session_id) == Some(&LiveStatus::Idle) {
+        let DoorAddress::Http { base, .. } = &session.door else {
+            anyhow::bail!("opencode session {} has no HTTP address", session.session_id);
+        };
+        let source = Self::at(base.clone());
+        if source.statuses().get(&session.session_id) == Some(&LiveStatus::Idle) {
             return Ok(IdleNotice::now(Some("idle".into())));
         }
         let deadline = Instant::now() + timeout;
-        let url = self.base()?.join("event")?;
+        let url = base.join("event")?;
         let response = agent(timeout).get(url.as_str()).call()?;
         let reader = BufReader::new(response.into_body().into_reader());
         for line in reader.lines() {
@@ -517,6 +533,7 @@ mod tests {
         match target.as_str() {
             "/session" => write_json(&mut stream, sessions),
             "/session/status" => write_json(&mut stream, statuses),
+            "/config" => write_json(&mut stream, r#"{"model":"fixture/retired"}"#),
             "/event" => {
                 let _ = write!(
                     stream,
@@ -546,6 +563,27 @@ mod tests {
     ]"#;
     const STATUSES: &str = r#"{"ses_new":{"type":"busy"},"ses_old":{"type":"idle"}}"#;
     const EVENTS: &str = "data: {\"id\":\"evt_1\",\"type\":\"server.connected\",\"properties\":{}}\n\ndata: {\"id\":\"evt_2\",\"type\":\"session.idle\",\"properties\":{\"sessionID\":\"ses_new\"}}\n\n";
+
+    #[test]
+    fn route_uses_its_observed_http_server() {
+        let stub = Stub::start(SESSIONS, STATUSES, EVENTS);
+        let route = boop_store::bus::route_from_value(&serde_json::json!({
+            "harness":"opencode", "session_id":"ses_new", "kind":"coordinator",
+            "appServerSocket":stub.base.as_str(), "mode":"native-owned"
+        }));
+        let unrelated = OpencodeDoor::at(Url::parse("http://127.0.0.1:1/").unwrap());
+        let live = unrelated.live_session_for_route(&route).unwrap().expect("route-scoped live session");
+        assert_eq!(live.door, DoorAddress::Http { base: stub.base.clone(), session: "ses_new".into() });
+        assert_eq!(unrelated.notify_idle(&live, Duration::from_secs(2)).unwrap().status_line.as_deref(), Some("session.idle"));
+    }
+
+    #[test]
+    fn first_prompt_preserves_configured_model_without_provider_fallback() {
+        let stub = Stub::start(SESSIONS, STATUSES, EVENTS);
+        assert_eq!(stub.door().default_model(), Some(serde_json::json!({"providerID":"fixture","modelID":"retired"})));
+        assert_eq!(stub.seen.recv_timeout(Duration::from_secs(1)).unwrap().0, "/config");
+        assert!(stub.seen.try_recv().is_err());
+    }
 
     /// RECEIPT. `GET /session` plus `GET /session/status` become live
     /// sessions, newest update first, each addressed by its own server.

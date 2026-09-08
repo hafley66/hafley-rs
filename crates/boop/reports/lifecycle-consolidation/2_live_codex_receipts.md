@@ -75,3 +75,22 @@ All launches used the actual generated Bash wrapper in test pane `%1828`, parent
 hashes. No receiver-side wait/poll/paste produced these nonces. Test assertions read
 the native transcript after delivery. The remote-acceptance/local-ledger crash
 window remains unverified; this does not establish arbitrary exactly-once transport.
+# Shared four-entry runner checkpoint
+
+The live command is `BOOP_E2E_ROOT=<task-owned-root> just boop-check live`.
+It currently fails on unfinished scenarios. Raw roots below are relative to
+`/private/tmp/boop-lifecycle-consolidation-proof-01a08191/shared-live/`.
+
+| Entry | Executed shared cases | Current remaining result |
+|---|---|---|
+| Claude | `claude-54743`: fresh wrapper, inbound peer receipt, accepted retry suppression, graceful exit/process resume, compact/nonce, resume after compact, clear/new session/nonce, resume after clear all PASS | Busy/settings/crash/isolation/parent scenarios remain unfinished; latest cleanup assertion not yet rerun live |
+| Codex | `codex-98246`: fresh wrapper and idle nonce/retry PASS | Runner used an unverified exit spelling and failed; corrected to previously verified Ctrl+D, shared sequence rerun pending. Earlier manual Codex proofs above remain separately labeled |
+| ccz | `ccz-6954`: distinct ccz wrapper launch, actual peer nonce and retry suppression PASS | Shared run exposed missing trace binding before its fix; complete after-fix ccz sequence pending |
+| OpenCode | `opencode-1495`: generated wrapper, owned HTTP backend and exact route binding PASS; native TUI displayed the inbound nonce | Provider BLOCKED GLM-5.3-Highspeed subscription access. This model came from an adapter fallback from configured `zai-coding-plan/glm-4.6`; fallback removed. Listed models (`171`) omit glm-4.6. Explicit supported-model launch work remains |
+
+Claude `159` proves the pre-fix clear failure; `160` proves clear/rebind and
+resumption after correction. The native registry's exact frontend PID identifies
+the changed session; the Boop trace is retained. `152`/`153` record the exact
+reader path regression. `161`/`162` record initial registry binding failure and
+passing deterministic same-process transition/cleanup. None of these fixtures
+uses a receiver-side `boop wait` to deliver a nonce.

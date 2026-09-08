@@ -10,14 +10,14 @@ use boop::{bus, ident, tmux};
 #[cfg(feature = "agent-read")]
 use boop::{query, usage};
 
+#[cfg(feature = "agent-read")]
 use crate::cli::job::lane_state;
 use crate::cli::mail::deliver_hail;
 use crate::cli::{append_acks, append_message, line, mail_dir, now_ms, write_route};
-use crate::{
-    AgentSessionGraphFormat, AgentSummaryCmd, AgentSummaryFormat, ChatCmd, CursorCmd, DbCmd,
-    EdgeCmd, FactCmd, FavoriteCmd, PriceCmd, QueryArgs, QueryFormat, SessionCmd, SyncCmd, TurnCmd,
-    UsageArgs, UsageCmd,
-};
+use crate::{ChatCmd, DbCmd, EdgeCmd, QueryArgs, QueryFormat, SyncCmd, TurnCmd};
+#[cfg(feature = "agent-read")]
+use crate::{AgentSessionGraphFormat, AgentSummaryCmd, AgentSummaryFormat, CursorCmd,
+    FactCmd, FavoriteCmd, PriceCmd, SessionCmd, UsageArgs, UsageCmd};
 
 // ---------------------------------------------------------------------------
 // Pass 1 verbs: layer 2 (transcript)
@@ -1320,6 +1320,7 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
         },
         #[cfg(feature = "agent-read")]
         DbCmd::Status { window, format } => run_status(window, format),
+        #[cfg(feature = "agent-read")]
         DbCmd::Search {
             text,
             days,
@@ -1335,6 +1336,7 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
             );
             Ok(())
         }
+        #[cfg(feature = "agent-read")]
         DbCmd::Sessions {
             days,
             harness,
@@ -1349,6 +1351,7 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
             );
             Ok(())
         }
+        #[cfg(feature = "agent-read")]
         DbCmd::Lanes {
             days,
             limit,
@@ -1359,6 +1362,7 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
             emit_json_rows(&store.recent_lanes(since, limit)?, format);
             Ok(())
         }
+        #[cfg(feature = "agent-read")]
         DbCmd::Mail {
             route,
             kind,
@@ -1369,6 +1373,7 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
             emit_json_rows(&store.route_mail(&route, kind.as_deref(), limit)?, format);
             Ok(())
         }
+        #[cfg(feature = "agent-read")]
         DbCmd::Schema { format } => {
             let store = open_ro_store()?;
             emit_json_rows(&store.schema_rows()?, format);

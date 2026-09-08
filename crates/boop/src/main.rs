@@ -17,13 +17,17 @@ use boop::{config, identity};
 mod cli;
 
 use cli::control::run_native_tui;
-use cli::db::{run_db, run_passthrough, run_public_agent_command, sync_before_read};
+use cli::db::{run_db, run_passthrough, sync_before_read};
+#[cfg(feature = "agent-read")]
+use cli::db::run_public_agent_command;
 #[cfg(feature = "dl6")]
 use cli::debug::run_host;
 use cli::debug::{run_config, run_debug, run_lane_debug};
 use cli::job::{run_beep, run_lane_wait, run_wait};
 use cli::mail::{run_inbox, run_send, Outbound};
-use cli::me::{run_me_favorite, run_me_mood, run_whoami};
+use cli::me::{run_me_mood, run_whoami};
+#[cfg(feature = "agent-read")]
+use cli::me::run_me_favorite;
 use cli::tag::{
     run_tag_add, run_tag_backfill, run_tag_list, run_tag_of, run_tag_recent, run_tag_rm,
     run_tag_search, run_tag_sources,
@@ -639,6 +643,7 @@ fn main() -> Result<()> {
                     as_name.as_deref(),
                     mail_dir.as_deref(),
                 ),
+                #[cfg(feature = "agent-read")]
                 MeCmd::Favorite { index, note } => run_me_favorite(index, note.as_deref()),
             },
             SubCmd::Tag { cmd } => match cmd {
@@ -744,6 +749,7 @@ fn startup_sync_wanted(command: &SubCmd, suppressed: bool) -> bool {
 
 /// Verbs that read `agent_*` rows. A registry, mailbox, tmux or live-process
 /// verb stays off: a cold cursor re-parses every transcript root from offset 0.
+#[cfg(feature = "agent-read")]
 fn command_needs_startup_sync(command: &SubCmd) -> bool {
     #[cfg(feature = "dl6")]
     if matches!(command, SubCmd::Concatmap { .. }) {
@@ -833,6 +839,9 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
             | SubCmd::Debug { .. }
     )
 }
+
+#[cfg(not(feature = "agent-read"))]
+fn command_needs_startup_sync(_: &SubCmd) -> bool { false }
 
 fn run_with_startup_sync<T>(
     needs_sync: bool,
@@ -1035,6 +1044,7 @@ enum HarnessCmd {
 }
 
 #[derive(Subcommand)]
+#[cfg(feature = "dl6")]
 enum HostCmd {
     /// Read one JSON request from stdin and emit one JSON response.
     Chat,
@@ -1421,7 +1431,7 @@ enum InboxCmd {
         mail_dir: Option<PathBuf>,
     },
     /// Install (or remove) the two drain hooks in <cwd>/.claude/settings.json.
-    /// `boop adopt --harness claude` does this for you.
+    /// Route registration is separate: `boop beep agent register NAME`.
     Hooks {
         #[arg(long)]
         name: String,
@@ -1809,6 +1819,7 @@ enum MeCmd {
         as_name: Option<String>,
     },
     /// Save one assistant turn from the caller's conversation as a favorite.
+    #[cfg(feature = "agent-read")]
     Favorite {
         /// Assistant turn position: -1 is newest, -2 is the one before it.
         #[arg(default_value_t = -1, allow_hyphen_values = true)]

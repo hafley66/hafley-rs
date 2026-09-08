@@ -51,11 +51,15 @@ fn opened_session(
     prior_observations: &HashMap<String, u64>,
     wait: Duration,
     my_pane: &str,
+    pid: u32,
 ) -> Option<String> {
     let canonical = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
     let deadline = std::time::Instant::now() + wait;
     loop {
         let live = adapter.live().live_sessions().unwrap_or_default();
+        if let Some(session) = session_for_pid(&live, pid) {
+            return Some(session.session_id.clone());
+        }
         let picked = newest_opened_session(
             live.clone(),
             &canonical,
@@ -79,6 +83,12 @@ fn opened_session(
         }
         std::thread::sleep(Duration::from_millis(250));
     }
+}
+
+fn session_for_pid(live: &[boop::live::LiveSession], pid: u32) -> Option<&boop::live::LiveSession> {
+    let mut matches = live.iter().filter(|session| session.pid == Some(pid));
+    let session = matches.next()?;
+    matches.next().is_none().then_some(session)
 }
 
 fn newest_opened_session(
@@ -176,30 +186,23 @@ impl Drop for AlternateScreen {
     }
 }
 
-/// Bind a tmux pane to the boop session running in it, so a reader with a pane
-/// in hand can name the session outright instead of matching text against every
-/// recent session of the harness.
-fn record_pane(
-    open: Option<&boop::Store>,
+/// One binding path for adapter-observed sessions and native control events.
+fn bind_native_session(
+    store: &boop::Store,
+    route: &mut Route,
+    trace: &mut Option<String>,
     session: &str,
     pid: u32,
-    pane: Option<&str>,
 ) -> anyhow::Result<()> {
-    let owned;
-    let store = match open {
-        Some(store) => store,
-        None => {
-            owned = boop::Store::open(boop::Store::default_path()?)?;
-            &owned
-        }
-    };
-    store.record_status(
-        session,
-        boop::live::now_ms(),
-        "live",
-        Some(i64::from(pid)),
-        pane,
-    )
+    let ts = boop::live::now_ms();
+    if let Some(previous) = route.session_id.as_deref().filter(|previous| *previous != session) {
+        store.record_status(previous, ts, "detached", None, None)?;
+    }
+    *trace = Some(store.trace_of(session)?.or_else(|| trace.clone())
+        .unwrap_or_else(|| format!("trace-{session}")));
+    store.attach_trace(session, trace.as_deref().unwrap(), "native-tui-session", ts)?;
+    route.session_id = Some(session.to_owned());
+    store.record_status(session, ts, "live", Some(i64::from(pid)), route.tmux.as_deref())
 }
 
 /// Release only the transport and process observation still owned by this
@@ -232,14 +235,7 @@ fn apply_native_event(
     let ts = boop::live::now_ms();
     let (session_id, model, effort) = match event {
         NativeTuiEvent::Session { session_id, model, effort } => {
-            if let Some(previous) = route.session_id.as_deref().filter(|previous| *previous != session_id) {
-                store.record_status(previous, ts, "detached", None, None)?;
-            }
-            *trace = Some(store.trace_of(&session_id)?.or_else(|| trace.clone())
-                .unwrap_or_else(|| format!("trace-{session_id}")));
-            store.attach_trace(&session_id, trace.as_deref().unwrap(), "native-tui-session", ts)?;
-            route.session_id = Some(session_id.clone());
-            store.record_status(&session_id, ts, "live", Some(i64::from(pid)), route.tmux.as_deref())?;
+            bind_native_session(store, route, trace, &session_id, pid)?;
             (session_id, model, effort)
         }
         NativeTuiEvent::Settings { session_id, model, effort } if route.session_id.as_deref() == Some(&session_id) => (session_id, model, effort),
@@ -347,22 +343,11 @@ pub(crate) fn run_native_tui(
             &prior_observations,
             SESSION_WAIT,
             pane.as_deref().unwrap_or(""),
+            frontend_pid,
         );
         if let Some(session) = plan.session_id.as_deref() {
             plan.source_path = Some(format!("native-session={session}"));
             info!(%session, harness = %adapter.id(), "native session route resolved");
-        }
-    }
-    // The pane id is the only thing tying this tmux cell to a boop session. It
-    // went into the route file and nowhere else, so `agent_live` held 0 pane
-    // ids across 4565 rows and any reader holding a pane had to guess its
-    // session from a pool of every recent session of that harness.
-    //
-    // Opened separately from `store` above: registering a pane is required even
-    // for a harness that opts out of resident transcript projection.
-    if let Some(session) = plan.session_id.as_deref() {
-        if let Err(error) = record_pane(Some(&store), session, frontend_pid, pane.as_deref()) {
-            eprintln!("boop: pane {pane:?} not recorded for session {session}: {error}");
         }
     }
     let mut route = Route {
@@ -381,8 +366,11 @@ pub(crate) fn run_native_tui(
         worktree_dir: None,
         app_server_socket: plan.app_server_socket.clone(),
     };
-    write_route(&dir, name, route.clone())?;
     let mut trace = None;
+    if let Some(session) = route.session_id.clone() {
+        bind_native_session(&store, &mut route, &mut trace, &session, frontend_pid)?;
+    }
+    write_route(&dir, name, route.clone())?;
     // Child exit observation stays responsive while transcript projection is
     // independently bounded. The global known-session join ran once above;
     // every pass below reuses and incrementally updates that resident cache.
@@ -473,15 +461,13 @@ pub(crate) fn run_native_tui(
                 &prior_observations,
                 Duration::ZERO,
                 pane.as_deref().unwrap_or(""),
+                frontend_pid,
             ) {
                 Some(session) => {
                     route.source_path = Some(format!("native-session={session}"));
-                    route.session_id = Some(session.clone());
+                    bind_native_session(&store, &mut route, &mut trace, &session, frontend_pid)?;
                     write_route(&dir, name, route.clone())?;
                     info!(route = name, %session, "native session route recovered after launch");
-                    if let Err(error) = record_pane(Some(&store), &session, frontend_pid, pane.as_deref()) {
-                        warn!(%error, ?pane, %session, "recovered native pane was not recorded");
-                    }
                 }
                 None => {
                     std::thread::sleep(EXIT_POLL);
@@ -496,6 +482,29 @@ pub(crate) fn run_native_tui(
             let pushed = boop::mail::drain_route_held_mail(&dir, registry, &store, name);
             if pushed > 0 {
                 info!(route = name, pushed, "held mail drained through the door");
+            }
+        }
+        if plan.observer.is_none() && last_parent_project.elapsed() >= parent_project_every {
+            // Native registries that identify the process also identify a
+            // clear/new transition within that process. Cwd and pane alone
+            // cannot distinguish concurrent conversations.
+            let observed = adapter.live().live_sessions()?;
+            if let Some(session) = session_for_pid(&observed, frontend_pid) {
+                if route.session_id.as_deref() != Some(session.session_id.as_str()) {
+                    bind_native_session(&store, &mut route, &mut trace, &session.session_id, frontend_pid)?;
+                    route.model = None;
+                    route.source_path = Some(format!("native-session={}", session.session_id));
+                    write_route(&dir, name, route.clone())?;
+                }
+            }
+            if let Some(session) = route.session_id.as_deref()
+                .and_then(|id| adapter.session_by_id(id, route.cwd.as_deref())) {
+                if let Some(model) = adapter.describe(&session).and_then(|meta| meta.model) {
+                    if route.model.as_deref() != Some(model.as_str()) {
+                        route.model = Some(model);
+                        write_route(&dir, name, route.clone())?;
+                    }
+                }
             }
         }
         if let Some(known) = known.as_mut() {
@@ -513,13 +522,15 @@ pub(crate) fn run_native_tui(
                 }
             }
             if last_parent_project.elapsed() >= parent_project_every {
-                last_parent_project = std::time::Instant::now();
                 if let Err(error) =
                     crate::cli::db::sync_native_parent_route_once(&store, known, adapter, name, &dir)
                 {
                     warn!(%error, route = name, "native parent projector pass failed");
                 }
             }
+        }
+        if last_parent_project.elapsed() >= parent_project_every {
+            last_parent_project = std::time::Instant::now();
         }
         std::thread::sleep(EXIT_POLL);
     } })();

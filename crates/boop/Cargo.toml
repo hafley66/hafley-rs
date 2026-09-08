@@ -14,7 +14,7 @@ default = ["agent-read"]
 agent-read = ["boop-store/agent-read", "boop-proc/agent-read"]
 # The DL6 refinement runtime (`concatmap`, `host`): off by default per the
 # 2026-08-25 user call, no other binary to move it to yet.
-dl6 = []
+dl6 = ["agent-read"]
 
 [dependencies]
 # Process control: lane spawn, supervision, the mailbox, the coroutine host.

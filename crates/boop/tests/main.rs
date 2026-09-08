@@ -57,6 +57,8 @@ mod t1_harness_boundaries;
 mod t2_native_wrapper;
 #[path = "3_live_codex.rs"]
 mod t3_live_codex;
+#[path = "4_lifecycle_gate.rs"]
+mod t4_lifecycle_gate;
 #[path = "tell.rs"]
 mod tell;
 #[path = "temp_home_rail.rs"]

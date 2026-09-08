@@ -5,11 +5,16 @@ use anyhow::{Context, Result};
 use boop::bus::Route;
 use boop::harness::HarnessId;
 use boop::registry::Registry;
-use boop::{bus, ident, identity, tmux};
+use boop::{bus, identity, tmux};
+#[cfg(feature = "agent-read")]
+use boop::ident;
 
+#[cfg(feature = "agent-read")]
 use crate::cli::db::open_store;
 use crate::cli::job::waiting_as;
-use crate::cli::{line, mail_dir, now_ms};
+use crate::cli::mail_dir;
+#[cfg(feature = "agent-read")]
+use crate::cli::{line, now_ms};
 
 // ---------------------------------------------------------------------------
 // Registration, including the legacy lane patch spelling.
@@ -97,6 +102,7 @@ pub(crate) fn register_route(
 // whoami
 // ---------------------------------------------------------------------------
 
+#[cfg(feature = "agent-read")]
 pub(crate) fn run_me_favorite(index: i64, note: Option<&str>) -> Result<()> {
     anyhow::ensure!(
         index < 0,

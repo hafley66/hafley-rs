@@ -23,8 +23,14 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: just
-      - name: test workspace
-        run: cargo test --workspace --locked
+      - name: Boop regression gate
+        run: just boop-check deterministic
+      - name: test remaining workspace packages
+        run: >-
+          cargo test --workspace --locked
+          --exclude boop --exclude boop-store --exclude boop-harness
+          --exclude boop-acp --exclude boop-proc --exclude boop-mux
+          --exclude boop-turnvis
 
   semver:
     if: github.event_name == 'pull_request'

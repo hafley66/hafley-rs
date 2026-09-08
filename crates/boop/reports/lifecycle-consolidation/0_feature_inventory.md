@@ -1,5 +1,36 @@
 # Boop feature inventory
 
+## Executable regression entry point
+
+`CARGO_TARGET_DIR=<dedicated-target> just boop-check deterministic` runs the seven
+Boop package suites, `boop --features dl6` tests, and no-default-features check.
+The complete command passed in `169_central-deterministic-after.log`; final
+no-default import cleanup passes in `172_no-default-clean.log`. CI calls this
+recipe. The previous `scripts/door-e2e.sh` now delegates to the central live mode.
+
+`BOOP_E2E_ROOT=<task-owned-directory> just boop-check live` invokes all four
+required entries. `tests/4_lifecycle_gate.rs::LifecycleHarness` shares scenarios
+and assertions; Codex, Claude and OpenCode implement native operations, with ccz
+as a second Claude configuration. It currently returns failure for unfinished
+scenarios. Default deterministic runs explicitly ignore authenticated tests;
+passing deterministic coverage does not assert live provider coverage.
+
+Feature gates now follow dependencies: `dl6` enables `agent-read`; the library
+host/concatmap modules require that reader feature. Delivery receipts remain in
+the core store with the compatible `query::DeliveryRow` export. The missing dl6
+fixture field and no-default compile errors were reproduced before correction.
+
+Observed native sessions now use `bind_native_session` for trace/PID/pane binding,
+including same-process clear transitions identified by exact PID. Claude exact
+session lookup and observed model metadata are adapter-owned. OpenCode uses its
+route's HTTP server for delivery and idle observation, owns newly launched
+backends, and preserves the configured model without provider-default fallback.
+Its explicit launch model flags and remaining native controls still need review.
+
+Current-help corrections: hook help names route registration instead of removed
+`adopt`; `docs/tell.md` distinguishes removed command aliases from the retained
+hidden `--body` argument and labels its old ACP diagram as a historical design.
+
 Wrapper checkpoint: generated Bash functions pass help, version, CLI subcommands
 and print-mode calls directly to the native executable. Adapter-owned argument
 classification preserves values that resemble commands. The failing actual-wrapper

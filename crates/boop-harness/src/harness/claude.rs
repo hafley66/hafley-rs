@@ -192,7 +192,11 @@ impl Harness for Claude {
             .find_map(|value| value.get("timestamp").and_then(Value::as_str))
             .map(crate::transcript::iso_to_ms)
             .unwrap_or(0);
-        let input_tokens = crate::transcript::tail_values(&session.path)
+        let tail = crate::transcript::tail_values(&session.path);
+        let model = tail.iter().rev().chain(head.iter().rev())
+            .find_map(|value| value.pointer("/message/model").and_then(Value::as_str))
+            .map(str::to_owned);
+        let input_tokens = tail
             .iter()
             .rev()
             .chain(head.iter().rev())
@@ -212,7 +216,7 @@ impl Harness for Claude {
             cwd: session.cwd.clone().unwrap_or_default(),
             source_path: Some(session.path.to_string_lossy().into_owned()),
             title: None,
-            model: None,
+            model,
             provider: Some("anthropic".to_string()),
             input_tokens,
             parent_kind: session.parent.as_ref().map(|_| "subagent"),
@@ -235,7 +239,7 @@ impl Harness for Claude {
     }
 
     fn session_by_id(&self, session_id: &str, cwd: Option<&str>) -> Option<SessionRef> {
-        let base = claude_projects_dir().ok()?;
+        let base = super::reader_home().ok()?;
         let cwd = cwd?;
         let path = claude_session_path(&base, cwd, session_id)?;
         let nickname = path.file_stem()?.to_str()?.to_string();

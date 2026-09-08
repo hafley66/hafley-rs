@@ -2,9 +2,11 @@
 //! into, the supervisor that owns the harness child and writes its result row,
 //! the mailbox a lane drains, and the coroutine host a caller embeds.
 
+#[cfg(feature = "agent-read")]
 pub mod concatmap;
 pub mod config;
 pub mod deliver;
+#[cfg(feature = "agent-read")]
 pub mod host;
 pub mod inbox;
 pub mod lane;
