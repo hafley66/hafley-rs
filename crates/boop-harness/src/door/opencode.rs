@@ -750,6 +750,41 @@ impl Door for OpencodeDoor {
         );
         Ok(expected)
     }
+
+    fn clear_native_session(
+        &self,
+        route: &boop_store::bus::Route,
+    ) -> Result<Option<NativeTuiEvent>> {
+        let (source, old_session) = Self::for_route(route)?;
+        let cwd = route
+            .cwd
+            .as_deref()
+            .context("OpenCode route has no working directory")?;
+        let base = source.base()?;
+        let session = source.create_session(&base, std::path::Path::new(cwd))?;
+        anyhow::ensure!(
+            session != old_session,
+            "OpenCode clear created the currently selected session"
+        );
+        let mut url = base.join("tui/select-session")?;
+        url.query_pairs_mut().append_pair("directory", cwd);
+        let response = agent(READ_TIMEOUT)
+            .post(url.as_str())
+            .header("content-type", "application/json")
+            .send(serde_json::to_string(
+                &serde_json::json!({"sessionID": session}),
+            )?)?;
+        anyhow::ensure!(
+            response.status().is_success(),
+            "OpenCode session selection answered {}",
+            response.status()
+        );
+        Ok(Some(NativeTuiEvent::Session {
+            session_id: session,
+            model: source.configured_model(),
+            effort: None,
+        }))
+    }
 }
 
 #[cfg(test)]
@@ -871,6 +906,12 @@ mod tests {
             }
         }
         let head = String::from_utf8_lossy(&head).to_string();
+        let method = head
+            .lines()
+            .next()
+            .and_then(|line| line.split_whitespace().next())
+            .unwrap_or("")
+            .to_string();
         let target = head
             .lines()
             .next()
@@ -899,6 +940,9 @@ mod tests {
             );
         };
         match target.as_str() {
+            path if method == "POST" && path.starts_with("/session?") => {
+                write_json(&mut stream, r#"{"id":"ses_created"}"#)
+            }
             "/session" => write_json(&mut stream, sessions),
             "/session/status" => write_json(&mut stream, statuses),
             "/config" => write_json(&mut stream, r#"{"model":"fixture/retired"}"#),
@@ -920,6 +964,9 @@ mod tests {
                     stream,
                     "HTTP/1.1 204 No Content\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
                 );
+            }
+            path if path.starts_with("/tui/select-session?") => {
+                write_json(&mut stream, "true");
             }
             path if path.ends_with("/history") => write_json(
                 &mut stream,
@@ -1015,6 +1062,40 @@ mod tests {
         assert_eq!(
             stub.seen.recv_timeout(Duration::from_secs(1)).unwrap().0,
             "/api/session/ses_new/history"
+        );
+    }
+
+    #[test]
+    fn clear_creates_and_selects_an_exact_session_on_the_route_server() {
+        let stub = Stub::start(SESSIONS, STATUSES, EVENTS);
+        let route = boop_store::bus::route_from_value(&serde_json::json!({
+            "harness":"opencode", "session_id":"ses_new", "kind":"coordinator",
+            "cwd":"/fixture/project", "appServerSocket":stub.base.as_str(), "mode":"native-owned"
+        }));
+        assert_eq!(
+            stub.door().clear_native_session(&route).unwrap(),
+            Some(NativeTuiEvent::Session {
+                session_id: "ses_created".into(),
+                model: Some("fixture/retired".into()),
+                effort: None,
+            })
+        );
+        let requests = [
+            stub.seen.recv_timeout(Duration::from_secs(1)).unwrap(),
+            stub.seen.recv_timeout(Duration::from_secs(1)).unwrap(),
+            stub.seen.recv_timeout(Duration::from_secs(1)).unwrap(),
+        ];
+        assert_eq!(
+            requests.each_ref().map(|request| request.0.as_str()),
+            [
+                "/session?directory=%2Ffixture%2Fproject",
+                "/tui/select-session?directory=%2Ffixture%2Fproject",
+                "/config",
+            ]
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&requests[1].1).unwrap(),
+            serde_json::json!({"sessionID":"ses_created"})
         );
     }
 

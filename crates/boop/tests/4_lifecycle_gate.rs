@@ -199,6 +199,20 @@ trait LifecycleHarness {
         );
         Ok((model, effort))
     }
+    fn clear_session(&self, fixture: &Fixture, registry: &Registry) -> Result<()> {
+        let adapter = self.adapter(registry);
+        let route = fixture.route()?;
+        if let Some(NativeTuiEvent::Session { session_id, .. }) =
+            adapter.door().clear_native_session(&route)?
+        {
+            ensure!(
+                Some(&session_id) != route.session_id.as_ref(),
+                "native clear returned the selected session"
+            );
+            return Ok(());
+        }
+        self.control(fixture, "/clear")
+    }
     fn busy(&self, fixture: &Fixture, registry: &Registry) -> Result<bool> {
         let route = fixture.route()?;
         Ok(self
@@ -1328,7 +1342,7 @@ fn authenticated_matrix() -> Result<()> {
             let trace = fixture
                 .store()?
                 .trace_of(old.session_id.as_deref().unwrap())?;
-            harness.control(&fixture, "/clear")?;
+            harness.clear_session(&fixture, &registry)?;
             let deadline = Instant::now() + Duration::from_secs(25);
             while fixture
                 .route()?

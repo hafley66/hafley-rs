@@ -95,6 +95,15 @@ pub trait Door: Send + Sync {
     ) -> Result<NativeTuiEvent> {
         anyhow::bail!("UNSUPPORTED: this harness has no isolated native settings control plane")
     }
+
+    /// Create and select a fresh native session through an isolated control
+    /// plane. `None` means the harness handles `/clear` inside its own TUI.
+    fn clear_native_session(
+        &self,
+        _route: &boop_store::bus::Route,
+    ) -> Result<Option<NativeTuiEvent>> {
+        Ok(None)
+    }
 }
 
 /// The harness with no control plane: nothing is running that boop can find,
