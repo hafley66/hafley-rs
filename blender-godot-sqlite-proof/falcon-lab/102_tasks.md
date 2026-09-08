@@ -26,7 +26,7 @@ Terraria-style terrain, Smash-style combat, and items/regions/statuses modifying
 | ID | State | Work | Depends on | Completion evidence |
 | --- | --- | --- | --- | --- |
 | G0 | Done | Reuse redux and GGRS execution | Existing libraries | `62832dc`; `.workflow/test-uAKBba/receipt.json`: redux unit/external tests, shared rollback replay, 27 Falcon tests |
-| G1 | Next | Verify local mirror and Falcon inventory | G0 | Offline manifest, missing-file report, hashes and tested resume |
+| G1 | In progress | Verify local mirror and Falcon inventory | G0 | Offline inventory and Falcon decoding passed; full mirror and downloader truncation recovery remain open |
 | G2 | Pending | Full available Falcon data and behavior coverage | Falcon subset of G1 | Versioned package, decoder tests, supported/unresolved callback report |
 | G3 | Pending | Reuse rule resolution and generate shared rule IO | G0; G2 IDs/defaults | Library-fit receipt, generated outputs, conflict/removal tests |
 | G4 | Pending | Stage entity and editable terrain | G0; G3 shared IDs | Bounded edit/contact/restore fixture in actual simulation |
@@ -40,7 +40,7 @@ its verified Falcon subset. No existing rollback proof is discarded.
 
 ## G1: offline acquisition
 
-- [ ] Inspect existing mirror process/log before starting another downloader.
+- [x] Inspect existing mirror process/log before starting another downloader.
   Cache: `../fixtures/rukaidata-mirror/`; command: `just mirror`.
 - [ ] Manifest original URLs, hashes, content kinds, game/version and retrieval
   status; compare reachable URLs with local files. Record failures and exit status.
@@ -49,6 +49,28 @@ its verified Falcon subset. No existing rollback proof is discarded.
 - [ ] Record disk budget. Current 4 GB quota is transferred bytes per invocation,
   not retained/decompressed cache size. Report partial coverage if space runs out;
   never delete unrelated data. Routine importer tests must not fetch the site.
+
+### G1/G2 checkpoint: 2026-09-08
+
+- `just mirror-status` now writes `.workflow/mirror-inventory.json` without network
+  requests. First scan: 1,811 local files, 119,499,072 bytes, zero detected invalid
+  files; 85,006 unresolved same-host links from locally discovered HTML. This is
+  partial-site coverage, not a full remote inventory. The active download changes it.
+- All 491 Falcon subaction index links resolve locally. `just import-catalog`
+  decoded all 491 through the existing brawllib 0.29.0 decoder, consuming complete
+  payloads. 107 have zero frames; `SpecialLwEndAir.html` reports bad_interrupts.
+  The unnamed `.html` subaction is retained explicitly.
+- Catalog metadata: `.workflow/falcon-catalog.json`; diagnostics:
+  `.workflow/falcon-catalog.log`. This is a data/compatibility audit; the playable
+  runtime still uses its seven-action package. G2 is not complete.
+- `just test core` passed, receipt `.workflow/test-o8sEcu/receipt.json`, including
+  shared-library and 27 Falcon tests. Offline inventory tests cover missing,
+  truncated, repaired, compressed and unchanged fixtures; they do not establish
+  actual network downloader recovery.
+- Remaining G1: verify downloader completion/exit, preserve source retrieval
+  metadata, and implement/test targeted recovery of truncated existing downloads.
+  Wget `--no-clobber` alone retains a truncated existing file. Inventory diagnoses
+  it; it does not currently repair it. No second crawler was added.
 
 ## G2: imported fighter package
 

@@ -44,10 +44,16 @@ pub(crate) fn load_controlled() -> Result<Vec<HighLevelSubaction>, Error> {
 fn load_files(files: &[&str]) -> Result<Vec<HighLevelSubaction>, Error> {
     files.iter()
     .map(|file| {
-        let html = std::fs::read_to_string(format!(
+        decode_file(std::path::Path::new(&format!(
             "{}/../fixtures/falcon/{file}",
             env!("CARGO_MANIFEST_DIR")
-        ))?;
+        )))
+    })
+    .collect()
+}
+
+pub(crate) fn decode_file(path: &std::path::Path) -> Result<HighLevelSubaction, Error> {
+        let html = std::fs::read_to_string(path)?;
         let payload = html
             .split("const fighter_subaction_data = \"")
             .nth(1)
@@ -58,7 +64,7 @@ fn load_files(files: &[&str]) -> Result<Vec<HighLevelSubaction>, Error> {
         let bytes = base64::engine::general_purpose::STANDARD.decode(payload)?;
         let (action, used): (HighLevelSubaction, usize) =
             bincode::serde::decode_from_slice(&bytes, bincode::config::standard())?;
-        assert_eq!(used, bytes.len(), "schema must consume the entire payload");
+        if used != bytes.len() { return Err("schema must consume the entire payload".into()); }
         eprintln!(
             "DECODE {}: {} frames, {} bytes",
             action.name,
@@ -66,8 +72,6 @@ fn load_files(files: &[&str]) -> Result<Vec<HighLevelSubaction>, Error> {
             used
         );
         Ok(action)
-    })
-    .collect()
 }
 
 pub(crate) use falcon_simulation::Tick;
