@@ -1,0 +1,14 @@
+[workspace]
+resolver="3"
+[package]
+name="falcon-simulation"
+version="0.1.0"
+edition="2024"
+[lib]
+path="2_simulation.rs"
+[dependencies]
+serde={version="1",features=["derive"]}
+serde_json="1"
+parry3d="=0.30.2"
+rapier3d={version="=0.35.3",features=["serde-serialize","enhanced-determinism"]}
+ssbm_utils="=0.4.0"

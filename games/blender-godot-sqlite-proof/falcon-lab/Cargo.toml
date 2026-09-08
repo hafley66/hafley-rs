@@ -8,6 +8,7 @@ edition = "2024"
 default-run = "falcon-lab"
 
 [dependencies]
+falcon-simulation = { path = "../simulation-core" }
 brawllib_rs = "=0.29.0"
 base64 = "0.22"
 bincode = { version = "2", features = ["serde"] }
@@ -30,7 +31,7 @@ gdext = ["dep:godot"]
 
 [lib]
 name = "falcon_gdext"
-path = "28_extension.rs"
+path = "36_library.rs"
 crate-type = ["cdylib", "rlib"]
 
 [[bin]]

@@ -5,9 +5,7 @@ use godot::prelude::*;
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::JoinHandle;
 
-#[allow(dead_code)]
-#[path = "8_rollback.rs"]
-mod fixture;
+use crate::fixture;
 use fixture::sql_viewer::{boundary::Row, geometry};
 
 struct Packet {
@@ -16,7 +14,7 @@ struct Packet {
     status: serde_json::Value,
 }
 struct Bridge {
-    requests: Option<SyncSender<()>>,
+    requests: Option<SyncSender<u8>>,
     responses: Receiver<Packet>,
     worker: Option<JoinHandle<Result<(), String>>>,
 }
@@ -61,6 +59,7 @@ struct FalconSql {
     pending: Option<Packet>,
     acknowledgements: Vec<serde_json::Value>,
     reference: Vec<serde_json::Value>,
+    incremental: bool,
 }
 
 #[godot_api]
@@ -83,7 +82,22 @@ impl FalconSql {
         .unwrap();
         let (requests, request_rx) = mpsc::sync_channel(1);
         let (response_tx, responses) = mpsc::sync_channel(1);
+        let incremental = self.incremental;
         let worker = std::thread::spawn(move || {
+            if incremental {
+                return fixture::incremental_host(
+                    || Ok(request_rx.recv()?),
+                    |rows, status| {
+                        response_tx.send(Packet {
+                            rows: pack(rows),
+                            lines: geometry::wire(rows),
+                            status: status.clone(),
+                        })?;
+                        Ok(())
+                    },
+                )
+                .map_err(|error| error.to_string());
+            }
             fixture::host_fixture(|rows, status| {
                 request_rx.recv()?;
                 response_tx.send(Packet {
@@ -103,10 +117,28 @@ impl FalconSql {
     }
 
     #[func]
+    fn start_incremental(&mut self) {
+        self.incremental = true;
+        self.start();
+    }
+
+    #[func]
     fn next_frame(&mut self) -> VarDictionary {
+        self.advance(i64::from(falcon_simulation::fixture_input(
+            self.acknowledgements.len() as i32,
+        )))
+    }
+
+    #[func]
+    fn advance(&mut self, input: i64) -> VarDictionary {
         assert!(self.pending.is_none(), "previous frame not acknowledged");
         let bridge = self.bridge.as_ref().unwrap();
-        bridge.requests.as_ref().unwrap().send(()).unwrap();
+        bridge
+            .requests
+            .as_ref()
+            .unwrap()
+            .send(u8::try_from(input).unwrap())
+            .unwrap();
         let packet = bridge.responses.recv().expect("Rust fixture failed");
         let vertices: PackedVector3Array = packet
             .lines
@@ -192,7 +224,11 @@ impl FalconSql {
             .expect("fixture panic")
             .expect("fixture error");
         std::fs::write(
-            concat!(env!("CARGO_MANIFEST_DIR"), "/30_godot_consumed.json"),
+            if self.incremental {
+                concat!(env!("CARGO_MANIFEST_DIR"), "/38_incremental_consumed.json")
+            } else {
+                concat!(env!("CARGO_MANIFEST_DIR"), "/30_godot_consumed.json")
+            },
             serde_json::to_vec_pretty(&self.acknowledgements).unwrap(),
         )
         .unwrap();
