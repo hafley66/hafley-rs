@@ -1,12 +1,11 @@
 #!/bin/sh
 set -eu
 lab_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$lab_dir/0_shell.sh"
 if [ "${1:-}" != "--skip-build" ]; then
-  env -u CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER cargo build \
-    --manifest-path "$lab_dir/Cargo.toml" --release --locked --offline \
-    -j 2 --features gdext --bin falcon-rollback
+  lab_cargo build --release --features gdext --bin falcon-rollback
 fi
-run_dir=$(mktemp -d /private/tmp/falcon-release.XXXXXX)
+run_dir=$(lab_temp release)
 cd "$run_dir"
 RUST_LOG=off "$lab_dir/target/release/falcon-rollback" --measure-release \
   >measurements.json 2>diagnostics.log
