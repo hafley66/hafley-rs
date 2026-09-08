@@ -1006,11 +1006,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     let model_given = args.model.is_some();
     // One row decides harness, model and effort. `--model` is the hidden
     // alias: it reads as a preset of one row that names no harness.
-    let requested = match (args.model.as_deref(), args.preset.as_deref()) {
-        (Some(model), _) => Some(config::ModelPreset::from_model(model)?),
-        (None, Some(preset)) => Some(config::resolve_preset(preset, &config_path)?),
-        (None, None) => None,
-    };
+    let requested = config::resolve_spawn_preset(args.model.as_deref(), args.preset.as_deref(), None, &config_path)?;
     let requested_model = requested.as_ref().map(|preset| preset.model.clone());
     // A preset names its harness as surely as --harness does: choosing
     // `--preset opus` is the opt-in a claude tmux lane asks for.
@@ -1063,10 +1059,9 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     // The row that spawns: the one named, else the harness's default preset.
     // An explicit --model opts out of the default-preset lookup entirely.
     let default_preset = default_preset_for_harness(&config, &config_path, harness_id)?;
-    let spawning = match (&requested, default_preset.as_deref()) {
-        (Some(preset), _) => Some(preset.clone()),
-        (None, Some(name)) => Some(config::resolve_preset(name, &config_path)?),
-        (None, None) => None,
+    let spawning = match requested {
+        Some(preset) => Some(preset),
+        None => config::resolve_spawn_preset(None, None, default_preset.as_deref(), &config_path)?,
     };
     let model = spawning.as_ref().map(|preset| preset.model.clone());
     // Effort reaches the harness as its own config; the model string stays

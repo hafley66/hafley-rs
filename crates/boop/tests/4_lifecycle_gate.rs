@@ -96,7 +96,7 @@ trait LifecycleHarness {
     fn approve_completion(&self, _fixture: &Fixture, _command: &str) -> Result<()> { Ok(()) }
     fn backend(&self, _fixture: &Fixture) -> Result<Option<(u32, bool)>> { Ok(None) }
     fn change_settings(&self, _fixture: &Fixture) -> Result<(String, String)> {
-        anyhow::bail!("settings controls have not been verified for this adapter")
+        anyhow::bail!("BLOCKED: settings controls have not been verified for this adapter")
     }
     fn busy(&self, fixture: &Fixture, registry: &Registry) -> Result<bool> {
         let route = fixture.route()?;
@@ -205,6 +205,9 @@ impl LifecycleHarness for Claude {
     }
     fn launch_args(&self, resume: Option<&str>) -> Vec<String> {
         let mut args = resume.map(|id| vec!["--resume".into(), id.into()]).unwrap_or_default();
+        // Only these test-owned shell operations are needed. Native agent
+        // discovery/messaging would escape the fixture's route database.
+        args.extend(["--tools".into(), "Bash".into(), "--strict-mcp-config".into()]);
         if let Ok(model) = std::env::var(format!("BOOP_E2E_{}_MODEL", self.entry.to_uppercase())) {
             args.extend(["--model".into(), model]);
         }
@@ -581,22 +584,6 @@ fn authenticated_matrix() -> Result<()> {
         active_scenario = "resume_after_compact";
         let receipt = resume(&fixture, harness.as_ref(), &registry, "compact_resume")?;
         cases.push(json!({"scenario":"resume_after_compact","status":"PASS","receipt":receipt}));
-        active_scenario = "clear_new_session";
-        let old = fixture.route()?;
-        let trace = fixture.store()?.trace_of(old.session_id.as_deref().unwrap())?;
-        harness.control(&fixture, "/clear")?;
-        let deadline = Instant::now() + Duration::from_secs(25);
-        while fixture.route()?.session_id.as_ref().is_none_or(|id| Some(id) == old.session_id.as_ref()) {
-            ensure!(Instant::now() < deadline, "clear did not rebind to a new native session within 25 seconds");
-            std::thread::sleep(Duration::from_millis(250));
-        }
-        let new = await_route(&fixture, harness.as_ref())?;
-        ensure!(fixture.store()?.trace_of(new.session_id.as_deref().unwrap())? == trace, "clear changed Boop trace");
-        let receipt = nonce(&fixture, harness.as_ref(), &registry, "clear")?;
-        cases.push(json!({"scenario":"clear_new_session","status":"PASS","old_thread":old.session_id,"new_thread":new.session_id,"receipt":receipt}));
-        active_scenario = "resume_after_clear";
-        let receipt = resume(&fixture, harness.as_ref(), &registry, "clear_resume")?;
-        cases.push(json!({"scenario":"resume_after_clear","status":"PASS","receipt":receipt}));
         active_scenario = "model_and_effort_change";
         match harness.change_settings(&fixture) {
             Ok((model, effort)) => {
@@ -670,6 +657,40 @@ fn authenticated_matrix() -> Result<()> {
             cases.push(json!({"scenario":"backend_restart","status":"PASS","automatic":automatic,"old_backend":backend,"receipt":receipt}));
         } else {
             cases.push(json!({"scenario":"backend_restart","status":"UNSUPPORTED","detail":"production native launch plan runs this harness directly, without a separate owned backend"}));
+        }
+        let before_clear = fixture.route()?.session_id.context("clear recovery thread absent")?;
+        let clear_result = (|| -> Result<()> {
+            active_scenario = "clear_new_session";
+            let old = fixture.route()?;
+            let trace = fixture.store()?.trace_of(old.session_id.as_deref().unwrap())?;
+            harness.control(&fixture, "/clear")?;
+            let deadline = Instant::now() + Duration::from_secs(25);
+            while fixture.route()?.session_id.as_ref().is_none_or(|id| Some(id) == old.session_id.as_ref()) {
+                ensure!(Instant::now() < deadline, "clear did not rebind to a new native session within 25 seconds");
+                std::thread::sleep(Duration::from_millis(250));
+            }
+            let new = await_route(&fixture, harness.as_ref())?;
+            ensure!(fixture.store()?.trace_of(new.session_id.as_deref().unwrap())? == trace, "clear changed Boop trace");
+            let receipt = nonce(&fixture, harness.as_ref(), &registry, "clear")?;
+            cases.push(json!({"scenario":"clear_new_session","status":"PASS","old_thread":old.session_id,"new_thread":new.session_id,"receipt":receipt}));
+            active_scenario = "resume_after_clear";
+            let receipt = resume(&fixture, harness.as_ref(), &registry, "clear_resume")?;
+            cases.push(json!({"scenario":"resume_after_clear","status":"PASS","receipt":receipt}));
+            Ok(())
+        })();
+        if let Err(error) = clear_result {
+            cases.push(json!({"scenario":active_scenario,"status":"FAIL","detail":format!("{error:#}")}));
+            if active_scenario == "clear_new_session" {
+                cases.push(json!({"scenario":"resume_after_clear","status":"BLOCKED","detail":"clear did not establish a new bound conversation"}));
+            }
+            harness.exit(&fixture)?;
+            let deadline = Instant::now() + Duration::from_secs(35);
+            while fixture.tmux(&["display-message", "-p", "-t", &fixture.pane, "#{pane_dead}"])?.trim() != "1" {
+                ensure!(Instant::now() < deadline, "clear failure recovery could not stop its test-owned frontend");
+                std::thread::sleep(Duration::from_millis(250));
+            }
+            fixture.launch(harness.as_ref(), Some(&before_clear))?;
+            ensure!(await_route(&fixture, harness.as_ref())?.session_id.as_deref() == Some(before_clear.as_str()), "clear failure recovery rebound another conversation");
         }
         active_scenario = "concurrent_session_isolation";
         let root = fixture.root.join("concurrent");

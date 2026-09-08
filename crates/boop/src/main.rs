@@ -560,8 +560,8 @@ fn main() -> Result<()> {
                 let config_path = config::default_path()?;
                 let model = match (model, preset) {
                     (Some(model), _) => model,
-                    (None, Some(preset)) => config::resolve_model(&preset, &config_path)?,
-                    (None, None) => config::resolve_model("flash4", &config_path)?,
+                    (None, Some(preset)) => config::resolve_preset(&preset, &config_path)?.model,
+                    (None, None) => config::resolve_preset("flash4", &config_path)?.model,
                 };
                 let formula = match &rules {
                     Some(path) => boop::concatmap::Formula::load(path)?,
