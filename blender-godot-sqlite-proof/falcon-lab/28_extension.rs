@@ -9,6 +9,7 @@ use crate::fixture;
 use fixture::sql_viewer::{boundary::Row, geometry};
 use fixture::sql_viewer::boundary::contracts::{
     Acknowledgment, AckResult, BoundaryError, FrameAcknowledger, GenerationId, RowPublisher,
+    pack_rows as pack,
 };
 
 struct Packet {
@@ -62,15 +63,6 @@ impl Drop for Bridge {
     }
 }
 
-fn pack(rows: &[Row]) -> Vec<f64> {
-    rows.iter()
-        .flat_map(|r| {
-            [r.tick as f64, r.kind as f64, r.entity as f64]
-                .into_iter()
-                .chain(r.values)
-        })
-        .collect()
-}
 fn digest(values: &[f64]) -> u64 {
         values
             .iter()

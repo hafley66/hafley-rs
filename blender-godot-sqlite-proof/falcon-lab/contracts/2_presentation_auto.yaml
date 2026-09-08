@@ -1,5 +1,5 @@
-# Generated from 0_presentation.tsp; sha256:e22f632bf4c97d3d819c510115bde62529b3863410700004705fe597a6dfac0e
-version: 2
+# Generated from 0_presentation.tsp; sha256:3c076cf3878f52f7820094fca73cb6751f0874eb895e8ca81e41d0e05a0eafee
+version: 3
 namespace: FalconBoundary
 constants:
   WINDOW:
@@ -34,6 +34,164 @@ models:
       item:
         rust: f64
         type: float64
+  Line:
+    - name: a
+      rust: "[f32; 3]"
+      length: 3
+      item:
+        rust: f32
+        type: float32
+    - name: b
+      rust: "[f32; 3]"
+      length: 3
+      item:
+        rust: f32
+        type: float32
+    - name: color
+      rust: "[f32; 4]"
+      length: 4
+      item:
+        rust: f32
+        type: float32
+    - name: width
+      rust: f32
+      type: float32
+  FrameValues:
+    - name: action
+      rust: f64
+      type: float64
+    - name: pose
+      rust: f64
+      type: float64
+    - name: root_x
+      rust: f64
+      type: float64
+    - name: root_y
+      rust: f64
+      type: float64
+    - name: root_z
+      rust: f64
+      type: float64
+    - name: damage
+      rust: f64
+      type: float64
+    - name: hits
+      rust: f64
+      type: float64
+    - name: last_hit
+      rust: f64
+      type: float64
+    - name: contact
+      rust: f64
+      type: float64
+    - name: predicted
+      rust: f64
+      type: float64
+    - name: input
+      rust: f64
+      type: float64
+    - name: animation_x
+      rust: f64
+      type: float64
+    - name: animation_y
+      rust: f64
+      type: float64
+    - name: reserved_13
+      rust: f64
+      type: float64
+    - name: reserved_14
+      rust: f64
+      type: float64
+    - name: restored
+      rust: f64
+      type: float64
+    - name: advances
+      rust: f64
+      type: float64
+    - name: total_loads
+      rust: f64
+      type: float64
+    - name: confirmed
+      rust: f64
+      type: float64
+  TargetValues:
+    - name: x
+      rust: f64
+      type: float64
+    - name: y
+      rust: f64
+      type: float64
+    - name: z
+      rust: f64
+      type: float64
+    - name: vx
+      rust: f64
+      type: float64
+    - name: vy
+      rust: f64
+      type: float64
+    - name: vz
+      rust: f64
+      type: float64
+    - name: stun
+      rust: f64
+      type: float64
+    - name: phase
+      rust: f64
+      type: float64
+    - name: grounded
+      rust: f64
+      type: float64
+  HurtValues:
+    - name: matrix
+      rust: "[f64; 16]"
+      length: 16
+      item:
+        rust: f64
+        type: float64
+    - name: offset_x
+      rust: f64
+      type: float64
+    - name: offset_y
+      rust: f64
+      type: float64
+    - name: offset_z
+      rust: f64
+      type: float64
+    - name: stretch_x
+      rust: f64
+      type: float64
+    - name: stretch_y
+      rust: f64
+      type: float64
+    - name: stretch_z
+      rust: f64
+      type: float64
+    - name: radius
+      rust: f64
+      type: float64
+    - name: enabled
+      rust: f64
+      type: float64
+  AttackValues:
+    - name: x
+      rust: f64
+      type: float64
+    - name: y
+      rust: f64
+      type: float64
+    - name: z
+      rust: f64
+      type: float64
+    - name: radius
+      rust: f64
+      type: float64
+    - name: damage
+      rust: f64
+      type: float64
+    - name: enabled
+      rust: f64
+      type: float64
   GenerationId:
     - name: epoch
       rust: u64
@@ -77,6 +235,152 @@ models:
     - name: mesh_vertices
       rust: u32
       type: uint32
+rows:
+  FrameValues:
+    kind: 0
+    fields:
+      - name: action
+        offset: 0
+        length: 1
+      - name: pose
+        offset: 1
+        length: 1
+      - name: root_x
+        offset: 2
+        length: 1
+      - name: root_y
+        offset: 3
+        length: 1
+      - name: root_z
+        offset: 4
+        length: 1
+      - name: damage
+        offset: 5
+        length: 1
+      - name: hits
+        offset: 6
+        length: 1
+      - name: last_hit
+        offset: 7
+        length: 1
+      - name: contact
+        offset: 8
+        length: 1
+      - name: predicted
+        offset: 9
+        length: 1
+      - name: input
+        offset: 10
+        length: 1
+      - name: animation_x
+        offset: 11
+        length: 1
+      - name: animation_y
+        offset: 12
+        length: 1
+      - name: reserved_13
+        offset: 13
+        length: 1
+      - name: reserved_14
+        offset: 14
+        length: 1
+      - name: restored
+        offset: 15
+        length: 1
+      - name: advances
+        offset: 16
+        length: 1
+      - name: total_loads
+        offset: 17
+        length: 1
+      - name: confirmed
+        offset: 18
+        length: 1
+    width: 19
+  TargetValues:
+    kind: 1
+    fields:
+      - name: x
+        offset: 0
+        length: 1
+      - name: y
+        offset: 1
+        length: 1
+      - name: z
+        offset: 2
+        length: 1
+      - name: vx
+        offset: 3
+        length: 1
+      - name: vy
+        offset: 4
+        length: 1
+      - name: vz
+        offset: 5
+        length: 1
+      - name: stun
+        offset: 6
+        length: 1
+      - name: phase
+        offset: 7
+        length: 1
+      - name: grounded
+        offset: 8
+        length: 1
+    width: 9
+  HurtValues:
+    kind: 2
+    fields:
+      - name: matrix
+        offset: 0
+        length: 16
+      - name: offset_x
+        offset: 16
+        length: 1
+      - name: offset_y
+        offset: 17
+        length: 1
+      - name: offset_z
+        offset: 18
+        length: 1
+      - name: stretch_x
+        offset: 19
+        length: 1
+      - name: stretch_y
+        offset: 20
+        length: 1
+      - name: stretch_z
+        offset: 21
+        length: 1
+      - name: radius
+        offset: 22
+        length: 1
+      - name: enabled
+        offset: 23
+        length: 1
+    width: 24
+  AttackValues:
+    kind: 3
+    fields:
+      - name: x
+        offset: 0
+        length: 1
+      - name: y
+        offset: 1
+        length: 1
+      - name: z
+        offset: 2
+        length: 1
+      - name: radius
+        offset: 3
+        length: 1
+      - name: damage
+        offset: 4
+        length: 1
+      - name: enabled
+        offset: 5
+        length: 1
+    width: 6
 enums:
   BoundaryError:
     - Capacity

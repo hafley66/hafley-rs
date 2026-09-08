@@ -5,6 +5,7 @@ pub mod geometry;
 use super::{CYAN, Display, Error, ORANGE, WHITE, World, baseline};
 use baseline::{gpu, project, text};
 use boundary::{Boundary, Row};
+use boundary::contracts::{FrameValues, TargetValues, HurtValues, AttackValues};
 use brawllib_rs::high_level_fighter::{CollisionBoxValues, HighLevelSubaction};
 
 #[tracing::instrument(target = "falcon::presentation", level = "trace", skip_all, fields(tick = world.frame - 1, predicted, applied))]
@@ -17,79 +18,63 @@ pub(super) fn encode(
     let s = &world.view;
     let source = &actions[s.action].frames[s.frame];
     let tick = i64::from(world.frame - 1);
-    let mut meta = Row::new(tick, 0, 0);
-    meta.values[..15].copy_from_slice(&[
-        s.action as f64,
-        s.frame as f64,
-        s.root[0] as f64,
-        s.root[1] as f64,
-        s.root[2] as f64,
-        world.damage as f64,
-        world.hit_count as f64,
-        world.last_hit.unwrap_or(-1) as f64,
-        f64::from(s.contact),
-        f64::from(predicted),
-        f64::from(applied),
-        source.x_pos as f64,
-        source.y_pos as f64,
-        0.0,
-        0.0,
-    ]);
+    let meta = FrameValues {
+        action: s.action as f64,
+        pose: s.frame as f64,
+        root_x: s.root[0] as f64,
+        root_y: s.root[1] as f64,
+        root_z: s.root[2] as f64,
+        damage: world.damage as f64,
+        hits: world.hit_count as f64,
+        last_hit: world.last_hit.unwrap_or(-1) as f64,
+        contact: f64::from(s.contact),
+        predicted: f64::from(predicted),
+        input: f64::from(applied),
+        animation_x: source.x_pos as f64,
+        animation_y: source.y_pos as f64,
+        ..Default::default()
+    }.into_row(tick, 0);
     let mut rows = vec![meta];
-    let mut target = Row::new(tick, 1, 0);
+    let mut target = TargetValues::default();
     if let Some(b) = &world.bag {
-        for i in 0..3 {
-            target.values[i] = b.position[i] as f64;
-            target.values[i + 3] = b.velocity[i] as f64;
-        }
-        target.values[6] = b.stun as f64;
-        target.values[7] = match b.phase {
+        [target.x, target.y, target.z] = b.position.map(f64::from);
+        [target.vx, target.vy, target.vz] = b.velocity.map(f64::from);
+        target.stun = b.stun as f64;
+        target.phase = match b.phase {
             super::sandbag::Phase::Hovering => 0.0,
             super::sandbag::Phase::Hit => 1.0,
             super::sandbag::Phase::Hitstun => 2.0,
             super::sandbag::Phase::Falling => 3.0,
             super::sandbag::Phase::Landed => 4.0,
         };
-        target.values[8] = f64::from(b.grounded);
+        target.grounded = f64::from(b.grounded);
     } else {
-        target.values[1] = 24.0;
-        target.values[2] = 28.0;
+        target.y = 24.0;
+        target.z = 28.0;
     }
-    rows.push(target);
+    rows.push(target.into_row(tick, 0));
     for hurt in &source.hurt_boxes {
-        let mut r = Row::new(tick, 2, hurt.hurt_box.bone_index as i64);
         let matrix: [[f32; 4]; 4] = hurt.bone_matrix.into();
-        for (out, value) in r.values.iter_mut().zip(matrix.iter().flatten()) {
-            *out = *value as f64;
-        }
         let a = hurt.hurt_box.offset;
         let b = hurt.hurt_box.stretch;
-        r.values[16..].copy_from_slice(&[
-            a.x as f64,
-            a.y as f64,
-            a.z as f64,
-            b.x as f64,
-            b.y as f64,
-            b.z as f64,
-            hurt.hurt_box.radius as f64,
-            f64::from(hurt.hurt_box.enabled),
-        ]);
-        rows.push(r);
+        rows.push(HurtValues {
+            matrix: std::array::from_fn(|i| matrix[i / 4][i % 4] as f64),
+            offset_x: a.x as f64, offset_y: a.y as f64, offset_z: a.z as f64,
+            stretch_x: b.x as f64, stretch_y: b.y as f64, stretch_z: b.z as f64,
+            radius: hurt.hurt_box.radius as f64,
+            enabled: f64::from(hurt.hurt_box.enabled),
+        }.into_row(tick, hurt.hurt_box.bone_index as i64));
     }
     for hit in &source.hit_boxes {
         let CollisionBoxValues::Hit(values) = &hit.next_values else {
             continue;
         };
-        let mut r = Row::new(tick, 3, hit.hitbox_id as i64);
-        r.values[..6].copy_from_slice(&[
-            hit.next_pos.x as f64,
-            hit.next_pos.y as f64,
-            hit.next_pos.z as f64,
-            hit.next_size as f64,
-            values.damage as f64,
-            f64::from(values.enabled),
-        ]);
-        rows.push(r);
+        rows.push(AttackValues {
+            x: hit.next_pos.x as f64, y: hit.next_pos.y as f64, z: hit.next_pos.z as f64,
+            radius: hit.next_size as f64,
+            damage: values.damage as f64,
+            enabled: f64::from(values.enabled),
+        }.into_row(tick, hit.hitbox_id as i64));
     }
     assert!(rows.iter().all(|r| r.values.iter().all(|v| v.is_finite())));
     rows

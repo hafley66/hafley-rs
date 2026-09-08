@@ -1,5 +1,7 @@
 extends Node3D
 
+const Rows = preload("res://1_rows_auto.gd")
+
 var extension
 var mesh := ArrayMesh.new()
 var captions: Array[Label] = []
@@ -106,12 +108,15 @@ func _process(_delta):
 		var frame: Dictionary = extension.advance(bits) if incremental else extension.next_frame()
 		var state: Dictionary = JSON.parse_string(frame.status)
 		var rows: PackedFloat64Array = frame.rows
+		var meta := Rows.frame_values(rows)
+		var target := Rows.target_values(rows)
+		assert(not meta.is_empty() and not target.is_empty())
 		assert(state.simulation_tick == tick)
 		assert(state.published_generation == state.renderer_generation)
 		_upload_and_acknowledge(frame, int(state.renderer_generation))
 		captions[1].text = "SIM %03d / PUBLISHED %03d / RENDERER %03d" % [tick, state.published_generation, state.renderer_generation]
-		captions[2].text = "%s POSE %02d / INPUT %s" % [["IDLE", "JUMP", "FAIR"][int(rows[3])], int(rows[4]) + 1, "PREDICTED" if rows[12] != 0 else "CONFIRMED"]
-		captions[3].text = "BAG %s / %.0f%% / STUN %.0f" % [["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(rows[37])], rows[8], rows[36]]
+		captions[2].text = "%s POSE %02d / INPUT %s" % [["IDLE", "JUMP", "FAIR"][int(meta.action)], int(meta.pose) + 1, "PREDICTED" if meta.predicted != 0 else "CONFIRMED"]
+		captions[3].text = "BAG %s / %.0f%% / STUN %.0f" % [["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(target.phase)], meta.damage, target.stun]
 		captions[4].text = "SQL WINDOW %d/32 / ROWS %d/1024 / SLOTS 3" % [state.window_frames, state.rows]
 		captions[6].text = "RESTORE %d / ATOMIC CORRECTION: 20 FRAMES" % state.restored[0] if not state.restored.is_empty() else "PUBLISH COMPLETE WINDOW / SLOT POINTERS STABLE"
 		captions[7].text = "HELD SQL CURSOR: GEN %d / TICK 91 / DAMAGE 0" % state.held_generation if state.held_generation != null else ("HELD CURSOR RELEASED / SLOT REUSABLE" if tick == 101 else "HELD SQL CURSOR: NONE")
@@ -133,14 +138,17 @@ func _process_external():
 	if not frame.is_empty():
 		var state: Dictionary = JSON.parse_string(frame.status)
 		var rows: PackedFloat64Array = frame.rows
+		var meta := Rows.frame_values(rows)
+		var target := Rows.target_values(rows)
+		assert(not meta.is_empty() and not target.is_empty())
 		_upload_and_acknowledge(frame, int(state.renderer_generation))
 		displayed_tick = int(state.published_tick)
 		captions[1].text = "PEER PID %d / GODOT PID %d / TICK %03d" % [state.source_pid, OS.get_process_id(), displayed_tick]
-		captions[2].text = "%s POSE %02d / INPUT %d %s / CONFIRMED %.0f" % [["IDLE", "JUMP", "FAIR"][int(rows[3])], int(rows[4])+1, int(rows[13]), "PREDICTED" if rows[12] != 0 else "KNOWN", rows[21]]
-		captions[3].text = "BAG %s / DAMAGE %.0f / STUN %.0f" % [["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(rows[37])], rows[8], rows[36]]
+		captions[2].text = "%s POSE %02d / INPUT %d %s / CONFIRMED %.0f" % [["IDLE", "JUMP", "FAIR"][int(meta.action)], int(meta.pose)+1, int(meta.input), "PREDICTED" if meta.predicted != 0 else "KNOWN", meta.confirmed]
+		captions[3].text = "BAG %s / DAMAGE %.0f / STUN %.0f" % [["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(target.phase)], meta.damage, target.stun]
 		captions[4].text = "SOURCE GEN %d / LOCAL SQL GEN %d / SKIPPED %d" % [state.source_generation, state.renderer_generation, state.skipped_generations]
-		captions[5].text = "RESTORE %.0f / REPLAY %.0f / SOURCE WALL %.3fS" % [rows[18], rows[19]-1, state.source_elapsed_us / 1000000.0]
-		captions[7].text = "IPC ROWS -> SQLITE -> ARRAYMESH: EXACT / ROWS %d" % (rows.size()/27)
+		captions[5].text = "RESTORE %.0f / REPLAY %.0f / SOURCE WALL %.3fS" % [meta.restored, meta.advances-1, state.source_elapsed_us / 1000000.0]
+		captions[7].text = "IPC ROWS -> SQLITE -> ARRAYMESH: EXACT / ROWS %d" % (rows.size()/Rows.STRIDE)
 		captions[8].text = "RENDERER HAS NO SIMULATION WORKER / LATEST-ONLY FEED"
 		print("LIVE_ACK ", displayed_tick, " ", int(state.source_generation))
 	elif displayed_tick == -1:
@@ -177,11 +185,14 @@ func _process_scheduled():
 		var frame: Dictionary = observation.frame
 		var state: Dictionary = JSON.parse_string(frame.status)
 		var rows: PackedFloat64Array = frame.rows
+		var meta := Rows.frame_values(rows)
+		var target := Rows.target_values(rows)
+		assert(not meta.is_empty() and not target.is_empty())
 		_upload_and_acknowledge(frame, int(state.renderer_generation))
 		displayed_tick = int(state.published_tick)
 		displayed_generation = int(state.renderer_generation)
-		captions[2].text = "DISPLAY: %s POSE %02d / INPUT %s" % [["IDLE", "JUMP", "FAIR"][int(rows[3])], int(rows[4]) + 1, "PREDICTED" if rows[12] != 0 else "CONFIRMED"]
-		captions[3].text = "DISPLAY BAG: %s / %.0f%% / STUN %.0f" % [["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(rows[37])], rows[8], rows[36]]
+		captions[2].text = "DISPLAY: %s POSE %02d / INPUT %s" % [["IDLE", "JUMP", "FAIR"][int(meta.action)], int(meta.pose) + 1, "PREDICTED" if meta.predicted != 0 else "CONFIRMED"]
+		captions[3].text = "DISPLAY BAG: %s / %.0f%% / STUN %.0f" % [["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(target.phase)], meta.damage, target.stun]
 		if displayed_tick >= 106:
 			assert(displayed_tick == int(current.simulation_tick))
 	captions[1].text = "SIM %03d / DISPLAY %03d / LAG %02d / GEN %03d" % [current.simulation_tick, displayed_tick, int(current.simulation_tick) - displayed_tick, displayed_generation]

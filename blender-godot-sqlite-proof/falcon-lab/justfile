@@ -10,6 +10,9 @@ generate:
 check-generated:
     node contracts/1_generate.mjs --check
 
+test-godot: check-generated
+    godot --headless --path godot --script res://1_rows_test.gd
+
 # Rust library and controller checks.
 test: check-generated
     node --test contracts/1_generate.test.mjs

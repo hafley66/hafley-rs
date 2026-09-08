@@ -247,6 +247,38 @@ pub fn read_frame(db: &Connection, tick: i64) -> Result<(u64, Vec<Row>)> {
 mod tests {
     use super::*;
     #[test]
+    fn named_row_adapters_preserve_packed_values_and_untouched_tail() {
+        use contracts::{FrameValues, TargetValues, HurtValues, AttackValues, pack_rows};
+        let source = std::array::from_fn(|i| i as f64 + 0.25);
+        let mut rows = Vec::new();
+        for kind in 0..4 {
+            let input = Row { tick: 91, kind, entity: 7, values: source };
+            let mut output = Row { values: [-99.0; 24], ..input };
+            let width = match kind {
+                0 => {
+                    let value = FrameValues::from_row(&input).unwrap();
+                    assert_eq!((value.damage, value.confirmed), (5.25, 18.25));
+                    value.write_row(&mut output);
+                    assert_eq!(value.into_row(91, 7).values[19..], [0.0; 5]);
+                    19
+                }
+                1 => { TargetValues::from_row(&input).unwrap().write_row(&mut output); 9 }
+                2 => { HurtValues::from_row(&input).unwrap().write_row(&mut output); 24 }
+                3 => { AttackValues::from_row(&input).unwrap().write_row(&mut output); 6 }
+                _ => unreachable!(),
+            };
+            assert_eq!(&output.values[..width], &source[..width]);
+            assert_eq!(&output.values[width..], &[-99.0; 24][width..]);
+            assert_eq!((output.tick, output.kind, output.entity), (91, kind, 7));
+            rows.push(input);
+        }
+        assert_eq!(FrameValues::from_row(&rows[1]), None);
+        let packed = pack_rows(&rows);
+        let expected: Vec<_> = (0..4).flat_map(|kind| [91.0, kind as f64, 7.0].into_iter().chain(source)).collect();
+        assert_eq!(packed, expected);
+    }
+
+    #[test]
     fn generated_publisher_preserves_replay_and_refusal_semantics() {
         use contracts::{BoundaryError, GenerationId, RowPublisher};
         let mut b = Boundary::new().unwrap();
