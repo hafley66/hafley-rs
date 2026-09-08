@@ -76,6 +76,16 @@ func _ready():
 	captions[9].text = "0.5X + HOLDS / SCRIPTED TRAVEL / PM + MELEE KB + RAPIER"
 	print("GDEXT_STAGE_READY runtime=", Engine.get_version_info().string)
 
+func _upload_and_acknowledge(frame: Dictionary, generation: int) -> void:
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = frame.vertices
+	arrays[Mesh.ARRAY_COLOR] = frame.colors
+	mesh.clear_surfaces()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
+	var uploaded := mesh.surface_get_arrays(0)
+	assert(extension.acknowledge(generation, frame.rows, uploaded[Mesh.ARRAY_VERTEX]))
+
 func _process(_delta):
 	if external:
 		_process_external()
@@ -98,14 +108,7 @@ func _process(_delta):
 		var rows: PackedFloat64Array = frame.rows
 		assert(state.simulation_tick == tick)
 		assert(state.published_generation == state.renderer_generation)
-		var arrays := []
-		arrays.resize(Mesh.ARRAY_MAX)
-		arrays[Mesh.ARRAY_VERTEX] = frame.vertices
-		arrays[Mesh.ARRAY_COLOR] = frame.colors
-		mesh.clear_surfaces()
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
-		var uploaded := mesh.surface_get_arrays(0)
-		assert(extension.acknowledge(int(state.renderer_generation), rows, uploaded[Mesh.ARRAY_VERTEX]))
+		_upload_and_acknowledge(frame, int(state.renderer_generation))
 		captions[1].text = "SIM %03d / PUBLISHED %03d / RENDERER %03d" % [tick, state.published_generation, state.renderer_generation]
 		captions[2].text = "%s POSE %02d / INPUT %s" % [["IDLE", "JUMP", "FAIR"][int(rows[3])], int(rows[4]) + 1, "PREDICTED" if rows[12] != 0 else "CONFIRMED"]
 		captions[3].text = "BAG %s / %.0f%% / STUN %.0f" % [["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(rows[37])], rows[8], rows[36]]
@@ -130,13 +133,7 @@ func _process_external():
 	if not frame.is_empty():
 		var state: Dictionary = JSON.parse_string(frame.status)
 		var rows: PackedFloat64Array = frame.rows
-		var arrays := []
-		arrays.resize(Mesh.ARRAY_MAX)
-		arrays[Mesh.ARRAY_VERTEX] = frame.vertices
-		arrays[Mesh.ARRAY_COLOR] = frame.colors
-		mesh.clear_surfaces()
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
-		assert(extension.acknowledge(int(state.renderer_generation), rows, mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]))
+		_upload_and_acknowledge(frame, int(state.renderer_generation))
 		displayed_tick = int(state.published_tick)
 		captions[1].text = "PEER PID %d / GODOT PID %d / TICK %03d" % [state.source_pid, OS.get_process_id(), displayed_tick]
 		captions[2].text = "%s POSE %02d / INPUT %d %s / CONFIRMED %.0f" % [["IDLE", "JUMP", "FAIR"][int(rows[3])], int(rows[4])+1, int(rows[13]), "PREDICTED" if rows[12] != 0 else "KNOWN", rows[21]]
@@ -180,14 +177,7 @@ func _process_scheduled():
 		var frame: Dictionary = observation.frame
 		var state: Dictionary = JSON.parse_string(frame.status)
 		var rows: PackedFloat64Array = frame.rows
-		var arrays := []
-		arrays.resize(Mesh.ARRAY_MAX)
-		arrays[Mesh.ARRAY_VERTEX] = frame.vertices
-		arrays[Mesh.ARRAY_COLOR] = frame.colors
-		mesh.clear_surfaces()
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
-		var uploaded := mesh.surface_get_arrays(0)
-		assert(extension.acknowledge(int(state.renderer_generation), rows, uploaded[Mesh.ARRAY_VERTEX]))
+		_upload_and_acknowledge(frame, int(state.renderer_generation))
 		displayed_tick = int(state.published_tick)
 		displayed_generation = int(state.renderer_generation)
 		captions[2].text = "DISPLAY: %s POSE %02d / INPUT %s" % [["IDLE", "JUMP", "FAIR"][int(rows[3])], int(rows[4]) + 1, "PREDICTED" if rows[12] != 0 else "CONFIRMED"]
