@@ -209,7 +209,7 @@ impl OpencodeDoor {
     fn observe(
         &self,
         cwd: &std::path::Path,
-        initial_session: Option<&str>,
+        initial_event: Option<NativeTuiEvent>,
     ) -> Result<NativeTuiObserver> {
         let mut url = self.base()?.join("event")?;
         url.query_pairs_mut()
@@ -218,12 +218,8 @@ impl OpencodeDoor {
         let worker_stop = Arc::clone(&stop);
         let (sender, events) = mpsc::channel();
         let configured_model = self.configured_model();
-        if let Some(session_id) = initial_session {
-            sender.send(NativeTuiEvent::Session {
-                session_id: session_id.to_owned(),
-                model: configured_model.clone(),
-                effort: None,
-            })?;
+        if let Some(event) = initial_event {
+            sender.send(event)?;
         }
         let worker = std::thread::spawn(move || {
             while !worker_stop.load(Ordering::Acquire) {
@@ -262,6 +258,31 @@ impl OpencodeDoor {
             stop,
             worker: Some(worker),
         })
+    }
+
+    /// The last durable settings event for this exact session. This endpoint
+    /// is session-addressed, so no transcript ordering or cwd match selects it.
+    fn session_settings(&self, session: &str) -> Result<Option<NativeTuiEvent>> {
+        let history: EventHistory = serde_json::from_str(
+            &self.get(&format!("api/session/{session}/history"), READ_TIMEOUT)?,
+        )?;
+        Ok(history.data.into_iter().rev().find_map(|event| {
+            let event = native_event(event)?;
+            match &event {
+                NativeTuiEvent::Settings { session_id, .. } if session_id == session => Some(event),
+                _ => None,
+            }
+        }))
+    }
+
+    fn initial_session_event(&self, session: &str) -> Result<NativeTuiEvent> {
+        Ok(self
+            .session_settings(session)?
+            .unwrap_or_else(|| NativeTuiEvent::Session {
+                session_id: session.to_owned(),
+                model: self.configured_model(),
+                effort: None,
+            }))
     }
 
     fn for_route(route: &boop_store::bus::Route) -> Result<(Self, String)> {
@@ -590,7 +611,8 @@ impl Door for OpencodeDoor {
             "managed-opencode-serve={base};started-session={session}"
         ));
         plan.app_server_socket = Some(base.to_string());
-        plan.observer = Some(source.observe(&spec.cwd, Some(&session))?);
+        let initial_event = source.initial_session_event(&session)?;
+        plan.observer = Some(source.observe(&spec.cwd, Some(initial_event))?);
         Ok(plan)
     }
 
@@ -685,10 +707,7 @@ impl Door for OpencodeDoor {
         route: &boop_store::bus::Route,
     ) -> Result<Option<NativeTuiEvent>> {
         let (source, session) = Self::for_route(route)?;
-        let history: EventHistory = serde_json::from_str(
-            &source.get(&format!("api/session/{session}/history"), READ_TIMEOUT)?,
-        )?;
-        Ok(history.data.into_iter().rev().find_map(native_event))
+        source.session_settings(&session)
     }
 
     fn change_native_settings(
@@ -950,6 +969,24 @@ mod tests {
             ["/config", "/event?directory=%2Ffixture%2Fproject"]
         );
         drop(observer);
+    }
+
+    #[test]
+    fn resumed_session_seeds_observer_from_exact_durable_history() {
+        let stub = Stub::start(SESSIONS, STATUSES, EVENTS);
+        assert_eq!(
+            stub.door().initial_session_event("ses_new").unwrap(),
+            NativeTuiEvent::Settings {
+                session_id: "ses_new".into(),
+                model: Some("fixture/model".into()),
+                effort: Some("high".into()),
+            }
+        );
+        assert_eq!(
+            stub.seen.recv_timeout(Duration::from_secs(1)).unwrap().0,
+            "/api/session/ses_new/history"
+        );
+        assert!(stub.seen.try_recv().is_err());
     }
 
     #[test]
