@@ -102,16 +102,18 @@ paid inference, and redistribution permissions require their own authorization.
 - [x] Pure simulation compile check for `wasm32-unknown-unknown` passed on 2026-09-08,
   including the current Parry/Rapier dependencies. Log:
   `/private/tmp/falcon-core-wasm-check.log`. This is compilation only.
-- [ ] Verify the actual Godot Web/Emscripten extension path for this lab. Avoid
+- [x] Verify the actual Godot Web/Emscripten extension path for this lab. Avoid
   bundling native recording/decoder dependencies when an offline import suffices.
-- [ ] Execute browser input, hit, SQL boundary, snapshot replay, and presentation
+- [x] Execute browser input, hit, SQL boundary, snapshot replay, and presentation
   assertions; measure artifact sizes and inspect the browser output.
-- [ ] Deploy the exact verified demo to `/game3/`; verify production behavior,
+- [x] Deploy the exact verified demo to `/game3/`; verify production behavior,
   artifact identity, and unchanged protected `/game/` artifacts.
 - [ ] Pin and inventory Falcon's jump/fair/landing behavior dependency closure;
   create the first importer coverage receipt and source-trace comparison.
 - [ ] Build the bounded model/animation-span/photo alignment and silhouette proof,
   after selecting existing tools and deciding texture/hidden-surface policy.
 
-No Godot Web build, browser runtime proof, importer port, photo pipeline, or
-production replacement has been completed at this planning checkpoint.
+Godot Web build and local Chromium runtime proof completed in `3c452b6`, with
+deployment compatibility and event-driven acceptance fixes in `f99fc15` and
+`6b6395c`. Production acceptance and recovery evidence: `96_web_results.md`.
+Importer port and photo pipeline remain pending.
