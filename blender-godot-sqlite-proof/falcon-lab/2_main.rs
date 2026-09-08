@@ -54,15 +54,7 @@ pub(crate) fn load() -> Result<Vec<HighLevelSubaction>, Error> {
     .collect()
 }
 
-#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-pub(crate) struct Tick {
-    pub action: usize,
-    pub frame: usize,
-    pub root: [f32; 3],
-    pub damage: f32,
-    pub contact: bool,
-    pub hit: Option<(u8, f32)>,
-}
+pub(crate) use falcon_simulation::Tick;
 
 fn simulate(actions: &[HighLevelSubaction], target: [f32; 3]) -> Vec<Tick> {
     let mut damage = 0.0;

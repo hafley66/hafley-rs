@@ -770,6 +770,7 @@ dependencies = [
  "brawllib_rs",
  "cgmath",
  "core-labs",
+ "falcon-simulation",
  "font8x8",
  "ggrs",
  "godot",
@@ -781,6 +782,17 @@ dependencies = [
  "serde_json",
  "ssbm_utils",
  "wgpu 29.0.4",
+]
+
+[[package]]
+name = "falcon-simulation"
+version = "0.1.0"
+dependencies = [
+ "parry3d",
+ "rapier3d",
+ "serde",
+ "serde_json",
+ "ssbm_utils",
 ]
 
 [[package]]

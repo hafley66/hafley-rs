@@ -1,4 +1,4 @@
-use brawllib_rs::high_level_fighter::HitBoxValues;
+use crate::Attack;
 use rapier3d::prelude::*;
 use serde::{Deserialize, Serialize};
 use ssbm_utils::{calc, enums::character::Attributes};
@@ -93,7 +93,7 @@ impl Default for Sandbag {
 }
 
 impl Sandbag {
-    pub fn launch(&mut self, hit: &HitBoxValues, percent_before: f32) {
+    pub fn launch(&mut self, hit: &Attack, percent_before: f32) {
         let target = Attributes::MARIO; // Only name/weight are read by this knockback helper; weight=100.
         self.knockback = calc::knockback(
             hit.damage,

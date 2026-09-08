@@ -1,0 +1,149 @@
+use std::sync::Arc;
+#[path = "0_types.rs"]
+mod types;
+pub use types::*;
+#[path = "1_sandbag.rs"]
+pub mod sandbag;
+use parry3d::{
+    math::{Pose, Vec3},
+    query,
+    shape::{Ball, Cuboid},
+};
+use serde::{Deserialize, Serialize};
+const JUMP: u8 = 1;
+const ATTACK: u8 = 2;
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct World {
+    pub frame: i32,
+    pub action: usize,
+    pub animation: usize,
+    pub jump_at: Option<i32>,
+    pub previous_input: u8,
+    pub attack_hit: bool,
+    pub damage: f32,
+    pub hit_count: usize,
+    pub last_hit: Option<i32>,
+    pub view: Tick,
+    pub bag: Option<sandbag::Sandbag>,
+}
+
+pub fn fixture_input(tick: i32) -> u8 {
+    match tick {
+        60 => JUMP,
+        78 => ATTACK,
+        _ => 0,
+    }
+}
+
+pub fn advance_world(world: &mut World, bits: u8, actions: &[Action]) {
+    if let Some(bag) = &mut world.bag {
+        bag.advance();
+    }
+    let pressed = bits & !world.previous_input;
+    if pressed & JUMP != 0 && world.view.root[1] == 0.0 {
+        world.jump_at = Some(world.frame);
+        world.action = 1;
+        world.animation = 0;
+    }
+    if pressed & ATTACK != 0 && world.jump_at.is_some() && world.view.root[1] > 0.0 {
+        world.action = 2;
+        world.animation = 0;
+        world.attack_hit = false;
+    }
+    let air = world.jump_at.map_or(0.0, |t| (world.frame - t) as f32);
+    let root = [
+        0.0,
+        (0.95 * air - 0.018 * air * air).max(0.0),
+        -12.0 + (0.9 * air).min(32.0),
+    ];
+    if world.action == 1 && air > 0.0 && root[1] == 0.0 {
+        world.action = 0;
+        world.animation = 0;
+    }
+    let frame = world.animation.min(actions[world.action].frames.len() - 1);
+    let source = &actions[world.action].frames[frame];
+    let mut view = Tick {
+        action: world.action,
+        frame,
+        root,
+        damage: world.damage,
+        contact: false,
+        hit: None,
+    };
+    for hb in &source.hit_boxes {
+        let values = hb;
+        if !values.enabled || !values.aerial {
+            continue;
+        }
+        let p = hb.position;
+        let target = world
+            .bag
+            .as_ref()
+            .map_or([0.0, 24.0, 28.0], |bag| bag.position);
+        let overlap = query::intersection_test(
+            &Pose::translation(
+                p[0],
+                p[1] + root[1] + source.y_pos,
+                p[2] + root[2] + source.x_pos,
+            ),
+            &Ball::new(hb.radius),
+            &Pose::translation(target[0], target[1], target[2]),
+            &Cuboid::new(Vec3::new(3.0, 6.0, 4.0)),
+        )
+        .unwrap();
+        view.contact |= overlap;
+        if overlap && !world.attack_hit {
+            if let Some(bag) = &mut world.bag {
+                bag.launch(values, world.damage);
+            }
+            world.damage += values.damage;
+            world.attack_hit = true;
+            world.hit_count += 1;
+            world.last_hit = Some(world.frame);
+            view.hit = Some((hb.id, values.damage));
+        }
+    }
+    view.damage = world.damage;
+    world.view = view;
+    world.previous_input = bits;
+    world.frame += 1;
+    world.animation += 1;
+    if world.action == 2 && world.animation == actions[2].frames.len() {
+        world.action = 0;
+        world.animation = 0;
+    }
+    if world.action == 0 {
+        world.animation %= actions[0].frames.len();
+    }
+}
+
+/// A durable copy of simulation state. Asset data is shared separately.
+pub struct Snapshot(World);
+pub struct Simulation {
+    actions: Arc<[Action]>,
+    world: World,
+}
+impl Simulation {
+    pub fn new(actions: Arc<[Action]>, launch: bool) -> Self {
+        assert_eq!(actions.len(), 3);
+        assert!(actions.iter().all(|a| !a.frames.is_empty()));
+        let mut world = World::default();
+        if launch {
+            world.bag = Some(sandbag::Sandbag::default());
+        }
+        Self { actions, world }
+    }
+    pub fn advance(&mut self, input: u8) -> &World {
+        advance_world(&mut self.world, input, &self.actions);
+        &self.world
+    }
+    pub fn state(&self) -> &World {
+        &self.world
+    }
+    pub fn save(&self) -> Snapshot {
+        Snapshot(self.world.clone())
+    }
+    pub fn load(&mut self, snapshot: &Snapshot) {
+        self.world = snapshot.0.clone();
+    }
+}

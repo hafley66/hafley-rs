@@ -131,7 +131,22 @@ pub(super) fn execute(trace: &[[Display; 2]], record: bool) -> Result<(), Error>
 pub(super) fn execute_with(
     trace: &[[Display; 2]],
     record: bool,
+    consume: impl FnMut(&[Row], &serde_json::Value) -> Result<(), Error>,
+) -> Result<(), Error> {
+    let mut frames = trace.iter();
+    execute_stream(
+        || Ok(frames.next().unwrap().clone()),
+        record,
+        consume,
+        "24_sql_boundary_trace.json",
+    )
+}
+
+pub(super) fn execute_stream(
+    mut next: impl FnMut() -> Result<[Display; 2], Error>,
+    record: bool,
     mut consume: impl FnMut(&[Row], &serde_json::Value) -> Result<(), Error>,
+    report_path: &str,
 ) -> Result<(), Error> {
     let mut b = Boundary::new()?;
     let reader = b.reader()?;
@@ -150,7 +165,13 @@ pub(super) fn execute_with(
     } else {
         None
     };
-    for (tick, pair) in trace.iter().enumerate() {
+    let mut on_time = std::collections::VecDeque::new();
+    for tick in 0..180 {
+        let pair = next()?;
+        on_time.push_back((tick, pair[0].presented.last().unwrap().clone()));
+        if on_time.len() > boundary::WINDOW as usize {
+            on_time.pop_front();
+        }
         let d = &pair[1];
         assert!(b.publish(&d.presented));
         let current_pointer = b.ring.read().unwrap().current().rows.as_ptr() as usize;
@@ -210,9 +231,13 @@ pub(super) fn execute_with(
             assert_eq!(corrected, Some(18.0));
         }
         if tick == 97 {
-            for (historical, historical_pair) in trace.iter().enumerate().take(98).skip(78) {
+            for historical in 78..=97 {
                 let (_, actual) = boundary::read_frame(&b.db, historical as i64)?;
-                let expected = historical_pair[0].presented.last().unwrap();
+                let expected = &on_time
+                    .iter()
+                    .find(|(tick, _)| *tick == historical)
+                    .unwrap()
+                    .1;
                 assert_eq!(actual.len(), expected.len());
                 for (a, e) in actual.iter().zip(expected) {
                     assert_eq!((a.tick, a.kind, a.entity), (e.tick, e.kind, e.entity));
@@ -349,7 +374,12 @@ pub(super) fn execute_with(
             }
         }
         report.push(serde_json::json!({"simulation_tick":tick,"published_generation":b.generation,"renderer_generation":generation,"rows":count,"window_frames":frames,"held_generation":if held.is_some(){Some(held_generation)}else{None},"held_damage":if held.is_some(){Some(0)}else{None},"fresh_tick91_damage":corrected,"restored":d.restored}));
-        consume(&rows, report.last().unwrap())?;
+        let mut status = report.last().unwrap().clone();
+        status["saved"] = serde_json::json!(d.saved);
+        status["advances"] = d.advances.into();
+        status["runtime_next_tick"] = d.world.frame.into();
+        status["input_bits"] = d.applied.into();
+        consume(&rows, &status)?;
     }
     assert_eq!(b.layout, b.ring.read().unwrap().slot_layout());
     assert!(
@@ -365,10 +395,7 @@ pub(super) fn execute_with(
         0
     );
     assert!(b.db.execute("DELETE FROM presentation", []).is_err());
-    std::fs::write(
-        "24_sql_boundary_trace.json",
-        serde_json::to_vec_pretty(&report)?,
-    )?;
+    std::fs::write(report_path, serde_json::to_vec_pretty(&report)?)?;
     if let Some(c) = capture {
         c.finish()?;
     }

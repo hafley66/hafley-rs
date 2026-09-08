@@ -6,13 +6,18 @@ var captions: Array[Label] = []
 var tick := -1
 var remaining := 0
 var video_frames := 0
+var incremental := false
 
 func _ready():
 	if not ClassDB.class_exists("FalconSql"):
 		assert(GDExtensionManager.load_extension("res://0_falcon.gdextension") == GDExtensionManager.LOAD_STATUS_OK)
 	extension = ClassDB.instantiate("FalconSql")
 	assert(extension.proof_version() == "falcon-sql-gdext-1")
-	extension.start()
+	incremental = "--incremental" in OS.get_cmdline_user_args()
+	if incremental:
+		extension.start_incremental()
+	else:
+		extension.start()
 	var instance := MeshInstance3D.new()
 	instance.mesh = mesh
 	var material := StandardMaterial3D.new()
@@ -40,6 +45,8 @@ func _ready():
 		canvas.add_child(caption)
 		captions.append(caption)
 	captions[0].text = "FALCON -> RECYCLED SQLITE -> GDEXT -> GODOT"
+	if incremental:
+		captions[0].text = "INPUT -> RUST TICK -> SQLITE -> GODOT"
 	captions[5].text = "3D LINE MESH / SQL ROWS + MESH UPLOAD VERIFIED"
 	captions[9].text = "0.5X + HOLDS / SCRIPTED TRAVEL / PM + MELEE KB + RAPIER"
 	print("GDEXT_STAGE_READY runtime=", Engine.get_version_info().string)
@@ -54,7 +61,8 @@ func _process(_delta):
 			set_process(false)
 			return
 		tick += 1
-		var frame: Dictionary = extension.next_frame()
+		var bits := 1 if tick == 60 else (2 if tick == 78 else 0)
+		var frame: Dictionary = extension.advance(bits) if incremental else extension.next_frame()
 		var state: Dictionary = JSON.parse_string(frame.status)
 		var rows: PackedFloat64Array = frame.rows
 		assert(state.simulation_tick == tick)
@@ -74,6 +82,10 @@ func _process(_delta):
 		captions[6].text = "RESTORE %d / ATOMIC CORRECTION: 20 FRAMES" % state.restored[0] if not state.restored.is_empty() else "PUBLISH COMPLETE WINDOW / SLOT POINTERS STABLE"
 		captions[7].text = "HELD SQL CURSOR: GEN %d / TICK 91 / DAMAGE 0" % state.held_generation if state.held_generation != null else ("HELD CURSOR RELEASED / SLOT REUSABLE" if tick == 101 else "HELD SQL CURSOR: NONE")
 		captions[8].text = "FRESH SQL QUERY: TICK 91 DAMAGE %.0f" % state.fresh_tick91_damage if state.fresh_tick91_damage != null else "LATEST GENERATION / BOUNDED STORAGE"
+		if incremental:
+			assert(state.runtime_next_tick == tick + 1)
+			captions[5].text = "EXECUTED NOW: %d / ADVANCES %d / INPUT SENT %d" % [state.runtime_next_tick, state.advances, bits]
+			captions[6].text = "SAVES %d LAST %s / LOAD %s / NEXT %d" % [state.saved.size(), str(state.saved.back()) if not state.saved.is_empty() else "NONE", str(state.restored), state.runtime_next_tick]
 		remaining = 60 if tick in [60, 78, 91, 97, 101, 117, 126, 179] else 2
 	remaining -= 1
 	video_frames += 1
