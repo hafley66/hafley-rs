@@ -95,7 +95,7 @@ pub(super) fn encode(
     rows
 }
 
-fn draw(rows: &[Row]) -> Vec<gpu::Vertex> {
+pub(crate) fn draw(rows: &[Row]) -> Vec<gpu::Vertex> {
     let meta = &rows.iter().find(|r| r.kind == 0).unwrap().values;
     let target = &rows.iter().find(|r| r.kind == 1).unwrap().values;
     let mut out = Vec::new();

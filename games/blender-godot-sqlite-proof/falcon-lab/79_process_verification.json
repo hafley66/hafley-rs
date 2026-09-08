@@ -1,0 +1,47 @@
+{
+  "corrected_peer_pairs_equal": 200,
+  "corrected_worlds_match_golden": 360,
+  "final_confirmed": [
+    199,
+    199
+  ],
+  "final_damage": 18,
+  "pids": [
+    22172,
+    22173
+  ],
+  "restores": [
+    {
+      "advances": 23,
+      "peer": 1,
+      "restore": [
+        78
+      ],
+      "tick": 100
+    }
+  ],
+  "speculative_different_ticks": [
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    92,
+    93,
+    94,
+    95,
+    96,
+    97,
+    98,
+    99
+  ]
+}

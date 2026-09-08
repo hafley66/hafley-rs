@@ -5,6 +5,10 @@ mod extension;
 mod fixture;
 #[path = "70_release_measure.rs"]
 mod release_measure;
+#[path = "74_process_peer.rs"]
+mod process_peer;
+#[path = "76_process_video.rs"]
+mod process_video;
 #[cfg(any(test, feature = "gdext"))]
 #[path = "45_schedule.rs"]
 mod schedule;
