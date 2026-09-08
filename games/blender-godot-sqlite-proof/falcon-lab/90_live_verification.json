@@ -12,5 +12,97 @@
       }
     ]
   },
-  "lifecycle": null
+  "lifecycle": {
+    "lifecycle": true,
+    "events": {
+      "pause": {
+        "pid": 62571,
+        "os_state": "T",
+        "before": [
+          51,
+          50
+        ],
+        "ack_count": 49,
+        "begin": 691021.914010083,
+        "after": [
+          71,
+          70
+        ],
+        "duration_ms": 801.420500036329,
+        "advanced": [
+          20,
+          20
+        ],
+        "resumed": {
+          "consumer_pid": 62571,
+          "frame_rows": 13,
+          "ipc_sql_exact": true,
+          "mesh_roundtrip_exact": true,
+          "mesh_vertices": 2182,
+          "published_tick": 70,
+          "renderer_generation": 50,
+          "row_digest": "d9ba7012d63e769b",
+          "row_roundtrip_exact": true,
+          "skipped_generations": 19,
+          "source_elapsed_us": 2871470,
+          "source_generation": 71,
+          "source_pid": 62649
+        }
+      },
+      "restart": {
+        "before": [
+          123,
+          120
+        ],
+        "old_pid": 62571,
+        "new_pid": 62704,
+        "first_ack": {
+          "consumer_pid": 62704,
+          "frame_rows": 13,
+          "ipc_sql_exact": true,
+          "mesh_roundtrip_exact": true,
+          "mesh_vertices": 2182,
+          "published_tick": 132,
+          "renderer_generation": 1,
+          "row_digest": "a159d5d3638a8269",
+          "row_roundtrip_exact": true,
+          "skipped_generations": 132,
+          "source_elapsed_us": 5412998,
+          "source_generation": 133,
+          "source_pid": 62649
+        },
+        "after": [
+          135,
+          132
+        ]
+      },
+      "cold_attach": {
+        "peer_exit_verified": true,
+        "renderer_pid": 62779
+      }
+    },
+    "renderers": [
+      {
+        "pid": 62571,
+        "acks": 100,
+        "first_tick": 0,
+        "last_tick": 120,
+        "skipped": 21
+      },
+      {
+        "pid": 62704,
+        "acks": 67,
+        "first_tick": 132,
+        "last_tick": 199,
+        "skipped": 133
+      },
+      {
+        "pid": 62779,
+        "acks": 1,
+        "first_tick": 199,
+        "last_tick": 199,
+        "skipped": 199
+      }
+    ]
+  }
 }

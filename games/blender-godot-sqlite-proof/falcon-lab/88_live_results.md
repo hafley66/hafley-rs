@@ -34,3 +34,28 @@ The control files are initial/lifecycle coordination only. The renderer has no
 input/control channel into the authoritative simulation. Snapshots contain only
 the current frame's presentation rows, not the full corrected historical window.
 Reattaching recovers the latest display, not missed animations or every event.
+
+## Hop 2: pause, restart, and cold attach
+
+The recorded lifecycle run OS-stopped Godot PID 62571 for 801.42 ms, confirmed
+process state T, and observed no new Godot acknowledgements while stopped.
+Peer progress moved from [51,50] to [71,70]. The resumed renderer read source
+tick 70 immediately, skipping 19 intermediate generations.
+
+Godot then exited normally at tick 120. Replacement PID 62704 first imported
+source tick 132/generation 133 into local SQL generation 1. Both peer counters
+advanced during the restart, from [123,120] to [135,132]. The replacement reached
+tick 199. After the relay had waited for both peers to exit successfully, a
+third Godot PID 62779 cold-attached to the persisted final snapshot. It imported
+source generation 200 into local generation 1, with a single exact acknowledgement.
+
+All 168 lifecycle-run acknowledgements matched source-row digests, local SQLite,
+and mesh uploads. All 200 corrected peer pairs and 360 golden states passed.
+`86_godot_restart.mp4` joins the actual first and replacement renderer recordings;
+`87_godot_cold_attach.mp4` shows the post-peer-exit attachment. Both were inspected.
+The join does not synthesize frames during the process pause or restart gap.
+
+The restart is graceful renderer termination, not an unhandled crash. Simulation
+process restart, remote filesystems, host failure, and shared-memory IPC remain
+untested. Transport progress is renderer-independent here; filesystem stalls
+can still delay the synchronous source adapter.
