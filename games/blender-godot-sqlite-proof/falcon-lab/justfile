@@ -49,7 +49,7 @@ test-reuse:
 # Resumable same-host mirror. Downloaded source bytes remain outside Git.
 mirror:
     mkdir -p ../fixtures/rukaidata-mirror
-    wget --compression=auto --adjust-extension --recursive --level=inf --page-requisites --no-clobber --domains=rukaidata.com --wait=0.2 --random-wait --limit-rate=4m --timeout=30 --tries=3 --directory-prefix=../fixtures/rukaidata-mirror --output-file=../fixtures/rukaidata-mirror/download.log https://rukaidata.com/
+    wget --compression=auto --adjust-extension --recursive --level=inf --page-requisites --no-clobber --domains=rukaidata.com --quota=4g --wait=0.2 --random-wait --limit-rate=4m --timeout=30 --tries=3 --directory-prefix=../fixtures/rukaidata-mirror --output-file=../fixtures/rukaidata-mirror/download.log 'https://rukaidata.com/PM3.6/Captain%20Falcon/' https://rukaidata.com/
 
 # SQL checks, tracing report, and full-state golden comparison.
 verify:
