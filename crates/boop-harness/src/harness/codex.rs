@@ -35,6 +35,10 @@ static CAPABILITIES: Capabilities = Capabilities {
 static DOOR: crate::door::codex::CodexDoor = crate::door::codex::CodexDoor::machine();
 
 impl Harness for Codex {
+    fn matches_model(&self, name: &str) -> bool {
+        !name.contains('/') && ["gpt", "codex", "o3", "o4"].iter().any(|prefix| name.starts_with(prefix))
+    }
+
     fn open_channel(
         &self,
         spec: &boop_acp::channel::ChannelSpec,

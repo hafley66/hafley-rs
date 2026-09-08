@@ -55,6 +55,8 @@ signal-hook = "0.4"
 
 [dev-dependencies]
 wait-timeout = "0.2.1"
+syn = { version = "2", features = ["full", "visit"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
 # The store's deterministic fixtures (throwaway git repo, fake multiplexer).
 boop-store = { version = "0.0.2", path = "../boop-store", features = ["testing"] }
 # Peak-bytes-allocated counter for tests/bench_grid.rs's own #[global_allocator].

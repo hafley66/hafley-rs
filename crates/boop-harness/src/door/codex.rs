@@ -158,36 +158,8 @@ impl LiveSessions for CodexDoor {
                 parent_session,
             });
         }
-        // Guardian sources carry no parent id. Codex creates the guardian
-        // immediately after its interactive thread, so recover the closest
-        // preceding root in the same cwd. Explicit thread_spawn parents above
-        // remain authoritative.
-        let roots = live
-            .iter()
-            .filter(|session| session.scope == LiveSessionScope::Root)
-            .map(|session| {
-                (
-                    session.session_id.clone(),
-                    session.cwd.clone(),
-                    session.started_ms,
-                )
-            })
-            .collect::<Vec<_>>();
-        for session in live.iter_mut().filter(|session| {
-            session.scope == LiveSessionScope::Child && session.parent_session.is_none()
-        }) {
-            session.parent_session = roots
-                .iter()
-                .filter(|(_, cwd, started)| {
-                    cwd == &session.cwd
-                        && match (started, session.started_ms) {
-                            (Some(root), Some(child)) => root <= &child,
-                            _ => false,
-                        }
-                })
-                .max_by_key(|(_, _, started)| *started)
-                .map(|(id, _, _)| id.clone());
-        }
+        // A guardian source with no explicit parent remains unparented.
+        // Cwd and creation times cannot identify its owning root.
         Ok(live)
     }
 }
@@ -513,13 +485,7 @@ fn explicit_resume(tui_args: &[String]) -> anyhow::Result<(Option<String>, &[Str
 /// Queue one message for a thread through the remote-control daemon. This is
 /// the one place boop spells the `codex queue` command.
 pub fn queue_message(socket: &Path, thread: &str, text: &str) -> Result<()> {
-    // The executable name is the one the id declares, never a literal here.
-    let program = HarnessId::Codex
-        .process_names()
-        .first()
-        .copied()
-        .context("codex declares no process name")?;
-    let output = Command::new(program)
+    let output = Command::new("codex")
         .args(["queue", "--thread", thread, "--message", text, "--remote"])
         .arg(format!("unix://{}", socket.display()))
         .output()
@@ -682,7 +648,7 @@ mod tests {
         );
         assert_eq!(
             parents.get("guardian").and_then(Option::as_deref),
-            Some("01a02a8b-live")
+            None
         );
     }
 

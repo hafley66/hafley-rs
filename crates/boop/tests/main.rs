@@ -51,6 +51,8 @@ mod sync_convoy;
 mod sync_discovery;
 #[path = "0_sqlite_contention.rs"]
 mod t0_sqlite_contention;
+#[path = "1_harness_boundaries.rs"]
+mod t1_harness_boundaries;
 #[path = "tell.rs"]
 mod tell;
 #[path = "temp_home_rail.rs"]

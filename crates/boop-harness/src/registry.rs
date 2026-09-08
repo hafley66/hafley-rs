@@ -48,7 +48,28 @@ impl Registry {
 
     /// The adapter a CLI argument names. `None` when the text names no harness.
     pub fn by_name(&self, name: &str) -> Option<&dyn Harness> {
-        HarnessId::parse(name).map(|id| self.get(id))
+        let id = HarnessId::parse(name)?;
+        self.harnesses.iter().rev().find(|harness| harness.id() == id).map(|boxed| boxed.as_ref())
+    }
+
+    /// A named adapter resolves exactly. Omission selects the first registered
+    /// adapter, matching the existing dispatch default.
+    pub fn resolve(&self, name: Option<&str>) -> anyhow::Result<&dyn Harness> {
+        let Some(name) = name else {
+            return self.harnesses.first().map(|boxed| boxed.as_ref())
+                .ok_or_else(|| anyhow::anyhow!("no harness registered"));
+        };
+        self.by_name(name).ok_or_else(|| anyhow::anyhow!("unregistered harness `{name}`; registered harnesses: {}",
+            self.harnesses.iter().map(|harness| harness.id().as_str()).collect::<Vec<_>>().join(", ")))
+    }
+
+    /// Model inference is delegated to the registered adapters. Explicit
+    /// caller/config choices are resolved before reaching this method.
+    pub fn for_model(&self, model: &str) -> Option<HarnessId> {
+        let spec: boop_store::session::ModelSpec = model.parse().ok()?;
+        let name = spec.name.trim().to_ascii_lowercase();
+        if name.is_empty() { return None; }
+        self.harnesses.iter().rev().find(|harness| harness.matches_model(&name)).map(|harness| harness.id())
     }
 
     /// Every session boop-harness can see for one harness, filtered to `cwd`
@@ -115,6 +136,31 @@ impl Registry {
 
 #[cfg(test)]
 mod tests {
+    /// RECEIPT (field, 2026-08-10). `--model gpt-5.6-luna@medium` with no
+    /// `--harness` dry-ran as opencode; the spelling names the harness now.
+    #[test]
+    fn a_model_spelling_names_its_harness() {
+        assert_eq!(
+            Registry::discover().for_model("gpt-5.6-luna@medium"),
+            Some(HarnessId::Codex)
+        );
+        assert_eq!(Registry::discover().for_model("kimi-k2"), Some(HarnessId::Kimi));
+        assert_eq!(
+            Registry::discover().for_model("claude-opus-4"),
+            Some(HarnessId::Claude)
+        );
+        assert_eq!(
+            Registry::discover().for_model("openrouter/deepseek/deepseek-v4-flash-0731"),
+            Some(HarnessId::Opencode)
+        );
+        assert_eq!(
+            Registry::discover().for_model("zai-coding-plan/glm-4.6"),
+            Some(HarnessId::Opencode)
+        );
+        assert_eq!(Registry::discover().for_model("nothing-known"), None);
+        assert_eq!(Registry::discover().for_model(""), None);
+    }
+
     use super::Registry;
     use crate::harness::{
         Capabilities, Harness, HarnessId, LanePolicy, MailPolicy, ReadChunk, SessionRef,
@@ -192,6 +238,7 @@ mod tests {
             Some(HarnessId::Kimi)
         );
         assert!(registry.by_name("nothing-known").is_none());
+        assert!(registry.by_name("codex").is_none());
     }
 
     /// RECEIPT. The built-in registry answers every variant, so `get` never

@@ -215,6 +215,10 @@ pub(crate) fn explicit_resume(tui_args: &[String]) -> Option<String> {
 }
 
 impl Door for ClaudeDoor {
+    fn inbox_hook_installed(&self, cwd: &Path, route: &str) -> bool {
+        super::claude_hooks::installed_for(cwd, route)
+    }
+
     /// Claude's TUI takes the user's arguments as written; the only thing the
     /// wrapper adds is reading the resumed session id out of them.
     fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan> {

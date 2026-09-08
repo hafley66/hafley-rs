@@ -197,6 +197,86 @@
     "72_cli-integration-suite.log": {
       "sha256": "cbf912cf11790bb5714b25144676cf49d1c07f0a20d1870a1a4c83f97e4dd709",
       "bytes": 30984
+    },
+    "75_projector-pid-before.log": {
+      "sha256": "78b3959c3adaa6c7af01a5c4c969368fc48140464cd62d208c447df669953a69",
+      "bytes": 1081
+    },
+    "76_projector-pid-after.log": {
+      "sha256": "e45c491ec66d2329f28273abf556b10bc60a559cd108b6a342a04d444e5baaff",
+      "bytes": 632
+    },
+    "78_native-cleanup-regressions.log": {
+      "sha256": "a7766c1fb27997add0aa2704c2188db8fd982d5a154111a677dbb97f579c959d",
+      "bytes": 2420
+    },
+    "79_plan-drop.log": {
+      "sha256": "e2c4fe83c0c3d4ce7ff2f6b322e6fcc90f5103450449b34ec6517c0db8ba1f22",
+      "bytes": 1190
+    },
+    "83_retire-fixture-error.log": {
+      "sha256": "35d50c4832f2ad789602ecf65ecc4b386731e29ebfe39808a80a98cbe5af225c",
+      "bytes": 13878
+    },
+    "84_telemetry-import-after.log": {
+      "sha256": "6fe8343920ffa79c19a6e369cb02f3f36403e9dd691a8311cea167fc9b1399c2",
+      "bytes": 2302
+    },
+    "85_cli-integration-isolated-after.log": {
+      "sha256": "b122e3a3eefa9665aa59c3dc9b6c048e4351d0b36848627de515f4b6b4a82972",
+      "bytes": 21564
+    },
+    "86_parent-milestone.txt": {
+      "sha256": "e357c0bb3e8b66616c524ddb1e5b3dc0f809b4f17310adadb447d9eac77a03f2",
+      "bytes": 637
+    },
+    "88_available-harnesses.json": {
+      "sha256": "6a35cb9c4e157ca5fe2f724bc1d7058c6eb620aea845d833a0d683da24ec2ceb",
+      "bytes": 730
+    },
+    "89_all-harness-literals.txt": {
+      "sha256": "43ecc61cfe038ddccd0b7c872d3474918f54d61fae379d13ca03229a13a8f51c",
+      "bytes": 12350
+    },
+    "91_harness-guard.log": {
+      "sha256": "30b7d540b545cb2df0cf2008da7830dd0e770165ff53e0bb7208d3ccd1efee98",
+      "bytes": 11608
+    },
+    "92_harness-guard-after.log": {
+      "sha256": "99c7d9327a163dcda59acfcf10db68a0095e1f7605ddca117f0c60cb6dda7e34",
+      "bytes": 2092
+    },
+    "95_proc-boundary-suite.log": {
+      "sha256": "438a2276fa61ca866cea7ead6f876c53c2b81cb381a96858733b4cb6febff0ab",
+      "bytes": 12677
+    },
+    "100_harness-boundary-suite.log": {
+      "sha256": "15d3a74050cc8ee3eeb4468280390ceb01b9afbf29686f723f4d90f608cad4b3",
+      "bytes": 14945
+    },
+    "101_acp-boundary-suite.log": {
+      "sha256": "1ace88e0224a1d8916df722eee897707343ccbf9c8c05a5aab32a6cf5a702e12",
+      "bytes": 10975
+    },
+    "102_cli-boundary-unit.log": {
+      "sha256": "803ca70b14a4ed51e3a104864750e2070161252f3c7ae11eaeacb8b22470538d",
+      "bytes": 9773
+    },
+    "103_cli-boundary-integration.log": {
+      "sha256": "1c29608485ab14bafc6717745a9ba6a71fb90067a71018d5d120268f18c32ac1",
+      "bytes": 22035
+    },
+    "103_boundary-gates.json": {
+      "sha256": "5ea76e34ff1868366bf5a34936af657b79a4a493a1386fcdb379ec37548f048d",
+      "bytes": 275
+    },
+    "106_harness-guard.log": {
+      "sha256": "3c168a02b88d2503790ae0dfb2aea575a15fa8c4b8713ce0f87a79c96f69febd",
+      "bytes": 2088
+    },
+    "106_harness-ast-inventory.json": {
+      "sha256": "c3165ee458697280787eada0e142ed7d1232cd4f209561de1c7f1dfefb89c0f3",
+      "bytes": 117515
     }
   }
 }

@@ -36,6 +36,10 @@ static CAPABILITIES: Capabilities = Capabilities {
 static DOOR: crate::door::opencode::OpencodeDoor = crate::door::opencode::OpencodeDoor::machine();
 
 impl Harness for Opencode {
+    fn matches_model(&self, name: &str) -> bool {
+        name.contains('/')
+    }
+
     fn open_channel(
         &self,
         spec: &boop_acp::channel::ChannelSpec,
@@ -978,39 +982,6 @@ pub fn opencode_db_path() -> Option<PathBuf> {
     )
 }
 
-/// The opencode command a spawn runs. Opencode has no default model; the
-/// caller resolves one into `spec.model` or the spawn refuses.
-#[allow(dead_code)] // spawn() runs supervisor_command instead; kept live by its own tests below.
-fn launch_command(spec: &SpawnSpec) -> Result<String> {
-    let model = spec
-        .model
-        .as_deref()
-        .filter(|value| !value.is_empty())
-        .context("spawn spec has no model; opencode needs one resolved by the caller")?;
-    let mut command = format!("opencode run -m {}", super::shell_quote(model));
-    if let Some(variant) = spec.variant.as_deref().filter(|value| !value.is_empty()) {
-        command.push_str(&format!(" --variant {}", super::shell_quote(variant)));
-    }
-    if let Some(session) = &spec.resume_session {
-        command.push_str(&format!(" -s {}", super::shell_quote(session)));
-    }
-    command.push_str(&format!(
-        " --auto \"$(cat {})\"",
-        shell_quote_double(&spec.prompt)
-    ));
-    Ok(spec.with_on_exit(match &spec.env_stamp {
-        Some(stamp) => format!("{stamp} {command}"),
-        None => command,
-    }))
-}
-
-/// Double-quote a value for use inside an already-double-quoted `$(cat ...)`
-/// substitution; bash nests nested `"..."` correctly inside `$(...)`.
-#[allow(dead_code)] // only called from launch_command, itself dead code (see above).
-fn shell_quote_double(value: &str) -> String {
-    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
-}
-
 // The old per-byte time sample repeated one byte 8 times (measured live:
 // "62626262626a6a6a"), so two close spawns could collide.
 fn random_hex() -> String {
@@ -1284,10 +1255,10 @@ mod tests {
     use rusqlite::trace::{TraceEvent, TraceEventCodes};
 
     use super::{
-        launch_command, messages_after, session_from, sessions_from,
+        messages_after, session_from, sessions_from,
         sync_candidates_from_connection, visit_parts_for_messages, Opencode, Part,
     };
-    use crate::harness::{sync_session, Harness, KnownSessions, SpawnSpec};
+    use crate::harness::{sync_session, Harness, KnownSessions, OneShotSpec, SpawnSpec};
     use boop_store::ident::{Store, TurnQuery, UsageRow};
     use boop_store::testing::TempRepo;
 
@@ -2128,65 +2099,22 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_model_refuses_to_build_a_command() {
-        let guard = TmuxGuard::new();
-        let mut req = spec(&guard);
-        req.model = None;
-        let error = launch_command(&req).unwrap_err();
+    fn one_shot_requires_a_model_before_starting_a_process() {
+        let error = Opencode.one_shot(&OneShotSpec { model: None, prompt: "fixture".into() }).unwrap_err();
         assert!(error.to_string().contains("no model"));
     }
 
     #[test]
-    fn launch_command_cats_the_prompt_path_under_the_resolved_model() {
+    fn preview_uses_the_canonical_supervisor_with_model_variant_resume_and_epilogue() {
         let guard = TmuxGuard::new();
         let mut req = spec(&guard);
-        req.model = Some("openrouter/deepseek/deepseek-v4-flash-0731".to_owned());
-        let command = launch_command(&req).unwrap();
-        assert!(command.contains("opencode run -m 'openrouter/deepseek/deepseek-v4-flash-0731'"));
-        assert!(command.contains("--auto \"$(cat \"/tmp/brief.md\")\""));
-    }
-
-    #[test]
-    fn variant_flag_is_emitted_when_set() {
-        let guard = TmuxGuard::new();
-        let mut req = spec(&guard);
-        req.variant = Some("low".to_owned());
-        let command = launch_command(&req).unwrap();
-        assert!(command.contains(" --variant 'low'"), "{command}");
-    }
-
-    #[test]
-    fn no_variant_means_no_flag_and_byte_identical() {
-        let guard = TmuxGuard::new();
-        let req = spec(&guard);
-        let command = launch_command(&req).unwrap();
-        assert!(!command.contains("--variant"), "{command}");
-        assert_eq!(
-            command,
-            "opencode run -m 'm' --auto \"$(cat \"/tmp/brief.md\")\""
-        );
-    }
-
-    #[test]
-    fn opencode_launch_resumes_with_session_id() {
-        let guard = TmuxGuard::new();
-        let mut req = spec(&guard);
-        req.resume_session = Some("ses_abc123".to_owned());
-        let command = launch_command(&req).unwrap();
-        assert!(command.contains("-s 'ses_abc123'"));
-    }
-
-    /// The epilogue lands after the harness command and the lane re-raises
-    /// the harness exit code.
-    #[test]
-    fn on_exit_appends_and_reraises_the_exit_code() {
-        let guard = TmuxGuard::new();
-        let mut req = spec(&guard);
-        req.on_exit =
-            Some("boop hail --to 'coord' --kind result --body \"lane done rc=$__rc\"".to_owned());
-        let command = launch_command(&req).unwrap();
-        assert!(command.contains("; __rc=$?; boop hail --to 'coord'"));
-        assert!(command.ends_with("; exit $__rc"));
+        req.model = Some("provider/model".into());
+        req.variant = Some("low".into());
+        req.resume_session = Some("ses_abc123".into());
+        req.on_exit = Some("finish-fixture".into());
+        assert_eq!(Opencode.preview_command(&req).unwrap(),
+            "nice -n 10 boop beep lane run --lane 'lane-test' --harness 'opencode' --brief '/tmp/brief.md' --mail-dir '/tmp' --model 'provider/model' --variant 'low' --resume 'ses_abc123'; __rc=$?; finish-fixture; exit $__rc"
+                .replace("--mail-dir '/tmp'", &format!("--mail-dir {}", super::super::shell_quote(&req.mail_dir.display().to_string()))));
     }
 
     #[test]

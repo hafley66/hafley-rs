@@ -12,7 +12,7 @@ use boop::registry::Registry;
 use boop::{bus, config, identity, lane, mailwait, proc, tmux};
 use tracing::{error, info, warn};
 
-use crate::cli::db::{resolve_harness, run_harnesses};
+use crate::cli::db::run_harnesses;
 use crate::cli::debug::default_preset_for_harness;
 use crate::cli::mail::{all_messages, run_list};
 use crate::cli::me::register_route;
@@ -74,7 +74,7 @@ pub(crate) struct DispatchArgs {
 }
 
 pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
-    let adapter = resolve_dispatch_harness(registry, args.harness.as_deref())?;
+    let adapter = registry.resolve(args.harness.as_deref())?;
     let harness_id = adapter.id();
     info!(
         lane = args.to,
@@ -233,47 +233,6 @@ pub(crate) fn spawn_env_stamp(
     stamp
 }
 
-/// The registered harness adapter for a dispatched `--harness`. A named
-/// harness must resolve exactly; an unnamed one takes the first registered
-/// adapter. A named harness resolving to a different harness is a capability
-/// lie, so an unregistered name is a hard error that lists the registered set.
-pub(crate) fn resolve_dispatch_harness<'a>(
-    registry: &'a Registry,
-    id: Option<&str>,
-) -> Result<&'a dyn boop::harness::Harness> {
-    let Some(id) = id else {
-        return registry
-            .all()
-            .first()
-            .map(|boxed| boxed.as_ref())
-            .ok_or_else(|| anyhow::anyhow!("no harness registered"));
-    };
-    match registry.by_name(id) {
-        Some(adapter) => Ok(adapter),
-        None => {
-            let registered = registry
-                .all()
-                .iter()
-                .map(|harness| harness.id().as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            anyhow::bail!("unregistered harness `{id}`; registered harnesses: {registered}")
-        }
-    }
-}
-
-/// The registered harness adapter for a `--harness` filter, or the first
-/// registered one when the id is absent.
-pub(crate) fn harness_by_id<'a>(
-    registry: &'a Registry,
-    id: &str,
-) -> Result<&'a dyn boop::harness::Harness> {
-    registry
-        .by_name(id)
-        .or_else(|| registry.all().first().map(|b| b.as_ref()))
-        .ok_or_else(|| anyhow::anyhow!("no harness registered"))
-}
-
 pub(crate) fn git_head(repo: &str) -> Result<Option<String>> {
     let output = std::process::Command::new("git")
         .args(["-C", repo, "rev-parse", "HEAD"])
@@ -384,7 +343,7 @@ pub(crate) fn run_lane_supervisor(
         bin = bin.unwrap_or_default(),
         "lane supervisor starting"
     );
-    let adapter = harness_by_id(registry, harness_id)?;
+    let adapter = registry.resolve(Some(harness_id))?;
     let dir = mail_dir(mail_dir_arg)?;
     let cwd = std::env::current_dir().context("read the current directory")?;
     // A respawned lane continues its pinned conversation instead of cold-
@@ -1960,6 +1919,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             all,
             mail_dir,
         } => run_lane_list(
+            registry,
             mail_dir.as_deref(),
             state.as_deref(),
             harness.as_deref().map(str::parse).transpose()?,
@@ -2124,7 +2084,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
 }
 
 pub(crate) fn run_harness_get(registry: &Registry, id: &str) -> Result<()> {
-    let adapter = resolve_harness(registry, id)?;
+    let adapter = registry.resolve(Some(id))?;
     let caps = adapter.control_capabilities();
     println!(
         "{}",
@@ -2174,6 +2134,7 @@ fn retired_lanes(
 }
 
 pub(crate) fn run_lane_list(
+    registry: &Registry,
     mail_dir_arg: Option<&Path>,
     state_filter: Option<&str>,
     harness_filter: Option<HarnessId>,
@@ -2272,19 +2233,17 @@ pub(crate) fn run_lane_list(
             ));
         }
         for (route_name, route) in &routes {
-            if route.harness != Some(HarnessId::Claude) {
-                continue;
-            }
+            let Some(harness) = route.harness else { continue; };
             let Some(cwd) = route.cwd.as_deref() else {
                 continue;
             };
-            for (name, path, locked) in claude_agent_worktrees(cwd) {
+            for (name, path, locked) in registry.get(harness).native_worktrees(cwd) {
                 let state = if locked { "live" } else { "dead" };
                 line(&format!(
                     "{} {} {} {} {} {} {} {} PARENT={}",
                     pad(state, 4),
                     pad(&name, 16),
-                    pad("native-claude", 12),
+                    pad(&format!("native-{harness}"), 12),
                     pad("-", 10),
                     pad("-", 6),
                     pad("-", 46),
@@ -2319,57 +2278,7 @@ pub(crate) fn unregistered_sessions(
         .collect()
 }
 
-/// The native Claude Code subagent worktrees linked into the repo at `cwd`.
-/// One tuple per `git worktree list --porcelain` block whose path carries
-/// `/.claude/worktrees/agent-`: `(agent-<id> name, path, locked)`.
-pub(crate) fn claude_agent_worktrees(cwd: &str) -> Vec<(String, String, bool)> {
-    let output = Command::new("git")
-        .args(["-C", cwd, "worktree", "list", "--porcelain"])
-        .output();
-    let Ok(output) = output else {
-        return Vec::new();
-    };
-    if !output.status.success() {
-        return Vec::new();
-    }
-    parse_claude_agent_worktrees(&String::from_utf8_lossy(&output.stdout))
-}
 
-fn parse_claude_agent_worktrees(porcelain: &str) -> Vec<(String, String, bool)> {
-    let mut result = Vec::new();
-    let mut current: Option<(String, bool)> = None;
-    for line in porcelain.lines() {
-        if let Some(path) = line.strip_prefix("worktree ") {
-            if let Some((path, locked)) = current.take() {
-                push_claude_agent(&mut result, path, locked);
-            }
-            current = Some((path.to_owned(), false));
-        } else if line == "locked" {
-            if let Some((_, locked)) = current.as_mut() {
-                *locked = true;
-            }
-        }
-    }
-    if let Some((path, locked)) = current {
-        push_claude_agent(&mut result, path, locked);
-    }
-    result
-}
-
-fn push_claude_agent(result: &mut Vec<(String, String, bool)>, path: String, locked: bool) {
-    const MARKER: &str = "/.claude/worktrees/agent-";
-    let Some(idx) = path.find(MARKER) else {
-        return;
-    };
-    let id = path[idx + MARKER.len()..]
-        .split('/')
-        .next()
-        .unwrap_or_default();
-    if id.is_empty() {
-        return;
-    }
-    result.push((format!("agent-{id}"), path, locked));
-}
 
 /// The parent edge that answers nobody, so a surviving orphan says so on its
 /// own row. `None` while the parent route is still addressable.
@@ -3901,7 +3810,7 @@ mod tests {
     #[test]
     fn dispatch_refuses_an_unregistered_harness() {
         let registry = Registry::discover();
-        let error = match resolve_dispatch_harness(&registry, Some("gemini-cli")) {
+        let error = match registry.resolve(Some("gemini-cli")) {
             Ok(_) => panic!("unregistered harness must be refused"),
             Err(error) => error,
         };
@@ -4050,55 +3959,6 @@ mod tests {
             vec!["free-session".to_owned()]
         );
         assert!(unregistered_sessions(&routes, &None).is_empty());
-    }
-
-    /// RECEIPT (native-visibility). A repo's linked `.claude/worktrees/agent-*`
-    /// worktrees surface as native Claude subagents: a `locked` porcelain block
-    /// reads `live`, an unlocked one reads `dead`.
-    #[test]
-    fn claude_agent_worktrees_lists_locked_and_unlocked_agents() {
-        let base = std::env::temp_dir().join(format!("boop-claude-wt-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-        let run = |args: &[&str]| {
-            let out = std::process::Command::new("git")
-                .args(args)
-                .current_dir(&base)
-                .output()
-                .unwrap();
-            assert!(
-                out.status.success(),
-                "git {args:?}: {}",
-                String::from_utf8_lossy(&out.stderr)
-            );
-        };
-        run(&["init", "-q"]);
-        run(&["config", "user.email", "t@t"]);
-        run(&["config", "user.name", "t"]);
-        std::fs::write(base.join("seed.txt"), "s").unwrap();
-        run(&["add", "-A"]);
-        run(&["commit", "-qm", "seed"]);
-        std::fs::create_dir_all(base.join(".claude/worktrees")).unwrap();
-        run(&["worktree", "add", ".claude/worktrees/agent-abc", "HEAD"]);
-        run(&["worktree", "add", ".claude/worktrees/agent-def", "HEAD"]);
-        run(&["worktree", "lock", ".claude/worktrees/agent-abc"]);
-
-        let trees = claude_agent_worktrees(base.to_str().unwrap());
-        let names = trees
-            .iter()
-            .map(|(name, _, _)| name.as_str())
-            .collect::<Vec<_>>();
-        assert!(names.contains(&"agent-abc"), "{names:?}");
-        assert!(names.contains(&"agent-def"), "{names:?}");
-        for (name, path, locked) in &trees {
-            assert!(path.contains("/.claude/worktrees/agent-"), "{path}");
-            match name.as_str() {
-                "agent-abc" => assert!(*locked, "agent-abc must be locked"),
-                "agent-def" => assert!(!*locked, "agent-def must be unlocked"),
-                other => panic!("unexpected worktree name {other}"),
-            }
-        }
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// RECEIPT (Job 3b). A `--route-only` delete drops the lane's registry row

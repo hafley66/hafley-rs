@@ -9,6 +9,8 @@ use anyhow::Result;
 use crate::harness::{NativeTuiPlan, NativeTuiSpec};
 use crate::live::{now_ms, LiveSession, LiveSessions};
 
+#[path = "door/0_claude_hooks.rs"]
+pub mod claude_hooks;
 pub mod claude;
 pub mod codex;
 pub mod kimi;
@@ -43,6 +45,9 @@ impl IdleNotice {
 
 /// The control plane of one harness.
 pub trait Door: Send + Sync {
+    /// Whether this adapter's installed hooks will drain the addressed inbox.
+    fn inbox_hook_installed(&self, _cwd: &std::path::Path, _route: &str) -> bool { false }
+
     /// Write `body` to `session`. Transport failure is `Unreachable`, not an
     /// `Err`; an `Err` means the request could not be formed at all.
     fn deliver(&self, session: &LiveSession, body: &str) -> Result<Delivered>;

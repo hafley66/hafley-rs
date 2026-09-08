@@ -9,22 +9,6 @@ use std::str::FromStr;
 
 use anyhow::{anyhow, Error, Result};
 
-use crate::session::ModelSpec;
-
-/// Bare model-name prefix -> owning harness; a `/` in the name is a provider
-/// path, which is opencode. Was `boop-proc/src/lane.rs`'s `MODEL_HARNESS`.
-const MODEL_PREFIX: [(&str, HarnessId); 9] = [
-    ("gpt", HarnessId::Codex),
-    ("codex", HarnessId::Codex),
-    ("o3", HarnessId::Codex),
-    ("o4", HarnessId::Codex),
-    ("claude", HarnessId::Claude),
-    ("opus", HarnessId::Claude),
-    ("sonnet", HarnessId::Claude),
-    ("haiku", HarnessId::Claude),
-    ("kimi", HarnessId::Kimi),
-];
-
 /// One agent harness boop can read, spawn and address. Declaration order is
 /// alphabetical by `as_str`, so the derived `Ord` is the order a registry lists.
 #[derive(
@@ -57,21 +41,6 @@ impl HarnessId {
         }
     }
 
-    /// The executable names this harness's own process runs under.
-    pub const fn process_names(self) -> &'static [&'static str] {
-        match self {
-            HarnessId::Claude => &["claude"],
-            HarnessId::Codex => &["codex"],
-            HarnessId::Kimi => &["kimi"],
-            HarnessId::Opencode => &["opencode"],
-        }
-    }
-
-    /// True when an observed process name is one of this harness's own.
-    pub fn owns_process_name(self, name: &str) -> bool {
-        self.process_names().contains(&name)
-    }
-
     /// The harness a short id names, case folded, or `None` when it names none.
     pub fn parse(value: &str) -> Option<HarnessId> {
         let value = value.trim().to_ascii_lowercase();
@@ -80,23 +49,7 @@ impl HarnessId {
             .find(|harness| harness.as_str() == value)
     }
 
-    /// The harness a model spelling names. An `@effort` suffix that names no
-    /// effort answers `None` rather than guessing a harness for it.
-    pub fn for_model(model: &str) -> Option<HarnessId> {
-        let spec: ModelSpec = model.parse().ok()?;
-        let name = spec.name.trim();
-        if name.is_empty() {
-            return None;
-        }
-        if name.contains('/') {
-            return Some(HarnessId::Opencode);
-        }
-        let name = name.to_ascii_lowercase();
-        MODEL_PREFIX
-            .into_iter()
-            .find(|(prefix, _)| name.starts_with(prefix))
-            .map(|(_, harness)| harness)
-    }
+
 }
 
 impl fmt::Display for HarnessId {
@@ -137,31 +90,6 @@ mod tests {
         }
         assert_eq!(HarnessId::parse("  Codex "), Some(HarnessId::Codex));
         assert_eq!(HarnessId::parse("gemini"), None);
-    }
-
-    /// RECEIPT (field, 2026-08-10). `--model gpt-5.6-luna@medium` with no
-    /// `--harness` dry-ran as opencode; the spelling names the harness now.
-    #[test]
-    fn a_model_spelling_names_its_harness() {
-        assert_eq!(
-            HarnessId::for_model("gpt-5.6-luna@medium"),
-            Some(HarnessId::Codex)
-        );
-        assert_eq!(HarnessId::for_model("kimi-k2"), Some(HarnessId::Kimi));
-        assert_eq!(
-            HarnessId::for_model("claude-opus-4"),
-            Some(HarnessId::Claude)
-        );
-        assert_eq!(
-            HarnessId::for_model("openrouter/deepseek/deepseek-v4-flash-0731"),
-            Some(HarnessId::Opencode)
-        );
-        assert_eq!(
-            HarnessId::for_model("zai-coding-plan/glm-4.6"),
-            Some(HarnessId::Opencode)
-        );
-        assert_eq!(HarnessId::for_model("nothing-known"), None);
-        assert_eq!(HarnessId::for_model(""), None);
     }
 
     /// RECEIPT. Serde is the registry.json spelling; a route round-trips.

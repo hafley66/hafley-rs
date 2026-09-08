@@ -33,6 +33,14 @@ static CAPABILITIES: Capabilities = Capabilities {
 static DOOR: crate::door::claude::ClaudeDoor = crate::door::claude::ClaudeDoor::machine();
 
 impl Harness for Claude {
+    fn matches_model(&self, name: &str) -> bool {
+        !name.contains('/') && ["claude", "opus", "sonnet", "haiku"].iter().any(|prefix| name.starts_with(prefix))
+    }
+
+    fn native_worktrees(&self, cwd: &str) -> Vec<(String, String, bool)> {
+        claude_agent_worktrees(cwd)
+    }
+
     fn open_channel(
         &self,
         spec: &boop_acp::channel::ChannelSpec,
@@ -528,23 +536,6 @@ pub(crate) fn read_claude(path: &std::path::Path, session_id: &str, after_seq: O
     out
 }
 
-/// The claude command line a spawn runs. Resuming an existing session wins
-/// over a fresh prompt.
-#[allow(dead_code)] // used only by tests
-fn launch_command(spec: &SpawnSpec) -> String {
-    let mut command = match &spec.resume_session {
-        Some(id) => format!("claude --resume {id}"),
-        None => format!("claude {}", super::shell_quote(&spec.prompt)),
-    };
-    if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
-        command.push_str(&format!(" --model {}", super::shell_quote(model)));
-    }
-    spec.with_on_exit(match &spec.env_stamp {
-        Some(stamp) => format!("{stamp} {command}"),
-        None => command,
-    })
-}
-
 // The old per-byte time sample repeated one byte 8 times (measured live:
 // "62626262626a6a6a"), so two close spawns could collide.
 fn random_hex() -> String {
@@ -554,6 +545,58 @@ fn random_hex() -> String {
         .unwrap_or(0);
     let mixed = (nanos as u64) ^ ((std::process::id() as u64) << 48) ^ (nanos >> 64) as u64;
     format!("{mixed:016x}")
+}
+
+/// The native Claude Code subagent worktrees linked into the repo at `cwd`.
+/// One tuple per `git worktree list --porcelain` block whose path carries
+/// `/.claude/worktrees/agent-`: `(agent-<id> name, path, locked)`.
+fn claude_agent_worktrees(cwd: &str) -> Vec<(String, String, bool)> {
+    let output = std::process::Command::new("git")
+        .args(["-C", cwd, "worktree", "list", "--porcelain"])
+        .output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    parse_claude_agent_worktrees(&String::from_utf8_lossy(&output.stdout))
+}
+
+fn parse_claude_agent_worktrees(porcelain: &str) -> Vec<(String, String, bool)> {
+    let mut result = Vec::new();
+    let mut current: Option<(String, bool)> = None;
+    for line in porcelain.lines() {
+        if let Some(path) = line.strip_prefix("worktree ") {
+            if let Some((path, locked)) = current.take() {
+                push_claude_agent(&mut result, path, locked);
+            }
+            current = Some((path.to_owned(), false));
+        } else if line == "locked" {
+            if let Some((_, locked)) = current.as_mut() {
+                *locked = true;
+            }
+        }
+    }
+    if let Some((path, locked)) = current {
+        push_claude_agent(&mut result, path, locked);
+    }
+    result
+}
+
+fn push_claude_agent(result: &mut Vec<(String, String, bool)>, path: String, locked: bool) {
+    const MARKER: &str = "/.claude/worktrees/agent-";
+    let Some(idx) = path.find(MARKER) else {
+        return;
+    };
+    let id = path[idx + MARKER.len()..]
+        .split('/')
+        .next()
+        .unwrap_or_default();
+    if id.is_empty() {
+        return;
+    }
+    result.push((format!("agent-{id}"), path, locked));
 }
 
 fn claude_projects_dir() -> anyhow::Result<PathBuf> {
@@ -779,6 +822,55 @@ pub use boop_store::session::parse_iso_ms;
 
 #[cfg(test)]
 mod tests {
+    /// RECEIPT (native-visibility). A repo's linked `.claude/worktrees/agent-*`
+    /// worktrees surface as native Claude subagents: a `locked` porcelain block
+    /// reads `live`, an unlocked one reads `dead`.
+    #[test]
+    fn claude_agent_worktrees_lists_locked_and_unlocked_agents() {
+        let base = std::env::temp_dir().join(format!("boop-claude-wt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let run = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&base)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        run(&["init", "-q"]);
+        run(&["config", "user.email", "t@t"]);
+        run(&["config", "user.name", "t"]);
+        std::fs::write(base.join("seed.txt"), "s").unwrap();
+        run(&["add", "-A"]);
+        run(&["commit", "-qm", "seed"]);
+        std::fs::create_dir_all(base.join(".claude/worktrees")).unwrap();
+        run(&["worktree", "add", ".claude/worktrees/agent-abc", "HEAD"]);
+        run(&["worktree", "add", ".claude/worktrees/agent-def", "HEAD"]);
+        run(&["worktree", "lock", ".claude/worktrees/agent-abc"]);
+
+        let trees = Claude.native_worktrees(base.to_str().unwrap());
+        let names = trees
+            .iter()
+            .map(|(name, _, _)| name.as_str())
+            .collect::<Vec<_>>();
+        assert!(names.contains(&"agent-abc"), "{names:?}");
+        assert!(names.contains(&"agent-def"), "{names:?}");
+        for (name, path, locked) in &trees {
+            assert!(path.contains("/.claude/worktrees/agent-"), "{path}");
+            match name.as_str() {
+                "agent-abc" => assert!(*locked, "agent-abc must be locked"),
+                "agent-def" => assert!(!*locked, "agent-def must be unlocked"),
+                other => panic!("unexpected worktree name {other}"),
+            }
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
     use crate::harness::HarnessId;
     use std::fs::OpenOptions;
     use std::io::Write;
@@ -788,7 +880,7 @@ mod tests {
     use crate::harness::SessionRef;
     use boop_store::testing::TempRepo;
 
-    use super::{launch_command, parse_iso_ms, Claude};
+    use super::{parse_iso_ms, Claude};
 
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("boop_claude_{}_{}", std::process::id(), name))
@@ -1013,7 +1105,7 @@ mod tests {
     fn claude_launch_resumes_with_session_id() {
         let mut req = spec(&TmuxGuard::new());
         req.resume_session = Some("abc123".to_owned());
-        assert!(launch_command(&req).contains("--resume abc123"));
+        assert!(Claude.preview_command(&req).unwrap().contains("--resume 'abc123'"));
     }
 
     #[test]

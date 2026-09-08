@@ -1,0 +1,4394 @@
+[
+  {
+    "file": "crates/boop/labs/0_tmux_process_env/probe.rs",
+    "line": 152,
+    "symbol": "main",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/labs/0_tmux_process_env/probe.rs",
+    "line": 158,
+    "symbol": "main",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/src/cli/acpx.rs",
+    "line": 56,
+    "symbol": "run_foreground",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::parse"
+  },
+  {
+    "file": "crates/boop/src/cli/control.rs",
+    "line": 603,
+    "symbol": "tests::session",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "boop::harness::HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 128,
+    "symbol": "AdapterPhase",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "boop::harness::HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 143,
+    "symbol": "AdapterPhase::new",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "boop::harness::HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 1786,
+    "symbol": "tests::FakeHarness::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 1787,
+    "symbol": "tests::FakeHarness::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 1820,
+    "symbol": "tests::WatchingHarness::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 1821,
+    "symbol": "tests::WatchingHarness::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 1908,
+    "symbol": "tests::CodexFixtureHarness::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 1909,
+    "symbol": "tests::CodexFixtureHarness::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 1932,
+    "symbol": "tests::CodexFixtureHarness::read_from",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "boop::harness::codex::Codex"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 1941,
+    "symbol": "tests::CodexFixtureHarness::ingest",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "boop::harness::codex::Codex"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 1949,
+    "symbol": "tests::CodexFixtureHarness::observe_native_children",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "boop::harness::codex::Codex"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 1955,
+    "symbol": "tests::native_child_session",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 1972,
+    "symbol": "tests::native_parent_routes",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 2021,
+    "symbol": "tests::guardian_reviews_do_not_mail_the_parent_but_delegated_workers_still_do",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 2037,
+    "symbol": "tests::guardian_reviews_do_not_mail_the_parent_but_delegated_workers_still_do",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "boop::harness::codex::Codex"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 2266,
+    "symbol": "tests::resident_child_poller_delivers_an_appended_completion_without_manual_sync",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 2273,
+    "symbol": "tests::resident_child_poller_delivers_an_appended_completion_without_manual_sync",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 2355,
+    "symbol": "tests::resident_native_poller_projects_appended_parent_assistant_turns",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 2361,
+    "symbol": "tests::resident_native_poller_projects_appended_parent_assistant_turns",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 2451,
+    "symbol": "tests::precreated_codex_parent_delivers_an_appended_child_completion",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 2460,
+    "symbol": "tests::precreated_codex_parent_delivers_an_appended_child_completion",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop/src/cli/db.rs",
+    "line": 2644,
+    "symbol": "tests::session_with_cwd",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop/src/cli/debug.rs",
+    "line": 40,
+    "symbol": "run_lane_debug",
+    "role": "macro-enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/debug.rs",
+    "line": 208,
+    "symbol": "default_preset_for_harness",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/debug.rs",
+    "line": 364,
+    "symbol": "tests::the_default_preset_reaches_only_its_own_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/debug.rs",
+    "line": 364,
+    "symbol": "tests::the_default_preset_reaches_only_its_own_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop/src/cli/debug.rs",
+    "line": 368,
+    "symbol": "tests::the_default_preset_reaches_only_its_own_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/debug.rs",
+    "line": 368,
+    "symbol": "tests::the_default_preset_reaches_only_its_own_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 269,
+    "symbol": "run_resolve",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::as_str"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 1020,
+    "symbol": "run_lane",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "boop::harness::HarnessId::as_str"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 1456,
+    "symbol": "run_agent",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "boop_store::harness_id::HarnessId::parse"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 2140,
+    "symbol": "run_lane_list",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 2189,
+    "symbol": "run_lane_list",
+    "role": "macro-enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 2214,
+    "symbol": "run_lane_list",
+    "role": "macro-enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 3427,
+    "symbol": "tests::a_fork_brief_carries_the_ask_the_quote_and_the_quoted_turns",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 3819,
+    "symbol": "tests::dispatch_refuses_an_unregistered_harness",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 3820,
+    "symbol": "tests::dispatch_refuses_an_unregistered_harness",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 3974,
+    "symbol": "tests::route_only_delete_drops_the_registry_row_without_tmux",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 4012,
+    "symbol": "tests::tmux_route",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 4158,
+    "symbol": "tests::dead_reason_names_no_recorded_session_when_tmux_is_absent",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 4197,
+    "symbol": "tests::registered_route",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop/src/cli/job.rs",
+    "line": 4694,
+    "symbol": "tests::pstree_carries_the_goal",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop/src/cli/mail.rs",
+    "line": 37,
+    "symbol": "run_list",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::as_str"
+  },
+  {
+    "file": "crates/boop/src/cli/me.rs",
+    "line": 47,
+    "symbol": "register_route",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/me.rs",
+    "line": 300,
+    "symbol": "tests::OnePane::live_sessions",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/me.rs",
+    "line": 300,
+    "symbol": "tests::OnePane::live_sessions",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop/src/cli/me.rs",
+    "line": 316,
+    "symbol": "tests::LiveClaude::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/me.rs",
+    "line": 317,
+    "symbol": "tests::LiveClaude::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop/src/cli/me.rs",
+    "line": 358,
+    "symbol": "tests::adopt_reads_the_session_from_the_live_registry_and_explicit_id_wins",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/src/cli/me.rs",
+    "line": 381,
+    "symbol": "tests::adopt_reads_the_session_from_the_live_registry_and_explicit_id_wins",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/src/cli/mod.rs",
+    "line": 493,
+    "symbol": "testkit::route_with",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop/src/cli/mod.rs",
+    "line": 524,
+    "symbol": "tests::route_goal_round_trips",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop/src/cli/paste.rs",
+    "line": 133,
+    "symbol": "run_paste",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/src/cli/paste.rs",
+    "line": 136,
+    "symbol": "run_paste",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop/src/debug.rs",
+    "line": 538,
+    "symbol": "tests::sync_report_exposes_causes_repairs_and_database_growth",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2153,
+    "symbol": "tests::lane_create_and_lane_run_both_take_a_bin_override",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2309,
+    "symbol": "tests::foreground_acp_coordinator_parses_without_a_subcommand",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2310,
+    "symbol": "tests::foreground_acp_coordinator_parses_without_a_subcommand",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2326,
+    "symbol": "tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2326,
+    "symbol": "tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2326,
+    "symbol": "tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2326,
+    "symbol": "tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2336,
+    "symbol": "tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2336,
+    "symbol": "tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2336,
+    "symbol": "tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2336,
+    "symbol": "tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2336,
+    "symbol": "tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2336,
+    "symbol": "tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2336,
+    "symbol": "tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2336,
+    "symbol": "tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop/src/main.rs",
+    "line": 2336,
+    "symbol": "tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop/tests/1_harness_boundaries.rs",
+    "line": 60,
+    "symbol": "Inventory::macro_markers",
+    "role": "dispatch:matches-macro",
+    "test": true,
+    "spelling": "literal . value () . as_str () , \"claude\" | \"codex\" | \"kimi\" | \"opencode\""
+  },
+  {
+    "file": "crates/boop/tests/1_harness_boundaries.rs",
+    "line": 62,
+    "symbol": "Inventory::macro_markers",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/tests/1_harness_boundaries.rs",
+    "line": 62,
+    "symbol": "Inventory::macro_markers",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/1_harness_boundaries.rs",
+    "line": 62,
+    "symbol": "Inventory::macro_markers",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop/tests/1_harness_boundaries.rs",
+    "line": 62,
+    "symbol": "Inventory::macro_markers",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop/tests/1_harness_boundaries.rs",
+    "line": 231,
+    "symbol": "Inventory::visit_lit_str",
+    "role": "dispatch:matches-macro",
+    "test": true,
+    "spelling": "item . value () . as_str () , \"claude\" | \"codex\" | \"kimi\" | \"opencode\""
+  },
+  {
+    "file": "crates/boop/tests/1_harness_boundaries.rs",
+    "line": 233,
+    "symbol": "Inventory::visit_lit_str",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/tests/1_harness_boundaries.rs",
+    "line": 233,
+    "symbol": "Inventory::visit_lit_str",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/1_harness_boundaries.rs",
+    "line": 233,
+    "symbol": "Inventory::visit_lit_str",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop/tests/1_harness_boundaries.rs",
+    "line": 233,
+    "symbol": "Inventory::visit_lit_str",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop/tests/boop_start_warm.rs",
+    "line": 120,
+    "symbol": "spawn_spec",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "boop::harness::HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop/tests/boop_start_warm.rs",
+    "line": 302,
+    "symbol": "DryRunFixture::run",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/coordinator_ping.rs",
+    "line": 78,
+    "symbol": "write_coordinator_route",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/tests/coordinator_ping.rs",
+    "line": 157,
+    "symbol": "hail_to_a_coordinator_with_no_live_session_is_held_for_its_turn_boundary",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 66,
+    "symbol": "OneSession::live_sessions",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 66,
+    "symbol": "OneSession::live_sessions",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 88,
+    "symbol": "Echo",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 92,
+    "symbol": "Echo::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 133,
+    "symbol": "echo",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 148,
+    "symbol": "route",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 224,
+    "symbol": "a_door_harness_takes_the_body_and_leaves_one_delivery_row",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 224,
+    "symbol": "a_door_harness_takes_the_body_and_leaves_one_delivery_row",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 225,
+    "symbol": "a_door_harness_takes_the_body_and_leaves_one_delivery_row",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 247,
+    "symbol": "a_door_harness_takes_the_body_and_leaves_one_delivery_row",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 248,
+    "symbol": "a_door_harness_takes_the_body_and_leaves_one_delivery_row",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 268,
+    "symbol": "a_keystrokes_harness_falls_to_the_mailbox_rung",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 268,
+    "symbol": "a_keystrokes_harness_falls_to_the_mailbox_rung",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 269,
+    "symbol": "a_keystrokes_harness_falls_to_the_mailbox_rung",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 287,
+    "symbol": "a_keystrokes_harness_falls_to_the_mailbox_rung",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 291,
+    "symbol": "a_keystrokes_harness_falls_to_the_mailbox_rung",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 304,
+    "symbol": "a_door_falls_back_to_the_last_agent_live_row",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 307,
+    "symbol": "a_door_falls_back_to_the_last_agent_live_row",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 340,
+    "symbol": "a_hail_with_no_route_is_held_in_the_mailbox",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 340,
+    "symbol": "a_hail_with_no_route_is_held_in_the_mailbox",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 360,
+    "symbol": "a_route_with_no_harness_falls_to_the_mailbox_rung",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 360,
+    "symbol": "a_route_with_no_harness_falls_to_the_mailbox_rung",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 361,
+    "symbol": "a_route_with_no_harness_falls_to_the_mailbox_rung",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 398,
+    "symbol": "a_lane_route_with_no_harness_still_lands_at_its_supervisor",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 398,
+    "symbol": "a_lane_route_with_no_harness_still_lands_at_its_supervisor",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 399,
+    "symbol": "a_lane_route_with_no_harness_still_lands_at_its_supervisor",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 430,
+    "symbol": "a_route_with_a_live_pane_takes_the_paste_rung",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 430,
+    "symbol": "a_route_with_a_live_pane_takes_the_paste_rung",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 431,
+    "symbol": "a_route_with_a_live_pane_takes_the_paste_rung",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 461,
+    "symbol": "every_landing_records_a_transition_past_appended",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 461,
+    "symbol": "every_landing_records_a_transition_past_appended",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 462,
+    "symbol": "every_landing_records_a_transition_past_appended",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 467,
+    "symbol": "every_landing_records_a_transition_past_appended",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 496,
+    "symbol": "a_door_harness_with_no_live_session_is_held_and_never_pasted",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 499,
+    "symbol": "a_door_harness_with_no_live_session_is_held_and_never_pasted",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 549,
+    "symbol": "a_supervisor_row_never_takes_the_door_of_a_live_route",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 549,
+    "symbol": "a_supervisor_row_never_takes_the_door_of_a_live_route",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 550,
+    "symbol": "a_supervisor_row_never_takes_the_door_of_a_live_route",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 593,
+    "symbol": "a_lane_end_row_takes_the_door_of_a_live_route",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 593,
+    "symbol": "a_lane_end_row_takes_the_door_of_a_live_route",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 594,
+    "symbol": "a_lane_end_row_takes_the_door_of_a_live_route",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 614,
+    "symbol": "a_reply_to_a_beep_still_takes_the_door_of_the_same_route",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 614,
+    "symbol": "a_reply_to_a_beep_still_takes_the_door_of_the_same_route",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop/tests/deliver_door.rs",
+    "line": 615,
+    "symbol": "a_reply_to_a_beep_still_takes_the_door_of_the_same_route",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/tests/host_chat.rs",
+    "line": 31,
+    "symbol": "EchoHarness::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop/tests/host_chat.rs",
+    "line": 32,
+    "symbol": "EchoHarness::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/tests/host_chat.rs",
+    "line": 115,
+    "symbol": "two_requests_resume_one_resident_conversation",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop/tests/inbox_hooks.rs",
+    "line": 113,
+    "symbol": "Coordinator::adopt",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/tests/inbox_hooks.rs",
+    "line": 387,
+    "symbol": "a_lane_patch_installs_no_hooks",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop/tests/lane_carcass.rs",
+    "line": 100,
+    "symbol": "Doa::create",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/lane_carcass.rs",
+    "line": 360,
+    "symbol": "a_create_with_an_expect_flag_still_writes_it",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/lane_debug.rs",
+    "line": 90,
+    "symbol": "a_registered_lane_fills_the_route_mail_and_worktree_sections",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop/tests/lane_retire_revive.rs",
+    "line": 216,
+    "symbol": "a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/lane_wait_exit.rs",
+    "line": 159,
+    "symbol": "CreateFixture::command",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/lane_wait_exit.rs",
+    "line": 187,
+    "symbol": "CreateFixture::codex_caller_command",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/lane_wait_exit.rs",
+    "line": 407,
+    "symbol": "a_fresh_codex_acp_session_receives_the_lane_brief",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/preset_dry_run.rs",
+    "line": 214,
+    "symbol": "the_banned_preset_is_refused_by_name",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/registry_kinds.rs",
+    "line": 87,
+    "symbol": "patch_accepts_a_pane_and_preserves_the_registered_route",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/registry_kinds.rs",
+    "line": 122,
+    "symbol": "coordinator_registration_binds_an_explicit_thread_and_retains_it_on_update",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop/tests/registry_kinds.rs",
+    "line": 150,
+    "symbol": "coordinator_registration_binds_an_explicit_thread_and_retains_it_on_update",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-acp/src/channel/1_acpx.rs",
+    "line": 106,
+    "symbol": "recognizes_agent",
+    "role": "dispatch:matches-macro",
+    "test": false,
+    "spelling": "name , \"codex\" | \"claude\" | \"gemini\" | \"opencode\" | \"kimi\""
+  },
+  {
+    "file": "crates/boop-acp/src/channel/1_acpx.rs",
+    "line": 106,
+    "symbol": "recognizes_agent",
+    "role": "macro-name-literal",
+    "test": false,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-acp/src/channel/1_acpx.rs",
+    "line": 106,
+    "symbol": "recognizes_agent",
+    "role": "macro-name-literal",
+    "test": false,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-acp/src/channel/1_acpx.rs",
+    "line": 106,
+    "symbol": "recognizes_agent",
+    "role": "macro-name-literal",
+    "test": false,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-acp/src/channel/1_acpx.rs",
+    "line": 106,
+    "symbol": "recognizes_agent",
+    "role": "macro-name-literal",
+    "test": false,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop-acp/src/channel/1_acpx.rs",
+    "line": 116,
+    "symbol": "route_agent",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::as_str"
+  },
+  {
+    "file": "crates/boop-acp/src/channel/1_acpx.rs",
+    "line": 139,
+    "symbol": "tests::route",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-acp/src/channel/1_acpx.rs",
+    "line": 169,
+    "symbol": "tests::coordinator_mail_uses_the_persistent_queue",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-acp/src/channel/1_acpx.rs",
+    "line": 207,
+    "symbol": "tests::foreground_prompt_waits_for_the_same_session",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-acp/src/channel/acp.rs",
+    "line": 63,
+    "symbol": "KIMI_ADAPTER",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop-acp/src/channel/acp.rs",
+    "line": 64,
+    "symbol": "OPENCODE_ADAPTER",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-acp/src/channel/acp.rs",
+    "line": 1020,
+    "symbol": "tests::every_roster_row_spawns_something_in_acp_mode",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop-acp/src/channel/claude.rs",
+    "line": 33,
+    "symbol": "ClaudeChannel::open",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-acp/src/channel/claude.rs",
+    "line": 282,
+    "symbol": "tests::fake_claude",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-harness/src/door/claude.rs",
+    "line": 158,
+    "symbol": "RegistryFile::into_live",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/door/claude.rs",
+    "line": 409,
+    "symbol": "tests::a_registry_file_becomes_a_live_session",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/door/claude.rs",
+    "line": 409,
+    "symbol": "tests::a_registry_file_becomes_a_live_session",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/door/claude.rs",
+    "line": 599,
+    "symbol": "tui_launch_tests::tui_launch_carries_the_resumed_session_into_the_plan",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-harness/src/door/claude.rs",
+    "line": 615,
+    "symbol": "tui_launch_tests::a_bare_launch_still_leaves_the_session_to_opened_session",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-harness/src/door/codex.rs",
+    "line": 80,
+    "symbol": "CodexDoor::live_session_for_route",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/door/codex.rs",
+    "line": 139,
+    "symbol": "CodexDoor::live_sessions",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/door/codex.rs",
+    "line": 488,
+    "symbol": "queue_message",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-harness/src/door/codex.rs",
+    "line": 590,
+    "symbol": "tests::the_thread_table_lists_live_threads_only",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/door/codex.rs",
+    "line": 590,
+    "symbol": "tests::the_thread_table_lists_live_threads_only",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/door/codex.rs",
+    "line": 807,
+    "symbol": "tests::a_session_without_a_socket_is_unreachable",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/door/codex.rs",
+    "line": 808,
+    "symbol": "tests::a_session_without_a_socket_is_unreachable",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/door/kimi.rs",
+    "line": 44,
+    "symbol": "tests::kimi_reports_no_door",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/door/opencode.rs",
+    "line": 298,
+    "symbol": "OpencodeDoor::live_sessions",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/door/opencode.rs",
+    "line": 562,
+    "symbol": "tests::the_session_list_becomes_live_sessions",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/door/opencode.rs",
+    "line": 562,
+    "symbol": "tests::the_session_list_becomes_live_sessions",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/door.rs",
+    "line": 105,
+    "symbol": "tests::probe",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "crate::harness::HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/door.rs",
+    "line": 125,
+    "symbol": "tests::the_default_door_reports_itself_unreachable",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "crate::harness::HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 35,
+    "symbol": "Claude",
+    "role": "variant-reference",
+    "test": false,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 37,
+    "symbol": "Claude::matches_model",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 62,
+    "symbol": "Claude::id",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 63,
+    "symbol": "Claude::id",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 71,
+    "symbol": "Claude::tui_composer",
+    "role": "variant-reference",
+    "test": false,
+    "spelling": "crate::harness::TuiComposer::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 149,
+    "symbol": "Claude::spawn",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 204,
+    "symbol": "Claude::describe",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 236,
+    "symbol": "Claude::session_by_id",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 524,
+    "symbol": "read_claude",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 637,
+    "symbol": "sessions_in_with_known",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 654,
+    "symbol": "sessions_in_with_known",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 856,
+    "symbol": "tests::claude_agent_worktrees_lists_locked_and_unlocked_agents",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 903,
+    "symbol": "tests::session_for",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 981,
+    "symbol": "tests::skips_an_invalid_json_line_but_keeps_the_rest",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 998,
+    "symbol": "tests::extracts_file_paths_and_urls_from_tool_use",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 1043,
+    "symbol": "tests::spec",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 1067,
+    "symbol": "tests::claude_capabilities_are_measured",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 1084,
+    "symbol": "tests::claude_spawn_returns_handle_and_stop_tears_down",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 1108,
+    "symbol": "tests::claude_launch_resumes_with_session_id",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/claude.rs",
+    "line": 1134,
+    "symbol": "tests::claude_fixture_projects_through_the_graph_query",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "super::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 37,
+    "symbol": "Codex",
+    "role": "variant-reference",
+    "test": false,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 39,
+    "symbol": "Codex::matches_model",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 52,
+    "symbol": "Codex::id",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 53,
+    "symbol": "Codex::id",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 61,
+    "symbol": "Codex::tui_composer",
+    "role": "variant-reference",
+    "test": false,
+    "spelling": "crate::harness::TuiComposer::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 102,
+    "symbol": "Codex::spawn",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 272,
+    "symbol": "Codex::describe",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 303,
+    "symbol": "Codex::session_by_id",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 486,
+    "symbol": "read_codex",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 688,
+    "symbol": "sessions_in_with_known",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 708,
+    "symbol": "sessions_in_with_known",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1217,
+    "symbol": "project_line",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1345,
+    "symbol": "tests::session_for",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1370,
+    "symbol": "tests::project_one_line",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1384,
+    "symbol": "tests::codex_capabilities_are_measured",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1394,
+    "symbol": "tests::spawn_spec",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1458,
+    "symbol": "tests::codex_spawn_returns_handle_and_stop_tears_down",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1488,
+    "symbol": "tests::reads_a_message_and_a_token_count_line",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1565,
+    "symbol": "tests::native_child_observer_projects_the_codex_child_fixture",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1602,
+    "symbol": "tests::same_turn_token_counts_sum_into_one_usage_row",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1635,
+    "symbol": "tests::skips_an_invalid_json_line_but_keeps_the_rest",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1658,
+    "symbol": "tests::a_partial_trailing_line_is_not_consumed",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1672,
+    "symbol": "tests::extracts_patch_apply_paths",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1715,
+    "symbol": "tests::known_transcript_uses_persisted_metadata_without_parsing_its_first_record",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1744,
+    "symbol": "tests::codex_fixture_projects_through_the_graph_query",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "super::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1762,
+    "symbol": "tests::turn_context_cwd_projects_two_distinct_turn_cwds",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1937,
+    "symbol": "tests::an_unprojected_kind_warns_once_per_process",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1938,
+    "symbol": "tests::an_unprojected_kind_warns_once_per_process",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1939,
+    "symbol": "tests::an_unprojected_kind_warns_once_per_process",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/codex.rs",
+    "line": 1981,
+    "symbol": "tests::codex_fixture_tool_and_assistant_turns_keep_their_content",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 39,
+    "symbol": "Kimi",
+    "role": "variant-reference",
+    "test": false,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 41,
+    "symbol": "Kimi::matches_model",
+    "role": "dispatch:string-method",
+    "test": false,
+    "spelling": "starts_with"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 41,
+    "symbol": "Kimi::matches_model",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 54,
+    "symbol": "Kimi::id",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 55,
+    "symbol": "Kimi::id",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 63,
+    "symbol": "Kimi::tui_composer",
+    "role": "variant-reference",
+    "test": false,
+    "spelling": "crate::harness::TuiComposer::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 104,
+    "symbol": "Kimi::spawn",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 184,
+    "symbol": "Kimi::describe",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 217,
+    "symbol": "Kimi::session_by_id",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 427,
+    "symbol": "read_kimi",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 530,
+    "symbol": "sessions_in",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 894,
+    "symbol": "tests::session_for",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 910,
+    "symbol": "tests::kimi_spawns_and_resumes_like_every_other_harness",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 929,
+    "symbol": "tests::reads_a_user_message_and_a_tool_call",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 954,
+    "symbol": "tests::skips_an_invalid_json_line_but_keeps_the_rest",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 980,
+    "symbol": "tests::same_turn_usage_records_sum_into_one_usage_row",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 1015,
+    "symbol": "tests::a_partial_trailing_line_is_not_consumed",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 1044,
+    "symbol": "tests::kimi_fixture_projects_through_the_graph_query",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "super::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 1057,
+    "symbol": "tests::project_one_line",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/kimi.rs",
+    "line": 1199,
+    "symbol": "tests::the_probe_fixture_keeps_every_tool_and_assistant_body",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 38,
+    "symbol": "Opencode",
+    "role": "variant-reference",
+    "test": false,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 53,
+    "symbol": "Opencode::id",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 54,
+    "symbol": "Opencode::id",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 62,
+    "symbol": "Opencode::tui_composer",
+    "role": "variant-reference",
+    "test": false,
+    "spelling": "crate::harness::TuiComposer::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 116,
+    "symbol": "Opencode::read_from",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 162,
+    "symbol": "Opencode::one_shot",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 206,
+    "symbol": "Opencode::spawn",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 356,
+    "symbol": "Opencode::describe",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 480,
+    "symbol": "read_opencode",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 533,
+    "symbol": "sessions_from",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 586,
+    "symbol": "sync_candidates_from_connection",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 602,
+    "symbol": "sync_candidates_from_connection",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 657,
+    "symbol": "session_from",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 778,
+    "symbol": "write_part",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 980,
+    "symbol": "opencode_db_path",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1287,
+    "symbol": "tests::opencode_capabilities_match_the_binary",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1354,
+    "symbol": "tests::opencode_fixture_acquisition_and_parent_project_through_graph",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1373,
+    "symbol": "tests::exact_sync_candidate_refreshes_the_session_rowid_cursor",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1375,
+    "symbol": "tests::exact_sync_candidate_refreshes_the_session_rowid_cursor",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1406,
+    "symbol": "tests::steady_candidate_discovery_skips_message_scan_and_batches_projection_upgrades",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1418,
+    "symbol": "tests::steady_candidate_discovery_skips_message_scan_and_batches_projection_upgrades",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1429,
+    "symbol": "tests::steady_candidate_discovery_skips_message_scan_and_batches_projection_upgrades",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1435,
+    "symbol": "tests::steady_candidate_discovery_skips_message_scan_and_batches_projection_upgrades",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1495,
+    "symbol": "tests::opencode_projection_preserves_assistant_and_complete_tool_bodies",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1575,
+    "symbol": "tests::every_content_bearing_part_kind_projects_a_body",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1627,
+    "symbol": "tests::no_projected_turn_from_the_fixture_has_an_empty_body",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1681,
+    "symbol": "tests::streamed_assistant_waits_for_completion_and_legacy_empty_turn_repairs",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1697,
+    "symbol": "tests::streamed_assistant_waits_for_completion_and_legacy_empty_turn_repairs",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1758,
+    "symbol": "tests::streamed_assistant_waits_for_completion_and_legacy_empty_turn_repairs",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1761,
+    "symbol": "tests::streamed_assistant_waits_for_completion_and_legacy_empty_turn_repairs",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1771,
+    "symbol": "tests::streamed_assistant_waits_for_completion_and_legacy_empty_turn_repairs",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1839,
+    "symbol": "tests::a_model_switch_survives_a_partless_errored_assistant_message",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1882,
+    "symbol": "tests::a_model_switch_survives_a_partless_errored_assistant_message",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 1912,
+    "symbol": "tests::a_model_switch_survives_a_partless_errored_assistant_message",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 2079,
+    "symbol": "tests::spec",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 2103,
+    "symbol": "tests::one_shot_requires_a_model_before_starting_a_process",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 2115,
+    "symbol": "tests::preview_uses_the_canonical_supervisor_with_model_variant_resume_and_epilogue",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness/opencode.rs",
+    "line": 2130,
+    "symbol": "tests::opencode_spawn_returns_handle_and_stop_tears_down",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness.rs",
+    "line": 96,
+    "symbol": "TuiComposer::input_region",
+    "role": "dispatch:match",
+    "test": false,
+    "spelling": "match"
+  },
+  {
+    "file": "crates/boop-harness/src/harness.rs",
+    "line": 97,
+    "symbol": "TuiComposer::input_region",
+    "role": "variant-reference",
+    "test": false,
+    "spelling": "TuiComposer::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness.rs",
+    "line": 110,
+    "symbol": "TuiComposer::input_region",
+    "role": "variant-reference",
+    "test": false,
+    "spelling": "TuiComposer::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness.rs",
+    "line": 122,
+    "symbol": "TuiComposer::input_region",
+    "role": "variant-reference",
+    "test": false,
+    "spelling": "TuiComposer::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness.rs",
+    "line": 131,
+    "symbol": "TuiComposer::input_region",
+    "role": "variant-reference",
+    "test": false,
+    "spelling": "TuiComposer::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/harness.rs",
+    "line": 340,
+    "symbol": "Harness::id",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/harness.rs",
+    "line": 703,
+    "symbol": "supervisor_command_tests::spec",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness.rs",
+    "line": 783,
+    "symbol": "tui_composer_tests::codex_finds_a_dynamic_multiline_composer_above_its_footer",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/harness.rs",
+    "line": 799,
+    "symbol": "tui_composer_tests::claude_finds_the_prompt_between_the_last_border_pair",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/harness.rs",
+    "line": 807,
+    "symbol": "tui_composer_tests::kimi_and_opencode_report_their_bottom_bordered_composers",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/harness.rs",
+    "line": 818,
+    "symbol": "tui_composer_tests::kimi_and_opencode_report_their_bottom_bordered_composers",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/identity.rs",
+    "line": 253,
+    "symbol": "tests::the_child_stamp_never_carries_the_spawners_session_as_its_own",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/identity.rs",
+    "line": 265,
+    "symbol": "tests::a_stamp_with_no_parent_clears_an_inherited_parent",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-harness/src/live.rs",
+    "line": 50,
+    "symbol": "LiveSession",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/live.rs",
+    "line": 207,
+    "symbol": "tests::session",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 19,
+    "symbol": "Registry::discover",
+    "role": "macro-enum-reference",
+    "test": false,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 20,
+    "symbol": "Registry::discover",
+    "role": "macro-enum-reference",
+    "test": false,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 21,
+    "symbol": "Registry::discover",
+    "role": "macro-enum-reference",
+    "test": false,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 22,
+    "symbol": "Registry::discover",
+    "role": "macro-enum-reference",
+    "test": false,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 40,
+    "symbol": "Registry::get",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 51,
+    "symbol": "Registry::by_name",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::parse"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 68,
+    "symbol": "Registry::for_model",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 77,
+    "symbol": "Registry::sessions_in_cwd",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 90,
+    "symbol": "Registry::describe_all",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 106,
+    "symbol": "Registry::session_ids_for_cwd",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 125,
+    "symbol": "Registry::messages_by_id",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 145,
+    "symbol": "tests::a_model_spelling_names_its_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 145,
+    "symbol": "tests::a_model_spelling_names_its_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 147,
+    "symbol": "tests::a_model_spelling_names_its_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 147,
+    "symbol": "tests::a_model_spelling_names_its_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 150,
+    "symbol": "tests::a_model_spelling_names_its_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 150,
+    "symbol": "tests::a_model_spelling_names_its_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 154,
+    "symbol": "tests::a_model_spelling_names_its_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 154,
+    "symbol": "tests::a_model_spelling_names_its_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 158,
+    "symbol": "tests::a_model_spelling_names_its_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 158,
+    "symbol": "tests::a_model_spelling_names_its_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 188,
+    "symbol": "tests::Echo::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 189,
+    "symbol": "tests::Echo::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 212,
+    "symbol": "tests::spawn_refusals",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 229,
+    "symbol": "tests::a_swapped_in_impl_drives_the_shared_rails_under_its_variant",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 230,
+    "symbol": "tests::a_swapped_in_impl_drives_the_shared_rails_under_its_variant",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 230,
+    "symbol": "tests::a_swapped_in_impl_drives_the_shared_rails_under_its_variant",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 233,
+    "symbol": "tests::a_swapped_in_impl_drives_the_shared_rails_under_its_variant",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 233,
+    "symbol": "tests::a_swapped_in_impl_drives_the_shared_rails_under_its_variant",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 237,
+    "symbol": "tests::a_swapped_in_impl_drives_the_shared_rails_under_its_variant",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 238,
+    "symbol": "tests::a_swapped_in_impl_drives_the_shared_rails_under_its_variant",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 238,
+    "symbol": "tests::a_swapped_in_impl_drives_the_shared_rails_under_its_variant",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 241,
+    "symbol": "tests::a_swapped_in_impl_drives_the_shared_rails_under_its_variant",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 249,
+    "symbol": "tests::every_variant_resolves_in_the_built_in_registry",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::ALL"
+  },
+  {
+    "file": "crates/boop-harness/src/registry.rs",
+    "line": 252,
+    "symbol": "tests::every_variant_resolves_in_the_built_in_registry",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript.rs",
+    "line": 33,
+    "symbol": "SessionMeta",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript.rs",
+    "line": 50,
+    "symbol": "Message",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 33,
+    "symbol": "session_ref",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 56,
+    "symbol": "live_session",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 208,
+    "symbol": "four_harnesses_lower_into_one_session_shape",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 212,
+    "symbol": "four_harnesses_lower_into_one_session_shape",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 213,
+    "symbol": "four_harnesses_lower_into_one_session_shape",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 215,
+    "symbol": "four_harnesses_lower_into_one_session_shape",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 306,
+    "symbol": "opencode_tokens_take_max_not_latest",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 307,
+    "symbol": "opencode_tokens_take_max_not_latest",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 327,
+    "symbol": "an_archived_opencode_session_is_not_a_row",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 328,
+    "symbol": "an_archived_opencode_session_is_not_a_row",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 328,
+    "symbol": "an_archived_opencode_session_is_not_a_row",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 351,
+    "symbol": "kimi_wire_usage_sums_inputs",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 352,
+    "symbol": "kimi_wire_usage_sums_inputs",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 364,
+    "symbol": "a_resume_id_is_the_stem_for_claude_and_the_session_id_elsewhere",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 367,
+    "symbol": "a_resume_id_is_the_stem_for_claude_and_the_session_id_elsewhere",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 369,
+    "symbol": "a_resume_id_is_the_stem_for_claude_and_the_session_id_elsewhere",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 371,
+    "symbol": "a_resume_id_is_the_stem_for_claude_and_the_session_id_elsewhere",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 631,
+    "symbol": "wire_shapes_pin_the_instant_key_set",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/transcript_tests.rs",
+    "line": 661,
+    "symbol": "wire_shapes_pin_the_instant_key_set",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/src/worktree.rs",
+    "line": 889,
+    "symbol": "tests::spec",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-harness/tests/bench_grid.rs",
+    "line": 58,
+    "symbol": "session_ref",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-mux/src/lib.rs",
+    "line": 950,
+    "symbol": "tests::parses_pane_identity_and_current_location",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-mux/src/lib.rs",
+    "line": 963,
+    "symbol": "tests::detailed_session_retains_each_pane",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-proc/src/concatmap.rs",
+    "line": 870,
+    "symbol": "tests::row",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-proc/src/concatmap.rs",
+    "line": 1103,
+    "symbol": "tests::session_ref",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-proc/src/concatmap.rs",
+    "line": 1137,
+    "symbol": "tests::FakeHarness::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/concatmap.rs",
+    "line": 1138,
+    "symbol": "tests::FakeHarness::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-proc/src/config.rs",
+    "line": 223,
+    "symbol": "tests::parses_named_provider_model_presets",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-proc/src/config.rs",
+    "line": 391,
+    "symbol": "tests::a_preset_carries_its_harness_and_effort_as_fields",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop-proc/src/config.rs",
+    "line": 395,
+    "symbol": "tests::a_preset_carries_its_harness_and_effort_as_fields",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 175,
+    "symbol": "Landing::record",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 575,
+    "symbol": "live_session",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 591,
+    "symbol": "projected",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 886,
+    "symbol": "tests::FakeClaudeLive::live_sessions",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 886,
+    "symbol": "tests::FakeClaudeLive::live_sessions",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 911,
+    "symbol": "tests::FakeClaude::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 912,
+    "symbol": "tests::FakeClaude::id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 916,
+    "symbol": "tests::FakeClaude::capabilities",
+    "role": "variant-reference",
+    "test": true,
+    "spelling": "boop_harness::harness::claude::Claude"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 971,
+    "symbol": "tests::root_session",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 1010,
+    "symbol": "tests::unbound_route",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 1424,
+    "symbol": "tests::a_row_a_door_already_queued_is_never_pushed_again",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 1503,
+    "symbol": "tests::the_gate_counts_a_pre_fix_door_queue_row",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 1556,
+    "symbol": "tests::a_claude_coordinator_takes_its_row_at_the_door_with_no_hooks_installed",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-proc/src/deliver.rs",
+    "line": 1577,
+    "symbol": "tests::a_claude_coordinator_takes_its_row_at_the_door_with_no_hooks_installed",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 23,
+    "symbol": "DEFAULT_SPAWN_HARNESS",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 23,
+    "symbol": "DEFAULT_SPAWN_HARNESS",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 28,
+    "symbol": "PLAN_FAMILY_TO_HARNESS",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 29,
+    "symbol": "PLAN_FAMILY_TO_HARNESS",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 29,
+    "symbol": "PLAN_FAMILY_TO_HARNESS",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 30,
+    "symbol": "PLAN_FAMILY_TO_HARNESS",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 31,
+    "symbol": "PLAN_FAMILY_TO_HARNESS",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 32,
+    "symbol": "PLAN_FAMILY_TO_HARNESS",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 32,
+    "symbol": "PLAN_FAMILY_TO_HARNESS",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 33,
+    "symbol": "PLAN_FAMILY_TO_HARNESS",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 34,
+    "symbol": "PLAN_FAMILY_TO_HARNESS",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 35,
+    "symbol": "PLAN_FAMILY_TO_HARNESS",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 36,
+    "symbol": "PLAN_FAMILY_TO_HARNESS",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 275,
+    "symbol": "harness_for_model",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 287,
+    "symbol": "harness_for_model",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::parse"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 293,
+    "symbol": "harness_for_preset",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 295,
+    "symbol": "harness_for_preset",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 302,
+    "symbol": "preset_spawn_check",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 306,
+    "symbol": "preset_spawn_check",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::as_str"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 346,
+    "symbol": "harness_for_spawn",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 350,
+    "symbol": "harness_for_spawn",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 884,
+    "symbol": "tests::route_of_kind",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1075,
+    "symbol": "tests::a_gpt_model_names_the_codex_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1075,
+    "symbol": "tests::a_gpt_model_names_the_codex_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1079,
+    "symbol": "tests::a_gpt_model_names_the_codex_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1079,
+    "symbol": "tests::a_gpt_model_names_the_codex_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1081,
+    "symbol": "tests::a_gpt_model_names_the_codex_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1081,
+    "symbol": "tests::a_gpt_model_names_the_codex_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1084,
+    "symbol": "tests::a_gpt_model_names_the_codex_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1084,
+    "symbol": "tests::a_gpt_model_names_the_codex_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1088,
+    "symbol": "tests::a_gpt_model_names_the_codex_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1088,
+    "symbol": "tests::a_gpt_model_names_the_codex_harness",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1102,
+    "symbol": "tests::plan_family_models_are_banned_from_opencode",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1103,
+    "symbol": "tests::plan_family_models_are_banned_from_opencode",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1110,
+    "symbol": "tests::plan_family_models_are_banned_from_opencode",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1112,
+    "symbol": "tests::plan_family_models_are_banned_from_opencode",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1121,
+    "symbol": "tests::plan_family_models_are_banned_from_opencode",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1121,
+    "symbol": "tests::plan_family_models_are_banned_from_opencode",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1125,
+    "symbol": "tests::plan_family_models_are_banned_from_opencode",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1125,
+    "symbol": "tests::plan_family_models_are_banned_from_opencode",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1135,
+    "symbol": "tests::an_explicit_harness_wins_over_the_model_spelling",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1136,
+    "symbol": "tests::an_explicit_harness_wins_over_the_model_spelling",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1136,
+    "symbol": "tests::an_explicit_harness_wins_over_the_model_spelling",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Kimi"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1140,
+    "symbol": "tests::an_explicit_harness_wins_over_the_model_spelling",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1140,
+    "symbol": "tests::an_explicit_harness_wins_over_the_model_spelling",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1143,
+    "symbol": "tests::an_explicit_harness_wins_over_the_model_spelling",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1144,
+    "symbol": "tests::an_explicit_harness_wins_over_the_model_spelling",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-proc/src/lane.rs",
+    "line": 1144,
+    "symbol": "tests::an_explicit_harness_wins_over_the_model_spelling",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 640,
+    "symbol": "tests::graph_projects_sessions_edges_and_shells_from_setwise_relations",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 671,
+    "symbol": "tests::current_graph_keeps_discovered_native_sessions_with_idle_status",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 705,
+    "symbol": "tests::scoped_activity_uses_the_latest_turn_or_usage_timestamp",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 757,
+    "symbol": "tests::scoped_graph_activity_plan_avoids_whole_corpus_aggregates",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 796,
+    "symbol": "tests::unmatched_harness_routes_project_as_shell_nodes",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 830,
+    "symbol": "tests::unmatched_harness_routes_project_as_shell_nodes",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 861,
+    "symbol": "tests::public_graph_projects_a_live_harness_coordinator_without_a_transcript",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 902,
+    "symbol": "tests::public_graph_projects_a_live_harness_coordinator_without_a_transcript",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 905,
+    "symbol": "tests::public_graph_projects_a_live_harness_coordinator_without_a_transcript",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 935,
+    "symbol": "tests::unresolved_live_lane_appears_as_shell_then_merges_into_sessions",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 974,
+    "symbol": "tests::unresolved_live_lane_appears_as_shell_then_merges_into_sessions",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1015,
+    "symbol": "tests::focused_runtime_route_seeds_its_native_session_component",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1035,
+    "symbol": "tests::focused_runtime_route_seeds_its_native_session_component",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1118,
+    "symbol": "tests::qualified_identity_preserves_harness_for_distinct_native_rows",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1119,
+    "symbol": "tests::qualified_identity_preserves_harness_for_distinct_native_rows",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1120,
+    "symbol": "tests::qualified_identity_preserves_harness_for_distinct_native_rows",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1121,
+    "symbol": "tests::qualified_identity_preserves_harness_for_distinct_native_rows",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1161,
+    "symbol": "tests::qualified_identity_preserves_harness_for_distinct_native_rows",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1161,
+    "symbol": "tests::qualified_identity_preserves_harness_for_distinct_native_rows",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1165,
+    "symbol": "tests::qualified_identity_preserves_harness_for_distinct_native_rows",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1165,
+    "symbol": "tests::qualified_identity_preserves_harness_for_distinct_native_rows",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1177,
+    "symbol": "tests::graph_json_contains_trace_event_fixture_and_applies_cwd_and_history_filters",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1371,
+    "symbol": "tests::tmux_session_window_and_pane_evidence_select_the_same_shell",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1371,
+    "symbol": "tests::tmux_session_window_and_pane_evidence_select_the_same_shell",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1375,
+    "symbol": "tests::tmux_session_window_and_pane_evidence_select_the_same_shell",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1375,
+    "symbol": "tests::tmux_session_window_and_pane_evidence_select_the_same_shell",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1408,
+    "symbol": "tests::focused_tmux_shell_serializes_its_rooted_family_without_cwd_inference",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1409,
+    "symbol": "tests::focused_tmux_shell_serializes_its_rooted_family_without_cwd_inference",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1497,
+    "symbol": "tests::focused_tmux_shell_serializes_its_rooted_family_without_cwd_inference",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::parse"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1498,
+    "symbol": "tests::focused_tmux_shell_serializes_its_rooted_family_without_cwd_inference",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-store/src/_0_session_graph.rs",
+    "line": 1561,
+    "symbol": "tests::focused_tmux_shell_serializes_its_rooted_family_without_cwd_inference",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/activity.rs",
+    "line": 373,
+    "symbol": "tests::projects_claude_codex_opencode_kimi_resume_replacement_and_shell_lanes",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/activity.rs",
+    "line": 374,
+    "symbol": "tests::projects_claude_codex_opencode_kimi_resume_replacement_and_shell_lanes",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/activity.rs",
+    "line": 375,
+    "symbol": "tests::projects_claude_codex_opencode_kimi_resume_replacement_and_shell_lanes",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/activity.rs",
+    "line": 376,
+    "symbol": "tests::projects_claude_codex_opencode_kimi_resume_replacement_and_shell_lanes",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/activity.rs",
+    "line": 377,
+    "symbol": "tests::projects_claude_codex_opencode_kimi_resume_replacement_and_shell_lanes",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-store/src/activity.rs",
+    "line": 378,
+    "symbol": "tests::projects_claude_codex_opencode_kimi_resume_replacement_and_shell_lanes",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop-store/src/activity.rs",
+    "line": 501,
+    "symbol": "tests::scoped_trace_counts_seek_selected_sessions_only",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/activity.rs",
+    "line": 502,
+    "symbol": "tests::scoped_trace_counts_seek_selected_sessions_only",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/bus.rs",
+    "line": 41,
+    "symbol": "Route",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/bus.rs",
+    "line": 284,
+    "symbol": "route_from_value",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::parse"
+  },
+  {
+    "file": "crates/boop-store/src/bus.rs",
+    "line": 934,
+    "symbol": "routes_in",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::parse"
+  },
+  {
+    "file": "crates/boop-store/src/bus.rs",
+    "line": 1442,
+    "symbol": "tests::a_newer_registered_route_outranks_the_file",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-store/src/bus.rs",
+    "line": 1487,
+    "symbol": "tests::a_registry_without_the_parent_field_still_loads",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/bus.rs",
+    "line": 1487,
+    "symbol": "tests::a_registry_without_the_parent_field_still_loads",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-store/src/bus.rs",
+    "line": 1518,
+    "symbol": "tests::a_registry_without_the_goal_field_still_loads",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/bus.rs",
+    "line": 1518,
+    "symbol": "tests::a_registry_without_the_goal_field_still_loads",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Opencode"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 25,
+    "symbol": "HarnessId",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 27,
+    "symbol": "HarnessId",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 28,
+    "symbol": "HarnessId",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 29,
+    "symbol": "HarnessId",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 30,
+    "symbol": "HarnessId",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 31,
+    "symbol": "HarnessId",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 36,
+    "symbol": "HarnessId::as_str",
+    "role": "dispatch:match",
+    "test": false,
+    "spelling": "match"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 37,
+    "symbol": "HarnessId::as_str",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 37,
+    "symbol": "HarnessId::as_str",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 38,
+    "symbol": "HarnessId::as_str",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 38,
+    "symbol": "HarnessId::as_str",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 39,
+    "symbol": "HarnessId::as_str",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Kimi"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 39,
+    "symbol": "HarnessId::as_str",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "kimi"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 40,
+    "symbol": "HarnessId::as_str",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 40,
+    "symbol": "HarnessId::as_str",
+    "role": "name-literal",
+    "test": false,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 45,
+    "symbol": "HarnessId::parse",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 47,
+    "symbol": "HarnessId::parse",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::ALL"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 55,
+    "symbol": "HarnessId",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 61,
+    "symbol": "HarnessId",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 64,
+    "symbol": "HarnessId::from_str",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 65,
+    "symbol": "HarnessId::from_str",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId::parse"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 68,
+    "symbol": "HarnessId::from_str",
+    "role": "macro-enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 70,
+    "symbol": "HarnessId::from_str",
+    "role": "macro-enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 86,
+    "symbol": "tests::every_variant_round_trips_through_its_short_id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::ALL"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 87,
+    "symbol": "tests::every_variant_round_trips_through_its_short_id",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 89,
+    "symbol": "tests::every_variant_round_trips_through_its_short_id",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 91,
+    "symbol": "tests::every_variant_round_trips_through_its_short_id",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 91,
+    "symbol": "tests::every_variant_round_trips_through_its_short_id",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 91,
+    "symbol": "tests::every_variant_round_trips_through_its_short_id",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Codex"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 92,
+    "symbol": "tests::every_variant_round_trips_through_its_short_id",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 98,
+    "symbol": "tests::serde_is_the_lowercase_short_id",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 101,
+    "symbol": "tests::serde_is_the_lowercase_short_id",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 102,
+    "symbol": "tests::serde_is_the_lowercase_short_id",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/harness_id.rs",
+    "line": 102,
+    "symbol": "tests::serde_is_the_lowercase_short_id",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "Claude"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 2780,
+    "symbol": "Store::record_delivery",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "crate::harness_id::HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 2807,
+    "symbol": "Store::append_delivery_transition",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "crate::harness_id::HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 4709,
+    "symbol": "tests::v27_claude_fixture_projects_two_distinct_turn_cwds",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 4756,
+    "symbol": "tests::v27_view_falls_back_to_session_cwd_for_null_turn",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 5248,
+    "symbol": "tests::a_lane_spawn_keeps_the_goal_the_path_and_the_brief_bytes",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 5356,
+    "symbol": "tests::session_for",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 5377,
+    "symbol": "tests::discovery_projects_empty_unchanged_session_and_parent_edge",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 5409,
+    "symbol": "tests::known_sessions_restore_candidate_metadata_and_cursor",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 5499,
+    "symbol": "tests::known_sessions_stays_under_budget",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 6390,
+    "symbol": "tests::a_v13_store_gains_the_door_columns_and_the_delivery_ledger",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "crate::harness_id::HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 6420,
+    "symbol": "tests::a_second_delivery_of_one_message_appends_a_transition",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "crate::harness_id::HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 6442,
+    "symbol": "tests::a_second_delivery_of_one_message_appends_a_transition",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 6452,
+    "symbol": "tests::pane_occupant_nickname_is_mutable_without_changing_session_identity",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 6710,
+    "symbol": "tests::query_cursors_expose_transcript_identity",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/ident.rs",
+    "line": 6734,
+    "symbol": "tests::a_foreign_dict_harness_value_reads_back_without_error",
+    "role": "macro-enum-reference",
+    "test": true,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/query.rs",
+    "line": 1068,
+    "symbol": "tests::typed_rows_populate_for_a_real_session",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-store/src/query.rs",
+    "line": 1089,
+    "symbol": "tests::typed_rows_populate_for_a_real_session",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/query.rs",
+    "line": 1134,
+    "symbol": "tests::live_pid_status_row_carries_nonzero_rss",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-store/src/runtime.rs",
+    "line": 54,
+    "symbol": "ResolvedRoute",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/runtime.rs",
+    "line": 1108,
+    "symbol": "tests::route",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Opencode"
+  },
+  {
+    "file": "crates/boop-store/src/runtime.rs",
+    "line": 1154,
+    "symbol": "tests::add_session",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-store/src/session.rs",
+    "line": 31,
+    "symbol": "SessionRef",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/session.rs",
+    "line": 198,
+    "symbol": "SpawnSpec",
+    "role": "enum-reference",
+    "test": false,
+    "spelling": "HarnessId"
+  },
+  {
+    "file": "crates/boop-store/src/session.rs",
+    "line": 385,
+    "symbol": "tests::known",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/session.rs",
+    "line": 415,
+    "symbol": "tests::copied_session_id_retains_each_path_and_session_lookup_uses_newest",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/summary.rs",
+    "line": 247,
+    "symbol": "tests::schema_fixture_joins_activity_runtime_mailbox_and_completion",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-store/src/summary.rs",
+    "line": 274,
+    "symbol": "tests::schema_fixture_joins_activity_runtime_mailbox_and_completion",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Codex"
+  },
+  {
+    "file": "crates/boop-store/src/usage.rs",
+    "line": 504,
+    "symbol": "tests::typed_usage_rows_carry_bucket_and_calls",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-store/src/usage.rs",
+    "line": 533,
+    "symbol": "tests::typed_usage_rows_carry_bucket_and_calls",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/usage.rs",
+    "line": 537,
+    "symbol": "tests::typed_usage_rows_carry_bucket_and_calls",
+    "role": "macro-name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-store/src/usage.rs",
+    "line": 679,
+    "symbol": "cte_equality::store_with",
+    "role": "enum-reference",
+    "test": true,
+    "spelling": "HarnessId::Claude"
+  },
+  {
+    "file": "crates/boop-turnvis/tests/golden.rs",
+    "line": 185,
+    "symbol": "FIXTURES",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "claude"
+  },
+  {
+    "file": "crates/boop-turnvis/tests/golden.rs",
+    "line": 188,
+    "symbol": "FIXTURES",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "codex"
+  },
+  {
+    "file": "crates/boop-turnvis/tests/golden.rs",
+    "line": 190,
+    "symbol": "FIXTURES",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "opencode"
+  },
+  {
+    "file": "crates/boop-turnvis/tests/golden.rs",
+    "line": 191,
+    "symbol": "FIXTURES",
+    "role": "name-literal",
+    "test": true,
+    "spelling": "kimi"
+  }
+]

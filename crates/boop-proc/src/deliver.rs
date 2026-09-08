@@ -469,6 +469,7 @@ fn land(
     }
     let Some(id) = route.harness else {
         return Ok(no_door_route(
+            registry,
             route,
             to,
             paster,
@@ -478,6 +479,7 @@ fn land(
     let harness = registry.get(id);
     if harness.capabilities().mail == MailPolicy::Keystrokes {
         return Ok(no_door_route(
+            registry,
             route,
             to,
             paster,
@@ -486,6 +488,7 @@ fn land(
     }
     let Some(live) = live_session(harness, store, route, id)? else {
         return Ok(door_route_below_the_door(
+            registry,
             route,
             to,
             format!("no live {id} session for {to}"),
@@ -500,7 +503,7 @@ fn land(
     Ok(match harness.door().deliver(&live, &message.body)? {
         Delivered::Injected => Landing::new(Rung::Door, "door"),
         Delivered::QueuedForTurnBoundary => Landing::new(Rung::DoorQueue, "door queue"),
-        Delivered::Unreachable(why) => door_route_below_the_door(route, to, why),
+        Delivered::Unreachable(why) => door_route_below_the_door(registry, route, to, why),
     })
 }
 
@@ -509,9 +512,9 @@ fn land(
 /// is held for the recipient's next turn boundary. A harness with a door is
 /// never pasted into: a codex or claude TUI pane takes its mail through the
 /// door or not at all, and typing at it puts keys in front of a human.
-fn door_route_below_the_door(route: &Route, to: &str, why: impl Into<String>) -> Landing {
+fn door_route_below_the_door(registry: &Registry, route: &Route, to: &str, why: impl Into<String>) -> Landing {
     let why = why.into();
-    match hook_inbox(route, to) {
+    match hook_inbox(registry, route, to) {
         true => Landing::new(Rung::HookInbox, why),
         false => Landing::new(Rung::TurnBoundary, why),
     }
@@ -520,13 +523,14 @@ fn door_route_below_the_door(route: &Route, to: &str, why: impl Into<String>) ->
 /// A route with no door to try at all: no harness, or a harness whose only
 /// transport was ever the pane. Rungs 3 through 5 in order.
 fn no_door_route(
+    registry: &Registry,
     route: &Route,
     to: &str,
     paster: &dyn PanePaster,
     why: impl Into<String>,
 ) -> Landing {
     let why = why.into();
-    if hook_inbox(route, to) {
+    if hook_inbox(registry, route, to) {
         return Landing::new(Rung::HookInbox, why);
     }
     match paste_into_pane(route, to, paster) {
@@ -536,11 +540,13 @@ fn no_door_route(
 }
 
 /// Whether the recipient's project carries an installed inbox hook.
-fn hook_inbox(route: &Route, to: &str) -> bool {
-    route
-        .cwd
-        .as_deref()
-        .is_some_and(|cwd| crate::inbox::installed_for(std::path::Path::new(cwd), to))
+pub fn hook_inbox(registry: &Registry, route: &Route, to: &str) -> bool {
+    let Some(cwd) = route.cwd.as_deref() else { return false; };
+    let cwd = std::path::Path::new(cwd);
+    match route.harness {
+        Some(id) => registry.get(id).door().inbox_hook_installed(cwd, to),
+        None => registry.all().iter().any(|adapter| adapter.door().inbox_hook_installed(cwd, to)),
+    }
 }
 
 /// Rung 4. The route's own pane takes the text as a paste when nothing else

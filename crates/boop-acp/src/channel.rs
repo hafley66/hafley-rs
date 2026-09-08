@@ -7,8 +7,8 @@ use anyhow::Result;
 
 pub mod acp;
 pub mod claude;
-pub mod codex;
-pub mod jsonrpc;
+#[path = "channel/1_acpx.rs"]
+pub mod acpx;
 pub mod terminal;
 
 /// Where a delivered message landed relative to the turn that was running.

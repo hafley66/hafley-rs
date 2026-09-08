@@ -271,12 +271,12 @@ pub fn pane_epilogue(lane: &str, mail_dir: &Path) -> String {
 pub use boop_store::session::{Effort, ModelSpec};
 
 /// The harness a model spelling names, or `None` when it names none. Config's
-/// `model-harness` wins for a bare name; otherwise `HarnessId::for_model` does.
+/// `model-harness` wins for a bare name; otherwise `boop_harness::Registry::discover().for_model` does.
 pub fn harness_for_model(model: &str) -> Result<Option<HarnessId>> {
     let spec: ModelSpec = model.parse()?;
     let name = spec.name.trim();
     if name.is_empty() || name.contains('/') {
-        return Ok(HarnessId::for_model(model));
+        return Ok(boop_harness::Registry::discover().for_model(model));
     }
     let lowered = name.to_ascii_lowercase();
     let config = config::loaded()?;
@@ -285,7 +285,7 @@ pub fn harness_for_model(model: &str) -> Result<Option<HarnessId>> {
         .iter()
         .find(|(prefix, _)| lowered.starts_with(prefix.as_str()))
         .and_then(|(_, harness)| HarnessId::parse(harness));
-    Ok(configured.or_else(|| HarnessId::for_model(model)))
+    Ok(configured.or_else(|| boop_harness::Registry::discover().for_model(model)))
 }
 
 /// The harness a preset runs on: its own `harness` field, else the harness its

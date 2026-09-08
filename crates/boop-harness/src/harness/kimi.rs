@@ -37,6 +37,10 @@ static CAPABILITIES: Capabilities = Capabilities {
 static DOOR: crate::door::kimi::KimiDoor = crate::door::kimi::KimiDoor;
 
 impl Harness for Kimi {
+    fn matches_model(&self, name: &str) -> bool {
+        !name.contains('/') && name.starts_with("kimi")
+    }
+
     fn open_channel(
         &self,
         spec: &boop_acp::channel::ChannelSpec,

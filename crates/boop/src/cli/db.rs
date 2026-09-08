@@ -1164,15 +1164,6 @@ pub(crate) fn session_matches_route(
         || (route.cwd.is_some() && route.cwd.as_deref() == session.cwd.as_deref())
 }
 
-pub(crate) fn resolve_harness<'a>(
-    registry: &'a Registry,
-    id: &str,
-) -> Result<&'a dyn boop::harness::Harness> {
-    registry
-        .by_name(id)
-        .with_context(|| format!("no harness registered with id `{id}`"))
-}
-
 // ---------------------------------------------------------------------------
 // db
 // ---------------------------------------------------------------------------

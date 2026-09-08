@@ -329,6 +329,13 @@ pub fn sync_session_with_pid(
 /// One agent harness that writes transcripts to this machine. Harnesses are
 /// shareable so a caller can bound a synchronous pass on its own thread.
 pub trait Harness: Send + Sync {
+    /// Whether this adapter accepts a normalized model spelling when no
+    /// explicit harness or configured model mapping was supplied.
+    fn matches_model(&self, _name: &str) -> bool { false }
+
+    /// Native subagent worktrees reported by this harness: name, path, locked.
+    fn native_worktrees(&self, _cwd: &str) -> Vec<(String, String, bool)> { Vec::new() }
+
     /// Stable short id used in CLI output and as the `--harness` filter value.
     fn id(&self) -> HarnessId;
 

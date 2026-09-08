@@ -1,151 +1,102 @@
 # Task state and join instructions
 
-Work in progress. Baseline commit: `66cbe8e`. No merge, push or global install.
-Dedicated target directory: `/private/tmp/boop-lifecycle-consolidation-target`.
+Work in progress, 2026-09-08. Base `66cbe8e`; branch `refactor/boop-lifecycle-consolidation`.
+No merge, push or global install. Worktree: `/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/boop-lifecycle-consolidation`.
+Dedicated CARGO_TARGET_DIR: `/private/tmp/boop-lifecycle-consolidation-target`.
 Raw receipts: `/private/tmp/boop-lifecycle-consolidation-proof-01a08191`.
 
-The active audit lane remains `refactor-boop-lifecycle-consolidation`, pane
-`%1811`, Codex thread `01a08191-263d-7971-b11b-10b44d4bbd09`.
-Parent edge: `sprefa-ivm-extract-parent`.
+Audit lane `refactor-boop-lifecycle-consolidation`, pane `%1811`, pane PID `22078`,
+remains live. Audit thread `01a08191-263d-7971-b11b-10b44d4bbd09` has observed
+model `gpt-6-astra`, effort `max`. Parent: `sprefa-ivm-extract-parent`.
+Join outside tmux: `tmux attach-session -t refactor-boop-lifecycle-consolidation`.
+Join inside tmux: `tmux switch-client -t refactor-boop-lifecycle-consolidation`.
+The CLI has no `beep lane join`. This lane stays open while work remains.
 
-Join from outside tmux: `tmux attach-session -t refactor-boop-lifecycle-consolidation`.
-Join from inside tmux: `tmux switch-client -t refactor-boop-lifecycle-consolidation`.
-Verified session and pane: `refactor-boop-lifecycle-consolidation %1811`.
-The installed CLI has no `beep lane join` command. The audit lane must remain available while
-implementation and live cases are pending.
-
-Milestone push `m-6e05b74e` at 2026-09-08T15:12:08Z returned
-`held-for-turn-boundary (lane supervisor)` for the parent. No parent transcript
-receipt has been established. The user's parent route and pane were not repaired
-or used as a test fixture.
-
-Completed commits:
+## Commits
 
 - `29fad26 fix(boop): preserve route ownership when binding existing panes`
 - `2376ef5 fix(boop-store): isolate trails and coalesce lifecycle observations`
 - `b815481 feat(boop): observe wrapped Codex lifecycle through owned connections`
 - `501d44c fix(boop): retain process observations and release owned TUI resources`
+- `f4480d1 fix(boop): isolate fixture readers and avoid telemetry mailbox writes`
+- Current boundary cluster: adapter-owned model inference, hook settings, native
+  worktree discovery and ACPX transport; removed unused Codex transport modules,
+  duplicate dispatch/preview helpers and fan-out door implementation; architectural
+  guard and symbol inventory. Migration and compatibility table in report 1.
 
-Fixture isolation checkpoint: the complete CLI integration target now passes
-**118/118** (`85_cli-integration-isolated-after.log`). Fixture subprocesses use
-`BoopCommandExt::boop_test_root`, `BOOP_READER_HOME`, `BOOP_CONFIG` and explicit
-`BOOP_DB`; HOME and CODEX_HOME are preserved. Test tmux servers load `/dev/null`
-configuration. Default user `remain-on-exit` caused four intermediate failures;
-their captured panes showed completed, dead processes (`83_retire-fixture-error.log`).
-The WAL reader regression exposed a separate import defect: sync telemetry beside
-the configured DB acquired a mailbox write lock despite carrying no envelopes.
-The importer now parses before taking that lock; the reader completes while a
-writer holds its transaction (`84_telemetry-import-after.log`).
+## Current gates
 
-Post-checkpoint fixes: transcript-only refresh preserves explicit PID/pane
-observations (failing reproduction `75_projector-pid-before.log`, passing
-`76_projector-pid-after.log`). Native launch resources now own both frontend and
-backend cleanup. Exit releases the route socket and liveness only while still
-owned; a later resume is preserved. Owned unbound routes cannot select a thread
-by cwd. Control 10 passed (`78_native-cleanup-regressions.log`); process-drop
-regression passed (`79_plan-drop.log`). Integration fixture migration remains next.
+All cargo commands use the dedicated target directory above.
 
-Current implementation work owns a separate Codex app-server process group and
-private socket per wrapped TUI. Observed protocol events carry thread/model/effort
-into the existing route and session tables. Storage overrides now include trail
-paths. The latest worktree binary built successfully (`28_live-build.log`).
+| Command | Result | Raw log |
+| --- | --- | --- |
+| `cargo test -p boop-store --lib` | Earlier checkpoint 176 passed; latest shared changes need rerun | `62_store-suite.log` |
+| `cargo test -p boop-harness --lib` | 169 passed, 1 ignored | `100_harness-boundary-suite.log` |
+| `cargo test -p boop-acp --lib` | 50 passed, 6 ignored | `101_acp-boundary-suite.log` |
+| `cargo test -p boop-proc --lib` | 159 passed | `95_proc-boundary-suite.log` |
+| `cargo test -p boop --bin boop` | 103 passed | `102_cli-boundary-unit.log` |
+| `cargo test -p boop --test main` | 120 passed | `103_cli-boundary-integration.log` |
+| `cargo test -p boop --test main -- t1_harness_boundaries::` | 2 passed after test-file classification correction | `106_harness-guard.log` |
 
-The native adapter now observes the actual TUI websocket connection, forwarding
-both directions with Tokio/Tungstenite. It correlates start/resume/fork responses
-and receives the TUI's settings/closure notifications. This replaced an observer
-client that missed resumed threads and later settings. Only selected persisted
-root threads bind routes; global thread-started/ephemeral guardian events do not.
-The generated Bash entries share `boop tui` inside and outside tmux.
+Seven adapter tests remain explicitly ignored for authenticated or machine-dependent
+environments. Full final affected-package and feature gates remain pending.
+Before/after logs are retained: incident registration 5 passed / 3 failed before
+fix; PID projection failed in `75_projector-pid-before.log` and passed in
+`76_projector-pid-after.log`. Fixture failures and telemetry write-lock failure
+were fixed; CLI integration passed 118/118 in `85_cli-integration-isolated-after.log`.
+Fixtures retain HOME/CODEX_HOME and use Boop reader/config/database overrides.
 
-Current authenticated evidence: initial thread
-`01a081bf-5d5a-7f23-a33d-81d349d9d56f` received idle and busy nonces, changed
-Luna/low to Terra/medium/high, compacted, exited and resumed in another process.
-The held resume nonce then arrived automatically. `/clear` created
-`01a081d7-85ca-7ca1-a8ce-f3ce84dadc50`; route, parent and Boop trace were maintained.
-The new thread received a nonce and was resumed in another process. Clear used
-Codex's default Astra/xhigh settings; a supported per-thread API change selected
-Luna/low before the bounded post-clear prompt. No user config was changed.
+## Authenticated Codex state
 
-Same-cwd concurrent proof uses route `codex-1828` in pane `%1828` and pane-less
-route `codex-process-51263` in a real PTY held by test pane `%1831`. Its independent
-thread is `01a081e4-1c58-7f83-9e4a-24d2d414bdf9`. Each received one distinct nonce
-and one matching answer, with zero occurrences in the other transcript.
-See `67_concurrency-verdict.json`, its per-side receipts and actual OS process
-trees. Both trials stopped at 16:48:15 UTC: A exited normally; B received a
-verified TERM at its wrapper PID. Both owned sockets disappeared. Dead test tmux
-cells remain for scoped cleanup. The audit lane `%1811` stays open.
+Report 2 has actual transcript receipts. Wrapped route `codex-1828`, parent
+`probe-parent`, received idle and busy nonces, changed Luna/low to Terra/medium/high,
+compacted, exited and resumed in another process. Initial thread:
+`01a081bf-5d5a-7f23-a33d-81d349d9d56f`. `/clear` created
+`01a081d7-85ca-7ca1-a8ce-f3ce84dadc50` and retained route, parent and Boop trace.
+The cleared thread received a nonce and resumed in another process. Clear reset
+Codex to Astra/xhigh; a supported per-thread change selected Luna/low before a
+bounded prompt. No user config was changed.
 
-Known failures retained: first guardian misbinding and failed nonce queues;
-pre-fix timeout orphan (verified test-only process group 5943 cleaned up);
-missing resume broadcast; synchronous forwarding timeout. TERM/HUP handling and
-owned backend cleanup are implemented. SIGKILL/restart cases remain open.
+Concurrent same-cwd test `codex-process-51263` used thread
+`01a081e4-1c58-7f83-9e4a-24d2d414bdf9`, independent trace and real PTY with TMUX
+variables removed. Each received exactly one distinct nonce and answer, with zero
+cross-transcript occurrences (`67_concurrency-verdict.json`). Both fixtures stopped
+at 16:48:15 UTC and private sockets disappeared. Dead test tmux cells remain.
 
-Latest gates: store 176 passed (`62_store-suite.log`); harness 170 passed, one
-ignored (`66_harness-suite.log`); Codex adapter 11 passed (`47_codex-adapter-tests.log`);
-native control 9 passed (`58_control-after.log`); shell wrapper 1 passed covering
-five entries in both pane environments (`34_wrapper-after.log`). Proc: 159 passed
-(`68_proc-suite.log`); CLI unit tests: 107 passed (`70_cli-unit-suite.log`). CLI
-integration suite: **105 passed, 13 failed** (`72_cli-integration-suite.log`).
-Failures: three lane-carcass trail-path assertions, lane-retire/revive trail path,
-spawn-identity trail path, three sync-convoy fixtures and sync-discovery inheriting
-BOOP_NO_SYNC, three tell fixtures inheriting BOOP_PARENT, and a source-scan false
-positive for `trail.rs`. Tell messages stayed in fixture databases with no route
-for the inherited parent name. Fix fixture environment isolation and migrate old
-home-based trail expectations before rerunning. Existing fixtures still override
-HOME; migrate these to Boop/harness reader injection points under the user's
-instruction to leave HOME and CODEX_HOME intact. Current live binary
-SHA-256: `3ef0dc3101e49ce0526948d149ce7ffc1dacfc975591371a0c24f599f537e99f`.
-`m-322f985c` is held on test route `codex-1828` after its socket disappeared. A
-later explicit resume of cleared thread `01a081d7-85ca-7ca1-a8ce-f3ce84dadc50` in
-test pane `%1828` can prove automatic recovery of that held message.
+Test-only message `m-322f985c` awaits resume of the cleared thread in test pane
+`%1828`, session `boop-proof-owned5-01a08191`. Expected answer:
+`ACK_BP_STALE_RESUME_01a08191_1`. This can prove stale-route recovery and the PID fix.
+Old proof processes used binary SHA-256
+`3ef0dc3101e49ce0526948d149ce7ffc1dacfc975591371a0c24f599f537e99f`.
+Record a new launch manifest before launching the current executable.
 
-Next actions:
+Retained live failures: initial guardian misbinding, missing resume broadcast,
+synchronous proxy timeout and a pre-fix killed-wrapper orphan. The verified
+owned orphan group 5943 was cleaned up. SIGKILL/restart and remaining supervisor/
+child cases are open. Only Codex has live authenticated coverage. All five
+installed CLI help probes succeeded (`88_available-harnesses.json`).
 
-1. Finish the native-wrapper commit and save hashed receipt manifests.
-2. Fix the remaining competing liveness writer: transcript projection currently
-   erases observed PID/pane/status. `67_concurrency-verdict.json` proves the null
-   PID/pane cache while real processes are running. `ident::sync_session_with`
-   calls `record_status` with transcript-derived state and no PID. Preserve
-   explicit live ownership; add a refresh regression.
-3. Make frontend cleanup belong to the native launch resource on every error
-   path. Clear route transport/status on exit, prevent owned unbound routes from
-   cwd discovery, and prove TERM/stale/restart/reattach. SIGKILL requires special
-   attention: an earlier killed wrapper orphaned its backend.
-4. Complete retry/concurrent delivery admission coverage and child completion /
-   parent notification proof. Ordinary nonce receipt counts pass; arbitrary
-   concurrent retries of one message have not been proved.
-5. Complete inventories and harness dispatch guard. Candidate behavioral branch:
-   `cli/job.rs` Claude native-worktree discovery. Static harness metadata must be
-   classified separately. Retired `boop-acp/channel/codex.rs`, duplicate discovery,
-   fallback dispatch and direct mail paths remain under review.
-6. Finish opt-in authenticated E2E runner, all affected-package gates and reports.
+## Remaining work
 
-Milestone `m-1d4a403e` at 16:24:34 UTC was again held for `lane supervisor` on
-the user's parent (`50_parent-milestone.txt`). No parent transcript receipt is
-claimed. A repair has not been applied to the user's parent route.
+1. Commit the passing boundary cluster. Fix wrapper noninteractive passthrough,
+   explicit route-name ownership and observed settings on automatic relaunch.
+2. Reproduce and fix concurrent/repeated delivery of one message. ACPX admission
+   and hook/supervisor fan-out remain separate. Analyze child completion marking
+   when parent delivery holds. Review legacy non-Codex discovery/claim paths.
+3. Complete bounded live stale recovery, abnormal exit, supervisor restart/reattach,
+   child completion, actual parent notification and duplicate/retry proof.
+4. Complete command/alias/hidden/config/identity/telemetry/feature inventory.
+5. Commit portable opt-in authenticated E2E coverage, finish affected-package
+   gates, update hashes and PASS/FAIL/BLOCKED ledger, clean task fixtures only.
 
-Raw driver files: `0_launch_baseline.bash` evaluates actual generated shell-init;
-`4_resume_live.bash` does the same for explicit resume; `1_capture_live.py` records
-route, actual thread/turn data, trace, attributes, OS process tree and delivery
-transitions. The Node helpers use an already cached `ws` library without installs.
-These prototypes remain outside Git; migrate them into a portable opt-in runner.
+Raw drivers `0_launch_baseline.bash` and `4_resume_live.bash` evaluate generated
+Bash shell-init. `1_capture_live.py` records selected thread/turn data, route, trace,
+attributes, process tree and delivery ledger. Node helpers use the cached `ws`
+package. Complete user transcripts are not committed.
 
-Audit thread metadata verifies `gpt-6-astra`, effort `max`. Initial incident
-regressions: 5 passed, 3 failed, 109 filtered; raw `2_regression-before.log`.
+## Parent push failures
 
-Registration cluster gates: `cargo test -p boop --test main -- registry_kinds::`
-(8 passed), `cargo test -p boop --bin boop -- cli::me::` (3 passed),
-`cargo test -p boop --test main -- coordinator_ping::` (4 passed).
-Complete affected-package gates remain pending until implementation finishes.
-
-Removed duplicate adoption/pane lookup and route serialization paths. Existing
-lane patch now preserves kind and metadata, supports `%pane`, and errors on a
-missing target. Agent register accepts `--session-id` and `--tmux` and preserves
-omitted fields. New pane attachments register as coordinators.
-
-Installed Codex supports `app-server --listen unix://PATH` and generated its
-protocol schemas under the raw receipt root. The shared daemon reports version
-0.153.4. The uncommitted Codex wrapper observes its owned backend. Other adapters
-still use existing registry discovery; their identity paths remain under review.
-Raw receipt `26_loaded-threads.json` contains the task-owned initial answer;
-`22_idle-send.txt` and `23_idle-send.txt` retain the failed queue deliveries.
+Milestones `m-6e05b74e`, `m-4531df56`, `m-1d4a403e`, `m-24fbea68` and latest
+`m-a3b88f59` (17:24:35 UTC, `86_parent-milestone.txt`) were held for
+`lane supervisor` on the protected parent. No parent transcript receipt is claimed.
+No repair or fixture mutation has been applied to that route or pane.
