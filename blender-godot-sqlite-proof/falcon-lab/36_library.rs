@@ -11,6 +11,8 @@ mod process_peer;
 mod process_video;
 #[path = "77_cli.rs"]
 mod cli;
+#[path = "78_repeat.rs"]
+mod repeat;
 #[path = "1c_live_rows.rs"]
 mod live_rows;
 #[cfg(any(test, feature = "gdext"))]

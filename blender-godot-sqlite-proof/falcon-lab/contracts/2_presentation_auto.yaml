@@ -1,4 +1,4 @@
-# Generated from 0_presentation.tsp; sha256:3c076cf3878f52f7820094fca73cb6751f0874eb895e8ca81e41d0e05a0eafee
+# Generated from 0_presentation.tsp; sha256:644d771e64f1650f62add21f95c9815731b03675ea7cfe5e517dce3ee2eef4a7
 version: 3
 namespace: FalconBoundary
 constants:
@@ -17,7 +17,35 @@ constants:
   PROTOCOL_VERSION:
     type: uint32
     value: "1"
+  REPEAT_FLAG:
+    type: string
+    value: --repeat
+  REPEAT_TICKS:
+    type: uint32
+    value: "300"
+  REPEAT_PERIOD:
+    type: int64
+    value: "120"
 models:
+  RepeatProof:
+    - name: ticks
+      rust: u32
+      type: uint32
+    - name: hits
+      rust: u32
+      type: uint32
+    - name: damage
+      rust: f64
+      type: float64
+    - name: replayed
+      rust: u32
+      type: uint32
+    - name: hit_ticks
+      rust: Vec<i64>
+      maxLength: 2
+      item:
+        rust: i64
+        type: int64
   Row:
     - name: tick
       rust: i64

@@ -1,4 +1,4 @@
-// Generated from 0_presentation.tsp; sha256:3c076cf3878f52f7820094fca73cb6751f0874eb895e8ca81e41d0e05a0eafee
+// Generated from 0_presentation.tsp; sha256:644d771e64f1650f62add21f95c9815731b03675ea7cfe5e517dce3ee2eef4a7
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -7,6 +7,17 @@ pub const SLOTS: u32 = 3;
 pub const ROW_CAPACITY: u32 = 1024;
 pub const IPC_LIMIT: u32 = 262144;
 pub const PROTOCOL_VERSION: u32 = 1;
+pub const REPEAT_FLAG: &'static str = "--repeat";
+pub const REPEAT_TICKS: u32 = 300;
+pub const REPEAT_PERIOD: i64 = 120;
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RepeatProof {
+  pub ticks: u32,
+  pub hits: u32,
+  pub damage: f64,
+  pub replayed: u32,
+  pub hit_ticks: Vec<i64>,
+}
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Row {
   pub tick: i64,

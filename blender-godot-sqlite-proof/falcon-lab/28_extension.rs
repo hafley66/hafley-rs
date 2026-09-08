@@ -6,7 +6,7 @@ use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::JoinHandle;
 
 use crate::fixture;
-use fixture::sql_viewer::{boundary::Row, geometry};
+use fixture::sql_viewer::geometry;
 use fixture::sql_viewer::boundary::contracts::{
     Acknowledgment, AckResult, BoundaryError, FrameAcknowledger, GenerationId, RowPublisher,
     pack_rows as pack,

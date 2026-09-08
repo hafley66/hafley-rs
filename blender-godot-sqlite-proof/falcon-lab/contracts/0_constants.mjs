@@ -7,6 +7,11 @@ export function constants(program, source) {
   function visit(node) {
     if (node.kind === SyntaxKind.ConstStatement) {
       const value = program.checker.getValueForNode(node);
+      if (value?.valueKind === 'StringValue' && value.type.name === 'string') {
+        if (result[node.id.sv]) throw Error(`duplicate constant: ${node.id.sv}`);
+        result[node.id.sv] = { type: 'string', value: value.value };
+        return;
+      }
       if (value?.valueKind !== 'NumericValue' || !['int64', 'uint32', 'uint64'].includes(value.type.name)) {
         throw Error(`unsupported constant: ${node.id.sv}`);
       }

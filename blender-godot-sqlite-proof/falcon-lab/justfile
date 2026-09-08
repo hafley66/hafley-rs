@@ -35,6 +35,7 @@ record mode="live":
     #!/usr/bin/env bash
     set -euo pipefail
     case {{quote(mode)}} in
+      repeat) sh 79_run_repeat.sh ;;
       live|lifecycle) sh 89_run_live.sh ;;
       processes) sh 77_run_processes.sh ;;
       godot) bash 29_run_godot.sh ;;

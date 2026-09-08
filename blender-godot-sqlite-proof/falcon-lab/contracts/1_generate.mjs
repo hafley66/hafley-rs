@@ -59,7 +59,13 @@ function shape(type, property, parameter = false) {
 const declarations = [];
 const contract = { version: 3, namespace: ns.name, constants: constants(program, fileURLToPath(source)), models: {}, rows: {}, enums: {}, results: {}, interfaces: {} };
 for (const [name, value] of Object.entries(contract.constants)) {
-  declarations.push(c(ConstDeclaration, { name, pub: true, type: scalars[value.type], children: value.value }));
+  const string = value.type === 'string';
+  const literal = string ? '"' + Array.from(value.value, ch => {
+    if (ch === '"' || ch === '\\') return '\\' + ch;
+    const code = ch.codePointAt(0);
+    return code < 32 || code === 127 ? `\\u{${code.toString(16)}}` : ch;
+  }).join('') + '"' : value.value;
+  declarations.push(c(ConstDeclaration, { name, pub: true, type: string ? "&'static str" : scalars[value.type], children: literal }));
 }
 function isCopy(type, seen = new Set()) {
   if (type.kind === 'Scalar' || type.kind === 'Enum') return true;

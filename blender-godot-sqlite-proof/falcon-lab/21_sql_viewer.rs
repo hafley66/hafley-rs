@@ -9,7 +9,7 @@ use boundary::contracts::{FrameValues, TargetValues, HurtValues, AttackValues};
 use brawllib_rs::high_level_fighter::{CollisionBoxValues, HighLevelSubaction};
 
 #[tracing::instrument(target = "falcon::presentation", level = "trace", skip_all, fields(tick = world.frame - 1, predicted, applied))]
-pub(super) fn encode(
+pub(crate) fn encode(
     world: &World,
     actions: &[HighLevelSubaction],
     predicted: bool,
