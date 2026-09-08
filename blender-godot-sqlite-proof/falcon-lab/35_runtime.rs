@@ -120,6 +120,19 @@ pub struct Display {
     pub total_loads: usize,
     pub presented: Vec<Vec<sql_viewer::boundary::Row>>,
 }
+impl Display {
+    pub(crate) fn stamp_presented(&mut self) {
+        let metadata = [
+            self.restored.first().copied().unwrap_or(-1) as f64,
+            self.advances as f64,
+            self.total_loads as f64,
+            self.confirmed as f64,
+        ];
+        for rows in &mut self.presented {
+            rows[0].values[15..19].copy_from_slice(&metadata);
+        }
+    }
+}
 #[tracing::instrument(target = "falcon::rollback", level = "trace", skip_all, fields(tick = world.frame))]
 fn checksum(world: &World) -> u128 {
     bincode::serde::encode_to_vec(world, bincode::config::standard())
@@ -279,12 +292,7 @@ impl<'a> Runtime<'a> {
             );
             peer_display.confirmed = self.peers[id].confirmed_frame();
             tracing::debug!(target: "falcon::rollback", advances = peer_display.advances, restores = peer_display.restored.len(), saves = peer_display.saved.len(), confirmed = peer_display.confirmed, "requests_executed");
-            for frame in &mut peer_display.presented {
-                frame[0].values[15] = peer_display.restored.first().copied().unwrap_or(-1) as f64;
-                frame[0].values[16] = peer_display.advances as f64;
-                frame[0].values[17] = peer_display.total_loads as f64;
-                frame[0].values[18] = peer_display.confirmed as f64;
-            }
+            peer_display.stamp_presented();
             displays.push(peer_display);
         }
 
@@ -675,6 +683,52 @@ pub fn run_cli() -> Result<(), Error> {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn metadata_stamping_preserves_every_other_row_field() {
+        use super::{Display, World, sql_viewer::boundary::Row};
+        let original: Vec<Vec<Row>> = (0..3)
+            .map(|tick| {
+                (0..2)
+                    .map(|kind| Row {
+                        tick,
+                        kind,
+                        entity: 42 + kind,
+                        values: std::array::from_fn(|i| (100 * tick + 24 * kind + i as i64) as f64),
+                    })
+                    .collect()
+            })
+            .collect();
+        for (restored, advances, total_loads, confirmed, metadata) in [
+            (vec![], 1, 0, -1, [-1.0, 1.0, 0.0, -1.0]),
+            (vec![78, 80], 23, 7, 99, [78.0, 23.0, 7.0, 99.0]),
+        ] {
+            let mut display = Display {
+                world: World::default(),
+                applied: 0,
+                predicted: false,
+                confirmed,
+                restored,
+                saved: vec![],
+                advances,
+                total_loads,
+                presented: original.clone(),
+            };
+            let mut expected = original.clone();
+            for rows in &mut expected {
+                for (index, value) in (15..19).zip(metadata) {
+                    rows[0].values[index] = value;
+                }
+            }
+            display.stamp_presented();
+            assert_eq!(display.presented, expected);
+            display.stamp_presented();
+            assert_eq!(display.presented, expected);
+            display.presented.clear();
+            display.stamp_presented();
+            assert_eq!(display.presented, Vec::<Vec<Row>>::new());
+        }
+    }
+
     #[test]
     fn delayed_attack_rolls_back_and_converges() {
         let actions = super::baseline::load().unwrap();

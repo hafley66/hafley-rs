@@ -143,12 +143,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             },
         );
         display.confirmed = session.confirmed_frame();
-        for rows in &mut display.presented {
-            rows[0].values[15] = display.restored.first().copied().unwrap_or(-1) as f64;
-            rows[0].values[16] = display.advances as f64;
-            rows[0].values[17] = display.total_loads as f64;
-            rows[0].values[18] = display.confirmed as f64;
-        }
+        display.stamp_presented();
         assert_eq!(world.frame, tick as i32 + 1);
         assert!(boundary.publish(&display.presented));
         let (generation, rows) = read_frame(&boundary.db, tick as i64)?;
