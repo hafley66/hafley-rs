@@ -36,8 +36,7 @@ pub struct Sandbag {
     pub grounded: bool,
 }
 
-// Full Rapier durable state is copied, including solver/contact state.
-// This deliberately allocation-heavy snapshot fixture is not a hot-buffer benchmark.
+// Copy Rapier durable state. Recreate the two workspaces that its serde snapshot skips.
 impl Clone for Sandbag {
     #[tracing::instrument(
         target = "falcon::snapshot",
@@ -46,7 +45,28 @@ impl Clone for Sandbag {
         skip_all
     )]
     fn clone(&self) -> Self {
-        serde_json::from_slice(&serde_json::to_vec(self).unwrap()).unwrap()
+        Self {
+            physics: PhysicsWorld {
+                gravity: self.physics.gravity,
+                integration_parameters: self.physics.integration_parameters,
+                physics_pipeline: PhysicsPipeline::default(),
+                islands: self.physics.islands.clone(),
+                broad_phase: self.physics.broad_phase.clone(),
+                narrow_phase: self.physics.narrow_phase.clone(),
+                bodies: self.physics.bodies.clone(),
+                colliders: self.physics.colliders.clone(),
+                impulse_joints: self.physics.impulse_joints.clone(),
+                multibody_joints: self.physics.multibody_joints.clone(),
+                ccd_solver: CCDSolver::default(),
+            },
+            body: self.body,
+            phase: self.phase,
+            position: self.position,
+            velocity: self.velocity,
+            stun: self.stun,
+            knockback: self.knockback,
+            grounded: self.grounded,
+        }
     }
 }
 impl PartialEq for Sandbag {

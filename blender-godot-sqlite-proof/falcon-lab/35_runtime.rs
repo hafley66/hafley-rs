@@ -678,7 +678,7 @@ mod tests {
     #[test]
     fn moving_and_ground_contact_snapshots_replay_exactly() {
         let actions = super::baseline::load().unwrap();
-        for checkpoint in [105, 128] {
+        for checkpoint in [0, 91, 105, 128, 179] {
             let mut world = super::World {
                 bag: Some(super::sandbag::Sandbag::default()),
                 ..Default::default()
@@ -688,6 +688,8 @@ mod tests {
             }
             let mut restored = world.clone();
             let saved_bytes = serde_json::to_vec(&restored).unwrap();
+            assert_eq!(saved_bytes, serde_json::to_vec(&world).unwrap());
+            let mut legacy: super::World = serde_json::from_slice(&saved_bytes).unwrap();
             for tick in checkpoint..180 {
                 super::step(&mut world, super::input(tick), &actions);
             }
@@ -698,6 +700,8 @@ mod tests {
             );
             for tick in checkpoint..180 {
                 super::step(&mut restored, super::input(tick), &actions);
+                super::step(&mut legacy, super::input(tick), &actions);
+                assert_eq!(restored, legacy, "legacy clone diverged at tick {tick}");
             }
             assert_eq!(
                 world, restored,
