@@ -584,10 +584,8 @@ fn main() -> Result<()> {
                     (None, true) => {
                         let routes = bus::read_routes(&mail_dir(mail_dir_arg.as_deref())?)
                             .unwrap_or_default();
-                        let identity = identity::resolve_with(&registry, &routes)?;
-                        Some(identity.session.context(
-                        "--me found no caller session: this process carries no BOOP_SESSION stamp; pass --session <id>",
-                    )?)
+                        let identity = identity::resolve_as(None);
+                        Some(identity.conversation(&routes)?.to_owned())
                     }
                     (None, false) => anyhow::bail!(
                     "name the conversation to map: --session <id>, or --me to take the caller's own"

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use boop_store::bus::Route;
 
@@ -51,6 +51,16 @@ pub struct Identity {
 }
 
 impl Identity {
+    /// Resolve a stamped route to its native conversation. Older callers
+    /// stamped the native ID directly; retain that spelling when no route exists.
+    pub fn conversation<'a>(&'a self, routes: &'a BTreeMap<String, Route>) -> Result<&'a str> {
+        let caller = self.session.as_deref().context("no caller session resolved: no BOOP_SESSION stamp in this process")?;
+        match routes.get(caller) {
+            Some(route) => route.session_id.as_deref().with_context(|| format!("caller route {caller} has no bound native conversation")),
+            None => Ok(caller),
+        }
+    }
+
     pub fn to_json(&self) -> serde_json::Value {
         let rung = self.rung.unwrap_or(Rung::None);
         serde_json::json!({
@@ -95,21 +105,6 @@ pub fn resolve_as(as_name: Option<&str>) -> Identity {
         rung: Some(Rung::None),
         ..Default::default()
     })
-}
-
-/// The env rung alone, for a caller with no flag to offer. Kept as the old
-/// name so no call site outside this module changes.
-pub fn resolve(_routes: &BTreeMap<String, Route>) -> Result<Identity> {
-    Ok(resolve_as(None))
-}
-
-/// The env rung alone. The registry argument is vestigial: no harness owns a
-/// rung any more.
-pub fn resolve_with(
-    _registry: &crate::registry::Registry,
-    _routes: &BTreeMap<String, Route>,
-) -> Result<Identity> {
-    Ok(resolve_as(None))
 }
 
 /// The caller, or one line and exit 2. Every verb that must put a name on
@@ -165,6 +160,20 @@ fn shell_word(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{child_stamp, resolve_as, Rung};
+
+    #[test]
+    fn conversation_binding_preserves_legacy_ids_and_rejects_unbound_routes() {
+        let mut routes = std::collections::BTreeMap::new();
+        routes.insert("caller".into(), boop_store::bus::route_from_value(&serde_json::json!({"sessionId":"native"})));
+        let mut identity = super::Identity { session: Some("caller".into()), ..Default::default() };
+        assert_eq!(identity.conversation(&routes).unwrap(), "native");
+        routes.get_mut("caller").unwrap().session_id = None;
+        assert!(identity.conversation(&routes).is_err());
+        identity.session = Some("legacy-native-id".into());
+        assert_eq!(identity.conversation(&routes).unwrap(), "legacy-native-id");
+        identity.session = None;
+        assert!(identity.conversation(&routes).is_err());
+    }
 
     /// The flag wins over a stamp: a native subagent inherits its spawner's
     /// env and must be able to say it is somebody else.

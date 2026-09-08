@@ -218,6 +218,27 @@ pub fn write_route(dir: &Path, name: &str, route: &Route) -> Result<()> {
     upsert_route(&store, name, route)
 }
 
+/// Update only fields owned by a native wrapper. Registration owns parent,
+/// goal and worktree metadata; return their current values to the actor cache.
+/// The ownership predicate also prevents a late observation resurrecting a
+/// completed route or replacing another kind of route.
+pub fn update_native_route(store: &crate::ident::Store, name: &str, route: &mut Route) -> Result<()> {
+    let (parent, goal, registered_at, base_sha, worktree_dir) = store.connection().query_row(
+        "UPDATE agent_route SET tmux=?1,cwd=?2,model=?3,mode=?4,session_id=?5,source_path=?6,app_server_socket=?7
+         WHERE route=?8 AND kind=?9 AND harness IS ?10
+         RETURNING parent,goal,registered_at,base_sha,worktree_dir",
+        rusqlite::params![route.tmux, route.cwd, route.model, route.mode, route.session_id,
+            route.source_path, route.app_server_socket, name, route.kind.as_str(), route.harness.map(|id| id.as_str())],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+    ).with_context(|| format!("native route {name} was unregistered or changed ownership"))?;
+    route.parent = parent;
+    route.goal = goal;
+    route.registered_at = registered_at;
+    route.base_sha = base_sha;
+    route.worktree_dir = worktree_dir;
+    Ok(())
+}
+
 /// Every undelivered envelope addressed to one route: `to_timestamp` still
 /// open and no door has ever accepted it. A drain re-pushes these.
 ///

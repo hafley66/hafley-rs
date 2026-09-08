@@ -399,7 +399,7 @@ pub(crate) fn run_native_tui(
                     observation_failure = Some(error);
                 } else {
                     apply_native_event(&store, &mut route, &mut trace, event, frontend_pid)?;
-                    write_route(&dir, name, route.clone())?;
+                    boop::bus::update_native_route(&store, name, &mut route)?;
                 }
             }
         }
@@ -447,7 +447,7 @@ pub(crate) fn run_native_tui(
             route.source_path = next.source_path.clone();
             route.session_id = next.session_id.clone();
             plan = next;
-            write_route(&dir, name, route.clone())?;
+            boop::bus::update_native_route(&store, name, &mut route)?;
             continue;
         }
         // A fresh TUI opens its session at its first prompt, after the route
@@ -466,7 +466,7 @@ pub(crate) fn run_native_tui(
                 Some(session) => {
                     route.source_path = Some(format!("native-session={session}"));
                     bind_native_session(&store, &mut route, &mut trace, &session, frontend_pid)?;
-                    write_route(&dir, name, route.clone())?;
+                    boop::bus::update_native_route(&store, name, &mut route)?;
                     info!(route = name, %session, "native session route recovered after launch");
                 }
                 None => {
@@ -494,7 +494,7 @@ pub(crate) fn run_native_tui(
                     bind_native_session(&store, &mut route, &mut trace, &session.session_id, frontend_pid)?;
                     route.model = None;
                     route.source_path = Some(format!("native-session={}", session.session_id));
-                    write_route(&dir, name, route.clone())?;
+                    boop::bus::update_native_route(&store, name, &mut route)?;
                 }
             }
             if let Some(session) = route.session_id.as_deref()
@@ -503,7 +503,7 @@ pub(crate) fn run_native_tui(
                     if route.model != model || store.session_attr(&session_id, "effort")? != effort {
                         apply_native_event(&store, &mut route, &mut trace,
                             NativeTuiEvent::Settings { session_id, model, effort }, frontend_pid)?;
-                        write_route(&dir, name, route.clone())?;
+                        boop::bus::update_native_route(&store, name, &mut route)?;
                     }
                 }
             }
@@ -550,6 +550,29 @@ mod tests {
     use std::os::unix::process::ExitStatusExt;
     use std::process::ExitStatus;
     use std::time::Duration;
+
+    #[test]
+    fn native_observation_preserves_a_registered_parent_update() {
+        let dir = std::env::temp_dir().join(format!("boop-native-parent-update-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut cached = crate::cli::testkit::route_with(Some("old-parent"));
+        let mut registered = cached.clone();
+        registered.parent = Some("new-parent".into());
+        registered.goal = Some("new-goal".into());
+        boop::bus::write_route(&dir, "owned", &registered).unwrap();
+        cached.model = Some("observed-model".into());
+        let store = boop::bus::open_store(&dir).unwrap();
+        boop::bus::update_native_route(&store, "owned", &mut cached).unwrap();
+        let current = boop::bus::read_routes(&dir).unwrap().remove("owned").unwrap();
+        assert_eq!((current.parent.as_deref(), current.goal.as_deref(), current.model.as_deref()),
+            (Some("new-parent"), Some("new-goal"), Some("observed-model")));
+        assert_eq!(cached.parent, current.parent);
+        store.connection().execute("DELETE FROM agent_route WHERE route='owned'", []).unwrap();
+        assert!(boop::bus::update_native_route(&store, "owned", &mut cached).is_err());
+        assert!(boop::bus::routes_in(&store).unwrap().is_empty());
+        drop(store);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn a_named_route_has_one_wrapper_owner_and_can_be_reacquired() {

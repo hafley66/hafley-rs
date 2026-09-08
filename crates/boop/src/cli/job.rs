@@ -1099,7 +1099,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     };
     let hail_mail_dir = mail_dir(args.mail_dir.as_deref())?;
     let routes = bus::read_routes(&hail_mail_dir)?;
-    let caller = identity::resolve(&routes)?;
+    let caller = identity::resolve_as(None);
     let caller_lane = caller.lane.clone().filter(|lane| *lane != identity.lane);
     let parent = resolve_parent_with_legacy_fallback(
         args.parent.as_deref(),

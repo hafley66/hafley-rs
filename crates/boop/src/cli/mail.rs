@@ -143,7 +143,7 @@ pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
     // Only the aliases that read an edge need the caller's own route; every
     // other send takes the name it was handed, registered or not.
     let (sender, to, parent_source) = if send.route == PARENT_ALIAS {
-        let (caller, route, stamped) = caller_identity(registry, &routes, send.as_name)?;
+        let (caller, route, stamped) = caller_identity(&routes, send.as_name)?;
         let pick = lane::tell_parent_target(&caller, route, &routes, stamped.as_deref())?;
         let parent = pick
             .parent
@@ -152,7 +152,7 @@ pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
         (caller, parent, Some(pick.source))
     } else {
         (
-            sender_name(registry, &routes, send.as_name)?,
+            sender_name(&routes, send.as_name),
             send.route.to_owned(),
             None,
         )
@@ -212,17 +212,16 @@ pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
 /// placeholder. A name `--as` gives is taken as written; only the alias sends
 /// need it to be a registered route.
 fn sender_name(
-    registry: &Registry,
     routes: &BTreeMap<String, Route>,
     as_name: Option<&str>,
-) -> Result<String> {
+) -> String {
     if let Some(name) = as_name {
-        return Ok(name.to_owned());
+        return name.to_owned();
     }
-    let identity = identity::resolve_with(registry, routes)?;
-    Ok(lane::caller_route(&identity, routes)
+    let identity = identity::resolve_as(None);
+    lane::caller_route(&identity, routes)
         .map(|(caller, _)| caller)
-        .unwrap_or_else(|_| DEFAULT_SENDER.to_owned()))
+        .unwrap_or_else(|_| DEFAULT_SENDER.to_owned())
 }
 
 /// Put one queued message in front of its recipient, through the door its
@@ -374,7 +373,6 @@ const PUSH_POLL: std::time::Duration = std::time::Duration::from_millis(500);
 /// environment, so the env rung names the spawner and `BOOP_PARENT` is the
 /// spawner's parent, never the native's.
 fn caller_identity<'a>(
-    registry: &Registry,
     routes: &'a BTreeMap<String, Route>,
     as_name: Option<&str>,
 ) -> Result<(String, &'a Route, Option<String>)> {
@@ -386,7 +384,7 @@ fn caller_identity<'a>(
             Ok((name.to_owned(), route, None))
         }
         None => {
-            let identity = identity::resolve_with(registry, routes)?;
+            let identity = identity::resolve_as(None);
             let (caller, route) = lane::caller_route(&identity, routes)?;
             Ok((caller, route, identity.parent))
         }
@@ -426,7 +424,7 @@ fn fan_out_to_children(
     routes: &BTreeMap<String, Route>,
     send: &Outbound<'_>,
 ) -> Result<()> {
-    let (caller, route, _) = caller_identity(registry, routes, send.as_name)?;
+    let (caller, route, _) = caller_identity(routes, send.as_name)?;
     let body = send
         .body
         .context("a body is required to mail the caller's children")?;
