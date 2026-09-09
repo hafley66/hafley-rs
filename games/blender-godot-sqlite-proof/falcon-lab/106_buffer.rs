@@ -204,23 +204,45 @@ fn held_attack_requires_release_before_second_consumption() {
 
 pub fn run(record: bool) -> Result<(), Error> {
     let actions = baseline::load_controlled()?;
-    let proofs = [verify(&actions, 0)?, verify(&actions, 8)?];
-    std::fs::write(
-        "buffer-proof.json",
-        serde_json::to_vec_pretty(&[&proofs[0].0, &proofs[1].0])?,
-    )?;
-    if !record {
-        return Ok(());
+    let sets = [
+        (
+            "buffer-proof",
+            [verify(&actions, 0)?, verify(&actions, 8)?],
+            ["ZERO WINDOW", "EIGHT WINDOW"],
+            "SAME INPUT / 3X SLOW PLAYBACK / LAB RULES",
+        ),
+        (
+            "held-proof",
+            held_proofs(&actions)?,
+            ["HOLD ATTACK", "RELEASE / REPRESS"],
+            "HOLD VS REPRESS / 3X SLOW / LAB RULES",
+        ),
+    ];
+    for (name, proofs, titles, footer) in sets {
+        std::fs::write(
+            format!("{name}.json"),
+            serde_json::to_vec_pretty(&[&proofs[0].0, &proofs[1].0])?,
+        )?;
+        if record {
+            render(&proofs, titles, &format!("{name}.mp4"), footer)?;
+        }
     }
-    let mut capture = game_capture::Capture::new("buffer-proof.mp4")?;
+    Ok(())
+}
+
+fn render(
+    proofs: &[(Receipt, Vec<Vec<Row>>); 2],
+    titles: [&str; 2],
+    output: &str,
+    footer: &str,
+) -> Result<(), Error> {
+    let mut capture = game_capture::Capture::new(output)?;
     let labels: Vec<_> = CONTROL_ACTION_LABELS.split('|').collect();
     for tick in 0..BUFFER_TICKS as usize {
         let mut vertices = Vec::new();
         for (panel, (proof, rows)) in proofs.iter().enumerate() {
             let mut mesh = sql_viewer::draw(&rows[tick]);
-            for v in &mut mesh {
-                v[0] = (v[0] + 1.0) * 0.5 - 1.0 + panel as f32;
-            }
+            game_capture::panel(&mut mesh, panel, proofs.len());
             vertices.extend(mesh);
             let world = &proof.states[tick];
             let status = &proof.inspection[tick];
@@ -236,12 +258,13 @@ pub fn run(record: bool) -> Result<(), Error> {
                 "EMPTY"
             };
             let lines = [
-                format!("LAB BUFFER {} FRAMES", proof.policy.window_frames),
+                format!("{} / {}F", titles[panel], proof.policy.window_frames),
                 format!(
                     "TICK {tick:03} / {}",
-                    match input(tick as u32) {
+                    match proof.inputs[tick] {
                         1 => "JUMP",
-                        2 => "ATTACK",
+                        2 if tick > 0 && proof.inputs[tick - 1] & 2 != 0 => "ATTACK HELD",
+                        2 => "ATTACK PRESS",
                         4 => "CANCEL",
                         _ => "NO INPUT",
                     }
@@ -270,6 +293,13 @@ pub fn run(record: bool) -> Result<(), Error> {
                         Some(format!("LAST {event} AT {}", s.tick))
                     })
                     .unwrap_or_else(|| "NO BUFFER EVENT YET".into()),
+                format!(
+                    "CONSUMPTIONS {}",
+                    proof.inspection[..=tick]
+                        .iter()
+                        .filter(|s| s.consumed)
+                        .count()
+                ),
             ];
             for (line, label) in lines.iter().enumerate() {
                 baseline::text(
@@ -288,32 +318,30 @@ pub fn run(record: bool) -> Result<(), Error> {
         }
         baseline::text(
             &mut vertices,
-            "SAME INPUT / 3X SLOW PLAYBACK / LAB RULES",
+            footer,
             100.0,
             494.0,
             1.5,
             [1.0, 0.8, 0.3, 1.0],
         );
-        for _ in 0..3 {
-            capture.frame_checked(&vertices, |data| {
-                for panel in 0..2 {
-                    let colored = data
-                        .chunks_exact(4)
-                        .enumerate()
-                        .filter(|(i, p)| {
-                            let x = i % 960;
-                            let y = i / 960;
-                            x / 480 == panel
-                                && (160..480).contains(&y)
-                                && p[0] > 120
-                                && p[1] < 160
-                                && p[2] > 190
-                        })
-                        .count();
-                    assert!(colored > 30, "fighter wireframe absent in panel {panel}");
-                }
-            })?;
-        }
+        capture.frames_checked(&vertices, 3, |data| {
+            for panel in 0..2 {
+                let colored = data
+                    .chunks_exact(4)
+                    .enumerate()
+                    .filter(|(i, p)| {
+                        let x = i % 960;
+                        let y = i / 960;
+                        x / 480 == panel
+                            && (160..480).contains(&y)
+                            && p[0] > 120
+                            && p[1] < 160
+                            && p[2] > 190
+                    })
+                    .count();
+                assert!(colored > 30, "fighter wireframe absent in panel {panel}");
+            }
+        })?;
     }
     capture.finish()
 }

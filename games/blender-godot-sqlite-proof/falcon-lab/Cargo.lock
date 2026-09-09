@@ -771,7 +771,6 @@ dependencies = [
  "cgmath",
  "core-labs",
  "falcon-simulation",
- "font8x8",
  "game-capture",
  "ggrs",
  "godot",
@@ -966,6 +965,7 @@ dependencies = [
 name = "game-capture"
 version = "0.1.0"
 dependencies = [
+ "font8x8",
  "pollster",
  "wgpu 29.0.4",
 ]

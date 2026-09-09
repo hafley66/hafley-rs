@@ -1,7 +1,6 @@
 use base64::Engine;
 use brawllib_rs::high_level_fighter::{CollisionBoxValues, HighLevelFrame, HighLevelSubaction};
 use cgmath::{Matrix4, Vector3};
-use font8x8::UnicodeFonts;
 use parry3d::{
     math::{Pose, Vec3},
     query,
@@ -178,34 +177,7 @@ pub(crate) fn mesh_wire(
     }
 }
 
-pub(crate) fn text(
-    out: &mut Vec<gpu::Vertex>,
-    label: &str,
-    x: f32,
-    y: f32,
-    scale: f32,
-    color: [f32; 4],
-) {
-    for (i, c) in label.chars().enumerate() {
-        if let Some(glyph) = font8x8::BASIC_FONTS.get(c) {
-            for (row, bits) in glyph.iter().enumerate() {
-                for col in 0..8 {
-                    if bits & (1 << col) != 0 {
-                        let x = x + (i * 8 + col) as f32 * scale;
-                        let y = y + row as f32 * scale;
-                        gpu::line(
-                            out,
-                            [x, y + scale * 0.5],
-                            [x + scale, y + scale * 0.5],
-                            scale,
-                            color,
-                        );
-                    }
-                }
-            }
-        }
-    }
-}
+pub(crate) use game_capture::text;
 
 pub(crate) fn draw(
     source: &HighLevelFrame,
