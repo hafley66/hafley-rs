@@ -1,14 +1,14 @@
 {
   "objective": "Extract reusable game foundations from existing v1/v3 machinery through playable Falcon slices toward Lovers/Terraria/Smash",
-  "next": "L1 lift replay harness; N1 held/repressed input proof; L2 lift comparison presentation, then stop",
-  "acceptance": "104_tasks.md: buffered-input consumption/expiry/cancellation, rollback proof and labeled MP4; boots/terrain remains a following milestone",
+  "next": "L1/N1/L2 complete; stopped for review of 109_tasks.md and held-proof.mp4. G2 remains on deck",
+  "acceptance": "109_tasks.md: shared replay harness, held/repressed proof, shared presentation and inspected MP4",
   "coverage": "99_lifecycle_import.md",
   "plan": "92_web_import_plan.md",
   "tasks": "109_tasks.md",
   "task_lookback": 3,
-  "current_task": "L2",
+  "current_task": "review",
   "pending": [
-    "L2", "G2", "G3", "G4", "G5", "G6", "G7", "P1", "P2", "P3", "P4"
+    "G2", "G3", "G4", "G5", "G6", "G7", "P1", "P2", "P3", "P4"
   ],
   "deferred": ["G1"]
 }

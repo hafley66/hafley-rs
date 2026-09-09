@@ -44,3 +44,23 @@ must remain offline. Do not replace these libraries with new reducer/session cod
 
 Buffer policy and inspection payloads are game-owned TypeSpec models generated
 by the existing emitter. This slice does not change the emitter implementation.
+
+## Replay harness and comparison presentation (2026-09-09)
+
+- `rollback::proof::run<S>` accepts borrowed configuration and a tick/player
+  input tape, returning owned post-tick states and actual GGRS request counts.
+  `restore_suffixes<S>` checks decoded checkpoint state before replaying its
+  suffix. Codecs stay caller-supplied; both functions use existing RollbackSim.
+  The independent fixture uses two counters; Falcon consumes the same harness.
+- `capture::text` is the existing font8x8 mesh renderer moved from Falcon.
+  `capture::panel(&mut [Vertex], index, count)` places geometry in horizontal
+  panels without changing its vertical coordinate or colors.
+  `Capture::frames_checked(vertices, repeats, verify)` borrows the same mesh
+  across repeated presentation frames and verifies every readback. It never
+  advances game state. Mesh storage and labels remain caller-owned; the capture
+  owns GPU/encoder resources. Existing Falcon text callers re-export this code.
+
+Falcon's `just held-proof` records both old and new scenarios in
+`.workflow/buffer-held/`, retaining `.workflow/buffer/`. Its new scenario proves
+held-versus-repressed button edges through existing runtime policy. This expands
+proof coverage; controller selection, game fidelity and transport remain separate.

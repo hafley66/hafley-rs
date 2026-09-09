@@ -1,5 +1,8 @@
 use std::{io::Write, time::Duration};
 use wgpu::util::DeviceExt;
+#[path = "1_comparison.rs"]
+mod comparison;
+pub use comparison::{panel, text};
 
 pub const WIDTH: u32 = 960;
 pub const HEIGHT: u32 = 540;
@@ -194,6 +197,20 @@ impl Capture {
         }
         self.readback.unmap();
         self.frames += 1;
+        Ok(())
+    }
+
+    /// Presentation repetition leaves authoritative simulation time unchanged.
+    pub fn frames_checked(
+        &mut self,
+        vertices: &[Vertex],
+        repeats: usize,
+        mut verify: impl FnMut(&[u8]),
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        assert!(repeats > 0);
+        for _ in 0..repeats {
+            self.frame_checked(vertices, &mut verify)?;
+        }
         Ok(())
     }
 
