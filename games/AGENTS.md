@@ -8,6 +8,29 @@ crates. All first-party reusable game crates belong in `crates/`. Existing
 lockfile/dependency updates and consumer verification. Never duplicate them to
 populate the destination. Third-party submodules retain their upstream layout.
 
+## Direct file trees and colocation
+
+Use explicit, direct paths. Each directory segment must identify a distinct
+ownership or domain boundary. Do not repeat intermediate concepts or mirror the
+same domain tree under source, content, assets, data, or generated roots.
+
+Keep a fighter's authored behavior, configuration, imported/generated data and
+local tests together in one fighter directory. For example,
+`smash/src/fighters/falcon/` owns Falcon; do not also create
+`smash/content/fighters/falcon/`. A local `generated/` directory is permitted when
+it separates machine-owned output from authored files without duplicating the
+fighter hierarchy. Apply the same colocation rule to stages, items and vehicles.
+
+Create folders when code or data actually occupies them. Do not scaffold empty
+category trees, redundant wrapper modules, or directory levels that merely repeat
+their parent. Number files within their local module's dependency/reading order;
+do not encode the full parent path again in filenames.
+
+Falcon-specific behavior belongs in the app's fighter directory. Shared crates
+must remain character-independent. Offline ingestion selects a character and
+writes into that character's existing home using a common package format; do not
+create a second maintained implementation or parallel per-character output tree.
+
 Lab is a maturity stage. Classify lab code by promotion destination independently
 of proof status:
 
