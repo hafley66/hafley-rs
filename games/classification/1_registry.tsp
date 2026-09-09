@@ -5,25 +5,25 @@ const entries: Record<Entry> = #{
   redux: #{
     stage: 3, destination: "library", task: "A1",
     scope: "Reducer composition and snapshot-owned statechart qualification",
-    manifest: "shared/redux/Cargo.toml", targets: #["crates/redux"],
+    manifest: "crates/redux/Cargo.toml", targets: #["crates/redux"],
     evidence: #["shared/0_reuse.md", "blender-godot-sqlite-proof/falcon-lab/109_tasks.md"],
   },
   `game-input`: #{
     stage: 3, destination: "library", task: "A1",
     scope: "Snapshot-owned button buffering; held and repressed input proofs",
-    manifest: "shared/input/Cargo.toml", targets: #["crates/input"],
+    manifest: "crates/input/Cargo.toml", targets: #["crates/input"],
     evidence: #["shared/0_reuse.md", "blender-godot-sqlite-proof/falcon-lab/109_tasks.md"],
   },
   rollback: #{
     stage: 3, destination: "library", task: "A1",
     scope: "GGRS adapter and full-state replay qualification harness",
-    manifest: "shared/rollback/Cargo.toml", targets: #["crates/rollback"],
+    manifest: "crates/rollback/Cargo.toml", targets: #["crates/rollback"],
     evidence: #["shared/0_reuse.md", "blender-godot-sqlite-proof/falcon-lab/109_tasks.md"],
   },
   `game-capture`: #{
     stage: 3, destination: "library", task: "A1",
     scope: "Reusable wgpu recording, labels and presentation repetition",
-    manifest: "shared/capture/Cargo.toml", targets: #["crates/capture"],
+    manifest: "crates/capture/Cargo.toml", targets: #["crates/capture"],
     evidence: #["shared/0_reuse.md", "blender-godot-sqlite-proof/falcon-lab/109_tasks.md"],
   },
   `falcon-simulation`: #{

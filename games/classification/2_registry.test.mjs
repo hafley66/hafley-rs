@@ -33,7 +33,7 @@ test('repository checks reject broken identity, references and promotion claims'
     [e => { e.redux.evidence = []; }, /qualification requires evidence/],
     [e => { e.redux.task = 'NEVER'; }, /unknown task/],
     [e => { e.redux.task = 'A2, A3'; }, /unknown task/],
-    [e => { e.redux.stage = 4; }, /stage 4 requires integration/],
+    [e => { e.redux.stage = 4; e.redux.targets = ['crates/pending-redux']; }, /stage 4 requires integration/],
     [e => { e.redux.targets = ['smash/crates/redux']; }, /library targets/],
     [e => { e.smash.stage = 2; }, /implemented stage requires manifest/],
     [e => { e.smash.targets = ['crates/smash']; }, /app target/],

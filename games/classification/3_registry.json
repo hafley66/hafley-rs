@@ -4,7 +4,7 @@
     "destination": "library",
     "task": "A1",
     "scope": "Reducer composition and snapshot-owned statechart qualification",
-    "manifest": "shared/redux/Cargo.toml",
+    "manifest": "crates/redux/Cargo.toml",
     "targets": [
       "crates/redux"
     ],
@@ -18,7 +18,7 @@
     "destination": "library",
     "task": "A1",
     "scope": "Snapshot-owned button buffering; held and repressed input proofs",
-    "manifest": "shared/input/Cargo.toml",
+    "manifest": "crates/input/Cargo.toml",
     "targets": [
       "crates/input"
     ],
@@ -32,7 +32,7 @@
     "destination": "library",
     "task": "A1",
     "scope": "GGRS adapter and full-state replay qualification harness",
-    "manifest": "shared/rollback/Cargo.toml",
+    "manifest": "crates/rollback/Cargo.toml",
     "targets": [
       "crates/rollback"
     ],
@@ -46,7 +46,7 @@
     "destination": "library",
     "task": "A1",
     "scope": "Reusable wgpu recording, labels and presentation repetition",
-    "manifest": "shared/capture/Cargo.toml",
+    "manifest": "crates/capture/Cargo.toml",
     "targets": [
       "crates/capture"
     ],
