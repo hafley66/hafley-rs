@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { requireProof, runStage } from './100_workflow.mjs';
+import '../../shared/workflow/0_fingerprint.test.mjs';
 
 test('deployment rejects absent, failed, stale-source, stale-toolchain and changed-artifact proofs', () => {
   const proof = { status: 'passed', source: 'source', tools: { rust: 'pinned' }, hashes: { wasm: 'hash' } };
