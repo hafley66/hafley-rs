@@ -32,6 +32,9 @@ test-godot: check-generated
     godot --headless --path godot --script res://1_rows_test.gd
     godot --headless --path godot --script res://1_payload.test.gd
 
+godot-build:
+    lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo build --features gdext --lib
+
 # Rust library and controller checks.
 _test-core: check-generated
     just test-reuse
