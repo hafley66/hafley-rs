@@ -9,6 +9,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+/// A lane spawn, its supervisor exit and its epilogue. This fixture is
+/// intermittent on a loaded machine, on unmodified main as well.
+const CARCASS_DEADLINE_SECS: u64 = 20;
+
 /// A throwaway repo, mailbox, PATH and tmux socket. The harness the spawn
 /// names is absent from that PATH, which is what makes every spawn DOA.
 struct Doa {
@@ -138,7 +142,7 @@ impl Doa {
         );
         let worktree = self.worktree_of(branch);
         assert!(worktree.exists(), "the spawn makes the worktree");
-        let deadline = Instant::now() + Duration::from_secs(20);
+        let deadline = Instant::now() + Duration::from_secs(CARCASS_DEADLINE_SECS);
         while Instant::now() < deadline {
             let routed = boop::bus::read_routes(&self.mail)
                 .unwrap_or_default()

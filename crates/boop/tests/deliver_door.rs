@@ -306,7 +306,9 @@ fn a_door_harness_takes_the_body_and_leaves_one_delivery_row() {
     assert_eq!(landing.rung, Rung::Door);
     assert_eq!(
         std::fs::read_to_string(dir.join("door.log")).unwrap(),
-        "live-1 <- ping through the door"
+        "live-1 <- [boop m-door from coordinator] ping through the door",
+        "the door receives the body rendered through the recipient's mood, so \
+         a pushed row names its sender"
     );
 
     let rows = store.delivery_rows("m-door").unwrap();
@@ -395,7 +397,7 @@ fn a_door_falls_back_to_the_last_agent_live_row() {
     assert_eq!(landing.rung, Rung::Door);
     assert_eq!(
         std::fs::read_to_string(dir.join("door.log")).unwrap(),
-        "stored-1 <- through the projection"
+        "stored-1 <- [boop m-fallback from coordinator] through the projection"
     );
     assert_eq!(
         store
@@ -675,8 +677,8 @@ fn a_lane_end_row_takes_the_door_of_a_live_route() {
         assert_eq!(landing.rung, Rung::Door, "a {kind} row takes the door");
         assert_eq!(
             std::fs::read_to_string(dir.join("door.log")).unwrap(),
-            "live-1 <- lane feature-x done rc=1",
-            "the {kind} row's body reached the door"
+            format!("live-1 <- [boop {id} from coordinator] lane feature-x done rc=1"),
+            "the {kind} row's body reached the door, sender named"
         );
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -696,7 +698,7 @@ fn a_reply_to_a_beep_still_takes_the_door_of_the_same_route() {
     assert_eq!(landing.rung, Rung::Door);
     assert_eq!(
         std::fs::read_to_string(dir.join("door.log")).unwrap(),
-        "live-1 <- the answer is 4"
+        "live-1 <- [boop m-sup-reply from coordinator] the answer is 4"
     );
     let _ = std::fs::remove_dir_all(dir);
 }

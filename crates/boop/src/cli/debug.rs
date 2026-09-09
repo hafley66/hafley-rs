@@ -183,7 +183,6 @@ pub(crate) fn run_debug(since: &str, lane: Option<&str>, json: bool) -> Result<(
     Ok(())
 }
 
-
 /// An opencode model spelling handed to the codex adapter is a broken lane, so
 /// a default preset whose model routes elsewhere goes unused.
 pub(crate) fn default_preset_for_harness(

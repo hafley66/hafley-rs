@@ -557,7 +557,16 @@ fn land(
     if let Some(cooled) = door_gate(store, to, routes, &message.body, budget, now_ms)? {
         return Ok(cooled);
     }
-    Ok(match harness.door().deliver(&live, &message.body)? {
+    // The recipient reads pushed mail beside its own turns, so the row names
+    // its sender through the same mood template a lane's supervisor uses.
+    let rendered = crate::supervise::render_mail(
+        &crate::supervise::mood_template(to),
+        message.kind.as_str(),
+        &message.id,
+        &message.from,
+        &message.body,
+    );
+    Ok(match harness.door().deliver(&live, &rendered)? {
         Delivered::Injected => Landing::new(Rung::Door, "door"),
         Delivered::QueuedForTurnBoundary => Landing::new(Rung::DoorQueue, "door queue"),
         Delivered::Unreachable(why) => door_route_below_the_door(registry, route, to, why),
@@ -916,6 +925,18 @@ mod tests {
         DOOR_LOG.lock().unwrap().clone()
     }
 
+    /// The door log with the recipient's mood prefix stripped, so a body
+    /// assertion names what the sender wrote.
+    fn door_bodies() -> Vec<String> {
+        door_log()
+            .into_iter()
+            .map(|line| match line.split_once("] ") {
+                Some((_, body)) => body.to_owned(),
+                None => line,
+            })
+            .collect()
+    }
+
     impl Door for FakeClaudeDoor {
         fn deliver(&self, _session: &LiveSession, body: &str) -> Result<Delivered> {
             DOOR_LOG.lock().unwrap().push(body.to_owned());
@@ -1180,7 +1201,7 @@ mod tests {
             );
             assert_eq!(drain_all_held_mail(&dir, &registry, &later_process), 0);
         }
-        let copies = door_log()
+        let copies = door_bodies()
             .iter()
             .filter(|body| body.as_str() == "push me")
             .count();
@@ -1409,7 +1430,7 @@ mod tests {
             assert_eq!(landing.rung.state(), DeliveryState::AcceptedByHarness);
             assert!(landing.rung.carried_the_body());
             assert!(
-                door_log().iter().any(|body| body == &message.body),
+                door_bodies().iter().any(|body| body == &message.body),
                 "{kind} never reached the door"
             );
             let _ = std::fs::remove_dir_all(dir);
@@ -1430,7 +1451,7 @@ mod tests {
             );
             assert_eq!(landing.detail, format!("{kind} row; no door"));
             assert!(
-                !door_log().iter().any(|body| body == &message.body),
+                !door_bodies().iter().any(|body| body == &message.body),
                 "{kind} opened a door"
             );
             assert_eq!(bus::held_messages(&store, &message.to).unwrap().len(), 1);
@@ -1479,7 +1500,7 @@ mod tests {
         let pushed =
             drain_route_held_mail_budgeted(&dir, &registry, &store, "claude-burst", &budget);
         assert_eq!(pushed, 2, "the budget is the floor for one live lane");
-        let taken: Vec<_> = door_log()
+        let taken: Vec<_> = door_bodies()
             .into_iter()
             .filter(|body| body.starts_with("b-"))
             .collect();
@@ -1531,7 +1552,7 @@ mod tests {
         );
         assert_eq!(store.door_blowouts("claude-burst").unwrap().len(), 1);
         assert_eq!(
-            door_log()
+            door_bodies()
                 .iter()
                 .filter(|body| body.starts_with("b-"))
                 .count(),
@@ -1560,7 +1581,7 @@ mod tests {
             std::thread::sleep(Duration::from_millis(400));
         }
         assert_eq!(per_pass, [2, 2, 1]);
-        let taken: Vec<_> = door_log()
+        let taken: Vec<_> = door_bodies()
             .into_iter()
             .filter(|body| body.starts_with("d-"))
             .collect();
@@ -1586,7 +1607,7 @@ mod tests {
         let trip = store.latest_door_blowout("claude-replay").unwrap().unwrap();
         assert!(trip.why.contains("same body"), "{}", trip.why);
         assert_eq!(
-            door_log()
+            door_bodies()
                 .iter()
                 .filter(|body| body.as_str() == "r-same")
                 .count(),
@@ -1660,7 +1681,7 @@ mod tests {
             0
         );
         assert!(
-            !door_log()
+            !door_bodies()
                 .iter()
                 .any(|body| body == "already in front of you"),
             "the door was handed a row it already holds"

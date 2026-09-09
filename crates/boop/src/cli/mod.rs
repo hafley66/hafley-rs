@@ -15,7 +15,6 @@ use anyhow::{Context, Result};
 use boop::bus::Route;
 use boop::{bus, ident};
 
-
 /// The schema version is interpolated, not literal, so a bump to
 /// `ident::SCHEMA_VERSION` cannot leave this text stale.
 pub(crate) fn doctrine() -> String {
@@ -356,7 +355,9 @@ fn tui_owned_trail() -> Option<&'static std::sync::Mutex<std::fs::File>> {
 /// a process outside a TUI carries no stamp. Neither reads the store.
 fn open_tui_owned_trail() -> Option<std::sync::Mutex<std::fs::File>> {
     use std::io::IsTerminal;
-    let name = std::env::var(TUI_PANE_ENV).ok().filter(|it| !it.is_empty())?;
+    let name = std::env::var(TUI_PANE_ENV)
+        .ok()
+        .filter(|it| !it.is_empty())?;
     if !std::io::stdout().is_terminal() {
         return None;
     }
