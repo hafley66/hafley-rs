@@ -52,10 +52,25 @@ pub fn advance(world: &mut World, pressed: u8, actions: &[Action], axis: f32) ->
     }
     let source = &actions[world.action];
     let interruptible = source.frames[world.animation.min(source.frames.len() - 1)].interruptible;
-    if height > 0.0
-        && pressed & 2 != 0
-        && (matches!(world.action, JUMP | FALL) || (world.action == FAIR && interruptible))
-    {
+    let eligible = height > 0.0
+        && (matches!(world.action, JUMP | FALL) || (world.action == FAIR && interruptible));
+    let attack = if let Some(buffer) = &mut world.input_buffer {
+        let out = buffer
+            .state
+            .advance(pressed & 2 != 0, eligible, buffer.cancel, buffer.window);
+        buffer.cancel = false;
+        buffer.consumed = out == game_input::Outcome::Consumed;
+        buffer.expired = out == game_input::Outcome::Expired;
+        buffer.cancelled = out == game_input::Outcome::Cancelled;
+        tracing::trace!(target: "falcon::input", tick = world.frame,
+            window = buffer.window, pressed = pressed & 2 != 0, eligible,
+            pending = buffer.state.remaining().is_some(), remaining = buffer.state.remaining(),
+            consumed = buffer.consumed, expired = buffer.expired, cancelled = buffer.cancelled);
+        buffer.consumed
+    } else {
+        eligible && pressed & 2 != 0
+    };
+    if attack {
         enter(world, FAIR);
     }
     [

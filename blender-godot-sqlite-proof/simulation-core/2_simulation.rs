@@ -16,6 +16,8 @@ const JUMP: u8 = 1;
 const ATTACK: u8 = 2;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct World {
+    #[serde(default)]
+    pub input_buffer: Option<InputBuffer>,
     pub frame: i32,
     pub action: usize,
     pub animation: usize,
@@ -27,6 +29,16 @@ pub struct World {
     pub last_hit: Option<i32>,
     pub view: Tick,
     pub bag: Option<sandbag::Sandbag>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct InputBuffer {
+    pub window: u32,
+    pub state: game_input::Buffer,
+    pub cancel: bool,
+    pub consumed: bool,
+    pub expired: bool,
+    pub cancelled: bool,
 }
 
 pub fn fixture_input(tick: i32) -> u8 {
@@ -56,7 +68,12 @@ impl redux::Slice for Step {
     type Output = ();
     type Effect = redux::Never;
 
-    fn reduce(world: &mut World, (bits, axis): Self::Event, actions: Self::Context<'_>, _: &mut impl FnMut(Self::Effect)) {
+    fn reduce(
+        world: &mut World,
+        (bits, axis): Self::Event,
+        actions: Self::Context<'_>,
+        _: &mut impl FnMut(Self::Effect),
+    ) {
         reduce_tick(world, bits, actions, axis);
     }
 }

@@ -1,4 +1,4 @@
-// Generated from 0_presentation.tsp; sha256:97fb1dd6dec830758add983626bc9de314056748c2763cf496496fa4022ee437
+// Generated from 0_presentation.tsp; sha256:055253d52b18369f5035b4ec7038efff8d8212f9988b5d260e3e715865b0e190
 use godot::prelude::*;
 
 use crate::fixture::sql_viewer::boundary::contracts::*;
@@ -126,6 +126,54 @@ impl ControlInput {
         assert!((out.buttons as f64) <= 3.0, "out of range buttons");
         assert!((out.axis as f64) >= -1.0, "out of range axis");
         assert!((out.axis as f64) <= 1.0, "out of range axis");
+        out
+    }
+}
+
+impl BufferPolicy {
+    pub fn to_dictionary(&self) -> VarDictionary {
+        let mut out = VarDictionary::new();
+        out.set("window_frames", i64::try_from(self.window_frames).expect("Godot integer range").to_variant());
+        out
+    }
+}
+
+impl BufferPolicy {
+    pub fn from_dictionary(value: &VarDictionary) -> Self {
+        let out = Self {
+            window_frames: value.get("window_frames").expect("missing window_frames").try_to::<u32>().expect("invalid window_frames"),
+        };
+
+
+        out
+    }
+}
+
+impl BufferInspection {
+    pub fn to_dictionary(&self) -> VarDictionary {
+        let mut out = VarDictionary::new();
+        out.set("tick", self.tick.to_variant());
+        out.set("pending", self.pending.to_variant());
+        out.set("remaining_frames", i64::try_from(self.remaining_frames).expect("Godot integer range").to_variant());
+        out.set("consumed", self.consumed.to_variant());
+        out.set("expired", self.expired.to_variant());
+        out.set("cancelled", self.cancelled.to_variant());
+        out
+    }
+}
+
+impl BufferInspection {
+    pub fn from_dictionary(value: &VarDictionary) -> Self {
+        let out = Self {
+            tick: value.get("tick").expect("missing tick").try_to::<i64>().expect("invalid tick"),
+            pending: value.get("pending").expect("missing pending").try_to::<bool>().expect("invalid pending"),
+            remaining_frames: value.get("remaining_frames").expect("missing remaining_frames").try_to::<u32>().expect("invalid remaining_frames"),
+            consumed: value.get("consumed").expect("missing consumed").try_to::<bool>().expect("invalid consumed"),
+            expired: value.get("expired").expect("missing expired").try_to::<bool>().expect("invalid expired"),
+            cancelled: value.get("cancelled").expect("missing cancelled").try_to::<bool>().expect("invalid cancelled"),
+        };
+
+
         out
     }
 }

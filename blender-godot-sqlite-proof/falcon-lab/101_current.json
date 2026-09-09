@@ -1,14 +1,14 @@
 {
   "objective": "Extract reusable game foundations from existing v1/v3 machinery through playable Falcon slices toward Lovers/Terraria/Smash",
-  "next": "I2: integrate the qualified statechart through Redux into Falcon; first verify snapshot/serialization and generated IO requirements, preserving ruleset-owned behavior",
+  "next": "I3: record and inspect the passing zero/eight-frame Falcon buffering comparison using just buffer-proof",
   "acceptance": "104_tasks.md: buffered-input consumption/expiry/cancellation, rollback proof and labeled MP4; boots/terrain remains a following milestone",
   "coverage": "99_lifecycle_import.md",
   "plan": "92_web_import_plan.md",
   "tasks": "104_tasks.md",
   "task_lookback": 3,
-  "current_task": "I2",
+  "current_task": "I3",
   "pending": [
-    "I2", "I3", "G2", "G3", "G4", "G5", "G6", "G7", "P1", "P2", "P3", "P4"
+    "I3", "G2", "G3", "G4", "G5", "G6", "G7", "P1", "P2", "P3", "P4"
   ],
   "deferred": ["G1"]
 }

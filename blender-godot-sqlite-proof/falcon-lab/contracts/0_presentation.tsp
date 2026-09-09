@@ -68,6 +68,19 @@ union FrameStatus {
 }
 
 model Position { x: float32; y: float32; z: float32; }
+const BUFFER_FLAG: string = "--buffer-proof";
+const BUFFER_TICKS: uint32 = 180;
+
+// Lab-policy IO. These values do not claim a named source game's input behavior.
+@godot model BufferPolicy { window_frames: uint32; }
+@godot model BufferInspection {
+  tick: int64;
+  pending: boolean;
+  remaining_frames: uint32;
+  consumed: boolean;
+  expired: boolean;
+  cancelled: boolean;
+}
 const CONTROL_TICKS: uint32 = 300;
 const CONTROL_SNAPSHOT: uint32 = 180;
 const CONTROL_ACTION_LABELS: string = "IDLE|JUMP|FAIR|JUMP SQUAT|FALL|FAIR LANDING|HEAVY LANDING";

@@ -1,6 +1,7 @@
-# Generated from 0_presentation.tsp; sha256:97fb1dd6dec830758add983626bc9de314056748c2763cf496496fa4022ee437
+# Generated from 0_presentation.tsp; sha256:055253d52b18369f5035b4ec7038efff8d8212f9988b5d260e3e715865b0e190
 extends RefCounted
 
+const BUFFER_FLAG = "--buffer-proof"
 const CONTROL_ACTION_LABELS = "IDLE|JUMP|FAIR|JUMP SQUAT|FALL|FAIR LANDING|HEAVY LANDING"
 const REPEAT_FLAG = "--repeat"
 
@@ -329,6 +330,61 @@ class ControlInput:
 		return {
 			"buttons": buttons,
 			"axis": axis,
+		}
+
+class BufferPolicy:
+	var window_frames: int
+
+	static func from_wire(data: Dictionary) -> BufferPolicy:
+		var out := BufferPolicy.new()
+		assert(data.has("window_frames"), "Missing BufferPolicy.window_frames")
+		assert(typeof(data["window_frames"]) == TYPE_INT, "Invalid BufferPolicy.window_frames")
+		out.window_frames = data["window_frames"]
+		return out
+
+	func to_wire() -> Dictionary:
+		return {
+			"window_frames": window_frames,
+		}
+
+class BufferInspection:
+	var tick: int
+	var pending: bool
+	var remaining_frames: int
+	var consumed: bool
+	var expired: bool
+	var cancelled: bool
+
+	static func from_wire(data: Dictionary) -> BufferInspection:
+		var out := BufferInspection.new()
+		assert(data.has("tick"), "Missing BufferInspection.tick")
+		assert(typeof(data["tick"]) == TYPE_INT, "Invalid BufferInspection.tick")
+		out.tick = data["tick"]
+		assert(data.has("pending"), "Missing BufferInspection.pending")
+		assert(typeof(data["pending"]) == TYPE_BOOL, "Invalid BufferInspection.pending")
+		out.pending = data["pending"]
+		assert(data.has("remaining_frames"), "Missing BufferInspection.remaining_frames")
+		assert(typeof(data["remaining_frames"]) == TYPE_INT, "Invalid BufferInspection.remaining_frames")
+		out.remaining_frames = data["remaining_frames"]
+		assert(data.has("consumed"), "Missing BufferInspection.consumed")
+		assert(typeof(data["consumed"]) == TYPE_BOOL, "Invalid BufferInspection.consumed")
+		out.consumed = data["consumed"]
+		assert(data.has("expired"), "Missing BufferInspection.expired")
+		assert(typeof(data["expired"]) == TYPE_BOOL, "Invalid BufferInspection.expired")
+		out.expired = data["expired"]
+		assert(data.has("cancelled"), "Missing BufferInspection.cancelled")
+		assert(typeof(data["cancelled"]) == TYPE_BOOL, "Invalid BufferInspection.cancelled")
+		out.cancelled = data["cancelled"]
+		return out
+
+	func to_wire() -> Dictionary:
+		return {
+			"tick": tick,
+			"pending": pending,
+			"remaining_frames": remaining_frames,
+			"consumed": consumed,
+			"expired": expired,
+			"cancelled": cancelled,
 		}
 
 class FramePayload:

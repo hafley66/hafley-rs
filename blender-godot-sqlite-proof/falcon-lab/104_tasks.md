@@ -50,8 +50,8 @@ semantics before adding entry actions; production runtime is still unchanged.
 | ID | State | Work | Completion / checkpoint |
 | --- | --- | --- | --- |
 | I1 | Done | Trace existing buffered input and source tests; inspect v3 counterpart | `105_input_slice.md`: three source checks complete. User subsequently requested statig/Redux and GGRS qualification, then continuation. Source tests read, not newly executed. |
-| I2 | In progress | Extract required input machinery into `games/shared` and wire Falcon | Qualified statig/Redux/GGRS test retained; verify actual Falcon snapshot/serialization boundary before wiring. Preserve source semantics/tests and provenance; shared IO follows TSP guidance. |
-| I3 | Pending, after I2 | Prove one buffered-action scenario | Independent consumption, expiry and cancellation assertions; restore/replay and GGRS corrected-state equality; inspected H.264 MP4 with actual pending input, window state and consumption labels. |
+| I2 | Done | Extract required input machinery into `games/shared` and wire Falcon | Shared input buffer consumed by existing Redux Step; generated policy/inspection types; full clone/JSON/bincode restore and GGRS/SQL tests pass. See increment below. |
+| I3 | In progress | Prove one buffered-action scenario | Deterministic proof passes; `just buffer-proof` added. GPU recording and frame inspection next. |
 
 Scope: one buffered behavior, selected from inspected source evidence. Its exact
 Falcon mapping is proposed in I1. Do not assume the existing input crate already
@@ -72,7 +72,7 @@ current state during the work so the coordinator can interrupt or redirect drift
 | G7 | On deck | Moving ship and larger-world qualification after G6. |
 | P1 | Pending | Shared TSP generation glue, non-Falcon fixture and Falcon consumer. |
 | P2 | Pending | Shared SQLite ring/query/publication, preserving existing core-labs tests. |
-| P3 | Pending | Shared capture/MP4/workflow receipts; apply when extending recording for I3. |
+| P3 | Partial | GPU/FFmpeg recorder extracted to shared/capture and consumed by existing recorder and I3; independent mesh test passes. Workflow fingerprint extraction retained; remaining receipt tooling pending. |
 | P4 | Pending | Shared web driver/local export guards; no deployment required. |
 
 All predecessor deferrals, browser/photo goals, protected deployment paths and
@@ -96,7 +96,7 @@ not a completed audit of v1/v3.
 
 | Capability | Source evidence | Task / status |
 | --- | --- | --- |
-| Quantized participant input | `crates/input/src/{0_types,1_quantize}.rs`: four i8 axes, u32 buttons and conversion | I1/I2; not integrated in Falcon |
+| Quantized participant input | `crates/input/src/{0_types,1_quantize}.rs`: four i8 axes, u32 buttons and conversion | Ported to shared/input; richer four-axis Falcon mapping remains pending |
 | Pressed/held and directional input | `games/kneeman/src/0_input_frame.rs` | I1; richer application input remains source-owned |
 | Buffered action / coyote timing | `games/kneeman/src/v1/{physics,replay_tests,di_tests}.rs` | I1 first traces one behavior; remaining useful behavior stays pending |
 | v3 input and game utilities | `smashy/reference/og-v1/gdscript-labs/v3-game-dom-css-lab/`, details in `105_input_slice.md` | Input edges/routes inspected; authored buffer FSM documented as pending. Other utilities remain pending inspection. |
@@ -112,3 +112,28 @@ Rukaidata source submodule: `../vendor/rukaidata`, remote
 `b0d6dd0999a28760ba21983a298cad44ad9ecff7`. Added through Git; source code and
 downloaded fighter payloads remain separate dependencies. Submodule declaration
 was staged before this planning update; no commit is claimed here.
+
+## I2 integration receipt (2026-09-09)
+
+Production shared `Buffer::advance(press, eligible, cancel, window) -> Outcome`
+uses macro-free statig with no entry/exit actions. Falcon World owns the optional
+buffer and policy; existing Redux Step advances it. Game owns eligibility and
+aging. V1 replacement/age-before-record distilled with provenance in
+`../../shared/0_reuse.md`. The buffer counter includes the press frame plus N
+following ticks; no Melee/PM/Ultimate policy equivalence is claimed.
+
+`106_buffer.rs`: same 180-tick tape, lab windows 0/8, actual GGRS SyncTest distance
+7. Every corrected World equals direct execution; published SQLite rows and
+derived mesh equal direct rows/mesh. Five checkpoints per policy replay through
+clone, JSON and bincode restoration. Default unbuffered World also binary-round-
+trips. Optional fields are serialized explicitly to preserve binary field layout.
+Historical binary snapshots predating this schema change are not supported.
+Existing raw-Serde/entry-action negative qualification test remains intact.
+
+`just test core` passed: `.workflow/test-AXxLQg/receipt.json`, 28 Falcon tests,
+3 shared input tests, 1 shared capture test, existing Redux/rollback and generator
+tests. `just test-godot` passed outside sandbox after its user-log access failed
+inside sandbox. Initial core receipt rejected source edits during the run; the
+fresh stable-source run above passed. No network, web deployment or interactive
+policy picker was added. Buffer proof is the new runtime consumer; ordinary
+unconfigured worlds retain immediate-input behavior. I3 recording pending.
