@@ -60,6 +60,25 @@ fn rejects_malformed_and_trailing_payloads() {
 }
 
 #[test]
+fn retained_kirby_actions_use_the_same_decoder_and_baker() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../smash/src/fighters/kirby");
+    let actions = ["0_JumpSquat.html", "1_LandingHeavy.html"]
+        .map(|file| decode_file(&dir.join(file)).unwrap());
+    assert_eq!(actions.each_ref().map(|a| a.name.as_str()), ["JumpSquat", "LandingHeavy"]);
+    let baked = bake(&actions);
+    assert_eq!(baked.len(), 2);
+    for (source, output) in actions.iter().zip(&baked) {
+        assert!(!source.frames.is_empty());
+        assert!(source.frames.iter().any(|f| !f.hurt_boxes.is_empty()));
+        assert_eq!(output.frames.len(), source.frames.len());
+        assert_eq!(output.iasa, source.iasa);
+    }
+    let falcon = decode_file(&fixture("6_pm36_JumpSquat.html")).unwrap();
+    assert_ne!(serde_json::to_value(&actions[0]).unwrap(), serde_json::to_value(falcon).unwrap());
+}
+
+#[test]
 fn synthetic_identity_is_not_a_fighter_whitelist() {
     // Synthetic mutation verifies name independence, not another real character.
     let mut source = decode_file(&fixture("4_pm36_Wait1.html")).unwrap();

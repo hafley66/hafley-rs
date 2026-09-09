@@ -315,7 +315,10 @@ func _physics_process(_delta):
 func _process_control_demo():
 	if tick == extension.control_ticks() - 1 and remaining == 0:
 		if finish_hold == 60:
-			var verified: bool = extension.finish_controlled(OS.get_environment("FALCON_CONTROL_PROOF"))
+			var proof_path := OS.get_environment("FALCON_CONTROL_PROOF")
+			if proof_path.is_empty():
+				proof_path = "user://falcon-control-proof.json"
+			var verified: bool = extension.finish_controlled(proof_path)
 			assert(verified)
 			captions[6].text = "0.5X DEMO / SNAPSHOT REPLAY: 120 STATES EXACT / SQL + MESH EXACT"
 		finish_hold -= 1
