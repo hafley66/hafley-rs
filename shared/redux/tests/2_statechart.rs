@@ -269,6 +269,46 @@ fn serialized_restore_reenters_state_unlike_clone_restore() {
 }
 
 #[test]
+fn ggrs_restore_detects_accidental_serde_reinitialization() {
+    use rollback::RollbackSim;
+    let rules = Rules { window: 3 };
+    let mut session = rollback::synctest_session::<ChartSim>(1, 3);
+    let mut game = rollback::Game::<ChartSim>::new(rules);
+    let mut expected = ChartSim::initial(&rules);
+    let mut loads = 0;
+    let mut detected = None;
+    for tick in 0..16 {
+        let input = if tick % 4 == 0 { 1 } else { 0 };
+        session.add_local_input(0, input).unwrap();
+        for request in session.advance_frame().unwrap() {
+            let restoring = matches!(&request, ggrs::GgrsRequest::LoadGameState { .. });
+            game.handle(vec![request]);
+            if restoring {
+                loads += 1;
+                // Deliberately broken restore path: GGRS saved an initialized
+                // clone, but this extra round-trip discards initialization.
+                game.state =
+                    serde_json::from_slice(&serde_json::to_vec(&game.state).unwrap()).unwrap();
+            }
+        }
+        expected = ChartSim::advance(&expected, &[input], &rules);
+        if game.state != expected {
+            detected = Some((
+                game.state.0.input.inner().entries,
+                expected.0.input.inner().entries,
+            ));
+            break;
+        }
+    }
+    assert!(loads > 0, "negative test must cross an actual GGRS restore");
+    let (actual_entries, expected_entries) = detected.expect("must detect the broken restore");
+    assert!(
+        actual_entries > expected_entries,
+        "restoration reran entry actions"
+    );
+}
+
+#[test]
 fn policies_expiry_consumption_cancellation_and_same_tick_output() {
     let tape = [
         (true, false, false),
