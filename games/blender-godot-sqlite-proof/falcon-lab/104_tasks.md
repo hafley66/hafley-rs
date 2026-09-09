@@ -51,7 +51,7 @@ semantics before adding entry actions; production runtime is still unchanged.
 | --- | --- | --- | --- |
 | I1 | Done | Trace existing buffered input and source tests; inspect v3 counterpart | `105_input_slice.md`: three source checks complete. User subsequently requested statig/Redux and GGRS qualification, then continuation. Source tests read, not newly executed. |
 | I2 | Done | Extract required input machinery into `games/shared` and wire Falcon | Shared input buffer consumed by existing Redux Step; generated policy/inspection types; full clone/JSON/bincode restore and GGRS/SQL tests pass. See increment below. |
-| I3 | In progress | Prove one buffered-action scenario | Deterministic proof passes; `just buffer-proof` added. GPU recording and frame inspection next. |
+| I3 | Done | Prove one buffered-action scenario | `just buffer-proof` passed; 540-frame H.264 inspected at action divergence and cancellation. `108_buffer_receipt.md` records commands, evidence and limits. |
 
 Scope: one buffered behavior, selected from inspected source evidence. Its exact
 Falcon mapping is proposed in I1. Do not assume the existing input crate already
@@ -136,4 +136,11 @@ tests. `just test-godot` passed outside sandbox after its user-log access failed
 inside sandbox. Initial core receipt rejected source edits during the run; the
 fresh stable-source run above passed. No network, web deployment or interactive
 policy picker was added. Buffer proof is the new runtime consumer; ordinary
-unconfigured worlds retain immediate-input behavior. I3 recording pending.
+unconfigured worlds retain immediate-input behavior. Committed as `1707594`.
+
+I3 completed: `108_buffer_receipt.md`. Both policies execute 180 ticks, 172 real
+GGRS loads and 1,384 advances; 624 suffix ticks per restore method per policy.
+Window 0 expires at tick 22; window 8 consumes at 25; both cancel at 102.
+Recorded and visually inspected 9-second MP4, 540 frames, 735,384 bytes.
+`just test-simulation-wasm` compiles the pure simulation, Redux and shared input
+for wasm32-unknown-unknown. No browser runtime or deployment claim.
