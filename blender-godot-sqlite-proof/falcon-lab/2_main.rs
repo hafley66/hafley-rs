@@ -1,3 +1,4 @@
+use smash::fighters::falcon;
 use base64::Engine;
 use brawllib_rs::high_level_fighter::{CollisionBoxValues, HighLevelFrame, HighLevelSubaction};
 use cgmath::{Matrix4, Vector3};
@@ -73,7 +74,7 @@ pub(crate) fn decode_file(path: &std::path::Path) -> Result<HighLevelSubaction, 
         Ok(action)
 }
 
-pub(crate) use falcon_simulation::Tick;
+pub(crate) use falcon::Tick;
 
 fn simulate(actions: &[HighLevelSubaction], target: [f32; 3]) -> Vec<Tick> {
     let mut damage = 0.0;

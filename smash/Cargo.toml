@@ -1,14 +1,14 @@
 [workspace]
 resolver="3"
 [package]
-name="falcon-simulation"
+name="smash"
 version="0.1.0"
 edition="2024"
 [lib]
-path="2_simulation.rs"
+path="src/lib.rs"
 [dependencies]
-redux = { path = "../../crates/redux" }
-game-input = { path = "../../crates/input" }
+redux = { path = "../crates/redux" }
+game-input = { path = "../crates/input" }
 serde={version="1",features=["derive"]}
 serde_json="1"
 tracing="=0.1.44"

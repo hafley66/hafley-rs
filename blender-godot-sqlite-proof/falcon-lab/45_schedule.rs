@@ -1,5 +1,6 @@
 //! Lab scheduling harness. std threads/Instant pace execution; rusqlite cursors
 //! and the existing core_labs FrameRing supply reader leases and recycling.
+use smash::fighters::falcon;
 use crate::fixture::{
     self, Runtime,
     sql_viewer::boundary::{self, Boundary, Ring, Row},
@@ -24,7 +25,7 @@ pub type State = Arc<Mutex<Shared>>;
 
 #[derive(Deserialize)]
 struct Recorded {
-    world: falcon_simulation::World,
+    world: falcon::World,
 }
 
 /// Clock is called before each fixed simulation step. Neither publication nor
@@ -55,7 +56,7 @@ pub fn run(
     let mut published_tick = -1;
     for (tick, expected) in golden.iter().enumerate() {
         clock(tick);
-        let pair = runtime.advance(falcon_simulation::fixture_input(tick as i32))?;
+        let pair = runtime.advance(falcon::fixture_input(tick as i32))?;
         assert_eq!(runtime.tick(), tick + 1);
         for (actual, expected) in pair.iter().zip(expected) {
             assert_eq!(

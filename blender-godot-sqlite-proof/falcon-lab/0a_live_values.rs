@@ -1,6 +1,7 @@
 //! Dynamic presentation metadata shared by decoded and offline-baked assets.
+use smash::fighters::falcon;
 use super::boundary::contracts::{FrameValues, TargetValues, Row};
-use falcon_simulation::{World, sandbag::Phase};
+use falcon::{World, sandbag::Phase};
 
 pub fn state(world: &World, animation_x: f64, animation_y: f64, predicted: bool, applied: u8) -> [Row; 2] {
     let s = &world.view;

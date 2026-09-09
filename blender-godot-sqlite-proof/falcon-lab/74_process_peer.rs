@@ -1,9 +1,10 @@
 //! One independently clocked GGRS peer. The existing GGRS UDP codec owns the wire format.
+use smash::fighters::falcon;
 use crate::fixture::{
     self,
     sql_viewer::boundary::{Boundary, read_frame, contracts::PROTOCOL_VERSION},
 };
-use falcon_simulation::{World, fixture_input};
+use falcon::{World, fixture_input};
 use ggrs::{
     Config, NonBlockingSocket, PlayerType, PredictRepeatLast, SessionBuilder, SessionState,
     UdpNonBlockingSocket,

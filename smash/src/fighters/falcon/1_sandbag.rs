@@ -1,4 +1,4 @@
-use crate::Attack;
+use super::Attack;
 use rapier3d::prelude::*;
 use serde::{Deserialize, Serialize};
 use ssbm_utils::{calc, enums::character::Attributes};

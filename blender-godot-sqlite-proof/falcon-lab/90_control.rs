@@ -1,11 +1,12 @@
 //! Fixed-step player input through the existing simulation and SQLite publication.
+use smash::fighters::falcon;
 use crate::fixture::{self, baseline, sql_viewer};
 use sql_viewer::boundary::{Boundary, Row, ROW_CAPACITY};
 use sql_viewer::boundary::contracts::{
     ControlInput, ControlledStatus, ControlProof, FrameQuery, RowPublisher,
     CONTROL_TICKS, CONTROL_SNAPSHOT,
 };
-use falcon_simulation::{Simulation, World};
+use falcon::{Simulation, World};
 
 type Error = Box<dyn std::error::Error>;
 

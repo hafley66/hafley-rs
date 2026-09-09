@@ -12,7 +12,7 @@ direction with the approved Smash app destination.
 | R1 | Done | D2 roadmap, evidence, destination rules and queued labs added. `just map` and `just test-map` pass; SVG inspected through `just map-png`. App creation/migration remain A1. |
 | R2 | Done | Native TSP registry validates 9 existing packages + 1 app proposal through Cargo metadata; generates JSON/D2. Four test groups pass, including schema/identity/evidence/destination/staleness rejection. Populated SVG rendered and inspected. No scanner, package migration or automatic promotion. |
 | R3 | Done | Independent Astra audit found annotation-dependent schema checks, referenced-constant duplicate bypass, unrelated-table task acceptance and unchecked SVG freshness. Fixed with authoritative assignability, inline records, rolling ID-table lookup and temporary SVG comparison. Six test groups and `just test-map` pass; package moves remain A1. |
-| A1 | In progress | Redux, input, rollback and capture moved with source/tests/lockfiles to `crates/`; Falcon manifests and test commands consume moved packages. `just test core` passed (`falcon-lab/.workflow/test-ttAi1C/receipt.json`). Registry paths and roadmap updated. Remaining: move Falcon policy into `smash/src/fighters/falcon`, character-selectable offline ingestion, app executable consuming existing slice, remaining lab library/app splits. Report each move/dependency checkpoint before implementation. |
+| A1 | In progress | Shared crates moved in `b1c2046`. Falcon simulation moved into `smash/src/fighters/falcon`; lab/web imports use the app package, with no app dependency on the lab. Core tests passed (`falcon-lab/.workflow/test-FNxTcD/receipt.json`); pure WASM check passed. App registry 1 -> 2.7 carries the existing bounded slice evidence. Remaining: character-selectable offline ingestion, app executable consuming existing slice, remaining lab library/app splits. Report each move/dependency checkpoint before implementation. |
 | Q1 | Queued, first library lab | Pin ssbm_utils APIs already used. Table-driven fixtures for knockback, Sakurai angle, launch velocity, hitstun and target weight. Label Melee results separately from PM comparisons. Report mismatches and missing authoritative PM fixtures; do not invent expected values. |
 | Q2 | Queued | Baked pose/action fixtures verify bone-attached hurt/attack geometry, root motion, freeze/rate/transition and restore. Separate cosmetic interpolation. MP4 labels reflect actual action/frame/contact. |
 | A2 | Queued | Walk/jump/crouch on Small Battlefield with facing-relative attack/special input selection. Down-tilt interpretation and PM smash/tilt windows recorded. Restore input history and transitions. Yield when routing is proven before expanding moves. |
@@ -24,6 +24,14 @@ direction with the approved Smash app destination.
 | M1 | On deck after A3 | Two-fighter match, stocks, blast zones and respawn. Full PM Falcon state machine remains a later coverage expansion. |
 
 ## Q6 families, not claims of qualification
+
+A1 move verification: `just test core` and `just test-simulation-wasm` from the
+Falcon lab passed. The separate `94_web/Cargo.toml` native `cargo check` passed
+with the existing locked/offline two-job helper. `games/just test` passed all six
+registry groups and map freshness. Registry dependency blocks in all three
+affected lockfiles are unchanged. Browser execution, web adapter WASM export,
+deployment and new MP4 capture were not run for this source-ownership move.
+Promotion/session flow is committed in `cbf334c`, linked from `games/AGENTS.md`.
 
 Promotion destination is independent of the task's state above:
 

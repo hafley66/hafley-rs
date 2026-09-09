@@ -1,9 +1,10 @@
 //! Two attacks in one continuous stationary-target world, through generated rows.
 //! Uses existing Simulation/Parry hit detection and Capture; no new combat rules.
+use smash::fighters::falcon;
 use crate::fixture::{self, baseline::{self, gpu, text}, sql_viewer};
 use sql_viewer::boundary::{Boundary, Row, ROW_CAPACITY};
 use sql_viewer::boundary::contracts::{FrameQuery, RowPublisher, FrameValues, RepeatProof, REPEAT_PERIOD, REPEAT_TICKS};
-use falcon_simulation::{Simulation, World, fixture_input};
+use falcon::{Simulation, World, fixture_input};
 
 fn sequence() -> Result<(Vec<brawllib_rs::high_level_fighter::HighLevelSubaction>, Vec<World>, RepeatProof), Box<dyn std::error::Error>> {
     let actions = baseline::load()?;

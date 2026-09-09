@@ -26,13 +26,6 @@ const entries: Record<Entry> = #{
     manifest: "crates/capture/Cargo.toml", targets: #["crates/capture"],
     evidence: #["shared/0_reuse.md", "blender-godot-sqlite-proof/falcon-lab/109_tasks.md"],
   },
-  `falcon-simulation`: #{
-    stage: 2.7, destination: "split", task: "Q2",
-    scope: "Seven-action Falcon slice; shared mechanics and game policy need separation",
-    manifest: "blender-godot-sqlite-proof/simulation-core/Cargo.toml",
-    targets: #["crates/simulation", "smash"],
-    evidence: #["blender-godot-sqlite-proof/falcon-lab/109_tasks.md"],
-  },
   `core-labs`: #{
     stage: 2.7, destination: "split", task: "A1",
     scope: "Collision, physics rollback and SQLite proofs; optional Ozz remains unqualified",
@@ -62,8 +55,9 @@ const entries: Record<Entry> = #{
     evidence: #["blender-godot-sqlite-proof/falcon-lab/88_live_results.md"],
   },
   smash: #{
-    stage: 1, destination: "app", task: "A1",
-    scope: "Walk, jump, crouch; directional attacks/specials; side smash, down tilt, nair/fair/bair",
+    stage: 2.7, destination: "app", task: "A1",
+    scope: "Moved seven-action Falcon simulation and snapshot state; executable, general ingest and expanded moves pending",
+    manifest: "smash/Cargo.toml",
     targets: #["smash"], evidence: #["smash/0_readme.md", "3_tasks.md"],
   },
 };

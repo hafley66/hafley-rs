@@ -2,6 +2,7 @@
 // godot 0.4.5's #[class(init)] emits `base: base` in generated initialization.
 #![allow(clippy::redundant_field_names)]
 use godot::prelude::*;
+use smash::fighters::falcon;
 use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::JoinHandle;
 
@@ -413,7 +414,7 @@ impl FalconSql {
 
     #[func]
     fn next_frame(&mut self) -> VarDictionary {
-        self.advance(i64::from(falcon_simulation::fixture_input(
+        self.advance(i64::from(falcon::fixture_input(
             self.acknowledgements.len() as i32,
         )))
     }

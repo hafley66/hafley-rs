@@ -1,8 +1,9 @@
+use smash::fighters::falcon;
 // Reuse the preceding fixture's decoder and wireframe presentation unchanged.
 #[allow(dead_code)]
 #[path = "2_main.rs"]
 pub(crate) mod baseline;
-use falcon_simulation::sandbag;
+use falcon::sandbag;
 #[path = "21_sql_viewer.rs"]
 pub(crate) mod sql_viewer;
 use baseline::{gpu, text};
@@ -21,17 +22,17 @@ const ORANGE: [f32; 4] = [1.0, 0.42, 0.18, 1.0];
 const JUMP: u8 = 1;
 const ATTACK: u8 = 2;
 
-use falcon_simulation::World;
-pub(crate) fn bake(actions: &[HighLevelSubaction]) -> Vec<falcon_simulation::Action> {
+use falcon::World;
+pub(crate) fn bake(actions: &[HighLevelSubaction]) -> Vec<falcon::Action> {
     actions
         .iter()
-        .map(|a| falcon_simulation::Action {
+        .map(|a| falcon::Action {
             iasa: a.iasa,
             landing_lag: a.landing_lag,
             frames: a
                 .frames
                 .iter()
-                .map(|f| falcon_simulation::Frame {
+                .map(|f| falcon::Frame {
                     interruptible: f.interruptible,
                     landing_lag: f.landing_lag,
                     x_pos: f.x_pos,
@@ -43,7 +44,7 @@ pub(crate) fn bake(actions: &[HighLevelSubaction]) -> Vec<falcon_simulation::Act
                             let CollisionBoxValues::Hit(v) = &h.next_values else {
                                 return None;
                             };
-                            Some(falcon_simulation::Attack {
+                            Some(falcon::Attack {
                                 id: h.hitbox_id,
                                 position: [h.next_pos.x, h.next_pos.y, h.next_pos.z],
                                 radius: h.next_size,
@@ -63,10 +64,10 @@ pub(crate) fn bake(actions: &[HighLevelSubaction]) -> Vec<falcon_simulation::Act
         .collect()
 }
 fn input(tick: i32) -> u8 {
-    falcon_simulation::fixture_input(tick)
+    falcon::fixture_input(tick)
 }
 fn step(world: &mut World, bits: u8, actions: &[HighLevelSubaction]) {
-    falcon_simulation::advance_world(world, bits, &bake(actions));
+    falcon::advance_world(world, bits, &bake(actions));
 }
 
 struct Game;
@@ -150,7 +151,7 @@ pub(crate) fn handle<C: Config<Input = u8, State = World>>(
     requests: Vec<GgrsRequest<C>>,
     actions: &[HighLevelSubaction],
     loads: &mut usize,
-    baked: &[falcon_simulation::Action],
+    baked: &[falcon::Action],
     mut record: impl FnMut(&World),
 ) -> Display {
     let mut restored = Vec::new();
@@ -181,7 +182,7 @@ pub(crate) fn handle<C: Config<Input = u8, State = World>>(
                 applied = inputs[0].0;
                 predicted = inputs[0].1 == InputStatus::Predicted;
                 rollback::apply_request::<C>(world, GgrsRequest::AdvanceFrame { inputs }, checksum, |state, inputs| {
-                    falcon_simulation::advance_world(state, inputs[0].0, baked);
+                    falcon::advance_world(state, inputs[0].0, baked);
                 });
                 record(world);
                 presented.push(sql_viewer::encode(world, actions, predicted, applied));
@@ -204,7 +205,7 @@ pub(crate) fn handle<C: Config<Input = u8, State = World>>(
 
 pub struct Runtime<'a> {
     actions: &'a [HighLevelSubaction],
-    baked: Vec<falcon_simulation::Action>,
+    baked: Vec<falcon::Action>,
     bus: Arc<Mutex<Bus>>,
     peers: Vec<ggrs::P2PSession<Game>>,
     worlds: [World; 2],

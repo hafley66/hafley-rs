@@ -3,10 +3,12 @@
 Approved destination: one Rust application crate here, no nested crates.
 Reusable first-party packages belong in `../crates/`.
 
-Status: destination recorded; Cargo application and consumer migration are A1
-in [the domain task ledger](../3_tasks.md). No runnable game is claimed here.
-Start from the existing Falcon slice and its verification; do not create a second
-simulation implementation or another replacement demo.
+The app package now owns `src/fighters/falcon/`: the moved seven-action simulation,
+input policy, snapshot state and sandbag scenario from `simulation-core`.
+Lab and web consumers import `smash::fighters::falcon`. The package currently
+exposes a library; its executable and offline ingestion migration remain A1 in
+[the domain task ledger](../3_tasks.md). Existing fixture assets and MP4s remain
+in the lab. Movement formulas and callback coverage retain their lab limitations.
 
 First playable gate: walking, jumping, crouching, directional attack/special input
 routing, side smash, down tilt, neutral air, fair and bair on Small Battlefield.

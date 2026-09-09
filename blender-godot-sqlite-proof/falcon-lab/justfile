@@ -59,7 +59,7 @@ held-proof:
 
 # Compile the pure simulation and its shared input/Redux dependencies for WASM.
 test-simulation-wasm:
-    lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo_manifest "$lab_dir/../simulation-core/Cargo.toml" check --target wasm32-unknown-unknown
+    lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo_manifest "$lab_dir/../../smash/Cargo.toml" check --target wasm32-unknown-unknown
 
 # Resumable same-host mirror. Downloaded source bytes remain outside Git.
 mirror-status:

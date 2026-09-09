@@ -1,3 +1,4 @@
+use smash::fighters::falcon;
 #[cfg(feature = "gdext")]
 #[path = "28_extension.rs"]
 mod extension;
@@ -25,7 +26,7 @@ mod live_rows;
 #[cfg(any(test, feature = "gdext"))]
 #[path = "45_schedule.rs"]
 mod schedule;
-pub use falcon_simulation::{Simulation, Snapshot};
+pub use falcon::{Simulation, Snapshot};
 pub use fixture::{Display, Runtime};
 pub use cli::run_cli;
 #[cfg(test)]
