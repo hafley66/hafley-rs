@@ -1,4 +1,15 @@
-# Game development labs
+# Games
+
+[Living architecture roadmap](1_roadmap.svg) · [D2 source](1_roadmap.d2) ·
+[Evidence and rollback ownership](2_roadmap.md) · [Current tasks](3_tasks.md)
+
+Approved app destination: `smash/`, one app crate. Shared first-party game crates:
+`crates/`. Existing packages have not yet migrated. Run `just map` to regenerate
+the upward-growing structural timeline and `just test-map` to validate its source.
+
+Classifications are authored in [TypeSpec](classification/1_registry.tsp).
+`just status` checks crate references; `just test` runs registry validation and
+rejection tests. [Workflow and limits](classification/0_readme.md).
 
 Incubation area for experiments that can later be moved into a production crate
 or project, along with their tests, fixtures, and provenance. See [AGENTS.md](AGENTS.md).
