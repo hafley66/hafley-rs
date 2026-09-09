@@ -17,6 +17,17 @@ The HUD reports Rust tick, action/pose, position, hits, damage, sandbag phase,
 SQL generation and snapshot status. The process remains attached to the terminal
 until the user exits it.
 
+The current Falcon transition table is generated and consumed by the Redux tick:
+
+```sh
+cargo run --features ingest --bin smash-import -- falcon
+```
+
+The command decodes the seven retained PM actions, resolves authored transition
+names to imported action indices and rewrites `generated/0_chart.rs`. Missing or
+duplicate action names fail generation. `cargo test --features ingest --bin
+smash-import` rejects stale generated output.
+
 The scripted verification is separate and bounded:
 
 ```sh

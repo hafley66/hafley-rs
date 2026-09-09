@@ -13,3 +13,9 @@ pub use decode::{decode_file, decode_html};
 mod bake;
 #[cfg(feature = "ingest")]
 pub use bake::bake;
+
+#[cfg(feature = "ingest")]
+#[path = "3_chart.rs"]
+mod chart;
+#[cfg(feature = "ingest")]
+pub use chart::{emit_chart, TransitionSpec};

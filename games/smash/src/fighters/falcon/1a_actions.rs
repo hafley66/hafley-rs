@@ -1,6 +1,10 @@
 //! Lab transition policy over imported PM timing/flag/pose data.
 //! This does not execute Brawl common callbacks or claim PM physics equivalence.
 use super::{Action, World};
+use game_content::Trigger;
+
+#[path = "generated/0_chart.rs"]
+mod generated;
 
 const IDLE: usize = 0;
 const JUMP: usize = 1;
@@ -9,6 +13,13 @@ const SQUAT: usize = 3;
 const FALL: usize = 4;
 const LAND_FAIR: usize = 5;
 const LAND: usize = 6;
+
+fn target(from: usize, trigger: Trigger) -> usize {
+    generated::TRANSITIONS.iter()
+        .find(|transition| transition.from == from && transition.trigger == trigger)
+        .unwrap_or_else(|| panic!("missing transition from {from} for {trigger:?}"))
+        .to
+}
 
 fn enter(world: &mut World, action: usize) {
     tracing::debug!(target: "falcon::transition", tick = world.frame, from = world.action, to = action);
@@ -24,17 +35,17 @@ pub fn advance(world: &mut World, pressed: u8, actions: &[Action], axis: f32) ->
     if world.animation >= actions[world.action].frames.len() {
         match world.action {
             SQUAT => {
-                enter(world, JUMP);
+                enter(world, target(SQUAT, Trigger::Complete));
                 world.jump_at = Some(world.frame);
             }
-            JUMP | FAIR => enter(world, FALL),
-            LAND_FAIR | LAND => enter(world, IDLE),
+            JUMP | FAIR => enter(world, target(world.action, Trigger::Complete)),
+            LAND_FAIR | LAND => enter(world, target(world.action, Trigger::Complete)),
             IDLE | FALL => world.animation = 0,
             _ => unreachable!(),
         }
     }
     if world.action == IDLE && pressed & 1 != 0 {
-        enter(world, SQUAT);
+        enter(world, target(IDLE, Trigger::JumpPress));
     }
     let air = world.jump_at.map_or(0.0, |t| (world.frame - t) as f32);
     let height = (0.95 * air - 0.018 * air * air).max(0.0);
@@ -43,9 +54,9 @@ pub fn advance(world: &mut World, pressed: u8, actions: &[Action], axis: f32) ->
         let action = &actions[world.action];
         let frame = &action.frames[world.animation.min(action.frames.len() - 1)];
         let landing = if world.action == FAIR && frame.landing_lag {
-            LAND_FAIR
+            target(FAIR, Trigger::LandDuringAttack)
         } else {
-            LAND
+            target(world.action, Trigger::Land)
         };
         enter(world, landing);
         world.jump_at = None;
@@ -71,7 +82,7 @@ pub fn advance(world: &mut World, pressed: u8, actions: &[Action], axis: f32) ->
         eligible && pressed & 2 != 0
     };
     if attack {
-        enter(world, FAIR);
+        enter(world, target(world.action, Trigger::AttackEligible));
     }
     [
         0.0,
