@@ -298,6 +298,7 @@ pub(crate) fn run_native_tui(
             ("BOOP_HARNESS".into(), adapter.id().as_str().into()),
             ("BOOP_PARENT".into(), parent.clone().unwrap_or_default()),
             ("BOOP_MAIL_DIR".into(), dir.display().to_string()),
+            (crate::cli::TUI_PANE_ENV.into(), name.into()),
             (
                 "BOOP_DB".into(),
                 boop::bus::db_path(&dir)?.display().to_string(),

@@ -6,7 +6,6 @@ mode=${1:-deterministic}
 case "$mode" in
   deterministic)
     cargo test --locked -p boop-store -p boop-harness -p boop-acp -p boop-proc -p boop-mux -p boop-turnvis -p boop
-    cargo test --locked -p boop --features dl6
     cargo check --locked -p boop --no-default-features
     ;;
   live)

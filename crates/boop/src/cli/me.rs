@@ -91,10 +91,20 @@ pub(crate) fn register_route(
         }
         let merged = bus::route_from_value(&serde_json::Value::Object(fields.clone()));
         if session_id.is_none() {
-            if let (Some(harness), Some(pane)) = (merged.harness, pane.as_deref()) {
-                if let Some(live) = registry.get(harness).live().live_session_in_pane(pane)? {
-                    fields.insert("sessionId".into(), serde_json::json!(live.session_id));
-                }
+            let bound = match (merged.harness, pane.as_deref()) {
+                (Some(harness), Some(pane)) => registry
+                    .get(harness)
+                    .live()
+                    .live_session_in_pane(pane)?
+                    .map(|live| live.session_id),
+                (Some(harness), None) => merged
+                    .cwd
+                    .as_deref()
+                    .and_then(|cwd| lone_session_in_cwd(registry, current, name, harness, cwd)),
+                _ => None,
+            };
+            if let Some(session) = bound {
+                fields.insert("sessionId".into(), serde_json::json!(session));
             }
         }
         current.insert(name.to_owned(), serde_json::Value::Object(fields.clone()));
@@ -102,6 +112,42 @@ pub(crate) fn register_route(
     })?;
     println!("registered {name}");
     Ok(())
+}
+
+/// The one root session of `harness` in `cwd` that no other route carries.
+/// Zero or several matches bind nothing rather than guess a conversation.
+fn lone_session_in_cwd(
+    registry: &Registry,
+    routes: &serde_json::Map<String, serde_json::Value>,
+    me: &str,
+    harness: HarnessId,
+    cwd: &str,
+) -> Option<String> {
+    let wanted = canonical(Path::new(cwd));
+    let taken: std::collections::BTreeSet<String> = routes
+        .iter()
+        .filter(|(name, _)| name.as_str() != me)
+        .filter_map(|(_, value)| bus::route_from_value(value).session_id)
+        .collect();
+    let mut hits = registry
+        .get(harness)
+        .live()
+        .live_sessions()
+        .ok()?
+        .into_iter()
+        .filter(|live| live.scope != boop::live::LiveSessionScope::Child)
+        .filter(|live| live.cwd.as_deref().map(canonical).as_ref() == Some(&wanted))
+        .filter(|live| !taken.contains(&live.session_id))
+        .map(|live| live.session_id);
+    match (hits.next(), hits.next()) {
+        (Some(only), None) => Some(only),
+        _ => None,
+    }
+}
+
+/// A path compared by identity; an unresolvable one compares as written.
+fn canonical(path: &Path) -> std::path::PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 // ---------------------------------------------------------------------------

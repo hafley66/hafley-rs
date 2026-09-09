@@ -2199,31 +2199,12 @@ pub(crate) fn run_lane_list(
                 continue;
             }
         }
-        let flags = escape_flags(&dir, name);
         let mut suffix = String::new();
         if state == "dead" {
             suffix.push_str(&format!(" DEAD={}", dead_reason_token(&dir, name)));
         }
         if let Some(gone) = gone_parent(&dir, &routes, &live, route) {
             suffix.push_str(&format!(" PARENT-GONE={gone}"));
-        }
-        if let Some(flags) = &flags {
-            if flags.worktree_untouched {
-                suffix.push_str(" WORKTREE-UNTOUCHED");
-            }
-            if !flags.main_commits.is_empty() {
-                suffix.push_str(&format!(
-                    " MAIN-TREE-COMMIT-SUSPECT={}",
-                    flags.main_commits.join(",")
-                ));
-            }
-            for commit in &flags.ambiguous_main_commits {
-                suffix.push_str(&format!(
-                    " MAIN-TREE-COMMIT-AMBIGUOUS={}:{}",
-                    commit.sha,
-                    commit.lanes.join("|")
-                ));
-            }
         }
         line(&format!(
             "{} {} {} {} {} {} {} {}{}",
@@ -2805,9 +2786,6 @@ pub(crate) fn run_lane_wait(
     ) {
         WaitOutcome::Result(rc) => {
             info!(lane, exit_code = rc, "lane result received");
-            if let Some(flags) = escape_flags(&dir, lane) {
-                print_escape_flags(lane, &flags);
-            }
             std::process::exit(rc)
         }
         WaitOutcome::Died => {
@@ -2942,100 +2920,6 @@ pub(crate) fn route_registered_at(dir: &std::path::Path, lane: &str) -> Option<u
         .get(lane)
         .and_then(|route| route.registered_at.as_deref())
         .and_then(parse_iso_ms)
-}
-
-/// The worktree-escape flags for a lane, or `None` when the route records no
-/// worktree (a main-tree spawn) or no base sha to compare against.
-pub(crate) fn escape_flags(
-    dir: &std::path::Path,
-    lane: &str,
-) -> Option<boop::worktree::EscapeFlags> {
-    let routes = bus::read_routes(dir).ok()?;
-    let route = routes.get(lane)?;
-    let worktree = std::path::Path::new(route.worktree_dir.as_deref()?);
-    let base_sha = route.base_sha.as_deref()?;
-    if base_sha.is_empty() {
-        return None;
-    }
-    let repo = lane::repo_root(worktree).ok()?;
-    let run = lane_window(dir, lane, &routes)?;
-    // Every other lane registered against this same repo. Without them a shared
-    // main tree makes one lane's commits look like every lane's.
-    let siblings: Vec<boop::worktree::LaneWindow> = routes
-        .keys()
-        .filter(|name| name.as_str() != lane)
-        .filter(|name| sibling_repo(name, &routes).as_deref() == Some(repo.as_path()))
-        .filter_map(|name| lane_window(dir, name, &routes))
-        .collect();
-    Some(boop::worktree::detect_escape(
-        worktree, &repo, base_sha, &run, &siblings,
-    ))
-}
-
-/// The repo a lane's registered worktree belongs to.
-pub(crate) fn sibling_repo(
-    lane: &str,
-    routes: &std::collections::BTreeMap<String, Route>,
-) -> Option<std::path::PathBuf> {
-    let route = routes.get(lane)?;
-    lane::repo_root(std::path::Path::new(route.worktree_dir.as_deref()?)).ok()
-}
-
-/// When a lane held its repo and on which branch: the spawn's `registered_at`
-/// opens the window, its result row closes it, and the worktree names the
-/// branch that witnesses reachability.
-pub(crate) fn lane_window(
-    dir: &std::path::Path,
-    lane: &str,
-    routes: &std::collections::BTreeMap<String, Route>,
-) -> Option<boop::worktree::LaneWindow> {
-    let route = routes.get(lane)?;
-    let worktree = std::path::Path::new(route.worktree_dir.as_deref()?);
-    let start_ms = route.registered_at.as_deref().and_then(parse_iso_ms)?;
-    Some(boop::worktree::LaneWindow {
-        lane: lane.to_owned(),
-        branch: boop::worktree::current_branch(worktree),
-        start_secs: (start_ms / 1000) as i64,
-        end_secs: lane_result_at_ms(dir, lane, start_ms).map(|ms| (ms / 1000) as i64),
-    })
-}
-
-/// Epoch millis of the lane's newest result row at or after `since`, which is
-/// the moment the lane stopped being able to commit anywhere.
-pub(crate) fn lane_result_at_ms(dir: &std::path::Path, lane: &str, since: u64) -> Option<u64> {
-    let mut rows = Vec::new();
-    for path in bus::read_boxes(dir).unwrap_or_default() {
-        rows.extend(bus::parse_box(&path));
-    }
-    rows.iter()
-        .filter(|row| row.kind == "result" && row.from == lane)
-        .filter_map(|row| parse_iso_ms(&row.from_timestamp))
-        .filter(|written| *written >= since)
-        .max()
-}
-
-/// Print the loud escape flags to stdout. `WORKTREE-UNTOUCHED` names a lane
-/// whose worktree gained no commit; `MAIN-TREE-COMMIT-SUSPECT` lists the shas
-/// only this lane's branch or window accounts for, and
-/// `MAIN-TREE-COMMIT-AMBIGUOUS` the shas a concurrent lane could equally have
-/// made.
-pub(crate) fn print_escape_flags(lane: &str, flags: &boop::worktree::EscapeFlags) {
-    if flags.worktree_untouched {
-        println!("WORKTREE-UNTOUCHED {lane}: no new commits in its registered worktree");
-    }
-    if !flags.main_commits.is_empty() {
-        println!(
-            "MAIN-TREE-COMMIT-SUSPECT {lane}: {}",
-            flags.main_commits.join(" ")
-        );
-    }
-    for commit in &flags.ambiguous_main_commits {
-        println!(
-            "MAIN-TREE-COMMIT-AMBIGUOUS {lane}: {} could be any of {}",
-            commit.sha,
-            commit.lanes.join(" ")
-        );
-    }
 }
 
 /// Poll `lane_result_rc` every `interval` until a result appears or `deadline`

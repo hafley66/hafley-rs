@@ -143,10 +143,16 @@ impl OpencodeDoor {
             .context("opencode POST /session answered without an id")
     }
 
-    fn message_count(&self, session: &str) -> Result<usize> {
-        let text = self.get(&format!("session/{session}/message"), READ_TIMEOUT)?;
-        let messages: Vec<serde_json::Value> = serde_json::from_str(&text)?;
-        Ok(messages.len())
+    /// Whether the session names its own model. The TUI binds one at creation;
+    /// `POST /session` leaves the field absent for the session's whole life.
+    fn session_has_model(&self, session: &str) -> bool {
+        let Ok(text) = self.get(&format!("session/{session}"), READ_TIMEOUT) else {
+            return true;
+        };
+        serde_json::from_str::<serde_json::Value>(&text)
+            .ok()
+            .and_then(|value| value.get("model").cloned())
+            .is_some_and(|model| !model.is_null())
     }
 
     /// Preserve the configured model exactly. Provider rejection remains an
@@ -635,10 +641,10 @@ impl Door for OpencodeDoor {
         let mut payload = serde_json::json!({
             "parts": [{ "type": "text", "text": body }],
         });
-        // A session with no turn yet has no model; the server stays silent
-        // rather than refusing, so the first prompt names one.
+        // A session from `POST /session` carries no `model`, and a prompt that
+        // names none on one is stored with no turn run (opencode 1.18.25).
         let source = Self::at(base.clone());
-        if source.message_count(id).unwrap_or(0) == 0 {
+        if !source.session_has_model(id) {
             if let Some(model) = source.default_model() {
                 payload["model"] = model;
             }

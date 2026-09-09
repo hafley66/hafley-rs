@@ -15,70 +15,6 @@ use anyhow::{Context, Result};
 use boop::bus::Route;
 use boop::{bus, ident};
 
-#[cfg(feature = "dl6")]
-pub(crate) const CONCATMAP_EXAMPLES: &str = "\
-TEMPLATE: a markdown file whose rendered form IS the prompt. Keys:
-  {{mode}}      the --mode word (labels the experiment; also how the loop
-                recognises and skips its own mapper prompts)
-  {{ai_text}}   the assistant turn(s) before the user turn
-  {{user_text}} the user turn that follows
-
-STATE: the loop's own memory, one dir per experiment:
-  <state>/cursor    last store ts seen (first run seeds at the newest ts,
-                    so only pairs made AFTER launch get mapped; --from-start
-                    or --cursor <N> backfills an existing conversation)
-  <state>/done/     one empty marker per processed (session, turn); a restart
-                    never remaps them
-  For the chat feed the state dir is also the resident model's cwd.
-
-RULES: a json file choosing the feed and bundle shape:
-  {\"feed\": \"oneshot\"}                       fresh process per bundle, one model call each
-  {\"feed\": \"chat\", \"goal\": \"...\"}          one enduring resident; goal is its first turn
-  \"bundle\": \"pair\" (default) or \"run\"       pair = 1 ai + 1 user; run collapses same-role runs
-  \"coalesce\": 0                        backlog cap; only the newest survives past it (default 0 = never drop)
-  \"references\": true                   append the source session's file touches as of the bundle
-  \"window\": \"SELECT ...\"               caller-owned SQL replacing the compiled bundlers:
-                                         binds :session (TEXT), :session_id (INTEGER), :cursor (ms);
-                                         returns INTEGER `id` + INTEGER `ts` + TEXT `text`,
-                                         one row per bundle (`ts` is the cursor watermark).
-                                         With a window, --template/--mode are optional (text ships
-                                         verbatim) and the loop only does cursor + done + send.
-
-WINDOW EXAMPLE (gaps-and-islands over agent_turn, same-role runs concat'ed):
-  rules.json:
-    {\"feed\": \"chat\",
-     \"goal\": \"tighten each <ai> turn; code and numbers verbatim\",
-     \"window\": \"WITH marked AS (
-        SELECT t.turn, t.ts, r.value AS role, t.said,
-               ROW_NUMBER() OVER (ORDER BY t.ts, t.turn)
-             - ROW_NUMBER() OVER (PARTITION BY r.value ORDER BY t.ts, t.turn) AS island
-        FROM agent_turn t JOIN dict_role r ON r.id = t.role_id
-        JOIN dict_session s ON s.id = t.session_id
-        WHERE s.value = :session AND t.ts > :cursor)
-      SELECT max(turn) AS id, max(ts) AS ts, group_concat(said, char(10)) AS text
-      FROM marked GROUP BY role, island ORDER BY min(ts)\"}
-  boop concatmap --me --rules rules.json --state s
-
-EXAMPLES:
-  # oneshot refinement of one conversation, flash4 default model:
-  boop concatmap --session ses_abc123 --mode tighten \\
-    --template tighten.md \\
-    --state ~/.agent/concatmap/tighten/state
-
-  # same, but map the caller's own session (whoami ladder resolves it):
-  boop concatmap --me --mode tighten --template tighten.md --state s
-
-  # enduring resident whose history accumulates; rewrites land per turn:
-  #   rules.json: {\"feed\": \"chat\", \"goal\": \"tighten each <ai> turn; code and
-  #                numbers verbatim; return only the rewritten turn\",
-  #                \"bundle\": \"run\", \"coalesce\": 4, \"references\": true}
-  boop concatmap --me --rules rules.json --mode tighten \\
-    --template tighten.md --state s
-
-  # template file shape (tighten.md):
-  #   mode: {{mode}}
-  #   <ai>{{ai_text}}</ai>
-  #   <user>{{user_text}}</user>";
 
 /// The schema version is interpolated, not literal, so a bump to
 /// `ident::SCHEMA_VERSION` cannot leave this text stale.
@@ -387,9 +323,16 @@ BUILD: hafley-rs crates/boop; `cargo install --path crates/boop --force` from
 }
 
 /// Write one line, treating a closed pipe as a normal end. Rust masks SIGPIPE,
-/// so a bare `println!` panics the moment output is piped into `head`.
+/// so a bare `println!` panics the moment output is piped into `head`. A TUI
+/// reads its own terminal as typed input, so those lines take the trail.
 pub(crate) fn line(text: &str) {
     use std::io::Write;
+    if let Some(trail) = tui_owned_trail() {
+        if let Ok(mut file) = trail.lock() {
+            let _ = writeln!(file, "{text}");
+            return;
+        }
+    }
     let mut out = std::io::stdout().lock();
     match write_line(&mut out, text) {
         Ok(()) => {}
@@ -400,6 +343,29 @@ pub(crate) fn line(text: &str) {
         }
     }
 }
+
+/// The trail a caller writes to when a harness TUI owns its terminal, resolved
+/// once per process. `None` is every ordinary caller, which keeps stdout.
+fn tui_owned_trail() -> Option<&'static std::sync::Mutex<std::fs::File>> {
+    static TRAIL: std::sync::OnceLock<Option<std::sync::Mutex<std::fs::File>>> =
+        std::sync::OnceLock::new();
+    TRAIL.get_or_init(open_tui_owned_trail).as_ref()
+}
+
+/// Both conditions are required: a redirected stdout reaches no composer, and
+/// a process outside a TUI carries no stamp. Neither reads the store.
+fn open_tui_owned_trail() -> Option<std::sync::Mutex<std::fs::File>> {
+    use std::io::IsTerminal;
+    let name = std::env::var(TUI_PANE_ENV).ok().filter(|it| !it.is_empty())?;
+    if !std::io::stdout().is_terminal() {
+        return None;
+    }
+    boop::trail::open(&name, boop::trail::SUPERVISE_LOG).map(std::sync::Mutex::new)
+}
+
+/// Stamped into every process a harness TUI wrapper spawns, naming its route.
+/// A descendant that finds it is sharing that TUI's terminal.
+pub(crate) const TUI_PANE_ENV: &str = "BOOP_TUI_PANE";
 
 pub(crate) fn write_line(output: &mut impl std::io::Write, text: &str) -> std::io::Result<()> {
     writeln!(output, "{text}")

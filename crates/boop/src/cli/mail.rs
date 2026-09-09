@@ -256,41 +256,25 @@ pub(crate) fn deliver_hail(
         "{}",
         landing.line(&message.id, &message.from, to, &harness_id)
     );
-    confirm_transition_recorded(&store, &message.id, to)?;
+    confirm_transition_recorded(&landing, &message.id, to)?;
     Ok(())
 }
 
-/// One POLL after the append, the ledger must hold a transition past
-/// `appended` for this message. A row nobody owns is the failure the sender
-/// reports, and it is the only outcome that is not an exit 0.
-fn confirm_transition_recorded(store: &boop::Store, message_id: &str, to: &str) -> Result<()> {
-    let deadline = std::time::Instant::now() + DELIVERY_CONFIRM;
-    loop {
-        let rows = store.delivery_rows(message_id).unwrap_or_default();
-        if rows.iter().any(|row| {
-            boop::DeliveryState::parse(&row.outcome).is_some_and(boop::DeliveryState::landed)
-        }) {
-            return Ok(());
-        }
-        if std::time::Instant::now() >= deadline {
-            let states: Vec<&str> = rows.iter().map(|row| row.outcome.as_str()).collect();
-            anyhow::bail!(
-                "{message_id} -> {to}: appended with no landing inside {}ms (ledger: {}); the row is in the mailbox and nothing owns it",
-                DELIVERY_CONFIRM.as_millis(),
-                if states.is_empty() {
-                    "empty".to_owned()
-                } else {
-                    states.join(", ")
-                }
-            );
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
+/// The rung the ladder stopped on must own the row. `record` wrote it before
+/// `deliver_hail` returned, so nothing re-reads the store for boop's own write.
+fn confirm_transition_recorded(
+    landing: &boop::mail::Landing,
+    message_id: &str,
+    to: &str,
+) -> Result<()> {
+    anyhow::ensure!(
+        landing.state().landed(),
+        "{message_id} -> {to}: the ladder stopped at `{}` ({}), which owns nothing; the row is in the mailbox",
+        landing.outcome(),
+        landing.detail(),
+    );
+    Ok(())
 }
-
-/// One supervisor POLL. A send with no landing by now is a row no rung of the
-/// ladder took.
-const DELIVERY_CONFIRM: std::time::Duration = std::time::Duration::from_millis(700);
 
 /// The block half of a waited send. Every source it watches is one an existing verb
 /// already watches: `boop wait`'s reply selection, `beep hail --wait-timeout`'s

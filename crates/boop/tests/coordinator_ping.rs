@@ -117,10 +117,10 @@ fn lane_patch_of_a_fresh_pane_registers_a_coordinator_without_a_supervisor() {
 
 /// RECEIPT. A hail to a claude coordinator route goes to the claude door.
 /// With no claude session live in that pane and no hook inbox in the project,
-/// nothing takes the row: the refusal is named on stdout, written to the
-/// `agent_delivery` ledger, and the pane is never typed at.
+/// nothing takes the row: it stays unread in the mailbox, where `wait --me`
+/// still finds it, and the pane is never typed at.
 #[test]
-fn hail_to_a_coordinator_with_no_live_session_is_held_for_its_turn_boundary() {
+fn hail_to_a_coordinator_with_no_live_session_stays_unread_in_the_mailbox() {
     let dir = mail_dir("deliver");
     let session = TestSession::new("deliver");
     write_coordinator_route(&dir, "ping-coord", &session.0);
@@ -144,8 +144,8 @@ fn hail_to_a_coordinator_with_no_live_session_is_held_for_its_turn_boundary() {
         "the landing line must name the door it tried: {stdout}"
     );
     assert!(
-        stdout.contains("held") && stdout.contains("turn boundary"),
-        "a claude route whose door is down is held, never pasted at: {stdout}"
+        stdout.contains("held") && stdout.contains("in the mailbox"),
+        "a claude route whose door is down keeps the row unread: {stdout}"
     );
 
     let ledger = Command::new(BOOP)
@@ -162,7 +162,7 @@ fn hail_to_a_coordinator_with_no_live_session_is_held_for_its_turn_boundary() {
     let row = String::from_utf8_lossy(&ledger.stdout);
     assert!(row.contains("ping-coord"), "ledger: {row}");
     assert!(row.contains("claude"), "ledger: {row}");
-    assert!(row.contains("held-for-turn-boundary"), "ledger: {row}");
+    assert!(row.contains("held-in-mailbox"), "ledger: {row}");
 
     std::thread::sleep(std::time::Duration::from_millis(300));
     let captured = tmux(&["capture-pane", "-p", "-t", &session.0]);
@@ -176,9 +176,8 @@ fn hail_to_a_coordinator_with_no_live_session_is_held_for_its_turn_boundary() {
 
 /// RECEIPT. The same coordinator route, one kind lower: a lane's `result` row
 /// is an end row (Chris, 2026-09-07), so it walks the ladder like a hail and,
-/// with no live claude session behind the route, is held for the
-/// coordinator's next turn boundary. A `yield` row still stops at the mailbox
-/// (supervisor-rows-off-the-door).
+/// with no live claude session behind the route, stays unread in the mailbox.
+/// A `yield` row stops there too (supervisor-rows-off-the-door).
 #[test]
 fn a_supervisor_result_row_to_the_same_coordinator_stops_at_the_mailbox() {
     let dir = mail_dir("supervisor");
@@ -200,7 +199,7 @@ fn a_supervisor_result_row_to_the_same_coordinator_stops_at_the_mailbox() {
     assert!(hailed.status.success(), "stderr: {:?}", hailed.stderr);
     let stdout = String::from_utf8_lossy(&hailed.stdout);
     assert!(
-        stdout.contains("for the next turn boundary"),
+        stdout.contains("in the mailbox"),
         "an end row walks the ladder like a hail: {stdout}"
     );
 

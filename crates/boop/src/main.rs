@@ -11,8 +11,6 @@ use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use boop::registry::Registry;
 use boop::supervise::ParentDeathPolicy;
 use boop::{bus, mailwait};
-#[cfg(feature = "dl6")]
-use boop::{config, identity};
 
 mod cli;
 
@@ -20,8 +18,6 @@ use cli::control::run_native_tui;
 #[cfg(feature = "agent-read")]
 use cli::db::run_public_agent_command;
 use cli::db::{run_db, run_passthrough, sync_before_read};
-#[cfg(feature = "dl6")]
-use cli::debug::run_host;
 use cli::debug::{run_config, run_debug, run_lane_debug};
 use cli::job::{run_beep, run_lane_wait, run_wait};
 use cli::mail::{run_inbox, run_send, Outbound};
@@ -32,8 +28,6 @@ use cli::tag::{
     run_tag_add, run_tag_backfill, run_tag_list, run_tag_of, run_tag_recent, run_tag_rm,
     run_tag_search, run_tag_sources,
 };
-#[cfg(feature = "dl6")]
-use cli::CONCATMAP_EXAMPLES;
 use cli::{doctrine, line, mail_dir, now_ms};
 
 /// A `--env KEY=VAL` value must name a non-empty key and carry a `=`. The
@@ -173,67 +167,6 @@ enum SubCmd {
     Agent {
         #[command(subcommand)]
         cmd: AgentSummaryCmd,
-    },
-    /// Refinement loop: map each new (assistant, user) contact pair through
-    /// a model pass and write the rewrite per turn. For a resident DL6
-    /// coroutine, use `boop host chat`.
-    #[command(after_help = CONCATMAP_EXAMPLES)]
-    /// Folded (comment-out-dl6-verbs): the DL6 runtime, off by default;
-    /// `cargo build --features dl6` puts it back.
-    #[cfg(feature = "dl6")]
-    #[command(hide = true)]
-    Concatmap {
-        /// The directory holding the mailbox `--me` resolves the caller in.
-        #[arg(long = "mail-dir")]
-        mail_dir_arg: Option<PathBuf>,
-        /// Prompt template file; substitutes {{mode}}, {{ai_text}} (the
-        /// assistant turn(s) before the user turn), {{user_text}}. Optional
-        /// under a rules `window` (the SQL's `text` column ships verbatim).
-        #[arg(long)]
-        template: Option<PathBuf>,
-        /// The mode word substituted into the template (compiled bundling).
-        #[arg(long)]
-        mode: Option<String>,
-        /// The one-shot model id, in the harness's own flag spelling.
-        #[arg(long, conflicts_with = "preset")]
-        model: Option<String>,
-        /// Model preset resolving through boop/config.json, as lane create.
-        #[arg(long)]
-        preset: Option<String>,
-        /// Loop-owned memory: cursor file (last store ts seen; first run
-        /// seeds at the newest ts) and done/ markers; chat feed's cwd too.
-        #[arg(long)]
-        state: PathBuf,
-        /// The boop store to read turns from (defaults to the resident store).
-        #[arg(long)]
-        store: Option<PathBuf>,
-        /// Seconds between turn queries.
-        #[arg(long, default_value_t = 5)]
-        poll_secs: u64,
-        /// Seed the cursor at 0 so an existing conversation maps in full.
-        /// Default is tail-only (seed at the newest store ts).
-        #[arg(long, conflicts_with = "cursor")]
-        from_start: bool,
-        /// An explicit starting cursor ts (ms); `--from-start` is `--cursor 0`.
-        #[arg(long)]
-        cursor: Option<i64>,
-        /// Rules json naming feed {"oneshot"|"chat"} plus goal, bundle
-        /// {"pair"|"run"}, coalesce, references. Absent = oneshot/pair.
-        #[arg(long)]
-        rules: Option<PathBuf>,
-        /// Map one conversation only.
-        #[arg(long)]
-        session: Option<String>,
-        /// Map the caller's own session (the `whoami` ladder resolves it).
-        #[arg(long, conflicts_with = "session")]
-        me: bool,
-    },
-    /// Typed stdin/stdout host boundary for compiled DL6 programs.
-    /// Folded (comment-out-dl6-verbs): DL6, off by default.
-    #[cfg(feature = "dl6")]
-    Host {
-        #[command(subcommand)]
-        cmd: HostCmd,
     },
     /// Report the caller's own identity and which of the two rungs named it.
     Whoami {
@@ -544,72 +477,6 @@ fn main() -> Result<()> {
                     ),
                 },
             },
-            #[cfg(feature = "dl6")]
-            SubCmd::Concatmap {
-                mail_dir_arg,
-                template,
-                mode,
-                model,
-                preset,
-                state,
-                store,
-                poll_secs,
-                from_start,
-                cursor,
-                rules,
-                session,
-                me,
-            } => {
-                // Explicit model wins, preset resolves through config.
-                let config_path = config::default_path()?;
-                let model = match (model, preset) {
-                    (Some(model), _) => model,
-                    (None, Some(preset)) => config::resolve_preset(&preset, &config_path)?.model,
-                    (None, None) => config::resolve_preset("flash4", &config_path)?.model,
-                };
-                let formula = match &rules {
-                    Some(path) => boop::concatmap::Formula::load(path)?,
-                    None => boop::concatmap::Formula::oneshot(),
-                };
-                let template = match &template {
-                    Some(path) => {
-                        Some(boop::concatmap::expand_env(&std::fs::read_to_string(path)?))
-                    }
-                    None => None,
-                };
-                if formula.window.is_none() {
-                    anyhow::ensure!(
-                    template.is_some() && mode.is_some(),
-                    "compiled bundling needs --template and --mode; or pass --rules with a window SQL"
-                );
-                }
-                let session = match (session, me) {
-                    (Some(session), _) => Some(session),
-                    (None, true) => {
-                        let routes = bus::read_routes(&mail_dir(mail_dir_arg.as_deref())?)
-                            .unwrap_or_default();
-                        let identity = identity::resolve_as(None);
-                        Some(identity.conversation(&routes)?.to_owned())
-                    }
-                    (None, false) => anyhow::bail!(
-                    "name the conversation to map: --session <id>, or --me to take the caller's own"
-                ),
-                };
-                boop::concatmap::run(boop::concatmap::Args {
-                    template,
-                    mode,
-                    model,
-                    state_dir: state,
-                    store_path: store,
-                    poll: std::time::Duration::from_secs(poll_secs),
-                    from_start,
-                    cursor,
-                    formula,
-                    session,
-                })
-            }
-            #[cfg(feature = "dl6")]
-            SubCmd::Host { cmd } => run_host(cmd),
             SubCmd::Wait {
                 id,
                 me,
@@ -753,10 +620,6 @@ fn startup_sync_wanted(command: &SubCmd, suppressed: bool) -> bool {
 /// verb stays off: a cold cursor re-parses every transcript root from offset 0.
 #[cfg(feature = "agent-read")]
 fn command_needs_startup_sync(command: &SubCmd) -> bool {
-    #[cfg(feature = "dl6")]
-    if matches!(command, SubCmd::Concatmap { .. }) {
-        return true;
-    }
     matches!(
         command,
         SubCmd::Db { cmd: None, .. }
@@ -1045,13 +908,6 @@ enum ForkCmd {
 enum HarnessCmd {
     List,
     Get { harness: String },
-}
-
-#[derive(Subcommand)]
-#[cfg(feature = "dl6")]
-enum HostCmd {
-    /// Read one JSON request from stdin and emit one JSON response.
-    Chat,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -1996,13 +1852,9 @@ mod tests {
     #[test]
     fn every_help_example_parses_through_clap() {
         let doctrine = doctrine();
-        #[allow(unused_mut)]
-        let mut examples = help_examples(&doctrine);
-        #[cfg(feature = "dl6")]
-        examples.extend(help_examples(CONCATMAP_EXAMPLES));
+        let examples = help_examples(&doctrine);
         // A regression in the extractor would pass this test by finding
-        // nothing, so the count is asserted before the parses are. The floor
-        // covers doctrine alone; `--features dl6` adds CONCATMAP_EXAMPLES on top.
+        // nothing, so the count is asserted before the parses are.
         assert!(
             examples.len() >= 15,
             "the extractor found almost nothing: {examples:#?}"

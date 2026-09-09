@@ -1072,8 +1072,8 @@ pub fn route_to_value(route: &Route) -> Value {
     Value::Object(object)
 }
 
-/// Run one caller mutation against the route table under `BEGIN IMMEDIATE`.
-/// The table is the whole map, so a key the mutation dropped is deleted.
+/// One caller mutation against the route table under `BEGIN IMMEDIATE`. The
+/// map is the whole table, and only changed rows are written.
 fn registry_update(
     dir: &Path,
     mutate: impl Fn(&mut Map<String, Value>) -> Result<()>,
@@ -1082,13 +1082,22 @@ fn registry_update(
     let connection = store.connection();
     connection.execute_batch("BEGIN IMMEDIATE")?;
     let result = (|| -> Result<()> {
-        let mut map = Map::new();
-        for (id, route) in routes_in(&store)? {
-            map.insert(id, route_to_value(&route));
+        let before: Map<String, Value> = routes_in(&store)?
+            .into_iter()
+            .map(|(id, route)| (id, route_to_value(&route)))
+            .collect();
+        let mut after = before.clone();
+        mutate(&mut after)?;
+        for id in before.keys().filter(|id| !after.contains_key(*id)) {
+            connection.execute(
+                "DELETE FROM agent_route WHERE route = ?1",
+                rusqlite::params![id],
+            )?;
         }
-        mutate(&mut map)?;
-        connection.execute("DELETE FROM agent_route", [])?;
-        for (id, entry) in &map {
+        for (id, entry) in &after {
+            if before.get(id) == Some(entry) {
+                continue;
+            }
             upsert_route(&store, id, &route_from_value(entry))?;
         }
         Ok(())

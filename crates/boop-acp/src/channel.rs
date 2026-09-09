@@ -28,6 +28,33 @@ pub struct TurnReceipt {
     pub tool_calls: u32,
 }
 
+/// One tool call the agent reported, as its own protocol described it. An
+/// empty drain is no evidence, never proof that nothing ran.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ToolCallFact {
+    /// The agent's own human-readable line for the call.
+    pub title: String,
+    /// The agent's category word: `execute`, `read`, `edit`, and the rest.
+    pub kind: String,
+    /// `pending`, `in_progress`, `completed` or `failed`.
+    pub status: String,
+    /// Paths the agent named as touched by this call.
+    pub paths: Vec<String>,
+}
+
+/// The category word an agent gives a call that ran a command.
+pub const TOOL_KIND_EXECUTE: &str = "execute";
+/// The status word a finished call wears.
+pub const TOOL_STATUS_COMPLETED: &str = "completed";
+
+impl ToolCallFact {
+    /// Whether this call finished running a command, which is the one event
+    /// that can have moved the worktree.
+    pub fn ran_a_command(&self) -> bool {
+        self.kind == TOOL_KIND_EXECUTE && self.status == TOOL_STATUS_COMPLETED
+    }
+}
+
 impl Delivery {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -171,6 +198,12 @@ pub trait LaneChannel: Send {
     /// `None` means no signal; the supervisor then measures from turn start.
     fn last_activity_ms(&self) -> Option<u64> {
         None
+    }
+
+    /// Take the tool calls observed since the last drain. The default is a
+    /// transport that reports none, which every reader treats as no evidence.
+    fn drain_tool_calls(&mut self) -> Vec<ToolCallFact> {
+        Vec::new()
     }
 
     /// Release the harness child.

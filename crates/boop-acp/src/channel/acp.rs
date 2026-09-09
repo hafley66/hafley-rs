@@ -17,8 +17,8 @@ use agent_client_protocol::schema::v1::{
     RequestPermissionRequest, RequestPermissionResponse, SelectedPermissionOutcome,
     SessionConfigKind, SessionConfigOption, SessionConfigOptionValue, SessionConfigSelectOptions,
     SessionId, SessionNotification, SessionUpdate, SetSessionConfigOptionRequest, StopReason,
-    TerminalOutputRequest, TerminalOutputResponse, WaitForTerminalExitRequest,
-    WaitForTerminalExitResponse,
+    TerminalOutputRequest, TerminalOutputResponse, ToolCallLocation, ToolCallStatus, ToolKind,
+    WaitForTerminalExitRequest, WaitForTerminalExitResponse,
 };
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Agent, ConnectionTo, LineDirection};
@@ -27,7 +27,10 @@ use boop_store::session::ModelSpec;
 use tracing::{debug, info, warn};
 
 use crate::channel::terminal::{await_exit, Terminals};
-use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent, TurnReceipt};
+use crate::channel::{
+    ChannelSpec, Delivery, LaneChannel, ToolCallFact, TurnEvent, TurnReceipt, TOOL_KIND_EXECUTE,
+    TOOL_STATUS_COMPLETED,
+};
 
 /// The config option every ACP agent names its model with.
 const MODEL_CONFIG_ID: &str = "model";
@@ -103,6 +106,8 @@ pub struct AcpChannel {
     session: Option<String>,
     /// Epoch millis of the newest `session/update`; 0 before the first one.
     last_update_ms: Arc<AtomicU64>,
+    /// Tool calls the agent reported, drained by the supervisor mid-turn.
+    tool_calls: Arc<Mutex<Vec<ToolCallFact>>>,
     turn_running: bool,
 }
 
@@ -133,6 +138,7 @@ impl AcpChannel {
         let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
         let (note_tx, note_rx) = std::sync::mpsc::channel();
         let last_update_ms = Arc::new(AtomicU64::new(0));
+        let tool_calls: Arc<Mutex<Vec<ToolCallFact>>> = Arc::new(Mutex::new(Vec::new()));
         // The agent's `model` option takes the family alone, so an `@effort`
         // suffix is split off here and set as its own option below.
         let model_spec = spec
@@ -156,6 +162,7 @@ impl AcpChannel {
                 }),
             resume: spec.resume.clone(),
             clock: Arc::clone(&last_update_ms),
+            tool_calls: Arc::clone(&tool_calls),
         };
         info!(
             command = %command.join(" "),
@@ -174,6 +181,7 @@ impl AcpChannel {
             driver: Some(driver),
             session: None,
             last_update_ms,
+            tool_calls,
             turn_running: false,
         };
         match channel.notes.recv_timeout(OPEN_TIMEOUT) {
@@ -275,6 +283,13 @@ impl LaneChannel for AcpChannel {
         }
     }
 
+    fn drain_tool_calls(&mut self) -> Vec<ToolCallFact> {
+        match self.tool_calls.lock() {
+            Ok(mut seen) => std::mem::take(&mut *seen),
+            Err(_) => Vec::new(),
+        }
+    }
+
     fn close(&mut self) -> Result<()> {
         let _ = self.commands.send(Command::Close);
         if let Some(driver) = self.driver.take() {
@@ -292,6 +307,7 @@ struct SessionPlan {
     effort: Option<String>,
     resume: Option<String>,
     clock: Arc<AtomicU64>,
+    tool_calls: Arc<Mutex<Vec<ToolCallFact>>>,
 }
 
 /// Own one ACP connection for the channel's life.
@@ -323,6 +339,7 @@ async fn connect(
     notes: Sender<Note>,
 ) -> Result<(), agent_client_protocol::Error> {
     let clock = Arc::clone(&plan.clock);
+    let observed_calls = Arc::clone(&plan.tool_calls);
     let turn_receipt = Arc::new(Mutex::new(TurnReceipt::default()));
     let observed_receipt = Arc::clone(&turn_receipt);
     let mut commands = commands;
@@ -335,6 +352,7 @@ async fn connect(
                 clock.store(crate::channel::now_ms(), Ordering::Relaxed);
                 observe_turn(
                     &mut observed_receipt.lock().expect("turn receipt mutex poisoned"),
+                    &mut observed_calls.lock().expect("tool call mutex poisoned"),
                     &notification.update,
                 );
                 debug!(
@@ -696,16 +714,73 @@ fn turn_verdict(
     }
 }
 
-fn observe_turn(receipt: &mut TurnReceipt, update: &SessionUpdate) {
+fn observe_turn(receipt: &mut TurnReceipt, seen: &mut Vec<ToolCallFact>, update: &SessionUpdate) {
     match update {
         SessionUpdate::AgentMessageChunk(chunk) => {
             if let ContentBlock::Text(text) = &chunk.content {
                 receipt.text.push_str(&text.text);
             }
         }
-        SessionUpdate::ToolCall(_) => receipt.tool_calls += 1,
+        SessionUpdate::ToolCall(call) => {
+            receipt.tool_calls += 1;
+            seen.push(ToolCallFact {
+                title: call.title.clone(),
+                kind: tool_kind_word(call.kind),
+                status: tool_status_word(call.status),
+                paths: location_paths(&call.locations),
+            });
+        }
+        SessionUpdate::ToolCallUpdate(update) => {
+            let fields = &update.fields;
+            seen.push(ToolCallFact {
+                title: fields.title.clone().unwrap_or_default(),
+                kind: fields.kind.map(tool_kind_word).unwrap_or_default(),
+                status: fields.status.map(tool_status_word).unwrap_or_default(),
+                paths: fields
+                    .locations
+                    .as_deref()
+                    .map(location_paths)
+                    .unwrap_or_default(),
+            });
+        }
         _ => {}
     }
+}
+
+/// The agent's own category word. An unnamed kind stays empty rather than
+/// reading as a category the agent never sent.
+fn tool_kind_word(kind: ToolKind) -> String {
+    match kind {
+        ToolKind::Read => "read",
+        ToolKind::Edit => "edit",
+        ToolKind::Delete => "delete",
+        ToolKind::Move => "move",
+        ToolKind::Search => "search",
+        ToolKind::Execute => TOOL_KIND_EXECUTE,
+        ToolKind::Think => "think",
+        ToolKind::Fetch => "fetch",
+        ToolKind::SwitchMode => "switch_mode",
+        _ => "other",
+    }
+    .to_owned()
+}
+
+fn tool_status_word(status: ToolCallStatus) -> String {
+    match status {
+        ToolCallStatus::Pending => "pending",
+        ToolCallStatus::InProgress => "in_progress",
+        ToolCallStatus::Completed => TOOL_STATUS_COMPLETED,
+        ToolCallStatus::Failed => "failed",
+        _ => "unknown",
+    }
+    .to_owned()
+}
+
+fn location_paths(locations: &[ToolCallLocation]) -> Vec<String> {
+    locations
+        .iter()
+        .map(|location| location.path.display().to_string())
+        .collect()
 }
 
 /// The wire spelling of a stop reason; printed, never parsed.
@@ -819,9 +894,11 @@ mod tests {
     #[test]
     fn turn_observation_collects_agent_text_and_counts_tool_calls() {
         let mut receipt = TurnReceipt::default();
+        let mut seen = Vec::new();
         for text in ["bo", "op"] {
             observe_turn(
                 &mut receipt,
+                &mut seen,
                 &SessionUpdate::AgentMessageChunk(ContentChunk::new(ContentBlock::Text(
                     TextContent::new(text),
                 ))),
@@ -829,6 +906,7 @@ mod tests {
         }
         observe_turn(
             &mut receipt,
+            &mut seen,
             &SessionUpdate::ToolCall(ToolCall::new(ToolCallId::new("call_1"), "list files")),
         );
         assert_eq!(
@@ -837,6 +915,51 @@ mod tests {
                 text: "boop".into(),
                 tool_calls: 1,
             }
+        );
+    }
+
+    /// RECEIPT. The tool call the agent reported is kept whole, not counted
+    /// away: its title, category, status and paths all survive the drain.
+    #[test]
+    fn a_reported_tool_call_keeps_its_title_kind_status_and_paths() {
+        let mut receipt = TurnReceipt::default();
+        let mut seen = Vec::new();
+        let call = ToolCall::new(ToolCallId::new("call_1"), "git commit -m fix")
+            .kind(ToolKind::Execute)
+            .status(ToolCallStatus::Completed)
+            .locations(vec![ToolCallLocation::new(std::path::PathBuf::from(
+                "crates/boop-proc/src/deliver.rs",
+            ))]);
+        observe_turn(&mut receipt, &mut seen, &SessionUpdate::ToolCall(call));
+        assert_eq!(
+            seen,
+            vec![ToolCallFact {
+                title: "git commit -m fix".into(),
+                kind: "execute".into(),
+                status: "completed".into(),
+                paths: vec!["crates/boop-proc/src/deliver.rs".into()],
+            }]
+        );
+        assert!(seen[0].ran_a_command());
+    }
+
+    /// RECEIPT. A call still running, and a call that read a file, are not
+    /// evidence that the worktree moved.
+    #[test]
+    fn only_a_finished_execute_call_counts_as_having_run_a_command() {
+        let running = ToolCallFact {
+            kind: "execute".into(),
+            status: "in_progress".into(),
+            ..Default::default()
+        };
+        let read = ToolCallFact {
+            kind: "read".into(),
+            status: "completed".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            (running.ran_a_command(), read.ran_a_command()),
+            (false, false)
         );
     }
 
@@ -994,6 +1117,7 @@ mod tests {
             driver: None,
             session: Some("ses_1".to_owned()),
             last_update_ms: Arc::new(AtomicU64::new(0)),
+            tool_calls: Arc::new(Mutex::new(Vec::new())),
             turn_running: false,
         }
     }

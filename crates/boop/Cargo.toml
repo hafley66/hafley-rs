@@ -12,10 +12,6 @@ license.workspace = true
 # verbs with no transcript reader in the graph.
 default = ["agent-read"]
 agent-read = ["boop-store/agent-read", "boop-proc/agent-read"]
-# The DL6 refinement runtime (`concatmap`, `host`): off by default per the
-# 2026-08-25 user call, no other binary to move it to yet.
-dl6 = ["agent-read"]
-
 [dependencies]
 # Process control: lane spawn, supervision, the mailbox, the coroutine host.
 boop-proc = { version = "0.0.2", path = "../boop-proc", default-features = false }
@@ -81,7 +77,6 @@ name = "typed_rows"
 required-features = ["agent-read"]
 
 # One integration target; every tests/*.rs is a module of tests/main.rs.
-# The two DL6 modules are gated there on the `dl6` feature.
 [[test]]
 name = "main"
 path = "tests/main.rs"

@@ -36,8 +36,6 @@ pub mod ident {
 
 pub use boop_acp::channel;
 pub use boop_harness::{door, harness, identity, live, registry, worktree};
-#[cfg(feature = "agent-read")]
-pub use boop_proc::{concatmap, host};
 pub use boop_proc::{config, inbox, lane, mailwait, supervise};
 pub mod debug;
 /// The delivery ladder, at the path every send path already spells.

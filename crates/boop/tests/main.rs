@@ -4,16 +4,10 @@
 
 #[path = "boop_start_warm.rs"]
 mod boop_start_warm;
-#[cfg(feature = "dl6")]
-#[path = "concatmap_e2e.rs"]
-mod concatmap_e2e;
 #[path = "coordinator_ping.rs"]
 mod coordinator_ping;
 #[path = "deliver_door.rs"]
 mod deliver_door;
-#[cfg(feature = "dl6")]
-#[path = "host_chat.rs"]
-mod host_chat;
 #[path = "inbox_hooks.rs"]
 mod inbox_hooks;
 #[path = "install_rail.rs"]

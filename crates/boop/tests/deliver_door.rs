@@ -286,7 +286,7 @@ fn concurrent_and_later_retries_do_not_resubmit_an_accepted_message() {
             retry.detail.as_str(),
             accepted
         ),
-        (1, Rung::TurnBoundary, "previously accepted by harness", 1)
+        (1, Rung::Mailbox, "previously accepted by harness", 1)
     );
     drop(store);
     std::fs::remove_dir_all(dir).unwrap();
@@ -580,7 +580,7 @@ fn a_door_harness_with_no_live_session_is_held_and_never_pasted() {
     let pane = RecordingPane::default();
 
     let landing = deliver_hail_with(&registry, &store, &routes, &message, &pane).unwrap();
-    assert_eq!(landing.rung, Rung::TurnBoundary);
+    assert_eq!(landing.rung, Rung::Mailbox);
     assert!(
         landing.detail.contains("no live codex session"),
         "detail: {}",
@@ -597,7 +597,7 @@ fn a_door_harness_with_no_live_session_is_held_and_never_pasted() {
             .unwrap()
             .last()
             .map(|row| row.outcome.clone()),
-        Some("held-for-turn-boundary".to_owned())
+        Some("held-in-mailbox".to_owned())
     );
     let _ = std::fs::remove_dir_all(dir);
 }

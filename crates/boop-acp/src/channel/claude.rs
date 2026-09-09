@@ -15,7 +15,10 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 
-use crate::channel::{ChannelSpec, Delivery, LaneChannel, TurnEvent, TurnReceipt};
+use crate::channel::{
+    ChannelSpec, Delivery, LaneChannel, ToolCallFact, TurnEvent, TurnReceipt, TOOL_KIND_EXECUTE,
+    TOOL_STATUS_COMPLETED,
+};
 
 pub struct ClaudeChannel {
     child: Child,
@@ -26,6 +29,8 @@ pub struct ClaudeChannel {
     /// watchdog reads this so a healthy long turn is not killed as silent.
     last_event_ms: Arc<AtomicU64>,
     turn_receipt: TurnReceipt,
+    /// Tool calls seen since the supervisor last drained them.
+    tool_calls: Vec<ToolCallFact>,
 }
 
 impl ClaudeChannel {
@@ -90,6 +95,7 @@ impl ClaudeChannel {
             conversation,
             last_event_ms,
             turn_receipt: TurnReceipt::default(),
+            tool_calls: Vec::new(),
         })
     }
 
@@ -138,7 +144,7 @@ impl LaneChannel for ClaudeChannel {
             if let Some(id) = event.get("session_id").and_then(Value::as_str) {
                 self.conversation = id.to_owned();
             }
-            observe_turn(&mut self.turn_receipt, &event);
+            observe_turn(&mut self.turn_receipt, &mut self.tool_calls, &event);
             if event.get("type").and_then(Value::as_str) != Some("result") {
                 continue;
             }
@@ -170,6 +176,10 @@ impl LaneChannel for ClaudeChannel {
         (ms > 0).then_some(ms)
     }
 
+    fn drain_tool_calls(&mut self) -> Vec<ToolCallFact> {
+        std::mem::take(&mut self.tool_calls)
+    }
+
     fn close(&mut self) -> Result<()> {
         drop(std::mem::replace(&mut self.stdin, blackhole()?));
         self.child.wait().context("wait claude child")?;
@@ -177,7 +187,7 @@ impl LaneChannel for ClaudeChannel {
     }
 }
 
-fn observe_turn(receipt: &mut TurnReceipt, event: &Value) {
+fn observe_turn(receipt: &mut TurnReceipt, seen: &mut Vec<ToolCallFact>, event: &Value) {
     if event.get("type").and_then(Value::as_str) != Some("assistant") {
         return;
     }
@@ -196,9 +206,119 @@ fn observe_turn(receipt: &mut TurnReceipt, event: &Value) {
                     .and_then(Value::as_str)
                     .unwrap_or_default(),
             ),
-            Some("tool_use") => receipt.tool_calls += 1,
+            Some("tool_use") => {
+                receipt.tool_calls += 1;
+                seen.push(tool_call_fact(block));
+            }
             _ => {}
         }
+    }
+}
+
+/// One claude `tool_use` block as the shared fact. The stream reports the
+/// request, so a block that reached the wire is reported as having run.
+fn tool_call_fact(block: &Value) -> ToolCallFact {
+    let name = block
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let command = block
+        .pointer("/input/command")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    ToolCallFact {
+        title: match command.is_empty() {
+            true => name.to_owned(),
+            false => format!("{name} {command}"),
+        },
+        kind: claude_tool_kind(name).to_owned(),
+        status: TOOL_STATUS_COMPLETED.to_owned(),
+        paths: block
+            .pointer("/input/file_path")
+            .and_then(Value::as_str)
+            .map(|path| vec![path.to_owned()])
+            .unwrap_or_default(),
+    }
+}
+
+/// Claude's own tool names mapped onto the shared category words.
+fn claude_tool_kind(name: &str) -> &'static str {
+    match name.to_ascii_lowercase().as_str() {
+        "bash" | "bashoutput" | "killshell" => TOOL_KIND_EXECUTE,
+        "read" | "glob" | "grep" | "notebookread" => "read",
+        "write" | "edit" | "multiedit" | "notebookedit" => "edit",
+        "webfetch" => "fetch",
+        "websearch" => "search",
+        _ => "other",
+    }
+}
+
+#[cfg(test)]
+mod tool_call_tests {
+    use super::{claude_tool_kind, observe_turn, tool_call_fact};
+    use crate::channel::{ToolCallFact, TurnReceipt};
+    use serde_json::json;
+
+    /// RECEIPT. A `Bash` block becomes an execute fact carrying the command,
+    /// so the supervisor learns a command ran without forking git on a clock.
+    #[test]
+    fn a_bash_block_reports_the_command_it_ran() {
+        let block = json!({
+            "type": "tool_use",
+            "name": "Bash",
+            "input": {"command": "git commit -m fix"}
+        });
+        assert_eq!(
+            tool_call_fact(&block),
+            ToolCallFact {
+                title: "Bash git commit -m fix".into(),
+                kind: "execute".into(),
+                status: "completed".into(),
+                paths: Vec::new(),
+            }
+        );
+        assert!(tool_call_fact(&block).ran_a_command());
+    }
+
+    /// RECEIPT. Claude's own tool names land on the shared category words, and
+    /// a read is never mistaken for something that moved the worktree.
+    #[test]
+    fn claude_tool_names_map_onto_the_shared_categories() {
+        let mapped =
+            ["Bash", "Read", "Edit", "WebFetch", "WebSearch", "Task"].map(claude_tool_kind);
+        assert_eq!(
+            mapped,
+            ["execute", "read", "edit", "fetch", "search", "other"]
+        );
+    }
+
+    /// RECEIPT. One assistant event yields one fact per tool_use block, and
+    /// the file path a read named survives onto the fact.
+    #[test]
+    fn an_assistant_event_yields_one_fact_per_tool_use_block() {
+        let mut receipt = TurnReceipt::default();
+        let mut seen = Vec::new();
+        observe_turn(
+            &mut receipt,
+            &mut seen,
+            &json!({
+                "type": "assistant",
+                "message": {"content": [
+                    {"type": "text", "text": "working"},
+                    {"type": "tool_use", "name": "Read", "input": {"file_path": "src/lib.rs"}},
+                    {"type": "tool_use", "name": "Bash", "input": {"command": "cargo test"}}
+                ]}
+            }),
+        );
+        assert_eq!(
+            (
+                receipt.tool_calls,
+                seen.len(),
+                seen[0].paths.as_slice(),
+                seen[1].kind.as_str()
+            ),
+            (2, 2, ["src/lib.rs".to_owned()].as_slice(), "execute")
+        );
     }
 }
 

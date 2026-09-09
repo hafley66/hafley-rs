@@ -25,11 +25,11 @@ use boop_store::ident::{DeliveryState, LiveRow, Store};
 /// | `Door` | a live door session takes the text into the running turn | accepted-by-harness |
 /// | `DoorQueue` | a live door session holds the text itself and reads it at its next turn boundary | accepted-by-harness |
 /// | `Acpx` | the caller drives the recipient's own acpx queue | accepted-by-harness |
-/// | `TurnBoundary` | the recipient's supervisor holds it, or a door harness whose door answered nothing holds it for its next turn | held-for-turn-boundary |
+/// | `TurnBoundary` | the recipient's own lane supervisor holds it, which is the one rung with a real holder | held-for-turn-boundary |
 /// | `HookInbox` | the recipient's project carries an installed inbox hook | queued-in-hook-inbox |
 /// | `PanePaste` | the route owns no door at all and names a live pane | pasted-into-pane |
 /// | `MailboxOnly` | a supervisor's progress row about a lane's run; a lane's end row takes the door like a hail | held-in-mailbox |
-/// | `Mailbox` | nothing answered; the row waits and the supervisor retries it | held-in-mailbox |
+/// | `Mailbox` | nothing answered; the row stays unread and the drain retries it | held-in-mailbox |
 /// | `CoolOff` | the route's door budget is blown; the row waits out the cool-off and the drain retries it | cooled-off |
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Rung {
@@ -162,7 +162,7 @@ impl Landing {
                 self.detail
             ),
             Rung::Mailbox => format!(
-                "held {message_id} from {from} -> {to} in the mailbox ({}); the supervisor retries it",
+                "held {message_id} from {from} -> {to} in the mailbox ({}); {to} reads it with `boop wait --me` and the drain retries it",
                 self.detail
             ),
             Rung::CoolOff => format!(
@@ -440,8 +440,8 @@ pub fn deliver_hail_budgeted(
         Some(path) => match bus::try_route_lock(Path::new(path), &message.to, "delivery")? {
             Some(lock) => Some(lock),
             None => {
-                let held =
-                    Landing::new(Rung::TurnBoundary, "another delivery attempt is in flight");
+                // Nothing holds this row, so it stays unread for `wait --me`.
+                let held = Landing::new(Rung::Mailbox, "another delivery attempt is in flight");
                 held.record(store, &message.id, &message.to, harness)?;
                 return Ok(held);
             }
@@ -564,11 +564,8 @@ fn land(
     })
 }
 
-/// A route whose harness owns a door, when that door answered nothing. The
-/// hook inbox is the one drain the recipient itself runs; failing that the row
-/// is held for the recipient's next turn boundary. A harness with a door is
-/// never pasted into: a codex or claude TUI pane takes its mail through the
-/// door or not at all, and typing at it puts keys in front of a human.
+/// A door that answered nothing. No supervisor holds a coordinator's mail, so
+/// the row stays unread in the mailbox instead of claiming a turn boundary.
 fn door_route_below_the_door(
     registry: &Registry,
     route: &Route,
@@ -578,7 +575,7 @@ fn door_route_below_the_door(
     let why = why.into();
     match hook_inbox(registry, route, to) {
         true => Landing::new(Rung::HookInbox, why),
-        false => Landing::new(Rung::TurnBoundary, why),
+        false => Landing::new(Rung::Mailbox, why),
     }
 }
 

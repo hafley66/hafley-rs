@@ -810,7 +810,7 @@ fn supervise(
     let mut flake_resumes = 0u32;
     let mut empty_briefs = 0u32;
     let mut result_written = false;
-    let mut head_watch = HeadWatch::new(&lane.cwd);
+    let mut turn_tools: Vec<boop_acp::channel::ToolCallFact> = Vec::new();
 
     events.record(
         "channel-open",
@@ -825,6 +825,7 @@ fn supervise(
     );
     loop {
         info!(turn_bytes = turn.len(), "lane turn starting");
+        turn_tools.clear();
         record_residency(&lane.mail_dir, &lane.lane, RESIDENCY_LIVE);
         let limit = if start_ack_pending {
             start_ack_limit()
@@ -885,7 +886,7 @@ fn supervise(
                     Some(end) => break end,
                 },
             }
-            head_watch.poll(lane, boop_acp::channel::now_ms());
+            turn_tools.extend(channel.drain_tool_calls());
             let this_turn_activity = channel
                 .last_activity_ms()
                 .filter(|written| *written >= turn_started);
@@ -939,6 +940,7 @@ fn supervise(
                         .detail
                         .as_deref()
                         .unwrap_or(boop_store::trail::PARENT_DIED),
+                    &turn_tools,
                 );
                 events.record(
                     "parent-death",
@@ -1021,7 +1023,7 @@ fn supervise(
         // Every turn end reports itself. The parent's picture of this lane
         // never depends on the model choosing to run `tell-parent`.
         if !start_ack_pending {
-            yield_to_parent(lane, end.detail());
+            yield_to_parent(lane, end.detail(), &turn_tools);
         }
         let finish = boop_acp::channel::now_ms();
         events.record(
@@ -1210,6 +1212,7 @@ fn supervise(
                             .detail
                             .as_deref()
                             .unwrap_or(boop_store::trail::PARENT_DIED),
+                        &turn_tools,
                     );
                     events.record(
                         "parent-death",
@@ -1227,7 +1230,7 @@ fn supervise(
                     );
                     return Ok(ended);
                 }
-                head_watch.poll(lane, boop_acp::channel::now_ms());
+                // A parked lane runs no tool, so HEAD cannot have moved.
                 let arrived = pending(&lane.mail_dir, &lane.lane, &seen)?;
                 if arrived.is_empty() {
                     std::thread::sleep(POLL);
@@ -1545,97 +1548,25 @@ fn dirty_count(cwd: &Path) -> usize {
 
 /// The body a parked lane mails: which lane, why the turn ended, where HEAD
 /// sits, and how many paths are dirty. One line, four fields, greppable.
-fn idle_body(lane: &LaneRun, reason: &str) -> String {
+fn idle_body(lane: &LaneRun, reason: &str, tools: &[boop_acp::channel::ToolCallFact]) -> String {
     format!(
-        "idle {} turn={reason} head={} dirty={}",
+        "idle {} turn={reason} head={} dirty={} did={}{}",
         lane.lane,
         head_sha(&lane.cwd),
         dirty_count(&lane.cwd),
+        tools.len(),
+        last_tool(tools),
     )
 }
 
-/// How often the supervisor asks git where HEAD sits. A 700 ms inbox poll
-/// would fork git twice a second for a value that moves at commit speed.
-const HEAD_POLL: Duration = Duration::from_secs(5);
-
-/// The lane's own progress watcher. It holds the last sha this supervisor
-/// mailed the parent, so the parent hears about a commit whether or not the
-/// model ever runs `tell-parent`.
-struct HeadWatch {
-    last_mailed: Option<String>,
-    checked_ms: u64,
-}
-
-/// Whether `candidate` descends from `ancestor` in this worktree. A git that
-/// cannot answer reports `true`, so an unreadable repo raises no diagnostic.
-fn descends_from(cwd: &Path, ancestor: &str, candidate: &str) -> bool {
-    std::process::Command::new("git")
-        .args([
-            "-C",
-            &cwd.display().to_string(),
-            "merge-base",
-            "--is-ancestor",
-            ancestor,
-            candidate,
-        ])
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(true)
-}
-
-impl HeadWatch {
-    /// Seed from where HEAD sits now, so the first row a parent sees names a
-    /// move this lane made rather than the base it started from.
-    fn new(cwd: &Path) -> HeadWatch {
-        HeadWatch {
-            last_mailed: match head_sha(cwd).as_str() {
-                "unknown" => None,
-                sha => Some(sha.to_owned()),
-            },
-            checked_ms: 0,
-        }
-    }
-
-    /// Read HEAD at most once per `HEAD_POLL` and mail the parent what moved.
-    /// A descendant is a commit row; anything else names both shas as a
-    /// rewind, which is how a yielded sha reset off the branch surfaces.
-    fn poll(&mut self, lane: &LaneRun, now_ms: u64) {
-        if now_ms.saturating_sub(self.checked_ms) < HEAD_POLL.as_millis() as u64 {
-            return;
-        }
-        self.checked_ms = now_ms;
-        let head = head_sha(&lane.cwd);
-        if head == "unknown" {
-            return;
-        }
-        let Some(previous) = self.last_mailed.clone() else {
-            self.last_mailed = Some(head);
-            return;
-        };
-        if previous == head {
-            return;
-        }
-        self.last_mailed = Some(head.clone());
-        if descends_from(&lane.cwd, &previous, &head) {
-            let body = format!(
-                "commit {} {previous}..{head} dirty={}",
-                lane.lane,
-                dirty_count(&lane.cwd),
-            );
-            mail_to_parent_kind(lane, YIELD, body, Some("head advanced"));
-            return;
-        }
-        let body = format!(
-            "head {} rewound: {head} does not descend from the last reported {previous}",
-            lane.lane,
-        );
-        mail_to_parent_kind(lane, HEAD_REWOUND, body, Some("head rewound"));
+/// The newest tool call's own title, for the tail of an idle row. A turn that
+/// reported none adds nothing rather than a placeholder.
+fn last_tool(tools: &[boop_acp::channel::ToolCallFact]) -> String {
+    match tools.iter().rev().find(|call| !call.title.is_empty()) {
+        Some(call) => format!(" last={:?}", call.title),
+        None => String::new(),
     }
 }
-
-/// The kind a rewind wears. A parent that holds a receipt for a sha no longer
-/// on the branch reads exactly one row naming both shas.
-pub const HEAD_REWOUND: &str = "head_rewound";
 
 /// Resolve the parent and mail one row of `kind`. A parentless lane writes
 /// nothing, which is the same silence every other parent path keeps.
@@ -1673,7 +1604,7 @@ fn has_answered(dir: &Path, lane: &str) -> bool {
 /// its own row: the dedup `hail_parent_once` applies to failure kinds would
 /// collapse a whole lane's progress into a single line. A lane whose parent
 /// already holds a result or request row stays silent.
-fn yield_to_parent(lane: &LaneRun, reason: &str) {
+fn yield_to_parent(lane: &LaneRun, reason: &str, tools: &[boop_acp::channel::ToolCallFact]) {
     if has_answered(&lane.mail_dir, &lane.lane) {
         debug!(
             lane = lane.lane,
@@ -1681,7 +1612,7 @@ fn yield_to_parent(lane: &LaneRun, reason: &str) {
         );
         return;
     }
-    mail_to_parent_kind(lane, YIELD, idle_body(lane, reason), Some(reason));
+    mail_to_parent_kind(lane, YIELD, idle_body(lane, reason, tools), Some(reason));
 }
 
 /// Append one row from this lane to its parent and walk the delivery ladder
@@ -3290,7 +3221,7 @@ mod tests {
         )
         .unwrap();
 
-        yield_to_parent(&lane, "completed");
+        yield_to_parent(&lane, "completed", &[]);
         let rows = rows_of_kind(&dir, "yield");
         assert_eq!(rows.len(), 1, "one trail row per park");
         assert_eq!(rows[0].to, "coord");
@@ -3345,7 +3276,7 @@ mod tests {
         )
         .unwrap();
 
-        yield_to_parent(&lane, "completed");
+        yield_to_parent(&lane, "completed", &[]);
         let rows = rows_of_kind(&dir, "yield");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].to, "up");
@@ -3375,88 +3306,46 @@ mod tests {
             model: None,
             resume: None,
         };
-        yield_to_parent(&lane, "completed");
+        yield_to_parent(&lane, "completed", &[]);
         assert!(rows_of_kind(&dir, "yield").is_empty());
     }
 
     /// RECEIPT (Item 0). A worktree git cannot read still reports a body with
-    /// both fields, so the parent's grep never loses a column.
+    /// every field, so the parent's grep never loses a column.
     #[test]
     fn an_unreadable_worktree_still_names_head_and_dirty() {
         let dir = tempdir();
         let lane = parented_lane(&dir, "mine", "coordinator");
         assert_eq!(
-            idle_body(&lane, "stalled"),
-            "idle mine turn=stalled head=unknown dirty=0"
+            idle_body(&lane, "stalled", &[]),
+            "idle mine turn=stalled head=unknown dirty=0 did=0"
         );
     }
 
-    // FAIL-PRE-FIX: the supervisor never read HEAD, so a lane that committed
-    // four times without yielding left its parent with nothing to read.
+    /// RECEIPT. The turn's own tool calls ride the idle row, so a parent reads
+    /// what the agent reported doing without polling anything.
     #[test]
-    fn a_commit_mails_the_parent_the_sha_range() {
+    fn an_idle_row_names_the_tool_calls_the_agent_reported() {
         let dir = tempdir();
-        let work = dir.join("work");
-        std::fs::create_dir_all(&work).unwrap();
-        let first = git_repo(&work);
-        let mut lane = parented_lane(&dir, "mine", "coordinator");
-        lane.cwd = work.clone();
-        let mut watch = HeadWatch::new(&lane.cwd);
-        assert_eq!(watch.last_mailed.as_deref(), Some(first.as_str()));
-
-        std::fs::write(work.join("two.txt"), "two\n").unwrap();
-        let git = |args: &[&str]| {
-            std::process::Command::new("git")
-                .args(["-C", &work.display().to_string()])
-                .args(args)
-                .output()
-                .unwrap()
-        };
-        git(&["add", "-A"]);
-        git(&["commit", "-qm", "two"]);
-        let second = head_sha(&work);
-
-        watch.poll(&lane, HEAD_POLL.as_millis() as u64 + 1);
-        let rows = rows_of_kind(&dir, "yield");
-        assert_eq!(rows.len(), 1, "one commit row");
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let tools = [
+            boop_acp::channel::ToolCallFact {
+                title: "Read src/lib.rs".into(),
+                kind: "read".into(),
+                status: "completed".into(),
+                paths: Vec::new(),
+            },
+            boop_acp::channel::ToolCallFact {
+                title: "Bash git commit -m fix".into(),
+                kind: "execute".into(),
+                status: "completed".into(),
+                paths: Vec::new(),
+            },
+        ];
         assert_eq!(
-            rows[0].body,
-            format!("commit mine {first}..{second} dirty=0")
+            idle_body(&lane, "end_turn", &tools),
+            "idle mine turn=end_turn head=unknown dirty=0 did=2 last=\"Bash git commit -m fix\""
         );
-    }
-
-    // FAIL-PRE-FIX: a lane that reset away a sha it had already reported left
-    // the parent holding a receipt for a commit no longer on the branch.
-    #[test]
-    fn a_head_that_does_not_descend_names_both_shas() {
-        let dir = tempdir();
-        let work = dir.join("work");
-        std::fs::create_dir_all(&work).unwrap();
-        let first = git_repo(&work);
-        let mut lane = parented_lane(&dir, "mine", "coordinator");
-        lane.cwd = work.clone();
-        let git = |args: &[&str]| {
-            std::process::Command::new("git")
-                .args(["-C", &work.display().to_string()])
-                .args(args)
-                .output()
-                .unwrap()
-        };
-        std::fs::write(work.join("two.txt"), "two\n").unwrap();
-        git(&["add", "-A"]);
-        git(&["commit", "-qm", "two"]);
-        let reported = head_sha(&work);
-        let mut watch = HeadWatch::new(&lane.cwd);
-        assert_eq!(watch.last_mailed.as_deref(), Some(reported.as_str()));
-
-        git(&["reset", "-q", "--hard", "HEAD~1"]);
-        watch.poll(&lane, HEAD_POLL.as_millis() as u64 + 1);
-        let rows = rows_of_kind(&dir, HEAD_REWOUND);
-        assert_eq!(rows.len(), 1);
-        assert!(rows[0].body.contains(&reported), "body: {}", rows[0].body);
-        assert!(rows[0].body.contains(&first), "body: {}", rows[0].body);
-        assert!(descends_from(&work, &first, &reported));
-        assert!(!descends_from(&work, &reported, &first));
     }
 
     // FAIL-PRE-FIX: a lane whose model spelling the harness rejected died

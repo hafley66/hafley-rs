@@ -9,8 +9,6 @@ use boop::{config, lane};
 
 use crate::cli::db::open_ro_store;
 use crate::cli::{line, now_ms};
-#[cfg(feature = "dl6")]
-use crate::HostCmd;
 use crate::{ConfigCmd, PresetsFormat};
 
 /// `boop debug <lane>`: what happened to one lane, in the order a reader asks
@@ -185,23 +183,6 @@ pub(crate) fn run_debug(since: &str, lane: Option<&str>, json: bool) -> Result<(
     Ok(())
 }
 
-#[cfg(feature = "dl6")]
-pub(crate) fn run_host(cmd: HostCmd) -> Result<()> {
-    match cmd {
-        HostCmd::Chat => {
-            let response =
-                match serde_json::from_reader::<_, boop::host::ChatRequest>(std::io::stdin()) {
-                    Ok(request) => boop::host::run_chat(request),
-                    Err(error) => boop::host::ChatResponse::Failed {
-                        outcome: "failed",
-                        detail: format!("read host chat JSON: {error}"),
-                    },
-                };
-            println!("{}", serde_json::to_string(&response)?);
-            Ok(())
-        }
-    }
-}
 
 /// An opencode model spelling handed to the codex adapter is a broken lane, so
 /// a default preset whose model routes elsewhere goes unused.
