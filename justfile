@@ -11,6 +11,7 @@ test-map:
     node classification/2_registry.mjs check
     d2 fmt --check 1_roadmap.d2
     d2 validate 1_roadmap.d2
+    node classification/2_registry.mjs check-svg
 
 map-watch:
     node classification/2_registry.mjs generate

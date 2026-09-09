@@ -1,4 +1,5 @@
-import { readFile, writeFile, readdir, realpath, stat } from 'node:fs/promises';
+import { readFile, writeFile, readdir, realpath, stat, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import { dirname, resolve, relative, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -13,12 +14,19 @@ export const root = fileURLToPath(new URL('../', import.meta.url));
 const source = fileURLToPath(new URL('1_registry.tsp', import.meta.url));
 
 export async function loadRegistry(path = source) {
-  const program = await compiler.compile(compiler.NodeHost, path, { noEmit: true });
+  const program = await compiler.compile(compiler.NodeHost, path, {
+    noEmit: true,
+    additionalImports: [fileURLToPath(new URL('0_model.tsp', import.meta.url))],
+  });
   const errors = program.diagnostics.filter(d => d.severity === 'error');
   if (errors.length) throw Error(errors.map(d => `${d.code}: ${d.message}`).join('\n'));
   const node = program.sourceFiles.get(path)?.statements.find(n =>
     n.kind === SyntaxKind.ConstStatement && n.id.sv === 'entries');
   if (!node) throw Error('missing entries constant');
+  if (node.value.kind !== SyntaxKind.ObjectLiteral || node.value.properties.some(p =>
+    p.kind !== SyntaxKind.ObjectLiteralProperty || p.value.kind !== SyntaxKind.ObjectLiteral)) {
+    throw Error('registry and entries must be inline object literals');
+  }
   // The compiler accepts repeated object keys. Registry identity must be unique.
   function unique(current) {
     if (current.kind === SyntaxKind.ObjectLiteral) {
@@ -34,7 +42,11 @@ export async function loadRegistry(path = source) {
   unique(node.value);
   // Same pinned internal-checker seam already used by contracts/0_constants.mjs.
   const value = program.checker.getValueForNode(node);
-  return compiler.serializeValueAsJson(program, value, value.type);
+  const [expected, diagnostics] = program.resolveTypeReference('Games.Registry');
+  if (!expected || diagnostics.length) throw Error('cannot resolve authoritative registry schema');
+  const [valid, failures] = program.checker.isTypeAssignableTo(value.type, expected, node);
+  if (!valid) throw Error(failures.map(d => `${d.code}: ${d.message}`).join('\n'));
+  return compiler.serializeValueAsJson(program, value, expected);
 }
 
 export function localPath(base, path) {
@@ -74,10 +86,10 @@ export async function manifests(base, dir = base) {
 
 export async function validateRegistry(entries, base = root, metadata = cargoMetadata) {
   const seen = new Set();
-  const tasks = await readFile(resolve(base, '3_tasks.md'), 'utf8');
+  const tasks = await taskIds(base);
   for (const [name, entry] of Object.entries(entries)) {
     if (!entry.scope.trim()) throw Error(`${name}: empty scope`);
-    if (!tasks.includes(`| ${entry.task} |`)) throw Error(`${name}: unknown task ${entry.task}`);
+    if (!tasks.has(entry.task)) throw Error(`${name}: unknown task ${entry.task}`);
     if (entry.stage >= 2.7 && !entry.evidence.length) throw Error(`${name}: qualification requires evidence`);
     for (const path of entry.evidence) await existing(base, path);
     for (const target of entry.targets) localPath(base, target);
@@ -112,6 +124,24 @@ export async function validateRegistry(entries, base = root, metadata = cargoMet
   return entries;
 }
 
+export async function taskIds(base) {
+  const files = (await readdir(base)).filter(name => /^\d+_tasks\.md$/.test(name))
+    .sort((a, b) => Number.parseInt(b) - Number.parseInt(a)).slice(0, 3);
+  if (!files.length) throw Error('missing numbered task ledger');
+  const ids = new Set();
+  for (const file of files) {
+    const text = await readFile(resolve(base, file), 'utf8');
+    let inTasks = false;
+    for (const line of text.split('\n')) {
+      if (/^\|\s*ID\s*\|\s*State\s*\|/.test(line)) { inTasks = true; continue; }
+      if (!line.startsWith('|')) { inTasks = false; continue; }
+      const id = inTasks && line.match(/^\|\s*([A-Z]+\d+)\s*\|/)?.[1];
+      if (id) ids.add(id);
+    }
+  }
+  return ids;
+}
+
 export function renderD2(entries) {
   const stages = [[0, 'Strawperson'], [1, 'Proposal'], [2, 'Draft'], [2.7, 'Testing'], [3, 'Candidate'], [4, 'Finished']];
   const colors = ['#F1F5F9', '#FEF3C7', '#FFEDD5', '#E0F2FE', '#D1FAE5', '#BBF7D0'];
@@ -138,9 +168,21 @@ export async function output(path, content, check) {
   } else await writeFile(path, content);
 }
 
+export async function checkSvg(base = root) {
+  const temp = await mkdtemp(resolve(tmpdir(), 'game-roadmap-'));
+  try {
+    const rendered = resolve(temp, '1_roadmap.svg');
+    execFileSync('d2', ['--layout', 'elk', '--pad', '24', resolve(base, '1_roadmap.d2'), rendered], {
+      timeout: 20000, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    await output(resolve(base, '1_roadmap.svg'), await readFile(rendered, 'utf8'), true);
+  } finally { await rm(temp, { recursive: true }); }
+}
+
 async function main() {
   const mode = process.argv[2] ?? 'check';
-  if (!['check', 'generate', 'status'].includes(mode)) throw Error('usage: 2_registry.mjs check|generate|status');
+  if (mode === 'check-svg') { await checkSvg(); return; }
+  if (!['check', 'generate', 'status'].includes(mode)) throw Error('usage: 2_registry.mjs check|generate|status|check-svg');
   const entries = await validateRegistry(await loadRegistry());
   if (mode === 'status') {
     for (const [name, e] of Object.entries(entries)) console.log(`${e.stage}\t${e.destination}\t${name}\t${e.task}\t${e.manifest ? 'present' : 'proposed'}`);

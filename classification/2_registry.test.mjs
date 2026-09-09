@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { root, loadRegistry, validateRegistry, cargoMetadata, localPath, renderD2, output } from './2_registry.mjs';
+import { execFileSync } from 'node:child_process';
+import { root, loadRegistry, validateRegistry, cargoMetadata, localPath, renderD2, output, taskIds, checkSvg } from './2_registry.mjs';
 
 const entries = await loadRegistry();
 const cache = new Map();
@@ -31,6 +32,7 @@ test('repository checks reject broken identity, references and promotion claims'
     [e => { e.redux.evidence = ['shared']; }, /expected file/],
     [e => { e.redux.evidence = []; }, /qualification requires evidence/],
     [e => { e.redux.task = 'NEVER'; }, /unknown task/],
+    [e => { e.redux.task = 'A2, A3'; }, /unknown task/],
     [e => { e.redux.stage = 4; }, /stage 4 requires integration/],
     [e => { e.redux.targets = ['smash/crates/redux']; }, /library targets/],
     [e => { e.smash.stage = 2; }, /implemented stage requires manifest/],
@@ -56,11 +58,45 @@ test('compiler and registry guard reject invalid schema and duplicate identities
       source.replace('destination: "library"', 'destination: "engine"'),
       source.replace('scope:', 'scpoe:'),
       source.replace('  rollback: #{', '  redux: #{'),
+      source.replace(': Record<Entry>', '').replace('stage: 3', 'stage: 9'),
+      source.replace(': Record<Entry>', '').replace('destination: "library"', 'destination: "invalid"'),
+      source.replace('const entries:', 'const data:').replace('  rollback: #{', '  redux: #{') + '\nconst entries: Record<Entry> = data;\n',
     ].entries()) {
       const path = join(dir, 'invalid.tsp');
       await writeFile(path, invalid);
-      await assert.rejects(loadRegistry(path), /unassignable|missing-property|unexpected-property|duplicate/, `invalid case ${index}`);
+      await assert.rejects(loadRegistry(path), /unassignable|missing-property|unexpected-property|duplicate|inline/, `invalid case ${index}`);
     }
+    const untyped = source.replace(': Record<Entry>', '');
+    const validPath = join(dir, 'valid.tsp');
+    await writeFile(validPath, untyped);
+    assert.deepEqual(await loadRegistry(validPath), entries);
+    const missingModel = join(dir, 'missing-model.tsp');
+    await writeFile(missingModel, 'const entries = #{ghost: #{stage: 1, destination: "invalid", scope: "fixture", task: "A1", targets: #[], evidence: #[]}};');
+    await assert.rejects(loadRegistry(missingModel), /unassignable/);
+  } finally { await rm(dir, { recursive: true }); }
+});
+
+test('task references use ID tables in the latest ledger and two predecessors', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'game-task-ledgers-'));
+  try {
+    for (const n of [1, 3, 9, 10]) {
+      await writeFile(join(dir, `${n}_tasks.md`), `| ID | State | Scope |\n| --- | --- | --- |\n| A${n} | Queued | Work |\n\n| Tasks | Destination |\n| A2, A3 | app |\n| FAKE1 | library |\n`);
+    }
+    assert.deepEqual([...await taskIds(dir)].sort(), ['A10', 'A3', 'A9']);
+  } finally { await rm(dir, { recursive: true }); }
+});
+
+test('SVG freshness check rejects corruption without overwriting it', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'game-svg-test-'));
+  try {
+    const d2 = join(dir, '1_roadmap.d2');
+    const svg = join(dir, '1_roadmap.svg');
+    await writeFile(d2, 'a -> b\n');
+    execFileSync('d2', ['--layout', 'elk', '--pad', '24', d2, svg], { stdio: 'pipe', timeout: 20000 });
+    await checkSvg(dir);
+    await writeFile(svg, 'corrupt');
+    await assert.rejects(checkSvg(dir), /stale generated output/);
+    assert.equal(await readFile(svg, 'utf8'), 'corrupt');
   } finally { await rm(dir, { recursive: true }); }
 });
 
