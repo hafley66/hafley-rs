@@ -1,0 +1,67 @@
+# Living structural timeline. New architecture milestones go above inventory.
+# Stable IDs map to evidence/task IDs in 2_roadmap.md and 3_tasks.md.
+direction: up
+classes: {
+  done: {style.fill: "#DCFCE7"; style.stroke: "#166534"; style.font-color: "#123522"}
+  partial: {style.fill: "#E0F2FE"; style.stroke: "#0369A1"; style.font-color: "#12304A"}
+  queued: {style.fill: "#FEF3C7"; style.stroke: "#92400E"; style.font-color: "#452B10"; style.stroke-dash: 4}
+  source: {style.fill: "#F1F5F9"; style.stroke: "#64748B"; style.font-color: "#243247"}
+  retired: {style.fill: "#FEE2E2"; style.stroke: "#991B1B"; style.font-color: "#591B1B"}
+}
+board: "HAFLEY-RS / GAMES · structural timeline · grows upward" {
+  grid-columns: 1
+  grid-gap: 48
+  legend: "STATUS · evidence scope stays attached to each node" {
+    grid-columns: 5
+    a: "DONE\nscoped proof" {class: done}
+    b: "PARTIAL\nintegration remains" {class: partial}
+    c: "QUEUED\nnot executed" {class: queued}
+    d: "SOURCE\nextract / inspect" {class: source}
+    e: "RETIRED\nretain history" {class: retired}
+  }
+  inventory: @classification/3_registry
+  m4: "04 · DESTINATION / next playable architecture · queued" {
+    grid-columns: 3
+    app: "A1–A3 · games/smash/\nOne app crate, no subcrates\nWalk / jump / crouch + input routing\nSide smash / down tilt / nair / fair / bair" {class: queued}
+    core: "games/crates/ · shared dependencies\nRedux + input/chart + rollback\nPhysics + content + rule capabilities\nMigration pending; no duplicate cores" {class: queued}
+    contract: "Authoritative tick contract\ninputs + content + mutable world\nrestore / replay / final publication\nSQLite → wgpu or Godot shell" {class: queued}
+  }
+  m3: "03 · QUALIFICATION LABS / gates for the game · queued" {
+    grid-columns: 3
+    combat: "Q1 · Smash math / behavior\nssbm_utils launch, angles, hitstun\nMelee vs PM3.6 fixture comparison\nPF / canon / fp-combat overlap" {class: queued}
+    bones: "Q2 · Bone-driven gameplay\nAttachments + hurt/hit geometry\nRoot motion, rate, freeze, transition\nSnapshot restore + frame assertions" {class: queued}
+    runtime: "Q3 · Match execution\n2-player replay / corrections\nNative–WASM determinism\nRollback bursts / allocations / 16.67 ms" {class: queued}
+    props: "Q4 · v1 capability extraction\nItems / ship / helm / possession\nOwnership + expiry + modifiers\nPreserve observed interactions" {class: queued}
+    terrain: "Q5 · v3 capability extraction\nInput feel / moving support\nDestruction → debris → item\nRestore geometry + entity lifecycle" {class: queued}
+    survey: "Q6 · Library compatibility queue\nRust + GDScript + JS/TS\nReplay / input / formats / animation\nPin API + license; bounded fixtures" {class: queued}
+  }
+  m2: "02 · DISTILLED FOUNDATIONS / current locations + remaining lifts" {
+    grid-columns: 3
+    state: "DONE · shared/redux + input\nReducer composition + statig buffer\nHeld / release / repress checks\nMigration to crates/ pending" {class: done}
+    rollback: "DONE · shared/rollback\nGGRS save / load / advance\nFull-state replay + codec restores\nScope: existing Falcon slices" {class: done}
+    capture: "DONE · shared/capture\nwgpu + FFmpeg + labels\njust workflows + trace receipts\nScope: recorded lab scenarios" {class: done}
+    boundary: "PARTIAL · lab-owned boundary\nTSP → Rust / gdext / GDScript\nRecycled SQLite rows + frame payload\nShared extraction remains" {class: partial}
+    simulation: "PARTIAL · simulation-core\nRenderer-free Redux World\nSeven Falcon actions + sandbag\nFull PM / stage / match remains" {class: partial}
+    donor: "SOURCE · earlier Rust crates\ncascade / physics2d\nTyped overrides / support velocity\nExtraction + qualification remains" {class: source}
+  }
+  m1: "01 · EXECUTED LAB GROUPS / blender-godot-sqlite-proof" {
+    grid-columns: 3
+    content: "DONE · scoped content proof\nRukai payload → brawllib_rs\nBone matrices / capsule wireframe\nIdle → jump → fair / knee" {class: done}
+    hit: "DONE · scoped hit proof\nParry sphere vs sandbag cuboid\nssbm_utils launch + Rapier flight\nPM fidelity remains unqualified" {class: done}
+    output: "DONE · scoped boundary proofs\nSQLite → wgpu / Godot\nFault recovery / replay / MP4\nFull connected game remains" {class: done}
+  }
+  m0: "00 · HISTORICAL SOURCES / distill behavior; retain provenance" {
+    grid-columns: 3
+    v1: "SOURCE · v1 gameplay\nProps / items / Lovers ship\nDrawable world interactions\nWorking behavior to extract" {class: source}
+    v2: "SOURCE · v2 language\nRules / input routes / timelines\nAttachment + vehicle rows\nArchived interpreter survives" {class: source}
+    v3: "SOURCE · v3 engine\nStage destruction / input feel\nEntity and rule machinery\nSeparate game policy on extraction" {class: source}
+    v4: "RETIRED · Rust v4\nAbandoned application architecture\nNo revival task" {class: retired}
+    dom: "RETIRED · document / DOM\nFlattened typed override direction\nNo CSS engine port task" {class: retired}
+    game3: "PARTIAL · /game3/ lineage\nLifted v1 demo + integration work\nDeployment destination retained\n/game/ remains protected" {class: partial}
+  }
+}
+# Adjacent milestone connections encode qualification/promotion, not runtime IO.
+board.m0 -> board.m1: "selected content + behavior"
+board.m1 -> board.m2: "extract verified machinery"
+board.m2 -> board.m3: "qualify missing behavior"
+board.m3 -> board.m4: "integrate only with evidence"
