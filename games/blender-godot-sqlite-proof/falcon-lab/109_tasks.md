@@ -6,8 +6,8 @@ User approved exactly one lift, one new thing, one lift, then stop for review.
 | ID | State | Scope and terminal condition |
 | --- | --- | --- |
 | L1 | Done | Shared replay/restore harness consumed by Falcon; just test-reuse and scoped buffer_proof test pass. |
-| N1 | In progress | Add held-versus-repressed attack scenario using existing buffer/Redux; prove held input consumes once and a fresh press can consume again; commit tests. |
-| L2 | Pending | Extract comparison layout/text/repetition into shared/capture, preserve original proof and record/inspect new MP4; run core/WASM checks, commit and stop. |
+| N1 | Done | Held attack consumes at 25 only; release 64/repress 65 consumes at 25/65. Both scoped Falcon tests pass with GGRS/SQL and six clone/JSON/binary restore checkpoints. |
+| L2 | In progress | Extract comparison layout/text/repetition into shared/capture, preserve original proof and record/inspect new MP4; run core/WASM checks, commit and stop. |
 
 L1 API: `proof::run<S>(config, tape, distance) -> Result<Trace<S::State>, GgrsError>`;
 `proof::restore_suffixes<S>(config, tape, states, checkpoints, restore) -> Result<usize, E>`.
@@ -35,3 +35,8 @@ equality and replay tests pass. Negative entry-hook regression remains intact.
 Harness counter fixture tests two players, codec errors and corrupt restored state.
 Disk exhaustion interrupted the ledger write; scoped cargo clean -p falcon-lab
 removed rebuildable package artifacts before retry. Sources/recordings retained.
+
+L1 committed `ad3cf57`. N1 adds proof coverage of existing edge-detector semantics;
+it does not modify the runtime policy. Both panels use window 8. At tick 65 the
+held path enters Fall and the repressed path enters Fair. Tape inputs are retained
+in the receipt for labels; no inferred input labels. Recording follows in L2.
