@@ -17,7 +17,30 @@ The Falcon rollback golden and fault tests must remain green after changing thes
 boundaries. A source port alone does not establish behavior preservation. Browser
 transport and cross-target network play remain separate verification gates.
 
-Pending user scope: mirror all reachable Rukaidata site assets resumably; import
+Current user scope: site-wide acquisition is deferred in Falcon `104_tasks.md`; import
 Falcon's available source data with unsupported common callbacks reported; model
 snapshot-owned stage terrain independently of rendered geometry. Site decoding
 must remain offline. Do not replace these libraries with new reducer/session code.
+
+## Input and capture slice (2026-09-09)
+
+- `input`: macro-free statig 0.4.1 lane buffer. `Buffer::advance(press, eligible,
+  cancel, window) -> Outcome` mutates snapshot-owned state; `remaining()` only
+  inspects it. The game owns dispatch/aging, eligibility, cancellation and window.
+  V1 age-before-record/newest-press semantics are distilled from
+  `games/kneeman/src/v1/{state,fighter,za_warudo}.rs`; window N admits the press
+  tick plus N following ticks. No entry/exit actions, so Serde reinitialization
+  is inert. Falcon's existing Redux Step consumes this implementation.
+  `PlayerInput` and quantization were ported from `crates/input` at `8646fa2`;
+  the Falcon adapter still accepts its existing button bits. Four-axis controller
+  integration and V1 tech/coyote buffers remain pending.
+- `capture`: existing Falcon wgpu/FFmpeg recorder and shader moved here.
+  `frame_checked(vertices, verify_rgba)` borrows a mesh for one synchronous
+  render/readback/encode step. Capture owns GPU resources and the encoder until
+  `finish`. Fixed 960x540, 60 fps H.264, two encoder threads; per-frame upload
+  allocation is unchanged. Falcon pixel assertions remain in `1_gpu.rs`;
+  the buffer comparison supplies its own panel assertions. Receipt/deployment
+  automation extraction remains pending. Neither crate installs a subscriber.
+
+Buffer policy and inspection payloads are game-owned TypeSpec models generated
+by the existing emitter. This slice does not change the emitter implementation.

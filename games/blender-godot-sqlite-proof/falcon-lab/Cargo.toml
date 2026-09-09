@@ -9,6 +9,7 @@ default-run = "falcon-lab"
 
 [dependencies]
 rollback = { path = "../../shared/rollback" }
+game-capture = { path = "../../shared/capture" }
 falcon-simulation = { path = "../simulation-core" }
 brawllib_rs = "=0.29.0"
 base64 = "0.22"

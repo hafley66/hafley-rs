@@ -1,7 +1,13 @@
-# Generated from 0_presentation.tsp; sha256:97fb1dd6dec830758add983626bc9de314056748c2763cf496496fa4022ee437
+# Generated from 0_presentation.tsp; sha256:055253d52b18369f5035b4ec7038efff8d8212f9988b5d260e3e715865b0e190
 version: 4
 namespace: FalconBoundary
 constants:
+  BUFFER_FLAG:
+    type: string
+    value: --buffer-proof
+  BUFFER_TICKS:
+    type: uint32
+    value: "180"
   CONTROL_TICKS:
     type: uint32
     value: "300"
@@ -251,6 +257,29 @@ models:
     - name: z
       rust: f32
       type: float32
+  BufferPolicy:
+    - name: window_frames
+      rust: u32
+      type: uint32
+  BufferInspection:
+    - name: tick
+      rust: i64
+      type: int64
+    - name: pending
+      rust: bool
+      type: boolean
+    - name: remaining_frames
+      rust: u32
+      type: uint32
+    - name: consumed
+      rust: bool
+      type: boolean
+    - name: expired
+      rust: bool
+      type: boolean
+    - name: cancelled
+      rust: bool
+      type: boolean
   RepeatProof:
     - name: ticks
       rust: u32
@@ -758,6 +787,8 @@ godot:
   - ExternalStatus
   - ControlledStatus
   - ControlInput
+  - BufferPolicy
+  - BufferInspection
   - FramePayload
   - MeshReceipt
 interfaces:

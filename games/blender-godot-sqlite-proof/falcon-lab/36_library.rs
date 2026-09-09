@@ -15,6 +15,8 @@ mod cli;
 mod repeat;
 #[path = "90_control.rs"]
 mod control;
+#[path = "106_buffer.rs"]
+mod buffer_proof;
 pub use control::bake_web;
 pub use control::inspect_import;
 pub use control::inspect_catalog;

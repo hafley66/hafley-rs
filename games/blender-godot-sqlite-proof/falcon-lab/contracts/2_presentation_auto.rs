@@ -1,7 +1,9 @@
-// Generated from 0_presentation.tsp; sha256:97fb1dd6dec830758add983626bc9de314056748c2763cf496496fa4022ee437
+// Generated from 0_presentation.tsp; sha256:055253d52b18369f5035b4ec7038efff8d8212f9988b5d260e3e715865b0e190
 use serde::Deserialize;
 use serde::Serialize;
 
+pub const BUFFER_FLAG: &'static str = "--buffer-proof";
+pub const BUFFER_TICKS: u32 = 180;
 pub const CONTROL_TICKS: u32 = 300;
 pub const CONTROL_SNAPSHOT: u32 = 180;
 pub const CONTROL_ACTION_LABELS: &'static str = "IDLE|JUMP|FAIR|JUMP SQUAT|FALL|FAIR LANDING|HEAVY LANDING";
@@ -88,6 +90,19 @@ pub struct Position {
   pub x: f32,
   pub y: f32,
   pub z: f32,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct BufferPolicy {
+  pub window_frames: u32,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct BufferInspection {
+  pub tick: i64,
+  pub pending: bool,
+  pub remaining_frames: u32,
+  pub consumed: bool,
+  pub expired: bool,
+  pub cancelled: bool,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RepeatProof {

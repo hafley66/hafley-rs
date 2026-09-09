@@ -44,8 +44,14 @@ _test-core: check-generated
 
 # Existing reducer algebra, deterministic pools, and shared rollback library.
 test-reuse:
+    lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo_manifest "$lab_dir/../../shared/input/Cargo.toml" test
+    lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo_manifest "$lab_dir/../../shared/capture/Cargo.toml" test
     lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo_manifest "$lab_dir/../../shared/redux/Cargo.toml" test --features serde
     lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo_manifest "$lab_dir/../../shared/rollback/Cargo.toml" test
+
+# Same tape, two buffering policies, SQL/GGRS/Serde proof and labeled MP4.
+buffer-proof:
+    bash 107_run_buffer.sh
 
 # Resumable same-host mirror. Downloaded source bytes remain outside Git.
 mirror-status:
