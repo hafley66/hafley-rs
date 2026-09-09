@@ -1,5 +1,8 @@
 //! Generic rollback coordination around an application-supplied deterministic reducer.
 
+#[path = "0_proof.rs"]
+pub mod proof;
+
 use ggrs::{Config, GgrsRequest, PlayerType, PredictRepeatLast, SessionBuilder, SyncTestSession};
 use serde::Serialize;
 use serde::de::DeserializeOwned;

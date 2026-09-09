@@ -84,43 +84,18 @@ fn verify(
             window_frames: window,
         },
     };
-    let mut expected = Sim::initial(&cx);
-    let mut game = rollback::Game::<Sim>::new(cx.clone());
-    let mut session = rollback::synctest_session::<Sim>(1, 7);
-    let mut states = Vec::new();
+    let tape: Vec<_> = (0..BUFFER_TICKS).map(|tick| vec![input(tick)]).collect();
+    let trace = rollback::proof::run::<Sim>(&cx, &tape, 7)?;
+    let states = trace.states;
     let mut all_rows = Vec::new();
-    let mut restores = Vec::new();
-    let mut advances = Vec::new();
     let mut boundary = Boundary::new()?;
-    for tick in 0..BUFFER_TICKS {
-        let bits = input(tick);
-        session.add_local_input(0, bits)?;
-        let requests = session.advance_frame()?;
-        restores.push(
-            requests
-                .iter()
-                .filter_map(|r| match r {
-                    ggrs::GgrsRequest::LoadGameState { frame, .. } => Some(*frame),
-                    _ => None,
-                })
-                .collect::<Vec<_>>(),
-        );
-        advances.push(
-            requests
-                .iter()
-                .filter(|r| matches!(r, ggrs::GgrsRequest::AdvanceFrame { .. }))
-                .count(),
-        );
-        game.handle(requests);
-        expected = Sim::advance(&expected, &[bits], &cx);
-        assert_eq!(game.state, expected, "GGRS corrected state at {tick}");
-        let rows = sql_viewer::encode(&expected, actions, false, bits & 3);
+    for (tick, state) in states.iter().enumerate() {
+        let rows = sql_viewer::encode(state, actions, false, tape[tick][0] & 3);
         assert!(boundary.publish(std::slice::from_ref(&rows)));
         let (_, sql) = sql_viewer::boundary::read_frame(&boundary.reader()?, tick as i64)?;
         assert_eq!(rows, sql);
         assert_eq!(sql_viewer::draw(&rows), sql_viewer::draw(&sql));
         all_rows.push(sql);
-        states.push(expected.clone());
     }
     let inspection: Vec<_> = states.iter().map(inspect).collect();
     let consumes: Vec<_> = inspection
@@ -134,35 +109,42 @@ fn verify(
     assert_eq!(inspection[22].expired, window == 0);
     assert!(inspection[102].cancelled);
     assert!(inspection[102..].iter().all(|s| !s.consumed));
-    assert!(restores.iter().any(|r| !r.is_empty()));
-    // Restore while pending, after consumption/expiry, and around cancellation.
-    let mut replayed = 0;
-    for checkpoint in [21usize, 22, first_air as usize, 101, 102] {
-        let bytes = serde_json::to_vec(&states[checkpoint])?;
-        let mut decoded: World = serde_json::from_slice(&bytes)?;
-        let binary =
-            bincode::serde::encode_to_vec(&states[checkpoint], bincode::config::standard())?;
-        let (mut binary_decoded, used): (World, usize) =
-            bincode::serde::decode_from_slice(&binary, bincode::config::standard())?;
-        assert_eq!(used, binary.len());
-        let mut cloned = states[checkpoint].clone();
-        for tick in checkpoint + 1..states.len() {
-            decoded = Sim::advance(&decoded, &[input(tick as u32)], &cx);
-            cloned = Sim::advance(&cloned, &[input(tick as u32)], &cx);
-            binary_decoded = Sim::advance(&binary_decoded, &[input(tick as u32)], &cx);
-            assert_eq!(decoded, states[tick], "serialized restore tick {tick}");
-            assert_eq!(cloned, states[tick]);
-            assert_eq!(binary_decoded, states[tick]);
-            replayed += 1;
-        }
-    }
+    let checkpoints = [21usize, 22, first_air as usize, 101, 102];
+    let replayed = rollback::proof::restore_suffixes::<Sim, Error>(
+        &cx,
+        &tape,
+        &states,
+        &checkpoints,
+        |state| Ok(state.clone()),
+    )?;
+    let json = rollback::proof::restore_suffixes::<Sim, Error>(
+        &cx,
+        &tape,
+        &states,
+        &checkpoints,
+        |state| Ok(serde_json::from_slice(&serde_json::to_vec(state)?)?),
+    )?;
+    let binary = rollback::proof::restore_suffixes::<Sim, Error>(
+        &cx,
+        &tape,
+        &states,
+        &checkpoints,
+        |state| {
+            let bytes = bincode::serde::encode_to_vec(state, bincode::config::standard())?;
+            let (decoded, used) =
+                bincode::serde::decode_from_slice(&bytes, bincode::config::standard())?;
+            assert_eq!(used, bytes.len());
+            Ok(decoded)
+        },
+    )?;
+    assert_eq!((json, binary), (replayed, replayed));
     Ok((
         Receipt {
             policy: cx.policy,
             states,
             inspection,
-            restore_requests: restores,
-            advances,
+            restore_requests: trace.restore_requests,
+            advances: trace.advances,
             serialized_replayed: replayed,
             sql_frames: all_rows.len(),
         },
