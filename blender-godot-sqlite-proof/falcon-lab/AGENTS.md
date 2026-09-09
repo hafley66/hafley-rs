@@ -1,5 +1,14 @@
 # Active Falcon lab direction
 
+## Yield current state
+
+During work, yield a message to the parent/coordinator or human explaining current
+state: what just finished, what is happening, and what comes next. Do this along
+the way to the goal, without waiting for completion. Send enough concrete detail
+for the parent to catch a wrong approach and interrupt or redirect the child
+before more work accumulates. The parent must read these updates and intervene
+when the child drifts from the request.
+
 Start with `just status`. `101_current.json` is the replace-in-place task pointer.
 Read the active ledger named by its `tasks` field and the previous N numbered
 `*_tasks.md` ledgers, following the task-history rule below. Update active task
