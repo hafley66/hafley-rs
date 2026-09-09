@@ -38,6 +38,15 @@ Snapshots use Clone, never Serde decode. This qualifies SyncTest restore/replay;
 delayed remote-input correction, network transport, Falcon integration and MP4
 remain untested. GGRS/rollback are test-only Redux dependencies.
 
+Committed qualification and task reorientation: `639083d`. Continued I2 boundary
+inspection found Falcon `simulation-core/2_simulation.rs::World` derives Serde
+alongside Clone. Added `ggrs_restore_detects_accidental_serde_reinitialization`:
+after a real GGRS Load request, deliberately round-trip the restored chart through
+Serde and detect excess entry actions against uninterrupted state. All five
+statechart tests and scoped Clippy passed. Preserve both positive clone and
+negative Serde regressions. Falcon integration must explicitly preserve restore
+semantics before adding entry actions; production runtime is still unchanged.
+
 | ID | State | Work | Completion / checkpoint |
 | --- | --- | --- | --- |
 | I1 | Done | Trace existing buffered input and source tests; inspect v3 counterpart | `105_input_slice.md`: three source checks complete. User subsequently requested statig/Redux and GGRS qualification, then continuation. Source tests read, not newly executed. |
