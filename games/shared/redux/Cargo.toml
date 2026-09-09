@@ -16,3 +16,6 @@ serde = ["dep:serde", "dep:serde-big-array"]
 
 [dev-dependencies]
 serde_json = "1"
+statig = { version = "=0.4.1", default-features = false, features = ["serde"] }
+rollback = { path = "../rollback" }
+ggrs = "=0.13.0"

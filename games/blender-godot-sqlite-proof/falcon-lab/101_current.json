@@ -1,13 +1,14 @@
 {
-  "objective": "Imported fighter data, composable item rules, and snapshot-owned terrain in the active Rust lab",
-  "next": "G1: finish mirror receipt/retrieval metadata and tested truncated-file recovery; 491 Falcon subactions already decode locally, G2 runtime package remains pending",
-  "acceptance": "Per-task gates in 102_tasks.md; first visible milestone is the boots/terrain replay MP4",
+  "objective": "Extract reusable game foundations from existing v1/v3 machinery through playable Falcon slices toward Lovers/Terraria/Smash",
+  "next": "I2: integrate the qualified statechart through Redux into Falcon; first verify snapshot/serialization and generated IO requirements, preserving ruleset-owned behavior",
+  "acceptance": "104_tasks.md: buffered-input consumption/expiry/cancellation, rollback proof and labeled MP4; boots/terrain remains a following milestone",
   "coverage": "99_lifecycle_import.md",
   "plan": "92_web_import_plan.md",
-  "tasks": "102_tasks.md",
+  "tasks": "104_tasks.md",
   "task_lookback": 3,
-  "current_task": "G1",
+  "current_task": "I2",
   "pending": [
-    "G1", "G2", "G3", "G4", "G5", "G6", "G7", "P1", "P2", "P3", "P4"
-  ]
+    "I2", "I3", "G2", "G3", "G4", "G5", "G6", "G7", "P1", "P2", "P3", "P4"
+  ],
+  "deferred": ["G1"]
 }

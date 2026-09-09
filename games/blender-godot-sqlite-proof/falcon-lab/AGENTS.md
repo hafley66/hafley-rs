@@ -64,6 +64,16 @@ ordering. Do not create a separate tasks folder or one file per task.
 User direction: design and implement reusable game/lab machinery in its shared
 home from the first consumer. Do not wait for a second game or a later cleanup.
 
+The goal is reusable foundations for Lovers-style cooperation, Terraria-style
+worlds and Smash-style combat, verified through playable Falcon increments.
+Extract useful existing v1/v3 machinery along the way, preserving source
+provenance, behavior and tests. Old applications remain read-only references.
+Each slice wires its extracted machinery into Falcon immediately. Keep other
+useful capabilities in the active ledger until extracted, explicitly deferred,
+or excluded by user direction; distinguish inspected code from unverified leads.
+This includes input, rules, physics, shared TSP IO, SQLite and recording tooling.
+Full-site acquisition does not block work using already verified local assets.
+
 - Inspect existing libraries first. Extend/reuse those APIs before introducing
   equivalents. Shared Rust, generation, storage and capture code belongs under
   `games/shared` or an existing appropriate reusable package in `hafley-rs`.

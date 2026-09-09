@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { fingerprintSources } from '../../shared/workflow/0_fingerprint.mjs';
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, openSync, closeSync } from 'node:fs';
 import { dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,20 +15,10 @@ const read = path => { try { return JSON.parse(readFileSync(path)); } catch (e) 
 export function fingerprint() {
   const repo = text('git', ['rev-parse', '--show-toplevel']);
   const sibling = resolve(repo, '../hafley-rs-game-runtime');
-  const hash = createHash('sha256');
-  for (const [cwd, paths] of [
-    [repo, ['AGENTS.md', 'games/AGENTS.md', 'games/shared', 'games/blender-godot-sqlite-proof']],
+  return fingerprintSources([
+    [repo, ['.gitmodules', 'AGENTS.md', 'games/AGENTS.md', 'games/shared', 'games/blender-godot-sqlite-proof']],
     [sibling, ['tools/godot-web', 'games/kneeman/app/deploy/scripts']],
-  ]) {
-    const files = text('git', ['ls-files', '-co', '--exclude-standard', '-z', '--', ...paths], cwd).split('\0').filter(Boolean);
-    for (const name of [...new Set(files)].sort()) {
-      hash.update(cwd + '\0' + name + '\0');
-      try { hash.update(readFileSync(resolve(cwd, name))); }
-      catch (e) { if (e.code !== 'ENOENT') throw e; hash.update('<deleted>'); }
-      hash.update('\0');
-    }
-  }
-  return hash.digest('hex');
+  ]);
 }
 
 function toolchain() {
