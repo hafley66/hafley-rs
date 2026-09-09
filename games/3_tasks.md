@@ -33,6 +33,21 @@ affected lockfiles are unchanged. Browser execution, web adapter WASM export,
 deployment and new MP4 capture were not run for this source-ownership move.
 Promotion/session flow is committed in `cbf334c`, linked from `games/AGENTS.md`.
 
+A1 content increment: `crates/content` owns the existing Action/Frame/Attack wire
+types, path-selected decoder and baker. Ingestion is feature-gated; Smash depends
+only on default content types. Lab decoding and baking consume the shared code.
+The reference simulation and snapshot test now bake once before replay loops.
+Three ingest tests cover seven retained actions, malformed/trailing payloads and
+a synthetic identity; a real second-character fixture remains unqualified.
+The standalone app executable, general import/export command and pose-content
+promotion remain pending. Existing `falcon-import <directory>` uses shared decode.
+Native web-adapter check and pure WASM check passed. The WASM normal dependency
+tree excludes brawllib_rs, base64, bincode, wgpu and winit. Registry/map checks pass.
+Final core receipt: `falcon-lab/.workflow/test-ryqTJC/receipt.json`, including
+three new ingest tests and 29 Falcon tests after hoisting reference-path baking.
+The TypeSpec registry classifies this extracted, tested scope at 2.7. Shared
+content-type generation from TSP remains part of the carried P1 boundary work.
+
 Promotion destination is independent of the task's state above:
 
 | Tasks | Destination | Split to retain |

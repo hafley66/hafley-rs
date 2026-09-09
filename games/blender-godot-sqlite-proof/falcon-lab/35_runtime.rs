@@ -7,7 +7,7 @@ use falcon::sandbag;
 #[path = "21_sql_viewer.rs"]
 pub(crate) mod sql_viewer;
 use baseline::{gpu, text};
-use brawllib_rs::high_level_fighter::{CollisionBoxValues, HighLevelSubaction};
+use brawllib_rs::high_level_fighter::HighLevelSubaction;
 use ggrs::{
     Config, GgrsRequest, InputStatus, Message, NonBlockingSocket, PlayerType, PredictRepeatLast,
     SessionBuilder, SessionState,
@@ -23,52 +23,11 @@ const JUMP: u8 = 1;
 const ATTACK: u8 = 2;
 
 use falcon::World;
-pub(crate) fn bake(actions: &[HighLevelSubaction]) -> Vec<falcon::Action> {
-    actions
-        .iter()
-        .map(|a| falcon::Action {
-            iasa: a.iasa,
-            landing_lag: a.landing_lag,
-            frames: a
-                .frames
-                .iter()
-                .map(|f| falcon::Frame {
-                    interruptible: f.interruptible,
-                    landing_lag: f.landing_lag,
-                    x_pos: f.x_pos,
-                    y_pos: f.y_pos,
-                    hit_boxes: f
-                        .hit_boxes
-                        .iter()
-                        .filter_map(|h| {
-                            let CollisionBoxValues::Hit(v) = &h.next_values else {
-                                return None;
-                            };
-                            Some(falcon::Attack {
-                                id: h.hitbox_id,
-                                position: [h.next_pos.x, h.next_pos.y, h.next_pos.z],
-                                radius: h.next_size,
-                                enabled: v.enabled,
-                                aerial: v.aerial,
-                                damage: v.damage,
-                                kbg: v.kbg as u32,
-                                bkb: v.bkb as u32,
-                                wdsk: v.wdsk as u32,
-                                trajectory: v.trajectory as f32,
-                            })
-                        })
-                        .collect(),
-                })
-                .collect(),
-        })
-        .collect()
-}
+pub(crate) use game_content::bake;
 fn input(tick: i32) -> u8 {
     falcon::fixture_input(tick)
 }
-fn step(world: &mut World, bits: u8, actions: &[HighLevelSubaction]) {
-    falcon::advance_world(world, bits, &bake(actions));
-}
+use falcon::advance_world as step;
 
 struct Game;
 impl Config for Game {
@@ -316,13 +275,14 @@ pub(crate) fn run(
 }
 
 pub(crate) fn verify(actions: &[HighLevelSubaction], trace: &[[Display; 2]]) -> Result<(), Error> {
+    let baked = bake(actions);
     let launch = trace[0][0].world.bag.is_some();
     let mut reference = World::default();
     if launch {
         reference.bag = Some(sandbag::Sandbag::default());
     }
     for (tick, pair) in trace.iter().enumerate() {
-        step(&mut reference, input(tick as i32), actions);
+        step(&mut reference, input(tick as i32), &baked);
         assert_eq!(
             pair[0].world, reference,
             "on-time peer must match direct input simulation"
@@ -716,7 +676,7 @@ mod tests {
 
     #[test]
     fn moving_and_ground_contact_snapshots_replay_exactly() {
-        let actions = super::baseline::load().unwrap();
+        let actions = super::bake(&super::baseline::load().unwrap());
         for checkpoint in [0, 91, 105, 128, 179] {
             let mut world = super::World {
                 bag: Some(super::sandbag::Sandbag::default()),

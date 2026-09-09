@@ -2,6 +2,12 @@ import "./0_model.tsp";
 using Games;
 
 const entries: Record<Entry> = #{
+  `game-content`: #{
+    stage: 2.7, destination: "library", task: "A1",
+    scope: "Shared action wire types and optional offline decoder/baker; Falcon fixtures, second-character qualification pending",
+    manifest: "crates/content/Cargo.toml", targets: #["crates/content"],
+    evidence: #["crates/content/0_readme.md", "3_tasks.md"],
+  },
   redux: #{
     stage: 3, destination: "library", task: "A1",
     scope: "Reducer composition and snapshot-owned statechart qualification",

@@ -1,5 +1,4 @@
 use smash::fighters::falcon;
-use base64::Engine;
 use brawllib_rs::high_level_fighter::{CollisionBoxValues, HighLevelFrame, HighLevelSubaction};
 use cgmath::{Matrix4, Vector3};
 use parry3d::{
@@ -52,27 +51,7 @@ fn load_files(files: &[&str]) -> Result<Vec<HighLevelSubaction>, Error> {
     .collect()
 }
 
-pub(crate) fn decode_file(path: &std::path::Path) -> Result<HighLevelSubaction, Error> {
-        let html = std::fs::read_to_string(path)?;
-        let payload = html
-            .split("const fighter_subaction_data = \"")
-            .nth(1)
-            .ok_or("missing data")?
-            .split('"')
-            .next()
-            .unwrap();
-        let bytes = base64::engine::general_purpose::STANDARD.decode(payload)?;
-        let (action, used): (HighLevelSubaction, usize) =
-            bincode::serde::decode_from_slice(&bytes, bincode::config::standard())?;
-        if used != bytes.len() { return Err("schema must consume the entire payload".into()); }
-        eprintln!(
-            "DECODE {}: {} frames, {} bytes",
-            action.name,
-            action.frames.len(),
-            used
-        );
-        Ok(action)
-}
+pub(crate) use game_content::decode_file;
 
 pub(crate) use falcon::Tick;
 

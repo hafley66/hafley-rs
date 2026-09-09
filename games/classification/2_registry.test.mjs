@@ -16,6 +16,7 @@ const metadata = path => {
 test('native TSP values resolve all existing first-party Cargo packages', async () => {
   await validateRegistry(entries, root, metadata);
   assert.deepEqual(Object.entries(entries).map(([name, e]) => [name, e.stage, e.destination, Boolean(e.manifest)]), [
+    ['game-content', 2.7, 'library', true],
     ['redux', 3, 'library', true], ['game-input', 3, 'library', true],
     ['rollback', 3, 'library', true], ['game-capture', 3, 'library', true],
     ['core-labs', 2.7, 'split', true],

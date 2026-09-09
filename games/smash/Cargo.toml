@@ -7,6 +7,7 @@ edition="2024"
 [lib]
 path="src/lib.rs"
 [dependencies]
+game-content = { path = "../crates/content" }
 redux = { path = "../crates/redux" }
 game-input = { path = "../crates/input" }
 serde={version="1",features=["derive"]}

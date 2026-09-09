@@ -93,6 +93,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
+name = "game-content"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "game-input"
 version = "0.1.0"
 dependencies = [
@@ -563,6 +570,7 @@ checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
 name = "smash"
 version = "0.1.0"
 dependencies = [
+ "game-content",
  "game-input",
  "parry3d",
  "rapier3d",
