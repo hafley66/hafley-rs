@@ -1,6 +1,7 @@
 //! Same Falcon input tape, selected buffering policy, real SQL presentation and GGRS replay.
+use smash::fighters::falcon;
 use crate::fixture::{self, baseline, sql_viewer};
-use falcon_simulation::{Action, InputBuffer, World};
+use falcon::{Action, InputBuffer, World};
 use rollback::RollbackSim;
 use serde::Serialize;
 use sql_viewer::boundary::{
@@ -32,7 +33,7 @@ impl RollbackSim for Sim {
     fn advance(state: &World, inputs: &[u8], cx: &Config) -> World {
         let mut next = state.clone();
         next.input_buffer.as_mut().unwrap().cancel = inputs[0] & 4 != 0;
-        falcon_simulation::advance_world(&mut next, inputs[0] & 3, &cx.actions);
+        falcon::advance_world(&mut next, inputs[0] & 3, &cx.actions);
         next
     }
     fn checksum(state: &World) -> u128 {

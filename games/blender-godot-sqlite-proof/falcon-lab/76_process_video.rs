@@ -1,4 +1,5 @@
 //! Validate recorded process state, then render its existing SQL wire geometry.
+use smash::fighters::falcon;
 use crate::{
     fixture::{
         baseline::{gpu, text},
@@ -15,7 +16,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     ];
     #[derive(Deserialize)]
     struct Golden {
-        world: falcon_simulation::World,
+        world: falcon::World,
     }
     let golden: Vec<[Golden; 2]> = serde_json::from_slice(include_bytes!("17_launch_trace.json"))?;
     assert_ne!(peers[0].pid, peers[1].pid);

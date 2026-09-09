@@ -1,11 +1,12 @@
 //! Headless wall-clock measurements. No subscriber is installed in this CLI mode.
+use smash::fighters::falcon;
 use crate::{Runtime, fixture};
 use serde::{Deserialize, Serialize};
 use std::{hint::black_box, time::Instant};
 
 #[derive(Deserialize)]
 struct Recorded {
-    world: falcon_simulation::World,
+    world: falcon::World,
 }
 
 #[derive(Serialize)]
@@ -51,7 +52,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let mut displays = Vec::with_capacity(180);
         let mut elapsed_ns = Vec::with_capacity(180);
         for tick in 0..180 {
-            let bits = falcon_simulation::fixture_input(tick);
+            let bits = falcon::fixture_input(tick);
             let start = Instant::now();
             let pair = black_box(runtime.advance(black_box(bits))?);
             let elapsed = start.elapsed().as_nanos() as u64;

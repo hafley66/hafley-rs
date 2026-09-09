@@ -18,9 +18,9 @@ test('native TSP values resolve all existing first-party Cargo packages', async 
   assert.deepEqual(Object.entries(entries).map(([name, e]) => [name, e.stage, e.destination, Boolean(e.manifest)]), [
     ['redux', 3, 'library', true], ['game-input', 3, 'library', true],
     ['rollback', 3, 'library', true], ['game-capture', 3, 'library', true],
-    ['falcon-simulation', 2.7, 'split', true], ['core-labs', 2.7, 'split', true],
+    ['core-labs', 2.7, 'split', true],
     ['trace-gpu-host', 2.7, 'split', true], ['falcon-lab', 2.7, 'split', true],
-    ['falcon_web', 2.7, 'split', true], ['smash', 1, 'app', false],
+    ['falcon_web', 2.7, 'split', true], ['smash', 2.7, 'app', true],
   ]);
 });
 
@@ -35,9 +35,9 @@ test('repository checks reject broken identity, references and promotion claims'
     [e => { e.redux.task = 'A2, A3'; }, /unknown task/],
     [e => { e.redux.stage = 4; e.redux.targets = ['crates/pending-redux']; }, /stage 4 requires integration/],
     [e => { e.redux.targets = ['smash/crates/redux']; }, /library targets/],
-    [e => { e.smash.stage = 2; }, /implemented stage requires manifest/],
+    [e => { e.smash.stage = 2; delete e.smash.manifest; }, /implemented stage requires manifest/],
     [e => { e.smash.targets = ['crates/smash']; }, /app target/],
-    [e => { e['falcon-simulation'].targets = ['crates/simulation']; }, /split requires/],
+    [e => { e['core-labs'].targets = ['crates/physics']; }, /split requires/],
     [e => { e.redux.evidence = ['../Cargo.toml']; }, /escapes scope/],
     [e => { delete e.redux; }, /unclassified Cargo manifests/],
   ];
@@ -113,6 +113,9 @@ test('paths stay scoped and generated checks detect staleness without writing', 
   } finally { await rm(dir, { recursive: true }); }
   const d2 = renderD2(entries);
   assert.equal(d2, await readFile(new URL('3_registry.d2', import.meta.url), 'utf8'));
-  assert.match(d2, /PROPOSAL · crate absent/);
+  const proposal = structuredClone(entries);
+  proposal.smash.stage = 1;
+  delete proposal.smash.manifest;
+  assert.match(renderD2(proposal), /PROPOSAL · crate absent/);
   assert.match(d2, /2\.7 · Testing/);
 });

@@ -770,7 +770,6 @@ dependencies = [
  "brawllib_rs",
  "cgmath",
  "core-labs",
- "falcon-simulation",
  "game-capture",
  "ggrs",
  "godot",
@@ -781,24 +780,11 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "smash",
  "ssbm_utils",
  "tracing",
  "tracing-subscriber",
  "wgpu 29.0.4",
-]
-
-[[package]]
-name = "falcon-simulation"
-version = "0.1.0"
-dependencies = [
- "game-input",
- "parry3d",
- "rapier3d",
- "redux",
- "serde",
- "serde_json",
- "ssbm_utils",
- "tracing",
 ]
 
 [[package]]
@@ -2855,6 +2841,20 @@ name = "smallvec"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
+
+[[package]]
+name = "smash"
+version = "0.1.0"
+dependencies = [
+ "game-input",
+ "parry3d",
+ "rapier3d",
+ "redux",
+ "serde",
+ "serde_json",
+ "ssbm_utils",
+ "tracing",
+]
 
 [[package]]
 name = "smithay-client-toolkit"

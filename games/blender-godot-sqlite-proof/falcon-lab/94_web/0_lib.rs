@@ -1,7 +1,8 @@
 //! Browser host. Decoder/recording tools run offline; simulation and SQL stay shared.
 #![allow(dead_code)]
 use godot::prelude::*;
-use falcon_simulation::{Action, Simulation, Snapshot, World};
+use smash::fighters::falcon;
+use falcon::{Action, Simulation, Snapshot, World};
 
 #[path = "../1b_boundary.rs"]
 pub mod boundary;
