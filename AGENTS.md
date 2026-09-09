@@ -61,6 +61,13 @@ Use explicit status labels plus the existing classes; a source audit, a passing
 lab and a shipped game capability are distinct states. Evidence and limits live
 in `2_roadmap.md`. Run `just map` and `just test-map` from this directory.
 
+Follow the commit-sized session flow and promotion examples in
+`classification/0_readme.md`. Each implementation commit records Task, Package,
+Stage before/after, Property gained, Verified commands/outcomes, Evidence and
+Remaining conditions. Commits are the progress unit; stages advance only when
+their scoped evidence gates pass. Send the commit SHA and current state to the
+coordinator/human after each increment. Never wait for a whole promotion to report.
+
 Read the newest numbered `*_tasks.md` plus N=2 predecessors when available.
 Carry unfinished IDs forward with explicit disposition; never erase unfinished
 work by starting another task file. The domain ledger starts at `3_tasks.md` and
