@@ -26,3 +26,19 @@ pub struct Action {
     pub landing_lag: Option<f32>,
     pub frames: Vec<Frame>,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Trigger {
+    Complete,
+    JumpPress,
+    AttackEligible,
+    LandDuringAttack,
+    Land,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Transition {
+    pub from: usize,
+    pub trigger: Trigger,
+    pub to: usize,
+}

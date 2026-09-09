@@ -4,8 +4,17 @@ resolver="3"
 name="smash"
 version="0.1.0"
 edition="2024"
+
+[features]
+ingest = ["game-content/ingest"]
+
 [lib]
 path="src/lib.rs"
+
+[[bin]]
+name = "smash-import"
+path = "src/3_import.rs"
+required-features = ["ingest"]
 [dependencies]
 game-content = { path = "../crates/content" }
 redux = { path = "../crates/redux" }

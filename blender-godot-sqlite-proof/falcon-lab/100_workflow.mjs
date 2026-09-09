@@ -16,7 +16,8 @@ export function fingerprint() {
   const repo = text('git', ['rev-parse', '--show-toplevel']);
   const sibling = resolve(repo, '../hafley-rs-game-runtime');
   return fingerprintSources([
-    [repo, ['.gitmodules', 'AGENTS.md', 'games/AGENTS.md', 'games/shared', 'games/blender-godot-sqlite-proof']],
+    [repo, ['.gitmodules', 'AGENTS.md', 'games/AGENTS.md', 'games/crates', 'games/shared',
+      'games/smash', 'games/blender-godot-sqlite-proof']],
     [sibling, ['tools/godot-web', 'games/kneeman/app/deploy/scripts']],
   ]);
 }

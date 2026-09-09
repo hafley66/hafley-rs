@@ -48,6 +48,15 @@ three new ingest tests and 29 Falcon tests after hoisting reference-path baking.
 The TypeSpec registry classifies this extracted, tested scope at 2.7. Shared
 content-type generation from TSP remains part of the carried P1 boundary work.
 
+A1 generated-chart increment: `smash-import falcon` decodes the retained seven
+actions and resolves an authored transition specification by action name into
+`falcon/generated/0_chart.rs`. Falcon's Redux Step consumes the generated table
+for completion, jump, eligible attack and landing transitions. Generation fails
+on missing/duplicate actions; a binary test rejects stale generated output. The
+workflow fingerprint now covers `games/crates` and `games/smash`, so proof/deploy
+receipts invalidate on app or generated-state changes. Full callback translation,
+additional moves and generalized per-fighter authored specs remain pending.
+
 Promotion destination is independent of the task's state above:
 
 | Tasks | Destination | Split to retain |
