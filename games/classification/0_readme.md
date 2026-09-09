@@ -40,9 +40,15 @@ toolchain's lab location is migration debt in A1; update this resolver when move
 - TypeSpec skill guidance supplied native value authoring. Constant lookup uses
   the same pinned checker seam as the existing boundary generator; JSON value
   conversion uses compiler `serializeValueAsJson`. No hand-written type lowering.
-- TypeSpec 1.10 accepts duplicate object keys. The registry guard rejects repeated
-  keys and object spreads before serialization to protect identity uniqueness.
-- JSON and D2 freshness checks are read-only. SVG is rebuilt by `just map`.
+- The loader imports the authoritative model and checks assignability independently
+  of the authored annotation. Removing the annotation cannot bypass the schema.
+- TypeSpec 1.10 accepts duplicate object keys. The registry and each entry must be
+  inline object literals; repeated keys and spreads are rejected before serialization.
+  Referenced record constants are explicitly unsupported to keep this guard complete.
+- Task IDs come from ID/State tables in the newest numbered task ledger and two
+  predecessors. Unrelated tables and combined strings such as `A2, A3` do not qualify.
+- JSON, D2 and SVG freshness checks are read-only. SVG is temporarily rerendered
+  with D2/ELK and compared byte-for-byte; `just map` updates the committed SVG.
   `map-watch` watches D2; TSP edits require `just map` or `just tsp` explicitly.
 
 Change stage/scope/evidence in the same commit as the corresponding implementation.

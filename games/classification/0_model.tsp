@@ -15,3 +15,5 @@ model Entry {
   targets: string[];
   evidence: string[];
 }
+
+alias Registry = Record<Entry>;
