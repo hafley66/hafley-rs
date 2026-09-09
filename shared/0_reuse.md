@@ -1,5 +1,10 @@
 # Reused game libraries
 
+Current implementation homes: `../crates/redux`, `../crates/input`,
+`../crates/rollback`, `../crates/capture`. Sources, tests and lockfiles moved
+together; this document retains their provenance. The Falcon lab consumes those
+packages directly. Non-Rust workflow tooling remains in `shared/workflow`.
+
 Source: sibling `hafley-rs-game-runtime` at commit `8646fa2`, MIT OR Apache-2.0.
 The `crates/redux` and `crates/rollback` source files were read from that checkout
 on 2026-09-08. Those crate files had no worktree modifications. Application code

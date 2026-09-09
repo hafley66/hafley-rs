@@ -13,7 +13,9 @@ Start with `just status`. `101_current.json` is the replace-in-place task pointe
 Read the active ledger named by its `tasks` field and the previous N numbered
 `*_tasks.md` ledgers, following the task-history rule below. Update active task
 status/receipts after each tested increment.
-Work stays in this lab and `games/shared`; sealed applications are read-only references.
+The parent games ledger governs promotion: reusable Rust packages move to
+`games/crates`, game-owned code to `games/smash`. This lab retains proof fixtures
+and consumes the promoted code. Sealed applications are read-only references.
 Use `just tsp`, `just test [all|core|godot|workflow|web]`, `just prove`, and
 `just deploy`. The default test suite includes core, workflow and native Godot
 boundaries; Web tests additionally build/export and run browser acceptance.
@@ -76,7 +78,7 @@ Full-site acquisition does not block work using already verified local assets.
 
 - Inspect existing libraries first. Extend/reuse those APIs before introducing
   equivalents. Shared Rust, generation, storage and capture code belongs under
-  `games/shared` or an existing appropriate reusable package in `hafley-rs`.
+  `games/crates` or an existing appropriate reusable package in `hafley-rs`.
 - Before implementing a feature, identify its shared mechanism and game-owned
   policy/data. Record the concrete signature, ownership and consumer. Shared code
   must not import Falcon modules or embed its paths, action IDs or expectations.
