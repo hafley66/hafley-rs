@@ -5,9 +5,7 @@ use anyhow::{Context, Result};
 use tracing::{debug, info, warn};
 
 use boop::bus::Route;
-use boop::door::Delivered;
 use boop::harness::HarnessId;
-use boop::mail::Landing;
 use boop::mailwait::Watch;
 use boop::registry::Registry;
 use boop::{bus, identity, inbox, lane, tmux};
@@ -145,7 +143,7 @@ pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
     // Only the aliases that read an edge need the caller's own route; every
     // other send takes the name it was handed, registered or not.
     let (sender, to, parent_source) = if send.route == PARENT_ALIAS {
-        let (caller, route, stamped) = caller_identity(registry, &routes, send.as_name)?;
+        let (caller, route, stamped) = caller_identity(&routes, send.as_name)?;
         let pick = lane::tell_parent_target(&caller, route, &routes, stamped.as_deref())?;
         let parent = pick
             .parent
@@ -154,7 +152,7 @@ pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
         (caller, parent, Some(pick.source))
     } else {
         (
-            sender_name(registry, &routes, send.as_name)?,
+            sender_name(&routes, send.as_name),
             send.route.to_owned(),
             None,
         )
@@ -213,18 +211,14 @@ pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
 /// Who the row is from: `--as`, else the identity ladder's own name, else the
 /// placeholder. A name `--as` gives is taken as written; only the alias sends
 /// need it to be a registered route.
-fn sender_name(
-    registry: &Registry,
-    routes: &BTreeMap<String, Route>,
-    as_name: Option<&str>,
-) -> Result<String> {
+fn sender_name(routes: &BTreeMap<String, Route>, as_name: Option<&str>) -> String {
     if let Some(name) = as_name {
-        return Ok(name.to_owned());
+        return name.to_owned();
     }
-    let identity = identity::resolve_with(registry, routes)?;
-    Ok(lane::caller_route(&identity, routes)
+    let identity = identity::resolve_as(None);
+    lane::caller_route(&identity, routes)
         .map(|(caller, _)| caller)
-        .unwrap_or_else(|_| DEFAULT_SENDER.to_owned()))
+        .unwrap_or_else(|_| DEFAULT_SENDER.to_owned())
 }
 
 /// Put one queued message in front of its recipient, through the door its
@@ -241,55 +235,6 @@ pub(crate) fn deliver_hail(
     if let Some(route) = revive_if_retired(dir, to, routes.get(to))? {
         routes.insert(to.to_owned(), route);
     }
-    // The acpx queue is a door the ladder never sees, so it takes the same
-    // progress-row exemption the ladder does: a lane's yield row waits in the
-    // mailbox rather than spending a worker's turn; its end row is pushed.
-    if let Some(route) = routes
-        .get(to)
-        .filter(|route| is_acpx(route) && !message.kind.lane_progress_row())
-    {
-        let harness_id = route
-            .harness
-            .map_or_else(|| "acpx".to_owned(), |id| id.to_string());
-        if !store.has_delivery_transition(&message.id)? {
-            store.append_delivery_transition(
-                &message.id,
-                to,
-                route.harness,
-                boop::DeliveryState::Appended.as_str(),
-                "mailbox",
-                None,
-                boop::live::now_ms(),
-            )?;
-        }
-        // The acpx queue is a door like any other: a burst past the worker's
-        // budget cools the route off and the row waits, unstamped, for a retry.
-        let budget = boop::mail::DoorBudget::from_env();
-        if let Some(cooled) = boop::mail::door_gate(
-            &store,
-            to,
-            &routes,
-            &message.body,
-            &budget,
-            boop::live::now_ms(),
-        )? {
-            cooled.record(&store, &message.id, to, route.harness)?;
-            println!("{}", cooled.line(&message.id, &message.from, to, &harness_id));
-            return Ok(());
-        }
-        let response = crate::cli::acpx::deliver(route, &message.body)?;
-        append_acks(dir, std::slice::from_ref(message))?;
-        let landing = Landing::acpx(response.trim_end().to_owned());
-        landing.record(&store, &message.id, to, route.harness)?;
-        if let Some(reply) = landing.reply.as_deref().filter(|text| !text.is_empty()) {
-            println!("{reply}");
-        }
-        println!(
-            "{}",
-            landing.line(&message.id, &message.from, to, &harness_id)
-        );
-        return Ok(());
-    }
     // The door rung is the only line that names a harness; a route naming none
     // reads the placeholder rather than inventing one.
     let harness_id = routes
@@ -304,8 +249,8 @@ pub(crate) fn deliver_hail(
         outcome = landing.outcome(),
         "hail delivery recorded"
     );
-    if landing.rung.carried_the_body() {
-        append_acks(dir, std::slice::from_ref(message))?;
+    if let Some(reply) = landing.reply.as_deref().filter(|text| !text.is_empty()) {
+        println!("{reply}");
     }
     println!(
         "{}",
@@ -418,11 +363,6 @@ fn push_wait(dir: &Path, to: &str, message_id: &str, timeout_secs: u64) -> Resul
 /// How often `push` re-reads the mailbox. The same cadence `boop wait` uses.
 const PUSH_POLL: std::time::Duration = std::time::Duration::from_millis(500);
 
-/// An acpx route is driven by the caller's own queue, not by a harness door.
-fn is_acpx(route: &Route) -> bool {
-    route.mode.as_deref() == Some("acpx")
-}
-
 /// Who is calling, for every verb that has to know: the name, its registry
 /// route, and the parent the spawner stamped into the environment.
 ///
@@ -430,7 +370,6 @@ fn is_acpx(route: &Route) -> bool {
 /// environment, so the env rung names the spawner and `BOOP_PARENT` is the
 /// spawner's parent, never the native's.
 fn caller_identity<'a>(
-    registry: &Registry,
     routes: &'a BTreeMap<String, Route>,
     as_name: Option<&str>,
 ) -> Result<(String, &'a Route, Option<String>)> {
@@ -442,7 +381,7 @@ fn caller_identity<'a>(
             Ok((name.to_owned(), route, None))
         }
         None => {
-            let identity = identity::resolve_with(registry, routes)?;
+            let identity = identity::resolve_as(None);
             let (caller, route) = lane::caller_route(&identity, routes)?;
             Ok((caller, route, identity.parent))
         }
@@ -482,7 +421,7 @@ fn fan_out_to_children(
     routes: &BTreeMap<String, Route>,
     send: &Outbound<'_>,
 ) -> Result<()> {
-    let (caller, route, _) = caller_identity(registry, routes, send.as_name)?;
+    let (caller, route, _) = caller_identity(routes, send.as_name)?;
     let body = send
         .body
         .context("a body is required to mail the caller's children")?;
@@ -498,7 +437,7 @@ fn fan_out_to_children(
     let budget = boop::mail::DoorBudget::from_env();
     let (mut landed, mut cooled, mut unreachable, mut dead) = (0usize, 0usize, 0usize, 0usize);
     for (name, route) in children {
-        let reach = child_reach(route, name, None);
+        let reach = child_reach(registry, route, name, None);
         match &reach {
             ChildReach::NoRoute(why) => {
                 unreachable += 1;
@@ -527,72 +466,33 @@ fn fan_out_to_children(
         };
         append_message(dir, &message)?;
         record_control_edge(&message)?;
-        match reach {
-            ChildReach::Hook => {
-                landed += 1;
-                println!("landed {name} {} from {} (hook inbox)", message.id, caller);
-            }
-            ChildReach::Supervisor => {
-                landed += 1;
-                println!(
-                    "landed {name} {} from {} (lane supervisor)",
-                    message.id, caller
-                );
-            }
-            ChildReach::Pane => {
-                let now_ms = boop::live::now_ms();
-                store.append_delivery_transition(
-                    &message.id,
-                    name,
-                    route.harness,
-                    boop::DeliveryState::Appended.as_str(),
-                    "mailbox",
-                    None,
-                    now_ms,
-                )?;
-                if let Some(cooling) = boop::mail::door_gate(
-                    &store,
-                    name,
-                    routes,
-                    &message.body,
-                    &budget,
-                    now_ms,
-                )? {
-                    cooling.record(&store, &message.id, name, route.harness)?;
-                    cooled += 1;
-                    println!("cooled-off {name} {} ({})", message.id, cooling.detail());
-                    continue;
-                }
-                match deliver_through_door(registry, route, &message.body)? {
-                    Delivered::Injected => {
-                        append_acks(dir, std::slice::from_ref(&message))?;
-                        Landing::new(boop::mail::Rung::Door, "door")
-                            .record(&store, &message.id, name, route.harness)?;
-                        landed += 1;
-                        println!(
-                            "landed {name} {} from {} (through the door)",
-                            message.id, caller
-                        );
-                    }
-                    Delivered::QueuedForTurnBoundary => {
-                        // The harness holds the body; stamp the row or the held-mail
-                        // drain pushes a second copy (failure mode 14).
-                        append_acks(dir, std::slice::from_ref(&message))?;
-                        Landing::new(boop::mail::Rung::DoorQueue, "door queue")
-                            .record(&store, &message.id, name, route.harness)?;
-                        landed += 1;
-                        println!(
-                            "landed {name} {} from {} (next turn boundary)",
-                            message.id, caller
-                        );
-                    }
-                    Delivered::Unreachable(why) => {
-                        unreachable += 1;
-                        println!("no-route {name} ({why})");
-                    }
-                }
-            }
-            ChildReach::NoRoute(_) | ChildReach::Dead(_) => unreachable!("reported above"),
+        let landing = boop::mail::deliver_hail_budgeted(
+            registry,
+            &store,
+            routes,
+            &message,
+            &boop::mail::TmuxPaster,
+            &budget,
+        )?;
+        let owned_inbox = matches!(
+            (&reach, landing.rung),
+            (ChildReach::Hook, boop::mail::Rung::HookInbox)
+                | (ChildReach::Supervisor, boop::mail::Rung::TurnBoundary)
+        );
+        if landing.rung.carried_the_body() || owned_inbox {
+            landed += 1;
+            let label = if matches!(reach, ChildReach::Supervisor) && owned_inbox {
+                "lane supervisor"
+            } else {
+                landing.rung.as_str()
+            };
+            println!("landed {name} {} from {} ({label})", message.id, caller);
+        } else if landing.rung == boop::mail::Rung::CoolOff {
+            cooled += 1;
+            println!("cooled-off {name} {} ({})", message.id, landing.detail());
+        } else {
+            unreachable += 1;
+            println!("no-route {name} ({})", landing.detail());
         }
     }
     for session in spawned {
@@ -613,27 +513,6 @@ fn caller_session<'a>(caller: &'a str, route: &'a Route) -> &'a str {
         .as_deref()
         .filter(|session| !session.is_empty())
         .unwrap_or(caller)
-}
-
-/// One body to a child that holds a pane, through its harness's own door.
-/// The pane the route names is looked up in that harness's live registry; a
-/// route naming no harness, or a pane no live session holds, is unreachable
-/// rather than typed at.
-fn deliver_through_door(registry: &Registry, route: &Route, body: &str) -> Result<Delivered> {
-    let Some(harness) = route.harness else {
-        return Ok(Delivered::Unreachable("route names no harness".into()));
-    };
-    let adapter = registry.get(harness);
-    let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) else {
-        return Ok(Delivered::Unreachable("route names no pane".into()));
-    };
-    let pane = boop::live::pane_of_target(target).unwrap_or_else(|| target.to_owned());
-    let Some(live) = adapter.live().live_session_in_pane(&pane)? else {
-        return Ok(Delivered::Unreachable(format!(
-            "no live {harness} session in {pane}"
-        )));
-    };
-    adapter.door().deliver(&live, body)
 }
 
 /// A claude Agent-tool child runs inside its parent's process. It owns no pane,
@@ -741,14 +620,10 @@ pub(crate) fn revive_if_retired(
     revived.registered_at = Some(bus::now_iso());
     // The replayed record keeps this run's spawn id, so the pin it wrote is
     // still this run's pin and the revived supervisor resumes on it.
-    revived.session_id = boop::supervise::pinned_conversation_for(
-        dir,
-        name,
-        Path::new(&spawn.cwd),
-        spawn.spawn_id,
-    )
-    .ok()
-    .or(revived.session_id);
+    revived.session_id =
+        boop::supervise::pinned_conversation_for(dir, name, Path::new(&spawn.cwd), spawn.spawn_id)
+            .ok()
+            .or(revived.session_id);
     write_route(dir, name, revived.clone())?;
     println!(
         "revive {name} (pane {} gone; respawning on the pinned conversation)",
@@ -798,16 +673,21 @@ pub(crate) fn revive_if_retired(
 /// How a queued row reaches a child. A route with no hook and no tmux target
 /// was never reachable; a route whose target tmux has dropped went dead. The
 /// two are different facts and are reported apart.
-pub(crate) fn child_reach(route: &Route, name: &str, socket: Option<&str>) -> ChildReach {
-    if route
-        .cwd
-        .as_deref()
-        .is_some_and(|cwd| inbox::installed_for(Path::new(cwd), name))
-    {
+pub(crate) fn child_reach(
+    registry: &Registry,
+    route: &Route,
+    name: &str,
+    socket: Option<&str>,
+) -> ChildReach {
+    if boop::mail::hook_inbox(registry, route, name) {
         return ChildReach::Hook;
     }
     let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) else {
-        return ChildReach::NoRoute("no hook, no pane");
+        return if route.harness.is_some() && route.session_id.is_some() {
+            ChildReach::Pane
+        } else {
+            ChildReach::NoRoute("no hook, no pane")
+        };
     };
     if !tmux::mux().target_alive(socket, target) {
         return ChildReach::Dead(target.to_owned());

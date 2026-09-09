@@ -250,7 +250,7 @@ fn wait_with_deadline(
 /// their own threads so a full pipe can never block the deadline wait, and
 /// stdin is null as `Command::output` makes it, so no captured child can sit
 /// on a prompt the spawn has no terminal to answer.
-fn run_captured_with_deadline(
+pub fn run_captured_with_deadline(
     mut cmd: Command,
     what: &'static str,
     deadline: Duration,

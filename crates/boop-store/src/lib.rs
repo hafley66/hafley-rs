@@ -40,7 +40,6 @@ pub use _0_session_graph::{
 #[cfg(feature = "agent-read")]
 pub use activity::{ActivityCount, ActivityScope, ToolResultAvailability};
 pub use harness_id::HarnessId;
-pub use tags::{normalize_tag, tags_in, Tag};
 pub use ident::{
     DeliveryState, Store, SyncStat, TraceErrorRow, TraceEvent, TraceEventRow,
     TRACE_EVENT_RETENTION_LIMIT,
@@ -61,6 +60,7 @@ pub use summary::{
     agent_summary, agent_summary_now, AgentSummary, AgentSummaryActivity, AgentSummaryAgent,
     AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION,
 };
+pub use tags::{normalize_tag, tags_in, Tag};
 #[cfg(feature = "agent-read")]
 pub use usage::{GroupBy, UsageQuery};
 

@@ -1,6 +1,7 @@
 //! The exit codes a spawn-and-join depends on, taken from the real binary:
 //! `--wait` on `lane create` returns through this same verb.
 
+use boop_store::testing::BoopCommandExt;
 use std::io::BufRead;
 use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -144,10 +145,9 @@ impl CreateFixture {
     fn command(&self, timeout: &str) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_boop"));
         command
-            .env_clear()
-            .env("HOME", &self.root)
+            .boop_test_root(&self.root)
             .env("BOOP_DB", self.root.join("boop.db"))
-            .env("XDG_CONFIG_HOME", self.root.join("config"))
+            .env("BOOP_CONFIG", self.root.join("config/boop/config.json"))
             .env("PATH", &self.bin)
             .args(["beep", "lane", "create"])
             .arg("--lane")
@@ -171,10 +171,9 @@ impl CreateFixture {
     fn codex_caller_command(&self) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_boop"));
         command
-            .env_clear()
-            .env("HOME", &self.root)
+            .boop_test_root(&self.root)
             .env("BOOP_DB", self.root.join("boop.db"))
-            .env("XDG_CONFIG_HOME", self.root.join("config"))
+            .env("BOOP_CONFIG", self.root.join("config/boop/config.json"))
             .env("PATH", &self.bin)
             .env("CODEX_THREAD_ID", "thread-codex-parent")
             .env("TMUX_PANE", "%1206")
@@ -213,7 +212,7 @@ fn wait_exit(dir: &std::path::Path, lane: &str, timeout: &str) -> i32 {
         .args(["wait", lane, "--wait-timeout", timeout])
         .arg("--mail-dir")
         .arg(dir)
-        .env("HOME", dir.join("home"))
+        .boop_test_root(dir.join("home"))
         .env("BOOP_DB", dir.join("boop.db"))
         .status()
         .unwrap()
@@ -394,7 +393,7 @@ done
     let path = format!("{}:/usr/bin:/bin", bin.display());
     let mut child = Command::new(env!("CARGO_BIN_EXE_boop"))
         .env("PATH", path)
-        .env("HOME", root.join("home"))
+        .boop_test_root(root.join("home"))
         .env("BOOP_DB", root.join("boop.db"))
         .env("BOOP_TEST_CODEX_LOG", &log)
         .current_dir(&repo)

@@ -1131,6 +1131,8 @@ mod tests {
         image_paste_keys: None,
         native_tui_projector: false,
         wrapper_owns_alternate_screen: false,
+        native_backend: boop_harness::harness::NativeBackendSupport::Unsupported,
+        native_settings: boop_harness::harness::NativeSettingsSupport::Unsupported("fixture"),
     };
 
     impl Harness for FakeHarness {
@@ -1242,10 +1244,16 @@ mod tests {
     #[test]
     fn oneshot_window_maps_each_window_exactly_once() {
         let (store, db_path) = store();
-        store.write_turn("ses", 1, 10, "assistant", "a1", None).unwrap();
-        store.write_turn("ses", 2, 11, "assistant", "a2", None).unwrap();
+        store
+            .write_turn("ses", 1, 10, "assistant", "a1", None)
+            .unwrap();
+        store
+            .write_turn("ses", 2, 11, "assistant", "a2", None)
+            .unwrap();
         store.write_turn("ses", 3, 12, "user", "u1", None).unwrap();
-        store.write_turn("ses", 4, 13, "assistant", "a3", None).unwrap();
+        store
+            .write_turn("ses", 4, 13, "assistant", "a3", None)
+            .unwrap();
         let harness: &'static FakeHarness = Box::leak(Box::new(FakeHarness {
             calls: AtomicUsize::new(0),
             reply: "rewritten",
@@ -1275,7 +1283,9 @@ mod tests {
     #[test]
     fn poisoned_bundle_times_out_and_the_next_window_still_processes() {
         let (store, db_path) = store();
-        store.write_turn("ses", 1, 10, "assistant", "a1", None).unwrap();
+        store
+            .write_turn("ses", 1, 10, "assistant", "a1", None)
+            .unwrap();
         store.write_turn("ses", 2, 11, "user", "u1", None).unwrap();
         let harness: &'static FakeHarness = Box::leak(Box::new(FakeHarness {
             calls: AtomicUsize::new(0),
@@ -1300,7 +1310,9 @@ mod tests {
     #[test]
     fn a_planted_marker_skips_the_bundle_mid_flight() {
         let (store, db_path) = store();
-        store.write_turn("ses", 1, 10, "assistant", "a1", None).unwrap();
+        store
+            .write_turn("ses", 1, 10, "assistant", "a1", None)
+            .unwrap();
         store.write_turn("ses", 2, 11, "user", "u1", None).unwrap();
         let state_dir = temp_dir("plant_state");
         // The first one_shot call plants a done marker for the second window

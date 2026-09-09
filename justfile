@@ -1,5 +1,9 @@
 set shell := ["bash", "-cu"]
 
+# Boop protocol/adapter/integration gate; live requires BOOP_E2E_ROOT.
+boop-check mode="deterministic":
+    bash crates/boop/scripts/0_regression_gate.sh "{{mode}}"
+
 # Install boop over ~/.cargo/bin/boop from a clean tree whose HEAD is already on
 # origin/main, stamping that sha into `boop --version`. Refuses otherwise.
 install-boop:

@@ -6,6 +6,7 @@
 //! not be tied to any of them. `boop --version` printed `boop 0.0.2` for all
 //! three, and nothing refused an install from a tree that was never on main.
 
+use boop_store::testing::BoopCommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -177,7 +178,7 @@ fn the_version_string_carries_the_commit_it_was_built_from() {
     std::fs::create_dir_all(&home).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_boop"))
         .arg("--version")
-        .env("HOME", &home)
+        .boop_test_root(&home)
         .env("BOOP_DB", home.join("boop.db"))
         .output()
         .expect("run boop --version");
@@ -236,7 +237,7 @@ fn a_lane_spawn_names_the_binary_that_ran_it() {
         .arg("--mail-dir")
         .arg(&mail)
         .args(["--branch", "fix/install-rail-probe", "--dry-run"])
-        .env("HOME", &home)
+        .boop_test_root(&home)
         .env("BOOP_DB", repo.root.join("boop.db"))
         .output()
         .expect("run boop beep lane create --dry-run");

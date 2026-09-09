@@ -10,14 +10,16 @@ use boop::{bus, ident, tmux};
 #[cfg(feature = "agent-read")]
 use boop::{query, usage};
 
+#[cfg(feature = "agent-read")]
 use crate::cli::job::lane_state;
 use crate::cli::mail::deliver_hail;
 use crate::cli::{append_acks, append_message, line, mail_dir, now_ms, write_route};
+#[cfg(feature = "agent-read")]
 use crate::{
-    AgentSessionGraphFormat, AgentSummaryCmd, AgentSummaryFormat, ChatCmd, CursorCmd, DbCmd,
-    EdgeCmd, FactCmd, FavoriteCmd, PriceCmd, QueryArgs, QueryFormat, SessionCmd, SyncCmd, TurnCmd,
-    UsageArgs, UsageCmd,
+    AgentSessionGraphFormat, AgentSummaryCmd, AgentSummaryFormat, CursorCmd, FactCmd, FavoriteCmd,
+    PriceCmd, SessionCmd, UsageArgs, UsageCmd,
 };
+use crate::{ChatCmd, DbCmd, EdgeCmd, QueryArgs, QueryFormat, SyncCmd, TurnCmd};
 
 // ---------------------------------------------------------------------------
 // Pass 1 verbs: layer 2 (transcript)
@@ -815,12 +817,7 @@ pub(crate) fn sync_all_budgeted(
                 .get(harness)
                 .native_child_completion_visible(parent, child)
         },
-        |message| {
-            if let Err(error) = deliver_hail(registry, &native_child_mail_dir, message, None) {
-                tracing::warn!(error = %error, "deliver native child completion hail failed");
-            }
-            Ok(())
-        },
+        |message| deliver_hail(registry, &native_child_mail_dir, message, None),
     )?;
     let elapsed_ms = started.elapsed().as_millis();
     phases.db_after_bytes = store.db_bytes().unwrap_or(phases.db_before_bytes);
@@ -939,6 +936,9 @@ fn deliver_native_child_completions(
             append_acks(dir, std::slice::from_ref(&message))?;
         } else {
             deliver(&message)?;
+            if !store.delivery_accepted(&message.id, parent_route)? {
+                continue;
+            }
         }
         store.ensure_edge_at(
             &completion.parent_session,
@@ -1164,15 +1164,6 @@ pub(crate) fn session_matches_route(
         || (route.cwd.is_some() && route.cwd.as_deref() == session.cwd.as_deref())
 }
 
-pub(crate) fn resolve_harness<'a>(
-    registry: &'a Registry,
-    id: &str,
-) -> Result<&'a dyn boop::harness::Harness> {
-    registry
-        .by_name(id)
-        .with_context(|| format!("no harness registered with id `{id}`"))
-}
-
 // ---------------------------------------------------------------------------
 // db
 // ---------------------------------------------------------------------------
@@ -1331,6 +1322,7 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
         },
         #[cfg(feature = "agent-read")]
         DbCmd::Status { window, format } => run_status(window, format),
+        #[cfg(feature = "agent-read")]
         DbCmd::Search {
             text,
             days,
@@ -1346,6 +1338,7 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
             );
             Ok(())
         }
+        #[cfg(feature = "agent-read")]
         DbCmd::Sessions {
             days,
             harness,
@@ -1360,6 +1353,7 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
             );
             Ok(())
         }
+        #[cfg(feature = "agent-read")]
         DbCmd::Lanes {
             days,
             limit,
@@ -1370,6 +1364,7 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
             emit_json_rows(&store.recent_lanes(since, limit)?, format);
             Ok(())
         }
+        #[cfg(feature = "agent-read")]
         DbCmd::Mail {
             route,
             kind,
@@ -1380,6 +1375,7 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
             emit_json_rows(&store.route_mail(&route, kind.as_deref(), limit)?, format);
             Ok(())
         }
+        #[cfg(feature = "agent-read")]
         DbCmd::Schema { format } => {
             let store = open_ro_store()?;
             emit_json_rows(&store.schema_rows()?, format);
@@ -1785,6 +1781,8 @@ mod tests {
         image_paste_keys: None,
         native_tui_projector: false,
         wrapper_owns_alternate_screen: false,
+        native_backend: boop::harness::NativeBackendSupport::Unsupported,
+        native_settings: boop::harness::NativeSettingsSupport::Unsupported("fixture"),
     };
 
     struct FakeHarness {
@@ -1975,6 +1973,22 @@ mod tests {
         }
     }
 
+    fn record_parent_acceptance(
+        store: &ident::Store,
+        dir: &Path,
+        message: &bus::Message,
+    ) -> Result<()> {
+        store.record_delivery(
+            &message.id,
+            &message.to,
+            None,
+            "accepted-by-harness",
+            "fixture door",
+            now_ms(),
+        )?;
+        append_acks(dir, std::slice::from_ref(message)).map(|_| ())
+    }
+
     fn native_parent_routes() -> BTreeMap<String, bus::Route> {
         let mut route = route_with(None);
         route.kind = "native".into();
@@ -2018,10 +2032,18 @@ mod tests {
         // mailed into an ordinary art session. Both kinds have a parent ID;
         // source.subagent distinguishes a guardian from a delegated worker.
         for (kind, source, expected_deliveries) in [
-            ("guardian", serde_json::json!({"subagent": {"other": "guardian"}}), 0),
-            ("worker", serde_json::json!({"subagent": {"thread_spawn": {
-                "parent_thread_id": "parent-session", "agent_path": "/root/worker", "depth": 1
-            }}}), 1),
+            (
+                "guardian",
+                serde_json::json!({"subagent": {"other": "guardian"}}),
+                0,
+            ),
+            (
+                "worker",
+                serde_json::json!({"subagent": {"thread_spawn": {
+                    "parent_thread_id": "parent-session", "agent_path": "/root/worker", "depth": 1
+                }}}),
+                1,
+            ),
         ] {
             let dir = temp_mail_dir();
             std::fs::create_dir_all(&dir).unwrap();
@@ -2043,23 +2065,41 @@ mod tests {
             // Exercise a full read, an incremental read past session_meta,
             // and a repeated scan through the real mailbox/receipt path.
             for from in [0, metadata.len() as u64 + 1, 0] {
-                project_native_children(&store, &boop::harness::codex::Codex, &session, from).unwrap();
+                project_native_children(&store, &boop::harness::codex::Codex, &session, from)
+                    .unwrap();
                 deliver_native_child_completions(
-                    &store, &routes, &dir, |_, _, _| Ok(false),
+                    &store,
+                    &routes,
+                    &dir,
+                    |_, _, _| Ok(false),
                     |message| {
                         delivered.push(message.clone());
-                        append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+                        record_parent_acceptance(&store, &dir, message)
                     },
-                ).unwrap();
+                )
+                .unwrap();
             }
-            assert_eq!(delivered.len(), expected_deliveries, "{kind}: queued payloads {delivered:?}");
-            assert_eq!(completion_rows(&dir).len(), expected_deliveries, "{kind}: mailbox");
+            assert_eq!(
+                delivered.len(),
+                expected_deliveries,
+                "{kind}: queued payloads {delivered:?}"
+            );
+            assert_eq!(
+                completion_rows(&dir).len(),
+                expected_deliveries,
+                "{kind}: mailbox"
+            );
             let edges = store.edge_rows(None).unwrap();
             let kinds: Vec<_> = edges.iter().map(|edge| edge.edge.as_str()).collect();
             let expected = if kind == "guardian" {
                 vec!["spawned"]
             } else {
-                vec!["completed", "completion-delivered", "completion-mailed", "spawned"]
+                vec![
+                    "completed",
+                    "completion-delivered",
+                    "completion-mailed",
+                    "spawned",
+                ]
             };
             let mut kinds = kinds;
             kinds.sort_unstable();
@@ -2085,7 +2125,7 @@ mod tests {
             |_, _, _| Ok(false),
             |message| {
                 delivered.push(message.clone());
-                append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+                record_parent_acceptance(&store, &dir, message)
             },
         )
         .unwrap();
@@ -2097,7 +2137,7 @@ mod tests {
             |_, _, _| Ok(false),
             |message| {
                 delivered.push(message.clone());
-                append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+                record_parent_acceptance(&store, &dir, message)
             },
         )
         .unwrap();
@@ -2208,7 +2248,7 @@ mod tests {
             |_, _, _| Ok(false),
             |message| {
                 delivered.push(message.clone());
-                append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+                record_parent_acceptance(&store, &dir, message)
             },
         )
         .unwrap();
@@ -2218,6 +2258,52 @@ mod tests {
             delivered[0].id,
             "native-child-completion:parent-session:child-session"
         );
+    }
+
+    #[test]
+    fn a_held_child_completion_remains_pending_until_transport_acceptance() {
+        let dir = temp_mail_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = ident::Store::open(dir.join("boop.db")).unwrap();
+        project_native_children(&store, &fake_child_events(), &native_child_session(&dir), 0)
+            .unwrap();
+        let routes = native_parent_routes();
+        let mut attempted = Vec::new();
+        for accepted in [false, true] {
+            deliver_native_child_completions(
+                &store,
+                &routes,
+                &dir,
+                |_, _, _| Ok(false),
+                |message| {
+                    attempted.push(message.id.clone());
+                    store.record_delivery(
+                        &message.id,
+                        &message.to,
+                        None,
+                        if accepted {
+                            "accepted-by-harness"
+                        } else {
+                            "held-for-turn-boundary"
+                        },
+                        "fixture",
+                        now_ms(),
+                    )
+                },
+            )
+            .unwrap();
+            let done = store
+                .edge_rows(None)
+                .unwrap()
+                .iter()
+                .any(|edge| edge.edge == "completion-delivered");
+            assert_eq!(done, accepted);
+        }
+        assert_eq!(
+            attempted,
+            ["native-child-completion:parent-session:child-session"; 2]
+        );
+        assert_eq!(completion_rows(&dir).len(), 1);
     }
 
     #[test]
@@ -2247,7 +2333,7 @@ mod tests {
             |_, _, _| Ok(false),
             |message| {
                 delivered.push(message.clone());
-                append_acks(&dir, std::slice::from_ref(message)).map(|_| ())
+                record_parent_acceptance(&store, &dir, message)
             },
         )
         .unwrap();
@@ -2308,7 +2394,7 @@ mod tests {
                     "resident-parent",
                     &worker_dir,
                     |message| {
-                        append_acks(&worker_dir, std::slice::from_ref(message))?;
+                        record_parent_acceptance(&store, &worker_dir, message)?;
                         delivery_tx.send(message.id.clone()).unwrap();
                         Ok(())
                     },
@@ -2497,7 +2583,7 @@ mod tests {
                     "codex-live-parent",
                     &worker_dir,
                     |message| {
-                        append_acks(&worker_dir, std::slice::from_ref(message))?;
+                        record_parent_acceptance(&store, &worker_dir, message)?;
                         delivery_tx.send(message.id.clone()).unwrap();
                         Ok(())
                     },

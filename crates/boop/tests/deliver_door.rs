@@ -24,6 +24,8 @@ static DOOR: Capabilities = Capabilities {
     image_paste_keys: Some("C-v"),
     native_tui_projector: false,
     wrapper_owns_alternate_screen: false,
+    native_backend: boop::harness::NativeBackendSupport::Unsupported,
+    native_settings: boop::harness::NativeSettingsSupport::Unsupported("fixture"),
 };
 
 static KEYSTROKES: Capabilities = Capabilities {
@@ -34,16 +36,32 @@ static KEYSTROKES: Capabilities = Capabilities {
     image_paste_keys: Some("C-v"),
     native_tui_projector: false,
     wrapper_owns_alternate_screen: false,
+    native_backend: boop::harness::NativeBackendSupport::Unsupported,
+    native_settings: boop::harness::NativeSettingsSupport::Unsupported("fixture"),
 };
 
 /// A door that keeps what it was handed. The file is the recorder, so the
 /// harness stays the shareable, lock-free value the trait asks for.
 struct Recorder {
     log: PathBuf,
+    calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    pause: Option<(
+        std::sync::mpsc::SyncSender<()>,
+        std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+    )>,
 }
 
 impl Door for Recorder {
     fn deliver(&self, session: &LiveSession, body: &str) -> Result<Delivered> {
+        if self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+            if let Some((entered, release)) = &self.pause {
+                entered.send(())?;
+                release
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(10))?;
+            }
+        }
         std::fs::write(&self.log, format!("{} <- {body}", session.session_id))?;
         Ok(Delivered::Injected)
     }
@@ -139,6 +157,8 @@ fn echo(id: HarnessId, capabilities: &'static Capabilities, dir: &std::path::Pat
         },
         door: Recorder {
             log: dir.join("door.log"),
+            calls: Default::default(),
+            pause: None,
         },
         capabilities,
         id,
@@ -213,6 +233,63 @@ impl PanePaster for RecordingPane {
 
 fn routes(name: &str, route: Route) -> BTreeMap<String, Route> {
     BTreeMap::from([(name.to_owned(), route)])
+}
+
+#[test]
+fn concurrent_and_later_retries_do_not_resubmit_an_accepted_message() {
+    use std::sync::{atomic::Ordering, mpsc, Arc, Mutex};
+    let dir = temp_dir("retries");
+    let store = store(&dir);
+    let mut adapter = echo(HarnessId::Kimi, &DOOR, &dir);
+    let calls = Arc::clone(&adapter.door.calls);
+    let (entered, arrived) = mpsc::sync_channel(1);
+    let (release, paused) = mpsc::sync_channel(1);
+    adapter.door.pause = Some((entered, Mutex::new(paused)));
+    let registry = Registry::with(vec![Box::new(adapter)]);
+    let routes = routes("tui", route(HarnessId::Kimi, Some("%1"), Some("live-1")));
+    let message = message("m-retry", "tui", "deliver this message once");
+    let budget = boop::mail::DoorBudget {
+        window: Duration::ZERO,
+        cooldown: Duration::ZERO,
+        floor: 100,
+    };
+    let concurrent = std::thread::scope(|scope| {
+        let worker = scope.spawn(|| {
+            let separate = Store::open(dir.join("boop.db")).unwrap();
+            boop::mail::deliver_hail_budgeted(
+                &registry, &separate, &routes, &message, &NoPane, &budget,
+            )
+            .unwrap()
+        });
+        arrived.recv_timeout(Duration::from_secs(10)).unwrap();
+        let concurrent = boop::mail::deliver_hail_budgeted(
+            &registry, &store, &routes, &message, &NoPane, &budget,
+        )
+        .unwrap();
+        release.send(()).unwrap();
+        assert!(worker.join().unwrap().rung.carried_the_body());
+        concurrent
+    });
+    let retry =
+        boop::mail::deliver_hail_budgeted(&registry, &store, &routes, &message, &NoPane, &budget)
+            .unwrap();
+    let accepted = store
+        .delivery_rows(&message.id)
+        .unwrap()
+        .iter()
+        .filter(|row| row.outcome == "accepted-by-harness")
+        .count();
+    assert_eq!(
+        (
+            calls.load(Ordering::SeqCst),
+            concurrent.rung,
+            retry.detail.as_str(),
+            accepted
+        ),
+        (1, Rung::TurnBoundary, "previously accepted by harness", 1)
+    );
+    drop(store);
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 /// RECEIPT. A hail to a Door harness reaches that harness's own door and

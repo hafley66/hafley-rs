@@ -8,16 +8,18 @@ boop beep parent "TEXT" [--kind completion|yield|note] [--as NAME]
 boop beep children "TEXT" [--as NAME]
 ```
 
-Folded 2026-08-25: `boop tell-parent` and `boop tell-children` are hidden
-aliases over the same send, so briefs that name them keep running. `--body
-TEXT` is accepted in place of the positional for the same reason.
+Use the positional route and body shown above. The removed `tell-parent` and
+`tell-children` commands are rejected. Hidden `--body TEXT` remains a compatibility
+alias for the positional body.
+`--no-wait` returns after delivery admission; ordinary sends wait for a response
+up to `--timeout` seconds and return 124 on timeout.
 
 | step | where it comes from |
 |---|---|
-| the sender | the identity ladder (`boop whoami`): `BOOP_LANE`/`BOOP_SESSION`, else the registered pane, else the harness process |
+| the sender | explicit `--as`, otherwise `BOOP_SESSION` / legacy `BOOP_LANE`; `boop whoami` displays the resolved identity |
 | the recipient | the caller's registry route `parent`, written by `lane create --parent` and `agent register --parent` |
 | the fallback | the one registered coordinator with a pane, when the route records no parent |
-| delivery | the ladder every send walks: pane injection for a coordinator, inbox drain for a hook, the mailbox for a lane supervisor |
+| delivery | `boop-proc::deliver::deliver_hail_budgeted`; harness door or owned queue, installed hook, lane supervisor, and explicit fallback outcomes |
 
 `--kind` is the mail row's kind. A body is required for `completion` and
 `note`. `yield` alone has a default, `yield <lane> rc=0 branch=<branch>
@@ -28,19 +30,23 @@ A caller the ladder cannot name, and a caller with no parent edge and no lone
 coordinator, are each an error naming the caller and a non-zero exit. Neither
 writes a row.
 
-`tell-children` sends one body to every route registered as a child of the
-caller and prints one line per target:
+`beep children` enumerates registered parent edges and observed native spawned
+edges, then prints one line per target and an outcome tally:
 
 ```
 landed feature-a m-02be8593 (hook inbox)
 dead   feature-b
 ```
 
-A child is reachable when a boop drain hook is installed in its project or its
-tmux target is alive. A dead child gets a line and no row, so nothing queues up
-for a lane that will never read it.
+A reachable target can have a native harness door, a lane supervisor, an installed
+hook or a live pane. Dead/unroutable targets are reported individually. Native
+transcript receipt is stronger evidence than queue admission or mailbox ack.
 
-## ACP delivery target
+## Historical ACP delivery design target
+
+The diagram below records the earlier proposed supervisor control-socket design.
+Current delivery is implemented by the adapter doors and shared delivery ladder
+named above; the diagram is not an executable lifecycle receipt.
 
 The target transport keeps one ACP connection alive for every agent, including
 the coordinator. The owning supervisor exposes a local control socket; mailbox
@@ -56,7 +62,7 @@ sequenceDiagram
     participant ACP as ACP adapter
     participant Agent as Parent agent
 
-    Terra->>Child: tell-parent(completion)
+    Terra->>Child: beep parent(completion)
     Child->>Bus: Store message
     Bus-->>Child: Message ID
     Child->>Parent: Notify through Unix socket

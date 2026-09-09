@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 pub mod acp;
+#[path = "channel/1_acpx.rs"]
+pub mod acpx;
 pub mod claude;
-pub mod codex;
-pub mod jsonrpc;
 pub mod terminal;
 
 /// Where a delivered message landed relative to the turn that was running.

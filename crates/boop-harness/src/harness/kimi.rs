@@ -31,12 +31,44 @@ static CAPABILITIES: Capabilities = Capabilities {
     image_paste_keys: None,
     native_tui_projector: true,
     wrapper_owns_alternate_screen: false,
+    native_backend: super::NativeBackendSupport::Unsupported,
+    native_settings: super::NativeSettingsSupport::Unsupported(
+        "Kimi exposes no native model and effort control plane",
+    ),
 };
 
 /// kimi publishes no door; the impl says so rather than guessing one.
 static DOOR: crate::door::kimi::KimiDoor = crate::door::kimi::KimiDoor;
 
 impl Harness for Kimi {
+    fn uses_native_tui(&self, args: &[String]) -> bool {
+        super::interactive_arguments(
+            args,
+            &[
+                "-S",
+                "--session",
+                "-m",
+                "--model",
+                "-p",
+                "--prompt",
+                "--output-format",
+                "--skills-dir",
+                "--agent",
+                "--agent-file",
+                "--add-dir",
+            ],
+            &["-V", "-p", "--prompt"],
+            &[
+                "help", "export", "provider", "acp", "web", "server", "login", "doctor", "vis",
+                "migrate", "upgrade", "update",
+            ],
+        )
+    }
+
+    fn matches_model(&self, name: &str) -> bool {
+        !name.contains('/') && name.starts_with("kimi")
+    }
+
     fn open_channel(
         &self,
         spec: &boop_acp::channel::ChannelSpec,
@@ -283,7 +315,11 @@ fn kimi_state_path(wire: &Path) -> PathBuf {
     wire.ancestors().nth(3).unwrap_or(wire).join("state.json")
 }
 
-fn read_kimi(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate::transcript::Message> {
+fn read_kimi(
+    path: &Path,
+    session_id: &str,
+    after_seq: Option<u64>,
+) -> Vec<crate::transcript::Message> {
     let Ok(file) = std::fs::File::open(path) else {
         return Vec::new();
     };
@@ -377,7 +413,10 @@ fn read_kimi(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate
                             "assistant".to_string(),
                             Some(name),
                             crate::transcript::cap(
-                                &event.get("args").map(super::codex::codex_value_text).unwrap_or_default(),
+                                &event
+                                    .get("args")
+                                    .map(super::codex::codex_value_text)
+                                    .unwrap_or_default(),
                                 400,
                             ),
                         )
@@ -436,7 +475,7 @@ fn read_kimi(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate
 }
 
 fn kimi_sessions_dir() -> anyhow::Result<PathBuf> {
-    let home = dirs::home_dir().context("resolve home directory")?;
+    let home = super::reader_home()?;
     Ok(home.join(".kimi-code").join("sessions"))
 }
 

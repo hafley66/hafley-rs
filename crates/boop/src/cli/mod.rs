@@ -4,8 +4,8 @@ pub(crate) mod db;
 pub(crate) mod debug;
 pub(crate) mod job;
 pub(crate) mod mail;
-pub(crate) mod paste;
 pub(crate) mod me;
+pub(crate) mod paste;
 pub(crate) mod tag;
 
 use std::path::{Path, PathBuf};
@@ -424,56 +424,7 @@ pub(crate) fn pad(value: &str, width: usize) -> String {
 }
 
 pub(crate) fn write_route(dir: &std::path::Path, lane_id: &str, route: Route) -> Result<()> {
-    let path = dir.join("registry.json");
-    bus::cas_update_json(&path, |current| {
-        current.insert(lane_id.to_owned(), route_to_json(&route));
-        Ok(())
-    })
-}
-
-pub(crate) fn route_to_json(route: &Route) -> serde_json::Value {
-    let mut object = serde_json::Map::new();
-    object.insert("kind".into(), serde_json::json!(route.kind.as_str()));
-    if let Some(harness) = &route.harness {
-        object.insert("harness".into(), serde_json::json!(harness));
-    }
-    if let Some(tmux) = &route.tmux {
-        object.insert("tmux".into(), serde_json::json!(tmux));
-    }
-    if let Some(cwd) = &route.cwd {
-        object.insert("cwd".into(), serde_json::json!(cwd));
-    }
-    if let Some(model) = &route.model {
-        object.insert("model".into(), serde_json::json!(model));
-    }
-    if let Some(mode) = &route.mode {
-        object.insert("mode".into(), serde_json::json!(mode));
-    }
-    if let Some(session_id) = &route.session_id {
-        object.insert("sessionId".into(), serde_json::json!(session_id));
-    }
-    if let Some(source_path) = &route.source_path {
-        object.insert("sourcePath".into(), serde_json::json!(source_path));
-    }
-    if let Some(parent) = &route.parent {
-        object.insert("parent".into(), serde_json::json!(parent));
-    }
-    if let Some(goal) = &route.goal {
-        object.insert("goal".into(), serde_json::json!(goal));
-    }
-    if let Some(registered_at) = &route.registered_at {
-        object.insert("registeredAt".into(), serde_json::json!(registered_at));
-    }
-    if let Some(base_sha) = &route.base_sha {
-        object.insert("baseSha".into(), serde_json::json!(base_sha));
-    }
-    if let Some(worktree_dir) = &route.worktree_dir {
-        object.insert("worktreeDir".into(), serde_json::json!(worktree_dir));
-    }
-    if let Some(socket) = &route.app_server_socket {
-        object.insert("appServerSocket".into(), serde_json::json!(socket));
-    }
-    serde_json::Value::Object(object)
+    bus::write_route(dir, lane_id, &route)
 }
 
 pub(crate) fn append_message(dir: &std::path::Path, message: &bus::Message) -> Result<()> {
@@ -511,13 +462,7 @@ pub(crate) fn append_acks(dir: &std::path::Path, messages: &[bus::Message]) -> R
     Ok(messages.len())
 }
 
-#[cfg(feature = "agent-read")]
-pub(crate) fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
-}
+pub(crate) use boop::live::now_ms;
 
 #[cfg(test)]
 pub(crate) mod testkit {

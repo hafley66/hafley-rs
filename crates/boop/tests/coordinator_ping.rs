@@ -4,6 +4,7 @@
 //! hail took the "lane supervisor delivers it" branch and every result row
 //! addressed to a coordinator queued in bus.ndjson forever, never reaching
 //! the pane.
+use boop_store::testing::BoopCommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -28,7 +29,7 @@ fn boop(dir: &Path, args: &[&str]) -> std::process::Output {
         // of 5 whole-suite runs: 374MB, `journal_mode=delete`, a 5s busy_timeout
         // and writers holding longer than that.
         .env("BOOP_DB", dir.join("boop.db"))
-        .env("HOME", dir.join("home"))
+        .boop_test_root(dir.join("home"))
         .output()
         .unwrap()
 }
@@ -66,8 +67,7 @@ fn route_kind(dir: &Path, name: &str) -> String {
         .to_owned()
 }
 
-/// Write a coordinator route directly, the way an adopted pane used to be
-/// registered: no CLI verb attaches to an already-running pane anymore.
+/// Seed a coordinator route for the deterministic door tests.
 fn write_coordinator_route(dir: &Path, name: &str, tmux: &str) {
     std::fs::create_dir_all(dir).unwrap();
     std::fs::write(
@@ -86,9 +86,14 @@ fn write_coordinator_route(dir: &Path, name: &str, tmux: &str) {
 }
 
 #[test]
-fn lane_patch_still_writes_a_lane_route() {
+fn lane_patch_preserves_an_existing_lane_route() {
     let dir = mail_dir("patch");
     let session = TestSession::new("patch");
+    std::fs::write(
+        dir.join("registry.json"),
+        r#"{"test-lane":{"kind":"lane"}}"#,
+    )
+    .unwrap();
     let output = boop(
         &dir,
         &["beep", "lane", "patch", "test-lane", "--tmux", &session.0],
@@ -96,6 +101,18 @@ fn lane_patch_still_writes_a_lane_route() {
     assert!(output.status.success(), "stderr: {:?}", output.stderr);
     assert_eq!(route_kind(&dir, "test-lane"), "lane");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn lane_patch_of_a_fresh_pane_registers_a_coordinator_without_a_supervisor() {
+    let dir = mail_dir("fresh-patch");
+    let session = TestSession::new("fresh-patch");
+    let output = boop(
+        &dir,
+        &["beep", "lane", "patch", "parent", "--tmux", &session.0],
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(route_kind(&dir, "parent"), "coordinator");
 }
 
 /// RECEIPT. A hail to a claude coordinator route goes to the claude door.
@@ -138,7 +155,7 @@ fn hail_to_a_coordinator_with_no_live_session_is_held_for_its_turn_boundary() {
              left join dict_harness h on h.id = d.harness_id order by d.at_ms desc limit 1",
         ])
         .env("BOOP_DB", dir.join("boop.db"))
-        .env("HOME", dir.join("home"))
+        .boop_test_root(dir.join("home"))
         .output()
         .unwrap();
     assert!(ledger.status.success(), "stderr: {:?}", ledger.stderr);
@@ -217,7 +234,7 @@ fn a_supervisor_result_row_to_the_same_coordinator_stops_at_the_mailbox() {
             "select d.outcome, d.detail from agent_delivery d where d.detail like 'yield row%' order by d.at_ms desc limit 1",
         ])
         .env("BOOP_DB", dir.join("boop.db"))
-        .env("HOME", dir.join("home"))
+        .boop_test_root(dir.join("home"))
         .output()
         .unwrap();
     let row = String::from_utf8_lossy(&ledger.stdout);

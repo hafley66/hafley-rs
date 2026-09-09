@@ -107,6 +107,16 @@ fn an_existing_guardian_route_resolves_to_the_interactive_parent() {
 }
 
 #[test]
+fn an_unparented_child_never_infers_a_same_cwd_root() {
+    let root = live_session("root", 1_788_113_899_820, LiveSessionScope::Root, None);
+    let guardian = live_session("guardian", 1_788_113_899_931, LiveSessionScope::Child, None);
+    assert_eq!(
+        interactive_session_id(&guardian, &[root, guardian.clone()]),
+        "guardian"
+    );
+}
+
+#[test]
 fn claude_messages_resolve_one_exact_file_without_session_discovery() {
     let home = fixture_home();
     let cwd = "/fixture";
@@ -650,7 +660,15 @@ fn wire_shapes_pin_the_instant_key_set() {
     assert_eq!(
         message_keys,
         [
-            "editor", "id", "locator", "preview", "role", "seq", "session_id", "text", "ts",
+            "editor",
+            "id",
+            "locator",
+            "preview",
+            "role",
+            "seq",
+            "session_id",
+            "text",
+            "ts",
         ]
         .map(str::to_owned)
         .to_vec()
@@ -681,8 +699,18 @@ fn wire_shapes_pin_the_instant_key_set() {
     assert_eq!(
         meta_keys,
         [
-            "createdAtMs", "cwd", "harness", "id", "inputTokens", "lastActivityMs", "model",
-            "parentId", "parentKind", "provider", "sourcePath", "title",
+            "createdAtMs",
+            "cwd",
+            "harness",
+            "id",
+            "inputTokens",
+            "lastActivityMs",
+            "model",
+            "parentId",
+            "parentKind",
+            "provider",
+            "sourcePath",
+            "title",
         ]
         .map(str::to_owned)
         .to_vec()

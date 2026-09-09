@@ -13,6 +13,17 @@ pub use boop_store::session::{
     SpawnSpec,
 };
 
+/// Root for offline transcript and session-registry reads. This override is
+/// consumed only by Boop readers; it never changes a harness's credentials or
+/// the HOME/CODEX_HOME inherited by an executable.
+pub fn reader_home() -> Result<PathBuf> {
+    std::env::var_os("BOOP_READER_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(dirs::home_dir)
+        .ok_or_else(|| anyhow::anyhow!("resolve transcript reader home"))
+}
+
 /// The declared behaviour every former harness-name comparison now reads. One
 /// `static CAPABILITIES` per harness module is the whole table.
 pub struct Capabilities {
@@ -38,6 +49,24 @@ pub struct Capabilities {
     /// (openai/codex#24552), so its TUI renders inline and every repaint lands
     /// in tmux scrollback. claude and opencode enter it themselves.
     pub wrapper_owns_alternate_screen: bool,
+    /// Whether `boop tui` owns a separate backend process that can be killed
+    /// and observed independently from the frontend.
+    pub native_backend: NativeBackendSupport,
+    /// Whether the adapter has an isolated native control-plane operation for
+    /// model and effort changes.
+    pub native_settings: NativeSettingsSupport,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum NativeBackendSupport {
+    SeparateProcess,
+    Unsupported,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum NativeSettingsSupport {
+    ControlPlane,
+    Unsupported(&'static str),
 }
 
 /// Whether workers of this harness run as tmux lanes.
@@ -166,6 +195,96 @@ pub struct NativeTuiSpec {
     pub executable: String,
     pub cwd: PathBuf,
     pub args: Vec<String>,
+    /// Identity and mail-root environment shared by the TUI and its backend.
+    pub env: Vec<(String, String)>,
+}
+
+/// Classify only the adapter's command/option spellings. Arguments remain
+/// untouched for the native parser, including values that resemble commands.
+pub(crate) fn interactive_arguments(
+    args: &[String],
+    value_options: &[&str],
+    exit_flags: &[&str],
+    exit_commands: &[&str],
+) -> bool {
+    let mut args = args.iter();
+    let mut first_positional = true;
+    while let Some(arg) = args.next() {
+        if arg == "--" {
+            break;
+        }
+        let option = arg.split_once('=').map_or(arg.as_str(), |(key, _)| key);
+        if ["--help", "-h", "--version"].contains(&option) || exit_flags.contains(&option) {
+            return false;
+        }
+        if value_options.contains(&option) {
+            if !arg.contains('=')
+                && args
+                    .clone()
+                    .next()
+                    .is_some_and(|value| !value.starts_with('-'))
+            {
+                args.next();
+            }
+        } else if let Some(short) = value_options
+            .iter()
+            .find(|flag| flag.len() == 2 && arg.starts_with(**flag) && arg.len() > 2)
+        {
+            if exit_flags.contains(short) {
+                return false;
+            }
+        } else if !arg.starts_with('-') && first_positional {
+            if exit_commands.contains(&arg.as_str()) {
+                return false;
+            }
+            first_positional = false;
+        }
+    }
+    true
+}
+
+/// Observed control-plane facts, decoded by the harness adapter.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NativeTuiEvent {
+    Session {
+        session_id: String,
+        model: Option<String>,
+        effort: Option<String>,
+    },
+    Settings {
+        session_id: String,
+        model: Option<String>,
+        effort: Option<String>,
+    },
+    Closed {
+        session_id: String,
+    },
+    Failed(String),
+}
+
+/// Session ownership derived from explicit harness or Boop relations. The
+/// variants deliberately contain no cwd or timestamp fallback.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SessionTopology {
+    Root,
+    NativeChild { parent_session: String },
+    WrappedChild { parent_route: String },
+}
+
+/// A bounded adapter event stream with process-scoped observation lifetime.
+pub struct NativeTuiObserver {
+    pub events: std::sync::mpsc::Receiver<NativeTuiEvent>,
+    pub stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub worker: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Drop for NativeTuiObserver {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Release);
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
 }
 
 /// Prepared native process plus the evidence recorded in its coordinator
@@ -177,6 +296,69 @@ pub struct NativeTuiPlan {
     pub session_id: Option<String>,
     pub source_path: Option<String>,
     pub app_server_socket: Option<String>,
+    pub observer: Option<NativeTuiObserver>,
+    /// The launched frontend, owned here after preparation and spawn.
+    pub frontend: Option<std::process::Child>,
+    /// An adapter-owned backend, started in its own process group.
+    /// Shared user daemons are never stored here or stopped by this plan.
+    pub backend: Option<std::process::Child>,
+    pub backend_root: Option<tempfile::TempDir>,
+}
+
+impl Drop for NativeTuiPlan {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+impl NativeTuiPlan {
+    /// Stop this launch before another backend resumes its conversation.
+    pub fn stop(&mut self) {
+        use wait_timeout::ChildExt;
+        if let Some(observer) = &self.observer {
+            observer
+                .stop
+                .store(true, std::sync::atomic::Ordering::Release);
+        }
+        if let Some(child) = self.frontend.as_mut() {
+            if matches!(child.try_wait(), Ok(None)) {
+                // Launchers forward TERM to their native frontend process.
+                unsafe {
+                    libc::kill(child.id() as i32, libc::SIGTERM);
+                }
+                if !matches!(
+                    child.wait_timeout(std::time::Duration::from_secs(2)),
+                    Ok(Some(_))
+                ) {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+            }
+        }
+        if let Some(child) = self.backend.as_mut() {
+            if matches!(child.try_wait(), Ok(None)) {
+                unsafe {
+                    libc::kill(-(child.id() as i32), libc::SIGTERM);
+                }
+                if !matches!(
+                    child.wait_timeout(std::time::Duration::from_secs(2)),
+                    Ok(Some(_))
+                ) {
+                    unsafe {
+                        libc::kill(-(child.id() as i32), libc::SIGKILL);
+                    }
+                    let _ = child.wait();
+                }
+            }
+            if let Some(socket) = self.app_server_socket.as_deref() {
+                let _ = std::fs::remove_file(socket);
+            }
+        }
+        self.frontend.take();
+        self.observer.take();
+        self.backend.take();
+        self.backend_root.take();
+    }
 }
 
 /// A native collaboration child fact observed by one harness from its own
@@ -206,6 +388,10 @@ impl NativeTuiPlan {
             session_id: None,
             source_path: Some(format!("native-executable={}", spec.executable)),
             app_server_socket: None,
+            observer: None,
+            frontend: None,
+            backend: None,
+            backend_root: None,
         }
     }
 }
@@ -251,12 +437,50 @@ pub fn sync_session_with_pid(
 /// One agent harness that writes transcripts to this machine. Harnesses are
 /// shareable so a caller can bound a synchronous pass on its own thread.
 pub trait Harness: Send + Sync {
+    /// Whether this adapter accepts a normalized model spelling when no
+    /// explicit harness or configured model mapping was supplied.
+    fn matches_model(&self, _name: &str) -> bool {
+        false
+    }
+
+    /// Whether this invocation owns an interactive TUI lifecycle. CLI tools,
+    /// print mode and help execute directly without a Boop route or backend.
+    fn uses_native_tui(&self, _args: &[String]) -> bool {
+        true
+    }
+
+    /// Native subagent worktrees reported by this harness: name, path, locked.
+    fn native_worktrees(&self, _cwd: &str) -> Vec<(String, String, bool)> {
+        Vec::new()
+    }
+
     /// Stable short id used in CLI output and as the `--harness` filter value.
     fn id(&self) -> HarnessId;
 
     /// What this harness declares about itself. Every branch that used to
     /// compare a harness name reads one field here.
     fn capabilities(&self) -> &'static Capabilities;
+
+    /// Classify a harness session from the parent relation in its authoritative
+    /// transcript or session store.
+    fn session_topology(&self, session: &SessionRef) -> SessionTopology {
+        match session.parent.as_deref() {
+            Some(parent_session) => SessionTopology::NativeChild {
+                parent_session: parent_session.to_owned(),
+            },
+            None => SessionTopology::Root,
+        }
+    }
+
+    /// Classify a Boop-owned wrapper route from its explicit parent edge.
+    fn route_topology(&self, route: &boop_store::bus::Route) -> SessionTopology {
+        match route.parent.as_deref() {
+            Some(parent_route) => SessionTopology::WrappedChild {
+                parent_route: parent_route.to_owned(),
+            },
+            None => SessionTopology::Root,
+        }
+    }
 
     fn tui_composer(&self) -> TuiComposer {
         TuiComposer::None
@@ -433,6 +657,17 @@ pub trait Harness: Send + Sync {
         None
     }
 
+    /// Settings observed in native records. Launch arguments are intent;
+    /// adapters with richer native metadata include its actual effort here.
+    fn native_settings(&self, session: &SessionRef) -> Option<NativeTuiEvent> {
+        let model = self.describe(session)?.model?;
+        Some(NativeTuiEvent::Settings {
+            session_id: session.session_id.clone(),
+            model: Some(model),
+            effort: None,
+        })
+    }
+
     /// Every turn in one session, oldest first. `after_seq` returns only newer
     /// turns (the watcher's incremental read).
     fn messages(
@@ -453,11 +688,7 @@ pub trait Harness: Send + Sync {
     /// transcript file (direct or a `subagents/` child) under the cwd's project
     /// dir; codex and kimi walk their sessions dir for the id; opencode reads
     /// its db row.
-    fn session_by_id(
-        &self,
-        _session_id: &str,
-        _cwd: Option<&str>,
-    ) -> Option<SessionRef> {
+    fn session_by_id(&self, _session_id: &str, _cwd: Option<&str>) -> Option<SessionRef> {
         None
     }
 
@@ -466,6 +697,98 @@ pub trait Harness: Send + Sync {
     /// only its main agent.
     fn lists_session(&self, _session: &SessionRef) -> bool {
         true
+    }
+}
+
+#[cfg(test)]
+mod topology_tests {
+    use super::{
+        Harness, HarnessId, NativeBackendSupport, NativeSettingsSupport, NativeTuiPlan,
+        NativeTuiSpec, SessionRef, SessionTopology,
+    };
+    use std::path::PathBuf;
+
+    fn session(parent: Option<&str>) -> SessionRef {
+        SessionRef {
+            harness: HarnessId::Claude,
+            session_id: "session".into(),
+            nickname: "session".into(),
+            path: PathBuf::from("/fixture/session.jsonl"),
+            cwd: Some("/same/cwd".into()),
+            git_branch: None,
+            modified_ms: 99,
+            size: 0,
+            tmux: None,
+            tmux_socket: None,
+            parent: parent.map(str::to_owned),
+        }
+    }
+
+    fn route(parent: Option<&str>) -> boop_store::bus::Route {
+        boop_store::bus::Route {
+            kind: "coordinator".into(),
+            harness: Some(HarnessId::Claude),
+            tmux: None,
+            cwd: Some("/same/cwd".into()),
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: parent.map(str::to_owned),
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+            app_server_socket: None,
+        }
+    }
+
+    #[test]
+    fn root_native_and_wrapped_topologies_use_explicit_relations() {
+        let adapter = super::claude::Claude;
+        assert_eq!(
+            adapter.session_topology(&session(None)),
+            SessionTopology::Root
+        );
+        assert_eq!(
+            adapter.session_topology(&session(Some("native-parent"))),
+            SessionTopology::NativeChild {
+                parent_session: "native-parent".into()
+            }
+        );
+        assert_eq!(adapter.route_topology(&route(None)), SessionTopology::Root);
+        assert_eq!(
+            adapter.route_topology(&route(Some("wrapper-parent"))),
+            SessionTopology::WrappedChild {
+                parent_route: "wrapper-parent".into()
+            }
+        );
+    }
+
+    #[test]
+    fn lifecycle_capabilities_and_ccz_executable_identity_are_declared() {
+        assert_eq!(
+            super::codex::Codex.capabilities().native_backend,
+            NativeBackendSupport::SeparateProcess
+        );
+        assert_eq!(
+            super::opencode::Opencode.capabilities().native_settings,
+            NativeSettingsSupport::ControlPlane
+        );
+        assert!(matches!(
+            super::claude::Claude.capabilities().native_settings,
+            NativeSettingsSupport::Unsupported(_)
+        ));
+        let spec = NativeTuiSpec {
+            executable: "ccz".into(),
+            cwd: PathBuf::from("/fixture"),
+            args: Vec::new(),
+            env: Vec::new(),
+        };
+        assert_eq!(
+            NativeTuiPlan::direct(&spec).source_path.as_deref(),
+            Some("native-executable=ccz")
+        );
     }
 }
 
@@ -597,6 +920,43 @@ pub(crate) fn assert_fixture_sessions_project(
 #[cfg(test)]
 mod supervisor_command_tests {
     use super::*;
+
+    #[test]
+    fn dropping_a_native_plan_stops_both_owned_processes() {
+        use std::os::unix::process::CommandExt;
+        let spec = NativeTuiSpec {
+            executable: "/bin/sleep".into(),
+            cwd: std::env::temp_dir(),
+            args: vec![],
+            env: vec![],
+        };
+        let mut plan = NativeTuiPlan::direct(&spec);
+        plan.frontend = Some(
+            std::process::Command::new("/bin/sleep")
+                .arg("600")
+                .spawn()
+                .unwrap(),
+        );
+        plan.backend = Some(
+            std::process::Command::new("/bin/sleep")
+                .arg("600")
+                .process_group(0)
+                .spawn()
+                .unwrap(),
+        );
+        let pids = [
+            plan.frontend.as_ref().unwrap().id(),
+            plan.backend.as_ref().unwrap().id(),
+        ];
+        drop(plan);
+        for pid in pids {
+            assert_eq!(
+                unsafe { libc::kill(pid as i32, 0) },
+                -1,
+                "owned process {pid} survived drop"
+            );
+        }
+    }
 
     fn spec() -> SpawnSpec {
         SpawnSpec {

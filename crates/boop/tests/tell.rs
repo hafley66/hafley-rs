@@ -3,6 +3,7 @@
 //! `yield` default body) and `boop beep children <body>`
 //! (per-child landed/no-route/dead).
 
+use boop_store::testing::BoopCommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -58,7 +59,7 @@ impl Fixture {
             .args(args)
             .arg("--mail-dir")
             .arg(self.mail())
-            .env("HOME", self.root.join("home"))
+            .boop_test_root(self.root.join("home"))
             .env("BOOP_DB", self.root.join("boop.db"))
             .env("BOOP_SESSION", caller)
             .env("BOOP_LANE", caller)
@@ -70,7 +71,7 @@ impl Fixture {
     fn boop(&self, args: &[&str]) -> Output {
         Command::new(BOOP)
             .args(args)
-            .env("HOME", self.root.join("home"))
+            .boop_test_root(self.root.join("home"))
             .env("BOOP_DB", self.root.join("boop.db"))
             .output()
             .unwrap()
@@ -89,6 +90,25 @@ fn stdout(output: &Output) -> String {
 
 fn stderr(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
+#[test]
+fn beep_rejects_competing_body_spellings_before_insertion() {
+    let fixture = Fixture::new("body-conflict");
+    let output = fixture.boop_as(
+        "caller",
+        &[
+            "beep",
+            "target",
+            "positional",
+            "--body",
+            "flag",
+            "--no-wait",
+        ],
+    );
+    assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
+    assert!(stderr(&output).contains("cannot be used with"));
+    assert!(fixture.bus_rows().is_empty());
 }
 
 #[test]
@@ -243,7 +263,10 @@ fn beep_children_lands_on_the_hook_child_and_reports_the_routeless_child_as_no_r
         lines[1].starts_with("landed hook-child ") && lines[1].ends_with("(hook inbox)"),
         "stdout: {text}"
     );
-    assert_eq!(lines[2], "1 landed, 0 cooled-off, 1 no-route, 0 dead", "stdout: {text}");
+    assert_eq!(
+        lines[2], "1 landed, 0 cooled-off, 1 no-route, 0 dead",
+        "stdout: {text}"
+    );
 
     let rows = fixture.bus_rows();
     assert_eq!(rows.len(), 1, "bus rows: {rows:?}");
@@ -304,7 +327,10 @@ fn beep_children_names_a_native_subagent_child_as_no_route() {
         lines[0].starts_with("no-route coord-6/agent-a1b2 (native subagent"),
         "stdout: {text}"
     );
-    assert_eq!(lines[1], "0 landed, 0 cooled-off, 1 no-route, 0 dead", "stdout: {text}");
+    assert_eq!(
+        lines[1], "0 landed, 0 cooled-off, 1 no-route, 0 dead",
+        "stdout: {text}"
+    );
     assert!(
         fixture.bus_rows().is_empty(),
         "rows: {:?}",
@@ -337,7 +363,7 @@ fn beep_children_as_uses_the_selected_routes_native_session_not_the_env_stamp() 
         .args(["beep", "children", "status check", "--as", "caller-a"])
         .arg("--mail-dir")
         .arg(fixture.mail())
-        .env("HOME", fixture.root.join("home"))
+        .boop_test_root(fixture.root.join("home"))
         .env("BOOP_DB", fixture.root.join("boop.db"))
         .env("BOOP_SESSION", "caller-b")
         .env("BOOP_LANE", "caller-b")

@@ -1,5 +1,6 @@
 //! Binary receipts for pane-less native registration and explicit completion.
 
+use boop_store::testing::BoopCommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -21,7 +22,7 @@ fn boop(dir: &Path, args: &[&str]) -> std::process::Output {
         .args(args)
         .arg("--mail-dir")
         .arg(dir)
-        .env("HOME", dir.join("home"))
+        .boop_test_root(dir.join("home"))
         .env("BOOP_DB", dir.join("boop.db"))
         .output()
         .unwrap()
@@ -55,7 +56,7 @@ fn native_route_stays_live_until_done_and_wait_me_consumes_one_completion() {
     let lane_wait = Command::new(BOOP)
         .args(["wait", "native-child", "--wait-timeout", "1", "--mail-dir"])
         .arg(&dir)
-        .env("HOME", dir.join("home"))
+        .boop_test_root(dir.join("home"))
         .env("BOOP_DB", dir.join("boop.db"))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -75,7 +76,7 @@ fn native_route_stays_live_until_done_and_wait_me_consumes_one_completion() {
             "--mail-dir",
         ])
         .arg(&dir)
-        .env("HOME", dir.join("home"))
+        .boop_test_root(dir.join("home"))
         .env("BOOP_DB", dir.join("boop.db"))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

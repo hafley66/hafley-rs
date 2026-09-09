@@ -9,6 +9,7 @@
 //! the writer lock in turn, and the store records no row for a pass that
 //! wrote nothing.
 
+use boop_store::testing::BoopCommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -78,7 +79,7 @@ impl Fixture {
                 "--format",
                 "ndjson",
             ])
-            .env("HOME", &self.home)
+            .boop_test_root(&self.home)
             .env("BOOP_DB", self.db())
             .env("BOOP_SYNC_TRAIL", self.trail())
             .stdout(std::process::Stdio::piped())

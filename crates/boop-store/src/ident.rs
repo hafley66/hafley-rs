@@ -20,6 +20,19 @@ use crate::session::{Ingested, KnownSession, KnownSessions, SessionRef};
 /// for the same bounded interval.
 const BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
+/// One recorded hail transition. `sequence` orders all receiver-boundary
+/// receipts for one message; `harness` stays TEXT at the read surface.
+pub struct DeliveryRow {
+    pub message_id: String,
+    pub sequence: i64,
+    pub route: String,
+    pub harness: Option<String>,
+    pub outcome: String,
+    pub detail: String,
+    pub error_code: Option<String>,
+    pub at_ms: i64,
+}
+
 /// The relational store.
 pub struct Store {
     connection: Connection,
@@ -1112,6 +1125,9 @@ impl Store {
         if let Some(path) = std::env::var_os("BOOP_DB").filter(|path| !path.is_empty()) {
             return Ok(PathBuf::from(path));
         }
+        if let Some(dir) = std::env::var_os("BOOP_MAIL_DIR").filter(|dir| !dir.is_empty()) {
+            return Ok(PathBuf::from(dir).join("boop.db"));
+        }
         let home = dirs::home_dir().context("resolve home directory")?;
         Ok(home.join(".agent").join("boop.db"))
     }
@@ -1928,7 +1944,8 @@ impl Store {
                 created_ts: row.get(4)?,
             })
         })?;
-        rows.collect::<std::result::Result<Vec<_>, _>>().map_err(Into::into)
+        rows.collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(Into::into)
     }
 
     /// The latest assistant turn with a non-empty `said` for one session, as
@@ -2352,6 +2369,32 @@ impl Store {
         Ok(names)
     }
 
+    /// Clear a process observation only while this PID still owns it. The
+    /// ownership read and both liveness writes share one writer transaction.
+    pub fn detach_process(&self, session: &str, pid: u32, ts: u64) -> Result<bool> {
+        let transaction = rusqlite::Transaction::new_unchecked(
+            &self.connection,
+            rusqlite::TransactionBehavior::Immediate,
+        )?;
+        let owns = self
+            .live_row(session)?
+            .is_some_and(|row| row.pid == Some(i64::from(pid)));
+        if owns {
+            self.record_status(session, ts, "detached", None, None)?;
+            self.record_live_door(session, "none", None)?;
+        }
+        transaction.commit()?;
+        Ok(owns)
+    }
+
+    /// Read one observed session attribute without inheritance.
+    pub fn session_attr(&self, session: &str, key: &str) -> Result<Option<String>> {
+        Ok(self.connection.query_row(
+            "SELECT attr.value FROM agent_session_attr attr JOIN dict_attr_key key ON key.id = attr.key_id JOIN dict_session session ON session.id = attr.session_id WHERE session.value = ?1 AND key.value = ?2",
+            params![session, key], |row| row.get(0),
+        ).optional()?)
+    }
+
     /// One session attribute, last write wins.
     pub fn set_session_attr(&self, session: &str, key: &str, value: &str, ts: u64) -> Result<()> {
         let session_id = self.session_id(session)?;
@@ -2621,50 +2664,73 @@ impl Store {
         pid: Option<i64>,
         tmux_pane: Option<&str>,
     ) -> Result<()> {
-        let sid = self.session_id(session)?;
-        let status_id = self.intern("dict_status", status)?;
-        let pane_id = match tmux_pane {
-            Some(pane) => Some(self.intern("dict_pane", pane)?),
-            None => None,
-        };
-        self.connection.execute(
-            "INSERT INTO agent_live (session_id, pid, tmux_pane_id, status_id)
-             VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(session_id) DO UPDATE SET
-               pid = excluded.pid,
-               tmux_pane_id = excluded.tmux_pane_id,
-               status_id = excluded.status_id",
-            params![sid, pid, pane_id, status_id],
-        )?;
-        let open: Option<(i64, i64, Option<i64>, Option<i64>)> = self
-            .connection
-            .query_row(
-                "SELECT from_ts, status_id, pid, tmux_pane_id FROM agent_live_span
-                 WHERE session_id = ?1 AND to_ts IS NULL
-                 ORDER BY from_ts DESC LIMIT 1",
-                params![sid],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-            )
-            .optional()?;
-        let unchanged = open
-            .as_ref()
-            .map(|(_, st, pg, pn)| *st == status_id && *pg == pid && *pn == pane_id)
-            .unwrap_or(false);
-        if unchanged {
-            return Ok(());
-        }
-        if let Some((from_ts, _, _, _)) = open {
+        self.connection
+            .execute_batch("SAVEPOINT live_observation")?;
+        let result = (|| {
+            let sid = self.session_id(session)?;
+            let status_id = self.intern("dict_status", status)?;
+            let pane_id = match tmux_pane {
+                Some(pane) => Some(self.intern("dict_pane", pane)?),
+                None => None,
+            };
+            let open: Option<(i64, i64, Option<i64>, Option<i64>)> = self
+                .connection
+                .query_row(
+                    "SELECT from_ts, status_id, pid, tmux_pane_id FROM agent_live_span
+                     WHERE session_id = ?1 AND to_ts IS NULL
+                     ORDER BY from_ts DESC LIMIT 1",
+                    params![sid],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                )
+                .optional()?;
+            // Observations before the current interval cannot replace its binding.
+            if open
+                .as_ref()
+                .is_some_and(|(from, _, _, _)| *from > ts as i64)
+            {
+                return Ok(());
+            }
             self.connection.execute(
-                "UPDATE agent_live_span SET to_ts = ?2
-                 WHERE session_id = ?1 AND from_ts = ?3",
-                params![sid, ts as i64, from_ts],
+                "INSERT INTO agent_live (session_id, pid, tmux_pane_id, status_id)
+                 VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(session_id) DO UPDATE SET
+                   pid = excluded.pid,
+                   tmux_pane_id = excluded.tmux_pane_id,
+                   status_id = excluded.status_id",
+                params![sid, pid, pane_id, status_id],
             )?;
+            let unchanged = open
+                .as_ref()
+                .map(|(_, st, pg, pn)| *st == status_id && *pg == pid && *pn == pane_id)
+                .unwrap_or(false);
+            if unchanged {
+                return Ok(());
+            }
+            if let Some((from_ts, _, _, _)) = open {
+                self.connection.execute(
+                    "UPDATE agent_live_span SET to_ts = ?2
+                     WHERE session_id = ?1 AND from_ts = ?3",
+                    params![sid, ts as i64, from_ts],
+                )?;
+            }
+            self.connection.execute(
+                "INSERT INTO agent_live_span (session_id, from_ts, to_ts, status_id, pid, tmux_pane_id)
+                 VALUES (?1, ?2, NULL, ?3, ?4, ?5)
+                 ON CONFLICT(session_id, from_ts) DO UPDATE SET
+                   to_ts = NULL, status_id = excluded.status_id,
+                   pid = excluded.pid, tmux_pane_id = excluded.tmux_pane_id",
+                params![sid, ts as i64, status_id, pid, pane_id],
+            )?;
+            Ok(())
+        })();
+        match result {
+            Ok(()) => self.connection.execute_batch("RELEASE live_observation")?,
+            Err(error) => {
+                self.connection
+                    .execute_batch("ROLLBACK TO live_observation; RELEASE live_observation")?;
+                return Err(error);
+            }
         }
-        self.connection.execute(
-            "INSERT INTO agent_live_span (session_id, from_ts, to_ts, status_id, pid, tmux_pane_id)
-             VALUES (?1, ?2, NULL, ?3, ?4, ?5)",
-            params![sid, ts as i64, status_id, pid, pane_id],
-        )?;
         Ok(())
     }
 
@@ -2773,6 +2839,44 @@ impl Store {
             |row| row.get(0),
         )?;
         Ok(count > 0)
+    }
+
+    /// Every recorded receiver-boundary transition for one message. Empty
+    /// means no path has observed or attempted delivery yet.
+    pub fn delivery_rows(&self, message_id: &str) -> Result<Vec<DeliveryRow>> {
+        let sql = "SELECT d.message_id, d.sequence, d.route, h.value, d.outcome, d.detail,
+                          d.error_code, d.at_ms
+                   FROM agent_delivery_transition d
+                   LEFT JOIN dict_harness h ON h.id = d.harness_id
+                   WHERE d.message_id = ?1
+                   ORDER BY d.sequence";
+        let mut statement = self.connection().prepare(sql)?;
+        let iter = statement.query_map(params![message_id], |row| {
+            Ok(DeliveryRow {
+                message_id: row.get(0)?,
+                sequence: row.get(1)?,
+                route: row.get(2)?,
+                harness: row.get(3)?,
+                outcome: row.get(4)?,
+                detail: row.get(5)?,
+                error_code: row.get(6)?,
+                at_ms: row.get(7)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for row in iter {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+
+    /// Prior transport acceptance for this exact message and recipient.
+    /// Mailbox insertion or a hold transition is not acceptance.
+    pub fn delivery_accepted(&self, message_id: &str, route: &str) -> Result<bool> {
+        Ok(self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM agent_delivery_transition WHERE message_id = ?1 AND route = ?2 AND outcome = 'accepted-by-harness')",
+            params![message_id, route], |row| row.get(0),
+        )?)
     }
 
     /// The typed writer every delivery path goes through. `sequence` is
@@ -3115,17 +3219,21 @@ pub fn sync_session_with(
             .map(|duration| duration.as_millis() as u64)
             .unwrap_or(0),
     );
-    store.record_status(
-        &session.session_id,
-        observed_ts,
-        if session.tmux.is_some() {
-            "live"
-        } else {
-            "idle"
-        },
-        pid,
-        session.tmux.as_deref(),
-    )?;
+    // A transcript refresh supplies file facts. Explicit process/pane
+    // observations own liveness once present; absent fields cannot erase them.
+    if pid.is_some() || session.tmux.is_some() || store.live_row(&session.session_id)?.is_none() {
+        store.record_status(
+            &session.session_id,
+            observed_ts,
+            if session.tmux.is_some() {
+                "live"
+            } else {
+                "idle"
+            },
+            pid,
+            session.tmux.as_deref(),
+        )?;
+    }
     store.set_cursor_modified(
         &session.session_id,
         &key,
@@ -3316,9 +3424,7 @@ fn project_line(
         .unwrap_or("");
     // Claude stamps every record with the directory it ran in; a Bash `cd`
     // mid-session changes it, so the turn's own cwd differs from the session's.
-    let cwd = object
-        .get("cwd")
-        .and_then(serde_json::Value::as_str);
+    let cwd = object.get("cwd").and_then(serde_json::Value::as_str);
 
     if record_type == "pr-link" {
         let pr_url = object
@@ -4358,11 +4464,9 @@ mod tests {
             .unwrap();
         let act: (String, f64) = store
             .connection
-            .query_row(
-                "SELECT skill, cost_usd FROM v_skill_cost_act",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
+            .query_row("SELECT skill, cost_usd FROM v_skill_cost_act", [], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
             .unwrap();
         assert_eq!(act, ("my-skill".to_string(), 3.0));
         let window: (i64, i64, i64, f64) = store
@@ -4376,11 +4480,16 @@ mod tests {
         assert_eq!(window, (2, 3, 1, 3.0));
         store
             .connection
-            .execute("UPDATE agent_usage SET cost_usd_recorded = 9.0 WHERE turn = 2", [])
+            .execute(
+                "UPDATE agent_usage SET cost_usd_recorded = 9.0 WHERE turn = 2",
+                [],
+            )
             .unwrap();
         let recorded: f64 = store
             .connection
-            .query_row("SELECT cost_usd FROM v_skill_cost_window", [], |row| row.get(0))
+            .query_row("SELECT cost_usd FROM v_skill_cost_window", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(recorded, 9.0);
         let _ = std::fs::remove_file(&path);
@@ -4394,7 +4503,9 @@ mod tests {
             row.get("table").and_then(serde_json::Value::as_str)
         }
         assert!(rows.iter().any(|row| name(row) == Some("v_usage_cost")));
-        assert!(rows.iter().any(|row| name(row) == Some("v_skill_cost_window")));
+        assert!(rows
+            .iter()
+            .any(|row| name(row) == Some("v_skill_cost_window")));
         let skill = rows
             .iter()
             .find(|row| name(row) == Some("agent_skill"))
@@ -4519,7 +4630,9 @@ mod tests {
             (5, 150, "user", "Selected context: ..."),
             (6, 160, "assistant", "the reply"),
         ] {
-            store.write_turn("sess-a", turn, ts, role, said, None).unwrap();
+            store
+                .write_turn("sess-a", turn, ts, role, said, None)
+                .unwrap();
         }
         let targets = vec![("sess-a".to_string(), 3)];
         store
@@ -4535,7 +4648,10 @@ mod tests {
             })
             .unwrap();
         let pending = store.turn_comments_pending().unwrap();
-        assert_eq!(pending[0].targets[0].reply_turn, None, "pending: no reply yet");
+        assert_eq!(
+            pending[0].targets[0].reply_turn, None,
+            "pending: no reply yet"
+        );
         assert!(store.turn_comments_sent().unwrap().is_empty());
 
         store
@@ -4544,7 +4660,11 @@ mod tests {
         let sent = store.turn_comments_sent().unwrap();
         assert_eq!(sent.len(), 1);
         assert_eq!(sent[0].targets[0].turn, 3);
-        assert_eq!(sent[0].targets[0].reply_turn, Some(6), "turn 4 predates the send");
+        assert_eq!(
+            sent[0].targets[0].reply_turn,
+            Some(6),
+            "turn 4 predates the send"
+        );
         let (_, rows) = store
             .passthrough("SELECT comment_id, target_turn, reply_turn FROM agent_turn_comment_reply")
             .unwrap();
@@ -4638,7 +4758,15 @@ mod tests {
             ("m-open", "held-in-mailbox", "mailbox"),
         ] {
             store
-                .append_delivery_transition(id, "claude-1", None, outcome, detail, None, 1_700_000_000_000)
+                .append_delivery_transition(
+                    id,
+                    "claude-1",
+                    None,
+                    outcome,
+                    detail,
+                    None,
+                    1_700_000_000_000,
+                )
                 .unwrap();
             store
                 .connection
@@ -4741,7 +4869,9 @@ mod tests {
                 params![sid, harness_id, cwd_id],
             )
             .unwrap();
-        store.write_turn("null-ses", 1, 100, "user", "hello", None).unwrap();
+        store
+            .write_turn("null-ses", 1, 100, "user", "hello", None)
+            .unwrap();
 
         let (turn, cwd): (i64, String) = store
             .connection
@@ -6531,6 +6661,40 @@ mod tests {
     /// ACCEPTANCE (item 2). Observations fold into [from_ts, to_ts) intervals:
     /// a state change closes the open interval, a repeated identical one
     /// extends nothing, and a historical point query uses the open-rule.
+    #[test]
+    fn liveness_coalesces_same_timestamp_and_rejects_older_observations() {
+        let store = Store::open(":memory:".into()).unwrap();
+        store
+            .record_status("s1", 100, "live", Some(1), Some("%1"))
+            .unwrap();
+        store
+            .record_status("s1", 100, "closed", None, None)
+            .unwrap();
+        store
+            .record_status("s1", 200, "live", Some(2), Some("%2"))
+            .unwrap();
+        store
+            .record_status("s1", 150, "idle", Some(1), Some("%1"))
+            .unwrap();
+        let spans = store.live_span(Some("s1")).unwrap();
+        assert_eq!(
+            spans
+                .iter()
+                .map(|s| (s.from_ts, s.to_ts, s.status.as_str()))
+                .collect::<Vec<_>>(),
+            vec![(100, Some(200), "closed"), (200, None, "live")]
+        );
+        let current = store.live_row("s1").unwrap().unwrap();
+        assert_eq!(
+            (
+                current.pid,
+                current.tmux_pane.as_deref(),
+                current.status.as_deref()
+            ),
+            (Some(2), Some("%2"), Some("live"))
+        );
+    }
+
     #[test]
     fn liveness_intervals_fold_adjacent_and_ignore_repeats() {
         let db_path = temp_path("livdb");

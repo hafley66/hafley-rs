@@ -46,7 +46,7 @@ impl ClaudeDoor {
         if let Some(dir) = std::env::var_os(SESSIONS_DIR_ENV).filter(|value| !value.is_empty()) {
             return Ok(PathBuf::from(dir));
         }
-        let home = dirs::home_dir().context("resolve home directory")?;
+        let home = crate::harness::reader_home()?;
         Ok(home.join(".claude").join("sessions"))
     }
 
@@ -215,21 +215,24 @@ pub(crate) fn explicit_resume(tui_args: &[String]) -> Option<String> {
 }
 
 impl Door for ClaudeDoor {
+    fn inbox_hook_installed(&self, cwd: &Path, route: &str) -> bool {
+        super::claude_hooks::installed_for(cwd, route)
+    }
+
     /// Claude's TUI takes the user's arguments as written; the only thing the
     /// wrapper adds is reading the resumed session id out of them.
     fn tui_launch(&self, spec: &NativeTuiSpec) -> Result<NativeTuiPlan> {
         let session_id = explicit_resume(&spec.args);
-        Ok(NativeTuiPlan {
-            source_path: Some(match &session_id {
-                Some(session) => format!(
-                    "native-executable={};requested-resume={session}",
-                    spec.executable
-                ),
-                None => format!("native-executable={}", spec.executable),
-            }),
-            session_id,
-            ..NativeTuiPlan::direct(spec)
-        })
+        let mut plan = NativeTuiPlan::direct(spec);
+        plan.source_path = Some(match &session_id {
+            Some(session) => format!(
+                "native-executable={};requested-resume={session}",
+                spec.executable
+            ),
+            None => format!("native-executable={}", spec.executable),
+        });
+        plan.session_id = session_id;
+        Ok(plan)
     }
 
     fn deliver(&self, session: &LiveSession, body: &str) -> Result<Delivered> {
@@ -560,8 +563,14 @@ mod tui_launch_tests {
 
     #[test]
     fn reads_it_after_the_short_flag_and_from_an_equals_form() {
-        assert_eq!(explicit_resume(&args(&["-r", "abc"])), Some("abc".to_string()));
-        assert_eq!(explicit_resume(&args(&["--resume=abc"])), Some("abc".to_string()));
+        assert_eq!(
+            explicit_resume(&args(&["-r", "abc"])),
+            Some("abc".to_string())
+        );
+        assert_eq!(
+            explicit_resume(&args(&["--resume=abc"])),
+            Some("abc".to_string())
+        );
     }
 
     #[test]
@@ -596,13 +605,20 @@ mod tui_launch_tests {
             executable: "claude".into(),
             cwd: std::path::PathBuf::from("/tmp"),
             args: args(&["--resume", "f3deaaac-d198-47d5-975d-8e84a038046f"]),
+            env: Vec::new(),
         };
         let plan = ClaudeDoor::machine().tui_launch(&spec).unwrap();
         assert_eq!(
             plan.session_id.as_deref(),
             Some("f3deaaac-d198-47d5-975d-8e84a038046f")
         );
-        assert_eq!(plan.args, spec.args.iter().map(std::ffi::OsString::from).collect::<Vec<_>>());
+        assert_eq!(
+            plan.args,
+            spec.args
+                .iter()
+                .map(std::ffi::OsString::from)
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -611,7 +627,11 @@ mod tui_launch_tests {
             executable: "claude".into(),
             cwd: std::path::PathBuf::from("/tmp"),
             args: Vec::new(),
+            env: Vec::new(),
         };
-        assert_eq!(ClaudeDoor::machine().tui_launch(&spec).unwrap().session_id, None);
+        assert_eq!(
+            ClaudeDoor::machine().tui_launch(&spec).unwrap().session_id,
+            None
+        );
     }
 }

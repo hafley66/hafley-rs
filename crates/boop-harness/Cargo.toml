@@ -33,10 +33,12 @@ ureq = { version = "3", default-features = false }
 # read filters on the existence probe libc already exposes.
 libc = "0.2"
 # The codex remote-control socket is a websocket carrying JSON-RPC (HTTP
-# upgrade answers 101; a bare JSON line gets EOF). tungstenite is the sync,
-# pure-Rust client that wraps any stream, here a UnixStream; tokio-tungstenite
-# would drag a runtime in for one subscription.
+# upgrade answers 101; a bare JSON line gets EOF).
 tungstenite = { version = "0.26", default-features = false, features = ["handshake"] }
+# The native TUI connection forwards requests and responses concurrently.
+tokio-tungstenite = { version = "0.26", default-features = false, features = ["handshake"] }
+tokio = { version = "1", features = ["rt", "net", "time", "macros", "sync"] }
+futures-util = { version = "0.3", features = ["sink"] }
 # Resolve the claude home dir without XDG project-dir machinery.
 dirs = "5"
 # Parallel filesystem acquisition for transcript candidates. Harness adapters
@@ -49,6 +51,8 @@ time = { version = "0.3", features = ["parsing", "formatting"] }
 # Process-wide diagnostics. The binary installs the subscriber; library code
 # only emits conventional tracing events and spans.
 tracing.workspace = true
+wait-timeout = "0.2.1"
+tempfile = "3"
 
 [dev-dependencies]
 # The store's deterministic fixtures (throwaway git repo, fake multiplexer).

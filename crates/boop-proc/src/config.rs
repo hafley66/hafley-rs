@@ -92,6 +92,9 @@ fn load_once() -> Result<Config, anyhow::Error> {
 }
 
 pub fn default_path() -> Result<PathBuf> {
+    if let Some(path) = std::env::var_os("BOOP_CONFIG").filter(|value| !value.is_empty()) {
+        return Ok(PathBuf::from(path));
+    }
     let root = dirs::config_dir().context("resolve the user config directory")?;
     Ok(root.join("boop").join("config.json"))
 }
@@ -103,21 +106,6 @@ pub fn load(path: &Path) -> Result<Config> {
         Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
     };
     serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))
-}
-
-pub fn resolve_model(preset: &str, path: &Path) -> Result<String> {
-    Ok(resolve_preset(preset, path)?.model)
-}
-
-/// The reasoning effort a named preset carries, if any.
-pub fn resolve_effort(preset: &str, path: &Path) -> Result<Option<String>> {
-    Ok(resolve_preset(preset, path)?.effort)
-}
-
-/// The opencode variant a named preset carries, if any. A preset that names
-/// no variant resolves to `None`, meaning the CLI flag decides alone.
-pub fn resolve_variant(preset: &str, path: &Path) -> Result<Option<String>> {
-    Ok(resolve_preset(preset, path)?.variant)
 }
 
 /// The full named preset, both the model string and its optional variant.
@@ -149,26 +137,22 @@ pub fn resolve_preset(preset: &str, path: &Path) -> Result<ModelPreset> {
         .split_effort()
 }
 
-/// Pick a lane's spawn model: explicit --model, then --preset, then
-/// default-model-preset, applied to every harness. The explicit slot carries
-/// an already resolved model string; `preset` and `default_preset` are names
-/// resolved to model strings on demand.
-pub fn resolve_spawn_model(
+/// Select the complete spawn preset: explicit model, named preset, then the
+/// caller's eligible default. Harness eligibility is decided by the caller;
+/// every preset field survives selection and explicit model effort is parsed.
+pub fn resolve_spawn_preset(
     explicit: Option<&str>,
     preset: Option<&str>,
     default_preset: Option<&str>,
     path: &Path,
-) -> Result<Option<String>> {
+) -> Result<Option<ModelPreset>> {
     if let Some(model) = explicit {
-        return Ok(Some(model.to_owned()));
+        return ModelPreset::from_model(model).map(Some);
     }
-    if let Some(preset) = preset {
-        return Ok(Some(resolve_model(preset, path)?));
-    }
-    if let Some(preset) = default_preset {
-        return Ok(Some(resolve_model(preset, path)?));
-    }
-    Ok(None)
+    preset
+        .or(default_preset)
+        .map(|name| resolve_preset(name, path))
+        .transpose()
 }
 
 /// The loaded config as pretty JSON, including the defaults a missing file
@@ -251,14 +235,14 @@ mod tests {
             "object-preset",
         );
         assert_eq!(
-            resolve_model("flash4", &path).unwrap(),
+            resolve_preset("flash4", &path).unwrap().model,
             "openrouter/deepseek/deepseek-v4-flash-0731"
         );
         assert_eq!(
-            resolve_variant("flash4", &path).unwrap(),
+            resolve_preset("flash4", &path).unwrap().variant,
             Some("high".into())
         );
-        assert_eq!(resolve_variant("luna", &path).unwrap(), None);
+        assert_eq!(resolve_preset("luna", &path).unwrap().variant, None);
     }
 
     /// A preset object naming an alternate executable survives the round
@@ -299,7 +283,9 @@ mod tests {
             "any-harness",
         );
         assert_eq!(
-            resolve_spawn_model(None, None, Some("flash4"), &path).unwrap(),
+            resolve_spawn_preset(None, None, Some("flash4"), &path)
+                .unwrap()
+                .map(|preset| preset.model),
             Some("openrouter/deepseek/deepseek-v4-flash-0731".into())
         );
     }
@@ -312,18 +298,29 @@ mod tests {
             "precedence",
         );
         assert_eq!(
-            resolve_spawn_model(Some("my-model"), Some("flash4"), Some("luna"), &path).unwrap(),
+            resolve_spawn_preset(Some("my-model"), Some("flash4"), Some("luna"), &path)
+                .unwrap()
+                .map(|preset| preset.model),
             Some("my-model".into())
         );
         assert_eq!(
-            resolve_spawn_model(None, Some("flash4"), Some("luna"), &path).unwrap(),
+            resolve_spawn_preset(None, Some("flash4"), Some("luna"), &path)
+                .unwrap()
+                .map(|preset| preset.model),
             Some("openrouter/deepseek/deepseek-v4-flash-0731".into())
         );
         assert_eq!(
-            resolve_spawn_model(None, None, Some("luna"), &path).unwrap(),
+            resolve_spawn_preset(None, None, Some("luna"), &path)
+                .unwrap()
+                .map(|preset| preset.model),
             Some("gpt-5.6-luna".into())
         );
-        assert_eq!(resolve_spawn_model(None, None, None, &path).unwrap(), None);
+        assert_eq!(
+            resolve_spawn_preset(None, None, None, &path)
+                .unwrap()
+                .map(|preset| preset.model),
+            None
+        );
     }
 
     #[test]
@@ -349,7 +346,9 @@ mod tests {
         ];
         for (explicit, preset, default, expected) in cases {
             assert_eq!(
-                resolve_spawn_model(explicit, preset, default, &path).unwrap(),
+                resolve_spawn_preset(explicit, preset, default, &path)
+                    .unwrap()
+                    .map(|preset| preset.model),
                 expected
             );
         }
@@ -367,9 +366,9 @@ mod tests {
         let preset = resolve_preset("luna", &path).unwrap();
         assert_eq!(preset.model, "gpt-5.6-luna");
         assert_eq!(preset.effort.as_deref(), Some("medium"));
-        assert_eq!(resolve_model("luna", &path).unwrap(), "gpt-5.6-luna");
+        assert_eq!(resolve_preset("luna", &path).unwrap().model, "gpt-5.6-luna");
         assert_eq!(
-            resolve_effort("luna", &path).unwrap(),
+            resolve_preset("luna", &path).unwrap().effort,
             Some("medium".into())
         );
     }
@@ -412,7 +411,7 @@ mod tests {
                 "luna": "gpt-5.6-luna@medium" } }"#,
             "missing-preset",
         );
-        let error = resolve_model("nope", &path).unwrap_err().to_string();
+        let error = resolve_preset("nope", &path).unwrap_err().to_string();
         assert!(
             error.contains("model preset `nope` is absent from"),
             "{error}"

@@ -17,13 +17,17 @@ use boop::{config, identity};
 mod cli;
 
 use cli::control::run_native_tui;
-use cli::db::{run_db, run_passthrough, run_public_agent_command, sync_before_read};
+#[cfg(feature = "agent-read")]
+use cli::db::run_public_agent_command;
+use cli::db::{run_db, run_passthrough, sync_before_read};
 #[cfg(feature = "dl6")]
 use cli::debug::run_host;
 use cli::debug::{run_config, run_debug, run_lane_debug};
 use cli::job::{run_beep, run_lane_wait, run_wait};
 use cli::mail::{run_inbox, run_send, Outbound};
-use cli::me::{run_me_favorite, run_me_mood, run_whoami};
+#[cfg(feature = "agent-read")]
+use cli::me::run_me_favorite;
+use cli::me::{run_me_mood, run_whoami};
 use cli::tag::{
     run_tag_add, run_tag_backfill, run_tag_list, run_tag_of, run_tag_recent, run_tag_rm,
     run_tag_search, run_tag_sources,
@@ -82,6 +86,7 @@ enum SubCmd {
         /// Executable override, for example ccz with the Claude adapter.
         #[arg(long = "bin")]
         executable: Option<String>,
+        /// Stable route name for later resumes; refuses an existing live owner.
         #[arg(long)]
         name: Option<String>,
         #[arg(long)]
@@ -112,7 +117,7 @@ enum SubCmd {
         #[arg(value_name = "BODY")]
         body: Option<String>,
         /// The older spelling of the BODY positional.
-        #[arg(long = "body", hide = true)]
+        #[arg(long = "body", hide = true, conflicts_with = "body")]
         body_flag: Option<String>,
         /// Who the row is from, when the whoami ladder cannot say.
         #[arg(long = "as", value_name = "NAME")]
@@ -411,28 +416,18 @@ enum ShellKind {
     Bash,
 }
 
-/// Outside tmux there is no pane to key the route on, so every wrapper
-/// registers <entry>-<dir> as a pane-less coordinator and stamps its full
-/// caller identity.
+/// Every shell entry uses the native lifecycle owner. Its route is keyed by
+/// pane or process, including concurrent launches in the same directory.
 const BASH_SHELL_INIT: &str = r#"boop_wrap() {
-  local name="$1" harness="$2" bin="$3"
-  shift 3
-  if [ -n "$TMUX_PANE" ]; then
-    if [ "$bin" = "$harness" ]; then
-      command boop tui "$harness" --cwd "$PWD" -- "$@"
-    else
-      command boop tui "$harness" --bin "$bin" --cwd "$PWD" -- "$@"
-    fi
-    return
-  fi
-  command boop beep agent register --kind coordinator --harness "$harness" --cwd "$PWD" "$name" >/dev/null 2>&1
-  BOOP_SESSION="$name" BOOP_LANE="$name" BOOP_HARNESS="$harness" BOOP_PARENT= command "$bin" "$@"
+  local harness="$1" bin="$2"
+  shift 2
+  command boop tui "$harness" --bin "$bin" --cwd "$PWD" -- "$@"
 }
-codex() { boop_wrap "codex-${PWD##*/}" codex codex "$@"; }
-claude() { boop_wrap "claude-${PWD##*/}" claude claude "$@"; }
-ccz() { boop_wrap "ccz-${PWD##*/}" claude ccz "$@"; }
-kimi() { boop_wrap "kimi-${PWD##*/}" kimi kimi "$@"; }
-opencode() { boop_wrap "opencode-${PWD##*/}" opencode opencode "$@"; }
+codex() { boop_wrap codex codex "$@"; }
+claude() { boop_wrap claude claude "$@"; }
+ccz() { boop_wrap claude ccz "$@"; }
+kimi() { boop_wrap kimi kimi "$@"; }
+opencode() { boop_wrap opencode opencode "$@"; }
 "#;
 
 fn print_shell_init(shell: ShellKind) {
@@ -443,7 +438,9 @@ fn print_shell_init(shell: ShellKind) {
 
 /// Whether this invocation is asking for help, whatever verb it names.
 fn help_wanted() -> bool {
-    std::env::args().any(|argument| argument == "--help" || argument == "-h")
+    std::env::args()
+        .take_while(|argument| argument != "--")
+        .any(|argument| argument == "--help" || argument == "-h")
 }
 
 fn main() -> Result<()> {
@@ -463,7 +460,9 @@ fn main() -> Result<()> {
     }
     let command = cli.command.context("a command or --preset is required")?;
     match &command {
-        SubCmd::Tui { harness, .. } => init_tracing(tui_trail(harness).as_deref(), true)?,
+        SubCmd::Tui { harness, name, .. } => {
+            init_tracing(name.clone().or_else(|| tui_trail(harness)).as_deref(), true)?
+        }
         _ => init_tracing(supervised_lane(&command), false)?,
     }
     let registry = Registry::discover();
@@ -565,8 +564,8 @@ fn main() -> Result<()> {
                 let config_path = config::default_path()?;
                 let model = match (model, preset) {
                     (Some(model), _) => model,
-                    (None, Some(preset)) => config::resolve_model(&preset, &config_path)?,
-                    (None, None) => config::resolve_model("flash4", &config_path)?,
+                    (None, Some(preset)) => config::resolve_preset(&preset, &config_path)?.model,
+                    (None, None) => config::resolve_preset("flash4", &config_path)?.model,
                 };
                 let formula = match &rules {
                     Some(path) => boop::concatmap::Formula::load(path)?,
@@ -589,10 +588,8 @@ fn main() -> Result<()> {
                     (None, true) => {
                         let routes = bus::read_routes(&mail_dir(mail_dir_arg.as_deref())?)
                             .unwrap_or_default();
-                        let identity = identity::resolve_with(&registry, &routes)?;
-                        Some(identity.session.context(
-                        "--me found no caller session: this process carries no BOOP_SESSION stamp; pass --session <id>",
-                    )?)
+                        let identity = identity::resolve_as(None);
+                        Some(identity.conversation(&routes)?.to_owned())
                     }
                     (None, false) => anyhow::bail!(
                     "name the conversation to map: --session <id>, or --me to take the caller's own"
@@ -648,6 +645,7 @@ fn main() -> Result<()> {
                     as_name.as_deref(),
                     mail_dir.as_deref(),
                 ),
+                #[cfg(feature = "agent-read")]
                 MeCmd::Favorite { index, note } => run_me_favorite(index, note.as_deref()),
             },
             SubCmd::Tag { cmd } => match cmd {
@@ -753,6 +751,7 @@ fn startup_sync_wanted(command: &SubCmd, suppressed: bool) -> bool {
 
 /// Verbs that read `agent_*` rows. A registry, mailbox, tmux or live-process
 /// verb stays off: a cold cursor re-parses every transcript root from offset 0.
+#[cfg(feature = "agent-read")]
 fn command_needs_startup_sync(command: &SubCmd) -> bool {
     #[cfg(feature = "dl6")]
     if matches!(command, SubCmd::Concatmap { .. }) {
@@ -843,6 +842,11 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
     )
 }
 
+#[cfg(not(feature = "agent-read"))]
+fn command_needs_startup_sync(_: &SubCmd) -> bool {
+    false
+}
+
 fn run_with_startup_sync<T>(
     needs_sync: bool,
     sync: impl FnOnce() -> Result<()>,
@@ -879,10 +883,7 @@ fn init_tracing(lane: Option<&str>, pane_owned: bool) -> Result<()> {
 /// The trail name a `boop tui` run logs under: the same `<harness>-<pane>`
 /// route name `run_native_tui` registers.
 fn tui_trail(harness: &str) -> Option<String> {
-    let pane = std::env::var("TMUX_PANE")
-        .ok()
-        .filter(|pane| !pane.is_empty())?;
-    Some(format!("{harness}-{}", pane.trim_start_matches('%')))
+    Some(cli::control::native_route_name(harness))
 }
 
 /// The lane this invocation supervises, which is the only verb whose whole run
@@ -1047,6 +1048,7 @@ enum HarnessCmd {
 }
 
 #[derive(Subcommand)]
+#[cfg(feature = "dl6")]
 enum HostCmd {
     /// Read one JSON request from stdin and emit one JSON response.
     Chat,
@@ -1220,7 +1222,8 @@ enum LaneCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Point a lane at a pane that already exists.
+    /// Compatibility spelling for rebinding a registered route to an existing
+    /// pane. Preserves its kind; fresh interactive registration uses agent register.
     Patch {
         lane: String,
         #[arg(long)]
@@ -1298,16 +1301,17 @@ enum LaneCmd {
 
 #[derive(Subcommand)]
 enum AgentCmd {
-    /// Add a pane-less registry row.
+    /// Register or update a native/coordinator route. Omitted fields are preserved.
     Register {
         /// The route name. Every boop call this agent makes then carries
         /// `--as <name>`: it shares its spawner's process, so no env stamp
         /// can name it.
         name: String,
         /// `native` (a subagent inside a lane or coordinator process) or
-        /// `coordinator` (a pane-less session that owns lanes).
-        #[arg(long, default_value = "native")]
-        kind: String,
+        /// `coordinator` (an interactive session that owns lanes). Defaults
+        /// to native for a new route; preserves the kind of an existing route.
+        #[arg(long)]
+        kind: Option<String>,
         /// The route completion and `boop beep parent` rows go to.
         #[arg(long)]
         parent: Option<String>,
@@ -1319,6 +1323,13 @@ enum AgentCmd {
         /// mailbox, not an address: nothing can push to it.
         #[arg(long)]
         harness: Option<String>,
+        /// Observed harness thread/session ID. Required for a pane-less
+        /// coordinator whose harness exposes no process-local identity.
+        #[arg(long)]
+        session_id: Option<String>,
+        /// Existing tmux pane, window or session to bind. Resolves to a pane ID.
+        #[arg(long)]
+        tmux: Option<String>,
         /// The directory the agent works in; a hook inbox drains rows here.
         #[arg(long)]
         cwd: Option<PathBuf>,
@@ -1424,7 +1435,7 @@ enum InboxCmd {
         mail_dir: Option<PathBuf>,
     },
     /// Install (or remove) the two drain hooks in <cwd>/.claude/settings.json.
-    /// `boop adopt --harness claude` does this for you.
+    /// Route registration is separate: `boop beep agent register NAME`.
     Hooks {
         #[arg(long)]
         name: String,
@@ -1812,6 +1823,7 @@ enum MeCmd {
         as_name: Option<String>,
     },
     /// Save one assistant turn from the caller's conversation as a favorite.
+    #[cfg(feature = "agent-read")]
     Favorite {
         /// Assistant turn position: -1 is newest, -2 is the one before it.
         #[arg(default_value_t = -1, allow_hyphen_values = true)]
@@ -2318,7 +2330,7 @@ mod tests {
     }
 
     #[test]
-    fn shell_wrapper_replaces_inherited_identity_stamps_outside_tmux() {
+    fn shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit() {
         let root = std::env::temp_dir().join(format!(
             "boop-shell-init-{}-{}",
             std::process::id(),
@@ -2327,29 +2339,67 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).expect("make shell-init fixture");
         let capture = root.join("captured");
-        executable(&root.join("boop"), "#!/bin/sh\nexit 0\n");
+        for entry in ["codex", "claude", "ccz", "kimi", "opencode"] {
+            executable(&root.join(entry), "#!/bin/sh\nexit 42\n");
+        }
         executable(
-            &root.join("harness"),
-            "#!/bin/sh\nprintf '%s\\n' \"$BOOP_SESSION\" \"$BOOP_LANE\" \"$BOOP_HARNESS\" \"$BOOP_PARENT\" > \"$CAPTURE\"\n",
+            &root.join("boop"),
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" \"$BOOP_SESSION\" \"$BOOP_PARENT\" > \"$CAPTURE\"\nexit 23\n",
         );
         let mut paths = vec![root.clone()];
-        paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
+        paths.extend(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        ));
         let path = std::env::join_paths(paths).expect("join shell-init PATH");
-        let script = format!("{BASH_SHELL_INIT}\nboop_wrap coord-x harness harness");
-        let output = std::process::Command::new("bash")
-            .args(["-c", &script])
-            .env("CAPTURE", &capture)
-            .env("PATH", path)
-            .env("BOOP_SESSION", "foreign-session")
-            .env("BOOP_LANE", "foreign-lane")
-            .env("BOOP_HARNESS", "foreign-harness")
-            .env("BOOP_PARENT", "foreign-parent")
-            .env_remove("TMUX_PANE")
-            .output()
-            .expect("run shell wrapper with stubs");
-        let stamped = std::fs::read_to_string(&capture).expect("read shell-wrapper stamps");
+        for (entry, harness) in [
+            ("codex", "codex"),
+            ("claude", "claude"),
+            ("ccz", "claude"),
+            ("kimi", "kimi"),
+            ("opencode", "opencode"),
+        ] {
+            for pane in ["", "%999"] {
+                let script =
+                    format!("{BASH_SHELL_INIT}\n{entry} -c 'model_reasoning_effort=low' 'a b' ''");
+                let output = std::process::Command::new("bash")
+                    .args(["-c", &script])
+                    .current_dir(&root)
+                    .env("CAPTURE", &capture)
+                    .env("PATH", &path)
+                    .env("BOOP_SESSION", "caller-session")
+                    .env("BOOP_PARENT", "caller-parent")
+                    .env("TMUX_PANE", pane)
+                    .output()
+                    .expect("run generated shell wrapper");
+                assert_eq!(
+                    output.status.code(),
+                    Some(23),
+                    "entry={entry}, pane={pane}, stderr={}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                let stamped = std::fs::read_to_string(&capture).expect("read wrapper call");
+                let cwd = std::fs::canonicalize(&root).unwrap();
+                assert_eq!(
+                    stamped.lines().collect::<Vec<_>>(),
+                    vec![
+                        "tui",
+                        harness,
+                        "--bin",
+                        entry,
+                        "--cwd",
+                        cwd.to_str().unwrap(),
+                        "--",
+                        "-c",
+                        "model_reasoning_effort=low",
+                        "a b",
+                        "",
+                        "caller-session",
+                        "caller-parent",
+                    ],
+                    "entry={entry}, pane={pane}"
+                );
+            }
+        }
         let _ = std::fs::remove_dir_all(&root);
-        assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
-        assert_eq!(stamped, "coord-x\ncoord-x\nharness\n\n");
     }
 }

@@ -12,14 +12,14 @@ use boop::registry::Registry;
 use boop::{bus, config, identity, lane, mailwait, proc, tmux};
 use tracing::{error, info, warn};
 
-use crate::cli::db::{resolve_harness, run_harnesses};
+use crate::cli::db::run_harnesses;
 use crate::cli::debug::default_preset_for_harness;
 use crate::cli::mail::{all_messages, run_list};
-use crate::cli::me::run_adopt;
-use crate::cli::{append_ack, append_message, line, mail_dir, pad, route_to_json, write_route};
-use crate::{
-    AgentCmd, BeepCmd, ForkCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat,
-};
+use crate::cli::me::register_route;
+use crate::cli::{append_ack, append_message, line, mail_dir, pad, write_route};
+#[cfg(feature = "agent-read")]
+use crate::ForkCmd;
+use crate::{AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, PstreeFormat};
 
 // ---------------------------------------------------------------------------
 // dispatch (layer 1 + bus)
@@ -74,7 +74,7 @@ pub(crate) struct DispatchArgs {
 }
 
 pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
-    let adapter = resolve_dispatch_harness(registry, args.harness.as_deref())?;
+    let adapter = registry.resolve(args.harness.as_deref())?;
     let harness_id = adapter.id();
     info!(
         lane = args.to,
@@ -172,7 +172,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             socket: session.tmux_socket.clone(),
             cwd: cwd.to_owned(),
             command: boop::harness::supervisor_command(&spec),
-            route: crate::cli::route_to_json(&route),
+            route: bus::route_to_value(&route),
             spawn_id: args.spawn_id,
         };
         if let Err(error) = boop::trail::write_spawn(&args.to, &spawn) {
@@ -233,47 +233,6 @@ pub(crate) fn spawn_env_stamp(
     stamp
 }
 
-/// The registered harness adapter for a dispatched `--harness`. A named
-/// harness must resolve exactly; an unnamed one takes the first registered
-/// adapter. A named harness resolving to a different harness is a capability
-/// lie, so an unregistered name is a hard error that lists the registered set.
-pub(crate) fn resolve_dispatch_harness<'a>(
-    registry: &'a Registry,
-    id: Option<&str>,
-) -> Result<&'a dyn boop::harness::Harness> {
-    let Some(id) = id else {
-        return registry
-            .all()
-            .first()
-            .map(|boxed| boxed.as_ref())
-            .ok_or_else(|| anyhow::anyhow!("no harness registered"));
-    };
-    match registry.by_name(id) {
-        Some(adapter) => Ok(adapter),
-        None => {
-            let registered = registry
-                .all()
-                .iter()
-                .map(|harness| harness.id().as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            anyhow::bail!("unregistered harness `{id}`; registered harnesses: {registered}")
-        }
-    }
-}
-
-/// The registered harness adapter for a `--harness` filter, or the first
-/// registered one when the id is absent.
-pub(crate) fn harness_by_id<'a>(
-    registry: &'a Registry,
-    id: &str,
-) -> Result<&'a dyn boop::harness::Harness> {
-    registry
-        .by_name(id)
-        .or_else(|| registry.all().first().map(|b| b.as_ref()))
-        .ok_or_else(|| anyhow::anyhow!("no harness registered"))
-}
-
 pub(crate) fn git_head(repo: &str) -> Result<Option<String>> {
     let output = std::process::Command::new("git")
         .args(["-C", repo, "rev-parse", "HEAD"])
@@ -319,7 +278,7 @@ pub(crate) fn run_resolve(to: &str, mail_dir_arg: Option<&Path>) -> Result<()> {
             println!("resolved {to} -> {session_id}");
             let path = dir.join("registry.json");
             bus::cas_update_json(&path, |current| {
-                current.insert(to.to_owned(), route_to_json(&updated));
+                current.insert(to.to_owned(), bus::route_to_value(&updated));
                 Ok(())
             })?;
             Ok(())
@@ -384,7 +343,7 @@ pub(crate) fn run_lane_supervisor(
         bin = bin.unwrap_or_default(),
         "lane supervisor starting"
     );
-    let adapter = harness_by_id(registry, harness_id)?;
+    let adapter = registry.resolve(Some(harness_id))?;
     let dir = mail_dir(mail_dir_arg)?;
     let cwd = std::env::current_dir().context("read the current directory")?;
     // A respawned lane continues its pinned conversation instead of cold-
@@ -785,9 +744,13 @@ pub(crate) fn run_sweep(
 
 /// Ask `cass` whether the envelope id appears in the recipient's transcript.
 pub(crate) fn cass_hit(route: &Route, message_id: &str) -> Result<bool> {
-    let output = Command::new("cass")
-        .args(["search", message_id, "--robot", "--limit", "20"])
-        .output();
+    let mut command = Command::new("cass");
+    command.args(["search", message_id, "--robot", "--limit", "20"]);
+    let output = boop_harness::worktree::run_captured_with_deadline(
+        command,
+        "cass search",
+        std::time::Duration::from_secs(20),
+    );
     let output = match output {
         Ok(output) if output.status.success() => output,
         _ => return Ok(false),
@@ -815,13 +778,28 @@ pub(crate) fn scoped_to_agent(route: &Route, source_path: &str) -> bool {
     if source_path.is_empty() {
         return false;
     }
-    if let Some(expected) = route.source_path.as_deref() {
+    if let Some(expected) = route
+        .source_path
+        .as_deref()
+        .filter(|path| !path.starts_with("native-session="))
+    {
         return source_path == expected;
     }
     route
         .session_id
         .as_deref()
-        .map(|session_id| source_path.contains(session_id))
+        .filter(|session_id| !session_id.is_empty())
+        .map(|session_id| {
+            Path::new(source_path)
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .is_some_and(|stem| {
+                    stem == session_id
+                        || stem
+                            .strip_suffix(session_id)
+                            .is_some_and(|prefix| prefix.ends_with('-'))
+                })
+        })
         .unwrap_or(false)
 }
 
@@ -917,7 +895,10 @@ pub(crate) fn spawn_repo(
     if let Some(cwd) = cwd_arg {
         return Ok((PathBuf::from(cwd), RepoSource::CwdFlag));
     }
-    if let Some(dir) = brief.filter(|path| path.is_absolute()).and_then(Path::parent) {
+    if let Some(dir) = brief
+        .filter(|path| path.is_absolute())
+        .and_then(Path::parent)
+    {
         if let Ok(root) = lane::repo_root(dir) {
             return Ok((root, RepoSource::Brief));
         }
@@ -998,7 +979,11 @@ pub(crate) fn reset_dead_identity(
         parts.push(format!("tmux {session}"));
     }
     if !parts.is_empty() {
-        info!(lane = identity.lane, removed = parts.join(", "), "dead lane name reset");
+        info!(
+            lane = identity.lane,
+            removed = parts.join(", "),
+            "dead lane name reset"
+        );
         lines.insert(
             0,
             format!(
@@ -1042,11 +1027,12 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     let model_given = args.model.is_some();
     // One row decides harness, model and effort. `--model` is the hidden
     // alias: it reads as a preset of one row that names no harness.
-    let requested = match (args.model.as_deref(), args.preset.as_deref()) {
-        (Some(model), _) => Some(config::ModelPreset::from_model(model)?),
-        (None, Some(preset)) => Some(config::resolve_preset(preset, &config_path)?),
-        (None, None) => None,
-    };
+    let requested = config::resolve_spawn_preset(
+        args.model.as_deref(),
+        args.preset.as_deref(),
+        None,
+        &config_path,
+    )?;
     let requested_model = requested.as_ref().map(|preset| preset.model.clone());
     // A preset names its harness as surely as --harness does: choosing
     // `--preset opus` is the opt-in a claude tmux lane asks for.
@@ -1099,10 +1085,9 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     // The row that spawns: the one named, else the harness's default preset.
     // An explicit --model opts out of the default-preset lookup entirely.
     let default_preset = default_preset_for_harness(&config, &config_path, harness_id)?;
-    let spawning = match (&requested, default_preset.as_deref()) {
-        (Some(preset), _) => Some(preset.clone()),
-        (None, Some(name)) => Some(config::resolve_preset(name, &config_path)?),
-        (None, None) => None,
+    let spawning = match requested {
+        Some(preset) => Some(preset),
+        None => config::resolve_spawn_preset(None, None, default_preset.as_deref(), &config_path)?,
     };
     let model = spawning.as_ref().map(|preset| preset.model.clone());
     // Effort reaches the harness as its own config; the model string stays
@@ -1138,7 +1123,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     };
     let hail_mail_dir = mail_dir(args.mail_dir.as_deref())?;
     let routes = bus::read_routes(&hail_mail_dir)?;
-    let caller = identity::resolve(&routes)?;
+    let caller = identity::resolve_as(None);
     let caller_lane = caller.lane.clone().filter(|lane| *lane != identity.lane);
     let parent = resolve_parent_with_legacy_fallback(
         args.parent.as_deref(),
@@ -1340,7 +1325,9 @@ fn parse_env_pairs(values: Vec<String>) -> Result<Vec<(String, String)>> {
     let mut out = Vec::with_capacity(values.len());
     for value in values {
         // The clap value_parser already guarantees a `=` and a non-empty key.
-        let (key, val) = value.split_once('=').expect("--env value parses as KEY=VAL");
+        let (key, val) = value
+            .split_once('=')
+            .expect("--env value parses as KEY=VAL");
         if BOOP_ENV_STAMPS.contains(&key) {
             anyhow::bail!("--env key `{key}` collides with a boop-owned stamp; pick another name");
         }
@@ -1476,11 +1463,16 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
             parent,
             on_parent_death,
             harness,
+            session_id,
+            tmux,
             cwd,
             worktree,
             mail_dir: mail_dir_arg,
         } => {
-            if !matches!(kind.as_str(), "coordinator" | "native") {
+            if kind
+                .as_deref()
+                .is_some_and(|kind| !matches!(kind, "coordinator" | "native"))
+            {
                 anyhow::bail!("agent kind must be coordinator or native")
             }
             if let Some(tree) = worktree.as_deref().filter(|tree| !tree.is_dir()) {
@@ -1498,30 +1490,25 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
                 .as_deref()
                 .map(boop::worktree::warm_start)
                 .transpose()?;
-            write_route(
-                &dir,
+            register_route(
                 &name,
-                Route {
-                    kind: kind.into(),
-                    harness: harness_id,
-                    tmux: None,
-                    cwd: cwd
-                        .as_ref()
-                        .map(|dir| dir.display().to_string())
-                        .or_else(|| worktree.as_ref().map(|dir| dir.display().to_string())),
-                    model: None,
-                    mode: None,
-                    session_id: None,
-                    source_path: None,
-                    parent,
-                    goal: None,
-                    registered_at: Some(bus::now_iso()),
-                    base_sha: None,
-                    worktree_dir: worktree.as_ref().map(|dir| dir.display().to_string()),
-                    app_server_socket: None,
-                },
+                kind.as_deref(),
+                tmux.as_deref(),
+                harness.as_deref(),
+                session_id.as_deref(),
+                cwd.as_deref()
+                    .or(worktree.as_deref())
+                    .map(|path| path.to_string_lossy())
+                    .as_deref(),
+                None,
+                None,
+                parent.as_deref(),
+                None,
+                Some(&dir),
+                worktree.as_deref(),
+                &Registry::discover(),
+                tmux::mux(),
             )?;
-            println!("registered {name}");
             if let Some(outcome) = started {
                 print!("{}", boop::lane::start_preamble(&outcome.status));
             }
@@ -1889,7 +1876,9 @@ fn ensure_clean(repo: &str) -> Result<()> {
         );
     }
     if !String::from_utf8_lossy(&output.stdout).trim().is_empty() {
-        anyhow::bail!("refusing to merge: dirty index in {repo} (git status --porcelain non-empty)");
+        anyhow::bail!(
+            "refusing to merge: dirty index in {repo} (git status --porcelain non-empty)"
+        );
     }
     Ok(())
 }
@@ -1924,11 +1913,18 @@ fn ensure_ahead(repo: &str, base_sha: &str, branch: &str) -> Result<()> {
 fn fork_brief(comment: &boop::ident::TurnComment, turns: &[boop::rows::TurnRow]) -> String {
     let mut out = String::new();
     out.push_str(&format!("# Fork of comment {}\n\n", comment.comment_id));
-    match comment.note.as_deref().filter(|note| !note.trim().is_empty()) {
+    match comment
+        .note
+        .as_deref()
+        .filter(|note| !note.trim().is_empty())
+    {
         Some(note) => out.push_str(&format!("## Ask\n\n{}\n\n", note.trim())),
         None => out.push_str("## Ask\n\nAct on the quoted text.\n\n"),
     }
-    out.push_str(&format!("## Quote\n\n> {}\n\n", comment.quote.trim().replace('\n', "\n> ")));
+    out.push_str(&format!(
+        "## Quote\n\n> {}\n\n",
+        comment.quote.trim().replace('\n', "\n> ")
+    ));
     if !turns.is_empty() {
         out.push_str("## Quoted turns\n\n");
         for turn in turns {
@@ -1936,13 +1932,20 @@ fn fork_brief(comment: &boop::ident::TurnComment, turns: &[boop::rows::TurnRow])
                 "### {} turn {} ({})\n\n{}\n\n",
                 turn.session,
                 turn.turn,
-                if turn.role.is_empty() { "?" } else { turn.role.as_str() },
+                if turn.role.is_empty() {
+                    "?"
+                } else {
+                    turn.role.as_str()
+                },
                 turn.said.trim()
             ));
         }
     }
     for target in &comment.targets {
-        if !turns.iter().any(|turn| turn.session == target.session && turn.turn == target.turn) {
+        if !turns
+            .iter()
+            .any(|turn| turn.session == target.session && turn.turn == target.turn)
+        {
             out.push_str(&format!(
                 "- {} turn {} is quoted but not ingested; read it with `boop db turns --session {}`\n",
                 target.session, target.turn, target.session
@@ -1960,6 +1963,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             all,
             mail_dir,
         } => run_lane_list(
+            registry,
             mail_dir.as_deref(),
             state.as_deref(),
             harness.as_deref().map(str::parse).transpose()?,
@@ -2078,10 +2082,10 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             mail_dir,
             // A lane pane runs a supervisor that reads the mailbox itself, so
             // no hook inbox belongs on it.
-        } => run_adopt(
+        } => register_route(
             &lane,
-            "lane",
-            &tmux,
+            None,
+            Some(&tmux),
             harness.as_deref(),
             session_id.as_deref(),
             cwd.as_deref(),
@@ -2090,7 +2094,9 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             parent.as_deref(),
             goal.as_deref(),
             mail_dir.as_deref(),
-            false,
+            None,
+            registry,
+            tmux::mux(),
         ),
         LaneCmd::Delete {
             lane,
@@ -2122,7 +2128,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
 }
 
 pub(crate) fn run_harness_get(registry: &Registry, id: &str) -> Result<()> {
-    let adapter = resolve_harness(registry, id)?;
+    let adapter = registry.resolve(Some(id))?;
     let caps = adapter.control_capabilities();
     println!(
         "{}",
@@ -2172,6 +2178,7 @@ fn retired_lanes(
 }
 
 pub(crate) fn run_lane_list(
+    registry: &Registry,
     mail_dir_arg: Option<&Path>,
     state_filter: Option<&str>,
     harness_filter: Option<HarnessId>,
@@ -2270,19 +2277,19 @@ pub(crate) fn run_lane_list(
             ));
         }
         for (route_name, route) in &routes {
-            if route.harness != Some(HarnessId::Claude) {
+            let Some(harness) = route.harness else {
                 continue;
-            }
+            };
             let Some(cwd) = route.cwd.as_deref() else {
                 continue;
             };
-            for (name, path, locked) in claude_agent_worktrees(cwd) {
+            for (name, path, locked) in registry.get(harness).native_worktrees(cwd) {
                 let state = if locked { "live" } else { "dead" };
                 line(&format!(
                     "{} {} {} {} {} {} {} {} PARENT={}",
                     pad(state, 4),
                     pad(&name, 16),
-                    pad("native-claude", 12),
+                    pad(&format!("native-{harness}"), 12),
                     pad("-", 10),
                     pad("-", 6),
                     pad("-", 46),
@@ -2315,58 +2322,6 @@ pub(crate) fn unregistered_sessions(
         })
         .cloned()
         .collect()
-}
-
-/// The native Claude Code subagent worktrees linked into the repo at `cwd`.
-/// One tuple per `git worktree list --porcelain` block whose path carries
-/// `/.claude/worktrees/agent-`: `(agent-<id> name, path, locked)`.
-pub(crate) fn claude_agent_worktrees(cwd: &str) -> Vec<(String, String, bool)> {
-    let output = Command::new("git")
-        .args(["-C", cwd, "worktree", "list", "--porcelain"])
-        .output();
-    let Ok(output) = output else {
-        return Vec::new();
-    };
-    if !output.status.success() {
-        return Vec::new();
-    }
-    parse_claude_agent_worktrees(&String::from_utf8_lossy(&output.stdout))
-}
-
-fn parse_claude_agent_worktrees(porcelain: &str) -> Vec<(String, String, bool)> {
-    let mut result = Vec::new();
-    let mut current: Option<(String, bool)> = None;
-    for line in porcelain.lines() {
-        if let Some(path) = line.strip_prefix("worktree ") {
-            if let Some((path, locked)) = current.take() {
-                push_claude_agent(&mut result, path, locked);
-            }
-            current = Some((path.to_owned(), false));
-        } else if line == "locked" {
-            if let Some((_, locked)) = current.as_mut() {
-                *locked = true;
-            }
-        }
-    }
-    if let Some((path, locked)) = current {
-        push_claude_agent(&mut result, path, locked);
-    }
-    result
-}
-
-fn push_claude_agent(result: &mut Vec<(String, String, bool)>, path: String, locked: bool) {
-    const MARKER: &str = "/.claude/worktrees/agent-";
-    let Some(idx) = path.find(MARKER) else {
-        return;
-    };
-    let id = path[idx + MARKER.len()..]
-        .split('/')
-        .next()
-        .unwrap_or_default();
-    if id.is_empty() {
-        return;
-    }
-    result.push((format!("agent-{id}"), path, locked));
 }
 
 /// The parent edge that answers nobody, so a surviving orphan says so on its
@@ -3476,6 +3431,23 @@ mod tests {
     use crate::cli::testkit::{route_with, temp_mail_dir};
     use std::sync::Mutex;
 
+    #[test]
+    fn transcript_scope_resolves_native_markers_without_partial_id_hits() {
+        let mut route = route_with(None);
+        route.session_id = Some("native-id".into());
+        route.source_path = Some("native-session=native-id".into());
+        assert!(scoped_to_agent(&route, "/test/native-id.jsonl"));
+        assert!(scoped_to_agent(
+            &route,
+            "/test/rollout-date-native-id.jsonl"
+        ));
+        assert!(!scoped_to_agent(&route, "/test/native-id-other.jsonl"));
+        assert!(!scoped_to_agent(&route, "/test/native-id/other.jsonl"));
+        route.source_path = Some("/exact/transcript.jsonl".into());
+        assert!(scoped_to_agent(&route, "/exact/transcript.jsonl"));
+        assert!(!scoped_to_agent(&route, "/test/native-id.jsonl"));
+    }
+
     /// The join tests change the process cwd (repo resolution reads it), so
     /// they serialize against each other behind this one lock.
     #[cfg(feature = "agent-read")]
@@ -3522,8 +3494,14 @@ mod tests {
         let brief = fork_brief(&comment, &turns);
         assert!(brief.contains("## Ask\n\nmake this a test"), "{brief}");
         assert!(brief.contains("> line one\n> line two"), "{brief}");
-        assert!(brief.contains("### ses-a turn 3 (assistant)\n\nthe turn body"), "{brief}");
-        assert!(brief.contains("ses-a turn 9 is quoted but not ingested"), "{brief}");
+        assert!(
+            brief.contains("### ses-a turn 3 (assistant)\n\nthe turn body"),
+            "{brief}"
+        );
+        assert!(
+            brief.contains("ses-a turn 9 is quoted but not ingested"),
+            "{brief}"
+        );
     }
 
     #[cfg(feature = "agent-read")]
@@ -3629,7 +3607,10 @@ mod tests {
             .unwrap();
         let second = fork_row(7, "fork-comment-7-b", "fork/comment-7-b");
         store.record_turn_comment_fork(&second).unwrap();
-        assert_eq!(pick_fork(&store, 7, Some("fork-comment-7-b")).unwrap(), second);
+        assert_eq!(
+            pick_fork(&store, 7, Some("fork-comment-7-b")).unwrap(),
+            second
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -3644,8 +3625,12 @@ mod tests {
         store
             .record_turn_comment_fork(&fork_row(7, "fork-comment-7", "fork/comment-7"))
             .unwrap();
-        write_route(&dir, "fork-comment-7", fork_route(Some("parent-lane"), &base, "ses-fork"))
-            .unwrap();
+        write_route(
+            &dir,
+            "fork-comment-7",
+            fork_route(Some("parent-lane"), &base, "ses-fork"),
+        )
+        .unwrap();
         write_route(&dir, "parent-lane", route_with(None)).unwrap();
         store
             .write_turn("ses-fork", 1, 100, "assistant", "the fork answer", None)
@@ -3670,7 +3655,10 @@ mod tests {
             "a merge commit must exist"
         );
         let reply = std::fs::read_to_string(dir.join("forks/comment-7.reply.md")).unwrap();
-        assert!(reply.contains("# Reply from fork-comment-7 to comment 7"), "{reply}");
+        assert!(
+            reply.contains("# Reply from fork-comment-7 to comment 7"),
+            "{reply}"
+        );
         assert!(reply.contains("the fork answer"), "{reply}");
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&repo);
@@ -3688,8 +3676,12 @@ mod tests {
         store
             .record_turn_comment_fork(&fork_row(8, "fork-comment-8", "fork/comment-8"))
             .unwrap();
-        write_route(&dir, "fork-comment-8", fork_route(Some("parent-lane"), &base, "ses-fork"))
-            .unwrap();
+        write_route(
+            &dir,
+            "fork-comment-8",
+            fork_route(Some("parent-lane"), &base, "ses-fork"),
+        )
+        .unwrap();
         write_route(&dir, "parent-lane", route_with(None)).unwrap();
 
         let cwd = std::env::current_dir().unwrap();
@@ -3728,8 +3720,12 @@ mod tests {
         store
             .record_turn_comment_fork(&fork_row(9, "fork-comment-9", "fork/comment-9"))
             .unwrap();
-        write_route(&dir, "fork-comment-9", fork_route(Some("parent-lane"), &base, "ses-fork"))
-            .unwrap();
+        write_route(
+            &dir,
+            "fork-comment-9",
+            fork_route(Some("parent-lane"), &base, "ses-fork"),
+        )
+        .unwrap();
         write_route(&dir, "parent-lane", route_with(None)).unwrap();
 
         let cwd = std::env::current_dir().unwrap();
@@ -3767,8 +3763,12 @@ mod tests {
         store
             .record_turn_comment_fork(&fork_row(10, "fork-comment-10", "fork/comment-10"))
             .unwrap();
-        write_route(&dir, "fork-comment-10", fork_route(Some("parent-lane"), &base, "ses-fork"))
-            .unwrap();
+        write_route(
+            &dir,
+            "fork-comment-10",
+            fork_route(Some("parent-lane"), &base, "ses-fork"),
+        )
+        .unwrap();
         write_route(&dir, "parent-lane", route_with(None)).unwrap();
         store
             .write_turn("ses-fork", 1, 100, "assistant", "the fork answer", None)
@@ -3883,7 +3883,7 @@ mod tests {
     #[test]
     fn dispatch_refuses_an_unregistered_harness() {
         let registry = Registry::discover();
-        let error = match resolve_dispatch_harness(&registry, Some("gemini-cli")) {
+        let error = match registry.resolve(Some("gemini-cli")) {
             Ok(_) => panic!("unregistered harness must be refused"),
             Err(error) => error,
         };
@@ -3902,10 +3902,12 @@ mod tests {
         write_route(&dir, "coordinator", tmux_route(&coord_name)).unwrap();
         run_agent(AgentCmd::Register {
             name: "native-child".into(),
-            kind: "native".into(),
+            kind: Some("native".into()),
             parent: Some("coordinator".into()),
             on_parent_death: crate::ParentDeathPolicy::Orphan,
             harness: None,
+            session_id: None,
+            tmux: None,
             cwd: None,
             worktree: None,
             mail_dir: Some(dir.clone()),
@@ -4030,55 +4032,6 @@ mod tests {
             vec!["free-session".to_owned()]
         );
         assert!(unregistered_sessions(&routes, &None).is_empty());
-    }
-
-    /// RECEIPT (native-visibility). A repo's linked `.claude/worktrees/agent-*`
-    /// worktrees surface as native Claude subagents: a `locked` porcelain block
-    /// reads `live`, an unlocked one reads `dead`.
-    #[test]
-    fn claude_agent_worktrees_lists_locked_and_unlocked_agents() {
-        let base = std::env::temp_dir().join(format!("boop-claude-wt-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-        let run = |args: &[&str]| {
-            let out = std::process::Command::new("git")
-                .args(args)
-                .current_dir(&base)
-                .output()
-                .unwrap();
-            assert!(
-                out.status.success(),
-                "git {args:?}: {}",
-                String::from_utf8_lossy(&out.stderr)
-            );
-        };
-        run(&["init", "-q"]);
-        run(&["config", "user.email", "t@t"]);
-        run(&["config", "user.name", "t"]);
-        std::fs::write(base.join("seed.txt"), "s").unwrap();
-        run(&["add", "-A"]);
-        run(&["commit", "-qm", "seed"]);
-        std::fs::create_dir_all(base.join(".claude/worktrees")).unwrap();
-        run(&["worktree", "add", ".claude/worktrees/agent-abc", "HEAD"]);
-        run(&["worktree", "add", ".claude/worktrees/agent-def", "HEAD"]);
-        run(&["worktree", "lock", ".claude/worktrees/agent-abc"]);
-
-        let trees = claude_agent_worktrees(base.to_str().unwrap());
-        let names = trees
-            .iter()
-            .map(|(name, _, _)| name.as_str())
-            .collect::<Vec<_>>();
-        assert!(names.contains(&"agent-abc"), "{names:?}");
-        assert!(names.contains(&"agent-def"), "{names:?}");
-        for (name, path, locked) in &trees {
-            assert!(path.contains("/.claude/worktrees/agent-"), "{path}");
-            match name.as_str() {
-                "agent-abc" => assert!(*locked, "agent-abc must be locked"),
-                "agent-def" => assert!(!*locked, "agent-def must be unlocked"),
-                other => panic!("unexpected worktree name {other}"),
-            }
-        }
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// RECEIPT (Job 3b). A `--route-only` delete drops the lane's registry row
@@ -5030,13 +4983,20 @@ mod tests {
         let identity = carcass_of(&repo, "fix/navmenu-flip-hover");
         let worktree = identity.worktree_dir.clone().unwrap();
 
-        let lines = reset_dead_identity(&repo.dir, &identity, &BTreeMap::new(), &|_| false).unwrap();
-        let line = lines.first().expect("a dead name reports its reset").clone();
+        let lines =
+            reset_dead_identity(&repo.dir, &identity, &BTreeMap::new(), &|_| false).unwrap();
+        let line = lines
+            .first()
+            .expect("a dead name reports its reset")
+            .clone();
         assert!(
             line.starts_with("reclaim: fix-navmenu-flip-hover was dead; removed "),
             "{line}"
         );
-        assert!(line.contains(&format!("worktree {}", worktree.display())), "{line}");
+        assert!(
+            line.contains(&format!("worktree {}", worktree.display())),
+            "{line}"
+        );
         assert!(line.contains("branch fix/navmenu-flip-hover"), "{line}");
         assert!(!worktree.exists(), "the worktree is gone");
         assert!(
@@ -5143,10 +5103,7 @@ mod tests {
                 .any(|line| line.starts_with("commit ") && line.ends_with("the lane did a thing")),
             "{lines:?}"
         );
-        assert!(
-            lines.contains(&"changed added.txt".to_owned()),
-            "{lines:?}"
-        );
+        assert!(lines.contains(&"changed added.txt".to_owned()), "{lines:?}");
         assert!(
             lines.contains(&"dirty ?? scratch.txt".to_owned()),
             "{lines:?}"
@@ -5162,7 +5119,7 @@ mod tests {
             socket: None,
             cwd: tree.display().to_string(),
             command: "boop beep lane run --lane fix-retired".to_owned(),
-            route: crate::cli::route_to_json(&touched_route(tree, base)),
+            route: bus::route_to_value(&touched_route(tree, base)),
             spawn_id: None,
         }
     }
@@ -5183,12 +5140,17 @@ mod tests {
         let (route, state) =
             inspect_route("fix-retired", &BTreeMap::new(), Some(&spawn), true).unwrap();
         assert_eq!(state, Some("retired"));
-        assert_eq!(where_line(&route, "fix-retired").unwrap(), tree.display().to_string());
+        assert_eq!(
+            where_line(&route, "fix-retired").unwrap(),
+            tree.display().to_string()
+        );
         let lines = touched_lines(&route, "fix-retired").unwrap();
         assert_eq!(lines[0], format!("worktree {}", tree.display()));
         assert!(lines[1].contains("commits_past_base 1"), "{:?}", lines[1]);
         assert!(
-            lines.iter().any(|line| line.ends_with("the retired lane committed")),
+            lines
+                .iter()
+                .any(|line| line.ends_with("the retired lane committed")),
             "{lines:?}"
         );
         assert!(lines.contains(&"changed done.txt".to_owned()), "{lines:?}");
@@ -5225,7 +5187,10 @@ mod tests {
         let mut route = tmux_route("wherever");
         route.worktree_dir = Some("/tmp/boop-worktrees/fix/x".to_owned());
         route.cwd = Some("/repo".to_owned());
-        assert_eq!(where_line(&route, "fix-x").unwrap(), "/tmp/boop-worktrees/fix/x");
+        assert_eq!(
+            where_line(&route, "fix-x").unwrap(),
+            "/tmp/boop-worktrees/fix/x"
+        );
         route.worktree_dir = None;
         assert_eq!(where_line(&route, "fix-x").unwrap(), "/repo");
         route.cwd = None;

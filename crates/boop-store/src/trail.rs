@@ -16,10 +16,10 @@ pub const SUPERVISE_LOG: &str = "supervise.log";
 /// Whatever the harness child wrote to fd 2.
 pub const CHILD_STDERR: &str = "child.stderr";
 
-/// `~/.agent/lanes`.
+/// Lane trails under the configured Boop mail root. BOOP_MAIL_DIR/BOOP_DB
+/// isolate the store and its trails together without changing harness homes.
 pub fn lanes_root() -> Result<PathBuf> {
-    let home = dirs::home_dir().context("resolve home directory")?;
-    Ok(home.join(".agent").join("lanes"))
+    Ok(agent_root()?.join("lanes"))
 }
 
 /// A lane name is a path segment here; a separator in it would escape the root.
@@ -387,8 +387,10 @@ const SYNC_TRAIL_CAP: u64 = 512 * 1024;
 
 /// `~/.agent`.
 pub fn agent_root() -> Result<PathBuf> {
-    let home = dirs::home_dir().context("resolve home directory")?;
-    Ok(home.join(".agent"))
+    crate::ident::Store::default_path()?
+        .parent()
+        .map(Path::to_path_buf)
+        .context("Boop store needs a parent directory")
 }
 
 /// `~/.agent/sync-trail.ndjson`, or the `BOOP_SYNC_TRAIL` override a test sets.
@@ -435,6 +437,55 @@ pub fn read_sync_trail(path: &Path) -> Vec<serde_json::Value> {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn configured_store_and_trails_are_isolated() {
+        if let Some(expected) = std::env::var_os("BOOP_STORE_PATH_PROBE") {
+            let expected = PathBuf::from(expected);
+            assert_eq!(crate::ident::Store::default_path().unwrap(), expected);
+            assert_eq!(agent_root().unwrap(), expected.parent().unwrap());
+            assert_eq!(
+                lanes_root().unwrap(),
+                expected.parent().unwrap().join("lanes")
+            );
+            return;
+        }
+        let root = tempdir("path-overrides");
+        let default = dirs::home_dir().unwrap().join(".agent/boop.db");
+        for (mail, db, expected) in [
+            (None, None, default),
+            (Some(root.join("mail")), None, root.join("mail/boop.db")),
+            (
+                Some(root.join("mail")),
+                Some(root.join("database/custom.db")),
+                root.join("database/custom.db"),
+            ),
+        ] {
+            let mut probe = std::process::Command::new(std::env::current_exe().unwrap());
+            probe
+                .args([
+                    "--exact",
+                    "trail::tests::configured_store_and_trails_are_isolated",
+                ])
+                .env("BOOP_STORE_PATH_PROBE", expected)
+                .env_remove("BOOP_DB")
+                .env_remove("BOOP_MAIL_DIR");
+            if let Some(mail) = mail {
+                probe.env("BOOP_MAIL_DIR", mail);
+            }
+            if let Some(db) = db {
+                probe.env("BOOP_DB", db);
+            }
+            let output = probe.output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     fn tempdir(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(

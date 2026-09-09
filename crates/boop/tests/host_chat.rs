@@ -1,3 +1,4 @@
+use boop_store::testing::BoopCommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
@@ -22,8 +23,11 @@ static CAPABILITIES: Capabilities = Capabilities {
     lanes: LanePolicy::Allowed,
     variant: VariantSupport::None,
     mail: MailPolicy::Keystrokes,
+    image_paste_keys: None,
     native_tui_projector: false,
     wrapper_owns_alternate_screen: false,
+    native_backend: boop::harness::NativeBackendSupport::Unsupported,
+    native_settings: boop::harness::NativeSettingsSupport::Unsupported("fixture"),
 };
 
 impl Harness for EchoHarness {
@@ -185,7 +189,7 @@ fn command_failure_prints_a_row_and_exits_zero() {
     std::fs::create_dir_all(root.join("home")).unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_boop"))
         .args(["host", "chat"])
-        .env("HOME", root.join("home"))
+        .boop_test_root(root.join("home"))
         .env("BOOP_DB", root.join("boop.db"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

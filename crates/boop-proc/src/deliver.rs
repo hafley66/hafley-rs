@@ -9,11 +9,9 @@ use anyhow::Result;
 
 use boop_harness::door::Delivered;
 use boop_harness::harness::{Harness, MailPolicy};
-use boop_harness::live::{
-    pane_of_target, DoorAddress, LiveSession, LiveSessionScope, LiveSessions, LiveStatus,
-};
-use boop_store::bus;
+use boop_harness::live::{pane_of_target, DoorAddress, LiveSession, LiveSessions, LiveStatus};
 use boop_harness::Registry;
+use boop_store::bus;
 use boop_store::bus::{Message, Route};
 use boop_store::harness_id::HarnessId;
 use boop_store::ident::{DeliveryState, LiveRow, Store};
@@ -35,6 +33,7 @@ use boop_store::ident::{DeliveryState, LiveRow, Store};
 /// | `CoolOff` | the route's door budget is blown; the row waits out the cool-off and the drain retries it | cooled-off |
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Rung {
+    AlreadyAccepted,
     Door,
     DoorQueue,
     Acpx,
@@ -50,7 +49,9 @@ impl Rung {
     /// The transition this rung records. One rung, one state.
     pub fn state(self) -> DeliveryState {
         match self {
-            Rung::Door | Rung::DoorQueue | Rung::Acpx => DeliveryState::AcceptedByHarness,
+            Rung::AlreadyAccepted | Rung::Door | Rung::DoorQueue | Rung::Acpx => {
+                DeliveryState::AcceptedByHarness
+            }
             Rung::TurnBoundary => DeliveryState::HeldForTurnBoundary,
             Rung::HookInbox => DeliveryState::QueuedInHookInbox,
             Rung::PanePaste => DeliveryState::PastedIntoPane,
@@ -62,6 +63,7 @@ impl Rung {
     /// The word the sender prints, and the same word `boop debug` shows.
     pub fn as_str(self) -> &'static str {
         match self {
+            Rung::AlreadyAccepted => "already accepted",
             Rung::Door => "door",
             Rung::DoorQueue => "door queue",
             Rung::Acpx => "acpx queue",
@@ -82,7 +84,10 @@ impl Rung {
     /// recipient (failure mode 14). `deliver_hail_budgeted` reads this and
     /// stamps the row, so every caller of the ladder stamps alike.
     pub fn carried_the_body(self) -> bool {
-        matches!(self, Rung::Door | Rung::DoorQueue | Rung::Acpx)
+        matches!(
+            self,
+            Rung::AlreadyAccepted | Rung::Door | Rung::DoorQueue | Rung::Acpx
+        )
     }
 }
 
@@ -134,6 +139,7 @@ impl Landing {
     /// answered and reads `harness` for a route that names none.
     pub fn line(&self, message_id: &str, from: &str, to: &str, harness: &str) -> String {
         match self.rung {
+            Rung::AlreadyAccepted => format!("already accepted {message_id} from {from} -> {to}; no new transport call"),
             Rung::Door => format!("delivered {message_id} from {from} -> {to} through the {harness} door"),
             Rung::DoorQueue => format!(
                 "delivered {message_id} from {from} -> {to} into the {harness} door queue; it reads it at its next turn boundary"
@@ -342,30 +348,35 @@ pub fn door_gate(
     budget: &DoorBudget,
     now_ms: u64,
 ) -> Result<Option<Landing>> {
-    Ok(match door_verdict(store, route, routes, body, budget, now_ms)? {
-        DoorVerdict::Open => None,
-        DoorVerdict::CoolingOff { until_ms } => Some(Landing::new(
-            Rung::CoolOff,
-            format!("cooling off for {}s more", until_ms.saturating_sub(now_ms) / 1000),
-        )),
-        DoorVerdict::Blowout {
-            pushes,
-            budget: allowed,
-            why,
-        } => {
-            store.record_door_blowout(&boop_store::ident::DoorBlowoutRow {
-                route: route.to_owned(),
-                at_ms: now_ms,
+    Ok(
+        match door_verdict(store, route, routes, body, budget, now_ms)? {
+            DoorVerdict::Open => None,
+            DoorVerdict::CoolingOff { until_ms } => Some(Landing::new(
+                Rung::CoolOff,
+                format!(
+                    "cooling off for {}s more",
+                    until_ms.saturating_sub(now_ms) / 1000
+                ),
+            )),
+            DoorVerdict::Blowout {
                 pushes,
                 budget: allowed,
-                window_ms: budget.window.as_millis() as u64,
-                cooldown_ms: budget.cooldown.as_millis() as u64,
-                why: why.clone(),
-            })?;
-            tracing::warn!(route, pushes, budget = allowed, %why, "door budget blown; cooling off");
-            Some(Landing::new(Rung::CoolOff, why))
-        }
-    })
+                why,
+            } => {
+                store.record_door_blowout(&boop_store::ident::DoorBlowoutRow {
+                    route: route.to_owned(),
+                    at_ms: now_ms,
+                    pushes,
+                    budget: allowed,
+                    window_ms: budget.window.as_millis() as u64,
+                    cooldown_ms: budget.cooldown.as_millis() as u64,
+                    why: why.clone(),
+                })?;
+                tracing::warn!(route, pushes, budget = allowed, %why, "door budget blown; cooling off");
+                Some(Landing::new(Rung::CoolOff, why))
+            }
+        },
+    )
 }
 
 /// Whether `route` is inside a cool-off right now. A drain asks this once
@@ -400,7 +411,14 @@ pub fn deliver_hail_with(
     message: &Message,
     paster: &dyn PanePaster,
 ) -> Result<Landing> {
-    deliver_hail_budgeted(registry, store, routes, message, paster, &DoorBudget::from_env())
+    deliver_hail_budgeted(
+        registry,
+        store,
+        routes,
+        message,
+        paster,
+        &DoorBudget::from_env(),
+    )
 }
 
 /// `deliver_hail_with` with the door budget supplied, for a test that must
@@ -415,6 +433,28 @@ pub fn deliver_hail_budgeted(
 ) -> Result<Landing> {
     let route = routes.get(message.to.as_str());
     let harness = route.and_then(|route| route.harness);
+    // Admission spans the external call and its receipt, without keeping a
+    // SQLite write transaction open across transport I/O. File locks are
+    // released on process exit; in-memory stores have no shared file owner.
+    let _admission = match store.connection().path().filter(|path| !path.is_empty()) {
+        Some(path) => match bus::try_route_lock(Path::new(path), &message.to, "delivery")? {
+            Some(lock) => Some(lock),
+            None => {
+                let held =
+                    Landing::new(Rung::TurnBoundary, "another delivery attempt is in flight");
+                held.record(store, &message.id, &message.to, harness)?;
+                return Ok(held);
+            }
+        },
+        None => None,
+    };
+    if store.delivery_accepted(&message.id, &message.to)? {
+        bus::ack_messages(store, std::slice::from_ref(&message.id), &bus::now_iso())?;
+        return Ok(Landing::new(
+            Rung::AlreadyAccepted,
+            "previously accepted by harness",
+        ));
+    }
     if !store.has_delivery_transition(&message.id)? {
         store.append_delivery_transition(
             &message.id,
@@ -465,10 +505,28 @@ fn land(
     // A lane's own supervisor reads the mailbox directly and injects at its
     // next boundary, so the row is held rather than pushed at a door.
     if route.kind == "lane" {
+        if hook_inbox(registry, route, to) {
+            return Ok(Landing::new(Rung::HookInbox, "installed inbox hook"));
+        }
         return Ok(Landing::new(Rung::TurnBoundary, "lane supervisor"));
+    }
+    if route.mode.as_deref() == Some("acpx") {
+        if let Some(cooled) = door_gate(
+            store,
+            to,
+            routes,
+            &message.body,
+            budget,
+            boop_harness::live::now_ms(),
+        )? {
+            return Ok(cooled);
+        }
+        let reply = boop_acp::channel::acpx::prompt(route, &message.body, true)?;
+        return Ok(Landing::acpx(reply.trim_end().to_owned()));
     }
     let Some(id) = route.harness else {
         return Ok(no_door_route(
+            registry,
             route,
             to,
             paster,
@@ -478,6 +536,7 @@ fn land(
     let harness = registry.get(id);
     if harness.capabilities().mail == MailPolicy::Keystrokes {
         return Ok(no_door_route(
+            registry,
             route,
             to,
             paster,
@@ -486,6 +545,7 @@ fn land(
     }
     let Some(live) = live_session(harness, store, route, id)? else {
         return Ok(door_route_below_the_door(
+            registry,
             route,
             to,
             format!("no live {id} session for {to}"),
@@ -500,7 +560,7 @@ fn land(
     Ok(match harness.door().deliver(&live, &message.body)? {
         Delivered::Injected => Landing::new(Rung::Door, "door"),
         Delivered::QueuedForTurnBoundary => Landing::new(Rung::DoorQueue, "door queue"),
-        Delivered::Unreachable(why) => door_route_below_the_door(route, to, why),
+        Delivered::Unreachable(why) => door_route_below_the_door(registry, route, to, why),
     })
 }
 
@@ -509,9 +569,14 @@ fn land(
 /// is held for the recipient's next turn boundary. A harness with a door is
 /// never pasted into: a codex or claude TUI pane takes its mail through the
 /// door or not at all, and typing at it puts keys in front of a human.
-fn door_route_below_the_door(route: &Route, to: &str, why: impl Into<String>) -> Landing {
+fn door_route_below_the_door(
+    registry: &Registry,
+    route: &Route,
+    to: &str,
+    why: impl Into<String>,
+) -> Landing {
     let why = why.into();
-    match hook_inbox(route, to) {
+    match hook_inbox(registry, route, to) {
         true => Landing::new(Rung::HookInbox, why),
         false => Landing::new(Rung::TurnBoundary, why),
     }
@@ -520,13 +585,14 @@ fn door_route_below_the_door(route: &Route, to: &str, why: impl Into<String>) ->
 /// A route with no door to try at all: no harness, or a harness whose only
 /// transport was ever the pane. Rungs 3 through 5 in order.
 fn no_door_route(
+    registry: &Registry,
     route: &Route,
     to: &str,
     paster: &dyn PanePaster,
     why: impl Into<String>,
 ) -> Landing {
     let why = why.into();
-    if hook_inbox(route, to) {
+    if hook_inbox(registry, route, to) {
         return Landing::new(Rung::HookInbox, why);
     }
     match paste_into_pane(route, to, paster) {
@@ -536,11 +602,18 @@ fn no_door_route(
 }
 
 /// Whether the recipient's project carries an installed inbox hook.
-fn hook_inbox(route: &Route, to: &str) -> bool {
-    route
-        .cwd
-        .as_deref()
-        .is_some_and(|cwd| crate::inbox::installed_for(std::path::Path::new(cwd), to))
+pub fn hook_inbox(registry: &Registry, route: &Route, to: &str) -> bool {
+    let Some(cwd) = route.cwd.as_deref() else {
+        return false;
+    };
+    let cwd = std::path::Path::new(cwd);
+    match route.harness {
+        Some(id) => registry.get(id).door().inbox_hook_installed(cwd, to),
+        None => registry
+            .all()
+            .iter()
+            .any(|adapter| adapter.door().inbox_hook_installed(cwd, to)),
+    }
 }
 
 /// Rung 4. The route's own pane takes the text as a paste when nothing else
@@ -568,26 +641,19 @@ pub fn live_session(
     route: &Route,
     id: HarnessId,
 ) -> Result<Option<LiveSession>> {
-    if let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) {
-        let pane = pane_of_target(target).unwrap_or_else(|| target.to_owned());
-        if let Some(live) = harness.live().live_session_in_pane(&pane)? {
-            return Ok(Some(live));
-        }
+    if let Some(live) = harness.live().live_session_for_route(route)? {
+        return Ok(Some(live));
+    }
+    if route.mode.as_deref() == Some("native-owned") {
+        return Ok(None);
     }
     let Some(session_id) = route.session_id.as_deref() else {
         return Ok(None);
     };
-    // Codex and opencode registries record no pane, so the route's session
-    // id is the match; the registry carries the door the store cannot.
-    if let Some(live) = harness
-        .live()
-        .live_sessions()?
-        .into_iter()
-        .find(|session| session.session_id == session_id)
-    {
-        return Ok(Some(live));
-    }
-    Ok(store.live_row(session_id)?.map(|row| projected(id, row)))
+    Ok(store
+        .live_row(session_id)?
+        .filter(|row| !matches!(row.status.as_deref(), Some("detached" | "closed")))
+        .map(|row| projected(id, row)))
 }
 
 /// The last projection of one session read back as a live session. The status
@@ -682,43 +748,24 @@ pub fn claimed_sessions(
     claimed
 }
 
-/// Bind an unbound route to the one unclaimed live root session in its cwd.
-/// Zero or several candidates bind nothing: wrong-session is worse than none.
+/// Bind an unbound route only when the harness can resolve its explicit route
+/// evidence, such as an exact pane or adapter-owned control endpoint.
 pub fn bind_route_session(
     dir: &Path,
     route_name: &str,
     route: &mut Route,
     live: &dyn LiveSessions,
 ) -> bool {
-    if route.session_id.is_some() || route.harness.is_none() {
+    if route.session_id.is_some()
+        || route.harness.is_none()
+        || route.app_server_socket.is_some()
+        || route.mode.as_deref() == Some("native-owned")
+    {
         return false;
     }
-    let Some(cwd) = route.cwd.as_deref() else {
+    let Ok(Some(session)) = live.live_session_for_route(route) else {
         return false;
     };
-    let canonical = std::fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
-    let claimed = claimed_sessions(dir, None, &canonical);
-    let candidates: Vec<LiveSession> = live
-        .live_sessions()
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|session| {
-            session.scope != LiveSessionScope::Child
-                && !claimed.contains(&session.session_id)
-                && session
-                    .cwd
-                    .as_ref()
-                    .map(|dir| std::fs::canonicalize(dir).unwrap_or_else(|_| dir.clone()))
-                    .as_deref()
-                    == Some(&canonical)
-        })
-        .collect();
-    let [session] = candidates.as_slice() else {
-        return false;
-    };
-    if !claim_open_session(dir, &session.session_id) {
-        return false;
-    }
     route.session_id = Some(session.session_id.clone());
     route.source_path = Some(format!("native-session={}", session.session_id));
     let _ = bus::write_route(dir, route_name, route);
@@ -746,7 +793,9 @@ pub fn drain_route_held_mail_budgeted(
     route_name: &str,
     budget: &DoorBudget,
 ) -> usize {
-    let Some(mut route) = bus::read_routes(dir).ok().and_then(|mut routes| routes.remove(route_name))
+    let Some(mut route) = bus::read_routes(dir)
+        .ok()
+        .and_then(|mut routes| routes.remove(route_name))
     else {
         return 0;
     };
@@ -975,7 +1024,7 @@ mod tests {
             session_id: id.to_owned(),
             pid: Some(7),
             cwd: Some(cwd),
-            tmux_pane: None,
+            tmux_pane: Some("%77".into()),
             status: LiveStatus::Idle,
             door: DoorAddress::UnixSocket {
                 path: "/tmp/boop-bound.sock".into(),
@@ -983,7 +1032,7 @@ mod tests {
             },
             observed_ms: 0,
             started_ms: None,
-            scope: LiveSessionScope::Root,
+            scope: boop_harness::live::LiveSessionScope::Root,
             parent_session: None,
         }
     }
@@ -1026,23 +1075,49 @@ mod tests {
         }
     }
 
-    /// RECEIPT. A pane-less route binds the one candidate; a second route
-    /// binds nothing because the first claim took the only session.
+    /// RECEIPT. Same-cwd candidates cannot bind a route. An exact pane can.
     #[test]
-    fn a_paneless_route_binds_one_candidate_and_never_two() {
+    fn route_binding_requires_authoritative_route_evidence() {
         let dir = std::env::temp_dir().join(format!("boop-bind-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
 
-        let mut route = unbound_route(&dir);
-        assert!(bind_route_session(&dir, "agent-a", &mut route, &OneLive(dir.clone())));
-        assert_eq!(route.session_id.as_deref(), Some("ses-one"));
+        let mut observed = unbound_route(&dir);
+        observed.mode = Some("native-owned".into());
+        assert!(!bind_route_session(
+            &dir,
+            "observed-route",
+            &mut observed,
+            &OneLive(dir.clone())
+        ));
+        assert_eq!(observed.session_id, None);
 
-        let mut second = unbound_route(&dir);
-        assert!(!bind_route_session(&dir, "agent-b", &mut second, &OneLive(dir.clone())));
+        let mut route = unbound_route(&dir);
+        assert!(!bind_route_session(
+            &dir,
+            "agent-a",
+            &mut route,
+            &OneLive(dir.clone())
+        ));
+        assert_eq!(route.session_id, None);
+
+        let mut exact = unbound_route(&dir);
+        exact.tmux = Some("%77".into());
+        assert!(bind_route_session(
+            &dir,
+            "agent-b",
+            &mut exact,
+            &OneLive(dir.clone())
+        ));
+        assert_eq!(exact.session_id.as_deref(), Some("ses-one"));
 
         let mut third = unbound_route(&dir);
-        assert!(!bind_route_session(&dir, "agent-c", &mut third, &TwoLive(dir.clone())));
+        assert!(!bind_route_session(
+            &dir,
+            "agent-c",
+            &mut third,
+            &TwoLive(dir.clone())
+        ));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1074,28 +1149,140 @@ mod tests {
             detail: None,
         };
         bus::append(&dir, "bus", &message).unwrap();
-        let store = bus::open_store(&dir).unwrap();
-        assert_eq!(bus::held_messages(&store, "claude-bare").unwrap().len(), 1);
+        let first_process = bus::open_store(&dir).unwrap();
+        assert_eq!(
+            bus::held_messages(&first_process, "claude-bare")
+                .unwrap()
+                .len(),
+            1
+        );
+        drop(first_process);
 
-        let pushed = drain_route_held_mail(&dir, &registry, &store, "claude-bare");
+        let resumed_process = bus::open_store(&dir).unwrap();
+        let pushed = drain_route_held_mail(&dir, &registry, &resumed_process, "claude-bare");
         assert_eq!(pushed, 1, "the held row leaves through the claude door");
-        let taken = bus::messages_in(&store)
+        let taken = bus::messages_in(&resumed_process)
             .unwrap()
             .into_iter()
             .find(|row| row.id == "m-drain")
             .unwrap();
         assert!(taken.to_timestamp.is_some(), "the row is stamped taken");
         assert_eq!(
-            bus::held_messages(&store, "claude-bare").unwrap().len(),
+            bus::held_messages(&resumed_process, "claude-bare")
+                .unwrap()
+                .len(),
             0,
             "a second drain never replays a taken row"
         );
+        drop(resumed_process);
+        let later_process = bus::open_store(&dir).unwrap();
         for _ in 0..3 {
-            assert_eq!(drain_route_held_mail(&dir, &registry, &store, "claude-bare"), 0);
-            assert_eq!(drain_all_held_mail(&dir, &registry, &store), 0);
+            assert_eq!(
+                drain_route_held_mail(&dir, &registry, &later_process, "claude-bare"),
+                0
+            );
+            assert_eq!(drain_all_held_mail(&dir, &registry, &later_process), 0);
         }
-        let copies = door_log().iter().filter(|body| body.as_str() == "push me").count();
-        assert_eq!(copies, 1, "the door took the body exactly once over seven drains");
+        let copies = door_log()
+            .iter()
+            .filter(|body| body.as_str() == "push me")
+            .count();
+        assert_eq!(
+            copies, 1,
+            "the door took the body exactly once over seven drains"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. A failed ACPX process leaves the durable mailbox row open. A
+    /// later Boop process retries it, records remote acceptance, and later
+    /// drains make no second transport call. This does not prove exactly-once
+    /// across a crash after remote acceptance and before the local receipt.
+    #[test]
+    fn acpx_failure_retries_after_store_reopen_then_stays_accepted() {
+        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = ENV_LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!("boop-acpx-restart-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let executable = dir.join("fake-acpx");
+        let calls = dir.join("calls");
+        let failing = format!("#!/bin/sh\nprintf x >> '{}'\nexit 7\n", calls.display());
+        std::fs::write(&executable, failing).unwrap();
+        let mut permissions = std::fs::metadata(&executable).unwrap().permissions();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o700);
+        std::fs::set_permissions(&executable, permissions).unwrap();
+        let previous = std::env::var_os("BOOP_ACPX_BIN");
+        std::env::set_var("BOOP_ACPX_BIN", &executable);
+
+        let mut route = unbound_route(&dir);
+        route.mode = Some("acpx".into());
+        route.session_id = Some("persistent-session".into());
+        route.source_path = Some("acpx-agent=claude".into());
+        bus::write_route(&dir, "acpx-parent", &route).unwrap();
+        let message = Message {
+            id: "m-acpx-restart".into(),
+            from: "worker".into(),
+            to: "acpx-parent".into(),
+            from_timestamp: "2026-09-08T00:00:00Z".into(),
+            to_timestamp: None,
+            kind: "result".into(),
+            reply_to: None,
+            body: "completion-to-parent".into(),
+            r#ref: None,
+            rc: Some(0),
+            detail: None,
+        };
+        bus::append(&dir, "bus", &message).unwrap();
+        let registry = Registry::with(vec![Box::new(FakeClaude)]);
+        let first_process = bus::open_store(&dir).unwrap();
+        let routes = bus::read_routes(&dir).unwrap();
+        assert!(deliver_hail_budgeted(
+            &registry,
+            &first_process,
+            &routes,
+            &message,
+            &NoPane,
+            &budget(60_000, 60_000, 10),
+        )
+        .is_err());
+        assert_eq!(
+            bus::held_messages(&first_process, "acpx-parent")
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(first_process.delivery_rows(&message.id).unwrap().len(), 1);
+        drop(first_process);
+
+        let succeeding = format!(
+            "#!/bin/sh\nprintf x >> '{}'\nprintf accepted\n",
+            calls.display()
+        );
+        std::fs::write(&executable, succeeding).unwrap();
+        let resumed_process = bus::open_store(&dir).unwrap();
+        assert_eq!(
+            drain_route_held_mail(&dir, &registry, &resumed_process, "acpx-parent"),
+            1
+        );
+        assert!(resumed_process
+            .delivery_accepted(&message.id, "acpx-parent")
+            .unwrap());
+        assert!(bus::held_messages(&resumed_process, "acpx-parent")
+            .unwrap()
+            .is_empty());
+        drop(resumed_process);
+
+        let later_process = bus::open_store(&dir).unwrap();
+        assert_eq!(
+            drain_route_held_mail(&dir, &registry, &later_process, "acpx-parent"),
+            0
+        );
+        assert_eq!(std::fs::read_to_string(&calls).unwrap(), "xx");
+        match previous {
+            Some(value) => std::env::set_var("BOOP_ACPX_BIN", value),
+            None => std::env::remove_var("BOOP_ACPX_BIN"),
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1109,9 +1296,11 @@ mod tests {
         let routes = bus::read_routes(&dir).unwrap();
         let budget = budget(60_000, 60_000, 1);
         let now = boop_harness::live::now_ms();
-        assert!(door_gate(&store, "claude-gate", &routes, "g-one", &budget, now)
-            .unwrap()
-            .is_none());
+        assert!(
+            door_gate(&store, "claude-gate", &routes, "g-one", &budget, now)
+                .unwrap()
+                .is_none()
+        );
         Landing::new(Rung::Door, "door")
             .record(&store, "m-gate-0", "claude-gate", None)
             .unwrap();
@@ -1213,13 +1402,19 @@ mod tests {
     /// leaves through the door of a live route; the fake claude door queues it.
     #[test]
     fn a_lane_end_row_takes_the_door_of_a_live_route() {
-        for (tag, kind) in [("endresult", "result"), ("endexit", "exited_without_completion")] {
+        for (tag, kind) in [
+            ("endresult", "result"),
+            ("endexit", "exited_without_completion"),
+        ] {
             let (dir, store, message) = kind_fixture(tag, kind);
             let landing = land_one(&dir, &store, &message, &budget(60_000, 60_000, 10));
             assert_eq!(landing.rung, Rung::DoorQueue, "a {kind} row takes the door");
             assert_eq!(landing.rung.state(), DeliveryState::AcceptedByHarness);
             assert!(landing.rung.carried_the_body());
-            assert!(door_log().iter().any(|body| body == &message.body), "{kind} never reached the door");
+            assert!(
+                door_log().iter().any(|body| body == &message.body),
+                "{kind} never reached the door"
+            );
             let _ = std::fs::remove_dir_all(dir);
         }
     }
@@ -1231,9 +1426,16 @@ mod tests {
         for (tag, kind) in [("progyield", "yield"), ("progrewound", "head_rewound")] {
             let (dir, store, message) = kind_fixture(tag, kind);
             let landing = land_one(&dir, &store, &message, &budget(60_000, 60_000, 10));
-            assert_eq!(landing.rung, Rung::MailboxOnly, "a {kind} row stops at the mailbox");
+            assert_eq!(
+                landing.rung,
+                Rung::MailboxOnly,
+                "a {kind} row stops at the mailbox"
+            );
             assert_eq!(landing.detail, format!("{kind} row; no door"));
-            assert!(!door_log().iter().any(|body| body == &message.body), "{kind} opened a door");
+            assert!(
+                !door_log().iter().any(|body| body == &message.body),
+                "{kind} opened a door"
+            );
             assert_eq!(bus::held_messages(&store, &message.to).unwrap().len(), 1);
             let _ = std::fs::remove_dir_all(dir);
         }
@@ -1289,7 +1491,13 @@ mod tests {
         let trips = store.door_blowouts("claude-burst").unwrap();
         assert_eq!(trips.len(), 1, "{trips:?}");
         assert_eq!((trips[0].pushes, trips[0].budget), (2, 2));
-        assert!(trips[0].why.contains("2 door pushes in 60s against 2 live connects"), "{}", trips[0].why);
+        assert!(
+            trips[0]
+                .why
+                .contains("2 door pushes in 60s against 2 live connects"),
+            "{}",
+            trips[0].why
+        );
 
         assert_eq!(
             transitions(&store, "m-burst-2"),
@@ -1300,7 +1508,11 @@ mod tests {
         );
         let untouched = [("appended".to_owned(), "mailbox".to_owned())];
         for later in ["m-burst-3", "m-burst-4", "m-burst-5"] {
-            assert_eq!(transitions(&store, later), untouched, "{later} was touched past the trip");
+            assert_eq!(
+                transitions(&store, later),
+                untouched,
+                "{later} was touched past the trip"
+            );
         }
         assert_eq!(bus::held_messages(&store, "claude-burst").unwrap().len(), 4);
 
@@ -1316,10 +1528,16 @@ mod tests {
         let (_, after) = store
             .passthrough("SELECT COUNT(*) AS n FROM agent_delivery_transition")
             .unwrap();
-        assert_eq!(before, after, "a cooling route writes no transition per tick");
+        assert_eq!(
+            before, after,
+            "a cooling route writes no transition per tick"
+        );
         assert_eq!(store.door_blowouts("claude-burst").unwrap().len(), 1);
         assert_eq!(
-            door_log().iter().filter(|body| body.starts_with("b-")).count(),
+            door_log()
+                .iter()
+                .filter(|body| body.starts_with("b-"))
+                .count(),
             2,
             "the door took nothing during the cool-off"
         );
@@ -1351,7 +1569,9 @@ mod tests {
             .collect();
         assert_eq!(taken, ["d-1", "d-2", "d-3", "d-4", "d-5"]);
         assert_eq!(store.door_blowouts("claude-drip").unwrap().len(), 2);
-        assert!(bus::held_messages(&store, "claude-drip").unwrap().is_empty());
+        assert!(bus::held_messages(&store, "claude-drip")
+            .unwrap()
+            .is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1369,7 +1589,10 @@ mod tests {
         let trip = store.latest_door_blowout("claude-replay").unwrap().unwrap();
         assert!(trip.why.contains("same body"), "{}", trip.why);
         assert_eq!(
-            door_log().iter().filter(|body| body.as_str() == "r-same").count(),
+            door_log()
+                .iter()
+                .filter(|body| body.as_str() == "r-same")
+                .count(),
             1
         );
         assert_eq!(
@@ -1414,7 +1637,10 @@ mod tests {
         };
         bus::append(&dir, "bus", &message).unwrap();
         let store = bus::open_store(&dir).unwrap();
-        for (outcome, detail) in [("appended", "mailbox"), ("held-for-turn-boundary", "door queue")] {
+        for (outcome, detail) in [
+            ("appended", "mailbox"),
+            ("held-for-turn-boundary", "door queue"),
+        ] {
             store
                 .append_delivery_transition(
                     "m-legacy",
@@ -1432,9 +1658,14 @@ mod tests {
             bus::held_messages(&store, "claude-old").unwrap().is_empty(),
             "a door-queued row is not held, whatever its latest outcome word"
         );
-        assert_eq!(drain_route_held_mail(&dir, &registry, &store, "claude-old"), 0);
+        assert_eq!(
+            drain_route_held_mail(&dir, &registry, &store, "claude-old"),
+            0
+        );
         assert!(
-            !door_log().iter().any(|body| body == "already in front of you"),
+            !door_log()
+                .iter()
+                .any(|body| body == "already in front of you"),
             "the door was handed a row it already holds"
         );
         let _ = std::fs::remove_dir_all(&dir);
@@ -1477,7 +1708,9 @@ mod tests {
             "the rung carried the body, so the row is history"
         );
         assert!(
-            bus::held_messages(&store, "claude-stamp").unwrap().is_empty(),
+            bus::held_messages(&store, "claude-stamp")
+                .unwrap()
+                .is_empty(),
             "nothing re-pushes a row the door holds"
         );
         let _ = std::fs::remove_dir_all(&dir);
@@ -1507,7 +1740,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            store.door_pushes_since("claude-prefix", now - 60_000).unwrap(),
+            store
+                .door_pushes_since("claude-prefix", now - 60_000)
+                .unwrap(),
             1,
             "the pre-fix outcome word does not hide the push"
         );

@@ -1,3 +1,4 @@
+use boop_store::testing::BoopCommandExt;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -156,7 +157,7 @@ fn six_idle_projector_processes_do_not_repeat_global_session_materialization() {
 
     let seeded = Command::new(BOOP)
         .args(["db", "sync", "create"])
-        .env("HOME", &fixture.root)
+        .boop_test_root(&fixture.root)
         .env("BOOP_DB", fixture.db())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -174,7 +175,12 @@ fn six_idle_projector_processes_do_not_repeat_global_session_materialization() {
         .len();
     assert_eq!(stored, STORED_SESSIONS);
 
-    let version = Command::new(BOOP).arg("--version").output().unwrap();
+    let version = Command::new(BOOP)
+        .boop_test_root(&fixture.root)
+        .env("BOOP_DB", fixture.db())
+        .arg("--version")
+        .output()
+        .unwrap();
     let version = String::from_utf8(version.stdout).unwrap().trim().to_owned();
     let expected = format!("boop {} ", env!("CARGO_PKG_VERSION"));
     assert!(version.starts_with(&expected), "{version}");

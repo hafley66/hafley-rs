@@ -3,6 +3,7 @@
 //! on the mtime of `~/.claude/projects` itself, which does not move when a
 //! file is created inside a child directory.
 
+use boop_store::testing::BoopCommandExt;
 use std::path::Path;
 use std::process::Command;
 
@@ -28,7 +29,7 @@ fn turn_count(home: &Path) -> i64 {
             "--format",
             "ndjson",
         ])
-        .env("HOME", home)
+        .boop_test_root(home)
         .env("BOOP_DB", home.join("boop.db"))
         .env("BOOP_SYNC_TRAIL", home.join("sync-trail.ndjson"))
         .output()

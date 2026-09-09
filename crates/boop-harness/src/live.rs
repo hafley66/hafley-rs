@@ -71,6 +71,29 @@ pub trait LiveSessions: Send + Sync {
     /// harness is running, never that the lookup failed.
     fn live_sessions(&self) -> Result<Vec<LiveSession>>;
 
+    /// Resolve an explicitly registered route through the harness's own
+    /// control plane. A harness-specific endpoint belongs to its adapter.
+    fn live_session_for_route(
+        &self,
+        route: &boop_store::bus::Route,
+    ) -> Result<Option<LiveSession>> {
+        // Pane numbers repeat across tmux servers and can be reused after an
+        // exit. A bound conversation is authoritative, including when stale.
+        if let Some(id) = route.session_id.as_deref() {
+            return Ok(self
+                .live_sessions()?
+                .into_iter()
+                .find(|session| session.session_id == id));
+        }
+        if let Some(target) = route.tmux.as_deref() {
+            let pane = pane_of_target(target).unwrap_or_else(|| target.to_owned());
+            if let Some(live) = self.live_session_in_pane(&pane)? {
+                return Ok(Some(live));
+            }
+        }
+        Ok(None)
+    }
+
     /// The session occupying a tmux pane. `pane` is matched as written and
     /// with a leading `%` added, so both `3418` and `%3418` resolve.
     fn live_session_in_pane(&self, pane: &str) -> Result<Option<LiveSession>> {
@@ -127,29 +150,17 @@ pub fn session_in_pane(
         .map(|session| session.map(|session| resolve_registered_session(registry, &session)))
 }
 
-/// Read-time repair for routes written before child sessions were classified.
-/// An explicit native parent wins. The closest preceding root in the same cwd
-/// covers Codex guardian rows whose source omits its parent thread id.
-pub(crate) fn interactive_session_id(bound: &LiveSession, sessions: &[LiveSession]) -> String {
+/// Resolve an observed process or pane to its interactive session. Only an
+/// explicit native parent relation may redirect a child row. Cwd and start
+/// time are descriptive fields, not identity evidence.
+pub(crate) fn interactive_session_id(bound: &LiveSession, _sessions: &[LiveSession]) -> String {
     if bound.scope != LiveSessionScope::Child {
         return bound.session_id.clone();
     }
     if let Some(parent) = &bound.parent_session {
         return parent.clone();
     }
-    sessions
-        .iter()
-        .filter(|candidate| {
-            candidate.scope == LiveSessionScope::Root
-                && candidate.cwd == bound.cwd
-                && match (candidate.started_ms, bound.started_ms) {
-                    (Some(root), Some(child)) => root <= child,
-                    _ => false,
-                }
-        })
-        .max_by_key(|candidate| candidate.started_ms)
-        .map(|candidate| candidate.session_id.clone())
-        .unwrap_or_else(|| bound.session_id.clone())
+    bound.session_id.clone()
 }
 
 fn resolve_registered_session(registry: &Registry, session: &str) -> String {
@@ -205,6 +216,23 @@ mod tests {
             scope: LiveSessionScope::Unknown,
             parent_session: None,
         }
+    }
+
+    #[test]
+    fn bound_route_never_selects_another_thread_by_pane() {
+        let route = boop_store::bus::route_from_value(&serde_json::json!({
+            "kind":"coordinator", "harness":"claude", "tmux":"%1", "session_id":"b"
+        }));
+        assert_eq!(
+            Two.live_session_for_route(&route)
+                .unwrap()
+                .unwrap()
+                .session_id,
+            "b"
+        );
+        let mut stale = route;
+        stale.session_id = Some("gone".into());
+        assert!(Two.live_session_for_route(&stale).unwrap().is_none());
     }
 
     /// RECEIPT. A route holds a pane either spelling; both find the session.

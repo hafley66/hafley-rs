@@ -2,6 +2,7 @@
 //! mailbox (supervisor + pane epilogue, ids minted apart), so every completion
 //! reached the coordinator inbox twice. On the pre-fix tree this counts 2.
 
+use boop_store::testing::BoopCommandExt;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -114,7 +115,7 @@ fn one_lane_exit_writes_exactly_one_result_row() {
         .arg("-c")
         .arg(format!("__rc=0; {epilogue}"))
         .env("PATH", path_with_boop(&dir))
-        .env("HOME", dir.join("home"))
+        .boop_test_root(dir.join("home"))
         .env("BOOP_DB", dir.join("boop.db"))
         .status()
         .unwrap();

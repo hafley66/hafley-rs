@@ -1,3 +1,4 @@
+use boop_store::testing::BoopCommandExt;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -23,7 +24,7 @@ fn agent_summary_reads_while_a_wal_writer_holds_its_transaction() {
         .args(["agent", "summary", "--format", "json", "--mail-dir"])
         .arg(root.join("mail"))
         .env("BOOP_DB", &db)
-        .env("HOME", &root)
+        .boop_test_root(&root)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

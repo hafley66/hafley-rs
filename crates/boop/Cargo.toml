@@ -14,7 +14,7 @@ default = ["agent-read"]
 agent-read = ["boop-store/agent-read", "boop-proc/agent-read"]
 # The DL6 refinement runtime (`concatmap`, `host`): off by default per the
 # 2026-08-25 user call, no other binary to move it to yet.
-dl6 = []
+dl6 = ["agent-read"]
 
 [dependencies]
 # Process control: lane spawn, supervision, the mailbox, the coroutine host.
@@ -51,11 +51,13 @@ time = { version = "0.3", features = ["parsing", "formatting"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 hafley-observe = { path = "../hafley-observe" }
+signal-hook = "0.4"
 
 [dev-dependencies]
-# Deadline on a synchronous std::process::Child in tests/0_sqlite_contention.rs
-# without pulling in an async runtime.
+tungstenite = { version = "0.26", default-features = false, features = ["handshake"] }
 wait-timeout = "0.2.1"
+syn = { version = "2", features = ["full", "visit"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
 # The store's deterministic fixtures (throwaway git repo, fake multiplexer).
 boop-store = { version = "0.0.2", path = "../boop-store", features = ["testing"] }
 # Peak-bytes-allocated counter for tests/bench_grid.rs's own #[global_allocator].

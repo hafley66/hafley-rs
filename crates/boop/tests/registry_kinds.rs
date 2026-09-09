@@ -1,3 +1,4 @@
+use boop_store::testing::BoopCommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -13,10 +14,13 @@ fn mail_dir(name: &str) -> PathBuf {
 
 fn run(dir: &Path, args: &[&str]) -> std::process::Output {
     Command::new(BOOP)
+        .boop_test_root(dir.join("home"))
         .args(args)
         .arg("--mail-dir")
         .arg(dir)
-        .env("HOME", dir.join("home"))
+        .env("BOOP_NO_SYNC", "1")
+        .env("BOOP_MAIL_DIR", dir)
+        .env("BOOP_CODEX_STATE_DB", dir.join("absent-codex.sqlite"))
         .env("BOOP_DB", dir.join("boop.db"))
         .output()
         .unwrap()
@@ -44,6 +48,108 @@ impl Drop for LiveTmuxSession {
             .args(["kill-session", "-t", &self.0])
             .status();
     }
+}
+
+#[test]
+fn patch_accepts_a_pane_and_preserves_the_registered_route() {
+    let dir = mail_dir("patch-pane");
+    let session = LiveTmuxSession::new(&format!("boop-patch-pane-{}", std::process::id()));
+    let pane = Command::new("tmux")
+        .args(["display-message", "-p", "-t", &session.0, "#{pane_id}"])
+        .output()
+        .unwrap();
+    assert!(pane.status.success());
+    let pane = String::from_utf8(pane.stdout).unwrap();
+    std::fs::write(
+        dir.join("registry.json"),
+        r#"{"parent":{"kind":"coordinator","harness":"codex","cwd":"/task","parent":"root","goal":"preserve","model":"gpt-6-astra","sessionId":"old","baseSha":"abc","worktreeDir":"/task","appServerSocket":"/task/control.sock"}}"#,
+    ).unwrap();
+    let output = run(
+        &dir,
+        &[
+            "beep",
+            "lane",
+            "patch",
+            "parent",
+            "--tmux",
+            pane.trim(),
+            "--session-id",
+            "new",
+        ],
+    );
+    assert!(output.status.success(), "{output:?}");
+    let routes = boop_store::testing::routes_json(&dir.join("boop.db"));
+    let mut actual = routes["parent"].clone();
+    actual.as_object_mut().unwrap().remove("registeredAt");
+    assert_eq!(
+        actual,
+        serde_json::json!({
+            "kind":"coordinator", "harness":"codex", "tmux":pane.trim(),
+            "cwd":"/task", "parent":"root", "goal":"preserve", "model":"gpt-6-astra",
+            "sessionId":"new", "baseSha":"abc", "worktreeDir":"/task",
+            "appServerSocket":"/task/control.sock"
+        })
+    );
+}
+
+#[test]
+fn patch_rejects_a_missing_target_with_a_failure_exit() {
+    let dir = mail_dir("patch-missing");
+    let output = run(
+        &dir,
+        &["beep", "lane", "patch", "parent", "--tmux", "%2147483647"],
+    );
+    assert!(!output.status.success(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("no live tmux target"),
+        "{output:?}"
+    );
+}
+
+#[test]
+fn coordinator_registration_binds_an_explicit_thread_and_retains_it_on_update() {
+    let dir = mail_dir("register-thread");
+    let output = run(
+        &dir,
+        &[
+            "beep",
+            "agent",
+            "register",
+            "parent",
+            "--kind",
+            "coordinator",
+            "--harness",
+            "codex",
+            "--session-id",
+            "thread-owned",
+            "--parent",
+            "root",
+            "--cwd",
+            "/task",
+        ],
+    );
+    assert!(output.status.success(), "{output:?}");
+    let output = run(
+        &dir,
+        &[
+            "beep",
+            "agent",
+            "register",
+            "parent",
+            "--kind",
+            "coordinator",
+        ],
+    );
+    assert!(output.status.success(), "{output:?}");
+    let routes = boop_store::testing::routes_json(&dir.join("boop.db"));
+    let mut actual = routes["parent"].clone();
+    actual.as_object_mut().unwrap().remove("registeredAt");
+    assert_eq!(
+        actual,
+        serde_json::json!({
+            "kind":"coordinator", "harness":"codex", "sessionId":"thread-owned", "parent":"root", "cwd":"/task"
+        })
+    );
 }
 
 #[test]
@@ -93,7 +199,7 @@ fn a_hail_to_a_harnessless_native_row_is_held_and_the_reason_recorded() {
             "db",
             "select outcome, detail from agent_delivery order by at_ms desc limit 1",
         ])
-        .env("HOME", dir.join("home"))
+        .boop_test_root(dir.join("home"))
         .env("BOOP_DB", dir.join("boop.db"))
         .output()
         .unwrap();

@@ -26,6 +26,10 @@ static CAPABILITIES: Capabilities = Capabilities {
     image_paste_keys: Some("C-v"),
     native_tui_projector: true,
     wrapper_owns_alternate_screen: false,
+    native_backend: super::NativeBackendSupport::Unsupported,
+    native_settings: super::NativeSettingsSupport::Unsupported(
+        "Claude and ccz settings require user-scoped configuration; the lifecycle gate never reads or writes it",
+    ),
 };
 
 /// The registry directory and messaging sockets of the claude on this
@@ -33,6 +37,100 @@ static CAPABILITIES: Capabilities = Capabilities {
 static DOOR: crate::door::claude::ClaudeDoor = crate::door::claude::ClaudeDoor::machine();
 
 impl Harness for Claude {
+    fn uses_native_tui(&self, args: &[String]) -> bool {
+        super::interactive_arguments(
+            args,
+            &[
+                "--add-dir",
+                "--agent",
+                "--agents",
+                "--allowedTools",
+                "--allowed-tools",
+                "--append-system-prompt",
+                "--autocompact",
+                "--betas",
+                "-d",
+                "--debug",
+                "--debug-file",
+                "--disallowedTools",
+                "--disallowed-tools",
+                "--effort",
+                "--fallback-model",
+                "--file",
+                "--from-pr",
+                "--input-format",
+                "--json-schema",
+                "--max-budget-usd",
+                "--mcp-config",
+                "--model",
+                "-n",
+                "--name",
+                "--output-format",
+                "--permission-mode",
+                "--permission-prompts",
+                "--plugin-dir",
+                "--plugin-url",
+                "--prompt-suggestions",
+                "--remote-control",
+                "--remote-control-session-name-prefix",
+                "-r",
+                "--resume",
+                "--session-id",
+                "--setting-sources",
+                "--settings",
+                "--system-prompt",
+                "--system-prompt-snapshot",
+                "--teleport",
+                "--tools",
+                "-w",
+                "--worktree",
+            ],
+            &[
+                "-v",
+                "-p",
+                "--print",
+                "--bg",
+                "--background",
+                "--cloud",
+                "--environment",
+            ],
+            &[
+                "help",
+                "agents",
+                "auth",
+                "auto-mode",
+                "doctor",
+                "gateway",
+                "import",
+                "install",
+                "logs",
+                "mcp",
+                "plugin",
+                "plugins",
+                "project",
+                "respawn",
+                "rm",
+                "setup-token",
+                "stop",
+                "kill",
+                "ultrareview",
+                "update",
+                "upgrade",
+            ],
+        )
+    }
+
+    fn matches_model(&self, name: &str) -> bool {
+        !name.contains('/')
+            && ["claude", "opus", "sonnet", "haiku"]
+                .iter()
+                .any(|prefix| name.starts_with(prefix))
+    }
+
+    fn native_worktrees(&self, cwd: &str) -> Vec<(String, String, bool)> {
+        claude_agent_worktrees(cwd)
+    }
+
     fn open_channel(
         &self,
         spec: &boop_acp::channel::ChannelSpec,
@@ -177,7 +275,10 @@ impl Harness for Claude {
             .find_map(|value| value.get("timestamp").and_then(Value::as_str))
             .map(crate::transcript::iso_to_ms)
             .unwrap_or(0);
-        let input_tokens = crate::transcript::tail_values(&session.path)
+        let tail = crate::transcript::tail_values(&session.path);
+        let model =
+            claude_settings(tail.iter().rev().chain(head.iter().rev())).map(|(model, _)| model);
+        let input_tokens = tail
             .iter()
             .rev()
             .chain(head.iter().rev())
@@ -197,13 +298,24 @@ impl Harness for Claude {
             cwd: session.cwd.clone().unwrap_or_default(),
             source_path: Some(session.path.to_string_lossy().into_owned()),
             title: None,
-            model: None,
+            model,
             provider: Some("anthropic".to_string()),
             input_tokens,
             parent_kind: session.parent.as_ref().map(|_| "subagent"),
             parent_id: session.parent.clone(),
             created_at_ms,
             last_activity_ms: session.modified_ms,
+        })
+    }
+
+    fn native_settings(&self, session: &SessionRef) -> Option<crate::harness::NativeTuiEvent> {
+        let tail = crate::transcript::tail_values(&session.path);
+        let head = crate::transcript::head_values(&session.path);
+        let (model, effort) = claude_settings(tail.iter().rev().chain(head.iter().rev()))?;
+        Some(crate::harness::NativeTuiEvent::Settings {
+            session_id: session.session_id.clone(),
+            model: Some(model),
+            effort,
         })
     }
 
@@ -220,7 +332,7 @@ impl Harness for Claude {
     }
 
     fn session_by_id(&self, session_id: &str, cwd: Option<&str>) -> Option<SessionRef> {
-        let base = claude_projects_dir().ok()?;
+        let base = super::reader_home().ok()?;
         let cwd = cwd?;
         let path = claude_session_path(&base, cwd, session_id)?;
         let nickname = path.file_stem()?.to_str()?.to_string();
@@ -238,6 +350,26 @@ impl Harness for Claude {
             parent: None,
         })
     }
+}
+
+fn claude_settings<'a>(
+    values: impl Iterator<Item = &'a Value>,
+) -> Option<(String, Option<String>)> {
+    values
+        .filter(|value| value["type"] == "assistant")
+        .find_map(|value| {
+            let model = value.pointer("/message/model")?.as_str()?;
+            if model.starts_with('<') {
+                return None;
+            }
+            Some((
+                model.to_owned(),
+                value
+                    .get("effort")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+            ))
+        })
 }
 
 /// The cwd-encoded claude project directory under a home root.
@@ -261,13 +393,16 @@ pub(crate) fn claude_session_path(
     if direct.is_file() {
         return Some(direct);
     }
-    std::fs::read_dir(project).ok()?.flatten().find_map(|entry| {
-        let path = entry
-            .path()
-            .join("subagents")
-            .join(format!("{session_id}.jsonl"));
-        path.is_file().then_some(path)
-    })
+    std::fs::read_dir(project)
+        .ok()?
+        .flatten()
+        .find_map(|entry| {
+            let path = entry
+                .path()
+                .join("subagents")
+                .join(format!("{session_id}.jsonl"));
+            path.is_file().then_some(path)
+        })
 }
 
 // ---- claude transcript reader (moved from instant ledger.rs, verbatim).
@@ -322,7 +457,10 @@ fn injected_tag(content: &serde_json::Value) -> Option<String> {
     INJECTED_TAGS.contains(&tag).then(|| tag.to_string())
 }
 
-fn classify_user_line(v: &serde_json::Value, content: &serde_json::Value) -> (String, Option<String>) {
+fn classify_user_line(
+    v: &serde_json::Value,
+    content: &serde_json::Value,
+) -> (String, Option<String>) {
     if content_has_tool_result(content) {
         return ("tool".to_string(), Some("tool_result".to_string()));
     }
@@ -457,10 +595,14 @@ fn claude_text(content: &serde_json::Value) -> crate::transcript::Extracted {
 }
 
 // Read every turn from one claude jsonl. `after_seq` skips lines already seen
-// (the watcher passes the last line index). Only user/assistant rows become
-// messages; system/mode/snapshot lines are skipped but still advance `seq` so
+// (the watcher passes the last line index). User/assistant and delivered queued
+// command attachments become messages; other records still advance `seq` so
 // the line index stays an exact file offset.
-pub(crate) fn read_claude(path: &std::path::Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate::transcript::Message> {
+pub(crate) fn read_claude(
+    path: &std::path::Path,
+    session_id: &str,
+    after_seq: Option<u64>,
+) -> Vec<crate::transcript::Message> {
     let Ok(file) = std::fs::File::open(path) else {
         return Vec::new();
     };
@@ -479,15 +621,28 @@ pub(crate) fn read_claude(path: &std::path::Path, session_id: &str, after_seq: O
         };
         let msg_type = match v.get("type").and_then(|t| t.as_str()) {
             Some(t @ ("user" | "assistant")) => t,
+            Some("attachment")
+                if v.pointer("/attachment/type").and_then(Value::as_str)
+                    == Some("queued_command") =>
+            {
+                "attachment"
+            }
             _ => continue,
         };
-        let content = v
-            .get("message")
-            .and_then(|m| m.get("content"))
-            .cloned()
-            .unwrap_or(Value::Null);
+        let content = if msg_type == "attachment" {
+            v.pointer("/attachment/prompt")
+                .cloned()
+                .unwrap_or(Value::Null)
+        } else {
+            v.get("message")
+                .and_then(|m| m.get("content"))
+                .cloned()
+                .unwrap_or(Value::Null)
+        };
         let (role, subtype) = if msg_type == "assistant" {
             ("assistant".to_string(), None)
+        } else if msg_type == "attachment" {
+            classify_user_line(&v["attachment"], &content)
         } else {
             classify_user_line(&v, &content)
         };
@@ -528,23 +683,6 @@ pub(crate) fn read_claude(path: &std::path::Path, session_id: &str, after_seq: O
     out
 }
 
-/// The claude command line a spawn runs. Resuming an existing session wins
-/// over a fresh prompt.
-#[allow(dead_code)] // used only by tests
-fn launch_command(spec: &SpawnSpec) -> String {
-    let mut command = match &spec.resume_session {
-        Some(id) => format!("claude --resume {id}"),
-        None => format!("claude {}", super::shell_quote(&spec.prompt)),
-    };
-    if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
-        command.push_str(&format!(" --model {}", super::shell_quote(model)));
-    }
-    spec.with_on_exit(match &spec.env_stamp {
-        Some(stamp) => format!("{stamp} {command}"),
-        None => command,
-    })
-}
-
 // The old per-byte time sample repeated one byte 8 times (measured live:
 // "62626262626a6a6a"), so two close spawns could collide.
 fn random_hex() -> String {
@@ -556,8 +694,60 @@ fn random_hex() -> String {
     format!("{mixed:016x}")
 }
 
+/// The native Claude Code subagent worktrees linked into the repo at `cwd`.
+/// One tuple per `git worktree list --porcelain` block whose path carries
+/// `/.claude/worktrees/agent-`: `(agent-<id> name, path, locked)`.
+fn claude_agent_worktrees(cwd: &str) -> Vec<(String, String, bool)> {
+    let output = std::process::Command::new("git")
+        .args(["-C", cwd, "worktree", "list", "--porcelain"])
+        .output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    parse_claude_agent_worktrees(&String::from_utf8_lossy(&output.stdout))
+}
+
+fn parse_claude_agent_worktrees(porcelain: &str) -> Vec<(String, String, bool)> {
+    let mut result = Vec::new();
+    let mut current: Option<(String, bool)> = None;
+    for line in porcelain.lines() {
+        if let Some(path) = line.strip_prefix("worktree ") {
+            if let Some((path, locked)) = current.take() {
+                push_claude_agent(&mut result, path, locked);
+            }
+            current = Some((path.to_owned(), false));
+        } else if line == "locked" {
+            if let Some((_, locked)) = current.as_mut() {
+                *locked = true;
+            }
+        }
+    }
+    if let Some((path, locked)) = current {
+        push_claude_agent(&mut result, path, locked);
+    }
+    result
+}
+
+fn push_claude_agent(result: &mut Vec<(String, String, bool)>, path: String, locked: bool) {
+    const MARKER: &str = "/.claude/worktrees/agent-";
+    let Some(idx) = path.find(MARKER) else {
+        return;
+    };
+    let id = path[idx + MARKER.len()..]
+        .split('/')
+        .next()
+        .unwrap_or_default();
+    if id.is_empty() {
+        return;
+    }
+    result.push((format!("agent-{id}"), path, locked));
+}
+
 fn claude_projects_dir() -> anyhow::Result<PathBuf> {
-    let home = dirs::home_dir().context("resolve home directory")?;
+    let home = super::reader_home()?;
     Ok(home.join(".claude").join("projects"))
 }
 
@@ -779,6 +969,55 @@ pub use boop_store::session::parse_iso_ms;
 
 #[cfg(test)]
 mod tests {
+    /// RECEIPT (native-visibility). A repo's linked `.claude/worktrees/agent-*`
+    /// worktrees surface as native Claude subagents: a `locked` porcelain block
+    /// reads `live`, an unlocked one reads `dead`.
+    #[test]
+    fn claude_agent_worktrees_lists_locked_and_unlocked_agents() {
+        let base = std::env::temp_dir().join(format!("boop-claude-wt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let run = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&base)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        run(&["init", "-q"]);
+        run(&["config", "user.email", "t@t"]);
+        run(&["config", "user.name", "t"]);
+        std::fs::write(base.join("seed.txt"), "s").unwrap();
+        run(&["add", "-A"]);
+        run(&["commit", "-qm", "seed"]);
+        std::fs::create_dir_all(base.join(".claude/worktrees")).unwrap();
+        run(&["worktree", "add", ".claude/worktrees/agent-abc", "HEAD"]);
+        run(&["worktree", "add", ".claude/worktrees/agent-def", "HEAD"]);
+        run(&["worktree", "lock", ".claude/worktrees/agent-abc"]);
+
+        let trees = Claude.native_worktrees(base.to_str().unwrap());
+        let names = trees
+            .iter()
+            .map(|(name, _, _)| name.as_str())
+            .collect::<Vec<_>>();
+        assert!(names.contains(&"agent-abc"), "{names:?}");
+        assert!(names.contains(&"agent-def"), "{names:?}");
+        for (name, path, locked) in &trees {
+            assert!(path.contains("/.claude/worktrees/agent-"), "{path}");
+            match name.as_str() {
+                "agent-abc" => assert!(*locked, "agent-abc must be locked"),
+                "agent-def" => assert!(!*locked, "agent-def must be unlocked"),
+                other => panic!("unexpected worktree name {other}"),
+            }
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
     use crate::harness::HarnessId;
     use std::fs::OpenOptions;
     use std::io::Write;
@@ -788,7 +1027,7 @@ mod tests {
     use crate::harness::SessionRef;
     use boop_store::testing::TempRepo;
 
-    use super::{launch_command, parse_iso_ms, Claude};
+    use super::{parse_iso_ms, Claude};
 
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("boop_claude_{}_{}", std::process::id(), name))
@@ -1013,7 +1252,29 @@ mod tests {
     fn claude_launch_resumes_with_session_id() {
         let mut req = spec(&TmuxGuard::new());
         req.resume_session = Some("abc123".to_owned());
-        assert!(launch_command(&req).contains("--resume abc123"));
+        assert!(Claude
+            .preview_command(&req)
+            .unwrap()
+            .contains("--resume 'abc123'"));
+    }
+
+    #[test]
+    fn busy_peer_attachment_is_a_native_message_receipt() {
+        let path =
+            std::env::temp_dir().join(format!("boop-claude-peer-{}.jsonl", std::process::id()));
+        std::fs::write(&path, concat!(
+            "{\"type\":\"queue-operation\",\"content\":\"nonce\"}\n",
+            "{\"type\":\"attachment\",\"uuid\":\"receipt\",\"attachment\":{\"type\":\"queued_command\",\"prompt\":\"nonce\",\"origin\":{\"kind\":\"peer\"},\"isMeta\":true}}\n",
+            "{\"type\":\"assistant\",\"uuid\":\"answer\",\"message\":{\"content\":\"ACK\"}}\n"
+        )).unwrap();
+        let rows = super::read_claude(&path, "owned", None);
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(
+            rows.iter()
+                .map(|row| (row.role.as_str(), row.text.as_str(), row.seq))
+                .collect::<Vec<_>>(),
+            [("meta", "nonce", 1), ("assistant", "ACK", 2)]
+        );
     }
 
     #[test]

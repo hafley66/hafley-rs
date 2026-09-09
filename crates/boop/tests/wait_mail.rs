@@ -1,6 +1,7 @@
 //! The blocking mail wait, taken from the real binary: what it prints, what it
 //! stamps, and the exit code plus re-run line a timeout leaves behind.
 
+use boop_store::testing::BoopCommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -28,8 +29,7 @@ impl Fixture {
     fn boop(&self, args: &[&str]) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_boop"));
         command
-            .env_clear()
-            .env("HOME", &self.home)
+            .boop_test_root(&self.home)
             .env("BOOP_DB", self.home.join("boop.db"))
             .env("PATH", "/usr/bin:/bin")
             .args(args)
@@ -568,8 +568,16 @@ fn me_still_takes_a_row_held_in_the_mailbox_for_a_native_route() {
 fn me_still_takes_the_yield_and_commit_rows_its_lanes_wrote() {
     let fixture = Fixture::new("supervisor-rows");
     for (id, kind, body) in [
-        ("m-idle", "yield", "idle feature-turn-cwd turn=3 head=abc1234"),
-        ("m-commit", "yield", "commit feature-turn-cwd abc1234..def5678 dirty=0"),
+        (
+            "m-idle",
+            "yield",
+            "idle feature-turn-cwd turn=3 head=abc1234",
+        ),
+        (
+            "m-commit",
+            "yield",
+            "commit feature-turn-cwd abc1234..def5678 dirty=0",
+        ),
         ("m-done", "result", "lane feature-turn-cwd done rc=0"),
     ] {
         append(
