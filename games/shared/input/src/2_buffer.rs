@@ -87,9 +87,16 @@ impl blocking::Superstate<Machine> for Parent {
     }
 }
 
-#[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Buffer {
     machine: StateMachine<Machine>,
+}
+// Machine is stateless and has no entry/exit hooks. The runtime initialization
+// bit is not logical input state; Serde intentionally resets it.
+impl PartialEq for Buffer {
+    fn eq(&self, other: &Self) -> bool {
+        self.machine.state() == other.machine.state()
+    }
 }
 impl std::fmt::Debug for Buffer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -168,6 +175,7 @@ mod tests {
             let mut clone = buffer.clone();
             let mut decoded: Buffer =
                 serde_json::from_slice(&serde_json::to_vec(&buffer).unwrap()).unwrap();
+            assert_eq!(buffer, decoded);
             for (press, eligible, cancel) in [
                 (false, false, false),
                 (false, true, false),
