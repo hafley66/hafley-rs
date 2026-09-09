@@ -72,11 +72,14 @@ struct Receipt {
     advances: Vec<usize>,
     serialized_replayed: usize,
     sql_frames: usize,
+    inputs: Vec<u8>,
 }
 
-fn verify(
+fn verify_tape(
     actions: &[brawllib_rs::high_level_fighter::HighLevelSubaction],
     window: u32,
+    tape: &[Vec<u8>],
+    checkpoints: &[usize],
 ) -> Result<(Receipt, Vec<Vec<Row>>), Error> {
     let cx = Config {
         actions: fixture::bake(actions).into(),
@@ -84,7 +87,6 @@ fn verify(
             window_frames: window,
         },
     };
-    let tape: Vec<_> = (0..BUFFER_TICKS).map(|tick| vec![input(tick)]).collect();
     let trace = rollback::proof::run::<Sim>(&cx, &tape, 7)?;
     let states = trace.states;
     let mut all_rows = Vec::new();
@@ -98,18 +100,6 @@ fn verify(
         all_rows.push(sql);
     }
     let inspection: Vec<_> = states.iter().map(inspect).collect();
-    let consumes: Vec<_> = inspection
-        .iter()
-        .filter(|s| s.consumed)
-        .map(|s| s.tick)
-        .collect();
-    let first_air = 20 + actions[3].frames.len() as i64 + 1;
-    assert_eq!(consumes, if window == 0 { vec![] } else { vec![first_air] });
-    assert!(inspection[21].pending);
-    assert_eq!(inspection[22].expired, window == 0);
-    assert!(inspection[102].cancelled);
-    assert!(inspection[102..].iter().all(|s| !s.consumed));
-    let checkpoints = [21usize, 22, first_air as usize, 101, 102];
     let replayed = rollback::proof::restore_suffixes::<Sim, Error>(
         &cx,
         &tape,
@@ -147,9 +137,69 @@ fn verify(
             advances: trace.advances,
             serialized_replayed: replayed,
             sql_frames: all_rows.len(),
+            inputs: tape.iter().map(|row| row[0]).collect(),
         },
         all_rows,
     ))
+}
+
+fn verify(
+    actions: &[brawllib_rs::high_level_fighter::HighLevelSubaction],
+    window: u32,
+) -> Result<(Receipt, Vec<Vec<Row>>), Error> {
+    let tape: Vec<_> = (0..BUFFER_TICKS).map(|tick| vec![input(tick)]).collect();
+    let first_air = 20 + actions[3].frames.len();
+    let proof = verify_tape(actions, window, &tape, &[21, 22, first_air + 1, 101, 102])?;
+    let inspection = &proof.0.inspection;
+    let consumes: Vec<_> = inspection
+        .iter()
+        .filter(|s| s.consumed)
+        .map(|s| s.tick)
+        .collect();
+    let first_air = 20 + actions[3].frames.len() as i64 + 1;
+    assert_eq!(consumes, if window == 0 { vec![] } else { vec![first_air] });
+    assert!(inspection[21].pending);
+    assert_eq!(inspection[22].expired, window == 0);
+    assert!(inspection[102].cancelled);
+    assert!(inspection[102..].iter().all(|s| !s.consumed));
+    Ok(proof)
+}
+
+fn held_proofs(
+    actions: &[brawllib_rs::high_level_fighter::HighLevelSubaction],
+) -> Result<[(Receipt, Vec<Vec<Row>>); 2], Error> {
+    let held: Vec<_> = (0..BUFFER_TICKS)
+        .map(|tick| {
+            vec![match tick {
+                20 => 1,
+                21..=90 => 2,
+                _ => 0,
+            }]
+        })
+        .collect();
+    let mut repressed = held.clone();
+    repressed[64][0] = 0;
+    let proofs = [
+        verify_tape(actions, 8, &held, &[21, 25, 63, 64, 65, 76])?,
+        verify_tape(actions, 8, &repressed, &[21, 25, 63, 64, 65, 76])?,
+    ];
+    for (panel, (proof, _)) in proofs.iter().enumerate() {
+        let consumed: Vec<_> = proof
+            .inspection
+            .iter()
+            .filter(|s| s.consumed)
+            .map(|s| s.tick)
+            .collect();
+        assert_eq!(consumed, if panel == 0 { vec![25] } else { vec![25, 65] });
+        assert!(proof.inspection.iter().all(|s| !s.expired && !s.cancelled));
+        assert_eq!(proof.states[65].view.action, if panel == 0 { 4 } else { 2 });
+    }
+    Ok(proofs)
+}
+
+#[test]
+fn held_attack_requires_release_before_second_consumption() {
+    held_proofs(&baseline::load_controlled().unwrap()).unwrap();
 }
 
 pub fn run(record: bool) -> Result<(), Error> {

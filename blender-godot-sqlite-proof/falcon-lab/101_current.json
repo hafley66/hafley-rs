@@ -6,9 +6,9 @@
   "plan": "92_web_import_plan.md",
   "tasks": "109_tasks.md",
   "task_lookback": 3,
-  "current_task": "N1",
+  "current_task": "L2",
   "pending": [
-    "N1", "L2", "G2", "G3", "G4", "G5", "G6", "G7", "P1", "P2", "P3", "P4"
+    "L2", "G2", "G3", "G4", "G5", "G6", "G7", "P1", "P2", "P3", "P4"
   ],
   "deferred": ["G1"]
 }
