@@ -25,3 +25,19 @@ decisions; runtime Godot observer shows phase-clock re-entry (including DASH to
 DASH), entry tick and observed edge counts. Headless Godot/controls gate passed
 in `.workflow/test-clv3oo/receipt.json`. Static export and full visual proof pending.
 These are observed presentation samples, not a lossless transition event stream.
+
+S5 subsequent delivery: `a5ce0af` static/runtime visualizers were proved and
+deployed; domain `../../4_tasks.md` records the source-bound receipts and MP4.
+This supersedes the pending proof/deployment text above.
+
+Opus `b099bf2` + `73c1cf6` add `godot/4_dash_dance.test.gd`, using real
+FalconSql controlled ticks and generated Rows/Payload adapters. Independent
+expectations: DASH re-entry T6, RUN T21, TURN T26, direct TURN->SQUAT T27,
+takeoff T30, five observed edges, and rewind clearing the observer graph.
+Coordinator rebuilt the primary native extension with `just godot-build` and
+passed `just test-godot`, including the required `DASH_DANCE_OK` marker.
+Package: Falcon lab (app proof), stage 2.7 -> 2.7. Property gained: actual
+simulation-to-observer regression, including same-phase re-entry and Turn jump.
+No runtime behavior changes or new deployment are claimed by this test increment.
+Full `just test` passed core, workflow, Godot and controls:
+`.workflow/test-OL4Zdg/receipt.json`. This receipt predates only this ledger note.
