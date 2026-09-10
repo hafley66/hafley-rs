@@ -81,9 +81,9 @@ inspection pass, and no maturity promotion is claimed.
 
 | ID | State | Terminal condition / coordinator checkpoint |
 | --- | --- | --- |
-| S1 | In progress | Enumerate source-backed common actions, exclusivity, callback-phase edges and ordered guards. Explain groups item by item. Mark unresolved PM3.6 patch behavior explicitly; do not substitute 3.6.1 annotations. |
-| S2 | In progress, four-edge qualification | State-only crouch cycle implemented with statig + Redux; lifecycle, rejected/competing facts and clone/JSON suffix tests. Other action interrupts and callback scheduling remain unqualified. No physics formulas or input-device wiring. |
-| S3 | In progress, live ground slice | Grounded decisions dispatch through statig; Turn jump permission added. Preserve physics, phase snapshot layout and existing presentation. Crouch lifecycle, distinct turn/stop families and source command-variable timings remain pending. |
+| S1 | In progress | Enumerate source-backed common actions, exclusivity, callback-phase edges and ordered guards. Explain groups item by item. Mark unresolved PM3.6 patch behavior explicitly; do not substitute 3.6.1 annotations. Remaining-edge inventory, exact counts and the three next cuts: `crates/fighter/6_remaining.md`. |
+| S2 | In progress, four-edge qualification | State-only crouch cycle implemented with statig + Redux; lifecycle, rejected/competing facts and clone/JSON suffix tests. Other action interrupts and callback scheduling remain unqualified. No physics formulas or input-device wiring. Remaining-edge inventory, exact counts and the three next cuts: `crates/fighter/6_remaining.md`. |
+| S3 | In progress, live ground slice | Grounded decisions dispatch through statig; Turn jump permission added. Preserve physics, phase snapshot layout and existing presentation. Crouch lifecycle, distinct turn/stop families and source command-variable timings remain pending. Remaining-edge inventory, exact counts and the three next cuts: `crates/fighter/6_remaining.md`. |
 | S4 | Done, bounded ingest | Append four verified locomotion clips without renumbering IDs 0-17. Catalog now 22; all 23 retained payload hashes including attributes verified. Full eight-test Smash ingest suite passes after constructor accepts current catalog length. Animation selection remains S3. |
 | S6 | In progress, checked progress view | Static `classification/6_progress.html` replaces hand-written status: retained ingest with recomputed hashes, five-axis mechanics matrix and registry stages. Terminal condition: `just progress` regenerates it, `just test` rejects a stale copy, and coordinator visual inspection passes. Catalog membership stays unexported until a bounded Rust export is authorized. |
 | S5 | Done, bounded observed graph | 763f336 publishes phase/age, draws observed GraphEdit edges with active highlight, handles rewind/repeated ticks/unknown state. Full proof, inspected H.264 and protected production deployment passed. Complete source/legal-edge graph remains S1/S2. |
@@ -183,13 +183,15 @@ generator never builds or runs the game. No stage promotion is claimed.
 
 Integrated today and cited as evidence: `a5ce0af` observer deployment,
 `fc11379` real Falcon dash/turn observer regression, `6bb2d0f` checked progress
-view. Boop delivery work `841115a`/`bcdeb2c` is supporting test infrastructure,
-not a game package stage. The four rows below are uncommitted worker lanes: they
-carry no SHA and advance no stage.
+view. The Boop delivery work `841115a`/`bcdeb2c` (one failed-lane end row reaches
+the door once) is supporting test infrastructure, not a game package stage.
+S7 and S9 are now integrated on main; S10's mocked-harness backbone is integrated
+as Boop test infrastructure. Only S8 remains an unintegrated lane. No row below
+advances a game package stage.
 
 | ID | State | Terminal condition / coordinator checkpoint |
 | --- | --- | --- |
-| S7 | Active | Browser simultaneous-direction input: a last-pressed-wins resolver owns two opposing digital directions and resets on blur, so dash dance reverses with both held. Terminal: resolver merged into the live browser control path, tests pass and the integrated commit SHA is recorded. Unintegrated worker work; no SHA. |
+| S7 | Done, integrated | `f5b1142` resolves two opposing digital directions by last press in `godot/2_input.gd`/`2_stage.gd`; `98b4631` suspends the resolver across focus loss. `godot/3_control.test.gd` passes. Terminal condition met: resolver lives in the browser control path and the SHA is recorded. No stage promotion; app proof stays 2.7. |
 | S8 | Pending | Input/world/state trace backend with bounded rotation and atomic consume: emits input, world and state records, rotates within a fixed bound and consumes a record atomically. Terminal: code exists, bound and atomicity tests pass, and the record stream is documented. No code produced yet. |
-| S9 | Active | Readable runtime statechart UI: headless overlay and geometry tests assert captions, observed graph and touch layout at desktop and phone sizes. Terminal: tests pass and the Godot presentation is integrated with the observed phase graph. Unintegrated worker work; no SHA. |
-| S10 | Active | Mocked real-harness integration backbone: the recovery path drives the mocked harness from offline fixtures. Terminal: recovery exercises the mocked harness and tests pass; this is Boop test infrastructure, not a game package stage. Unintegrated worker work; no SHA. |
+| S9 | Done, integrated | `870a3e0` makes the Falcon debug overlay derive text/touch sizes from the physical window, keeps the observed graph in one scroll panel and band-places nodes. `2a_overlay_geometry.test.gd` and `2_phase_view.test.gd` pass at desktop and phone sizes. Terminal condition met; app proof stays 2.7. |
+| S10 | Done, integrated (Boop infra) | `d0db56d` replays all four harness adapters from offline fixtures through `boop-harness/src/harness/replay.rs`; `7172202` replays a live codex turn through llmock and a real PTY; `291af2c` extends that to all four live harnesses. Boop test infrastructure, not a game package stage. |
