@@ -429,11 +429,15 @@ func _observe_phase(at_tick: int, code: float, age: float):
 		_reset_phase_view()
 		return
 	var now := int(code)
-	if now == motion_phase:
+	var entry := at_tick - int(age) + 1 if is_finite(age) and age >= 1 else at_tick
+	# A restarted phase clock exposes a same-phase re-entry, including dash dance.
+	# Skipped presentation ticks can hide intermediate transitions; this remains
+	# an observed graph of published samples rather than a complete event log.
+	if now == motion_phase and (entry <= motion_enter_tick or not is_finite(age) or age < 1):
 		return
 	previous_motion_phase = motion_phase
 	motion_phase = now
-	motion_enter_tick = at_tick - int(age) + 1 if is_finite(age) and age >= 1 else at_tick
+	motion_enter_tick = entry
 	if phase_graph != null and not phase_nodes.has(now):
 		var node := GraphNode.new()
 		node.name = MOTION_PHASE_NAMES[now]
@@ -448,9 +452,15 @@ func _observe_phase(at_tick: int, code: float, age: float):
 		phase_graph.add_child(node)
 		phase_nodes[now] = node
 	if previous_motion_phase >= 0:
-		observed_edges["%s->%s" % [MOTION_PHASE_NAMES[previous_motion_phase], MOTION_PHASE_NAMES[now]]] = true
+		var edge := "%s->%s" % [MOTION_PHASE_NAMES[previous_motion_phase], MOTION_PHASE_NAMES[now]]
+		observed_edges[edge] = observed_edges.get(edge, 0) + 1
 		if phase_graph != null:
 			phase_graph.connect_node(MOTION_PHASE_NAMES[previous_motion_phase], 0, MOTION_PHASE_NAMES[now], 0)
+	if phase_nodes.has(now):
+		var label: Label = phase_nodes[now].get_child(0)
+		label.text = "entered T%d" % motion_enter_tick
+		if now == previous_motion_phase:
+			label.text += " / re-entry"
 	for id in phase_nodes:
 		phase_nodes[id].self_modulate = Color("65efb0") if id == now else Color("8793a8")
 

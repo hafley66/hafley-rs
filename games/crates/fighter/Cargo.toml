@@ -16,3 +16,7 @@ tracing = "0.1"
 
 [dev-dependencies]
 serde_json = "1"
+
+[[example]]
+name = "ground_chart"
+path = "examples/0_ground_chart.rs"
