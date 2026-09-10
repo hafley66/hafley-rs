@@ -33,6 +33,69 @@ var previous_motion_phase := -1
 var motion_enter_tick := -1
 var phase_graph: GraphEdit
 var phase_nodes := {}
+var newest_phase := -1
+var previous_root_y := NAN
+
+# Debug overlay stays inside the 960x540 base viewport. The stretched canvas can
+# shrink debug text below physical readability on a portrait phone, so sizes are
+# derived from the physical window: base size * scale = physical pixels.
+const DEBUG_BASE := Vector2(960, 540)
+const DEBUG_MIN_TEXT_PX := 14.0
+const DEBUG_MIN_TOUCH_PX := 44.0
+const DEBUG_GRAPH_ZOOM := 0.65
+# Existing 12-phase order, grouped into four lifecycle bands: ground locomotion,
+# crouch/jumpsquat, air, landing. Column index is the lifecycle band.
+const PHASE_LIFECYCLE := [[0, 1, 2, 3, 4, 5], [6, 7], [9, 10, 11], [8]]
+var canvas_layer: CanvasLayer
+var debug_panel: ScrollContainer
+var debug_rows: VBoxContainer
+var touch_bar: HBoxContainer
+var debug_scale := 1.0
+var debug_geometry := {}
+
+static func debug_scale_for(window_px: Vector2) -> float:
+	if window_px.x <= 0.0 or window_px.y <= 0.0:
+		return 1.0
+	return minf(window_px.x / DEBUG_BASE.x, window_px.y / DEBUG_BASE.y)
+
+# Smallest font that still renders at DEBUG_MIN_TEXT_PX physical pixels.
+static func debug_font_for(base: int, scale: float) -> int:
+	return int(ceil(maxf(float(base), DEBUG_MIN_TEXT_PX / maxf(scale, 0.0001))))
+
+# Smallest touch target that still renders at DEBUG_MIN_TOUCH_PX physical pixels.
+static func debug_touch_for(scale: float) -> float:
+	return ceil(DEBUG_MIN_TOUCH_PX / maxf(scale, 0.0001))
+
+static func phase_graph_cell(id: int) -> Vector2:
+	for column in range(PHASE_LIFECYCLE.size()):
+		var row: int = PHASE_LIFECYCLE[column].find(id)
+		if row >= 0:
+			return Vector2(12.0 + column * 190.0, 12.0 + row * 70.0)
+	return Vector2(12.0, 12.0)
+
+func _create_captions() -> void:
+	var font := SystemFont.new()
+	font.font_names = PackedStringArray(["Menlo", "monospace"])
+	for y in [16, 49, 76, 103, 130, 157, 438, 464, 491, 518]:
+		var caption := Label.new()
+		caption.position = Vector2(24, y)
+		caption.add_theme_font_override("font", font)
+		caption.add_theme_font_size_override("font_size", 20 if y == 16 else (12 if y == 518 else 16))
+		caption.modulate = Color("65d9e6") if captions.size() % 2 else Color("e0e8f5")
+		canvas_layer.add_child(caption)
+		captions.append(caption)
+
+static func phase_label(phase: int, previous: int, entry_tick: int) -> String:
+	var previous_name: String = "NONE" if previous < 0 else MOTION_PHASE_NAMES[previous]
+	return "PHASE %s / PREV %s / T%d / OBSERVED GRAPH" % [MOTION_PHASE_NAMES[phase], previous_name, entry_tick]
+
+static func edges_label(edges: Array, newest: int) -> String:
+	var list: String = "NONE" if edges.is_empty() else ", ".join(PackedStringArray(edges))
+	var note: String = "" if newest < 0 else " / NEW %s" % MOTION_PHASE_NAMES[newest]
+	return "OBSERVED EDGES: %s%s" % [list, note]
+
+static func velocity_label(speed: float, vy: float, age: int) -> String:
+	return "VEL X %+.3f / VY %+.3f / PHASE AGE %d TICKS" % [speed, vy, age]
 
 func _ready():
 	if not ClassDB.class_exists("FalconSql"):
@@ -75,18 +138,9 @@ func _ready():
 	camera.current = true
 	add_child(camera)
 	camera.look_at(Vector3(40, 23, 0))
-	var canvas := CanvasLayer.new()
-	add_child(canvas)
-	var font := SystemFont.new()
-	font.font_names = PackedStringArray(["Menlo", "monospace"])
-	for y in [16, 49, 76, 103, 130, 157, 438, 464, 491, 518]:
-		var caption := Label.new()
-		caption.position = Vector2(24, y)
-		caption.add_theme_font_override("font", font)
-		caption.add_theme_font_size_override("font_size", 20 if y == 16 else (12 if y == 518 else 16))
-		caption.modulate = Color("65d9e6") if captions.size() % 2 else Color("e0e8f5")
-		canvas.add_child(caption)
-		captions.append(caption)
+	canvas_layer = CanvasLayer.new()
+	add_child(canvas_layer)
+	_create_captions()
 	captions[0].text = "FALCON -> RECYCLED SQLITE -> GDEXT -> GODOT"
 	if incremental:
 		captions[0].text = "INPUT -> RUST TICK -> SQLITE -> GODOT"
@@ -107,7 +161,7 @@ func _ready():
 			phase_graph.minimap_enabled = false
 			phase_graph.show_grid = false
 			phase_graph.zoom = 0.65
-			canvas.add_child(phase_graph)
+			canvas_layer.add_child(phase_graph)
 			captions[5].add_theme_font_size_override("font_size", 12)
 	captions[5].text = "3D LINE MESH / SQL ROWS + MESH UPLOAD VERIFIED"
 	captions[9].text = "0.5X + HOLDS / SCRIPTED TRAVEL / PM + MELEE KB + RAPIER"
@@ -119,16 +173,16 @@ func _ready():
 			captions[8].position = Vector2(24, 180)
 			captions[8].add_theme_font_size_override("font_size", 13)
 			captions[8].show()
-		var bar := HBoxContainer.new()
-		bar.position = Vector2(24, 482)
-		bar.size = Vector2(912, 44)
-		canvas.add_child(bar)
+		touch_bar = HBoxContainer.new()
+		touch_bar.position = Vector2(24, 482)
+		touch_bar.size = Vector2(912, 44)
+		canvas_layer.add_child(touch_bar)
 		for title in ["Left", "Right", "Jump", "Fair", "Reset", "Proof"]:
 			var button := Button.new()
 			button.text = title
 			button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			button.focus_mode = Control.FOCUS_NONE
-			bar.add_child(button)
+			touch_bar.add_child(button)
 			match title:
 				"Left":
 					button.button_down.connect(func(): touch_left = true)
@@ -146,6 +200,80 @@ func _ready():
 					button.pressed.connect(func(): JavaScriptBridge.eval("location.search = ''"))
 				"Proof":
 					button.pressed.connect(func(): JavaScriptBridge.eval("location.search = '?demo=1'"))
+	if controlled and not control_demo:
+		_build_debug_panel()
+		_layout_debug_overlay(Vector2(DisplayServer.window_get_size()))
+		get_viewport().size_changed.connect(_on_viewport_size_changed)
+
+func _on_viewport_size_changed() -> void:
+	_layout_debug_overlay(Vector2(DisplayServer.window_get_size()))
+
+# One scroll panel holds the telemetry labels and the observed graph, so a narrow
+# stretched viewport scrolls instead of shrinking every label below readability.
+func _build_debug_panel() -> void:
+	if debug_panel != null or captions.is_empty():
+		return
+	debug_panel = ScrollContainer.new()
+	debug_panel.name = "DebugPanel"
+	debug_panel.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	debug_rows = VBoxContainer.new()
+	debug_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	debug_panel.add_child(debug_rows)
+	for caption in captions:
+		caption.get_parent().remove_child(caption)
+		caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		debug_rows.add_child(caption)
+	if phase_graph != null:
+		phase_graph.get_parent().remove_child(phase_graph)
+		debug_rows.add_child(phase_graph)
+	canvas_layer.add_child(debug_panel)
+
+func _layout_debug_overlay(window_px: Vector2) -> void:
+	debug_scale = debug_scale_for(window_px)
+	var narrow: bool = window_px.x < 700.0
+	if not captions.is_empty():
+		var body := debug_font_for(16, debug_scale)
+		for index in range(captions.size()):
+			captions[index].add_theme_font_size_override("font_size", body)
+		captions[0].add_theme_font_size_override("font_size", debug_font_for(20, debug_scale))
+		captions[9].add_theme_font_size_override("font_size", debug_font_for(12, debug_scale))
+	if debug_panel != null:
+		var touch := debug_touch_for(debug_scale) if touch_bar != null else 0.0
+		debug_panel.position = Vector2(8, 8)
+		debug_panel.size = Vector2(
+			DEBUG_BASE.x - 16.0 if narrow else 520.0,
+			DEBUG_BASE.y - touch - 16.0)
+		debug_rows.add_theme_constant_override("separation", int(maxf(4.0, debug_scale * 10.0)))
+	if touch_bar != null:
+		var touch_h := debug_touch_for(debug_scale)
+		touch_bar.position = Vector2(8, DEBUG_BASE.y - touch_h)
+		touch_bar.size = Vector2(DEBUG_BASE.x - 16, touch_h)
+		for button in touch_bar.get_children():
+			button.custom_minimum_size = Vector2(0, touch_h)
+	if phase_graph != null:
+		phase_graph.zoom = DEBUG_GRAPH_ZOOM
+		phase_graph.custom_minimum_size = Vector2(760, 560) if narrow else Vector2(420, 560)
+		_apply_graph_layout()
+	_remember_debug_geometry()
+
+# Deterministic snapshot the headless geometry test reads back.
+func _remember_debug_geometry() -> void:
+	debug_geometry = {
+		"scale": debug_scale,
+		"body_font": debug_font_for(16, debug_scale),
+		"body_physical": debug_font_for(16, debug_scale) * debug_scale,
+		"touch_logical": debug_touch_for(debug_scale),
+		"touch_physical": debug_touch_for(debug_scale) * debug_scale,
+		"panel": Vector2.ZERO if debug_panel == null else debug_panel.size,
+		"cells": phase_graph_cells(),
+	}
+
+static func phase_graph_cells() -> Dictionary:
+	var cells := {}
+	for id in range(MOTION_PHASE_NAMES.size()):
+		cells[id] = phase_graph_cell(id)
+	return cells
 
 func _upload_and_acknowledge(frame: Payload.FramePayload, generation: int) -> void:
 	var arrays := []
@@ -395,11 +523,13 @@ func _control_step(input: Payload.ControlInput):
 	# stream; the edge list is observed only, never a complete legal-edge graph.
 	if not control_demo:
 		_observe_phase(int(state.simulation_tick), meta.phase, meta.phase_ticks)
+		var vy: float = float(meta.root_y) - previous_root_y if is_finite(previous_root_y) else 0.0
+		previous_root_y = float(meta.root_y)
+		var age := 0 if motion_enter_tick < 0 else int(state.simulation_tick) - motion_enter_tick + 1
+		captions[5].text = velocity_label(float(meta.speed), vy, age)
 		if motion_phase >= 0:
-			var prev_label: String = "NONE" if previous_motion_phase < 0 else MOTION_PHASE_NAMES[previous_motion_phase]
-			captions[8].text = "PHASE %s / PREV %s / T%d / OBSERVED GRAPH" % [MOTION_PHASE_NAMES[motion_phase], prev_label, motion_enter_tick]
-			var edges: String = "NONE" if observed_edges.is_empty() else ", ".join(PackedStringArray(observed_edges.keys()))
-			captions[9].text = "OBSERVED EDGES: %s" % edges
+			captions[8].text = phase_label(motion_phase, previous_motion_phase, motion_enter_tick)
+			captions[9].text = edges_label(observed_edges.keys(), newest_phase)
 		else:
 			captions[8].text = "LIVE PHASE NONE / NO MOVEMENT STATE"
 			captions[9].text = "OBSERVED EDGES (not a legal-edge graph): NONE"
@@ -410,7 +540,9 @@ func _reset_phase_view():
 	motion_phase = -1
 	previous_motion_phase = -1
 	motion_enter_tick = -1
+	newest_phase = -1
 	observed_edges.clear()
+	previous_root_y = NAN
 	if phase_graph != null:
 		phase_graph.clear_connections()
 		for node in phase_nodes.values():
@@ -442,9 +574,7 @@ func _observe_phase(at_tick: int, code: float, age: float):
 		var node := GraphNode.new()
 		node.name = MOTION_PHASE_NAMES[now]
 		node.title = MOTION_PHASE_NAMES[now]
-		var index := phase_nodes.size()
-		node.position_offset = Vector2(12 + (index % 3) * 168, 12 + (index / 3) * 75)
-		node.custom_minimum_size = Vector2(150, 60)
+		node.position_offset = phase_graph_cell(now)
 		var label := Label.new()
 		label.text = "observed"
 		node.add_child(label)
@@ -452,6 +582,7 @@ func _observe_phase(at_tick: int, code: float, age: float):
 		phase_graph.add_child(node)
 		phase_nodes[now] = node
 	if previous_motion_phase >= 0:
+		newest_phase = now
 		var edge := "%s->%s" % [MOTION_PHASE_NAMES[previous_motion_phase], MOTION_PHASE_NAMES[now]]
 		observed_edges[edge] = observed_edges.get(edge, 0) + 1
 		if phase_graph != null:
@@ -461,8 +592,32 @@ func _observe_phase(at_tick: int, code: float, age: float):
 		label.text = "entered T%d" % motion_enter_tick
 		if now == previous_motion_phase:
 			label.text += " / re-entry"
+	_refresh_phase_titles()
+	_apply_graph_layout()
+
+# Non-color markers: the active node is prefixed, the newest transition gets a
+# trailing arrow, so the two states are distinguishable without hue alone.
+func _refresh_phase_titles() -> void:
 	for id in phase_nodes:
-		phase_nodes[id].self_modulate = Color("65efb0") if id == now else Color("8793a8")
+		var title: String = MOTION_PHASE_NAMES[id]
+		if id == motion_phase:
+			title = "▶ " + title
+		if id == newest_phase:
+			title = title + " ←"
+		phase_nodes[id].title = title
+		phase_nodes[id].self_modulate = Color("65efb0") if id == motion_phase else Color("8793a8")
+
+func _apply_graph_layout() -> void:
+	if phase_graph == null:
+		return
+	var node_font := debug_font_for(14, debug_scale * DEBUG_GRAPH_ZOOM)
+	for id in phase_nodes:
+		var node: GraphNode = phase_nodes[id]
+		node.position_offset = phase_graph_cell(id)
+		node.custom_minimum_size = Vector2(maxf(150.0, node_font * 6.0), maxf(60.0, node_font * 2.2))
+		node.add_theme_font_size_override("title_font_size", node_font)
+		if node.get_child_count() > 0 and node.get_child(0) is Label:
+			(node.get_child(0) as Label).add_theme_font_size_override("font_size", node_font)
 
 func _notification(what):
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
