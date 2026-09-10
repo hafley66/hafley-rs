@@ -51,6 +51,10 @@ mod t1_harness_boundaries;
 mod t2_native_wrapper;
 #[path = "2_replay_fixture.rs"]
 mod t2_replay_fixture;
+#[path = "3_terminal_pipe_replay.rs"]
+mod t3_terminal_pipe_replay;
+#[path = "4_adapter_replay.rs"]
+mod t4_adapter_replay;
 #[path = "4_lifecycle_gate.rs"]
 mod t4_lifecycle_gate;
 #[path = "5_delayed_worker_delivery.rs"]

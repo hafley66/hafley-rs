@@ -186,6 +186,7 @@ pub mod claude;
 pub mod codex;
 pub mod kimi;
 pub mod opencode;
+pub mod replay;
 
 /// User-facing interactive launch request. The CLI supplies the executable so
 /// aliases such as `ccz` can use the Claude adapter without inventing another

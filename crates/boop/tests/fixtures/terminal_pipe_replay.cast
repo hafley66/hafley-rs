@@ -1,0 +1,7 @@
+{"version":2,"width":80,"height":24,"title":"Synthetic pipe replay","env":{"TERM":"xterm-256color"}}
+[0.100,"i","ping\n"]
+[0.100,"o","screen-ready\n"]
+[0.000,"m","replay-start"]
+[0.100,"o","echo:ping\n"]
+[0.000,"r","80x24"]
+[0.200,"m","replay-eof"]

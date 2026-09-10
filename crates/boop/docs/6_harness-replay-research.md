@@ -511,3 +511,23 @@ External:
 - [asciicast-v2.md at v2.0.0 — asciinema/asciinema](https://github.com/asciinema/asciinema/blob/v2.0.0/doc/asciicast-v2.md)
 - [asciicast v2: file extension and media type — asciinema issue #224](https://github.com/asciinema/asciinema/issues/224)
 - [RxJS marble testing guide](https://github.com/ReactiveX/rxjs/blob/master/apps/rxjs.dev/content/guide/testing/marble-testing.md)
+
+## Integrated replay increment, 2026-09-10
+
+`boop-harness/src/harness/replay.rs` parses relative millisecond schedules and
+drives byte channels with concurrent output draining. The coordinator added a
+1 MiB duplex/backpressure regression; reading only after writing can deadlock.
+Logical timestamp ordering is preserved; wall-clock pacing is not implemented.
+
+`tests/3_terminal_pipe_replay.rs` checks real child pipes, EOF, exit 7 and Codex
+decoding after transcript bytes cross a pipe. `tests/4_adapter_replay.rs` checks
+Claude/Kimi JSONL and a temporary OpenCode SQLite database built from committed
+SQL. Exact event expectations, 1250 ms fixture deltas, repeated reads, mid-cursor
+resume and exhausted cursor behavior pass for those three adapters. Existing
+`2_replay_fixture.rs` retains Codex's independent event expectations.
+
+These fixtures cover selected message shapes. Full message-kind coverage,
+OpenCode's newer `time_updated` cursor shape, live transcript scrubbing and
+PTY/emulator screen replay remain unqualified. No model/network calls occur in
+these replay tests. Worker commits: cf424f4, ed296fc, ab633a1; coordinator re-ran
+the focused suites against the primary checkout before integration.

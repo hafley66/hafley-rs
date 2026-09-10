@@ -1,0 +1,3 @@
+{"type":"context.append_message","message":{"role":"user","content":[{"type":"text","text":"convert the eprintln calls"}]},"time":1767225600000}
+{"type":"context.append_loop_event","event":{"type":"tool.call","uuid":"tool_1","turnId":"0","step":1,"stepUuid":"s1","toolCallId":"tool_1","name":"Read","args":{"path":"src/lib.rs"},"description":"Reading"},"time":1767225601250}
+{"type":"context.append_loop_event","event":{"type":"tool.result","parentUuid":"tool_1","toolCallId":"tool_1","result":{"output":"# demo\n"}},"time":1767225602500}
