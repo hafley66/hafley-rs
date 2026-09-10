@@ -84,6 +84,8 @@ inspection pass, and no maturity promotion is claimed.
 | S1 | In progress | Enumerate source-backed common actions, exclusivity, callback-phase edges and ordered guards. Explain groups item by item. Mark unresolved PM3.6 patch behavior explicitly; do not substitute 3.6.1 annotations. |
 | S2 | In progress, four-edge qualification | State-only crouch cycle implemented with statig + Redux; lifecycle, rejected/competing facts and clone/JSON suffix tests. Other action interrupts and callback scheduling remain unqualified. No physics formulas or input-device wiring. |
 | S3 | Queued | Replace matching live Falcon transition policy with tested shared chart while retaining existing physics and presentation. Verify the consumer and restore traces; expand common families through scoped green commits. |
+| S4 | Done, bounded ingest | Append four verified locomotion clips without renumbering IDs 0-17. Catalog now 22; all 23 retained payload hashes including attributes verified. Full eight-test Smash ingest suite passes after constructor accepts current catalog length. Animation selection remains S3. |
+| S5 | In progress | Publish actual movement phase/phase age through generated presentation boundary; debug view tracks observed transitions and handles rewind/unknown state. Headless tests before merge; graph drawing and MP4 coverage reported separately. |
 
 All unfinished A/Q/M/G/P tasks retain their prior dispositions. S1-S3 govern the
 current ordering; full network world, friends' content and multiplayer remain
@@ -105,3 +107,13 @@ passed 6 registry tests plus D2 validation and generated SVG freshness.
 `extract --ast-pattern 'transition=Transition($NEXT)' --ast-capture transition=NEXT`
 against `src/1a_chart.rs` returned all four destination captures. Full guard/source
 edge extraction and generated statechart drawing are still pending.
+
+S4: worker `1296d99` adds ID18 Squat (8 frames), ID19 SquatWait (61),
+ID20 SquatRv (10), ID21 JumpAerialB (40). Coordinator replaces fixed 18-action
+constructor allowance with catalog length and updates the existing statig lockfile
+edge. `cargo test --manifest-path games/smash/Cargo.toml --offline --features ingest
+-j2` passed six library tests and two generation tests, including live locomotion
+restore and full Run-pose cycle. Every retained payload SHA256 matches manifest.
+The local source mirror contains 490 subaction files; 22 are currently selected.
+Wait2/3, WalkBrake, TurnRunBrake, FallB/F, other aerial landings and item crouch
+remain unselected. No full-Falcon ingest or movement-fidelity claim. No deployment.

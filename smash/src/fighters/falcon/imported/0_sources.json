@@ -22,12 +22,17 @@
     "JumpB.html": "15d847c7584e7b42f9a414cf572c19e748476f4fb52f1e3119b0a3d0ea4a4da5",
     "JumpAerialF.html": "c2b937be09695e4ff2d4761c726c6fe34c56d114dc3bff8ae891803bc80796b1",
     "LandingLight.html": "7726bc3c985636a9bf5f6a64b52be9af38b177d5e6f7f63b8f5d1c6204aa7a75",
+    "Squat.html": "f84cf8df8ef9330846c7da4abe50da0f798c97b1116c02c07cea78a293c96477",
+    "SquatWait.html": "78e46ad99dba80af930f4b4f0bbbc4680d0d9f7274312fa1b108742b7d231d54",
+    "SquatRv.html": "2b571966040c118bcb72525890db99228c5fe0e9b73e328bd51a10e172e1d140",
+    "JumpAerialB.html": "1ceb779c9209447323c7e240ec2c52780bf65716e789ed71e45d92cd6b733d5c",
     "attributes.html": "59efd5642a560b1c02fc572b3aee2920974c18559ab697937acd845f83e04625"
   },
   "frames": {
     "Wait1": 61, "JumpF": 36, "AttackAirF": 40, "JumpSquat": 4, "Fall": 9,
     "LandingAirF": 19, "LandingHeavy": 3, "WalkSlow": 55, "WalkMiddle": 31,
     "WalkFast": 26, "Dash": 29, "Run": 21, "RunBrake": 28, "Turn": 12,
-    "TurnRun": 22, "JumpB": 51, "JumpAerialF": 50, "LandingLight": 3
+    "TurnRun": 22, "JumpB": 51, "JumpAerialF": 50, "LandingLight": 3,
+    "Squat": 8, "SquatWait": 61, "SquatRv": 10, "JumpAerialB": 40
   }
 }

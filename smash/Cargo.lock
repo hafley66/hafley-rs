@@ -845,6 +845,7 @@ dependencies = [
  "game-input",
  "redux",
  "serde",
+ "statig",
  "tracing",
 ]
 

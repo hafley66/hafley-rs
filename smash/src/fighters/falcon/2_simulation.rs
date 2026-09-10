@@ -190,7 +190,7 @@ pub struct Simulation {
 }
 impl Simulation {
     pub fn new(actions: Arc<[Action]>, launch: bool) -> Self {
-        assert!(matches!(actions.len(), 3 | 7 | 18));
+        assert!(matches!(actions.len(), 3 | 7) || actions.len() == catalog::CATALOG.len());
         assert!(actions.iter().all(|a| !a.frames.is_empty()));
         let mut world = World::default();
         if launch {
