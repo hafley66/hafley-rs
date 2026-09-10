@@ -1,4 +1,4 @@
-# Generated from 0_presentation.tsp; sha256:f098260e9e1188be0bd81c1966517cfb1330c41dac416339c6c9637be86b7130
+# Generated from 0_presentation.tsp; sha256:8df8cc3e093e4880d89dc3e698ff3d421a1172dadc21e929871313b30debb9c0
 version: 4
 namespace: FalconBoundary
 constants:
@@ -16,7 +16,9 @@ constants:
     value: "180"
   CONTROL_ACTION_LABELS:
     type: string
-    value: IDLE|JUMP|FAIR|JUMP SQUAT|FALL|FAIR LANDING|HEAVY LANDING
+    value: IDLE|JUMP|FAIR|JUMP SQUAT|FALL|FAIR LANDING|HEAVY LANDING|WALK
+      SLOW|WALK|WALK FAST|DASH|RUN|BRAKE|TURN|RUN TURN|BACK JUMP|AIR JUMP|LIGHT
+      LANDING
   WINDOW:
     type: int64
     value: "32"

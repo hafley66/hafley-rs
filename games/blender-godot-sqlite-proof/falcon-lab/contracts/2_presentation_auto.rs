@@ -1,4 +1,4 @@
-// Generated from 0_presentation.tsp; sha256:f098260e9e1188be0bd81c1966517cfb1330c41dac416339c6c9637be86b7130
+// Generated from 0_presentation.tsp; sha256:8df8cc3e093e4880d89dc3e698ff3d421a1172dadc21e929871313b30debb9c0
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -6,7 +6,7 @@ pub const BUFFER_FLAG: &'static str = "--buffer-proof";
 pub const BUFFER_TICKS: u32 = 180;
 pub const CONTROL_TICKS: u32 = 300;
 pub const CONTROL_SNAPSHOT: u32 = 180;
-pub const CONTROL_ACTION_LABELS: &'static str = "IDLE|JUMP|FAIR|JUMP SQUAT|FALL|FAIR LANDING|HEAVY LANDING";
+pub const CONTROL_ACTION_LABELS: &'static str = "IDLE|JUMP|FAIR|JUMP SQUAT|FALL|FAIR LANDING|HEAVY LANDING|WALK SLOW|WALK|WALK FAST|DASH|RUN|BRAKE|TURN|RUN TURN|BACK JUMP|AIR JUMP|LIGHT LANDING";
 pub const WINDOW: i64 = 32;
 pub const SLOTS: u32 = 3;
 pub const ROW_CAPACITY: u32 = 1024;

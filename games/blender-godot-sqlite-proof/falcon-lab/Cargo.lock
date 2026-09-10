@@ -968,6 +968,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "game-fighter"
+version = "0.1.0"
+dependencies = [
+ "game-input",
+ "redux",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "game-input"
 version = "0.1.0"
 dependencies = [
@@ -2554,6 +2564,10 @@ dependencies = [
 [[package]]
 name = "redux"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde-big-array",
+]
 
 [[package]]
 name = "regex"
@@ -2747,6 +2761,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-big-array"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_arrays"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2857,7 +2880,9 @@ checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
 name = "smash"
 version = "0.1.0"
 dependencies = [
+ "brawllib_rs",
  "game-content",
+ "game-fighter",
  "game-input",
  "parry3d",
  "rapier3d",

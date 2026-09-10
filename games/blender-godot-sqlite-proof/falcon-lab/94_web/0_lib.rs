@@ -56,7 +56,8 @@ impl FalconSql {
             bincode::serde::decode_from_slice(bytes, bincode::config::standard()).unwrap();
         assert_eq!(used, bytes.len());
         self.runtime = Some(Runtime {
-            simulation: Simulation::new(actions.into(), true), poses, inputs, expected,
+            simulation: if record { Simulation::new(actions[..7].to_vec().into(), true) }
+                else { Simulation::new_locomotion(actions.into(), true) }, poses, inputs, expected,
             boundary: boundary::Boundary::new().unwrap(),
             output: vec![Row::new(0, 0, 0); ROW_CAPACITY as usize],
             recorded: Vec::with_capacity(if record { CONTROL_TICKS as usize } else { 0 }),

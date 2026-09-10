@@ -16,9 +16,13 @@ test('publication requires unchanged browser-tested assets and the isolated Game
     writeFileSync(join(dir, 'index.html'), 'tested');
     assert.throws(() => verified(dir));
     const receipt = { production: false, native_rows: 300, replayed_states: 120,
-      keyboard: true, touch: true, errors: [], hashes: hashes(dir) };
+      keyboard: true, touch: true, errors: [], hashes: hashes(dir),
+      locomotion: { run_speed: 2.3, dash: true, run: true, left_run: true, walk: true } };
     json('verified.json', receipt);
     assert.deepEqual(verified(dir).selected, profile);
+    json('verified.json', { ...receipt, locomotion: undefined });
+    assert.throws(() => verified(dir), /locomotion speed proof missing/);
+    json('verified.json', receipt);
     writeFileSync(join(dir, 'index.html'), 'changed after test');
     assert.throws(() => verified(dir), /export changed/);
     writeFileSync(join(dir, 'index.html'), 'tested');

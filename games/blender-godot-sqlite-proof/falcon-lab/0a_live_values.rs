@@ -12,7 +12,10 @@ pub fn state(world: &World, animation_x: f64, animation_y: f64, predicted: bool,
         damage: world.damage as f64, hits: world.hit_count as f64,
         last_hit: world.last_hit.unwrap_or(-1) as f64,
         contact: f64::from(s.contact), predicted: f64::from(predicted), input: f64::from(applied),
-        animation_x, animation_y, ..Default::default()
+        animation_x, animation_y,
+        facing: world.movement.as_ref().map_or(1.0, |s| s.facing as f64),
+        speed: world.movement.as_ref().map_or(0.0, |s| s.velocity[0] as f64),
+        ..Default::default()
     }.into_row(tick, 0);
     let mut target = TargetValues::default();
     if let Some(b) = &world.bag {
