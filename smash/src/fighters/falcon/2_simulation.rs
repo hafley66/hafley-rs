@@ -2,6 +2,8 @@ use std::sync::Arc;
 #[path = "0_types.rs"]
 mod types;
 pub use types::*;
+#[path = "1b_catalog.rs"]
+pub mod catalog;
 #[path = "1a_actions.rs"]
 mod lifecycle;
 #[path = "1_sandbag.rs"]

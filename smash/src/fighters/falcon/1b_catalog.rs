@@ -1,10 +1,14 @@
 //! Falcon offline locomotion catalog over fighter-owned Rukaidata PM 3.6 payloads.
 //! Indices 0..=6 match the runtime's existing seven-action order; later entries
 //! extend the catalog without renumbering. Requires the `ingest` feature.
+#[cfg(feature = "ingest")]
 use game_content::decode_file;
+#[cfg(feature = "ingest")]
 use brawllib_rs::high_level_fighter::HighLevelSubaction;
+#[cfg(feature = "ingest")]
 use std::path::PathBuf;
 
+#[cfg(feature = "ingest")]
 type Error = Box<dyn std::error::Error>;
 
 /// Ordered (subaction name, imported file) pairs. IDs 0-6 are frozen.
@@ -29,12 +33,14 @@ pub const CATALOG: [(&str, &str); 18] = [
     ("LandingLight", "LandingLight.html"),
 ];
 
+#[cfg(feature = "ingest")]
 fn imported_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/fighters/falcon/imported")
 }
 
 /// Decode each catalog payload in ID order, verifying the embedded subaction name.
 #[tracing::instrument(target = "falcon::ingest", skip_all, fields(actions = CATALOG.len()))]
+#[cfg(feature = "ingest")]
 pub fn load() -> Result<Vec<HighLevelSubaction>, Error> {
     let root = imported_dir();
     let mut actions = Vec::with_capacity(CATALOG.len());
@@ -48,7 +54,7 @@ pub fn load() -> Result<Vec<HighLevelSubaction>, Error> {
     Ok(actions)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "ingest"))]
 mod tests {
     use super::*;
 
@@ -71,7 +77,8 @@ mod tests {
         let manifest: serde_json::Value =
             serde_json::from_str(include_str!("imported/0_sources.json")).unwrap();
         let files = manifest["files"].as_object().unwrap();
-        assert_eq!(files.len(), CATALOG.len());
+        assert_eq!(files.len(), CATALOG.len() + 1);
+        assert!(files.contains_key("attributes.html"));
         for (_, file) in CATALOG {
             assert!(files.contains_key(file), "missing manifest entry for {file}");
         }
