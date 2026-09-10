@@ -227,3 +227,16 @@ dispositions above remain in force; this queue only orders the next work.
 T1-T7 depend on the status slice: `just status` is the observation surface each
 terminal condition cites. Do not add a disposition to a task row that `status`
 cannot derive from the export, the manifest or a source-fingerprinted receipt.
+
+Status slice receipt, `7f3f1e6`: `just status` prints 11 packages and a 22-row x
+8-axis action matrix (payload, catalog, phase, chart, live, restore, native,
+fidelity), each axis separate and no percentage. Derived: 23 retained payloads
+with recomputed SHA256 (0 failures), Rust catalog order for all 22 actions, 14
+Phase-to-animation selections, 57 ground and 29 air executable transitions. 9/22
+actions have no live phase or executable chart mapping (AttackAirF, LandingAirF,
+Turn, JumpB, LandingLight, Squat, SquatWait, SquatRv, JumpAerialB); all 22
+source-fidelity dispositions stay unqualified. Restore and native/WASM receipts
+render STALE because the new export files changed the source fingerprint; no
+stage advanced. `just status && just test` passed: 6 registry, 7 progress and 8
+status node tests plus D2/SVG freshness. Cargo: 24 fighter tests and 7 smash
+library plus 2 import tests with `--locked --offline -j2`.
