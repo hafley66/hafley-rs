@@ -259,8 +259,8 @@ mod tests {
                     let value = FrameValues::from_row(&input).unwrap();
                     assert_eq!((value.damage, value.confirmed), (5.25, 18.25));
                     value.write_row(&mut output);
-                    assert_eq!(value.into_row(91, 7).values[19..], [0.0; 5]);
-                    19
+                    assert_eq!(value.into_row(91, 7).values[21..], [0.0; 3]);
+                    21
                 }
                 1 => { TargetValues::from_row(&input).unwrap().write_row(&mut output); 9 }
                 2 => { HurtValues::from_row(&input).unwrap().write_row(&mut output); 24 }

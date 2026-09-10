@@ -2,6 +2,17 @@
 use smash::fighters::falcon;
 use super::boundary::contracts::{FrameValues, TargetValues, Row};
 use falcon::{World, sandbag::Phase};
+use game_fighter::Phase as MotionPhase;
+
+/// Numeric code for the live locomotion phase, -1 when no movement state exists.
+pub fn motion_phase_code(phase: MotionPhase) -> f64 {
+    match phase {
+        MotionPhase::Idle => 0.0, MotionPhase::Walk => 1.0, MotionPhase::Dash => 2.0,
+        MotionPhase::Run => 3.0, MotionPhase::Brake => 4.0, MotionPhase::Turn => 5.0,
+        MotionPhase::Squat => 6.0, MotionPhase::Crouch => 7.0, MotionPhase::Landing => 8.0,
+        MotionPhase::Jump => 9.0, MotionPhase::Fall => 10.0, MotionPhase::AirJump => 11.0,
+    }
+}
 
 pub fn state(world: &World, animation_x: f64, animation_y: f64, predicted: bool, applied: u8) -> [Row; 2] {
     let s = &world.view;
@@ -15,6 +26,8 @@ pub fn state(world: &World, animation_x: f64, animation_y: f64, predicted: bool,
         animation_x, animation_y,
         facing: world.movement.as_ref().map_or(1.0, |s| s.facing as f64),
         speed: world.movement.as_ref().map_or(0.0, |s| s.velocity[0] as f64),
+        phase: world.movement.as_ref().map_or(-1.0, |s| motion_phase_code(s.phase)),
+        phase_ticks: world.movement.as_ref().map_or(-1.0, |s| s.phase_tick as f64),
         ..Default::default()
     }.into_row(tick, 0);
     let mut target = TargetValues::default();

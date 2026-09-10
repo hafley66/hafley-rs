@@ -3,7 +3,7 @@ use smash::fighters::falcon;
 use crate::fixture::{self, baseline, sql_viewer};
 use sql_viewer::boundary::{Boundary, Row, ROW_CAPACITY};
 use sql_viewer::boundary::contracts::{
-    ControlInput, ControlledStatus, ControlProof, FrameQuery, RowPublisher,
+    ControlInput, ControlledStatus, ControlProof, FrameQuery, FrameValues, RowPublisher,
     CONTROL_TICKS, CONTROL_SNAPSHOT,
 };
 use falcon::{Simulation, World};
@@ -203,6 +203,29 @@ mod tests {
         }
         let proof = run.verify();
         assert_eq!((proof.hits, proof.damage, proof.replayed), (1, 18.0, 120));
+    }
+
+    #[test]
+    fn live_rows_expose_motion_phase_and_observed_edges() {
+        use crate::phase_debug::PhaseDebug;
+        let mut run = Controlled::new(false).unwrap();
+        let mut debug = PhaseDebug::new();
+        let mut seen = std::collections::BTreeSet::new();
+        for tick in 0..CONTROL_TICKS {
+            let (rows, _status) = run.step(demo_input(tick as i32)).unwrap();
+            let meta = FrameValues::from_row(&rows[0]).unwrap();
+            assert!(meta.phase >= 0.0, "movement state must project a phase");
+            assert!(meta.phase_ticks >= 1.0);
+            seen.insert(meta.phase as i64);
+            debug.observe(rows[0].tick, meta.phase, meta.phase_ticks);
+        }
+        assert!(seen.contains(&0), "idle phase was never presented");
+        assert!(seen.len() >= 3, "expected several distinct live phases, saw {seen:?}");
+        assert!(!debug.observed_edges().is_empty());
+        assert_eq!(debug.highlighted_node(), debug.active());
+        assert!(debug
+            .observed_edge_label()
+            .starts_with("OBSERVED EDGES (not a legal-edge graph):"));
     }
 
     #[test]

@@ -1,4 +1,4 @@
-// Generated from 0_presentation.tsp; sha256:8df8cc3e093e4880d89dc3e698ff3d421a1172dadc21e929871313b30debb9c0
+// Generated from 0_presentation.tsp; sha256:2e2471aa2135c5b4bd41a88cd9b59665520b6436a95b95e655ad875f6c78f024
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -175,6 +175,8 @@ pub struct FrameValues {
   pub advances: f64,
   pub total_loads: f64,
   pub confirmed: f64,
+  pub phase: f64,
+  pub phase_ticks: f64,
 }
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct TargetValues {
@@ -285,6 +287,8 @@ impl FrameValues {
             advances: row.values[16],
             total_loads: row.values[17],
             confirmed: row.values[18],
+            phase: row.values[19],
+            phase_ticks: row.values[20],
         })
     }
     pub fn write_row(&self, row: &mut Row) {
@@ -308,6 +312,8 @@ impl FrameValues {
         row.values[16] = self.advances;
         row.values[17] = self.total_loads;
         row.values[18] = self.confirmed;
+        row.values[19] = self.phase;
+        row.values[20] = self.phase_ticks;
     }
     pub fn into_row(self, tick: i64, entity: i64) -> Row {
         let mut row = Row { tick, kind: Self::KIND, entity, values: [0.0; 24] };

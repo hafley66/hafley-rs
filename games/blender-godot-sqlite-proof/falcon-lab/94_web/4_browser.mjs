@@ -73,6 +73,13 @@ try {
   await page.screenshot({ path: join(output, '3a_dash.png') });
   await page.waitForFunction(() => window.FALCON_META.action === 11 && window.FALCON_META.pose >= 10);
   const running = await page.evaluate(() => ({ ...window.FALCON_META }));
+  assert.equal(running.phase, 3);
+  await page.waitForFunction(() => window.FALCON_PHASE_DEBUG?.active === 3);
+  const phaseDebug = await page.evaluate(() => window.FALCON_PHASE_DEBUG);
+  assert(phaseDebug.edges.includes('IDLE->DASH'));
+  assert(phaseDebug.edges.includes('DASH->RUN'));
+  assert.equal(phaseDebug.previous, 2);
+  assert(phaseDebug.nodes.includes(3));
   assert(Math.abs(running.speed - 2.3) < 0.001, `run speed ${running.speed}`);
   assert.equal(running.facing, 1);
   assert(running.root_z > start + 20);
@@ -112,7 +119,7 @@ try {
   execFileSync('sh', [resolve(root, '../95_web.sh'), 'encode', video, mp4], { stdio: 'inherit' });
   const receipt = { url, production, native_rows: 300, replayed_states: 120,
     keyboard: true, touch: true, locomotion: { run_speed: running.speed, dash: true, run: true, left_run: true, walk: true },
-    transitions, errors, video, mp4, output };
+    phase_debug: phaseDebug, transitions, errors, video, mp4, output };
   writeFileSync(join(output, 'receipt.json'), JSON.stringify(receipt, null, 2));
   if (!production) writeFileSync(resolve(root, 'build/web-game3/verified.json'),
     JSON.stringify({ ...receipt, hashes: hashes(resolve(root, 'build/web-game3')) }, null, 2));

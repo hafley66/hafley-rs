@@ -1,4 +1,4 @@
-# Generated from 0_presentation.tsp; sha256:8df8cc3e093e4880d89dc3e698ff3d421a1172dadc21e929871313b30debb9c0
+# Generated from 0_presentation.tsp; sha256:2e2471aa2135c5b4bd41a88cd9b59665520b6436a95b95e655ad875f6c78f024
 version: 4
 namespace: FalconBoundary
 constants:
@@ -472,6 +472,12 @@ models:
     - name: confirmed
       rust: f64
       type: float64
+    - name: phase
+      rust: f64
+      type: float64
+    - name: phase_ticks
+      rust: f64
+      type: float64
   TargetValues:
     - name: x
       rust: f64
@@ -654,7 +660,13 @@ rows:
       - name: confirmed
         offset: 18
         length: 1
-    width: 19
+      - name: phase
+        offset: 19
+        length: 1
+      - name: phase_ticks
+        offset: 20
+        length: 1
+    width: 21
   TargetValues:
     kind: 1
     fields:
