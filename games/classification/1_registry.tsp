@@ -3,8 +3,8 @@ using Games;
 
 const entries: Record<Entry> = #{
   `game-fighter`: #{
-    stage: 2.7, destination: "library", task: "S2",
-    scope: "Parameterized locomotion plus state-only statig crouch qualification; live chart migration and source-game equivalence unqualified",
+    stage: 2.7, destination: "library", task: "S3",
+    scope: "Live statig grounded decisions and turn jump permission; crouch lifecycle migration and source-game timing equivalence pending",
     manifest: "crates/fighter/Cargo.toml", targets: #["crates/fighter"],
     evidence: #["4_tasks.md", "crates/fighter/4_graph.md", "crates/fighter/tests/1_chart.rs"],
   },

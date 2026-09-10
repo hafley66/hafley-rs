@@ -83,7 +83,7 @@ inspection pass, and no maturity promotion is claimed.
 | --- | --- | --- |
 | S1 | In progress | Enumerate source-backed common actions, exclusivity, callback-phase edges and ordered guards. Explain groups item by item. Mark unresolved PM3.6 patch behavior explicitly; do not substitute 3.6.1 annotations. |
 | S2 | In progress, four-edge qualification | State-only crouch cycle implemented with statig + Redux; lifecycle, rejected/competing facts and clone/JSON suffix tests. Other action interrupts and callback scheduling remain unqualified. No physics formulas or input-device wiring. |
-| S3 | Queued | Replace matching live Falcon transition policy with tested shared chart while retaining existing physics and presentation. Verify the consumer and restore traces; expand common families through scoped green commits. |
+| S3 | In progress, live ground slice | Grounded decisions dispatch through statig; Turn jump permission added. Preserve physics, phase snapshot layout and existing presentation. Crouch lifecycle, distinct turn/stop families and source command-variable timings remain pending. |
 | S4 | Done, bounded ingest | Append four verified locomotion clips without renumbering IDs 0-17. Catalog now 22; all 23 retained payload hashes including attributes verified. Full eight-test Smash ingest suite passes after constructor accepts current catalog length. Animation selection remains S3. |
 | S5 | Done, bounded observed graph | 763f336 publishes phase/age, draws observed GraphEdit edges with active highlight, handles rewind/repeated ticks/unknown state. Full proof, inspected H.264 and protected production deployment passed. Complete source/legal-edge graph remains S1/S2. |
 
@@ -136,3 +136,12 @@ artifact checks passed, protected /game/ unchanged. Recoverable prior Game3:
 `/var/www/smash-godot-game3-backup-20260910144335087`.
 S3 remains queued: migrate grounded permissions/interrupt priority to statig,
 including Turn jump permission, without adding attacks or contacts.
+
+S3 next increment supersedes that queued checkpoint: `ground::decide` now owns
+jump permissions and local ground transition selection. Numeric facts resolve
+outside the graph; State retains its single serialized Phase and existing physics.
+16 fighter tests passed, including ordered/competing guards, dash self-transition,
+all phase jump permissions and serialized dispatch. Falcon Turn-jump consumer
+test distinguishes published pose 0 from next-frame clock 1. Full proof passed:
+`falcon-lab/.workflow/prove-MifHpW/receipt.json`, six stages including browser
+and MP4 capture. Ground slice remains stage 2.7 with the scope limits above.

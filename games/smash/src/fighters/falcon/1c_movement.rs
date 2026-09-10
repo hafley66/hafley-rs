@@ -128,4 +128,21 @@ mod tests {
         assert!(states.iter().any(|s| s.action == 2));
         assert!(states.iter().any(|s| s.action == 11));
     }
+
+    #[test]
+    fn turn_jump_interrupt_selects_jump_squat_and_replays_exactly() {
+        let mut sim = Simulation::new_locomotion(assets(), false);
+        for _ in 0..40 { sim.advance_controlled(0, 1.0); }
+        assert_eq!(sim.state().movement.as_ref().unwrap().phase, Phase::Run);
+        sim.advance_controlled(0, -1.0);
+        assert_eq!(sim.state().movement.as_ref().unwrap().phase, Phase::Turn);
+        let turn = sim.save();
+        let jumped = sim.advance_controlled(1, -1.0).clone();
+        assert_eq!(jumped.movement.as_ref().unwrap().phase, Phase::Squat);
+        // View carries the emitted pose; the world clock already points at
+        // the next animation frame after publication.
+        assert_eq!((jumped.action, jumped.view.frame, jumped.animation), (3, 0, 1));
+        sim.load(&turn);
+        assert_eq!(sim.advance_controlled(1, -1.0), &jumped);
+    }
 }

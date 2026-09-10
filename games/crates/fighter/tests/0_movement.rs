@@ -108,14 +108,24 @@ fn dash_reverse_is_bounded_and_run_stays_below_cap() {
 }
 
 #[test]
-fn jump_accepts_edges_from_walk_brake_and_crouch() {
+fn jump_accepts_ground_edges_including_turn_before_reversal() {
     let rules = rules();
-    for phase in [Phase::Walk, Phase::Brake, Phase::Crouch, Phase::Run] {
+    for phase in [
+        Phase::Idle,
+        Phase::Walk,
+        Phase::Dash,
+        Phase::Run,
+        Phase::Brake,
+        Phase::Turn,
+        Phase::Crouch,
+    ] {
         let mut state = State::new(&rules);
         state.phase = phase;
         state.velocity[0] = if phase == Phase::Brake { 0.5 } else { 0.0 };
-        advance(&mut state, input(0.0, button::JUMP), &rules);
+        advance(&mut state, input(-1.0, button::JUMP | button::DOWN), &rules);
         assert_eq!(state.phase, Phase::Squat, "{phase:?}");
+        assert_eq!(state.phase_tick, 1);
+        assert!(!state.short_hop);
     }
 }
 

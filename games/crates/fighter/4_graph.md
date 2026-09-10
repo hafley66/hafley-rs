@@ -1,8 +1,9 @@
 # Common fighter graph: source distillation
 
 Status: source-backed design inventory, with a four-edge crouch qualification in
-`src/1a_chart.rs` and `tests/1_chart.rs`. The live controller still uses
-`src/2_advance.rs`; it has not migrated to statig. The qualification handles one
+`src/1a_chart.rs` and `tests/1_chart.rs`. The live controller now dispatches its
+grounded decisions through `src/1b_ground.rs`; air/contact decisions remain in
+`src/2_advance.rs`. The crouch qualification handles one
 semantic dispatch, not the source game's full per-tick callback schedule.
 Scope: action exclusivity, transitions, guards, ordering and snapshot semantics.
 No velocity integration, collision solver, device mapping or animation renderer.
@@ -67,8 +68,9 @@ Concrete inspected examples, under Melee `ftCommon/`:
 1. `ftCo_Wait.c:ftCo_Wait_IASA` checks special dispatch and other helpers, grab,
    smash attacks, tilts, jab, defense/other helpers, jump, dash, crouch helper,
    turn and walk in source order. Every RETURN_IF exits when a check succeeds.
-2. `ftCo_Turn.c:ftCo_Turn_IASA` explicitly checks jump. The current live generic
-   controller omits Turn from jump eligibility; preserve this edge in the chart.
+2. `ftCo_Turn.c:ftCo_Turn_IASA` explicitly checks jump. S3 adds the missing
+   live Turn jump edge. `ftCo_TurnRun_IASA` also calls `fn_800CAF78` for jumping;
+   the live Turn remains a simplified running-turn policy, not both source states.
 3. `ftCo_KneeBend.c:ftCo_KneeBend_IASA` contains jab-100, grab and up-smash
    checks. Jumpsquat has interrupt edges, in addition to eventual takeoff.
 4. `ftCo_Run.c:ftCo_Run_IASA` has its own ordered checks and a run-local timer
@@ -86,6 +88,27 @@ one transition maximum per entire tick. Scheduling and cross-phase priority need
 their own source evidence before executable translation.
 
 ## Existing library and lowering contract
+
+### Live ground slice, S3
+
+`ground::decide(Phase, Event) -> Option<Phase>` executes statig with borrowed
+semantic facts. `Some(current)` is a real self-transition resetting dash age;
+`None` keeps the phase and clock. The caller retains physics and entry impulses.
+Redux still serializes the single `State.phase`; a stack-local uninitialized
+machine is rehydrated before dispatch and dropped afterward. No entry/exit hooks
+or persistent parallel phase are introduced. The transition hook only returns
+the dispatch's changed flag. Complete World restore tests exercise the consumer.
+
+JumpRequest precedes movement callbacks for Idle, Walk, Dash, Run, Brake, Turn
+and Crouch. Squat and recovery Landing reject that ground-jump event. Air jumping
+remains in the existing air handler. Motion guards preserve the prior local
+policy: Dash reversal before run completion, Run reversal before braking before
+crouching, Turn reversal before timeout. Numbers and formulas are unchanged.
+
+The four-state crouch qualification still has a separate migration gate: live
+Crouch remains hold-only, and Turn/TurnRun plus distinct dash/run stopping and
+source command-variable timing remain unresolved. This increment adds no attack,
+contact or PM3.6-equivalence claims.
 
 Use existing macro-free statig 0.4.1, as in `../input/src/2_buffer.rs` and
 `../redux/tests/2_statechart.rs`. No replacement library is proposed.

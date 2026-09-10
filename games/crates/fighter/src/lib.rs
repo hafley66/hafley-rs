@@ -17,6 +17,8 @@ mod advance_impl;
 pub mod rules;
 #[path = "1a_chart.rs"]
 pub mod chart;
+#[path = "1b_ground.rs"]
+pub mod ground;
 #[path = "3_slice.rs"]
 pub mod slice;
 #[path = "1_state.rs"]
