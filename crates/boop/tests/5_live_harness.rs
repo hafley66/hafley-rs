@@ -214,9 +214,10 @@ fn claude(
     env: &mut Vec<(String, String)>,
 ) -> Result<LaunchParts> {
     let config_dir = home.join(".claude");
-    // The trust and onboarding state lives in `~/.claude.json` (HOME), not
-    // under CLAUDE_CONFIG_DIR. Writing it only under the config dir left the
-    // folder-trust dialog up.
+    // A normal install keeps global config in `~/.claude.json` and per-project
+    // state in `~/.claude/`. Isolating HOME lands both here; setting
+    // CLAUDE_CONFIG_DIR instead split the trust write from the trust read and
+    // the dialog reappeared after claude's post-onboarding relaunch.
     let state = home.join(".claude.json");
     write(
         &state,
@@ -236,10 +237,6 @@ fn claude(
         &serde_json::to_string_pretty(&serde_json::json!({"theme": "dark"}))?,
     )?;
     env.push((
-        "CLAUDE_CONFIG_DIR".into(),
-        config_dir.display().to_string(),
-    ));
-    env.push((
         "ANTHROPIC_BASE_URL".into(),
         format!("http://127.0.0.1:{port}/anthropic"),
     ));
@@ -249,13 +246,10 @@ fn claude(
     Ok((
         vec![
             "--bare".into(),
-            "--safe-mode".into(),
             "--model".into(),
             "claude-sonnet-4-5".into(),
             "--permission-mode".into(),
             "dontAsk".into(),
-            "--tools".into(),
-            String::new(),
         ],
         vec![state, settings],
         LiveSubmit::TypePrompt,
@@ -582,14 +576,18 @@ fn settle_claude_onboarding(session: &Session) -> Result<()> {
             })
             .is_ok()
     };
-    for attempt in 0..4 {
-        let timeout = if attempt == 0 { 6_000 } else { 2_000 };
+    for attempt in 0..6 {
+        let timeout = if attempt == 0 { 6_000 } else { 1_500 };
         if visible("Quick safety check", timeout) {
             press(session, "down")?;
             press(session, "enter")?;
             continue;
         }
         if visible("Choose the text style", timeout) {
+            press(session, "enter")?;
+            continue;
+        }
+        if visible("Security notes", timeout) {
             press(session, "enter")?;
             continue;
         }
@@ -648,13 +646,24 @@ fn run_adapter(id: HarnessId, port: u16) -> Result<AdapterReport> {
             .with_context(|| format!("{id} rejected the typed prompt"))?;
     }
 
-    session
+    if let Err(error) = session
         .get_by_text(LIVE_REPLY_MARKER)
         .expect_with(LocatorExpectOptions {
             not: false,
             timeout_ms: Some(120_000),
         })
-        .with_context(|| format!("{id} never rendered the fixed reply marker"))?;
+    {
+        let cast = session.recording().unwrap_or_default();
+        let tail: String = cast
+            .chars()
+            .rev()
+            .take(4_000)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect();
+        bail!("{id} never rendered the fixed reply marker: {error}\ncast tail:\n{tail}");
+    }
 
     let screen = match session.execute(Operation::Text { full: true })? {
         OperationResult::Text(text) => text,
@@ -683,6 +692,12 @@ fn run_adapter(id: HarnessId, port: u16) -> Result<AdapterReport> {
         "{id} cast timestamps are not monotonic"
     );
 
+    // Let the turn finish writing before the PTY closes: an interactive
+    // harness (opencode) persists the assistant record after output goes idle,
+    // and a hard close can race that write.
+    let _ = session.execute(Operation::WaitIdle {
+        timeout_ms: Some(30_000),
+    });
     session.close().ok();
     drop(session);
 
@@ -694,9 +709,18 @@ fn run_adapter(id: HarnessId, port: u16) -> Result<AdapterReport> {
         let registry = Registry::discover();
         let adapter = registry.get(id);
         let session = discover_session(adapter, &home)?;
-        let chunk = adapter
+        // The harness may append its assistant record a beat after the reply
+        // lands on the grid; poll the real adapter until the turn is complete.
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let mut chunk = adapter
             .read_from(&session, 0)
             .with_context(|| format!("{id} read_from rejected its own transcript"))?;
+        while chunk.events.len() < 2 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(200));
+            chunk = adapter
+                .read_from(&session, 0)
+                .with_context(|| format!("{id} read_from rejected its own transcript"))?;
+        }
         assert_eq!(chunk.skipped, 0, "{id} adapter skipped records");
         assert!(!chunk.reset, "{id} adapter reset a fresh transcript");
         assert!(!chunk.events.is_empty(), "{id} transcript decoded no events");
