@@ -33,6 +33,8 @@ test-godot: check-generated
     godot --headless --path godot --script res://1_payload.test.gd
     godot --headless --path godot --script res://2_phase_view.test.gd
     # Godot exits 0 on a failed script assert, so the receipt line is the gate.
+    godot --headless --path godot --quit-after 200 --script res://2a_overlay_geometry.test.gd -- --control | tee /dev/stderr | grep -q '^OVERLAY_GEOMETRY_OK'
+    # Godot exits 0 on a failed script assert, so the receipt line is the gate.
     godot --headless --path godot --quit-after 200 --script res://4_dash_dance.test.gd -- --control | tee /dev/stderr | grep -q '^DASH_DANCE_OK'
 
 godot-build:
