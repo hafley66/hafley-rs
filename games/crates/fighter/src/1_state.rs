@@ -142,3 +142,17 @@ impl State {
         self.phase_tick = 0;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Phase;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn phase_inventory_is_single_authority_with_unique_names() {
+        let names: Vec<_> = Phase::ALL.iter().map(|phase| phase.name()).collect();
+        let unique: BTreeSet<_> = names.iter().copied().collect();
+        assert_eq!(names.len(), 12);
+        assert_eq!(unique.len(), names.len(), "duplicate Phase names");
+    }
+}

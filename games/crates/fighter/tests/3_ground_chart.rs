@@ -20,3 +20,11 @@ fn generated_ground_chart_exposes_ground_policy_and_none_semantics() {
     assert!(!chart.contains("Handled"));
     assert_eq!(chart.matches("```mermaid").count(), 3);
 }
+
+#[test]
+fn generated_ground_chart_covers_the_shared_phase_inventory() {
+    let chart = render();
+    for phase in game_fighter::Phase::ALL {
+        assert!(chart.contains(phase.name()), "chart omits {}", phase.name());
+    }
+}

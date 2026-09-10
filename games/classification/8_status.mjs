@@ -49,7 +49,11 @@ export async function fileHashes(files, base = root) {
 }
 
 // Pure join. Every input is explicit so tests can mutate it.
-export function joinStatus({ catalog, phases, phaseAnimation, manifestFiles, manifestFrames, hashes }) {
+export function joinStatus({
+  catalog, phases, phaseAnimation,
+  chartMembership = [], chartExempt = [],
+  manifestFiles, manifestFrames, hashes,
+}) {
   const errors = [];
   const fail = (code, message) => errors.push({ code, message });
 
@@ -70,6 +74,17 @@ export function joinStatus({ catalog, phases, phaseAnimation, manifestFiles, man
     phaseNames.add(phase.name);
   }
 
+  const membership = new Map();
+  for (const entry of chartMembership) {
+    if (!phaseNames.has(entry.phase)) {
+      fail('IMPOSSIBLE_MAPPING', `chart membership references unknown phase ${entry.phase}`);
+      continue;
+    }
+    if (membership.has(entry.phase)) fail('DUPLICATE_MEMBERSHIP', `duplicate chart membership for ${entry.phase}`);
+    membership.set(entry.phase, { ground: Boolean(entry.ground), air: Boolean(entry.air) });
+  }
+  const exempt = new Set(chartExempt);
+
   const actionPhases = new Map();
   const mappedPhases = new Set();
   for (const entry of phaseAnimation) {
@@ -86,8 +101,25 @@ export function joinStatus({ catalog, phases, phaseAnimation, manifestFiles, man
     actionPhases.get(entry.action).add(entry.phase);
   }
   for (const phase of phases) {
-    if (!mappedPhases.has(phase.name)) fail('MISSING_PHASE', `${phase.name} has no catalog mapping`);
+    if (!mappedPhases.has(phase.name)) {
+      fail('MISSING_PHASE', `${phase.name} has no catalog mapping`);
+      continue;
+    }
+    const member = membership.get(phase.name);
+    const participates = Boolean(member && (member.ground || member.air));
+    if (!participates && !exempt.has(phase.name)) {
+      fail('CHART_MEMBERSHIP', `${phase.name} has no executable ground/air transition and no exemption`);
+    }
   }
+
+  // Per mapped host phase, the executable chart edge or explicit exemption.
+  const chartFor = name => {
+    const member = membership.get(name);
+    if (member?.ground && member?.air) return `${name}:ground+air`;
+    if (member?.ground) return `${name}:ground`;
+    if (member?.air) return `${name}:air`;
+    return exempt.has(name) ? `${name}:exempt` : `${name}:none`;
+  };
 
   const rows = catalog.map(entry => {
     const expected = manifestFiles?.[entry.file];
@@ -105,6 +137,7 @@ export function joinStatus({ catalog, phases, phaseAnimation, manifestFiles, man
       frames: manifestFrames?.[entry.action] ?? null,
       hash,
       phases: mapped,
+      chart: mapped.map(chartFor),
       selected: mapped.length > 0,
     };
   });
@@ -113,8 +146,8 @@ export function joinStatus({ catalog, phases, phaseAnimation, manifestFiles, man
 }
 
 export function renderRows({ rows, errors }) {
-  const header = ['id', 'action', 'file', 'frames', 'hash', 'phases', 'selected'];
-  const widths = [2, 13, 17, 6, 10, 18, 8];
+  const header = ['id', 'action', 'file', 'frames', 'hash', 'phases', 'chart', 'selected'];
+  const widths = [2, 13, 17, 6, 10, 18, 30, 8];
   const line = values => values.map((value, index) =>
     index === 0 || index === 3 ? String(value).padStart(widths[index]) : String(value).padEnd(widths[index])).join(' ');
   const lines = ['FALCON', line(header)];
@@ -126,6 +159,7 @@ export function renderRows({ rows, errors }) {
       row.frames ?? '?',
       row.hash,
       row.phases.length ? row.phases.join(',') : '-',
+      row.chart.length ? row.chart.join(',') : '-',
       row.selected ? 'selected' : 'unselected',
     ]));
   }
@@ -140,6 +174,8 @@ export function joinExport(assembled, manifest, hashes) {
     catalog: assembled.catalog,
     phases: assembled.phases,
     phaseAnimation: assembled.phase_animation,
+    chartMembership: assembled.chart_membership,
+    chartExempt: assembled.chart_exempt,
     manifestFiles: manifest.files,
     manifestFrames: manifest.frames,
     hashes,
