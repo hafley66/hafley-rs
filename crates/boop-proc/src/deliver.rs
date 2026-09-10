@@ -230,7 +230,7 @@ impl PanePaster for TmuxPaster {
 /// |---|---|---|
 /// | `window` | 60 s | `BOOP_DOOR_WINDOW_SECS` |
 /// | `cooldown` | 300 s | `BOOP_DOOR_COOLDOWN_SECS` |
-/// | `floor` | 2 | `BOOP_DOOR_FLOOR` |
+/// | `floor` | 32 | `BOOP_DOOR_FLOOR` |
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DoorBudget {
     pub window: Duration,
@@ -243,7 +243,7 @@ impl Default for DoorBudget {
         DoorBudget {
             window: Duration::from_secs(60),
             cooldown: Duration::from_secs(300),
-            floor: 2,
+            floor: 32,
         }
     }
 }
@@ -1337,6 +1337,250 @@ mod tests {
             "a route already cooling off records no second trip"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// REGRESSION (historical floor override). With an explicit floor of two,
+    /// a coordinator with one live lane has allowance two. Two distinct pushes
+    /// in a 60-second window are open; the third records one 300-second
+    /// cool-off. At the exact expiry, a new two-push burst is open again and
+    /// its third distinct body records the next cool-off. Every decision uses
+    /// an explicit clock value, so this test has no sleep or wall-clock race.
+    #[test]
+    fn explicit_clock_reproduces_two_push_cooloff_and_subsequent_unique_burst() {
+        let (dir, store) = burst_fixture(
+            "explicit-clock",
+            1,
+            &[
+                "clock-one",
+                "clock-two",
+                "clock-three",
+                "clock-four",
+                "clock-five",
+            ],
+        );
+        let route = "claude-explicit-clock";
+        let routes = bus::read_routes(&dir).unwrap();
+        let budget = budget(60_000, 300_000, 2);
+        const FIRST: u64 = 1_000_000;
+        const FIRST_TRIP: u64 = FIRST + 2_000;
+        const SECOND_BURST: u64 = FIRST_TRIP + 300_000;
+
+        let record_push = |id: &str, at_ms: u64| {
+            store
+                .append_delivery_transition(
+                    id,
+                    route,
+                    Some(HarnessId::Claude),
+                    "accepted-by-harness",
+                    "door",
+                    None,
+                    at_ms,
+                )
+                .unwrap();
+        };
+
+        assert_eq!(
+            door_verdict(&store, route, &routes, "clock-one", &budget, FIRST).unwrap(),
+            DoorVerdict::Open
+        );
+        record_push("m-explicit-clock-0", FIRST);
+        assert_eq!(
+            door_verdict(&store, route, &routes, "clock-two", &budget, FIRST + 1_000).unwrap(),
+            DoorVerdict::Open
+        );
+        record_push("m-explicit-clock-1", FIRST + 1_000);
+
+        let first = door_gate(&store, route, &routes, "clock-three", &budget, FIRST_TRIP)
+            .unwrap()
+            .expect("the third unique push crosses allowance two");
+        assert_eq!(first.rung, Rung::CoolOff);
+        assert_eq!(first.detail, "2 door pushes in 60s against 2 live connects");
+        let first_row = store.latest_door_blowout(route).unwrap().unwrap();
+        assert_eq!(
+            (
+                first_row.at_ms,
+                first_row.pushes,
+                first_row.budget,
+                first_row.window_ms,
+                first_row.cooldown_ms,
+            ),
+            (FIRST_TRIP, 2, 2, 60_000, 300_000)
+        );
+
+        assert_eq!(
+            door_verdict(
+                &store,
+                route,
+                &routes,
+                "clock-three",
+                &budget,
+                SECOND_BURST - 1,
+            )
+            .unwrap(),
+            DoorVerdict::CoolingOff {
+                until_ms: SECOND_BURST
+            }
+        );
+        let still_cooling = door_gate(
+            &store,
+            route,
+            &routes,
+            "clock-four",
+            &budget,
+            SECOND_BURST - 1,
+        )
+        .unwrap()
+        .expect("the route stays cooling until the exact expiry");
+        assert_eq!(still_cooling.rung, Rung::CoolOff);
+        assert_eq!(store.door_blowouts(route).unwrap().len(), 1);
+
+        assert_eq!(
+            door_verdict(&store, route, &routes, "clock-three", &budget, SECOND_BURST).unwrap(),
+            DoorVerdict::Open,
+            "the cool-off expires at at_ms + cooldown_ms"
+        );
+        record_push("m-explicit-clock-2", SECOND_BURST);
+        assert_eq!(
+            door_verdict(
+                &store,
+                route,
+                &routes,
+                "clock-four",
+                &budget,
+                SECOND_BURST + 1_000,
+            )
+            .unwrap(),
+            DoorVerdict::Open
+        );
+        record_push("m-explicit-clock-3", SECOND_BURST + 1_000);
+
+        let second = door_gate(
+            &store,
+            route,
+            &routes,
+            "clock-five",
+            &budget,
+            SECOND_BURST + 2_000,
+        )
+        .unwrap()
+        .expect("the subsequent third unique push crosses allowance two");
+        assert_eq!(second.rung, Rung::CoolOff);
+        assert_eq!(
+            second.detail,
+            "2 door pushes in 60s against 2 live connects"
+        );
+        let trips = store.door_blowouts(route).unwrap();
+        assert_eq!(trips.len(), 2);
+        assert_eq!(
+            (
+                trips[0].at_ms,
+                trips[0].pushes,
+                trips[1].at_ms,
+                trips[1].pushes
+            ),
+            (SECOND_BURST + 2_000, 2, FIRST_TRIP, 2)
+        );
+        assert_eq!(
+            store
+                .door_pushes_since(route, SECOND_BURST - 60_000)
+                .unwrap(),
+            2,
+            "the second burst is counted in its own 60-second window"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// REGRESSION (normal unique progress). The default floor admits a burst
+    /// of 32 distinct door bodies in one 60-second window. A repeated body is
+    /// rejected by the existing anti-loop guard before the aggregate budget
+    /// is full. The 33rd distinct body crosses the bounded default and starts
+    /// the normal 300-second cool-off. All decisions use an explicit clock.
+    #[test]
+    fn default_floor_admits_unique_progress_and_bounds_the_33rd_push() {
+        let bodies = (0..33)
+            .map(|index| format!("unique-progress-{index}"))
+            .chain(std::iter::once("unique-progress-0".to_owned()))
+            .collect::<Vec<_>>();
+        let body_refs = bodies.iter().map(String::as_str).collect::<Vec<_>>();
+        let (dir, store) = burst_fixture("default-policy", 1, &body_refs);
+        let route = "claude-default-policy";
+        let routes = bus::read_routes(&dir).unwrap();
+        let budget = DoorBudget::default();
+        const BASE: u64 = 2_000_000;
+
+        assert_eq!(budget.floor, 32);
+        assert_eq!(budget.allowance(route, &routes), 32);
+
+        let record_push = |index: usize, at_ms: u64| {
+            store
+                .append_delivery_transition(
+                    format!("m-default-policy-{index}").as_str(),
+                    route,
+                    Some(HarnessId::Claude),
+                    "accepted-by-harness",
+                    "door",
+                    None,
+                    at_ms,
+                )
+                .unwrap();
+        };
+
+        for index in 0..8 {
+            let at_ms = BASE + index as u64 * 1_000;
+            assert_eq!(
+                door_verdict(&store, route, &routes, &bodies[index], &budget, at_ms).unwrap(),
+                DoorVerdict::Open
+            );
+            record_push(index, at_ms);
+        }
+
+        let duplicate =
+            door_verdict(&store, route, &routes, &bodies[0], &budget, BASE + 8_000).unwrap();
+        match duplicate {
+            DoorVerdict::Blowout {
+                pushes,
+                budget: allowed,
+                why,
+            } => {
+                assert_eq!((pushes, allowed), (8, 32));
+                assert!(why.contains("same body"), "{why}");
+            }
+            other => panic!("duplicate body was not rejected: {other:?}"),
+        }
+
+        for index in 8..32 {
+            let at_ms = BASE + index as u64 * 1_000;
+            assert_eq!(
+                door_verdict(&store, route, &routes, &bodies[index], &budget, at_ms).unwrap(),
+                DoorVerdict::Open
+            );
+            record_push(index, at_ms);
+        }
+
+        let unique =
+            door_verdict(&store, route, &routes, &bodies[32], &budget, BASE + 32_000).unwrap();
+        assert!(matches!(
+            unique,
+            DoorVerdict::Blowout {
+                pushes: 32,
+                budget: 32,
+                ..
+            }
+        ));
+        let bounded = door_gate(&store, route, &routes, &bodies[32], &budget, BASE + 32_000)
+            .unwrap()
+            .expect("the 33rd distinct body crosses the default bound");
+        assert_eq!(bounded.rung, Rung::CoolOff);
+        assert_eq!(
+            bounded.detail,
+            "32 door pushes in 60s against 32 live connects"
+        );
+        let trip = store.latest_door_blowout(route).unwrap().unwrap();
+        assert_eq!(
+            (trip.at_ms, trip.pushes, trip.budget),
+            (BASE + 32_000, 32, 32)
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     fn budget(window_ms: u64, cooldown_ms: u64, floor: usize) -> DoorBudget {

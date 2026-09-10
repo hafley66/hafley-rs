@@ -53,6 +53,8 @@ mod t2_native_wrapper;
 mod t2_replay_fixture;
 #[path = "4_lifecycle_gate.rs"]
 mod t4_lifecycle_gate;
+#[path = "5_delayed_worker_delivery.rs"]
+mod t5_delayed_worker_delivery;
 #[path = "tell.rs"]
 mod tell;
 #[path = "temp_home_rail.rs"]

@@ -142,7 +142,7 @@ DELIVERY: what one send does after the row is written.
     boop db \"SELECT * FROM agent_delivery_transition ORDER BY sequence\"
   and `boop wait <message-id>` prints that history.
   A route takes at most its live connects' worth of door pushes per window
-  (lane children, floor BOOP_DOOR_FLOOR=2, window BOOP_DOOR_WINDOW_SECS=60);
+  (lane children, floor BOOP_DOOR_FLOOR=32, window BOOP_DOOR_WINDOW_SECS=60);
   past that it is cooled off for BOOP_DOOR_COOLDOWN_SECS=300, the row lands
   `cooled-off`, and the trip is a row in agent_door_blowout.
 
