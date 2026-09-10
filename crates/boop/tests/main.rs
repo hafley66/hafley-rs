@@ -49,6 +49,8 @@ mod t0_sqlite_contention;
 mod t1_harness_boundaries;
 #[path = "2_native_wrapper.rs"]
 mod t2_native_wrapper;
+#[path = "2_replay_fixture.rs"]
+mod t2_replay_fixture;
 #[path = "4_lifecycle_gate.rs"]
 mod t4_lifecycle_gate;
 #[path = "tell.rs"]

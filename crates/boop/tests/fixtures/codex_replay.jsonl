@@ -1,0 +1,2 @@
+{"timestamp":"2026-01-01T00:00:00.000Z","ordinal":0,"type":"session_meta","payload":{"session_id":"S-0001","id":"S-0001","parent_thread_id":"S-0000","timestamp":"2026-01-01T00:00:00.000Z","cwd":"/Users/dev/replay","originator":"codex-tui","source":{"subagent":{"thread_spawn":{"parent_thread_id":"S-0000","depth":1,"agent_path":"/Users/dev/replay"}}},"thread_source":"subagent"}}
+{"timestamp":"2026-01-01T00:00:04.630Z","ordinal":1,"type":"event_msg","payload":{"type":"task_complete"}}
