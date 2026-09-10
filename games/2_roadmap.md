@@ -48,6 +48,9 @@ verified before moving code.
 | m3 | [Domain inventory](blender-godot-sqlite-proof/research/10_smash_ecosystem.md) | Candidate inventory is broader than executed labs. Q1–Q6 track qualification without claiming completion. |
 | m4 | [App destination](smash/0_readme.md), [crate destination](crates/0_readme.md) | Approved paths. Package creation, moves and app integration remain A1. |
 | m6 | [Ledger](4_tasks.md) rows S7–S10; receipts `a5ce0af`, `fc11379`, `6bb2d0f` | Foundations integrated. Four uncommitted lanes remain: browser simultaneous-direction input (S7), bounded-rotation atomic-consume trace backend (S8), readable runtime statechart UI (S9), mocked real-harness backbone (S10). No SHA, no stage change. |
+| m7.router | [Registry](classification/1_registry.tsp) `game-ui`; sibling runtime `games/kneeman/app/crates/godot-shell/src/ui/menu/router.rs` and `menu/mod.rs` | Proposed library lift of the proven `Location`/`Nav`/`NavCmd` memory router. The reducer is pure and snapshot-safe; URI codec, dialog gate and host-neutral view projection are specified. No crate exists at stage 1. |
+| m7.adapters | `blender-godot-sqlite-proof/falcon-lab/godot/2_input.gd`, `2_stage.gd`, `3_control.test.gd`; S7 `f5b1142`/`98b4631` | Observed adapters: keys with last-pressed resolution, first connected generic joypad, web touch bar Left/Right/Jump/Fair/Reset/Proof. GameCube-specific adapter absent; hardware unmeasured. GameCube-proportioned touch layout is reference only in sibling `kneeman-lines`. |
+| m7.deploy | `blender-godot-sqlite-proof/falcon-lab/.workflow/deploy.json` (`a5ce0af`, source `428fe2e0`), `prove.json` (`98b4631`, source `addc7e5c`) | `/game3/` serves the older deploy receipt with protected `/game/` unchanged. Current source has no matching receipt and is stale after later changes. Rollback is qualified in isolation; live native-vs-WASM match/netplay remains unqualified. |
 
 ## Runtime ownership and rollback
 
@@ -60,6 +63,7 @@ verified before moving code.
 | Bone matrices/capsules derived entirely from content + restored state | Reusable scratch/cache | Rebuild exactly. No need to copy immutable matrices each tick. |
 | Rapier durable body/collider/joint and other causally relevant state | Physics portion of authoritative world | Restore required state. Rebuilding caches requires replay tests; do not assume transforms alone suffice. |
 | SQLite presentation rows / GPU buffers / cosmetic interpolation | Output adapters | Republish corrected output after replay catch-up. Do not use stale presentation rows as gameplay authority. |
+| Local shell route, dialog gate, nav history, renderer focus/hover/layout | Host-local Redux/UI state, outside the gameplay snapshot | Never restored by gameplay rollback. Match/rules/item commands cross as authoritative effects/events; the route is a statechart codec, not a second source of truth. |
 
 Redux supplies state-transition composition. It does not require an action per bone
 or a serialized mesh per tick. Existing reducers mutate their owned World. GGRS

@@ -240,3 +240,42 @@ render STALE because the new export files changed the source fingerprint; no
 stage advanced. `just status && just test` passed: 6 registry, 7 progress and 8
 status node tests plus D2/SVG freshness. Cargo: 24 fighter tests and 7 smash
 library plus 2 import tests with `--locked --offline -j2`.
+
+## UI routing, host adapters, deploy and netcode, 2026-09-10
+
+Classification-only increment. No UI implementation, dependency move, deployment,
+network call or HTML. This section records the next bounded queue and the observed
+facts so a later pass starts from checked state. Nothing below satisfies a stage
+gate or advances an existing package.
+
+| ID | State | Terminal condition / coordinator checkpoint |
+| --- | --- | --- |
+| U1 | Proposed, stage 1 | Lift the proven Kneeman router into a pure Redux-compatible `crates/ui`: the `Location`/`Nav`/`NavCmd` reducer, route history with `PopTo` breadcrumbs, query-like dialog gate (`NavOut::Fire`), URI encode/decode of route plus dialog into `Location`, and a host-neutral view projection. Terminal: crate exists at `crates/ui`; reducer is pure and total; URI round-trip and history/`PopTo` tests pass; `game-ui` advances 1 -> 2 with the consuming path named. No egui or Godot dependency in the reducer. |
+| U2 | Blocked on U1 | Godot host adapters for keyboard, controller and touch, preserving current behavior. Add a GameCube-specific adapter only if a named device mapping is chosen; none exists today. Terminal: headless adapter tests plus a physical-device or recorded run; `just status` input axes stay explicit. |
+| U3 | Blocked on U1/U2 | One `UiState` drives native and WASM consumers. Godot shell is the first consumer; egui-kit is qualified separately as renderer helpers. Terminal: native and WASM builds observe equal route state from the same reducer; a snapshot/restore test covers route state; renderer-only focus, hover and layout stay host-local. No egui-kit authority over routing. |
+| U4 | Status record | Deploy and netcode: `/game3/` serves the older `a5ce0af` deploy receipt; the current source has no matching prove/deploy receipt and is stale after later code changes; rollback is qualified only in isolation while live native-vs-WASM match/netplay is unqualified. Terminal: a fresh source-fingerprinted prove and deploy receipt for one declared slice, plus a separate result for two-peer native-vs-WASM match determinism. No network implementation here. |
+
+Ownership boundary: the local shell UI route is Redux state outside gameplay
+rollback. Shared match, rules and item commands cross the boundary as authoritative
+effects/events; the gameplay snapshot owns those effects, never the route.
+Renderer-only focus, hover and layout stay host-local. URL projection is a
+statechart codec over route state, not a second source of truth.
+
+Observed current controls, from `falcon-lab/godot/2_stage.gd` and `2_input.gd`:
+A/D or Left/Right with last-pressed resolution (`direction.press`, suspended on
+focus loss), Space jump, S or Down down, J fair, Shift at 0.4 walk scale. Generic
+first connected joypad only: `JOY_AXIS_LEFT_X` above 0.2 sets the axis,
+`JOY_BUTTON_A`/`JOY_BUTTON_Y` jump, `JOY_BUTTON_X` fair, `JOY_AXIS_LEFT_Y > 0.65`
+down. Web touch bar: Left, Right, Jump, Fair, Reset, Proof. A GameCube-specific
+adapter is absent in this checkout and hardware is unmeasured; the
+GameCube-proportioned floating stick and diamond exist only as reference in the
+sibling `kneeman-lines/0_rust_v1_ship/rust-sim/shell/src/kneeman/touch.rs`.
+
+Deploy and netcode facts, from `falcon-lab/.workflow/`: `deploy.json` is
+`a5ce0af`, source `428fe2e0`, URL `https://hafley.codes/game3/`, backup
+`/var/www/smash-godot-game3-backup-20260910152751808`, `protected_unchanged` true.
+`prove.json` is `98b4631`, source `addc7e5c`, all six stages passed. Both predate
+current HEAD `26f6a99`, so neither fingerprint matches current source; the
+recurring `just status` receipts are STALE after the export/movement changes.
+`crates/rollback` qualifies only GGRS synctest restore and replay over a
+deterministic reducer; no live native-vs-WASM match or netplay is qualified.
