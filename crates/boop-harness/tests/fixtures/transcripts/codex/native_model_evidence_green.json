@@ -1,0 +1,30 @@
+{
+  "probe": "f41-native-model-attribution",
+  "fixture": "crates/boop-harness/tests/fixtures/transcripts/codex/codex-native-model.jsonl",
+  "fixture_bytes": 1634,
+  "fixture_lines": 7,
+  "replay": {
+    "channels": "real OS pipe",
+    "schedule_events": 4,
+    "authored_schedule_ms": [
+      0,
+      50,
+      100
+    ],
+    "schedule_semantics": "authored logical schedule; drive() does not wall-clock pace it",
+    "measured_pipe_elapsed_ms": 4,
+    "recorded_equals_replayed": true,
+    "replay_child_exit": 0
+  },
+  "command": "BOOP_F41_EVIDENCE=<path> BOOP_SOURCE_SHA=<sha> cargo test -p boop-harness --test native_model_receipt -j2 -- --nocapture",
+  "source_sha": "4c44069cf57b4e06c4a9282c59ad8a39d1b627d2",
+  "expected_model": "gpt-5.6-luna",
+  "actual_models": [
+    [
+      "gpt-5.6-luna",
+      2
+    ]
+  ],
+  "result": "GREEN_FIXED",
+  "fidelity": "pipe/adapter replay; no PTY or screen emulator exercised"
+}

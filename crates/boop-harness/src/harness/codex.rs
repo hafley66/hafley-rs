@@ -1287,6 +1287,15 @@ fn project_line(
             if let Some(cwd) = payload.get("cwd").and_then(Value::as_str) {
                 *turn_cwd = Some(cwd.to_owned());
             }
+            // The turn_context is Codex's authoritative per-turn model, and the
+            // only model source for rollouts without `thread_settings_applied`.
+            // Without it every usage row fell back to `unknown`; an explicit
+            // settings change still overrides because the last writer wins.
+            if let Some(model) = payload.get("model").and_then(Value::as_str) {
+                if !model.is_empty() {
+                    *current_model = model.to_owned();
+                }
+            }
         }
         kind if BOOKKEEPING.contains(&if kind.is_empty() { outer_type } else { kind }) => {
             // Session bookkeeping, no transcript content: nothing to project
@@ -1732,6 +1741,159 @@ mod tests {
         assert_eq!(input_tokens, 110);
         assert_eq!(output_tokens, 16);
         assert_eq!(cache_read_tokens, 50);
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// `(model bucket, call count)` for one session's usage rows, read through
+    /// the same `dict_model` join the `db usage` report uses.
+    fn usage_models(store: &Store, session: &str) -> Vec<(String, i64)> {
+        let filter = boop_store::usage::UsageQuery {
+            session: Some(session.to_owned()),
+            ..Default::default()
+        };
+        store
+            .usage_report_rows(Some(boop_store::usage::GroupBy::Model), &filter)
+            .unwrap()
+            .into_iter()
+            .map(|row| (row.bucket.unwrap_or_default(), row.calls))
+            .collect()
+    }
+
+    /// Fail-first receipt: the base adapter read only `thread_settings_applied`
+    /// for the model, so a rollout whose authority is `turn_context.payload.model`
+    /// attributed every usage row to `dict_model` `unknown`.
+    #[test]
+    fn turn_context_model_attributes_usage_rows_to_the_real_model() {
+        let fixture =
+            include_str!("../../tests/fixtures/transcripts/codex/codex-native-model.jsonl");
+        let lines: Vec<&str> = fixture.lines().collect();
+        let path = temp_path("native-model");
+        write_lines(&path, &lines);
+        let db_path = temp_path("native-model-db");
+        let _ = std::fs::remove_file(&db_path);
+        let store = Store::open(db_path.clone()).unwrap();
+        let mut session = session_for(&path, std::fs::metadata(&path).unwrap().len());
+        session.parent = Some("parent-session".to_owned());
+        Codex.ingest(&store, &session, 0).unwrap();
+        let models = usage_models(&store, "ses-codex-1");
+        let sidechain: i64 = store
+            .connection()
+            .query_row("SELECT is_sidechain FROM agent_usage LIMIT 1", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        drop(store);
+        assert_eq!(
+            sidechain, 1,
+            "child identity (parent set) survives model attribution"
+        );
+        assert_eq!(
+            models,
+            vec![("gpt-5.6-luna".to_owned(), 2)],
+            "turn_context.payload.model is the per-turn attribution"
+        );
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn missing_model_metadata_preserves_unknown() {
+        let path = temp_path("native-model-absent");
+        write_lines(
+            &path,
+            &[
+                r#"{"timestamp":"2026-09-10T15:06:16.000Z","type":"response_item","payload":{"type":"message","id":"msg_1","role":"user","content":[{"type":"input_text","text":"no model here"}]}}"#,
+                r#"{"timestamp":"2026-09-10T15:06:19.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"output_tokens":1}}}}"#,
+            ],
+        );
+        let db_path = temp_path("native-model-absent-db");
+        let _ = std::fs::remove_file(&db_path);
+        let store = Store::open(db_path.clone()).unwrap();
+        let session = session_for(&path, std::fs::metadata(&path).unwrap().len());
+        Codex.ingest(&store, &session, 0).unwrap();
+        let models = usage_models(&store, "ses-codex-1");
+        drop(store);
+        assert_eq!(
+            models,
+            vec![("unknown".to_owned(), 1)],
+            "absent upstream metadata is preserved, never guessed"
+        );
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn explicit_settings_override_the_turn_context_model() {
+        let path = temp_path("native-model-override");
+        write_lines(
+            &path,
+            &[
+                r#"{"type":"turn_context","payload":{"cwd":"/scrubbed","model":"gpt-turn-one"}}"#,
+                r#"{"type":"response_item","payload":{"type":"message","id":"msg_1","role":"user","content":[{"type":"input_text","text":"one"}]}}"#,
+                r#"{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"output_tokens":1}}}}"#,
+                r#"{"type":"event_msg","payload":{"type":"thread_settings_applied","thread_settings":{"model":"gpt-turn-two"}}}"#,
+                r#"{"type":"response_item","payload":{"type":"message","id":"msg_2","role":"user","content":[{"type":"input_text","text":"two"}]}}"#,
+                r#"{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":20,"output_tokens":2}}}}"#,
+            ],
+        );
+        let db_path = temp_path("native-model-override-db");
+        let _ = std::fs::remove_file(&db_path);
+        let store = Store::open(db_path.clone()).unwrap();
+        let session = session_for(&path, std::fs::metadata(&path).unwrap().len());
+        Codex.ingest(&store, &session, 0).unwrap();
+        let models = usage_models(&store, "ses-codex-1");
+        drop(store);
+        assert_eq!(
+            models,
+            vec![
+                ("gpt-turn-one".to_owned(), 1),
+                ("gpt-turn-two".to_owned(), 1)
+            ],
+            "an explicit per-turn settings change wins over the last turn_context"
+        );
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn incremental_resume_attributes_the_appended_turn_model() {
+        let path = temp_path("native-model-resume");
+        write_lines(
+            &path,
+            &[
+                r#"{"type":"turn_context","payload":{"cwd":"/scrubbed","model":"gpt-turn-one"}}"#,
+                r#"{"type":"response_item","payload":{"type":"message","id":"msg_1","role":"user","content":[{"type":"input_text","text":"one"}]}}"#,
+                r#"{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"output_tokens":1}}}}"#,
+            ],
+        );
+        let db_path = temp_path("native-model-resume-db");
+        let _ = std::fs::remove_file(&db_path);
+        let store = Store::open(db_path.clone()).unwrap();
+        let session = session_for(&path, 0);
+        let first = Codex.ingest(&store, &session, 0).unwrap();
+
+        let mut file = OpenOptions::new().append(true).open(&path).unwrap();
+        for line in [
+            r#"{"type":"turn_context","payload":{"cwd":"/scrubbed","model":"gpt-turn-two"}}"#,
+            r#"{"type":"response_item","payload":{"type":"message","id":"msg_2","role":"user","content":[{"type":"input_text","text":"two"}]}}"#,
+            r#"{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":20,"output_tokens":2}}}}"#,
+        ] {
+            writeln!(file, "{line}").unwrap();
+        }
+        drop(file);
+
+        Codex.ingest(&store, &session, first.next_cursor).unwrap();
+        let models = usage_models(&store, "ses-codex-1");
+        drop(store);
+        assert_eq!(
+            models,
+            vec![
+                ("gpt-turn-one".to_owned(), 1),
+                ("gpt-turn-two".to_owned(), 1)
+            ],
+            "a resumed read attributes only the turns it consumed"
+        );
         let _ = std::fs::remove_file(&db_path);
         let _ = std::fs::remove_file(&path);
     }

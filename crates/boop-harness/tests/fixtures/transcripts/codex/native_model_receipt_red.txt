@@ -1,0 +1,27 @@
+# F41 native model attribution RED receipt (base 4aa53fc007445f9a68d0d4adeaf2347d5f11de0a)
+$ BOOP_F41_EVIDENCE=crates/boop-harness/tests/fixtures/transcripts/codex/native_model_evidence_red.json BOOP_SOURCE_SHA=4aa53fc007445f9a68d0d4adeaf2347d5f11de0a cargo test -p boop-harness --test native_model_receipt -j2 -- --nocapture
+   Compiling boop-harness v0.0.2 (/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-native-model-replay/crates/boop-harness)
+    Building [=======================> ] 246/248: boop-harness                    Building [=======================> ] 247/248: native_model_receipt(test)      Finished `test` profile [unoptimized + debuginfo] target(s) in 2.41s
+     Running tests/native_model_receipt.rs (/Users/chrishafley/.cache/boop/cargo-target/debug/build/boop-harness/5cde66913032016d/out/native_model_receipt-5cde66913032016d)
+
+running 1 test
+
+[31mRED  REPRO[0m | f41 native codex model attribution | expected="gpt-5.6-luna" actual=[("unknown", 2)]
+plain: RED  REPRO | expected_model=gpt-5.6-luna actual_models=[("unknown", 2)] replay_child_exit=0 authored_schedule_ms=[0, 50, 100] measured_pipe_elapsed_ms=5
+
+thread 'native_model_pipe_replay_receipt' (124928031) panicked at crates/boop-harness/tests/native_model_receipt.rs:186:5:
+assertion `left == right` failed: turn_context.payload.model is the per-turn attribution
+  left: [("unknown", 2)]
+ right: [("gpt-5.6-luna", 2)]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test native_model_pipe_replay_receipt ... FAILED
+
+failures:
+
+failures:
+    native_model_pipe_replay_receipt
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p boop-harness --test native_model_receipt`
+exit=101

@@ -1,0 +1,27 @@
+# F41 native model attribution GREEN receipt (fix 4c44069cf57b4e06c4a9282c59ad8a39d1b627d2)
+$ cargo test -p boop-harness --lib -j2 codex::tests::turn_context_model_attributes_usage_rows_to_the_real_model
+   Compiling boop-harness v0.0.2 (/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-native-model-replay/crates/boop-harness)
+    Building [=======================> ] 246/247: boop_harness(test)              Finished `test` profile [unoptimized + debuginfo] target(s) in 1.20s
+     Running unittests src/lib.rs (/Users/chrishafley/.cache/boop/cargo-target/debug/build/boop-harness/0381f800ed78beca/out/boop_harness-0381f800ed78beca)
+
+running 1 test
+test harness::codex::tests::turn_context_model_attributes_usage_rows_to_the_real_model ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 192 filtered out; finished in 0.01s
+
+exit=0
+
+$ BOOP_F41_EVIDENCE=crates/boop-harness/tests/fixtures/transcripts/codex/native_model_evidence_green.json BOOP_SOURCE_SHA=4c44069cf57b4e06c4a9282c59ad8a39d1b627d2 cargo test -p boop-harness --test native_model_receipt -j2 -- --nocapture
+   Compiling boop-harness v0.0.2 (/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-native-model-replay/crates/boop-harness)
+    Building [=======================> ] 246/248: boop-harness                    Building [=======================> ] 247/248: native_model_receipt(test)      Finished `test` profile [unoptimized + debuginfo] target(s) in 1.32s
+     Running tests/native_model_receipt.rs (/Users/chrishafley/.cache/boop/cargo-target/debug/build/boop-harness/5cde66913032016d/out/native_model_receipt-5cde66913032016d)
+
+running 1 test
+
+[32mGREEN FIXED[0m | f41 native codex model attribution | expected="gpt-5.6-luna" actual=[("gpt-5.6-luna", 2)]
+plain: GREEN FIXED | expected_model=gpt-5.6-luna actual_models=[("gpt-5.6-luna", 2)] replay_child_exit=0 authored_schedule_ms=[0, 50, 100] measured_pipe_elapsed_ms=4
+test native_model_pipe_replay_receipt ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+exit=0
