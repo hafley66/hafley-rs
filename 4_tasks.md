@@ -242,6 +242,27 @@ stage advanced. `just status && just test` passed: 6 registry, 7 progress and 8
 status node tests plus D2/SVG freshness. Cargo: 24 fighter tests and 7 smash
 library plus 2 import tests with `--locked --offline -j2`.
 
+Crouch lifecycle receipt, `81576c7`: shared phases now execute
+`CrouchEnter -> CrouchHold -> CrouchExit`; Falcon selects PM3.6 Squat ID18,
+SquatWait ID19 and SquatRv ID20. Imported frame lengths drive exact 8-tick
+enter and 10-tick exit residence, and the full tape restores and replays
+identically. `just status` now derives 18 selected and 4 unselected actions
+(Turn, JumpB, LandingLight, JumpAerialB), with zero integrity failures. Fighter
+tests: 25 passed. Smash ingest tests: 12 passed. Classification/status tests:
+22 passed plus D2/SVG freshness. Source fidelity and native/WASM receipts remain
+unqualified or stale; no stage advanced.
+
+## Attack, geometry and netplay proof chain
+
+This chain follows T1 locomotion completion and precedes T2 ledge work. Each
+gate stops for review before the next begins.
+
+| ID | State | Terminal condition / coordinator checkpoint |
+| --- | --- | --- |
+| V1 | Queued after T1 | Jab and dash attack: snapshot-owned action ID/frame, buffered attack intent, combo/IASA windows and per-target hit registry; shared transition vocabulary with Falcon-owned action mapping. Terminal: startup/active/recovery tapes, imported poses, whiff/hit and rollback-from-each-window tests pass. |
+| V2 | Blocked on V1 | Bone-driven contact: immutable skeleton/animation/hitbox content derives world-space Parry shapes each tick; Rapier retains durable stage/body physics. Terminal: source-frame geometry, Falcon knee contact, whiff and single-hit suppression pass without storing bone matrices in snapshots. |
+| V3 | Blocked on V1/V2 | Native-to-WASM rollback: qualify `matchbox_socket` and `matchbox_server` against existing `ggrs = 0.13.0`; TypeSpec owns protocol/content/ruleset/input/checksum/receipt shapes. Terminal: loopback signaling server plus native and headless WASM peers force a rollback, converge on matching frame checksums and final state, disconnect within a bound, and emit a current source-fingerprinted receipt. |
+
 ## UI routing, host adapters, deploy and netcode, 2026-09-10
 
 Classification-only increment. No UI implementation, dependency move, deployment,
