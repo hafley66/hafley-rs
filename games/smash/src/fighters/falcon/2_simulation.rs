@@ -4,6 +4,8 @@ mod types;
 pub use types::*;
 #[path = "1b_catalog.rs"]
 pub mod catalog;
+#[path = "1c_movement.rs"]
+pub mod movement;
 #[path = "1a_actions.rs"]
 mod lifecycle;
 #[path = "1_sandbag.rs"]
@@ -18,6 +20,7 @@ const JUMP: u8 = 1;
 const ATTACK: u8 = 2;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct World {
+    pub movement: Option<game_fighter::State>,
     #[serde(default)]
     pub input_buffer: Option<InputBuffer>,
     pub frame: i32,
@@ -85,8 +88,10 @@ fn reduce_tick(world: &mut World, bits: u8, actions: &[Action], axis: Option<f32
         bag.advance();
     }
     let pressed = bits & !world.previous_input;
-    let imported = actions.len() == 7;
-    let root = if imported {
+    let imported = actions.len() >= 7;
+    let root = if world.movement.is_some() {
+        movement::advance(world, bits, axis.unwrap_or(0.0), actions)
+    } else if imported {
         lifecycle::advance(world, pressed, actions, axis.unwrap_or(0.0))
     } else {
         if pressed & JUMP != 0 && world.view.root[1] == 0.0 {
@@ -142,9 +147,9 @@ fn reduce_tick(world: &mut World, bits: u8, actions: &[Action], axis: Option<f32
             .map_or([0.0, 24.0, 28.0], |bag| bag.position);
         let overlap = query::intersection_test(
             &Pose::translation(
-                p[0],
+                world.movement.as_ref().map_or(1.0, |s| s.facing) * p[0],
                 p[1] + root[1] + source.y_pos,
-                p[2] + root[2] + source.x_pos,
+                world.movement.as_ref().map_or(1.0, |s| s.facing) * (p[2] + source.x_pos) + root[2],
             ),
             &Ball::new(hb.radius),
             &Pose::translation(target[0], target[1], target[2]),
@@ -185,13 +190,19 @@ pub struct Simulation {
 }
 impl Simulation {
     pub fn new(actions: Arc<[Action]>, launch: bool) -> Self {
-        assert!(matches!(actions.len(), 3 | 7));
+        assert!(matches!(actions.len(), 3 | 7 | 18));
         assert!(actions.iter().all(|a| !a.frames.is_empty()));
         let mut world = World::default();
         if launch {
             world.bag = Some(sandbag::Sandbag::default());
         }
         Self { actions, world }
+    }
+    pub fn new_locomotion(actions: Arc<[Action]>, launch: bool) -> Self {
+        assert_eq!(actions.len(), catalog::CATALOG.len());
+        let mut simulation = Self::new(actions, launch);
+        simulation.world.movement = Some(movement::initial());
+        simulation
     }
     pub fn advance(&mut self, input: u8) -> &World {
         advance_world(&mut self.world, input, &self.actions);

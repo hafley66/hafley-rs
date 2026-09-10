@@ -2,6 +2,12 @@ import "./0_model.tsp";
 using Games;
 
 const entries: Record<Entry> = #{
+  `game-fighter`: #{
+    stage: 2.7, destination: "library", task: "F3",
+    scope: "Parameterized flat-ground locomotion and Redux dispatch; input history, jump and restore tests; source-game equivalence unqualified",
+    manifest: "crates/fighter/Cargo.toml", targets: #["crates/fighter"],
+    evidence: #["4_tasks.md"],
+  },
   `game-content`: #{
     stage: 2.7, destination: "library", task: "A1",
     scope: "Shared action types, offline decoder/baker and checked Rust transition-table emission; Falcon and Kirby fixtures",
@@ -62,7 +68,7 @@ const entries: Record<Entry> = #{
   },
   smash: #{
     stage: 2.7, destination: "app", task: "A1",
-    scope: "Moved seven-action Falcon simulation and snapshot state; executable, general ingest and expanded moves pending",
+    scope: "18-action Falcon catalog and PM numeric ingest; shared locomotion and restore tests; full callbacks and finite stage pending",
     manifest: "smash/Cargo.toml",
     targets: #["smash"], evidence: #["smash/0_readme.md", "3_tasks.md"],
   },

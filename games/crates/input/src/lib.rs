@@ -5,6 +5,9 @@ mod types;
 mod quantize;
 #[path = "2_buffer.rs"]
 mod buffer;
+#[path = "3_history.rs"]
+mod history;
+pub use history::{Frame, History};
 pub use types::PlayerInput;
 pub use quantize::{dequantize_axis, quantize_axis};
 pub use buffer::{Buffer, Outcome};
