@@ -309,7 +309,19 @@ func _physics_process(_delta):
 		return
 	var input := Payload.ControlInput.new()
 	input.buttons = touch_buttons | int(Input.is_physical_key_pressed(KEY_SPACE)) | (int(Input.is_physical_key_pressed(KEY_J)) << 1)
+	input.buttons |= int(Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN)) << 2
 	input.axis = float(touch_right or Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT)) - float(touch_left or Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT))
+	if Input.is_physical_key_pressed(KEY_SHIFT):
+		input.axis *= 0.4
+	var pads := Input.get_connected_joypads()
+	if not pads.is_empty():
+		var pad: int = pads[0]
+		var stick := Input.get_joy_axis(pad, JOY_AXIS_LEFT_X)
+		if absf(stick) > 0.2:
+			input.axis = stick
+		input.buttons |= int(Input.is_joy_button_pressed(pad, JOY_BUTTON_A) or Input.is_joy_button_pressed(pad, JOY_BUTTON_Y))
+		input.buttons |= int(Input.is_joy_button_pressed(pad, JOY_BUTTON_X)) << 1
+		input.buttons |= int(Input.get_joy_axis(pad, JOY_AXIS_LEFT_Y) > 0.65) << 2
 	_control_step(input)
 
 func _process_control_demo():

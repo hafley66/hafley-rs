@@ -112,7 +112,7 @@ impl Controlled {
     #[tracing::instrument(target = "falcon::control", level = "trace", skip_all, fields(buttons = input.buttons, axis = input.axis))]
     pub fn step(&mut self, input: ControlInput) -> Result<(Vec<Row>, ControlledStatus), Error> {
         let buttons = u8::try_from(input.buttons)?;
-        assert_eq!(buttons & !3, 0, "unsupported input bits");
+        assert_eq!(buttons & !7, 0, "unsupported input bits");
         let world = self.simulation.advance_controlled(buttons, input.axis);
         if let Some(recorded) = &mut self.recorded {
             assert!(recorded.len() < CONTROL_TICKS as usize);
@@ -222,7 +222,7 @@ mod tests {
         let mut run = Controlled::new(false).unwrap();
         let before = run.simulation.state().clone();
         for input in [
-            ControlInput { buttons: 4, axis: 0.0 },
+            ControlInput { buttons: 8, axis: 0.0 },
             ControlInput { buttons: 0, axis: -2.0 },
             ControlInput { buttons: 0, axis: 2.0 },
             ControlInput { buttons: 0, axis: f32::NAN },
