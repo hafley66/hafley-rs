@@ -2,6 +2,7 @@ extends Node3D
 
 const Rows = preload("res://1_rows_auto.gd")
 const Payload = preload("res://1_payload_auto.gd")
+const InputAxis = preload("res://2_input.gd")
 
 var extension
 var mesh := ArrayMesh.new()
@@ -25,6 +26,7 @@ var touch_buttons := 0
 var web_inspect := false
 var injected := [false, false, false]
 var fault_note := "FAULTS ARMED: MAIN / PROCESS / RENDER THREAD"
+var direction := InputAxis.new()
 const MOTION_PHASE_NAMES := ["IDLE", "WALK", "DASH", "RUN", "BRAKE", "TURN", "SQUAT", "CROUCH", "LANDING", "JUMP", "FALL", "AIRJUMP"]
 var motion_phase := -1
 var observed_edges := {}
@@ -185,10 +187,10 @@ func _ready():
 			touch_bar.add_child(button)
 			match title:
 				"Left":
-					button.button_down.connect(func(): touch_left = true)
+					button.button_down.connect(func(): touch_left = true; direction.press(-1))
 					button.button_up.connect(func(): touch_left = false)
 				"Right":
-					button.button_down.connect(func(): touch_right = true)
+					button.button_down.connect(func(): touch_right = true; direction.press(1))
 					button.button_up.connect(func(): touch_right = false)
 				"Jump":
 					button.button_down.connect(func(): touch_buttons |= 1)
@@ -451,6 +453,17 @@ static func _render_stall():
 	OS.delay_msec(800)
 	print("FAULT_END render")
 
+func _input(event):
+	# Key order is the only tie-break a digital stick has. `_physics_process`
+	# still polls held state; this records which opposing direction arrived
+	# last so a reverse does not need the old key released first.
+	if event is InputEventKey and event.pressed and not event.echo:
+		match event.physical_keycode:
+			KEY_A, KEY_LEFT:
+				direction.press(-1)
+			KEY_D, KEY_RIGHT:
+				direction.press(1)
+
 func _physics_process(_delta):
 	if not controlled or control_demo:
 		return
@@ -460,7 +473,9 @@ func _physics_process(_delta):
 	var input := Payload.ControlInput.new()
 	input.buttons = touch_buttons | int(Input.is_physical_key_pressed(KEY_SPACE)) | (int(Input.is_physical_key_pressed(KEY_J)) << 1)
 	input.buttons |= int(Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN)) << 2
-	input.axis = float(touch_right or Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT)) - float(touch_left or Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT))
+	input.axis = direction.axis(
+		touch_left or Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT),
+		touch_right or Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT))
 	if Input.is_physical_key_pressed(KEY_SHIFT):
 		input.axis *= 0.4
 	var pads := Input.get_connected_joypads()
@@ -620,7 +635,8 @@ func _apply_graph_layout() -> void:
 			(node.get_child(0) as Label).add_theme_font_size_override("font_size", node_font)
 
 func _notification(what):
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 		touch_left = false
 		touch_right = false
 		touch_buttons = 0
+		direction.reset()

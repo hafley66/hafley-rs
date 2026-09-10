@@ -28,11 +28,21 @@ try {
   await page.addInitScript(() => {
     let meta;
     window.FALCON_TRANSITIONS = [];
+    window.FALCON_SAMPLES = [];
+    window.FALCON_KEYS = [];
+    window.addEventListener('keydown', e => window.FALCON_KEYS.push([e.code, true]));
+    window.addEventListener('keyup', e => window.FALCON_KEYS.push([e.code, false]));
     Object.defineProperty(window, 'FALCON_META', {
       get: () => meta,
       set: next => {
         if (meta?.action !== next.action) window.FALCON_TRANSITIONS.push([window.FALCON_STATUS.simulation_tick, next.action]);
         meta = next;
+        if (window.FALCON_STATUS) window.FALCON_SAMPLES.push({
+          tick: window.FALCON_STATUS.simulation_tick, action: next.action, phase: next.phase,
+          phase_ticks: next.phase_ticks, facing: next.facing, speed: next.speed,
+          axis: window.FALCON_STATUS.input.axis,
+          keys: window.FALCON_KEYS.filter(k => k[1]).map(k => k[0]).sort(),
+        });
       },
     });
   });
@@ -68,12 +78,53 @@ try {
   await page.goto(url + '?inspect=1');
   await page.waitForFunction(() => window.FALCON_STATUS?.simulation_tick > 1, null, { timeout: 90000 });
   const start = await page.evaluate(() => window.FALCON_META.root_z);
+  const dashStart = await page.evaluate(() => window.FALCON_STATUS.simulation_tick);
   await page.keyboard.down('d');
   await page.waitForFunction(() => window.FALCON_META.action === 10);
-  await page.screenshot({ path: join(output, '3a_dash.png') });
+  // Dash dance through the real controlled path: reverse inside the initial
+  // dash without releasing 'd', then alternate by re-pressing. Both DOM keys
+  // are held during each overlap, so a signed sum would emit axis 0 and drop
+  // the reverse; the resolver must hand the newer direction to the reducer.
+  const step = async (up, down, sign) => {
+    if (up) await page.keyboard.up(up);
+    await page.keyboard.down(down);
+    await page.waitForFunction(s => window.FALCON_META.facing === s &&
+      window.FALCON_META.action === 10, sign);
+  };
+  await step(null, 'a', -1);
+  await step('d', 'd', 1);
+  await step('a', 'a', -1);
+  await step('d', 'd', 1);
+  await page.keyboard.up('a');
+  const samples = await page.evaluate(() => window.FALCON_SAMPLES);
+  const danceDebug = await page.evaluate(() => window.FALCON_PHASE_DEBUG);
+  await page.screenshot({ path: join(output, '3a2_dash_dance.png') });
   await page.waitForFunction(() => window.FALCON_META.action === 11 && window.FALCON_META.pose >= 10);
   const running = await page.evaluate(() => ({ ...window.FALCON_META }));
   assert.equal(running.phase, 3);
+  // Reverse edge observed before Run, dash clock restarted each time, facing
+  // flipped, and three-plus alternations stayed in Dash.
+  const danceSamples = samples.filter(s => s.tick >= dashStart);
+  const dashEntry = danceSamples.find(s => s.phase === 2 && s.facing === 1);
+  assert(dashEntry, 'no right-facing Dash sample after keydown');
+  assert.equal(dashEntry.axis, 1, `dash axis ${dashEntry.axis}`);
+  const flips = [];
+  let seenFacing = null;
+  for (let i = danceSamples.indexOf(dashEntry); i < danceSamples.length; i++) {
+    const s = danceSamples[i];
+    if (s.phase !== 2) break;
+    if (seenFacing !== null && s.facing !== seenFacing) flips.push(s);
+    seenFacing = s.facing;
+  }
+  assert(flips.length >= 3, `facing flips inside Dash ${flips.length}`);
+  for (const s of flips) {
+    assert.equal(Math.sign(s.axis), Math.sign(s.facing), `axis ${s.axis} facing ${s.facing} @${s.tick}`);
+    assert(Number.isFinite(s.speed), `speed ${s.speed} @${s.tick}`);
+    assert(s.phase_ticks <= 6, `dash clock did not restart @${s.tick}: ${s.phase_ticks}`);
+  }
+  assert(danceSamples.some(s => s.keys.includes('KeyA') && s.keys.includes('KeyD')),
+    'both DOM keys were never held during a reverse');
+  assert(danceDebug.edges.includes('DASH->DASH'), `edges ${danceDebug.edges}`);
   await page.waitForFunction(() => window.FALCON_PHASE_DEBUG?.active === 3);
   const phaseDebug = await page.evaluate(() => window.FALCON_PHASE_DEBUG);
   assert(phaseDebug.edges.includes('IDLE->DASH'));
@@ -97,7 +148,8 @@ try {
   await page.waitForFunction(() => window.FALCON_META.action === 8 && window.FALCON_META.speed > 0);
   await page.keyboard.up('d');
   await page.keyboard.up('Shift');
-  await page.waitForFunction(() => window.FALCON_STATUS.input.axis === 0);
+  await page.waitForFunction(() => window.FALCON_STATUS.input.axis === 0 &&
+    window.FALCON_META.action === 0 && window.FALCON_META.speed === 0);
   await page.keyboard.down('Space');
   await page.waitForFunction(() => window.FALCON_META.root_y > 0);
   await page.keyboard.up('Space');
@@ -119,6 +171,9 @@ try {
   execFileSync('sh', [resolve(root, '../95_web.sh'), 'encode', video, mp4], { stdio: 'inherit' });
   const receipt = { url, production, native_rows: 300, replayed_states: 120,
     keyboard: true, touch: true, locomotion: { run_speed: running.speed, dash: true, run: true, left_run: true, walk: true },
+    dash_dance: { dash_tick: dashStart, flips: flips.length, reversals: flips,
+      overlap_keys: danceSamples.find(s => s.keys.includes('KeyA') && s.keys.includes('KeyD'))?.keys,
+      samples: danceSamples.filter(s => s.phase === 2) },
     phase_debug: phaseDebug, transitions, errors, video, mp4, output };
   writeFileSync(join(output, 'receipt.json'), JSON.stringify(receipt, null, 2));
   if (!production) writeFileSync(resolve(root, 'build/web-game3/verified.json'),
