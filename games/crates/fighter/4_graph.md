@@ -8,6 +8,13 @@ semantic dispatch, not the source game's full per-tick callback schedule.
 Scope: action exclusivity, transitions, guards, ordering and snapshot semantics.
 No velocity integration, collision solver, device mapping or animation renderer.
 
+The current grounded runtime decision slice has a generated exhaustive chart at
+`5_ground_chart.md`. Regenerate it with `just ground-chart` from `games/`; the
+freshness test is `tests/3_ground_chart.rs`. The chart calls `ground::decide` for
+all 12 phases, all three event variants and all 128 assignments of the seven
+semantic facts. It is a view of the live function, not a second transition
+specification.
+
 ## Local sources
 
 Paths below are relative to the user's projects directory. These are read-only

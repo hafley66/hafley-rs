@@ -1,6 +1,10 @@
 default:
     @just --list
 
+# Render the live fighter ground decision function into its colocated chart.
+ground-chart:
+    cargo run --manifest-path crates/fighter/Cargo.toml --example ground_chart -- --write
+
 # D2 0.7.1; commit source and rendered SVG together.
 map:
     node classification/2_registry.mjs generate
