@@ -2,6 +2,7 @@
   "source": "https://rukaidata.com/PM3.6/Captain%20Falcon/subactions/",
   "retrieved": "2026-09-08",
   "decoder": "brawllib_rs 0.29.0 (MIT), bincode 2 standard serde",
+  "source_boundary": "Rukaidata GitHub is the generator/parser source; these retained PM3.6 files are literal generated webpage artifacts embedding base64+bincode payloads; raw PAC/GCT inputs are absent from this checkout. Melee transition rules are generated separately from the pinned github.com/doldecomp/melee submodule (see falcon/generated/2_source_rules.json).",
   "copied_from": "games/blender-godot-sqlite-proof/fixtures (primary checkout; rukaidata-mirror for subactions, fixtures/falcon for AttackAirF)",
   "files": {
     "Wait1.html": "b5d904b01c4c35630801de7062ed2d495904abb1b4da9d11e97c6dee38f29207",

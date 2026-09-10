@@ -1,6 +1,12 @@
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { COLUMNS, joinStatus, loadStatus, receiptObservation, currentSource } from './8_status.mjs';
+
+const sourceRules = JSON.parse(await readFile(
+  fileURLToPath(new URL('../smash/src/fighters/falcon/generated/2_source_rules.json', import.meta.url)),
+  'utf8'));
 
 const authored = await loadStatus();
 const H = 'a'.repeat(64);
@@ -173,4 +179,42 @@ test('the current source fingerprint recomputes to a stable digest', () => {
   const source = currentSource();
   assert.match(source, /^[0-9a-f]{64}$/);
   assert.equal(source, currentSource());
+});
+
+// SOURCE RULES input logic: the printed count, pin and unresolved reasons come
+// from the generated rules JSON alone. The submodule pin is read live; no
+// HTML/SVG snapshot.
+test('source rules pin the melee submodule with resolved sources per rule', () => {
+  assert.equal(sourceRules.repository, 'https://github.com/doldecomp/melee.git');
+  assert.match(sourceRules.revision, /^[0-9a-f]{40}$/);
+  assert.ok(sourceRules.rules.length > 0);
+  for (const rule of sourceRules.rules) {
+    for (const key of ['from', 'event', 'to', 'guard']) assert.ok(rule[key], `rule missing ${key}`);
+    assert.ok(rule.source, 'rule without a resolved source');
+    assert.equal(rule.source.repository, sourceRules.repository);
+    assert.equal(rule.source.revision, sourceRules.revision);
+    assert.match(rule.source.path, /^src\//);
+    assert.ok(rule.source.line > 0);
+    assert.ok(rule.source.symbol);
+  }
+  for (const item of sourceRules.unresolved) {
+    assert.ok(item.symbol && item.reason, 'unresolved entries carry a symbol and reason');
+  }
+});
+
+test('the submodule pin equals the rules revision and the manifest names the boundary', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const toplevel = execFileSync('git', ['rev-parse', '--show-toplevel'],
+    { cwd: fileURLToPath(new URL('../', import.meta.url)), encoding: 'utf8' }).trim();
+  const pin = execFileSync('git', ['ls-files', '-s', 'games/vendor/melee'],
+    { cwd: toplevel, encoding: 'utf8' }).trim();
+  const pinSha = pin.split(/\s+/)[1];
+  if (pinSha) assert.equal(pinSha, sourceRules.revision);
+  const manifest = JSON.parse(await readFile(
+    fileURLToPath(new URL('../smash/src/fighters/falcon/imported/0_sources.json', import.meta.url)),
+    'utf8'));
+  assert.match(manifest.source_boundary, /Rukaidata GitHub/);
+  assert.match(manifest.source_boundary, /literal generated webpage artifacts/);
+  assert.match(manifest.source_boundary, /raw PAC\/GCT inputs are absent/);
+  assert.match(manifest.source_boundary, /doldecomp\/melee/);
 });

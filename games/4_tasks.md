@@ -252,6 +252,12 @@ tests: 25 passed. Smash ingest tests: 12 passed. Classification/status tests:
 22 passed plus D2/SVG freshness. Source fidelity and native/WASM receipts remain
 unqualified or stale; no stage advanced.
 
+## Pinned-source rules milestone, 2026-09-10
+
+| ID | State | Terminal condition / coordinator checkpoint |
+| --- | --- | --- |
+| P1 | Done, bounded codegen | `61b2195` generates Falcon transition rules and charts from the pinned github.com/doldecomp/melee submodule (c7861544f8e1fbc530612393e91d859886e97e3c): melee transition rules now come from the pinned submodule. The retained Rukaidata PM3.6 files remain literal generated webpage artifacts embedding base64+bincode payloads; raw PAC/GCT inputs are absent. Rukaidata GitHub is the generator/parser source of those artifacts. `just status` prints the derived SOURCE RULES section (rule count, pinned repository@revision, unresolved symbols) from `smash/src/fighters/falcon/generated/2_source_rules.json`. TC39 stage delta: 0; no behavior change; Melee/PM3.6 fidelity stays unqualified. Status tests cover the section's pure input pin and structure. |
+
 ## Attack, geometry and netplay proof chain
 
 This chain follows T1 locomotion completion and precedes T2 ledge work. Each
