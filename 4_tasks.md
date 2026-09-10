@@ -154,3 +154,10 @@ headless tests cover DASH self-transition, duplicate samples and rewind.
 Full visual proof passed: `.workflow/prove-UaYS9r/receipt.json` under the Falcon
 lab, all six stages. Static PNG and captured Run frame inspected. Stage remains
 2.7; the graph covers local grounded decisions and observed samples only.
+
+S5 deployment receipt: `a5ce0af` published to `https://hafley.codes/game3/`.
+Falcon lab `.workflow/deploy-a5hZFy/receipt.json` passed production browser
+acceptance and exact artifact hashes; protected `/game/` unchanged. Backup:
+`/var/www/smash-godot-game3-backup-20260910152751808`. Domain `just test` passed
+six registry tests and roadmap freshness checks. Opus followup is bounded to a
+real native Falcon-to-observer dash-dance regression, without behavior changes.
