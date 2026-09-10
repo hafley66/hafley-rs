@@ -85,7 +85,7 @@ inspection pass, and no maturity promotion is claimed.
 | S2 | In progress, four-edge qualification | State-only crouch cycle implemented with statig + Redux; lifecycle, rejected/competing facts and clone/JSON suffix tests. Other action interrupts and callback scheduling remain unqualified. No physics formulas or input-device wiring. |
 | S3 | Queued | Replace matching live Falcon transition policy with tested shared chart while retaining existing physics and presentation. Verify the consumer and restore traces; expand common families through scoped green commits. |
 | S4 | Done, bounded ingest | Append four verified locomotion clips without renumbering IDs 0-17. Catalog now 22; all 23 retained payload hashes including attributes verified. Full eight-test Smash ingest suite passes after constructor accepts current catalog length. Animation selection remains S3. |
-| S5 | In progress | Publish actual movement phase/phase age through generated presentation boundary; debug view tracks observed transitions and handles rewind/unknown state. Headless tests before merge; graph drawing and MP4 coverage reported separately. |
+| S5 | Done, bounded observed graph | 763f336 publishes phase/age, draws observed GraphEdit edges with active highlight, handles rewind/repeated ticks/unknown state. Full proof, inspected H.264 and protected production deployment passed. Complete source/legal-edge graph remains S1/S2. |
 
 All unfinished A/Q/M/G/P tasks retain their prior dispositions. S1-S3 govern the
 current ordering; full network world, friends' content and multiplayer remain
@@ -124,4 +124,15 @@ phase, invalid-code and repeated-tick handling, plus browser graph assertions.
 Graph state is a presentation observer, reset on rewind or absent movement.
 It never supplies simulation transitions. Complete legal edges remain S1/S2.
 `just test-godot` passes generated freshness, row/payload checks and the new
-headless phase-view regression. Full proof/MP4 and deployment receipts are pending.
+headless phase-view regression. Full proof passed all six stages:
+`blender-godot-sqlite-proof/falcon-lab/.workflow/prove-lsenEc/receipt.json`.
+35 Falcon library tests passed; browser asserts actual phase and observed
+Idle -> Dash -> Run edges, stable previous phase, dash/run poses and signed speed.
+Inspected H.264: `falcon-browser-VUG1W9/proof.mp4` in the system temporary directory,
+960x540, 308 frames, 12.32 seconds, 895374 bytes. The graph is clear of Falcon.
+Production receipt: `blender-godot-sqlite-proof/falcon-lab/.workflow/deploy-mEG4UH/receipt.json`.
+Published source 763f336 at https://hafley.codes/game3/; production browser and
+artifact checks passed, protected /game/ unchanged. Recoverable prior Game3:
+`/var/www/smash-godot-game3-backup-20260910144335087`.
+S3 remains queued: migrate grounded permissions/interrupt priority to statig,
+including Turn jump permission, without adding attacks or contacts.

@@ -57,7 +57,7 @@ const entries: Record<Entry> = #{
     scope: "Falcon importer, boundary tooling and observed live phase graph; complete legal-edge graph and promotion split pending",
     manifest: "blender-godot-sqlite-proof/falcon-lab/Cargo.toml",
     targets: #["crates/content", "crates/presentation", "smash"],
-    evidence: #["blender-godot-sqlite-proof/falcon-lab/109_tasks.md"],
+    evidence: #["4_tasks.md", "blender-godot-sqlite-proof/falcon-lab/109_tasks.md"],
   },
   falcon_web: #{
     stage: 2.7, destination: "split", task: "Q3",
