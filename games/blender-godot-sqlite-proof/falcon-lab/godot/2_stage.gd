@@ -25,6 +25,9 @@ var touch_buttons := 0
 var web_inspect := false
 var injected := [false, false, false]
 var fault_note := "FAULTS ARMED: MAIN / PROCESS / RENDER THREAD"
+const MOTION_PHASE_NAMES := ["IDLE", "WALK", "DASH", "RUN", "BRAKE", "TURN", "SQUAT", "CROUCH", "LANDING", "JUMP", "FALL", "AIRJUMP"]
+var motion_phase := -1
+var observed_edges := {}
 
 func _ready():
 	if not ClassDB.class_exists("FalconSql"):
@@ -368,6 +371,23 @@ func _control_step(input: Payload.ControlInput):
 	captions[7].text = "A/D: DASH / SHIFT: WALK / SPACE: JUMP / S: DOWN / J: FAIR"
 	captions[8].text = "RUST PARRY CONTACT / RAPIER BAG / PM POSES"
 	captions[9].text = "0.5X DEMO / LANDING RECOVERY / THIRD JUMP" if control_demo else "60 HZ / SPEED %+.3f UNITS/TICK / FACING %s" % [meta.speed, "LEFT" if meta.facing < 0 else "RIGHT"]
+	# Actual live locomotion phase, not the animation action/pose above.
+	# Previous phase and the transition tick are observed from the presented
+	# stream; the edge list is observed only, never a complete legal-edge graph.
+	if not control_demo:
+		if meta.phase >= 0.0:
+			var now := int(meta.phase)
+			var enter := int(state.simulation_tick) - int(meta.phase_ticks) + 1
+			var prev_label: String = "NONE" if motion_phase < 0 else MOTION_PHASE_NAMES[motion_phase]
+			if motion_phase >= 0 and motion_phase != now:
+				observed_edges["%s->%s" % [MOTION_PHASE_NAMES[motion_phase], MOTION_PHASE_NAMES[now]]] = true
+			motion_phase = now
+			captions[8].text = "LIVE PHASE %s / PREV %s / T%d [OBSERVED]" % [MOTION_PHASE_NAMES[now], prev_label, enter]
+			var edges: String = "NONE" if observed_edges.is_empty() else ", ".join(PackedStringArray(observed_edges.keys()))
+			captions[9].text = "OBSERVED EDGES (not a legal-edge graph): %s / HIGHLIGHT %s" % [edges, MOTION_PHASE_NAMES[now]]
+		else:
+			captions[8].text = "LIVE PHASE NONE / NO MOVEMENT STATE"
+			captions[9].text = "OBSERVED EDGES (not a legal-edge graph): NONE"
 
 func _notification(what):
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:

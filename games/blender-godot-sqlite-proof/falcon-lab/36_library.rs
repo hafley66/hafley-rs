@@ -16,6 +16,9 @@ mod cli;
 mod repeat;
 #[path = "90_control.rs"]
 mod control;
+#[path = "1d_phase_debug.rs"]
+pub mod phase_debug;
+pub use phase_debug::PhaseDebug;
 #[path = "106_buffer.rs"]
 mod buffer_proof;
 pub use control::bake_web;

@@ -10,8 +10,9 @@ func _init():
 		for index in range(24):
 			packed.append(index + 0.25)
 	var frame := Rows.frame_values(packed, 7)
-	assert(frame.size() == 19)
+	assert(frame.size() == 21)
 	assert(frame.damage == 5.25 and frame.confirmed == 18.25)
+	assert(frame.phase == 19.25 and frame.phase_ticks == 20.25)
 	assert(Rows.frame_values(packed).is_empty())
 	assert(Rows.target_values(packed, 7) == {
 		"x": 0.25, "y": 1.25, "z": 2.25, "vx": 3.25, "vy": 4.25,

@@ -771,6 +771,7 @@ dependencies = [
  "core-labs",
  "game-capture",
  "game-content",
+ "game-fighter",
  "ggrs",
  "godot",
  "parry3d",
@@ -974,6 +975,7 @@ dependencies = [
  "game-input",
  "redux",
  "serde",
+ "statig",
  "tracing",
 ]
 

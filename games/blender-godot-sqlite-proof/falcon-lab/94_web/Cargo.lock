@@ -228,6 +228,7 @@ dependencies = [
  "bincode",
  "cgmath",
  "core-labs",
+ "game-fighter",
  "godot",
  "parry3d",
  "rusqlite",
@@ -275,6 +276,7 @@ dependencies = [
  "game-input",
  "redux",
  "serde",
+ "statig",
  "tracing",
 ]
 
