@@ -1,4 +1,4 @@
-# Generated from 0_presentation.tsp; sha256:055253d52b18369f5035b4ec7038efff8d8212f9988b5d260e3e715865b0e190
+# Generated from 0_presentation.tsp; sha256:f098260e9e1188be0bd81c1966517cfb1330c41dac416339c6c9637be86b7130
 version: 4
 namespace: FalconBoundary
 constants:
@@ -241,7 +241,7 @@ models:
       rust: u32
       type: uint32
       minimum: 0
-      maximum: 3
+      maximum: 7
     - name: axis
       rust: f32
       type: float32
@@ -452,10 +452,10 @@ models:
     - name: animation_y
       rust: f64
       type: float64
-    - name: reserved_13
+    - name: facing
       rust: f64
       type: float64
-    - name: reserved_14
+    - name: speed
       rust: f64
       type: float64
     - name: restored
@@ -634,10 +634,10 @@ rows:
       - name: animation_y
         offset: 12
         length: 1
-      - name: reserved_13
+      - name: facing
         offset: 13
         length: 1
-      - name: reserved_14
+      - name: speed
         offset: 14
         length: 1
       - name: restored

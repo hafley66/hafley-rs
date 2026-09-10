@@ -1,4 +1,4 @@
-# Generated from 0_presentation.tsp; sha256:055253d52b18369f5035b4ec7038efff8d8212f9988b5d260e3e715865b0e190
+# Generated from 0_presentation.tsp; sha256:f098260e9e1188be0bd81c1966517cfb1330c41dac416339c6c9637be86b7130
 extends RefCounted
 
 const BUFFER_FLAG = "--buffer-proof"
@@ -316,7 +316,7 @@ class ControlInput:
 		var out := ControlInput.new()
 		assert(data.has("buttons"), "Missing ControlInput.buttons")
 		assert(data["buttons"] >= 0, "Out of range ControlInput.buttons")
-		assert(data["buttons"] <= 3, "Out of range ControlInput.buttons")
+		assert(data["buttons"] <= 7, "Out of range ControlInput.buttons")
 		assert(typeof(data["buttons"]) == TYPE_INT, "Invalid ControlInput.buttons")
 		out.buttons = data["buttons"]
 		assert(data.has("axis"), "Missing ControlInput.axis")

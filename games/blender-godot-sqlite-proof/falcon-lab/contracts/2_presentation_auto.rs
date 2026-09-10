@@ -1,4 +1,4 @@
-// Generated from 0_presentation.tsp; sha256:055253d52b18369f5035b4ec7038efff8d8212f9988b5d260e3e715865b0e190
+// Generated from 0_presentation.tsp; sha256:f098260e9e1188be0bd81c1966517cfb1330c41dac416339c6c9637be86b7130
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -169,8 +169,8 @@ pub struct FrameValues {
   pub input: f64,
   pub animation_x: f64,
   pub animation_y: f64,
-  pub reserved_13: f64,
-  pub reserved_14: f64,
+  pub facing: f64,
+  pub speed: f64,
   pub restored: f64,
   pub advances: f64,
   pub total_loads: f64,
@@ -279,8 +279,8 @@ impl FrameValues {
             input: row.values[10],
             animation_x: row.values[11],
             animation_y: row.values[12],
-            reserved_13: row.values[13],
-            reserved_14: row.values[14],
+            facing: row.values[13],
+            speed: row.values[14],
             restored: row.values[15],
             advances: row.values[16],
             total_loads: row.values[17],
@@ -302,8 +302,8 @@ impl FrameValues {
         row.values[10] = self.input;
         row.values[11] = self.animation_x;
         row.values[12] = self.animation_y;
-        row.values[13] = self.reserved_13;
-        row.values[14] = self.reserved_14;
+        row.values[13] = self.facing;
+        row.values[14] = self.speed;
         row.values[15] = self.restored;
         row.values[16] = self.advances;
         row.values[17] = self.total_loads;

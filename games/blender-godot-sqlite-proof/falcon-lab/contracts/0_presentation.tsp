@@ -86,7 +86,7 @@ const CONTROL_SNAPSHOT: uint32 = 180;
 const CONTROL_ACTION_LABELS: string = "IDLE|JUMP|FAIR|JUMP SQUAT|FALL|FAIR LANDING|HEAVY LANDING";
 
 @godot model ControlInput {
-  @minValue(0) @maxValue(3) buttons: uint32;
+  @minValue(0) @maxValue(7) buttons: uint32;
   @minValue(-1) @maxValue(1) axis: float32;
 }
 
@@ -169,8 +169,8 @@ model FrameValues {
   input: float64;
   animation_x: float64;
   animation_y: float64;
-  reserved_13: float64;
-  reserved_14: float64;
+  facing: float64;
+  speed: float64;
   restored: float64;
   advances: float64;
   total_loads: float64;

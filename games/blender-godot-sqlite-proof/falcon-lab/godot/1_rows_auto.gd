@@ -1,4 +1,4 @@
-# Generated from 0_presentation.tsp; sha256:055253d52b18369f5035b4ec7038efff8d8212f9988b5d260e3e715865b0e190
+# Generated from 0_presentation.tsp; sha256:f098260e9e1188be0bd81c1966517cfb1330c41dac416339c6c9637be86b7130
 extends RefCounted
 
 const STRIDE = 27
@@ -21,8 +21,8 @@ static func frame_values(rows: PackedFloat64Array, entity: int = 0) -> Dictionar
 				"input": rows[start + 13],
 				"animation_x": rows[start + 14],
 				"animation_y": rows[start + 15],
-				"reserved_13": rows[start + 16],
-				"reserved_14": rows[start + 17],
+				"facing": rows[start + 16],
+				"speed": rows[start + 17],
 				"restored": rows[start + 18],
 				"advances": rows[start + 19],
 				"total_loads": rows[start + 20],
