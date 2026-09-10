@@ -15,15 +15,61 @@ Sources: `src/{1_state,1a_chart,1b_ground,2_advance,4_ground_chart}.rs`,
 3.6.1 and is never substituted; `codes-3_6.txt` is uninterpreted 3.6 patch words
 (labelled Unknown Code), so every PM3.6 row below stays unresolved.
 
+## Counting unit and totals
+
+One unit is used once below.
+
+- **Source edge**: one ordered (source action, destination action) pair among the
+  in-scope `ftCo_MS_*` actions, established by an inspected callback. A callback
+  that selects N destinations contributes N edges; repeated guards for the same
+  pair contribute one.
+- **Live rule**: one event-qualified `Transition` the dispatcher can take, i.e. a
+  (source `Phase`, `Event`, destination `Phase`) triple in
+  `1b_ground.rs::decide`. A rule is not an edge: several guards can select one
+  source edge, and a rule can be local policy with no source edge.
+
+| Ledger | Count | Basis |
+| --- | --- | --- |
+| Source states | 25 | distinct in-scope `ftCo_MS_*` |
+| In-scope source edges | 42 | remaining table plus live rules, deduplicated by (source, destination) |
+| Represented source edges | 15 | a `1b` rule or procedural phase write executes the pair |
+| Remaining source edges | 27 | rows below with no live rule |
+| Live event-qualified rules | 28 | `1b_ground.rs::decide` triples, also the arrows in `5_ground_chart.md` |
+| ... matching a source edge | 23 | guard selects a pair in the census |
+| ... local policy | 5 | no source edge (Dash self-reversal, local timing) |
+| Isolated crouch rules | 4 | `1a_chart.rs`, not wired to `Phase` |
+| Procedural phase writes | 5 | `2_advance.rs`, no chart authority |
+
+`tests/4_audit_counts.rs` reads the block below, asserts both sums and the
+remaining-row count, and checks that the generated chart still has one arrow per
+live rule.
+
+```text
+source_edges_total=42
+represented_source_edges=15
+remaining_source_edges=27
+live_rules_total=28
+source_matching_rules=23
+local_policy_rules=5
+```
+
+- `represented_source_edges + remaining_source_edges = source_edges_total`
+  (15 + 27 = 42).
+- `source_matching_rules + local_policy_rules = live_rules_total` (23 + 5 = 28).
+
+The rule ledger and the edge ledger are different units and are not additive:
+23 source-matching rules collapse onto 15 represented edges because several
+event-qualified guards select one pair. `42 = 23 + 19` is not an identity here.
+
 ## Coverage matrix
 
 Counts are enumerated, not sampled. `Src states` = distinct `ftCo_MS_*` in scope
-(25). `Src edges` = transitions in an inspected callback whose destination is a
-base state (42). `Chart` = 1b live statig rules (28 event-qualified) and the
-isolated 1a crouch cycle (4). `Live` = executed by `State::advance` and the
-Falcon consumer. Animation IDs are `CATALOG` indices; an ID is never evidence of
-an edge. Fidelity is unqualified everywhere: no Melee/PM callback schedule is
-translated, and no PM3.6 behavior is decoded.
+(25). `Src edges` = distinct in-scope source edges whose source action is in the
+family (42). `Chart` = `1b` live triples (28) and the isolated `1a` crouch cycle
+(4). `Live` = executed by `State::advance` and the Falcon consumer. Animation IDs
+are `CATALOG` indices; an ID is never evidence of an edge. Fidelity is unqualified
+everywhere: no Melee/PM callback schedule is translated, and no PM3.6 behavior is
+decoded.
 
 | Family | Src states | Src edges | Chart (1b / 1a) | Live | Falcon anim (ID) | Restore |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -39,16 +85,19 @@ translated, and no PM3.6 behavior is decoded.
 | Fall variants | 6 | 1 | 0 / 0 | partial | Fall=4 only; FallF/B/Aerial unselected | 360-tick tape |
 | Landing | 1 | 6 | 1 / 0 | partial | LandingHeavy=6, LandingAirF=5, LandingLight=17 unused | 360-tick tape |
 
-Totals: 25 source states; 42 source edges in scope; 28 live chart rules of which
-23 match a cited source edge and 5 are local policy; 4 isolated crouch rules not
-wired to `Phase`; 5 procedural edges with no chart authority;
-27 remaining transitions (below).
+The family `Src edges` column sums to 42 and the `Src states` column to 25; the
+42 edges split into the 15 represented and 27 remaining edges in the ledger
+above. Per-family remaining counts are not stated because the remaining table is
+ordered by callback, not by family, and rows such as `Fall -> FallF/B` and
+`JumpAerialF/B` select signed destinations that cross family rows.
 
 ## Duplicate authorities
 
 1. `1a_chart.rs::Action`/`Facts` (crouch cycle, re-exported as
    `game_fighter::Facts`) and `1b_ground.rs::Phase`/`Facts` are disconnected; the
-   crate exposes two `Facts` types and two primary-action vocabularies.
+   crate exposes two `Facts` types and two primary-action vocabularies. The
+   identity decision below retires `chart::Action` into `Phase`, leaving
+   `State.phase` as the only serialized action authority.
 2. Grounded selection lives in `1b_ground.rs`, while `2_advance.rs` re-decides
    the same phases in `match self.phase` and pre-dispatches `jump_starts_squat`.
 3. Air (`Jump/Fall/AirJump`), takeoff, completion and ground contact transitions
@@ -56,9 +105,32 @@ wired to `Phase`; 5 procedural edges with no chart authority;
 4. Falcon `1c_movement.rs` re-encodes phase semantics into `action` indices and
    overrides (aerial attack, recovery landing) outside `Phase`.
 5. `4_ground_chart.rs::PHASES` and `1_state.rs::Phase` are two orderings that
-   must stay in sync; the generated `5_ground_chart.md` is a third projection.
+   must stay in sync; every `Phase` variant added below grows both arrays, and
+   the generated `5_ground_chart.md` is a third projection.
 6. `Rules` hardcodes common callback timings (`dash_ticks=15`, `turn_ticks`,
    `landing_lag`) as local policy, not decoded source command variables.
+
+## State identity
+
+`State.phase` is the single serialized field that owns action identity.
+`phase_tick` is the action clock, `facing` is the current direction, and neither
+is identity: both move after entry, so they cannot keep `JumpB` distinct from
+`JumpF` once the stick moves. No field, `Action` enum or variant column may carry
+primary-action identity in parallel.
+
+The earlier draft required distinct source states while forbidding a new `Phase`
+variant. That contradiction is withdrawn. A transition to `TurnRun`,
+`CrouchEnter/Hold/Exit`, `JumpB` or `AirJumpB` changes the primary action, so the
+variant lives in `Phase` and is serialized by `State.phase` alone. The isolated
+`1a_chart::Action` is retired into `Phase`; its four edges become edges between
+`Phase` variants.
+
+Required `Phase` expansion, limited to variants the three cuts consume:
+`RunDirect`, `RunBrake` (renaming `Brake`), `TurnRun`, `CrouchEnter`,
+`CrouchHold`, `CrouchExit` (replacing `Crouch`), `JumpF`, `JumpB`, `AirJumpF`,
+`AirJumpB`, and the signed fall variants from cut 3. `Squat` stays the source
+`KneeBend` jumpsquat. Clone and JSON suffix replay must cover the expanded
+`State.phase` with no second identity field.
 
 ## Remaining transitions (ordered by source callback)
 
@@ -104,28 +176,61 @@ item hooks. Jump and fall IASA lists are dominated by attack/air-catch/special
 checks that stay out of scope. `codes-3_6.txt` supplies no readable behavior, so
 all PM3.6 timing and jump/landing differences remain unresolved.
 
-## Next three cuts
+## Three next implementation cuts
 
-1. Ground permission closure. Files: `src/1b_ground.rs`, `src/2_advance.rs`,
-   `tests/2_ground.rs`. Signature: add `Event::GroundContact` and facts
-   `{ turn: bool, squat: bool, squat_hold: bool, walk_tier: u8 }`; return
-   `Option<Phase>` unchanged. Tests: source-ordered cases for rows 1, 2, 4-10,
-   23-27; delete the `jump_starts_squat` pre-dispatch and the duplicate
-   `match self.phase` arms. Terminal: those rows are chart-executed, generated
-   `5_ground_chart.md` is fresh, and no new `Phase` variant exists.
-2. Live crouch cycle. Files: `src/1a_chart.rs`, `src/1_state.rs`,
-   `src/2_advance.rs`, `smash/src/fighters/falcon/1c_movement.rs`,
-   `tests/1_chart.rs`. Signature: `fn action_phase(a: chart::Action) -> Phase`
-   plus `CrouchSlice` dispatch inside `advance`; `State` keeps one serialized
-   field. Tests: rows 11-16, clone and JSON suffix replay, Falcon IDs 18/19/20
-   selected during enter/hold/exit. Terminal: live crouch is three source
-   actions, not hold-only, and `Phase` still has no parallel chart field.
-3. Air family chart. Files: new `src/1c_air.rs` (registered in `src/lib.rs`),
-   `src/2_advance.rs`, `smash/src/fighters/falcon/1c_movement.rs`,
-   `tests/0_movement.rs`. Signature:
-   `air::decide(phase: Phase, ev: AirEvent, f: AirFacts) -> Option<Phase>` with
-   `AirFacts { animation_finished, stick_x, facing, grounded_contact }`. Tests:
-   rows 17-22, JumpF/JumpB and JumpAerialF/B selection, animation-end fall,
-   contact entry into landing. Terminal: air transitions are chart-executed,
-   Falcon selects the signed jump and fall variants, and the 360-tick restore
-   tape still reproduces bit-exact.
+Cut 1 carries the required `Phase` expansion; cuts 2 and 3 add the identity
+variants they own. No cut adds a second primary-action authority.
+
+### Cut 1: ground permission and distinct stopping/turning states
+
+- Owned: `src/1_state.rs`, `src/1b_ground.rs`, `src/2_advance.rs`,
+  `tests/2_ground.rs`.
+- Identity: `State.phase`; add `TurnRun`, `RunDirect`, rename `Brake` to
+  `RunBrake`, and replace `Crouch` with `CrouchEnter/CrouchHold/CrouchExit`.
+- Signature: `Event::GroundIntent(Facts)` with
+  `Facts { turn, squat, squat_hold, walk_tier }`, `Event::Completion` for
+  animation ends (`ft_8008A2BC`, `fn_800CA644`), and the existing
+  `Event::JumpRequest`. There is no `Event::GroundContact`: none of rows 1, 2,
+  4-10, 23-27 consumes it, and ground contact enters `Landing` inside the air
+  cut. Callbacks are separated by event, not merged: `GroundIntent` from
+  `ftCo_Walk/Squat/Dash/Turn/SquatWait_CheckInput` (rows 1, 2, 4, 7, 12-16,
+  24-27); `Completion` from the `_Anim` completions; `JumpRequest` from
+  `ftCo_Jump_CheckInput`.
+- Tests: source-ordered cases for rows 1, 2, 4-10, 23-27; competing-fact traces;
+  clone and JSON suffix replay across the expanded `State.phase`.
+- Terminal (narrowed): those rows are chart-executed for the expanded ground
+  phases, and the generated `5_ground_chart.md` is fresh. `WalkSlow/Mid/Fast`,
+  the signed fall variants and `LandingAirN/F/B/Hi/Lw` remain collapsed, so full
+  ground permission closure is not claimed. Delete the `jump_starts_squat`
+  pre-dispatch and the duplicate `match self.phase` arms.
+
+### Cut 2: live crouch cycle
+
+- Owned: `src/1a_chart.rs`, `src/1_state.rs`, `src/2_advance.rs`,
+  `smash/src/fighters/falcon/1c_movement.rs`, `tests/1_chart.rs`.
+- Identity: `State.phase`; the three source actions are `Phase::CrouchEnter`,
+  `Phase::CrouchHold`, `Phase::CrouchExit`. `chart::Action` retires into `Phase`;
+  no second serialized chart field.
+- Signature: drive `CrouchChart` from `Phase::CrouchEnter/Hold/Exit` inside
+  `advance`, mapping `chart::Facts` to those variants.
+- Tests: rows 11-16, clone and JSON suffix replay, Falcon IDs 18/19/20 selected
+  during enter/hold/exit.
+- Terminal: live crouch is three `Phase` values, not hold-only, and `State.phase`
+  is the only action authority.
+
+### Cut 3: air family chart
+
+- Owned: new `src/1c_air.rs` (registered in `src/lib.rs`), `src/1_state.rs`,
+  `src/2_advance.rs`, `smash/src/fighters/falcon/1c_movement.rs`,
+  `tests/0_movement.rs`.
+- Identity: `State.phase`; add `JumpF`, `JumpB`, `AirJumpF`, `AirJumpB`,
+  `FallF`, `FallB`, `FallAerialF`, `FallAerialB`.
+- Signature: `air::decide(phase: Phase, ev: AirEvent, f: AirFacts) -> Option<Phase>`
+  with `AirEvent::Motion(AirFacts)` and `AirEvent::Land`, and
+  `AirFacts { animation_finished, stick_x, facing }`. Landing is `AirEvent::Land`
+  from the contact callback; there is no `grounded_contact` fact on the ground
+  intent event.
+- Tests: rows 17-22, signed jump and fall selection, animation-end fall, `Land`
+  entry from contact, 360-tick restore tape byte-identical.
+- Terminal: air transitions are chart-executed, Falcon selects the signed jump
+  and fall variants, and the 360-tick restore tape still reproduces bit-exact.
