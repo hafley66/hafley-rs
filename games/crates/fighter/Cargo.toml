@@ -11,6 +11,7 @@ publish = false
 serde = { version = "1", features = ["derive"] }
 redux = { path = "../redux", features = ["serde"] }
 game-input = { path = "../input" }
+statig = { version = "=0.4.1", default-features = false, features = ["serde"] }
 tracing = "0.1"
 
 [dev-dependencies]
