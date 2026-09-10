@@ -1,0 +1,18 @@
+rules:
+  - match: {}
+    respond:
+      content: |-
+        FIXED_TERMINAL_REPLY
+        ```mermaid
+        flowchart LR
+          PTY --> tmux
+          tmux --> xterm
+          xterm --> Markdown
+        ```
+      usage:
+        prompt_tokens: 12
+        completion_tokens: 18
+      stream:
+        ttft_ms: 500
+        inter_token_ms: 0
+        chunk_by: word

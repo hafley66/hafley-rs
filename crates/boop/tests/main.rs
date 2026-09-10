@@ -59,6 +59,8 @@ mod t4_adapter_replay;
 mod t4_lifecycle_gate;
 #[path = "5_delayed_worker_delivery.rs"]
 mod t5_delayed_worker_delivery;
+#[path = "5_live_harness.rs"]
+mod t5_live_harness;
 #[path = "tell.rs"]
 mod tell;
 #[path = "temp_home_rail.rs"]

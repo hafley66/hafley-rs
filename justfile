@@ -24,6 +24,17 @@ release:
 boop-perf-grid:
     cargo test -p boop-harness --test bench_grid -- --nocapture
 
+# Install the pinned tools the live harness needs (llmock; tui-test-rs is a
+# cargo dev-dependency). Idempotent.
+boop-live-setup:
+    bash crates/boop/scripts/1_live_harness_setup.sh
+
+# Run the almost-E2E live harness: installed CLI -> isolated config -> real
+# llmock provider -> real PTY -> native transcript -> real Boop adapter.
+# Fails clearly if `just boop-live-setup` has not run.
+boop-live-harness *ARGS:
+    cargo test -p boop --test main t5_live_harness -- --ignored --nocapture {{ARGS}}
+
 soopy-scale repo pathspec="" handles="500" batch="16" label="manual":
     bash crates/soopy/bench/0_run.sh "{{repo}}" "{{handles}}" "{{batch}}" "{{label}}" "{{pathspec}}"
 

@@ -58,6 +58,11 @@ proc-macro2 = { version = "1", features = ["span-locations"] }
 boop-store = { version = "0.0.2", path = "../boop-store", features = ["testing"] }
 # Peak-bytes-allocated counter for tests/bench_grid.rs's own #[global_allocator].
 peak_alloc = "0.3"
+# The bought terminal driver for the live harness: real PTY, real terminal
+# emulation, asciicast recording. Microsoft's tui-test engine, Rust binding.
+tui-test-rs = "0.1.0-beta.3"
+# Throwaway isolated HOME/workspace roots for one live adapter run.
+tempfile = "3"
 
 [lib]
 name = "boop"
