@@ -17,6 +17,8 @@ fn rules() -> Rules {
         ground_max_horizontal_velocity: 4.0,
         turn_ticks: 3,
         jump_startup_time: 4,
+        crouch_enter_ticks: 3,
+        crouch_exit_ticks: 2,
         jump_h_initial_velocity: 0.5,
         jump_h_max_velocity: 1.2,
         jump_v_initial_velocity: 3.0,
@@ -117,7 +119,9 @@ fn jump_accepts_ground_edges_including_turn_before_reversal() {
         Phase::Run,
         Phase::Brake,
         Phase::Turn,
-        Phase::Crouch,
+        Phase::CrouchEnter,
+        Phase::CrouchHold,
+        Phase::CrouchExit,
     ] {
         let mut state = State::new(&rules);
         state.phase = phase;

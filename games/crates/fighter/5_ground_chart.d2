@@ -26,9 +26,15 @@ board: "Grounded local policy / evaluated semantic guards" {
     Turn.class: phase
     Squat.class: phase
     Turn -> Squat: "true" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
-    Crouch.class: phase
+    CrouchEnter.class: phase
     Squat.class: phase
-    Crouch -> Squat: "true" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
+    CrouchEnter -> Squat: "true" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
+    CrouchHold.class: phase
+    Squat.class: phase
+    CrouchHold -> Squat: "true" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
+    CrouchExit.class: phase
+    Squat.class: phase
+    CrouchExit -> Squat: "true" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
   }
   GroundIntent: "GroundIntent" {
     style: {fill: "#14232e"; stroke: "#30424e"; font-color: "#65d9e6"}
@@ -39,20 +45,20 @@ board: "Grounded local policy / evaluated semantic guards" {
     Dash.class: phase
     Idle -> Dash: "dash && !down" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
     Idle.class: phase
-    Crouch.class: phase
-    Idle -> Crouch: "down" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
+    CrouchEnter.class: phase
+    Idle -> CrouchEnter: "down" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
     Dash.class: phase
     Dash.class: phase
     Dash -> Dash: "dash && !down" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
     Dash.class: phase
-    Crouch.class: phase
-    Dash -> Crouch: "down" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
+    CrouchEnter.class: phase
+    Dash -> CrouchEnter: "down" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
     Run.class: phase
     Dash.class: phase
     Run -> Dash: "dash && !down" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
     Run.class: phase
-    Crouch.class: phase
-    Run -> Crouch: "down" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
+    CrouchEnter.class: phase
+    Run -> CrouchEnter: "down" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
   }
   Motion: "Motion" {
     style: {fill: "#14232e"; stroke: "#30424e"; font-color: "#65d9e6"}
@@ -78,8 +84,8 @@ board: "Grounded local policy / evaluated semantic guards" {
     Turn.class: phase
     Run -> Turn: "reverse" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
     Run.class: phase
-    Crouch.class: phase
-    Run -> Crouch: "walk && !reverse && down" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
+    CrouchEnter.class: phase
+    Run -> CrouchEnter: "walk && !reverse && down" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
     Brake.class: phase
     Idle.class: phase
     Brake -> Idle: "stopped" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
@@ -92,9 +98,15 @@ board: "Grounded local policy / evaluated semantic guards" {
     Squat.class: phase
     Jump.class: phase
     Squat -> Jump: "finished" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
-    Crouch.class: phase
+    CrouchEnter.class: phase
+    CrouchHold.class: phase
+    CrouchEnter -> CrouchHold: "finished" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
+    CrouchHold.class: phase
+    CrouchExit.class: phase
+    CrouchHold -> CrouchExit: "!down" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
+    CrouchExit.class: phase
     Idle.class: phase
-    Crouch -> Idle: "!down" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
+    CrouchExit -> Idle: "finished" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
     Landing.class: phase
     Idle.class: phase
     Landing -> Idle: "finished" {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}

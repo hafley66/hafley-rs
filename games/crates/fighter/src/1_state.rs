@@ -36,19 +36,29 @@ pub enum Phase {
     Dash,
     Run,
     Brake,
+    /// `ftCo_MS_Turn`, the in-place turn entered from Wait/Walk.
     Turn,
+    /// `ftCo_MS_JumpSquat`/`ftCo_MS_KneeBend` takeoff preparation.
     Squat,
-    Crouch,
+    /// `ftCo_MS_Squat`, the crouch-down animation.
+    CrouchEnter,
+    /// `ftCo_MS_SquatWait`, the held crouch.
+    CrouchHold,
+    /// `ftCo_MS_SquatRv`, the stand-from-crouch animation.
+    CrouchExit,
+    /// Ordinary ground landing (`ftCo_MS_Landing`).
     Landing,
+    /// `ftCo_MS_JumpF`, forward ground jump.
     Jump,
     Fall,
+    /// `ftCo_MS_JumpAerialF`, forward double jump.
     AirJump,
 }
 
 impl Phase {
     /// Declaration order of the serialized `Phase` variants. This is the
     /// executable inventory; callers must not restate it.
-    pub const ALL: [Phase; 12] = [
+    pub const ALL: [Phase; 14] = [
         Phase::Idle,
         Phase::Walk,
         Phase::Dash,
@@ -56,7 +66,9 @@ impl Phase {
         Phase::Brake,
         Phase::Turn,
         Phase::Squat,
-        Phase::Crouch,
+        Phase::CrouchEnter,
+        Phase::CrouchHold,
+        Phase::CrouchExit,
         Phase::Landing,
         Phase::Jump,
         Phase::Fall,
@@ -72,7 +84,9 @@ impl Phase {
             Phase::Brake => "Brake",
             Phase::Turn => "Turn",
             Phase::Squat => "Squat",
-            Phase::Crouch => "Crouch",
+            Phase::CrouchEnter => "CrouchEnter",
+            Phase::CrouchHold => "CrouchHold",
+            Phase::CrouchExit => "CrouchExit",
             Phase::Landing => "Landing",
             Phase::Jump => "Jump",
             Phase::Fall => "Fall",
@@ -90,7 +104,9 @@ impl Phase {
                 | Phase::Brake
                 | Phase::Turn
                 | Phase::Squat
-                | Phase::Crouch
+                | Phase::CrouchEnter
+                | Phase::CrouchHold
+                | Phase::CrouchExit
                 | Phase::Landing
         )
     }

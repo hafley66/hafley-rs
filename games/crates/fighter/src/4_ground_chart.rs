@@ -122,13 +122,14 @@ fn event_label(event_index: usize, cube: Cube, witnesses: usize) -> String {
 /// Render the current grounded decision function as a source-backed Mermaid
 /// statechart. Every event/phase/fact assignment is evaluated by `decide`.
 pub fn render() -> String {
-    let mut output = String::from(
+    let mut output = format!(
         "# Ground statechart (generated)\n\nSource: `src/1b_ground.rs`, evaluated through `ground::decide`.\n\n\
-12 phases × 3 events × 128 boolean assignments. Counts measure semantic fact\n\
+{} phases × 3 events × 128 boolean assignments. Counts measure semantic fact\n\
 combinations, including combinations the controller may never supply.\n\
 This is the local grounded policy, not full Melee/PM behavior or caller scheduling.\n\
 Self-edges reset phase age. Rejected events preserve phase and age.\n\n\
 [Rendered SVG](5_ground_chart.svg) | [D2 source](5_ground_chart.d2)\n",
+        Phase::ALL.len()
     );
     for (event_index, event) in EVENTS.iter().enumerate() {
         output.push_str(&format!(

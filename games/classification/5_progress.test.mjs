@@ -117,13 +117,13 @@ test('red marks only observed failures; unproven dispositions stay yellow', () =
 test('the matrix keeps inventory, chart, live, restore and fidelity distinct', () => {
   assert.deepEqual(AXES.map(([axis]) => axis), ['inventory', 'chart', 'live', 'restore', 'fidelity']);
   const axes = key => AXES.map(([axis]) => progress.mechanics[key][axis]);
-  assert.deepEqual(axes('crouch'), ['qualified', 'qualified', 'partial', 'partial', 'unqualified']);
+  assert.deepEqual(axes('crouch'), ['qualified', 'qualified', 'qualified', 'qualified', 'unqualified']);
   assert.deepEqual(axes('run'), ['qualified', 'qualified', 'qualified', 'qualified', 'unqualified']);
   assert.deepEqual(axes('grab'), ['qualified', 'absent', 'absent', 'absent', 'unqualified']);
   assert.equal(Object.values(progress.mechanics).filter(m => m.fidelity === 'qualified').length, 0,
     'no family may claim source-game fidelity while PM3.6 equivalence is unresolved');
   const chips = key => cells(rendered, key).slice(2, 7).map(cell => cell.match(/>([A-Z]+)</)[1]);
-  assert.deepEqual(chips('crouch'), ['QUALIFIED', 'QUALIFIED', 'PARTIAL', 'PARTIAL', 'UNQUALIFIED']);
+  assert.deepEqual(chips('crouch'), ['QUALIFIED', 'QUALIFIED', 'QUALIFIED', 'QUALIFIED', 'UNQUALIFIED']);
   assert.deepEqual(chips('run'), ['QUALIFIED', 'QUALIFIED', 'QUALIFIED', 'QUALIFIED', 'UNQUALIFIED']);
   assert.deepEqual(chips('ledge-support'), ['QUALIFIED', 'ABSENT', 'ABSENT', 'ABSENT', 'UNQUALIFIED']);
   assert.match(cells(rendered, 'game-fighter')[0], /2\.7 · Testing/);
