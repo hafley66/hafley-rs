@@ -22,13 +22,13 @@ const entries: Record<Entry> = #{
   },
   `game-input`: #{
     stage: 3, destination: "library", task: "A1",
-    scope: "Snapshot-owned button buffering; held and repressed input proofs",
+    scope: "Snapshot-owned button buffering; held and repressed input proofs. Browser last-pressed direction resolution and first-connected generic joypad mapping stay Godot-shell adapters, not this crate; no GameCube-specific adapter exists.",
     manifest: "crates/input/Cargo.toml", targets: #["crates/input"],
     evidence: #["shared/0_reuse.md", "blender-godot-sqlite-proof/falcon-lab/109_tasks.md"],
   },
   rollback: #{
     stage: 3, destination: "library", task: "A1",
-    scope: "GGRS adapter and full-state replay qualification harness",
+    scope: "GGRS adapter and full-state replay qualification harness; isolated synctest restore and replay pass. Live native-vs-WASM match and netplay remain unqualified.",
     manifest: "crates/rollback/Cargo.toml", targets: #["crates/rollback"],
     evidence: #["shared/0_reuse.md", "blender-godot-sqlite-proof/falcon-lab/109_tasks.md"],
   },
@@ -61,15 +61,21 @@ const entries: Record<Entry> = #{
   },
   falcon_web: #{
     stage: 2.7, destination: "split", task: "Q3",
-    scope: "Godot web adapter and app composition; cross-target match unqualified",
+    scope: "Godot web adapter and app composition; keyboard and synthetic touch proofs exist. Cross-target match, physical devices and online play unqualified; last deploy receipt predates current source.",
     manifest: "blender-godot-sqlite-proof/falcon-lab/94_web/Cargo.toml",
     targets: #["crates/presentation", "smash"],
     evidence: #["blender-godot-sqlite-proof/falcon-lab/88_live_results.md"],
   },
   smash: #{
     stage: 2.7, destination: "app", task: "A1",
-    scope: "22-action Falcon catalog and PM numeric ingest; shared locomotion and restore tests; full callbacks and finite stage pending",
+    scope: "22-action Falcon catalog and PM numeric ingest; shared locomotion and restore tests; keyboard, touch and first-joypad adapters live in the Godot shell; UI route ownership not yet extracted; full callbacks and finite stage pending",
     manifest: "smash/Cargo.toml",
     targets: #["smash"], evidence: #["smash/0_readme.md", "3_tasks.md"],
+  },
+  `game-ui`: #{
+    stage: 1, destination: "library", task: "U1",
+    scope: "Proposed pure Redux-compatible URL/statechart router from the proven Location/Nav/NavCmd model: route history, query-like dialog gate, URI encode/decode and host-neutral view projection. egui-kit is reused as renderer helpers, never UI authority. No crate or manifest exists at stage 1.",
+    targets: #["crates/ui"],
+    evidence: #["4_tasks.md", "2_roadmap.md"],
   },
 };
