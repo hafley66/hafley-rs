@@ -5197,6 +5197,29 @@ mod tests {
         assert!(!missing.exists(), "bounded write created a missing store");
     }
 
+    /// Analytics must not migrate: a stale store stays at its stamped version
+    /// when it is opened through the bounded write handle.
+    #[test]
+    fn bounded_write_open_leaves_a_stale_schema_untouched() {
+        let (path, store) = fresh_store("bounded-write-stale");
+        drop(store);
+        let rewind = Connection::open(&path).unwrap();
+        rewind.execute_batch("PRAGMA user_version = 25;").unwrap();
+        drop(rewind);
+
+        let store = Store::open_bounded_write(path.clone(), Duration::from_millis(50)).unwrap();
+        assert_eq!(store.schema_version().unwrap(), 25);
+        drop(store);
+
+        let check = Connection::open(&path).unwrap();
+        let version: i64 = check
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 25, "bounded write migrated a stale store");
+        drop(check);
+        let _ = std::fs::remove_file(&path);
+    }
+
     #[test]
     fn current_schema_open_and_readonly_query_do_not_wait_for_a_wal_writer() {
         let (path, writer) = fresh_store("current-open-during-writer");
