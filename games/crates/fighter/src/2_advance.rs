@@ -2,6 +2,7 @@
 //! motion states. Unsupported in this cut: attacks (ATTACK bit is read but
 //! has no effect), ledges, walls, platforms, crouch variants beyond hold.
 
+use crate::air::{self, AirEvent, AirFacts};
 use crate::ground::{self, Event, Facts};
 use crate::rules::Rules;
 use crate::state::{Input, Phase, State, button};
@@ -289,10 +290,13 @@ impl State {
             if self.velocity[1] < floor {
                 self.velocity[1] = floor;
             }
-            if (self.phase == Phase::Jump || self.phase == Phase::AirJump)
-                && self.velocity[1] <= 0.0
-            {
-                self.enter(Phase::Fall);
+            let facts = AirFacts {
+                descending: self.velocity[1] <= 0.0,
+                jump_pressed: false,
+                jumps_left: self.jumps_left,
+            };
+            if let Some(next) = air::decide(self.phase, AirEvent::Motion(facts)) {
+                self.enter_air(next, input, r);
             }
         } else {
             self.position[0] += self.velocity[0];
@@ -300,14 +304,33 @@ impl State {
         }
 
         if airborne && self.position[1] <= 0.0 && self.velocity[1] < 0.0 {
-            self.position[1] = 0.0;
-            self.velocity[1] = 0.0;
-            self.jumps_left = r.max_jumps;
-            self.fast_fall = false;
-            self.enter(Phase::Landing);
+            if let Some(next) = air::decide(self.phase, AirEvent::Land) {
+                self.enter_air(next, input, r);
+            }
         }
 
         self.phase_tick += 1;
+    }
+
+    /// Apply the numeric entry effect for an air chart destination exactly once,
+    /// then enter the phase. The chart owns permission and destination only.
+    fn enter_air(&mut self, next: Phase, input: Input, r: &Rules) {
+        match next {
+            Phase::AirJump => {
+                self.velocity[0] = input.axis * r.air_jump_h_multiplier;
+                self.velocity[1] = r.jump_v_initial_velocity * r.air_jump_v_multiplier;
+                self.jumps_left -= 1;
+                self.fast_fall = false;
+            }
+            Phase::Landing => {
+                self.position[1] = 0.0;
+                self.velocity[1] = 0.0;
+                self.jumps_left = r.max_jumps;
+                self.fast_fall = false;
+            }
+            _ => {}
+        }
+        self.enter(next);
     }
 
     /// Air drift + fast fall + double jump (ftCo_Fall.c:164-183,
@@ -316,12 +339,14 @@ impl State {
         if down_pressed && self.velocity[1] < 0.0 {
             self.fast_fall = true;
         }
-        if jump_pressed && self.jumps_left > 0 {
-            self.velocity[0] = input.axis * r.air_jump_h_multiplier;
-            self.velocity[1] = r.jump_v_initial_velocity * r.air_jump_v_multiplier;
-            self.jumps_left -= 1;
-            self.fast_fall = false;
-            self.enter(Phase::AirJump);
+        let facts = AirFacts {
+            // The jump callback runs before gravity; descending is decided post-integration.
+            descending: false,
+            jump_pressed,
+            jumps_left: self.jumps_left,
+        };
+        if let Some(next) = air::decide(self.phase, AirEvent::Motion(facts)) {
+            self.enter_air(next, input, r);
             return;
         }
         let target = input.axis * r.air_drift_max;

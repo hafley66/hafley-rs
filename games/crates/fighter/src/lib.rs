@@ -15,6 +15,8 @@
 mod advance_impl;
 #[path = "0_rules.rs"]
 pub mod rules;
+#[path = "1c_air.rs"]
+pub mod air;
 #[path = "1a_chart.rs"]
 pub mod chart;
 #[path = "1b_ground.rs"]
