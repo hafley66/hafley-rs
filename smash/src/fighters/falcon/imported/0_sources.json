@@ -3,6 +3,12 @@
   "retrieved": "2026-09-08",
   "decoder": "brawllib_rs 0.29.0 (MIT), bincode 2 standard serde",
   "copied_from": "games/blender-godot-sqlite-proof/fixtures (primary checkout; rukaidata-mirror for subactions, fixtures/falcon for AttackAirF)",
+  "boundary": {
+    "generator": "Rukaidata GitHub (github.com/rukai/rukaidata) is generator/parser source",
+    "artifacts": "retained PM3.6 files are literal generated webpage artifacts containing base64+bincode",
+    "raw_inputs": "raw PAC/GCT inputs are absent from this checkout",
+    "transitions": "Melee transition rules come from the pinned github.com/doldecomp/melee submodule (games/vendor/melee@c7861544f8e1fbc530612393e91d859886e97e3c)"
+  },
   "files": {
     "Wait1.html": "b5d904b01c4c35630801de7062ed2d495904abb1b4da9d11e97c6dee38f29207",
     "JumpF.html": "37a49314e4b7c8b22edd7705238e78f6b5c5cbb77e79d48d4aba882264d51d8a",

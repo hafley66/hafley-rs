@@ -1,9 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { COLUMNS, joinStatus, loadStatus, receiptObservation, currentSource } from './8_status.mjs';
 
 const authored = await loadStatus();
 const H = 'a'.repeat(64);
+
+// Pure inputs for the `just status` SOURCE RULES section. These are small JSON
+// records, not the generated HTML/SVG or the base64 payloads.
+const sourceRules = JSON.parse(await readFile(
+  new URL('../smash/src/fighters/falcon/generated/2_source_rules.json', import.meta.url), 'utf8'));
+const manifest = JSON.parse(await readFile(
+  new URL('../smash/src/fighters/falcon/imported/0_sources.json', import.meta.url), 'utf8'));
+const SOURCE_OPS = ['Less', 'LessEqual', 'Greater', 'GreaterEqual', 'Equal', 'NotEqual'];
 
 function fixture() {
   return {
@@ -173,4 +182,56 @@ test('the current source fingerprint recomputes to a stable digest', () => {
   const source = currentSource();
   assert.match(source, /^[0-9a-f]{64}$/);
   assert.equal(source, currentSource());
+});
+
+// The SOURCE RULES section prints every extracted rule and each unresolved
+// value. Assert its input shape: one pinned decomp revision, a line anchor per
+// rule, and no fabricated numeric values.
+test('source rules pin one decomp revision with line-anchored guards', () => {
+  assert.equal(sourceRules.repository, 'https://github.com/doldecomp/melee.git');
+  assert.match(sourceRules.revision, /^[0-9a-f]{40}$/);
+  assert.equal(sourceRules.rules.length, 5);
+  for (const rule of sourceRules.rules) {
+    assert.ok(rule.from && rule.event && rule.to, 'rule needs from/event/to');
+    assert.equal(rule.source.repository, sourceRules.repository);
+    assert.equal(rule.source.revision, sourceRules.revision);
+    assert.match(rule.source.path, /^src\/melee\/ft\//);
+    assert.ok(rule.source.line > 0, `${rule.source.symbol} needs a nonzero line anchor`);
+    assert.ok(rule.source.symbol.length > 0);
+    assert.ok(SOURCE_OPS.includes(rule.guard.operator), `unknown operator ${rule.guard.operator}`);
+    assert.ok(rule.guard.lhs && rule.guard.rhs);
+  }
+  assert.deepEqual(
+    sourceRules.rules.map(rule => `${rule.from}-${rule.event}->${rule.to}`),
+    [
+      'Wait-turn_request->Turn',
+      'KneeBend-takeoff->JumpF',
+      'KneeBend-takeoff->JumpB',
+      'Fall-air_jump->JumpAerialF',
+      'Fall-air_jump->JumpAerialB',
+    ]);
+});
+
+test('unresolved source values stay explicit and name their missing input', () => {
+  assert.deepEqual(
+    sourceRules.unresolved.map(item => item.symbol),
+    ['p_ftCommonData->x34', 'p_ftCommonData->x78', 'LandingLight selection']);
+  for (const item of sourceRules.unresolved) {
+    assert.ok(item.reason.trim().length > 0, `${item.symbol} needs a reason`);
+  }
+  assert.equal(sourceRules.unresolved[0].source.revision, sourceRules.revision);
+  assert.equal(sourceRules.unresolved[1].source.revision, sourceRules.revision);
+  assert.match(sourceRules.unresolved[0].reason, /no retained DAT input/);
+  assert.match(sourceRules.unresolved[2].reason, /no retained PM selection rule/);
+  assert.equal(sourceRules.unresolved[2].source.repository, 'https://rukaidata.com/PM3.6/Captain%20Falcon/subactions/');
+  assert.equal(manifest.frames.LandingLight, 3);
+});
+
+test('the retained manifest records the source boundary', () => {
+  const { boundary } = manifest;
+  assert.match(boundary.generator, /Rukaidata GitHub .* generator\/parser source/);
+  assert.match(boundary.artifacts, /base64\+bincode/);
+  assert.match(boundary.raw_inputs, /PAC\/GCT inputs are absent/);
+  assert.match(boundary.transitions, /github\.com\/doldecomp\/melee submodule/);
+  assert.match(boundary.transitions, /c7861544f8e1fbc530612393e91d859886e97e3c/);
 });

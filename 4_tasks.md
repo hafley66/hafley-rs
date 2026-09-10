@@ -301,3 +301,32 @@ current HEAD `26f6a99`, so neither fingerprint matches current source; the
 recurring `just status` receipts are STALE after the export/movement changes.
 `crates/rollback` qualifies only GGRS synctest restore and replay over a
 deterministic reducer; no live native-vs-WASM match or netplay is qualified.
+
+## Pinned-source codegen, 2026-09-10
+
+Documentation and source-boundary status for `61b2195`. This pass records the
+extraction already landed; it changes no Rust, importer, gameplay or generated
+source-rule file, and advances no stage. TC39 stage delta is 0.
+
+| ID | State | Terminal condition / coordinator checkpoint |
+| --- | --- | --- |
+| P1 | Done, bounded codegen | Falcon common-transition guards are extracted from the pinned Melee decomp syntax trees into `generated/2_source_rules.json`/`.rs`, with a rendered `generated/3_source_chart.d2`/`.svg`. Terminal: `just source-rules-check` reproduces the artifacts and `just status` prints the SOURCE RULES section. Resolving the three open source values is a separate bounded task. |
+
+Codegen receipt, `61b2195`: `crates/content/src/5_source.rs` + TypeSpec
+`classification/0_model.tsp` (`SourceRule`/`SourceGuard`/`Op`/`SourceRef`/
+`SourceUnresolved`) extract 5 guards from pinned `github.com/doldecomp/melee`
+revision `c7861544f8e1fbc530612393e91d859886e97e3c`, each carrying a repo +
+revision + path + line `SourceRef` (`ftCo_Turn.c:28`, `ftCo_Jump.c:153` x2,
+`ftCo_JumpAerial.c:158` x2). `smash/src/3_import.rs` writes the generated
+JSON/Rust and `justfile` adds `source-rules`/`source-rules-check`. 3 values stay
+unresolved: `p_ftCommonData->x34` and `p_ftCommonData->x78` (numeric values live
+in the game common-data binary; no retained DAT input) and the PM3.6
+`LandingLight` selection rule (payload establishes the action; no retained PM
+selection rule). `just status` prints the SOURCE RULES section: 5 extracted from
+`doldecomp/melee@c7861544` plus the 3 unresolved entries above. Source boundary:
+Rukaidata GitHub is generator/parser source; retained PM3.6 files are literal
+generated webpage artifacts containing base64+bincode; raw PAC/GCT inputs are
+absent; Melee transition rules come from the pinned `doldecomp/melee` submodule
+(`games/vendor/melee`). Verified: `node --test classification/8_status.test.mjs`
+12 passed; `just map` and `just test-map` current; game-fighter remains authored
+stage 2.7 and no stage advanced.
