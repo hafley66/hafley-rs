@@ -8,8 +8,7 @@ const progress: Progress = #{
     character: "Captain Falcon (PM 3.6)",
     package: "smash", task: "S4",
     manifest: "smash/src/fighters/falcon/imported/0_sources.json",
-    mirror: "blender-godot-sqlite-proof/fixtures/rukaidata-mirror",
-    catalogApi: "Catalog membership and ID order live in the Rust const CATALOG (smash/src/fighters/falcon/1b_catalog.rs). No generated export exists, so the column below stays unexported: a bounded `catalog_export` example writing an ordered id/name/file JSON is the proposed next step, pending coordinator approval.",
+    catalogApi: "Catalog membership and ID order live in the Rust const CATALOG (smash/src/fighters/falcon/1b_catalog.rs). Nothing exports them, so membership is unmeasured here and this table reports retention only. The unselected remainder of the source game is likewise unmeasured: the local mirror is untracked and differs per checkout, so no selection denominator is shown.",
     tests: #[
       #{
         label: "Source test: catalog decode and frozen IDs",
@@ -92,7 +91,7 @@ const progress: Progress = #{
       inventory: "qualified", chart: "partial", live: "qualified",
       restore: "qualified", fidelity: "unqualified",
       evidence: #["smash/src/fighters/falcon/1c_movement.rs", "crates/fighter/4_graph.md"],
-      gate: "LandingLight/Heavy/AirF poses are consumed, but ftCo_Landing_IASA duration and allow_interrupt ordering is untranslated.",
+      gate: "Landing selects ID6 LandingHeavy, with ID5 LandingAirF only while recovering from the aerial; ID17 LandingLight is retained but never selected, and ftCo_Landing_IASA duration and allow_interrupt ordering is untranslated.",
     },
     `restricted-air`: #{
       family: "Restricted air", package: "game-fighter", task: "S1",
@@ -127,7 +126,7 @@ const progress: Progress = #{
       inventory: "qualified", chart: "absent", live: "absent",
       restore: "absent", fidelity: "unqualified",
       evidence: #["crates/fighter/4_graph.md"],
-      gate: "Damage, tumble, knockdown, tech and shield-break recovery depend on hit detection, which is out of scope for the graph pass.",
+      gate: "The live game already detects the aerial hitting the sandbag; no source damage, tumble, knockdown, tech or shield-break state exists, and none of that chart is authored.",
     },
     grab: #{
       family: "Grab relationships", package: "game-fighter", task: "S1",

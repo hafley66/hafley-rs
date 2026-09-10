@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { root, loadRegistry, output } from './2_registry.mjs';
-import { AXES, escape, loadProgress, validateProgress, ingestRows, renderProgress } from './5_progress.mjs';
+import { AXES, COVERAGE, escape, loadProgress, validateProgress, ingestRows, renderProgress } from './5_progress.mjs';
 
 const entries = await loadRegistry();
 const progress = await loadProgress();
@@ -25,8 +25,10 @@ test('committed dashboard is current and rendering is deterministic', async () =
   assert.equal(rendered, renderProgress({ ...progress, entries, ...await ingestRows(root, progress.ingest) }));
   assert.equal(rendered, await readFile(new URL('6_progress.html', import.meta.url), 'utf8'));
   assert.equal(ingested.rows.filter(row => row.state !== 'retained').length, 0);
-  assert.equal(ingested.mirror, null, 'the local mirror is absent or empty, so its total stays unknown');
-  assert.match(rendered, /UNKNOWN, mirror absent or empty/);
+  assert.deepEqual(Object.keys(ingested), ['manifest', 'rows'], 'no untracked directory may reach the output');
+  assert.match(rendered, /Source-game total<\/span> <span class="chip warn">UNKNOWN, unmeasured/);
+  assert.equal(rendered.match(/UNMEASURED, not exported/g).length, ingested.rows.length);
+  assert.match(rendered, /<nav><a href="#ingest">1 · Retained ingest \(23 files\)<\/a>/);
   assert.doesNotMatch(rendered.split('</style>')[1], /\d+\s?%/, 'no single percentage may summarize the axes');
   assert.match(rendered, /declared values, not a fresh decode/);
 });
@@ -66,8 +68,6 @@ test('missing evidence, package and task references are rejected', async () => {
     [p => { p.ingest.task = 'NEVER'; }, /ingest: unknown task/],
     [p => { p.ingest.catalogApi = ''; }, /reported API state/],
     [p => { p.ingest.manifest = 'smash/src/fighters/falcon/imported/absent.json'; }, /ENOENT/],
-    [p => { p.ingest.mirror = '../fixtures'; }, /escapes scope/],
-    [p => { p.ingest.catalogExport = 'smash/generated/absent.json'; }, /ENOENT/],
     [p => { p.ingest.tests[0].note = ''; }, /ingest test: reference needs a label and a note/],
     [p => { p.references[0].path = 'crates/fighter/absent.svg'; }, /ENOENT/],
     [p => { p.references = []; }, /references: no linked evidence/],
@@ -93,26 +93,26 @@ test('missing and mismatched retained hashes are reported as failures', () => fi
     },
     frames: { Wait1: 61 },
   }));
-  const ingest = { ...structuredClone(progress.ingest), manifest: 'imported/0_sources.json', mirror: undefined };
-  const { rows, mirror } = await ingestRows(dir, ingest);
+  const ingest = { ...structuredClone(progress.ingest), manifest: 'imported/0_sources.json' };
+  const { rows } = await ingestRows(dir, ingest);
   assert.deepEqual(rows.map(row => [row.action, row.state, row.frames]), [
     ['Wait1', 'retained', 61], ['Dash', 'mismatch', null], ['Turn', 'missing', null],
   ]);
-  assert.equal(mirror, null);
-  const html = renderProgress({ ...progress, ingest, entries, manifest: {}, rows, mirror });
-  assert.equal(html.match(/FAILED, hash mismatch/g).length, 1);
-  assert.equal(html.match(/FAILED, file absent/g).length, 1);
-  assert.equal(html.match(/UNKNOWN, no manifest count/g).length, 2);
-  assert.equal(html.match(/UNEXPORTED/g).length, 3);
+  const section = renderProgress({ ...progress, ingest, entries, manifest: {}, rows }).split('<section')[1];
+  assert.equal(section.match(/FAILED, hash mismatch/g).length, 1);
+  assert.equal(section.match(/FAILED, file absent/g).length, 1);
+  assert.equal(section.match(/UNKNOWN, no manifest count/g).length, 2);
+  assert.equal(section.match(/UNMEASURED, not exported/g).length, 3);
 }));
 
-test('an exported catalog resolves membership per retained file', () => fixture(async dir => {
-  await writeFile(join(dir, '0_sources.json'), JSON.stringify({ files: { 'Wait1.html': createHash('sha256').update('kept').digest('hex'), 'Dash.html': 'f'.repeat(64) } }));
-  await writeFile(join(dir, 'Wait1.html'), 'kept');
-  await writeFile(join(dir, '2_catalog.json'), JSON.stringify([{ id: 0, name: 'Wait1', file: 'Wait1.html' }]));
-  const { rows } = await ingestRows(dir, { ...structuredClone(progress.ingest), manifest: '0_sources.json', catalogExport: '2_catalog.json', mirror: undefined });
-  assert.deepEqual(rows.map(row => [row.action, row.catalog]), [['Wait1', 'id 0'], ['Dash', 'excluded']]);
-}));
+test('red marks only observed failures; unproven dispositions stay yellow', () => {
+  assert.deepEqual(Object.entries(COVERAGE).map(([key, [tone]]) => [key, tone]), [
+    ['qualified', 'ok'], ['partial', 'warn'], ['pending', 'warn'], ['unqualified', 'warn'], ['absent', 'off'],
+  ]);
+  assert.equal(rendered.match(/class="chip bad"/g).length, 1, 'only the legend swatch is red');
+  assert.equal(rendered.split('<section')[1].match(/class="chip bad"/g), null, 'no section reports a failure');
+  assert.match(rendered, /red marks only an observed failure/);
+});
 
 test('the matrix keeps inventory, chart, live, restore and fidelity distinct', () => {
   assert.deepEqual(AXES.map(([axis]) => axis), ['inventory', 'chart', 'live', 'restore', 'fidelity']);

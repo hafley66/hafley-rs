@@ -36,10 +36,7 @@ model IngestSource {
   package: string;
   task: string;
   manifest: string;
-  // Optional local source mirror. Absent or empty means an unknown total.
-  mirror?: string;
-  // Optional generated catalog membership export. Absent means unexported.
-  catalogExport?: string;
+  // Untracked mirrors differ per checkout; the selection denominator stays unknown.
   catalogApi: string;
   tests: Reference[];
 }

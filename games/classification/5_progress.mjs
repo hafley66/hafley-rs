@@ -16,11 +16,12 @@ export const AXES = [
   ['fidelity', 'Source-game fidelity', 'Measured PM3.6/Melee callback equivalence'],
 ];
 
+// Red is reserved for an observed failure: a broken hash or a failed check.
 export const COVERAGE = {
   qualified: ['ok', 'QUALIFIED'],
   partial: ['warn', 'PARTIAL'],
   pending: ['warn', 'PENDING'],
-  unqualified: ['bad', 'UNQUALIFIED'],
+  unqualified: ['warn', 'UNQUALIFIED'],
   absent: ['off', 'ABSENT'],
 };
 
@@ -64,8 +65,6 @@ export async function validateProgress(progress, entries, base = root) {
   if (!tasks.has(ingest.task)) throw Error(`ingest: unknown task ${ingest.task}`);
   if (!ingest.catalogApi.trim()) throw Error('ingest: catalog membership needs a reported API state');
   await existing(base, ingest.manifest);
-  if (ingest.mirror) localPath(base, ingest.mirror);
-  if (ingest.catalogExport) await existing(base, ingest.catalogExport);
   for (const test of ingest.tests) await checkReference(base, test, 'ingest test');
   if (!Object.keys(mechanics).length) throw Error('mechanics: empty matrix');
   for (const [key, mechanic] of Object.entries(mechanics)) {
@@ -83,28 +82,16 @@ export async function validateProgress(progress, entries, base = root) {
   return progress;
 }
 
-async function payloads(dir) {
-  let total = 0;
-  for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
-    if (entry.name.startsWith('.')) continue;
-    if (entry.isDirectory()) total += await payloads(resolve(dir, entry.name));
-    else if (entry.isFile() && entry.name.endsWith('.html')) total += 1;
-  }
-  return total;
-}
-
+// Only tracked files are read: an untracked mirror would make output differ per checkout.
 export async function ingestRows(base, ingest) {
   const manifestPath = await existing(base, ingest.manifest);
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   const dir = dirname(manifestPath);
-  const catalog = ingest.catalogExport
-    ? JSON.parse(await readFile(await existing(base, ingest.catalogExport), 'utf8')) : null;
   const rows = [];
   for (const [file, expected] of Object.entries(manifest.files ?? {})) {
     const data = await readFile(localPath(dir, file)).catch(() => null);
     const action = file.replace(/\.html$/, '');
     const frames = manifest.frames?.[action];
-    const index = catalog ? catalog.findIndex(entry => entry.file === file) : -1;
     const hash = data ? createHash('sha256').update(data).digest('hex') : null;
     rows.push({
       action, file, expected, hash,
@@ -112,11 +99,9 @@ export async function ingestRows(base, ingest) {
       state: data ? (hash === expected ? 'retained' : 'mismatch') : 'missing',
       bytes: data ? data.length : null,
       frames: Number.isInteger(frames) ? frames : null,
-      catalog: catalog ? (index < 0 ? 'excluded' : `id ${index}`) : null,
     });
   }
-  const mirror = ingest.mirror ? await payloads(localPath(base, ingest.mirror)) : 0;
-  return { manifest, rows, mirror: mirror || null };
+  return { manifest, rows };
 }
 
 function link(path, label) {
@@ -128,16 +113,16 @@ function chip(map, key) {
   return `<span class="chip ${tone}">${escape(text)}</span>`;
 }
 
-function ingestSection({ ingest, manifest, rows, mirror }) {
+function ingestSection({ ingest, manifest, rows }) {
   const failed = rows.filter(row => row.state !== 'retained').length;
-  const head = ['Action', 'Payload', 'Retained payload', 'Declared frames', 'Catalog membership'];
+  const head = ['Action', 'Payload', 'Observed retention', 'Declared frames', 'Catalog membership'];
   const body = rows.map(row => `<tr><th scope="row">${escape(row.action)}</th>` + [
     link(row.path, row.file),
     `${chip(RETAINED, row.state)}<br><code>${escape((row.hash ?? row.expected).slice(0, 16))}</code>${row.bytes === null ? '' : ` · ${row.bytes} bytes`}`,
     row.frames === null
       ? '<span class="chip warn">UNKNOWN, no manifest count</span>'
       : `${row.frames} <span class="dim">declared</span>`,
-    row.catalog === null ? '<span class="chip warn">UNEXPORTED</span>' : `<span class="chip ok">${escape(row.catalog)}</span>`,
+    '<span class="chip warn">UNMEASURED, not exported</span>',
   ].map(cell => `<td>${cell}</td>`).join('') + '</tr>').join('\n');
   return `<section id="ingest">
 <h2>1 · Retained ingest, ${escape(ingest.character)}</h2>
@@ -147,21 +132,21 @@ function ingestSection({ ingest, manifest, rows, mirror }) {
 · <span class="label">Decoder</span> ${escape(manifest.decoder ?? 'unrecorded')}</p>
 <p class="note"><span class="label">Retained payloads</span> ${rows.length}
 · <span class="label">Hash failures</span> ${failed}
-· <span class="label">Local mirror total</span> ${mirror === null
-    ? '<span class="chip warn">UNKNOWN, mirror absent or empty</span>' : `${mirror} payloads`}.
+· <span class="label">Source-game total</span> <span class="chip warn">UNKNOWN, unmeasured</span>, so no selection fraction is shown.
 Frame counts are the manifest's declared values, not a fresh decode; this generator never decodes a payload or runs the game.</p>
 <p class="note"><span class="label">Catalog membership</span> ${escape(ingest.catalogApi)}</p>
-<table><caption>Retained files with recomputed SHA256 against the manifest</caption>
+<table><caption>Observed: file present, SHA256 recomputed and compared to the manifest. Declared: everything else in this table.</caption>
 <thead><tr>${head.map(cell => `<th scope="col">${escape(cell)}</th>`).join('')}</tr></thead>
 <tbody>
 ${body}
 </tbody></table>
-<p class="note">${ingest.tests.map(test => `<span class="label">${escape(test.label)}</span> ${link(test.path, test.path)} — ${escape(test.note)}`).join('<br>')}</p>
+<p class="note">Declared test paths, checked for existence only. This view never executes them and cannot report a pass.<br>
+${ingest.tests.map(test => `<span class="label">${escape(test.label)}</span> ${link(test.path, test.path)} — ${escape(test.note)}`).join('<br>')}</p>
 </section>`;
 }
 
 function mechanicsSection(mechanics) {
-  const head = ['Mechanic', 'Source family', 'Package / task', ...AXES.map(([, label]) => label), 'Evidence', 'Explicit next gate'];
+  const head = ['Mechanic', 'Source family', 'Package / task', ...AXES.map(([, label]) => label), 'Declared evidence', 'Explicit next gate'];
   const body = Object.entries(mechanics).map(([key, mechanic]) => `<tr><th scope="row">${escape(key)}</th>` + [
     escape(mechanic.family),
     `${escape(mechanic.package)}<br><span class="dim">${escape(mechanic.task)}</span>`,
@@ -174,7 +159,7 @@ function mechanicsSection(mechanics) {
 <p class="note">Five independent axes, no combined percentage. ${AXES.map(([, label, note]) =>
     `<span class="label">${escape(label)}</span> ${escape(note)}`).join(' · ')}.
 Families come from ${link('crates/fighter/4_graph.md', 'crates/fighter/4_graph.md')}; a family named there is inventory only, never a live claim.</p>
-<table><caption>Authored semantic dispositions per mechanic family</caption>
+<table><caption>Every cell here is authored. Evidence paths are checked for existence; a listed path is not a passed test.</caption>
 <thead><tr>${head.map(cell => `<th scope="col">${escape(cell)}</th>`).join('')}</tr></thead>
 <tbody>
 ${body}
@@ -183,7 +168,7 @@ ${body}
 }
 
 function packagesSection(entries) {
-  const head = ['Package', 'Stage', 'Destination', 'Task', 'Cargo manifest', 'Scope and limitations', 'Evidence', 'Next gate'];
+  const head = ['Package', 'Stage', 'Destination', 'Task', 'Cargo manifest', 'Scope and limitations', 'Declared evidence', 'Next gate'];
   const body = Object.entries(entries).map(([name, entry]) => `<tr><th scope="row">${escape(name)}</th>` + [
     `<span class="chip ${entry.stage >= 3 ? 'ok' : 'warn'}">${escape(entry.stage)} · ${escape(STAGE_NAMES.get(entry.stage) ?? 'unknown')}</span>`,
     escape(entry.destination),
@@ -197,7 +182,7 @@ function packagesSection(entries) {
 <h2>3 · Checked package stages</h2>
 <p class="note">Derived from ${link('classification/1_registry.tsp', 'classification/1_registry.tsp')} through the pinned compiler.
 Stages are this project's TC39 adaptation and never advance automatically; this view records the authored stage and its documented exit, and claims no promotion.</p>
-<table><caption>Stage, scope limits and documented exit per Cargo package</caption>
+<table><caption>Observed: the Cargo manifest resolves. Declared: stage, scope, evidence paths. The registry checker does not evaluate test results.</caption>
 <thead><tr>${head.map(cell => `<th scope="col">${escape(cell)}</th>`).join('')}</tr></thead>
 <tbody>
 ${body}
@@ -214,7 +199,7 @@ ${references.map(entry => `<li><span class="label">${escape(entry.label)}</span>
 </section>`;
 }
 
-export function renderProgress({ ingest, manifest, rows, mirror, mechanics, entries, references }) {
+export function renderProgress({ ingest, manifest, rows, mechanics, entries, references }) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -226,7 +211,8 @@ body { background: #0B1120; color: #E2E8F0; font: 15px/1.5 ui-sans-serif, system
 h1 { font-size: 22px; margin: 0 0 4px; }
 h2 { color: #22D3EE; font-size: 17px; margin: 32px 0 8px; }
 a { color: #7DD3FC; }
-code { color: #C4B5FD; font-size: 12px; }
+code { color: #67E8F9; font-size: 12px; }
+nav { border: 1px solid #1E293B; display: flex; flex-wrap: wrap; font-size: 13px; gap: 14px; margin: 10px 0 4px; padding: 6px 10px; }
 table { border-collapse: collapse; width: 100%; }
 caption { color: #94A3B8; font-size: 13px; padding: 4px 0; text-align: left; }
 th, td { border: 1px solid #1E293B; padding: 6px 8px; text-align: left; vertical-align: top; }
@@ -248,10 +234,16 @@ li { margin-bottom: 6px; }
 </head>
 <body>
 <h1>Games port progress</h1>
+<nav><a href="#ingest">1 · Retained ingest (${rows.length} files)</a>
+<a href="#mechanics">2 · Mechanics matrix (${Object.keys(mechanics).length} families)</a>
+<a href="#packages">3 · Package stages (${Object.keys(entries).length})</a>
+<a href="#references">4 · Linked evidence</a></nav>
 <p class="note">Generated by <code>just progress</code> from ${link('classification/4_progress.tsp', 'classification/4_progress.tsp')},
-${link('classification/1_registry.tsp', 'classification/1_registry.tsp')} and the retained fighter manifest. Do not edit; <code>just test</code> rejects a stale copy.
-Colors repeat the adjacent text: ${Object.keys(COVERAGE).map(key => chip(COVERAGE, key)).join(' ')}</p>
-${ingestSection({ ingest, manifest, rows, mirror })}
+${link('classification/1_registry.tsp', 'classification/1_registry.tsp')} and the retained fighter manifest. Do not edit; <code>just test</code> rejects a stale copy.</p>
+<p class="note"><span class="label">Observed here</span> file presence, recomputed SHA256, Cargo manifest resolution.
+<span class="label">Declared here</span> every disposition, scope, frame count and evidence path; paths are checked for existence, which is not a passing test.
+Colors repeat the adjacent text, and red marks only an observed failure: ${Object.keys(COVERAGE).map(key => chip(COVERAGE, key)).join(' ')} ${chip(RETAINED, 'mismatch')}</p>
+${ingestSection({ ingest, manifest, rows })}
 ${mechanicsSection(mechanics)}
 ${packagesSection(entries)}
 ${referencesSection(references)}
@@ -263,8 +255,7 @@ ${referencesSection(references)}
 export async function buildProgress(base = root) {
   const entries = await validateRegistry(await loadRegistry(), base);
   const progress = await validateProgress(await loadProgress(), entries, base);
-  const { manifest, rows, mirror } = await ingestRows(base, progress.ingest);
-  return { ...progress, entries, manifest, rows, mirror };
+  return { ...progress, entries, ...await ingestRows(base, progress.ingest) };
 }
 
 async function main() {
