@@ -82,9 +82,26 @@ inspection pass, and no maturity promotion is claimed.
 | ID | State | Terminal condition / coordinator checkpoint |
 | --- | --- | --- |
 | S1 | In progress | Enumerate source-backed common actions, exclusivity, callback-phase edges and ordered guards. Explain groups item by item. Mark unresolved PM3.6 patch behavior explicitly; do not substitute 3.6.1 annotations. |
-| S2 | Queued | Express first source-resolved common graph slice in existing statig + Redux, with mutual-exclusion, priority, rejection and restore tests. Report the executable edge coverage before expanding. No physics formulas or input-device wiring. |
+| S2 | In progress, four-edge qualification | State-only crouch cycle implemented with statig + Redux; lifecycle, rejected/competing facts and clone/JSON suffix tests. Other action interrupts and callback scheduling remain unqualified. No physics formulas or input-device wiring. |
 | S3 | Queued | Replace matching live Falcon transition policy with tested shared chart while retaining existing physics and presentation. Verify the consumer and restore traces; expand common families through scoped green commits. |
 
 All unfinished A/Q/M/G/P tasks retain their prior dispositions. S1-S3 govern the
 current ordering; full network world, friends' content and multiplayer remain
 the desired destination, not additional authorization for this graph-only pass.
+
+S2 worker increment: Boop `f41` used OpenCode with
+`openrouter/deepseek/deepseek-v4.1-flash`, provider unpinned. Worker commit
+`258b187` implements Idle -> CrouchEnter -> CrouchHold -> CrouchExit -> Idle.
+Facts are animation_finished, crouch_request and crouch_release. Each dispatch
+executes at most one selected edge; full source tick scheduling remains outside
+this qualification. No entry/exit side effects. Live Falcon still uses existing
+locomotion; S3 remains queued. Coordinator adds trace instrumentation and verifies
+tests/registry before committing the integrated increment. No deployment in S2.
+
+Coordinator verification: `cargo test --manifest-path games/crates/fighter/Cargo.toml
+--locked --offline -j2` passed 13 tests (4 chart, 7 movement, 2 unit), using
+`CARGO_TARGET_DIR=/private/tmp/f41-ground-chart-review`. `just map && just test`
+passed 6 registry tests plus D2 validation and generated SVG freshness.
+`extract --ast-pattern 'transition=Transition($NEXT)' --ast-capture transition=NEXT`
+against `src/1a_chart.rs` returned all four destination captures. Full guard/source
+edge extraction and generated statechart drawing are still pending.
