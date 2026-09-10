@@ -57,7 +57,8 @@ func check_keyboard():
 	key(KEY_A, false)
 	stage._physics_process(1.0 / 60.0)
 	assert("AXIS +0.0" in stage.captions[1].text)
-	# Focus loss clears the ordering so a stale side cannot win after a blur.
+	# Focus loss clears held and order state: a key left physically held does
+	# not leak a direction, and a fresh press resumes it.
 	key(KEY_D, true)
 	key(KEY_A, true)
 	stage._notification(NOTIFICATION_APPLICATION_FOCUS_OUT)
@@ -65,6 +66,12 @@ func check_keyboard():
 	assert("AXIS +0.0" in stage.captions[1].text)
 	key(KEY_D, false)
 	key(KEY_A, false)
+	stage._physics_process(1.0 / 60.0)
+	assert("AXIS +0.0" in stage.captions[1].text)
+	key(KEY_D, true)
+	stage._physics_process(1.0 / 60.0)
+	assert("AXIS +1.0" in stage.captions[1].text)
+	key(KEY_D, false)
 	stage.queue_free()
 	print("CONTROL_KEYBOARD_OK movement=right_stop_left jump=true attack=true mesh_ack=exact")
 	quit(0)
