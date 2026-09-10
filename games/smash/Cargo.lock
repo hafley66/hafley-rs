@@ -2353,6 +2353,7 @@ checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
 name = "smash"
 version = "0.1.0"
 dependencies = [
+ "brawllib_rs",
  "game-content",
  "game-input",
  "parry3d",
