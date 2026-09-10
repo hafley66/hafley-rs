@@ -25,3 +25,14 @@ decisions; runtime Godot observer shows phase-clock re-entry (including DASH to
 DASH), entry tick and observed edge counts. Headless Godot/controls gate passed
 in `.workflow/test-clv3oo/receipt.json`. Static export and full visual proof pending.
 These are observed presentation samples, not a lossless transition event stream.
+
+`godot/4_dash_dance.test.gd` closes the observer's real-boundary gap: actual
+`start_controlled(false)`, `advance_controlled` and `acknowledge` over a fixed
+dash-dance tape, published `phase`/`phase_ticks` fed to the stage observer.
+Receipts: DASH re-entry at T6 with the phase clock restarting at 1, RUN at T21,
+TURN at T26, SQUAT/JUMP at T31/T34, six observed edges, and a re-presented
+earlier sample clearing the graph. Wired into `just test-godot`, gated on the
+`DASH_DANCE_OK` line because Godot exits 0 on a failed script assert. The lane
+reused the primary checkout's `libfalcon_gdext.dylib` and contracts
+`node_modules` at the same commit; a source-bound native rebuild and full
+`just test` rerun stay with the parent.
