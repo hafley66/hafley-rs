@@ -113,6 +113,18 @@ flowchart TD
 4. PM pose mapping (CHR0 via brawllib_rs) is untouched here; nothing in this
    report constrains pose selection.
 
+## Correction (crate cut, verified against kneeman-lines cca1beea)
+
+General ground traction is a LINEAR constant-magnitude deceleration clamped at
+zero (`ftCommon_ApplyFrictionGround`, ft/ftcommon.c:50-60), not the
+multiplicative decay this report first stated. The multiplicative form
+(`gr_vel -= gr_vel * x54 * friction`, ftCo_Dash.c:142-144) is dash-sustain
+only. Also, dash/run accel is `stick * dash_accel_mul + sign(stick) *
+dash_accel_base` toward `stick * dash_max_velocity` (`getAccelAndTarget`,
+ft/inlines.h:135-145); the `.ext` copy names these fields
+`dash_run_acceleration_a/_b`. Update the "Traction (no input)" row
+accordingly; superseded wording retained above for the record.
+
 ## Suggested numeric test vectors
 
 1. Jump arc: feed Falcon `fh_jump_force=3.1, gravity=0.13, terminal=2.9`
