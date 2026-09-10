@@ -21,7 +21,8 @@
     "TurnRun.html": "af93fc0b9fbc047f15a75d569e3bda38ad927452f80a250d833f44917bf3b767",
     "JumpB.html": "15d847c7584e7b42f9a414cf572c19e748476f4fb52f1e3119b0a3d0ea4a4da5",
     "JumpAerialF.html": "c2b937be09695e4ff2d4761c726c6fe34c56d114dc3bff8ae891803bc80796b1",
-    "LandingLight.html": "7726bc3c985636a9bf5f6a64b52be9af38b177d5e6f7f63b8f5d1c6204aa7a75"
+    "LandingLight.html": "7726bc3c985636a9bf5f6a64b52be9af38b177d5e6f7f63b8f5d1c6204aa7a75",
+    "attributes.html": "59efd5642a560b1c02fc572b3aee2920974c18559ab697937acd845f83e04625"
   },
   "frames": {
     "Wait1": 61, "JumpF": 36, "AttackAirF": 40, "JumpSquat": 4, "Fall": 9,

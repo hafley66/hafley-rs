@@ -19,3 +19,9 @@ pub use bake::bake;
 mod chart;
 #[cfg(feature = "ingest")]
 pub use chart::{emit_chart, TransitionSpec};
+
+#[cfg(feature = "ingest")]
+#[path = "4_attributes.rs"]
+mod attributes;
+#[cfg(feature = "ingest")]
+pub use attributes::attributes;

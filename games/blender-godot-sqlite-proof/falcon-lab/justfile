@@ -122,6 +122,10 @@ web-setup:
 import-check:
     sh 98_import.sh check
 
+# Regenerate Falcon's transition and numeric attribute outputs offline.
+import-generate:
+    lab_dir="$PWD"; . ./0_shell.sh; lab_cargo_manifest "$lab_dir/../../smash/Cargo.toml" run --features ingest --bin smash-import -- falcon
+
 import-fetch:
     sh 98_import.sh fetch
 
