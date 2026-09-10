@@ -364,7 +364,7 @@ func _control_step(input: Payload.ControlInput):
 	captions[3].text = "HITS %.0f / DAMAGE %.0f / BAG %s" % [meta.hits, meta.damage, ["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(target.phase)]]
 	captions[4].text = "BAG Z %.1f Y %.1f / CONTACT %s / STUN %.0f" % [target.z, target.y, str(meta.contact != 0.0), target.stun]
 	captions[5].text = "PM POSES + ATTRIBUTES / SHARED RUST LOCOMOTION" if not control_demo else "HISTORICAL KNEE REGRESSION / LAB MOVEMENT"
-	captions[6].text = "0.5X SCRIPTED REPLAY / SNAPSHOT CHECK PENDING" if control_demo else "LIVE KEYBOARD / LOCAL FIXED STEP / NO NETWORK PREDICTION"
+	captions[6].text = "0.5X SCRIPTED REPLAY / SNAPSHOT CHECK PENDING" if control_demo else "LIVE 60 HZ / SPEED %+.3f UNITS/TICK / FACING %s / LOCAL" % [meta.speed, "LEFT" if meta.facing < 0 else "RIGHT"]
 	captions[7].text = "A/D: DASH / SHIFT: WALK / SPACE: JUMP / S: DOWN / J: FAIR"
 	captions[8].text = "RUST PARRY CONTACT / RAPIER BAG / PM POSES"
 	captions[9].text = "0.5X DEMO / LANDING RECOVERY / THIRD JUMP" if control_demo else "60 HZ / SPEED %+.3f UNITS/TICK / FACING %s" % [meta.speed, "LEFT" if meta.facing < 0 else "RIGHT"]

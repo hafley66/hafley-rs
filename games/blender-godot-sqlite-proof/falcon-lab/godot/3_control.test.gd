@@ -22,6 +22,7 @@ func check_keyboard():
 	stage._physics_process(1.0 / 60.0)
 	assert("AXIS +1.0" in stage.captions[1].text)
 	assert("DASH POSE" in stage.captions[2].text)
+	assert(stage.captions[6].visible and "SPEED +2.000" in stage.captions[6].text and "FACING RIGHT" in stage.captions[6].text)
 	key(KEY_D, false)
 	stage._physics_process(1.0 / 60.0)
 	assert("AXIS +0.0" in stage.captions[1].text)
