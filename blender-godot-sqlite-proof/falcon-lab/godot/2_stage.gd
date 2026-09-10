@@ -357,13 +357,17 @@ func _control_step(input: Payload.ControlInput):
 		JavaScriptBridge.eval("window.FALCON_META = " + JSON.stringify(meta))
 	captions[1].text = "TICK %03d / AXIS %+.1f / BUTTONS %d / SQL GEN %d" % [state.simulation_tick, state.input.axis, state.input.buttons, state.renderer_generation]
 	captions[2].text = "%s POSE %02d / PLAYER Z %.1f Y %.1f" % [Payload.CONTROL_ACTION_LABELS.split("|")[int(meta.action)], int(meta.pose)+1, meta.root_z, meta.root_y]
+	if not control_demo:
+		var camera := get_viewport().get_camera_3d()
+		camera.position = Vector3(meta.root_z + 42, 38, 150)
+		camera.look_at(Vector3(meta.root_z, 23, 0))
 	captions[3].text = "HITS %.0f / DAMAGE %.0f / BAG %s" % [meta.hits, meta.damage, ["HOVERING", "HIT", "HITSTUN", "FALLING", "LANDED"][int(target.phase)]]
 	captions[4].text = "BAG Z %.1f Y %.1f / CONTACT %s / STUN %.0f" % [target.z, target.y, str(meta.contact != 0.0), target.stun]
-	captions[5].text = "PM TIMINGS + POSES / LAB TRANSITIONS + MOVEMENT"
+	captions[5].text = "PM POSES + ATTRIBUTES / SHARED RUST LOCOMOTION" if not control_demo else "HISTORICAL KNEE REGRESSION / LAB MOVEMENT"
 	captions[6].text = "0.5X SCRIPTED REPLAY / SNAPSHOT CHECK PENDING" if control_demo else "LIVE KEYBOARD / LOCAL FIXED STEP / NO NETWORK PREDICTION"
-	captions[7].text = "A/D OR ARROWS: MOVE / SPACE: JUMP / J: FAIR / ESC: EXIT"
+	captions[7].text = "A/D: DASH / SHIFT: WALK / SPACE: JUMP / S: DOWN / J: FAIR"
 	captions[8].text = "RUST PARRY CONTACT / RAPIER BAG / PM POSES"
-	captions[9].text = "0.5X DEMO / LANDING RECOVERY / THIRD JUMP" if control_demo else "60 HZ INPUT / LAB MOVEMENT CURVE / FACING RIGHT"
+	captions[9].text = "0.5X DEMO / LANDING RECOVERY / THIRD JUMP" if control_demo else "60 HZ / SPEED %+.3f UNITS/TICK / FACING %s" % [meta.speed, "LEFT" if meta.facing < 0 else "RIGHT"]
 
 func _notification(what):
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:

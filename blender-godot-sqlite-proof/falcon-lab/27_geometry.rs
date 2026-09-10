@@ -52,11 +52,12 @@ pub fn wire(rows: &[Row]) -> Vec<Line> {
             width: 0.8,
         });
     }
+    let facing = if meta.facing == 0.0 { 1.0 } else { meta.facing as f32 };
     let root = Matrix4::from_translation(Vector3::new(
         meta.root_x as f32,
         (meta.root_y + meta.animation_y) as f32,
-        (meta.root_z + meta.animation_x) as f32,
-    ));
+        meta.root_z as f32 + meta.animation_x as f32 * facing,
+    )) * Matrix4::from_nonuniform_scale(facing, 1.0, facing);
     for row in rows {
         match row.kind {
             TargetValues::KIND => {

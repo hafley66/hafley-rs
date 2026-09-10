@@ -56,7 +56,7 @@ pub fn inspect_catalog(directory: &std::path::Path) -> Result<(), Error> {
 
 /// Offline decoder output and native presentation oracle for the browser build.
 pub fn bake_web(path: &std::path::Path) -> Result<(), Error> {
-    let actions = baseline::load_controlled()?;
+    let actions = baseline::load_locomotion()?;
     let baked = fixture::bake(&actions);
     let poses: Vec<Vec<Vec<Row>>> = actions.iter().enumerate().map(|(action, a)| {
         a.frames.iter().enumerate().map(|(frame, _)| {
@@ -68,7 +68,7 @@ pub fn bake_web(path: &std::path::Path) -> Result<(), Error> {
         }).collect()
     }).collect();
     let inputs: Vec<_> = (0..CONTROL_TICKS).map(|t| demo_input(t as i32)).collect();
-    let mut simulation = Simulation::new(baked.clone().into(), true);
+    let mut simulation = Simulation::new(baked[..7].to_vec().into(), true);
     let expected: Vec<_> = inputs.iter().map(|input| {
         let world = simulation.advance_controlled(input.buttons as u8, input.axis);
         sql_viewer::encode(world, &actions, false, input.buttons as u8)
@@ -100,8 +100,9 @@ pub struct Controlled {
 
 impl Controlled {
     pub fn new(record: bool) -> Result<Self, Error> {
-        let actions = baseline::load_controlled()?;
-        let simulation = Simulation::new(fixture::bake(&actions).into(), true);
+        let actions = if record { baseline::load_controlled()? } else { baseline::load_locomotion()? };
+        let simulation = if record { Simulation::new(fixture::bake(&actions).into(), true) }
+            else { Simulation::new_locomotion(fixture::bake(&actions).into(), true) };
         Ok(Self {
             actions, simulation, boundary: Boundary::new()?,
             scratch: vec![Row::new(0, 0, 0); ROW_CAPACITY],
@@ -214,7 +215,7 @@ mod tests {
         let right = run.simulation.advance_controlled(0, 1.0).view.root[2];
         run.simulation.load(&snapshot);
         let left = run.simulation.advance_controlled(0, -1.0).view.root[2];
-        assert_eq!((right, left), (-11.1, -12.9));
+        assert_eq!((right, left), (-10.0, -14.0));
     }
 
     #[test]

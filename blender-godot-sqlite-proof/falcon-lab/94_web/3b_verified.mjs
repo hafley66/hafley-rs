@@ -16,6 +16,9 @@ export function verified(directory) {
   assert.equal(receipt.replayed_states, 120);
   assert.equal(receipt.keyboard, true);
   assert.equal(receipt.touch, true);
+  assert(receipt.locomotion && Math.abs(receipt.locomotion.run_speed - 2.3) < 0.001,
+    'locomotion speed proof missing');
+  for (const key of ['dash', 'run', 'left_run', 'walk']) assert.equal(receipt.locomotion[key], true);
   assert.deepEqual(receipt.errors, []);
   assert.deepEqual(hashes(directory), receipt.hashes, 'export changed after browser verification');
   return { selected, receipt };

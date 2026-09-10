@@ -10,7 +10,7 @@ default-run = "falcon-lab"
 [dependencies]
 rollback = { path = "../../crates/rollback" }
 game-capture = { path = "../../crates/capture" }
-smash = { path = "../../smash" }
+smash = { path = "../../smash", features = ["ingest"] }
 brawllib_rs = "=0.29.0"
 game-content = { path = "../../crates/content", features = ["ingest"] }
 bincode = { version = "2", features = ["serde"] }

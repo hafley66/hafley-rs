@@ -1,12 +1,12 @@
 {
   "objective": "Extract reusable game foundations from existing v1/v3 machinery through playable Falcon slices toward Lovers/Terraria/Smash",
-  "next": "L1/N1/L2 complete; stopped for review of 109_tasks.md and held-proof.mp4. G2 remains on deck",
-  "acceptance": "109_tasks.md: shared replay harness, held/repressed proof, shared presentation and inspected MP4",
+  "next": "F3 committed; finish F4 headless browser animation proof and F5 verified /game3/ publication. Current receipts and terminal status live in ../../4_tasks.md",
+  "acceptance": "110_tasks.md and ../../4_tasks.md: live Falcon locomotion, actual dash/run poses, restore tests, inspected MP4 and guarded deployment",
   "coverage": "99_lifecycle_import.md",
   "plan": "92_web_import_plan.md",
-  "tasks": "109_tasks.md",
+  "tasks": "110_tasks.md",
   "task_lookback": 3,
-  "current_task": "review",
+  "current_task": "F4",
   "pending": [
     "G2", "G3", "G4", "G5", "G6", "G7", "P1", "P2", "P3", "P4"
   ],

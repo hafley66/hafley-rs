@@ -69,8 +69,27 @@ try {
   await page.waitForFunction(() => window.FALCON_STATUS?.simulation_tick > 1, null, { timeout: 90000 });
   const start = await page.evaluate(() => window.FALCON_META.root_z);
   await page.keyboard.down('d');
-  await page.waitForFunction(z => window.FALCON_META.root_z > z + 3, start);
+  await page.waitForFunction(() => window.FALCON_META.action === 10);
+  await page.screenshot({ path: join(output, '3a_dash.png') });
+  await page.waitForFunction(() => window.FALCON_META.action === 11 && window.FALCON_META.pose >= 10);
+  const running = await page.evaluate(() => ({ ...window.FALCON_META }));
+  assert(Math.abs(running.speed - 2.3) < 0.001, `run speed ${running.speed}`);
+  assert.equal(running.facing, 1);
+  assert(running.root_z > start + 20);
+  await page.screenshot({ path: join(output, '3b_run.png') });
   await page.keyboard.up('d');
+  await page.waitForFunction(() => window.FALCON_META.action === 0 && window.FALCON_META.speed === 0);
+  await page.keyboard.down('a');
+  await page.waitForFunction(() => window.FALCON_META.action === 11 && window.FALCON_META.speed < -2.29);
+  assert.equal(await page.evaluate(() => window.FALCON_META.facing), -1);
+  await page.screenshot({ path: join(output, '3c_left_run.png') });
+  await page.keyboard.up('a');
+  await page.waitForFunction(() => window.FALCON_META.action === 0 && window.FALCON_META.speed === 0);
+  await page.keyboard.down('Shift');
+  await page.keyboard.down('d');
+  await page.waitForFunction(() => window.FALCON_META.action === 8 && window.FALCON_META.speed > 0);
+  await page.keyboard.up('d');
+  await page.keyboard.up('Shift');
   await page.waitForFunction(() => window.FALCON_STATUS.input.axis === 0);
   await page.keyboard.down('Space');
   await page.waitForFunction(() => window.FALCON_META.root_y > 0);
@@ -92,7 +111,8 @@ try {
   const mp4 = join(output, 'proof.mp4');
   execFileSync('sh', [resolve(root, '../95_web.sh'), 'encode', video, mp4], { stdio: 'inherit' });
   const receipt = { url, production, native_rows: 300, replayed_states: 120,
-    keyboard: true, touch: true, transitions, errors, video, mp4, output };
+    keyboard: true, touch: true, locomotion: { run_speed: running.speed, dash: true, run: true, left_run: true, walk: true },
+    transitions, errors, video, mp4, output };
   writeFileSync(join(output, 'receipt.json'), JSON.stringify(receipt, null, 2));
   if (!production) writeFileSync(resolve(root, 'build/web-game3/verified.json'),
     JSON.stringify({ ...receipt, hashes: hashes(resolve(root, 'build/web-game3')) }, null, 2));

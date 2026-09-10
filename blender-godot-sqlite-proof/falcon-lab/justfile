@@ -47,6 +47,8 @@ _test-core: check-generated
 
 # Existing reducer algebra, deterministic pools, and shared rollback library.
 test-reuse:
+    lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo_manifest "$lab_dir/../../smash/Cargo.toml" test --features ingest
+    lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo_manifest "$lab_dir/../../crates/fighter/Cargo.toml" test
     lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo_manifest "$lab_dir/../../crates/content/Cargo.toml" test --features ingest
     lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo_manifest "$lab_dir/../../crates/input/Cargo.toml" test
     lab_dir="$PWD"; . ./0_shell.sh; CARGO_TARGET_DIR="$lab_dir/target" lab_cargo_manifest "$lab_dir/../../crates/capture/Cargo.toml" test

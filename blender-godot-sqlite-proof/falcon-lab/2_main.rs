@@ -40,6 +40,10 @@ pub(crate) fn load_controlled() -> Result<Vec<HighLevelSubaction>, Error> {
     Ok(actions)
 }
 
+pub(crate) fn load_locomotion() -> Result<Vec<HighLevelSubaction>, Error> {
+    falcon::catalog::load()
+}
+
 fn load_files(files: &[&str]) -> Result<Vec<HighLevelSubaction>, Error> {
     files.iter()
     .map(|file| {
