@@ -36,7 +36,7 @@ map-png:
     rsvg-convert -w 1500 1_roadmap.svg -o /tmp/hafley-games-roadmap.png
 
 status:
-    node classification/2_registry.mjs status
+    node classification/8_status.mjs
 
 tsp:
     node classification/2_registry.mjs generate
@@ -44,4 +44,5 @@ tsp:
 test:
     node --test classification/2_registry.test.mjs
     node --test classification/5_progress.test.mjs
+    node --test classification/8_status.test.mjs
     just test-map

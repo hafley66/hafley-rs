@@ -23,6 +23,8 @@ pub mod chart;
 pub mod ground;
 #[path = "4_ground_chart.rs"]
 pub mod ground_chart;
+#[path = "5_status.rs"]
+pub mod status;
 #[path = "3_slice.rs"]
 pub mod slice;
 #[path = "1_state.rs"]

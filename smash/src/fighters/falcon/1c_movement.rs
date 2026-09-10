@@ -38,6 +38,19 @@ pub fn initial() -> State {
     State { position: [-12.0, 0.0], ..State::new(&rules()) }
 }
 
+/// Pure host Phase -> catalog animation seam. The shipped controller calls this
+/// for the base pose; airborne attack and aerial-landing recovery overrides stay
+/// in [`advance`] because they depend on action state, not phase alone.
+pub fn pose_for_phase(phase: Phase, axis: f32) -> usize {
+    match phase {
+        Phase::Idle => 0,
+        Phase::Walk => if axis.abs() < 0.35 { 7 } else if axis.abs() < 0.65 { 8 } else { 9 },
+        Phase::Dash => 10, Phase::Run => 11, Phase::Brake => 12, Phase::Turn => 14,
+        Phase::Squat => 3, Phase::Jump => 1, Phase::Fall => 4,
+        Phase::AirJump => 16, Phase::Crouch => 3, Phase::Landing => 6,
+    }
+}
+
 pub fn advance(world: &mut World, buttons: u8, axis: f32, actions: &[Action]) -> [f32; 3] {
     let mut policy = rules();
     let fighter = world.movement.as_mut().unwrap();
@@ -48,13 +61,7 @@ pub fn advance(world: &mut World, buttons: u8, axis: f32, actions: &[Action]) ->
     let input = Input { buttons: if attacking { buttons & !1 } else { buttons }, axis };
     game_fighter::advance(fighter, input, &policy);
     let landed = !old_phase.grounded() && fighter.phase == Phase::Landing;
-    let mut action = match fighter.phase {
-        Phase::Idle => 0,
-        Phase::Walk => if axis.abs() < 0.35 { 7 } else if axis.abs() < 0.65 { 8 } else { 9 },
-        Phase::Dash => 10, Phase::Run => 11, Phase::Brake => 12, Phase::Turn => 14,
-        Phase::Squat => 3, Phase::Jump => 1, Phase::Fall => 4,
-        Phase::AirJump => 16, Phase::Crouch => 3, Phase::Landing => 6,
-    };
+    let mut action = pose_for_phase(fighter.phase, axis);
     if attacking && !fighter.grounded() { action = 2; }
     if (landed && attacking && actions[2].frames[world.animation.min(actions[2].frames.len()-1)].landing_lag)
         || (recovering && fighter.phase == Phase::Landing) { action = 5; }
