@@ -36,9 +36,7 @@ pub enum Phase {
     Dash,
     Run,
     Brake,
-    /// `ftCo_MS_Turn`, the in-place turn entered from Wait/Walk.
     Turn,
-    /// `ftCo_MS_JumpSquat`/`ftCo_MS_KneeBend` takeoff preparation.
     Squat,
     /// `ftCo_MS_Squat`, the crouch-down animation.
     CrouchEnter,
@@ -46,12 +44,9 @@ pub enum Phase {
     CrouchHold,
     /// `ftCo_MS_SquatRv`, the stand-from-crouch animation.
     CrouchExit,
-    /// Ordinary ground landing (`ftCo_MS_Landing`).
     Landing,
-    /// `ftCo_MS_JumpF`, forward ground jump.
     Jump,
     Fall,
-    /// `ftCo_MS_JumpAerialF`, forward double jump.
     AirJump,
 }
 

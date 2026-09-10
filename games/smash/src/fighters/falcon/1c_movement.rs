@@ -256,29 +256,51 @@ mod tests {
     #[test]
     fn live_crouch_lifecycle_selects_squat_ids_and_replays_exactly() {
         let data = assets();
-        let tape: Vec<(u8, f32)> = (0..40)
-            .map(|t| if t < 20 { (4, 0.0) } else { (0, 0.0) })
+        let enter_frames = data[18].frames.len();
+        let hold_frames = data[19].frames.len();
+        let exit_frames = data[20].frames.len();
+        // Hold past one full SquatWait loop, then release for the full SquatRv.
+        let hold_until = hold_frames + 12;
+        let tape: Vec<(u8, f32)> = (0..hold_until + exit_frames + 2)
+            .map(|t| if t < hold_until { (4, 0.0) } else { (0, 0.0) })
             .collect();
         let mut sim = Simulation::new_locomotion(data, false);
-        let start = sim.save();
         let mut states = Vec::new();
+        let mut saves = Vec::new();
         for &(buttons, axis) in &tape {
+            saves.push(sim.save());
             states.push(sim.advance_controlled(buttons, axis).clone());
         }
         let actions: Vec<usize> = states.iter().map(|state| state.action).collect();
         let enter = actions.iter().position(|&a| a == 18).expect("enters Squat");
         let hold = actions.iter().position(|&a| a == 19).expect("holds SquatWait");
         let exit = actions.iter().position(|&a| a == 20).expect("exits SquatRv");
-        assert!(enter < hold && hold < exit, "crouch order {actions:?}");
-        assert_eq!(actions.last(), Some(&0), "returns to Wait");
+        let idle = exit
+            + actions[exit..]
+                .iter()
+                .position(|&a| a == 0)
+                .expect("returns to Wait");
+        assert!(enter < hold && hold < exit && exit < idle, "crouch order {actions:?}");
+        // The entering tick through the transition tick span the clip length.
+        assert_eq!(hold - enter + 1, enter_frames, "Squat duration {enter_frames}");
+        assert_eq!(idle - exit + 1, exit_frames, "SquatRv duration {exit_frames}");
+        // Hold loops its animation and never plays past its frame count.
+        let hold_states: Vec<&World> = states[hold..exit].iter().collect();
+        assert!(hold_states.len() > hold_frames, "hold outlasts one loop");
+        assert!(hold_states.iter().all(|state| state.view.frame < hold_frames));
         assert!(
-            actions.iter().filter(|&&a| a == 19).count() > 1,
-            "holds SquatWait across ticks: {actions:?}",
+            hold_states.windows(2).any(|pair| pair[1].animation < pair[0].animation),
+            "hold animation wraps",
         );
-        sim.load(&start);
-        for (offset, &(buttons, axis)) in tape.iter().enumerate() {
-            assert_eq!(sim.advance_controlled(buttons, axis), &states[offset]);
+        // Snapshot suffix equality from mid-hold.
+        let mid = hold + hold_frames;
+        sim.load(&saves[mid]);
+        for (offset, &(buttons, axis)) in tape[mid..].iter().enumerate() {
+            assert_eq!(sim.advance_controlled(buttons, axis), &states[mid + offset]);
         }
+        // ftCo_SquatWait_IASA:118 exposes ftCo_Jump_CheckInput.
+        sim.load(&saves[mid]);
+        assert_eq!(sim.advance_controlled(1, 0.0).action, 3, "jump interrupts hold");
     }
 
     #[test]
