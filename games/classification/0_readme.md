@@ -9,9 +9,14 @@ From `games/`:
 ```sh
 just status    # compile TSP, check repository references, print classifications
 just tsp       # validate and regenerate JSON + D2 inventory
-just map       # regenerate inventory and render the complete living roadmap
+just progress  # regenerate the static port dashboard, classification/6_progress.html
+just map       # regenerate inventory, dashboard and the complete living roadmap
 just test      # rejection tests + reference checks + generated-file freshness
 ```
+
+`6_progress.html` is the checked progress view: retained ingest with recomputed
+hashes, the mechanics matrix and current package stages. Open the file directly;
+nothing serves or launches it.
 
 Uses the existing `falcon-lab/contracts` compiler installation and lockfile
 (@typespec/compiler 1.10.0). If absent, run `pnpm install --frozen-lockfile` there.
@@ -74,6 +79,9 @@ increments, never an automatic promotion threshold.
    implementation. Advance stage only when its scoped exit conditions are met.
 6. Run `just map` and `just test` from `games/`. Commit only this increment's source,
    tests, lockfile changes, registry, generated outputs and tracked evidence.
+   Progress that changes a mechanic's disposition or ingest payload updates
+   `4_progress.tsp` and the regenerated `6_progress.html` in the same commit.
+   Report status by linking that view, never by composing a fresh chat table.
 7. Send commit SHA, stage before/after, checks and next bounded increment.
    Stop at the assigned terminal condition.
 

@@ -14,6 +14,11 @@ export const root = fileURLToPath(new URL('../', import.meta.url));
 const source = fileURLToPath(new URL('1_registry.tsp', import.meta.url));
 
 export async function loadRegistry(path = source) {
+  return loadValue(path, 'entries', 'Games.Registry', true);
+}
+
+// One pinned-compiler seam for every checked const in this directory.
+export async function loadValue(path, name, reference, inlineChildren = false) {
   const program = await compiler.compile(compiler.NodeHost, path, {
     noEmit: true,
     additionalImports: [fileURLToPath(new URL('0_model.tsp', import.meta.url))],
@@ -21,11 +26,11 @@ export async function loadRegistry(path = source) {
   const errors = program.diagnostics.filter(d => d.severity === 'error');
   if (errors.length) throw Error(errors.map(d => `${d.code}: ${d.message}`).join('\n'));
   const node = program.sourceFiles.get(path)?.statements.find(n =>
-    n.kind === SyntaxKind.ConstStatement && n.id.sv === 'entries');
-  if (!node) throw Error('missing entries constant');
-  if (node.value.kind !== SyntaxKind.ObjectLiteral || node.value.properties.some(p =>
-    p.kind !== SyntaxKind.ObjectLiteralProperty || p.value.kind !== SyntaxKind.ObjectLiteral)) {
-    throw Error('registry and entries must be inline object literals');
+    n.kind === SyntaxKind.ConstStatement && n.id.sv === name);
+  if (!node) throw Error(`missing ${name} constant`);
+  if (node.value.kind !== SyntaxKind.ObjectLiteral || (inlineChildren && node.value.properties.some(p =>
+    p.kind !== SyntaxKind.ObjectLiteralProperty || p.value.kind !== SyntaxKind.ObjectLiteral))) {
+    throw Error(`${name} and its records must be inline object literals`);
   }
   // The compiler accepts repeated object keys. Registry identity must be unique.
   function unique(current) {
@@ -42,8 +47,8 @@ export async function loadRegistry(path = source) {
   unique(node.value);
   // Same pinned internal-checker seam already used by contracts/0_constants.mjs.
   const value = program.checker.getValueForNode(node);
-  const [expected, diagnostics] = program.resolveTypeReference('Games.Registry');
-  if (!expected || diagnostics.length) throw Error('cannot resolve authoritative registry schema');
+  const [expected, diagnostics] = program.resolveTypeReference(reference);
+  if (!expected || diagnostics.length) throw Error(`cannot resolve authoritative schema: ${reference}`);
   const [valid, failures] = program.checker.isTypeAssignableTo(value.type, expected, node);
   if (!valid) throw Error(failures.map(d => `${d.code}: ${d.message}`).join('\n'));
   return compiler.serializeValueAsJson(program, value, expected);
@@ -59,7 +64,7 @@ export function localPath(base, path) {
   return resolved;
 }
 
-async function existing(base, path) {
+export async function existing(base, path) {
   const candidate = localPath(base, path);
   const actual = await realpath(candidate);
   localPath(await realpath(base), relative(await realpath(base), actual));
