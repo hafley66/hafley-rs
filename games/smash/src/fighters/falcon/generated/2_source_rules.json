@@ -1,0 +1,126 @@
+{
+  "repository": "https://github.com/doldecomp/melee.git",
+  "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+  "rules": [
+    {
+      "from": "Wait",
+      "event": "turn_request",
+      "to": "Turn",
+      "guard": {
+        "lhs": "fp->input.lstick[0].x*fp->facing_dir",
+        "operator": "LessEqual",
+        "rhs": "p_ftCommonData->x34"
+      },
+      "source": {
+        "repository": "https://github.com/doldecomp/melee.git",
+        "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+        "path": "src/melee/ft/kinds/ftCommon/ftCo_Turn.c",
+        "line": 28,
+        "symbol": "ftCo_800C97A8"
+      }
+    },
+    {
+      "from": "KneeBend",
+      "event": "takeoff",
+      "to": "JumpF",
+      "guard": {
+        "lhs": "fp->input.lstick[0].x*fp->facing_dir",
+        "operator": "Greater",
+        "rhs": "-p_ftCommonData->x78"
+      },
+      "source": {
+        "repository": "https://github.com/doldecomp/melee.git",
+        "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+        "path": "src/melee/ft/kinds/ftCommon/ftCo_Jump.c",
+        "line": 153,
+        "symbol": "ftCo_Jump_Enter"
+      }
+    },
+    {
+      "from": "KneeBend",
+      "event": "takeoff",
+      "to": "JumpB",
+      "guard": {
+        "lhs": "fp->input.lstick[0].x*fp->facing_dir",
+        "operator": "LessEqual",
+        "rhs": "-p_ftCommonData->x78"
+      },
+      "source": {
+        "repository": "https://github.com/doldecomp/melee.git",
+        "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+        "path": "src/melee/ft/kinds/ftCommon/ftCo_Jump.c",
+        "line": 153,
+        "symbol": "ftCo_Jump_Enter"
+      }
+    },
+    {
+      "from": "Fall",
+      "event": "air_jump",
+      "to": "JumpAerialF",
+      "guard": {
+        "lhs": "fp->input.lstick[0].x*fp->facing_dir",
+        "operator": "Greater",
+        "rhs": "-p_ftCommonData->x78"
+      },
+      "source": {
+        "repository": "https://github.com/doldecomp/melee.git",
+        "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+        "path": "src/melee/ft/kinds/ftCommon/ftCo_JumpAerial.c",
+        "line": 158,
+        "symbol": "ftCo_JumpAerial_Enter_Basic"
+      }
+    },
+    {
+      "from": "Fall",
+      "event": "air_jump",
+      "to": "JumpAerialB",
+      "guard": {
+        "lhs": "fp->input.lstick[0].x*fp->facing_dir",
+        "operator": "LessEqual",
+        "rhs": "-p_ftCommonData->x78"
+      },
+      "source": {
+        "repository": "https://github.com/doldecomp/melee.git",
+        "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+        "path": "src/melee/ft/kinds/ftCommon/ftCo_JumpAerial.c",
+        "line": 158,
+        "symbol": "ftCo_JumpAerial_Enter_Basic"
+      }
+    }
+  ],
+  "unresolved": [
+    {
+      "symbol": "p_ftCommonData->x34",
+      "source": {
+        "repository": "https://github.com/doldecomp/melee.git",
+        "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+        "path": "src/melee/ft/kinds/ftCommon/ftCo_Turn.c",
+        "line": 0,
+        "symbol": "ftCo_800C97A8"
+      },
+      "reason": "numeric value lives in the game common-data binary; no retained DAT input"
+    },
+    {
+      "symbol": "p_ftCommonData->x78",
+      "source": {
+        "repository": "https://github.com/doldecomp/melee.git",
+        "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+        "path": "src/melee/ft/kinds/ftCommon/ftCo_Jump.c",
+        "line": 0,
+        "symbol": "ftCo_Jump_Enter"
+      },
+      "reason": "numeric value lives in the game common-data binary; no retained DAT input"
+    },
+    {
+      "symbol": "LandingLight selection",
+      "source": {
+        "repository": "https://rukaidata.com/PM3.6/Captain%20Falcon/subactions/",
+        "revision": "7726bc3c985636a9bf5f6a64b52be9af38b177d5e6f7f63b8f5d1c6204aa7a75",
+        "path": "LandingLight.html",
+        "line": 0,
+        "symbol": "LandingLight"
+      },
+      "reason": "payload establishes the action; no retained PM selection rule"
+    }
+  ]
+}

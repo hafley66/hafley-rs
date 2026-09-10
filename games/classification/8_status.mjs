@@ -13,6 +13,7 @@ export const COLUMNS = ['payload', 'catalog', 'phase', 'chart', 'live', 'restore
 
 const statusSource = fileURLToPath(new URL('7_status.tsp', import.meta.url));
 const workflow = fileURLToPath(new URL('../blender-godot-sqlite-proof/falcon-lab/.workflow/', import.meta.url));
+const sourceRules = fileURLToPath(new URL('../smash/src/fighters/falcon/generated/2_source_rules.json', import.meta.url));
 
 // The live Rust export writes JSON to stdout. No checked editable registry.
 export function runExport(base = root, env = process.env) {
@@ -216,6 +217,7 @@ async function main() {
   await output(new URL('6_progress.html', import.meta.url), renderProgress(progress), true);
   const authored = await loadStatus();
   const exported = runExport();
+  const extracted = await readJson(sourceRules);
   const current = currentSource();
   const prove = await readJson(resolve(workflow, 'prove.json'));
   const result = joinStatus({
@@ -232,6 +234,9 @@ async function main() {
   }
   console.log('MATRIX');
   console.log(renderMatrix(result));
+  console.log('SOURCE RULES');
+  console.log(`  ${extracted.rules.length} extracted from ${extracted.repository}@${extracted.revision.slice(0, 12)}`);
+  for (const item of extracted.unresolved) console.log(`  UNRESOLVED ${item.symbol}: ${item.reason}`);
   const blocked = result.rows.filter(row => !row.live || row.chart === 0).length;
   console.log(`GATE game-fighter: stage ${entries['game-fighter'].stage} authored, not auto-promoted; ` +
     `${blocked}/${result.rows.length} actions lack a live phase or executable chart mapping; ` +

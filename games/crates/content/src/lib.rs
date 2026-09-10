@@ -25,3 +25,12 @@ pub use chart::{emit_chart, TransitionSpec};
 mod attributes;
 #[cfg(feature = "ingest")]
 pub use attributes::attributes;
+
+#[cfg(feature = "ingest")]
+#[path = "5_source.rs"]
+mod source;
+#[cfg(feature = "ingest")]
+pub use source::{
+    FunctionEvidence, Guard, Op, SourceError, SourceRef, SourceRule, Unresolved,
+    conditional_choice, function_evidence, if_guard,
+};

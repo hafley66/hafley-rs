@@ -9,6 +9,15 @@ ground-chart:
 ground-chart-preview output="/private/tmp/falcon-ground-chart.png":
     d2 --layout elk crates/fighter/5_ground_chart.d2 {{quote(output)}}
 
+# Extract source-backed Falcon guards from the pinned Melee decomp.
+source-rules:
+    cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- falcon
+    d2 --layout elk smash/src/fighters/falcon/generated/3_source_chart.d2 smash/src/fighters/falcon/generated/3_source_chart.svg
+
+source-rules-check:
+    cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- falcon --check
+    d2 validate smash/src/fighters/falcon/generated/3_source_chart.d2
+
 # Static port progress dashboard: classification/6_progress.html.
 progress:
     node classification/5_progress.mjs generate
@@ -36,6 +45,7 @@ map-png:
     rsvg-convert -w 1500 1_roadmap.svg -o /tmp/hafley-games-roadmap.png
 
 status:
+    just source-rules-check
     node classification/8_status.mjs
 
 tsp:
