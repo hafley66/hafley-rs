@@ -41,3 +41,13 @@ simulation-to-observer regression, including same-phase re-entry and Turn jump.
 No runtime behavior changes or new deployment are claimed by this test increment.
 Full `just test` passed core, workflow, Godot and controls:
 `.workflow/test-OL4Zdg/receipt.json`. This receipt predates only this ledger note.
+
+F41 browser dash dance fix: the controller input adapter summed opposing digital
+directions, so holding right and pressing left emitted axis 0 and the Dash
+reverse self-transition never reached the reducer. `godot/2_input.gd` resolves
+two opposing digital sides by last-pressed order with a deterministic focus
+reset; `2_stage.gd` feeds it key events and touch buttons. Native
+`3_control.test.gd` covers overlap and blur reset; `94_web/4_browser.mjs` drives
+a real headless browser and asserts four reversals inside Dash before Run, with
+phase-clock restarts, facing flips and both DOM keys held. No reducer, chart or
+deployment change.
