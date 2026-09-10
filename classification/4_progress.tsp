@@ -41,8 +41,8 @@ const progress: Progress = #{
       family: "Ground movement", package: "game-fighter", task: "S3",
       inventory: "partial", chart: "qualified", live: "qualified",
       restore: "partial", fidelity: "unqualified",
-      evidence: #["crates/fighter/tests/2_ground.rs", "blender-godot-sqlite-proof/falcon-lab/godot/4_dash_dance.test.gd"],
-      gate: "Dash dance is a behavior over the Dash self-transition, not a source action; source-ordered reversal timing is still unresolved, the Godot check drives the observer rather than a saved state, and the simultaneous-direction resolver (S7) is unintegrated.",
+      evidence: #["crates/fighter/tests/2_ground.rs", "blender-godot-sqlite-proof/falcon-lab/godot/4_dash_dance.test.gd", "blender-godot-sqlite-proof/falcon-lab/godot/3_control.test.gd"],
+      gate: "Dash dance is a behavior over the Dash self-transition, not a source action; source-ordered reversal timing is still unresolved and the Godot check drives the observer rather than a saved state. The simultaneous-direction resolver is integrated (`f5b1142` last-press, `98b4631` focus loss) and `godot/3_control.test.gd` covers it.",
     },
     run: #{
       family: "Ground movement", package: "game-fighter", task: "S3",
@@ -56,14 +56,14 @@ const progress: Progress = #{
       inventory: "qualified", chart: "qualified", live: "qualified",
       restore: "partial", fidelity: "unqualified",
       evidence: #["crates/fighter/5_ground_chart.md", "crates/fighter/tests/2_ground.rs"],
-      gate: "Distinct dash and run stopping families remain merged; WalkBrake and TurnRunBrake are unselected and unimplemented.",
+      gate: "RunBrake and TurnRun are separate source states; the host merges RunBrake into Brake and TurnRun into Turn. The source motion enum has no WalkBrake or TurnRunBrake state, so those names are dropped. Falcon emits RunBrake ID12 for Brake.",
     },
     turn: #{
       family: "Ground movement", package: "game-fighter", task: "S3",
       inventory: "qualified", chart: "qualified", live: "qualified",
       restore: "qualified", fidelity: "unqualified",
       evidence: #["crates/fighter/tests/2_ground.rs", "smash/src/fighters/falcon/1c_movement.rs", "crates/fighter/4_graph.md"],
-      gate: "Turn and TurnRun stay one simplified policy; the source has two states, and TurnRun's own jump helper is untranslated.",
+      gate: "Turn and TurnRun stay one simplified policy; the source has two states, and TurnRun's own jump helper is untranslated. Live Phase::Turn emits catalog ID14 TurnRun, so source Turn ID13 is unselected.",
     },
     jump: #{
       family: "Jump and fall", package: "game-fighter", task: "S3",
