@@ -147,6 +147,17 @@ test distinguishes published pose 0 from next-frame clock 1. Full proof passed:
 `falcon-lab/.workflow/prove-MifHpW/receipt.json`, six stages including browser
 and MP4 capture. Ground slice remains stage 2.7 with the scope limits above.
 
+Air/contact cut: new `crates/fighter/src/1c_air.rs` lifts the five remaining
+airborne writes (`Jump/AirJump -> Fall`, `Jump/Fall -> AirJump`, airborne ->
+`Landing`) into `air::decide`; `src/2_advance.rs` keeps air drift, gravity,
+fast-fall, double-jump impulse and landing reset, applied once per returned
+transition. Exhaustive 12-phase by 4-fact table, rejected ground phases,
+competing descending+jump order and JSON suffix replay live in
+`crates/fighter/tests/4_air.rs`. 22 fighter tests pass; the 360-tick Falcon
+restore tape and JSON replay stay bit-exact (7 smash library + 2 import tests).
+No physics change and no stage promotion; signed jump/fall variants, distinct
+turn/stop states and crouch lifecycle remain queued.
+
 S5 followup: `crates/fighter/5_ground_chart.md` and `.svg` are generated from
 executed `ground::decide` truth sets, grouped by semantic event. `just ground-chart`
 regenerates; fighter freshness tests check Markdown and D2. Eighteen fighter

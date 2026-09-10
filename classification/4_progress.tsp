@@ -81,10 +81,10 @@ const progress: Progress = #{
     },
     air: #{
       family: "Jump and fall", package: "game-fighter", task: "S3",
-      inventory: "qualified", chart: "partial", live: "qualified",
+      inventory: "qualified", chart: "qualified", live: "qualified",
       restore: "qualified", fidelity: "unqualified",
-      evidence: #["crates/fighter/tests/0_movement.rs", "smash/src/fighters/falcon/1c_movement.rs", "crates/fighter/4_graph.md"],
-      gate: "Air and contact decisions still live in src/2_advance.rs; the generated chart only proves air phases reject the ground-jump event.",
+      evidence: #["crates/fighter/src/1c_air.rs", "crates/fighter/tests/4_air.rs", "crates/fighter/tests/0_movement.rs", "smash/src/fighters/falcon/1c_movement.rs", "crates/fighter/4_graph.md"],
+      gate: "The five airborne writes (Jump/AirJump -> Fall, Jump/Fall -> AirJump, airborne -> Landing) select through air::decide; drift, gravity, fast-fall, double-jump impulse and landing reset stay in src/2_advance.rs. Source callback scheduling and signed variants remain unqualified.",
     },
     landing: #{
       family: "Aerial attacks", package: "game-fighter", task: "S3",
