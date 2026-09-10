@@ -1,7 +1,9 @@
 # Common fighter graph: source distillation
 
-Status: source-backed design inventory, not an implemented full chart. The live
-controller still uses `src/2_advance.rs`; it has not migrated to statig.
+Status: source-backed design inventory, with a four-edge crouch qualification in
+`src/1a_chart.rs` and `tests/1_chart.rs`. The live controller still uses
+`src/2_advance.rs`; it has not migrated to statig. The qualification handles one
+semantic dispatch, not the source game's full per-tick callback schedule.
 Scope: action exclusivity, transitions, guards, ordering and snapshot semantics.
 No velocity integration, collision solver, device mapping or animation renderer.
 

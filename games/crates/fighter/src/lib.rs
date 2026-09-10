@@ -15,11 +15,14 @@
 mod advance_impl;
 #[path = "0_rules.rs"]
 pub mod rules;
+#[path = "1a_chart.rs"]
+pub mod chart;
 #[path = "3_slice.rs"]
 pub mod slice;
 #[path = "1_state.rs"]
 pub mod state;
 
+pub use chart::{Action, CrouchChart, CrouchSlice, Facts};
 pub use rules::Rules;
 pub use slice::{MovementEffect, MovementSlice};
 pub use state::{Input, Phase, State, button};

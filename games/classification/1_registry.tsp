@@ -3,10 +3,10 @@ using Games;
 
 const entries: Record<Entry> = #{
   `game-fighter`: #{
-    stage: 2.7, destination: "library", task: "F3",
-    scope: "Parameterized flat-ground locomotion and Redux dispatch; input history, jump and restore tests; source-game equivalence unqualified",
+    stage: 2.7, destination: "library", task: "S2",
+    scope: "Parameterized locomotion plus state-only statig crouch qualification; live chart migration and source-game equivalence unqualified",
     manifest: "crates/fighter/Cargo.toml", targets: #["crates/fighter"],
-    evidence: #["4_tasks.md"],
+    evidence: #["4_tasks.md", "crates/fighter/4_graph.md", "crates/fighter/tests/1_chart.rs"],
   },
   `game-content`: #{
     stage: 2.7, destination: "library", task: "A1",
