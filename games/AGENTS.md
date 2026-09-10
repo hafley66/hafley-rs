@@ -69,6 +69,18 @@ stages are derived; only semantic mechanic dispositions are authored, in
 that record and regenerate the view in the same commit, then link it. Do not
 hand-write a progress table into a report or chat message.
 
+## Source authority for status
+
+`just status` is the joined authority for Falcon action state. Status facts come
+only from TypeSpec declarations, executable Rust exports, retained ingest
+manifests and source-fingerprinted workflow receipts. Comments, prose documents
+and authored coverage labels cannot claim observed status: a catalog action is
+selected only when the executable Phase-to-action seam maps it, a retained file
+is present only when its recomputed SHA256 matches the manifest, and a receipt
+is PASSED only when its recorded source fingerprint equals the recomputed one.
+Unknown cells stay explicit. TC39 promotion remains an explicit authored
+decision and never advances inside `status`.
+
 Follow the commit-sized session flow and promotion examples in
 `classification/0_readme.md`. Each implementation commit records Task, Package,
 Stage before/after, Property gained, Verified commands/outcomes, Evidence and
