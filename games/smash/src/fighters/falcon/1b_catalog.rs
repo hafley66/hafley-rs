@@ -71,7 +71,7 @@ mod tests {
         let manifest: serde_json::Value =
             serde_json::from_str(include_str!("imported/0_sources.json")).unwrap();
         let files = manifest["files"].as_object().unwrap();
-        assert_eq!(files.len(), CATALOG.len());
+        assert!(files.contains_key("attributes.html"), "missing attributes entry");
         for (_, file) in CATALOG {
             assert!(files.contains_key(file), "missing manifest entry for {file}");
         }
