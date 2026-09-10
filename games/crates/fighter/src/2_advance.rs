@@ -1,6 +1,6 @@
 //! One fixed tick of locomotion, shaped after the Melee decomp ftCommon
 //! motion states. Unsupported in this cut: attacks (ATTACK bit is read but
-//! has no effect), ledges, walls, platforms, crouch variants beyond hold.
+//! has no effect), ledges, walls, platforms.
 
 use crate::air::{self, AirEvent, AirFacts};
 use crate::ground::{self, Event, Facts};
@@ -242,9 +242,34 @@ impl State {
                         self.takeoff(input.axis, r);
                     }
                 }
-                Phase::Crouch => {
+                Phase::CrouchEnter => {
+                    apply_ground_friction(&mut self.velocity[0], r.ground_friction);
+                    if let Some(next) = ground::decide(
+                        self.phase,
+                        Event::Motion(Facts {
+                            finished: self.phase_tick >= r.crouch_enter_ticks,
+                            ..facts
+                        }),
+                    ) {
+                        self.enter(next);
+                    }
+                }
+                Phase::CrouchHold => {
                     apply_ground_friction(&mut self.velocity[0], r.ground_friction);
                     if let Some(next) = ground::decide(self.phase, Event::Motion(facts)) {
+                        self.enter(next);
+                        self.ground_common(input, r, true);
+                    }
+                }
+                Phase::CrouchExit => {
+                    apply_ground_friction(&mut self.velocity[0], r.ground_friction);
+                    if let Some(next) = ground::decide(
+                        self.phase,
+                        Event::Motion(Facts {
+                            finished: self.phase_tick >= r.crouch_exit_ticks,
+                            ..facts
+                        }),
+                    ) {
                         self.enter(next);
                         self.ground_common(input, r, true);
                     }

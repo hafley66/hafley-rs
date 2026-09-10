@@ -7,7 +7,8 @@ use game_fighter::{
 fn ground_jump_permissions_are_exclusive_and_air_landing_squat_reject() {
     use Phase::*;
     let phases = [
-        Idle, Walk, Dash, Run, Brake, Turn, Squat, Crouch, Landing, Jump, Fall, AirJump,
+        Idle, Walk, Dash, Run, Brake, Turn, Squat, CrouchEnter, CrouchHold, CrouchExit,
+        Landing, Jump, Fall, AirJump,
     ];
     assert_eq!(
         phases.map(|phase| decide(phase, Event::JumpRequest)),
@@ -19,6 +20,8 @@ fn ground_jump_permissions_are_exclusive_and_air_landing_squat_reject() {
             Some(Squat),
             Some(Squat),
             None,
+            Some(Squat),
+            Some(Squat),
             Some(Squat),
             None,
             None,
@@ -41,7 +44,7 @@ fn grounded_graph_has_ordered_guards_and_significant_dash_self_transition() {
         stopped: true,
     };
     let cases = [
-        (Idle, Event::GroundIntent(all), Some(Crouch)),
+        (Idle, Event::GroundIntent(all), Some(CrouchEnter)),
         (
             Idle,
             Event::GroundIntent(Facts { down: false, ..all }),
@@ -90,7 +93,7 @@ fn grounded_graph_has_ordered_guards_and_significant_dash_self_transition() {
                 reverse: false,
                 ..all
             }),
-            Some(Crouch),
+            Some(CrouchEnter),
         ),
         (Turn, Event::Motion(all), Some(Dash)),
         (
@@ -104,12 +107,30 @@ fn grounded_graph_has_ordered_guards_and_significant_dash_self_transition() {
         (Brake, Event::Motion(all), Some(Idle)),
         (Squat, Event::Motion(all), Some(Jump)),
         (Landing, Event::Motion(all), Some(Idle)),
-        (Crouch, Event::Motion(all), None),
         (
-            Crouch,
-            Event::Motion(Facts { down: false, ..all }),
-            Some(Idle),
+            CrouchEnter,
+            Event::Motion(Facts {
+                finished: false,
+                ..all
+            }),
+            None,
         ),
+        (CrouchEnter, Event::Motion(all), Some(CrouchHold)),
+        (CrouchHold, Event::Motion(all), None),
+        (
+            CrouchHold,
+            Event::Motion(Facts { down: false, ..all }),
+            Some(CrouchExit),
+        ),
+        (
+            CrouchExit,
+            Event::Motion(Facts {
+                finished: false,
+                ..all
+            }),
+            None,
+        ),
+        (CrouchExit, Event::Motion(all), Some(Idle)),
         (Fall, Event::Motion(all), None),
     ];
     for (phase, event, expected) in cases {

@@ -35,10 +35,11 @@ function fixture() {
 
 const codes = result => result.errors.map(error => error.code).sort();
 
-// Full authored catalog joined with the live selection seam: the 13 base-pose
-// action IDs plus the conditional airborne attack (ID2) and aerial-landing
-// recovery (ID5) runtime overrides. Mirrors movement::select over the export.
-const SELECTED_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16];
+// Full authored catalog joined with the live selection seam: the 16 base-pose
+// action IDs (including the crouch lifecycle 18/19/20) plus the conditional
+// airborne attack (ID2) and aerial-landing recovery (ID5) runtime overrides.
+// Mirrors movement::select over the export.
+const SELECTED_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 19, 20];
 
 function catalogFixture() {
   const entries = Object.values(authored.expected).sort((a, b) => a.id - b.id);
@@ -92,14 +93,14 @@ test('success join maps payload, phase, chart, live and fidelity separately', ()
   assert.equal(b.live, true);
 });
 
-test('the authored catalog joins to 15 selected and 7 unselected actions', () => {
+test('the authored catalog joins to 18 selected and 4 unselected actions', () => {
   const result = joinStatus(catalogFixture());
   assert.deepEqual(result.errors, []);
   const selected = result.rows.filter(row => row.live).map(row => row.id);
   assert.deepEqual(selected, SELECTED_IDS);
-  assert.equal(selected.length, 15);
-  assert.deepEqual(result.rows.filter(row => !row.live).map(row => row.id), [13, 15, 17, 18, 19, 20, 21]);
-  for (const id of [2, 5]) assert.equal(result.rows[id].live, true, `action ${id} unselected`);
+  assert.equal(selected.length, 18);
+  assert.deepEqual(result.rows.filter(row => !row.live).map(row => row.id), [13, 15, 17, 21]);
+  for (const id of [2, 5, 18, 19, 20]) assert.equal(result.rows[id].live, true, `action ${id} unselected`);
 });
 
 test('duplicate, missing and extra stable ids are rejected', () => {

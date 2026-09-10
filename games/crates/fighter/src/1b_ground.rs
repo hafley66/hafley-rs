@@ -1,7 +1,8 @@
 //! Grounded permission/transition slice consumed by the live Redux controller.
 //! Numeric thresholds, integration and entry impulses stay in `2_advance.rs`.
 //! Jump edges follow ftCo_Wait/Turn_IASA and fn_800CAF78 in Dash/Run/RunBrake/
-//! TurnRun. Other guards preserve the existing lab policy, not exact PM timing.
+//! TurnRun. The crouch lifecycle follows ftCo_Squat/SquatWait/SquatRv. Other
+//! guards preserve the existing lab policy, not exact PM timing.
 
 use crate::Phase;
 use statig::Outcome::{self, Handled, Transition};
@@ -46,12 +47,14 @@ impl blocking::State<Ground> for Phase {
         match event {
             // Jump wins before the grounded movement callback. Landing recovery
             // and an already-running jumpsquat do not accept another ground jump.
+            // ftCo_Squat/SquatWait/SquatRv IASA all expose ftCo_Jump_CheckInput.
             Event::JumpRequest => match self {
-                Idle | Walk | Dash | Run | Brake | Turn | Crouch => Transition(Squat),
+                Idle | Walk | Dash | Run | Brake | Turn
+                | CrouchEnter | CrouchHold | CrouchExit => Transition(Squat),
                 _ => Handled,
             },
             Event::GroundIntent(f) => match self {
-                Idle | Dash | Run if f.down => Transition(Crouch),
+                Idle | Dash | Run if f.down => Transition(CrouchEnter),
                 Idle | Dash | Run if f.dash => Transition(Dash),
                 Idle if f.walk => Transition(Walk),
                 _ => Handled,
@@ -65,11 +68,16 @@ impl blocking::State<Ground> for Phase {
                 Dash if !f.forward => Transition(Brake),
                 Run if f.reverse => Transition(Turn),
                 Run if !f.walk => Transition(Brake),
-                Run if f.down => Transition(Crouch),
+                Run if f.down => Transition(CrouchEnter),
                 Brake if f.stopped => Transition(Idle),
                 Turn if f.reverse => Transition(Dash),
                 Turn if f.finished => Transition(Idle),
-                Crouch if !f.down => Transition(Idle),
+                // ftCo_Squat_Anim:85-86 -> ftCo_800D638C -> ftCo_MS_SquatWait.
+                CrouchEnter if f.finished => Transition(CrouchHold),
+                // ftCo_SquatWait_IASA:121 -> ftCo_SquatRv_CheckInput.
+                CrouchHold if !f.down => Transition(CrouchExit),
+                // ftCo_SquatRv_Anim:59-64 -> ft_8008A2BC -> ftCo_MS_Wait.
+                CrouchExit if f.finished => Transition(Idle),
                 Landing if f.finished => Transition(Idle),
                 Squat if f.finished => Transition(Jump),
                 _ => Handled,

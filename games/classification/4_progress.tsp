@@ -74,10 +74,10 @@ const progress: Progress = #{
     },
     crouch: #{
       family: "Crouch", package: "game-fighter", task: "S2",
-      inventory: "qualified", chart: "qualified", live: "partial",
-      restore: "partial", fidelity: "unqualified",
-      evidence: #["crates/fighter/tests/1_chart.rs", "crates/fighter/4_graph.md"],
-      gate: "The four-state Squat/SquatWait/SquatRv cycle is qualified in isolation with clone and JSON suffix replay; live crouch remains hold-only and holds the jumpsquat pose.",
+      inventory: "qualified", chart: "qualified", live: "qualified",
+      restore: "qualified", fidelity: "unqualified",
+      evidence: #["crates/fighter/tests/2_ground.rs", "crates/fighter/tests/3_ground_chart.rs", "smash/src/fighters/falcon/1c_movement.rs", "crates/fighter/4_graph.md"],
+      gate: "CrouchEnter -> CrouchHold -> CrouchExit executes through ground::decide and Falcon selects Squat ID18, SquatWait ID19 and SquatRv ID20; enter/exit completion is animation-driven through Rules ticks set from the imported clip lengths. JumpSquat ID3 stays the jump startup pose. SquatWait re-enter (fn_800D62C4) and source callback scheduling remain unqualified.",
     },
     air: #{
       family: "Jump and fall", package: "game-fighter", task: "S3",

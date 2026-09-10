@@ -28,6 +28,9 @@ pub struct Rules {
     pub turn_ticks: u32,
     // jumpsquat / takeoff
     pub jump_startup_time: u32,
+    // crouch lifecycle (source Squat/SquatRv animation completion)
+    pub crouch_enter_ticks: u32,
+    pub crouch_exit_ticks: u32,
     pub jump_h_initial_velocity: f32,
     pub jump_h_max_velocity: f32,
     pub jump_v_initial_velocity: f32,
