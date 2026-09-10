@@ -44,6 +44,7 @@ pub struct PhaseDebug {
     active: Option<u8>,
     prev: Option<u8>,
     enter_tick: i64,
+    last_tick: Option<i64>,
     edges: BTreeMap<(u8, u8), u64>,
     transitions: u64,
 }
@@ -51,6 +52,16 @@ pub struct PhaseDebug {
 impl PhaseDebug {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Drop all observed history. Used on rollback rewind.
+    pub fn reset(&mut self) {
+        self.active = None;
+        self.prev = None;
+        self.enter_tick = 0;
+        self.last_tick = None;
+        self.edges.clear();
+        self.transitions = 0;
     }
 
     pub fn active(&self) -> Option<u8> {
@@ -78,7 +89,15 @@ impl PhaseDebug {
     /// Feed one frame. `phase` is `FrameValues.phase` (-1 when absent) and
     /// `phase_ticks` is `FrameValues.phase_ticks`. Returns the observed edge
     /// when the active phase changed, else `None`.
+    ///
+    /// A tick earlier than the previous observation is a rollback rewind: all
+    /// observed history is cleared so a replayed prefix cannot fabricate edges
+    /// or resurrect a stale previous phase.
     pub fn observe(&mut self, tick: i64, phase: f64, phase_ticks: f64) -> Option<Transition> {
+        if self.last_tick.is_some_and(|last| tick < last) {
+            self.reset();
+        }
+        self.last_tick = Some(tick);
         if !phase.is_finite() || phase < 0.0 {
             return None;
         }
@@ -208,5 +227,28 @@ mod tests {
         let mut dbg = PhaseDebug::new();
         assert_eq!(dbg.observe(42, RUN, 5.0), None);
         assert_eq!(dbg.enter_tick(), 38);
+    }
+
+    #[test]
+    fn tick_rewind_clears_observed_history_without_fabricating_edges() {
+        let mut dbg = PhaseDebug::new();
+        dbg.observe(10, IDLE, 1.0);
+        dbg.observe(11, DASH, 1.0);
+        dbg.observe(12, RUN, 1.0);
+        assert_eq!(dbg.transitions(), 3);
+        assert_eq!(dbg.observed_edges().keys().copied().collect::<Vec<_>>(), vec![(0, 2), (2, 3)]);
+        // Rollback to tick 9 and replay: history is discarded, no edge emitted
+        // from the stale RUN state, and the same replayed edge appears once.
+        assert_eq!(dbg.observe(9, IDLE, 1.0), None);
+        assert_eq!(dbg.transitions(), 1);
+        assert!(dbg.observed_edges().is_empty());
+        assert_eq!(dbg.active(), Some(0));
+        assert_eq!(dbg.observe(10, DASH, 1.0), Some(Transition { tick: 10, from: 0, to: 2 }));
+        assert_eq!(dbg.observe(11, RUN, 1.0), Some(Transition { tick: 11, from: 2, to: 3 }));
+        assert_eq!(
+            dbg.observed_edges().values().copied().collect::<Vec<_>>(),
+            vec![1, 1],
+            "each replayed edge is observed exactly once"
+        );
     }
 }

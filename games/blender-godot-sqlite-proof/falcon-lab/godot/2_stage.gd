@@ -28,6 +28,7 @@ var fault_note := "FAULTS ARMED: MAIN / PROCESS / RENDER THREAD"
 const MOTION_PHASE_NAMES := ["IDLE", "WALK", "DASH", "RUN", "BRAKE", "TURN", "SQUAT", "CROUCH", "LANDING", "JUMP", "FALL", "AIRJUMP"]
 var motion_phase := -1
 var observed_edges := {}
+var last_control_tick := -1
 
 func _ready():
 	if not ClassDB.class_exists("FalconSql"):
@@ -375,6 +376,10 @@ func _control_step(input: Payload.ControlInput):
 	# Previous phase and the transition tick are observed from the presented
 	# stream; the edge list is observed only, never a complete legal-edge graph.
 	if not control_demo:
+		if int(state.simulation_tick) < last_control_tick:
+			motion_phase = -1
+			observed_edges.clear()
+		last_control_tick = int(state.simulation_tick)
 		if meta.phase >= 0.0:
 			var now := int(meta.phase)
 			var enter := int(state.simulation_tick) - int(meta.phase_ticks) + 1
