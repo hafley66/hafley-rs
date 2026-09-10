@@ -9,9 +9,10 @@ const Stage = preload("res://2_stage.gd")
 const Rows = preload("res://1_rows_auto.gd")
 const Payload = preload("res://1_payload_auto.gd")
 
-# Dash right, reverse inside the initial dash, hold to run, turn, then jump.
+# Dash right, reverse inside the initial dash, hold to run, turn, then jump on
+# the tick after the turn begins, while TURN is still the current phase.
 const TAPE := [
-	[0, 6, 1.0, 0], [6, 26, -1.0, 0], [26, 31, 1.0, 0], [31, 32, 1.0, 1], [32, 40, 0.0, 0],
+	[0, 6, 1.0, 0], [6, 26, -1.0, 0], [26, 27, 1.0, 0], [27, 28, 1.0, 1], [28, 40, 0.0, 0],
 ]
 
 func stick(axis: float, buttons: int) -> Payload.ControlInput:
@@ -52,17 +53,18 @@ func dash_dance():
 		assert(observed[t] == [2, 6, 2])
 	assert(observed[21] == [3, 21, 2])
 	assert(observed[26] == [5, 26, 3])
-	assert(observed[27] == [2, 27, 5])
-	assert(observed[31] == [6, 31, 2])
-	assert(observed[34] == [9, 34, 6])
+	# Jump pressed while TURN is current: the jump edge wins over the reverse
+	# stick that would otherwise start another dash.
+	assert(observed[27] == [6, 27, 5])
+	assert(observed[30] == [9, 30, 6])
 	assert(stage.observed_edges == {
 		"DASH->DASH": 1, "DASH->RUN": 1, "RUN->TURN": 1,
-		"TURN->DASH": 1, "DASH->SQUAT": 1, "SQUAT->JUMP": 1,
+		"TURN->SQUAT": 1, "SQUAT->JUMP": 1,
 	})
 	assert(stage.phase_nodes.keys() == [2, 3, 5, 6, 9])
-	assert(stage.phase_graph.get_connection_list().size() == 6)
-	assert(stage.phase_nodes[2].get_child(0).text == "entered T27")
-	assert(stage.captions[8].text == "PHASE JUMP / PREV SQUAT / T34 / OBSERVED GRAPH")
+	assert(stage.phase_graph.get_connection_list().size() == 5)
+	assert(stage.phase_nodes[2].get_child(0).text == "entered T6 / re-entry")
+	assert(stage.captions[8].text == "PHASE JUMP / PREV SQUAT / T30 / OBSERVED GRAPH")
 	assert(stage.captions[9].text.begins_with("OBSERVED EDGES: DASH->DASH"))
 
 	# Same tape read straight off the extension, keeping the published phase
@@ -83,6 +85,10 @@ func dash_dance():
 	assert(samples[6] == [6, 2.0, 1.0])
 	assert(samples[20] == [20, 2.0, 15.0])
 	assert(samples[21] == [21, 3.0, 1.0])
+	assert(samples[26] == [26, 5.0, 1.0])
+	assert(samples[27] == [27, 6.0, 1.0])
+	# Three jumpsquat ticks, then takeoff.
+	assert(samples[30] == [30, 9.0, 1.0])
 	for sample in samples:
 		replay._observe_phase(sample[0], sample[1], sample[2])
 	assert(replay.motion_enter_tick == stage.motion_enter_tick)
@@ -96,5 +102,5 @@ func dash_dance():
 
 	stage.queue_free()
 	replay.queue_free()
-	print("DASH_DANCE_OK dash_reentry=T6 run=T21 turn=T26 jump=T34 edges=", stage.observed_edges.size())
+	print("DASH_DANCE_OK dash_reentry=T6 run=T21 turn=T26 squat=T27 takeoff=T30 edges=", stage.observed_edges.size())
 	quit(0)
