@@ -8,12 +8,22 @@
 //! parent's Claude session (incident 2026-09-10, rows m-a4faf081 and
 //! m-8b121d93). Every count of that kind below is a guard against the repeat.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Once;
 use std::time::Duration;
 
+use anyhow::Result;
 use boop_acp::channel::{Delivery, LaneChannel, TurnEvent, TurnReceipt};
+use boop_harness::door::{Delivered, Door, IdleNotice};
+use boop_harness::harness::{Capabilities, Harness, ReadChunk, SessionRef};
+use boop_harness::live::{DoorAddress, LiveSession, LiveSessions, LiveStatus};
+use boop_harness::Registry;
+use boop_proc::deliver::{deliver_hail_budgeted, DoorBudget, PanePaster, Rung};
 use boop_proc::supervise::{LaneRun, RETRYING, RETRY_BUDGET_EXHAUSTED};
+use boop_store::bus::Route;
+use boop_store::harness_id::HarnessId;
+use boop_store::ident::Store;
 
 /// The word a duplicated end-of-lane row used to wear. Nothing writes it now.
 const NO_DUPLICATE_END_ROW: &str = "exited_without_completion";
@@ -302,4 +312,164 @@ fn a_failure_row_names_the_lane_the_model_the_attempt_and_the_command() {
         )
     );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// DELIVERY. The retained result row is not merely stored: it walks the real
+/// ladder and stops on the recipient's door, which is the rung the incident's
+/// `m-a4faf081` was recorded at ("door queue"). The second row the pre-fix tree
+/// also sent is gone, so the door sees one delivery per failed lane.
+/// SABOTAGE RECEIPT: restore the `exited_without_completion` hail in
+/// `record_result` and this door sees two bodies.
+#[test]
+fn a_failed_lane_result_reaches_the_door_once() {
+    let dir = mail_dir("door-delivery");
+    parented(&dir);
+    boop_proc::supervise::run(lane_run(&dir), &mut FlakingChannel::default()).unwrap();
+
+    let lane = lane_of(&dir);
+    let mut rows = Vec::new();
+    for path in boop_store::bus::read_boxes(&dir).unwrap_or_default() {
+        rows.extend(boop_store::bus::parse_box(&path));
+    }
+    let end = rows
+        .into_iter()
+        .filter(|row| {
+            row.to == "coordinator"
+                && row.from == lane
+                && matches!(
+                    row.kind.as_str(),
+                    "result" | "exited_without_completion" | "open_failed"
+                )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(end.len(), 1, "one end row to deliver: {end:?}");
+
+    let store = Store::open(dir.join("boop.db")).unwrap();
+    let routes = BTreeMap::from([("coordinator".to_owned(), coordinator_route())]);
+    let registry = Registry::with(vec![Box::new(FakeClaude)]);
+    let budget = DoorBudget {
+        window: Duration::ZERO,
+        cooldown: Duration::ZERO,
+        floor: 100,
+    };
+    DELIVERED.lock().unwrap().clear();
+    let landing =
+        deliver_hail_budgeted(&registry, &store, &routes, &end[0], &NoPane, &budget).unwrap();
+
+    assert_eq!(
+        landing.rung,
+        Rung::DoorQueue,
+        "the retained result takes the recipient's door"
+    );
+    let bodies = DELIVERED.lock().unwrap().clone();
+    assert_eq!(bodies.len(), 1, "one door delivery per failed lane: {bodies:?}");
+    assert!(
+        bodies[0].contains("done rc=1") && bodies[0].contains("aborted stream"),
+        "the door body is the retained result row: {:?}",
+        bodies[0]
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The bodies one fake Claude door accepted, for the delivery assertion.
+static DELIVERED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+struct RecordingDoor;
+
+impl Door for RecordingDoor {
+    fn deliver(&self, _session: &LiveSession, body: &str) -> Result<Delivered> {
+        DELIVERED.lock().unwrap().push(body.to_owned());
+        Ok(Delivered::QueuedForTurnBoundary)
+    }
+
+    fn notify_idle(&self, _session: &LiveSession, _timeout: Duration) -> Result<IdleNotice> {
+        Ok(IdleNotice::now(None))
+    }
+}
+
+struct FakeLive;
+
+impl LiveSessions for FakeLive {
+    fn live_sessions(&self) -> Result<Vec<LiveSession>> {
+        Ok(vec![LiveSession {
+            harness: HarnessId::Claude,
+            session_id: "ses-fake-claude".to_owned(),
+            pid: Some(1),
+            cwd: None,
+            tmux_pane: Some("%1".to_owned()),
+            status: LiveStatus::Idle,
+            door: DoorAddress::UnixSocket {
+                path: "/tmp/boop-f41-fake.sock".into(),
+                token: None,
+            },
+            observed_ms: boop_harness::live::now_ms(),
+            started_ms: None,
+            scope: boop_harness::live::LiveSessionScope::Unknown,
+            parent_session: None,
+        }])
+    }
+}
+
+static FAKE_DOOR: RecordingDoor = RecordingDoor;
+static FAKE_LIVE: FakeLive = FakeLive;
+
+struct FakeClaude;
+
+impl Harness for FakeClaude {
+    fn id(&self) -> HarnessId {
+        HarnessId::Claude
+    }
+
+    fn capabilities(&self) -> &'static Capabilities {
+        boop_harness::harness::claude::Claude.capabilities()
+    }
+
+    fn live(&self) -> &dyn LiveSessions {
+        &FAKE_LIVE
+    }
+
+    fn door(&self) -> &dyn Door {
+        &FAKE_DOOR
+    }
+
+    fn sessions(&self) -> Result<Vec<SessionRef>> {
+        Ok(Vec::new())
+    }
+
+    fn read_from(&self, _session: &SessionRef, offset: u64) -> Result<ReadChunk> {
+        Ok(ReadChunk {
+            events: Vec::new(),
+            next_offset: offset,
+            reset: false,
+            skipped: 0,
+        })
+    }
+}
+
+struct NoPane;
+
+impl PanePaster for NoPane {
+    fn paste(&self, _pane: &str, _notice: &str) -> Option<String> {
+        panic!("a claude coordinator is never pasted into");
+    }
+}
+
+/// The parent route the supervisor addresses as `coordinator`.
+fn coordinator_route() -> Route {
+    Route {
+        kind: "coordinator".into(),
+        harness: Some(HarnessId::Claude),
+        tmux: Some("%1".to_owned()),
+        cwd: None,
+        model: None,
+        mode: None,
+        session_id: Some("ses-fake-claude".to_owned()),
+        source_path: None,
+        parent: None,
+        goal: None,
+        registered_at: None,
+        base_sha: None,
+        worktree_dir: None,
+        app_server_socket: None,
+    }
 }
