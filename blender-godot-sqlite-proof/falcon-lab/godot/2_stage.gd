@@ -25,6 +25,14 @@ var touch_buttons := 0
 var web_inspect := false
 var injected := [false, false, false]
 var fault_note := "FAULTS ARMED: MAIN / PROCESS / RENDER THREAD"
+const MOTION_PHASE_NAMES := ["IDLE", "WALK", "DASH", "RUN", "BRAKE", "TURN", "SQUAT", "CROUCH", "LANDING", "JUMP", "FALL", "AIRJUMP"]
+var motion_phase := -1
+var observed_edges := {}
+var last_control_tick := -1
+var previous_motion_phase := -1
+var motion_enter_tick := -1
+var phase_graph: GraphEdit
+var phase_nodes := {}
 
 func _ready():
 	if not ClassDB.class_exists("FalconSql"):
@@ -91,12 +99,26 @@ func _ready():
 		captions[0].text = "LIVE EXTERNAL PEER -> SNAPSHOT -> LOCAL SQLITE -> GODOT"
 	if controlled:
 		captions[0].text = "PLAYER INPUT -> RUST -> SQLITE -> TYPED GODOT"
+		if not control_demo:
+			phase_graph = GraphEdit.new()
+			phase_graph.position = Vector2(560, 55)
+			phase_graph.size = Vector2(376, 210)
+			phase_graph.show_menu = false
+			phase_graph.minimap_enabled = false
+			phase_graph.show_grid = false
+			phase_graph.zoom = 0.65
+			canvas.add_child(phase_graph)
+			captions[5].add_theme_font_size_override("font_size", 12)
 	captions[5].text = "3D LINE MESH / SQL ROWS + MESH UPLOAD VERIFIED"
 	captions[9].text = "0.5X + HOLDS / SCRIPTED TRAVEL / PM + MELEE KB + RAPIER"
 	print("GDEXT_STAGE_READY runtime=", Engine.get_version_info().string)
 	if OS.has_feature("web"):
 		for i in [7, 8, 9]:
 			captions[i].hide()
+		if not control_demo:
+			captions[8].position = Vector2(24, 180)
+			captions[8].add_theme_font_size_override("font_size", 13)
+			captions[8].show()
 		var bar := HBoxContainer.new()
 		bar.position = Vector2(24, 482)
 		bar.size = Vector2(912, 44)
@@ -368,6 +390,69 @@ func _control_step(input: Payload.ControlInput):
 	captions[7].text = "A/D: DASH / SHIFT: WALK / SPACE: JUMP / S: DOWN / J: FAIR"
 	captions[8].text = "RUST PARRY CONTACT / RAPIER BAG / PM POSES"
 	captions[9].text = "0.5X DEMO / LANDING RECOVERY / THIRD JUMP" if control_demo else "60 HZ / SPEED %+.3f UNITS/TICK / FACING %s" % [meta.speed, "LEFT" if meta.facing < 0 else "RIGHT"]
+	# Actual live locomotion phase, not the animation action/pose above.
+	# Previous phase and the transition tick are observed from the presented
+	# stream; the edge list is observed only, never a complete legal-edge graph.
+	if not control_demo:
+		_observe_phase(int(state.simulation_tick), meta.phase, meta.phase_ticks)
+		if motion_phase >= 0:
+			var prev_label: String = "NONE" if previous_motion_phase < 0 else MOTION_PHASE_NAMES[previous_motion_phase]
+			captions[8].text = "PHASE %s / PREV %s / T%d / OBSERVED GRAPH" % [MOTION_PHASE_NAMES[motion_phase], prev_label, motion_enter_tick]
+			var edges: String = "NONE" if observed_edges.is_empty() else ", ".join(PackedStringArray(observed_edges.keys()))
+			captions[9].text = "OBSERVED EDGES: %s" % edges
+		else:
+			captions[8].text = "LIVE PHASE NONE / NO MOVEMENT STATE"
+			captions[9].text = "OBSERVED EDGES (not a legal-edge graph): NONE"
+		if web_inspect:
+			JavaScriptBridge.eval("window.FALCON_PHASE_DEBUG = " + JSON.stringify({"active": motion_phase, "previous": previous_motion_phase, "entry_tick": motion_enter_tick, "edges": observed_edges.keys(), "nodes": phase_nodes.keys()}))
+
+func _reset_phase_view():
+	motion_phase = -1
+	previous_motion_phase = -1
+	motion_enter_tick = -1
+	observed_edges.clear()
+	if phase_graph != null:
+		phase_graph.clear_connections()
+		for node in phase_nodes.values():
+			phase_graph.remove_child(node)
+			node.queue_free()
+	phase_nodes.clear()
+
+# Observer lifetime follows monotonically presented ticks, separate from Redux.
+func _observe_phase(at_tick: int, code: float, age: float):
+	if at_tick == last_control_tick and code == float(motion_phase):
+		return
+	if at_tick <= last_control_tick:
+		_reset_phase_view()
+	last_control_tick = at_tick
+	if not is_finite(code) or code != floor(code) or code < 0 or code >= MOTION_PHASE_NAMES.size():
+		_reset_phase_view()
+		return
+	var now := int(code)
+	if now == motion_phase:
+		return
+	previous_motion_phase = motion_phase
+	motion_phase = now
+	motion_enter_tick = at_tick - int(age) + 1 if is_finite(age) and age >= 1 else at_tick
+	if phase_graph != null and not phase_nodes.has(now):
+		var node := GraphNode.new()
+		node.name = MOTION_PHASE_NAMES[now]
+		node.title = MOTION_PHASE_NAMES[now]
+		var index := phase_nodes.size()
+		node.position_offset = Vector2(12 + (index % 3) * 168, 12 + (index / 3) * 75)
+		node.custom_minimum_size = Vector2(150, 60)
+		var label := Label.new()
+		label.text = "observed"
+		node.add_child(label)
+		node.set_slot(0, true, 0, Color("65d9e6"), true, 0, Color("65d9e6"))
+		phase_graph.add_child(node)
+		phase_nodes[now] = node
+	if previous_motion_phase >= 0:
+		observed_edges["%s->%s" % [MOTION_PHASE_NAMES[previous_motion_phase], MOTION_PHASE_NAMES[now]]] = true
+		if phase_graph != null:
+			phase_graph.connect_node(MOTION_PHASE_NAMES[previous_motion_phase], 0, MOTION_PHASE_NAMES[now], 0)
+	for id in phase_nodes:
+		phase_nodes[id].self_modulate = Color("65efb0") if id == now else Color("8793a8")
 
 func _notification(what):
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:

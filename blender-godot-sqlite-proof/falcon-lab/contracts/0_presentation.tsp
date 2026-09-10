@@ -175,6 +175,12 @@ model FrameValues {
   advances: float64;
   total_loads: float64;
   confirmed: float64;
+  // Live `game_fighter::Phase` discriminant (-1 when no locomotion state) and
+  // ticks spent in it. The animation `action`/`pose` above are a separate
+  // concept. `phase_ticks` lets a debug view report the entry tick without a
+  // second state field; previous phase is observed from the stream.
+  phase: float64;
+  phase_ticks: float64;
 }
 
 @row(1)

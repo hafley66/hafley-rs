@@ -53,8 +53,8 @@ const entries: Record<Entry> = #{
     evidence: #["blender-godot-sqlite-proof/18_results.md"],
   },
   `falcon-lab`: #{
-    stage: 2.7, destination: "split", task: "A1",
-    scope: "Falcon importer, boundary tooling and app scenarios; promotion split pending",
+    stage: 2.7, destination: "split", task: "S5",
+    scope: "Falcon importer, boundary tooling and observed live phase graph; complete legal-edge graph and promotion split pending",
     manifest: "blender-godot-sqlite-proof/falcon-lab/Cargo.toml",
     targets: #["crates/content", "crates/presentation", "smash"],
     evidence: #["blender-godot-sqlite-proof/falcon-lab/109_tasks.md"],
@@ -68,7 +68,7 @@ const entries: Record<Entry> = #{
   },
   smash: #{
     stage: 2.7, destination: "app", task: "A1",
-    scope: "18-action Falcon catalog and PM numeric ingest; shared locomotion and restore tests; full callbacks and finite stage pending",
+    scope: "22-action Falcon catalog and PM numeric ingest; shared locomotion and restore tests; full callbacks and finite stage pending",
     manifest: "smash/Cargo.toml",
     targets: #["smash"], evidence: #["smash/0_readme.md", "3_tasks.md"],
   },

@@ -117,3 +117,11 @@ restore and full Run-pose cycle. Every retained payload SHA256 matches manifest.
 The local source mirror contains 490 subaction files; 22 are currently selected.
 Wait2/3, WalkBrake, TurnRunBrake, FallB/F, other aerial landings and item crouch
 remain unselected. No full-Falcon ingest or movement-fidelity claim. No deployment.
+
+S5 integration: worker 445289d/e82a5bd adds phase/phase_ticks to existing row
+slots 19/20. Coordinator adds Godot GraphEdit observed nodes/edges, stable previous
+phase, invalid-code and repeated-tick handling, plus browser graph assertions.
+Graph state is a presentation observer, reset on rewind or absent movement.
+It never supplies simulation transitions. Complete legal edges remain S1/S2.
+`just test-godot` passes generated freshness, row/payload checks and the new
+headless phase-view regression. Full proof/MP4 and deployment receipts are pending.
