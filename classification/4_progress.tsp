@@ -42,7 +42,7 @@ const progress: Progress = #{
       inventory: "partial", chart: "qualified", live: "qualified",
       restore: "partial", fidelity: "unqualified",
       evidence: #["crates/fighter/tests/2_ground.rs", "blender-godot-sqlite-proof/falcon-lab/godot/4_dash_dance.test.gd"],
-      gate: "Dash dance is a behavior over the Dash self-transition, not a source action; source-ordered reversal timing is still unresolved and the Godot check drives the observer rather than a saved state.",
+      gate: "Dash dance is a behavior over the Dash self-transition, not a source action; source-ordered reversal timing is still unresolved, the Godot check drives the observer rather than a saved state, and the simultaneous-direction resolver (S7) is unintegrated.",
     },
     run: #{
       family: "Ground movement", package: "game-fighter", task: "S3",

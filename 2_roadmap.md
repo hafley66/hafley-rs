@@ -13,7 +13,7 @@ Run `just map`, `just test-map`, or `just map-watch` from `games/`.
 D2 0.7.1 and ELK are the checked renderer. The map skill supplied the stacked-grid
 layout and adjacent-milestone edge convention. New milestones go above `m4`, under
 the legend. Stable IDs identify capabilities; status changes do not rename IDs.
-Date of this inventory: 2026-09-09. DONE means the named scoped proof exists;
+Date of this inventory: 2026-09-10. DONE means the named scoped proof exists;
 historical tests have not all been rerun for this documentation change.
 
 ## Lab maturity and promotion destination
@@ -47,6 +47,7 @@ verified before moving code.
 | m2.donor | Sibling `hafley-rs-game-runtime/games/cascade/` and `games/physics2d/` | Typed rule resolution, contact/support mechanics exist. Extraction and qualification remain. |
 | m3 | [Domain inventory](blender-godot-sqlite-proof/research/10_smash_ecosystem.md) | Candidate inventory is broader than executed labs. Q1–Q6 track qualification without claiming completion. |
 | m4 | [App destination](smash/0_readme.md), [crate destination](crates/0_readme.md) | Approved paths. Package creation, moves and app integration remain A1. |
+| m6 | [Ledger](4_tasks.md) rows S7–S10; receipts `a5ce0af`, `fc11379`, `6bb2d0f` | Foundations integrated. Four uncommitted lanes remain: browser simultaneous-direction input (S7), bounded-rotation atomic-consume trace backend (S8), readable runtime statechart UI (S9), mocked real-harness backbone (S10). No SHA, no stage change. |
 
 ## Runtime ownership and rollback
 

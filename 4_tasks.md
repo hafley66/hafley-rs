@@ -178,3 +178,18 @@ renders UNEXPORTED: `CATALOG` is a Rust const, and a bounded `catalog_export`
 example writing ordered id/name/file JSON is proposed, not built. `just test`
 passed six registry tests, seven progress tests and roadmap/SVG freshness. The
 generator never builds or runs the game. No stage promotion is claimed.
+
+## Active gates, 2026-09-10
+
+Integrated today and cited as evidence: `a5ce0af` observer deployment,
+`fc11379` real Falcon dash/turn observer regression, `6bb2d0f` checked progress
+view. Boop delivery work `841115a`/`bcdeb2c` is supporting test infrastructure,
+not a game package stage. The four rows below are uncommitted worker lanes: they
+carry no SHA and advance no stage.
+
+| ID | State | Terminal condition / coordinator checkpoint |
+| --- | --- | --- |
+| S7 | Active | Browser simultaneous-direction input: a last-pressed-wins resolver owns two opposing digital directions and resets on blur, so dash dance reverses with both held. Terminal: resolver merged into the live browser control path, tests pass and the integrated commit SHA is recorded. Unintegrated worker work; no SHA. |
+| S8 | Pending | Input/world/state trace backend with bounded rotation and atomic consume: emits input, world and state records, rotates within a fixed bound and consumes a record atomically. Terminal: code exists, bound and atomicity tests pass, and the record stream is documented. No code produced yet. |
+| S9 | Active | Readable runtime statechart UI: headless overlay and geometry tests assert captions, observed graph and touch layout at desktop and phone sizes. Terminal: tests pass and the Godot presentation is integrated with the observed phase graph. Unintegrated worker work; no SHA. |
+| S10 | Active | Mocked real-harness integration backbone: the recovery path drives the mocked harness from offline fixtures. Terminal: recovery exercises the mocked harness and tests pass; this is Boop test infrastructure, not a game package stage. Unintegrated worker work; no SHA. |
