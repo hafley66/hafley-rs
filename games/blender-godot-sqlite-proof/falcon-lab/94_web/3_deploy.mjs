@@ -16,7 +16,7 @@ export function stage() {
     ['2_project.godot', 'project.godot'], ['2_extension.gdextension', '0_falcon.gdextension'],
     ['2_export_presets.cfg', 'export_presets.cfg'],
     ['../godot/1_rows_auto.gd', '1_rows_auto.gd'], ['../godot/1_payload_auto.gd', '1_payload_auto.gd'],
-    ['../godot/2_stage.gd', '2_stage.gd'], ['../godot/3_stage.tscn', '3_stage.tscn'],
+    ['../godot/2_input.gd', '2_input.gd'], ['../godot/2_stage.gd', '2_stage.gd'], ['../godot/3_stage.tscn', '3_stage.tscn'],
   ]) copyFileSync(resolve(root, from), resolve(root, 'godot', to));
 }
 
