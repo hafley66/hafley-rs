@@ -158,6 +158,28 @@ restore tape and JSON replay stay bit-exact (7 smash library + 2 import tests).
 No physics change and no stage promotion; signed jump/fall variants, distinct
 turn/stop states and crouch lifecycle remain queued.
 
+## Ordered game queue (user-fixed 2026-09-10)
+
+Work proceeds in this order after the air/contact lift. Later items do not start
+before the coordinator closes an earlier one. Each item carries a terminal
+condition and a coordinator checkpoint.
+
+| Order | Item | Terminal condition | Checkpoint |
+| --- | --- | --- | --- |
+| G1 | Complete ground and aerial statecharts | Ground closure lands immediately after the air/contact cut. `Run -> TurnRun`, `TurnRun -> Run`, `Run -> RunBrake`, `RunBrake -> Idle/Crouch` and the live crouch lifecycle (`Squat -> SquatWait -> SquatRv -> Wait`) are chart-selected with no procedural permission left in `2_advance.rs`; every grounded and airborne source action has a Phase/chart representation; exhaustive chart tests pass; the 360-tick Falcon restore tape and JSON suffix replay stay bit-exact; the `just status` parity gate below passes for every source action. Aerial closure follows ground closure in the same item. | Coordinator confirms ground closure before aerial closure, then closes the pair. |
+| G2 | Ledge | Ledge grab, hang, climb, roll, jump and drop are chart-selected from source callbacks, not animation names; a stage with at least one ledge exists; restore and replay cover a ledge sequence. | Coordinator inspects the ledge tape. |
+| G3 | Items | Item spawn, pickup, hold, throw and expiry are modeled with ownership carried in rollback state; at least one item fixture replays; no item transition is inferred from animation data. | Coordinator inspects the item replay. |
+| G4 | Hitstun | Damage, hitstun, knockback and tumble are resolved from source callbacks for the existing fair; hitstun state is snapshot-owned and replays bit-exact. | Coordinator inspects the hitstun tape. |
+| G5 | Defense actions | Appended after hitstun: `AirDodge`/`EscapeAir`, `GroundRoll`/`EscapeF`+`EscapeB`, `SpotDodge`/`EscapeN` are chart-selected with intangibility windows read from source callbacks; restore and native/WASM target tests per action. | Coordinator inspects the dodge tape. |
+
+Automated parity/status gate (required terminal condition of G1, not yet
+implemented): `cd games && just status` reports one row per source action with
+these observed columns kept separate, never collapsed into one percentage:
+retained Ruka payload file plus SHA256 and declared frame count; catalog ID;
+host Phase/chart representation; live Falcon animation selection; restore-test
+status; native/WASM target-test status; source-code fidelity. Transition parity
+is never derived from Ruka animation data.
+
 S5 followup: `crates/fighter/5_ground_chart.md` and `.svg` are generated from
 executed `ground::decide` truth sets, grouped by semantic event. `just ground-chart`
 regenerates; fighter freshness tests check Markdown and D2. Eighteen fighter
