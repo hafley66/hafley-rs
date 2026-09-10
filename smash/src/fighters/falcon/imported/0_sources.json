@@ -1,0 +1,32 @@
+{
+  "source": "https://rukaidata.com/PM3.6/Captain%20Falcon/subactions/",
+  "retrieved": "2026-09-08",
+  "decoder": "brawllib_rs 0.29.0 (MIT), bincode 2 standard serde",
+  "copied_from": "games/blender-godot-sqlite-proof/fixtures (primary checkout; rukaidata-mirror for subactions, fixtures/falcon for AttackAirF)",
+  "files": {
+    "Wait1.html": "b5d904b01c4c35630801de7062ed2d495904abb1b4da9d11e97c6dee38f29207",
+    "JumpF.html": "37a49314e4b7c8b22edd7705238e78f6b5c5cbb77e79d48d4aba882264d51d8a",
+    "AttackAirF.html": "01b63dfbd97f6cc4c1536f809809164c514adc9fc2b1633f76bc6e22ffe690db",
+    "JumpSquat.html": "d7937dbf2b6ea50aeba59c0cb2a557f64b4210048ba5cf5d0e3acab32bac6455",
+    "Fall.html": "b419221f88097a9d7006e1cde2960b0754ee660a0a1e45cd97fe110e8e63e321",
+    "LandingAirF.html": "5e03b854cc53870ff8380bba8763b6085a8b5d3ddcfdac0cd3f030e09854f3a8",
+    "LandingHeavy.html": "84187cb92e1c906bfaa0f97f8e5bd7b6e60ff376e5c85f99b581b63773df1dcd",
+    "WalkSlow.html": "0af16f94c179d65651acbd8bb08e0bb4bb8de118f01dc036a4adee36e2d7f9e9",
+    "WalkMiddle.html": "a66b6b84498ff78ca2ac56778ef7b4ee65190b50c2d8cd05a94a043e12540605",
+    "WalkFast.html": "d1eb379dd910fe19d5f6852b2bd1ea5768b50f77677fd4dbd561986fbd51b368",
+    "Dash.html": "e7f8b6e5a44c894fdac0037c4f76e2cb1afdac1791106a685b595c58ae13aa58",
+    "Run.html": "0565dfe463cafbbd58344387a973aed2b47aee71677fb138d4347f2dc3ee166d",
+    "RunBrake.html": "26003a647fe613b8e9aa8fbd198f2bec1c5d9325e5e5ec2d5a46be448bdcdac5",
+    "Turn.html": "bc6899a4d6e244c8621afdad78c55c03c7785ff6d97605b3beb0fa0bf1560945",
+    "TurnRun.html": "af93fc0b9fbc047f15a75d569e3bda38ad927452f80a250d833f44917bf3b767",
+    "JumpB.html": "15d847c7584e7b42f9a414cf572c19e748476f4fb52f1e3119b0a3d0ea4a4da5",
+    "JumpAerialF.html": "c2b937be09695e4ff2d4761c726c6fe34c56d114dc3bff8ae891803bc80796b1",
+    "LandingLight.html": "7726bc3c985636a9bf5f6a64b52be9af38b177d5e6f7f63b8f5d1c6204aa7a75"
+  },
+  "frames": {
+    "Wait1": 61, "JumpF": 36, "AttackAirF": 40, "JumpSquat": 4, "Fall": 9,
+    "LandingAirF": 19, "LandingHeavy": 3, "WalkSlow": 55, "WalkMiddle": 31,
+    "WalkFast": 26, "Dash": 29, "Run": 21, "RunBrake": 28, "Turn": 12,
+    "TurnRun": 22, "JumpB": 51, "JumpAerialF": 50, "LandingLight": 3
+  }
+}

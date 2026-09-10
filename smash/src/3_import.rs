@@ -3,11 +3,11 @@ use std::path::{Path, PathBuf};
 
 fn falcon_source() -> Result<String, Box<dyn std::error::Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../blender-godot-sqlite-proof/fixtures/falcon");
+        .join("src/fighters/falcon/imported");
     let files = [
-        "4_pm36_Wait1.html", "5_pm36_JumpF.html", "1_pm36_AttackAirF.html",
-        "6_pm36_JumpSquat.html", "7_pm36_Fall.html", "8_pm36_LandingAirF.html",
-        "9_pm36_LandingHeavy.html",
+        "Wait1.html", "JumpF.html", "AttackAirF.html",
+        "JumpSquat.html", "Fall.html", "LandingAirF.html",
+        "LandingHeavy.html",
     ];
     let actions = files.iter().map(|file| decode_file(&root.join(file)))
         .collect::<Result<Vec<_>, _>>()?;
