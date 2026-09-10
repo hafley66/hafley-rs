@@ -70,3 +70,21 @@ F1-F5 terminal conditions for this bounded slice are satisfied. Remaining source
 fidelity, complete state-machine coverage, finite stage, additional moves and
 cross-target network qualifications retain their queued conditions above and in
 `3_tasks.md`. No interactive game window was launched. Stop this delivery pass.
+
+## New authorization: common action graph first
+
+User redirected work on 2026-09-10 to the shared fighter state machine before
+physics, device wiring or new mechanics. Existing F1-F5 receipts remain historical.
+Source distillation: `crates/fighter/4_graph.md`. The destination is game-fighter;
+use existing macro-free statig and Redux. No live behavior changed in this source
+inspection pass, and no maturity promotion is claimed.
+
+| ID | State | Terminal condition / coordinator checkpoint |
+| --- | --- | --- |
+| S1 | In progress | Enumerate source-backed common actions, exclusivity, callback-phase edges and ordered guards. Explain groups item by item. Mark unresolved PM3.6 patch behavior explicitly; do not substitute 3.6.1 annotations. |
+| S2 | Queued | Express first source-resolved common graph slice in existing statig + Redux, with mutual-exclusion, priority, rejection and restore tests. Report the executable edge coverage before expanding. No physics formulas or input-device wiring. |
+| S3 | Queued | Replace matching live Falcon transition policy with tested shared chart while retaining existing physics and presentation. Verify the consumer and restore traces; expand common families through scoped green commits. |
+
+All unfinished A/Q/M/G/P tasks retain their prior dispositions. S1-S3 govern the
+current ordering; full network world, friends' content and multiplayer remain
+the desired destination, not additional authorization for this graph-only pass.
