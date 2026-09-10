@@ -15,6 +15,10 @@ path="src/lib.rs"
 name = "smash-import"
 path = "src/3_import.rs"
 required-features = ["ingest"]
+
+[[example]]
+name = "status_export"
+path = "examples/0_status_export.rs"
 [dependencies]
 game-content = { path = "../crates/content" }
 redux = { path = "../crates/redux" }

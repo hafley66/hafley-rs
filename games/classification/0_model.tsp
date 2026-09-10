@@ -62,3 +62,23 @@ model Progress {
   mechanics: Record<Mechanic>;
   references: Reference[];
 }
+
+// Per-action status. The stable expected identity/order and the required
+// observation axes are authored here. Membership, order, mapped phases, chart
+// transitions and live animation selection are observed from the executable
+// Rust export; payload hashes and frame counts come from the retained ingest
+// manifest. Nothing in this model restates an observed value.
+alias ActionAxis =
+  "payload" | "catalog" | "phase" | "chart" | "live" | "restore" | "native" | "fidelity";
+
+model ExpectedAction {
+  id: int32;
+  action: string;
+  // Mechanic family name shared with Games.Mechanic.family.
+  family: string;
+}
+
+model Status {
+  expected: Record<ExpectedAction>;
+  axes: ActionAxis[];
+}

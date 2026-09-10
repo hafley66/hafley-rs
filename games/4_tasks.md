@@ -206,3 +206,24 @@ advances a game package stage.
 | S8 | Pending | Input/world/state trace backend with bounded rotation and atomic consume: emits input, world and state records, rotates within a fixed bound and consumes a record atomically. Terminal: code exists, bound and atomicity tests pass, and the record stream is documented. No code produced yet. |
 | S9 | Done, integrated | `870a3e0` makes the Falcon debug overlay derive text/touch sizes from the physical window, keeps the observed graph in one scroll panel and band-places nodes. `2a_overlay_geometry.test.gd` and `2_phase_view.test.gd` pass at desktop and phone sizes. Terminal condition met; app proof stays 2.7. |
 | S10 | Done, integrated (Boop infra) | `d0db56d` replays all four harness adapters from offline fixtures through `boop-harness/src/harness/replay.rs`; `7172202` replays a live codex turn through llmock and a real PTY; `291af2c` extends that to all four live harnesses. Boop test infrastructure, not a game package stage. |
+
+## Fixed capability queue, 2026-09-10
+
+User fixed this ordering after the status-authority slice. Each row is a
+capability, not a status claim: `just status` derives observed columns and gate
+blockers, so a row here never marks itself done. All earlier A/Q/M/G/P and S1-S10
+dispositions above remain in force; this queue only orders the next work.
+
+| ID | State | Terminal condition / coordinator checkpoint |
+| --- | --- | --- |
+| T1 | Queued | Ground plus aerial completion: every current and source-common grounded/airborne motion, interrupt and landing variant is either implemented through the statig charts or explicitly marked unsupported with the missing source fact named. Terminal: `just status` shows no action with an empty live phase or chart column and no silently dropped edge. |
+| T2 | Queued | Ledge: hang, climb, roll, attack, jump and release transitions with stage geometry facts. Terminal: headless ledge capture plus native restore tape; status `ledge-support` family advances its independent axes. |
+| T3 | Queued | Items: item ownership, pickup, throw and drop as shared vocabulary plus one Falcon-consumable path. Terminal: item ownership is snapshot-owned and replay-equivalent; status `content-extensions` axes updated. |
+| T4 | Queued | Hitstun: source damage, tumble, knockdown and tech states with ordered guards. Terminal: damage taken drives a hitstun phase and restore replay; status `damage-recovery` axes updated. |
+| T5 | Queued | Air dodge: direction-selected air dodge with its own action and landing lag. Terminal: air dodge transitions through the air chart and restores; status `defense` axes updated. |
+| T6 | Queued | Ground rolls: forward and backward rolls with intangibility windows as caller-resolved facts. Terminal: roll edges execute through the ground chart and restore; status `defense` axes updated. |
+| T7 | Queued | Spot dodge: in-place dodge with its own window and return edge. Terminal: spot dodge executes through the ground chart and restores; status `defense` axes updated. |
+
+T1-T7 depend on the status slice: `just status` is the observation surface each
+terminal condition cites. Do not add a disposition to a task row that `status`
+cannot derive from the export, the manifest or a source-fingerprinted receipt.

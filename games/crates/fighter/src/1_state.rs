@@ -46,6 +46,40 @@ pub enum Phase {
 }
 
 impl Phase {
+    /// Declaration order of the serialized `Phase` variants. This is the
+    /// executable inventory; callers must not restate it.
+    pub const ALL: [Phase; 12] = [
+        Phase::Idle,
+        Phase::Walk,
+        Phase::Dash,
+        Phase::Run,
+        Phase::Brake,
+        Phase::Turn,
+        Phase::Squat,
+        Phase::Crouch,
+        Phase::Landing,
+        Phase::Jump,
+        Phase::Fall,
+        Phase::AirJump,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Phase::Idle => "Idle",
+            Phase::Walk => "Walk",
+            Phase::Dash => "Dash",
+            Phase::Run => "Run",
+            Phase::Brake => "Brake",
+            Phase::Turn => "Turn",
+            Phase::Squat => "Squat",
+            Phase::Crouch => "Crouch",
+            Phase::Landing => "Landing",
+            Phase::Jump => "Jump",
+            Phase::Fall => "Fall",
+            Phase::AirJump => "AirJump",
+        }
+    }
+
     pub fn grounded(self) -> bool {
         matches!(
             self,

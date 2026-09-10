@@ -69,6 +69,36 @@ stages are derived; only semantic mechanic dispositions are authored, in
 that record and regenerate the view in the same commit, then link it. Do not
 hand-write a progress table into a report or chat message.
 
+## Source authority for status
+
+`just status` is the joined authority for Falcon action and mechanic state. Keep
+each source strictly in its lane:
+
+- TypeSpec (`classification/7_status.tsp`, modelled in `0_model.tsp`) authors
+  only stable expected action IDs, required observation axes, mechanic-family
+  intent and the explicit TC39 stage. It never restates an observed value.
+- The executable Rust export
+  (`smash/examples/0_status_export.rs`, through `game_fighter::status` and
+  `movement::pose_for_phase`) owns observed catalog membership/order, Phase
+  variants, executable chart transitions and the live Phase-to-animation
+  mapping. Never regex Rust semantic behavior; expose a public API or a pure
+  seam instead.
+- `smash/src/fighters/falcon/imported/0_sources.json` owns retained filenames,
+  hashes and declared frame counts. `just status` recomputes file presence and
+  SHA256 every run.
+- Source-fingerprinted workflow receipts under
+  `blender-godot-sqlite-proof/falcon-lab/.workflow/` own test, proof and deploy
+  observations. A path existing is not a passing test: a receipt counts as
+  PASSED only when its recorded source fingerprint equals the recomputed one,
+  otherwise it renders STALE.
+- Comments and prose documents are never machine authority.
+
+`just status` exits nonzero on stale generated data, broken hashes, missing or
+duplicate stable IDs, impossible mappings and contradictions. Unknown or
+unmeasured cells stay explicit; Ruka animation data cannot establish transition
+fidelity. Stages never advance inside `status`: it prints the authored stage and
+derives gate blockers from observations, and never silently promotes.
+
 Follow the commit-sized session flow and promotion examples in
 `classification/0_readme.md`. Each implementation commit records Task, Package,
 Stage before/after, Property gained, Verified commands/outcomes, Evidence and
