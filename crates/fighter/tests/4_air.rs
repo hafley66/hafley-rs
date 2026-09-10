@@ -3,21 +3,6 @@ use game_fighter::{
     air::{AirEvent, AirFacts, decide},
 };
 
-const PHASES: [Phase; 12] = [
-    Phase::Idle,
-    Phase::Walk,
-    Phase::Dash,
-    Phase::Run,
-    Phase::Brake,
-    Phase::Turn,
-    Phase::Squat,
-    Phase::Crouch,
-    Phase::Landing,
-    Phase::Jump,
-    Phase::Fall,
-    Phase::AirJump,
-];
-
 const AIRBORNE: [Phase; 3] = [Phase::Jump, Phase::AirJump, Phase::Fall];
 
 fn expected_motion(phase: Phase, facts: AirFacts) -> Option<Phase> {
@@ -34,7 +19,7 @@ fn expected_motion(phase: Phase, facts: AirFacts) -> Option<Phase> {
 
 #[test]
 fn motion_table_is_exhaustive_over_phases_and_fact_combinations() {
-    for phase in PHASES {
+    for phase in Phase::ALL {
         for descending in [false, true] {
             for jump_pressed in [false, true] {
                 for jumps_left in [0u8, 1, 2] {
@@ -56,7 +41,7 @@ fn motion_table_is_exhaustive_over_phases_and_fact_combinations() {
 
 #[test]
 fn land_only_accepts_airborne_phases() {
-    for phase in PHASES {
+    for phase in Phase::ALL {
         let expected = if AIRBORNE.contains(&phase) {
             Some(Phase::Landing)
         } else {
