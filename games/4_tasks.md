@@ -231,10 +231,11 @@ cannot derive from the export, the manifest or a source-fingerprinted receipt.
 Status slice receipt, `7f3f1e6`: `just status` prints 11 packages and a 22-row x
 8-axis action matrix (payload, catalog, phase, chart, live, restore, native,
 fidelity), each axis separate and no percentage. Derived: 23 retained payloads
-with recomputed SHA256 (0 failures), Rust catalog order for all 22 actions, 14
-Phase-to-animation selections, 57 ground and 29 air executable transitions. 9/22
-actions have no live phase or executable chart mapping (AttackAirF, LandingAirF,
-Turn, JumpB, LandingLight, Squat, SquatWait, SquatRv, JumpAerialB); all 22
+with recomputed SHA256 (0 failures), Rust catalog order for all 22 actions, 15
+Phase-to-animation selections (13 base poses plus the conditional AttackAirF ID2
+and LandingAirF ID5 runtime overrides), 57 ground and 29 air executable
+transitions. 7/22 actions have no live phase or executable chart mapping (Turn,
+JumpB, LandingLight, Squat, SquatWait, SquatRv, JumpAerialB); all 22
 source-fidelity dispositions stay unqualified. Restore and native/WASM receipts
 render STALE because the new export files changed the source fingerprint; no
 stage advanced. `just status && just test` passed: 6 registry, 7 progress and 8

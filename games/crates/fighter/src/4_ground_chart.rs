@@ -12,21 +12,6 @@ const FACT_NAMES: [&str; 7] = [
     "dash", "walk", "forward", "reverse", "down", "finished", "stopped",
 ];
 
-const PHASES: [Phase; 12] = [
-    Phase::Idle,
-    Phase::Walk,
-    Phase::Dash,
-    Phase::Run,
-    Phase::Brake,
-    Phase::Turn,
-    Phase::Squat,
-    Phase::Crouch,
-    Phase::Landing,
-    Phase::Jump,
-    Phase::Fall,
-    Phase::AirJump,
-];
-
 const EVENTS: [&str; 3] = ["JumpRequest", "GroundIntent", "Motion"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -69,23 +54,6 @@ fn facts(bits: u8) -> Facts {
         down: bits & 1 << 4 != 0,
         finished: bits & 1 << 5 != 0,
         stopped: bits & 1 << 6 != 0,
-    }
-}
-
-fn phase_name(phase: Phase) -> &'static str {
-    match phase {
-        Phase::Idle => "Idle",
-        Phase::Walk => "Walk",
-        Phase::Dash => "Dash",
-        Phase::Run => "Run",
-        Phase::Brake => "Brake",
-        Phase::Turn => "Turn",
-        Phase::Squat => "Squat",
-        Phase::Crouch => "Crouch",
-        Phase::Landing => "Landing",
-        Phase::Jump => "Jump",
-        Phase::Fall => "Fall",
-        Phase::AirJump => "AirJump",
     }
 }
 
@@ -166,24 +134,24 @@ Self-edges reset phase age. Rejected events preserve phase and age.\n\n\
         output.push_str(&format!(
             "\n## {event}\n\n```mermaid\nstateDiagram-v2\ndirection LR\n"
         ));
-        for phase in PHASES {
-            for destination in PHASES {
+        for phase in Phase::ALL {
+            for destination in Phase::ALL {
                 for (cube, witnesses) in exact_cubes(phase, event_index, Some(destination)) {
                     output.push_str(&format!(
                         "    {} --> {}: {}\n",
-                        phase_name(phase),
-                        phase_name(destination),
+                        phase.name(),
+                        destination.name(),
                         event_label(event_index, cube, witnesses)
                     ));
                 }
             }
         }
         output.push_str("```\n\nRejected events return `None`, preserving their source state:\n\n| Source | Guard | Assignments |\n| --- | --- | --- |\n");
-        for phase in PHASES {
+        for phase in Phase::ALL {
             for (cube, witnesses) in exact_cubes(phase, event_index, None) {
                 output.push_str(&format!(
                     "| {} | `{}` | {witnesses}/128 |\n",
-                    phase_name(phase),
+                    phase.name(),
                     cube.label()
                 ));
             }
@@ -199,10 +167,10 @@ pub fn render_d2() -> String {
     );
     for (event_index, event) in EVENTS.iter().enumerate() {
         output.push_str(&format!("  {event}: \"{event}\" {{\n    style: {{fill: \"#14232e\"; stroke: \"#30424e\"; font-color: \"#65d9e6\"}}\n"));
-        for phase in PHASES {
-            for destination in PHASES {
+        for phase in Phase::ALL {
+            for destination in Phase::ALL {
                 for (cube, _) in exact_cubes(phase, event_index, Some(destination)) {
-                    let (from, to) = (phase_name(phase), phase_name(destination));
+                    let (from, to) = (phase.name(), destination.name());
                     output.push_str(&format!("    {from}.class: phase\n    {to}.class: phase\n    {from} -> {to}: \"{}\" {{style: {{stroke: \"#65d9e6\"; font-color: \"#efcf75\"}}}}\n", cube.label()));
                 }
             }

@@ -38,9 +38,8 @@ pub fn initial() -> State {
     State { position: [-12.0, 0.0], ..State::new(&rules()) }
 }
 
-/// Pure host Phase -> catalog animation seam. The shipped controller calls this
-/// for the base pose; airborne attack and aerial-landing recovery overrides stay
-/// in [`advance`] because they depend on action state, not phase alone.
+/// Pure host Phase -> catalog animation seam for the base pose. Conditional
+/// live selections (air attack, aerial-landing recovery) go through [`select`].
 pub fn pose_for_phase(phase: Phase, axis: f32) -> usize {
     match phase {
         Phase::Idle => 0,
@@ -49,6 +48,65 @@ pub fn pose_for_phase(phase: Phase, axis: f32) -> usize {
         Phase::Squat => 3, Phase::Jump => 1, Phase::Fall => 4,
         Phase::AirJump => 16, Phase::Crouch => 3, Phase::Landing => 6,
     }
+}
+
+/// Caller-resolved facts that choose a catalog animation for one tick. These
+/// are the exact runtime inputs the shipped controller resolves before the
+/// Phase-to-action seam; the export evaluates the same function over them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SelectionFacts {
+    /// Aerial attack animation is still playing.
+    pub attacking: bool,
+    /// Attack button was pressed this tick.
+    pub attack_pressed: bool,
+    /// The fighter just contacted the ground and entered `Landing`.
+    pub landed: bool,
+    /// Aerial landing-recovery animation is still playing.
+    pub recovering: bool,
+    /// The aerial attack's landing-lag fact holds for this frame.
+    pub landing_lag: bool,
+}
+
+/// Machine key for the rule that won a selection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Condition {
+    Base,
+    AirAttack,
+    LandingRecovery,
+}
+
+impl Condition {
+    pub fn key(self) -> &'static str {
+        match self {
+            Condition::Base => "base",
+            Condition::AirAttack => "air_attack",
+            Condition::LandingRecovery => "landing_recovery",
+        }
+    }
+}
+
+/// Pure Phase-to-action selection shared by the shipped controller and the
+/// status export. Precedence mirrors the controller exactly: base pose, then
+/// the airborne attack override, then aerial-landing recovery, then a fresh
+/// airborne attack press.
+pub fn select(phase: Phase, axis: f32, facts: SelectionFacts) -> (usize, Condition) {
+    let mut action = pose_for_phase(phase, axis);
+    let mut condition = Condition::Base;
+    if facts.attacking && !phase.grounded() {
+        action = 2;
+        condition = Condition::AirAttack;
+    }
+    if (facts.landed && phase == Phase::Landing && facts.attacking && facts.landing_lag)
+        || (facts.recovering && phase == Phase::Landing)
+    {
+        action = 5;
+        condition = Condition::LandingRecovery;
+    }
+    if !phase.grounded() && !facts.attacking && facts.attack_pressed {
+        action = 2;
+        condition = Condition::AirAttack;
+    }
+    (action, condition)
 }
 
 pub fn advance(world: &mut World, buttons: u8, axis: f32, actions: &[Action]) -> [f32; 3] {
@@ -61,13 +119,18 @@ pub fn advance(world: &mut World, buttons: u8, axis: f32, actions: &[Action]) ->
     let input = Input { buttons: if attacking { buttons & !1 } else { buttons }, axis };
     game_fighter::advance(fighter, input, &policy);
     let landed = !old_phase.grounded() && fighter.phase == Phase::Landing;
-    let mut action = pose_for_phase(fighter.phase, axis);
-    if attacking && !fighter.grounded() { action = 2; }
-    if (landed && attacking && actions[2].frames[world.animation.min(actions[2].frames.len()-1)].landing_lag)
-        || (recovering && fighter.phase == Phase::Landing) { action = 5; }
     let pressed = buttons & !world.previous_input;
+    let landing_lag = landed
+        && attacking
+        && actions[2].frames[world.animation.min(actions[2].frames.len()-1)].landing_lag;
+    let (action, _) = select(fighter.phase, axis, SelectionFacts {
+        attacking,
+        attack_pressed: pressed & 2 != 0,
+        landed,
+        recovering,
+        landing_lag,
+    });
     if !fighter.grounded() && !attacking && pressed & 2 != 0 {
-        action = 2;
         world.attack_hit = false;
     }
     if action != world.action || old_phase != fighter.phase {
@@ -80,6 +143,42 @@ pub fn advance(world: &mut World, buttons: u8, axis: f32, actions: &[Action]) ->
     }
     if fighter.phase == Phase::Crouch { world.animation = actions[3].frames.len() - 1; }
     [0.0, fighter.position[1], fighter.position[0]]
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+
+    #[test]
+    fn selection_surfaces_air_attack_and_landing_recovery_ids() {
+        let base = SelectionFacts::default();
+        assert_eq!(select(Phase::Fall, 0.0, base), (4, Condition::Base));
+        assert_eq!(
+            select(Phase::Fall, 0.0, SelectionFacts { attacking: true, ..base }),
+            (2, Condition::AirAttack),
+        );
+        assert_eq!(
+            select(Phase::Fall, 0.0, SelectionFacts { attack_pressed: true, ..base }),
+            (2, Condition::AirAttack),
+        );
+        assert_eq!(
+            select(Phase::Jump, 0.0, SelectionFacts { attacking: true, ..base }),
+            (2, Condition::AirAttack),
+        );
+        assert_eq!(
+            select(Phase::Landing, 0.0, SelectionFacts { landed: true, attacking: true, landing_lag: true, ..base }),
+            (5, Condition::LandingRecovery),
+        );
+        assert_eq!(
+            select(Phase::Landing, 0.0, SelectionFacts { recovering: true, ..base }),
+            (5, Condition::LandingRecovery),
+        );
+        assert_eq!(
+            select(Phase::Idle, 0.0, SelectionFacts { landed: true, attacking: true, landing_lag: true, ..base }),
+            (0, Condition::Base),
+            "landing recovery is impossible outside Landing",
+        );
+    }
 }
 
 #[cfg(all(test, feature = "ingest"))]
