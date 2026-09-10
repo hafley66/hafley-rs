@@ -17,6 +17,8 @@ pub fn rules() -> Rules {
         dash_friction_mul: 1.0, ground_max_horizontal_velocity: attr::GROUNDED_MAX_X_VEL,
         turn_ticks: attr::FLIP_DIR_FRAME as u32,
         jump_startup_time: attr::JUMP_SQUAT_FRAMES as u32,
+        // Replaced from the imported crouch clips before each controlled tick.
+        crouch_enter_ticks: 1, crouch_exit_ticks: 1,
         jump_h_initial_velocity: attr::JUMP_X_INIT_VEL,
         jump_h_max_velocity: attr::JUMP_X_INIT_TERM_VEL,
         jump_v_initial_velocity: attr::JUMP_Y_INIT_VEL,
@@ -45,8 +47,10 @@ pub fn pose_for_phase(phase: Phase, axis: f32) -> usize {
         Phase::Idle => 0,
         Phase::Walk => if axis.abs() < 0.35 { 7 } else if axis.abs() < 0.65 { 8 } else { 9 },
         Phase::Dash => 10, Phase::Run => 11, Phase::Brake => 12, Phase::Turn => 14,
-        Phase::Squat => 3, Phase::Jump => 1, Phase::Fall => 4,
-        Phase::AirJump => 16, Phase::Crouch => 3, Phase::Landing => 6,
+        Phase::Squat => 3,
+        Phase::CrouchEnter => 18, Phase::CrouchHold => 19, Phase::CrouchExit => 20,
+        Phase::Jump => 1, Phase::Fall => 4,
+        Phase::AirJump => 16, Phase::Landing => 6,
     }
 }
 
@@ -116,6 +120,9 @@ pub fn advance(world: &mut World, buttons: u8, axis: f32, actions: &[Action]) ->
     let attacking = world.action == 2 && world.animation < actions[2].frames.len();
     let recovering = world.action == 5 && world.animation < actions[5].frames.len();
     if recovering { policy.landing_lag = actions[5].frames.len() as u32; }
+    // Crouch lifecycle completion is animation-driven; supply the imported lengths.
+    policy.crouch_enter_ticks = actions[18].frames.len() as u32;
+    policy.crouch_exit_ticks = actions[20].frames.len() as u32;
     let input = Input { buttons: if attacking { buttons & !1 } else { buttons }, axis };
     game_fighter::advance(fighter, input, &policy);
     let landed = !old_phase.grounded() && fighter.phase == Phase::Landing;
@@ -138,10 +145,9 @@ pub fn advance(world: &mut World, buttons: u8, axis: f32, actions: &[Action]) ->
         if action != 2 || world.action != 2 { world.animation = 0; }
         world.action = action;
     }
-    if matches!(action, 0 | 4 | 7..=11) {
+    if matches!(action, 0 | 4 | 7..=11 | 19) {
         world.animation %= actions[action].frames.len();
     }
-    if fighter.phase == Phase::Crouch { world.animation = actions[3].frames.len() - 1; }
     [0.0, fighter.position[1], fighter.position[0]]
 }
 
@@ -178,6 +184,18 @@ mod selection_tests {
             (0, Condition::Base),
             "landing recovery is impossible outside Landing",
         );
+    }
+
+    #[test]
+    fn selection_maps_crouch_lifecycle_to_squat_ids_and_keeps_jump_squat_pose() {
+        let base = SelectionFacts::default();
+        // JumpSquat ID3 stays the jump startup pose.
+        assert_eq!(select(Phase::Squat, 0.0, base), (3, Condition::Base));
+        assert_eq!(select(Phase::CrouchEnter, 0.0, base), (18, Condition::Base));
+        assert_eq!(select(Phase::CrouchHold, 0.0, base), (19, Condition::Base));
+        assert_eq!(select(Phase::CrouchExit, 0.0, base), (20, Condition::Base));
+        // A held crouch must not fall back to the jumpsquat pose.
+        assert_ne!(select(Phase::CrouchHold, 0.0, base).0, 3);
     }
 }
 
@@ -233,6 +251,46 @@ mod tests {
         }
         assert!(states.iter().any(|s| s.action == 2));
         assert!(states.iter().any(|s| s.action == 11));
+    }
+
+    #[test]
+    fn live_crouch_lifecycle_selects_squat_ids_and_replays_exactly() {
+        let data = assets();
+        let crouch_enter_frames = data[18].frames.len();
+        let crouch_exit_frames = data[20].frames.len();
+        let tape: Vec<(u8, f32)> = (0..40)
+            .map(|t| if t < 20 { (4, 0.0) } else { (0, 0.0) })
+            .collect();
+        let mut sim = Simulation::new_locomotion(data, false);
+        let start = sim.save();
+        let mut states = Vec::new();
+        for &(buttons, axis) in &tape {
+            states.push(sim.advance_controlled(buttons, axis).clone());
+        }
+        let actions: Vec<usize> = states.iter().map(|state| state.action).collect();
+        let enter = actions.iter().position(|&a| a == 18).expect("enters Squat");
+        let hold = actions.iter().position(|&a| a == 19).expect("holds SquatWait");
+        let exit = actions.iter().position(|&a| a == 20).expect("exits SquatRv");
+        assert!(enter < hold && hold < exit, "crouch order {actions:?}");
+        assert_eq!(actions.last(), Some(&0), "returns to Wait");
+        assert!(
+            actions.iter().filter(|&&a| a == 19).count() > 1,
+            "holds SquatWait across ticks: {actions:?}",
+        );
+        assert_eq!(
+            actions.iter().filter(|&&a| a == 18).count(),
+            crouch_enter_frames,
+            "Squat residence follows the imported animation length",
+        );
+        assert_eq!(
+            actions.iter().filter(|&&a| a == 20).count(),
+            crouch_exit_frames,
+            "SquatRv residence follows the imported animation length",
+        );
+        sim.load(&start);
+        for (offset, &(buttons, axis)) in tape.iter().enumerate() {
+            assert_eq!(sim.advance_controlled(buttons, axis), &states[offset]);
+        }
     }
 
     #[test]
