@@ -6,13 +6,14 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 
 use boop::registry::Registry;
 use boop::supervise::ParentDeathPolicy;
 use boop::{bus, mailwait};
 
 mod cli;
+mod invoke;
 
 use cli::control::run_native_tui;
 #[cfg(feature = "agent-read")]
@@ -383,7 +384,45 @@ fn main() -> Result<()> {
             line(&banner);
         }
     }
-    let cli = Cli::parse();
+    // Parse once here so help, version and parse errors are observed as
+    // invocations before clap's own print/exit preserves the stdout contract.
+    let argv: Vec<String> = std::env::args().collect();
+    let started_ms = now_ms();
+    let command = Cli::command();
+    let matches = match command.clone().try_get_matches_from(&argv) {
+        Ok(matches) => matches,
+        Err(error) => {
+            let outcome = invoke::outcome_for_clap_error(&error);
+            let invocation = invoke::begin(
+                invoke::command_path_from_argv(&argv),
+                &command,
+                None,
+                started_ms,
+            );
+            let _ = invoke::start(&invocation);
+            let _ = error.print();
+            invoke::finish(&invocation, now_ms().saturating_sub(started_ms), outcome);
+            std::process::exit(error.exit_code());
+        }
+    };
+    let (harness, lane) = invoke::identity(&matches);
+    let mut invocation = invoke::begin(
+        invoke::command_path(&matches),
+        &command,
+        Some(&matches),
+        started_ms,
+    );
+    invocation.harness = harness;
+    invocation.lane = lane;
+    let _ = invoke::start(&invocation);
+    let cli = Cli::from_arg_matches(&matches)?;
+    let result = run_cli(cli);
+    let outcome = if result.is_ok() { "ok" } else { "error" };
+    invoke::finish(&invocation, now_ms().saturating_sub(started_ms), outcome);
+    result
+}
+
+fn run_cli(cli: Cli) -> Result<()> {
     if let Some(preset) = cli.preset.as_deref() {
         anyhow::ensure!(
             cli.command.is_none(),
@@ -1750,6 +1789,23 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use boop::ident;
+
+    #[test]
+    fn clap_help_version_and_parse_errors_are_classified() {
+        let help = Cli::command()
+            .try_get_matches_from(["boop", "--help"])
+            .unwrap_err();
+        assert_eq!(invoke::outcome_for_clap_error(&help), "help");
+        let version = Cli::command()
+            .try_get_matches_from(["boop", "--version"])
+            .unwrap_err();
+        assert_eq!(invoke::outcome_for_clap_error(&version), "version");
+        let parse = Cli::command()
+            .try_get_matches_from(["boop", "--nope"])
+            .unwrap_err();
+        assert_eq!(invoke::outcome_for_clap_error(&parse), "parse-error");
+        assert_eq!(parse.exit_code(), 2);
+    }
 
     static SHELL_INIT_TEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 

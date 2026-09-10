@@ -672,6 +672,26 @@ impl Store {
         Ok(Store { connection })
     }
 
+    /// A write handle for a best-effort side append. It never migrates or
+    /// heals, never creates a missing store, and waits at most `busy` for a
+    /// held writer lock before surfacing the lock as an error. A read path
+    /// that only logs an observation uses this so it can drop the append
+    /// instead of turning a read-only command into a writer wait.
+    ///
+    /// [`Store::open`] stays the schema owner; this path assumes the schema is
+    /// already present and reports its absence as an ordinary error.
+    pub fn open_bounded_write(path: PathBuf, busy: std::time::Duration) -> Result<Self> {
+        let connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_WRITE)
+            .with_context(|| format!("open boop.db at {}", path.display()))?;
+        connection
+            .busy_timeout(busy)
+            .with_context(|| format!("set bounded busy_timeout on {}", path.display()))?;
+        connection
+            .pragma_update(None, "synchronous", "NORMAL")
+            .with_context(|| format!("set WAL synchronous mode on {}", path.display()))?;
+        Ok(Store { connection })
+    }
+
     fn stamp_version(&self) -> Result<()> {
         self.connection
             .execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION}"))?;
@@ -5147,6 +5167,34 @@ mod tests {
             assert_eq!(ms, BUSY_TIMEOUT.as_millis() as i64);
         }
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// The best-effort analytics open must neither inherit the 30s writer wait
+    /// nor migrate: a writer holding its transaction fails the append promptly,
+    /// and a missing store is unavailable instead of silently created.
+    #[test]
+    fn bounded_write_open_fails_fast_under_a_held_writer_lock() {
+        let (path, writer) = fresh_store("bounded-write");
+        writer.begin().unwrap();
+        let busy = Duration::from_millis(50);
+        let store = Store::open_bounded_write(path.clone(), busy).unwrap();
+        let started = std::time::Instant::now();
+        let result = store.record_trace_event(&trace_event("bounded-write-event", 1));
+        assert!(result.is_err(), "held writer lock must fail the append");
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "bounded write waited {:?}",
+            started.elapsed()
+        );
+        drop(store);
+        writer.rollback().unwrap();
+        drop(writer);
+        let _ = std::fs::remove_file(&path);
+
+        let missing = temp_path("bounded-write-missing");
+        let _ = std::fs::remove_file(&missing);
+        assert!(Store::open_bounded_write(missing.clone(), busy).is_err());
+        assert!(!missing.exists(), "bounded write created a missing store");
     }
 
     #[test]

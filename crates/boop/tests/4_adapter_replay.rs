@@ -359,3 +359,65 @@ fn opencode_fixture_replays_exact_events_orders_timing_and_resumes_at_the_rowid_
 
     let _ = std::fs::remove_file(db);
 }
+
+/// A half-written trailing line is the byte-plane chunk boundary: it must stay
+/// unconsumed and uncounted until its newline arrives, then decode exactly once.
+/// Claude is the witness; Kimi shares `tail::read_complete_lines`.
+#[test]
+fn claude_partial_trailing_line_is_held_until_terminated_then_decoded_once() {
+    use std::io::Write;
+
+    let fixture = include_str!("fixtures/claude_replay.jsonl");
+    let path =
+        std::env::temp_dir().join(format!("boop_claude_partial_{}.jsonl", std::process::id()));
+    std::fs::write(&path, fixture).expect("seed transcript");
+    let session = file_session(
+        HarnessId::Claude,
+        "S-0001",
+        path.clone(),
+        fixture.len() as u64,
+    );
+    let adapter = boop_harness::harness::claude::Claude;
+
+    let prefix = adapter
+        .read_from(&session, 0)
+        .expect("read complete prefix");
+    assert_eq!(prefix.next_offset, fixture.len() as u64);
+    let boundary = fixture.len() as u64;
+
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .expect("open for append");
+    file.write_all(
+        b"{\"type\":\"assistant\",\"uuid\":\"S-0001-u4\",\"sessionId\":\"S-0001\",\"timestamp\":\"2026-01-01T00:00:03.750Z\",\"message\":{\"role\":\"assistant\",\"content\":[]}",
+    )
+    .expect("append partial line");
+    drop(file);
+
+    let held = adapter
+        .read_from(&session, boundary)
+        .expect("read partial tail");
+    assert!(held.events.is_empty(), "partial line decodes nothing");
+    assert_eq!(held.next_offset, boundary, "partial line is not consumed");
+    assert_eq!(held.skipped, 0, "partial line is not counted");
+    assert!(!held.reset);
+
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .expect("open for append");
+    file.write_all(b"}\n").expect("terminate partial line");
+    drop(file);
+
+    let completed = adapter.read_from(&session, boundary).expect("read tail");
+    assert_eq!(completed.events.len(), 1);
+    assert_eq!(completed.events[0].uuid.as_deref(), Some("S-0001-u4"));
+    assert_eq!(completed.events[0].ts_ms, 1767225603750);
+    assert_eq!(
+        completed.next_offset,
+        std::fs::metadata(&path).unwrap().len()
+    );
+
+    let _ = std::fs::remove_file(path);
+}
