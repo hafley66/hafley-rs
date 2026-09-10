@@ -1,6 +1,14 @@
 default:
     @just --list
 
+# Evaluate live grounded guards and render the colocated static chart.
+ground-chart:
+    cargo run --locked --offline -j2 --manifest-path crates/fighter/Cargo.toml --example ground_chart -- --write
+    d2 --layout elk crates/fighter/5_ground_chart.d2 crates/fighter/5_ground_chart.svg
+
+ground-chart-preview output="/private/tmp/falcon-ground-chart.png":
+    d2 --layout elk crates/fighter/5_ground_chart.d2 {{quote(output)}}
+
 # D2 0.7.1; commit source and rendered SVG together.
 map:
     node classification/2_registry.mjs generate

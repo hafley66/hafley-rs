@@ -145,3 +145,12 @@ all phase jump permissions and serialized dispatch. Falcon Turn-jump consumer
 test distinguishes published pose 0 from next-frame clock 1. Full proof passed:
 `falcon-lab/.workflow/prove-MifHpW/receipt.json`, six stages including browser
 and MP4 capture. Ground slice remains stage 2.7 with the scope limits above.
+
+S5 followup: `crates/fighter/5_ground_chart.md` and `.svg` are generated from
+executed `ground::decide` truth sets, grouped by semantic event. `just ground-chart`
+regenerates; fighter freshness tests check Markdown and D2. Eighteen fighter
+tests pass. Godot observed nodes now label entry ticks and clock-reset re-entry;
+headless tests cover DASH self-transition, duplicate samples and rewind.
+Full visual proof passed: `.workflow/prove-UaYS9r/receipt.json` under the Falcon
+lab, all six stages. Static PNG and captured Run frame inspected. Stage remains
+2.7; the graph covers local grounded decisions and observed samples only.

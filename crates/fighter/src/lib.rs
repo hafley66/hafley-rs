@@ -19,6 +19,8 @@ pub mod rules;
 pub mod chart;
 #[path = "1b_ground.rs"]
 pub mod ground;
+#[path = "4_ground_chart.rs"]
+pub mod ground_chart;
 #[path = "3_slice.rs"]
 pub mod slice;
 #[path = "1_state.rs"]
