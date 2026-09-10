@@ -1446,27 +1446,13 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
             println!("[boop] result row write failed: {error}");
         }
     }
-    if exit_code != 0 && !ended_on_parent_death(detail.as_deref()) {
-        hail_parent_once(
-            lane,
-            EXITED_WITHOUT_COMPLETION,
-            exit_code as u32,
-            detail.as_deref().unwrap_or("no completion reported"),
-        );
-    }
 }
 
-/// A lane killed because its parent died: the one nonzero exit whose parent is
-/// gone, so a failure hail addressed to it would reach nobody.
-fn ended_on_parent_death(detail: Option<&str>) -> bool {
-    detail.is_some_and(|detail| detail.starts_with(boop_store::trail::PARENT_DIED))
-}
-
-/// The three actionable transitions a parent is told about, each at most once
-/// per lane. The completion row stays the only place an rc is written.
+/// The two actionable transitions a parent is told about while a lane is still
+/// running, each at most once per lane. The completion row stays the only place
+/// an rc is written: a nonzero exit is reported there, not as a second row.
 pub const RETRYING: &str = "retrying";
 pub const RETRY_BUDGET_EXHAUSTED: &str = "retry_budget_exhausted";
-pub const EXITED_WITHOUT_COMPLETION: &str = "exited_without_completion";
 
 /// What the parent needs to act on: which lane, on what model, how far in, why,
 /// and the command that reads the rest.

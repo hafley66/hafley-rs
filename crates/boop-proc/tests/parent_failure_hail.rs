@@ -1,13 +1,22 @@
 //! FAIL-PRE-FIX: a lane that burned its whole retry budget and then stopped
 //! without completing told its parent nothing; the only row was the completion
 //! rc, read after the fact. On the pre-fix tree every count below is 0.
+//!
+//! A lane's end row is now the one place its rc is written, and it takes the
+//! door. The supervisor must not also mail a second `exited_without_completion`
+//! row for the same nonzero exit: that duplicated every failed lane in the
+//! parent's Claude session (incident 2026-09-10, rows m-a4faf081 and
+//! m-8b121d93). Every count of that kind below is a guard against the repeat.
 
 use std::path::{Path, PathBuf};
 use std::sync::Once;
 use std::time::Duration;
 
 use boop_acp::channel::{Delivery, LaneChannel, TurnEvent, TurnReceipt};
-use boop_proc::supervise::{LaneRun, EXITED_WITHOUT_COMPLETION, RETRYING, RETRY_BUDGET_EXHAUSTED};
+use boop_proc::supervise::{LaneRun, RETRYING, RETRY_BUDGET_EXHAUSTED};
+
+/// The word a duplicated end-of-lane row used to wear. Nothing writes it now.
+const NO_DUPLICATE_END_ROW: &str = "exited_without_completion";
 
 /// One temp HOME and store for this whole binary, so the mood lookup inside a
 /// lane run never opens the machine's own store.
@@ -163,8 +172,52 @@ fn each_failure_kind_reaches_the_parent_exactly_once() {
     );
     assert_eq!(count(&dir, RETRYING), 1);
     assert_eq!(count(&dir, RETRY_BUDGET_EXHAUSTED), 1);
-    assert_eq!(count(&dir, EXITED_WITHOUT_COMPLETION), 1);
+    assert_eq!(
+        count(&dir, NO_DUPLICATE_END_ROW),
+        0,
+        "the result row carries the rc; a second end row is the duplicate"
+    );
     assert_eq!(count(&dir, "result"), 1, "the rc still has one writer");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// COUNT. A failed lane mails exactly one end row, and it is the `result` row
+/// whose rc and detail already say everything. Incident 2026-09-10: the parent
+/// received `m-a4faf081` (`result` rc=4) and then `m-8b121d93`
+/// (`exited_without_completion`) for the same failure, i.e. two Claude peer
+/// messages with two copies of the permission-laundering warning.
+/// RED: restore the `hail_parent_once(EXITED_WITHOUT_COMPLETION, ..)` call in
+/// `record_result` and this reads two rows.
+#[test]
+fn a_failed_lane_mails_one_end_row_not_two() {
+    let dir = mail_dir("one-end-row");
+    parented(&dir);
+    boop_proc::supervise::run(lane_run(&dir), &mut FlakingChannel::default()).unwrap();
+
+    let lane = lane_of(&dir);
+    let mut ends = Vec::new();
+    for path in boop_store::bus::read_boxes(&dir).unwrap_or_default() {
+        ends.extend(
+            boop_store::bus::parse_box(&path)
+                .into_iter()
+                .filter(|row| {
+                    row.to == "coordinator"
+                        && row.from == lane
+                        && matches!(
+                            row.kind.as_str(),
+                            "result" | "exited_without_completion" | "open_failed"
+                        )
+                }),
+        );
+    }
+    assert_eq!(ends.len(), 1, "one end row per failed lane: {ends:?}");
+    assert_eq!(ends[0].kind, "result");
+    assert_eq!(ends[0].rc, Some(1));
+    assert!(
+        ends[0].body.contains("done rc=1") && ends[0].body.contains("aborted stream"),
+        "the single end row carries the rc and the reason: {}",
+        ends[0].body
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -179,7 +232,7 @@ fn a_second_supervisor_run_repeats_none_of_them() {
 
     assert_eq!(count(&dir, RETRYING), 1);
     assert_eq!(count(&dir, RETRY_BUDGET_EXHAUSTED), 1);
-    assert_eq!(count(&dir, EXITED_WITHOUT_COMPLETION), 1);
+    assert_eq!(count(&dir, NO_DUPLICATE_END_ROW), 0);
     assert_eq!(count(&dir, "result"), 2, "each run reports its own rc");
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -197,7 +250,7 @@ fn a_clean_completion_hails_nothing_but_its_rc() {
     wait_for(|| count(&dir, "result") == 1, Duration::from_secs(5));
     assert_eq!(count(&dir, RETRYING), 0);
     assert_eq!(count(&dir, RETRY_BUDGET_EXHAUSTED), 0);
-    assert_eq!(count(&dir, EXITED_WITHOUT_COMPLETION), 0);
+    assert_eq!(count(&dir, NO_DUPLICATE_END_ROW), 0);
     assert_eq!(count(&dir, "result"), 1);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -219,7 +272,7 @@ fn a_parentless_lane_writes_no_failure_row() {
     assert_eq!(exit_code, 1);
     assert_eq!(count(&dir, RETRYING), 0);
     assert_eq!(count(&dir, RETRY_BUDGET_EXHAUSTED), 0);
-    assert_eq!(count(&dir, EXITED_WITHOUT_COMPLETION), 0);
+    assert_eq!(count(&dir, NO_DUPLICATE_END_ROW), 0);
     assert_eq!(count(&dir, "result"), 0);
     let _ = std::fs::remove_dir_all(&dir);
 }
