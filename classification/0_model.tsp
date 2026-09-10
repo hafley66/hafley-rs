@@ -82,3 +82,40 @@ model Status {
   expected: Record<ExpectedAction>;
   axes: ActionAxis[];
 }
+
+// Stable interchange shape for source extractors. Values are emitted from
+// syntax trees and pinned source revisions; TypeSpec does not author them.
+alias SourceOp = "<" | "<=" | ">" | ">=" | "==" | "!=";
+
+model SourceRef {
+  repository: string;
+  revision: string;
+  path: string;
+  line: uint32;
+  symbol: string;
+}
+
+model SourceGuard {
+  lhs: string;
+  operator: SourceOp;
+  rhs: string;
+}
+
+model SourceRule {
+  from: string;
+  event: string;
+  to: string;
+  guard: SourceGuard;
+  source: SourceRef;
+}
+
+model SourceUnresolved {
+  symbol: string;
+  source: SourceRef;
+  reason: string;
+}
+
+model SourceImport {
+  rules: SourceRule[];
+  unresolved: SourceUnresolved[];
+}

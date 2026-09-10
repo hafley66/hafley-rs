@@ -6,6 +6,9 @@ pub use types::*;
 pub mod catalog;
 #[path = "1c_movement.rs"]
 pub mod movement;
+#[cfg(feature = "ingest")]
+#[path = "generated/2_source_rules.rs"]
+pub mod source_rules;
 #[path = "1a_actions.rs"]
 mod lifecycle;
 #[path = "1_sandbag.rs"]
