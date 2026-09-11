@@ -624,7 +624,20 @@ fn land(
             "harness takes no door mail",
         ));
     }
-    let Some(live) = live_session(harness, store, route, id)? else {
+    // The live-session lookup is itself a door status read: a stopped server
+    // parks here until its client timeout, so time it like the deliver call.
+    let live_started = Instant::now();
+    let live = live_session(harness, store, route, id)?;
+    let live_elapsed_ms = live_started.elapsed().as_millis() as u64;
+    if live_elapsed_ms >= SLOW_DOOR_CALL_MS {
+        tracing::warn!(
+            door = id.as_str(),
+            route = to,
+            elapsed_ms = live_elapsed_ms,
+            "slow door call"
+        );
+    }
+    let Some(live) = live else {
         return Ok(door_route_below_the_door(
             registry,
             route,
@@ -647,11 +660,111 @@ fn land(
         &message.from,
         &message.body,
     );
-    Ok(match harness.door().deliver(&live, &rendered)? {
-        Delivered::Injected => Landing::new(Rung::Door, "door"),
-        Delivered::QueuedForTurnBoundary => Landing::new(Rung::DoorQueue, "door queue"),
-        Delivered::Unreachable(why) => door_route_below_the_door(registry, route, to, why),
+    let door = id.as_str();
+    let door_started = Instant::now();
+    let delivered = harness.door().deliver(&live, &rendered);
+    let door_elapsed_ms = door_started.elapsed().as_millis() as u64;
+    if door_elapsed_ms >= SLOW_DOOR_CALL_MS {
+        tracing::warn!(
+            door,
+            route = to,
+            elapsed_ms = door_elapsed_ms,
+            "slow door call"
+        );
+    }
+    Ok(match delivered {
+        Ok(Delivered::Injected) => Landing::new(Rung::Door, "door"),
+        Ok(Delivered::QueuedForTurnBoundary) => Landing::new(Rung::DoorQueue, "door queue"),
+        Ok(Delivered::Unreachable(why)) => {
+            // Name the door and the route on every attempt so an operator
+            // reads which transport failed without opening the store.
+            let why = format!("{door} door for {to}: {why}");
+            if door_transport_failure(&why) {
+                record_door_failure(store, to, routes, &why, now_ms)?;
+                tracing::warn!(door, route = to, elapsed_ms = door_elapsed_ms, %why, "door call failed");
+            }
+            door_route_below_the_door(registry, route, to, why)
+        }
+        Err(error) => {
+            // An Err is a request that could not be formed or answered at all:
+            // a transport failure, whatever the transport spells it. Only a
+            // transport failure cools the route off; a live door that refused
+            // to answer (an ambiguous steer receipt, say) must not bench the
+            // route for the whole cool-off.
+            let why = format!("{door} door for {to}: {error}");
+            if door_transport_failure(&why) {
+                record_door_failure(store, to, routes, &why, now_ms)?;
+                tracing::warn!(door, route = to, elapsed_ms = door_elapsed_ms, error = %error, "door call failed");
+            }
+            door_route_below_the_door(registry, route, to, why)
+        }
     })
+}
+
+/// The env knob for how long a route whose door failed to connect is skipped.
+pub const DOOR_FAIL_COOLDOWN_ENV: &str = "BOOP_DOOR_FAIL_COOLDOWN_SECS";
+
+/// A dead door is skipped this long, so a drain never re-walks it every tick.
+const DOOR_FAIL_COOLDOWN_DEFAULT: Duration = Duration::from_secs(120);
+
+/// A door status read or deliver past this is a slow external effect.
+const SLOW_DOOR_CALL_MS: u64 = 1000;
+
+fn door_failure_cooldown() -> Duration {
+    std::env::var(DOOR_FAIL_COOLDOWN_ENV)
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(DOOR_FAIL_COOLDOWN_DEFAULT)
+}
+
+/// Whether a door answer is a transport failure (dead or unreachable) rather
+/// than a live door declining this body for now. A busy door is not cooled off.
+fn door_transport_failure(why: &str) -> bool {
+    let why = why.to_ascii_lowercase();
+    [
+        "connect",
+        "socket",
+        "refused",
+        "unreachable",
+        "app-server",
+        "app server",
+        "timed out",
+        "timeout",
+        "broken pipe",
+        "connection reset",
+        "no such file",
+    ]
+    .iter()
+    .any(|needle| why.contains(needle))
+}
+
+/// Record a cool-off for a route whose door could not take the body, so the
+/// drain skips it instead of re-walking the same dead transport every tick.
+fn record_door_failure(
+    store: &Store,
+    route: &str,
+    routes: &BTreeMap<String, Route>,
+    why: &str,
+    now_ms: u64,
+) -> Result<()> {
+    let budget = DoorBudget::from_env();
+    store.record_door_blowout(&boop_store::ident::DoorBlowoutRow {
+        route: route.to_owned(),
+        at_ms: now_ms,
+        pushes: 0,
+        budget: budget.allowance(route, routes),
+        window_ms: budget.window.as_millis() as u64,
+        cooldown_ms: door_failure_cooldown().as_millis() as u64,
+        why: format!("door-unreachable: {why}"),
+    })?;
+    tracing::warn!(
+        route,
+        %why,
+        cooldown_secs = door_failure_cooldown().as_secs(),
+        "door unreachable; cooling off the route"
+    );
+    Ok(())
 }
 
 /// A door that answered nothing. No supervisor holds a coordinator's mail, so
