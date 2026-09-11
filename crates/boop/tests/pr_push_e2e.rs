@@ -1,11 +1,17 @@
 //! PR push end to end: a real lane supervisor, or transcript ingest, pushes one
-//! kind=pr notice through a live coordinator TUI's own door. One pass per
-//! coordinator harness (claude, codex, opencode) against a loopback llmock
-//! provider; the model provider is the only seam, every other part is the real
-//! binary and the real TUI. kimi is skipped: its coordinator route binds no
-//! session and it has no door.
+//! kind=pr notice through a live coordinator TUI's own door. Every case runs
+//! once per coordinator harness H in {claude, codex, opencode} as `<case>_<H>`,
+//! against a loopback llmock provider; the model provider is the only seam,
+//! every other part is the real binary and the real TUI. kimi is skipped: its
+//! coordinator route binds no session and it has no door.
 //!
-//! Skips a harness when its executable, or `llmock`, is absent:
+//! The lane is claude for every H. Its stream-json channel is the one harness
+//! channel that executes the brief's `gh pr create` under llmock and writes the
+//! `pr-link` transcript record; the supervisor's `gh pr view` and transcript
+//! ingest are both claude-shaped, so the PR producers do not exist for a codex
+//! or opencode lane. The coordinator is the dimension under test here.
+//!
+//! Skips a harness when its executable, or `llmock`, is absent, printed:
 //!   cargo install --git https://github.com/larsakerlund/llmock.git \
 //!     --tag v0.1.2 --locked llmock
 //! Executable overrides: CODEX_BIN, CLAUDE_BIN (ccz rides this),
@@ -57,7 +63,10 @@ const FIXTURE_YAML: &str = r#"rules:
         FIXED_TERMINAL_REPLY
 "#;
 
-/// One harness's place in the matrix.
+/// One harness's place in the matrix. The coordinator TUI is `id`; the lane is
+/// always claude, the one harness whose stream-json channel executes the
+/// `gh pr create` tool call and writes the `pr-link` record the two producers
+/// read. See the module doc.
 struct Case {
     entry: &'static str,
     id: HarnessId,
@@ -174,6 +183,7 @@ impl Scratch {
         git(&repo, &["commit", "-qm", "seed"]);
         let _ = std::os::unix::fs::symlink(BOOP, bin.join("boop"));
         make_executable(&bin.join("gh"), &gh_script(kind.gh()));
+        write_gui_shield(&bin);
         Scratch {
             root,
             mail,
@@ -379,6 +389,33 @@ fn make_executable(path: &Path, body: &str) {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
 }
 
+/// Create the scratch bin dir and shadow `open` with a no-op, so a harness that
+/// decides to raise a browser cannot steal the operator's desktop focus.
+fn write_gui_shield(bin: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(bin).expect("create gui shield bin dir");
+    let open = bin.join("open");
+    std::fs::write(&open, "#!/bin/sh\nexit 0\n").expect("write no-op open");
+    std::fs::set_permissions(&open, std::fs::Permissions::from_mode(0o755))
+        .expect("make no-op open executable");
+}
+
+/// The env every harness process gets: `BROWSER=true`, and the scratch bin dir
+/// first on `PATH` so its no-op `open` wins.
+fn gui_shield(bin: &Path) -> Vec<(String, String)> {
+    vec![
+        ("BROWSER".into(), "true".into()),
+        (
+            "PATH".into(),
+            format!(
+                "{}:{}",
+                bin.display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        ),
+    ]
+}
+
 /// The gh stub: `pr create` prints the url; `pr view` answers, fails, or hangs.
 fn gh_script(view: GhView) -> String {
     let view = match view {
@@ -395,7 +432,9 @@ fn gh_script(view: GhView) -> String {
 
 /// Pids whose working directory sits under `root`, from one `lsof` sweep.
 fn cwd_pids_under(root: &str) -> Vec<u32> {
-    let output = Command::new("lsof").args(["-a", "-d", "cwd", "-Fn"]).output();
+    let output = Command::new("lsof")
+        .args(["-a", "-d", "cwd", "-Fn"])
+        .output();
     let Ok(output) = output else {
         return Vec::new();
     };
@@ -459,6 +498,9 @@ fn run_tui_in_pane(scratch: &Scratch, case: &Case, launch: &MockTuiLaunch, works
     let mut command = String::from("exec env");
     for (key, value) in &launch.env {
         command.push_str(&format!(" {}={}", key, shell_quote(value)));
+    }
+    for (key, value) in gui_shield(&scratch.bin) {
+        command.push_str(&format!(" {}={}", key, shell_quote(&value)));
     }
     command.push_str(&format!(
         " {}={}",
@@ -554,11 +596,11 @@ fn wait_for_coordinator(scratch: &Scratch, case: &Case) {
     }
 }
 
-/// Build the lane create command. The lane always runs harness `claude` in
-/// direct stream-json mode (`--bin`), pointed at the same llmock through the
-/// mock recipe's env. PATH carries this worktree's gh stub and boop binary onto
-/// the pane so the supervisor's `gh pr view` and the lane's `gh pr create` run
-/// the scratch stubs.
+/// Build the lane create command. The lane runs harness `claude` in direct
+/// stream-json mode (`--bin`), pointed at the same llmock through its mock
+/// recipe env. PATH carries this worktree's gh stub and boop binary onto the
+/// pane so the supervisor's `gh pr view` and the lane's `gh pr create` run the
+/// scratch stubs.
 fn create_lane(
     scratch: &Scratch,
     case: &Case,
@@ -575,6 +617,7 @@ fn create_lane(
         "PATH".into(),
         format!("{}:{boop_dir}:{path}", scratch.bin.display()),
     );
+    env.insert("BROWSER".into(), "true".into());
     // The pane runs the supervisor on the scratch store and the scratch trail,
     // so the spawn record it reads (post_pr) sits beside the one create wrote.
     env.insert(
@@ -873,35 +916,30 @@ fn run_case(
     Ok(())
 }
 
-/// Run one case against every harness in the matrix, serialized by the caller's
-/// lock. A harness missing its executable is a printed skip, never a failure.
-fn run_matrix(kind: Kind) {
+/// Resolve the shared prerequisites, then run one case for one coordinator
+/// harness. An absent executable, or `llmock`, is a printed skip, never a
+/// failure.
+fn run_one(entry: &str, kind: Kind) -> Result<(), String> {
+    let case = case_for(entry);
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        println!("skip {} all: no llmock", kind.label());
-        return;
+        return Err("no llmock (cargo install --tag v0.1.2 llmock)".to_owned());
     };
     let Some(claude_bin) = mock_tui::resolve_executable("claude", "CLAUDE_BIN") else {
-        println!("skip {} all: no claude executable for the lane", kind.label());
-        return;
+        return Err("no claude executable for the lane (set CLAUDE_BIN)".to_owned());
     };
+    if mock_tui::resolve_executable(case.entry, case.executable_override).is_none() {
+        return Err(format!("no {} executable", case.entry));
+    }
     let registry = Registry::discover();
-    for entry in ["claude", "codex", "opencode", "kimi"] {
-        let case = case_for(entry);
-        if entry == "kimi" {
-            println!(
-                "skip {} kimi: kimi coordinator route binds no session and it has no door",
-                kind.label()
-            );
-            continue;
-        }
-        if mock_tui::resolve_executable(case.entry, case.executable_override).is_none() {
-            println!("skip {} {entry}: no {entry} executable", kind.label());
-            continue;
-        }
-        match run_case(case, kind, &llmock, &claude_bin, &registry) {
-            Ok(()) => println!("pass {} {}", kind.label(), entry),
-            Err(reason) => println!("skip {} {entry}: {reason}", kind.label()),
-        }
+    run_case(case, kind, &llmock, &claude_bin, &registry)
+}
+
+/// One test body: hold the case lock, print the outcome for `<case>_<H>`.
+fn run(entry: &str, kind: Kind) {
+    let _case = CASE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+    match run_one(entry, kind) {
+        Ok(()) => println!("pass {} {}", kind.label(), entry),
+        Err(reason) => println!("skip {} {entry}: {reason}", kind.label()),
     }
 }
 
@@ -979,36 +1017,89 @@ fn lane_create_dry_run_prints_the_post_pr_toggle() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// RECEIPT (lane supervisor producer). A real lane runs a real claude against
-/// llmock; the model calls `gh pr create`, the supervisor reads `gh pr view`
-/// and pushes one kind=pr row through the live coordinator's own door.
+/// RECEIPT (lane supervisor producer). A real claude lane runs against llmock;
+/// the model calls `gh pr create`, the supervisor reads `gh pr view` and pushes
+/// one kind=pr row through the live claude coordinator's own door.
 #[test]
-fn pr_push_supervisor_reaches_live_coordinators() {
-    let _case = CASE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
-    run_matrix(Kind::Supervisor);
+fn supervisor_claude() {
+    run("claude", Kind::Supervisor);
+}
+
+/// RECEIPT, codex coordinator. Same lane; see `supervisor_claude`.
+#[test]
+fn supervisor_codex() {
+    run("codex", Kind::Supervisor);
+}
+
+/// RECEIPT, opencode coordinator. Same lane; see `supervisor_claude`.
+#[test]
+fn supervisor_opencode() {
+    run("opencode", Kind::Supervisor);
 }
 
 /// RECEIPT (ingest producer). `gh pr view` fails, so only transcript ingest
-/// sees the pr-link; a drain walks the held row through the live coordinator.
+/// sees the pr-link; a drain walks the held row through the live claude
+/// coordinator.
 #[test]
-fn pr_push_ingest_reaches_live_coordinators() {
-    let _case = CASE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
-    run_matrix(Kind::Ingest);
+fn ingest_claude() {
+    run("claude", Kind::Ingest);
+}
+
+/// RECEIPT, codex coordinator. Same lane; see `ingest_claude`.
+#[test]
+fn ingest_codex() {
+    run("codex", Kind::Ingest);
+}
+
+/// RECEIPT, opencode coordinator. Same lane; see `ingest_claude`.
+#[test]
+fn ingest_opencode() {
+    run("opencode", Kind::Ingest);
 }
 
 /// RECEIPT (both producers). The supervisor claims the url first; a later sync
-/// of the same pr-link appends nothing, so the door sees the row exactly once.
+/// of the same pr-link appends nothing, so the live claude coordinator's door
+/// sees the row exactly once.
 #[test]
-fn pr_push_both_producers_reach_live_coordinators_once() {
-    let _case = CASE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
-    run_matrix(Kind::Both);
+fn both_producers_claude() {
+    run("claude", Kind::Both);
+}
+
+/// RECEIPT, codex coordinator. Same lane; see `both_producers_claude`.
+#[test]
+fn both_producers_codex() {
+    run("codex", Kind::Both);
+}
+
+/// RECEIPT, opencode coordinator. Same lane; see `both_producers_claude`.
+#[test]
+fn both_producers_opencode() {
+    run("opencode", Kind::Both);
 }
 
 /// RECEIPT (gh hangs). A `gh pr view` that never answers is killed at the
-/// deadline: the lane's turn continues, the timeout warns, and the coordinator
-/// receives nothing for that PR.
+/// deadline: the lane's turn continues, the timeout warns, and the live
+/// claude coordinator receives nothing for that PR.
 #[test]
-fn pr_push_a_hung_gh_does_not_stall_the_lane() {
-    let _case = CASE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
-    run_matrix(Kind::Hung);
+fn hung_gh_claude() {
+    run("claude", Kind::Hung);
+}
+
+/// RECEIPT, codex coordinator. Same lane; see `hung_gh_claude`.
+#[test]
+fn hung_gh_codex() {
+    run("codex", Kind::Hung);
+}
+
+/// RECEIPT, opencode coordinator. Same lane; see `hung_gh_claude`.
+#[test]
+fn hung_gh_opencode() {
+    run("opencode", Kind::Hung);
+}
+
+/// kimi has no coordinator door: its route binds no session and no rung takes a
+/// PR row, so there is no `<case>_kimi`. Printed here so the skip is visible.
+#[test]
+fn kimi_has_no_door() {
+    println!("skip all kimi: kimi coordinator route binds no session and it has no door");
 }
