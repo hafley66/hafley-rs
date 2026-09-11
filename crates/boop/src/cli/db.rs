@@ -1784,6 +1784,7 @@ mod tests {
         wrapper_owns_alternate_screen: false,
         native_backend: boop::harness::NativeBackendSupport::Unsupported,
         native_settings: boop::harness::NativeSettingsSupport::Unsupported("fixture"),
+        registry_names_processes: true,
     };
 
     struct FakeHarness {

@@ -49,6 +49,7 @@ static DOOR: Capabilities = Capabilities {
     wrapper_owns_alternate_screen: false,
     native_backend: NativeBackendSupport::Unsupported,
     native_settings: NativeSettingsSupport::Unsupported("fixture"),
+    registry_names_processes: true,
 };
 
 struct OneSession {

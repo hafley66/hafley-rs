@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use boop::harness::mock_tui::{self, MockTuiLaunch, MockTuiReplay};
 use boop::harness::{shell_quote, HarnessId};
@@ -437,6 +437,41 @@ fn lane_create_command(
     command
 }
 
+/// Two decoy kimi transcripts under this scratch HOME, each in another
+/// worktree and older than the launch. `boop tui kimi` must still bind the
+/// session it opens in its own cwd, not one of these.
+fn seed_decoy_kimi_sessions(root: &Path) {
+    let old = SystemTime::now() - Duration::from_secs(3600);
+    for (slug, uuid, cwd) in [
+        ("wd_decoy-a", "decoy-a0001", root.join("decoy-a")),
+        ("wd_decoy-b", "decoy-b0001", root.join("decoy-b")),
+    ] {
+        std::fs::create_dir_all(&cwd).unwrap();
+        let session = root
+            .join("home")
+            .join(".kimi-code")
+            .join("sessions")
+            .join(slug)
+            .join(format!("session_{uuid}"));
+        let agent = session.join("agents").join("main");
+        std::fs::create_dir_all(&agent).unwrap();
+        std::fs::write(
+            agent.join("wire.jsonl"),
+            "{\"type\":\"metadata\",\"protocol_version\":\"1.4\",\"created_at\":1}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            session.join("state.json"),
+            format!("{{\"cwd\":\"{}\"}}", cwd.display()),
+        )
+        .unwrap();
+        for file in [agent.join("wire.jsonl"), session.join("state.json")] {
+            let handle = std::fs::OpenOptions::new().write(true).open(&file).unwrap();
+            handle.set_modified(old).unwrap();
+        }
+    }
+}
+
 /// One harness end to end. Prints `pass <entry>` on success; returns Err on a
 /// skip so the caller records it.
 fn run_case(case: &Case, llmock: &Path, registry: &Registry) -> Result<(), String> {
@@ -453,6 +488,9 @@ fn run_case(case: &Case, llmock: &Path, registry: &Registry) -> Result<(), Strin
     std::fs::create_dir_all(root.join("lane-home")).unwrap();
     std::fs::create_dir_all(root.join("workspace")).unwrap();
     std::fs::create_dir_all(root.join("repo")).unwrap();
+    if case.id == HarnessId::Kimi {
+        seed_decoy_kimi_sessions(&root);
+    }
 
     // The lane's repo: one initial commit that carries the brief.
     let repo = root.join("repo");
@@ -694,11 +732,13 @@ fn commit_push_opencode_lane_to_opencode_tui() {
     }
 }
 
-/// The kimi coordinator route binds no session and kimi has no door, so no rung
-/// takes the row.
-#[ignore = "kimi coordinator route binds no session and kimi has no door; no rung takes the row"]
+/// RECEIPT, kimi lane and coordinator. Same body as the claude case; see
+/// `commit_push_claude_lane_to_claude_tui`. The kimi coordinator registers its
+/// pane as a coordinator route bound to its transcript session, and a row
+/// lands by the pane-submit paste rung.
 #[test]
 fn commit_push_reaches_kimi_tui() {
+    let _case = CASE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     match run_one("kimi") {
         Ok(()) => {}
         Err(reason) => eprintln!("skip kimi: {reason}"),

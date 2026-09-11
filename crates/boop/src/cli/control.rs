@@ -3,7 +3,7 @@
 
 use std::io::Write;
 use std::ops::{Deref, DerefMut};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
@@ -51,7 +51,10 @@ fn opened_session(
     wait: Duration,
     my_pane: &str,
     pid: u32,
+    cwd: &Path,
+    launched_ms: u64,
 ) -> Option<String> {
+    let names_processes = adapter.capabilities().registry_names_processes;
     let deadline = std::time::Instant::now() + wait;
     loop {
         let live = adapter.live().live_sessions().unwrap_or_default();
@@ -68,11 +71,44 @@ fn opened_session(
                 return Some(session.parent_session.unwrap_or(session.session_id));
             }
         }
+        // A harness whose registry names no process (kimi keeps only
+        // transcripts) cannot match by pid or pane. It is identified by the
+        // worktree the wrapper was launched in: the newest session whose cwd
+        // is that directory and whose transcript appeared at or after launch.
+        if !names_processes {
+            if let Some(session) = session_for_cwd(&live, cwd, launched_ms) {
+                return Some(
+                    session
+                        .parent_session
+                        .clone()
+                        .unwrap_or_else(|| session.session_id.clone()),
+                );
+            }
+        }
         if std::time::Instant::now() >= deadline {
             return None;
         }
         std::thread::sleep(Duration::from_millis(250));
     }
+}
+
+/// Among `live` sessions in `cwd` whose newest observation is at or after
+/// `launched_ms`, the most recently observed. Pid- and pane-naming harnesses
+/// never reach here; a harness that names neither is found by its worktree.
+fn session_for_cwd<'a>(
+    live: &'a [boop::live::LiveSession],
+    cwd: &Path,
+    launched_ms: u64,
+) -> Option<&'a boop::live::LiveSession> {
+    let wanted = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
+    live.iter()
+        .filter(|session| session.observed_ms >= launched_ms)
+        .filter(|session| {
+            session.cwd.as_deref().is_some_and(|held| {
+                std::fs::canonicalize(held).unwrap_or_else(|_| PathBuf::from(held)) == wanted
+            })
+        })
+        .max_by_key(|session| session.observed_ms)
 }
 
 fn session_for_pid(live: &[boop::live::LiveSession], pid: u32) -> Option<&boop::live::LiveSession> {
@@ -358,6 +394,9 @@ pub(crate) fn run_native_tui(
     }
     let _alternate_screen =
         AlternateScreen::enter(adapter.capabilities().wrapper_owns_alternate_screen);
+    // A harness that names no process in its registry (kimi) is bound by the
+    // transcript this launch writes, so remember the instant the pane opened.
+    let launched_ms = boop::live::now_ms();
     // The stamp every `boop` call inside this TUI reads as its identity,
     // inherited by the harness's own shell and native subagents.
     plan.frontend = Some(
@@ -377,6 +416,8 @@ pub(crate) fn run_native_tui(
             SESSION_WAIT,
             pane.as_deref().unwrap_or(""),
             frontend_pid,
+            cwd,
+            launched_ms,
         );
         if let Some(session) = plan.session_id.clone() {
             plan.source_path = Some(format!("native-session={session}"));
@@ -510,6 +551,8 @@ pub(crate) fn run_native_tui(
                     Duration::ZERO,
                     pane.as_deref().unwrap_or(""),
                     frontend_pid,
+                    cwd,
+                    launched_ms,
                 ) {
                     Some(session) => {
                         route.source_path = Some(format!("native-session={session}"));

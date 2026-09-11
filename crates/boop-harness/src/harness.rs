@@ -58,6 +58,10 @@ pub struct Capabilities {
     /// Whether the adapter has an isolated native control-plane operation for
     /// model and effort changes.
     pub native_settings: NativeSettingsSupport,
+    /// Whether the harness's live registry names the process (or pane) that
+    /// owns each session. kimi keeps only pid-less, pane-less transcripts, so
+    /// a launch cannot match one by process identity and must bind by cwd.
+    pub registry_names_processes: bool,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
