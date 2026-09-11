@@ -20,11 +20,11 @@ pub struct Strike {
      */
     pub damage: f32,
     /**
-     *   attacker          target
-     *      o       ^ angle  o
-     *     /|\ ----/        /|\
-     *     / \    /          /\
-     *   ======================= (ground)
+     *   attacker       contact                         launched target
+     *      o              X                       . . . . . o
+     *     /|\ ----------/                    .              /|\
+     *     / \          /  authored angle .                  / \
+     *   ==============/==============.============================ ground
      */
     pub angle: f32,
     /**
@@ -71,21 +71,24 @@ pub struct Target {
      */
     pub weight: f32,
     /**
-     *   authored 361 deg       target branches
-     *   attacker o --hit-->      o --> grounded Sakurai angle
-     *           /|\             /|\ /
-     *           / \             / \    airborne 45 deg
+     *                                           o /  airborne: 45 deg
+     *                                          /|/
+     *   attacker o --361 deg--> X             / \
+     *           /|\             \____ o --> grounded: 0..44 deg
+     *           / \                  /|\
+     *   ============================/==\========================= ground
      */
     pub grounded: bool,
 }
 
 pub struct DefenseInput {
     /**
-     *   attacker          target stick
-     *      o               (u)   o
-     *     /|\             (\)   /|\  [DI angle shift]
-     *     / \              (d)   /\
-     *   ======================= (ground)
+     *   attacker       original path              DI-adjusted target
+     *      o          X . . . . . . . . . . . . . . . o
+     *     /|\ --------/             stick ^               /|\
+     *     / \                         <+>                 / \
+     *   ===============================|======================== ground
+     *                   perpendicular stick rotates the path
      */
     pub stick: [f32; 2],
 }
@@ -100,19 +103,19 @@ pub struct Launch {
      */
     pub damage: f32,
     /**
-     *   attacker          target
-     *      o    *LAUNCH*    o  ===> total kb
-     *     /|\ -------->    /|\
-     *     / \               /\
-     *   ======================= (ground)
+     *   attacker   contact       knockback magnitude       target
+     *      o          X      ----------------------------->  o
+     *     /|\ -------/                                           /|\
+     *     / \                                                     / \
+     *   ============================================================= ground
      */
     pub knockback: f32,
     /**
-     *   attacker          target
-     *      o                 o  --> vel [vx, vy]
-     *     /|\               /|\  ^
-     *     / \               /\   |
-     *   ======================= (ground)
+     *   attacker       launch origin                    target at next tick
+     *      o                X                     . . . . . o
+     *     /|\ ------------/| vy              .            /|\
+     *     / \              +----------> vx                 / \
+     *   ======================================================= ground
      */
     pub velocity: [f32; 2],
     /**
@@ -124,19 +127,21 @@ pub struct Launch {
      */
     pub hitlag: u32,
     /**
-     *   attacker          target
-     *      o                 o  [hitstun]
-     *     /|\               /|\ (no action)
-     *     / \               /\
-     *   ======================= (ground)
+     *   attacker                                      airborne target
+     *      o                launch path . . . . . . . . . o
+     *     /|\ --------X . . .                              /|\  HITSTUN
+     *     / \                                              / \  no action
+     *   ======================================================= ground
+     *                    timer ages while physics advances
      */
     pub hitstun: u32,
     /**
-     *   attacker          target
-     *      o              \ o / [tumble]
-     *     /|\              \|/  (rotating)
-     *     / \               /\
-     *   ======================= (ground)
+     *   attacker                 airborne target rotates along launch
+     *      o             . . . .   \ o /   . . .   --o--
+     *     /|\ -------X .'           \|/              /|
+     *     / \                       / \             / \
+     *   ======================================================= ground
+     *                         tumble = true
      */
     pub tumble: bool,
 }
