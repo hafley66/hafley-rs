@@ -117,6 +117,7 @@ impl Fixture {
         git(&repo, &["add", "-A"]);
         git(&repo, &["commit", "-qm", "seed"]);
         std::os::unix::fs::symlink(BOOP, bin.join("boop")).unwrap();
+        write_gui_shield(&bin);
         let unique = std::process::id();
         Fixture {
             root,
@@ -265,6 +266,8 @@ impl Fixture {
         self.mail.join("lanes").join(&self.lane).join(file)
     }
 
+    /// The supervisor pane shares the create-time store, so its trail lands
+    /// beside the spawn record under the mail dir.
     fn log(&self) -> String {
         std::fs::read_to_string(self.trail("supervise.log")).unwrap_or_default()
     }
@@ -332,6 +335,22 @@ impl Fixture {
         }
     }
 
+    /// The revive re-registers the retired lane's route.
+    fn wait_for_route_present(&self) {
+        let deadline = Instant::now() + START_DEADLINE;
+        loop {
+            let routes = boop_store::testing::routes_json(&self.mail.join("boop.db"));
+            if routes.get(&self.lane).is_some() {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the revive did not re-register the lane's route"
+            );
+            std::thread::sleep(POLL);
+        }
+    }
+
     fn wait_for_session_gone(&self) {
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
@@ -382,8 +401,79 @@ impl Drop for Fixture {
             return;
         }
         let _ = self.tmux(&["kill-server"]);
+        kill_survivors(&self.root);
         let _ = std::fs::remove_dir_all(&self.root);
     }
+}
+
+/// A killed tmux server leaves a harness child or a borrowed server behind for
+/// a beat; kill anything still rooted under the scratch dir, then wait for the
+/// sweep to come back empty so no `cwd` in the temp tree survives the run.
+fn kill_survivors(root: &Path) {
+    let raw = root.display().to_string();
+    let resolved = std::fs::canonicalize(root)
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|_| raw.clone());
+    let roots = [raw, resolved];
+    for _ in 0..20 {
+        let pids = pids_under(&roots);
+        if pids.is_empty() {
+            return;
+        }
+        for pid in pids {
+            let _ = Command::new("kill")
+                .args(["-KILL", &pid.to_string()])
+                .output();
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// Pids whose `cwd` or `HOME` sits under any of `roots`, spelled raw or
+/// resolved (macOS `/var` is a symlink to `/private/var`).
+fn pids_under(roots: &[String]) -> Vec<u32> {
+    let under = |path: &str| roots.iter().any(|root| path.starts_with(root.as_str()));
+    let mut pids = Vec::new();
+    if let Ok(output) = Command::new("lsof")
+        .args(["-a", "-d", "cwd", "-Fn"])
+        .output()
+    {
+        let text = String::from_utf8_lossy(&output.stdout);
+        let mut current = None;
+        for line in text.lines() {
+            if let Some(pid) = line.strip_prefix('p').and_then(|pid| pid.parse().ok()) {
+                current = Some(pid);
+            } else if let Some(path) = line.strip_prefix('n') {
+                if under(path) {
+                    if let Some(pid) = current {
+                        pids.push(pid);
+                    }
+                }
+            }
+        }
+    }
+    if let Ok(output) = Command::new("ps")
+        .args(["-E", "-ww", "-o", "pid=,command="])
+        .output()
+    {
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            let Some((pid, rest)) = line.trim().split_once(char::is_whitespace) else {
+                continue;
+            };
+            let Ok(pid) = pid.parse::<u32>() else {
+                continue;
+            };
+            if rest
+                .split_whitespace()
+                .any(|token| token.strip_prefix("HOME=").is_some_and(under))
+            {
+                pids.push(pid);
+            }
+        }
+    }
+    pids.sort_unstable();
+    pids.dedup();
+    pids
 }
 
 fn git(repo: &Path, args: &[&str]) {
@@ -397,6 +487,33 @@ fn git(repo: &Path, args: &[&str]) {
 
 fn commit(repo: &Path, subject: &str) {
     git(repo, &["commit", "--allow-empty", "-qm", subject]);
+}
+
+/// Shadow `open` with a no-op in the scratch bin dir, so a harness that tries
+/// to raise a browser cannot steal the operator's desktop focus.
+fn write_gui_shield(bin: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(bin).expect("create gui shield bin dir");
+    let open = bin.join("open");
+    std::fs::write(&open, "#!/bin/sh\nexit 0\n").expect("write no-op open");
+    std::fs::set_permissions(&open, std::fs::Permissions::from_mode(0o755))
+        .expect("make no-op open executable");
+}
+
+/// The env every harness process gets: `BROWSER=true`, and the scratch bin dir
+/// first on `PATH` so its no-op `open` wins.
+fn gui_shield(bin: &Path) -> Vec<(String, String)> {
+    vec![
+        ("BROWSER".into(), "true".into()),
+        (
+            "PATH".into(),
+            format!(
+                "{}:{}",
+                bin.display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        ),
+    ]
 }
 
 /// The provider fixture. The readiness probe answers `boop`; the coordinator's
@@ -432,8 +549,15 @@ fn lane_env(
     extra: &[(&str, &str)],
 ) -> Vec<(String, String)> {
     let mut env: BTreeMap<String, String> = launch_env.iter().cloned().collect();
-    let path = std::env::var("PATH").unwrap_or_default();
-    env.insert("PATH".into(), format!("{}:{path}", fixture.bin.display()));
+    for (key, value) in gui_shield(&fixture.bin) {
+        env.insert(key, value);
+    }
+    // The pane must share the create-time store root: the trail under it holds
+    // the spawn record, the expect file, and the supervisor log.
+    env.insert(
+        "BOOP_DB".into(),
+        fixture.mail.join("boop.db").display().to_string(),
+    );
     for (key, value) in extra {
         env.insert((*key).to_owned(), (*value).to_owned());
     }
@@ -479,6 +603,9 @@ fn run_coordinator_tui(fixture: &Fixture, h: &Harness, launch: &MockTuiLaunch) {
     let mut command = String::from("exec env");
     for (key, value) in &launch.env {
         command.push_str(&format!(" {}={}", key, shell_quote(value)));
+    }
+    for (key, value) in gui_shield(&fixture.bin) {
+        command.push_str(&format!(" {}={}", key, shell_quote(&value)));
     }
     command.push_str(&format!(
         " {}={}",
@@ -561,16 +688,25 @@ fn start(
     // A codex lane speaks ACP through `npx @agentclientprotocol/codex-acp`; the
     // others run their own binary as the harness child.
     let bin = match h.id {
-        HarnessId::Codex => None,
+        HarnessId::Codex => {
+            // codex prepends a model-metadata warning to the start-ack reply for
+            // a provider model it does not know, which fails the exact-word ack.
+            // Name a model this codex build carries so the ack text is clean.
+            let config = fixture.lane_home.join(".codex/config.toml");
+            if let Ok(text) = std::fs::read_to_string(&config) {
+                let patched = text.replace("model = \"mock-model\"", "model = \"gpt-5.6-luna\"");
+                let _ = std::fs::write(&config, patched);
+            }
+            None
+        }
         _ => Some(executable.as_path()),
     };
     let created = fixture.create(&fixture.coord_route, expect, &env, bin);
-    if !created.status.success() {
-        return Err(format!(
-            "lane create failed: {}",
-            String::from_utf8_lossy(&created.stderr)
-        ));
-    }
+    assert!(
+        created.status.success(),
+        "lane create failed: {}",
+        String::from_utf8_lossy(&created.stderr)
+    );
     Ok(Started {
         fixture,
         _provider: provider,
@@ -594,13 +730,13 @@ fn run_held(h: &Harness) -> Result<(), String> {
         "held",
         h,
         &llmock,
-        3000,
+        8000,
         &[],
         &["--expect-commit-subject", "the third commit"],
     )?;
     let fixture = &started.fixture;
 
-    // The ack turn is the first "turn starting"; send under the brief turn.
+    // Turn 1 is the readiness probe; turn 2 is the brief. Send under the brief.
     fixture.wait_for_log("lane turn starting", 2);
     let beep = fixture.beep(&[
         &fixture.lane,
@@ -610,10 +746,30 @@ fn run_held(h: &Harness) -> Result<(), String> {
         "--no-wait",
     ]);
     if !beep.status.success() {
-        return Err(format!(
-            "the hail failed: {}",
-            String::from_utf8_lossy(&beep.stderr)
-        ));
+        panic!("the hail failed: {}", String::from_utf8_lossy(&beep.stderr));
+    }
+
+    // A harness that cannot inject midturn holds the row and re-feeds it as a
+    // third turn; one that can inject hands it to the running brief turn. Both
+    // must keep the result from landing before the work does.
+    fixture.wait_for_log("lane hail ", 1);
+    let held = fixture.log().contains("lane hail held");
+    if held {
+        // The brief turn ended with the expected subject still missing. A
+        // supervisor that writes its result there writes rc=4; the held row
+        // must defer it and open the third turn instead.
+        fixture.wait_for_log("lane turn starting", 3);
+        assert_eq!(
+            fixture.result_bodies().len(),
+            0,
+            "a result was written before the held turn ran:\n{}",
+            fixture.log()
+        );
+        assert!(
+            !fixture.coord_screen().contains("rc=4"),
+            "a premature rc=4 reached the coordinator:\n{}",
+            fixture.coord_screen()
+        );
     }
     commit(&fixture.repo, "the third commit");
 
@@ -662,43 +818,32 @@ fn run_revive(h: &Harness) -> Result<(), String> {
         fixture.trail("spawn.json").exists(),
         "the spawn record a revive replays must survive retirement"
     );
-
-    // The live store left dead panes pinned open by `remain-on-exit`; the send
-    // has to revive through that leftover rather than hold behind it.
-    let option = fixture.tmux(&["set-option", "-g", "remain-on-exit", "on"]);
-    assert!(option.status.success(), "set remain-on-exit");
-    let _ = fixture.tmux(&["kill-session", "-t", &fixture.lane]);
-    let stale = fixture.tmux(&["new-session", "-d", "-s", &fixture.lane, "true"]);
-    assert!(
-        stale.status.success(),
-        "plant a leftover session: {}",
-        String::from_utf8_lossy(&stale.stderr)
-    );
-    let planted = Instant::now();
-    while !fixture.session_alive() {
-        assert!(
-            planted.elapsed() < Duration::from_secs(5),
-            "leftover session"
-        );
-        std::thread::sleep(POLL);
-    }
+    // Advance HEAD so the revived result body differs from the first: the door
+    // refuses a body identical to one it pushed inside its cool-off window.
+    commit(&fixture.repo, "a second commit");
 
     let revived = fixture.beep(&[
         &fixture.lane,
         "second",
         "--as",
         &fixture.coord_route,
-        "--timeout",
-        "60",
+        "--no-wait",
     ]);
     let stdout = String::from_utf8_lossy(&revived.stdout);
     let stderr = String::from_utf8_lossy(&revived.stderr);
-    if !revived.status.success() {
-        return Err(format!(
-            "the send to the retired lane failed:\n{stdout}{stderr}\n{}",
-            fixture.log()
-        ));
-    }
+    assert!(
+        revived.status.success(),
+        "the send to the retired lane failed:\n{stdout}{stderr}\n{}",
+        fixture.log()
+    );
+    assert!(
+        stdout.contains(&format!("revive {}", fixture.lane))
+            && stdout.contains(&format!("revived {}", fixture.lane)),
+        "the send must revive the retired lane:\n{stdout}"
+    );
+    // The revive re-registers the dropped route and resumes the pin.
+    fixture.wait_for_route_present();
+    fixture.wait_for_log("lane revived from retirement", 1);
     fixture.wait_for_result(2);
     let deadline = Instant::now() + START_DEADLINE;
     while fixture.coordinator_shows(&result) < 2 {
