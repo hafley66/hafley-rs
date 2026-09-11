@@ -36,3 +36,12 @@ pub use source::{
     SourceRef, SourceRule, Unresolved, common_inventory, conditional_choice, emit_port_rust,
     function_evidence, if_guard, lower_callback, lower_guard,
 };
+
+#[cfg(feature = "ingest")]
+#[path = "6_catalog.rs"]
+mod catalog;
+#[cfg(feature = "ingest")]
+pub use catalog::{
+    Catalog, CatalogEntry, CatalogError, CatalogEvidence, CharacterSpec, SourceEntry,
+    generate_catalog,
+};
