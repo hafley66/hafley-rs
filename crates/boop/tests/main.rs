@@ -12,6 +12,8 @@ mod commit_push_e2e;
 mod coordinator_ping;
 #[path = "deliver_door.rs"]
 mod deliver_door;
+#[path = "door_backoff_e2e.rs"]
+mod door_backoff_e2e;
 #[path = "inbox_hooks.rs"]
 mod inbox_hooks;
 #[path = "install_rail.rs"]
