@@ -60,22 +60,34 @@ fn contact_outcome(
     )
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct World {
     pub movement: Option<game_fighter::State>,
     #[serde(default)]
     pub input_buffer: Option<InputBuffer>,
     pub frame: i32,
-    pub action: usize,
-    pub animation: usize,
     pub jump_at: Option<i32>,
-    pub previous_input: u8,
     pub attack_hit: bool,
-    pub damage: f32,
     pub hit_count: usize,
     pub last_hit: Option<i32>,
     pub view: Tick,
     pub bag: Option<sandbag::Sandbag>,
+}
+
+impl Default for World {
+    fn default() -> Self {
+        Self {
+            movement: Some(game_fighter::State::new(&movement::rules())),
+            input_buffer: None,
+            frame: 0,
+            jump_at: None,
+            attack_hit: false,
+            hit_count: 0,
+            last_hit: None,
+            view: Tick::default(),
+            bag: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -129,23 +141,42 @@ fn reduce_tick(world: &mut World, bits: u8, actions: &[Action], axis: Option<f32
     if let Some(bag) = &mut world.bag {
         bag.advance();
     }
-    let pressed = bits & !world.previous_input;
+    let previous_input = world
+        .movement
+        .as_ref()
+        .map_or(0, |fighter| fighter.input_history.previous.buttons as u8);
+    let pressed = bits & !previous_input;
     let imported = actions.len() >= 7;
-    let root = if world.movement.is_some() {
+    let live = actions.len() == catalog::ACTION_COUNT;
+    if !live {
+        world
+            .movement
+            .as_mut()
+            .expect("canonical Pigeon State")
+            .input_history
+            .advance(game_input::PlayerInput {
+                buttons: u32::from(bits),
+                axes: [game_input::quantize_axis(axis.unwrap_or(0.0)), 0, 0, 0],
+            });
+    }
+    let root = if live {
         movement::advance(world, bits, axis.unwrap_or(0.0), actions)
     } else if imported {
         lifecycle::advance(world, pressed, actions, axis.unwrap_or(0.0))
     } else {
         if pressed & JUMP != 0 && world.view.root[1] == 0.0 {
             world.jump_at = Some(world.frame);
-            world.action = 1;
-            world.animation = 0;
+            let fighter = world.movement.as_mut().expect("canonical Pigeon State");
+            fighter.action.id = 1;
+            fighter.action.frame = 0;
         }
         if pressed & ATTACK != 0 && world.jump_at.is_some() && world.view.root[1] > 0.0 {
-            world.action = 2;
-            world.animation = 0;
+            let fighter = world.movement.as_mut().expect("canonical Pigeon State");
+            fighter.action.id = 2;
+            fighter.action.frame = 0;
             world.attack_hit = false;
         }
+        let action = world.movement.as_ref().expect("canonical Pigeon State").action.id;
         let air = world.jump_at.map_or(0.0, |t| (world.frame - t) as f32);
         let root = [
             0.0,
@@ -161,19 +192,22 @@ fn reduce_tick(world: &mut World, bits: u8, actions: &[Action], axis: Option<f32
                 },
             ),
         ];
-        if world.action == 1 && air > 0.0 && root[1] == 0.0 {
-            world.action = 0;
-            world.animation = 0;
+        if action == 1 && air > 0.0 && root[1] == 0.0 {
+            let fighter = world.movement.as_mut().expect("canonical Pigeon State");
+            fighter.action.id = 0;
+            fighter.action.frame = 0;
         }
         root
     };
-    let frame = world.animation.min(actions[world.action].frames.len() - 1);
-    let source = &actions[world.action].frames[frame];
+    let fighter = world.movement.as_ref().expect("canonical Pigeon State");
+    let action = fighter.action.id;
+    let frame = fighter.action.frame.min(actions[action].frames.len() - 1);
+    let source = &actions[action].frames[frame];
     let mut view = Tick {
-        action: world.action,
+        action,
         frame,
         root,
-        damage: world.damage,
+        damage: fighter.combat.percent,
         contact: false,
         hit: None,
     };
@@ -201,28 +235,34 @@ fn reduce_tick(world: &mut World, bits: u8, actions: &[Action], axis: Option<f32
         view.contact |= overlap;
         if overlap && !world.attack_hit {
             let grounded = world.bag.as_ref().is_some_and(|bag| bag.grounded);
-            let outcome = contact_outcome(values, world.damage, grounded);
+            let percent = world.movement.as_ref().expect("canonical Pigeon State").combat.percent;
+            let outcome = contact_outcome(values, percent, grounded);
             if let Some(bag) = &mut world.bag {
                 bag.launch(&outcome);
             }
-            world.damage = outcome.percent_after;
+            world
+                .movement
+                .as_mut()
+                .expect("canonical Pigeon State")
+                .combat
+                .percent = outcome.percent_after;
             world.attack_hit = true;
             world.hit_count += 1;
             world.last_hit = Some(world.frame);
             view.hit = Some((hb.id, values.damage));
         }
     }
-    view.damage = world.damage;
+    view.damage = world.movement.as_ref().expect("canonical Pigeon State").combat.percent;
     world.view = view;
-    world.previous_input = bits;
     world.frame += 1;
-    world.animation += 1;
-    if !imported && world.action == 2 && world.animation == actions[2].frames.len() {
-        world.action = 0;
-        world.animation = 0;
+    let fighter = world.movement.as_mut().expect("canonical Pigeon State");
+    fighter.action.frame += 1;
+    if !imported && fighter.action.id == 2 && fighter.action.frame == actions[2].frames.len() {
+        fighter.action.id = 0;
+        fighter.action.frame = 0;
     }
-    if world.action == 0 {
-        world.animation %= actions[0].frames.len();
+    if fighter.action.id == 0 {
+        fighter.action.frame %= actions[0].frames.len();
     }
 }
 
@@ -237,6 +277,7 @@ impl Simulation {
         assert!(matches!(actions.len(), 3 | 7) || actions.len() == catalog::ACTION_COUNT);
         assert!(actions.iter().all(|a| !a.frames.is_empty()));
         let mut world = World::default();
+        world.movement = Some(game_fighter::State::new(&movement::rules()));
         if launch {
             world.bag = Some(sandbag::Sandbag::default());
         }

@@ -98,7 +98,7 @@ fn contact_result_matches_direct_resolve_hit() {
     let expected = direct();
     let bag = world.bag.as_ref().expect("launched sandbag");
 
-    assert_eq!(world.damage, expected.percent_after);
+    assert_eq!(world.movement.as_ref().unwrap().combat.percent, expected.percent_after);
     assert_eq!(bag.knockback, expected.knockback);
     assert_eq!(bag.stun, expected.hitstun);
     assert_eq!(
@@ -133,7 +133,7 @@ fn snapshot_suffix_replay_preserves_combat_outcome() {
         .expect("contact occurred in the suffix");
     let expected = direct();
     let bag = hit.bag.as_ref().expect("launched sandbag");
-    assert_eq!(hit.damage, expected.percent_after);
+    assert_eq!(hit.movement.as_ref().unwrap().combat.percent, expected.percent_after);
     assert_eq!(bag.knockback, expected.knockback);
     assert_eq!(bag.stun, expected.hitstun);
     assert_eq!(

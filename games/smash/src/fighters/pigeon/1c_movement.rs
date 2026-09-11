@@ -117,44 +117,69 @@ pub fn advance(world: &mut World, buttons: u8, axis: f32, actions: &[Action]) ->
     let crouch_enter = roles::CROUCH_ENTER.expect("Pigeon CrouchEnter role");
     let crouch_exit = roles::CROUCH_EXIT.expect("Pigeon CrouchExit role");
     let mut policy = rules();
-    let fighter = world.movement.as_mut().unwrap();
-    let old_phase = fighter.phase;
-    let attacking = world.action == air_attack && world.animation < actions[air_attack].frames.len();
-    let recovering = world.action == landing_recovery
-        && world.animation < actions[landing_recovery].frames.len();
+    let (old_phase, old_action, old_frame) = {
+        let fighter = world.movement.as_ref().expect("canonical Pigeon State");
+        (fighter.phase, fighter.action.id, fighter.action.frame)
+    };
+    let attacking = old_action == air_attack && old_frame < actions[air_attack].frames.len();
+    let recovering = old_action == landing_recovery
+        && old_frame < actions[landing_recovery].frames.len();
+    let pressed = buttons
+        & !(world
+            .movement
+            .as_ref()
+            .expect("canonical Pigeon State")
+            .input_history
+            .previous
+            .buttons as u8);
     if recovering { policy.landing_lag = actions[landing_recovery].frames.len() as u32; }
     // Crouch lifecycle completion is animation-driven; supply the imported lengths.
     policy.crouch_enter_ticks = actions[crouch_enter].frames.len() as u32;
     policy.crouch_exit_ticks = actions[crouch_exit].frames.len() as u32;
     let input = Input { buttons: if attacking { buttons & !1 } else { buttons }, axis };
-    game_fighter::advance(fighter, input, &policy);
-    let landed = !old_phase.grounded() && fighter.phase == Phase::Landing;
-    let pressed = buttons & !world.previous_input;
+    game_fighter::advance(
+        world.movement.as_mut().expect("canonical Pigeon State"),
+        input,
+        &policy,
+    );
+    let phase = world.movement.as_ref().expect("canonical Pigeon State").phase;
+    let landed = !old_phase.grounded() && phase == Phase::Landing;
     let landing_lag = landed
         && attacking
-        && actions[air_attack].frames[world.animation.min(actions[air_attack].frames.len()-1)].landing_lag;
-    let (action, _) = select(fighter.phase, axis, SelectionFacts {
+        && actions[air_attack].frames[old_frame.min(actions[air_attack].frames.len()-1)].landing_lag;
+    let (action, _) = select(phase, axis, SelectionFacts {
         attacking,
         attack_pressed: pressed & 2 != 0,
         landed,
         recovering,
         landing_lag,
     });
-    if !fighter.grounded() && !attacking && pressed & 2 != 0 {
+    if !world.movement.as_ref().expect("canonical Pigeon State").grounded()
+        && !attacking
+        && pressed & 2 != 0
+    {
         world.attack_hit = false;
     }
-    if action != world.action || old_phase != fighter.phase {
+    let phase = world.movement.as_ref().expect("canonical Pigeon State").phase;
+    if action != old_action || old_phase != phase {
         // An aerial attack's pose clock continues across the jump apex.
-        if action != air_attack || world.action != air_attack { world.animation = 0; }
-        world.action = action;
+        let fighter = world.movement.as_mut().expect("canonical Pigeon State");
+        if action != air_attack || old_action != air_attack { fighter.action.frame = 0; }
+        fighter.action.id = action;
     }
     let looping = [
         roles::IDLE, roles::FALL, roles::WALK_SLOW, roles::WALK_MIDDLE, roles::WALK_FAST,
         roles::DASH, roles::RUN, roles::CROUCH_HOLD,
     ];
     if looping.contains(&Some(action)) {
-        world.animation %= actions[action].frames.len();
+        world
+            .movement
+            .as_mut()
+            .expect("canonical Pigeon State")
+            .action
+            .frame %= actions[action].frames.len();
     }
+    let fighter = world.movement.as_ref().expect("canonical Pigeon State");
     [0.0, fighter.position[1], fighter.position[0]]
 }
 
