@@ -28,7 +28,8 @@ revisions, artifact hashes, counts and pass results are emitted by tools:
 `9_steps.mjs` runs the authored gate recipes, hashes the generated artifacts,
 parses the extractor's own artifact for observed facts and writes the compact
 `10_steps.json` receipt. `just steps` regenerates it; `just test` includes
-`9_steps.mjs check`, which rejects a stale receipt against the working tree.
+`9_steps.mjs check`, which re-executes the authored gates and rejects a stale
+receipt against the working tree; a recorded pass is never trusted.
 The receipt's `source` field reuses `8_status.mjs` `currentSource` and is null
 (UNMEASURED) when the sibling runtime checkout is not resolvable from this
 checkout. Steps do not restate anything `just status` already derives.

@@ -15,7 +15,6 @@ const steps: Steps = #{
     extractor: "smash-import -- falcon (smash/Cargo.toml, feature ingest)",
     artifacts: #[
       #{ kind: "source-rules-json", path: "smash/src/fighters/falcon/generated/2_source_rules.json" },
-      #{ kind: "source-rules-rust", path: "smash/src/fighters/falcon/generated/0_chart.rs" },
       #{ kind: "source-chart-d2", path: "smash/src/fighters/falcon/generated/3_source_chart.d2" },
       #{ kind: "source-chart-svg", path: "smash/src/fighters/falcon/generated/3_source_chart.svg" },
     ],
