@@ -866,6 +866,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "game-combat"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "ssbm_utils",
+]
+
+[[package]]
 name = "game-content"
 version = "0.1.0"
 dependencies = [
@@ -2439,6 +2447,7 @@ name = "smash"
 version = "0.1.0"
 dependencies = [
  "brawllib_rs",
+ "game-combat",
  "game-content",
  "game-fighter",
  "game-input",
