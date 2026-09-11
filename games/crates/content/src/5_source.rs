@@ -953,13 +953,22 @@ fn emit_expr(expr: &PortExpr) -> String {
         }
         PortExpr::Conditional { condition, yes, no } => format!(
             "if {} {{ {} }} else {{ {} }}",
-            emit_expr(condition),
+            emit_condition(condition),
             emit_expr(yes),
             emit_expr(no),
         ),
         PortExpr::Vector { x, y, z } => {
             format!("Vec3 {{ x: {}, y: {}, z: {} }}", emit_expr(x), emit_expr(y), emit_expr(z))
         }
+    }
+}
+
+fn emit_condition(expr: &PortExpr) -> String {
+    match expr {
+        PortExpr::Compare(lhs, op, rhs) => {
+            format!("{} {} {}", emit_expr(lhs), op_text(*op), emit_expr(rhs))
+        }
+        _ => emit_expr(expr),
     }
 }
 
@@ -1131,7 +1140,7 @@ pub fn emit_port_rust(file: &PortFile<'_>) -> Result<String, SourceError> {
                     "pub fn {}({}) -> bool {{\n    {}\n}}\n",
                     function.name,
                     inputs.params(),
-                    emit_expr(expr),
+                    emit_condition(expr),
                 ));
             }
             PortBody::Callback(statements) => {
