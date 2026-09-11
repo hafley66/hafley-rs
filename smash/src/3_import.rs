@@ -1,7 +1,7 @@
 use game_content::{
-    Guard, Inventory, Op, RECOGNIZED_OPERATIONS, SourceRef, SourceRule, TransitionSpec, Trigger,
-    Unresolved, common_inventory, conditional_choice, decode_file, emit_chart, function_evidence,
-    if_guard,
+    Guard, Inventory, Op, PortFile, RECOGNIZED_OPERATIONS, SourceRef, SourceRule, TransitionSpec,
+    Trigger, Unresolved, common_inventory, conditional_choice, decode_file, emit_chart,
+    emit_port_rust, function_evidence, if_guard, lower_choice, lower_guard,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -12,6 +12,7 @@ const TURN_PATH: &str = "src/melee/ft/kinds/ftCommon/ftCo_Turn.c";
 const JUMP_PATH: &str = "src/melee/ft/kinds/ftCommon/ftCo_Jump.c";
 const AIR_JUMP_PATH: &str = "src/melee/ft/kinds/ftCommon/ftCo_JumpAerial.c";
 const FTCOMMON_PATH: &str = "src/melee/ft/kinds/ftCommon";
+const FTCOMMON_GENERATED: &str = "../crates/ftcommon/src/generated/0_ftcommon.rs";
 
 #[derive(Serialize)]
 struct SourceImport {
@@ -57,6 +58,7 @@ fn falcon(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
         format!("{}\n", serde_json::to_string_pretty(&source)?),
     )?;
     std::fs::write(output.with_file_name("3_source_chart.d2"), source_chart(&source))?;
+    std::fs::write(ftcommon_path(), ftcommon_port(&melee_root())?)?;
     let (common, _) = common_inventory_record(&melee_root())?;
     std::fs::write(
         output.with_file_name("4_common_inventory.json"),
@@ -80,6 +82,7 @@ fn falcon_check(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
             format!("{}\n", serde_json::to_string_pretty(&source)?),
         ),
         (output.with_file_name("3_source_chart.d2"), source_chart(&source)),
+        (ftcommon_path(), ftcommon_port(&melee_root())?),
         (
             output.with_file_name("4_common_inventory.json"),
             format!("{}\n", serde_json::to_string(&common)?),
@@ -92,6 +95,30 @@ fn falcon_check(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     Ok(())
+}
+
+fn ftcommon_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(FTCOMMON_GENERATED)
+}
+
+/// Translate the selected pinned decomp movement callbacks into the reusable
+/// `game-ftcommon` boundary. Only the pure decision is translated; engine calls
+/// are retained in the generated provenance.
+fn ftcommon_port(root: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let revision = revision(root)?;
+    let turn = std::fs::read_to_string(root.join(TURN_PATH))?;
+    let jump = std::fs::read_to_string(root.join(JUMP_PATH))?;
+    let air_jump = std::fs::read_to_string(root.join(AIR_JUMP_PATH))?;
+    let functions = vec![
+        lower_guard(&turn, TURN_PATH, "ftCo_800C97A8")?,
+        lower_choice(&jump, JUMP_PATH, "ftCo_Jump_Enter")?,
+        lower_choice(&air_jump, AIR_JUMP_PATH, "ftCo_JumpAerial_Enter_Basic")?,
+    ];
+    Ok(emit_port_rust(&PortFile {
+        repository: MELEE_REPOSITORY,
+        revision: &revision,
+        functions: &functions,
+    })?)
 }
 
 fn melee_root() -> PathBuf {
@@ -523,6 +550,16 @@ mod tests {
                 assert_eq!(game_content::RECOGNIZED_OPERATIONS[operation].0, call.symbol);
             }
         }
+    }
+
+    #[test]
+    fn generated_ftcommon_port_is_current() {
+        let generated = super::ftcommon_port(&super::melee_root()).unwrap();
+        let path = super::ftcommon_path();
+        assert_eq!(generated, std::fs::read_to_string(&path).unwrap());
+        assert!(generated.contains("pub fn ftCo_800C97A8("));
+        assert!(generated.contains("pub fn ftCo_Jump_Enter("));
+        assert!(generated.contains("pub fn ftCo_JumpAerial_Enter_Basic("));
     }
 
     #[test]
