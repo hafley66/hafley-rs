@@ -18,7 +18,7 @@ pub use bake::bake;
 #[path = "3_chart.rs"]
 mod chart;
 #[cfg(feature = "ingest")]
-pub use chart::{emit_chart, TransitionSpec};
+pub use chart::{TransitionSpec, emit_chart};
 
 #[cfg(feature = "ingest")]
 #[path = "4_attributes.rs"]
@@ -31,6 +31,7 @@ pub use attributes::attributes;
 mod source;
 #[cfg(feature = "ingest")]
 pub use source::{
-    FunctionEvidence, Guard, Op, SourceError, SourceRef, SourceRule, Unresolved,
-    conditional_choice, function_evidence, if_guard,
+    CallSite, FunctionEvidence, FunctionSite, Guard, Inventory, Op, SourceError, SourceRef,
+    SourceRule, Unresolved, conditional_choice, function_evidence, if_guard, inventory_file,
+    preprocess,
 };
