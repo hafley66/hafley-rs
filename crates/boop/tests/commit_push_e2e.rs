@@ -694,9 +694,10 @@ fn commit_push_opencode_lane_to_opencode_tui() {
     }
 }
 
-/// The kimi coordinator route binds no session and kimi has no door, so no rung
-/// takes the row.
-#[ignore = "kimi coordinator route binds no session and kimi has no door; no rung takes the row"]
+/// RECEIPT, kimi lane and coordinator. Same body as the claude case; see
+/// `commit_push_claude_lane_to_claude_tui`. The kimi coordinator registers its
+/// pane as a coordinator route bound to its transcript session, and a row
+/// lands by the pane-submit paste rung.
 #[test]
 fn commit_push_reaches_kimi_tui() {
     match run_one("kimi") {

@@ -26,7 +26,8 @@ pub struct Kimi;
 /// id is sha256(canonical root) truncated to 12 hex chars.
 fn seed_workspace_trust(kimi_config: &Path, workspace: &Path) -> anyhow::Result<()> {
     use sha2::{Digest, Sha256};
-    let root = std::fs::canonicalize(workspace)?;
+    let root = canonical_future(workspace)
+        .ok_or_else(|| anyhow::anyhow!("resolve workspace {}", workspace.display()))?;
     let digest = Sha256::digest(root.display().to_string().as_bytes());
     let id: String = digest
         .iter()
@@ -45,6 +46,45 @@ fn seed_workspace_trust(kimi_config: &Path, workspace: &Path) -> anyhow::Result<
             .to_string(),
     )?;
     Ok(())
+}
+
+/// The canonical path `path` will have once it exists: its deepest existing
+/// ancestor canonicalized, then the trailing components appended. A lane
+/// recipe runs before its worktree is created, and `git worktree add` puts no
+/// symlink of its own on that path.
+fn canonical_future(path: &Path) -> Option<PathBuf> {
+    if let Ok(canonical) = std::fs::canonicalize(path) {
+        return Some(canonical);
+    }
+    let name = path.file_name()?;
+    Some(canonical_future(path.parent()?)?.join(name))
+}
+
+/// kimi appends a date `<system-reminder>` as the last user message of a
+/// fresh session's first request. A mock fixture that matches the last user
+/// message cannot see the supervisor's startup probe behind it, so the mock
+/// recipe asks for one throwaway turn that consumes the reminder first. Real
+/// lanes never set this, so they pay no extra turn.
+const WARM_ENV: &str = "BOOP_KIMI_WARM";
+
+/// Send one throwaway turn and wait for it to end, so the session's first
+/// injected date reminder lands in the history before the supervisor probes.
+fn consume_first_turn(channel: &mut boop_acp::channel::acp::AcpChannel) -> anyhow::Result<()> {
+    use boop_acp::channel::LaneChannel;
+    channel.start_turn("warm-up")?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        if channel
+            .next_event(std::time::Duration::from_secs(2))?
+            .is_some()
+        {
+            return Ok(());
+        }
+        anyhow::ensure!(
+            std::time::Instant::now() < deadline,
+            "kimi warm-up turn never ended"
+        );
+    }
 }
 
 /// The kimi TUI takes no variant flag and exposes no control plane.
@@ -133,10 +173,14 @@ impl Harness for Kimi {
         &self,
         spec: &boop_acp::channel::ChannelSpec,
     ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
-        Ok(Box::new(boop_acp::channel::acp::AcpChannel::open_adapter(
+        let mut channel = boop_acp::channel::acp::AcpChannel::open_adapter(
             spec,
             boop_acp::channel::acp::KIMI_ADAPTER,
-        )?))
+        )?;
+        if std::env::var_os(WARM_ENV).is_some() {
+            consume_first_turn(&mut channel)?;
+        }
+        Ok(Box::new(channel))
     }
 
     fn id(&self) -> HarnessId {
@@ -176,10 +220,12 @@ impl Harness for Kimi {
             .join("\n"),
         )?;
         seed_workspace_trust(&kimi_config, ctx.workspace)?;
+        let mut env = terminal_env(ctx.home);
+        env.push((WARM_ENV.to_owned(), "1".to_owned()));
         Ok(super::mock_tui::MockTuiLaunch {
             executable: executable.display().to_string(),
             args: vec!["--model".into(), "llmock/mock-model".into()],
-            env: terminal_env(ctx.home),
+            env,
             config_paths: vec![config],
             replay: MockTuiReplay::TypePrompt {
                 readiness: "Mock Model",
