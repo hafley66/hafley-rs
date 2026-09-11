@@ -8,6 +8,7 @@
 use game_fighter::Phase;
 use game_fighter::status::{air_transitions, ground_transitions};
 use serde_json::{Value, json};
+use smash::fighters::dog;
 use smash::fighters::pigeon::movement::{self, SelectionFacts};
 
 /// Deterministic stick sweep; the phase->animation selection seam is sampled
@@ -101,6 +102,41 @@ fn main() {
         "phase_animation": phase_animation(),
         "ground": transitions(ground_transitions()),
         "air": transitions(air_transitions()),
+        "dog": dog_evidence(),
     });
     println!("{}", serde_json::to_string(&output).expect("serialize status export"));
+}
+
+/// Execute the source-free Dog slice over its deterministic tape and report the
+/// phase/action pairs the shared controller actually produced. Actions and
+/// phases the runtime never selected are listed explicitly; a generated role
+/// binding alone does not mark an action live.
+fn dog_evidence() -> Value {
+    let mut simulation = dog::Simulation::new().expect("Dog baked actions");
+    let observed = dog::simulation::observe_tape(&mut simulation);
+
+    let mut rows: Vec<Value> = Vec::new();
+    for (phase, action) in &observed {
+        if rows.iter().any(|row| row["action"].as_u64() == Some(*action as u64)) {
+            continue;
+        }
+        rows.push(json!({ "action": action, "phase": phase }));
+    }
+
+    let reached: Vec<&str> = observed.iter().map(|(phase, _)| *phase).collect();
+    let unreached_phases: Vec<&str> = Phase::ALL
+        .iter()
+        .map(|phase| phase.name())
+        .filter(|name| !reached.contains(name))
+        .collect();
+    let selected: Vec<usize> = observed.iter().map(|(_, action)| *action).collect();
+    let unselected_actions: Vec<usize> = (0..dog::catalog::ACTION_COUNT)
+        .filter(|action| !selected.contains(action))
+        .collect();
+
+    json!({
+        "observed": rows,
+        "unreached_phases": unreached_phases,
+        "unselected_actions": unselected_actions,
+    })
 }

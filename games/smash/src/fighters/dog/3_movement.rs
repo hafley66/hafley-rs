@@ -13,6 +13,10 @@ mod attr;
 mod generated_rules;
 #[path = "generated/4_roles.rs"]
 mod roles;
+#[path = "4_simulation.rs"]
+pub mod simulation;
+
+pub use simulation::{Simulation, Snapshot};
 
 use game_fighter::Phase;
 
