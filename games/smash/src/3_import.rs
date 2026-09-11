@@ -477,18 +477,56 @@ fn attribute_source() -> Result<String, Box<dyn std::error::Error>> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args_os().skip(1);
-    let fighter = args.next().ok_or("usage: smash-import pigeon [--check] [output]")?;
-    let second = args.next();
-    let check = second.as_deref() == Some(std::ffi::OsStr::new("--check"));
-    let output_arg = if check { args.next() } else { second };
-    if fighter != "pigeon" || args.next().is_some() {
-        return Err("usage: smash-import pigeon [--check] [output]".into());
+    let command = args.next();
+    if command.as_deref() == Some(std::ffi::OsStr::new("pigeon")) {
+        let second = args.next();
+        let check = second.as_deref() == Some(std::ffi::OsStr::new("--check"));
+        let output_arg = if check { args.next() } else { second };
+        if args.next().is_some() {
+            return Err("usage: smash-import pigeon [--check] [output]".into());
+        }
+        let output = output_arg.map(PathBuf::from).unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src/fighters/pigeon/generated/0_chart.rs")
+        });
+        return if check { pigeon_check(&output) } else { pigeon(&output) };
     }
-    let output = output_arg.map(PathBuf::from).unwrap_or_else(|| {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("src/fighters/pigeon/generated/0_chart.rs")
-    });
-    if check { pigeon_check(&output) } else { pigeon(&output) }
+    if command.as_deref() == Some(std::ffi::OsStr::new("catalog")) {
+        let check = args.next().as_deref() == Some(std::ffi::OsStr::new("--check"));
+        if args.next().is_some() {
+            return Err("usage: smash-import catalog [--check]".into());
+        }
+        return character_catalogs(check);
+    }
+    Err("usage: smash-import <pigeon|catalog> [--check] [output]".into())
+}
+
+/// Write or verify one committed character output. Serialization is always
+/// pretty JSON with a trailing newline, matching the committed files.
+fn emit(path: &Path, value: &impl Serialize, check: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let bytes = format!("{}\n", serde_json::to_string_pretty(value)?);
+    if check {
+        if std::fs::read_to_string(path)? != bytes {
+            return Err(format!("stale generated output: {}", path.display()).into());
+        }
+    } else {
+        std::fs::write(path, bytes)?;
+    }
+    Ok(())
+}
+
+/// The one direct generate/check path covering both characters. Derivation goes
+/// through each fighter's own [`Spec`] and shared `game_content::generate_catalog`;
+/// this CLI never re-derives a catalog or reparses Rust.
+fn character_catalogs(check: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fighters");
+    let pigeon = smash::fighters::pigeon::catalog::generate()?;
+    emit(&root.join("pigeon/generated/5_catalog.json"), &pigeon.evidence, check)?;
+    emit(&root.join("pigeon/generated/6_baked.json"), &pigeon.actions, check)?;
+    let dog = smash::fighters::dog::generate()?;
+    emit(&root.join("dog/generated/0_catalog.json"), &dog.evidence, check)?;
+    emit(&root.join("dog/generated/1_baked.json"), &dog.actions, check)?;
+    Ok(())
 }
 
 #[cfg(test)]
