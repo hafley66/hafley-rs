@@ -4,10 +4,10 @@ mod types;
 pub use types::*;
 #[path = "1b_catalog.rs"]
 pub mod catalog;
-#[path = "1c_movement.rs"]
-pub mod movement;
 #[path = "1a_actions.rs"]
 mod lifecycle;
+#[path = "1c_movement.rs"]
+pub mod movement;
 #[path = "1_sandbag.rs"]
 pub mod sandbag;
 use parry3d::{
@@ -18,6 +18,48 @@ use parry3d::{
 use serde::{Deserialize, Serialize};
 const JUMP: u8 = 1;
 const ATTACK: u8 = 2;
+
+/// Sandbag is the single target weight in this cut.
+const SANDBAG_WEIGHT: f32 = 100.0;
+/// The sandbag has no player input; the resolver sees a centered stick.
+const NEUTRAL_STICK: [f32; 2] = [0.0, 0.0];
+/// Explicit ruleset knobs for the sandbag contact path.
+pub const RESOLVE_POLICY: game_combat::ResolvePolicy = game_combat::ResolvePolicy {
+    hitlag_per_damage: 0.8,
+    hitlag_bonus: 0,
+    tumble_knockback: 80.0,
+};
+
+/// Build the strike/target pair for one connecting hitbox and resolve it once.
+/// The contact path and its tests call this same seam; the outcome is fully
+/// computed before anything mutates.
+fn contact_outcome(
+    values: &Attack,
+    percent_before: f32,
+    grounded: bool,
+) -> game_combat::HitOutcome {
+    let strike = game_combat::Strike {
+        damage: values.damage,
+        angle: values.trajectory,
+        base_knockback: values.bkb,
+        knockback_growth: values.kbg,
+        weight_dependent_set_knockback: values.wdsk,
+    };
+    let target = game_combat::Target {
+        percent: percent_before,
+        weight: SANDBAG_WEIGHT,
+        grounded,
+    };
+    game_combat::resolve_hit(
+        strike,
+        target,
+        game_combat::DefenseInput {
+            stick: NEUTRAL_STICK,
+        },
+        RESOLVE_POLICY,
+    )
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct World {
     pub movement: Option<game_fighter::State>,
@@ -158,10 +200,12 @@ fn reduce_tick(world: &mut World, bits: u8, actions: &[Action], axis: Option<f32
         .unwrap();
         view.contact |= overlap;
         if overlap && !world.attack_hit {
+            let grounded = world.bag.as_ref().is_some_and(|bag| bag.grounded);
+            let outcome = contact_outcome(values, world.damage, grounded);
             if let Some(bag) = &mut world.bag {
-                bag.launch(values, world.damage);
+                bag.launch(&outcome);
             }
-            world.damage += values.damage;
+            world.damage = outcome.percent_after;
             world.attack_hit = true;
             world.hit_count += 1;
             world.last_hit = Some(world.frame);
@@ -228,3 +272,7 @@ impl Simulation {
         self.world = snapshot.0.clone();
     }
 }
+
+#[cfg(test)]
+#[path = "2_tests.rs"]
+mod tests;

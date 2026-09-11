@@ -1,7 +1,6 @@
-use super::Attack;
+use game_combat::HitOutcome;
 use rapier3d::prelude::*;
 use serde::{Deserialize, Serialize};
-use ssbm_utils::{calc, enums::character::Attributes};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Phase {
@@ -125,32 +124,20 @@ impl Default for Sandbag {
 }
 
 impl Sandbag {
-    #[tracing::instrument(target = "pigeon::physics", level = "trace", skip_all, fields(damage = hit.damage, percent_before))]
-    pub fn launch(&mut self, hit: &Attack, percent_before: f32) {
-        let target = Attributes::MARIO; // Only name/weight are read by this knockback helper; weight=100.
-        self.knockback = calc::knockback(
-            hit.damage,
-            hit.damage,
-            hit.kbg,
-            hit.bkb,
-            hit.wdsk,
-            false,
-            &target,
-            percent_before,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false,
-        );
-        let angle = calc::resolve_sakurai_angle(hit.trajectory.to_radians(), self.knockback, false);
-        self.velocity = [
-            0.0,
-            calc::initial_y_velocity(self.knockback, angle, false),
-            calc::initial_x_velocity(self.knockback, angle),
-        ];
-        self.stun = calc::hitstun(self.knockback);
+    /// Apply an already-resolved hit to Rapier. This method never computes
+    /// knockback, angle, velocity or hitstun; the resolver owns those.
+    #[tracing::instrument(
+        target = "pigeon::physics",
+        name = "apply_hit",
+        level = "trace",
+        skip_all,
+        fields(knockback = outcome.knockback, hitstun = outcome.hitstun)
+    )]
+    pub fn launch(&mut self, outcome: &HitOutcome) {
+        self.knockback = outcome.knockback;
+        // Resolver axes are [x, y]; the lab stores [0, y, x].
+        self.velocity = [0.0, outcome.velocity[1], outcome.velocity[0]];
+        self.stun = outcome.hitstun;
         let body = self.physics.bodies.get_mut(self.body).unwrap();
         body.set_gravity_scale(1.0, true);
         body.set_linvel(Vector::from(self.velocity) * 60.0, true);

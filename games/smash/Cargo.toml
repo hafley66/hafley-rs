@@ -21,6 +21,7 @@ name = "status_export"
 path = "examples/0_status_export.rs"
 [dependencies]
 game-content = { path = "../crates/content" }
+game-combat = { path = "../crates/combat" }
 redux = { path = "../crates/redux" }
 game-input = { path = "../crates/input" }
 game-fighter = { path = "../crates/fighter" }
