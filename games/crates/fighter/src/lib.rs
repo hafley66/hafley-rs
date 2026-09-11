@@ -27,12 +27,15 @@ pub mod ground_chart;
 pub mod status;
 #[path = "6_qualification.rs"]
 pub mod qualification;
+#[path = "2a_controller.rs"]
+pub mod controller;
 #[path = "3_slice.rs"]
 pub mod slice;
 #[path = "1_state.rs"]
 pub mod state;
 
 pub use combat::{CombatState, Hit, apply_hit};
+pub use controller::Controller;
 pub use rules::Rules;
 pub use slice::{FighterEvent, FighterSlice, MovementEffect, MovementSlice};
 pub use state::{Input, Phase, State, button};
