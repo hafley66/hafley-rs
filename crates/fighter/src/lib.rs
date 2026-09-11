@@ -17,6 +17,8 @@ mod advance_impl;
 pub mod rules;
 #[path = "1c_air.rs"]
 pub mod air;
+#[path = "1d_combat.rs"]
+pub mod combat;
 #[path = "1a_chart.rs"]
 pub mod chart;
 #[path = "1b_ground.rs"]
@@ -31,8 +33,9 @@ pub mod slice;
 pub mod state;
 
 pub use chart::{Action, CrouchChart, CrouchSlice, Facts};
+pub use combat::{CombatState, Hit, apply_hit};
 pub use rules::Rules;
-pub use slice::{MovementEffect, MovementSlice};
+pub use slice::{FighterEvent, FighterSlice, MovementEffect, MovementSlice};
 pub use state::{Input, Phase, State, button};
 
 pub fn advance(state: &mut State, input: Input, rules: &Rules) {
