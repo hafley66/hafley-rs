@@ -117,8 +117,13 @@ impl Scratch {
     /// found even when the case panicked before recording its backend pid.
     fn scratch_processes(&self) -> Vec<u32> {
         let root = self.root.to_string_lossy().into_owned();
+        // lsof reports the resolved cwd (`/private/var/...`) while `temp_dir()`
+        // names `/var/...`; the cwd sweep matches the canonical spelling.
+        let resolved = std::fs::canonicalize(&self.root)
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| root.clone());
         let me = std::process::id();
-        let mut pids = cwd_pids_under(&root);
+        let mut pids = cwd_pids_under(&resolved);
         pids.extend(home_pids_under(&root));
         pids.sort_unstable();
         pids.dedup();
@@ -171,7 +176,8 @@ fn cwd_pids_under(root: &str) -> Vec<u32> {
 /// Pids whose environment `HOME` sits under `root`, from one `ps` sweep.
 fn home_pids_under(root: &str) -> Vec<u32> {
     let output = Command::new("ps")
-        .args(["-E", "-o", "pid=,command="])
+        // `-ww`: without it ps may cut the line before the `HOME=` token.
+        .args(["-E", "-ww", "-o", "pid=,command="])
         .output();
     let Ok(output) = output else {
         return Vec::new();
