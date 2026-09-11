@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use tree_sitter::{Node, Parser};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +92,8 @@ pub struct CallSite {
     /// Index into [`Inventory::functions`]; direct calls always have an owner.
     pub function: usize,
     pub symbol: String,
+    /// Zero-based direct-call position within the owning function.
+    pub ordinal: usize,
     /// Index into [`RECOGNIZED_OPERATIONS`], or `None` when unsupported.
     pub operation: Option<usize>,
 }
@@ -104,6 +107,53 @@ pub struct Inventory {
     pub functions: Vec<FunctionSite>,
     /// Stable-sorted by `(file, line, function, symbol)`.
     pub calls: Vec<CallSite>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceState {
+    pub id: String,
+    pub name: String,
+    pub ordinal: usize,
+    pub source: SourceRef,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceCallRequirement {
+    pub id: String,
+    pub ordinal: usize,
+    pub symbol: String,
+    pub operation: Option<String>,
+    pub owner: Option<String>,
+    pub source: SourceRef,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceCallback {
+    pub id: String,
+    pub action: Option<String>,
+    pub phase: String,
+    pub source: SourceRef,
+    pub calls: Vec<SourceCallRequirement>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceInventoryCounts {
+    pub states: usize,
+    pub callbacks: usize,
+    pub direct_calls: usize,
+    pub unresolved: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceMachineInventory {
+    pub ruleset: String,
+    pub repository: String,
+    pub revision: String,
+    pub vocabulary: SourceRef,
+    pub states: Vec<SourceState>,
+    pub callbacks: Vec<SourceCallback>,
+    pub unresolved: Vec<Unresolved>,
+    pub counts: SourceInventoryCounts,
 }
 
 impl Inventory {
@@ -1255,6 +1305,7 @@ fn collect(
     current: Option<usize>,
     functions: &mut Vec<FunctionSite>,
     calls: &mut Vec<CallSite>,
+    ordinals: &mut BTreeMap<usize, usize>,
 ) {
     let mut current = current;
     if node.kind() == "function_definition" {
@@ -1274,12 +1325,18 @@ fn collect(
             line: node.start_position().row + 1,
             function,
             symbol: text(callee, source).into(),
+            ordinal: {
+                let ordinal = ordinals.entry(function).or_default();
+                let result = *ordinal;
+                *ordinal += 1;
+                result
+            },
             operation: None,
         });
     }
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        collect(child, source, file, current, functions, calls);
+        collect(child, source, file, current, functions, calls, ordinals);
     }
 }
 
@@ -1305,6 +1362,7 @@ pub fn common_inventory(sources: &[(String, String)]) -> Result<Inventory, Sourc
         functions: Vec::new(),
         calls: Vec::new(),
     };
+    let mut ordinals = BTreeMap::new();
     for (file, (path, source)) in ordered.into_iter().enumerate() {
         inventory.files.push(path.clone());
         let tree = parser.parse(source, None).ok_or(SourceError::Parse)?;
@@ -1318,6 +1376,7 @@ pub fn common_inventory(sources: &[(String, String)]) -> Result<Inventory, Sourc
             None,
             &mut inventory.functions,
             &mut inventory.calls,
+            &mut ordinals,
         );
     }
 
@@ -1335,6 +1394,247 @@ pub fn common_inventory(sources: &[(String, String)]) -> Result<Inventory, Sourc
             .position(|(symbol, _, _)| *symbol == call.symbol);
     }
     Ok(inventory)
+}
+
+fn enum_node<'a>(root: Node<'a>, source: &str, name: &str) -> Result<Node<'a>, SourceError> {
+    let mut found = None;
+    visit(root, &mut |node| {
+        if found.is_some() || node.kind() != "enum_specifier" {
+            return;
+        }
+        if node
+            .child_by_field_name("name")
+            .is_some_and(|enum_name| text(enum_name, source) == name)
+        {
+            found = Some(node);
+        }
+    });
+    found.ok_or_else(|| SourceError::MissingFunction(name.into()))
+}
+
+/// Extract the ordered members of a named C enum from a tree-sitter syntax
+/// tree. Sentinel members are retained in the parse but omitted from the
+/// action denominator by name, without evaluating C enum expressions.
+pub fn motion_states(
+    ruleset: &str,
+    source: &str,
+    repository: &str,
+    revision: &str,
+    path: &str,
+    enum_name: &str,
+) -> Result<Vec<SourceState>, SourceError> {
+    let tree = tree(source)?;
+    let enumeration = enum_node(tree.root_node(), source, enum_name)?;
+    let body = enumeration
+        .child_by_field_name("body")
+        .ok_or(SourceError::MissingNode {
+            function: enum_name.into(),
+            kind: "enum body",
+        })?;
+    let mut states = Vec::new();
+    let mut cursor = body.walk();
+    for member in body.named_children(&mut cursor) {
+        if member.kind() != "enumerator" {
+            continue;
+        }
+        let member_name = member
+            .child_by_field_name("name")
+            .map(|name| text(name, source).to_string())
+            .ok_or(SourceError::Parse)?;
+        if member_name == "ftCo_MS_None" || member_name == "ftCo_MS_Count" {
+            continue;
+        }
+        let ordinal = states.len();
+        states.push(SourceState {
+            id: format!(
+                "{ruleset}:{revision}:{path}:{enum_name}:{member_name}:{ordinal}"
+            ),
+            name: member_name
+                .strip_prefix("ftCo_MS_")
+                .unwrap_or(&member_name)
+                .to_string(),
+            ordinal,
+            source: SourceRef {
+                repository: repository.into(),
+                revision: revision.into(),
+                path: path.into(),
+                line: member.start_position().row + 1,
+                symbol: member_name,
+            },
+        });
+    }
+    Ok(states)
+}
+
+fn callback_phase(name: &str) -> Option<(&'static str, &str)> {
+    for phase in ["Anim", "IASA", "Phys", "Coll"] {
+        let suffix = format!("_{phase}");
+        if let Some(prefix) = name.strip_suffix(&suffix) {
+            return Some((phase, prefix));
+        }
+        let suffix = format!("_{phase}_Inner");
+        if let Some(prefix) = name.strip_suffix(&suffix) {
+            return Some((phase, prefix));
+        }
+    }
+    None
+}
+
+fn source_callback_id(
+    ruleset: &str,
+    revision: &str,
+    path: &str,
+    symbol: &str,
+    phase: &str,
+    ordinal: usize,
+) -> String {
+    format!("{ruleset}:{revision}:{path}:{symbol}:{phase}:{ordinal}")
+}
+
+/// Build the source-side state and callback denominator. The enum supplies
+/// state membership; [`common_inventory`] supplies every parsed function and
+/// direct call. Callback records retain source order and unsupported calls as
+/// unresolved facts. No transition destination is inferred.
+pub fn source_machine_inventory(
+    ruleset: &str,
+    repository: &str,
+    revision: &str,
+    vocabulary_path: &str,
+    vocabulary_source: &str,
+    sources: &[(String, String)],
+) -> Result<SourceMachineInventory, SourceError> {
+    let states = motion_states(
+        ruleset,
+        vocabulary_source,
+        repository,
+        revision,
+        vocabulary_path,
+        "ftCommon_MotionState",
+    )?;
+    let inventory = common_inventory(sources)?;
+    let state_names: std::collections::BTreeSet<&str> =
+        states.iter().map(|state| state.name.as_str()).collect();
+    let mut unresolved = Vec::new();
+    for file in &inventory.parse_errors {
+        unresolved.push(Unresolved {
+            symbol: inventory.files[*file].clone(),
+            source: SourceRef {
+                repository: repository.into(),
+                revision: revision.into(),
+                path: inventory.files[*file].clone(),
+                line: 0,
+                symbol: inventory.files[*file].clone(),
+            },
+            reason: "tree-sitter recovered a syntax-error file; recovered records remain visible".into(),
+        });
+    }
+
+    let mut calls_by_function: BTreeMap<usize, Vec<&CallSite>> = BTreeMap::new();
+    for call in &inventory.calls {
+        calls_by_function.entry(call.function).or_default().push(call);
+    }
+    for calls in calls_by_function.values_mut() {
+        calls.sort_by_key(|call| call.ordinal);
+    }
+    let mut callbacks = Vec::new();
+    for (function_index, function) in inventory.functions.iter().enumerate() {
+        let Some((phase, prefix)) = callback_phase(&function.name) else {
+            continue;
+        };
+        let path = &inventory.files[function.file];
+        let action = prefix
+            .strip_prefix("ftCo_")
+            .filter(|name| state_names.contains(*name))
+            .map(str::to_string);
+        let callback_ordinal = callbacks.len();
+        let callback_id = source_callback_id(
+            ruleset,
+            revision,
+            path,
+            &function.name,
+            phase,
+            callback_ordinal,
+        );
+        let source = SourceRef {
+            repository: repository.into(),
+            revision: revision.into(),
+            path: path.clone(),
+            line: function.line,
+            symbol: function.name.clone(),
+        };
+        if action.is_none() {
+            unresolved.push(Unresolved {
+                symbol: function.name.clone(),
+                source: source.clone(),
+                reason: "callback prefix has no exact ftCommon motion-state member".into(),
+            });
+        }
+        let mut callback_calls = Vec::new();
+        for call in calls_by_function.get(&function_index).into_iter().flatten() {
+            let (operation, owner) = call
+                .operation
+                .map(|operation| {
+                    (
+                        Some(RECOGNIZED_OPERATIONS[operation].1.to_string()),
+                        Some(RECOGNIZED_OPERATIONS[operation].2.to_string()),
+                    )
+                })
+                .unwrap_or((None, None));
+            let call_source = SourceRef {
+                repository: repository.into(),
+                revision: revision.into(),
+                path: path.clone(),
+                line: call.line,
+                symbol: call.symbol.clone(),
+            };
+            let call_id = format!("{callback_id}:call:{}", call.ordinal);
+            if operation.is_none() {
+                unresolved.push(Unresolved {
+                    symbol: call.symbol.clone(),
+                    source: call_source.clone(),
+                    reason: "direct callee is outside the recognized operation boundary".into(),
+                });
+            }
+            callback_calls.push(SourceCallRequirement {
+                id: call_id,
+                ordinal: call.ordinal,
+                symbol: call.symbol.clone(),
+                operation,
+                owner,
+                source: call_source,
+            });
+        }
+        callbacks.push(SourceCallback {
+            id: callback_id,
+            action,
+            phase: phase.into(),
+            source,
+            calls: callback_calls,
+        });
+    }
+    let direct_calls = callbacks.iter().map(|callback| callback.calls.len()).sum();
+    let counts = SourceInventoryCounts {
+        states: states.len(),
+        callbacks: callbacks.len(),
+        direct_calls,
+        unresolved: unresolved.len(),
+    };
+    Ok(SourceMachineInventory {
+        ruleset: ruleset.into(),
+        repository: repository.into(),
+        revision: revision.into(),
+        vocabulary: SourceRef {
+            repository: repository.into(),
+            revision: revision.into(),
+            path: vocabulary_path.into(),
+            line: 1,
+            symbol: "ftCommon_MotionState".into(),
+        },
+        states,
+        callbacks,
+        unresolved,
+        counts,
+    })
 }
 
 #[cfg(test)]
@@ -1638,5 +1938,74 @@ void ftCo_JumpAerial_Enter_Basic(Fighter_GObj* gobj) {
         let source = "int f(Fighter* fp) { if (fp->input.lstick[0].x + 1) { return 1; } return 0; }\n";
         let error = lower_guard(source, "a.c", "f").unwrap_err();
         assert!(matches!(error, SourceError::UnsupportedExpression(_)));
+    }
+
+    const VOCABULARY: &str = r#"
+typedef enum ftCommon_MotionState {
+    ftCo_MS_None = -1,
+    ftCo_MS_Wait,
+    ftCo_MS_WalkSlow,
+    ftCo_MS_Count,
+} ftCommon_MotionState;
+"#;
+
+    fn machine(sources: &[(&str, &str)], vocabulary: &str) -> SourceMachineInventory {
+        source_machine_inventory(
+            "test-ruleset",
+            "https://example.invalid/melee.git",
+            "0123456789abcdef0123456789abcdef01234567",
+            "forward.h",
+            vocabulary,
+            &sources
+                .iter()
+                .map(|(path, source)| ((*path).to_string(), (*source).to_string()))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn source_machine_regeneration_is_stable() {
+        let input = [("ftCo_Wait.c", "void ftCo_Wait_Anim(void) { first(); second(); }\n")];
+        assert_eq!(machine(&input, VOCABULARY), machine(&input, VOCABULARY));
+    }
+
+    #[test]
+    fn source_machine_denominator_grows_with_enum_members() {
+        let input = [("ftCo_Wait.c", "void ftCo_Wait_Anim(void) { first(); }\n")];
+        let baseline = machine(&input, VOCABULARY);
+        let expanded = machine(
+            &input,
+            &VOCABULARY.replace("ftCo_MS_Count", "ftCo_MS_Run,\n    ftCo_MS_Count"),
+        );
+        assert_eq!(expanded.states.len(), baseline.states.len() + 1);
+        assert_eq!(expanded.states.last().unwrap().name, "Run");
+    }
+
+    #[test]
+    fn source_machine_preserves_callback_order_and_unresolved_rows() {
+        let input = [(
+            "ftCo_Wait.c",
+            "void ftCo_Wait_Anim(void) { first(); second(); }\n",
+        )];
+        let inventory = machine(&input, VOCABULARY);
+        let callback = inventory
+            .callbacks
+            .iter()
+            .find(|callback| callback.source.symbol == "ftCo_Wait_Anim")
+            .unwrap();
+        assert_eq!(
+            callback.calls.iter().map(|call| call.symbol.as_str()).collect::<Vec<_>>(),
+            ["first", "second"],
+        );
+        assert_eq!(callback.calls.iter().map(|call| call.ordinal).collect::<Vec<_>>(), [0, 1]);
+        assert!(inventory.unresolved.iter().any(|row| row.symbol == "first"));
+        assert!(inventory.unresolved.iter().any(|row| row.symbol == "second"));
+    }
+
+    #[test]
+    fn source_machine_retains_parse_error_rows() {
+        let inventory = machine(&[("broken.c", "void ftCo_Wait_Anim(void) { first( }\n")], VOCABULARY);
+        assert!(inventory.unresolved.iter().any(|row| row.symbol == "broken.c"));
     }
 }
