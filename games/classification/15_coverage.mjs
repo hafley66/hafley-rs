@@ -182,6 +182,7 @@ export function joinCoverage({ port, source, runtime, receipt, requirementReceip
     mappingBySource.set(mapping.sourceId, mapping);
   }
   const callbackRows = callbackAssociations(source);
+  const callbackHandlers = source.callbacks ?? [];
   const callbackBySource = new Map();
   for (const mapping of port.callbackMappings ?? []) {
     if (!callbackRows.some(row => row.id === mapping.sourceId)) errors.push(`callback mapping references unknown source id ${mapping.sourceId}`);
@@ -240,7 +241,7 @@ export function joinCoverage({ port, source, runtime, receipt, requirementReceip
     if (!associations.length) return false;
     if (!associations.every(association => callbackBySource.has(association.id))) return false;
     const callbacksForState = new Set(associations.map(association => association.callback));
-    const calls = callbackRows.filter(callback => callbacksForState.has(callback.source?.symbol)).flatMap(callback => callback.calls ?? []);
+    const calls = callbackHandlers.filter(callback => callbacksForState.has(callback.source?.symbol)).flatMap(callback => callback.calls ?? []);
     if (!calls.every(call => guardBySource.has(call.id))) return false;
     return reachableStates.has(mappingBySource.get(row.id).runtimeState) &&
       rollbackQualified.has(row.id) && fidelityQualified.has(row.id);

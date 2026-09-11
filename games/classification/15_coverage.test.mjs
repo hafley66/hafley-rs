@@ -134,8 +134,11 @@ test('a source state becomes strict only when all associated requirements pass',
   const input = fixture();
   input.source.associations = [{ id: 'assoc-a', state: 'A', phase: 'Anim', callback: 'callback-one', source: { symbol: 'A' } }];
   input.source.callbacks[0].source.symbol = 'callback-one';
+  input.source.callbacks[0].calls = [{ id: 'call-a', symbol: 'guard-a' }];
+  input.source.counts.direct_calls = 1;
   input.runtime.runtime.callbacks = ['Motion'];
   input.port.callbackMappings = [{ sourceId: 'assoc-a', runtimeCallback: 'Motion', reason: 'dispatch', evidence: ['runtime'] }];
+  input.port.guardMappings = [{ sourceId: 'call-a', runtimePartition: 'Idle:Motion:0', reason: 'guard', evidence: ['runtime'] }];
   input.requirementReceipts = [
     { requirementId: 'a', axis: 'rollback', sourceFingerprint: H, runtimeRevision: 'runtime-rev', target: 'test', status: 'passed' },
     { requirementId: 'a', axis: 'source fidelity', sourceFingerprint: H, runtimeRevision: 'runtime-rev', target: 'test', status: 'passed' },
