@@ -284,6 +284,20 @@ effects/events; the gameplay snapshot owns those effects, never the route.
 Renderer-only focus, hover and layout stay host-local. URL projection is a
 statechart codec over route state, not a second source of truth.
 
+## v1 combat and physics extraction, 2026-09-11
+
+The complete boundary, signatures, storage rules and stage gates live in
+`5_combat_port.md`. `game-combat` begins as a stage-1 proposal. Existing v1 code
+is evidence input; no copied numeric approximation becomes source authority.
+
+| ID | State | Terminal condition / coordinator checkpoint |
+| --- | --- | --- |
+| C1 | Queued, stage 1 | Fingerprint the five consumed v1 source files and execute data-first golden vectors against the untouched v1 implementation. Stop after the fixture receipt. |
+| C2 | Blocked on C1 | Extract pure `crates/combat` resolution using qualified `ssbm_utils` APIs. Terminal: C1 vectors pass native and WASM; advance `game-combat` 1 -> 2. |
+| C3 | Blocked on C2 | Apply launch to shared fighter hitlag/hitstun/tumble state with quantized DI and rollback tapes. Terminal: transition-point restores converge; advance `game-combat` 2 -> 2.7. |
+| C4 | Blocked on C3 | Qualify bone-derived Parry contacts and durable Rapier/kinematic response with Pigeon-versus-Dog and native/WASM rollback fixtures. Terminal: source-fingerprinted receipts pass; advance `game-combat` 2.7 -> 3. |
+| C5 | Blocked on C4 | Move consumers and remove duplicate active combat paths after equivalence. Terminal: one resolver remains in the active graph and `just status` derives current evidence. |
+
 Observed current controls, from `pigeon-lab/godot/2_stage.gd` and `2_input.gd`:
 A/D or Left/Right with last-pressed resolution (`direction.press`, suspended on
 focus loss), Space jump, S or Down down, J fair, Shift at 0.4 walk scale. Generic

@@ -37,6 +37,7 @@ verified before moving code.
 
 | Map group | Source / receipt | Established scope and remaining work |
 | --- | --- | --- |
+| m10 | [Combat port plan](5_combat_port.md); v1 `rust-sim/core/src/{combat.rs,physics.rs,moves/mod.rs,fighter.rs,step.rs}` | v1 already implements damage, knockback, DI, hitlag, hitstun, tumble, shields and contact suppression. `game-combat` is a stage-1 proposal. C1 fingerprints and executes donor behavior before extraction; C2-C4 qualify the pure resolver, shared fighter response and contact/physics adapters. |
 | m0.v1 / m0.v2 | [Sibling archive](../../smashy/reference/og-v1/), specifically `gdscript-labs/v2-godot-language-lab/README.md.txt` and its interpreter | v1 gameplay priorities are user-confirmed. Archived v2 source documents vehicle, attachment, input and destruction rows; executability not checked here. |
 | m0.v3 / m0.v4 / m0.dom | User's version history; `smashy/reference/og-v1/gdscript-labs/v3-game-dom-css-lab/` in sibling repository | v3 behavior is an extraction source. Rust v4 and document/DOM direction are retired. |
 | m1.content | [Importer](blender-godot-sqlite-proof/pigeon-lab/2_main.rs), [first recording](blender-godot-sqlite-proof/pigeon-lab/7_readme.md) | Cached HTML payload, base64/bincode, brawllib_rs HighLevelSubaction. Per-frame bone transforms place hurtbox capsules. This is evaluated frame data, not complete executable PM behavior. |

@@ -20,6 +20,13 @@ board: "HAFLEY-RS / GAMES · structural timeline · grows upward" {
     e: "RETIRED\nretain history" {class: retired}
   }
   inventory: @classification/3_registry
+  m10: "10 · 2026-09-11 V1 COMBAT / extraction and qualification" {
+    grid-columns: 4
+    donor: "SOURCE · v1 Rust combat\ncombat + physics + moves + fighter + step\nFingerprint before extraction\nGolden vectors are C1" {class: source}
+    resolver: "STAGE 1 · game-combat proposal\nDamage + KB + launch + DI\nHitlag + hitstun + tumble\nPure crate; ssbm_utils qualified" {class: queued}
+    state: "PENDING · game-fighter integration\nSnapshot response + input history\nTransition-point restore tapes\nPigeon + Dog receivers" {class: queued}
+    adapters: "PENDING · contact + body adapters\nBones -> Parry candidates\nRapier durable state boundary\nNative/WASM rollback gate" {class: queued}
+  }
   m9: "09 · 2026-09-10 DIRECT C-TO-RUST PORT / shared ftCommon callbacks" {
     grid-columns: 3
     translator: "SOURCE · tree-sitter-c 0.24 / 0.23.4 MIT\nLowered expressions + statements\ncalls mapped to typed effects\nelse errors, no C compiler" {class: source}
@@ -107,3 +114,4 @@ board.m0 -> board.m1: "selected content + behavior"
 board.m1 -> board.m2: "extract verified machinery"
 board.m2 -> board.m3: "qualify missing behavior"
 board.m3 -> board.m4: "integrate only with evidence"
+board.m9 -> board.m10: "freeze vectors, extract, integrate"
