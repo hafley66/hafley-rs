@@ -1,7 +1,7 @@
 //! The codex adapter: transcripts under `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
 //! Every line wraps a `payload` object whose own `type` names the real record.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -297,6 +297,7 @@ impl Harness for Codex {
         let mut current_model = String::from("unknown");
         let mut turn_tokens = TurnTokens::default();
         let mut turn_cwd = None;
+        let token_count_keys = token_count_usage_keys(&result.lines);
         for line in &result.lines {
             project_line(
                 store,
@@ -307,6 +308,7 @@ impl Harness for Codex {
                 &mut current_model,
                 &mut turn_tokens,
                 &mut turn_cwd,
+                &token_count_keys,
             )?;
         }
         Ok(Ingested {
@@ -1197,6 +1199,110 @@ struct TurnTokens {
     cached: i64,
 }
 
+/// One per-call usage tuple. It ties a `token_usage_record` to the
+/// `token_count` snapshot that carries the same numbers.
+type UsageKey = (i64, i64, i64, i64, i64, i64);
+
+fn usage_key(usage: &serde_json::Map<String, Value>) -> UsageKey {
+    let count = |key: &str| usage.get(key).and_then(Value::as_i64).unwrap_or(0);
+    (
+        count("input_tokens"),
+        count("cached_input_tokens"),
+        count("cache_write_input_tokens"),
+        count("output_tokens"),
+        count("reasoning_output_tokens"),
+        count("total_tokens"),
+    )
+}
+
+/// Every `token_count` per-call usage in one batch. A `token_usage_record`
+/// carrying one of these is the same call already projected from its
+/// `token_count` twin; only the compaction snapshots that `token_count` never
+/// emits are projected from the record itself.
+fn token_count_usage_keys(lines: &[tail::CompleteLine]) -> HashSet<UsageKey> {
+    let mut keys = HashSet::new();
+    for line in lines {
+        let Ok(value) = serde_json::from_slice::<Value>(&line.bytes) else {
+            continue;
+        };
+        if value.get("type").and_then(Value::as_str) != Some("event_msg") {
+            continue;
+        }
+        let Some(last) = value
+            .get("payload")
+            .and_then(|payload| payload.get("info"))
+            .and_then(|info| info.get("last_token_usage"))
+            .and_then(Value::as_object)
+        else {
+            continue;
+        };
+        keys.insert(usage_key(last));
+    }
+    keys
+}
+
+/// Sum one per-call usage into the current turn's running total and write the
+/// turn's usage row. Shared by `token_count` and `token_usage_record`.
+#[allow(clippy::too_many_arguments)]
+fn write_cumulative_usage(
+    store: &Store,
+    session: &SessionRef,
+    ts: u64,
+    turn: &mut u64,
+    stat: &mut SyncStat,
+    current_model: &str,
+    turn_tokens: &mut TurnTokens,
+    turn_cwd: Option<&str>,
+    input: i64,
+    output: i64,
+    cache_write: i64,
+    cached: i64,
+) -> anyhow::Result<()> {
+    let sid = session.session_id.clone();
+    let attach_turn = if *turn == 0 {
+        *turn += 1;
+        let inserted = store.write_turn(&sid, *turn, ts, "assistant", "", turn_cwd)?;
+        record(stat, inserted);
+        *turn
+    } else {
+        *turn
+    };
+    if turn_tokens.turn != attach_turn {
+        *turn_tokens = TurnTokens {
+            turn: attach_turn,
+            ..TurnTokens::default()
+        };
+    }
+    turn_tokens.input += input;
+    turn_tokens.output += output;
+    turn_tokens.cache_write += cache_write;
+    turn_tokens.cached += cached;
+    let message_id = format!("{sid}#t{attach_turn}");
+    let usage = UsageRow {
+        ts,
+        message_id: &message_id,
+        request_id: "",
+        model: current_model,
+        service_tier: None,
+        input_tokens: turn_tokens.input,
+        output_tokens: turn_tokens.output,
+        cache_create_5m_tokens: turn_tokens.cache_write,
+        cache_create_1h_tokens: 0,
+        cache_read_tokens: turn_tokens.cached,
+        is_sidechain: session.parent.is_some(),
+        cost_usd_recorded: None,
+    };
+    let (is_new, changed) = store.write_usage(&sid, attach_turn, &usage)?;
+    if changed {
+        if is_new {
+            stat.usage_written += 1;
+        } else {
+            stat.usage_updated += 1;
+        }
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn project_line(
     store: &Store,
@@ -1207,6 +1313,7 @@ fn project_line(
     current_model: &mut String,
     turn_tokens: &mut TurnTokens,
     turn_cwd: &mut Option<String>,
+    token_count_keys: &HashSet<UsageKey>,
 ) -> anyhow::Result<()> {
     let value: Value = match serde_json::from_slice(&line.bytes) {
         Ok(value) => value,
@@ -1325,48 +1432,20 @@ fn project_line(
             let cached = count("cached_input_tokens");
             let cache_write = count("cache_write_input_tokens");
             let input_tokens = (count("input_tokens") - cached - cache_write).max(0);
-            let attach_turn = if *turn == 0 {
-                *turn += 1;
-                let inserted =
-                    store.write_turn(&sid, *turn, ts, "assistant", "", turn_cwd.as_deref())?;
-                record(stat, inserted);
-                *turn
-            } else {
-                *turn
-            };
-            if turn_tokens.turn != attach_turn {
-                *turn_tokens = TurnTokens {
-                    turn: attach_turn,
-                    ..TurnTokens::default()
-                };
-            }
-            turn_tokens.input += input_tokens;
-            turn_tokens.output += count("output_tokens");
-            turn_tokens.cache_write += cache_write;
-            turn_tokens.cached += cached;
-            let message_id = format!("{sid}#t{attach_turn}");
-            let usage = UsageRow {
+            write_cumulative_usage(
+                store,
+                session,
                 ts,
-                message_id: &message_id,
-                request_id: "",
-                model: current_model.as_str(),
-                service_tier: None,
-                input_tokens: turn_tokens.input,
-                output_tokens: turn_tokens.output,
-                cache_create_5m_tokens: turn_tokens.cache_write,
-                cache_create_1h_tokens: 0,
-                cache_read_tokens: turn_tokens.cached,
-                is_sidechain: session.parent.is_some(),
-                cost_usd_recorded: None,
-            };
-            let (is_new, changed) = store.write_usage(&sid, attach_turn, &usage)?;
-            if changed {
-                if is_new {
-                    stat.usage_written += 1;
-                } else {
-                    stat.usage_updated += 1;
-                }
-            }
+                turn,
+                stat,
+                current_model,
+                turn_tokens,
+                turn_cwd.as_deref(),
+                input_tokens,
+                count("output_tokens"),
+                cache_write,
+                cached,
+            )?;
         }
         "reasoning" => {
             // Codex reasoning carries only its summary text. Empty summaries
@@ -1462,6 +1541,41 @@ fn project_line(
             let inserted = store.write_turn(&sid, *turn, ts, "tool", &body, turn_cwd.as_deref())?;
             record(stat, inserted);
             store.write_tool_fact(&sid, *turn, ts, &name, None)?;
+        }
+        kind if (if kind.is_empty() { outer_type } else { kind }) == "token_usage_record" => {
+            // Rollouts write one of these beside each `token_count` snapshot
+            // for the same call; the snapshot is already projected, so the
+            // record projects nothing. A compaction's usage has no snapshot
+            // twin and is projected here instead of warned about.
+            let Some(usage) = payload.get("usage").and_then(Value::as_object) else {
+                return Ok(());
+            };
+            if token_count_keys.contains(&usage_key(usage)) {
+                tracing::debug!(
+                    record = "token_usage_record",
+                    session_id = %sid,
+                    "codex token_usage_record duplicates an already-projected token_count"
+                );
+                return Ok(());
+            }
+            let count = |key: &str| -> i64 { usage.get(key).and_then(Value::as_i64).unwrap_or(0) };
+            let cached = count("cached_input_tokens");
+            let cache_write = count("cache_write_input_tokens");
+            let input_tokens = (count("input_tokens") - cached - cache_write).max(0);
+            write_cumulative_usage(
+                store,
+                session,
+                ts,
+                turn,
+                stat,
+                current_model,
+                turn_tokens,
+                turn_cwd.as_deref(),
+                input_tokens,
+                count("output_tokens"),
+                cache_write,
+                cached,
+            )?;
         }
         kind if (if kind.is_empty() { outer_type } else { kind }) == "turn_context" => {
             // Codex carries the working directory per turn. The latest record
@@ -2079,6 +2193,66 @@ mod tests {
         assert_eq!(input_tokens, 110);
         assert_eq!(output_tokens, 16);
         assert_eq!(cache_read_tokens, 50);
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A `token_usage_record` whose call has no `token_count` twin (the shape
+    /// a compaction writes) projects into the same usage row.
+    #[test]
+    fn token_usage_record_without_a_token_count_projects_usage() {
+        let db_path = temp_path("jn5db");
+        let _ = std::fs::remove_file(&db_path);
+        let store = Store::open(db_path.clone()).unwrap();
+        let path = temp_path("jn5");
+        write_lines(
+            &path,
+            &[
+                r#"{"timestamp":"2026-09-11T11:31:45.000Z","type":"response_item","payload":{"type":"message","id":"msg_1","role":"user","content":[{"type":"input_text","text":"hello"}]}}"#,
+                r#"{"timestamp":"2026-09-11T11:31:46.000Z","type":"token_usage_record","payload":{"thread_id":"t","turn_id":"u","usage":{"input_tokens":1000,"cached_input_tokens":400,"cache_write_input_tokens":100,"output_tokens":50,"reasoning_output_tokens":20,"total_tokens":1050}}}"#,
+            ],
+        );
+        let metadata = path.metadata().unwrap();
+        let ingested = Codex
+            .ingest(&store, &session_for(&path, metadata.len()), 0)
+            .unwrap();
+        assert_eq!(ingested.stat.usage_written, 1);
+        drop(store);
+        let totals = boop_store::testing::usage_totals_at(&db_path);
+        assert_eq!(totals.row_count, 1);
+        assert_eq!(totals.input_tokens, 500, "cached and cache-write excluded");
+        assert_eq!(totals.output_tokens, 50);
+        assert_eq!(totals.cache_read_tokens, 400);
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A `token_usage_record` that repeats its `token_count` snapshot is the
+    /// same call; it must not double the turn's usage row.
+    #[test]
+    fn token_usage_record_duplicating_token_count_projects_nothing() {
+        let db_path = temp_path("jn6db");
+        let _ = std::fs::remove_file(&db_path);
+        let store = Store::open(db_path.clone()).unwrap();
+        let path = temp_path("jn6");
+        write_lines(
+            &path,
+            &[
+                r#"{"timestamp":"2026-09-11T11:31:45.000Z","type":"response_item","payload":{"type":"message","id":"msg_1","role":"user","content":[{"type":"input_text","text":"hello"}]}}"#,
+                r#"{"timestamp":"2026-09-11T11:31:46.000Z","type":"token_usage_record","payload":{"thread_id":"t","turn_id":"u","usage":{"input_tokens":300,"cached_input_tokens":100,"cache_write_input_tokens":0,"output_tokens":20,"reasoning_output_tokens":5,"total_tokens":320}}}"#,
+                r#"{"timestamp":"2026-09-11T11:31:46.100Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":300,"cached_input_tokens":100,"cache_write_input_tokens":0,"output_tokens":20,"reasoning_output_tokens":5,"total_tokens":320}}}}"#,
+            ],
+        );
+        let metadata = path.metadata().unwrap();
+        Codex
+            .ingest(&store, &session_for(&path, metadata.len()), 0)
+            .unwrap();
+        drop(store);
+        let totals = boop_store::testing::usage_totals_at(&db_path);
+        assert_eq!(totals.row_count, 1);
+        assert_eq!(totals.input_tokens, 200);
+        assert_eq!(totals.output_tokens, 20);
+        assert_eq!(totals.cache_read_tokens, 100);
         let _ = std::fs::remove_file(&db_path);
         let _ = std::fs::remove_file(&path);
     }
