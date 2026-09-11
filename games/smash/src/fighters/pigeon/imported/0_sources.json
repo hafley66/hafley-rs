@@ -2,7 +2,7 @@
   "source": "https://rukaidata.com/PM3.6/Captain%20Falcon/subactions/",
   "retrieved": "2026-09-08",
   "decoder": "brawllib_rs 0.29.0 (MIT), bincode 2 standard serde",
-  "copied_from": "games/blender-godot-sqlite-proof/fixtures (primary checkout; rukaidata-mirror for subactions, fixtures/falcon for AttackAirF)",
+  "copied_from": "games/blender-godot-sqlite-proof/fixtures (primary checkout; rukaidata-mirror for subactions, fixtures/pigeon for AttackAirF)",
   "boundary": {
     "generator": "Rukaidata GitHub (github.com/rukai/rukaidata) is generator/parser source",
     "artifacts": "retained PM3.6 files are literal generated webpage artifacts containing base64+bincode",

@@ -58,12 +58,12 @@ func check_overlay():
 		for id in geometry["cells"]:
 			assert(not seen.has(geometry["cells"][id]))
 			seen[geometry["cells"][id]] = id
-		assert(seen.size() == 12)
+		assert(seen.size() == 14)
 		assert(stage.phase_graph_cell(0).x < stage.phase_graph_cell(6).x)
-		assert(stage.phase_graph_cell(6).x < stage.phase_graph_cell(9).x)
-		assert(stage.phase_graph_cell(9).x < stage.phase_graph_cell(8).x)
+		assert(stage.phase_graph_cell(6).x < stage.phase_graph_cell(11).x)
+		assert(stage.phase_graph_cell(11).x < stage.phase_graph_cell(10).x)
 		assert(absf(stage.phase_graph.zoom - Stage.DEBUG_GRAPH_ZOOM) < 0.0001)
 
 	stage.queue_free()
-	print("OVERLAY_GEOMETRY_OK desktop=960x540 mobile=390x844 text_px=14 touch_px=44 cells=12")
+	print("OVERLAY_GEOMETRY_OK desktop=960x540 mobile=390x844 text_px=14 touch_px=44 cells=14")
 	quit(0)
