@@ -424,3 +424,84 @@ fn a_held_row_defers_the_lane_result() {
         fixture.log()
     );
 }
+
+/// RECEIPT. A lane retires; its route is gone; a send replays the spawn record,
+/// re-registers the route, resumes the conversation and writes a fresh result.
+/// Sabotage: leaving the route unwritten holds the body instead of reviving.
+#[test]
+fn a_send_to_a_retired_lane_revives_it() {
+    let _lane = lane_lock();
+    let Some(llmock) = mock_tui::resolve_llmock() else {
+        eprintln!("skip: no llmock");
+        return;
+    };
+    if mock_tui::resolve_executable("opencode", "OPENCODE_BIN").is_none() {
+        eprintln!("skip: no opencode");
+        return;
+    }
+    let fixture = Fixture::new("revive");
+    let Some((_provider, executable, launch_env)) = provider_and_launch(&fixture, &llmock, 0)
+    else {
+        eprintln!("skip: no opencode mock recipe");
+        return;
+    };
+    let env = lane_env(&fixture, &launch_env, &[("BOOP_IDLE_SHUTDOWN_SECS", "1")]);
+    let created = fixture.create(&[], &env, &executable);
+    assert!(
+        created.status.success(),
+        "lane create failed: {}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+    fixture.wait_for_result(1);
+    fixture.wait_for_retired();
+    fixture.wait_for_route_gone();
+    assert!(
+        fixture.trail("spawn.json").exists(),
+        "the spawn record a revive replays must survive retirement"
+    );
+
+    // The live store left dead panes pinned open by `remain-on-exit`; the send
+    // has to revive through that leftover rather than hold behind it.
+    let option = fixture.tmux(&["set-option", "-g", "remain-on-exit", "on"]);
+    assert!(option.status.success(), "set remain-on-exit");
+    // Clear whatever the run left; the point is a dead pane pinned open, not
+    // which run left it.
+    let _ = fixture.tmux(&["kill-session", "-t", &fixture.lane]);
+    let stale = fixture.tmux(&["new-session", "-d", "-s", &fixture.lane, "true"]);
+    assert!(
+        stale.status.success(),
+        "plant a leftover session: {}",
+        String::from_utf8_lossy(&stale.stderr)
+    );
+    let planted = Instant::now();
+    while !fixture.session_alive() {
+        assert!(
+            planted.elapsed() < Duration::from_secs(5),
+            "leftover session"
+        );
+        std::thread::sleep(POLL);
+    }
+
+    let revived = fixture.beep(&[&fixture.lane, "second", "--as", "obs", "--timeout", "60"]);
+    let stdout = String::from_utf8_lossy(&revived.stdout);
+    let stderr = String::from_utf8_lossy(&revived.stderr);
+    assert!(
+        revived.status.success(),
+        "the send to the retired lane failed:\n{stdout}{stderr}\n{}",
+        fixture.log()
+    );
+    assert!(
+        stdout.contains(&format!("revive {}", fixture.lane)),
+        "no revive line:\n{stdout}"
+    );
+    assert!(
+        stdout.contains(&format!("revived {}", fixture.lane)),
+        "no revived line:\n{stdout}"
+    );
+    fixture.wait_for_result(2);
+    let bodies = fixture.result_bodies();
+    assert!(
+        bodies.last().is_some_and(|body| body.contains("rc=0")),
+        "the revived lane must write a fresh rc=0 result: {bodies:?}"
+    );
+}
