@@ -45,9 +45,9 @@ pub struct Strike {
     pub knockback_growth: u32,
     /**
      *   attacker          target
-     *      o    *WDSK*      o  ---> vel_fixed(wt)
+     *      o    *WDSK*      o  ---> set_kb branch
      *     /|\ -------->    /|\
-     *     / \               /\
+     *     / \              / \   weight + KBG + BKB still apply
      *   ======================= (ground)
      */
     pub weight_dependent_set_knockback: u32,
@@ -64,18 +64,17 @@ pub struct Target {
     pub percent: f32,
     /**
      *   attacker          target
-     *      o                o   (wt)
-     *     /|\              /|\   | gravity
-     *     / \               /\   v
+     *      o    *HIT*       o   [weight]
+     *     /|\ -------->    /|\  ------> knockback scaling
+     *     / \              / \
      *   ======================= (ground)
      */
     pub weight: f32,
     /**
-     *   attacker          target
-     *      o                o   grounded: true
-     *     /|\              /|\
-     *     / \               /\
-     *   ======================= (ground)
+     *   authored 361 deg       target branches
+     *   attacker o --hit-->      o --> grounded Sakurai angle
+     *           /|\             /|\ /
+     *           / \             / \    airborne 45 deg
      */
     pub grounded: bool,
 }
@@ -262,4 +261,3 @@ delete superseded v1-derived implementations only after equivalence tests pass.
 Terminal condition: one combat resolver remains in the active dependency graph;
 `just status` derives current combat gates from executable exports and
 source-fingerprinted receipts.
-
