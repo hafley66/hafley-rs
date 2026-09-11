@@ -12,7 +12,6 @@
 //! OPENCODE_BIN, KIMI_BIN, LLMOCK_BIN.
 
 use std::collections::BTreeMap;
-use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -529,49 +528,66 @@ fn run_case(
     Ok(())
 }
 
-/// RECEIPT. A real lane supervisor sees a commit in its worktree and pushes it
-/// once through the coordinator's own harness door, for each of claude, codex,
-/// opencode and kimi; a blocked commit arrives as a request carrying its ask.
-/// Sabotage: dropping the commit push leaves the scratch store with no
-/// `agent_commit_push` row and the coordinator pane without `commit <lane>`.
-#[ignore = "claude (mock recipe --safe-mode) exposes no messaging socket and kimi binds no session, so neither coordinator door takes the push"]
-#[test]
-fn commit_push_reaches_each_real_coordinator_tui() {
+/// Resolve the shared prerequisites, then run one harness end to end. An
+/// absent executable, or `llmock`, is a skip reason rather than a failure.
+fn run_one(entry: &str) -> Result<(), String> {
+    let case = CASES
+        .iter()
+        .find(|case| case.entry == entry)
+        .expect("case entry is in CASES");
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        eprintln!("skip all: no llmock (cargo install --tag v0.1.2 llmock)");
-        return;
+        return Err("no llmock (cargo install --tag v0.1.2 llmock)".to_owned());
     };
     let Some(claude_bin) = mock_tui::resolve_executable("claude", "CLAUDE_BIN") else {
-        eprintln!("skip all: no claude executable for the lane (set CLAUDE_BIN)");
-        return;
+        return Err("no claude executable for the lane (set CLAUDE_BIN)".to_owned());
     };
-    let registry = Registry::discover();
-    let mut failures = Vec::new();
-    for case in CASES {
-        if mock_tui::resolve_executable(case.entry, case.executable_override).is_none() {
-            println!("skip {}: no {} executable", case.entry, case.entry);
-            continue;
-        }
-        let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
-            run_case(case, &llmock, &claude_bin, &registry)
-        }));
-        match result {
-            Ok(Ok(())) => {}
-            Ok(Err(reason)) => println!("skip {}: {reason}", case.entry),
-            Err(panic) => {
-                let message = panic
-                    .downcast_ref::<String>()
-                    .cloned()
-                    .or_else(|| panic.downcast_ref::<&str>().map(|text| text.to_string()))
-                    .unwrap_or_else(|| "panicked".to_owned());
-                eprintln!("FAIL {}\n{message}", case.entry);
-                failures.push(format!("{}: {message}", case.entry));
-            }
-        }
+    if mock_tui::resolve_executable(case.entry, case.executable_override).is_none() {
+        return Err(format!("no {} executable", case.entry));
     }
-    assert!(
-        failures.is_empty(),
-        "commit push failed for:\n{}",
-        failures.join("\n")
-    );
+    let registry = Registry::discover();
+    run_case(case, &llmock, &claude_bin, &registry)
+}
+
+/// RECEIPT. A real lane supervisor sees a commit in its worktree and pushes it
+/// once through the claude coordinator's own door; a blocked commit arrives as
+/// a request carrying its ask. Sabotage: dropping the commit push leaves the
+/// scratch store with no `agent_commit_push` row and the coordinator pane
+/// without `commit <lane>`.
+#[test]
+fn commit_push_reaches_claude_tui() {
+    match run_one("claude") {
+        Ok(()) => {}
+        Err(reason) => eprintln!("skip claude: {reason}"),
+    }
+}
+
+/// RECEIPT, codex coordinator. Same body as the claude case; see
+/// `commit_push_reaches_claude_tui`.
+#[test]
+fn commit_push_reaches_codex_tui() {
+    match run_one("codex") {
+        Ok(()) => {}
+        Err(reason) => eprintln!("skip codex: {reason}"),
+    }
+}
+
+/// RECEIPT, opencode coordinator. Same body as the claude case; see
+/// `commit_push_reaches_claude_tui`.
+#[test]
+fn commit_push_reaches_opencode_tui() {
+    match run_one("opencode") {
+        Ok(()) => {}
+        Err(reason) => eprintln!("skip opencode: {reason}"),
+    }
+}
+
+/// The kimi coordinator route binds no session and kimi has no door, so no rung
+/// takes the row.
+#[ignore = "kimi coordinator route binds no session and kimi has no door; no rung takes the row"]
+#[test]
+fn commit_push_reaches_kimi_tui() {
+    match run_one("kimi") {
+        Ok(()) => {}
+        Err(reason) => eprintln!("skip kimi: {reason}"),
+    }
 }
