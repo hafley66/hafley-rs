@@ -19,7 +19,7 @@ test('native TSP values resolve all existing first-party Cargo packages', async 
     ['game-fighter', 2.7, 'library', true],
     ['game-content', 2.7, 'library', true],
     ['game-ftcommon', 2.7, 'library', true],
-    ['game-combat', 1, 'library', false],
+    ['game-combat', 2, 'library', true],
     ['redux', 3, 'library', true], ['game-input', 3, 'library', true],
     ['rollback', 3, 'library', true], ['game-capture', 3, 'library', true],
     ['core-labs', 2.7, 'split', true],

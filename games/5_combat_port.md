@@ -211,38 +211,41 @@ hit or feeds the reducer.
 
 ## Port sequence and gates
 
-### C1: freeze v1 behavior
+### C1/C2: direct port with executable vectors (done)
 
-Fingerprint `combat.rs`, `physics.rs`, `moves/mod.rs`, `fighter.rs`, `step.rs`
-and the relevant v1 tests. Convert selected v1 scenarios into data-first golden
-vectors covering damage, fixed/growth knockback, DI angle, hitlag, hitstun,
-tumble, shielding and repeated-contact suppression.
+No separate v1 freeze step ran. `fcf750e` reimplemented the v1 `combat`, `moves`
+and `physics` strike/target/DI resolver directly in `crates/combat`; `f6015c7`
+pins the pre-hit-percent knockback input, totaling 11 vectors in
+`crates/combat/tests/0_resolve.rs`. Each vector names the v1 source symbol it
+exercises. Knockback, Sakurai angle, DI, hitstun and initial velocity route
+through `ssbm_utils 0.4.0`; the target weight stays a plain value so no character
+enum enters the public API. Hitlag and tumble stay explicit ruleset inputs. The
+crate has no Godot, Rapier, SQLite or renderer dependency.
 
-Terminal condition: committed fingerprints plus golden inputs/outputs execute
-against the untouched v1 code. Every copied behavior names its v1 source symbol.
+Terminal condition met: the 11 tests pass natively and
+`wasm32-unknown-unknown` checks clean.
 
-### C2: extract pure combat resolution
+TC39 exit: `game-combat` advanced stage 1 to 2.
 
-Create `crates/combat` using `ssbm_utils` for its available knockback, Sakurai
-angle, DI, velocity and hitstun functions. Preserve unsupported v1 behavior as
-explicit rule inputs or unresolved cases.
+### C3: integrate fighter damage states (active)
 
-Terminal condition: native and `wasm32-unknown-unknown` tests reproduce the C1
-vectors; the crate has no Godot, Rapier, SQLite or renderer dependency.
+The Pigeon receiver wiring is done. `bb90cc5` routes the single Pigeon sandbag
+contact through `game-combat::resolve_hit`; `smash/src/fighters/pigeon/2_tests.rs`
+proves the sandbag only applies the resolved outcome, and that damage, knockback,
+hitstun, velocity, hit count and the contact result survive a snapshot/suffix
+replay. Parry overlap detection and Rapier application stay outside the crate.
+The Pigeon strike is still the one synthetic sandbag contact, not a shared
+fighter response.
 
-TC39 exit: `game-combat` advances stage 1 to 2.
-
-### C3: integrate fighter damage states
-
-Extend `game-fighter` with hitlag, hitstun, tumble and launch response. Replace
-the Pigeon sandbag-only application path with the shared resolver while retaining
-the sandbag as a receiver fixture. Drive DI through quantized `game-input`.
+Remaining: extend `game-fighter` with shared hitlag, hitstun, tumble and launch
+response, and drive DI through quantized `game-input`.
 
 Terminal condition: attack, hitlag, DI, launched movement and recovery tapes
 restore at each transition and replay to identical state/checksums.
 
-TC39 exit: `game-combat` advances stage 2 to 2.7. `game-fighter` stays at 2.7
-until its existing source-fidelity gates also pass.
+TC39 exit: `game-combat` advances stage 2 to 2.7. That gate is not earned in this
+increment. `game-fighter` stays at 2.7 until its existing source-fidelity gates
+also pass.
 
 ### C4: qualify contact and physics adapters
 

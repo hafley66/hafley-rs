@@ -44,14 +44,18 @@
     ]
   },
   "game-combat": {
-    "stage": 1,
+    "stage": 2,
     "destination": "library",
-    "task": "C1",
-    "scope": "Proposed pure damage, knockback, launch, DI, hitlag, hitstun and tumble resolver distilled from the v1 Rust behavior and qualified against ssbm_utils; no package or manifest exists",
+    "task": "C3",
+    "scope": "Direct port of the v1 strike/target/DI resolver into a pure crate: resolve_hit returns percent_after, Sakurai/DI angle, initial velocity, knockback, hitlag, hitstun and tumble through ssbm_utils 0.4.0, with 11 native test vectors and wasm32 compilation. Pigeon's single sandbag contact resolves through the crate and replays from a snapshot suffix; shared fighter hitlag/hitstun/tumble state plus quantized DI remain active C3.",
+    "manifest": "crates/combat/Cargo.toml",
     "targets": [
       "crates/combat"
     ],
     "evidence": [
+      "crates/combat/src/1_resolve.rs",
+      "crates/combat/tests/0_resolve.rs",
+      "smash/src/fighters/pigeon/2_tests.rs",
       "5_combat_port.md",
       "4_tasks.md"
     ]
