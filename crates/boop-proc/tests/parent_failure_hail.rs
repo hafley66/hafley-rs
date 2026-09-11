@@ -132,6 +132,8 @@ fn lane_run(dir: &Path) -> LaneRun {
         cwd: dir.to_owned(),
         model: Some("test-model".to_owned()),
         resume: None,
+        post_pr: false,
+        pr_base: "main".to_owned(),
     }
 }
 

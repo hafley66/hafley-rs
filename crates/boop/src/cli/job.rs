@@ -368,6 +368,10 @@ pub(crate) fn run_lane_supervisor(
         cwd,
         model: model.map(str::to_owned),
         resume: resume.map(str::to_owned),
+        // The toggle is written to spawn.json and read back here; until the
+        // dispatch carries it, a supervisor defaults to no PR line.
+        post_pr: false,
+        pr_base: "main".to_owned(),
     };
     // A handshake that fails here happens before the supervisor exists, so
     // nothing else would tell the parent this lane never opened. A rejected

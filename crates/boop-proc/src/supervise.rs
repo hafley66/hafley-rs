@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use tracing::{debug, error, info, warn};
 
-use boop_acp::channel::{Delivery, LaneChannel, TurnEvent};
+use boop_acp::channel::{Delivery, LaneChannel, ToolCallFact, TurnEvent, TOOL_STATUS_COMPLETED};
 use boop_store::bus;
 
 use crate::headwatch::{commit_body, is_git_write, CommitStatus, HeadMove, HeadWatch};
@@ -38,6 +38,19 @@ fn parse_commit_quiet(raw: Option<&str>) -> Duration {
 
 fn commit_quiet() -> Duration {
     parse_commit_quiet(std::env::var(COMMIT_QUIET_ENV).ok().as_deref())
+}
+
+/// Config key: the deadline on one `gh pr view` child. Unset/unparsable falls
+/// back to ten seconds, so a hung gh never blocks the turn loop.
+const PR_VIEW_TIMEOUT_ENV: &str = "BOOP_PR_VIEW_TIMEOUT_SECS";
+const DEFAULT_PR_VIEW_TIMEOUT: Duration = Duration::from_secs(10);
+
+fn pr_view_timeout() -> Duration {
+    std::env::var(PR_VIEW_TIMEOUT_ENV)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(DEFAULT_PR_VIEW_TIMEOUT)
 }
 
 /// Fresh lanes prove that the harness can complete one minimal turn before
@@ -282,6 +295,10 @@ pub struct LaneRun {
     pub cwd: PathBuf,
     pub model: Option<String>,
     pub resume: Option<String>,
+    /// When set, the brief closes with the push-and-open-a-PR line.
+    pub post_pr: bool,
+    /// The branch `gh pr create --base` targets when `post_pr` is set.
+    pub pr_base: String,
 }
 
 /// One inbox message the supervisor has taken responsibility for.
@@ -770,6 +787,9 @@ fn supervise(
     let brief = std::fs::read_to_string(&lane.brief)
         .with_context(|| format!("read lane brief {}", lane.brief.display()))?;
     info!(brief = %lane.brief.display(), "lane brief loaded");
+    // The closing PR line is in-memory only: the file on disk stays the brief
+    // the human wrote, and the channel re-feed carries the same text.
+    let brief = brief_with_post_pr(brief, lane.post_pr, &lane.pr_base);
     // The channel re-feeds this text after a respawn that lost its
     // conversation, so it must be the brief and not whichever turn opened.
     channel.set_brief(&brief);
@@ -893,6 +913,9 @@ fn supervise(
             record_delivery(events, &lane.mail_dir, &hail, Delivery::NextTurn);
         }
         remember_conversation(lane, channel);
+        // One `gh pr view` per turn, not one per poll: the tool fact stays in
+        // `turn_tools` for the rest of the turn once it lands.
+        let mut pr_checked = false;
         let end = loop {
             match channel.next_event(POLL) {
                 Err(error) => {
@@ -917,6 +940,23 @@ fn supervise(
             turn_tools.extend(channel.drain_tool_calls());
             if turn_tools.iter().any(is_git_write) {
                 head_watch.nudge();
+            }
+            if !pr_checked && turn_tools.iter().any(is_pr_create) {
+                pr_checked = true;
+                if let Some(store) = mail_store.as_ref() {
+                    if let Some((url, title)) = pr_view(&lane.cwd) {
+                        match store.notify_pr(&lane.lane, &url, Some(&title)) {
+                            Ok(rows) => {
+                                for row in rows {
+                                    deliver_outbound(lane, &row);
+                                }
+                            }
+                            Err(error) => {
+                                warn!(lane = lane.lane, error = %error, "PR notice write failed")
+                            }
+                        }
+                    }
+                }
             }
             if let Some(mv) = head_watch.tick(&lane.cwd, Instant::now()) {
                 if let Some(store) = mail_store.as_ref() {
@@ -1391,6 +1431,84 @@ fn report_head_move(lane: &LaneRun, store: &boop_store::Store, worktree: &Path, 
             }
         }
     }
+}
+
+/// The closing line a `post_pr` lane reads, pushing its branch and opening the
+/// PR that boop then reports to its subscribers.
+fn post_pr_line(pr_base: &str) -> String {
+    format!(
+        "When the deliverable is committed and validated: git push -u origin HEAD, then \
+         gh pr create --fill --base {pr_base}. The PR is your final report; boop tells your parent."
+    )
+}
+
+/// The brief text a lane opens with: unchanged, or closed with the post-PR
+/// line when the spawn asked the lane to finish by opening a PR.
+fn brief_with_post_pr(brief: String, post_pr: bool, pr_base: &str) -> String {
+    if post_pr {
+        format!("{brief}\n\n{}", post_pr_line(pr_base))
+    } else {
+        brief
+    }
+}
+
+/// Whether a completed tool call ran `gh pr create`.
+pub fn is_pr_create(tool: &ToolCallFact) -> bool {
+    tool.status == TOOL_STATUS_COMPLETED && tool.title.contains("gh pr create")
+}
+
+/// The url and title of the PR at HEAD, read with `gh pr view`. A gh that
+/// hangs is killed after `pr_view_timeout` and reports `None`; the caller warns
+/// and the turn continues.
+fn pr_view(cwd: &Path) -> Option<(String, String)> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    use wait_timeout::ChildExt;
+
+    let timeout = pr_view_timeout();
+    let started = Instant::now();
+    let mut child = Command::new("gh")
+        .args(["pr", "view", "--json", "url,title"])
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let stdout = match child.wait_timeout(timeout) {
+        Ok(Some(_)) => {
+            let mut stdout = Vec::new();
+            if let Some(mut pipe) = child.stdout.take() {
+                let _ = pipe.read_to_end(&mut stdout);
+            }
+            if !child.wait().ok()?.success() {
+                return None;
+            }
+            stdout
+        }
+        Ok(None) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            warn!(
+                elapsed_ms = started.elapsed().as_millis() as u64,
+                "gh pr view timed out"
+            );
+            return None;
+        }
+        Err(_) => return None,
+    };
+    let value: serde_json::Value = serde_json::from_slice(&stdout).ok()?;
+    let url = value
+        .get("url")
+        .and_then(serde_json::Value::as_str)
+        .filter(|url| !url.is_empty())?
+        .to_owned();
+    let title = value
+        .get("title")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("")
+        .to_owned();
+    Some((url, title))
 }
 
 /// The result row body, for a human reading the mailbox. The exit code every
@@ -2171,6 +2289,8 @@ mod tests {
             cwd: dir.clone(),
             model: None,
             resume: None,
+            post_pr: false,
+            pr_base: "main".to_owned(),
         };
         let mut watch = ParentWatch {
             policy: ParentDeathPolicy::Orphan,
@@ -2534,6 +2654,8 @@ mod tests {
             cwd: dir.to_owned(),
             model: None,
             resume: None,
+            post_pr: false,
+            pr_base: "main".to_owned(),
         }
     }
 
@@ -3554,6 +3676,8 @@ mod tests {
             cwd: dir.clone(),
             model: None,
             resume: None,
+            post_pr: false,
+            pr_base: "main".to_owned(),
         };
         yield_to_parent(&lane, "completed", &[]);
         assert!(rows_of_kind(&dir, "yield").is_empty());
@@ -3966,6 +4090,8 @@ mod tests {
             cwd: work.clone(),
             model: None,
             resume: None,
+            post_pr: false,
+            pr_base: "main".to_owned(),
         };
         record_result(&lane, 0, None);
         let rows = result_rows(&dir);
@@ -3978,5 +4104,130 @@ mod tests {
             "{}",
             rows[0].body
         );
+    }
+
+    /// Why: only a completed `gh pr create` call triggers the PR producer; a
+    /// dry run or a `git push` does not.
+    #[test]
+    fn is_pr_create_matches_a_completed_gh_pr_create_only() {
+        let call = |title: &str, status: &str| ToolCallFact {
+            title: title.into(),
+            kind: "execute".into(),
+            status: status.into(),
+            paths: Vec::new(),
+        };
+        assert!(is_pr_create(&call("Bash gh pr create --fill", "completed")));
+        assert!(!is_pr_create(&call("gh pr create --fill", "in_progress")));
+        assert!(!is_pr_create(&call(
+            "Bash git push -u origin HEAD",
+            "completed"
+        )));
+    }
+
+    /// Restore `PATH` when the fake-binary test ends.
+    struct PathGuard(String);
+    impl Drop for PathGuard {
+        fn drop(&mut self) {
+            std::env::set_var("PATH", &self.0);
+        }
+    }
+
+    /// A directory holding a `gh` script that shadows the real one on PATH,
+    /// with a guard that restores PATH on drop.
+    fn fake_gh(name: &str, script: &str) -> (PathBuf, PathGuard) {
+        let dir = tempdir().join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("gh");
+        std::fs::write(&path, script).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let original = std::env::var("PATH").unwrap_or_default();
+        std::env::set_var("PATH", format!("{}:{}", dir.display(), original));
+        (dir, PathGuard(original))
+    }
+
+    /// Why: the supervisor producer reads the PR url and title from
+    /// `gh pr view` in the worktree.
+    #[test]
+    fn pr_view_reads_the_url_and_title_from_gh() {
+        let dir = tempdir();
+        let (_fake, _guard) = fake_gh(
+            "prview",
+            "#!/bin/sh\nprintf '%s' '{\"url\":\"https://github.com/a/b/pull/7\",\"title\":\"t\"}'\n",
+        );
+        let (url, title) = pr_view(&dir).expect("fake gh answers");
+        assert_eq!(url, "https://github.com/a/b/pull/7");
+        assert_eq!(title, "t");
+    }
+
+    /// Why: a hung gh must not hold the turn loop; pr_view kills it at the
+    /// deadline and reports None.
+    #[test]
+    fn pr_view_gives_up_on_a_hung_gh() {
+        let dir = tempdir();
+        let (_fake, _guard) = fake_gh("prhang", "#!/bin/sh\nsleep 30\n");
+        let previous = std::env::var(PR_VIEW_TIMEOUT_ENV).ok();
+        std::env::set_var(PR_VIEW_TIMEOUT_ENV, "1");
+        let started = Instant::now();
+        let result = pr_view(&dir);
+        match previous {
+            Some(value) => std::env::set_var(PR_VIEW_TIMEOUT_ENV, value),
+            None => std::env::remove_var(PR_VIEW_TIMEOUT_ENV),
+        }
+        assert!(result.is_none());
+        assert!(
+            started.elapsed() < Duration::from_secs(8),
+            "gh was not bounded: {:?}",
+            started.elapsed()
+        );
+    }
+
+    /// Why: the post-PR line reaches the worker exactly when the toggle is set,
+    /// and it names the base the spawn resolved.
+    #[test]
+    fn the_brief_closes_with_the_post_pr_line_when_toggled() {
+        let off = brief_with_post_pr("do the work\n".into(), false, "dev");
+        assert_eq!(off, "do the work\n");
+        let on = brief_with_post_pr("do the work\n".into(), true, "dev");
+        assert!(
+            on.ends_with("--base dev. The PR is your final report; boop tells your parent."),
+            "{on}"
+        );
+    }
+
+    /// Why: a PR url produces one kind=pr row per subscriber, and a second
+    /// producer's attempt for the same url produces none.
+    #[test]
+    fn the_pr_producer_notifies_each_subscriber_once() {
+        let dir = tempdir();
+        let store = bus::open_store(&dir).unwrap();
+        let route = |parent: Option<&str>| bus::Route {
+            kind: "lane".into(),
+            harness: None,
+            tmux: None,
+            cwd: None,
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: parent.map(str::to_owned),
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+            app_server_socket: None,
+        };
+        bus::write_route(&dir, "mine", &route(Some("parent"))).unwrap();
+        let rows = store
+            .notify_pr("mine", "https://github.com/a/b/pull/7", Some("t"))
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].kind, bus::MessageKind::Pr);
+        assert_eq!(rows[0].to, "parent");
+        assert!(store
+            .notify_pr("mine", "https://github.com/a/b/pull/7", None)
+            .unwrap()
+            .is_empty());
+        assert_eq!(rows_of_kind(&dir, "pr").len(), 1);
     }
 }

@@ -97,6 +97,8 @@ fn one_lane_exit_writes_exactly_one_result_row() {
         cwd: dir.clone(),
         model: None,
         resume: None,
+        post_pr: false,
+        pr_base: "main".to_owned(),
     };
     std::thread::spawn(move || {
         let _ = boop::supervise::run(lane, &mut DoneChannel);
