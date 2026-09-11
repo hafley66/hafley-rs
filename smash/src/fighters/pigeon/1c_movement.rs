@@ -4,36 +4,15 @@ use game_fighter::{Input, Phase, Rules, State};
 
 #[path = "generated/1_attributes.rs"]
 mod attr;
+#[path = "generated/7_rules.rs"]
+mod generated_rules;
 
+/// Live locomotion rules for Pigeon, constructed by the generated artifact.
+/// Attribute values come from the generated attribute vocabulary; explicit
+/// local policy lives in the generator. Runtime overrides for crouch and
+/// landing lag remain in [`advance`].
 pub fn rules() -> Rules {
-    Rules {
-        walk_init_vel: attr::WALK_INIT_VEL, walk_accel: attr::WALK_ACC,
-        walk_max_vel: attr::WALK_MAX_VEL, walk_stick_threshold: 0.2,
-        dash_stick_threshold: 0.8, dash_initial_velocity: attr::DASH_INIT_VEL,
-        dash_accel_base: attr::DASH_RUN_ACC_B, dash_accel_mul: attr::DASH_RUN_ACC_A,
-        dash_max_velocity: attr::DASH_RUN_TERM_VEL,
-        // Common transition policy, pending imported common callback timings.
-        dash_ticks: 15, ground_friction: attr::GROUND_FRICTION,
-        dash_friction_mul: 1.0, ground_max_horizontal_velocity: attr::GROUNDED_MAX_X_VEL,
-        turn_ticks: attr::FLIP_DIR_FRAME as u32,
-        jump_startup_time: attr::JUMP_SQUAT_FRAMES as u32,
-        // Replaced from the imported crouch clips before each controlled tick.
-        crouch_enter_ticks: 1, crouch_exit_ticks: 1,
-        jump_h_initial_velocity: attr::JUMP_X_INIT_VEL,
-        jump_h_max_velocity: attr::JUMP_X_INIT_TERM_VEL,
-        jump_v_initial_velocity: attr::JUMP_Y_INIT_VEL,
-        hop_v_initial_velocity: attr::JUMP_Y_INIT_VEL_SHORT,
-        ground_to_air_jump_momentum_multiplier: attr::JUMP_X_VEL_GROUND_MULT,
-        max_jumps: attr::NUM_JUMPS as u8,
-        air_jump_v_multiplier: attr::AIR_JUMP_Y_MULT,
-        air_jump_h_multiplier: attr::AIR_JUMP_X_MULT,
-        gravity: attr::GRAVITY, terminal_velocity: attr::TERM_VEL,
-        fast_fall_velocity: attr::FASTFALL_VELOCITY,
-        air_drift_stick_mul: attr::AIR_MOBILITY_A,
-        air_drift_base: attr::AIR_MOBILITY_B,
-        air_drift_max: attr::AIR_X_TERM_VEL, aerial_friction: attr::AIR_FRICTION_X,
-        landing_lag: attr::NORMAL_LANDING_LAG as u32,
-    }
+    generated_rules::rules()
 }
 
 pub fn initial() -> State {
@@ -196,6 +175,53 @@ mod selection_tests {
         assert_eq!(select(Phase::CrouchExit, 0.0, base), (20, Condition::Base));
         // A held crouch must not fall back to the jumpsquat pose.
         assert_ne!(select(Phase::CrouchHold, 0.0, base).0, 3);
+    }
+}
+
+#[cfg(test)]
+mod rules_tests {
+    use super::*;
+
+    /// The generated constructor reproduces the retired authored mapping
+    /// exactly, attribute for attribute and policy value for policy value.
+    #[test]
+    fn generated_rules_preserve_the_pigeon_mapping_exactly() {
+        let expected = Rules {
+            walk_init_vel: attr::WALK_INIT_VEL,
+            walk_accel: attr::WALK_ACC,
+            walk_max_vel: attr::WALK_MAX_VEL,
+            walk_stick_threshold: 0.2,
+            dash_stick_threshold: 0.8,
+            dash_initial_velocity: attr::DASH_INIT_VEL,
+            dash_accel_base: attr::DASH_RUN_ACC_B,
+            dash_accel_mul: attr::DASH_RUN_ACC_A,
+            dash_max_velocity: attr::DASH_RUN_TERM_VEL,
+            dash_ticks: 15,
+            ground_friction: attr::GROUND_FRICTION,
+            dash_friction_mul: 1.0,
+            ground_max_horizontal_velocity: attr::GROUNDED_MAX_X_VEL,
+            turn_ticks: attr::FLIP_DIR_FRAME as u32,
+            jump_startup_time: attr::JUMP_SQUAT_FRAMES as u32,
+            crouch_enter_ticks: 1,
+            crouch_exit_ticks: 1,
+            jump_h_initial_velocity: attr::JUMP_X_INIT_VEL,
+            jump_h_max_velocity: attr::JUMP_X_INIT_TERM_VEL,
+            jump_v_initial_velocity: attr::JUMP_Y_INIT_VEL,
+            hop_v_initial_velocity: attr::JUMP_Y_INIT_VEL_SHORT,
+            ground_to_air_jump_momentum_multiplier: attr::JUMP_X_VEL_GROUND_MULT,
+            max_jumps: attr::NUM_JUMPS as u8,
+            air_jump_v_multiplier: attr::AIR_JUMP_Y_MULT,
+            air_jump_h_multiplier: attr::AIR_JUMP_X_MULT,
+            gravity: attr::GRAVITY,
+            terminal_velocity: attr::TERM_VEL,
+            fast_fall_velocity: attr::FASTFALL_VELOCITY,
+            air_drift_stick_mul: attr::AIR_MOBILITY_A,
+            air_drift_base: attr::AIR_MOBILITY_B,
+            air_drift_max: attr::AIR_X_TERM_VEL,
+            aerial_friction: attr::AIR_FRICTION_X,
+            landing_lag: attr::NORMAL_LANDING_LAG as u32,
+        };
+        assert_eq!(rules(), expected);
     }
 }
 
