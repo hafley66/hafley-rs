@@ -11,29 +11,60 @@ collision detection, rigid-body integration, rendering or content ingestion.
 
 ```rust
 pub struct Strike {
+    /** Authored hitbox base damage added to target percent.
+     *  [target 40%] + [hit 12%] -> [target 52%] */
     pub damage: f32,
+    /** Authored trajectory angle in degrees before Sakurai resolution and DI.
+     *  [hitbox angle 32 deg] -> [trajectory 32 deg] */
     pub angle: f32,
+    /** Authored base knockback (BKB) floor regardless of target percent.
+     *  [BKB 30] -> [knockback min 30] */
     pub base_knockback: u32,
+    /** Authored knockback growth (KBG) scaling factor with target percent.
+     *  [target %] x [KBG 100] -> [scaled knockback] */
     pub knockback_growth: u32,
+    /** Authored set knockback (WDSK) replacing ordinary percent in the KB formula.
+     *  [WDSK > 0] replaces % -> f(WDSK, weight, KBG, BKB) */
     pub weight_dependent_set_knockback: u32,
 }
 
 pub struct Target {
+    /** Target accumulated damage percent before hit resolution.
+     *  [target 40%] + [strike 12%] -> [percent_after 52%] */
     pub percent: f32,
+    /** Target character weight divisor dampening knockback acceleration.
+     *  [target weight] + [hit terms] -> [knockback scaling] */
     pub weight: f32,
+    /** Target stance selecting aerial vs grounded launch and Sakurai angle branch.
+     *  [361 + grounded] -> [low-KB 0 deg / high-KB 44 deg]
+     *  [361 + airborne] -> [45 deg] */
     pub grounded: bool,
 }
 
 pub struct DefenseInput {
+    /** Sampled defense control stick coordinate vector [x, y] for DI angle offset.
+     *  [stick perp component] + [trajectory angle] -> [rotated angle] */
     pub stick: [f32; 2],
 }
 
 pub struct Launch {
+    /** Derived damage applied to target from the resolved strike.
+     *  [strike 12%] -> [target damage +12%] */
     pub damage: f32,
+    /** Derived knockback scalar magnitude computed from strike, percent, and weight.
+     *  f(strike, target) -> [knockback 84.5] */
     pub knockback: f32,
+    /** Derived initial launch velocity vector [vx, vy] along DI-adjusted angle.
+     *  [kb 84.5] @ [angle 50 deg] -> [vx 54.3, vy 64.7] */
     pub velocity: [f32; 2],
+    /** Derived freeze duration in frames applied to attacker and target actions.
+     *  [strike damage] + [ruleset hitlag policy] -> [hitlag frames] */
     pub hitlag: u32,
+    /** Derived hitstun duration in frames victim cannot act while launched.
+     *  [knockback 84.5] -> [hitstun 33 frames] */
     pub hitstun: u32,
+    /** Derived tumble state flag active when launch knockback exceeds threshold.
+     *  [knockback] + [ruleset tumble threshold] -> [tumble bool] */
     pub tumble: bool,
 }
 
