@@ -943,20 +943,7 @@ fn supervise(
             }
             if !pr_checked && turn_tools.iter().any(is_pr_create) {
                 pr_checked = true;
-                if let Some(store) = mail_store.as_ref() {
-                    if let Some((url, title)) = pr_view(&lane.cwd) {
-                        match store.notify_pr(&lane.lane, &url, Some(&title)) {
-                            Ok(rows) => {
-                                for row in rows {
-                                    deliver_outbound(lane, &row);
-                                }
-                            }
-                            Err(error) => {
-                                warn!(lane = lane.lane, error = %error, "PR notice write failed")
-                            }
-                        }
-                    }
-                }
+                publish_pr(mail_store.as_ref(), lane, &turn_tools);
             }
             if let Some(mv) = head_watch.tick(&lane.cwd, Instant::now()) {
                 if let Some(store) = mail_store.as_ref() {
@@ -1123,6 +1110,12 @@ fn supervise(
                 }
             }
         };
+        // A fast turn can finish before the 700 ms poll drains the channel's
+        // tool calls; read the rest so the PR producer still sees them.
+        turn_tools.extend(channel.drain_tool_calls());
+        if !pr_checked {
+            publish_pr(mail_store.as_ref(), lane, &turn_tools);
+        }
         println!("[boop] turn ended: {}", end.detail());
         // Every turn end reports itself. The parent's picture of this lane
         // never depends on the model choosing to run `tell-parent`.
@@ -1455,6 +1448,28 @@ fn brief_with_post_pr(brief: String, post_pr: bool, pr_base: &str) -> String {
 /// Whether a completed tool call ran `gh pr create`.
 pub fn is_pr_create(tool: &ToolCallFact) -> bool {
     tool.status == TOOL_STATUS_COMPLETED && tool.title.contains("gh pr create")
+}
+
+/// Append and push one notice for a PR the turn opened, if the tools name one.
+/// `notify_pr` claims the url, so a second producer appends nothing.
+fn publish_pr(store: Option<&boop_store::Store>, lane: &LaneRun, tools: &[ToolCallFact]) {
+    let Some(store) = store else {
+        return;
+    };
+    if !tools.iter().any(is_pr_create) {
+        return;
+    }
+    let Some((url, title)) = pr_view(&lane.cwd) else {
+        return;
+    };
+    match store.notify_pr(&lane.lane, &url, Some(&title)) {
+        Ok(rows) => {
+            for row in rows {
+                deliver_outbound(lane, &row);
+            }
+        }
+        Err(error) => warn!(lane = lane.lane, error = %error, "PR notice write failed"),
+    }
 }
 
 /// The url and title of the PR at HEAD, read with `gh pr view`. A gh that
@@ -2318,6 +2333,8 @@ mod tests {
                 command: format!("boop lane run --lane {lane}"),
                 route: serde_json::Value::Null,
                 spawn_id: Some(id),
+                post_pr: false,
+                pr_base: None,
             },
         )
         .unwrap();
@@ -4122,64 +4139,6 @@ mod tests {
             "Bash git push -u origin HEAD",
             "completed"
         )));
-    }
-
-    /// Restore `PATH` when the fake-binary test ends.
-    struct PathGuard(String);
-    impl Drop for PathGuard {
-        fn drop(&mut self) {
-            std::env::set_var("PATH", &self.0);
-        }
-    }
-
-    /// A directory holding a `gh` script that shadows the real one on PATH,
-    /// with a guard that restores PATH on drop.
-    fn fake_gh(name: &str, script: &str) -> (PathBuf, PathGuard) {
-        let dir = tempdir().join(name);
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("gh");
-        std::fs::write(&path, script).unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let original = std::env::var("PATH").unwrap_or_default();
-        std::env::set_var("PATH", format!("{}:{}", dir.display(), original));
-        (dir, PathGuard(original))
-    }
-
-    /// Why: the supervisor producer reads the PR url and title from
-    /// `gh pr view` in the worktree.
-    #[test]
-    fn pr_view_reads_the_url_and_title_from_gh() {
-        let dir = tempdir();
-        let (_fake, _guard) = fake_gh(
-            "prview",
-            "#!/bin/sh\nprintf '%s' '{\"url\":\"https://github.com/a/b/pull/7\",\"title\":\"t\"}'\n",
-        );
-        let (url, title) = pr_view(&dir).expect("fake gh answers");
-        assert_eq!(url, "https://github.com/a/b/pull/7");
-        assert_eq!(title, "t");
-    }
-
-    /// Why: a hung gh must not hold the turn loop; pr_view kills it at the
-    /// deadline and reports None.
-    #[test]
-    fn pr_view_gives_up_on_a_hung_gh() {
-        let dir = tempdir();
-        let (_fake, _guard) = fake_gh("prhang", "#!/bin/sh\nsleep 30\n");
-        let previous = std::env::var(PR_VIEW_TIMEOUT_ENV).ok();
-        std::env::set_var(PR_VIEW_TIMEOUT_ENV, "1");
-        let started = Instant::now();
-        let result = pr_view(&dir);
-        match previous {
-            Some(value) => std::env::set_var(PR_VIEW_TIMEOUT_ENV, value),
-            None => std::env::remove_var(PR_VIEW_TIMEOUT_ENV),
-        }
-        assert!(result.is_none());
-        assert!(
-            started.elapsed() < Duration::from_secs(8),
-            "gh was not bounded: {:?}",
-            started.elapsed()
-        );
     }
 
     /// Why: the post-PR line reaches the worker exactly when the toggle is set,

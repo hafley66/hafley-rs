@@ -3256,7 +3256,7 @@ impl Store {
                 rc: None,
                 detail: None,
             };
-            crate::bus::insert_message(self, "bus", &row, "pr notice")?;
+            crate::bus::append_message(self, "bus", &row, "pr notice")?;
             rows.push(row);
         }
         Ok(rows)

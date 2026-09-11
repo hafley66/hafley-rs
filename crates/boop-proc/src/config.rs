@@ -16,6 +16,11 @@ pub struct Config {
     pub model_harness: BTreeMap<String, String>,
     /// Model-family prefix -> owning harness for the flat-rate-plan ban.
     pub opencode_banned: BTreeMap<String, String>,
+    /// The spawn default for finishing by opening a PR. A lane flag or a
+    /// preset field overrides it.
+    pub post_pr: bool,
+    /// The `gh pr create --base` branch. `None` reads as `main`.
+    pub pr_base: Option<String>,
 }
 
 /// One named preset. `harness`, `model` and `effort` are separate fields: a
@@ -39,6 +44,13 @@ pub struct ModelPreset {
     /// (`ccz` is claude under the z.ai env). `None` keeps the harness default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bin: Option<String>,
+    /// Finish by opening a PR: the lane brief closes with the push-and-PR
+    /// line. `None` falls back to the global config.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub post_pr: Option<bool>,
+    /// The `gh pr create --base` branch for a `post_pr` preset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pr_base: Option<String>,
 }
 
 impl ModelPreset {
@@ -203,6 +215,8 @@ mod tests {
                 ]),
                 model_harness: BTreeMap::from([("glm".into(), "opencode".into())]),
                 opencode_banned: BTreeMap::from([("gemini".into(), "gemini".into())]),
+                post_pr: false,
+                pr_base: None,
             }
         );
     }
@@ -391,6 +405,24 @@ mod tests {
         assert_eq!(sol.harness.as_deref(), Some("codex"));
         assert_eq!(sol.effort.as_deref(), Some("high"));
         assert!(!sol.model.contains('@'), "{}", sol.model);
+    }
+
+    /// RECEIPT. A global `post-pr` and `pr-base` parse, and a preset carries
+    /// its own pair through resolution.
+    #[test]
+    fn post_pr_parses_globally_and_per_preset() {
+        let path = write_config(
+            r#"{ "post-pr": true, "pr-base": "dev",
+                 "model-presets": {
+                     "ship": { "model": "gpt-5.6-sol", "post-pr": true, "pr-base": "release" } } }"#,
+            "post-pr",
+        );
+        let config = load(&path).unwrap();
+        assert!(config.post_pr);
+        assert_eq!(config.pr_base.as_deref(), Some("dev"));
+        let ship = resolve_preset("ship", &path).unwrap();
+        assert_eq!(ship.post_pr, Some(true));
+        assert_eq!(ship.pr_base.as_deref(), Some("release"));
     }
 
     /// An effort nobody recognizes is a config error, named at resolve time.

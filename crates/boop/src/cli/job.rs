@@ -71,6 +71,10 @@ pub(crate) struct DispatchArgs {
     /// the spawn record so a resume can prove it is the same run. A bare
     /// `dispatch` mints none.
     pub(crate) spawn_id: Option<i64>,
+    /// Finish by opening a PR; written onto the spawn record.
+    pub(crate) post_pr: bool,
+    /// The `gh pr create --base` branch; written onto the spawn record.
+    pub(crate) pr_base: Option<String>,
 }
 
 pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
@@ -174,6 +178,8 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             command: boop::harness::supervisor_command(&spec),
             route: bus::route_to_value(&route),
             spawn_id: args.spawn_id,
+            post_pr: args.post_pr,
+            pr_base: args.pr_base.clone(),
         };
         if let Err(error) = boop::trail::write_spawn(&args.to, &spawn) {
             warn!(lane = args.to, error = %error, "spawn record not written");
@@ -352,6 +358,13 @@ pub(crate) fn run_lane_supervisor(
         .map(str::to_owned)
         .or_else(|| boop::supervise::pinned_conversation(&dir, lane));
     let resume = resume.as_deref();
+    // The spawn record carries the post-PR toggle, so a revive keeps it.
+    let spawn = boop::trail::read_spawn(lane);
+    let post_pr = spawn.as_ref().is_some_and(|spawn| spawn.post_pr);
+    let pr_base = spawn
+        .as_ref()
+        .and_then(|spawn| spawn.pr_base.clone())
+        .unwrap_or_else(|| "main".to_owned());
     let spec = boop::channel::ChannelSpec {
         effort: effort.map(str::to_owned),
         model: model.map(str::to_owned),
@@ -368,10 +381,8 @@ pub(crate) fn run_lane_supervisor(
         cwd,
         model: model.map(str::to_owned),
         resume: resume.map(str::to_owned),
-        // The toggle is written to spawn.json and read back here; until the
-        // dispatch carries it, a supervisor defaults to no PR line.
-        post_pr: false,
-        pr_base: "main".to_owned(),
+        post_pr,
+        pr_base,
     };
     // A handshake that fails here happens before the supervisor exists, so
     // nothing else would tell the parent this lane never opened. A rejected
@@ -846,6 +857,12 @@ pub(crate) struct LaneArgs {
     pub(crate) expect_commits_at_least: Option<u32>,
     pub(crate) env: Vec<(String, String)>,
     pub(crate) commit_push: Option<String>,
+    /// `--post-pr`: close the brief with the push-and-PR line.
+    pub(crate) post_pr: bool,
+    /// `--no-post-pr`: override a preset or global `post_pr` back off.
+    pub(crate) no_post_pr: bool,
+    /// `--pr-base <branch>`: the `gh pr create --base` target.
+    pub(crate) pr_base: Option<String>,
 }
 
 /// Falls back to a `*coordinator*` name match only when no route declares
@@ -1021,6 +1038,33 @@ fn clear_expect(lane: &str) {
     }
 }
 
+/// The effective post-PR toggle and base for one `lane create`: the flags,
+/// then the spawning preset, then the global config. `--no-post-pr` wins over
+/// `--post-pr`, and `--pr-base` beats a preset or global base.
+fn resolve_post_pr(
+    post_pr: bool,
+    no_post_pr: bool,
+    pr_base: Option<&str>,
+    preset: Option<&config::ModelPreset>,
+    config: &config::Config,
+) -> (bool, String) {
+    let on = if no_post_pr {
+        false
+    } else if post_pr {
+        true
+    } else {
+        preset
+            .and_then(|preset| preset.post_pr)
+            .unwrap_or(config.post_pr)
+    };
+    let base = pr_base
+        .map(str::to_owned)
+        .or_else(|| preset.and_then(|preset| preset.pr_base.clone()))
+        .or_else(|| config.pr_base.clone())
+        .unwrap_or_else(|| "main".to_owned());
+    (on, base)
+}
+
 /// Register and spawn a lane. No match on harness id here; the adapter's own
 /// `spawn`/`preview_command` decides how `prompt` becomes a real invocation.
 pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
@@ -1110,6 +1154,13 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         Some(bin) => Some(bin),
         None => spawning.as_ref().and_then(|preset| preset.bin.clone()),
     };
+    let (post_pr, pr_base) = resolve_post_pr(
+        args.post_pr,
+        args.no_post_pr,
+        args.pr_base.as_deref(),
+        spawning.as_ref(),
+        &config,
+    );
     if variant.is_some() && adapter.capabilities().variant != VariantSupport::Flag {
         anyhow::bail!(
             "--variant is opencode-only; the codex channel sets reasoning effort via the \
@@ -1215,6 +1266,11 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         if let Some(mode) = &commit_push {
             println!("commit-push: {mode}");
         }
+        if post_pr {
+            println!("post-pr: {pr_base}");
+        } else {
+            println!("post-pr: off");
+        }
         if let Some(bin) = &bin {
             println!("bin: {bin}");
         }
@@ -1303,6 +1359,8 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             bin: bin.clone(),
             env: args.env.clone(),
             spawn_id,
+            post_pr,
+            pr_base: Some(pr_base),
         },
     )?;
     // The parent edge is registered; a `--commit-push` mode is the explicit
@@ -1711,6 +1769,9 @@ pub(crate) fn run_fork(
             expect_commits_at_least: None,
             env: Vec::new(),
             commit_push: None,
+            post_pr: false,
+            no_post_pr: false,
+            pr_base: None,
             parent,
             on_parent_death: Default::default(),
             harness: None,
@@ -2079,6 +2140,9 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             expect_commits_at_least,
             env,
             commit_push,
+            post_pr,
+            no_post_pr,
+            pr_base,
         } => {
             // Recorded before the spawn: the route the dispatch writes replaces
             // whatever is under this lane's key.
@@ -2120,6 +2184,9 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
                     expect_commits_at_least,
                     env,
                     commit_push,
+                    post_pr,
+                    no_post_pr,
+                    pr_base,
                 },
             )
         }
@@ -5090,6 +5157,8 @@ mod tests {
             command: "boop beep lane run --lane fix-retired".to_owned(),
             route: bus::route_to_value(&touched_route(tree, base)),
             spawn_id: None,
+            post_pr: false,
+            pr_base: None,
         }
     }
 

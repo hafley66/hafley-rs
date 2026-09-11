@@ -913,6 +913,23 @@ pub fn insert_message(
     finish(connection, result)
 }
 
+/// Append one envelope, joining the caller's transaction when it already holds
+/// one. The transcript projection appends a PR notice inside its own
+/// transaction; SQLite refuses a nested `BEGIN`, so this chooses the standalone
+/// form only when no transaction is open.
+pub fn append_message(
+    store: &crate::ident::Store,
+    mailbox: &str,
+    message: &Message,
+    detail: &str,
+) -> Result<()> {
+    if store.connection().is_autocommit() {
+        insert_message(store, mailbox, message, detail)
+    } else {
+        write_message(store, mailbox, message, detail)
+    }
+}
+
 fn write_message(
     store: &crate::ident::Store,
     mailbox: &str,

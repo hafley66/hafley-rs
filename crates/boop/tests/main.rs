@@ -31,6 +31,8 @@ mod native_agent_liveness;
 mod native_projector_contention;
 #[path = "no_sync_hatch.rs"]
 mod no_sync_hatch;
+#[path = "pr_push_e2e.rs"]
+mod pr_push_e2e;
 #[path = "preset_dry_run.rs"]
 mod preset_dry_run;
 #[path = "presets_json.rs"]

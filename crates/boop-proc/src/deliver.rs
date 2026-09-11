@@ -2410,16 +2410,4 @@ mod tests {
             .unwrap());
         let _ = std::fs::remove_dir_all(dir);
     }
-
-    /// Why: a kind=pr row is typed mail, not a supervisor progress row, so it
-    /// takes a live coordinator door like a hail.
-    #[test]
-    fn a_pr_row_takes_the_coordinator_door() {
-        let (dir, store, message) = kind_fixture("prpush", "pr");
-        let landing = land_one(&dir, &store, &message, &budget(60_000, 60_000, 10));
-        assert_eq!(landing.rung, Rung::DoorQueue, "{landing:?}");
-        assert!(landing.rung.carried_the_body());
-        assert!(door_bodies().iter().any(|body| body == &message.body));
-        let _ = std::fs::remove_dir_all(dir);
-    }
 }

@@ -1067,6 +1067,16 @@ enum LaneCmd {
         /// Absent, the parent's kind picks the default.
         #[arg(long = "commit-push", value_name = "MODE")]
         commit_push: Option<String>,
+        /// Finish by opening a PR: the lane brief closes with the push-and-PR
+        /// line. Overrides a preset or global `post-pr`.
+        #[arg(long = "post-pr", conflicts_with = "no_post_pr")]
+        post_pr: bool,
+        /// Override a preset or global `post-pr` back off for this spawn.
+        #[arg(long = "no-post-pr")]
+        no_post_pr: bool,
+        /// The branch `gh pr create --base` targets; default `main`.
+        #[arg(long = "pr-base", value_name = "BRANCH")]
+        pr_base: Option<String>,
         /// Defaults to the caller, then to the one registered coordinator.
         #[arg(long)]
         parent: Option<String>,
@@ -2286,6 +2296,72 @@ mod tests {
             }) => assert_eq!(commit_push.as_deref(), Some("mailbox")),
             other => panic!("lane create parsed as {:?}", other.is_some()),
         }
+    }
+
+    /// RECEIPT. `lane create --post-pr --pr-base` carries the toggle and base
+    /// through clap, and `--no-post-pr` is the separate off switch.
+    #[test]
+    fn lane_create_takes_the_post_pr_toggle() {
+        let cli = Cli::try_parse_from([
+            "boop",
+            "beep",
+            "lane",
+            "create",
+            "--lane",
+            "push-probe",
+            "--preset",
+            "flash4",
+            "--post-pr",
+            "--pr-base",
+            "dev",
+        ])
+        .expect("parse lane create --post-pr");
+        match cli.command {
+            Some(SubCmd::Beep {
+                cmd:
+                    Some(BeepCmd::Lane {
+                        cmd:
+                            LaneCmd::Create {
+                                post_pr,
+                                no_post_pr,
+                                pr_base,
+                                ..
+                            },
+                    }),
+                ..
+            }) => {
+                assert!(post_pr);
+                assert!(!no_post_pr);
+                assert_eq!(pr_base.as_deref(), Some("dev"));
+            }
+            other => panic!("lane create parsed as {:?}", other.is_some()),
+        }
+    }
+
+    /// RECEIPT. `--post-pr` and `--no-post-pr` cannot both be given.
+    #[test]
+    fn post_pr_and_no_post_pr_conflict() {
+        assert!(Cli::try_parse_from([
+            "boop",
+            "beep",
+            "lane",
+            "create",
+            "--lane",
+            "x",
+            "--post-pr",
+            "--no-post-pr",
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn help_text_documents_pr_push() {
+        let help = Cli::command().render_long_help().to_string();
+        assert!(
+            help.contains("PR PUSH:"),
+            "help text missing PR PUSH:\n{help}"
+        );
+        assert!(help.contains("--no-post-pr"), "{help}");
     }
 
     #[test]
