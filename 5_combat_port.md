@@ -11,29 +11,134 @@ collision detection, rigid-body integration, rendering or content ingestion.
 
 ```rust
 pub struct Strike {
+    /**
+     *   attacker          target
+     *      o    *POW*       o
+     *     /|\ -=======>    /|\  dmg += damage
+     *     / \               /\
+     *   ======================= (ground)
+     */
     pub damage: f32,
+    /**
+     *   attacker          target
+     *      o       ^ angle  o
+     *     /|\ ----/        /|\
+     *     / \    /          /\
+     *   ======================= (ground)
+     */
     pub angle: f32,
+    /**
+     *   attacker          target
+     *      o    *BKB*       o  --> vel_base
+     *     /|\ -------->    /|\
+     *     / \               /\
+     *   ======================= (ground)
+     */
     pub base_knockback: u32,
+    /**
+     *   attacker          target
+     *      o    *KBG*       o  ===> vel_scale(pct)
+     *     /|\ -------->    /|\
+     *     / \               /\
+     *   ======================= (ground)
+     */
     pub knockback_growth: u32,
+    /**
+     *   attacker          target
+     *      o    *WDSK*      o  ---> vel_fixed(wt)
+     *     /|\ -------->    /|\
+     *     / \               /\
+     *   ======================= (ground)
+     */
     pub weight_dependent_set_knockback: u32,
 }
 
 pub struct Target {
+    /**
+     *   attacker          target
+     *      o    *HIT*       o   [pct]%
+     *     /|\ -------->    /|\
+     *     / \               /\
+     *   ======================= (ground)
+     */
     pub percent: f32,
+    /**
+     *   attacker          target
+     *      o                o   (wt)
+     *     /|\              /|\   | gravity
+     *     / \               /\   v
+     *   ======================= (ground)
+     */
     pub weight: f32,
+    /**
+     *   attacker          target
+     *      o                o   grounded: true
+     *     /|\              /|\
+     *     / \               /\
+     *   ======================= (ground)
+     */
     pub grounded: bool,
 }
 
 pub struct DefenseInput {
+    /**
+     *   attacker          target stick
+     *      o               (u)   o
+     *     /|\             (\)   /|\  [DI angle shift]
+     *     / \              (d)   /\
+     *   ======================= (ground)
+     */
     pub stick: [f32; 2],
 }
 
 pub struct Launch {
+    /**
+     *   attacker          target
+     *      o    *HIT*       o   total dmg
+     *     /|\ -------->    /|\
+     *     / \               /\
+     *   ======================= (ground)
+     */
     pub damage: f32,
+    /**
+     *   attacker          target
+     *      o    *LAUNCH*    o  ===> total kb
+     *     /|\ -------->    /|\
+     *     / \               /\
+     *   ======================= (ground)
+     */
     pub knockback: f32,
+    /**
+     *   attacker          target
+     *      o                 o  --> vel [vx, vy]
+     *     /|\               /|\  ^
+     *     / \               /\   |
+     *   ======================= (ground)
+     */
     pub velocity: [f32; 2],
+    /**
+     *   attacker          target
+     *      o   [hitlag]     o   [hitlag]
+     *    -(|)- (frozen)   -(|)- (frozen)
+     *     / \               /\
+     *   ======================= (ground)
+     */
     pub hitlag: u32,
+    /**
+     *   attacker          target
+     *      o                 o  [hitstun]
+     *     /|\               /|\ (no action)
+     *     / \               /\
+     *   ======================= (ground)
+     */
     pub hitstun: u32,
+    /**
+     *   attacker          target
+     *      o              \ o / [tumble]
+     *     /|\              \|/  (rotating)
+     *     / \               /\
+     *   ======================= (ground)
+     */
     pub tumble: bool,
 }
 
