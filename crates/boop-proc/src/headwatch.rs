@@ -86,6 +86,9 @@ impl HeadWatch {
     pub fn new(cwd: &Path, reported: Option<String>, quiet: Duration) -> Self {
         let reflog = reflog_path(cwd).unwrap_or_else(|| cwd.join(".git/logs/HEAD"));
         let last_mtime = stat_mtime(&reflog);
+        // With nothing reported yet, the HEAD at start is the baseline; else
+        // the first commit's tick would only seed `reported` and report nothing.
+        let reported = reported.or_else(|| git_line(cwd, &["rev-parse", "HEAD"]));
         HeadWatch {
             reflog,
             last_mtime,
@@ -437,6 +440,20 @@ mod tests {
         let first = git_repo(&repo);
         let mut watch = HeadWatch::new(&repo, Some(first), Duration::ZERO);
         assert_eq!(watch.tick(&repo, Instant::now()), None);
+    }
+
+    #[test]
+    fn an_unseeded_watch_reports_the_first_commit() {
+        let dir = tempdir("unseeded");
+        let repo = dir.join("work");
+        git_repo(&repo);
+        let mut watch = HeadWatch::new(&repo, None, Duration::ZERO);
+        commit_file(&repo, "two.txt", "two");
+        watch.nudge();
+        match watch.tick(&repo, Instant::now()) {
+            Some(HeadMove::Advanced(facts)) => assert_eq!(facts.subject, "two"),
+            other => panic!("expected the first commit reported, got {other:?}"),
+        }
     }
 
     #[test]
