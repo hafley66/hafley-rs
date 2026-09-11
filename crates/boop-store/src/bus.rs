@@ -1392,12 +1392,12 @@ mod tests {
             worktree_dir: None,
             app_server_socket: None,
         };
-        super::upsert_route(&store, "mine", &route(Some("parent"))).unwrap();
+        super::upsert_route(&store, "sub-lane", &route(Some("parent"))).unwrap();
         for (subscriber, lane) in [
-            ("obs", "mine"),
+            ("obs", "sub-lane"),
             ("stranger", "*"),
             ("parent", "*"),
-            ("mine", "mine"),
+            ("sub-lane", "sub-lane"),
         ] {
             store
                 .set_commit_subscription(&crate::ident::CommitSubscriptionRow {
@@ -1408,7 +1408,7 @@ mod tests {
                 })
                 .unwrap();
         }
-        let mut subscribers = super::lane_subscribers(&store, "mine");
+        let mut subscribers = super::lane_subscribers(&store, "sub-lane");
         subscribers.sort();
         assert_eq!(subscribers, ["obs", "parent"]);
         let _ = std::fs::remove_dir_all(&dir);
