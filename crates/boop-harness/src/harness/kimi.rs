@@ -66,6 +66,11 @@ static CAPABILITIES: Capabilities = Capabilities {
 /// kimi publishes no door; the impl says so rather than guessing one.
 static DOOR: crate::door::kimi::KimiDoor = crate::door::kimi::KimiDoor;
 
+/// The composer key that submits a line already typed at the kimi prompt.
+/// `boop tui kimi`'s pane route carries mail by typing the body or a notice
+/// and pressing this key.
+pub const SUBMIT_KEY: &str = "Enter";
+
 /// kimi keeps no process registry, so its live sessions are the transcripts
 /// under `~/.kimi-code/sessions`. A transcript has no pid and no pane; the
 /// native wrapper binds the single pane-less one it finds when it launches.

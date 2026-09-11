@@ -97,6 +97,12 @@ pub struct Landing {
     pub detail: String,
     /// Text the transport answered with. Only the acpx queue replies inline.
     pub reply: Option<String>,
+    /// The transition word when it differs from the rung's own. A keystroke
+    /// harness whose composer took the typed body is the paste rung in
+    /// transport but an accepted body in effect.
+    state: Option<DeliveryState>,
+    /// Whether the body itself reached the recipient without a harness door.
+    carried: bool,
 }
 
 impl Landing {
@@ -105,6 +111,8 @@ impl Landing {
             rung,
             detail: detail.into(),
             reply: None,
+            state: None,
+            carried: rung.carried_the_body(),
         }
     }
 
@@ -113,12 +121,33 @@ impl Landing {
             rung: Rung::Acpx,
             detail: "acpx queue".to_owned(),
             reply: Some(reply),
+            state: None,
+            carried: true,
+        }
+    }
+
+    /// The body was typed into the recipient's live pane and its composer key
+    /// pressed, so the recipient reads the body itself at its prompt. The rung
+    /// is `PanePaste` (the pane is the transport), the effect is accepted.
+    pub fn pane_submit(pane: &str, why: impl Into<String>) -> Landing {
+        Landing {
+            rung: Rung::PanePaste,
+            detail: format!("{}; pane {pane}", why.into()),
+            reply: None,
+            state: Some(DeliveryState::AcceptedByHarness),
+            carried: true,
         }
     }
 
     /// The transition this landing records.
     pub fn state(&self) -> DeliveryState {
-        self.rung.state()
+        self.state.unwrap_or_else(|| self.rung.state())
+    }
+
+    /// Whether the rung put the body itself in front of the recipient, so the
+    /// mailbox row is acked and a commit push is recorded.
+    pub fn carried_the_body(&self) -> bool {
+        self.carried
     }
 
     /// The ledger's `outcome` word.
@@ -196,6 +225,14 @@ pub trait PanePaster {
     /// Paste one notice into `pane`. `Some(pane)` means the pane took it.
     fn paste(&self, pane: &str, notice: &str) -> Option<String>;
 
+    /// Press `key` in `pane` to submit the line already typed there.
+    /// `Some(pane)` means the pane took it. The default answers `None`: a
+    /// paster that must not touch a real terminal, or one with no key.
+    fn submit(&self, pane: &str, key: &str) -> Option<String> {
+        let _ = (pane, key);
+        None
+    }
+
     /// Whether `target` names a pane this paster can reach. The default asks
     /// the mux; a paster that must not touch a real terminal answers itself.
     fn alive(&self, target: &str) -> bool {
@@ -212,6 +249,14 @@ impl PanePaster for TmuxPaster {
     fn paste(&self, pane: &str, notice: &str) -> Option<String> {
         let status = std::process::Command::new("tmux")
             .args(["send-keys", "-t", pane, "-l", notice])
+            .status()
+            .ok()?;
+        status.success().then(|| pane.to_owned())
+    }
+
+    fn submit(&self, pane: &str, key: &str) -> Option<String> {
+        let status = std::process::Command::new("tmux")
+            .args(["send-keys", "-t", pane, key])
             .status()
             .ok()?;
         status.success().then(|| pane.to_owned())
@@ -471,7 +516,7 @@ pub fn deliver_hail_budgeted(
     // it open is how the supervisor's parent rows sat unstamped while the
     // ledger already said the door or its queue accepted it, invisible to both
     // `held_messages` and `boop wait --me` (head-rewound-door-retry).
-    if landing.rung.carried_the_body() {
+    if landing.carried_the_body() {
         bus::ack_messages(store, std::slice::from_ref(&message.id), &bus::now_iso())?;
         // One push per (lane, subscriber, head): the commit row joins the
         // ledger the moment the door takes it, so a same-head replay in the
@@ -616,13 +661,16 @@ fn land(
     };
     let harness = registry.get(id);
     if harness.capabilities().mail == MailPolicy::Keystrokes {
-        return Ok(no_door_route(
-            registry,
-            route,
-            to,
-            paster,
-            "harness takes no door mail",
-        ));
+        // The recipient reads pushed mail beside its own turns, so the typed
+        // line names its sender through the same mood template a lane uses.
+        let rendered = crate::supervise::render_mail(
+            &crate::supervise::mood_template(to),
+            message.kind.as_str(),
+            &message.id,
+            &message.from,
+            &message.body,
+        );
+        return Ok(keystroke_route(registry, route, to, paster, &rendered));
     }
     // The live-session lookup is itself a door status read: a stopped server
     // parks here until its client timeout, so time it like the deliver call.
@@ -837,6 +885,48 @@ fn paste_into_pane(route: &Route, to: &str, paster: &dyn PanePaster) -> Option<S
     )
 }
 
+/// A route whose harness takes mail only as keystrokes. kimi has a composer
+/// submit key, so the rendered body is typed and submitted at its prompt and
+/// the row is carried; every other keystroke harness gets the drain notice.
+fn keystroke_route(
+    registry: &Registry,
+    route: &Route,
+    to: &str,
+    paster: &dyn PanePaster,
+    rendered: &str,
+) -> Landing {
+    const WHY: &str = "harness takes no door mail";
+    if hook_inbox(registry, route, to) {
+        return Landing::new(Rung::HookInbox, "installed inbox hook");
+    }
+    let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) else {
+        return Landing::new(Rung::Mailbox, WHY);
+    };
+    if !paster.alive(target) {
+        return Landing::new(Rung::Mailbox, WHY);
+    }
+    let pane = pane_of_target(target).unwrap_or_else(|| target.to_owned());
+    if route.harness == Some(HarnessId::Kimi) {
+        // A newline would submit the prompt mid-body, so the line is flattened
+        // and the composer key pressed once.
+        let line = rendered.replace('\n', " ");
+        return match paster.paste(&pane, &line) {
+            Some(_)
+                if paster
+                    .submit(&pane, boop_harness::harness::kimi::SUBMIT_KEY)
+                    .is_some() =>
+            {
+                Landing::pane_submit(&pane, WHY)
+            }
+            _ => Landing::new(Rung::Mailbox, WHY),
+        };
+    }
+    match paste_into_pane(route, to, paster) {
+        Some(pane) => Landing::new(Rung::PanePaste, format!("{WHY}; pane {pane}")),
+        None => Landing::new(Rung::Mailbox, WHY),
+    }
+}
+
 /// The running session a route addresses: the harness's own registry first,
 /// then the last `agent_live` projection for the session the route names.
 /// The running session a route addresses; `deliver_hail` and `boop wait` share it.
@@ -1047,7 +1137,7 @@ pub fn drain_route_held_mail_budgeted(
         if landing.rung == Rung::Mailbox {
             break;
         }
-        if landing.rung.carried_the_body() {
+        if landing.carried_the_body() {
             pushed += 1; // `deliver_hail_budgeted` stamped the row
         }
     }
