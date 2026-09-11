@@ -4,24 +4,24 @@
 use game_content::{ActionRole, RoleBinding, RoleBindings};
 
 pub const IDLE: Option<usize> = Some(0);
-pub const WALK_SLOW: Option<usize> = None;
-pub const WALK_MIDDLE: Option<usize> = None;
-pub const WALK_FAST: Option<usize> = None;
+pub const WALK_SLOW: Option<usize> = Some(16);
+pub const WALK_MIDDLE: Option<usize> = Some(17);
+pub const WALK_FAST: Option<usize> = Some(18);
 pub const DASH: Option<usize> = Some(1);
 pub const RUN: Option<usize> = Some(2);
-pub const BRAKE: Option<usize> = None;
-pub const TURN: Option<usize> = None;
-pub const JUMP_SQUAT: Option<usize> = None;
+pub const BRAKE: Option<usize> = Some(19);
+pub const TURN: Option<usize> = Some(20);
+pub const JUMP_SQUAT: Option<usize> = Some(21);
 pub const CROUCH_ENTER: Option<usize> = Some(5);
 pub const CROUCH_HOLD: Option<usize> = Some(6);
 pub const CROUCH_EXIT: Option<usize> = Some(7);
 pub const JUMP: Option<usize> = Some(3);
-pub const FALL: Option<usize> = None;
+pub const FALL: Option<usize> = Some(22);
 pub const AIR_JUMP: Option<usize> = Some(4);
 pub const LANDING: Option<usize> = Some(8);
-pub const LANDING_LIGHT: Option<usize> = None;
+pub const LANDING_LIGHT: Option<usize> = Some(23);
 pub const AIR_ATTACK: Option<usize> = Some(12);
-pub const LANDING_RECOVERY: Option<usize> = None;
+pub const LANDING_RECOVERY: Option<usize> = Some(24);
 
 pub const IDLE_FALLBACK: Option<usize> = None;
 pub const WALK_SLOW_FALLBACK: Option<usize> = None;

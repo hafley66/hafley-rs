@@ -24,10 +24,8 @@ pub fn rules() -> game_fighter::Rules {
 
 /// Named Phase-to-animation selection over Dog's generated role bindings.
 ///
-/// Returns `None` where Dog retains no exact source clip; no substitute or
-/// fallback is claimed for those phases in this cut. The Walk bands mirror
-/// Pigeon's stick policy so a future Dog walk clip would join without changing
-/// the seam.
+/// Every `Phase` resolves to an exact retained Dog clip; no substitute or
+/// fallback is claimed. The Walk bands mirror Pigeon's stick policy.
 pub fn select(phase: Phase, axis: f32) -> Option<usize> {
     match phase {
         Phase::Idle => roles::IDLE,
@@ -90,10 +88,12 @@ mod rules_tests {
 mod selection_tests {
     use super::*;
 
-    /// Named bindings resolve to Dog's retained catalog IDs; phases whose exact
-    /// source clip Dog does not retain are explicitly `None`, not substituted.
+    /// Every `game_fighter::Phase` resolves to an exact retained Dog catalog ID.
     #[test]
-    fn select_binds_retained_roles_and_leaves_missing_roles_unavailable() {
+    fn select_binds_every_phase_to_an_exact_retained_role() {
+        for phase in Phase::ALL {
+            assert!(select(phase, 0.0).is_some(), "{phase:?} has no bound clip");
+        }
         assert_eq!(select(Phase::Idle, 0.0), Some(0));
         assert_eq!(select(Phase::Dash, 0.0), Some(1));
         assert_eq!(select(Phase::Run, 0.0), Some(2));
@@ -103,9 +103,15 @@ mod selection_tests {
         assert_eq!(select(Phase::CrouchHold, 0.0), Some(6));
         assert_eq!(select(Phase::CrouchExit, 0.0), Some(7));
         assert_eq!(select(Phase::Landing, 0.0), Some(8));
-        for phase in [Phase::Walk, Phase::Brake, Phase::Turn, Phase::Squat, Phase::Fall] {
-            assert_eq!(select(phase, 0.0), None, "{phase:?} has no exact Dog clip");
-        }
+        assert_eq!(select(Phase::Walk, 0.0), Some(16));
+        assert_eq!(select(Phase::Walk, 0.5), Some(17));
+        assert_eq!(select(Phase::Walk, 0.9), Some(18));
+        assert_eq!(select(Phase::Brake, 0.0), Some(19));
+        assert_eq!(select(Phase::Turn, 0.0), Some(20));
+        assert_eq!(select(Phase::Squat, 0.0), Some(21));
+        assert_eq!(select(Phase::Fall, 0.0), Some(22));
         assert_eq!(roles::AIR_ATTACK, Some(12));
+        assert_eq!(roles::LANDING_LIGHT, Some(23));
+        assert_eq!(roles::LANDING_RECOVERY, Some(24));
     }
 }

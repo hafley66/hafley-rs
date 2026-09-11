@@ -380,25 +380,25 @@
       "display": "Dog",
       "catalog": {
         "path": "smash/src/fighters/dog/generated/0_catalog.json",
-        "sha256": "e1b315112bfcb1b092bbc70fbf17ee9bc967498c5104e22a0bb8dae90c2bffd1",
-        "bytes": 3348,
-        "count": 16
+        "sha256": "7e6e3cdab2bd43537360e0a2813726ce6c33d221ac21670275b8ded753b68d0e",
+        "bytes": 5201,
+        "count": 25
       },
       "baked": {
         "path": "smash/src/fighters/dog/generated/1_baked.json",
-        "sha256": "d20f6372bb80bcd51d8a1cb913ec17f95bac4e178720d9a19899a226b0a53644",
-        "bytes": 165845,
-        "count": 16
+        "sha256": "323e2c44474ca2625eba1efa02393b73c296f9af16768796b10fceadfb25d48a",
+        "bytes": 200446,
+        "count": 25
       },
       "roles": {
         "path": "smash/src/fighters/dog/generated/4_roles.json",
-        "sha256": "968871df15b12c76739503ec9137a33be1f014b10b788ac28e7bf4c252f0c469",
-        "bytes": 1599
+        "sha256": "49a5557b186e4d095ad7e645415c15656ee7bbc34e8c3a7147a2f9861c1b8af0",
+        "bytes": 1581
       },
       "manifest": {
         "path": "smash/src/fighters/dog/imported/0_sources.json",
-        "sha256": "f399d0e135af64be81074eba855c9740dfbea994d9edba50b60edc2a33c8fc1f",
-        "bytes": 2318
+        "sha256": "13cb6b58fe44ba01eaec8ffb420485c4e3a5144ca6bba09c0e5119dede6cd81e",
+        "bytes": 3307
       },
       "rows": [
         {
@@ -644,6 +644,150 @@
           },
           "phase": [],
           "live": false
+        },
+        {
+          "id": 16,
+          "action": "WalkSlow",
+          "file": "WalkSlow.html",
+          "frames": 41,
+          "payload": {
+            "state": "retained",
+            "hash": "86fe5183411685560ed4b789c3be6efd18173678c9b46a4bd8237a8a53d62630",
+            "expected": "86fe5183411685560ed4b789c3be6efd18173678c9b46a4bd8237a8a53d62630",
+            "frames": 41
+          },
+          "phase": [
+            "WalkSlow"
+          ],
+          "live": true
+        },
+        {
+          "id": 17,
+          "action": "WalkMiddle",
+          "file": "WalkMiddle.html",
+          "frames": 41,
+          "payload": {
+            "state": "retained",
+            "hash": "7f484b577b347099ac78eb5aeb54f18bd6b8bc7fbc0359b23b407b516a81f9d2",
+            "expected": "7f484b577b347099ac78eb5aeb54f18bd6b8bc7fbc0359b23b407b516a81f9d2",
+            "frames": 41
+          },
+          "phase": [
+            "WalkMiddle"
+          ],
+          "live": true
+        },
+        {
+          "id": 18,
+          "action": "WalkFast",
+          "file": "WalkFast.html",
+          "frames": 51,
+          "payload": {
+            "state": "retained",
+            "hash": "f4f93fd1507b33e0f079c98ef3dd3ace559ca3a3bec358d9b573812643d3cef4",
+            "expected": "f4f93fd1507b33e0f079c98ef3dd3ace559ca3a3bec358d9b573812643d3cef4",
+            "frames": 51
+          },
+          "phase": [
+            "WalkFast"
+          ],
+          "live": true
+        },
+        {
+          "id": 19,
+          "action": "RunBrake",
+          "file": "RunBrake.html",
+          "frames": 28,
+          "payload": {
+            "state": "retained",
+            "hash": "85cd990225e2baf31270ae93364fa9c7861bdfc7282bc53cb58e170cf52ab84b",
+            "expected": "85cd990225e2baf31270ae93364fa9c7861bdfc7282bc53cb58e170cf52ab84b",
+            "frames": 28
+          },
+          "phase": [
+            "Brake"
+          ],
+          "live": true
+        },
+        {
+          "id": 20,
+          "action": "TurnRun",
+          "file": "TurnRun.html",
+          "frames": 20,
+          "payload": {
+            "state": "retained",
+            "hash": "60eafc8839f28b36a74fadfb62de1f3ffa37ea1b59bb817862aee305c8119530",
+            "expected": "60eafc8839f28b36a74fadfb62de1f3ffa37ea1b59bb817862aee305c8119530",
+            "frames": 20
+          },
+          "phase": [
+            "Turn"
+          ],
+          "live": true
+        },
+        {
+          "id": 21,
+          "action": "JumpSquat",
+          "file": "JumpSquat.html",
+          "frames": 3,
+          "payload": {
+            "state": "retained",
+            "hash": "e449d31a8b32b7d248cc9476de4dd52d0200e3d49054ea0e6106e4c2a5e3e25b",
+            "expected": "e449d31a8b32b7d248cc9476de4dd52d0200e3d49054ea0e6106e4c2a5e3e25b",
+            "frames": 3
+          },
+          "phase": [
+            "JumpSquat"
+          ],
+          "live": true
+        },
+        {
+          "id": 22,
+          "action": "Fall",
+          "file": "Fall.html",
+          "frames": 21,
+          "payload": {
+            "state": "retained",
+            "hash": "13a7ea0d80f0ee1d029a6ac64bec1a499b9fcaccf013489551135862c2f5c246",
+            "expected": "13a7ea0d80f0ee1d029a6ac64bec1a499b9fcaccf013489551135862c2f5c246",
+            "frames": 21
+          },
+          "phase": [
+            "Fall"
+          ],
+          "live": true
+        },
+        {
+          "id": 23,
+          "action": "LandingLight",
+          "file": "LandingLight.html",
+          "frames": 3,
+          "payload": {
+            "state": "retained",
+            "hash": "63a70e1c5910980d1808cfe67ee6f49a25e13e3af6845791c1c581b0378cb7c9",
+            "expected": "63a70e1c5910980d1808cfe67ee6f49a25e13e3af6845791c1c581b0378cb7c9",
+            "frames": 3
+          },
+          "phase": [
+            "LandingLight"
+          ],
+          "live": true
+        },
+        {
+          "id": 24,
+          "action": "LandingAirF",
+          "file": "LandingAirF.html",
+          "frames": 18,
+          "payload": {
+            "state": "retained",
+            "hash": "ddd4582d4b0dbd7da2e077346db7edc40b1ba4fed69f29c324a39b1f5febb291",
+            "expected": "ddd4582d4b0dbd7da2e077346db7edc40b1ba4fed69f29c324a39b1f5febb291",
+            "frames": 18
+          },
+          "phase": [
+            "LandingRecovery"
+          ],
+          "live": true
         }
       ],
       "errors": []
