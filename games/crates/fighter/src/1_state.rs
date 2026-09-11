@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::combat::CombatState;
 use crate::rules::Rules;
 
 /// Input bits: bit 1 jump, bit 2 attack, bit 4 down.
@@ -119,6 +120,8 @@ pub struct State {
     pub short_hop: bool,
     pub input_history: game_input::History,
     pub fast_fall: bool,
+    #[serde(default)]
+    pub combat: CombatState,
 }
 
 impl Default for State {
@@ -133,6 +136,7 @@ impl Default for State {
             short_hop: false,
             input_history: game_input::History::default(),
             fast_fall: false,
+            combat: CombatState::default(),
         }
     }
 }

@@ -118,6 +118,21 @@ impl State {
             buttons: u32::from(input.buttons),
             axes: [game_input::quantize_axis(input.axis), 0, 0, 0],
         });
+
+        // Hitlag freezes position/velocity integration and action clocks for its
+        // exact stored frame count.
+        if self.combat.hitlag > 0 {
+            self.combat.hitlag -= 1;
+            return;
+        }
+        // Hitstun suppresses ordinary movement and jump control while launch
+        // motion advances deterministically.
+        if self.combat.hitstun > 0 {
+            self.combat.hitstun -= 1;
+            self.hitstun_step(r);
+            return;
+        }
+
         let jump_released = frame.released as u8 & button::JUMP != 0;
         let jump_pressed = frame.pressed as u8 & button::JUMP != 0;
         let down_held = input.buttons & button::DOWN != 0;
@@ -335,6 +350,33 @@ impl State {
         }
 
         self.phase_tick += 1;
+    }
+
+    /// Launch motion under hitstun: no movement or jump control, deterministic
+    /// airborne integration. Ground contact ends hitstun and enters `Landing`.
+    /// Action clocks stay frozen; landing tech and knockback decay are not
+    /// modeled in this cut.
+    fn hitstun_step(&mut self, r: &Rules) {
+        self.position[0] += self.velocity[0];
+        self.position[1] += self.velocity[1];
+        self.velocity[1] -= r.gravity;
+        let floor = if self.fast_fall {
+            -r.fast_fall_velocity
+        } else {
+            -r.terminal_velocity
+        };
+        if self.velocity[1] < floor {
+            self.velocity[1] = floor;
+        }
+        if self.position[1] <= 0.0 && self.velocity[1] < 0.0 {
+            self.position[1] = 0.0;
+            self.velocity = [0.0, 0.0];
+            self.jumps_left = r.max_jumps;
+            self.fast_fall = false;
+            self.combat.hitstun = 0;
+            self.combat.tumble = false;
+            self.enter(Phase::Landing);
+        }
     }
 
     /// Apply the numeric entry effect for an air chart destination exactly once,

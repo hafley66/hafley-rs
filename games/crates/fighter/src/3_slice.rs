@@ -1,11 +1,13 @@
-//! Redux entry point: dispatch `Input` through `MovementSlice` with the
-//! `Rules` as context; the state method `State::advance` is the same scan.
+//! Redux entry points: dispatch `Input` through `MovementSlice`, or either an
+//! `Input` or a typed `Hit` through `FighterSlice`. The state method
+//! `State::advance` is the same scan; `combat::apply_hit` is the hit scan.
 
-use redux::Slice;
+use redux::{Never, Slice};
 use serde::{Deserialize, Serialize};
 
+use crate::combat::{Hit, apply_hit};
 use crate::rules::Rules;
-use crate::state::Input;
+use crate::state::{Input, State};
 
 pub struct MovementSlice;
 
@@ -26,5 +28,38 @@ impl Slice for MovementSlice {
         _fx: &mut impl FnMut(Self::Effect),
     ) -> Self::Output {
         st.advance(ev, cx)
+    }
+}
+
+/// One dispatcher event: ordinary movement input or a resolved hit.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub enum FighterEvent {
+    Input(Input),
+    Hit(Hit),
+}
+
+/// Combined dispatcher. The slice owns the mutation: movement input advances
+/// locomotion, a hit resolves and applies its outcome with no app-side writes.
+pub struct FighterSlice;
+
+impl Slice for FighterSlice {
+    type Context<'a> = &'a Rules;
+    type State = State;
+    type Event = FighterEvent;
+    type Output = ();
+    type Effect = Never;
+
+    fn reduce(
+        st: &mut Self::State,
+        ev: Self::Event,
+        cx: Self::Context<'_>,
+        _fx: &mut impl FnMut(Self::Effect),
+    ) -> Self::Output {
+        match ev {
+            FighterEvent::Input(input) => st.advance(input, cx),
+            FighterEvent::Hit(hit) => {
+                apply_hit(st, &hit);
+            }
+        }
     }
 }
