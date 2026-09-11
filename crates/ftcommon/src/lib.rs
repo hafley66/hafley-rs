@@ -1,4 +1,4 @@
-//! Character-independent port of shared Melee `ftCommon` callbacks.
+//! Character-independent fighter transition rules generated from pinned source evidence.
 //!
 //! Authored boundary types live in [`0_types.rs`](crate); the generated
 //! translation of pinned decomp functions lives in `generated/0_ftcommon.rs`

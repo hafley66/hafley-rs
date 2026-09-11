@@ -88,9 +88,10 @@ fn generated_source_retains_provenance_and_typed_inputs() {
         assert!(GENERATED.contains(name), "missing C name {name}");
     }
     assert!(GENERATED.contains(REVISION));
-    assert!(GENERATED.contains("src/melee/ft/kinds/ftCommon/ftCo_Turn.c"));
-    assert!(GENERATED.contains("src/melee/ft/kinds/ftCommon/ftCo_Jump.c"));
-    assert!(GENERATED.contains("src/melee/ft/kinds/ftCommon/ftCo_JumpAerial.c"));
+    assert!(GENERATED.contains("Source callback: `ftCo_800C97A8`"));
+    assert!(GENERATED.contains("Source callback: `ftCo_Jump_Enter`"));
+    assert!(GENERATED.contains("Source callback: `ftCo_JumpAerial_Enter_Basic`"));
+    assert!(!GENERATED.contains("github.com"));
     // Unresolved fields and attributes stay typed inputs named after the C fields.
     assert!(GENERATED.contains("common.x34"));
     assert!(GENERATED.contains("common.x78"));

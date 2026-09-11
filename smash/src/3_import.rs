@@ -130,7 +130,7 @@ fn revision(root: &Path) -> Result<String, Box<dyn std::error::Error>> {
         .args(["-C", root.to_str().ok_or("non-UTF8 source path")?, "rev-parse", "HEAD"])
         .output()?;
     if !output.status.success() {
-        return Err("cannot read pinned Melee submodule revision".into());
+        return Err("cannot read pinned source submodule revision".into());
     }
     Ok(String::from_utf8(output.stdout)?.trim().into())
 }
