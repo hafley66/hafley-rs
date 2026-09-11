@@ -137,9 +137,14 @@ fn pigeon_live_bindings() -> Value {
             .expect("Pigeon locomotion controller state")
             .phase;
         if !rows.iter().any(|row: &Value| {
-            row["phase"] == phase.name() && row["action"].as_u64() == Some(world.action as u64)
+            row["phase"] == phase.name()
+                && row["action"].as_u64()
+                    == Some(world.movement.as_ref().unwrap().action.id as u64)
         }) {
-            rows.push(json!({ "phase": phase.name(), "action": world.action }));
+            rows.push(json!({
+                "phase": phase.name(),
+                "action": world.movement.as_ref().unwrap().action.id
+            }));
         }
     }
     Value::Array(rows)

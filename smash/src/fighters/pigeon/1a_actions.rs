@@ -22,49 +22,56 @@ fn target(from: usize, trigger: Trigger) -> usize {
 }
 
 fn enter(world: &mut World, action: usize) {
-    tracing::debug!(target: "pigeon::transition", tick = world.frame, from = world.action, to = action);
-    world.action = action;
-    world.animation = 0;
+    let fighter = world.movement.as_mut().expect("canonical Pigeon State");
+    tracing::debug!(target: "pigeon::transition", tick = world.frame, from = fighter.action.id, to = action);
+    fighter.action.id = action;
+    fighter.action.frame = 0;
     if action == FAIR {
         world.attack_hit = false;
     }
 }
 
 pub fn advance(world: &mut World, pressed: u8, actions: &[Action], axis: f32) -> [f32; 3] {
+    let action = world.movement.as_ref().expect("canonical Pigeon State").action.id;
+    let animation = world.movement.as_ref().expect("canonical Pigeon State").action.frame;
     // Finish the previously displayed action before accepting this tick's input.
-    if world.animation >= actions[world.action].frames.len() {
-        match world.action {
+    if animation >= actions[action].frames.len() {
+        match action {
             SQUAT => {
                 enter(world, target(SQUAT, Trigger::Complete));
                 world.jump_at = Some(world.frame);
             }
-            JUMP | FAIR => enter(world, target(world.action, Trigger::Complete)),
-            LAND_FAIR | LAND => enter(world, target(world.action, Trigger::Complete)),
-            IDLE | FALL => world.animation = 0,
+            JUMP | FAIR => enter(world, target(action, Trigger::Complete)),
+            LAND_FAIR | LAND => enter(world, target(action, Trigger::Complete)),
+            IDLE | FALL => world.movement.as_mut().expect("canonical Pigeon State").action.frame = 0,
             _ => unreachable!(),
         }
     }
-    if world.action == IDLE && pressed & 1 != 0 {
+    if world.movement.as_ref().expect("canonical Pigeon State").action.id == IDLE && pressed & 1 != 0 {
         enter(world, target(IDLE, Trigger::JumpPress));
     }
     let air = world.jump_at.map_or(0.0, |t| (world.frame - t) as f32);
     let height = (0.95 * air - 0.018 * air * air).max(0.0);
     // Ground contact takes precedence over an aerial input on the same tick.
     if world.jump_at.is_some() && air > 0.0 && height == 0.0 {
-        let action = &actions[world.action];
-        let frame = &action.frames[world.animation.min(action.frames.len() - 1)];
-        let landing = if world.action == FAIR && frame.landing_lag {
+        let action = world.movement.as_ref().expect("canonical Pigeon State").action.id;
+        let animation = world.movement.as_ref().expect("canonical Pigeon State").action.frame;
+        let action_source = &actions[action];
+        let frame = &action_source.frames[animation.min(action_source.frames.len() - 1)];
+        let landing = if action == FAIR && frame.landing_lag {
             target(FAIR, Trigger::LandDuringAttack)
         } else {
-            target(world.action, Trigger::Land)
+            target(action, Trigger::Land)
         };
         enter(world, landing);
         world.jump_at = None;
     }
-    let source = &actions[world.action];
-    let interruptible = source.frames[world.animation.min(source.frames.len() - 1)].interruptible;
+    let action = world.movement.as_ref().expect("canonical Pigeon State").action.id;
+    let animation = world.movement.as_ref().expect("canonical Pigeon State").action.frame;
+    let source = &actions[action];
+    let interruptible = source.frames[animation.min(source.frames.len() - 1)].interruptible;
     let eligible = height > 0.0
-        && (matches!(world.action, JUMP | FALL) || (world.action == FAIR && interruptible));
+        && (matches!(action, JUMP | FALL) || (action == FAIR && interruptible));
     let attack = if let Some(buffer) = &mut world.input_buffer {
         let out = buffer
             .state
@@ -82,7 +89,7 @@ pub fn advance(world: &mut World, pressed: u8, actions: &[Action], axis: f32) ->
         eligible && pressed & 2 != 0
     };
     if attack {
-        enter(world, target(world.action, Trigger::AttackEligible));
+        enter(world, target(action, Trigger::AttackEligible));
     }
     [
         0.0,
