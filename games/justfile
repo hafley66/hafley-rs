@@ -61,7 +61,14 @@ status:
 tsp:
     node classification/2_registry.mjs generate
 
+# Smash character-select TypeSpec contract. Installs the pinned compiler from
+# the tracked lockfile, then runs the colocated test.
+select-check:
+    cd blender-godot-sqlite-proof/pigeon-lab/contracts && pnpm install --frozen-lockfile --offline
+    node --test smash/1_select.test.mjs
+
 test:
+    just select-check
     node --test classification/2_registry.test.mjs
     node --test classification/5_progress.test.mjs
     node --test classification/8_status.test.mjs
