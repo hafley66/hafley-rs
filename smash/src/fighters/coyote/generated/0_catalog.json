@@ -1,0 +1,166 @@
+{
+  "runtime": "coyote",
+  "display_name": "Common Coyote",
+  "entries": [
+    {
+      "id": 0,
+      "name": "Wait1",
+      "file": "Wait1.html",
+      "frames": 241,
+      "hurtbox_frames": 241,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 1,
+      "name": "Dash",
+      "file": "Dash.html",
+      "frames": 31,
+      "hurtbox_frames": 31,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 2,
+      "name": "Run",
+      "file": "Run.html",
+      "frames": 22,
+      "hurtbox_frames": 22,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 3,
+      "name": "JumpF",
+      "file": "JumpF.html",
+      "frames": 51,
+      "hurtbox_frames": 51,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 4,
+      "name": "JumpAerialF",
+      "file": "JumpAerialF.html",
+      "frames": 60,
+      "hurtbox_frames": 60,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 5,
+      "name": "Squat",
+      "file": "Squat.html",
+      "frames": 8,
+      "hurtbox_frames": 8,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 6,
+      "name": "SquatWait",
+      "file": "SquatWait.html",
+      "frames": 201,
+      "hurtbox_frames": 201,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 7,
+      "name": "SquatRv",
+      "file": "SquatRv.html",
+      "frames": 10,
+      "hurtbox_frames": 10,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 8,
+      "name": "LandingHeavy",
+      "file": "LandingHeavy.html",
+      "frames": 3,
+      "hurtbox_frames": 3,
+      "hitbox_frames": 0,
+      "iasa": 3,
+      "landing_lag": null
+    },
+    {
+      "id": 9,
+      "name": "Attack11",
+      "file": "Attack11.html",
+      "frames": 40,
+      "hurtbox_frames": 40,
+      "hitbox_frames": 2,
+      "iasa": 18,
+      "landing_lag": null
+    },
+    {
+      "id": 10,
+      "name": "Attack12",
+      "file": "Attack12.html",
+      "frames": 40,
+      "hurtbox_frames": 40,
+      "hitbox_frames": 2,
+      "iasa": 22,
+      "landing_lag": null
+    },
+    {
+      "id": 11,
+      "name": "Attack13",
+      "file": "Attack13.html",
+      "frames": 60,
+      "hurtbox_frames": 60,
+      "hitbox_frames": 4,
+      "iasa": 40,
+      "landing_lag": null
+    },
+    {
+      "id": 12,
+      "name": "AttackAirF",
+      "file": "AttackAirF.html",
+      "frames": 39,
+      "hurtbox_frames": 39,
+      "hitbox_frames": 9,
+      "iasa": 30,
+      "landing_lag": 18.0
+    },
+    {
+      "id": 13,
+      "name": "SpecialNStart",
+      "file": "SpecialNStart.html",
+      "frames": 14,
+      "hurtbox_frames": 14,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 14,
+      "name": "SpecialNHold",
+      "file": "SpecialNHold.html",
+      "frames": 85,
+      "hurtbox_frames": 85,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 15,
+      "name": "SpecialNMax",
+      "file": "SpecialNMax.html",
+      "frames": 81,
+      "hurtbox_frames": 81,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    }
+  ]
+}
