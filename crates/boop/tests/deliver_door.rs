@@ -27,6 +27,7 @@ static DOOR: Capabilities = Capabilities {
     wrapper_owns_alternate_screen: false,
     native_backend: boop::harness::NativeBackendSupport::Unsupported,
     native_settings: boop::harness::NativeSettingsSupport::Unsupported("fixture"),
+    registry_names_processes: true,
 };
 
 static KEYSTROKES: Capabilities = Capabilities {
@@ -40,6 +41,7 @@ static KEYSTROKES: Capabilities = Capabilities {
     wrapper_owns_alternate_screen: false,
     native_backend: boop::harness::NativeBackendSupport::Unsupported,
     native_settings: boop::harness::NativeSettingsSupport::Unsupported("fixture"),
+    registry_names_processes: true,
 };
 
 /// A door that keeps what it was handed. The file is the recorder, so the

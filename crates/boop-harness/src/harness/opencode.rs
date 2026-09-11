@@ -33,6 +33,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     wrapper_owns_alternate_screen: false,
     native_backend: super::NativeBackendSupport::SeparateProcess,
     native_settings: super::NativeSettingsSupport::ControlPlane,
+    registry_names_processes: true,
 };
 
 /// The `opencode serve` this machine's TUIs are clients of.

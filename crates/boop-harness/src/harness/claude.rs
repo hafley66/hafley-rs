@@ -31,6 +31,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     native_settings: super::NativeSettingsSupport::Unsupported(
         "Claude and ccz settings require user-scoped configuration; the lifecycle gate never reads or writes it",
     ),
+    registry_names_processes: true,
 };
 
 /// The registry directory and messaging sockets of the claude on this

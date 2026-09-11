@@ -101,6 +101,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     native_settings: super::NativeSettingsSupport::Unsupported(
         "Kimi exposes no native model and effort control plane",
     ),
+    registry_names_processes: false,
 };
 
 /// kimi publishes no door; the impl says so rather than guessing one.
@@ -636,9 +637,10 @@ struct KimiState {
 fn read_state(path: &Path) -> Option<KimiState> {
     let text = std::fs::read_to_string(path).ok()?;
     let value: Value = serde_json::from_str(&text).ok()?;
-    let cwd = value
-        .get("workDir")
-        .and_then(Value::as_str)
+    // kimi renamed the field: newer builds write `cwd`, older ones `workDir`.
+    let cwd = ["cwd", "workDir"]
+        .into_iter()
+        .find_map(|key| value.get(key).and_then(Value::as_str))
         .map(str::to_owned);
     Some(KimiState { cwd })
 }
