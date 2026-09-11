@@ -800,7 +800,7 @@ fn character_catalogs(check: bool) -> Result<(), Box<dyn std::error::Error>> {
     let pigeon = smash::fighters::pigeon::catalog::generate()?;
     emit(&root.join("pigeon/generated/5_catalog.json"), &pigeon.evidence, check)?;
     emit(&root.join("pigeon/generated/6_baked.json"), &pigeon.actions, check)?;
-    let dog = smash::fighters::dog::generate()?;
+    let dog = smash::fighters::dog::catalog::generate()?;
     emit(&root.join("dog/generated/0_catalog.json"), &dog.evidence, check)?;
     emit(&root.join("dog/generated/1_baked.json"), &dog.actions, check)?;
     Ok(())
