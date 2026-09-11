@@ -3,7 +3,7 @@
   "source": "https://rukaidata.com/PM3.6/Lucario/subactions/",
   "retrieved": "2026-09-10",
   "decoder": "brawllib_rs 0.29.0 (MIT), bincode 2 standard serde",
-  "boundary": "Retained PM3.6 generated webpage artifacts containing base64+bincode; raw PAC/GCT inputs absent. Runtime namespace and display name are local (coyote/Common Coyote); upstream character identity is confined to this manifest and the raw payload bytes.",
+  "boundary": "Retained PM3.6 generated webpage artifacts containing base64+bincode; raw PAC/GCT inputs absent. Runtime namespace and display name are local (dog/Dog); upstream character identity is confined to this manifest and the raw payload bytes.",
   "files": {
     "Wait1.html": "bcceb793a40b06dfb44396ca11bca6ce0f0a5fbf39b1c268cfdf6bc11a781727",
     "Dash.html": "e8cac7036a7dc71a54dea8cddce7701e53882c5d3d63f2fe13e6b5f963992af0",

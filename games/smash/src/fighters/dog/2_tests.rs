@@ -22,7 +22,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
 
 fn imported_root() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("src/fighters/coyote/imported")
+        .join("src/fighters/dog/imported")
 }
 
 fn committed_evidence() -> CatalogEvidence {
