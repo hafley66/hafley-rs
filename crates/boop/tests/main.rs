@@ -79,3 +79,5 @@ mod temp_home_rail;
 mod tui_sigint_e2e;
 #[path = "wait_mail.rs"]
 mod wait_mail;
+#[path = "worktree_reclaim_e2e.rs"]
+mod worktree_reclaim_e2e;

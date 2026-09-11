@@ -339,6 +339,25 @@ PRESETS: model spelling is presets only; `boop config presets` lists name,
   (bin ccz). The codex/gpt and claude families through opencode are refused at
   spawn: each has a flat-rate harness and opencode bills them metered. Gemini is allowed.
 
+DISK: boop owns each lane's cargo target dir, so no lane fills the laptop.
+  PLACEMENT: `lane create` sets CARGO_TARGET_DIR=<lanes root>/<lane>/target on
+    the lane's spawn (lanes root = BOOP_LANE_TARGET_ROOT, else ~/.agent/lanes).
+    A caller `--env CARGO_TARGET_DIR=...` wins; `--dry-run` prints `target:`.
+    The `boop-start` warmup keeps its own shared cache and is unchanged.
+  RECLAIM: every supervisor exit path (result written, retired, signalled)
+    deletes that lane's target dir; so does `lane delete`. Only a path under the
+    lane target root is ever removed; anything else is refused with a WARN. A
+    revive rebuilds the dir.
+  WORKTREE: `lane delete <lane>` also removes the worktree and branch when
+    `git branch --merged <base>` lists it (`--merged-into <branch>`, else the
+    lane's base branch, else main); an unmerged worktree stays and prints
+    `kept worktree <path> (unmerged)`.
+  FLOOR: `lane create` and each parked supervisor tick (once a minute) read the
+    free disk on the target root's volume. Below BOOP_DISK_FLOOR_GB (default
+    30), retired or dead lane targets are evicted oldest-first until above it.
+    Still below: `lane create` exits non-zero naming free space and the biggest
+    targets, and a parked lane mails one `disk-low free=<n>G` row (per 10 min).
+
 LAWS:
   1 Every lane spawn goes through `lane create`; a bare tmux spawn leaves no
     edge and no tracking.
@@ -346,7 +365,8 @@ LAWS:
     subagents (Agent tool). Lanes are for opencode, codex, kimi and ccz.
   3 A lane can die silently. Liveness is TWO checks: `boop beep ps <lane>`
     AND `git -C <worktree> status --short`. A REPORT.md alone proves nothing.
-  4 Give each lane its own CARGO_TARGET_DIR; shared target dirs race.
+  4 Give each lane its own CARGO_TARGET_DIR; boop places it and reclaims it,
+    so no lane and no hand-run spawn shares one.
   5 A brief never writes an absolute `cd` to the primary checkout; the lane
     works in $PWD, its worktree.
   6 `lane delete --state dead` removes each dead lane's own worktree and

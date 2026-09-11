@@ -239,6 +239,71 @@ pub(crate) fn spawn_env_stamp(
     stamp
 }
 
+/// The lane's own cargo target dir. A caller `--env CARGO_TARGET_DIR` wins, so
+/// the value is never duplicated in the spawn env.
+fn supplied_target(env: &[(String, String)]) -> Option<String> {
+    env.iter()
+        .find(|(key, _)| key == "CARGO_TARGET_DIR")
+        .map(|(_, value)| value.clone())
+}
+
+/// The env a lane's spawn carries when boop owns placement: the caller's pairs,
+/// plus boop's own `CARGO_TARGET_DIR` when the caller named none.
+/// `BOOP_LANE_TARGET_ROOT` rides too, so the supervisor resolves the same root
+/// and can prove a path is under it before deleting anything.
+fn lane_spawn_env(lane: &str, env: &[(String, String)]) -> Vec<(String, String)> {
+    let mut out = env.to_vec();
+    if supplied_target(env).is_none() {
+        if let Ok(target) = boop::trail::lane_target_dir(lane) {
+            out.push(("CARGO_TARGET_DIR".to_owned(), target.display().to_string()));
+        }
+    }
+    if let Some(root) = std::env::var_os("BOOP_LANE_TARGET_ROOT").filter(|root| !root.is_empty()) {
+        if !out.iter().any(|(key, _)| key == "BOOP_LANE_TARGET_ROOT") {
+            out.push((
+                "BOOP_LANE_TARGET_ROOT".to_owned(),
+                root.to_string_lossy().into_owned(),
+            ));
+        }
+    }
+    out
+}
+
+/// The target dir a dry run prints: the caller's `--env` override, else boop's
+/// own placement.
+fn effective_target(lane: &str, env: &[(String, String)]) -> Option<PathBuf> {
+    supplied_target(env)
+        .map(PathBuf::from)
+        .or_else(|| boop::trail::lane_target_dir(lane).ok())
+}
+
+/// Refuse a spawn when the lane target root's volume stays below the floor
+/// even after evicting retired or dead lane targets. Names the free space and
+/// the biggest remaining targets so the caller can act.
+fn disk_floor_admit(mail_dir: &Path, lane: &str) -> Result<()> {
+    let root = boop::trail::lane_target_root()?;
+    let floor = boop::supervise::disk_floor_gb();
+    let Some(free) =
+        boop::supervise::evict_targets_until_above_floor(mail_dir, &root, floor, Some(lane))
+    else {
+        return Ok(());
+    };
+    if free >= floor {
+        return Ok(());
+    }
+    let biggest = boop::supervise::biggest_targets(&root, 5);
+    let listing = if biggest.is_empty() {
+        "  (no lane target dirs)".to_owned()
+    } else {
+        biggest.join("\n")
+    };
+    anyhow::bail!(
+        "refusing to spawn {lane}: free disk {free:.1}G is below the {floor:.0}G floor \
+         (BOOP_DISK_FLOOR_GB) on {}\nbiggest lane targets:\n{listing}",
+        root.display()
+    );
+}
+
 pub(crate) fn git_head(repo: &str) -> Result<Option<String>> {
     let output = std::process::Command::new("git")
         .args(["-C", repo, "rev-parse", "HEAD"])
@@ -1198,6 +1263,10 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     let on_exit = result_recipient
         .as_ref()
         .map(|_| lane::pane_epilogue(&identity.lane, &hail_mail_dir));
+    // boop owns each lane's cargo target dir: appended unless the caller named
+    // one with `--env CARGO_TARGET_DIR=...`.
+    let spawn_env = lane_spawn_env(&identity.lane, &args.env);
+    let target = effective_target(&identity.lane, &args.env);
 
     if args.dry_run {
         info!(
@@ -1221,7 +1290,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
                 &identity.lane,
                 harness_id.as_str(),
                 parent.parent.as_deref(),
-                &args.env,
+                &spawn_env,
                 None,
             )),
             model: model.clone(),
@@ -1249,6 +1318,9 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         }
         if let Some(worktree_dir) = &identity.worktree_dir {
             println!("worktree: {}", worktree_dir.display());
+        }
+        if let Some(target) = &target {
+            println!("target: {}", target.display());
         }
         println!("{}", start_plan(&repo, args.no_start)?);
         println!("base-sha: {} (from {})", base.sha, base.rev);
@@ -1299,6 +1371,9 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         println!("reclaim: worktree, branch and tmux session removed first, if the name is dead");
         return Ok(());
     }
+    // Below the free-disk floor, refused before a route or a pane exists:
+    // eviction has already run and named what is left to clean up.
+    disk_floor_admit(&hail_mail_dir, &identity.lane)?;
     for line in reset_dead_identity(&repo, &identity, &routes, &|target| {
         lane::pane_process_alive(target).unwrap_or(false)
     })? {
@@ -1357,7 +1432,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             warm_start: !args.no_start,
             variant: variant.clone(),
             bin: bin.clone(),
-            env: args.env.clone(),
+            env: spawn_env.clone(),
             spawn_id,
             post_pr,
             pr_base: Some(pr_base),
@@ -2253,8 +2328,14 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             state,
             dry_run,
             mail_dir,
+            merged_into,
         } => match (lane, state) {
-            (Some(lane), _) => run_lane_delete(mail_dir.as_deref(), &lane, route_only),
+            (Some(lane), _) => run_lane_delete(
+                mail_dir.as_deref(),
+                &lane,
+                route_only,
+                merged_into.as_deref(),
+            ),
             (None, Some(_)) => run_lane_bulk_delete(mail_dir.as_deref(), dry_run),
             (None, None) => {
                 anyhow::bail!("name a lane to delete, or pass --state dead for a bulk delete")
@@ -2685,12 +2766,70 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str, touched: boo
     Ok(())
 }
 
+/// The branch a lane delete checks merge against: `--merged-into`, else the
+/// branch whose tip is the lane's base sha, else `main`.
+fn merged_base_branch(repo: &Path, base_sha: Option<&str>, merged_into: Option<&str>) -> String {
+    if let Some(branch) = merged_into {
+        return branch.to_owned();
+    }
+    if let Some(sha) = base_sha {
+        let branches = git_lines(
+            repo,
+            &["branch", "--format=%(refname:short)", "--points-at", sha],
+        );
+        if let Some(main) = branches.iter().find(|branch| branch.as_str() == "main") {
+            return main.clone();
+        }
+        if let Some(first) = branches.first() {
+            return first.clone();
+        }
+    }
+    "main".to_owned()
+}
+
+/// `git branch --merged <base>` lists `branch`.
+fn branch_merged(repo: &Path, branch: &str, base: &str) -> bool {
+    git_lines(
+        repo,
+        &["branch", "--merged", base, "--format=%(refname:short)"],
+    )
+    .iter()
+    .any(|listed| listed == branch)
+}
+
+/// The branch checked out in a worktree, for a delete that only has the path.
+fn worktree_branch(worktree: &Path) -> Option<String> {
+    git_lines(worktree, &["symbolic-ref", "--short", "HEAD"])
+        .into_iter()
+        .next()
+}
+
+/// Remove one worktree and its branch when the branch is merged into the base;
+/// otherwise keep the worktree and say so. Returns one line per outcome.
+fn reclaim_merged_worktree(
+    repo: &Path,
+    worktree: &Path,
+    branch: &str,
+    base_sha: Option<&str>,
+    merged_into: Option<&str>,
+) -> Vec<String> {
+    let base = merged_base_branch(repo, base_sha, merged_into);
+    if !branch_merged(repo, branch, &base) {
+        return vec![format!("kept worktree {} (unmerged)", worktree.display())];
+    }
+    match boop::worktree::reclaim_carcass(repo, branch, worktree) {
+        Ok(removed) => removed.lines(),
+        Err(error) => vec![format!("kept worktree {} ({error})", worktree.display())],
+    }
+}
+
 /// Stop one lane and drop its route. Refuses when tmux is unreachable. `--route-only`
 /// drops the registry row and never touches the pane, so the on-exit epilogue can run inside it.
 pub(crate) fn run_lane_delete(
     mail_dir_arg: Option<&Path>,
     lane: &str,
     route_only: bool,
+    merged_into: Option<&str>,
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
@@ -2698,7 +2837,7 @@ pub(crate) fn run_lane_delete(
         if route_only {
             anyhow::bail!("no registry route for lane `{lane}`")
         }
-        return run_lane_delete_carcass(lane);
+        return run_lane_delete_carcass(lane, merged_into);
     };
     if !route_only {
         if let Some(session) = route.tmux.as_deref() {
@@ -2716,6 +2855,28 @@ pub(crate) fn run_lane_delete(
     })?;
     if let Err(error) = bus::open_store(&dir).and_then(|store| store.drop_lane_commit_state(lane)) {
         warn!(lane, %error, "commit-push state not dropped");
+    }
+    // The route names the worktree; the branch is read from it. `--route-only`
+    // is the pane epilogue and leaves both the worktree and the branch alone.
+    if !route_only {
+        if let Some(worktree) = route.worktree_dir.as_deref().map(PathBuf::from) {
+            if let Some(repo) = boop::worktree::worktree_owner(&worktree) {
+                if let Some(branch) = worktree_branch(&worktree) {
+                    for line in reclaim_merged_worktree(
+                        &repo,
+                        &worktree,
+                        &branch,
+                        route.base_sha.as_deref(),
+                        merged_into,
+                    ) {
+                        println!("{line}");
+                    }
+                }
+            }
+        }
+        if let Some(target) = boop::supervise::reclaim_lane_target(lane) {
+            println!("removed target {}", target.display());
+        }
     }
     info!(lane, route_only, "lane route deleted");
     println!("deleted {lane}");
@@ -2819,14 +2980,43 @@ fn remove_one_worktree(repo: &Path, worktree: &Path) -> Result<()> {
 }
 
 /// A DOA spawn's epilogue drops the route before the driver can delete the
-/// lane, so the worktree and branch are all that is left to remove.
-pub(crate) fn run_lane_delete_carcass(lane: &str) -> Result<()> {
+/// lane, so the worktree, branch and target dir are all that is left to
+/// remove. The worktree stays unless its branch is merged into the base.
+pub(crate) fn run_lane_delete_carcass(lane: &str, merged_into: Option<&str>) -> Result<()> {
     let here = std::env::current_dir().context("read the current directory")?;
     let repo = lane::repo_root(&here)?;
-    let removed = lane::delete_carcass(&repo, lane, |target| {
-        lane::pane_process_alive(target).unwrap_or(false)
-    })?;
-    for line in removed.lines() {
+    let base_sha = boop::trail::read_spawn(lane)
+        .map(|spawn| bus::route_from_value(&spawn.route))
+        .and_then(|route| route.base_sha);
+    let carcass = lane::find_carcass(&repo, lane);
+    let target = boop::supervise::reclaim_lane_target(lane);
+    let Some(carcass) = carcass else {
+        if let Some(target) = target {
+            println!("deleted {lane}: removed target {}", target.display());
+            return Ok(());
+        }
+        anyhow::bail!(
+            "no registry route for lane `{lane}`, and no worktree under {} answers to it",
+            repo.display()
+        );
+    };
+    if lane::pane_process_alive(lane).unwrap_or(false) {
+        anyhow::bail!(
+            "lane `{lane}` has no route but its tmux session is alive; \
+             `boop beep lane patch` re-routes it, delete takes dead lanes only"
+        );
+    }
+    if let Some(target) = target {
+        println!("deleted {lane}: removed target {}", target.display());
+    }
+    let removed = reclaim_merged_worktree(
+        &repo,
+        &carcass.worktree,
+        &carcass.branch,
+        base_sha.as_deref(),
+        merged_into,
+    );
+    for line in &removed {
         println!("deleted {lane}: {line}");
     }
     // The session outlives its panes under remain-on-exit and holds the name.
@@ -2835,7 +3025,7 @@ pub(crate) fn run_lane_delete_carcass(lane: &str) -> Result<()> {
         tmux::mux().kill_session(None, lane)?;
         println!("deleted {lane}: removed tmux session {lane}");
     }
-    if removed.nothing_removed() && !session_removed {
+    if removed.is_empty() && !session_removed {
         println!("deleted {lane}: nothing left to remove");
     }
     info!(lane, "lane carcass deleted");
@@ -4096,7 +4286,7 @@ mod tests {
             },
         )
         .unwrap();
-        run_lane_delete(Some(&dir), "l", true).unwrap();
+        run_lane_delete(Some(&dir), "l", true, None).unwrap();
         let routes = read_routes(&dir).unwrap();
         assert!(
             !routes.contains_key("l"),
@@ -4669,7 +4859,7 @@ mod tests {
             Some("sprefa-coordinator"),
             "an old row is still a usable parent default"
         );
-        run_lane_delete(Some(&dir), "boop-sql", true).unwrap();
+        run_lane_delete(Some(&dir), "boop-sql", true, None).unwrap();
         let after = read_routes(&dir).unwrap();
         assert!(!after.contains_key("boop-sql"));
         assert!(

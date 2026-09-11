@@ -1220,6 +1220,11 @@ enum LaneCmd {
         /// delete would remove, and remove nothing.
         #[arg(long)]
         dry_run: bool,
+        /// Check merge against this branch instead of the lane's base branch
+        /// or `main`; a merged branch's worktree and branch are removed, an
+        /// unmerged one is kept.
+        #[arg(long = "merged-into", value_name = "BRANCH")]
+        merged_into: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
