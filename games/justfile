@@ -13,10 +13,12 @@ ground-chart-preview output="/private/tmp/falcon-ground-chart.png":
 source-rules:
     cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- falcon
     d2 --layout elk smash/src/fighters/falcon/generated/3_source_chart.d2 smash/src/fighters/falcon/generated/3_source_chart.svg
+    d2 --layout elk smash/src/fighters/falcon/generated/4_common_inventory.d2 smash/src/fighters/falcon/generated/4_common_inventory.svg
 
 source-rules-check:
     cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- falcon --check
     d2 validate smash/src/fighters/falcon/generated/3_source_chart.d2
+    d2 validate smash/src/fighters/falcon/generated/4_common_inventory.d2
 
 # Static port progress dashboard: classification/6_progress.html.
 progress:

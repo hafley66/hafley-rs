@@ -50,6 +50,80 @@ pub struct FunctionEvidence {
     pub calls: Vec<String>,
 }
 
+/// One decomp call already represented by current game semantics.
+///
+/// The tuple is `(callee symbol, game operation, owning crate)`. The operation
+/// names are the vocabulary the Rust side exposes: `transition`,
+/// `animation_finished`, `crouch_request`, `crouch_release`, `jump_request`,
+/// `motion_transition` and friend come from `game-fighter`; `turn_guard`,
+/// `jump_choice` and `air_jump_choice` are the source guards `smash-import`
+/// lowers through `game-content`. Everything not listed here is unsupported
+/// and is reported with its source path, line and symbol.
+pub const RECOGNIZED_OPERATIONS: &[(&str, &str, &str)] = &[
+    ("Fighter_ChangeMotionState", "transition", "game-fighter"),
+    ("ftAnim_IsFramesRemaining", "animation_finished", "game-fighter"),
+    ("ft_8008A348", "motion_transition", "game-fighter"),
+    ("ft_8008A2BC", "motion_transition", "game-fighter"),
+    ("ftCo_800D5FB0", "crouch_enter_dispatch", "game-fighter"),
+    ("ftCo_800D638C", "crouch_hold_enter", "game-fighter"),
+    ("ftCo_Squat_CheckInput", "crouch_request", "game-fighter"),
+    ("ftCo_SquatRv_CheckInput", "crouch_release", "game-fighter"),
+    ("ftCo_Jump_CheckInput", "jump_request", "game-fighter"),
+    ("getAccelAndTarget", "dash_run_acceleration", "game-fighter"),
+    ("ftCo_800C97A8", "turn_guard", "game-content"),
+    ("ftCo_Jump_Enter", "jump_choice", "game-content"),
+    ("ftCo_JumpAerial_Enter_Basic", "air_jump_choice", "game-content"),
+];
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FunctionSite {
+    /// Index into [`Inventory::files`].
+    pub file: usize,
+    pub line: usize,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CallSite {
+    /// Index into [`Inventory::files`].
+    pub file: usize,
+    pub line: usize,
+    /// Index into [`Inventory::functions`]; direct calls always have an owner.
+    pub function: usize,
+    pub symbol: String,
+    /// Index into [`RECOGNIZED_OPERATIONS`], or `None` when unsupported.
+    pub operation: Option<usize>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Inventory {
+    /// Sorted repository-relative source paths.
+    pub files: Vec<String>,
+    /// Indices into `files` whose syntax tree contains error nodes.
+    pub parse_errors: Vec<usize>,
+    pub functions: Vec<FunctionSite>,
+    /// Stable-sorted by `(file, line, function, symbol)`.
+    pub calls: Vec<CallSite>,
+}
+
+impl Inventory {
+    pub fn function_count(&self) -> usize {
+        self.functions.len()
+    }
+
+    pub fn call_count(&self) -> usize {
+        self.calls.len()
+    }
+
+    pub fn recognized_count(&self) -> usize {
+        self.calls.iter().filter(|call| call.operation.is_some()).count()
+    }
+
+    pub fn unsupported_count(&self) -> usize {
+        self.call_count() - self.recognized_count()
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum SourceError {
     Parse,
@@ -217,6 +291,111 @@ pub fn function_evidence(source: &str, name: &str) -> Result<FunctionEvidence, S
     })
 }
 
+fn declared_name(node: Node<'_>, source: &str) -> String {
+    let Some(declarator) = node.child_by_field_name("declarator") else {
+        return String::new();
+    };
+    let mut name = String::new();
+    visit(declarator, &mut |part| {
+        if name.is_empty() && part.kind() == "identifier" {
+            name = text(part, source).into();
+        }
+    });
+    name
+}
+
+/// Collect direct `identifier(...)` calls and every function definition under
+/// `node`. Non-identifier callees (field, subscript, parenthesised) are
+/// indirect and stay out of the inventory.
+fn collect(
+    node: Node<'_>,
+    source: &str,
+    file: usize,
+    current: Option<usize>,
+    functions: &mut Vec<FunctionSite>,
+    calls: &mut Vec<CallSite>,
+) {
+    let mut current = current;
+    if node.kind() == "function_definition" {
+        functions.push(FunctionSite {
+            file,
+            line: node.start_position().row + 1,
+            name: declared_name(node, source),
+        });
+        current = Some(functions.len() - 1);
+    } else if node.kind() == "call_expression"
+        && let Some(callee) = node.child_by_field_name("function")
+        && callee.kind() == "identifier"
+        && let Some(function) = current
+    {
+        calls.push(CallSite {
+            file,
+            line: node.start_position().row + 1,
+            function,
+            symbol: text(callee, source).into(),
+            operation: None,
+        });
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect(child, source, file, current, functions, calls);
+    }
+}
+
+/// Inventory every function definition and direct call expression in a bounded
+/// set of C translation units. `sources` is `(relative path, source text)`;
+/// paths are sorted before indexing so `file` indices are stable.
+///
+/// Parse errors do not abort the walk. The recovered tree still contributes
+/// functions and calls, and the file index is recorded in
+/// [`Inventory::parse_errors`] so the caller reports it rather than silently
+/// trusting the tree.
+pub fn common_inventory(sources: &[(String, String)]) -> Result<Inventory, SourceError> {
+    let mut ordered: Vec<&(String, String)> = sources.iter().collect();
+    ordered.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut parser = Parser::new();
+    parser
+        .set_language(&tree_sitter_c::LANGUAGE.into())
+        .map_err(|_| SourceError::Parse)?;
+
+    let mut inventory = Inventory {
+        files: Vec::new(),
+        parse_errors: Vec::new(),
+        functions: Vec::new(),
+        calls: Vec::new(),
+    };
+    for (file, (path, source)) in ordered.into_iter().enumerate() {
+        inventory.files.push(path.clone());
+        let tree = parser.parse(source, None).ok_or(SourceError::Parse)?;
+        if tree.root_node().has_error() {
+            inventory.parse_errors.push(file);
+        }
+        collect(
+            tree.root_node(),
+            source,
+            file,
+            None,
+            &mut inventory.functions,
+            &mut inventory.calls,
+        );
+    }
+
+    inventory.calls.sort_by(|a, b| {
+        (a.file, a.line, a.function, a.symbol.as_str()).cmp(&(
+            b.file,
+            b.line,
+            b.function,
+            b.symbol.as_str(),
+        ))
+    });
+    for call in &mut inventory.calls {
+        call.operation = RECOGNIZED_OPERATIONS
+            .iter()
+            .position(|(symbol, _, _)| *symbol == call.symbol);
+    }
+    Ok(inventory)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -260,5 +439,65 @@ void choose(Fighter* fp) {
     #[test]
     fn records_calls_without_text_pattern_matching() {
         assert_eq!(function_evidence(SOURCE, "choose").unwrap().calls, ["change"]);
+    }
+
+    const INVENTORY_SOURCE: &str = r#"
+int helper(int x) {
+    return x;
+}
+void first(Fighter* fp) {
+    if (ftAnim_IsFramesRemaining(fp->gobj)) {
+        Fighter_ChangeMotionState(fp->gobj, 1, 0, 0, 0, 0, 0);
+    }
+    helper(1);
+    fp->callback(2);
+}
+"#;
+
+    fn inventory(sources: &[(&str, &str)]) -> Inventory {
+        common_inventory(
+            &sources
+                .iter()
+                .map(|(path, source)| ((*path).to_string(), (*source).to_string()))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn inventories_functions_calls_and_recognized_operations() {
+        let records = inventory(&[("a.c", INVENTORY_SOURCE)]);
+        assert_eq!(records.files, ["a.c"]);
+        assert_eq!(
+            records.functions.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
+            ["helper", "first"],
+        );
+        assert_eq!(
+            records
+                .calls
+                .iter()
+                .map(|c| c.symbol.as_str())
+                .collect::<Vec<_>>(),
+            ["ftAnim_IsFramesRemaining", "Fighter_ChangeMotionState", "helper"],
+        );
+        assert_eq!(records.calls.iter().map(|c| c.function).collect::<Vec<_>>(), [1, 1, 1]);
+        assert_eq!((records.function_count(), records.call_count()), (2, 3));
+        assert_eq!((records.recognized_count(), records.unsupported_count()), (2, 1));
+        let unsupported = records.calls.iter().find(|c| c.operation.is_none()).unwrap();
+        assert_eq!(unsupported.symbol, "helper");
+        assert!(!records.parse_errors.contains(&0));
+    }
+
+    #[test]
+    fn sorts_files_by_path_before_indexing() {
+        let records = inventory(&[("b.c", INVENTORY_SOURCE), ("a.c", "void a(void) {}\n")]);
+        assert_eq!(records.files, ["a.c", "b.c"]);
+        assert!(records.functions.iter().all(|f| f.file != 0 || f.name == "a"));
+    }
+
+    #[test]
+    fn flags_parse_error_files_without_aborting() {
+        let records = inventory(&[("broken.c", "void f(void) { g( }\n")]);
+        assert_eq!(records.parse_errors, [0]);
     }
 }
