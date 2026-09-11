@@ -7,6 +7,7 @@ pub(crate) mod mail;
 pub(crate) mod me;
 pub(crate) mod paste;
 pub(crate) mod shout;
+pub(crate) mod subscribe;
 pub(crate) mod tag;
 
 use std::path::{Path, PathBuf};

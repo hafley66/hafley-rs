@@ -1063,6 +1063,10 @@ enum LaneCmd {
         /// value is shell-quoted onto the supervisor's spawn command.
         #[arg(long = "env", value_name = "KEY=VAL", value_parser = parse_env_kv)]
         env: Vec<String>,
+        /// How the lane's commits reach its parent: `door` or `mailbox`.
+        /// Absent, the parent's kind picks the default.
+        #[arg(long = "commit-push", value_name = "MODE")]
+        commit_push: Option<String>,
         /// Defaults to the caller, then to the one registered coordinator.
         #[arg(long)]
         parent: Option<String>,
@@ -1288,6 +1292,32 @@ enum AgentCmd {
         name: String,
         #[arg(long, default_value_t = 0)]
         rc: i32,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Receive a lane's commits as pushes. `<lane>` names one lane, `children`
+    /// every current child plus a wildcard, `'*'` every lane the caller parents.
+    Subscribe {
+        /// A lane, or the `children` / `'*'` alias.
+        #[arg(value_name = "LANE")]
+        target: String,
+        /// How a commit reaches the subscriber: `door` or `mailbox`.
+        #[arg(long, value_name = "MODE", default_value = "door")]
+        mode: String,
+        /// The subscriber; defaults to the caller's identity.
+        #[arg(long = "as", value_name = "NAME")]
+        as_name: Option<String>,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Stop receiving a lane's commit pushes.
+    Unsubscribe {
+        /// A lane, or the `children` / `'*'` alias.
+        #[arg(value_name = "LANE")]
+        target: String,
+        /// The subscriber; defaults to the caller's identity.
+        #[arg(long = "as", value_name = "NAME")]
+        as_name: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -2156,6 +2186,105 @@ mod tests {
                 ..
             }) => assert_eq!(bin.as_deref(), Some("ccz")),
             other => panic!("lane run parsed as {:?}", other.is_some()),
+        }
+    }
+
+    /// RECEIPT. `beep agent subscribe` defaults to the door, takes a mailbox
+    /// mode and an `--as`, and `unsubscribe` takes the wildcard.
+    #[test]
+    fn agent_subscribe_and_unsubscribe_parse() {
+        let cli = Cli::try_parse_from(["boop", "beep", "agent", "subscribe", "feature-x"])
+            .expect("subscribe feature-x parses");
+        match cli.command {
+            Some(SubCmd::Beep {
+                cmd:
+                    Some(BeepCmd::Agent {
+                        cmd:
+                            AgentCmd::Subscribe {
+                                target,
+                                mode,
+                                as_name,
+                                ..
+                            },
+                    }),
+                ..
+            }) => {
+                assert_eq!(target, "feature-x");
+                assert_eq!(mode, "door");
+                assert_eq!(as_name, None);
+            }
+            other => panic!("subscribe parsed as {:?}", other.is_some()),
+        }
+        let cli = Cli::try_parse_from([
+            "boop",
+            "beep",
+            "agent",
+            "subscribe",
+            "children",
+            "--mode",
+            "mailbox",
+            "--as",
+            "obs",
+        ])
+        .expect("subscribe children --mode --as parses");
+        match cli.command {
+            Some(SubCmd::Beep {
+                cmd:
+                    Some(BeepCmd::Agent {
+                        cmd:
+                            AgentCmd::Subscribe {
+                                target,
+                                mode,
+                                as_name,
+                                ..
+                            },
+                    }),
+                ..
+            }) => {
+                assert_eq!(target, "children");
+                assert_eq!(mode, "mailbox");
+                assert_eq!(as_name.as_deref(), Some("obs"));
+            }
+            other => panic!("subscribe children parsed as {:?}", other.is_some()),
+        }
+        let cli = Cli::try_parse_from(["boop", "beep", "agent", "unsubscribe", "*"])
+            .expect("unsubscribe '*' parses");
+        assert!(matches!(
+            cli.command,
+            Some(SubCmd::Beep {
+                cmd: Some(BeepCmd::Agent {
+                    cmd: AgentCmd::Unsubscribe { target, .. }
+                }),
+                ..
+            }) if target == "*"
+        ));
+    }
+
+    /// RECEIPT. `lane create --commit-push` carries the mode through clap.
+    #[test]
+    fn lane_create_takes_a_commit_push_mode() {
+        let cli = Cli::try_parse_from([
+            "boop",
+            "beep",
+            "lane",
+            "create",
+            "--lane",
+            "push-probe",
+            "--preset",
+            "flash4",
+            "--commit-push",
+            "mailbox",
+        ])
+        .expect("parse lane create --commit-push");
+        match cli.command {
+            Some(SubCmd::Beep {
+                cmd:
+                    Some(BeepCmd::Lane {
+                        cmd: LaneCmd::Create { commit_push, .. },
+                    }),
+                ..
+            }) => assert_eq!(commit_push.as_deref(), Some("mailbox")),
+            other => panic!("lane create parsed as {:?}", other.is_some()),
         }
     }
 
