@@ -11,6 +11,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use boop::harness::mock_tui::{self, MockTuiLaunch, MockTuiReplay};
@@ -18,6 +19,10 @@ use boop::harness::{shell_quote, HarnessId};
 use boop::Registry;
 
 const BOOP: &str = env!("CARGO_BIN_EXE_boop");
+
+/// The three cases each spawn a tmux server, an llmock provider and a real TUI
+/// against shared machine resources; run them one at a time.
+static CASE_LOCK: Mutex<()> = Mutex::new(());
 
 /// Wait for the route to register and the backend to appear.
 const START_DEADLINE: Duration = Duration::from_secs(60);
@@ -81,37 +86,52 @@ impl Scratch {
         String::from_utf8_lossy(&out.stdout).trim().to_owned()
     }
 
-    /// Kill anything this case left running; `true` when it had to.
-    fn kill_survivors(&mut self) -> bool {
-        let mut killed = false;
-        for pid in self.backend_pids.clone() {
-            if pid_alive(pid) {
-                // The backend leads its own process group (setsid), so the
-                // negative pid reaches the server and its children.
-                let _ = Command::new("kill")
-                    .args(["-KILL", &format!("-{pid}")])
-                    .output();
-                let _ = Command::new("kill")
-                    .args(["-KILL", &pid.to_string()])
-                    .output();
-                killed = true;
-            }
-        }
+    /// Kill anything this case left running; returns the pids it had to kill.
+    fn kill_survivors(&self) -> Vec<u32> {
+        let mut targets = self.backend_pids.clone();
         if let Some(pid) = self.wrapper_pid {
-            if pid_alive(pid) {
-                let _ = Command::new("kill")
-                    .args(["-KILL", &pid.to_string()])
-                    .output();
-                killed = true;
+            targets.push(pid);
+        }
+        targets.extend(self.scratch_processes());
+        targets.sort_unstable();
+        targets.dedup();
+        let mut killed = Vec::new();
+        for pid in targets {
+            if !pid_alive(pid) {
+                continue;
             }
+            // A backend leads its own process group (setsid), so the negative
+            // pid reaches the server and its children.
+            let _ = Command::new("kill")
+                .args(["-KILL", &format!("-{pid}")])
+                .output();
+            let _ = Command::new("kill")
+                .args(["-KILL", &pid.to_string()])
+                .output();
+            killed.push(pid);
         }
         killed
     }
 
-    fn teardown(&mut self, entry: &str) {
-        if self.kill_survivors() {
-            panic!("{entry}: teardown had to kill an orphaned process");
-        }
+    /// Every process whose cwd or `HOME` sits under this case's scratch root,
+    /// found even when the case panicked before recording its backend pid.
+    fn scratch_processes(&self) -> Vec<u32> {
+        let root = self.root.to_string_lossy().into_owned();
+        let me = std::process::id();
+        let mut pids = cwd_pids_under(&root);
+        pids.extend(home_pids_under(&root));
+        pids.sort_unstable();
+        pids.dedup();
+        pids.retain(|pid| *pid != me);
+        pids
+    }
+
+    fn teardown(&self, entry: &str) {
+        let killed = self.kill_survivors();
+        assert!(
+            killed.is_empty(),
+            "{entry}: teardown had to kill orphaned pids {killed:?}"
+        );
     }
 }
 
@@ -121,6 +141,52 @@ impl Drop for Scratch {
         let _ = tmux(&self.server, &["kill-server"]);
         let _ = std::fs::remove_dir_all(&self.root);
     }
+}
+
+/// Pids whose working directory sits under `root`, from one `lsof` sweep.
+fn cwd_pids_under(root: &str) -> Vec<u32> {
+    let output = Command::new("lsof")
+        .args(["-a", "-d", "cwd", "-Fn"])
+        .output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut pids = Vec::new();
+    let mut current = None;
+    for line in text.lines() {
+        if let Some(pid) = line.strip_prefix('p').and_then(|pid| pid.parse().ok()) {
+            current = Some(pid);
+        } else if let Some(path) = line.strip_prefix('n') {
+            if path.starts_with(root) {
+                if let Some(pid) = current {
+                    pids.push(pid);
+                }
+            }
+        }
+    }
+    pids
+}
+
+/// Pids whose environment `HOME` sits under `root`, from one `ps` sweep.
+fn home_pids_under(root: &str) -> Vec<u32> {
+    let output = Command::new("ps")
+        .args(["-E", "-o", "pid=,command="])
+        .output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let (pid, rest) = line.trim().split_once(char::is_whitespace)?;
+            let pid = pid.parse().ok()?;
+            let home = rest
+                .split_whitespace()
+                .find_map(|token| token.strip_prefix("HOME="))?;
+            home.starts_with(root).then_some(pid)
+        })
+        .collect()
 }
 
 /// A tmux command on this case's throwaway server.
@@ -492,6 +558,7 @@ fn run_one(entry: &str) -> Result<(), String> {
 /// strands the serve process.
 #[test]
 fn ctrl_c_leaves_no_orphaned_backend_opencode() {
+    let _case = CASE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     match run_one("opencode") {
         Ok(()) => println!("pass opencode"),
         Err(reason) => println!("skip opencode: {reason}"),
@@ -502,6 +569,7 @@ fn ctrl_c_leaves_no_orphaned_backend_opencode() {
 /// `ctrl_c_leaves_no_orphaned_backend_opencode`.
 #[test]
 fn ctrl_c_leaves_no_orphaned_backend_claude() {
+    let _case = CASE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     match run_one("claude") {
         Ok(()) => println!("pass claude"),
         Err(reason) => println!("skip claude: {reason}"),
@@ -512,6 +580,7 @@ fn ctrl_c_leaves_no_orphaned_backend_claude() {
 /// `ctrl_c_leaves_no_orphaned_backend_opencode`.
 #[test]
 fn ctrl_c_leaves_no_orphaned_backend_codex() {
+    let _case = CASE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     match run_one("codex") {
         Ok(()) => println!("pass codex"),
         Err(reason) => println!("skip codex: {reason}"),
