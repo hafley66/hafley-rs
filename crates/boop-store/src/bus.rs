@@ -81,6 +81,7 @@ pub enum MessageKind {
     ExitedWithoutCompletion,
     OpenFailed,
     HeadRewound,
+    Commit,
     Other(String),
 }
 
@@ -150,6 +151,7 @@ kind_impls!(MessageKind {
     ExitedWithoutCompletion => "exited_without_completion",
     OpenFailed => "open_failed",
     HeadRewound => "head_rewound",
+    Commit => "commit",
 });
 
 impl MessageKind {
@@ -159,7 +161,7 @@ impl MessageKind {
     /// | supervisor row | who reads it |
     /// |---|---|
     /// | `result`, `open_failed`, `exited_without_completion` | `boop wait <lane>`, `boop wait --me` |
-    /// | `yield`, `head_rewound`, `reparented` | `boop wait --me` |
+    /// | `yield`, `head_rewound`, `reparented`, `commit` | `boop wait --me` |
     /// | `retrying`, `retry_budget_exhausted`, `completion` | `boop wait --me` |
     ///
     /// The ladder splits these: `lane_progress_row` stops at the mailbox,
@@ -176,6 +178,7 @@ impl MessageKind {
                 | MessageKind::ExitedWithoutCompletion
                 | MessageKind::OpenFailed
                 | MessageKind::HeadRewound
+                | MessageKind::Commit
         )
     }
 
@@ -196,6 +199,13 @@ impl MessageKind {
     /// trail, read with `boop wait`.
     pub fn lane_progress_row(&self) -> bool {
         self.supervisor_row() && !self.lane_end_row()
+    }
+
+    /// A row that reports a HEAD move for a lane. The ladder treats it like a
+    /// progress row except at the mailbox, where it follows the subscriber's
+    /// `agent_commit_subscription` mode (commit-as-message).
+    pub fn commit_row(&self) -> bool {
+        matches!(self, MessageKind::Commit)
     }
 }
 
@@ -1235,6 +1245,7 @@ mod tests {
             "exited_without_completion",
             "open_failed",
             "head_rewound",
+            "commit",
         ] {
             assert!(
                 crate::bus::MessageKind::from(wire).supervisor_row(),
@@ -1266,7 +1277,7 @@ mod tests {
             assert!(kind.lane_end_row(), "{wire} ends a lane's run");
             assert!(!kind.lane_progress_row(), "{wire} is not progress");
         }
-        for wire in ["yield", "reparented", "retrying", "head_rewound"] {
+        for wire in ["yield", "reparented", "retrying", "head_rewound", "commit"] {
             let kind = crate::bus::MessageKind::from(wire);
             assert!(kind.lane_progress_row(), "{wire} is progress");
             assert!(!kind.lane_end_row(), "{wire} does not end a run");
@@ -1281,6 +1292,7 @@ mod tests {
             "exited_without_completion",
             "open_failed",
             "head_rewound",
+            "commit",
         ] {
             let kind = crate::bus::MessageKind::from(wire);
             assert_ne!(
@@ -1296,6 +1308,18 @@ mod tests {
                 "{wire} is neither"
             );
         }
+    }
+
+    /// RECEIPT. `commit` is the only wire string `commit_row` names, and it
+    /// round-trips through the same table every other kind uses.
+    #[test]
+    fn commit_is_the_commit_row_and_round_trips_its_wire_string() {
+        let commit = crate::bus::MessageKind::from("commit");
+        assert_eq!(commit, crate::bus::MessageKind::Commit);
+        assert_eq!(commit.as_str(), "commit");
+        assert!(commit.commit_row());
+        assert!(!crate::bus::MessageKind::from("yield").commit_row());
+        assert!(!crate::bus::MessageKind::from("result").commit_row());
     }
 
     /// A non-result body mentioning `rc=` is prose, never an exit code.

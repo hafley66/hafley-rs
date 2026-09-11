@@ -52,7 +52,9 @@ pub struct Store {
 /// 28 = agent_tag + agent_tag_link, the one tag table every surface shares.
 /// 29 = the same tag tables re-applied: another build stamped 28 without
 /// creating them, and a current version stops the migration at the gate.
-pub const SCHEMA_VERSION: i64 = 29;
+/// 30 = commit-as-message: subscriptions, door pushes per (lane, subscriber,
+/// head) and the per-lane reported head; see `COMMIT_PUSH_SCHEMA`.
+pub const SCHEMA_VERSION: i64 = 30;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -334,6 +336,17 @@ impl DoorBlowoutRow {
     pub fn until_ms(&self) -> u64 {
         self.at_ms.saturating_add(self.cooldown_ms)
     }
+}
+
+/// One commit subscription (`agent_commit_subscription`): which subscriber
+/// wants a lane's commits pushed, and by which mode. `lane` may be `'*'` for a
+/// wildcard row.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CommitSubscriptionRow {
+    pub subscriber: String,
+    pub lane: String,
+    pub mode: String,
+    pub created_at: String,
 }
 
 impl DeliveryState {
@@ -979,6 +992,10 @@ impl Store {
             if self.schema_version()? < 29 {
                 self.connection.execute_batch(TAG_SCHEMA)?;
                 self.connection.execute_batch("PRAGMA user_version = 29;")?;
+            }
+            if self.schema_version()? < 30 {
+                self.connection.execute_batch(COMMIT_PUSH_SCHEMA)?;
+                self.connection.execute_batch("PRAGMA user_version = 30;")?;
             }
             self.stamp_version()?;
             Ok(())
@@ -3042,6 +3059,131 @@ impl Store {
         Ok(())
     }
 
+    /// Every commit subscription for `lane`: the lane-specific rows plus the
+    /// `'*'` wildcard rows, ordered by lane then subscriber.
+    pub fn commit_subscriptions_for_lane(&self, lane: &str) -> Result<Vec<CommitSubscriptionRow>> {
+        let mut statement = self.connection.prepare(
+            "SELECT subscriber, lane, mode, created_at
+             FROM agent_commit_subscription
+             WHERE lane = ?1 OR lane = '*'
+             ORDER BY lane, subscriber",
+        )?;
+        let rows = statement.query_map(params![lane], |row| {
+            Ok(CommitSubscriptionRow {
+                subscriber: row.get(0)?,
+                lane: row.get(1)?,
+                mode: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+
+    /// The mode a subscriber set for `lane`, falling back to its `'*'` row.
+    /// `None` when the subscriber has no row at all.
+    pub fn commit_subscription(&self, subscriber: &str, lane: &str) -> Result<Option<String>> {
+        let exact = self
+            .connection
+            .query_row(
+                "SELECT mode FROM agent_commit_subscription
+                 WHERE subscriber = ?1 AND lane = ?2",
+                params![subscriber, lane],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        if exact.is_some() {
+            return Ok(exact);
+        }
+        self.connection
+            .query_row(
+                "SELECT mode FROM agent_commit_subscription
+                 WHERE subscriber = ?1 AND lane = '*'",
+                params![subscriber],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    /// Write one commit subscription, replacing the row for its key.
+    pub fn set_commit_subscription(&self, row: &CommitSubscriptionRow) -> Result<()> {
+        self.connection.execute(
+            "INSERT OR REPLACE INTO agent_commit_subscription
+               (subscriber, lane, mode, created_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![row.subscriber, row.lane, row.mode, row.created_at],
+        )?;
+        Ok(())
+    }
+
+    /// Drop one commit subscription. Returns how many rows were removed.
+    pub fn drop_commit_subscription(&self, subscriber: &str, lane: &str) -> Result<usize> {
+        let removed = self.connection.execute(
+            "DELETE FROM agent_commit_subscription WHERE subscriber = ?1 AND lane = ?2",
+            params![subscriber, lane],
+        )?;
+        Ok(removed)
+    }
+
+    /// Whether `head` was already pushed to `subscriber` for `lane`.
+    pub fn commit_push_exists(&self, lane: &str, subscriber: &str, head: &str) -> Result<bool> {
+        let exists: bool = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM agent_commit_push
+                            WHERE lane = ?1 AND subscriber = ?2 AND head = ?3)",
+            params![lane, subscriber, head],
+            |row| row.get(0),
+        )?;
+        Ok(exists)
+    }
+
+    /// Record one commit push. A second call for the same (lane, subscriber,
+    /// head) is a no-op, so a retried landing never doubles the row.
+    pub fn record_commit_push(
+        &self,
+        lane: &str,
+        subscriber: &str,
+        head: &str,
+        message_id: &str,
+        at_ms: u64,
+    ) -> Result<()> {
+        self.connection.execute(
+            "INSERT OR IGNORE INTO agent_commit_push
+               (lane, subscriber, head, message_id, at_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![lane, subscriber, head, message_id, at_ms as i64],
+        )?;
+        Ok(())
+    }
+
+    /// The last head `lane` reported, if any.
+    pub fn lane_reported_head(&self, lane: &str) -> Result<Option<String>> {
+        self.connection
+            .query_row(
+                "SELECT reported_head FROM agent_lane_head WHERE lane = ?1",
+                params![lane],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    /// Record the last head `lane` reported.
+    pub fn set_lane_reported_head(&self, lane: &str, head: &str, at_ms: u64) -> Result<()> {
+        self.connection.execute(
+            "INSERT INTO agent_lane_head (lane, reported_head, at_ms)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(lane) DO UPDATE SET
+               reported_head = excluded.reported_head,
+               at_ms = excluded.at_ms",
+            params![lane, head, at_ms as i64],
+        )?;
+        Ok(())
+    }
+
     /// Every liveness interval for one session (or all when `session` is
     /// `None`), joined back to the TEXT status surface.
     pub fn live_span(&self, session: Option<&str>) -> Result<Vec<crate::rows::LiveSpanRow>> {
@@ -3794,6 +3936,40 @@ CREATE INDEX IF NOT EXISTS idx_door_blowout_route
   ON agent_door_blowout(route, at_ms);
 ";
 
+/// Schema v30: commit-as-message, on its own so an older store adds the three
+/// tables in place. The same text sits inside `SCHEMA` for a fresh store.
+const COMMIT_PUSH_SCHEMA: &str = "
+-- One subscriber's interest in a lane's commits. `lane` is a lane name or
+-- '*'; `mode` is how a push reaches the subscriber. The exact (subscriber,
+-- lane) row beats the (subscriber, '*') row.
+CREATE TABLE IF NOT EXISTS agent_commit_subscription (
+  subscriber TEXT NOT NULL,
+  lane TEXT NOT NULL,
+  mode TEXT NOT NULL CHECK (mode IN ('door', 'mailbox')),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (subscriber, lane)
+) WITHOUT ROWID;
+-- One push of one commit to one subscriber: the dedupe key that keeps a
+-- drained or retried row from taking a door twice for the same head.
+CREATE TABLE IF NOT EXISTS agent_commit_push (
+  lane TEXT NOT NULL,
+  subscriber TEXT NOT NULL,
+  head TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  at_ms INTEGER NOT NULL,
+  PRIMARY KEY (lane, subscriber, head)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_commit_push_subscriber
+  ON agent_commit_push(subscriber, at_ms);
+-- The last head a lane reported, so a supervisor restart or revive does not
+-- report the same commit twice.
+CREATE TABLE IF NOT EXISTS agent_lane_head (
+  lane TEXT PRIMARY KEY,
+  reported_head TEXT NOT NULL,
+  at_ms INTEGER NOT NULL
+) WITHOUT ROWID;
+";
+
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS dict_session (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS dict_harness (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
@@ -3914,6 +4090,38 @@ CREATE TABLE IF NOT EXISTS agent_tag_link (
   PRIMARY KEY (tag, source)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS idx_tag_link_source ON agent_tag_link(source);
+
+-- One subscriber's interest in a lane's commits. `lane` is a lane name or
+-- '*'; `mode` is how a push reaches the subscriber. The exact (subscriber,
+-- lane) row beats the (subscriber, '*') row.
+CREATE TABLE IF NOT EXISTS agent_commit_subscription (
+  subscriber TEXT NOT NULL,
+  lane TEXT NOT NULL,
+  mode TEXT NOT NULL CHECK (mode IN ('door', 'mailbox')),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (subscriber, lane)
+) WITHOUT ROWID;
+
+-- One push of one commit to one subscriber: the dedupe key that keeps a
+-- drained or retried row from taking a door twice for the same head.
+CREATE TABLE IF NOT EXISTS agent_commit_push (
+  lane TEXT NOT NULL,
+  subscriber TEXT NOT NULL,
+  head TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  at_ms INTEGER NOT NULL,
+  PRIMARY KEY (lane, subscriber, head)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_commit_push_subscriber
+  ON agent_commit_push(subscriber, at_ms);
+
+-- The last head a lane reported, so a supervisor restart or revive does not
+-- report the same commit twice.
+CREATE TABLE IF NOT EXISTS agent_lane_head (
+  lane TEXT PRIMARY KEY,
+  reported_head TEXT NOT NULL,
+  at_ms INTEGER NOT NULL
+) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS agent_trace (
   trace_id INTEGER PRIMARY KEY,
@@ -6265,6 +6473,158 @@ mod tests {
         assert!(has_table(&store, "agent_tag"));
         assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
         assert!(store.missing_user_authored().unwrap().is_empty());
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// RECEIPT. A v29 store opened by this build gains the three commit-push
+    /// tables and keeps the rows it already held.
+    #[test]
+    fn v30_migrates_a_v29_store_keeps_rows_and_creates_the_commit_tables() {
+        let (path, store) = fresh_store("v30-migrate");
+        store
+            .record_door_blowout(&super::DoorBlowoutRow {
+                route: "parent".into(),
+                at_ms: 5,
+                pushes: 1,
+                budget: 1,
+                window_ms: 1,
+                cooldown_ms: 1,
+                why: "keep".into(),
+            })
+            .unwrap();
+        store
+            .connection
+            .execute_batch(
+                "DROP TABLE agent_commit_subscription;
+                 DROP TABLE agent_commit_push;
+                 DROP TABLE agent_lane_head;
+                 PRAGMA user_version = 29;",
+            )
+            .unwrap();
+        drop(store);
+
+        let migrated = Store::open(path.clone()).unwrap();
+        assert_eq!(migrated.schema_version().unwrap(), SCHEMA_VERSION);
+        for table in [
+            "agent_commit_subscription",
+            "agent_commit_push",
+            "agent_lane_head",
+        ] {
+            assert!(has_table(&migrated, table), "{table} exists after v30");
+        }
+        assert_eq!(
+            migrated
+                .latest_door_blowout("parent")
+                .unwrap()
+                .map(|r| r.why),
+            Some("keep".to_string()),
+            "the v29 rows survive the migration"
+        );
+        drop(migrated);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// RECEIPT. A subscriber's exact (subscriber, lane) row beats its
+    /// (subscriber, '*') row, and a lane it never named falls back to the
+    /// wildcard.
+    #[test]
+    fn an_exact_commit_subscription_beats_the_wildcard() {
+        let (path, store) = fresh_store("commit-sub-exact");
+        store
+            .set_commit_subscription(&super::CommitSubscriptionRow {
+                subscriber: "obs".into(),
+                lane: "*".into(),
+                mode: "mailbox".into(),
+                created_at: "t".into(),
+            })
+            .unwrap();
+        assert_eq!(
+            store
+                .commit_subscription("obs", "lane-a")
+                .unwrap()
+                .as_deref(),
+            Some("mailbox")
+        );
+        store
+            .set_commit_subscription(&super::CommitSubscriptionRow {
+                subscriber: "obs".into(),
+                lane: "lane-a".into(),
+                mode: "door".into(),
+                created_at: "t".into(),
+            })
+            .unwrap();
+        assert_eq!(
+            store
+                .commit_subscription("obs", "lane-a")
+                .unwrap()
+                .as_deref(),
+            Some("door"),
+            "the exact row wins"
+        );
+        assert_eq!(
+            store
+                .commit_subscription("obs", "lane-b")
+                .unwrap()
+                .as_deref(),
+            Some("mailbox"),
+            "an unnamed lane falls back to the wildcard"
+        );
+        assert_eq!(
+            store.commit_subscriptions_for_lane("lane-a").unwrap().len(),
+            2
+        );
+        assert_eq!(store.drop_commit_subscription("obs", "lane-a").unwrap(), 1);
+        assert_eq!(store.drop_commit_subscription("obs", "lane-a").unwrap(), 0);
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// RECEIPT. A retried landing for the same (lane, subscriber, head) is a
+    /// no-op, so a drain cannot double-push one commit.
+    #[test]
+    fn a_second_commit_push_for_the_same_head_is_a_noop() {
+        let (path, store) = fresh_store("commit-push-dedupe");
+        store
+            .record_commit_push("lane-a", "obs", "abc", "m-1", 1)
+            .unwrap();
+        store
+            .record_commit_push("lane-a", "obs", "abc", "m-2", 2)
+            .unwrap();
+        let rows: i64 = store
+            .connection
+            .query_row("SELECT COUNT(*) FROM agent_commit_push", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(rows, 1, "the same (lane, subscriber, head) stays one row");
+        assert!(store.commit_push_exists("lane-a", "obs", "abc").unwrap());
+        assert!(!store.commit_push_exists("lane-a", "obs", "def").unwrap());
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// RECEIPT. The reported head round-trips and a second set updates the one
+    /// row in place.
+    #[test]
+    fn a_lane_reported_head_round_trips_and_updates_in_place() {
+        let (path, store) = fresh_store("lane-head");
+        assert_eq!(store.lane_reported_head("lane-a").unwrap(), None);
+        store.set_lane_reported_head("lane-a", "sha1", 1).unwrap();
+        assert_eq!(
+            store.lane_reported_head("lane-a").unwrap().as_deref(),
+            Some("sha1")
+        );
+        store.set_lane_reported_head("lane-a", "sha2", 2).unwrap();
+        assert_eq!(
+            store.lane_reported_head("lane-a").unwrap().as_deref(),
+            Some("sha2")
+        );
+        let rows: i64 = store
+            .connection
+            .query_row("SELECT COUNT(*) FROM agent_lane_head", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 1, "one reported head per lane");
         drop(store);
         let _ = std::fs::remove_file(&path);
     }
