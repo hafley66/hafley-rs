@@ -1197,14 +1197,6 @@ fn supervise(
             brief_completed = true;
             brief_turn_pending = false;
         }
-        // The marker: a waiter learns the brief is done as soon as it is, not
-        // when the lane eventually exits. Written at most once per lane.
-        if end.is_done() && !result_written {
-            if let Some((exit_code, detail)) = completion_verdict(brief_completed, &end) {
-                record_result(lane, exit_code, detail.as_deref());
-                result_written = true;
-            }
-        }
         if end.retryable() && flake_resumes < FLAKE_RESUME_CAP {
             flake_resumes += 1;
             println!("[boop] provider flake, resuming ({flake_resumes}/{FLAKE_RESUME_CAP})");
@@ -1220,10 +1212,21 @@ fn supervise(
         if end.retryable() {
             hail_parent_once(lane, RETRY_BUDGET_EXHAUSTED, flake_resumes, end.detail());
         }
+        // A turn end is not the lane's end while it holds a row it will feed as
+        // the next turn: drain the inbox at the boundary first. The result row
+        // is the lane's last word, so only a lane with nothing held writes it.
         for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
             seen.insert(hail.id.clone());
             record_hail_transition(events, &hail, "claimed-by-supervisor", "turn boundary");
             held.push(hail);
+        }
+        // The marker: a waiter learns the brief is done as soon as it is, not
+        // when the lane eventually exits. Written at most once per lane.
+        if held.is_empty() && end.is_done() && !result_written {
+            if let Some((exit_code, detail)) = completion_verdict(brief_completed, &end) {
+                record_result(lane, exit_code, detail.as_deref());
+                result_written = true;
+            }
         }
         if held.is_empty() && !end.is_done() {
             // A hard failure or an exhausted flake budget: the harness is
