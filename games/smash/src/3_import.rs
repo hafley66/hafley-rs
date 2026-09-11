@@ -2,6 +2,7 @@ use game_content::{
     Guard, Inventory, Op, PortFile, RECOGNIZED_OPERATIONS, SourceRef, SourceRule, TransitionSpec,
     Trigger, Unresolved, common_inventory, conditional_choice, decode_file, emit_chart,
     emit_port_rust, function_evidence, if_guard, lower_callback, lower_guard,
+    source_machine_inventory,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -12,7 +13,9 @@ const TURN_PATH: &str = "src/melee/ft/kinds/ftCommon/ftCo_Turn.c";
 const JUMP_PATH: &str = "src/melee/ft/kinds/ftCommon/ftCo_Jump.c";
 const AIR_JUMP_PATH: &str = "src/melee/ft/kinds/ftCommon/ftCo_JumpAerial.c";
 const FTCOMMON_PATH: &str = "src/melee/ft/kinds/ftCommon";
+const FTCOMMON_FORWARD_PATH: &str = "src/melee/ft/kinds/ftCommon/forward.h";
 const FTCOMMON_GENERATED: &str = "../crates/ftcommon/src/generated/0_ftcommon.rs";
+const SOURCE_INVENTORY_GENERATED: &str = "../classification/12_source_inventory.json";
 
 #[derive(Serialize)]
 struct SourceImport {
@@ -359,6 +362,24 @@ fn common_inventory_record(
     Ok((record, inventory))
 }
 
+fn source_inventory_record(root: &Path) -> Result<game_content::SourceMachineInventory, Box<dyn std::error::Error>> {
+    let revision = revision(root)?;
+    let vocabulary = std::fs::read_to_string(root.join(FTCOMMON_FORWARD_PATH))?;
+    Ok(source_machine_inventory(
+        "melee-ftcommon",
+        MELEE_REPOSITORY,
+        &revision,
+        FTCOMMON_FORWARD_PATH,
+        &vocabulary,
+        &ftcommon_sources(root)?,
+    )?)
+}
+
+fn source_inventory(check: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(SOURCE_INVENTORY_GENERATED);
+    emit(&path, &source_inventory_record(&melee_root())?, check)
+}
+
 fn operation_family(symbol: &str) -> &str {
     symbol.split_once('_').map_or(symbol, |(head, _)| head)
 }
@@ -687,12 +708,14 @@ enum Command {
     Pigeon { check: bool, output: Option<PathBuf> },
     Catalog { check: bool },
     Attributes { check: bool },
+    SourceInventory { check: bool },
 }
 
-const USAGE: &str = "usage: smash-import <pigeon|catalog|attributes> [--check] [output]";
+const USAGE: &str = "usage: smash-import <pigeon|catalog|attributes|source-inventory> [--check] [output]";
 const PIGEON_USAGE: &str = "usage: smash-import pigeon [--check] [output]";
 const CATALOG_USAGE: &str = "usage: smash-import catalog [--check]";
 const ATTRIBUTES_USAGE: &str = "usage: smash-import attributes [--check]";
+const SOURCE_INVENTORY_USAGE: &str = "usage: smash-import source-inventory [--check]";
 
 /// Pure argument parser. `catalog` and `attributes` accept exactly no argument
 /// (generate) or one `--check` (verify); `pigeon` accepts an optional
@@ -733,6 +756,17 @@ fn parse_args(args: &[std::ffi::OsString]) -> Result<Command, String> {
             }
             Ok(Command::Attributes { check })
         }
+        Some(command) if command == std::ffi::OsStr::new("source-inventory") => {
+            let second = args.next();
+            let check = second.is_some_and(is_check);
+            if second.is_some() && !check {
+                return Err(SOURCE_INVENTORY_USAGE.into());
+            }
+            if args.next().is_some() {
+                return Err(SOURCE_INVENTORY_USAGE.into());
+            }
+            Ok(Command::SourceInventory { check })
+        }
         _ => Err(USAGE.into()),
     }
 }
@@ -749,6 +783,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Command::Catalog { check } => character_catalogs(check),
         Command::Attributes { check } => character_attributes(check),
+        Command::SourceInventory { check } => source_inventory(check),
     }
 }
 
@@ -959,6 +994,27 @@ mod tests {
     }
 
     #[test]
+    fn generated_source_inventory_is_current_and_pinned() {
+        let record = super::source_inventory_record(&super::melee_root()).unwrap();
+        assert_eq!(record.revision, super::revision(&super::melee_root()).unwrap());
+        assert_eq!(record.counts.states, record.states.len());
+        assert_eq!(record.counts.callbacks, record.callbacks.len());
+        assert_eq!(
+            record.counts.direct_calls,
+            record.callbacks.iter().map(|callback| callback.calls.len()).sum::<usize>(),
+        );
+        assert_eq!(record.counts.unresolved, record.unresolved.len());
+        assert!(record.states.windows(2).all(|states| states[0].ordinal < states[1].ordinal));
+        assert!(record.callbacks.iter().flat_map(|callback| &callback.calls).any(|call| {
+            call.operation.is_none()
+        }));
+        assert_eq!(
+            format!("{}\n", serde_json::to_string_pretty(&record).unwrap()),
+            include_str!("../../classification/12_source_inventory.json"),
+        );
+    }
+
+    #[test]
     fn common_inventory_covers_scope_with_sourced_calls() {
         let (common, inventory) = super::common_inventory_record(&super::melee_root()).unwrap();
         assert_eq!(common.counts.files, 142);
@@ -1006,7 +1062,10 @@ mod tests {
     /// Catalog and attributes accept only generate or `--check`.
     #[test]
     fn catalog_cli_spellings_are_exact() {
-        use super::{ATTRIBUTES_USAGE, CATALOG_USAGE, Command, PIGEON_USAGE, USAGE, parse_args};
+        use super::{
+            ATTRIBUTES_USAGE, CATALOG_USAGE, Command, PIGEON_USAGE, SOURCE_INVENTORY_USAGE,
+            USAGE, parse_args,
+        };
         use std::ffi::OsString;
 
         let args = |parts: &[&str]| parts.iter().map(OsString::from).collect::<Vec<_>>();
@@ -1035,6 +1094,14 @@ mod tests {
             parse_args(&args(&["attributes", "--check"])).unwrap(),
             Command::Attributes { check: true },
         );
+        assert_eq!(
+            parse_args(&args(&["source-inventory"])).unwrap(),
+            Command::SourceInventory { check: false },
+        );
+        assert_eq!(
+            parse_args(&args(&["source-inventory", "--check"])).unwrap(),
+            Command::SourceInventory { check: true },
+        );
         for bad in [
             vec![],
             vec!["cat"],
@@ -1044,6 +1111,16 @@ mod tests {
             vec!["--check"],
         ] {
             assert_eq!(parse_args(&args(&bad)), Err(USAGE.into()), "{bad:?}");
+        }
+        for bad in [
+            vec!["source-inventory", "out.json"],
+            vec!["source-inventory", "--check", "extra"],
+        ] {
+            assert_eq!(
+                parse_args(&args(&bad)),
+                Err(SOURCE_INVENTORY_USAGE.into()),
+                "{bad:?}"
+            );
         }
         for bad in [
             vec!["catalog", "out.rs"],

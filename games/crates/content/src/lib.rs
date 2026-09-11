@@ -33,8 +33,10 @@ mod source;
 pub use source::{
     CallSite, FunctionEvidence, FunctionSite, Guard, Inventory, Op, PortBody, PortEffect, PortExpr,
     PortFile, PortFn, PortSpan, PortStatement, PortValue, RECOGNIZED_OPERATIONS, SourceError,
-    SourceRef, SourceRule, Unresolved, common_inventory, conditional_choice, emit_port_rust,
-    function_evidence, if_guard, lower_callback, lower_guard,
+    SourceCallRequirement, SourceCallback, SourceInventoryCounts, SourceMachineInventory,
+    SourceRef, SourceRule, SourceState, Unresolved, common_inventory, conditional_choice,
+    emit_port_rust, function_evidence, if_guard, lower_callback, lower_guard, motion_states,
+    source_machine_inventory,
 };
 
 #[cfg(feature = "ingest")]

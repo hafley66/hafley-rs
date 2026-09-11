@@ -890,6 +890,7 @@ dependencies = [
 name = "game-fighter"
 version = "0.1.0"
 dependencies = [
+ "game-combat",
  "game-input",
  "redux",
  "serde",
