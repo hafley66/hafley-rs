@@ -1,4 +1,4 @@
-//! Common Coyote runtime-neutral catalog.
+//! Dog runtime-neutral catalog.
 //!
 //! Decodes the retained PM3.6 subaction payloads in `imported/` with the shared
 //! `game_content` decoder and copies them into owned content with the existing
@@ -10,9 +10,9 @@
 use serde::{Deserialize, Serialize};
 
 /// Runtime namespace.
-pub const RUNTIME: &str = "coyote";
+pub const RUNTIME: &str = "dog";
 /// Public display name.
-pub const DISPLAY_NAME: &str = "Common Coyote";
+pub const DISPLAY_NAME: &str = "Dog";
 
 /// Ordered (subaction name, retained file) pairs. Order is the catalog identity.
 /// Entries append without renumbering.
@@ -77,12 +77,12 @@ mod ingest {
     type Error = Box<dyn std::error::Error>;
 
     pub fn imported_dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/fighters/coyote/imported")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/fighters/dog/imported")
     }
 
     /// Decode each catalog payload in ID order, verifying the embedded
     /// subaction name matches the declared catalog name.
-    #[tracing::instrument(target = "coyote::ingest", skip_all, fields(actions = CATALOG.len()))]
+    #[tracing::instrument(target = "dog::ingest", skip_all, fields(actions = CATALOG.len()))]
     pub fn load() -> Result<Vec<HighLevelSubaction>, Error> {
         let root = imported_dir();
         let mut actions = Vec::with_capacity(CATALOG.len());
