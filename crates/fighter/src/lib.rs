@@ -26,7 +26,7 @@ pub mod _6_qualification;
 pub use _0_rules::Rules;
 pub use _1_state::{Input, Phase, State, button};
 pub use _1d_combat::{CombatState, Hit, apply_hit};
-pub use _2a_controller::Controller;
+pub use _2a_controller::{ActionState, Controller};
 pub use _3_slice::{FighterEvent, FighterSlice, MovementEffect, MovementSlice};
 
 pub fn advance(state: &mut State, input: Input, rules: &Rules) {
