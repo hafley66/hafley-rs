@@ -58,6 +58,15 @@ pub struct CatalogEvidence {
     pub entries: Vec<CatalogEntry>,
 }
 
+/// Owned, runtime-neutral action content embedded at build time.
+///
+/// Deserializes `generated/1_baked.json` from the compiled binary. Requires no
+/// brawllib, HTML, filesystem, or parser access, so it is usable without the
+/// `ingest` feature.
+pub fn load_baked() -> Result<Vec<game_content::Action>, serde_json::Error> {
+    serde_json::from_str(include_str!("generated/1_baked.json"))
+}
+
 #[cfg(feature = "ingest")]
 mod ingest {
     use super::*;
@@ -118,6 +127,6 @@ mod ingest {
 #[cfg(feature = "ingest")]
 pub use ingest::{baked, evidence, imported_dir, load};
 
-#[cfg(all(test, feature = "ingest"))]
+#[cfg(test)]
 #[path = "2_tests.rs"]
 mod tests;
