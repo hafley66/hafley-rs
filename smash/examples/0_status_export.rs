@@ -8,7 +8,6 @@
 use game_fighter::Phase;
 use game_fighter::status::{air_transitions, ground_transitions};
 use serde_json::{Value, json};
-use smash::fighters::pigeon::catalog;
 use smash::fighters::pigeon::movement::{self, SelectionFacts};
 
 /// Deterministic stick sweep; the phase->animation selection seam is sampled
@@ -81,10 +80,16 @@ fn phase_animation() -> Value {
 }
 
 fn main() {
-    let catalog: Value = catalog::CATALOG
+    // The committed generator output owns catalog membership and order; this
+    // export only reshapes it for the status join and never re-derives it.
+    let evidence: Value =
+        serde_json::from_str(include_str!("../src/fighters/pigeon/generated/5_catalog.json"))
+            .expect("parse committed pigeon catalog evidence");
+    let catalog: Value = evidence["entries"]
+        .as_array()
+        .expect("catalog entries")
         .iter()
-        .enumerate()
-        .map(|(id, (action, file))| json!({ "id": id, "action": action, "file": file }))
+        .map(|entry| json!({ "id": entry["id"], "action": entry["name"], "file": entry["file"] }))
         .collect();
     let phases: Value = Phase::ALL
         .iter()

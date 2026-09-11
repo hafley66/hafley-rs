@@ -1,13 +1,13 @@
 use super::*;
 use game_content::Action;
 
-/// Declared frame counts, one per [`CATALOG`] row. Values come from the raw
+/// Declared frame counts, one per catalog row. Values come from the raw
 /// payload header records and are frozen as deterministic catalog identity.
 const FRAMES: [usize; 16] = [
     241, 31, 22, 51, 60, 8, 201, 10, 3, 40, 40, 60, 39, 14, 85, 81,
 ];
 
-/// Frames carrying at least one hitbox, one per [`CATALOG`] row.
+/// Frames carrying at least one hitbox, one per catalog row.
 const HITBOX_FRAMES: [usize; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 4, 9, 0, 0, 0];
 
 fn canonical<T: serde::Serialize>(value: &T) -> String {
@@ -25,7 +25,25 @@ fn imported_root() -> std::path::PathBuf {
         .join("src/fighters/dog/imported")
 }
 
-fn committed_evidence() -> CatalogEvidence {
+/// Source-free mirror of the committed runtime-neutral evidence. Parsed from
+/// the generated JSON so the non-ingest tests never reopen a payload.
+#[derive(Debug, serde::Deserialize)]
+struct Entry {
+    id: usize,
+    name: String,
+    file: String,
+    frames: usize,
+    hitbox_frames: usize,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct Evidence {
+    runtime: String,
+    display_name: String,
+    entries: Vec<Entry>,
+}
+
+fn committed_evidence() -> Evidence {
     serde_json::from_str(include_str!("generated/0_catalog.json")).unwrap()
 }
 
@@ -43,12 +61,12 @@ fn load_baked_matches_embedded_content() {
 }
 
 /// Source-free catalog and frame identity: the embedded content must agree with
-/// the declared [`CATALOG`] order, the frozen frame/hitbox counts, and the
-/// committed runtime-neutral evidence, with no decode step.
+/// the frozen frame/hitbox counts and the committed runtime-neutral evidence,
+/// with no decode step.
 #[test]
 fn baked_catalog_and_frame_identity_are_exact() {
     let actions = load_baked().unwrap();
-    assert_eq!(actions.len(), CATALOG.len());
+    assert_eq!(actions.len(), ACTION_COUNT);
     assert_eq!(actions.iter().map(|a| a.frames.len()).collect::<Vec<_>>(), FRAMES);
     assert_eq!(hitbox_frame_counts(&actions), HITBOX_FRAMES);
     assert_eq!(
@@ -59,15 +77,14 @@ fn baked_catalog_and_frame_identity_are_exact() {
     let evidence = committed_evidence();
     assert_eq!(evidence.runtime, RUNTIME);
     assert_eq!(evidence.display_name, DISPLAY_NAME);
-    assert_eq!(evidence.entries.len(), CATALOG.len());
-    for (index, (entry, (name, file))) in evidence.entries.iter().zip(CATALOG).enumerate() {
+    assert_eq!(evidence.entries.len(), ACTION_COUNT);
+    let counts = hitbox_frame_counts(&actions);
+    for (index, entry) in evidence.entries.iter().enumerate() {
         assert_eq!(entry.id, index);
-        assert_eq!(entry.name, name);
-        assert_eq!(entry.file, file);
         assert_eq!(entry.frames, FRAMES[index]);
         assert_eq!(entry.hitbox_frames, HITBOX_FRAMES[index]);
         assert_eq!(entry.frames, actions[index].frames.len());
-        assert_eq!(entry.hitbox_frames, hitbox_frame_counts(&actions)[index]);
+        assert_eq!(entry.hitbox_frames, counts[index]);
     }
 }
 
@@ -83,28 +100,31 @@ fn baked_output_is_runtime_neutral() {
 }
 
 /// Recompute SHA256 over every retained payload and compare exact bytes to the
-/// manifest; a width or character-class check does not establish identity.
+/// manifest; a width or character-class check does not establish identity. The
+/// committed evidence supplies the ordered names and files, so this test needs
+/// no reference to the ingest-gated source rows.
 #[test]
 fn manifest_covers_every_retained_payload_with_exact_bytes() {
+    let evidence = committed_evidence();
     let manifest: serde_json::Value =
         serde_json::from_str(include_str!("imported/0_sources.json")).unwrap();
     let files = manifest["files"].as_object().unwrap();
-    assert_eq!(files.len(), CATALOG.len());
+    assert_eq!(files.len(), evidence.entries.len());
     let root = imported_root();
-    for (name, file) in CATALOG {
+    for entry in &evidence.entries {
         let expected = files
-            .get(file)
-            .unwrap_or_else(|| panic!("missing manifest entry for {file}"))
+            .get(&entry.file)
+            .unwrap_or_else(|| panic!("missing manifest entry for {}", entry.file))
             .as_str()
             .unwrap();
-        assert_eq!(expected.len(), 64, "hash width for {file}");
-        let bytes = std::fs::read(root.join(file)).unwrap();
-        assert_eq!(sha256_hex(&bytes), expected, "retained bytes changed for {name} ({file})");
+        assert_eq!(expected.len(), 64, "hash width for {}", entry.file);
+        let bytes = std::fs::read(root.join(&entry.file)).unwrap();
+        assert_eq!(sha256_hex(&bytes), expected, "retained bytes changed for {} ({})", entry.name, entry.file);
     }
     let frames = manifest["frames"].as_object().unwrap();
-    assert_eq!(frames.len(), CATALOG.len());
-    for ((name, _), count) in CATALOG.iter().zip(FRAMES) {
-        assert_eq!(frames[*name].as_u64(), Some(count as u64));
+    assert_eq!(frames.len(), evidence.entries.len());
+    for (entry, count) in evidence.entries.iter().zip(FRAMES) {
+        assert_eq!(frames[entry.name.as_str()].as_u64(), Some(count as u64));
     }
 }
 
@@ -131,7 +151,7 @@ mod with_ingest {
         let actions = load().unwrap();
         assert_eq!(
             actions.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(),
-            CATALOG.map(|(name, _)| name),
+            CATALOG.map(|source| source.name),
         );
         let frames: Vec<_> = actions.iter().map(|a| a.frames.len()).collect();
         assert_eq!(frames, FRAMES);
@@ -155,7 +175,7 @@ mod with_ingest {
             (Some(18), Some(30), Some(18.0)),
         );
 
-        let baked = baked(&actions);
+        let baked = game_content::bake(&actions);
         assert_eq!(hitbox_frame_counts(&baked), HITBOX_FRAMES);
         let attack: Vec<&game_content::Attack> =
             baked[12].frames.iter().flat_map(|f| &f.hit_boxes).collect();
@@ -181,15 +201,17 @@ mod with_ingest {
         }
     }
 
+    /// The committed evidence and baked actions are exactly a fresh decode run
+    /// through the shared generator.
     #[test]
-    fn generated_evidence_matches_decoded_catalog() {
-        let actions = load().unwrap();
-        let record = evidence(&actions);
-        assert_eq!(record.runtime, RUNTIME);
-        assert_eq!(record.display_name, DISPLAY_NAME);
-        assert_eq!(canonical(&record), include_str!("generated/0_catalog.json"));
+    fn generated_catalog_evidence_and_bake_are_current() {
+        let catalog = generate().unwrap();
+        assert_eq!(catalog.evidence.runtime, RUNTIME);
+        assert_eq!(catalog.evidence.display_name, DISPLAY_NAME);
+        assert_eq!(canonical(&catalog.evidence), include_str!("generated/0_catalog.json"));
+        assert_eq!(canonical(&catalog.actions), include_str!("generated/1_baked.json"));
         assert_eq!(
-            record.entries.iter().map(|entry| entry.frames).collect::<Vec<_>>(),
+            catalog.evidence.entries.iter().map(|entry| entry.frames).collect::<Vec<_>>(),
             FRAMES,
         );
     }
@@ -197,7 +219,7 @@ mod with_ingest {
     /// The embedded source-free content is exactly the bake of a fresh decode.
     #[test]
     fn embedded_bake_equals_decoded_bake() {
-        let decoded = game_content::bake(&load().unwrap());
+        let decoded = generate().unwrap().actions;
         assert_eq!(canonical(&load_baked().unwrap()), canonical(&decoded));
     }
 }
