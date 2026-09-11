@@ -87,6 +87,29 @@ COMPLETION: the supervisor writes ONE row `lane <id> done rc=<n>` into the
     boop wait <lane> [--wait-timeout <s>]
   A wait whose lane route goes dead with no row exits 3 instead of blocking.
 
+COMMIT PUSH: a lane reports by committing; its parent watches HEAD. Every
+  commit carries trailers, one per line after the subject:
+    git commit -m \"area: what changed\" -m \"Boop-Status: wip\"
+  Boop-Status  wip (the default checkpoint), done, or blocked
+  Boop-Ask     the one question, required on a blocked commit
+  Boop-Check   an optional validation receipt, `<command> -> <result>`
+  A blocked commit mints a request and takes the door, ending a
+  `boop wait <lane>`; a done commit stays in the mailbox and the result row
+  carries the head. The parent watches the worktree reflog (its mtime plus the
+  git-write tool-call nudge); BOOP_COMMIT_QUIET_SECS (default 3) coalesces a
+  burst into one row `old..new n=<count>`, and one push per commit goes to each
+  subscriber. The body names the range:
+    git -C <worktree> log -p old..new
+  A wip commit takes the door for subscribed routes: the parent by default,
+  door for coordinator/native/acpx parents and mailbox for lane parents. Change
+  it per lane or per edge:
+    boop beep agent subscribe <lane|children|*> [--mode door|mailbox] [--as <me>]
+    boop beep agent unsubscribe <lane|children|*> [--as <me>]
+  `children` writes one row per current child plus a wildcard row. At spawn:
+    boop beep lane create --branch feature/<name> --brief <abs-path> \\
+      --preset <p> --commit-push mailbox
+  Absent a row the parent's kind picks the default.
+
 RETIRE + REVIVE: a lane whose result row is written and then sees no mail for
   BOOP_IDLE_SHUTDOWN_SECS (default 60; 0 disables) closes its harness and
   exits with the rc it already mailed; residency reads `retired` and the
@@ -184,9 +207,9 @@ WAIT: every agent can background a shell, so the universal push is a block.
     boop wait <message-id>          the reply to what you just sent
     boop wait <lane>                a registered lane's result row, its rc
     boop wait --me [--as <name>]    the next unread mail addressed to you
-  A wait is the ONLY way a lane's progress reaches you: yield, commit,
-  head_rewound and result rows stop at the mailbox by law 9, so a coordinator
-  running lanes keeps one `boop wait --me &` armed.
+  A wip commit arrives as your next prompt; `boop wait --me` serves the rows
+  that stop at the mailbox (yield, head_rewound, a done commit and result), so a
+  coordinator running lanes keeps one armed.
   Default timeout 540s (under the 10-minute cap a background shell gives you),
   `--wait-timeout <s>` overrides it, and a timeout exits 124 printing the
   re-run line on stdout AND stderr. A lane whose typed expectations are unmet
@@ -325,10 +348,10 @@ LAWS:
   8 Codex native subagents need sandbox_mode=danger-full-access plus ACP
     session mode agent-full-access, or their boop calls cannot write the mail
     dir or .git/worktrees.
-  9 A supervisor row (yield, commit, head_rewound, result, open_failed, the
-    retry notices) never enters a parent's transcript. It waits in the mailbox
-    and the parent collects it: `boop wait <lane>` for an rc, a backgrounded
-    `boop wait --me &` for the batch. Only a reply and a hail take a door.
+  9 Yield, head_rewound and done-status commit rows stay in the mailbox; a wip
+    commit and a blocked commit take the door for subscribed routes (the parent
+    by default). The parent collects the mailbox rows with `boop wait <lane>`
+    for an rc, a backgrounded `boop wait --me &` for the batch.
 
 BUILD: hafley-rs crates/boop; `cargo install --path crates/boop --force` from
   main installs ~/.cargo/bin/boop. `boop --version` prints version and sha.

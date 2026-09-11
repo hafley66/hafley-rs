@@ -2305,6 +2305,19 @@ mod tests {
     }
 
     #[test]
+    fn help_text_documents_commit_push() {
+        let help = Cli::command().render_long_help().to_string();
+        assert!(
+            help.contains("COMMIT PUSH:"),
+            "help text missing COMMIT PUSH:\n{help}"
+        );
+        assert!(
+            help.contains("Boop-Status"),
+            "help text missing the trailer table:\n{help}"
+        );
+    }
+
+    #[test]
     fn startup_sync_runs_once_before_the_command() {
         let calls = std::cell::RefCell::new(Vec::new());
         run_with_startup_sync(
