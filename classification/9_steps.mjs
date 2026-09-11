@@ -8,7 +8,6 @@ import { currentSource } from './8_status.mjs';
 
 const stepsSource = fileURLToPath(new URL('7_steps.tsp', import.meta.url));
 const stepsOutput = new URL('10_steps.json', import.meta.url);
-const sourceRules = new URL('../smash/src/fighters/falcon/generated/2_source_rules.json', import.meta.url);
 const MAX_BYTES = 64 * 1024;
 
 export async function loadSteps(path = stepsSource) {
@@ -110,16 +109,18 @@ export async function runGateRecipe(gate, base = root) {
   return 'passed';
 }
 
-// Cheap re-verification for `check` mode: recompute artifact hashes and
-// observed facts from disk and compare against the stored receipt. Gates are
-// not re-executed; their recorded results are asserted in the returned
-// evidence so the join still validates names and pass results.
-export async function recheckReceipt(stored, step, base = root) {
+// Observation, not trust: a failing gate is recorded as failed instead of
+// throwing, so the join rejects it through GATE_FAILED in every mode.
+export async function runGateObserved(gate, base = root) {
+  try { return await runGateRecipe(gate, base); }
+  catch { return 'failed'; }
+}
+
+// Re-verification for `check` mode: recompute artifact hashes and observed
+// facts from disk, re-execute every authored proof gate and compare the live
+// observations against the stored receipt. A recorded pass is never trusted.
+export async function recheckReceipt(stored, step, base = root, runGate = runGateObserved) {
   const problems = [];
-  const expectedGates = Object.fromEntries(step.gates.map(gate => [gate.name, 'passed']));
-  if (JSON.stringify(stored.receipt.gates) !== JSON.stringify(expectedGates)) {
-    problems.push(`gates recorded ${JSON.stringify(stored.receipt.gates)}`);
-  }
   const artifacts = new Map();
   for (const artifact of step.artifacts) {
     const bytes = await readFile(await existing(base, artifact.path));
@@ -131,6 +132,8 @@ export async function recheckReceipt(stored, step, base = root) {
       observed = observedFacts(artifact.kind, await readFile(await existing(base, artifact.path)));
     }
   }
+  const gates = {};
+  for (const gate of step.gates) gates[gate.name] = await runGate(gate, base);
   const live = {
     source: await currentSource(base),
     artifacts: [...artifacts],
@@ -141,11 +144,27 @@ export async function recheckReceipt(stored, step, base = root) {
     artifacts: stored.receipt.artifacts.map(a => [a.path, { sha256: a.sha256, bytes: a.bytes }]),
     observed: stored.receipt.observed,
   };
+  if (JSON.stringify(stored.receipt.gates) !== JSON.stringify(gates)) {
+    problems.push(`recorded gates ${JSON.stringify(stored.receipt.gates)} != observed ${JSON.stringify(gates)}`);
+  }
   if (live.source !== recorded.source) problems.push('source fingerprint is stale');
   if (JSON.stringify(live.artifacts) !== JSON.stringify(recorded.artifacts)) problems.push('artifact hashes or sizes changed');
   if (JSON.stringify(live.observed) !== JSON.stringify(recorded.observed)) problems.push('observed extractor facts changed');
   if (problems.length) throw Error(`stale generated receipt: ${problems.join('; ')}`);
-  return { artifacts, observed, gates: expectedGates, source: recorded.source };
+  return { artifacts, observed, gates, source: live.source };
+}
+
+// Full check path shared by the CLI and tests: joins live evidence against the
+// stored receipt and rejects every error from either source.
+export async function checkSteps(steps, stored, base = root, runGate = runGateObserved) {
+  const evidence = new Map();
+  for (const [key, step] of Object.entries(steps)) {
+    if (!stored.steps[key]) throw Error(`stale generated receipt: missing step ${key}`);
+    evidence.set(key, await recheckReceipt(stored.steps[key], steps[key], base, runGate));
+  }
+  const result = joinSteps(steps, evidence);
+  if (result.errors.length) throw Error(result.errors.map(e => `${e.code}: ${e.message}`).join('\n'));
+  return result;
 }
 
 async function main() {
@@ -154,12 +173,8 @@ async function main() {
   const steps = await loadSteps();
   if (mode === 'check') {
     const stored = JSON.parse(await readFile(stepsOutput, 'utf8'));
-    const evidence = new Map();
-    for (const [key, step] of Object.entries(steps)) {
-      evidence.set(key, await recheckReceipt(stored.steps[key], steps[key]));
-    }
-    const result = joinSteps(steps, evidence);
-    console.log(`${Object.keys(steps).length} steps validated; receipt current`);
+    const result = await checkSteps(steps, stored);
+    console.log(`${Object.keys(result.steps).length} steps validated; gates re-executed; receipt current`);
     return;
   }
   const evidence = new Map();

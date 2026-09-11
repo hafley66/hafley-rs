@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { root, taskIds, existing, localPath } from './2_registry.mjs';
-import { loadSteps, joinSteps, observedFacts } from './9_steps.mjs';
+import { loadSteps, joinSteps, observedFacts, checkSteps } from './9_steps.mjs';
 
 const steps = await loadSteps();
 const step = steps['falconFtCommonSourceImport'];
@@ -72,6 +72,40 @@ test('receipt artifacts and observed facts match the generated source rules', ()
 });
 
 function byMap(map, path) { return map.get(path); }
+
+test('no artifact claims source-rule Rust after the lifecycle-chart split', () => {
+  for (const artifact of step.artifacts) {
+    assert.doesNotMatch(artifact.path, /0_chart\.rs/, `${artifact.path} is not emitted by the source extractor`);
+    assert.doesNotMatch(artifact.kind, /rust/, `${artifact.kind} must name its actual provenance`);
+  }
+  assert.deepEqual(step.artifacts.map(a => a.kind), ['source-rules-json', 'source-chart-d2', 'source-chart-svg']);
+});
+
+test('check re-executes authored gates instead of trusting the recorded pass', async () => {
+  const stored = structuredClone(generated);
+  await assert.rejects(
+    checkSteps(steps, stored, root, async () => 'failed'),
+    /GATE_FAILED|!= observed/, 'a recorded pass must not survive a failing gate');
+  const result = await checkSteps(steps, stored, root, async () => 'passed');
+  assert.deepEqual(Object.keys(result.steps), [step.id]);
+});
+
+test('check rejects drift, missing steps and join errors instead of printing success', async () => {
+  await assert.rejects(
+    checkSteps(steps, { steps: {} }, root, async () => 'passed'),
+    /missing step/);
+  const tampered = structuredClone(generated);
+  tampered.steps[step.id].receipt.artifacts[0].sha256 = 'f'.repeat(64);
+  await assert.rejects(
+    checkSteps(steps, tampered, root, async () => 'passed'),
+    /artifact hashes or sizes changed/);
+  // A join error still rejects even when the live gate agrees with the receipt.
+  const failed = structuredClone(generated);
+  failed.steps[step.id].receipt.gates['source-rules-check'] = 'failed';
+  await assert.rejects(
+    checkSteps(steps, failed, root, async () => 'failed'),
+    /GATE_FAILED/);
+});
 
 test('the generated file stays compact and shape-locked', () => {
   const raw = execFileSync('node', ['-e',
