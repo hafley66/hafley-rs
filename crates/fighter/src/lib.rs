@@ -26,9 +26,17 @@ pub use _0_rules::Rules;
 pub use _1_state::{ActionState, Input, Phase, State, button};
 pub use _1d_combat::{CombatState, Hit, apply_hit};
 pub use _3_slice::{
-    ActionContext, ActionSlice, FighterEvent, FighterSlice, MovementEffect, MovementSlice, frame,
-    tick,
+    ActionContext, ActionSlice, CombatSlice, FighterEvent, FighterSlice, MovementEffect,
+    MovementSlice, frame, tick,
 };
+
+impl State {
+    /// Compatibility seam for callers that dispatch one movement tick.
+    pub fn advance(&mut self, input: Input, rules: &Rules) {
+        use redux::Slice;
+        MovementSlice::reduce(self, input, rules, &mut |_| unreachable!());
+    }
+}
 
 pub fn advance(state: &mut State, input: Input, rules: &Rules) {
     use redux::Slice;

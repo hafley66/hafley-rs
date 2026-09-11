@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::_0_rules::Rules;
 use crate::_1_state::{Input, Phase, State};
-use crate::_1d_combat::{Hit, apply_hit};
+use crate::_1d_combat::{Hit, apply_hit_impl};
+use game_combat::HitOutcome;
 
 pub struct MovementSlice;
 
@@ -28,7 +29,27 @@ impl Slice for MovementSlice {
         cx: Self::Context<'_>,
         _fx: &mut impl FnMut(Self::Effect),
     ) -> Self::Output {
-        st.advance(ev, cx)
+        st.advance_impl(ev, cx)
+    }
+}
+
+/// The sole redux mutation boundary for a resolved combat hit.
+pub struct CombatSlice;
+
+impl Slice for CombatSlice {
+    type Context<'a> = ();
+    type State = State;
+    type Event = Hit;
+    type Output = HitOutcome;
+    type Effect = Never;
+
+    fn reduce(
+        st: &mut Self::State,
+        ev: Self::Event,
+        _cx: Self::Context<'_>,
+        _fx: &mut impl FnMut(Self::Effect),
+    ) -> Self::Output {
+        apply_hit_impl(st, &ev)
     }
 }
 
@@ -57,9 +78,11 @@ impl Slice for FighterSlice {
         _fx: &mut impl FnMut(Self::Effect),
     ) -> Self::Output {
         match ev {
-            FighterEvent::Input(input) => st.advance(input, cx),
+            FighterEvent::Input(input) => {
+                MovementSlice::reduce(st, input, cx, &mut |never| match never {});
+            }
             FighterEvent::Hit(hit) => {
-                apply_hit(st, &hit);
+                CombatSlice::reduce(st, hit, (), &mut |never| match never {});
             }
         }
     }
