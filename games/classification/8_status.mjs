@@ -18,9 +18,12 @@ async function fileDigest(base, path) {
 }
 
 // Pure projection from checked generated inputs. Rows are the catalog's own
-// membership and order; the phase axis is the generated role binding whose
-// source is that action id; chart stays explicit unknown because no generated
-// per-character chart artifact exists. Independent axes, no percentage.
+// membership and order; the generated role binding whose source is that action
+// id is reported as `bindings`/`bound`, which proves binding only. The phase and
+// live axes stay explicit UNKNOWN/unmeasured because no executable runtime
+// consumer of the generated roles exists in this projection; chart stays
+// explicit unknown because no generated per-character chart artifact exists.
+// Independent axes, no percentage.
 export async function buildStatusProjection(base = root) {
   const { characters: specs } = await loadStatus();
   const characters = [];
@@ -62,7 +65,7 @@ export async function buildStatusProjection(base = root) {
           message: `${key}: ${entry.name} baked ${bakedFrames} frames != catalog ${entry.frames}`,
         });
       }
-      const phase = (rolesBySource.get(entry.id) ?? []).slice().sort();
+      const bindings = (rolesBySource.get(entry.id) ?? []).slice().sort();
       return {
         id: entry.id,
         action: entry.name,
@@ -74,8 +77,10 @@ export async function buildStatusProjection(base = root) {
           expected: payload?.expected ?? null,
           frames: payload?.frames ?? null,
         },
-        phase,
-        live: phase.length > 0,
+        bindings,
+        bound: bindings.length > 0,
+        phase: 'UNKNOWN',
+        live: false,
       };
     });
 
@@ -107,18 +112,19 @@ export async function buildStatusProjection(base = root) {
 export function renderCharacterMatrix(character) {
   const lines = [];
   lines.push(`status axes: ${COLUMNS.join(' | ')}  (independent; no percentage)`);
-  lines.push('id  action        payload             catalog         phase                chart  live  restore   native    fidelity');
+  lines.push('id  action        payload             catalog         bind                 phase      chart  live  restore   native    fidelity');
   for (const row of character.rows) {
     const payload = row.payload.hash
       ? `${row.payload.state === 'retained' ? 'RET' : row.payload.state.toUpperCase()} ${(row.payload.hash ?? row.payload.expected).slice(0, 8)} f=${row.payload.frames ?? row.frames ?? '?'}`
       : 'MISSING';
-    const phase = row.phase.length ? row.phase.join(',') : '-';
+    const bindings = row.bindings.length ? row.bindings.join(',') : '-';
     lines.push([
       String(row.id).padStart(2),
       row.action.padEnd(13),
       payload.padEnd(19),
       String(row.file).padEnd(15),
-      phase.padEnd(20),
+      bindings.padEnd(20),
+      row.phase.padEnd(10),
       '-'.padEnd(6),
       (row.live ? 'yes' : 'no').padEnd(5),
       'UNMEASURED'.padEnd(9),

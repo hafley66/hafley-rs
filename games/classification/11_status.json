@@ -37,10 +37,12 @@
             "expected": "b5d904b01c4c35630801de7062ed2d495904abb1b4da9d11e97c6dee38f29207",
             "frames": 61
           },
-          "phase": [
+          "bindings": [
             "Idle"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 1,
@@ -53,10 +55,12 @@
             "expected": "37a49314e4b7c8b22edd7705238e78f6b5c5cbb77e79d48d4aba882264d51d8a",
             "frames": 36
           },
-          "phase": [
+          "bindings": [
             "Jump"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 2,
@@ -69,10 +73,12 @@
             "expected": "01b63dfbd97f6cc4c1536f809809164c514adc9fc2b1633f76bc6e22ffe690db",
             "frames": 40
           },
-          "phase": [
+          "bindings": [
             "AirAttack"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 3,
@@ -85,10 +91,12 @@
             "expected": "d7937dbf2b6ea50aeba59c0cb2a557f64b4210048ba5cf5d0e3acab32bac6455",
             "frames": 4
           },
-          "phase": [
+          "bindings": [
             "JumpSquat"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 4,
@@ -101,10 +109,12 @@
             "expected": "b419221f88097a9d7006e1cde2960b0754ee660a0a1e45cd97fe110e8e63e321",
             "frames": 9
           },
-          "phase": [
+          "bindings": [
             "Fall"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 5,
@@ -117,10 +127,12 @@
             "expected": "5e03b854cc53870ff8380bba8763b6085a8b5d3ddcfdac0cd3f030e09854f3a8",
             "frames": 19
           },
-          "phase": [
+          "bindings": [
             "LandingRecovery"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 6,
@@ -133,10 +145,12 @@
             "expected": "84187cb92e1c906bfaa0f97f8e5bd7b6e60ff376e5c85f99b581b63773df1dcd",
             "frames": 3
           },
-          "phase": [
+          "bindings": [
             "Landing"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 7,
@@ -149,10 +163,12 @@
             "expected": "0af16f94c179d65651acbd8bb08e0bb4bb8de118f01dc036a4adee36e2d7f9e9",
             "frames": 55
           },
-          "phase": [
+          "bindings": [
             "WalkSlow"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 8,
@@ -165,10 +181,12 @@
             "expected": "a66b6b84498ff78ca2ac56778ef7b4ee65190b50c2d8cd05a94a043e12540605",
             "frames": 31
           },
-          "phase": [
+          "bindings": [
             "WalkMiddle"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 9,
@@ -181,10 +199,12 @@
             "expected": "d1eb379dd910fe19d5f6852b2bd1ea5768b50f77677fd4dbd561986fbd51b368",
             "frames": 26
           },
-          "phase": [
+          "bindings": [
             "WalkFast"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 10,
@@ -197,10 +217,12 @@
             "expected": "e7f8b6e5a44c894fdac0037c4f76e2cb1afdac1791106a685b595c58ae13aa58",
             "frames": 29
           },
-          "phase": [
+          "bindings": [
             "Dash"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 11,
@@ -213,10 +235,12 @@
             "expected": "0565dfe463cafbbd58344387a973aed2b47aee71677fb138d4347f2dc3ee166d",
             "frames": 21
           },
-          "phase": [
+          "bindings": [
             "Run"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 12,
@@ -229,10 +253,12 @@
             "expected": "26003a647fe613b8e9aa8fbd198f2bec1c5d9325e5e5ec2d5a46be448bdcdac5",
             "frames": 28
           },
-          "phase": [
+          "bindings": [
             "Brake"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 13,
@@ -245,7 +271,9 @@
             "expected": "bc6899a4d6e244c8621afdad78c55c03c7785ff6d97605b3beb0fa0bf1560945",
             "frames": 12
           },
-          "phase": [],
+          "bindings": [],
+          "bound": false,
+          "phase": "UNKNOWN",
           "live": false
         },
         {
@@ -259,10 +287,12 @@
             "expected": "af93fc0b9fbc047f15a75d569e3bda38ad927452f80a250d833f44917bf3b767",
             "frames": 22
           },
-          "phase": [
+          "bindings": [
             "Turn"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 15,
@@ -275,7 +305,9 @@
             "expected": "15d847c7584e7b42f9a414cf572c19e748476f4fb52f1e3119b0a3d0ea4a4da5",
             "frames": 51
           },
-          "phase": [],
+          "bindings": [],
+          "bound": false,
+          "phase": "UNKNOWN",
           "live": false
         },
         {
@@ -289,10 +321,12 @@
             "expected": "c2b937be09695e4ff2d4761c726c6fe34c56d114dc3bff8ae891803bc80796b1",
             "frames": 50
           },
-          "phase": [
+          "bindings": [
             "AirJump"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 17,
@@ -305,10 +339,12 @@
             "expected": "7726bc3c985636a9bf5f6a64b52be9af38b177d5e6f7f63b8f5d1c6204aa7a75",
             "frames": 3
           },
-          "phase": [
+          "bindings": [
             "LandingLight"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 18,
@@ -321,10 +357,12 @@
             "expected": "f84cf8df8ef9330846c7da4abe50da0f798c97b1116c02c07cea78a293c96477",
             "frames": 8
           },
-          "phase": [
+          "bindings": [
             "CrouchEnter"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 19,
@@ -337,10 +375,12 @@
             "expected": "78e46ad99dba80af930f4b4f0bbbc4680d0d9f7274312fa1b108742b7d231d54",
             "frames": 61
           },
-          "phase": [
+          "bindings": [
             "CrouchHold"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 20,
@@ -353,10 +393,12 @@
             "expected": "2b571966040c118bcb72525890db99228c5fe0e9b73e328bd51a10e172e1d140",
             "frames": 10
           },
-          "phase": [
+          "bindings": [
             "CrouchExit"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 21,
@@ -369,7 +411,9 @@
             "expected": "1ceb779c9209447323c7e240ec2c52780bf65716e789ed71e45d92cd6b733d5c",
             "frames": 40
           },
-          "phase": [],
+          "bindings": [],
+          "bound": false,
+          "phase": "UNKNOWN",
           "live": false
         }
       ],
@@ -412,10 +456,12 @@
             "expected": "bcceb793a40b06dfb44396ca11bca6ce0f0a5fbf39b1c268cfdf6bc11a781727",
             "frames": 241
           },
-          "phase": [
+          "bindings": [
             "Idle"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 1,
@@ -428,10 +474,12 @@
             "expected": "e8cac7036a7dc71a54dea8cddce7701e53882c5d3d63f2fe13e6b5f963992af0",
             "frames": 31
           },
-          "phase": [
+          "bindings": [
             "Dash"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 2,
@@ -444,10 +492,12 @@
             "expected": "de2e4a44adf9ba12108bb98059e30d5052d0c0c44567c78e6d664095d364c109",
             "frames": 22
           },
-          "phase": [
+          "bindings": [
             "Run"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 3,
@@ -460,10 +510,12 @@
             "expected": "61e0eeedd329452ff3aa416633efbfff13b03020a65da9b1f8a850efe540e252",
             "frames": 51
           },
-          "phase": [
+          "bindings": [
             "Jump"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 4,
@@ -476,10 +528,12 @@
             "expected": "d42aff4e7e918f5aef6f12a7a0d9b7fcf3125445ddc2cdc99849c23468c06b90",
             "frames": 60
           },
-          "phase": [
+          "bindings": [
             "AirJump"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 5,
@@ -492,10 +546,12 @@
             "expected": "e427bae75f0e12e42dbf7ad4ca8d6917bfaa5bf1ba9f512ca47faafe6040dc38",
             "frames": 8
           },
-          "phase": [
+          "bindings": [
             "CrouchEnter"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 6,
@@ -508,10 +564,12 @@
             "expected": "73f33e2e07842f3ab6e782335fbcc5168d48e282f5fb223858ed3be52600af1d",
             "frames": 201
           },
-          "phase": [
+          "bindings": [
             "CrouchHold"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 7,
@@ -524,10 +582,12 @@
             "expected": "f2fcb69cbd8fe91582879d5e51188ff0f8ecaf66cc7d7a85a6f0ae4864daed72",
             "frames": 10
           },
-          "phase": [
+          "bindings": [
             "CrouchExit"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 8,
@@ -540,10 +600,12 @@
             "expected": "ca5fb8f548bdaae6ba47246b9dfeb1db835fc8d46cdc5372e60db914e5ed96c8",
             "frames": 3
           },
-          "phase": [
+          "bindings": [
             "Landing"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 9,
@@ -556,7 +618,9 @@
             "expected": "af79fa939ebd78b50abf560673b52421e859319477dea2cb3985864e13799ee1",
             "frames": 40
           },
-          "phase": [],
+          "bindings": [],
+          "bound": false,
+          "phase": "UNKNOWN",
           "live": false
         },
         {
@@ -570,7 +634,9 @@
             "expected": "3e698ac5a33bec9f334c4211193ea8058dcd996b7c24deeec15882958efa0a33",
             "frames": 40
           },
-          "phase": [],
+          "bindings": [],
+          "bound": false,
+          "phase": "UNKNOWN",
           "live": false
         },
         {
@@ -584,7 +650,9 @@
             "expected": "7970b787fe0998a24c33dd1c3cf3e9d1c573e7b115d7a7f6c830e1e76a229eb4",
             "frames": 60
           },
-          "phase": [],
+          "bindings": [],
+          "bound": false,
+          "phase": "UNKNOWN",
           "live": false
         },
         {
@@ -598,10 +666,12 @@
             "expected": "8f74cdea11e07e5c26a0eb829ceae5b156bb798199c1aa5d018ce616c225a9ee",
             "frames": 39
           },
-          "phase": [
+          "bindings": [
             "AirAttack"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 13,
@@ -614,7 +684,9 @@
             "expected": "b96624c70d86b786e092fc70e44b298150a3f572fb0f3c574abee14a2cf436c9",
             "frames": 14
           },
-          "phase": [],
+          "bindings": [],
+          "bound": false,
+          "phase": "UNKNOWN",
           "live": false
         },
         {
@@ -628,7 +700,9 @@
             "expected": "7882e3ba874055d11fbbdeea51a640fe589db6f359e68c017a4f7e73338f0a83",
             "frames": 85
           },
-          "phase": [],
+          "bindings": [],
+          "bound": false,
+          "phase": "UNKNOWN",
           "live": false
         },
         {
@@ -642,7 +716,9 @@
             "expected": "5944e41d19175b3bb9dd8eb391d2a475acd7ab81874ccb9d1369b2821bb2e66a",
             "frames": 81
           },
-          "phase": [],
+          "bindings": [],
+          "bound": false,
+          "phase": "UNKNOWN",
           "live": false
         },
         {
@@ -656,10 +732,12 @@
             "expected": "86fe5183411685560ed4b789c3be6efd18173678c9b46a4bd8237a8a53d62630",
             "frames": 41
           },
-          "phase": [
+          "bindings": [
             "WalkSlow"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 17,
@@ -672,10 +750,12 @@
             "expected": "7f484b577b347099ac78eb5aeb54f18bd6b8bc7fbc0359b23b407b516a81f9d2",
             "frames": 41
           },
-          "phase": [
+          "bindings": [
             "WalkMiddle"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 18,
@@ -688,10 +768,12 @@
             "expected": "f4f93fd1507b33e0f079c98ef3dd3ace559ca3a3bec358d9b573812643d3cef4",
             "frames": 51
           },
-          "phase": [
+          "bindings": [
             "WalkFast"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 19,
@@ -704,10 +786,12 @@
             "expected": "85cd990225e2baf31270ae93364fa9c7861bdfc7282bc53cb58e170cf52ab84b",
             "frames": 28
           },
-          "phase": [
+          "bindings": [
             "Brake"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 20,
@@ -720,10 +804,12 @@
             "expected": "60eafc8839f28b36a74fadfb62de1f3ffa37ea1b59bb817862aee305c8119530",
             "frames": 20
           },
-          "phase": [
+          "bindings": [
             "Turn"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 21,
@@ -736,10 +822,12 @@
             "expected": "e449d31a8b32b7d248cc9476de4dd52d0200e3d49054ea0e6106e4c2a5e3e25b",
             "frames": 3
           },
-          "phase": [
+          "bindings": [
             "JumpSquat"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 22,
@@ -752,10 +840,12 @@
             "expected": "13a7ea0d80f0ee1d029a6ac64bec1a499b9fcaccf013489551135862c2f5c246",
             "frames": 21
           },
-          "phase": [
+          "bindings": [
             "Fall"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 23,
@@ -768,10 +858,12 @@
             "expected": "63a70e1c5910980d1808cfe67ee6f49a25e13e3af6845791c1c581b0378cb7c9",
             "frames": 3
           },
-          "phase": [
+          "bindings": [
             "LandingLight"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         },
         {
           "id": 24,
@@ -784,10 +876,12 @@
             "expected": "ddd4582d4b0dbd7da2e077346db7edc40b1ba4fed69f29c324a39b1f5febb291",
             "frames": 18
           },
-          "phase": [
+          "bindings": [
             "LandingRecovery"
           ],
-          "live": true
+          "bound": true,
+          "phase": "UNKNOWN",
+          "live": false
         }
       ],
       "errors": []
