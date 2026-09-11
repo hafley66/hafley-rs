@@ -122,6 +122,18 @@ test('wrong requirement id, axis, revision or fingerprint qualifies zero', () =>
   assert.equal(result.axes.rollback.numerator, 0);
 });
 
+test('unqualified execution findings are never treated as requirement receipts', () => {
+  const input = fixture();
+  input.requirementReceipts = [
+    { requirementId: 'a', axis: 'rollback', sourceFingerprint: H, runtimeRevision: 'runtime-rev', target: 'test', status: 'unqualified' },
+    { requirementId: 'a', axis: 'source fidelity', sourceFingerprint: H, runtimeRevision: 'runtime-rev', target: 'test', status: 'unqualified' },
+  ];
+  const result = joinCoverage(input);
+  assert.equal(result.receipts.requirement_count, 2);
+  assert.equal(result.axes.rollback.numerator, 0);
+  assert.equal(result.axes['source fidelity'].numerator, 0);
+});
+
 test('duplicate requirement receipts are errors', () => {
   const input = fixture();
   const receipt = { requirementId: 'a', axis: 'rollback', sourceFingerprint: H, runtimeRevision: 'runtime-rev', target: 'test', status: 'passed' };
