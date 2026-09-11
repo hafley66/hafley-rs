@@ -505,3 +505,42 @@ fn a_send_to_a_retired_lane_revives_it() {
         "the revived lane must write a fresh rc=0 result: {bodies:?}"
     );
 }
+
+/// RECEIPT. A retired lane closes its tmux session even when the scratch server
+/// runs with `remain-on-exit on`, which would otherwise pin the dead pane.
+/// Sabotage: relying on the pane command's exit leaves the session alive.
+#[test]
+fn a_retired_lane_closes_its_tmux_session() {
+    let _lane = lane_lock();
+    let Some(llmock) = mock_tui::resolve_llmock() else {
+        eprintln!("skip: no llmock");
+        return;
+    };
+    if mock_tui::resolve_executable("opencode", "OPENCODE_BIN").is_none() {
+        eprintln!("skip: no opencode");
+        return;
+    }
+    let fixture = Fixture::new("pane");
+    let Some((_provider, executable, launch_env)) = provider_and_launch(&fixture, &llmock, 0)
+    else {
+        eprintln!("skip: no opencode mock recipe");
+        return;
+    };
+    let env = lane_env(&fixture, &launch_env, &[("BOOP_IDLE_SHUTDOWN_SECS", "1")]);
+    let created = fixture.create(&[], &env, &executable);
+    assert!(
+        created.status.success(),
+        "lane create failed: {}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+    // The condition the live store ran under: a server that keeps dead panes.
+    let option = fixture.tmux(&["set-option", "-g", "remain-on-exit", "on"]);
+    assert!(
+        option.status.success(),
+        "could not set remain-on-exit: {}",
+        String::from_utf8_lossy(&option.stderr)
+    );
+    fixture.wait_for_result(1);
+    fixture.wait_for_retired();
+    fixture.wait_for_session_gone();
+}

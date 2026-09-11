@@ -1195,9 +1195,16 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     // pane is killed before its route-only epilogue runs.
     let result_recipient =
         completion_recipient(parent.parent.as_deref(), args.wait, &identity.lane);
-    let on_exit = result_recipient
-        .as_ref()
-        .map(|_| lane::pane_epilogue(&identity.lane, &hail_mail_dir));
+    // The pane epilogue drops the route and then closes the session: a tmux
+    // server with `remain-on-exit on` keeps a dead pane's session forever, so
+    // the supervisor's exit alone is not enough to retire the lane.
+    let on_exit = result_recipient.as_ref().map(|_| {
+        format!(
+            "{}; tmux kill-session -t {} 2>/dev/null || true",
+            lane::pane_epilogue(&identity.lane, &hail_mail_dir),
+            shell_quote(&identity.tmux),
+        )
+    });
 
     if args.dry_run {
         info!(
