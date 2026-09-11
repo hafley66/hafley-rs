@@ -9,15 +9,28 @@
 use crate::{Phase, air, ground};
 use serde::Serialize;
 
-/// One observed `(source phase, event, destination)` triple with the number of
-/// fact assignments that produce it. `to == None` is an explicit rejection that
-/// preserves the source phase.
+/// Runtime callback identity for one state/event dispatch. The state is kept
+/// alongside the generic event name so source requirements can join this
+/// inventory without guessing which handler matched.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct CallbackIdentity {
+    pub domain: &'static str,
+    pub state: Phase,
+    pub event: &'static str,
+}
+
+/// One observed `(source phase, event, destination)` triple with the exact
+/// fact-bit assignments that produce it. `to == None` is an explicit rejection
+/// that preserves the source phase. Bit positions are the public fact fields
+/// in the order used by the corresponding decision function.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Transition {
     pub from: Phase,
     pub event: &'static str,
     pub to: Option<Phase>,
+    pub callback: CallbackIdentity,
     pub witnesses: u32,
+    pub fact_bits: Vec<u8>,
 }
 
 /// Pure inventory of the executable fighter decision surface.
@@ -31,7 +44,8 @@ pub struct RuntimeInventory {
     pub states: Vec<Phase>,
     pub ground: Vec<Transition>,
     pub air: Vec<Transition>,
-    pub callbacks: Vec<&'static str>,
+    pub callbacks: Vec<CallbackIdentity>,
+    pub events: Vec<&'static str>,
     pub effects: Vec<&'static str>,
 }
 
@@ -41,10 +55,14 @@ impl RuntimeInventory {
         let ground = ground_transitions();
         let air = air_transitions();
         let mut callbacks = Vec::new();
+        let mut events = Vec::new();
         let mut effects = Vec::new();
         for transition in ground.iter().chain(air.iter()) {
-            if !callbacks.contains(&transition.event) {
-                callbacks.push(transition.event);
+            if !events.contains(&transition.event) {
+                events.push(transition.event);
+            }
+            if !callbacks.contains(&transition.callback) {
+                callbacks.push(transition.callback);
             }
             let effect = match transition.to {
                 None => "Handled",
@@ -60,6 +78,7 @@ impl RuntimeInventory {
             ground,
             air,
             callbacks,
+            events,
             effects,
         }
     }
@@ -90,13 +109,23 @@ fn ground_facts(bits: u8) -> ground::Facts {
 fn record(
     out: &mut Vec<Transition>,
     from: Phase,
+    domain: &'static str,
     event: &'static str,
     to: Option<Phase>,
+    fact_bits: u8,
 ) {
     if let Some(entry) = out.iter_mut().find(|t| t.from == from && t.event == event && t.to == to) {
         entry.witnesses += 1;
+        entry.fact_bits.push(fact_bits);
     } else {
-        out.push(Transition { from, event, to, witnesses: 1 });
+        out.push(Transition {
+            from,
+            event,
+            to,
+            callback: CallbackIdentity { domain, state: from, event },
+            witnesses: 1,
+            fact_bits: vec![fact_bits],
+        });
     }
 }
 
@@ -104,19 +133,32 @@ fn record(
 pub fn ground_transitions() -> Vec<Transition> {
     let mut out = Vec::new();
     for from in Phase::ALL {
-        record(&mut out, from, "JumpRequest", ground::decide(from, ground::Event::JumpRequest));
         for bits in 0..=127u8 {
             record(
                 &mut out,
                 from,
+                "ground",
+                "JumpRequest",
+                ground::decide(from, ground::Event::JumpRequest),
+                bits,
+            );
+        }
+        for bits in 0..=127u8 {
+            record(
+                &mut out,
+                from,
+                "ground",
                 "GroundIntent",
                 ground::decide(from, ground::Event::GroundIntent(ground_facts(bits))),
+                bits,
             );
             record(
                 &mut out,
                 from,
+                "ground",
                 "Motion",
                 ground::decide(from, ground::Event::Motion(ground_facts(bits))),
+                bits,
             );
         }
     }
@@ -133,9 +175,25 @@ pub fn air_transitions() -> Vec<Transition> {
                 jump_pressed: bits & 2 != 0,
                 jumps_left: u8::from(bits & 4 != 0),
             };
-            record(&mut out, from, "Motion", air::decide(from, air::AirEvent::Motion(facts)));
+            record(
+                &mut out,
+                from,
+                "air",
+                "Motion",
+                air::decide(from, air::AirEvent::Motion(facts)),
+                bits,
+            );
         }
-        record(&mut out, from, "Land", air::decide(from, air::AirEvent::Land));
+        for bits in 0..8u8 {
+            record(
+                &mut out,
+                from,
+                "air",
+                "Land",
+                air::decide(from, air::AirEvent::Land),
+                bits,
+            );
+        }
     }
     out
 }
@@ -159,11 +217,68 @@ mod tests {
     #[test]
     fn runtime_inventory_is_sourced_from_phase_and_decision_apis() {
         let inventory = runtime_inventory();
-        assert_eq!(inventory.states, Phase::ALL);
+        assert_eq!(inventory.states, Phase::ALL.to_vec());
         assert_eq!(inventory.ground, ground_transitions());
         assert_eq!(inventory.air, air_transitions());
-        assert_eq!(inventory.callbacks, ["JumpRequest", "GroundIntent", "Motion", "Land"]);
+        assert_eq!(
+            inventory.events,
+            ["JumpRequest", "GroundIntent", "Motion", "Land"]
+        );
+        assert!(inventory.callbacks.iter().any(|callback| {
+            callback.domain == "ground"
+                && callback.state == Phase::Dash
+                && callback.event == "Motion"
+        }));
         assert_eq!(inventory.effects, ["Transition", "Handled", "SelfTransition"]);
+    }
+
+    #[test]
+    fn each_event_has_the_complete_fact_partition() {
+        let inventory = runtime_inventory();
+        for from in Phase::ALL {
+            for event in ["JumpRequest", "GroundIntent", "Motion"] {
+                let entries: Vec<_> = inventory
+                    .ground
+                    .iter()
+                    .filter(|transition| transition.from == from && transition.event == event)
+                    .collect();
+                assert_eq!(
+                    entries.iter().map(|transition| transition.witnesses).sum::<u32>(),
+                    128,
+                    "{from:?} {event}"
+                );
+                assert_eq!(
+                    entries
+                        .iter()
+                        .map(|transition| transition.fact_bits.len())
+                        .sum::<usize>(),
+                    128,
+                    "{from:?} {event}"
+                );
+            }
+        }
+        for from in Phase::ALL {
+            for event in ["Motion", "Land"] {
+                let entries: Vec<_> = inventory
+                    .air
+                    .iter()
+                    .filter(|transition| transition.from == from && transition.event == event)
+                    .collect();
+                assert_eq!(
+                    entries.iter().map(|transition| transition.witnesses).sum::<u32>(),
+                    8,
+                    "{from:?} {event}"
+                );
+                assert_eq!(
+                    entries
+                        .iter()
+                        .map(|transition| transition.fact_bits.len())
+                        .sum::<usize>(),
+                    8,
+                    "{from:?} {event}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -172,6 +287,10 @@ mod tests {
         assert_eq!(
             transition(&inventory.ground, Phase::Dash, "Motion", Some(Phase::Dash)).witnesses,
             64
+        );
+        assert_eq!(
+            transition(&inventory.ground, Phase::Dash, "Motion", Some(Phase::Dash)).fact_bits,
+            (0..128u8).filter(|bits| bits & (1 << 3) != 0).collect::<Vec<_>>()
         );
 
         let all = ground::Facts {
