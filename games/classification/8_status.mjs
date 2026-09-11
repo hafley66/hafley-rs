@@ -17,15 +17,32 @@ async function fileDigest(base, path) {
   return { path, sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length };
 }
 
-// Pure projection from checked generated inputs. Rows are the catalog's own
-// membership and order; the generated role binding whose source is that action
-// id is reported as `bindings`/`bound`, which proves binding only. The phase and
-// live axes stay explicit UNKNOWN/unmeasured because no executable runtime
-// consumer of the generated roles exists in this projection; chart stays
-// explicit unknown because no generated per-character chart artifact exists.
-// Independent axes, no percentage.
-export async function buildStatusProjection(base = root) {
+// Executable phase/action evidence from the Rust status export: the token
+// selector enumeration (`phase_animation`) and the deterministic controller
+// tape (`observed`). Both are executable outputs of the shared controller
+// boundary; a generated role binding is not consumed here.
+function executablePhases(evidence) {
+  const byAction = new Map();
+  const add = (action, phase) => {
+    if (typeof action !== 'number' || !phase) return;
+    if (!byAction.has(action)) byAction.set(action, new Set());
+    byAction.get(action).add(phase);
+  };
+  for (const entry of evidence?.phase_animation ?? []) add(entry.action, entry.phase);
+  for (const entry of evidence?.observed ?? []) add(entry.action, entry.phase);
+  return byAction;
+}
+
+// Pure projection from checked generated inputs plus, when supplied, the live
+// Rust status export. Rows are the catalog's own membership and order; the
+// generated role binding whose source is that action id is reported as
+// `bindings`/`bound`, which proves binding only. `phase` and `live` come only
+// from the executable selector/controller evidence: a generated binding alone
+// never marks a row live. Without that evidence (for example a file-only caller)
+// every row stays explicit UNKNOWN/false. Independent axes, no percentage.
+export async function buildStatusProjection(base = root, exported = null) {
   const { characters: specs } = await loadStatus();
+  const dogPhases = exported?.dog ? executablePhases(exported.dog) : null;
   const characters = [];
   for (const [key, spec] of Object.entries(specs)) {
     const catalog = JSON.parse(await readFile(await existing(base, spec.catalog), 'utf8'));
@@ -66,6 +83,9 @@ export async function buildStatusProjection(base = root) {
         });
       }
       const bindings = (rolesBySource.get(entry.id) ?? []).slice().sort();
+      const phases = key === 'dog' && dogPhases
+        ? [...(dogPhases.get(entry.id) ?? [])].sort()
+        : [];
       return {
         id: entry.id,
         action: entry.name,
@@ -79,8 +99,8 @@ export async function buildStatusProjection(base = root) {
         },
         bindings,
         bound: bindings.length > 0,
-        phase: 'UNKNOWN',
-        live: false,
+        phase: phases.length ? phases.join(',') : 'UNKNOWN',
+        live: phases.length > 0,
       };
     });
 
@@ -152,8 +172,8 @@ export async function checkStatusProjection(live) {
   return live;
 }
 
-export async function writeStatusProjection(base = root) {
-  const projection = await buildStatusProjection(base);
+export async function writeStatusProjection(base = root, exported = null) {
+  const projection = await buildStatusProjection(base, exported);
   await output(projectionOutput, JSON.stringify(projection, null, 2) + '\n', false);
   return projection;
 }
@@ -364,9 +384,11 @@ async function main() {
   await output(new URL('3_registry.d2', import.meta.url), renderD2(entries), true);
   const progress = await buildProgress();
   await output(new URL('6_progress.html', import.meta.url), renderProgress(progress), true);
-  const projection = mode === 'generate' ? await writeStatusProjection() : await checkStatusProjection();
-  const authored = await loadStatus();
   const exported = runExport();
+  const projection = mode === 'generate'
+    ? await writeStatusProjection(root, exported)
+    : await checkStatusProjection(await buildStatusProjection(root, exported));
+  const authored = await loadStatus();
   const extracted = await readJson(sourceRules);
   const current = currentSource();
   const prove = await readJson(resolve(workflow, 'prove.json'));

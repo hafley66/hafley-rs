@@ -8,6 +8,7 @@
 use game_fighter::Phase;
 use game_fighter::status::{air_transitions, ground_transitions};
 use serde_json::{Value, json};
+use smash::fighters::dog;
 use smash::fighters::pigeon::movement::{self, SelectionFacts};
 
 /// Deterministic stick sweep; the phase->animation selection seam is sampled
@@ -79,6 +80,44 @@ fn phase_animation() -> Value {
     Value::Array(rows)
 }
 
+/// Executable Dog evidence: the Phase/axis selector over the full stick sweep
+/// plus the deterministic controller tape. Both are runtime outputs of the
+/// shared controller boundary; the export authors no mapping here.
+fn dog_evidence() -> Value {
+    let phases: Value = Phase::ALL
+        .iter()
+        .map(|phase| json!({ "name": phase.name(), "grounded": phase.grounded() }))
+        .collect();
+    let mut phase_animation: Vec<Value> = Vec::new();
+    for &phase in &Phase::ALL {
+        for &axis in &AXIS_PROBES {
+            let Some(action) = dog::select(phase, axis) else {
+                continue;
+            };
+            if let Some(entry) = phase_animation.iter_mut().find(|entry| {
+                entry["phase"] == phase.name() && entry["action"].as_u64() == Some(action as u64)
+            }) {
+                entry["axes"].as_array_mut().unwrap().push(json!(axis));
+            } else {
+                phase_animation.push(json!({ "phase": phase.name(), "action": action, "axes": [axis] }));
+            }
+        }
+    }
+    let mut simulation = dog::Simulation::new().expect("committed Dog baked actions");
+    let observed: Vec<Value> = dog::simulation::tape()
+        .into_iter()
+        .map(|(buttons, axis)| {
+            let state = simulation.advance(game_fighter::Input { buttons, axis });
+            json!({ "phase": state.fighter.phase.name(), "action": state.action })
+        })
+        .collect();
+    json!({
+        "phases": phases,
+        "phase_animation": Value::Array(phase_animation),
+        "observed": observed,
+    })
+}
+
 fn main() {
     // The committed generator output owns catalog membership and order; this
     // export only reshapes it for the status join and never re-derives it.
@@ -101,6 +140,7 @@ fn main() {
         "phase_animation": phase_animation(),
         "ground": transitions(ground_transitions()),
         "air": transitions(air_transitions()),
+        "dog": dog_evidence(),
     });
     println!("{}", serde_json::to_string(&output).expect("serialize status export"));
 }

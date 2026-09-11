@@ -224,14 +224,59 @@ test('character matrices stay separated and keep unknown axes explicit', async (
 });
 
 test('the committed status projection is rejected when a generated input or row is stale', async () => {
-  const live = await buildStatusProjection();
-  assert.deepEqual(await checkStatusProjection(live), live);
+  const live = JSON.parse(await readFile(new URL('./11_status.json', import.meta.url), 'utf8'));
+  assert.deepEqual(await checkStatusProjection(structuredClone(live)), live);
   const rowDrift = structuredClone(live);
   rowDrift.characters[1].rows[0].action = 'Ghost';
   await assert.rejects(checkStatusProjection(rowDrift), /stale status projection/);
   const inputDrift = structuredClone(live);
   inputDrift.characters[1].catalog.sha256 = 'f'.repeat(64);
   await assert.rejects(checkStatusProjection(inputDrift), /stale status projection/);
+});
+
+// The executable Rust export is the only proof of a Dog phase or live action.
+// A generated binding (bound) is deliberately insufficient.
+test('executable Dog evidence marks only proven actions live', async () => {
+  const exported = { dog: {
+    phase_animation: [
+      { phase: 'Idle', action: 0, axes: [0] },
+      { phase: 'Walk', action: 16, axes: [0] },
+      { phase: 'Dash', action: 1, axes: [0] },
+    ],
+    observed: [
+      { phase: 'Idle', action: 0 },
+      { phase: 'Walk', action: 16 },
+    ],
+  } };
+  const projection = await buildStatusProjection(undefined, exported);
+  const dog = projection.characters.find(character => character.key === 'dog');
+  assert.deepEqual(dog.rows.filter(row => row.live).map(row => row.id), [0, 1, 16]);
+  assert.equal(dog.rows[0].phase, 'Idle');
+  assert.equal(dog.rows[1].phase, 'Dash');
+  assert.equal(dog.rows[16].phase, 'Walk');
+  assert.equal(dog.rows[16].bound, true);
+  // Bound-only rows stay unproven without executable selection.
+  for (const id of [12, 23, 24]) {
+    assert.equal(dog.rows[id].bound, true, `action ${id} should be bound`);
+    assert.equal(dog.rows[id].live, false, `action ${id} must not be live`);
+    assert.equal(dog.rows[id].phase, 'UNKNOWN');
+  }
+  const pigeon = projection.characters.find(character => character.key === 'pigeon');
+  assert.ok(pigeon.rows.every(row => row.phase === 'UNKNOWN' && row.live === false));
+});
+
+// The committed projection was generated from the live export; this guards that
+// the executable evidence actually landed and marks exactly the selected set.
+test('committed Dog rows carry executable phase and live evidence', async () => {
+  const projection = JSON.parse(await readFile(new URL('./11_status.json', import.meta.url), 'utf8'));
+  const dog = projection.characters.find(character => character.key === 'dog');
+  assert.deepEqual(
+    dog.rows.filter(row => row.live).map(row => row.id),
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 17, 18, 19, 20, 21, 22],
+  );
+  assert.ok(dog.rows.filter(row => row.live).every(row => row.phase !== 'UNKNOWN'));
+  const pigeon = projection.characters.find(character => character.key === 'pigeon');
+  assert.ok(pigeon.rows.every(row => row.phase === 'UNKNOWN' && row.live === false));
 });
 
 // The SOURCE RULES section prints every extracted rule and each unresolved
