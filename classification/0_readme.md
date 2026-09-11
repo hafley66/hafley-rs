@@ -10,6 +10,7 @@ From `games/`:
 just status    # compile TSP, check repository references, print classifications
 just tsp       # validate and regenerate JSON + D2 inventory
 just progress  # regenerate the static port dashboard, classification/6_progress.html
+just steps     # validate PortStep intent and (re)emit receipt JSON, classification/10_steps.json
 just map       # regenerate inventory, dashboard and the complete living roadmap
 just test      # rejection tests + reference checks + generated-file freshness
 ```
@@ -17,6 +18,20 @@ just test      # rejection tests + reference checks + generated-file freshness
 `6_progress.html` is the checked progress view: retained ingest with recomputed
 hashes, the mechanics matrix and current package stages. Open the file directly;
 nothing serves or launches it.
+
+## PortStep intent and receipts
+
+[7_steps.tsp](7_steps.tsp) authors each port step's intent only: id, task, scope,
+required source kinds, extractor identity, expected artifact kinds and paths,
+consumer, proof gates by recipe name, and the explicit TC39 stage. Observed
+revisions, artifact hashes, counts and pass results are emitted by tools:
+`9_steps.mjs` runs the authored gate recipes, hashes the generated artifacts,
+parses the extractor's own artifact for observed facts and writes the compact
+`10_steps.json` receipt. `just steps` regenerates it; `just test` includes
+`9_steps.mjs check`, which rejects a stale receipt against the working tree.
+The receipt's `source` field reuses `8_status.mjs` `currentSource` and is null
+(UNMEASURED) when the sibling runtime checkout is not resolvable from this
+checkout. Steps do not restate anything `just status` already derives.
 
 Uses the existing `falcon-lab/contracts` compiler installation and lockfile
 (@typespec/compiler 1.10.0). If absent, run `pnpm install --frozen-lockfile` there.

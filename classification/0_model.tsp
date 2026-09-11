@@ -119,3 +119,32 @@ model SourceImport {
   rules: SourceRule[];
   unresolved: SourceUnresolved[];
 }
+
+// PortStep backbone: authored step intent. Receipts (observed revisions, hashes,
+// counts and pass results) are emitted by tools into generated JSON; nothing
+// here restates an observed value or a test outcome.
+model StepArtifact {
+  kind: string;
+  // Repository-relative path; presence is checked by the tool.
+  path: string;
+}
+
+model StepProof {
+  name: string;
+  // Recipe or command identity the tool executes; it emits the pass result.
+  command: string;
+}
+
+model Step {
+  id: string;
+  task: string;
+  scope: string;
+  sourceKinds: string[];
+  extractor: string;
+  artifacts: StepArtifact[];
+  consumer: string;
+  gates: StepProof[];
+  stage: Stage;
+}
+
+alias Steps = Record<Step>;

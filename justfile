@@ -24,6 +24,10 @@ source-rules-check:
 progress:
     node classification/5_progress.mjs generate
 
+# PortStep intent and tool-emitted receipts: classification/10_steps.json.
+steps:
+    node classification/9_steps.mjs generate
+
 # D2 0.7.1; commit source and rendered SVG together.
 map:
     node classification/2_registry.mjs generate
@@ -57,4 +61,5 @@ test:
     node --test classification/2_registry.test.mjs
     node --test classification/5_progress.test.mjs
     node --test classification/8_status.test.mjs
+    node --test classification/9_steps.test.mjs
     just test-map
