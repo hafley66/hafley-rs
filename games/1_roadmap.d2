@@ -22,9 +22,9 @@ board: "HAFLEY-RS / GAMES · structural timeline · grows upward" {
   inventory: @classification/3_registry
   m9: "09 · 2026-09-10 DIRECT C-TO-RUST PORT / shared ftCommon callbacks" {
     grid-columns: 3
-    translator: "SOURCE · tree-sitter-c 0.24 / 0.23.4 MIT\nBounded lowering: * , - and comparisons\nfp->input.lstick[0].x / facing_dir\np_ftCommonData->x; else errors, no C compiler" {class: source}
-    port: "TESTED · game-ftcommon crate\nftCo_800C97A8, ftCo_Jump_Enter,\nftCo_JumpAerial_Enter_Basic generated\nrepo/revision/path/line-span retained" {class: done}
-    open: "UNRESOLVED · x34/x78 typed inputs\nExternal calls untranslated\nNo live consumer; stage 2.7" {class: partial}
+    translator: "SOURCE · tree-sitter-c 0.24 / 0.23.4 MIT\nLowered expressions + statements\ncalls mapped to typed effects\nelse errors, no C compiler" {class: source}
+    port: "TESTED · game-ftcommon crate\npure guard + ordered effect arrays\nmotion, setup, writes, aerial Vec3\nrepo/revision/path/line-span kept" {class: done}
+    open: "UNRESOLVED · x34/x78 + co_attrs inputs\nOpaque effects keep C symbols\nNo live consumer; stage 2.7" {class: partial}
   }
   m8: "08 · 2026-09-10 PINNED-SOURCE CODEGEN / Falcon guards from Melee decomp" {
     grid-columns: 3

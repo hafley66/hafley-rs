@@ -1,7 +1,7 @@
 use game_content::{
     Guard, Inventory, Op, PortFile, RECOGNIZED_OPERATIONS, SourceRef, SourceRule, TransitionSpec,
     Trigger, Unresolved, common_inventory, conditional_choice, decode_file, emit_chart,
-    emit_port_rust, function_evidence, if_guard, lower_choice, lower_guard,
+    emit_port_rust, function_evidence, if_guard, lower_callback, lower_guard,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -111,8 +111,8 @@ fn ftcommon_port(root: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let air_jump = std::fs::read_to_string(root.join(AIR_JUMP_PATH))?;
     let functions = vec![
         lower_guard(&turn, TURN_PATH, "ftCo_800C97A8")?,
-        lower_choice(&jump, JUMP_PATH, "ftCo_Jump_Enter")?,
-        lower_choice(&air_jump, AIR_JUMP_PATH, "ftCo_JumpAerial_Enter_Basic")?,
+        lower_callback(&jump, JUMP_PATH, "ftCo_Jump_Enter")?,
+        lower_callback(&air_jump, AIR_JUMP_PATH, "ftCo_JumpAerial_Enter_Basic")?,
     ];
     Ok(emit_port_rust(&PortFile {
         repository: MELEE_REPOSITORY,
@@ -558,8 +558,12 @@ mod tests {
         let path = super::ftcommon_path();
         assert_eq!(generated, std::fs::read_to_string(&path).unwrap());
         assert!(generated.contains("pub fn ftCo_800C97A8("));
-        assert!(generated.contains("pub fn ftCo_Jump_Enter("));
-        assert!(generated.contains("pub fn ftCo_JumpAerial_Enter_Basic("));
+        assert!(generated.contains(
+            "pub fn ftCo_Jump_Enter(query: &FighterQuery, common: &CommonData) -> [FtCommonEffect; 4]",
+        ));
+        assert!(generated.contains(
+            "pub fn ftCo_JumpAerial_Enter_Basic(query: &FighterQuery, common: &CommonData, attrs: &CoAttrs) -> [FtCommonEffect; 3]",
+        ));
     }
 
     #[test]
