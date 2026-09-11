@@ -14,37 +14,25 @@
 use crate::{Input, Phase, Rules, State};
 use serde::{Deserialize, Serialize};
 
-/// Selected action id and its animation frame, kept together so the pair is
-/// cloned, snapshotted and serialized as one crate-owned fact.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ActionState {
-    pub id: usize,
-    pub frame: usize,
-}
-
 /// Mutable facts shared by every source-free character: the authoritative
-/// reducer state plus the selected [`ActionState`].
+/// reducer state, which owns the selected [`ActionState`].
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Controller {
     pub fighter: State,
-    pub action: ActionState,
 }
 
 impl Controller {
     pub fn new(fighter: State) -> Self {
-        Controller {
-            fighter,
-            action: ActionState::default(),
-        }
+        Controller { fighter }
     }
 
     /// Animation frame for the selected action, clamped to its frame count.
     pub fn frame(&self, frame_count: impl Fn(usize) -> usize) -> usize {
-        let frames = frame_count(self.action.id);
+        let frames = frame_count(self.fighter.action.id);
         if frames == 0 {
             0
         } else {
-            self.action.frame.min(frames - 1)
+            self.fighter.action.frame.min(frames - 1)
         }
     }
 
@@ -67,20 +55,21 @@ impl Controller {
         let phase = self.fighter.phase;
         let selected = select(phase, input.axis)
             .filter(|action| *action < action_count)
-            .unwrap_or(self.action.id.min(action_count - 1));
+            .unwrap_or(self.fighter.action.id.min(action_count - 1));
         let frames = frame_count(selected);
-        if selected != self.action.id || phase != previous || frames == 0 {
-            self.action.frame = 0;
+        if selected != self.fighter.action.id || phase != previous || frames == 0 {
+            self.fighter.action.frame = 0;
         } else {
-            self.action.frame = (self.action.frame + 1) % frames;
+            self.fighter.action.frame = (self.fighter.action.frame + 1) % frames;
         }
-        self.action.id = selected;
+        self.fighter.action.id = selected;
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ActionState;
 
     fn rules() -> Rules {
         Rules {
@@ -126,13 +115,12 @@ mod tests {
 
     #[test]
     fn frame_clamps_to_action_length() {
-        let controller = Controller {
-            fighter: State::new(&rules()),
-            action: ActionState {
-                id: 0,
-                frame: 99,
-            },
+        let mut fighter = State::new(&rules());
+        fighter.action = ActionState {
+            id: 0,
+            frame: 99,
         };
+        let controller = Controller { fighter };
         assert_eq!(controller.frame(|_| 4), 3);
         assert_eq!(controller.frame(|_| 0), 0);
     }
@@ -144,16 +132,16 @@ mod tests {
         let frames = |_| 3;
 
         controller.advance(input(0.0, 0), &rules, 2, frames, |_, _| Some(0));
-        assert_eq!((controller.action.id, controller.action.frame), (0, 1));
+        assert_eq!((controller.fighter.action.id, controller.fighter.action.frame), (0, 1));
         controller.advance(input(0.0, 0), &rules, 2, frames, |_, _| Some(0));
-        assert_eq!((controller.action.id, controller.action.frame), (0, 2));
+        assert_eq!((controller.fighter.action.id, controller.fighter.action.frame), (0, 2));
         controller.advance(input(0.0, 0), &rules, 2, frames, |_, _| Some(0));
-        assert_eq!((controller.action.id, controller.action.frame), (0, 0));
+        assert_eq!((controller.fighter.action.id, controller.fighter.action.frame), (0, 0));
         controller.advance(input(0.0, 0), &rules, 2, frames, |_, _| Some(0));
-        assert_eq!((controller.action.id, controller.action.frame), (0, 1));
+        assert_eq!((controller.fighter.action.id, controller.fighter.action.frame), (0, 1));
 
         controller.advance(input(0.0, 0), &rules, 2, frames, |_, _| Some(1));
-        assert_eq!((controller.action.id, controller.action.frame), (1, 0));
+        assert_eq!((controller.fighter.action.id, controller.fighter.action.frame), (1, 0));
     }
 
     #[test]
@@ -169,9 +157,9 @@ mod tests {
     fn out_of_range_selection_falls_back_to_clamped_action() {
         let rules = rules();
         let mut controller = Controller::new(State::new(&rules));
-        controller.action.id = 9;
+        controller.fighter.action.id = 9;
         controller.advance(input(0.0, 0), &rules, 2, |_| 2, |_, _| Some(7));
-        assert_eq!(controller.action.id, 1);
-        assert_eq!(controller.action.frame, 0);
+        assert_eq!(controller.fighter.action.id, 1);
+        assert_eq!(controller.fighter.action.frame, 0);
     }
 }
