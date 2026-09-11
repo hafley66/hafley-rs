@@ -20,6 +20,12 @@ const entries: Record<Entry> = #{
     manifest: "crates/ftcommon/Cargo.toml", targets: #["crates/ftcommon"],
     evidence: #["crates/ftcommon/src/generated/0_ftcommon.rs", "crates/ftcommon/tests/1_source_rules.rs", "crates/content/src/5_source.rs"],
   },
+  `game-combat`: #{
+    stage: 1, destination: "library", task: "C1",
+    scope: "Proposed pure damage, knockback, launch, DI, hitlag, hitstun and tumble resolver distilled from the v1 Rust behavior and qualified against ssbm_utils; no package or manifest exists",
+    targets: #["crates/combat"],
+    evidence: #["5_combat_port.md", "4_tasks.md"],
+  },
   redux: #{
     stage: 3, destination: "library", task: "A1",
     scope: "Reducer composition and snapshot-owned statechart qualification",
