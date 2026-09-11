@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { COLUMNS, joinStatus, loadStatus, receiptObservation, currentSource,
   buildStatusProjection, checkStatusProjection, renderCharacterMatrix } from './8_status.mjs';
+import { root } from './2_registry.mjs';
 
 const authored = await loadStatus();
 const H = 'a'.repeat(64);
@@ -206,9 +207,42 @@ test('dog status projects 25 rows from checked generated inputs', async () => {
   assert.equal(unbound.length, 6);
   assert.deepEqual(dog.rows[0].bindings, ['Idle']);
   assert.equal(dog.rows[9].bindings.length, 0);
-  assert.equal(dog.rows.filter(row => row.live).length, 0);
-  assert.ok(dog.rows.every(row => row.phase === 'UNKNOWN' && row.live === false));
+  // Executable controller evidence, not the generated binding, marks a row live.
+  const live = dog.rows.filter(row => row.live).map(row => row.id);
+  assert.deepEqual(live, [0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 17, 18, 19, 20, 21, 22]);
+  assert.equal(live.length, 16);
+  assert.equal(dog.rows[0].phase, 'Idle');
+  assert.equal(dog.rows[8].phase, 'Landing');
+  // AirAttack/LandingLight/LandingRecovery are bound-only: the runtime never
+  // selects them, so they stay UNKNOWN and are not live.
+  for (const id of [12, 23, 24]) {
+    assert.equal(dog.rows[id].bound, true, `action ${id} should be bound`);
+    assert.equal(dog.rows[id].phase, 'UNKNOWN', `action ${id} should stay UNKNOWN`);
+    assert.equal(dog.rows[id].live, false, `action ${id} should not be live`);
+  }
+  assert.deepEqual(dog.evidence.unreached_phases, []);
+  assert.deepEqual(dog.evidence.unselected_actions, [9, 10, 11, 12, 13, 14, 15, 23, 24]);
   assert.deepEqual(projection.characters.map(character => character.rows.length), [22, 25]);
+});
+
+test('binding alone never marks a Dog row live; executable evidence does', async () => {
+  // A single observed action proves only itself live.
+  const one = await buildStatusProjection(root, {
+    observed: [{ action: 0, phase: 'Idle' }],
+    unreached_phases: [],
+    unselected_actions: [],
+  });
+  const dog = one.characters.find(character => character.key === 'dog');
+  assert.deepEqual(dog.rows.filter(row => row.live).map(row => row.id), [0]);
+  assert.equal(dog.rows[0].phase, 'Idle');
+  assert.equal(dog.rows[12].bound, true);
+  assert.equal(dog.rows[12].live, false);
+
+  // No executable evidence leaves every bound row UNKNOWN/false.
+  const none = await buildStatusProjection(root, null);
+  const bare = none.characters.find(character => character.key === 'dog');
+  assert.ok(bare.rows.every(row => row.phase === 'UNKNOWN' && row.live === false));
+  assert.equal(bare.rows.filter(row => row.bound).length, 19);
 });
 
 test('character matrices stay separated and keep unknown axes explicit', async () => {

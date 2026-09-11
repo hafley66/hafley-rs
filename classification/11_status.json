@@ -444,6 +444,20 @@
         "sha256": "13cb6b58fe44ba01eaec8ffb420485c4e3a5144ca6bba09c0e5119dede6cd81e",
         "bytes": 3307
       },
+      "evidence": {
+        "unreached_phases": [],
+        "unselected_actions": [
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          23,
+          24
+        ]
+      },
       "rows": [
         {
           "id": 0,
@@ -460,8 +474,8 @@
             "Idle"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "Idle",
+          "live": true
         },
         {
           "id": 1,
@@ -478,8 +492,8 @@
             "Dash"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "Dash",
+          "live": true
         },
         {
           "id": 2,
@@ -496,8 +510,8 @@
             "Run"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "Run",
+          "live": true
         },
         {
           "id": 3,
@@ -514,8 +528,8 @@
             "Jump"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "Jump",
+          "live": true
         },
         {
           "id": 4,
@@ -532,8 +546,8 @@
             "AirJump"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "AirJump",
+          "live": true
         },
         {
           "id": 5,
@@ -550,8 +564,8 @@
             "CrouchEnter"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "CrouchEnter",
+          "live": true
         },
         {
           "id": 6,
@@ -568,8 +582,8 @@
             "CrouchHold"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "CrouchHold",
+          "live": true
         },
         {
           "id": 7,
@@ -586,8 +600,8 @@
             "CrouchExit"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "CrouchExit",
+          "live": true
         },
         {
           "id": 8,
@@ -604,8 +618,8 @@
             "Landing"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "Landing",
+          "live": true
         },
         {
           "id": 9,
@@ -736,8 +750,8 @@
             "WalkSlow"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "Walk",
+          "live": true
         },
         {
           "id": 17,
@@ -754,8 +768,8 @@
             "WalkMiddle"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "Walk",
+          "live": true
         },
         {
           "id": 18,
@@ -772,8 +786,8 @@
             "WalkFast"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "Walk",
+          "live": true
         },
         {
           "id": 19,
@@ -790,8 +804,8 @@
             "Brake"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "Brake",
+          "live": true
         },
         {
           "id": 20,
@@ -808,8 +822,8 @@
             "Turn"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "Turn",
+          "live": true
         },
         {
           "id": 21,
@@ -826,8 +840,8 @@
             "JumpSquat"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "Squat",
+          "live": true
         },
         {
           "id": 22,
@@ -844,8 +858,8 @@
             "Fall"
           ],
           "bound": true,
-          "phase": "UNKNOWN",
-          "live": false
+          "phase": "Fall",
+          "live": true
         },
         {
           "id": 23,

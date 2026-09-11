@@ -20,12 +20,18 @@ async function fileDigest(base, path) {
 // Pure projection from checked generated inputs. Rows are the catalog's own
 // membership and order; the generated role binding whose source is that action
 // id is reported as `bindings`/`bound`, which proves binding only. The phase and
-// live axes stay explicit UNKNOWN/unmeasured because no executable runtime
-// consumer of the generated roles exists in this projection; chart stays
-// explicit unknown because no generated per-character chart artifact exists.
-// Independent axes, no percentage.
-export async function buildStatusProjection(base = root) {
+// live axes for Dog come from the executable Rust export's controller tape, so
+// only actions the source-free runtime actually selects are live; bound-only
+// roles stay UNKNOWN/false. Pigeon keeps its executable observation in the
+// joined MATRIX PIGEON. Chart stays explicit unknown because no generated
+// per-character chart artifact exists. Independent axes, no percentage.
+export async function buildStatusProjection(base = root, dog = undefined) {
+  if (dog === undefined) dog = exportedDog(base);
   const { characters: specs } = await loadStatus();
+  const dogPhases = new Map();
+  if (dog) {
+    for (const row of dog.observed ?? []) dogPhases.set(row.action, row.phase);
+  }
   const characters = [];
   for (const [key, spec] of Object.entries(specs)) {
     const catalog = JSON.parse(await readFile(await existing(base, spec.catalog), 'utf8'));
@@ -66,6 +72,7 @@ export async function buildStatusProjection(base = root) {
         });
       }
       const bindings = (rolesBySource.get(entry.id) ?? []).slice().sort();
+      const observed = key === 'dog' && dogPhases.has(entry.id);
       return {
         id: entry.id,
         action: entry.name,
@@ -79,8 +86,8 @@ export async function buildStatusProjection(base = root) {
         },
         bindings,
         bound: bindings.length > 0,
-        phase: 'UNKNOWN',
-        live: false,
+        phase: observed ? dogPhases.get(entry.id) : 'UNKNOWN',
+        live: observed,
       };
     });
 
@@ -102,6 +109,12 @@ export async function buildStatusProjection(base = root) {
       baked: { ...bakedDigest, count: baked.length },
       roles: await fileDigest(base, spec.roles),
       manifest: await fileDigest(base, spec.manifest),
+      ...(key === 'dog' && dog ? {
+        evidence: {
+          unreached_phases: dog.unreached_phases ?? [],
+          unselected_actions: dog.unselected_actions ?? [],
+        },
+      } : {}),
       rows,
       errors,
     });
@@ -152,8 +165,8 @@ export async function checkStatusProjection(live) {
   return live;
 }
 
-export async function writeStatusProjection(base = root) {
-  const projection = await buildStatusProjection(base);
+export async function writeStatusProjection(base = root, dog = undefined) {
+  const projection = await buildStatusProjection(base, dog);
   await output(projectionOutput, JSON.stringify(projection, null, 2) + '\n', false);
   return projection;
 }
@@ -173,6 +186,16 @@ export function runExport(base = root, env = process.env) {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   return JSON.parse(stdout);
+}
+
+// Executable Dog phase/action evidence. One export run per process; the tape is
+// deterministic, so the projection is reproducible.
+const dogEvidenceCache = new Map();
+export function exportedDog(base = root) {
+  if (!dogEvidenceCache.has(base)) {
+    dogEvidenceCache.set(base, runExport(base).dog ?? null);
+  }
+  return dogEvidenceCache.get(base);
 }
 
 // Mirrors the roots in pigeon-lab/100_workflow.mjs so `receipt.source` is
@@ -364,9 +387,11 @@ async function main() {
   await output(new URL('3_registry.d2', import.meta.url), renderD2(entries), true);
   const progress = await buildProgress();
   await output(new URL('6_progress.html', import.meta.url), renderProgress(progress), true);
-  const projection = mode === 'generate' ? await writeStatusProjection() : await checkStatusProjection();
-  const authored = await loadStatus();
   const exported = runExport();
+  const projection = mode === 'generate'
+    ? await writeStatusProjection(root, exported.dog)
+    : await checkStatusProjection(await buildStatusProjection(root, exported.dog));
+  const authored = await loadStatus();
   const extracted = await readJson(sourceRules);
   const current = currentSource();
   const prove = await readJson(resolve(workflow, 'prove.json'));
