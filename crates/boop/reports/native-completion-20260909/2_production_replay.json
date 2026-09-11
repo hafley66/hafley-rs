@@ -1,0 +1,52 @@
+{
+  "source_sha256": "a7685033fd50590a5cce5f15a693b140a4a692bd3ed5bf680fc220f0aae6c465",
+  "source_records": 27,
+  "command": "boop db sync create --mail-dir ISOLATED_MAIL_DIR",
+  "original_version": "boop 0.0.10 (8da697e-dirty)",
+  "original_edges": [
+    [
+      "01a087c5-432d-78b0-b351-abd863614d6b",
+      "01a087c6-18fc-7e81-b973-140dd72fccc7",
+      "spawned",
+      1788985761075,
+      1788985761075,
+      1
+    ],
+    [
+      "01a087c5-432d-78b0-b351-abd863614d6b",
+      "01a087c6-18fc-7e81-b973-140dd72fccc7",
+      "completed",
+      1788984301871,
+      1788984301871,
+      1
+    ]
+  ],
+  "fixed_edges": [
+    [
+      "01a087c5-432d-78b0-b351-abd863614d6b",
+      "01a087c6-18fc-7e81-b973-140dd72fccc7",
+      "spawned",
+      1788985908651,
+      1788985908651,
+      1
+    ]
+  ],
+  "isolated_replay_root": "/private/tmp/boop-incident-replay-20260909",
+  "registered_parent_routes": 0,
+  "live_messages_sent": 0,
+  "installed_version": "boop 0.0.10 (2d4fc0c-dirty)",
+  "installed_path": "/Users/chrishafley/.cargo/bin/boop",
+  "installed_sha256": "b14f72997a77c2145f64e78c68727e5ce228cb536490e1dcd49eaa4cb81eb842",
+  "release_artifact_sha256": "b14f72997a77c2145f64e78c68727e5ce228cb536490e1dcd49eaa4cb81eb842",
+  "exit_status": 0,
+  "installed_replay_edges": [
+    [
+      "01a087c5-432d-78b0-b351-abd863614d6b",
+      "01a087c6-18fc-7e81-b973-140dd72fccc7",
+      "spawned",
+      1788986425894,
+      1788986425894,
+      1
+    ]
+  ]
+}

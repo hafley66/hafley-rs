@@ -300,7 +300,10 @@ pub fn pending(dir: &Path, lane: &str, seen: &BTreeSet<String>) -> Result<Vec<Ha
 /// A lane acts on requests and hails. Its own dispatch row and result rows are
 /// bookkeeping and would loop straight back into the agent's context.
 fn deliverable(kind: &str) -> bool {
-    matches!(kind, "request" | "hail" | "note" | "retry" | "resume")
+    matches!(
+        kind,
+        "request" | "hail" | "note" | "retry" | "resume" | "cancel"
+    )
 }
 
 /// One piece of mail as its receiver reads it. The template is the receiver's
@@ -963,6 +966,34 @@ fn supervise(
                 record_hail_transition(events, &hail, "claimed-by-supervisor", "inbox drain");
                 if start_ack_pending {
                     println!("[boop] hail {} held until startup acknowledgment", hail.id);
+                    held.push(hail);
+                    continue;
+                }
+                if hail.kind == "cancel" {
+                    if let Err(error) = channel.interrupt() {
+                        record_hail_transition(
+                            events,
+                            &hail,
+                            "rejected-by-harness",
+                            &error.to_string(),
+                        );
+                        return Err(error);
+                    }
+                    println!(
+                        "[boop] interrupt {} ({}); body lands next turn",
+                        hail.id, hail.from
+                    );
+                    info!(
+                        hail_id = hail.id,
+                        from = hail.from,
+                        "lane interrupted by mail"
+                    );
+                    record_hail_transition(
+                        events,
+                        &hail,
+                        "interrupted-by-supervisor",
+                        "cancel row",
+                    );
                     held.push(hail);
                     continue;
                 }
@@ -2322,6 +2353,7 @@ mod tests {
         assert!(!deliverable("dispatch"));
         assert!(deliverable("request"));
         assert!(deliverable("hail"));
+        assert!(deliverable("cancel"));
     }
 
     #[test]
@@ -2594,6 +2626,105 @@ mod tests {
             "lane mine done rc=1 (startup acknowledgment failed: provider never acknowledged)"
         );
         assert!(rows_of_kind(&dir, "yield").is_empty());
+    }
+
+    /// Drives one cancel row held through startup ack, then a second that
+    /// lands mid-turn and must interrupt, never steer.
+    #[derive(Clone, Default)]
+    struct CancelMailChannel {
+        turns: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+        steers: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+        interrupts: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        state: std::sync::Arc<std::sync::Mutex<Vec<bus::Message>>>,
+        dir: std::sync::Arc<std::path::PathBuf>,
+        polls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl CancelMailChannel {
+        /// Poll choreography: 0-1 the ack turn, 2+ the brief and later turns.
+        /// Cancel rows land before the drains that read them.
+        fn poll(&self) -> Option<TurnEvent> {
+            let poll = self.polls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let rows = self.state.lock().unwrap();
+            match poll {
+                0 => {
+                    write_box(&self.dir, &rows[..1]);
+                    None // ack turn still running; the drain holds the cancel
+                }
+                1 => Some(fake_turn(Some(&START_ACK_PROMPT.to_owned()))),
+                2 => {
+                    write_box(&self.dir, &rows);
+                    None // brief turn still running; the drain interrupts
+                }
+                _ => Some(TurnEvent::ok_with_receipt(
+                    "completed",
+                    TurnReceipt {
+                        text: "stopped and read the mail".into(),
+                        tool_calls: 1,
+                    },
+                )),
+            }
+        }
+    }
+
+    impl LaneChannel for CancelMailChannel {
+        fn conversation_id(&self) -> Option<String> {
+            None
+        }
+        fn start_turn(&mut self, text: &str) -> Result<()> {
+            self.turns.lock().unwrap().push(text.to_owned());
+            Ok(())
+        }
+        fn steer(&mut self, text: &str) -> Result<Delivery> {
+            self.steers.lock().unwrap().push(text.to_owned());
+            Ok(Delivery::MidTurn)
+        }
+        fn interrupt(&mut self) -> Result<()> {
+            self.interrupts
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+        fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
+            Ok(self.poll())
+        }
+        fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    /// RECEIPT. A mid-turn cancel interrupts and its body opens the next turn;
+    /// sabotage: steering it like a note leaves the interrupt count at 0.
+    #[test]
+    fn a_cancel_row_interrupts_the_turn_and_feeds_the_next_one() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let mut channel = CancelMailChannel {
+            dir: std::sync::Arc::new(dir.clone()),
+            state: std::sync::Arc::new(std::sync::Mutex::new(vec![
+                message("c1", "mine", "cancel"),
+                message("c2", "mine", "cancel"),
+            ])),
+            ..CancelMailChannel::default()
+        };
+        let seen = (
+            channel.turns.clone(),
+            channel.steers.clone(),
+            channel.interrupts.clone(),
+        );
+        std::thread::spawn(move || {
+            let _ = run(lane, &mut channel);
+        });
+        // The result row lands after turn 2, before turn 3 opens; the turns
+        // handle is the terminal condition, not the row.
+        wait_for(|| seen.0.lock().unwrap().len() == 3, Duration::from_secs(5));
+        let (turns, steers, interrupts) = seen;
+        assert_eq!(interrupts.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(steers.lock().unwrap().is_empty(), "{:?}", steers.lock());
+        let turns = turns.lock().unwrap().clone();
+        assert_eq!(turns.len(), 3, "{turns:?}");
+        assert!(turns[1].contains("do the work"), "{turns:?}");
+        assert!(turns[1].contains("body of c1"), "{turns:?}");
+        assert!(turns[2].contains("body of c2"), "{turns:?}");
     }
 
     #[derive(Clone, Default)]

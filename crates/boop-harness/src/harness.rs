@@ -40,6 +40,9 @@ pub struct Capabilities {
     /// pasteboard (`boop beep paste`). claude and codex read it on Ctrl+V;
     /// a harness with no such key takes a path instead.
     pub image_paste_keys: Option<&'static str>,
+    /// The tmux key name that interrupts the TUI's running turn (`boop beep
+    /// scream`); `None` is unverified, so the caller falls back to Escape.
+    pub interrupt_keys: Option<&'static str>,
     /// Whether the native TUI wrapper runs the store projector alongside it.
     /// Was `boop/src/cli/control.rs:44`.
     pub native_tui_projector: bool,
@@ -185,6 +188,7 @@ pub(crate) fn first_projection_gap(harness: &str, label: &str) -> bool {
 pub mod claude;
 pub mod codex;
 pub mod kimi;
+pub mod mock_tui;
 pub mod opencode;
 pub mod replay;
 
@@ -457,6 +461,13 @@ pub trait Harness: Send + Sync {
 
     /// Stable short id used in CLI output and as the `--harness` filter value.
     fn id(&self) -> HarnessId;
+
+    /// The launch that runs this harness's real TUI against a loopback mock
+    /// provider (`mock_tui`). Required: no harness arrives without a recipe.
+    fn mock_tui_launch(
+        &self,
+        ctx: &mock_tui::MockTuiContext<'_>,
+    ) -> anyhow::Result<mock_tui::MockTuiLaunch>;
 
     /// What this harness declares about itself. Every branch that used to
     /// compare a harness name reads one field here.
@@ -773,9 +784,14 @@ mod topology_tests {
             NativeBackendSupport::SeparateProcess
         );
         assert_eq!(
-            super::opencode::Opencode.capabilities().native_settings,
-            NativeSettingsSupport::ControlPlane
+            super::opencode::Opencode.capabilities().interrupt_keys,
+            Some("C-g")
         );
+        assert_eq!(
+            super::claude::Claude.capabilities().interrupt_keys,
+            Some("Escape")
+        );
+        assert_eq!(super::kimi::Kimi.capabilities().interrupt_keys, None);
         assert!(matches!(
             super::claude::Claude.capabilities().native_settings,
             NativeSettingsSupport::Unsupported(_)

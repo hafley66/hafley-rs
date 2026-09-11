@@ -6,6 +6,7 @@ pub(crate) mod job;
 pub(crate) mod mail;
 pub(crate) mod me;
 pub(crate) mod paste;
+pub(crate) mod shout;
 pub(crate) mod tag;
 
 use std::path::{Path, PathBuf};
@@ -153,6 +154,19 @@ SEND: one verb, `boop beep`. It sends and then blocks for the answer:
     boop beep parent \"done with x\"      the caller's own parent edge
     boop beep children \"stop\"           every live child of the caller
   Neither end of an alias edge is spelled by the caller; the registry holds it.
+SHOUT + SCREAM: the broadcast pair, scoped to every connected agent (live
+  panes and registered pane-less routes), the caller excepted:
+    boop beep shout [body] [--kind hail]   one row per agent; a bare shout
+                                           sends \"stahp what ur doing please\"
+    boop beep scream [body] [--double]     interrupt too: the harness's
+                                           interrupt key into every live TUI
+                                           pane (claude/codex Esc, opencode
+                                           C-g) and a kind=cancel row into
+                                           every lane; a bare scream sends
+                                           \"stop what ur doing check ps\"
+  A lane supervisor answers a cancel row with channel.interrupt() and the
+  body opens the lane's next turn. --double presses the key twice. A fan-out
+  prints one line per target and ends in a tally; nothing blocks.
   It walks the same ladder every send walks, prints the rung that took the row,
   then blocks. Exits: 0 on a reply or the recipient's turn ending, 124 on the
   timeout, 3 when the route dies first. The last line is always the next
@@ -316,7 +330,16 @@ LAWS:
     `boop wait --me &` for the batch. Only a reply and a hail take a door.
 
 BUILD: hafley-rs crates/boop; `cargo install --path crates/boop --force` from
-  main installs ~/.cargo/bin/boop. `boop --version` prints version and sha.",
+  main installs ~/.cargo/bin/boop. `boop --version` prints version and sha.
+
+MOCK TUI: every harness adapter declares `mock_tui_launch`, the recipe that
+  runs its real TUI against a loopback llmock provider (no credentials).
+  Executable overrides: CODEX_BIN, CLAUDE_BIN (ccz rides this), OPENCODE_BIN,
+  KIMI_BIN, LLMOCK_BIN. Provider install:
+    cargo install --git https://github.com/larsakerlund/llmock.git \\
+      --tag v0.1.2 --locked llmock
+  The recipe lives in boop-harness `harness/mock_tui.rs`; the integration
+  test that drives it is crates/boop/tests/shout_interrupt.rs.",
         version = ident::SCHEMA_VERSION
     )
 }

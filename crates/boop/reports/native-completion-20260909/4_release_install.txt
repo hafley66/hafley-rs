@@ -1,0 +1,12 @@
+  Installing boop v0.0.10 (/Users/chrishafley/projects/hafley-rs/crates/boop)
+warning: default toolchain implicitly overridden with `nightly-aarch64-apple-darwin` by environment variable
+  |
+  = help: use `cargo +stable install` if you meant to use the stable toolchain
+  = note: rustup selects the toolchain based on the parent environment and not the environment of the package being installed
+    Updating crates.io index
+   Compiling boop-harness v0.0.2 (/Users/chrishafley/projects/hafley-rs/crates/boop-harness)
+    Building [=======================> ] 263/267: boop-harness                   Compiling boop-proc v0.0.2 (/Users/chrishafley/projects/hafley-rs/crates/boop-proc)
+    Building [=======================> ] 263/267: boop-proc, boop-harness        Compiling boop v0.0.10 (/Users/chrishafley/projects/hafley-rs/crates/boop)
+    Building [=======================> ] 264/267: boop, boop-harness              Building [=======================> ] 265/267: boop-harness                    Building [=======================> ] 266/267: boop(bin)                       Finished `release` profile [optimized] target(s) in 20.50s
+   Replacing /Users/chrishafley/.cargo/bin/boop
+    Replaced package `boop v0.0.10 (/Users/chrishafley/projects/hafley-rs/crates/boop)` with `boop v0.0.10 (/Users/chrishafley/projects/hafley-rs/crates/boop)` (executable `boop`)

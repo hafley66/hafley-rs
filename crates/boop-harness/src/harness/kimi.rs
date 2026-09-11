@@ -22,6 +22,31 @@ use boop_store::tail;
 
 pub struct Kimi;
 
+/// kimi trusts a folder through `workspace-trust/wd_workspace_<id>` where the
+/// id is sha256(canonical root) truncated to 12 hex chars.
+fn seed_workspace_trust(kimi_config: &Path, workspace: &Path) -> anyhow::Result<()> {
+    use sha2::{Digest, Sha256};
+    let root = std::fs::canonicalize(workspace)?;
+    let digest = Sha256::digest(root.display().to_string().as_bytes());
+    let id: String = digest
+        .iter()
+        .take(6)
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let dir = kimi_config.join("workspace-trust");
+    std::fs::create_dir_all(&dir)?;
+    let trusted_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_millis() as u64)
+        .unwrap_or(0);
+    std::fs::write(
+        dir.join(format!("wd_workspace_{id}")),
+        serde_json::json!({ "root": root.display().to_string(), "trustedAt": trusted_at })
+            .to_string(),
+    )?;
+    Ok(())
+}
+
 /// The kimi TUI takes no variant flag and exposes no control plane.
 static CAPABILITIES: Capabilities = Capabilities {
     bans_plan_family_models: false,
@@ -29,6 +54,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     variant: VariantSupport::None,
     mail: MailPolicy::Keystrokes,
     image_paste_keys: None,
+    interrupt_keys: None,
     native_tui_projector: true,
     wrapper_owns_alternate_screen: false,
     native_backend: super::NativeBackendSupport::Unsupported,
@@ -81,6 +107,50 @@ impl Harness for Kimi {
 
     fn id(&self) -> HarnessId {
         HarnessId::Kimi
+    }
+
+    /// instant's kimi recipe (`kimiLaunch`) held open: `--prompt` prints and
+    /// exits, so the mock runs the interactive TUI and the driver types.
+    fn mock_tui_launch(
+        &self,
+        ctx: &super::mock_tui::MockTuiContext<'_>,
+    ) -> anyhow::Result<super::mock_tui::MockTuiLaunch> {
+        use super::mock_tui::{terminal_env, MockTuiReplay};
+        let executable = super::mock_tui::resolve_executable("kimi", "KIMI_BIN")
+            .ok_or_else(|| anyhow::anyhow!("no kimi executable: set KIMI_BIN or put it on PATH"))?;
+        let kimi_config = ctx.home.join(".kimi-code");
+        std::fs::create_dir_all(&kimi_config)?;
+        let config = kimi_config.join("config.toml");
+        let base_url = format!(r#"base_url = "http://127.0.0.1:{}/openai/v1""#, ctx.port);
+        std::fs::write(
+            &config,
+            [
+                r#"default_model = "llmock/mock-model""#,
+                "telemetry = false",
+                r#"[providers.llmock]"#,
+                r#"type = "openai""#,
+                r#"api_key = "test""#,
+                base_url.as_str(),
+                r#"[models."llmock/mock-model"]"#,
+                r#"provider = "llmock""#,
+                r#"model = "mock-model""#,
+                "max_context_size = 100000",
+                r#"capabilities = ["tool_call"]"#,
+                r#"display_name = "Mock Model""#,
+                "",
+            ]
+            .join("\n"),
+        )?;
+        seed_workspace_trust(&kimi_config, ctx.workspace)?;
+        Ok(super::mock_tui::MockTuiLaunch {
+            executable: executable.display().to_string(),
+            args: vec!["--model".into(), "llmock/mock-model".into()],
+            env: terminal_env(ctx.home),
+            config_paths: vec![config],
+            replay: MockTuiReplay::TypePrompt {
+                readiness: "Mock Model",
+            },
+        })
     }
 
     fn capabilities(&self) -> &'static Capabilities {
@@ -1059,15 +1129,16 @@ mod tests {
     fn discovers_main_and_a_sub_agent_from_the_fixture() {
         let base = std::path::PathBuf::from("tests/fixtures/kimi");
         let sessions = sessions_in(&base).unwrap();
-        let main = sessions
-            .iter()
-            .find(|session| session.nickname == "main")
-            .expect("main agent transcript present in fixture");
-        assert!(main.parent.is_none());
         let sub = sessions
             .iter()
             .find(|session| session.nickname == "agent-0")
             .expect("sub-agent transcript present in fixture");
+        let main = sessions
+            .iter()
+            .find(|session| Some(session.session_id.as_str()) == sub.parent.as_deref())
+            .expect("sub-agent parent transcript present in fixture");
+        assert_eq!(main.nickname, "main");
+        assert!(main.parent.is_none());
         assert_eq!(sub.parent.as_deref(), Some(main.session_id.as_str()));
         assert_ne!(sub.session_id, main.session_id);
         assert!(main.cwd.is_some(), "state.json workDir recovered as cwd");

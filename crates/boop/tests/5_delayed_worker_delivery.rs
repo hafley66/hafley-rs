@@ -30,7 +30,7 @@ use boop::harness::{
     Capabilities, Harness, HarnessId, LanePolicy, MailPolicy, NativeBackendSupport,
     NativeSettingsSupport, ReadChunk, SessionRef, VariantSupport,
 };
-use boop::live::{DoorAddress, LiveSession, LiveSessions, LiveSessionScope, LiveStatus};
+use boop::live::{DoorAddress, LiveSession, LiveSessionScope, LiveSessions, LiveStatus};
 use boop::mail::{deliver_hail_budgeted, DoorBudget, PanePaster, Rung};
 use boop::registry::Registry;
 use boop::Store;
@@ -44,6 +44,7 @@ static DOOR: Capabilities = Capabilities {
     variant: VariantSupport::None,
     mail: MailPolicy::Door,
     image_paste_keys: None,
+    interrupt_keys: None,
     native_tui_projector: false,
     wrapper_owns_alternate_screen: false,
     native_backend: NativeBackendSupport::Unsupported,
@@ -99,6 +100,13 @@ struct Probe {
 impl Harness for Probe {
     fn id(&self) -> HarnessId {
         HarnessId::Codex
+    }
+
+    fn mock_tui_launch(
+        &self,
+        _: &boop::harness::mock_tui::MockTuiContext<'_>,
+    ) -> anyhow::Result<boop::harness::mock_tui::MockTuiLaunch> {
+        anyhow::bail!("fixture harness has no mock launch")
     }
 
     fn capabilities(&self) -> &'static Capabilities {
@@ -197,9 +205,7 @@ fn worker_completion_and_hail_take_the_door_while_progress_stays_in_the_mailbox(
             session_id: thread.into(),
             socket: socket.clone(),
         },
-        door: Recorder {
-            log: log.clone(),
-        },
+        door: Recorder { log: log.clone() },
     })]);
     let routes = BTreeMap::from([("codex-coord".to_owned(), route(thread, &socket))]);
     let budget = DoorBudget {
@@ -227,20 +233,22 @@ fn worker_completion_and_hail_take_the_door_while_progress_stays_in_the_mailbox(
 
     let mut timeline = Vec::new();
     for (id, kind, body, created) in cases {
-        let msg = message(id, "feature-f41-ground-chart", "codex-coord", kind, body, created);
+        let msg = message(
+            id,
+            "feature-f41-ground-chart",
+            "codex-coord",
+            kind,
+            body,
+            created,
+        );
         let started = Instant::now();
-        let landing = deliver_hail_budgeted(
-            &registry,
-            &store,
-            &routes,
-            &msg,
-            &NoPane,
-            &budget,
-        )
-        .unwrap();
+        let landing =
+            deliver_hail_budgeted(&registry, &store, &routes, &msg, &NoPane, &budget).unwrap();
         let rows = store.delivery_rows(id).unwrap();
         assert_eq!(
-            rows.iter().map(|row| row.outcome.as_str()).collect::<Vec<_>>(),
+            rows.iter()
+                .map(|row| row.outcome.as_str())
+                .collect::<Vec<_>>(),
             ["appended", "accepted-by-harness"],
             "{id} ({kind}) must append then land on the door"
         );
@@ -286,7 +294,9 @@ fn worker_completion_and_hail_take_the_door_while_progress_stays_in_the_mailbox(
         deliver_hail_budgeted(&registry, &store, &routes, &progress, &NoPane, &budget).unwrap();
     let rows = store.delivery_rows("m-yield").unwrap();
     assert_eq!(
-        rows.iter().map(|row| row.outcome.as_str()).collect::<Vec<_>>(),
+        rows.iter()
+            .map(|row| row.outcome.as_str())
+            .collect::<Vec<_>>(),
         ["appended", "held-in-mailbox"],
         "a yield row never opens the door"
     );

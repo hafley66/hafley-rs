@@ -34,7 +34,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 use boop::Registry;
-use boop_harness::harness::replay::{ReplayChannel, parse_cast};
+use boop_harness::harness::replay::{parse_cast, ReplayChannel};
 use boop_harness::{Harness, HarnessId, SessionRef};
 use tui_test::{
     AutomaticRecording, KeyAction, LocatorExpectOptions, OpenOptions, Operation, OperationResult,
@@ -242,7 +242,10 @@ fn claude(
     ));
     env.push(("ANTHROPIC_AUTH_TOKEN".into(), "test".into()));
     env.push(("DISABLE_AUTOUPDATER".into(), "1".into()));
-    env.push(("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC".into(), "1".into()));
+    env.push((
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC".into(),
+        "1".into(),
+    ));
     Ok((
         vec![
             "--bare".into(),
@@ -339,10 +342,9 @@ const PROVIDER_FIXTURE: &str = "tests/fixtures/provider/0_terminal-flow.yaml";
 /// offline guard fails before any live run if the two drift apart.
 #[test]
 fn the_authored_fixture_carries_the_fixed_reply() {
-    let fixture = std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join(PROVIDER_FIXTURE),
-    )
-    .expect("authored provider fixture is committed");
+    let fixture =
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(PROVIDER_FIXTURE))
+            .expect("authored provider fixture is committed");
     assert!(fixture.contains(LIVE_REPLY_MARKER));
     assert!(fixture.contains("prompt_tokens: 12"));
 }
@@ -688,7 +690,9 @@ fn run_adapter(id: HarnessId, port: u16) -> Result<AdapterReport> {
         "{id} cast bytes lost the fixed reply marker"
     );
     assert!(
-        schedule.windows(2).all(|pair| pair[0].at_ms <= pair[1].at_ms),
+        schedule
+            .windows(2)
+            .all(|pair| pair[0].at_ms <= pair[1].at_ms),
         "{id} cast timestamps are not monotonic"
     );
 
@@ -723,7 +727,10 @@ fn run_adapter(id: HarnessId, port: u16) -> Result<AdapterReport> {
         }
         assert_eq!(chunk.skipped, 0, "{id} adapter skipped records");
         assert!(!chunk.reset, "{id} adapter reset a fresh transcript");
-        assert!(!chunk.events.is_empty(), "{id} transcript decoded no events");
+        assert!(
+            !chunk.events.is_empty(),
+            "{id} transcript decoded no events"
+        );
         let offsets: Vec<u64> = chunk.events.iter().map(|e| e.raw_line_offset).collect();
         assert!(
             offsets.windows(2).all(|pair| pair[0] < pair[1]),
@@ -760,8 +767,9 @@ fn run_adapter(id: HarnessId, port: u16) -> Result<AdapterReport> {
         let assistant = messages.iter().position(|message| {
             message.role == "assistant" && message.text.contains(LIVE_REPLY_MARKER)
         });
-        let assistant = assistant
-            .with_context(|| format!("{id} adapter turn reader never saw the fixed reply marker"))?;
+        let assistant = assistant.with_context(|| {
+            format!("{id} adapter turn reader never saw the fixed reply marker")
+        })?;
         assert!(
             user.is_some_and(|user| user < assistant),
             "{id} assistant turn did not follow the user turn"
@@ -799,9 +807,8 @@ fn selected_adapters() -> Result<Vec<HarnessId>> {
 #[test]
 #[ignore = "live: installed harness + pinned llmock + real PTY; run just boop-live-harness"]
 fn live_harness_almost_e2e() -> Result<()> {
-    let llmock = llmock_path().context(
-        "pinned llmock is missing: run `just boop-live-setup` (or set LLMOCK_BIN)",
-    )?;
+    let llmock = llmock_path()
+        .context("pinned llmock is missing: run `just boop-live-setup` (or set LLMOCK_BIN)")?;
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join(PROVIDER_FIXTURE);
     let port = unused_loopback_port()?;
     let mut server = Llmock::spawn(&llmock, &fixture, port)?;

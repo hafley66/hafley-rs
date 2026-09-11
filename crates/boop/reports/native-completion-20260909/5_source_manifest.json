@@ -1,0 +1,23 @@
+{
+  "review_clone_base": "95bd8bb",
+  "installed_source_head": "2d4fc0c78766d9901a45951689313cc085df417b",
+  "source_test_files": {
+    "crates/boop-harness/src/door/codex.rs": "c23eda4245f11486aef30cf26d527482655bda293ec09b361d7045ef36ea6fc7",
+    "crates/boop-harness/src/harness/codex.rs": "fd4d59f041c12ed062ae8500c8305e93fb549ff35d8cb2825318ebbc9e675bf5",
+    "crates/boop-harness/src/harness/kimi.rs": "f9bf31b5d410ddacd0de97cf17772ae7b868117dd0007551a1e4f03134679484",
+    "crates/boop-proc/src/deliver.rs": "6b6c4321b12ed61595c62d5c8effd6c9525d3175cdf75df07b4bdaa7dd40d5d6",
+    "crates/boop-store/src/ident.rs": "67d398e83bf0ebbd985a346a01eafd0aac4a732857256beeb84ee146909d4fcb",
+    "crates/boop/src/cli/control.rs": "26c972acb643bb8dee13594e453dab0a005e7826d651539b2a706c98f5ad565a",
+    "crates/boop/src/cli/job.rs": "6246d61f6e6e0c2d14e515d6197841554c4a4f47f22cdeceda1d7ce293e9ea7a",
+    "crates/boop/src/cli/mail.rs": "684863e904b46f8f55a7bc2a4f0522276cc0727cc4823f6764e8004b61d6bd5c",
+    "crates/boop/tests/2_native_wrapper.rs": "f3a0358035d10d0b6d8ced95b3db7276d73e1f5f44ac9d4fa28af6081b689da3",
+    "crates/boop/tests/deliver_door.rs": "918cc0dc9728bb81bd4810d1484da49cbce7d6bd1b1b10cc298c5b10ecd3c6b6"
+  },
+  "receipts": {
+    "0_original_failure.txt": "75c212db49f81e841695adc755cbedba064fb1ccdeee08ef048758a6f47123a8",
+    "1_focused_tests.txt": "5d08c79d30ccd02153a32f2bb092d64f4c4e2e2b7cc5826b1cc37241b0e2c8ef",
+    "2_production_replay.json": "8d5edb3203626fc26f3718a4112f099c3ce1de38c8bbced1f7d6ffe33970f585",
+    "3_deterministic_gate.txt": "e57b61355ca938929489392399117f64a9b40e73552bf1d505d3b80fc08f1905",
+    "4_release_install.txt": "5ad42c3afac13c010bbc0490538398c0b8ec7e2840cb9fdc835ed9ea3a41a480"
+  }
+}

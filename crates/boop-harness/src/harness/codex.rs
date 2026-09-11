@@ -1,6 +1,7 @@
 //! The codex adapter: transcripts under `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
 //! Every line wraps a `payload` object whose own `type` names the real record.
 
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -25,6 +26,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     variant: VariantSupport::ModelSuffixEffort,
     mail: MailPolicy::Door,
     image_paste_keys: Some("C-v"),
+    interrupt_keys: Some("Escape"),
     native_tui_projector: true,
     // false so codex renders on the primary screen: its transcript then lands in
     // tmux history, which is the only scrollback a codex pane ever gets.
@@ -115,6 +117,62 @@ impl Harness for Codex {
 
     fn id(&self) -> HarnessId {
         HarnessId::Codex
+    }
+
+    /// instant's codex recipe (2_agentTuiReplay.ts `codexLaunch`): CODEX_HOME
+    /// config with an llmock provider, prompt on argv, no alt screen.
+    fn mock_tui_launch(
+        &self,
+        ctx: &super::mock_tui::MockTuiContext<'_>,
+    ) -> anyhow::Result<super::mock_tui::MockTuiLaunch> {
+        use super::mock_tui::{terminal_env, workspace_spellings, MockTuiReplay, MOCK_PROMPT};
+        let executable =
+            super::mock_tui::resolve_executable("codex", "CODEX_BIN").ok_or_else(|| {
+                anyhow::anyhow!("no codex executable: set CODEX_BIN or put it on PATH")
+            })?;
+        let codex_home = ctx.home.join(".codex");
+        std::fs::create_dir_all(&codex_home)?;
+        let config = codex_home.join("config.toml");
+        // codex compares its cwd spelling literally, and that spelling varies
+        // by launcher (/tmp vs /private/tmp on macOS): trust both forms.
+        let spellings = workspace_spellings(ctx.workspace)?;
+        let mut table = String::new();
+        for spelling in spellings {
+            let key = serde_json::to_string(&spelling)?;
+            table.push_str(&format!("[projects.{key}]\ntrust_level = \"trusted\"\n"));
+        }
+        std::fs::write(
+            &config,
+            [
+                r#"model = "mock-model""#,
+                r#"model_provider = "llmock""#,
+                r#"approval_policy = "never""#,
+                r#"sandbox_mode = "read-only""#,
+                "disable_response_storage = true",
+                table.as_str(),
+                r#"[model_providers.llmock]"#,
+                r#"name = "llmock""#,
+                &format!(r#"base_url = "http://127.0.0.1:{}/openai/v1""#, ctx.port),
+                r#"wire_api = "responses""#,
+                r#"env_key = "OPENAI_API_KEY""#,
+                "requires_openai_auth = false",
+                "request_max_retries = 0",
+                "stream_max_retries = 0",
+                "supports_websockets = false",
+                "",
+            ]
+            .join("\n"),
+        )?;
+        let mut env = terminal_env(ctx.home);
+        env.push(("CODEX_HOME".into(), codex_home.display().to_string()));
+        env.push(("OPENAI_API_KEY".into(), "test".into()));
+        Ok(super::mock_tui::MockTuiLaunch {
+            executable: executable.display().to_string(),
+            args: vec!["--no-alt-screen".into(), MOCK_PROMPT.into()],
+            env,
+            config_paths: vec![config],
+            replay: MockTuiReplay::PromptArg,
+        })
     }
 
     fn capabilities(&self) -> &'static Capabilities {
@@ -275,10 +333,16 @@ impl Harness for Codex {
         let mut file = File::open(&session.path)
             .with_context(|| format!("open transcript {}", session.path.display()))?;
         let result = tail::read_complete_lines(&mut file, from)?;
-        Ok(native_child_events_from_lines(
+        let mut ownership = if from == 0 || result.reset {
+            NativeChildOwnership::default()
+        } else {
+            native_child_ownership_before(&session.path, &session.session_id, from)?
+        };
+        Ok(native_child_events_with_ownership(
             parent_session,
             &session.session_id,
             &result.lines,
+            &mut ownership,
         ))
     }
 
@@ -667,14 +731,115 @@ fn first_session_meta(path: &Path) -> Option<SessionMeta> {
     })
 }
 
-/// Codex records subagent parentage in the child's `session_meta` and writes
-/// `task_complete` in that child's transcript. These are durable local events;
-/// app-server remote control is used only later, by the shared projector, to
-/// notify a registered parent route.
-fn native_child_events_from_lines(
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum NativeRecordOwner {
+    Child,
+    Other,
+}
+
+/// Explicit ownership state carried across a transcript prefix. Codex can
+/// replay parent records in a child rollout, so neither file membership nor
+/// the outer timestamp identifies the thread that owns a task event.
+#[derive(Default)]
+struct NativeChildOwnership {
+    current: Option<NativeRecordOwner>,
+    turns: BTreeMap<String, NativeRecordOwner>,
+}
+
+impl NativeChildOwnership {
+    /// Update ownership from one parsed record and return whether it is the
+    /// child's own session header or task completion.
+    fn observe(&mut self, value: &Value, child_session: &str) -> (bool, bool) {
+        let outer = value.get("type").and_then(Value::as_str);
+        let payload = value.get("payload").and_then(Value::as_object);
+        let record = payload
+            .and_then(|payload| payload.get("type"))
+            .and_then(Value::as_str);
+        if outer == Some("session_meta") {
+            self.current = payload
+                .and_then(|payload| payload.get("id"))
+                .and_then(Value::as_str)
+                .map(|session| {
+                    if session == child_session {
+                        NativeRecordOwner::Child
+                    } else {
+                        NativeRecordOwner::Other
+                    }
+                });
+            return (self.current == Some(NativeRecordOwner::Child), false);
+        }
+
+        // `thread_settings_applied.thread_id` is the explicit boundary Codex
+        // writes when replayed parent history returns to this child. Apply any
+        // future event carrying the same field as an ownership boundary too.
+        if let Some(thread) = payload
+            .and_then(|payload| payload.get("thread_id"))
+            .and_then(Value::as_str)
+        {
+            self.current = Some(if thread == child_session {
+                NativeRecordOwner::Child
+            } else {
+                NativeRecordOwner::Other
+            });
+        }
+        let turn_id = payload
+            .and_then(|payload| payload.get("turn_id"))
+            .and_then(Value::as_str);
+        if outer == Some("event_msg") && record == Some("task_started") {
+            if let (Some(turn), Some(owner)) = (turn_id, self.current) {
+                self.turns.insert(turn.to_owned(), owner);
+            }
+        }
+        let event_owner = turn_id
+            .and_then(|turn| self.turns.get(turn).copied())
+            .or(self.current);
+        (
+            false,
+            outer == Some("event_msg")
+                && record == Some("task_complete")
+                && event_owner == Some(NativeRecordOwner::Child),
+        )
+    }
+}
+
+/// Scan only the prefix needed to restore thread and turn ownership at an
+/// incremental byte cursor. The scan is streaming, so memory stays bounded by
+/// one JSONL record even for a large rollout.
+fn native_child_ownership_before(
+    path: &Path,
+    child_session: &str,
+    before: u64,
+) -> anyhow::Result<NativeChildOwnership> {
+    let mut reader = BufReader::new(
+        File::open(path).with_context(|| format!("open transcript {}", path.display()))?,
+    );
+    let mut consumed = 0u64;
+    let mut ownership = NativeChildOwnership::default();
+    while consumed < before {
+        let mut bytes = Vec::new();
+        let read = reader.read_until(b'\n', &mut bytes)?;
+        if read == 0 {
+            break;
+        }
+        consumed = consumed.saturating_add(read as u64);
+        if consumed > before || bytes.pop() != Some(b'\n') {
+            break;
+        }
+        if let Ok(value) = serde_json::from_slice::<Value>(&bytes) {
+            ownership.observe(&value, child_session);
+        }
+    }
+    Ok(ownership)
+}
+
+/// Codex records subagent parentage in the child's own `session_meta`. Task
+/// events are attributed through explicit session/thread markers and exact
+/// turn ids because the same file may also contain replayed parent history.
+fn native_child_events_with_ownership(
     parent_session: &str,
     child_session: &str,
     lines: &[tail::CompleteLine],
+    ownership: &mut NativeChildOwnership,
 ) -> Vec<NativeChildEvent> {
     let mut events = Vec::new();
     for line in lines {
@@ -686,26 +851,44 @@ fn native_child_events_from_lines(
             .and_then(Value::as_str)
             .and_then(crate::harness::claude::parse_iso_ms)
             .unwrap_or(0);
-        let outer = value.get("type").and_then(Value::as_str);
-        let record = value
-            .get("payload")
-            .and_then(Value::as_object)
-            .and_then(|payload| payload.get("type"))
-            .and_then(Value::as_str);
-        if outer == Some("session_meta") {
+        let (spawned, completed) = ownership.observe(&value, child_session);
+        if spawned {
             events.push(NativeChildEvent::Spawned {
                 parent_session: parent_session.to_owned(),
                 child_session: child_session.to_owned(),
                 at_ms,
             });
         }
-        if outer == Some("event_msg") && record == Some("task_complete") {
+        if completed {
             events.push(NativeChildEvent::Completed {
                 parent_session: parent_session.to_owned(),
                 child_session: child_session.to_owned(),
                 outcome: "completed".to_owned(),
                 at_ms,
             });
+        }
+    }
+    events
+}
+
+#[cfg(test)]
+fn native_child_events_from_lines(
+    parent_session: &str,
+    child_session: &str,
+    lines: &[tail::CompleteLine],
+    from: u64,
+) -> Vec<NativeChildEvent> {
+    let mut ownership = NativeChildOwnership::default();
+    let mut events = Vec::new();
+    for line in lines {
+        let projected = native_child_events_with_ownership(
+            parent_session,
+            child_session,
+            std::slice::from_ref(line),
+            &mut ownership,
+        );
+        if line.start >= from {
+            events.extend(projected);
         }
     }
     events
@@ -1632,7 +1815,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            native_child_events_from_lines("parent-session", "child-session", &lines),
+            native_child_events_from_lines("parent-session", "child-session", &lines, 0),
             [
                 crate::harness::NativeChildEvent::Spawned {
                     parent_session: "parent-session".into(),
@@ -1647,6 +1830,161 @@ mod tests {
                 },
             ]
         );
+    }
+
+    /// Regression receipt for the 2026-09-09 false completion. A native
+    /// child's rollout starts with its own metadata, then replays parent
+    /// history before returning to the child thread. Parent task completion
+    /// is not child completion, and an interrupted child has no completion.
+    #[test]
+    fn native_child_observer_attributes_replayed_turns_to_their_thread() {
+        let inherited_only = [
+            boop_store::tail::CompleteLine {
+                start: 0,
+                bytes: br#"{"timestamp":"2026-09-09T20:05:01.871Z","type":"session_meta","payload":{"id":"child-session","parent_thread_id":"parent-session"}}"#.to_vec(),
+            },
+            boop_store::tail::CompleteLine {
+                start: 1,
+                bytes: br#"{"timestamp":"2026-09-09T20:05:01.871Z","type":"session_meta","payload":{"id":"parent-session"}}"#.to_vec(),
+            },
+            boop_store::tail::CompleteLine {
+                start: 2,
+                bytes: br#"{"timestamp":"2026-09-09T20:05:01.871Z","type":"event_msg","payload":{"type":"task_started","turn_id":"parent-turn"}}"#.to_vec(),
+            },
+            boop_store::tail::CompleteLine {
+                start: 30,
+                bytes: br#"{"timestamp":"2026-09-09T20:05:01.871Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"parent-turn"}}"#.to_vec(),
+            },
+            boop_store::tail::CompleteLine {
+                start: 40,
+                bytes: br#"{"timestamp":"2026-09-09T20:05:01.893Z","type":"event_msg","payload":{"type":"thread_settings_applied","thread_id":"child-session"}}"#.to_vec(),
+            },
+            boop_store::tail::CompleteLine {
+                start: 50,
+                bytes: br#"{"timestamp":"2026-09-09T20:05:01.900Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"parent-turn"}}"#.to_vec(),
+            },
+            boop_store::tail::CompleteLine {
+                start: 60,
+                bytes: br#"{"timestamp":"2026-09-09T20:05:01.893Z","type":"event_msg","payload":{"type":"task_started","turn_id":"child-turn"}}"#.to_vec(),
+            },
+            boop_store::tail::CompleteLine {
+                start: 70,
+                bytes: br#"{"timestamp":"2026-09-09T20:05:08.907Z","type":"event_msg","payload":{"type":"turn_aborted","turn_id":"child-turn","reason":"interrupted"}}"#.to_vec(),
+            },
+        ];
+        assert_eq!(
+            native_child_events_from_lines("parent-session", "child-session", &inherited_only, 0,),
+            [crate::harness::NativeChildEvent::Spawned {
+                parent_session: "parent-session".into(),
+                child_session: "child-session".into(),
+                at_ms: 1_788_984_301_871,
+            }]
+        );
+
+        let own_completion = boop_store::tail::CompleteLine {
+            start: 90,
+            bytes: br#"{"timestamp":"2026-09-09T20:06:00.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"child-second-turn"}}"#.to_vec(),
+        };
+        let own_start = boop_store::tail::CompleteLine {
+            start: 80,
+            bytes: br#"{"timestamp":"2026-09-09T20:05:59.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"child-second-turn"}}"#.to_vec(),
+        };
+        let mut completed = inherited_only.to_vec();
+        completed.push(own_start);
+        completed.push(own_completion);
+        assert_eq!(
+            native_child_events_from_lines("parent-session", "child-session", &completed, 0)
+                .into_iter()
+                .filter(|event| matches!(event, crate::harness::NativeChildEvent::Completed { .. }))
+                .collect::<Vec<_>>(),
+            [crate::harness::NativeChildEvent::Completed {
+                parent_session: "parent-session".into(),
+                child_session: "child-session".into(),
+                outcome: "completed".into(),
+                at_ms: 1_788_984_360_000,
+            }]
+        );
+        assert_eq!(
+            native_child_events_from_lines("parent-session", "child-session", &completed, 90),
+            [crate::harness::NativeChildEvent::Completed {
+                parent_session: "parent-session".into(),
+                child_session: "child-session".into(),
+                outcome: "completed".into(),
+                at_ms: 1_788_984_360_000,
+            }],
+            "the prefix restores child ownership for an incremental tail"
+        );
+    }
+
+    #[test]
+    fn native_child_observer_restores_thread_ownership_at_byte_cursors() {
+        let path = temp_path("native-child-replayed-prefix");
+        let interrupted = [
+            r#"{"timestamp":"2026-09-09T20:05:01.871Z","type":"session_meta","payload":{"id":"child-session","parent_thread_id":"parent-session"}}"#,
+            r#"{"timestamp":"2026-09-09T20:05:01.871Z","type":"session_meta","payload":{"id":"parent-session"}}"#,
+            r#"{"timestamp":"2026-09-09T20:05:01.871Z","type":"event_msg","payload":{"type":"task_started","turn_id":"parent-turn"}}"#,
+            r#"{"timestamp":"2026-09-09T20:05:01.893Z","type":"event_msg","payload":{"type":"thread_settings_applied","thread_id":"child-session"}}"#,
+            r#"{"timestamp":"2026-09-09T20:05:01.900Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"parent-turn"}}"#,
+            r#"{"timestamp":"2026-09-09T20:05:01.893Z","type":"event_msg","payload":{"type":"task_started","turn_id":"child-turn"}}"#,
+            r#"{"timestamp":"2026-09-09T20:05:08.907Z","type":"event_msg","payload":{"type":"turn_aborted","turn_id":"child-turn","reason":"interrupted"}}"#,
+        ];
+        write_lines(&path, &interrupted);
+        let session = SessionRef {
+            harness: HarnessId::Codex,
+            session_id: "child-session".into(),
+            nickname: "child-session".into(),
+            path: path.clone(),
+            cwd: None,
+            git_branch: None,
+            modified_ms: 0,
+            size: std::fs::metadata(&path).unwrap().len(),
+            tmux: None,
+            tmux_socket: None,
+            parent: Some("parent-session".into()),
+        };
+        assert_eq!(
+            Codex.observe_native_children(&session, 0).unwrap(),
+            [crate::harness::NativeChildEvent::Spawned {
+                parent_session: "parent-session".into(),
+                child_session: "child-session".into(),
+                at_ms: 1_788_984_301_871,
+            }],
+            "an interrupted child has no completion"
+        );
+
+        let cursor_inside_parent_replay = (interrupted[0].len() + 1) as u64;
+        let cursor_after_child_start = interrupted[..6]
+            .iter()
+            .map(|line| line.len() as u64 + 1)
+            .sum::<u64>();
+        let cursor_after_abort = std::fs::metadata(&path).unwrap().len();
+        let completed = [
+            r#"{"timestamp":"2026-09-09T20:05:59.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"child-second-turn"}}"#,
+            r#"{"timestamp":"2026-09-09T20:06:00.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"child-second-turn"}}"#,
+        ];
+        let mut file = OpenOptions::new().append(true).open(&path).unwrap();
+        for line in completed {
+            writeln!(file, "{line}").unwrap();
+        }
+        drop(file);
+
+        for cursor in [
+            cursor_inside_parent_replay,
+            cursor_after_child_start,
+            cursor_after_abort,
+        ] {
+            assert_eq!(
+                Codex.observe_native_children(&session, cursor).unwrap(),
+                [crate::harness::NativeChildEvent::Completed {
+                    parent_session: "parent-session".into(),
+                    child_session: "child-session".into(),
+                    outcome: "completed".into(),
+                    at_ms: 1_788_984_360_000,
+                }],
+                "cursor {cursor}"
+            );
+        }
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

@@ -28,6 +28,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     variant: VariantSupport::Flag,
     mail: MailPolicy::Door,
     image_paste_keys: None,
+    interrupt_keys: Some("C-g"),
     native_tui_projector: true,
     wrapper_owns_alternate_screen: false,
     native_backend: super::NativeBackendSupport::SeparateProcess,
@@ -39,6 +40,13 @@ static DOOR: crate::door::opencode::OpencodeDoor = crate::door::opencode::Openco
 
 impl Harness for Opencode {
     fn uses_native_tui(&self, args: &[String]) -> bool {
+        // `run` prints one reply and exits, so it sits in the exit list below;
+        // `run --interactive` is the TUI that same subcommand opens.
+        if args.first().is_some_and(|first| first == "run")
+            && args.iter().any(|arg| arg == "--interactive")
+        {
+            return true;
+        }
         super::interactive_arguments(
             args,
             &[
@@ -99,6 +107,52 @@ impl Harness for Opencode {
 
     fn id(&self) -> HarnessId {
         HarnessId::Opencode
+    }
+
+    /// instant's opencode recipe (`opencodeLaunch`) reshaped for the wrapper:
+    /// `boop tui` attaches to its own server, so only the config rides along.
+    fn mock_tui_launch(
+        &self,
+        ctx: &super::mock_tui::MockTuiContext<'_>,
+    ) -> anyhow::Result<super::mock_tui::MockTuiLaunch> {
+        use super::mock_tui::{terminal_env, MockTuiReplay};
+        let executable = super::mock_tui::resolve_executable("opencode", "OPENCODE_BIN")
+            .ok_or_else(|| {
+                anyhow::anyhow!("no opencode executable: set OPENCODE_BIN or put it on PATH")
+            })?;
+        let config = ctx.home.join("opencode.json");
+        std::fs::write(
+            &config,
+            serde_json::json!({
+                "$schema": "https://opencode.ai/config.json",
+                "autoupdate": false,
+                "model": "llmock/mock-model",
+                "provider": {
+                    "llmock": {
+                        "npm": "@ai-sdk/openai-compatible",
+                        "name": "llmock",
+                        "options": {
+                            "baseURL": format!("http://127.0.0.1:{}/openai/v1", ctx.port),
+                            "apiKey": "test",
+                        },
+                        "models": { "mock-model": { "name": "Mock Model" } },
+                    }
+                },
+            })
+            .to_string(),
+        )?;
+        let mut env = terminal_env(ctx.home);
+        env.push(("OPENCODE_CONFIG".into(), config.display().to_string()));
+        env.push(("OPENCODE_DISABLE_AUTOUPDATE".into(), "1".into()));
+        Ok(super::mock_tui::MockTuiLaunch {
+            executable: executable.display().to_string(),
+            args: Vec::new(),
+            env,
+            config_paths: vec![config],
+            replay: MockTuiReplay::TypePrompt {
+                readiness: "Mock Model llmock",
+            },
+        })
     }
 
     fn capabilities(&self) -> &'static Capabilities {

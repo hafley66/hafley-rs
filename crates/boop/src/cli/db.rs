@@ -1779,6 +1779,7 @@ mod tests {
         variant: VariantSupport::None,
         mail: MailPolicy::Keystrokes,
         image_paste_keys: None,
+        interrupt_keys: None,
         native_tui_projector: false,
         wrapper_owns_alternate_screen: false,
         native_backend: boop::harness::NativeBackendSupport::Unsupported,
@@ -1792,6 +1793,13 @@ mod tests {
     impl Harness for FakeHarness {
         fn id(&self) -> HarnessId {
             HarnessId::Kimi
+        }
+
+        fn mock_tui_launch(
+            &self,
+            _: &boop::harness::mock_tui::MockTuiContext<'_>,
+        ) -> anyhow::Result<boop::harness::mock_tui::MockTuiLaunch> {
+            anyhow::bail!("fixture harness has no mock launch")
         }
 
         fn capabilities(&self) -> &'static Capabilities {
@@ -1826,6 +1834,13 @@ mod tests {
     impl Harness for WatchingHarness {
         fn id(&self) -> HarnessId {
             HarnessId::Kimi
+        }
+
+        fn mock_tui_launch(
+            &self,
+            _: &boop::harness::mock_tui::MockTuiContext<'_>,
+        ) -> anyhow::Result<boop::harness::mock_tui::MockTuiLaunch> {
+            anyhow::bail!("fixture harness has no mock launch")
         }
 
         fn capabilities(&self) -> &'static Capabilities {
@@ -1914,6 +1929,13 @@ mod tests {
     impl Harness for CodexFixtureHarness {
         fn id(&self) -> HarnessId {
             HarnessId::Codex
+        }
+
+        fn mock_tui_launch(
+            &self,
+            _: &boop::harness::mock_tui::MockTuiContext<'_>,
+        ) -> anyhow::Result<boop::harness::mock_tui::MockTuiLaunch> {
+            anyhow::bail!("fixture harness has no mock launch")
         }
 
         fn capabilities(&self) -> &'static Capabilities {

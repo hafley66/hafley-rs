@@ -262,6 +262,7 @@ pub(crate) fn run_native_tui(
     let default_name = native_route_name(adapter.id().as_str());
     let name = name.unwrap_or(&default_name);
     let dir = mail_dir(mail_dir_arg)?;
+    let tui_trail_root = boop::trail::lanes_root().ok();
     let _ownership = boop::bus::try_route_lock(&boop::bus::db_path(&dir)?, name, "native-tui")?
         .with_context(|| format!("route {name} already has a native TUI wrapper"))?;
     let store = boop::bus::open_store(&dir)?;
@@ -305,12 +306,22 @@ pub(crate) fn run_native_tui(
             ),
         ],
     };
+    let launch_started = std::time::Instant::now();
     let mut plan = adapter.door().tui_launch(&spec)?;
+    let launch_ms = launch_started.elapsed().as_millis() as u64;
+    if launch_ms >= 2_000 {
+        tracing::warn!(harness = %adapter.id(), elapsed_ms = launch_ms, "slow native TUI launch (backend start before the screen)");
+    }
+    let known_started = std::time::Instant::now();
     let mut known = adapter
         .capabilities()
         .native_tui_projector
         .then(|| store.known_sessions())
         .transpose()?;
+    let known_ms = known_started.elapsed().as_millis() as u64;
+    if known_ms >= 1_000 {
+        tracing::warn!(elapsed_ms = known_ms, "slow known-session read before the TUI screen");
+    }
     let _alternate_screen =
         AlternateScreen::enter(adapter.capabilities().wrapper_owns_alternate_screen);
     // The stamp every `boop` call inside this TUI reads as its identity,
@@ -547,7 +558,15 @@ pub(crate) fn run_native_tui(
                         adapter,
                         name,
                         &dir,
-                        |message| crate::cli::mail::deliver_hail(registry, &dir, message, None),
+                        |message| {
+                            crate::cli::mail::deliver_hail_to_tui_trail(
+                                registry,
+                                &dir,
+                                message,
+                                tui_trail_root.as_deref(),
+                                name,
+                            )
+                        },
                     ) {
                         warn!(%error, route = name, "native discovery projector pass failed");
                     }

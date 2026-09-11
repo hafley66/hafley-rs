@@ -39,6 +39,8 @@ mod presets_json;
 mod registry_kinds;
 #[path = "session_mood.rs"]
 mod session_mood;
+#[path = "shout_interrupt.rs"]
+mod shout_interrupt;
 #[path = "sync_convoy.rs"]
 mod sync_convoy;
 #[path = "sync_discovery.rs"]

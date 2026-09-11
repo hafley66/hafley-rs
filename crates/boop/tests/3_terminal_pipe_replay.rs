@@ -10,7 +10,7 @@
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use boop_harness::harness::replay::{ReplayChannel, drive, parse_cast};
+use boop_harness::harness::replay::{drive, parse_cast, ReplayChannel};
 use boop_harness::{Harness, HarnessId, SessionRef};
 
 fn spawn_shell(script: &str) -> std::process::Child {

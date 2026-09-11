@@ -88,13 +88,15 @@ fn write_pasteboard(path: &Path, class: &str) -> Result<()> {
     Ok(())
 }
 
-fn send_keys(pane: &str, keys: &str, literal: bool) -> Result<()> {
+/// One `tmux send-keys` with as many keys as named: `["Escape", "Escape"]` is
+/// two key presses, a single `"Esc Esc"` argument would be one unknown key.
+pub(crate) fn send_keys(pane: &str, keys: &[&str], literal: bool) -> Result<()> {
     let mut command = Command::new("tmux");
     command.args(["send-keys", "-t", pane]);
     if literal {
         command.arg("-l");
     }
-    command.arg(keys);
+    command.args(keys);
     let status = command.status().context("run tmux send-keys")?;
     if !status.success() {
         bail!("tmux send-keys into {pane} exited {status}");
@@ -151,14 +153,15 @@ pub(crate) fn run_paste(
     match plan(path, keys, as_path) {
         PastePlan::Image { class, keys } => {
             write_pasteboard(path, class)?;
-            send_keys(&pane, keys, false)?;
+            send_keys(&pane, &[keys], false)?;
             println!(
                 "pasted {} as {class} into {pane}: pasteboard + {keys}",
                 path.display()
             );
         }
         PastePlan::PathText(text) => {
-            send_keys(&pane, &format!("{text} "), true)?;
+            let typed = format!("{text} ");
+            send_keys(&pane, &[&typed], true)?;
             println!("typed {text} into {pane} (no Enter)");
         }
     }

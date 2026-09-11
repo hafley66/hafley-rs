@@ -22,6 +22,7 @@ static DOOR: Capabilities = Capabilities {
     variant: VariantSupport::None,
     mail: MailPolicy::Door,
     image_paste_keys: Some("C-v"),
+    interrupt_keys: None,
     native_tui_projector: false,
     wrapper_owns_alternate_screen: false,
     native_backend: boop::harness::NativeBackendSupport::Unsupported,
@@ -34,6 +35,7 @@ static KEYSTROKES: Capabilities = Capabilities {
     variant: VariantSupport::None,
     mail: MailPolicy::Keystrokes,
     image_paste_keys: Some("C-v"),
+    interrupt_keys: None,
     native_tui_projector: false,
     wrapper_owns_alternate_screen: false,
     native_backend: boop::harness::NativeBackendSupport::Unsupported,
@@ -109,6 +111,13 @@ struct Echo {
 impl Harness for Echo {
     fn id(&self) -> HarnessId {
         self.id
+    }
+
+    fn mock_tui_launch(
+        &self,
+        _: &boop::harness::mock_tui::MockTuiContext<'_>,
+    ) -> anyhow::Result<boop::harness::mock_tui::MockTuiLaunch> {
+        anyhow::bail!("fixture harness has no mock launch")
     }
 
     fn capabilities(&self) -> &'static Capabilities {
@@ -286,7 +295,12 @@ fn concurrent_and_later_retries_do_not_resubmit_an_accepted_message() {
             retry.detail.as_str(),
             accepted
         ),
-        (1, Rung::Mailbox, "previously accepted by harness", 1)
+        (
+            1,
+            Rung::Mailbox,
+            "previously accepted by harness or its queue",
+            1
+        )
     );
     drop(store);
     std::fs::remove_dir_all(dir).unwrap();

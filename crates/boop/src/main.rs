@@ -604,9 +604,29 @@ fn missing_beep_argument(name: &str) -> ! {
 }
 
 fn sync_before_local_command(registry: &Registry) -> Result<()> {
+    let started = std::time::Instant::now();
     sync_before_read(registry)?;
+    warn_if_slow("startup transcript sync", started, SLOW_STARTUP_EFFECT);
+    let started = std::time::Instant::now();
     drain_all_held_mail_best_effort(registry);
+    warn_if_slow("held-mail drain", started, SLOW_STARTUP_EFFECT);
     Ok(())
+}
+
+/// A startup effect a read verb pays before its own query; past this the
+/// caller sees a WARN naming the effect instead of a silent stall.
+const SLOW_STARTUP_EFFECT: std::time::Duration = std::time::Duration::from_millis(1000);
+
+fn warn_if_slow(effect: &str, started: std::time::Instant, budget: std::time::Duration) {
+    let elapsed = started.elapsed();
+    if elapsed >= budget {
+        tracing::warn!(
+            effect,
+            elapsed_ms = elapsed.as_millis() as u64,
+            budget_ms = budget.as_millis() as u64,
+            "slow external effect before the verb ran"
+        );
+    }
 }
 
 /// Held mail re-pushes itself on every sync-carrying command: a row parked
@@ -898,6 +918,34 @@ enum BeepCmd {
         all: bool,
         #[arg(long, value_enum, default_value_t = PstreeFormat::Text)]
         format: PstreeFormat,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// One row to every connected agent (live panes and registered pane-less
+    /// routes), the caller excepted. The stop-gap broadcast.
+    Shout {
+        /// The message; omitted sends "stahp what ur doing please".
+        body: Option<String>,
+        /// Who the rows are from, when the whoami ladder cannot say.
+        #[arg(long = "as", value_name = "NAME")]
+        as_name: Option<String>,
+        /// The mail kind the rows wear.
+        #[arg(long, default_value = "hail")]
+        kind: String,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Interrupt every connected agent: the harness's interrupt key into
+    /// every live TUI pane, a cancel row into every lane.
+    Scream {
+        /// The message; omitted sends "stop what ur doing check ps".
+        body: Option<String>,
+        /// Who the rows are from, when the whoami ladder cannot say.
+        #[arg(long = "as", value_name = "NAME")]
+        as_name: Option<String>,
+        /// Press the interrupt key twice (the claude double-Esc move).
+        #[arg(long)]
+        double: bool,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -2031,6 +2079,24 @@ mod tests {
             assert!(
                 !startup_sync_wanted(cli.command.as_ref().unwrap(), true),
                 "{argv:?} must skip the sync under the hatch"
+            );
+        }
+    }
+
+    /// RECEIPT. The broadcast verbs parse with and without a body, and a
+    /// broadcast reads the registry only, never a transcript row.
+    #[test]
+    fn shout_and_scream_parse_body_optional_and_skip_the_sync() {
+        for argv in [
+            vec!["boop", "beep", "shout"],
+            vec!["boop", "beep", "shout", "all hands"],
+            vec!["boop", "beep", "scream", "--double"],
+            vec!["boop", "beep", "scream", "stop now", "--as", "root"],
+        ] {
+            let cli = Cli::try_parse_from(&argv).unwrap_or_else(|e| panic!("{argv:?}: {e}"));
+            assert!(
+                !command_needs_startup_sync(cli.command.as_ref().unwrap()),
+                "{argv:?} reads no agent_* row and must not sync"
             );
         }
     }

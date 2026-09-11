@@ -246,6 +246,7 @@ mod tests {
         variant: VariantSupport::Flag,
         mail: MailPolicy::Door,
         image_paste_keys: Some("C-v"),
+        interrupt_keys: None,
         native_tui_projector: true,
         wrapper_owns_alternate_screen: false,
         native_backend: crate::harness::NativeBackendSupport::Unsupported,
@@ -255,6 +256,13 @@ mod tests {
     impl Harness for Echo {
         fn id(&self) -> HarnessId {
             HarnessId::Kimi
+        }
+
+        fn mock_tui_launch(
+            &self,
+            _: &crate::harness::mock_tui::MockTuiContext<'_>,
+        ) -> anyhow::Result<crate::harness::mock_tui::MockTuiLaunch> {
+            anyhow::bail!("fixture harness has no mock launch")
         }
 
         fn capabilities(&self) -> &'static Capabilities {

@@ -492,11 +492,11 @@ pub(crate) fn watch_turn_end(
     let (sender, receiver) = std::sync::mpsc::channel();
     let mut armed = 0usize;
     for row in rows {
-        // Only a rung that put the body itself in front of the recipient has
-        // a turn to end. A held or pasted row waits on the mailbox alone.
-        if !boop::DeliveryState::parse(&row.outcome)
-            .is_some_and(|state| state == boop::DeliveryState::AcceptedByHarness)
-        {
+        // A direct injection or an accepted door queue has a recipient turn
+        // to end. Other holds and pasted notices wait on the mailbox alone.
+        let direct = boop::DeliveryState::parse(&row.outcome)
+            .is_some_and(|state| state == boop::DeliveryState::AcceptedByHarness);
+        if !direct && row.detail != "door queue" {
             continue;
         }
         let Some(route) = routes.get(&row.route).cloned() else {
@@ -1452,6 +1452,38 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
             format,
             mail_dir,
         } => run_pstree(mail_dir.as_deref(), all, format),
+        BeepCmd::Shout {
+            body,
+            as_name,
+            kind,
+            mail_dir,
+        } => crate::cli::shout::run_broadcast(
+            registry,
+            mail_dir.as_deref(),
+            &crate::cli::shout::Broadcast {
+                body: body.as_deref().unwrap_or(crate::cli::shout::SHOUT_BODY),
+                kind: &kind,
+                as_name: as_name.as_deref(),
+                interrupt: false,
+                double: false,
+            },
+        ),
+        BeepCmd::Scream {
+            body,
+            as_name,
+            double,
+            mail_dir,
+        } => crate::cli::shout::run_broadcast(
+            registry,
+            mail_dir.as_deref(),
+            &crate::cli::shout::Broadcast {
+                body: body.as_deref().unwrap_or(crate::cli::shout::SCREAM_BODY),
+                kind: "hail",
+                as_name: as_name.as_deref(),
+                interrupt: true,
+                double,
+            },
+        ),
     }
 }
 

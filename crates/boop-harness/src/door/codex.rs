@@ -185,10 +185,12 @@ impl Door for CodexDoor {
                 session.session_id
             )));
         };
-        match queue_message(socket, thread, body) {
-            Ok(()) => Ok(Delivered::Injected),
-            Err(error) => Ok(Delivered::Unreachable(format!("{error}"))),
-        }
+        deliver_message_with(
+            thread,
+            body,
+            |method, params| app_server_rpc(socket, method, params),
+            || queue_message(socket, thread, body),
+        )
     }
 
     /// `thread/status/changed` on the daemon's notification stream: the
@@ -637,6 +639,63 @@ pub fn queue_message(socket: &Path, thread: &str, text: &str) -> Result<()> {
     Ok(())
 }
 
+/// Keep worker progress in the active turn. Reading only the newest turn's
+/// metadata avoids loading the coordinator's entire conversation per message.
+/// A definitive steer rejection can race a turn ending, so the existing queue
+/// remains the fallback. A lost response is ambiguous and must not enqueue a
+/// second copy in this delivery attempt.
+fn deliver_message_with(
+    thread: &str,
+    text: &str,
+    mut rpc: impl FnMut(&str, serde_json::Value) -> Result<serde_json::Value>,
+    queue: impl FnOnce() -> Result<()>,
+) -> Result<Delivered> {
+    let latest = rpc(
+        "thread/turns/list",
+        serde_json::json!({"threadId":thread,"limit":1,"sortDirection":"desc","itemsView":"notLoaded"}),
+    )?;
+    let turns = latest["data"]
+        .as_array()
+        .context("Codex turn list has no data array")?;
+    if let Some(active) = turns.first().filter(|turn| turn["status"] == "inProgress") {
+        let id = active["id"]
+            .as_str()
+            .context("Codex active turn has no id")?;
+        match rpc(
+            "turn/steer",
+            serde_json::json!({"threadId":thread,"expectedTurnId":id,
+                "input":[{"type":"text","text":text}]}),
+        ) {
+            Ok(receipt) => {
+                anyhow::ensure!(
+                    receipt["turnId"] == id,
+                    "Codex steer returned an unexpected turn id"
+                );
+                return Ok(Delivered::Injected);
+            }
+            Err(error) if error.downcast_ref::<RpcRejected>().is_some() => {
+                tracing::debug!(thread, turn = id, error = %error, "Codex rejected steering; using turn queue");
+            }
+            Err(error) => {
+                return Err(error.context("Codex steer receipt unknown; not queueing a second copy"))
+            }
+        }
+    }
+    queue()?;
+    Ok(Delivered::QueuedForTurnBoundary)
+}
+
+#[derive(Debug)]
+struct RpcRejected(serde_json::Value);
+
+impl std::fmt::Display for RpcRejected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Codex RPC rejected: {}", self.0)
+    }
+}
+
+impl std::error::Error for RpcRejected {}
+
 fn app_server_rpc(
     socket: &Path,
     method: &str,
@@ -672,11 +731,9 @@ fn app_server_rpc(
             if value["id"] != id {
                 continue;
             }
-            anyhow::ensure!(
-                value.get("error").is_none(),
-                "Codex {called}: {}",
-                value["error"]
-            );
+            if let Some(error) = value.get("error") {
+                return Err(RpcRejected(error.clone()).into());
+            }
             if id == 2 {
                 return Ok(value["result"].clone());
             }
@@ -1133,5 +1190,166 @@ mod tests {
         assert!(door
             .notify_idle(&session, Duration::from_millis(1))
             .is_err());
+    }
+
+    #[test]
+    fn successful_codex_queue_is_held_for_turn_boundary() {
+        const CHILD_ENV: &str = "BOOP_TEST_CODEX_QUEUE_CHILD";
+        const TEST_NAME: &str =
+            "door::codex::tests::successful_codex_queue_is_held_for_turn_boundary";
+        if std::env::var_os(CHILD_ENV).is_none() {
+            let root = std::env::temp_dir().join(format!(
+                "boop-codex-queue-state-{}-{}",
+                std::process::id(),
+                now_ms()
+            ));
+            std::fs::create_dir_all(&root).unwrap();
+            let output = Command::new(std::env::current_exe().unwrap())
+                .args([TEST_NAME, "--exact", "--nocapture"])
+                .env(CHILD_ENV, &root)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{output:#?}");
+            assert_eq!(
+                std::fs::read_to_string(root.join("argv")).unwrap(),
+                "queue\n--thread\nthread-1\n--message\nping\n--remote\nunix:///tmp/control.sock\n"
+            );
+            let _ = std::fs::remove_dir_all(root);
+            return;
+        }
+
+        use std::os::unix::fs::PermissionsExt;
+        let root = PathBuf::from(std::env::var_os(CHILD_ENV).unwrap());
+        let codex = root.join("codex");
+        std::fs::write(
+            &codex,
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$BOOP_TEST_CODEX_QUEUE_CAPTURE\"\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&codex, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::env::set_var("PATH", &root);
+        std::env::set_var("BOOP_TEST_CODEX_QUEUE_CAPTURE", root.join("argv"));
+        assert_eq!(
+            deliver_message_with(
+                "thread-1",
+                "ping",
+                |method, _| {
+                    assert_eq!(method, "thread/turns/list");
+                    Ok(serde_json::json!({"data":[]}))
+                },
+                || queue_message(Path::new("/tmp/control.sock"), "thread-1", "ping"),
+            )
+            .unwrap(),
+            Delivered::QueuedForTurnBoundary
+        );
+    }
+
+    #[test]
+    fn worker_progress_steers_active_turn_without_post_completion_queue() {
+        let mut calls = Vec::new();
+        let result = deliver_message_with(
+            "parent",
+            "worker checkpoint",
+            |method, params| {
+                calls.push((method.to_owned(), params));
+                Ok(if method == "thread/turns/list" {
+                    serde_json::json!({"data":[{"id":"working","status":"inProgress"}]})
+                } else {
+                    serde_json::json!({"turnId":"working"})
+                })
+            },
+            || panic!("active-turn progress must never enter the post-turn queue"),
+        )
+        .unwrap();
+        assert_eq!(result, Delivered::Injected);
+        assert_eq!(
+            calls,
+            vec![
+                (
+                    "thread/turns/list".into(),
+                    serde_json::json!({"threadId":"parent","limit":1,"sortDirection":"desc","itemsView":"notLoaded"})
+                ),
+                (
+                    "turn/steer".into(),
+                    serde_json::json!({"threadId":"parent","expectedTurnId":"working","input":[{"type":"text","text":"worker checkpoint"}]})
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn idle_or_explicitly_rejected_steer_queues_once() {
+        for active in [false, true] {
+            let mut queued = 0;
+            let mut methods = Vec::new();
+            let result = deliver_message_with("parent", "done", |method, _| {
+                methods.push(method.to_owned());
+                if method == "thread/turns/list" {
+                    Ok(serde_json::json!({"data":[{"id":"turn","status":if active {"inProgress"} else {"completed"}}]}))
+                } else {
+                    Err(RpcRejected(serde_json::json!({"code":-32600,"message":"no active turn"})).into())
+                }
+            }, || { queued += 1; Ok(()) }).unwrap();
+            assert_eq!(result, Delivered::QueuedForTurnBoundary);
+            assert_eq!(queued, 1);
+            assert_eq!(methods.len(), if active { 2 } else { 1 });
+        }
+    }
+
+    #[test]
+    fn missing_steer_receipt_never_falls_back_to_a_second_send() {
+        for malformed_receipt in [false, true] {
+            let result = deliver_message_with(
+                "parent",
+                "done",
+                |method, _| {
+                    if method == "thread/turns/list" {
+                        Ok(serde_json::json!({"data":[{"id":"turn","status":"inProgress"}]}))
+                    } else if malformed_receipt {
+                        Ok(serde_json::json!({"turnId":"wrong-turn"}))
+                    } else {
+                        anyhow::bail!("socket closed after send")
+                    }
+                },
+                || panic!("unknown acceptance must not enqueue a duplicate"),
+            );
+            assert!(result.is_err());
+        }
+    }
+
+    /// Opt-in transport proof against the caller-selected active session.
+    /// Never starts a model turn or queues a message after the current turn.
+    #[test]
+    #[ignore = "requires an explicitly selected Codex thread; message opts into steering"]
+    fn active_turn_delivery_probe() {
+        let socket = std::env::var("BOOP_CODEX_TEST_SOCKET").unwrap();
+        let thread = std::env::var("BOOP_CODEX_TEST_THREAD").unwrap();
+        let Ok(message) = std::env::var("BOOP_CODEX_TEST_MESSAGE") else {
+            let queue = app_server_rpc(
+                Path::new(&socket),
+                "thread/queue/list",
+                serde_json::json!({"threadId":thread}),
+            )
+            .unwrap();
+            let rows = queue["data"].as_array().unwrap();
+            println!(
+                "QUEUED_SUBMISSIONS count={} more={}",
+                rows.len(),
+                !queue["nextCursor"].is_null()
+            );
+            for row in rows {
+                println!("queued_id={}", row["id"]);
+            }
+            return;
+        };
+        let delivered = deliver_message_with(
+            &thread,
+            &message,
+            |method, params| app_server_rpc(Path::new(&socket), method, params),
+            || anyhow::bail!("probe requires active-turn steering; refusing post-turn queue"),
+        )
+        .unwrap();
+        assert_eq!(delivered, Delivered::Injected);
+        println!("ACTIVE_TURN_STEER_ACCEPTED thread={thread}");
     }
 }

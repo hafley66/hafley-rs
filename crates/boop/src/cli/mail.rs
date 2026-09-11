@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -117,8 +118,8 @@ pub(crate) struct Outbound<'a> {
 /// Route names a send cannot address: clap resolves each to the `beep`
 /// subcommand of that name long before the send sees it, so a registry row
 /// wearing one is unreachable and says so rather than mailing into the void.
-const RESERVED_ROUTES: [&str; 8] = [
-    "lane", "agent", "hail", "message", "ps", "pstree", "harness", "help",
+const RESERVED_ROUTES: [&str; 10] = [
+    "lane", "agent", "hail", "message", "ps", "pstree", "harness", "help", "shout", "scream",
 ];
 
 /// Who a row is from when no `--as` and no ladder rung names the caller.
@@ -229,6 +230,35 @@ pub(crate) fn deliver_hail(
     message: &bus::Message,
     _socket: Option<&str>,
 ) -> Result<()> {
+    deliver_hail_reported(registry, dir, message, line)
+}
+
+/// Deliver a completion found by the resident native-TUI projector and write
+/// its receipt only to that wrapper's trail. Failure to open or write the
+/// diagnostic trail is silent: the harness owns the terminal, so stdout and
+/// stderr are never fallbacks for this background callback.
+pub(crate) fn deliver_hail_to_tui_trail(
+    registry: &Registry,
+    dir: &Path,
+    message: &bus::Message,
+    trail_root: Option<&Path>,
+    route: &str,
+) -> Result<()> {
+    let mut trail = trail_root
+        .and_then(|root| boop::trail::open_in(root, route, boop::trail::SUPERVISE_LOG).ok());
+    deliver_hail_reported(registry, dir, message, |text| {
+        if let Some(trail) = trail.as_mut() {
+            let _ = writeln!(trail, "{text}");
+        }
+    })
+}
+
+fn deliver_hail_reported(
+    registry: &Registry,
+    dir: &Path,
+    message: &bus::Message,
+    mut report: impl FnMut(&str),
+) -> Result<()> {
     let to = message.to.as_str();
     let store = bus::open_store(dir)?;
     let mut routes = bus::routes_in(&store)?;
@@ -250,12 +280,9 @@ pub(crate) fn deliver_hail(
         "hail delivery recorded"
     );
     if let Some(reply) = landing.reply.as_deref().filter(|text| !text.is_empty()) {
-        println!("{reply}");
+        report(reply);
     }
-    println!(
-        "{}",
-        landing.line(&message.id, &message.from, to, &harness_id)
-    );
+    report(&landing.line(&message.id, &message.from, to, &harness_id));
     confirm_transition_recorded(&landing, &message.id, to)?;
     Ok(())
 }
@@ -755,6 +782,90 @@ pub(crate) fn run_inbox_drain(
         &boop::supervise::mood_template(&name),
     )));
     Ok(())
+}
+
+#[cfg(test)]
+mod delivery_report_tests {
+    use super::deliver_hail_to_tui_trail;
+    use boop::bus::Message;
+    use boop::registry::Registry;
+
+    fn message(id: &str) -> Message {
+        Message {
+            id: id.into(),
+            from: "native-child".into(),
+            to: "native-parent".into(),
+            from_timestamp: "2026-09-09T20:05:07Z".into(),
+            to_timestamp: None,
+            kind: "completion".into(),
+            reply_to: None,
+            body: "native child completed".into(),
+            r#ref: None,
+            rc: None,
+            detail: None,
+        }
+    }
+
+    /// The resident wrapper's exact completion callback writes its landing to
+    /// the wrapper trail. An unavailable trail drops diagnostic output rather
+    /// than falling through to the TUI-owned terminal.
+    #[test]
+    fn native_tui_completion_delivery_uses_only_its_trail() {
+        const CHILD_ENV: &str = "BOOP_TEST_NATIVE_COMPLETION_REPORT_CHILD";
+        const TEST_NAME: &str =
+            "cli::mail::delivery_report_tests::native_tui_completion_delivery_uses_only_its_trail";
+        if std::env::var_os(CHILD_ENV).is_none() {
+            let root = crate::cli::testkit::temp_mail_dir();
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([TEST_NAME, "--exact", "--nocapture"])
+                .env(CHILD_ENV, &root)
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{output:#?}");
+            let stdout = String::from_utf8(output.stdout).unwrap();
+            let stderr = String::from_utf8(output.stderr).unwrap();
+            for marker in ["native-completion-trailed", "native-completion-untrailed"] {
+                assert!(!stdout.contains(marker), "stdout: {stdout:?}");
+                assert!(!stderr.contains(marker), "stderr: {stderr:?}");
+            }
+            assert_eq!(
+                std::fs::read_to_string(
+                    boop::trail::lane_dir_in(&root.join("lanes"), "codex-1830")
+                        .join(boop::trail::SUPERVISE_LOG)
+                )
+                .unwrap(),
+                "held native-completion-trailed from native-child -> native-parent in the mailbox (no registry route for native-parent); native-parent reads it with `boop wait --me` and the drain retries it\n"
+            );
+            let _ = std::fs::remove_dir_all(root);
+            return;
+        }
+
+        let root = std::path::PathBuf::from(std::env::var_os(CHILD_ENV).unwrap());
+        let mail = root.join("mail");
+        let trails = root.join("lanes");
+        std::fs::create_dir_all(&mail).unwrap();
+        let registry = Registry::with(Vec::new());
+        deliver_hail_to_tui_trail(
+            &registry,
+            &mail,
+            &message("native-completion-trailed"),
+            Some(&trails),
+            "codex-1830",
+        )
+        .unwrap();
+
+        let unavailable = root.join("not-a-directory");
+        std::fs::write(&unavailable, "fixture").unwrap();
+        deliver_hail_to_tui_trail(
+            &registry,
+            &mail,
+            &message("native-completion-untrailed"),
+            Some(&unavailable),
+            "codex-1830",
+        )
+        .unwrap();
+        assert_eq!(std::fs::read_to_string(&unavailable).unwrap(), "fixture");
+    }
 }
 
 /// Write the coordinator's hooks into its project settings, or take them out.

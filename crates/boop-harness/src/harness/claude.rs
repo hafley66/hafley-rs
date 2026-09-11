@@ -24,6 +24,7 @@ static CAPABILITIES: Capabilities = Capabilities {
     variant: VariantSupport::None,
     mail: MailPolicy::Door,
     image_paste_keys: Some("C-v"),
+    interrupt_keys: Some("Escape"),
     native_tui_projector: true,
     wrapper_owns_alternate_screen: false,
     native_backend: super::NativeBackendSupport::Unsupported,
@@ -151,6 +152,81 @@ impl Harness for Claude {
 
     fn id(&self) -> HarnessId {
         HarnessId::Claude
+    }
+
+    /// instant's claude recipe (`claudeLaunch`): onboarded scratch config,
+    /// Anthropic base URL on the loopback mock, prompt typed at the composer.
+    fn mock_tui_launch(
+        &self,
+        ctx: &super::mock_tui::MockTuiContext<'_>,
+    ) -> anyhow::Result<super::mock_tui::MockTuiLaunch> {
+        use super::mock_tui::{terminal_env, MockTuiReplay};
+        let executable =
+            super::mock_tui::resolve_executable("claude", "CLAUDE_BIN").ok_or_else(|| {
+                anyhow::anyhow!(
+                    "no claude executable: set CLAUDE_BIN (ccz rides this) or put it on PATH"
+                )
+            })?;
+        let claude_config = ctx.home.join(".claude");
+        std::fs::create_dir_all(&claude_config)?;
+        let state = claude_config.join(".claude.json");
+        let mut projects = serde_json::Map::new();
+        for spelling in super::mock_tui::workspace_spellings(ctx.workspace)? {
+            projects.insert(
+                spelling,
+                serde_json::json!({ "hasTrustDialogAccepted": true }),
+            );
+        }
+        std::fs::write(
+            &state,
+            serde_json::json!({
+                "firstStartTime": "2026-01-01T00:00:00.000Z",
+                "firstStartVersion": "2",
+                "hasCompletedOnboarding": true,
+                "projects": projects,
+            })
+            .to_string(),
+        )?;
+        let settings = claude_config.join("settings.json");
+        std::fs::write(
+            &settings,
+            serde_json::json!({ "theme": "dark" }).to_string(),
+        )?;
+        let mut env = terminal_env(ctx.home);
+        env.extend([
+            (
+                "CLAUDE_CONFIG_DIR".into(),
+                claude_config.display().to_string(),
+            ),
+            (
+                format!("ANTHROPIC_BASE_URL"),
+                format!("http://127.0.0.1:{}/anthropic", ctx.port),
+            ),
+            ("ANTHROPIC_AUTH_TOKEN".into(), "test".into()),
+            ("DISABLE_AUTOUPDATER".into(), "1".into()),
+            (
+                "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC".into(),
+                "1".into(),
+            ),
+        ]);
+        Ok(super::mock_tui::MockTuiLaunch {
+            executable: executable.display().to_string(),
+            args: vec![
+                "--bare".into(),
+                "--safe-mode".into(),
+                "--model".into(),
+                "claude-sonnet-4-5".into(),
+                "--permission-mode".into(),
+                "dontAsk".into(),
+                "--tools".into(),
+                String::new(),
+            ],
+            env,
+            config_paths: vec![state, settings],
+            replay: MockTuiReplay::TypePrompt {
+                readiness: "Claude Code v",
+            },
+        })
     }
 
     fn capabilities(&self) -> &'static Capabilities {

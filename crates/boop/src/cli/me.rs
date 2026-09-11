@@ -344,6 +344,7 @@ mod tests {
         variant: VariantSupport::None,
         mail: MailPolicy::Door,
         image_paste_keys: Some("C-v"),
+        interrupt_keys: None,
         native_tui_projector: false,
         wrapper_owns_alternate_screen: false,
         native_backend: boop::harness::NativeBackendSupport::Unsupported,
@@ -373,6 +374,13 @@ mod tests {
     impl Harness for LiveClaude {
         fn id(&self) -> HarnessId {
             HarnessId::Claude
+        }
+
+        fn mock_tui_launch(
+            &self,
+            _: &boop::harness::mock_tui::MockTuiContext<'_>,
+        ) -> anyhow::Result<boop::harness::mock_tui::MockTuiLaunch> {
+            anyhow::bail!("fixture harness has no mock launch")
         }
 
         fn capabilities(&self) -> &'static Capabilities {

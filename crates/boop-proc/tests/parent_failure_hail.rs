@@ -207,18 +207,14 @@ fn a_failed_lane_mails_one_end_row_not_two() {
     let lane = lane_of(&dir);
     let mut ends = Vec::new();
     for path in boop_store::bus::read_boxes(&dir).unwrap_or_default() {
-        ends.extend(
-            boop_store::bus::parse_box(&path)
-                .into_iter()
-                .filter(|row| {
-                    row.to == "coordinator"
-                        && row.from == lane
-                        && matches!(
-                            row.kind.as_str(),
-                            "result" | "exited_without_completion" | "open_failed"
-                        )
-                }),
-        );
+        ends.extend(boop_store::bus::parse_box(&path).into_iter().filter(|row| {
+            row.to == "coordinator"
+                && row.from == lane
+                && matches!(
+                    row.kind.as_str(),
+                    "result" | "exited_without_completion" | "open_failed"
+                )
+        }));
     }
     assert_eq!(ends.len(), 1, "one end row per failed lane: {ends:?}");
     assert_eq!(ends[0].kind, "result");
@@ -362,7 +358,11 @@ fn a_failed_lane_result_reaches_the_door_once() {
         "the retained result takes the recipient's door"
     );
     let bodies = DELIVERED.lock().unwrap().clone();
-    assert_eq!(bodies.len(), 1, "one door delivery per failed lane: {bodies:?}");
+    assert_eq!(
+        bodies.len(),
+        1,
+        "one door delivery per failed lane: {bodies:?}"
+    );
     assert!(
         bodies[0].contains("done rc=1") && bodies[0].contains("aborted stream"),
         "the door body is the retained result row: {:?}",
@@ -418,6 +418,13 @@ struct FakeClaude;
 impl Harness for FakeClaude {
     fn id(&self) -> HarnessId {
         HarnessId::Claude
+    }
+
+    fn mock_tui_launch(
+        &self,
+        _: &boop_harness::harness::mock_tui::MockTuiContext<'_>,
+    ) -> anyhow::Result<boop_harness::harness::mock_tui::MockTuiLaunch> {
+        anyhow::bail!("fixture harness has no mock launch")
     }
 
     fn capabilities(&self) -> &'static Capabilities {

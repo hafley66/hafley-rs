@@ -89,3 +89,37 @@ fn generated_wrappers_pass_noninteractive_commands_without_routes() {
     drop(store);
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn explicit_send_keeps_redirected_stdout_under_a_tui_stamp() {
+    let root = std::env::temp_dir().join(format!(
+        "boop-wrapper-explicit-output-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_boop"))
+        .args([
+            "beep",
+            "missing-parent",
+            "body",
+            "--no-wait",
+            "--as",
+            "test-sender",
+        ])
+        .boop_test_root(&root)
+        .env("BOOP_DB", root.join("boop.db"))
+        .env("BOOP_MAIL_DIR", root.join("mail"))
+        .env("BOOP_NO_SYNC", "1")
+        .env("BOOP_TUI_PANE", "codex-1830")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:#?}");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("held ")
+            && stdout.contains("missing-parent")
+            && stdout.contains("boop wait"),
+        "{stdout:?}"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}

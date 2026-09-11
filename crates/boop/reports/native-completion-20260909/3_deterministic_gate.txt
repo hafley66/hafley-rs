@@ -1,0 +1,1210 @@
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+   Compiling boop-harness v0.0.2 (/private/tmp/boop-delivery-fix-20260909/crates/boop-harness)
+    Building [======================>  ] 282/299: boop-harness, boop_harness(…   Compiling boop-proc v0.0.2 (/private/tmp/boop-delivery-fix-20260909/crates/boop-proc)
+    Building [======================>  ] 284/299: bench_grid(test), boop_proc…   Compiling boop v0.0.10 (/private/tmp/boop-delivery-fix-20260909/crates/boop)
+    Building [======================>  ] 285/299: bench_grid(test), parent_fa…    Building [======================>  ] 286/299: bench_grid(test), parent_fa…    Building [======================>  ] 287/299: parent_failure_hail(test), …    Building [=======================> ] 288/299: typed_rows(example), parent…    Building [=======================> ] 289/299: typed_rows(example), boop_p…    Building [=======================> ] 290/299: typed_rows(example), boop_p…    Building [=======================> ] 292/299: boop_proc(test), main(test)…    Building [=======================> ] 294/299: boop_proc(test), main(test)…    Building [=======================> ] 295/299: main(test), boop(bin), boop…    Building [=======================> ] 296/299: main(test), boop(bin), boop…    Building [=======================> ] 297/299: boop(bin), boop(bin test)       Building [=======================> ] 298/299: boop(bin test)                  Finished `test` profile [unoptimized + debuginfo] target(s) in 3.49s
+     Running unittests src/lib.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop/88a2e51f00e725ea/out/boop-88a2e51f00e725ea)
+
+running 10 tests
+test debug::tests::a_window_word_parses_and_renders ... ok
+test debug::tests::a_line_without_a_timestamp_is_not_an_alert ... ok
+test debug::tests::aborted_pass_is_terminal_for_only_its_exact_start ... ok
+test debug::tests::sync_report_exposes_causes_repairs_and_database_growth ... ok
+test debug::tests::a_clean_window_has_no_banner_and_says_so ... ok
+test debug::tests::the_report_groups_by_lane ... ok
+test debug::tests::only_warn_and_error_inside_the_window_are_taken ... ok
+test debug::tests::a_lane_filter_reads_one_lane ... ok
+test debug::tests::the_banner_counts_lines_and_lanes ... ok
+test debug::tests::only_the_tail_of_a_long_log_is_read ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop/0480108f41186822/out/boop-0480108f41186822)
+
+running 102 tests
+test cli::control::tests::signal_death_fast_death_and_exhaustion_end_the_wrapper ... ok
+test cli::control::tests::nonzero_exit_after_min_uptime_respawns ... ok
+test cli::db::tests::agent_summary_text_fixture_has_fixed_columns ... ok
+test cli::db::tests::none_cwd_on_both_sides_is_not_a_route_match ... ok
+test cli::control::tests::a_named_route_has_one_wrapper_owner_and_can_be_reacquired ... ok
+test cli::db::tests::public_agent_sessions_accepts_focused_family_filters ... ok
+test cli::control::tests::observed_transitions_preserve_parent_and_ignore_late_thread_events ... ok
+test cli::control::tests::native_observation_preserves_a_registered_parent_update ... ok
+test cli::db::tests::session_id_match_needs_no_cwd ... ok
+test cli::db::tests::shared_concrete_cwd_matches_and_none_session_cwd_does_not ... ok
+test cli::db::tests::sync_decision_preserves_each_independent_queue_reason ... ok
+test cli::debug::tests::the_default_preset_reaches_only_its_own_harness ... ok
+test cli::db::tests::a_read_verb_succeeds_against_a_readonly_opened_store ... ok
+test cli::db::tests::a_held_child_completion_remains_pending_until_transport_acceptance ... ok
+test cli::job::tests::a_fork_brief_carries_the_ask_the_quote_and_the_quoted_turns ... ok
+test cli::job::tests::a_lane_with_no_dispatch_shadow_is_a_root ... ok
+test cli::job::tests::a_live_route_outranks_the_record_and_a_stranger_names_neither ... ok
+test cli::db::tests::native_parent_notification_acks_without_duplicate_injection ... ok
+test cli::db::tests::a_later_parent_route_delivers_an_already_committed_completion ... ok
+test cli::db::tests::native_child_projector_is_harness_neutral_and_idempotent ... ok
+test cli::db::tests::a_delivery_failure_retries_the_one_persisted_completion_message ... ok
+test cli::db::tests::resident_native_poller_projects_appended_parent_assistant_turns ... ok
+test cli::job::tests::an_env_stamp_shared_with_native_children_is_refused_not_guessed ... ok
+test cli::control::tests::native_exit_releases_its_transport_and_preserves_a_concurrent_owner ... ok
+test cli::job::tests::beep_fork_bare_spelling_still_parses ... ok
+test cli::job::tests::a_non_result_row_does_not_satisfy_the_wait ... ok
+test cli::db::tests::guardian_reviews_do_not_mail_the_parent_but_delegated_workers_still_do ... ok
+test cli::db::tests::precreated_codex_parent_delivers_an_appended_child_completion ... ok
+test cli::db::tests::resident_child_poller_delivers_an_appended_completion_without_manual_sync ... ok
+test cli::job::tests::a_pre_branch_registry_row_still_reads_and_deletes ... ok
+test cli::job::tests::a_result_row_beats_a_dead_route ... ok
+test cli::job::tests::dispatch_refuses_an_unregistered_harness ... ok
+test cli::job::tests::explicit_parent_beats_inferred_dispatch ... ok
+test cli::job::tests::foreground_wait_owns_a_result_recipient_without_a_parent ... ok
+test cli::job::tests::dead_reason_names_no_recorded_session_when_tmux_is_absent ... ok
+test cli::job::tests::a_parked_lane_reads_idle_while_its_pane_stays_live ... ok
+test cli::job::tests::a_duplicate_result_row_leaves_the_wait_unchanged ... ok
+test cli::job::tests::dead_reason_names_a_gone_session_with_no_pid ... ok
+test cli::job::tests::dead_reason_is_none_for_a_live_session ... ok
+test cli::job::tests::legacy_fallback_never_overrides_an_explicit_coordinator_kind ... ok
+test cli::job::tests::a_single_dead_observation_does_not_end_the_wait ... ok
+test cli::job::tests::orphan_infers_summoner_from_first_dispatch ... ok
+test cli::job::tests::orphan_root_prints_gone_summoner ... ok
+test cli::job::tests::a_done_row_older_than_the_taken_resume_row_does_not_satisfy_the_wait ... ok
+test cli::job::tests::an_undecidable_route_still_times_out_rather_than_reporting_death ... ok
+held m-a8e102c9 from native-child -> coordinator for the next turn boundary (lane supervisor)
+test cli::job::tests::pick_fork_returns_the_named_lane ... ok
+test cli::job::tests::pick_fork_requires_lane_when_several_match ... ok
+test cli::job::tests::create_refuses_a_name_whose_pane_is_alive ... ok
+test cli::job::tests::pane_less_route_inherits_parent_liveness ... ok
+test cli::job::tests::pick_fork_returns_the_one_row_by_default ... ok
+test cli::job::tests::pstree_carries_the_goal ... ok
+test cli::job::tests::pstree_goal_null_when_absent ... ok
+test cli::job::tests::native_registration_stays_live_until_explicit_done_and_done_is_once ... ok
+lane	pid	rss_kb	cpu_pct	uptime_sec	children
+test cli::job::tests::route_only_delete_drops_the_registry_row_without_tmux ... ok
+test cli::job::tests::run_ps_with_drives_the_injected_proc_reader ... ok
+lane dead-lane boop-prune-dead-3715-13 tmux session gone, no pid recorded
+1 lane(s) would be pruned (dry run)
+lane dead-lane boop-prune-dead-3715-14 tmux session gone, no pid recorded
+1 lane(s) pruned
+test cli::job::tests::prune_dry_run_removes_nothing ... ok
+test cli::job::tests::prune_removes_a_dead_row_and_keeps_a_live_one ... ok
+test cli::job::tests::transcript_scope_resolves_native_markers_without_partial_id_hits ... ok
+test cli::job::tests::unregistered_sessions_names_claimless_tmux_sessions ... ok
+test cli::job::tests::wait_accepts_a_result_row_after_the_current_spawn ... ok
+test cli::job::tests::wait_accepts_a_result_row_with_no_route_registered ... ok
+test cli::job::tests::fork_diff_contains_the_changed_path ... ok
+test cli::job::tests::wait_matches_the_row_the_supervisor_actually_writes ... ok
+test cli::job::tests::wait_calls_a_lane_dead_when_its_route_stops_being_live ... ok
+test cli::job::tests::the_cwd_flag_outranks_the_briefs_repo ... ok
+test cli::job::tests::wait_propagates_a_failing_rc_and_times_out_otherwise ... ok
+test cli::job::tests::wait_skips_a_result_row_older_than_the_current_spawn ... ok
+test cli::job::tests::where_prints_the_worktree_path_alone ... ok
+test cli::mail::delivery_report_tests::native_tui_completion_delivery_uses_only_its_trail ... ok
+test cli::job::tests::wait_times_out_when_no_result_row_arrives ... ok
+test cli::me::tests::me_favorite_accepts_an_older_negative_position ... ok
+test cli::me::tests::me_favorite_defaults_to_the_newest_assistant_message ... ok
+test cli::paste::tests::an_image_pastes_and_everything_else_is_typed ... ok
+test cli::job::tests::create_resets_a_dead_name_and_says_what_it_removed ... ok
+test tests::beep_lane_run_is_hidden_a_human_never_calls_it ... ok
+test tests::db_help_lists_the_read_verbs_besides_the_sql_passthrough ... ok
+test tests::db_subcommand_tree_has_no_blank_help ... ok
+test cli::me::tests::adopt_reads_the_session_from_the_live_registry_and_explicit_id_wins ... ok
+test cli::job::tests::the_repo_comes_from_the_brief_when_no_cwd_flag_names_one ... ok
+test tests::foreground_acp_coordinator_parses_without_a_subcommand ... ok
+test tests::help_text_names_the_current_schema_version ... ok
+test tests::help_text_names_the_no_sync_hatch ... ok
+test tests::lane_create_and_lane_run_both_take_a_bin_override ... ok
+test tests::public_agent_summary_command_parses ... ok
+test cli::tests::route_goal_round_trips ... ok
+test tests::startup_sync_runs_once_before_the_command ... ok
+test tests::startup_sync_policy_limits_projection_to_transcript_consumers ... ok
+test tests::tag_add_takes_several_tags_and_one_source ... ok
+test tests::tag_recent_takes_a_count_and_defaults_to_five ... ok
+test tests::the_no_sync_hatch_clears_every_verb_that_would_sync ... ok
+test tests::the_no_sync_hatch_never_makes_a_registry_verb_sync ... ok
+test tests::every_help_example_parses_through_clap ... ok
+test tests::wait_dispatches_to_lane_wait_only_for_a_registered_lane_route ... ok
+test cli::job::tests::touched_reads_none_on_a_fresh_worktree ... ok
+test cli::job::tests::touched_names_the_commit_and_the_changed_path ... ok
+test cli::job::tests::fork_join_dry_run_runs_nothing ... ok
+test cli::job::tests::delete_takes_a_carcass_whose_only_pane_is_dead ... ok
+test cli::job::tests::where_and_touched_read_the_spawn_record_when_the_route_is_gone ... ok
+test tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit ... ok
+held m-46274972 from fork-comment-7 -> parent-lane for the next turn boundary (lane supervisor)
+to await the reply: boop wait m-46274972   (or: boop wait --me &)
+test cli::job::tests::fork_join_merges_the_branch_and_writes_the_reply ... ok
+test cli::job::tests::fork_join_refuses_a_branch_with_nothing_past_base ... ok
+test cli::job::tests::fork_join_refuses_a_dirty_index ... ok
+
+test result: ok. 102 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.38s
+
+     Running tests/main.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop/a5212de62a3dfb20/out/main-a5212de62a3dfb20)
+
+running 129 tests
+test boop_start_warm::the_preamble_leads_the_brief_with_the_setup_sentence_verbatim ... ok
+test deliver_door::a_door_falls_back_to_the_last_agent_live_row ... ok
+test deliver_door::a_door_harness_takes_the_body_and_leaves_one_delivery_row ... ok
+test deliver_door::a_door_harness_with_no_live_session_is_held_and_never_pasted ... ok
+test deliver_door::a_hail_with_no_route_is_held_in_the_mailbox ... ok
+test deliver_door::a_lane_route_with_no_harness_still_lands_at_its_supervisor ... ok
+test deliver_door::a_reply_to_a_beep_still_takes_the_door_of_the_same_route ... ok
+test deliver_door::a_keystrokes_harness_falls_to_the_mailbox_rung ... ok
+test deliver_door::a_route_with_a_live_pane_takes_the_paste_rung ... ok
+test deliver_door::a_lane_end_row_takes_the_door_of_a_live_route ... ok
+test deliver_door::a_route_with_no_harness_falls_to_the_mailbox_rung ... ok
+test deliver_door::every_landing_records_a_transition_past_appended ... ok
+test deliver_door::concurrent_and_later_retries_do_not_resubmit_an_accepted_message ... ok
+test deliver_door::a_supervisor_row_never_takes_the_door_of_a_live_route ... ok
+test boop_start_warm::a_tree_without_the_recipe_warms_nothing_and_does_not_fail ... ok
+test inbox_hooks::an_empty_inbox_is_silent ... ok
+test coordinator_ping::lane_patch_of_a_fresh_pane_registers_a_coordinator_without_a_supervisor ... ok
+test coordinator_ping::lane_patch_preserves_an_existing_lane_route ... ok
+test inbox_hooks::a_lane_patch_installs_no_hooks ... ok
+test inbox_hooks::a_drain_without_a_name_uses_the_identity_ladder ... ok
+test coordinator_ping::a_supervisor_result_row_to_the_same_coordinator_stops_at_the_mailbox ... ok
+test inbox_hooks::the_inbox_hooks_verb_installs_both_hooks_once_and_removes_them ... ok
+test install_rail::a_path_that_is_not_a_repo_refuses_the_install ... ok
+test inbox_hooks::the_prompt_hook_prints_the_mail_as_context_and_takes_delivery ... ok
+test boop_start_warm::agent_register_with_a_worktree_prints_the_preamble_to_its_own_stdout ... ok
+test install_rail::the_version_string_carries_the_commit_it_was_built_from ... ok
+test inbox_hooks::removing_the_hooks_leaves_a_hail_queued_with_a_named_refusal ... ok
+test coordinator_ping::hail_to_a_coordinator_with_no_live_session_stays_unread_in_the_mailbox ... ok
+test install_rail::a_tracked_change_refuses_the_install ... ok
+test install_rail::a_clean_tree_on_origin_main_is_allowed ... ok
+test install_rail::a_repo_without_origin_main_refuses_the_install ... ok
+test install_rail::a_commit_that_never_reached_origin_main_refuses_the_install ... ok
+test boop_start_warm::lane_create_dry_run_names_the_justfile_boop_start_runs_from ... ok
+test install_rail::a_lane_spawn_names_the_binary_that_ran_it ... ok
+test install_rail::an_untracked_file_is_reported_and_allowed ... ok
+[2m2026-09-09T20:36:39.251100Z[0m [32m INFO[0m [2mboop::cli::job[0m[2m:[0m lane route deleted [3mlane[0m[2m=[0m"mine" [3mroute_only[0m[2m=[0mtrue
+deleted mine
+test lane_completion_row::one_lane_exit_writes_exactly_one_result_row ... ok
+test lane_debug::a_lane_with_nothing_recorded_prints_five_sections_of_none ... ok
+test lane_create_env::a_key_colliding_with_a_boop_stamp_is_refused_by_name ... ok
+test lane_create_env::a_value_without_equals_is_refused_at_the_cli ... ok
+test boop_start_warm::one_shared_target_is_built_once_across_two_sibling_spawns ... ok
+test lane_wait_exit::a_codex_thread_id_and_pane_no_longer_name_a_caller ... ok
+2026-09-09T20:36:39.425032Z  INFO boop::cli::job: lane supervisor starting lane="feature-fresh-codex" harness="codex" model="gpt-test" effort="" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo resume="" variant="" bin=""
+2026-09-09T20:36:39.432600Z  WARN boop_harness::worktree: lane brief preamble skipped lane="feature-fresh-codex" error=No such file or directory (os error 2)
+2026-09-09T20:36:39.433191Z  INFO boop_acp::channel::acp: acp channel opening command=npx -y @agentclientprotocol/codex-acp cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test"
+test lane_debug::a_registered_lane_fills_the_route_mail_and_worktree_sections ... ok
+[2m2026-09-09T20:36:39.458269Z[0m [32m INFO[0m [2mboop::cli::job[0m[2m:[0m lane result wait starting [3mlane[0m[2m=[0m"feature-schema-emit" [3mtimeout_secs[0m[2m=[0m5
+[2m2026-09-09T20:36:39.464928Z[0m [32m INFO[0m [2mboop::cli::job[0m[2m:[0m lane result received [3mlane[0m[2m=[0m"feature-schema-emit" [3mexit_code[0m[2m=[0m0
+[2m2026-09-09T20:36:39.479432Z[0m [32m INFO[0m [2mboop::cli::job[0m[2m:[0m lane result wait starting [3mlane[0m[2m=[0m"feature-schema-emit" [3mtimeout_secs[0m[2m=[0m5
+[2m2026-09-09T20:36:39.485415Z[0m [32m INFO[0m [2mboop::cli::job[0m[2m:[0m lane result received [3mlane[0m[2m=[0m"feature-schema-emit" [3mexit_code[0m[2m=[0m17
+test lane_wait_exit::a_wait_exits_with_the_lanes_own_rc ... ok
+[2m2026-09-09T20:36:39.501481Z[0m [32m INFO[0m [2mboop::cli::job[0m[2m:[0m lane result wait starting [3mlane[0m[2m=[0m"feature-quiet-door" [3mtimeout_secs[0m[2m=[0m5
+test lane_create_env::env_pairs_ride_the_dry_run_cmd_line ... ok
+[2m2026-09-09T20:36:39.505207Z[0m [32m INFO[0m [2mboop::cli::job[0m[2m:[0m lane result received [3mlane[0m[2m=[0m"feature-quiet-door" [3mexit_code[0m[2m=[0m9
+test lane_wait_exit::a_wait_reads_the_rc_off_a_result_row_the_ladder_held_in_the_mailbox ... ok
+[2m2026-09-09T20:36:39.521185Z[0m [32m INFO[0m [2mboop::cli::job[0m[2m:[0m mail wait starting [3mwatching[0m[2m=[0m"reply to feature-never-lands" [3mtimeout_secs[0m[2m=[0m1
+test lane_wait_exit::create_dry_run_with_wait_does_not_block ... ok
+test inbox_hooks::a_hail_during_a_long_turn_arrives_once_at_the_next_stop_and_never_as_keystrokes ... ok
+test lane_spawn_identity::the_dry_run_names_the_spawn_id_the_name_carries ... ok
+2026-09-09T20:36:40.282142Z  INFO connection{name="boop"}: boop_acp::channel::acp: acp agent initialized agent=None protocol_version=ProtocolVersion(1) load_session=false
+2026-09-09T20:36:40.286862Z  INFO connection{name="boop"}: boop_acp::channel::acp: acp session model set model="gpt-test"
+2026-09-09T20:36:40.286924Z  INFO boop_acp::channel::acp: acp session opened conversation_id="fresh-acp-session" conversation_id_kind="acp_session"
+2026-09-09T20:36:40.291865Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: lane brief loaded brief=/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo/brief.md
+2026-09-09T20:36:40.293673Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: lane turn starting turn_bytes=169
+2026-09-09T20:36:40.294223Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_acp::channel::acp: acp prompt turn starting conversation_id="fresh-acp-session" text_bytes=169
+2026-09-09T20:36:40.294262Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: lane conversation resolved lane="feature-fresh-codex" conversation_id="fresh-acp-session" conversation_id_kind="acp_session"
+2026-09-09T20:36:40.295834Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: conversation route updated lane="feature-fresh-codex" conversation_id="fresh-acp-session" mail_dir=/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/mail
+2026-09-09T20:36:40.296542Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: conversation trace attached lane="feature-fresh-codex" conversation_id="fresh-acp-session" trace="trace-feature-fresh-codex"
+[boop] turn ended: end_turn
+2026-09-09T20:36:40.297484Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: lane turn ended turn_end_reason="end_turn" turn_ok=true retryable=false
+2026-09-09T20:36:40.297512Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: lane conversation resolved lane="feature-fresh-codex" conversation_id="fresh-acp-session" conversation_id_kind="acp_session"
+2026-09-09T20:36:40.298612Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: conversation route updated lane="feature-fresh-codex" conversation_id="fresh-acp-session" mail_dir=/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/mail
+2026-09-09T20:36:40.299190Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: conversation trace attached lane="feature-fresh-codex" conversation_id="fresh-acp-session" trace="trace-feature-fresh-codex"
+[boop] startup acknowledged; submitting brief
+2026-09-09T20:36:40.299274Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: lane turn starting turn_bytes=58
+2026-09-09T20:36:40.299833Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_acp::channel::acp: acp prompt turn starting conversation_id="fresh-acp-session" text_bytes=58
+2026-09-09T20:36:40.299846Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: lane conversation resolved lane="feature-fresh-codex" conversation_id="fresh-acp-session" conversation_id_kind="acp_session"
+2026-09-09T20:36:40.301259Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: conversation route updated lane="feature-fresh-codex" conversation_id="fresh-acp-session" mail_dir=/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/mail
+2026-09-09T20:36:40.302421Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: conversation trace attached lane="feature-fresh-codex" conversation_id="fresh-acp-session" trace="trace-feature-fresh-codex"
+[boop] turn ended: end_turn
+2026-09-09T20:36:40.326893Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: lane parent row written lane="feature-fresh-codex" parent="coordinator" kind="yield"
+2026-09-09T20:36:40.327948Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: lane outbound row delivered lane="feature-fresh-codex" message_id="m-dbb8eb58" rung="mailbox only"
+[boop] yield hailed to coordinator: held m-dbb8eb58 from feature-fresh-codex -> coordinator in the mailbox (yield row; no door); coordinator reads it with `boop wait`
+2026-09-09T20:36:40.328543Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: lane turn ended turn_end_reason="end_turn" turn_ok=true retryable=false
+2026-09-09T20:36:40.328555Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: lane conversation resolved lane="feature-fresh-codex" conversation_id="fresh-acp-session" conversation_id_kind="acp_session"
+2026-09-09T20:36:40.329846Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: conversation route updated lane="feature-fresh-codex" conversation_id="fresh-acp-session" mail_dir=/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/mail
+2026-09-09T20:36:40.330711Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: conversation trace attached lane="feature-fresh-codex" conversation_id="fresh-acp-session" trace="trace-feature-fresh-codex"
+2026-09-09T20:36:40.333847Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: lane result row written lane="feature-fresh-codex" parent="coordinator" exit_code=0
+2026-09-09T20:36:40.334957Z  INFO lane.supervise{lane="feature-fresh-codex" cwd=/private/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-fresh-codex-brief/repo model="gpt-test" resume=""}: boop_proc::supervise: lane outbound row delivered lane="feature-fresh-codex" message_id="m-a93b2aeb" rung="mailbox"
+[boop] result rc=0 hailed to coordinator: held m-a93b2aeb from feature-fresh-codex -> coordinator in the mailbox (no registry route for coordinator); coordinator reads it with `boop wait --me` and the drain retries it
+[boop] lane idle, parked on the mailbox
+test lane_wait_exit::a_fresh_codex_acp_session_receives_the_lane_brief ... ok
+test native_projector_contention::projector_worker ... ok
+[2m2026-09-09T20:36:40.528907Z[0m [32m INFO[0m [2mboop::cli::job[0m[2m:[0m mail wait timed out [3mwatching[0m[2m=[0m"reply to feature-never-lands" [3mtimeout_secs[0m[2m=[0m1 [3mexit_code[0m[2m=[0m124
+timed out after 1s waiting for reply to feature-never-lands; re-run: boop wait feature-never-lands --wait-timeout 1 --mail-dir /var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-timeout
+timed out after 1s waiting for reply to feature-never-lands; re-run: boop wait feature-never-lands --wait-timeout 1 --mail-dir /var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/boop-wait-6261-timeout
+test lane_wait_exit::a_wait_that_times_out_exits_124 ... ok
+test no_sync_hatch::the_no_sync_hatch_skips_the_startup_sync_and_still_reads_rows ... ok
+test native_agent_liveness::native_route_stays_live_until_done_and_wait_me_consumes_one_completion ... ok
+test preset_dry_run::the_banned_preset_is_refused_by_name ... ok
+test presets_json::json_format_is_a_full_array_of_preset_rows ... ok
+test presets_json::table_output_is_byte_identical_to_the_snapshot ... ok
+test registry_kinds::a_hail_to_a_harnessless_native_row_is_held_and_the_reason_recorded ... ok
+test registry_kinds::agent_register_and_done_round_trip_registry_and_ledger ... ok
+test registry_kinds::coordinator_registration_binds_an_explicit_thread_and_retains_it_on_update ... ok
+test registry_kinds::patch_accepts_a_pane_and_preserves_the_registered_route ... ok
+test registry_kinds::patch_rejects_a_missing_target_with_a_failure_exit ... ok
+test registry_kinds::prune_skips_a_dead_coordinator_and_legacy_rows_still_prune ... ok
+test registry_kinds::pstree_keeps_a_paneless_native_without_all ... ok
+test registry_kinds::pstree_nests_a_native_between_the_two_lanes_it_joins ... ok
+test session_mood::a_drain_with_no_mood_anywhere_keeps_the_default_shape ... ok
+test session_mood::a_drained_inbox_renders_lane_completion_mail_through_the_receivers_mood ... ok
+test session_mood::an_unknown_mood_name_fails_and_names_the_known_ones ... ok
+test session_mood::me_favorite_follows_the_callers_bound_native_thread ... ok
+test session_mood::me_mood_sets_reads_and_clears_the_named_session ... ok
+test sync_convoy::a_caller_that_finds_the_sync_lock_held_reads_without_syncing ... ok
+test lane_carcass::a_create_clears_a_stale_pin_with_nothing_else_left_to_remove ... ok
+test lane_carcass::a_create_with_no_expect_flag_clears_the_names_old_expectation ... ok
+test sync_discovery::a_new_session_in_a_known_project_directory_is_discovered ... ok
+test sync_convoy::a_warm_read_stays_under_its_budget ... ok
+test t0_sqlite_contention::agent_summary_reads_while_a_wal_writer_holds_its_transaction ... ok
+test t1_harness_boundaries::guard_detects_enum_string_and_macro_dispatch_and_separates_tests ... ok
+test lane_carcass::a_create_with_an_expect_flag_still_writes_it ... ok
+test t2_native_wrapper::explicit_send_keeps_redirected_stdout_under_a_tui_stamp ... ok
+test t4_lifecycle_gate::authenticated_matrix ... ignored, authenticated four-harness matrix: just boop-check live
+test lane_wait_exit::create_wait_returns_the_lanes_rc ... ok
+test t4_lifecycle_gate::inbound_receipts_exclude_instructions_quoting_the_body ... ok
+test t4_lifecycle_gate::claude_reader_resolves_exact_session ... ok
+test tell::a_caller_with_no_parent_edge_and_no_registered_coordinator_fails_by_name ... ok
+test tell::a_caller_with_no_recorded_parent_falls_back_to_the_one_registered_coordinator ... ok
+test tell::agent_register_ends_with_the_as_line_for_the_new_name ... ok
+test tell::beep_accepts_the_as_spelling_for_the_sender ... ok
+test tell::beep_children_as_uses_the_selected_routes_native_session_not_the_env_stamp ... ok
+test tell::beep_children_lands_on_the_hook_child_and_reports_the_routeless_child_as_no_route ... ok
+test tell::beep_children_names_a_native_subagent_child_as_no_route ... ok
+test tell::beep_children_with_no_children_at_all_says_so_and_exits_clean ... ok
+test tell::beep_parent_as_a_native_outranks_the_spawners_env_stamp ... ok
+test tell::beep_parent_as_an_unregistered_name_says_to_register_it ... ok
+test tell::beep_parent_lands_exactly_one_row_of_the_given_kind_addressed_to_the_recorded_parent_edge ... ok
+test tell::beep_parent_no_wait_resolves_the_alias_through_the_same_edge_beep_parent_walks ... ok
+test lane_carcass::a_reclaim_refuses_a_worktree_that_still_holds_work ... ok
+test t1_harness_boundaries::behavioral_harness_dispatch_stays_in_adapters ... ok
+test tell::beep_rejects_competing_body_spellings_before_insertion ... ok
+test tell::beep_parent_with_no_edge_fails_by_name_instead_of_addressing_the_word ... ok
+test tell::beep_sends_one_row_from_a_route_and_a_body_positional ... ok
+test tell::beep_without_a_body_is_a_clap_required_argument_error ... ok
+test tell::beep_still_takes_the_body_flag_spelling ... ok
+test tell::boop_help_doctrine_names_the_one_send_and_the_wait ... ok
+test tell::kind_yield_with_no_body_mints_the_default_body ... ok
+test temp_home_rail::every_boop_subprocess_fixture_isolates_readers_and_storage ... ok
+test temp_home_rail::no_new_src_unit_test_reaches_the_machine_s_own_agent_root ... ok
+test tell::the_beep_subcommand_group_still_parses_under_the_route_positional ... ok
+test lane_carcass::lane_delete_clears_a_carcass_and_names_what_it_removed ... ok
+test native_projector_contention::six_idle_projector_processes_do_not_repeat_global_session_materialization ... ok
+test t2_native_wrapper::generated_wrappers_pass_noninteractive_commands_without_routes ... ok
+test lane_wait_exit::create_wait_timeout_exits_124 ... ok
+test tell::beep_parent_waited_resolves_the_alias_before_it_walks_the_ladder ... ok
+test wait_mail::a_delivered_reply_is_not_replayed_by_a_second_wait ... ok
+test wait_mail::hail_prints_the_wait_hint_naming_the_id_it_queued ... ok
+test wait_mail::a_timeout_exits_124_with_the_re_run_line_on_both_streams ... ok
+test wait_mail::me_still_takes_a_row_held_in_the_mailbox_for_a_native_route ... ok
+test wait_mail::me_still_takes_the_yield_and_commit_rows_its_lanes_wrote ... ok
+test lane_retire_revive::a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation ... ok
+test wait_mail::beep_at_an_unregistered_name_still_reports_a_rung ... ok
+test wait_mail::beep_with_a_timeout_exits_124_and_names_the_debug_command ... ok
+test wait_mail::me_without_a_name_watches_the_inbox_the_spawn_stamp_names ... ok
+test wait_mail::beep_with_a_timeout_sends_then_blocks_and_times_out ... ok
+test t4_lifecycle_gate::native_registry_process_transition_preserves_trace ... ok
+test preset_dry_run::every_preset_dry_runs_into_a_command_its_own_harness_runs ... ok
+test wait_mail::a_reply_ends_the_wait_with_its_body_and_a_delivery_stamp ... ok
+test wait_mail::me_never_hands_back_the_lanes_own_dispatch_row ... ok
+test wait_mail::beep_with_a_timeout_sends_and_blocks_until_the_reply_arrives ... ok
+test wait_mail::me_takes_every_unread_row_addressed_to_the_named_inbox ... ok
+test sync_convoy::concurrent_reads_perform_one_sync_pass_between_them ... ok
+test lane_carcass::a_plain_respawn_resets_the_name_a_dead_lane_left_behind ... ok
+
+test result: ok. 128 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 8.39s
+
+     Running unittests src/lib.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop-acp/fae6bc76d4f37924/out/boop_acp-fae6bc76d4f37924)
+
+running 61 tests
+test channel::acp::tests::a_real_claude_acp_session_is_resumed_by_a_second_child ... ignored
+test channel::acp::tests::a_real_claude_acp_turn_ends_the_turn ... ignored
+test channel::acp::tests::a_real_codex_acp_turn_ends_the_turn ... ignored
+test channel::acp::tests::a_real_kimi_acp_session_is_resumed_by_a_second_child ... ignored
+test channel::acp::tests::a_real_kimi_acp_turn_ends_the_turn ... ignored
+test channel::acp::tests::a_real_opencode_acp_turn_ends_the_turn ... ignored
+test channel::acp::tests::a_rejection_without_a_model_option_says_only_the_id ... ok
+test channel::acp::tests::a_reject_only_permission_request_selects_nothing ... ok
+test channel::acp::tests::a_rejected_model_id_names_what_the_agent_does_take ... ok
+test channel::acp::tests::a_reported_tool_call_keeps_its_title_kind_status_and_paths ... ok
+test channel::acp::tests::a_join_without_a_running_turn_answers_at_once ... ok
+test channel::acp::tests::an_agent_offering_no_full_access_mode_is_left_alone ... ok
+test channel::acp::tests::an_empty_command_is_refused_before_a_thread_is_spawned ... ok
+test channel::acp::tests::an_executable_override_replaces_only_the_adapter_program ... ok
+test channel::acp::tests::an_unwritten_update_clock_is_no_signal ... ok
+test channel::acp::tests::end_turn_is_the_only_clean_verdict ... ok
+test channel::acp::tests::every_other_stop_reason_is_a_terminal_failure ... ok
+test channel::acp::tests::every_roster_row_spawns_something_in_acp_mode ... ok
+test channel::acp::tests::no_text_reaches_a_turn_already_in_flight ... ok
+test channel::acp::tests::only_a_finished_execute_call_counts_as_having_run_a_command ... ok
+test channel::acp::tests::a_prompt_error_frame_is_a_retryable_flake ... ok
+test channel::acp::tests::the_codex_full_access_mode_is_taken_when_the_agent_offers_it ... ok
+test channel::acp::tests::the_first_allow_option_wins_over_a_leading_reject ... ok
+test channel::acp::tests::turn_observation_collects_agent_text_and_counts_tool_calls ... ok
+test channel::acpx::tests::an_acpx_agent_without_a_transcript_adapter_retains_its_selector ... ok
+test channel::acpx::tests::coordinator_mail_uses_the_persistent_queue ... ok
+test channel::acpx::tests::failure_detail_keeps_both_output_streams ... ok
+test channel::acpx::tests::foreground_prompt_waits_for_the_same_session ... ok
+test channel::acpx::tests::session_ensure_and_prompts_share_the_permission_policy ... ok
+test channel::claude::tests::a_minted_session_id_is_a_v4_uuid ... ok
+test channel::acp::terminal_wire_tests::terminal_wait_for_exit_answers_with_the_code ... ok
+test channel::acp::terminal_wire_tests::terminal_create_answers_with_an_id ... ok
+test channel::acp::terminal_wire_tests::initialize_advertises_the_terminal_capability ... ok
+test channel::acp::terminal_wire_tests::terminal_release_frees_the_id ... ok
+test channel::acp::terminal_wire_tests::terminal_kill_stops_the_child_and_leaves_it_readable ... ok
+test channel::acp::terminal_wire_tests::terminal_output_carries_both_pipes_and_the_status ... ok
+test channel::acp::terminal_wire_tests::an_unknown_terminal_id_answers_an_error_rather_than_wedging_the_turn ... ok
+test channel::claude::tests::two_mints_differ ... ok
+test channel::claude::tool_call_tests::a_bash_block_reports_the_command_it_ran ... ok
+test channel::claude::tool_call_tests::claude_tool_names_map_onto_the_shared_categories ... ok
+test channel::claude::tool_call_tests::an_assistant_event_yields_one_fact_per_tool_use_block ... ok
+test channel::terminal::tests::a_truncating_buffer_keeps_a_character_boundary ... ok
+test channel::terminal::tests::a_missing_command_fails_create_instead_of_registering_a_terminal ... ok
+test channel::terminal::tests::a_created_terminal_inherits_the_lane_env ... ok
+test channel::terminal::tests::output_on_an_unknown_terminal_names_the_id ... ok
+test channel::terminal::tests::killing_a_finished_terminal_is_a_no_op ... ok
+test channel::terminal::tests::a_byte_limit_drops_the_oldest_output_and_flags_the_truncation ... ok
+test channel::tests::delivery_spells_both_tiers ... ok
+test channel::tests::turn_event_carries_an_optional_output_receipt ... ok
+test channel::tests::turn_event_carries_its_verdict ... ok
+test channel::terminal::tests::release_forgets_the_terminal_and_stops_the_child ... ok
+test channel::terminal::tests::output_carries_both_pipes_and_the_exit_status ... ok
+test channel::terminal::tests::a_created_terminal_takes_the_request_cwd_and_env ... ok
+test channel::terminal::tests::a_created_terminal_runs_under_the_session_cwd ... ok
+test channel::claude::tests::a_completed_transcript_reports_ok_even_when_the_cli_exits_nonzero ... ok
+test channel::claude::tests::a_spawn_that_emits_nothing_reports_failed ... ok
+test channel::terminal::tests::a_killed_terminal_reports_its_signal_and_stays_readable ... ok
+test channel::terminal::tests::wait_for_exit_answers_with_the_childs_code ... ok
+test channel::claude::tests::a_zero_exit_with_a_completed_transcript_reports_ok ... ok
+test channel::claude::tests::open_spawns_the_executable_override_instead_of_claude ... ok
+test channel::claude::tests::streamed_activity_is_reported_to_the_stall_watchdog ... ok
+
+test result: ok. 55 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.70s
+
+     Running unittests src/lib.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop-harness/6c65774d2893be5d/out/boop_harness-6c65774d2893be5d)
+
+running 185 tests
+test door::claude::tests::live_claude_sessions_lists_this_machine ... ignored
+test door::claude::tui_launch_tests::reports_nothing_when_resume_names_no_session ... ok
+test door::claude::tui_launch_tests::reads_it_past_earlier_flags ... ok
+test door::claude::tui_launch_tests::reports_nothing_for_continue_or_a_bare_launch ... ok
+test door::claude::tui_launch_tests::reads_the_session_id_after_a_long_resume_flag ... ok
+test door::claude::tui_launch_tests::reads_it_after_the_short_flag_and_from_an_equals_form ... ok
+test door::claude::tui_launch_tests::tui_launch_carries_the_resumed_session_into_the_plan ... ok
+test door::claude::tui_launch_tests::a_bare_launch_still_leaves_the_session_to_opened_session ... ok
+test door::claude::tests::the_peer_feature_list_is_read ... ok
+test door::codex::tests::a_missing_state_database_lists_nothing ... ok
+test door::codex::tests::a_fresh_launch_forwards_every_tui_argument ... ok
+test door::codex::tests::a_session_without_a_socket_is_unreachable ... ok
+test door::codex::tests::a_resume_without_an_id_forwards_to_the_native_picker ... ok
+test door::codex::tests::backend_configuration_is_forwarded_without_replaying_the_prompt ... ok
+test door::codex::tests::explicit_resume_is_separated_from_forwarded_tui_arguments ... ok
+test door::codex::tests::native_launch_resumes_the_thread_that_was_already_created ... ok
+test door::codex::tests::native_lifecycle_events_keep_roots_settings_and_closure_separate ... ok
+test door::kimi::tests::kimi_reports_no_door ... ok
+test door::claude::tests::a_dead_socket_is_unreachable_not_an_error ... ok
+test door::codex::tests::automatic_resume_uses_observed_settings_and_retains_inline_mode ... ok
+test door::claude::tests::a_registry_file_becomes_a_live_session ... ok
+test door::claude::tests::a_delivery_writes_the_documented_json_lines ... ok
+test door::opencode::tests::a_server_that_is_not_running_lists_nothing ... ok
+test door::opencode::tests::native_model_is_owned_backend_configuration ... ok
+test door::opencode::tests::first_prompt_preserves_configured_model_without_provider_fallback ... ok
+test door::opencode::tests::model_and_effort_change_is_read_back_from_durable_session_history ... ok
+test door::opencode::tests::resumed_session_seeds_observer_from_exact_durable_history ... ok
+test door::opencode::tests::selected_session_and_durable_model_events_become_native_events ... ok
+test door::opencode::tests::a_busy_delivery_stays_pending_without_replacing_the_active_prompt ... ok
+test door::opencode::tests::clear_creates_and_selects_an_exact_session_on_the_route_server ... ok
+test door::tests::the_default_door_reports_itself_unreachable ... ok
+test door::opencode::tests::an_already_idle_session_answers_from_the_status_map ... ok
+test door::opencode::tests::observer_subscribes_to_the_exact_directory_and_reports_clear_selection ... ok
+test door::opencode::tests::a_delivery_posts_one_text_part ... ok
+test door::codex::tests::the_thread_table_lists_live_threads_only ... ok
+test harness::claude::tests::claude_capabilities_are_measured ... ok
+test harness::claude::tests::busy_peer_attachment_is_a_native_message_receipt ... ok
+test door::opencode::tests::the_session_list_becomes_live_sessions ... ok
+test door::codex::tests::the_thread_source_marks_guardian_and_spawned_threads_as_children ... ok
+test harness::claude::tests::extracts_file_paths_and_urls_from_tool_use ... ok
+test harness::claude::tests::parses_the_corpus_timestamp_shape ... ok
+test harness::claude::tests::a_transcript_whose_head_is_metadata_still_reports_its_cwd ... ok
+test door::opencode::tests::route_uses_its_observed_http_server ... ok
+test door::opencode::tests::the_event_stream_reports_idle ... ok
+test harness::claude::tests::skips_an_invalid_json_line_but_keeps_the_rest ... ok
+test harness::codex::tests::a_partial_trailing_line_is_not_consumed ... ok
+test harness::codex::tests::active_native_notification_satisfies_delivery_without_queue_injection ... ok
+test harness::claude::tests::claude_reads_subagent_edge_from_real_fixture ... ok
+test harness::claude::tests::two_transcripts_sharing_a_stem_get_distinct_session_ids ... ok
+test harness::codex::tests::an_unprojected_kind_warns_once_per_process ... ok
+test harness::codex::tests::codex_capabilities_are_measured ... ok
+error connecting to /private/tmp/tmux-501/boop-test-12673-ctl0 (No such file or directory)
+error connecting to /private/tmp/tmux-501/boop-test-12673-ctl1 (No such file or directory)
+error connecting to /private/tmp/tmux-501/boop-test-12673-ctl0 (No such file or directory)
+test harness::claude::tests::claude_launch_resumes_with_session_id ... ok
+test door::codex::tests::native_connection_forwards_large_frames_in_both_directions_and_observes_resume ... ok
+error connecting to /private/tmp/tmux-501/boop-test-12673-cdx0 (No such file or directory)
+test door::claude::tests::the_idle_poll_reads_the_registry_status ... ok
+test harness::codex::tests::completed_parent_turn_keeps_the_queue_injection_fallback ... ok
+test harness::codex::tests::agent_message_projects_under_the_assistant_role ... ok
+test harness::codex::tests::an_unknown_record_type_keeps_its_raw_json ... ok
+test harness::codex::tests::discovers_a_forked_subagent_session_from_the_fixture ... ok
+test harness::codex::tests::extracts_patch_apply_paths ... ok
+test harness::codex::tests::custom_tool_call_output_joins_input_text_parts ... ok
+test harness::codex::tests::codex_fixture_tool_and_assistant_turns_keep_their_content ... ok
+test harness::codex::tests::idle_native_notification_keeps_the_queue_injection_fallback ... ok
+test harness::codex::tests::known_transcript_uses_persisted_metadata_without_parsing_its_first_record ... ok
+test harness::codex::tests::native_child_observer_attributes_replayed_turns_to_their_thread ... ok
+test harness::codex::tests::native_child_observer_projects_the_codex_child_fixture ... ok
+test harness::codex::tests::native_child_observer_reads_session_parent_and_completion_records ... ok
+test harness::codex::tests::native_child_observer_restores_thread_ownership_at_byte_cursors ... ok
+test harness::codex::tests::native_completion_requires_the_structured_notification_and_exact_child ... ok
+test harness::codex::tests::native_settings_follow_last_observed_turn ... ok
+test harness::codex::tests::parent_thread_id_wins_and_forked_from_id_remains_a_legacy_fallback ... ok
+test harness::codex::tests::custom_tool_call_projects_name_and_input ... ok
+test harness::codex::tests::parses_the_corpus_timestamp_shape ... ok
+test harness::codex::tests::codex_fixture_projects_through_the_graph_query ... ok
+test harness::codex::tests::reads_a_message_and_a_token_count_line ... ok
+test harness::codex::tests::skips_an_invalid_json_line_but_keeps_the_rest ... ok
+test harness::codex::tests::tool_call_body_truncates_input_to_2000_chars ... ok
+test harness::codex::tests::tool_output_body_truncates_output_to_4000_chars ... ok
+test harness::codex::tests::function_call_output_keeps_the_raw_string ... ok
+test harness::codex::tests::function_call_projects_name_and_arguments ... ok
+test door::codex::tests::successful_codex_queue_is_held_for_turn_boundary ... ok
+test harness::kimi::tests::a_partial_trailing_line_is_not_consumed ... ok
+test harness::codex::tests::patch_apply_end_names_its_call_and_files ... ok
+test harness::codex::tests::turn_context_cwd_projects_two_distinct_turn_cwds ... ok
+test harness::codex::tests::same_turn_token_counts_sum_into_one_usage_row ... ok
+test harness::kimi::tests::a_failed_tool_result_keeps_its_text_under_an_error_tag ... ok
+test harness::claude::tests::claude_agent_worktrees_lists_locked_and_unlocked_agents ... ok
+test harness::kimi::tests::a_display_command_part_reads_its_command_key ... ok
+test harness::kimi::tests::discovers_main_and_a_sub_agent_from_the_fixture ... ok
+test harness::kimi::tests::a_text_part_rides_bare ... ok
+test harness::kimi::tests::kimi_spawns_and_resumes_like_every_other_harness ... ok
+test harness::kimi::tests::reads_a_user_message_and_a_tool_call ... ok
+test harness::kimi::tests::a_tool_call_projects_its_name_and_arguments ... ok
+test harness::kimi::tests::skips_an_invalid_json_line_but_keeps_the_rest ... ok
+test harness::kimi::tests::a_think_part_keeps_its_body_under_a_think_tag ... ok
+test harness::kimi::tests::tool_call_arguments_truncate_to_2000_chars ... ok
+test harness::kimi::tests::tool_result_output_truncates_to_4000_chars ... ok
+test harness::opencode::tests::a_file_part_names_its_path_and_compaction_is_structural ... ok
+test harness::opencode::tests::a_missing_store_is_no_sessions ... ok
+test harness::kimi::tests::a_tool_result_projects_its_output ... ok
+test harness::opencode::tests::a_part_with_no_state_still_parses ... ok
+test harness::kimi::tests::a_usage_row_before_any_content_names_its_model_instead_of_nothing ... ok
+test harness::kimi::tests::an_unknown_part_kind_keeps_its_raw_json ... ok
+test harness::opencode::tests::exact_sync_candidate_refreshes_the_session_rowid_cursor ... ok
+test harness::opencode::tests::one_shot_requires_a_model_before_starting_a_process ... ok
+test harness::opencode::tests::opencode_capabilities_match_the_binary ... ok
+test harness::kimi::tests::kimi_fixture_projects_through_the_graph_query ... ok
+test harness::kimi::tests::the_probe_fixture_keeps_every_tool_and_assistant_body ... ok
+test harness::kimi::tests::same_turn_usage_records_sum_into_one_usage_row ... ok
+test harness::claude::tests::claude_spawn_returns_handle_and_stop_tears_down ... ok
+error connecting to /private/tmp/tmux-501/boop-test-12673-oc0 (No such file or directory)
+test harness::opencode::tests::opencode_parts_batch_skips_malformed_json_without_reordering ... ok
+test harness::opencode::tests::opencode_parts_fixture_receipt_uses_one_part_query_and_preserves_order ... ok
+error connecting to /private/tmp/tmux-501/boop-test-12673-oc1 (No such file or directory)
+test harness::opencode::tests::a_model_switch_survives_a_partless_errored_assistant_message ... ok
+test harness::opencode::tests::steady_candidate_discovery_skips_message_scan_and_batches_projection_upgrades ... ok
+test harness::shell_quote_tests::quotes_the_edge_cases ... ok
+test harness::codex::tests::codex_spawn_returns_handle_and_stop_tears_down ... ok
+test harness::supervisor_command_tests::the_spawn_line_carries_the_bin_override ... ok
+test harness::supervisor_command_tests::dropping_a_native_plan_stops_both_owned_processes ... ok
+test harness::topology_tests::lifecycle_capabilities_and_ccz_executable_identity_are_declared ... ok
+test harness::topology_tests::root_native_and_wrapped_topologies_use_explicit_relations ... ok
+test harness::tui_composer_tests::claude_finds_the_prompt_between_the_last_border_pair ... ok
+test harness::tui_composer_tests::kimi_and_opencode_report_their_bottom_bordered_composers ... ok
+test identity::tests::a_caller_with_neither_rung_is_unresolved ... ok
+test harness::tui_composer_tests::codex_finds_a_dynamic_multiline_composer_above_its_footer ... ok
+test identity::tests::boop_lane_alone_answers_for_an_old_spawn ... ok
+test identity::tests::conversation_binding_preserves_legacy_ids_and_rejects_unbound_routes ... ok
+test identity::tests::the_as_flag_outranks_the_env_stamp ... ok
+test identity::tests::the_child_stamp_never_carries_the_spawners_session_as_its_own ... ok
+test identity::tests::the_env_stamp_is_the_second_rung ... ok
+test live::tests::a_live_pid_answers_the_signal_probe ... ok
+test live::tests::a_pane_lookup_ignores_the_percent_prefix ... ok
+test live::tests::a_tmux_target_yields_its_pane ... ok
+test live::tests::bound_route_never_selects_another_thread_by_pane ... ok
+error connecting to /private/tmp/tmux-501/boop-test-12673-oc1 (No such file or directory)
+test registry::tests::a_model_spelling_names_its_harness ... ok
+test registry::tests::a_swapped_in_impl_drives_the_shared_rails_under_its_variant ... ok
+test registry::tests::every_variant_resolves_in_the_built_in_registry ... ok
+test registry::tests::native_invocations_classify_commands_and_preserve_value_tokens ... ok
+test transcript::tests::a_resume_id_is_the_stem_for_claude_and_the_session_id_elsewhere ... ok
+test harness::opencode::tests::preview_uses_the_canonical_supervisor_with_model_variant_resume_and_epilogue ... ok
+test identity::tests::a_stamp_with_no_parent_clears_an_inherited_parent ... ok
+test transcript::tests::an_existing_guardian_route_resolves_to_the_interactive_parent ... ok
+test transcript::tests::an_unparented_child_never_infers_a_same_cwd_root ... ok
+test transcript::tests::after_seq_skips_up_to_and_including_that_index ... ok
+test transcript::tests::assistant_line_is_unaffected ... ok
+test transcript::tests::assistant_d2_write_retains_the_complete_fenced_file ... ok
+test transcript::tests::captured_claude_session_labels_every_row_by_its_wire_shape ... ok
+test transcript::tests::captured_claude_subagent_session_parses ... ok
+test transcript::tests::compact_summary_is_a_meta_row ... ok
+test transcript::tests::claude_messages_resolve_one_exact_file_without_session_discovery ... ok
+test transcript::tests::an_archived_opencode_session_is_not_a_row ... ok
+test transcript::tests::interrupted_message_stays_a_user_row ... ok
+test transcript::tests::kimi_wire_usage_sums_inputs ... ok
+test transcript::tests::legacy_command_body_is_a_meta_row ... ok
+test transcript::tests::meta_string_content_is_a_meta_row ... ok
+test transcript::tests::meta_text_block_is_a_meta_row ... ok
+test transcript::tests::prose_about_a_tag_stays_a_user_row ... ok
+test transcript::tests::seq_is_the_line_index_across_skipped_lines ... ok
+test transcript::tests::string_content_is_a_user_row ... ok
+test transcript::tests::four_harnesses_lower_into_one_session_shape ... ok
+test transcript::tests::task_notification_is_a_meta_row ... ok
+test transcript::tests::tool_result_block_is_a_tool_row ... ok
+test transcript::tests::title_lookup_skips_leading_tool_and_meta_rows ... ok
+test transcript::tests::wire_shapes_pin_the_instant_key_set ... ok
+test transcript::tests::typed_and_queued_input_stay_user_rows ... ok
+test transcript::tests::opencode_tokens_take_max_not_latest ... ok
+test harness::claude::tests::claude_fixture_projects_through_the_graph_query ... ok
+test harness::opencode::tests::streamed_assistant_waits_for_completion_and_legacy_empty_turn_repairs ... ok
+test harness::codex::tests::bookkeeping_records_leave_no_row_and_reasoning_keeps_its_summary ... ok
+test worktree::tests::a_captured_child_reads_eof_instead_of_a_prompt ... ok
+test harness::codex::tests::agent_reasoning_web_search_and_mcp_calls_project_instead_of_warning ... ok
+test harness::opencode::tests::every_content_bearing_part_kind_projects_a_body ... ok
+test harness::opencode::tests::no_projected_turn_from_the_fixture_has_an_empty_body ... ok
+test harness::opencode::tests::opencode_projection_preserves_assistant_and_complete_tool_bodies ... ok
+test worktree::tests::a_failing_boop_start_blocks_the_spawn ... ok
+test harness::opencode::tests::opencode_fixture_acquisition_and_parent_project_through_graph ... ok
+test harness::opencode::tests::opencode_spawn_returns_handle_and_stop_tears_down ... ok
+test worktree::tests::a_reclaim_refuses_a_branch_no_other_ref_carries ... ok
+test worktree::tests::worktree_spawn_creates_a_branch_at_the_base ... ok
+test worktree::tests::a_bulk_delete_of_two_siblings_leaves_the_third_and_the_parent_alone ... ok
+test worktree::tests::main_tree_spawn_refuses_a_non_fast_forward ... ok
+test worktree::tests::only_a_lanes_own_worktree_is_a_delete_candidate ... ok
+test worktree::tests::warm_start_is_a_no_op_where_no_recipe_is_declared ... ok
+test worktree::tests::a_reclaim_clears_a_clean_worktree_and_its_branch ... ok
+test worktree::tests::setup_steps_run_in_order_in_the_worktree ... ok
+test worktree::tests::a_hung_setup_step_fails_within_its_deadline_instead_of_hanging ... ok
+test worktree::tests::the_killed_child_leaves_no_orphan ... ok
+
+test result: ok. 184 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.51s
+
+     Running tests/bench_grid.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop-harness/a5c75cd2458ab89b/out/bench_grid-a5c75cd2458ab89b)
+
+running 2 tests
+test a_missing_manifest_is_no_corpus_not_an_error ... ok
+test bench_grid ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running unittests src/lib.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop-mux/8af74a04787cc87a/out/boop_mux-8af74a04787cc87a)
+
+running 12 tests
+test tests::an_unknown_percent_line_is_a_kept_notification ... ok
+test tests::detailed_session_retains_each_pane ... ok
+test tests::parses_pane_identity_and_current_location ... ok
+error connecting to /private/tmp/tmux-501/boop-test-15267-6 (No such file or directory)
+error connecting to /private/tmp/tmux-501/boop-test-15267-1 (No such file or directory)
+error connecting to /private/tmp/tmux-501/boop-test-15267-0 (No such file or directory)
+error connecting to /private/tmp/tmux-501/boop-test-15267-4 (No such file or directory)
+error connecting to /private/tmp/tmux-501/boop-test-15267-5 (No such file or directory)
+error connecting to /private/tmp/tmux-501/boop-test-15267-3 (No such file or directory)
+error connecting to /private/tmp/tmux-501/boop-test-15267-2 (No such file or directory)
+error connecting to /private/tmp/tmux-501/boop-test-15267-8 (No such file or directory)
+test tests::a_spawn_against_an_unreachable_socket_returns_err ... ok
+test tests::lists_the_created_session_inside_one_block ... ok
+test tests::two_commands_match_their_replies_by_number ... ok
+test tests::a_failing_command_returns_err_from_error_block ... ok
+test tests::unreachable_is_not_the_same_as_empty ... ok
+test tests::pane_pid_resolves_a_percent_pane_target ... ok
+error connecting to /private/tmp/tmux-501/boop-test-15267-15 (No such file or directory)
+test tests::target_alive_tracks_a_live_pane_and_drops_a_dead_session ... ok
+test tests::a_dropped_control_client_leaves_no_tmux_process ... ok
+test tests::exact_target_does_not_prefix_match_a_sibling_session ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running unittests src/lib.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop-proc/60967fadbf769989/out/boop_proc-60967fadbf769989)
+
+running 136 tests
+test config::tests::parses_named_provider_model_presets ... ok
+test config::tests::default_preset_resolves_for_any_harness ... ok
+test config::tests::a_legacy_at_effort_string_resolves_to_model_plus_effort ... ok
+test config::tests::an_unknown_effort_is_refused_by_name ... ok
+test config::tests::missing_preset_lists_available_names ... ok
+test config::tests::explicit_model_beats_preset_beats_default ... ok
+test config::tests::collapsed_resolution_matches_all_precedence_cases ... ok
+test config::tests::a_preset_carries_its_harness_and_effort_as_fields ... ok
+test config::tests::show_on_missing_file_prints_the_default_config ... ok
+test config::tests::preset_object_form_carries_a_bin ... ok
+test config::tests::preset_object_form_carries_a_variant ... ok
+test deliver::tests::every_door_address_round_trips_through_its_columns ... ok
+test deliver::tests::an_end_row_under_a_blown_budget_cools_off ... ok
+test deliver::tests::a_claude_coordinator_takes_its_row_at_the_door_with_no_hooks_installed ... ok
+test deliver::tests::route_binding_requires_authoritative_route_evidence ... ok
+test inbox::tests::a_batch_names_the_id_and_the_sender_of_every_row ... ok
+test inbox::tests::a_drained_batch_renders_through_the_draining_session_mood ... ok
+test inbox::tests::a_drained_id_is_never_offered_again ... ok
+test inbox::tests::a_second_install_adds_nothing ... ok
+test inbox::tests::an_acked_row_is_not_undelivered ... ok
+test inbox::tests::an_install_leaves_a_foreign_hook_alone ... ok
+test inbox::tests::an_install_writes_both_events_under_the_hooks_key ... ok
+test inbox::tests::an_uninstall_prunes_the_containers_it_empties ... ok
+test inbox::tests::each_hook_runs_the_drain_for_its_own_event ... ok
+test inbox::tests::the_installed_stop_hook_is_the_routing_decision ... ok
+test inbox::tests::the_prompt_payload_is_the_mail_as_plain_context ... ok
+test inbox::tests::the_settings_file_is_the_projects_own_claude_settings ... ok
+test inbox::tests::the_stop_payload_is_json_whatever_the_body_holds ... ok
+test lane::tests::a_branch_that_escapes_the_worktree_root_is_refused ... ok
+test lane::tests::a_carcass_is_found_by_the_slug_of_its_branch ... ok
+test lane::tests::a_gpt_model_names_the_codex_harness ... ok
+test lane::tests::a_kind_coordinator_route_named_without_the_word_is_selected ... ok
+test lane::tests::a_lane_named_coordinator_but_not_kind_coordinator_is_not_selected ... ok
+test lane::tests::a_nameless_spawn_is_an_error_naming_the_flag ... ok
+test lane::tests::a_pane_less_coordinator_is_not_an_inferred_parent ... ok
+test lane::tests::a_reclaim_refuses_while_the_pane_is_alive ... ok
+test lane::tests::a_session_on_two_routes_is_an_ambiguous_caller ... ok
+test lane::tests::a_session_whose_panes_are_all_dead_is_not_alive ... ok
+test lane::tests::a_spawn_always_gets_a_utf8_locale ... ok
+test lane::tests::a_yield_body_with_no_tree_reads_as_dashes ... ok
+test lane::tests::an_explicit_harness_wins_over_the_model_spelling ... ok
+test lane::tests::an_unconventional_prefix_still_derives ... ok
+test lane::tests::an_unnamed_harness_never_guesses_opencode ... ok
+test lane::tests::children_are_the_routes_recording_the_caller_as_parent ... ok
+test lane::tests::each_conventional_kind_derives_the_same_shape ... ok
+test lane::tests::model_spec_splits_the_last_at_and_rejects_a_bad_effort ... ok
+test lane::tests::overrides_win_over_the_derived_names ... ok
+test lane::tests::pane_process_alive_is_false_for_a_session_that_does_not_exist ... ok
+test lane::tests::plan_family_models_are_banned_from_opencode ... ok
+test lane::tests::slugging_spells_a_slash_as_a_dash ... ok
+test lane::tests::the_caller_is_the_lane_the_ladder_names ... ok
+test deliver::tests::the_door_gate_trips_once_then_only_reports_the_cool_off ... ok
+test deliver::tests::a_row_a_door_already_queued_is_never_pushed_again ... ok
+test deliver::tests::a_door_queue_landing_stamps_the_row_at_the_ladder ... ok
+test lane::tests::the_locale_stamp_sets_lc_all_and_lang ... ok
+test lane::tests::the_older_lane_shape_still_derives_without_a_worktree ... ok
+test lane::tests::the_parent_ladder_stops_at_the_first_rung_that_answers ... ok
+test lane::tests::the_recorded_edge_outranks_the_lone_coordinator ... ok
+test lane::tests::two_coordinators_default_to_no_parent ... ok
+test mailwait::tests::a_reply_already_taken_delivery_of_is_not_replayed ... ok
+test mailwait::tests::a_row_a_harness_hook_or_pane_already_took_is_not_unread ... ok
+test mailwait::tests::a_row_held_in_the_mailbox_stays_unread ... ok
+test mailwait::tests::a_threaded_reply_answers_the_wait ... ok
+test mailwait::tests::an_ack_of_the_question_is_not_a_reply ... ok
+test mailwait::tests::an_inbox_wait_never_hands_back_the_lanes_own_dispatch_row ... ok
+test mailwait::tests::an_inbox_wait_resumes_as_me_with_the_name_it_waited_as ... ok
+test mailwait::tests::an_inbox_wait_takes_every_unread_row_and_skips_delivered_ones ... ok
+test mailwait::tests::an_unthreaded_answer_from_the_recipient_also_answers_it ... ok
+test mailwait::tests::mail_that_predates_the_question_is_not_its_answer ... ok
+test mailwait::tests::the_timeout_line_carries_the_command_that_resumes_the_wait ... ok
+test supervise::tests::a_background_wait_survives_the_old_five_minute_bound ... ok
+test supervise::tests::a_body_that_names_a_placeholder_is_left_alone ... ok
+test supervise::tests::a_brief_completed_clean_stop_is_verdict_zero ... ok
+test deliver::tests::the_gate_counts_a_pre_fix_door_queue_row ... ok
+test deliver::tests::a_lane_progress_row_stays_off_the_door ... ok
+test deliver::tests::a_body_the_door_already_took_this_window_trips_at_once ... ok
+test supervise::tests::a_failed_turn_always_carries_a_verdict ... ok
+test supervise::tests::a_flake_detail_rides_behind_the_rc_token ... ok
+test deliver::tests::a_lane_end_row_takes_the_door_of_a_live_route ... ok
+test deliver::tests::a_burst_past_the_recipients_live_connects_trips_and_cools_off ... ok
+test supervise::tests::a_hail_into_a_lane_pane_renders_through_the_lane_mood ... ok
+test lane::tests::the_default_base_sha_falls_back_to_origin_head ... ok
+test lane::tests::the_default_repo_from_a_worktree_is_the_owning_repo ... ok
+test deliver::tests::acpx_failure_retries_after_store_reopen_then_stays_accepted ... ok
+test lane::tests::the_default_base_sha_prefers_origin_main ... ok
+test deliver::tests::held_mail_pushes_itself_once_the_route_can_take_it ... ok
+test supervise::tests::a_nudge_only_completion_has_no_verdict_yet ... ok
+test supervise::tests::a_legacy_plain_text_trail_never_resumes ... ok
+test supervise::tests::a_lane_parent_reads_its_yield_rows_off_the_mailbox_too ... ok
+test supervise::tests::a_failed_start_ack_stops_before_the_brief_without_retrying ... ok
+test supervise::tests::a_conversation_that_moves_mid_run_stays_on_the_same_spawn ... ok
+test supervise::tests::a_parentless_lane_writes_no_result_row ... ok
+test supervise::tests::a_quiet_opening_gap_is_not_a_stall ... ok
+test supervise::tests::a_parentless_park_mails_nothing ... ok
+test supervise::tests::a_missing_path_is_named ... ok
+test supervise::tests::a_resume_without_a_pinned_conversation_refeeds_the_brief ... ok
+test supervise::tests::a_lane_that_never_opened_mails_the_parent_and_writes_its_result ... ok
+test supervise::tests::a_pin_from_no_spawn_never_resumes ... ok
+test supervise::tests::a_fresh_identified_channel_acknowledges_before_receiving_the_full_brief ... ok
+test supervise::tests::a_seen_id_is_not_offered_twice ... ok
+test supervise::tests::a_revived_run_keeps_its_spawn_and_resumes_on_it ... ok
+test supervise::tests::a_supervisor_whose_own_pane_is_gone_ends_the_lane ... ok
+test supervise::tests::a_signalled_supervisor_writes_a_typed_result_row ... ok
+test supervise::tests::a_lane_that_declared_no_output_keeps_its_short_brief_turn ... ok
+test supervise::tests::a_result_row_to_a_coordinator_parent_also_stops_at_the_mailbox ... ok
+test supervise::tests::activity_from_an_earlier_turn_does_not_reset_the_clock ... ok
+test supervise::tests::an_empty_brief_turn_is_a_tool_free_turn_under_thirty_two_characters ... ok
+test supervise::tests::a_pinned_conversation_answers_only_the_spawn_that_pinned_it ... ok
+test supervise::tests::ack_stamps_the_row_so_the_next_read_skips_it ... ok
+test supervise::tests::an_idle_row_names_the_tool_calls_the_agent_reported ... ok
+test supervise::tests::a_wrong_subject_is_named ... ok
+test supervise::tests::a_supervisor_error_still_writes_the_lane_s_result_row ... ok
+test supervise::tests::an_unreadable_worktree_still_names_head_and_dirty ... ok
+test supervise::tests::a_supervisor_panic_still_writes_the_lane_s_result_row ... ok
+test supervise::tests::hail_text_names_the_id_and_the_sender ... ok
+test supervise::tests::a_park_after_the_result_row_mails_no_yield ... ok
+test supervise::tests::result_and_dispatch_rows_never_reach_the_agent ... ok
+test supervise::tests::an_idle_yield_reaches_the_trail_and_stops_at_the_mailbox ... ok
+test supervise::tests::the_idle_shutdown_defaults_to_one_minute_and_zero_disables_it ... ok
+test supervise::tests::the_spawn_stamp_answers_for_its_own_lane_only ... ok
+test supervise::tests::the_stall_limit_config_key_overrides_the_default ... ok
+test supervise::tests::the_start_ack_limit_config_key_overrides_the_default ... ok
+test supervise::tests::the_start_ack_requires_exact_text_and_zero_tool_calls ... ok
+test supervise::tests::the_start_ack_trims_the_word_and_ignores_its_case ... ok
+test supervise::tests::pending_takes_only_this_lane_s_unacked_actionable_rows ... ok
+test supervise::tests::a_flaked_brief_turn_is_refed_even_when_the_channel_has_an_id ... ok
+test supervise::tests::expectations_all_met_is_empty_unmet ... ok
+test supervise::tests::an_explicit_resume_receives_the_resume_nudge ... ok
+test supervise::tests::a_resume_pinned_for_another_cwd_starts_fresh_and_says_so ... ok
+test supervise::tests::an_unmet_expectation_turns_exit_zero_into_rc_four ... ok
+test supervise::tests::too_few_commits_is_named ... ok
+test supervise::tests::a_brief_turn_that_is_empty_twice_fails_the_lane ... ok
+test supervise::tests::the_brief_reaches_the_channel_before_a_resume_nudge_opens_the_lane ... ok
+test supervise::tests::a_turn_with_no_pending_hail_parks_instead_of_ending ... ok
+test supervise::tests::an_empty_brief_turn_is_re_sent_once ... ok
+test deliver::tests::a_cool_off_ends_and_the_drip_resumes_at_budget ... ok
+
+test result: ok. 136 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.62s
+
+     Running tests/parent_death.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop-proc/9fa7f07ad25979b8/out/parent_death-9fa7f07ad25979b8)
+
+running 4 tests
+test an_unrecorded_lane_is_orphan ... ok
+test a_kill_policy_ends_the_lane_when_the_parent_pane_dies ... ok
+test an_orphan_policy_leaves_the_lane_and_its_edge_alone ... ok
+test a_reparent_policy_moves_the_edge_onto_the_registered_coordinator ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.96s
+
+     Running tests/parent_failure_hail.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop-proc/f539ce52648e7edf/out/parent_failure_hail-f539ce52648e7edf)
+
+running 5 tests
+test a_clean_completion_hails_nothing_but_its_rc ... ok
+test a_parentless_lane_writes_no_failure_row ... ok
+test each_failure_kind_reaches_the_parent_exactly_once ... ok
+test a_failure_row_names_the_lane_the_model_the_attempt_and_the_command ... ok
+test a_second_supervisor_run_repeats_none_of_them ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+
+     Running unittests src/lib.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop-store/9a538fb5a4adb74b/out/boop_store-9a538fb5a4adb74b)
+
+running 176 tests
+test _0_session_graph::tests::unmatched_harness_routes_project_as_shell_nodes ... ok
+test _0_session_graph::tests::schema_version_one_legacy_graph_defaults_trace_events ... ok
+test _0_session_graph::tests::tmux_session_window_and_pane_evidence_select_the_same_shell ... ok
+test _0_session_graph::tests::scoped_graph_activity_plan_avoids_whole_corpus_aggregates ... ok
+test activity::tests::aggregation_query_has_no_per_identity_subquery ... ok
+test _0_session_graph::tests::current_graph_keeps_discovered_native_sessions_with_idle_status ... ok
+test _0_session_graph::tests::graph_projects_sessions_edges_and_shells_from_setwise_relations ... ok
+test _0_session_graph::tests::scoped_activity_uses_the_latest_turn_or_usage_timestamp ... ok
+test activity::tests::projects_claude_codex_opencode_kimi_resume_replacement_and_shell_lanes ... ok
+test _0_session_graph::tests::qualified_identity_preserves_harness_for_distinct_native_rows ... ok
+test activity::tests::scoped_trace_counts_seek_selected_sessions_only ... ok
+test _0_session_graph::tests::public_graph_projects_a_live_harness_coordinator_without_a_transcript ... ok
+test _0_session_graph::tests::graph_json_contains_trace_event_fixture_and_applies_cwd_and_history_filters ... ok
+test bus::tests::a_row_written_before_the_typed_columns_still_carries_its_code ... ok
+test bus::tests::a_supervisor_kind_is_an_end_row_or_a_progress_row_and_never_both ... ok
+test bus::tests::a_typed_result_row_round_trips_and_a_plain_row_grows_no_keys ... ok
+test _0_session_graph::tests::focused_runtime_route_seeds_its_native_session_component ... ok
+test bus::tests::an_unknown_message_kind_round_trips_through_other ... ok
+test _0_session_graph::tests::unresolved_live_lane_appears_as_shell_then_merges_into_sessions ... ok
+test bus::tests::fold_keeps_the_ack_across_a_resend ... ok
+test bus::tests::only_a_result_row_takes_a_code_from_its_body ... ok
+test bus::tests::route_lock_release_is_explicit_even_with_an_inherited_descriptor ... ok
+test bus::tests::the_file_is_a_log_of_send_then_ack_rows ... ok
+test _0_session_graph::tests::focused_tmux_shell_serializes_its_rooted_family_without_cwd_inference ... ok
+test bus::tests::the_supervisor_kinds_are_the_ones_a_lane_run_mints_about_itself ... ok
+test bus::tests::unacked_drops_rows_with_a_timestamp ... ok
+test harness_id::tests::every_variant_round_trips_through_its_short_id ... ok
+test harness_id::tests::serde_is_the_lowercase_short_id ... ok
+test bus::tests::a_mail_row_without_a_transition_is_refused ... ok
+test bus::tests::a_registry_without_the_goal_field_still_loads ... ok
+test bus::tests::a_registry_without_the_parent_field_still_loads ... ok
+test bus::tests::a_route_round_trips_its_goal_field ... ok
+test bus::tests::a_partial_last_line_is_left_for_the_next_open ... ok
+test bus::tests::a_route_round_trips_its_parent_field ... ok
+test bus::tests::a_route_with_an_unknown_kind_still_loads ... ok
+test bus::tests::a_newer_registered_route_outranks_the_file ... ok
+test bus::tests::an_append_carries_its_first_transition ... ok
+test ident::tests::a_comment_reads_by_id_and_keeps_the_lanes_forked_off_it ... ok
+test bus::tests::the_files_beside_the_database_are_read_in_place ... ok
+test bus::tests::each_open_imports_only_the_ndjson_tail ... ok
+test ident::tests::a_cycle_in_the_lane_tree_still_answers ... ok
+test ident::tests::a_cursor_is_per_transcript_not_per_session ... ok
+test ident::tests::a_favorite_is_edited_in_place_and_deleted_by_id ... ok
+test ident::tests::a_favorite_note_is_null_when_omitted ... ok
+test ident::tests::a_current_store_missing_a_user_table_heals_on_open ... ok
+test ident::tests::a_fresh_store_carries_the_schema_version ... ok
+test ident::tests::a_lane_spawn_keeps_the_goal_the_path_and_the_brief_bytes ... ok
+test ident::tests::a_second_delivery_of_one_message_appends_a_transition ... ok
+test ident::tests::a_fresh_store_carries_the_seed_moods ... ok
+test ident::tests::a_lower_output_snapshot_never_wins ... ok
+test ident::tests::a_lane_takes_the_nearest_ancestor_mood ... ok
+test ident::tests::a_missing_request_id_still_dedups ... ok
+test ident::tests::a_sent_comment_reads_the_assistant_turn_that_answered_it ... ok
+test ident::tests::a_session_with_no_attr_row_anywhere_takes_the_default ... ok
+test ident::tests::a_session_never_moves_to_a_second_trace ... ok
+test ident::tests::a_session_mood_round_trips_and_clears ... ok
+test ident::tests::a_foreign_dict_harness_value_reads_back_without_error ... ok
+test ident::tests::a_thinking_block_burns_no_ordinal ... ok
+test ident::tests::a_thinking_only_response_still_gets_a_usage_row ... ok
+test ident::tests::a_store_stamped_28_without_the_tag_tables_gets_them_on_open ... ok
+test ident::tests::an_observed_live_lane_row_carries_its_pid ... ok
+test ident::tests::an_unknown_mood_name_names_the_known_ones ... ok
+test ident::tests::backfill_traces_one_component_and_skips_the_edgeless ... ok
+test ident::tests::a_favorite_survives_rebuild ... ok
+test ident::tests::both_open_paths_carry_a_busy_timeout ... ok
+test ident::tests::cost_views_compute_rates_coalesce_and_window ... ok
+test ident::tests::a_v13_store_gains_the_door_columns_and_the_delivery_ledger ... ok
+test ident::tests::dict_model_exists ... ok
+test ident::tests::current_schema_open_and_readonly_query_do_not_wait_for_a_wal_writer ... ok
+test ident::tests::discovery_projects_empty_unchanged_session_and_parent_edge ... ok
+test ident::tests::concurrent_first_open_converges_on_one_current_schema ... ok
+test ident::tests::known_sessions_restore_candidate_metadata_and_cursor ... ok
+test ident::tests::a_v7_store_migrates_agent_pr_onto_the_three_column_key ... ok
+test ident::tests::liveness_coalesces_same_timestamp_and_rejects_older_observations ... ok
+test ident::tests::liveness_intervals_fold_adjacent_and_ignore_repeats ... ok
+test ident::tests::mixed_case_verbs_land_one_canonical_with_raw_retained ... ok
+test ident::tests::pane_occupant_nickname_is_mutable_without_changing_session_identity ... ok
+test ident::tests::one_trace_holds_every_session_id_a_lane_wears ... ok
+test ident::tests::ordinals_continue_across_an_incremental_sync ... ok
+test ident::tests::passthrough_select_returns_rows ... ok
+test ident::tests::passthrough_update_is_refused_read_only ... ok
+test ident::tests::query_cursors_expose_transcript_identity ... ok
+test ident::tests::repeated_hails_accumulate_on_one_edge ... ok
+test ident::tests::the_user_authored_inventory_matches_the_schema ... ok
+test ident::tests::resolving_the_effective_mood_is_one_statement ... ok
+test ident::tests::schema_rows_lists_views_and_join_keys ... ok
+test ident::tests::surrogate_ids_intern_once ... ok
+test ident::tests::schema_v20_adds_projection_version_to_existing_cursors ... ok
+test ident::tests::sync_projects_facts_and_cursor_is_incremental ... ok
+test ident::tests::the_same_brief_interns_once_however_often_it_is_spawned ... ok
+test ident::tests::sync_writes_the_spawn_edge ... ok
+test ident::tests::the_usage_time_range_query_seeks_an_index ... ok
+test ident::tests::trace_event_diagnostic_is_redacted_and_bounded ... ok
+test ident::tests::claude_cursor_metadata_is_two_statements_per_line_and_resumes ... ok
+test ident::tests::cost_views_exist_after_fresh_open_migration_and_rebuild ... ok
+test ident::tests::trace_event_retention_is_deterministic_and_preserves_newest_rows ... ok
+test ident::tests::trace_events_round_trip_stable_identity_endpoints_and_absent_times ... ok
+test ident::tests::trace_and_transcript_style_writers_complete_with_all_rows ... ok
+test ident::tests::two_prs_in_one_turn_survive_and_resync_dedups ... ok
+test proc::tests::tree_sum_exceeds_pane_only_on_a_fixture_tree ... ok
+test proc::tests::uptime_is_a_duration_not_an_epoch_stamp ... ok
+test ident::tests::turn_comment_round_trip ... ok
+test ident::tests::usage_dedups_to_one_row_and_the_last_output_wins ... ok
+test ident::tests::v27_view_falls_back_to_session_cwd_for_null_turn ... ok
+test ident::tests::v27_claude_fixture_projects_two_distinct_turn_cwds ... ok
+test ident::tests::v11_open_keeps_existing_rows_when_migration_is_reentered ... ok
+test ident::tests::v13_open_seeds_moods_once_and_keeps_an_edited_template ... ok
+test ident::tests::v26_stamps_the_rows_a_door_already_took ... ok
+test query::tests::edge_rows_typed_receipt ... ok
+test runtime::tests::diagnostics_are_typed_and_serializable ... ok
+test query::tests::a_path_filter_is_a_bound_prefix ... ok
+test ident::tests::writable_store_persists_wal_mode ... ok
+test query::tests::session_turn_read_uses_primary_key_not_scan ... ok
+test ident::tests::v18_favorite_migration_preserves_rows_and_ids ... ok
+test query::tests::every_fact_list_runs_on_an_empty_store ... ok
+test query::tests::window_sql_partitions_runs_and_binds_params ... ok
+test query::tests::typed_rows_populate_for_a_real_session ... ok
+test ident::tests::v27_migrates_live_db_in_place_without_backfill ... ok
+test session::tests::copied_session_id_retains_each_path_and_session_lookup_uses_newest ... ok
+test query::tests::live_pid_status_row_carries_nonzero_rss ... ok
+test runtime::tests::attached_session_activity_seeks_each_session_instead_of_materializing_the_corpus ... ok
+test runtime::tests::equal_activity_is_an_ambiguous_current_session ... ok
+test runtime::tests::inaccessible_tmux_and_stale_live_report_do_not_prove_liveness ... ok
+test runtime::tests::missing_lane_and_trace_are_reported_as_typed_diagnostics ... ok
+test tags::tests::a_link_source_follows_a_moved_favorite ... ok
+test runtime::tests::runtime_trace_span_query_seeks_only_candidate_lane_ids ... ok
+test tags::tests::a_note_splits_into_tags_on_commas_only ... ok
+test tags::tests::a_tag_has_one_spelling ... ok
+test runtime::tests::resolves_placeholder_to_latest_attached_session_and_completion ... ok
+test runtime::tests::snapshot_joins_live_dead_and_shell_only_routes_from_one_tmux_observation ... ok
+test runtime::tests::snapshot_preserves_an_orphan_lane_trace_diagnostic ... ok
+test summary::tests::multiple_lanes_share_one_tmux_observation_and_process_snapshot ... ok
+test summary::tests::reused_lane_with_ambiguous_traces_has_non_combined_activity ... ok
+test summary::tests::schema_fixture_joins_activity_runtime_mailbox_and_completion ... ok
+test tags::tests::a_note_applies_every_tag_it_holds ... ok
+test tags::tests::a_tag_reads_both_directions ... ok
+test tail::tests::completes_a_partial_line ... ok
+test tail::tests::first_line_reader_does_not_consume_the_transcript_tail ... ok
+test tail::tests::first_line_reader_requires_a_newline_and_ignores_the_tail ... ok
+test tail::tests::leaves_a_partial_line_untouched ... ok
+test tail::tests::picks_up_one_new_complete_line ... ok
+test tags::tests::applying_the_same_tag_twice_counts_two_uses_and_keeps_one_link ... ok
+test tail::tests::resets_when_truncated_below_offset ... ok
+test tail::tests::tails_three_lines_from_zero ... ok
+test trail::tests::a_child_s_stderr_lands_in_the_lane_trail ... ok
+test trail::tests::a_lane_name_with_a_separator_stays_under_the_root ... ok
+test trail::tests::a_legacy_plain_text_pin_belongs_to_no_spawn ... ok
+test tags::tests::backfill_turns_favorite_notes_into_tags_once ... ok
+test tags::tests::recent_puts_the_last_used_tag_first ... ok
+test trail::tests::a_pin_answers_only_the_cwd_it_was_written_for ... ok
+test trail::tests::a_spawn_record_carries_the_id_that_minted_it ... ok
+test trail::tests::a_second_open_appends_instead_of_truncating ... ok
+test trail::tests::clearing_a_pin_leaves_nothing_for_the_next_spawn ... ok
+test trail::tests::configured_store_and_trails_are_isolated ... ok
+test trail::tests::expect_round_trips_through_the_lane_trail ... ok
+test tags::tests::recent_stops_at_the_limit ... ok
+2026-09-09T20:37:02.521289Z  INFO boop_store::trail::tests: lane trail armed marker="trail-receipt"
+test trail::tests::the_lane_writer_tees_every_event_into_supervise_log ... ok
+test tags::tests::search_never_reads_a_note_body ... ok
+test tags::tests::search_matches_the_tag_column_most_used_first ... ok
+test usage::tests::a_long_silence_becomes_a_gap_row ... ok
+test usage::tests::a_steady_stream_stays_in_one_window_until_the_window_length ... ok
+test usage::tests::an_empty_timeline_has_no_windows ... ok
+test usage::tests::the_ceiling_is_the_ninth_decile_of_closed_windows ... ok
+test usage::tests::the_fold_matches_the_window_rule ... ok
+test trail::tests::an_ordinary_detail_stays_a_reported_rc ... ok
+test runtime::tests::snapshot_uses_fixed_durable_query_count_for_many_lanes ... ok
+test usage::cte_equality::fold_and_cte_agree_on_one_busy_window ... ok
+test usage::cte_equality::fold_and_cte_agree_across_a_gap ... ok
+test usage::tests::typed_usage_rows_carry_bucket_and_calls ... ok
+test trail::tests::a_parent_death_and_a_rewritten_edge_are_typed_reasons_of_their_own ... ok
+test tags::tests::a_comment_its_targets_and_its_fork_survive_a_rebuild ... ok
+test trail::tests::a_dead_lane_always_carries_a_typed_reason ... ok
+test tags::tests::a_favorite_survives_a_rebuild_whole ... ok
+test usage::cte_equality::fold_and_cte_agree_when_a_window_times_out_from_its_start ... ok
+test tags::tests::tags_and_their_links_survive_a_rebuild ... ok
+test ident::tests::known_sessions_stays_under_budget ... ok
+
+test result: ok. 176 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.27s
+
+     Running tests/mail_contention.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop-store/53661971f66de36f/out/mail_contention-53661971f66de36f)
+
+running 1 test
+test twelve_processes_share_one_mailbox_without_a_storm ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+
+     Running tests/wal_three_writers.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop-store/93ec1c2ff189a753/out/wal_three_writers-93ec1c2ff189a753)
+
+running 1 test
+test three_concurrent_writers_all_land ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/lib.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop-turnvis/b1218a39fa88129e/out/boop_turnvis-b1218a39fa88129e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/golden.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop-turnvis/0a32348f88328e40/out/golden-0a32348f88328e40)
+
+running 1 test
+test golden_fixtures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.58s
+
+   Doc-tests boop
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests boop_acp
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests boop_harness
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests boop_mux
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests boop_proc
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests boop_store
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests boop_turnvis
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Checking pin-project-lite v0.2.17
+    Checking cfg-if v1.0.4
+    Checking memchr v2.8.3
+    Checking libc v0.2.189
+    Checking bitflags v2.13.1
+    Checking futures-core v0.3.34
+    Building [>                         ] 13/267: bitflags, futures-core, lib…    Checking itoa v1.0.18
+    Building [>                         ] 14/267: bitflags, futures-core, lib…    Checking zerofrom v0.1.8
+    Building [>                         ] 15/267: bitflags, futures-core, lib…    Checking stable_deref_trait v1.2.1
+    Building [>                         ] 17/267: stable_deref_trait, bitflag…    Checking foldhash v0.2.0
+    Building [>                         ] 19/267: foldhash, bitflags, libc, z…    Checking futures-io v0.3.34
+    Building [>                         ] 20/267: foldhash, bitflags, libc, f…    Checking yoke v0.8.3
+    Building [=>                        ] 23/267: foldhash, libc, futures-io,…    Checking parking v2.2.1
+    Building [=>                        ] 25/267: foldhash, libc, futures-io,…    Checking hashbrown v0.17.1
+    Building [=>                        ] 26/267: hashbrown, libc, futures-io…    Checking once_cell v1.21.4
+    Building [=>                        ] 27/267: once_cell, hashbrown, libc,…    Checking serde_core v1.0.229
+    Building [=>                        ] 28/267: once_cell, hashbrown, serde…    Checking crossbeam-utils v0.8.22
+    Building [=>                        ] 29/267: once_cell, hashbrown, serde…    Checking smallvec v1.15.2
+    Building [==>                       ] 31/267: once_cell, hashbrown, serde…    Checking log v0.4.33
+    Building [==>                       ] 34/267: once_cell, hashbrown, serde…    Checking tracing-core v0.1.36
+    Building [==>                       ] 35/267: hashbrown, serde_core, trac…    Checking errno v0.3.14
+    Building [==>                       ] 38/267: hashbrown, serde_core, trac…    Checking zerovec v0.11.8
+    Building [==>                       ] 39/267: zerovec, hashbrown, serde_c…    Checking fastrand v2.5.0
+    Building [===>                      ] 43/267: zerovec, hashbrown, serde_c…    Checking equivalent v1.0.2
+    Building [===>                      ] 44/267: zerovec, hashbrown, serde_c…    Checking zmij v1.0.23
+    Building [===>                      ] 46/267: zerovec, hashbrown, serde_c…    Checking slab v0.4.12
+    Building [===>                      ] 48/267: zerovec, hashbrown, serde_c…    Checking aho-corasick v1.1.5
+    Building [====>                     ] 54/267: zerovec, hashbrown, serde_c…    Checking indexmap v2.14.0
+    Building [====>                     ] 55/267: zerovec, serde_core, indexm…    Checking regex-syntax v0.8.11
+    Building [====>                     ] 59/267: zerovec, serde_core, indexm…    Checking objc2-encode v4.1.0
+    Building [====>                     ] 61/267: zerovec, objc2-encode, serd…    Checking tinystr v0.8.4
+    Building [=====>                    ] 62/267: objc2-encode, serde_core, i…    Checking objc2 v0.6.4
+    Building [=====>                    ] 63/267: objc2, serde_core, indexmap…    Checking tracing v0.1.44
+    Building [=====>                    ] 65/267: objc2, tracing, serde_core,…    Checking rustix v1.1.4
+    Building [=====>                    ] 66/267: objc2, serde_core, indexmap…    Checking futures-lite v2.6.1
+    Building [=====>                    ] 68/267: objc2, serde_core, futures-…    Checking concurrent-queue v2.5.0
+    Building [=====>                    ] 69/267: objc2, serde_core, futures-…    Checking event-listener v5.4.2
+    Building [=====>                    ] 70/267: objc2, serde_core, futures-…    Checking regex-automata v0.4.18
+    Building [=====>                    ] 71/267: objc2, serde_core, futures-…    Checking futures-sink v0.3.34
+    Building [======>                   ] 73/267: objc2, serde_core, futures-…    Checking writeable v0.6.4
+    Building [======>                   ] 77/267: objc2, serde_core, futures-…    Checking bytes v1.12.1
+    Building [======>                   ] 78/267: objc2, bytes, serde_core, f…    Checking litemap v0.8.3
+    Building [======>                   ] 80/267: objc2, bytes, serde_core, l…    Checking typenum v1.20.1
+    Building [======>                   ] 82/267: objc2, bytes, serde_core, r…    Checking icu_locale_core v2.3.0
+    Building [=======>                  ] 86/267: bytes, serde_core, icu_loca…    Checking serde v1.0.229
+    Building [=======>                  ] 87/267: serde, bytes, icu_locale_co…    Checking serde_json v1.0.151
+    Building [=======>                  ] 88/267: serde, serde_json, icu_loca…    Checking futures-channel v0.3.34
+    Building [========>                 ] 93/267: futures-channel, serde_json…    Checking event-listener-strategy v0.5.4
+    Building [========>                 ] 94/267: serde_json, event-listener-…    Checking potential_utf v0.1.6
+    Building [========>                 ] 96/267: serde_json, potential_utf, …    Checking zerotrie v0.2.5
+    Building [========>                 ] 97/267: zerotrie, serde_json, icu_l…    Checking utf8parse v0.2.2
+    Building [========>                ] 103/267: zerotrie, serde_json, utf8p…    Checking futures-task v0.3.34
+    Building [========>                ] 105/267: zerotrie, serde_json, futur…    Checking utf8_iter v1.0.4
+    Building [=========>               ] 109/267: zerotrie, serde_json, futur…    Checking futures-util v0.3.34
+    Building [=========>               ] 112/267: zerotrie, serde_json, utf8_…    Checking icu_collections v2.3.0
+    Building [=========>               ] 113/267: zerotrie, serde_json, icu_c…    Checking anstyle-parse v1.0.0
+    Building [=========>               ] 117/267: zerotrie, anstyle-parse, ic…    Checking icu_provider v2.3.1
+    Building [==========>              ] 118/267: anstyle-parse, icu_collecti…    Checking polling v3.11.0
+    Building [==========>              ] 119/267: icu_collections, icu_provid…    Checking generic-array v0.14.7
+    Building [==========>              ] 120/267: generic-array, icu_collecti…    Checking ref-cast v1.0.27
+    Building [==========>              ] 124/267: ref-cast, generic-array, ic…    Checking anyhow v1.0.104
+    Building [==========>              ] 126/267: ref-cast, generic-array, ic…    Checking getrandom v0.3.4
+    Building [==========>              ] 128/267: ref-cast, generic-array, an…    Checking zerocopy v0.8.56
+    Building [===========>             ] 129/267: generic-array, zerocopy, an…    Checking objc2-core-foundation v0.3.2
+    Building [===========>             ] 130/267: generic-array, zerocopy, an…    Checking signal-hook-registry v1.4.8
+    Building [===========>             ] 131/267: generic-array, zerocopy, si…    Checking dyn-clone v1.0.20
+    Building [===========>             ] 132/267: zerocopy, signal-hook-regis…    Checking is_terminal_polyfill v1.70.2
+    Building [===========>             ] 133/267: is_terminal_polyfill, zeroc…    Checking lazy_static v1.5.0
+    Building [===========>             ] 134/267: is_terminal_polyfill, zeroc…    Checking colorchoice v1.0.5
+    Building [===========>             ] 135/267: colorchoice, zerocopy, futu…    Checking anstyle v1.0.14
+    Building [===========>             ] 136/267: colorchoice, zerocopy, anst…    Checking anstyle-query v1.1.5
+    Building [===========>             ] 137/267: anstyle-query, zerocopy, an…    Checking sharded-slab v0.1.7
+    Building [============>            ] 140/267: zerocopy, anstyle, futures-…    Checking anstream v1.0.0
+    Building [============>            ] 141/267: anstream, zerocopy, futures…    Checking matchers v0.2.0
+    Building [============>            ] 142/267: anstream, matchers, zerocop…    Checking schemars v1.2.2
+    Building [============>            ] 143/267: anstream, zerocopy, futures…    Checking block-buffer v0.10.4
+    Building [============>            ] 144/267: block-buffer, zerocopy, fut…    Checking crypto-common v0.1.7
+    Building [============>            ] 145/267: crypto-common, zerocopy, fu…    Checking rand_core v0.9.5
+    Building [============>            ] 146/267: crypto-common, rand_core, z…    Checking async-io v2.6.0
+    Building [============>            ] 147/267: rand_core, zerocopy, future…    Checking icu_normalizer_data v2.3.0
+    Building [============>            ] 149/267: rand_core, zerocopy, icu_no…    Checking httparse v1.10.1
+    Building [=============>           ] 150/267: httparse, zerocopy, icu_nor…    Checking getrandom v0.4.3
+    Building [=============>           ] 151/267: httparse, zerocopy, getrand…    Checking icu_properties_data v2.3.0
+    Building [=============>           ] 152/267: httparse, zerocopy, futures…    Checking tracing-serde v0.2.0
+    Building [=============>           ] 154/267: tracing-serde, zerocopy, fu…    Checking http v1.5.0
+    Building [=============>           ] 155/267: tracing-serde, http, zeroco…    Checking objc2-foundation v0.3.2
+    Building [=============>           ] 156/267: http, zerocopy, futures-uti…    Checking tracing-log v0.2.0
+    Building [=============>           ] 158/267: http, zerocopy, futures-uti…    Checking thread_local v1.1.10
+    Building [=============>           ] 159/267: thread_local, http, zerocop…    Checking option-ext v0.2.0
+    Building [==============>          ] 161/267: thread_local, http, zerocop…    Checking atomic-waker v1.1.2
+    Building [==============>          ] 162/267: thread_local, http, zerocop…    Checking strsim v0.11.1
+    Building [==============>          ] 164/267: http, zerocopy, atomic-wake…    Checking nu-ansi-term v0.50.3
+    Building [==============>          ] 166/267: http, zerocopy, nu-ansi-ter…    Checking clap_lex v1.1.0
+    Building [==============>          ] 167/267: http, zerocopy, nu-ansi-ter…    Checking objc2-open-directory v0.3.2
+    Building [==============>          ] 168/267: http, zerocopy, nu-ansi-ter…    Checking tracing-subscriber v0.3.23
+    Building [==============>          ] 169/267: http, zerocopy, futures-uti…    Checking clap_builder v4.6.6
+    Building [==============>          ] 170/267: clap_builder, http, zerocop…    Checking piper v0.2.5
+    Building [===============>         ] 172/267: clap_builder, http, zerocop…    Checking dirs-sys v0.4.1
+    Building [===============>         ] 174/267: clap_builder, http, zerocop…    Checking pin-project v1.1.13
+    Building [===============>         ] 175/267: clap_builder, zerocopy, pin…    Checking serde_with v3.22.0
+    Building [===============>         ] 176/267: clap_builder, zerocopy, pin…    Checking strum v0.28.0
+    Building [===============>         ] 177/267: clap_builder, strum, zeroco…    Checking async-signal v0.2.14
+    Building [===============>         ] 178/267: clap_builder, zerocopy, fut…    Checking icu_properties v2.3.0
+    Building [===============>         ] 179/267: clap_builder, icu_propertie…    Checking futures-executor v0.3.34
+    Building [===============>         ] 180/267: clap_builder, icu_propertie…    Checking libsqlite3-sys v0.38.2
+    Building [===============>         ] 181/267: clap_builder, icu_propertie…    Checking icu_normalizer v2.3.0
+    Building [================>        ] 182/267: clap_builder, icu_propertie…    Checking digest v0.10.7
+    Building [================>        ] 183/267: clap_builder, icu_propertie…    Checking objc2-io-kit v0.3.2
+    Building [================>        ] 184/267: clap_builder, icu_propertie…    Checking derive_more v2.1.1
+    Building [================>        ] 185/267: clap_builder, icu_propertie…    Checking async-channel v2.5.0
+    Building [================>        ] 186/267: clap_builder, icu_propertie…    Checking async-lock v3.4.2
+    Building [================>        ] 187/267: clap_builder, icu_propertie…   Compiling clap_derive v4.6.4
+    Building [================>        ] 188/267: clap_builder, zerocopy, cla…    Checking hashlink v0.12.1
+    Building [================>        ] 189/267: clap_builder, zerocopy, cla…    Checking mio v1.2.2
+    Building [================>        ] 190/267: mio, zerocopy, clap_derive,…    Checking cpufeatures v0.2.17
+    Building [================>        ] 191/267: mio, zerocopy, clap_derive,…    Checking socket2 v0.6.5
+    Building [================>        ] 192/267: socket2, mio, zerocopy, cla…    Checking fallible-streaming-iterator v0.1.9
+    Building [=================>       ] 195/267: socket2, mio, zerocopy, cla…    Checking fixedbitset v0.5.7
+    Building [=================>       ] 196/267: socket2, mio, zerocopy, cla…    Checking tmux_interface v0.4.0
+    Building [=================>       ] 197/267: socket2, zerocopy, clap_der…    Checking deranged v0.5.8
+    Building [=================>       ] 198/267: deranged, zerocopy, clap_de…    Checking fallible-iterator v0.3.0
+    Building [=================>       ] 200/267: deranged, zerocopy, clap_de…    Checking percent-encoding v2.3.2
+    Building [=================>       ] 201/267: deranged, percent-encoding,…    Checking time-core v0.1.9
+    Building [=================>       ] 202/267: deranged, percent-encoding,…    Checking ppv-lite86 v0.2.21
+    Building [==================>      ] 203/267: deranged, percent-encoding,…    Checking powerfmt v0.2.0
+    Building [==================>      ] 204/267: deranged, ppv-lite86, clap_…    Checking async-task v4.7.1
+    Building [==================>      ] 205/267: deranged, async-task, ppv-l…    Checking num-conv v0.2.2
+    Building [==================>      ] 206/267: deranged, async-task, ppv-l…    Checking rand_chacha v0.9.0
+    Building [==================>      ] 207/267: deranged, async-task, clap_…    Checking rusqlite v0.40.2
+    Building [==================>      ] 208/267: deranged, async-task, clap_…    Checking blocking v1.6.2
+    Building [==================>      ] 209/267: deranged, blocking, clap_de…    Checking rand v0.9.5
+    Building [==================>      ] 210/267: deranged, blocking, rand, c…    Checking agent-client-protocol-schema v1.5.0
+    Building [==================>      ] 211/267: deranged, rand, clap_derive…    Checking time v0.3.55
+    Building [==================>      ] 212/267: rand, clap_derive, tmux_int…    Checking futures-concurrency v7.7.1
+    Building [===================>     ] 214/267: futures-concurrency, clap_d…    Checking tokio v1.53.1
+    Building [===================>     ] 215/267: futures-concurrency, clap_d…    Checking boop-mux v0.0.9 (/private/tmp/boop-delivery-fix-20260909/crates/boop-mux)
+    Building [===================>     ] 216/267: boop-mux, futures-concurren…    Checking thiserror v2.0.20
+    Building [===================>     ] 217/267: boop-mux, futures-concurren…    Checking async-process v2.5.0
+    Building [===================>     ] 218/267: futures-concurrency, clap_d…    Checking sha1 v0.10.7
+    Building [===================>     ] 219/267: futures-concurrency, clap_d…    Checking sysinfo v0.39.6
+    Building [===================>     ] 220/267: sysinfo, futures-concurrenc…    Checking idna_adapter v1.2.2
+    Building [===================>     ] 221/267: sysinfo, futures-concurrenc…    Checking futures v0.3.34
+    Building [===================>     ] 222/267: sysinfo, futures-concurrenc…    Checking dirs v5.0.1
+    Building [===================>     ] 223/267: sysinfo, futures-concurrenc…    Checking crossbeam-epoch v0.9.20
+    Building [===================>     ] 224/267: sysinfo, futures-concurrenc…    Checking uuid v1.24.1
+    Building [====================>    ] 225/267: sysinfo, futures-concurrenc…    Checking bstr v1.13.1
+    Building [====================>    ] 226/267: futures-concurrency, uuid, …    Checking utf-8 v0.7.6
+    Building [====================>    ] 228/267: futures-concurrency, clap_d…    Checking shell-words v1.1.1
+    Building [====================>    ] 229/267: shell-words, futures-concur…    Checking same-file v1.0.6
+    Building [====================>    ] 230/267: futures-concurrency, clap_d…    Checking rustc-hash v2.1.3
+    Building [====================>    ] 231/267: rustc-hash, futures-concurr…    Checking data-encoding v2.11.1
+    Building [====================>    ] 232/267: rustc-hash, futures-concurr…    Checking base64 v0.23.1
+    Building [====================>    ] 233/267: futures-concurrency, clap_d…    Checking tungstenite v0.26.2
+    Building [====================>    ] 234/267: futures-concurrency, tungst…    Checking ureq-proto v0.6.1
+    Building [=====================>   ] 235/267: futures-concurrency, tungst…    Checking globset v0.4.20
+    Building [=====================>   ] 236/267: futures-concurrency, tungst…    Checking walkdir v2.5.0
+    Building [=====================>   ] 237/267: futures-concurrency, clap_d…    Checking crossbeam-deque v0.8.7
+    Building [=====================>   ] 238/267: futures-concurrency, crossb…    Checking idna v1.1.0
+    Building [=====================>   ] 239/267: futures-concurrency, crossb…    Checking form_urlencoded v1.2.2
+    Building [=====================>   ] 240/267: form_urlencoded, futures-co…    Checking utf8-zero v0.8.1
+    Building [=====================>   ] 242/267: form_urlencoded, futures-co…    Checking tokio-tungstenite v0.26.2
+    Building [=====================>   ] 244/267: tokio-tungstenite, futures-…    Checking url v2.5.8
+    Building [=====================>   ] 245/267: tokio-tungstenite, futures-…    Checking ureq v3.4.0
+    Building [======================>  ] 246/267: tokio-tungstenite, futures-…    Checking ignore v0.4.33
+    Building [======================>  ] 247/267: futures-concurrency, url, c…    Checking tempfile v3.27.0
+    Building [======================>  ] 248/267: futures-concurrency, clap_d…    Checking wait-timeout v0.2.1
+    Building [======================>  ] 249/267: futures-concurrency, wait-t…    Checking signal-hook v0.4.4
+    Building [======================>  ] 250/267: futures-concurrency, wait-t…   Compiling boop v0.0.10 (/private/tmp/boop-delivery-fix-20260909/crates/boop)
+    Building [======================>  ] 251/267: boop(build.rs), futures-con…    Checking hafley-observe v0.1.0 (/private/tmp/boop-delivery-fix-20260909/crates/hafley-observe)
+    Building [======================>  ] 252/267: boop(build.rs), futures-con…    Building [======================>  ] 253/267: boop(build.rs), futures-con…    Building [======================>  ] 254/267: boop(build.rs), futures-con…    Building [======================>  ] 255/267: boop(build), futures-concur…    Building [======================>  ] 256/267: futures-concurrency, clap_d…    Building [=======================> ] 257/267: futures-concurrency, clap_d…    Checking agent-client-protocol v2.0.0
+    Building [=======================> ] 258/267: clap_derive, agent-client-p…    Checking clap v4.6.6
+    Building [=======================> ] 259/267: agent-client-protocol, clap     Checking boop-store v0.0.2 (/private/tmp/boop-delivery-fix-20260909/crates/boop-store)
+    Building [=======================> ] 260/267: boop-store, agent-client-pr…    Building [=======================> ] 261/267: agent-client-protocol           Checking boop-acp v0.0.2 (/private/tmp/boop-delivery-fix-20260909/crates/boop-acp)
+    Building [=======================> ] 262/267: boop-acp                        Checking boop-harness v0.0.2 (/private/tmp/boop-delivery-fix-20260909/crates/boop-harness)
+    Building [=======================> ] 263/267: boop-harness                    Checking boop-proc v0.0.2 (/private/tmp/boop-delivery-fix-20260909/crates/boop-proc)
+    Building [=======================> ] 264/267: boop-proc                       Building [=======================> ] 265/267: boop                            Building [=======================> ] 266/267: boop(bin)                       Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.50s

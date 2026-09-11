@@ -1,0 +1,20 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s
+     Running unittests src/lib.rs (/private/tmp/boop-delivery-fix-target-20260909/debug/build/boop-harness/0381f800ed78beca/out/boop_harness-0381f800ed78beca)
+
+running 1 test
+
+thread 'harness::codex::tests::native_child_observer_attributes_replayed_turns_to_their_thread' (117814966) panicked at crates/boop-harness/src/harness/codex.rs:1679:9:
+assertion `left == right` failed
+  left: [Spawned { parent_session: "parent-session", child_session: "child-session", at_ms: 1788984301871 }, Spawned { parent_session: "parent-session", child_session: "child-session", at_ms: 1788984301871 }, Completed { parent_session: "parent-session", child_session: "child-session", outcome: "completed", at_ms: 1788984301871 }]
+ right: [Spawned { parent_session: "parent-session", child_session: "child-session", at_ms: 1788984301871 }]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test harness::codex::tests::native_child_observer_attributes_replayed_turns_to_their_thread ... FAILED
+
+failures:
+
+failures:
+    harness::codex::tests::native_child_observer_attributes_replayed_turns_to_their_thread
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 182 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p boop-harness --lib`

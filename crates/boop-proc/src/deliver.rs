@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
@@ -23,7 +23,7 @@ use boop_store::ident::{DeliveryState, LiveRow, Store};
 /// | rung | condition | transition recorded |
 /// |---|---|---|
 /// | `Door` | a live door session takes the text into the running turn | accepted-by-harness |
-/// | `DoorQueue` | a live door session holds the text itself and reads it at its next turn boundary | accepted-by-harness |
+/// | `DoorQueue` | a live door session accepted the text into its queue for its next turn boundary | held-for-turn-boundary |
 /// | `Acpx` | the caller drives the recipient's own acpx queue | accepted-by-harness |
 /// | `TurnBoundary` | the recipient's own lane supervisor holds it, which is the one rung with a real holder | held-for-turn-boundary |
 /// | `HookInbox` | the recipient's project carries an installed inbox hook | queued-in-hook-inbox |
@@ -49,10 +49,8 @@ impl Rung {
     /// The transition this rung records. One rung, one state.
     pub fn state(self) -> DeliveryState {
         match self {
-            Rung::AlreadyAccepted | Rung::Door | Rung::DoorQueue | Rung::Acpx => {
-                DeliveryState::AcceptedByHarness
-            }
-            Rung::TurnBoundary => DeliveryState::HeldForTurnBoundary,
+            Rung::AlreadyAccepted | Rung::Door | Rung::Acpx => DeliveryState::AcceptedByHarness,
+            Rung::DoorQueue | Rung::TurnBoundary => DeliveryState::HeldForTurnBoundary,
             Rung::HookInbox => DeliveryState::QueuedInHookInbox,
             Rung::PanePaste => DeliveryState::PastedIntoPane,
             Rung::MailboxOnly | Rung::Mailbox => DeliveryState::HeldInMailbox,
@@ -142,7 +140,7 @@ impl Landing {
             Rung::AlreadyAccepted => format!("already accepted {message_id} from {from} -> {to}; no new transport call"),
             Rung::Door => format!("delivered {message_id} from {from} -> {to} through the {harness} door"),
             Rung::DoorQueue => format!(
-                "delivered {message_id} from {from} -> {to} into the {harness} door queue; it reads it at its next turn boundary"
+                "queued {message_id} from {from} -> {to} in the {harness} door; it reads it at its next turn boundary"
             ),
             Rung::Acpx => format!("delivered {message_id} from {from} -> {to} through the acpx queue"),
             Rung::TurnBoundary => format!(
@@ -452,7 +450,7 @@ pub fn deliver_hail_budgeted(
         bus::ack_messages(store, std::slice::from_ref(&message.id), &bus::now_iso())?;
         return Ok(Landing::new(
             Rung::AlreadyAccepted,
-            "previously accepted by harness",
+            "previously accepted by harness or its queue",
         ));
     }
     if !store.has_delivery_transition(&message.id)? {
@@ -471,7 +469,7 @@ pub fn deliver_hail_budgeted(
     // The ladder stamps the row itself. A rung that carried the body put the
     // text in front of the recipient, so the mailbox row is history: leaving
     // it open is how the supervisor's parent rows sat unstamped while the
-    // ledger already said `accepted-by-harness`, invisible to both
+    // ledger already said the door or its queue accepted it, invisible to both
     // `held_messages` and `boop wait --me` (head-rewound-door-retry).
     if landing.rung.carried_the_body() {
         bus::ack_messages(store, std::slice::from_ref(&message.id), &bus::now_iso())?;
@@ -838,6 +836,11 @@ pub fn drain_route_held_mail_budgeted(
         if landing.rung == Rung::CoolOff {
             break;
         }
+        // Nothing answered: every later row walks the same dead door, so the
+        // pass ends here and the next tick retries from the oldest row.
+        if landing.rung == Rung::Mailbox {
+            break;
+        }
         if landing.rung.carried_the_body() {
             pushed += 1; // `deliver_hail_budgeted` stamped the row
         }
@@ -851,11 +854,46 @@ pub fn drain_all_held_mail(dir: &Path, registry: &Registry, store: &Store) -> us
     let Ok(routes) = bus::read_routes(dir) else {
         return 0;
     };
+    let budget = drain_budget();
+    let started = Instant::now();
+    let total = routes.len();
     let mut pushed = 0usize;
-    for name in routes.into_keys() {
+    for (index, name) in routes.into_keys().enumerate() {
+        if started.elapsed() >= budget {
+            tracing::warn!(
+                elapsed_ms = started.elapsed().as_millis() as u64,
+                budget_ms = budget.as_millis() as u64,
+                skipped = total - index,
+                next_route = %name,
+                "held-mail drain bailed at its deadline; set {DRAIN_BUDGET_ENV} to widen it"
+            );
+            break;
+        }
+        let route_started = Instant::now();
         pushed += drain_route_held_mail(dir, registry, store, &name);
+        let route_ms = route_started.elapsed().as_millis() as u64;
+        if route_ms >= SLOW_ROUTE_DRAIN.as_millis() as u64 {
+            tracing::warn!(route = %name, elapsed_ms = route_ms, "slow held-mail drain for one route");
+        }
     }
     pushed
+}
+
+/// The env knob for the whole drain pass's wall-clock budget, in ms.
+pub const DRAIN_BUDGET_ENV: &str = "BOOP_DRAIN_BUDGET_MS";
+
+/// A drain pass rides every sync-carrying read verb; past this it bails.
+const DRAIN_BUDGET_DEFAULT: Duration = Duration::from_millis(1500);
+
+/// One route's drain past this is reported as a slow external effect.
+const SLOW_ROUTE_DRAIN: Duration = Duration::from_millis(250);
+
+fn drain_budget() -> Duration {
+    std::env::var(DRAIN_BUDGET_ENV)
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .map(Duration::from_millis)
+        .unwrap_or(DRAIN_BUDGET_DEFAULT)
 }
 
 /// A door address as the two `agent_live` columns spell it. The claude socket
@@ -980,6 +1018,13 @@ mod tests {
     impl Harness for FakeClaude {
         fn id(&self) -> HarnessId {
             HarnessId::Claude
+        }
+
+        fn mock_tui_launch(
+            &self,
+            _: &boop_harness::harness::mock_tui::MockTuiContext<'_>,
+        ) -> anyhow::Result<boop_harness::harness::mock_tui::MockTuiLaunch> {
+            anyhow::bail!("fixture harness has no mock launch")
         }
 
         fn capabilities(&self) -> &'static Capabilities {
@@ -1671,7 +1716,7 @@ mod tests {
             let (dir, store, message) = kind_fixture(tag, kind);
             let landing = land_one(&dir, &store, &message, &budget(60_000, 60_000, 10));
             assert_eq!(landing.rung, Rung::DoorQueue, "a {kind} row takes the door");
-            assert_eq!(landing.rung.state(), DeliveryState::AcceptedByHarness);
+            assert_eq!(landing.rung.state(), DeliveryState::HeldForTurnBoundary);
             assert!(landing.rung.carried_the_body());
             assert!(
                 door_bodies().iter().any(|body| body == &message.body),
@@ -2070,7 +2115,7 @@ mod tests {
         assert!(landing.rung.carried_the_body());
         assert_eq!(
             landing.line("m-1", "coordinator", "claude-77", "claude"),
-            "delivered m-1 from coordinator -> claude-77 into the claude door queue; it reads it at its next turn boundary"
+            "queued m-1 from coordinator -> claude-77 in the claude door; it reads it at its next turn boundary"
         );
 
         let (_, history) = store
@@ -2087,13 +2132,22 @@ mod tests {
             states,
             vec![
                 DeliveryState::Appended.as_str().to_owned(),
-                DeliveryState::AcceptedByHarness.as_str().to_owned()
+                DeliveryState::HeldForTurnBoundary.as_str().to_owned()
             ],
             "{history:#?}"
         );
         assert!(
             !states.iter().any(|state| state.contains("hook-inbox")),
             "no hook rung was walked: {states:?}"
+        );
+        assert!(store.delivery_accepted("m-claude-77", "claude-77").unwrap());
+        let retry =
+            deliver_hail_with(&registry, &store, &routes, &message("claude-77"), &NoPane).unwrap();
+        assert_eq!(retry.rung, Rung::AlreadyAccepted);
+        assert_eq!(
+            store.delivery_rows("m-claude-77").unwrap().len(),
+            2,
+            "queue admission suppresses a second door push"
         );
         drop(store);
         let _ = std::fs::remove_dir_all(dir);

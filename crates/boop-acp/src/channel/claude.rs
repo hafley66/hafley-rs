@@ -108,6 +108,19 @@ impl ClaudeChannel {
         self.stdin.flush().context("flush claude stdin")?;
         Ok(())
     }
+
+    /// Wire shape per the SDK control protocol: the wrapper carries the id,
+    /// the payload carries the subtype (typescript-sdk, `interrupt()`).
+    fn write_interrupt(&mut self) -> Result<()> {
+        let frame = json!({
+            "type": "control_request",
+            "request_id": new_uuid(),
+            "request": {"subtype": "interrupt"}
+        });
+        writeln!(self.stdin, "{frame}").context("write claude interrupt line")?;
+        self.stdin.flush().context("flush claude stdin")?;
+        Ok(())
+    }
 }
 
 impl LaneChannel for ClaudeChannel {
@@ -123,6 +136,12 @@ impl LaneChannel for ClaudeChannel {
     fn steer(&mut self, text: &str) -> Result<Delivery> {
         self.write_user(text)?;
         Ok(Delivery::MidTurn)
+    }
+
+    /// An interrupt lands inside the running turn the way a user's Esc does;
+    /// the CLI answers with a control_response and then the turn's result.
+    fn interrupt(&mut self) -> Result<()> {
+        self.write_interrupt()
     }
 
     fn next_event(&mut self, timeout: std::time::Duration) -> Result<Option<TurnEvent>> {
@@ -523,5 +542,40 @@ mod tests {
             seen.is_some(),
             "the reader thread must surface the child's activity"
         );
+    }
+
+    /// RECEIPT. `interrupt` writes the SDK control_request frame, not a user
+    /// line; sabotage: routing it through `write_user` fails this.
+    #[test]
+    fn interrupt_writes_the_control_request_frame() {
+        let binary = fake_claude(
+            "interrupt-echo",
+            "cat >\"$(dirname \"$0\")/boop-interrupt-stdin\"\nprintf '%s\\n' '{COMPLETED}'",
+        );
+        let dir = binary.parent().unwrap();
+        let spill = dir.join("boop-interrupt-stdin");
+        let _ = std::fs::remove_file(&spill);
+        let mut channel =
+            ClaudeChannel::open_with_binary(&spec(), &binary.display().to_string()).unwrap();
+        let _ = channel.start_turn("do the lane");
+        channel.interrupt().unwrap();
+        channel.close().unwrap();
+        let mut stdin_text = String::new();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while std::time::Instant::now() < deadline {
+            if let Ok(text) = std::fs::read_to_string(&spill) {
+                stdin_text = text;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let interrupt = stdin_text
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+            .find(|frame| frame["type"] == "control_request")
+            .expect("one control_request on the child's stdin");
+        assert!(interrupt["request_id"].is_string(), "{interrupt}");
+        assert_eq!(interrupt["request"]["subtype"], "interrupt", "{interrupt}");
+        let _ = std::fs::remove_file(&spill);
     }
 }

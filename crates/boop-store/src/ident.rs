@@ -2890,11 +2890,12 @@ impl Store {
         Ok(out)
     }
 
-    /// Prior transport acceptance for this exact message and recipient.
-    /// Mailbox insertion or a hold transition is not acceptance.
+    /// Prior transport acceptance for this exact message and recipient. A
+    /// door queue is terminal transport acceptance even though the transcript
+    /// has not received the body yet. Other hold transitions are pending.
     pub fn delivery_accepted(&self, message_id: &str, route: &str) -> Result<bool> {
         Ok(self.connection.query_row(
-            "SELECT EXISTS(SELECT 1 FROM agent_delivery_transition WHERE message_id = ?1 AND route = ?2 AND outcome = 'accepted-by-harness')",
+            "SELECT EXISTS(SELECT 1 FROM agent_delivery_transition WHERE message_id = ?1 AND route = ?2 AND (outcome = 'accepted-by-harness' OR detail = 'door queue'))",
             params![message_id, route], |row| row.get(0),
         )?)
     }
