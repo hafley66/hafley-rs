@@ -6,19 +6,19 @@ ground-chart:
     cargo run --locked --offline -j2 --manifest-path crates/fighter/Cargo.toml --example ground_chart -- --write
     d2 --layout elk crates/fighter/5_ground_chart.d2 crates/fighter/5_ground_chart.svg
 
-ground-chart-preview output="/private/tmp/falcon-ground-chart.png":
+ground-chart-preview output="/private/tmp/pigeon-ground-chart.png":
     d2 --layout elk crates/fighter/5_ground_chart.d2 {{quote(output)}}
 
-# Extract source-backed Falcon guards from the pinned Melee decomp.
+# Extract source-backed Pigeon guards from the pinned Melee decomp.
 source-rules:
-    cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- falcon
-    d2 --layout elk smash/src/fighters/falcon/generated/3_source_chart.d2 smash/src/fighters/falcon/generated/3_source_chart.svg
-    d2 --layout elk smash/src/fighters/falcon/generated/4_common_inventory.d2 smash/src/fighters/falcon/generated/4_common_inventory.svg
+    cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- pigeon
+    d2 --layout elk smash/src/fighters/pigeon/generated/3_source_chart.d2 smash/src/fighters/pigeon/generated/3_source_chart.svg
+    d2 --layout elk smash/src/fighters/pigeon/generated/4_common_inventory.d2 smash/src/fighters/pigeon/generated/4_common_inventory.svg
 
 source-rules-check:
-    cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- falcon --check
-    d2 validate smash/src/fighters/falcon/generated/3_source_chart.d2
-    d2 validate smash/src/fighters/falcon/generated/4_common_inventory.d2
+    cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- pigeon --check
+    d2 validate smash/src/fighters/pigeon/generated/3_source_chart.d2
+    d2 validate smash/src/fighters/pigeon/generated/4_common_inventory.d2
 
 # Static port progress dashboard: classification/6_progress.html.
 progress:

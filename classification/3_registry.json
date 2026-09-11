@@ -18,7 +18,7 @@
     "stage": 2.7,
     "destination": "library",
     "task": "A1",
-    "scope": "Shared action types, offline decoder/baker and checked Rust transition-table emission; Falcon and Kirby fixtures",
+    "scope": "Shared action types, offline decoder/baker and checked Rust transition-table emission; Pigeon and Kirby fixtures",
     "manifest": "crates/content/Cargo.toml",
     "targets": [
       "crates/content"
@@ -54,7 +54,7 @@
     ],
     "evidence": [
       "shared/0_reuse.md",
-      "blender-godot-sqlite-proof/falcon-lab/109_tasks.md"
+      "blender-godot-sqlite-proof/pigeon-lab/109_tasks.md"
     ]
   },
   "game-input": {
@@ -68,7 +68,7 @@
     ],
     "evidence": [
       "shared/0_reuse.md",
-      "blender-godot-sqlite-proof/falcon-lab/109_tasks.md"
+      "blender-godot-sqlite-proof/pigeon-lab/109_tasks.md"
     ]
   },
   "rollback": {
@@ -82,7 +82,7 @@
     ],
     "evidence": [
       "shared/0_reuse.md",
-      "blender-godot-sqlite-proof/falcon-lab/109_tasks.md"
+      "blender-godot-sqlite-proof/pigeon-lab/109_tasks.md"
     ]
   },
   "game-capture": {
@@ -96,7 +96,7 @@
     ],
     "evidence": [
       "shared/0_reuse.md",
-      "blender-godot-sqlite-proof/falcon-lab/109_tasks.md"
+      "blender-godot-sqlite-proof/pigeon-lab/109_tasks.md"
     ]
   },
   "core-labs": {
@@ -128,12 +128,12 @@
       "blender-godot-sqlite-proof/18_results.md"
     ]
   },
-  "falcon-lab": {
+  "pigeon-lab": {
     "stage": 2.7,
     "destination": "split",
     "task": "S5",
-    "scope": "Falcon importer, boundary tooling and observed live phase graph; complete legal-edge graph and promotion split pending",
-    "manifest": "blender-godot-sqlite-proof/falcon-lab/Cargo.toml",
+    "scope": "Pigeon importer, boundary tooling and observed live phase graph; complete legal-edge graph and promotion split pending",
+    "manifest": "blender-godot-sqlite-proof/pigeon-lab/Cargo.toml",
     "targets": [
       "crates/content",
       "crates/presentation",
@@ -141,28 +141,28 @@
     ],
     "evidence": [
       "4_tasks.md",
-      "blender-godot-sqlite-proof/falcon-lab/109_tasks.md"
+      "blender-godot-sqlite-proof/pigeon-lab/109_tasks.md"
     ]
   },
-  "falcon_web": {
+  "pigeon_web": {
     "stage": 2.7,
     "destination": "split",
     "task": "Q3",
     "scope": "Godot web adapter and app composition; keyboard and synthetic touch proofs exist. Cross-target match, physical devices and online play unqualified; last deploy receipt predates current source.",
-    "manifest": "blender-godot-sqlite-proof/falcon-lab/94_web/Cargo.toml",
+    "manifest": "blender-godot-sqlite-proof/pigeon-lab/94_web/Cargo.toml",
     "targets": [
       "crates/presentation",
       "smash"
     ],
     "evidence": [
-      "blender-godot-sqlite-proof/falcon-lab/88_live_results.md"
+      "blender-godot-sqlite-proof/pigeon-lab/88_live_results.md"
     ]
   },
   "smash": {
     "stage": 2.7,
     "destination": "app",
     "task": "A1",
-    "scope": "22-action Falcon catalog and PM numeric ingest; shared locomotion and restore tests; keyboard, touch and first-joypad adapters live in the Godot shell; UI route ownership not yet extracted; full callbacks and finite stage pending",
+    "scope": "22-action Pigeon catalog and PM numeric ingest; shared locomotion and restore tests; keyboard, touch and first-joypad adapters live in the Godot shell; UI route ownership not yet extracted; full callbacks and finite stage pending",
     "manifest": "smash/Cargo.toml",
     "targets": [
       "smash"

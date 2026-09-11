@@ -67,7 +67,7 @@ test('missing evidence, package and task references are rejected', async () => {
     [p => { p.ingest.package = 'ghost'; }, /ingest: unknown package/],
     [p => { p.ingest.task = 'NEVER'; }, /ingest: unknown task/],
     [p => { p.ingest.catalogApi = ''; }, /reported API state/],
-    [p => { p.ingest.manifest = 'smash/src/fighters/falcon/imported/absent.json'; }, /ENOENT/],
+    [p => { p.ingest.manifest = 'smash/src/fighters/pigeon/imported/absent.json'; }, /ENOENT/],
     [p => { p.ingest.tests[0].note = ''; }, /ingest test: reference needs a label and a note/],
     [p => { p.references[0].path = 'crates/fighter/absent.svg'; }, /ENOENT/],
     [p => { p.references = []; }, /references: no linked evidence/],

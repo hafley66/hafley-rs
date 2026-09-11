@@ -10,7 +10,7 @@ Godot, verify the skeleton and pose restoration, and record H.264 MP4.
 - Rig: 16 bones, one weighted wire mesh, `PunchKnee` clip.
 
 Geometry and keyframes were authored by this lab's Blender script. This is a
-Falcon-style wireframe humanoid prototype, not an extracted game model or a
+Pigeon-style wireframe humanoid prototype, not an extracted game model or a
 reproduction of Melee frame data. Godot currently evaluates its animation.
 Rust-driven bone poses, bone-attached collision volumes, and gameplay/rollback
 integration for this fighter are not implemented by this asset proof.

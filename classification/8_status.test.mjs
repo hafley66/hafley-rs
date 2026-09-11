@@ -9,9 +9,9 @@ const H = 'a'.repeat(64);
 // Pure inputs for the `just status` SOURCE RULES section. These are small JSON
 // records, not the generated HTML/SVG or the base64 payloads.
 const sourceRules = JSON.parse(await readFile(
-  new URL('../smash/src/fighters/falcon/generated/2_source_rules.json', import.meta.url), 'utf8'));
+  new URL('../smash/src/fighters/pigeon/generated/2_source_rules.json', import.meta.url), 'utf8'));
 const manifest = JSON.parse(await readFile(
-  new URL('../smash/src/fighters/falcon/imported/0_sources.json', import.meta.url), 'utf8'));
+  new URL('../smash/src/fighters/pigeon/imported/0_sources.json', import.meta.url), 'utf8'));
 const SOURCE_OPS = ['Less', 'LessEqual', 'Greater', 'GreaterEqual', 'Equal', 'NotEqual'];
 
 function fixture() {

@@ -12,8 +12,8 @@ import { fingerprintSources } from '../shared/workflow/0_fingerprint.mjs';
 export const COLUMNS = ['payload', 'catalog', 'phase', 'chart', 'live', 'restore', 'native', 'fidelity'];
 
 const statusSource = fileURLToPath(new URL('7_status.tsp', import.meta.url));
-const workflow = fileURLToPath(new URL('../blender-godot-sqlite-proof/falcon-lab/.workflow/', import.meta.url));
-const sourceRules = fileURLToPath(new URL('../smash/src/fighters/falcon/generated/2_source_rules.json', import.meta.url));
+const workflow = fileURLToPath(new URL('../blender-godot-sqlite-proof/pigeon-lab/.workflow/', import.meta.url));
+const sourceRules = fileURLToPath(new URL('../smash/src/fighters/pigeon/generated/2_source_rules.json', import.meta.url));
 
 // The live Rust export writes JSON to stdout. No checked editable registry.
 export function runExport(base = root, env = process.env) {
@@ -28,7 +28,7 @@ export function runExport(base = root, env = process.env) {
   return JSON.parse(stdout);
 }
 
-// Mirrors the roots in falcon-lab/100_workflow.mjs so `receipt.source` is
+// Mirrors the roots in pigeon-lab/100_workflow.mjs so `receipt.source` is
 // comparable. Returns null when the sibling runtime checkout is absent, in
 // which case receipt freshness is UNMEASURED rather than assumed.
 export function currentSource(base = root) {

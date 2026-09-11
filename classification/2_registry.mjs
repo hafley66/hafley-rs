@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 // Reuse the installed, lockfile-pinned 1.10 compiler. No second toolchain.
-const require = createRequire(new URL('../blender-godot-sqlite-proof/falcon-lab/contracts/package.json', import.meta.url));
+const require = createRequire(new URL('../blender-godot-sqlite-proof/pigeon-lab/contracts/package.json', import.meta.url));
 const compiler = await import(pathToFileURL(require.resolve('@typespec/compiler')));
 // The pinned compiler exposes /ast only under the ESM import condition.
 const { SyntaxKind, visitChildren } = await import(new URL('./ast/index.js', pathToFileURL(require.resolve('@typespec/compiler'))));

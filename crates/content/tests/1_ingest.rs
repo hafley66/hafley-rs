@@ -6,7 +6,7 @@ use std::path::Path;
 
 fn fixture(file: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../blender-godot-sqlite-proof/fixtures/falcon")
+        .join("../../blender-godot-sqlite-proof/fixtures/pigeon")
         .join(file)
 }
 
@@ -74,8 +74,8 @@ fn retained_kirby_actions_use_the_same_decoder_and_baker() {
         assert_eq!(output.frames.len(), source.frames.len());
         assert_eq!(output.iasa, source.iasa);
     }
-    let falcon = decode_file(&fixture("6_pm36_JumpSquat.html")).unwrap();
-    assert_ne!(serde_json::to_value(&actions[0]).unwrap(), serde_json::to_value(falcon).unwrap());
+    let pigeon = decode_file(&fixture("6_pm36_JumpSquat.html")).unwrap();
+    assert_ne!(serde_json::to_value(&actions[0]).unwrap(), serde_json::to_value(pigeon).unwrap());
 }
 
 #[test]

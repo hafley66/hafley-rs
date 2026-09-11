@@ -1,0 +1,10 @@
+[configuration]
+entry_symbol="gdext_rust_init"
+compatibility_minimum="4.5"
+reloadable=false
+
+[libraries]
+macos.debug="res://../target/debug/libpigeon_web.dylib"
+macos.release="res://../target/debug/libpigeon_web.dylib"
+web.debug="res://bin/pigeon_web.wasm"
+web.release="res://bin/pigeon_web.wasm"

@@ -7,16 +7,16 @@ using Games;
 // hashes, counts and pass results are emitted by `9_steps.mjs` into
 // `10_steps.json`; nothing here restates one.
 const steps: Steps = #{
-  falconFtCommonSourceImport: #{
-    id: "falconFtCommonSourceImport",
+  pigeonFtCommonSourceImport: #{
+    id: "pigeonFtCommonSourceImport",
     task: "P1",
-    scope: "Falcon common transitions extracted from the pinned Melee decomp",
+    scope: "Pigeon common transitions extracted from the pinned Melee decomp",
     sourceKinds: #["melee-decomp-syntax-trees@pinned-revision"],
-    extractor: "smash-import -- falcon (smash/Cargo.toml, feature ingest)",
+    extractor: "smash-import -- pigeon (smash/Cargo.toml, feature ingest)",
     artifacts: #[
-      #{ kind: "source-rules-json", path: "smash/src/fighters/falcon/generated/2_source_rules.json" },
-      #{ kind: "source-chart-d2", path: "smash/src/fighters/falcon/generated/3_source_chart.d2" },
-      #{ kind: "source-chart-svg", path: "smash/src/fighters/falcon/generated/3_source_chart.svg" },
+      #{ kind: "source-rules-json", path: "smash/src/fighters/pigeon/generated/2_source_rules.json" },
+      #{ kind: "source-chart-d2", path: "smash/src/fighters/pigeon/generated/3_source_chart.d2" },
+      #{ kind: "source-chart-svg", path: "smash/src/fighters/pigeon/generated/3_source_chart.svg" },
     ],
     consumer: "smash/src/3_import.rs writes the generated files; classification/8_status.mjs reads the rules JSON in its SOURCE RULES section",
     gates: #[

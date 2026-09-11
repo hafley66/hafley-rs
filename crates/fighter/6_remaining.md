@@ -2,7 +2,7 @@
 
 Read-only audit of the requested primordial locomotion set before the shared
 fighter statechart covers it. Sources: `1_state.rs`, `1a_chart.rs`, `1b_ground.rs`,
-`2_advance.rs`, `4_ground_chart.rs`, generated `5_ground_chart.md`, Falcon
+`2_advance.rs`, `4_ground_chart.rs`, generated `5_ground_chart.md`, Pigeon
 `1c_movement.rs`/`2_simulation.rs`, and read-only Melee decomp under
 `kneeman-lines/4_melee_decomp`. Excludes attacks, hits, defense, grabs, ledges,
 lifecycle, items and stage contacts except the landing entry fact. No transition
@@ -18,7 +18,7 @@ or edge is inferred from an animation name; every edge below cites a callback.
 | Isolated crouch chart edges | 4 | unwired to live | `1a_chart.rs` |
 | Procedural phase moves (`2_advance.rs`) | 5 | to migrate | `2_advance.rs:292-308,319-326` |
 | Duplicate authorities | 6 | see below | |
-| Falcon catalog IDs selected live | 15 of 22 | 7 never selected (`13,15,17,18,19,20,21`) | `1b_catalog.rs`, `1c_movement.rs:51-57` |
+| Pigeon catalog IDs selected live | 15 of 22 | 7 never selected (`13,15,17,18,19,20,21`) | `1b_catalog.rs`, `1c_movement.rs:51-57` |
 
 Host states are `Idle, Walk, Dash, Run, Brake, Turn, Squat, Crouch, Landing, Jump,
 Fall, AirJump`. Collapsed groups: Walk covers `WalkSlow/Middle/Fast`; Turn covers
@@ -36,9 +36,9 @@ covers `JumpAerialF/B`; Fall covers `Fall/F/B/FallAerial/F/B`; Landing covers
    impulses (`start_dash`, `start_walk`, `takeoff`).
 3. Naming collision: host `Phase::Squat` is source `KneeBend` (jumpsquat) while
    source `Squat` is host `Phase::Crouch`.
-4. `Phase::Turn` emits Falcon catalog ID14 `TurnRun`; source `Turn` (ID13) is
+4. `Phase::Turn` emits Pigeon catalog ID14 `TurnRun`; source `Turn` (ID13) is
    unselected.
-5. `Phase::Landing` conflates source `Landing` and the five `LandingAir*`; Falcon
+5. `Phase::Landing` conflates source `Landing` and the five `LandingAir*`; Pigeon
    additionally overrides `landing_lag` from `actions[5].frames.len()` in the app.
 6. Air decisions (`Jump`, `Fall`, `AirJump`, `Landing`) live only in
    `2_advance.rs`; the generated chart proves they reject `JumpRequest` only.
@@ -126,7 +126,7 @@ for a verified 3.6 rule; PM3.6 behavior stays unresolved here.
   `Fall -> AirJump` needs `jumps_left > 0`; `Land` requires airborne and `vy < 0`);
   serialized phase suffix replay.
 - Terminal: no `enter(Phase::Fall | Phase::AirJump | Phase::Landing)` stays in
-  `2_advance.rs`; the existing 360-tick Falcon tape is byte-identical; tests pass.
+  `2_advance.rs`; the existing 360-tick Pigeon tape is byte-identical; tests pass.
 
 ### Cut 2: distinct stopping and turning states
 
@@ -140,17 +140,17 @@ for a verified 3.6 rule; PM3.6 behavior stays unresolved here.
 - Terminal: `just ground-chart` regenerates `5_ground_chart.md`/`.d2`/`.svg` with
   the new phases; the fighter freshness test accepts Markdown and D2.
 
-### Cut 3: wire crouch lifecycle and Falcon poses
+### Cut 3: wire crouch lifecycle and Pigeon poses
 
 - Owned: `crates/fighter/src/1a_chart.rs`, `crates/fighter/src/2_advance.rs`
-  crouch branch, `smash/src/fighters/falcon/1c_movement.rs`,
+  crouch branch, `smash/src/fighters/pigeon/1c_movement.rs`,
   `crates/fighter/tests/1_chart.rs`.
 - Signature: `CrouchChart::step(Facts) -> Action` driven from `Phase::Crouch`;
-  Falcon maps `Action` to catalog IDs 18/19/20 instead of ID3.
+  Pigeon maps `Action` to catalog IDs 18/19/20 instead of ID3.
 - Tests: live tape enters and exits crouch through all three poses; clone and
   JSON suffix replay match.
 - Terminal: `Phase::Crouch` no longer holds the jumpsquat pose; IDs 18/19/20 are
-  selected; the 360-tick Falcon restore tape still passes.
+  selected; the 360-tick Pigeon restore tape still passes.
 
 Cross-target restore stays unqualified: Godot/browser observe phases but no
 snapshot is restored across targets.

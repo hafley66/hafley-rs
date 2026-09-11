@@ -22,8 +22,8 @@ test('native TSP values resolve all existing first-party Cargo packages', async 
     ['redux', 3, 'library', true], ['game-input', 3, 'library', true],
     ['rollback', 3, 'library', true], ['game-capture', 3, 'library', true],
     ['core-labs', 2.7, 'split', true],
-    ['trace-gpu-host', 2.7, 'split', true], ['falcon-lab', 2.7, 'split', true],
-    ['falcon_web', 2.7, 'split', true], ['smash', 2.7, 'app', true],
+    ['trace-gpu-host', 2.7, 'split', true], ['pigeon-lab', 2.7, 'split', true],
+    ['pigeon_web', 2.7, 'split', true], ['smash', 2.7, 'app', true],
     ['game-ui', 1, 'library', false],
   ]);
 });

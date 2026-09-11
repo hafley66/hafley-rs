@@ -23,23 +23,23 @@ or project, along with their tests, fixtures, and provenance. See [AGENTS.md](AG
 - Blender source assets, Godot projects, and MP4 evidence.
 - [Executed results](blender-godot-sqlite-proof/18_results.md).
 - [Fighter-domain library inventory](blender-godot-sqlite-proof/research/10_smash_ecosystem.md).
-- [Native PM Falcon knee fixture](blender-godot-sqlite-proof/falcon-lab/7_readme.md):
+- [Native PM Pigeon knee fixture](blender-godot-sqlite-proof/pigeon-lab/7_readme.md):
   extracted idle/jump/knee poses, Parry contact, target damage, wgpu MP4.
-- [Input and rollback increment](blender-godot-sqlite-proof/falcon-lab/14_rollback_readme.md):
+- [Input and rollback increment](blender-godot-sqlite-proof/pigeon-lab/14_rollback_readme.md):
   two GGRS peers, a delayed attack, state-labeled side-by-side capture.
-- [Sandbag launch increment](blender-godot-sqlite-proof/falcon-lab/20_launch_readme.md):
+- [Sandbag launch increment](blender-godot-sqlite-proof/pigeon-lab/20_launch_readme.md):
   ssbm_utils launch/hitstun, Rapier flight/landing, complete physics rollback.
-- [SQLite presentation increment](blender-godot-sqlite-proof/falcon-lab/26_sql_readme.md):
+- [SQLite presentation increment](blender-godot-sqlite-proof/pigeon-lab/26_sql_readme.md):
   recycled numeric pose rows, atomic rollback correction, pinned SQL reader, wgpu capture.
-- [gdext presentation increment](blender-godot-sqlite-proof/falcon-lab/33_godot_readme.md):
+- [gdext presentation increment](blender-godot-sqlite-proof/pigeon-lab/33_godot_readme.md):
   Godot consumes the same Rust/SQL fixture, with exact row and mesh-upload checks.
-- [Incremental core](blender-godot-sqlite-proof/falcon-lab/43_incremental_readme.md):
+- [Incremental core](blender-godot-sqlite-proof/pigeon-lab/43_incremental_readme.md):
   renderer-free Rust state, one-call advances, full-state replay and save/load checks.
-- [Independent schedules](blender-godot-sqlite-proof/falcon-lab/52_schedule_readme.md):
+- [Independent schedules](blender-godot-sqlite-proof/pigeon-lab/52_schedule_readme.md):
   worker continues through paused consumption and exhausted SQL slots, then publishes corrected history.
-- [Thread and process faults](blender-godot-sqlite-proof/falcon-lab/63_fault_readme.md):
+- [Thread and process faults](blender-godot-sqlite-proof/pigeon-lab/63_fault_readme.md):
   main/render-thread delays, whole-process suspension, external tick audit, and exact recovery.
-- [Rust tracing](blender-godot-sqlite-proof/falcon-lab/65_tracing_readme.md):
+- [Rust tracing](blender-godot-sqlite-proof/pigeon-lab/65_tracing_readme.md):
   structured execution spans, adapter-owned JSON subscribers, and worker context propagation.
 
 The Rust packages retain separate Cargo workspace roots and lockfiles. Parent
