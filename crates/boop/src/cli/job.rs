@@ -2298,8 +2298,14 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             state,
             dry_run,
             mail_dir,
+            merged_into,
         } => match (lane, state) {
-            (Some(lane), _) => run_lane_delete(mail_dir.as_deref(), &lane, route_only),
+            (Some(lane), _) => run_lane_delete(
+                mail_dir.as_deref(),
+                &lane,
+                route_only,
+                merged_into.as_deref(),
+            ),
             (None, Some(_)) => run_lane_bulk_delete(mail_dir.as_deref(), dry_run),
             (None, None) => {
                 anyhow::bail!("name a lane to delete, or pass --state dead for a bulk delete")
@@ -2730,12 +2736,70 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str, touched: boo
     Ok(())
 }
 
+/// The branch a lane delete checks merge against: `--merged-into`, else the
+/// branch whose tip is the lane's base sha, else `main`.
+fn merged_base_branch(repo: &Path, base_sha: Option<&str>, merged_into: Option<&str>) -> String {
+    if let Some(branch) = merged_into {
+        return branch.to_owned();
+    }
+    if let Some(sha) = base_sha {
+        let branches = git_lines(
+            repo,
+            &["branch", "--format=%(refname:short)", "--points-at", sha],
+        );
+        if let Some(main) = branches.iter().find(|branch| branch.as_str() == "main") {
+            return main.clone();
+        }
+        if let Some(first) = branches.first() {
+            return first.clone();
+        }
+    }
+    "main".to_owned()
+}
+
+/// `git branch --merged <base>` lists `branch`.
+fn branch_merged(repo: &Path, branch: &str, base: &str) -> bool {
+    git_lines(
+        repo,
+        &["branch", "--merged", base, "--format=%(refname:short)"],
+    )
+    .iter()
+    .any(|listed| listed == branch)
+}
+
+/// The branch checked out in a worktree, for a delete that only has the path.
+fn worktree_branch(worktree: &Path) -> Option<String> {
+    git_lines(worktree, &["symbolic-ref", "--short", "HEAD"])
+        .into_iter()
+        .next()
+}
+
+/// Remove one worktree and its branch when the branch is merged into the base;
+/// otherwise keep the worktree and say so. Returns one line per outcome.
+fn reclaim_merged_worktree(
+    repo: &Path,
+    worktree: &Path,
+    branch: &str,
+    base_sha: Option<&str>,
+    merged_into: Option<&str>,
+) -> Vec<String> {
+    let base = merged_base_branch(repo, base_sha, merged_into);
+    if !branch_merged(repo, branch, &base) {
+        return vec![format!("kept worktree {} (unmerged)", worktree.display())];
+    }
+    match boop::worktree::reclaim_carcass(repo, branch, worktree) {
+        Ok(removed) => removed.lines(),
+        Err(error) => vec![format!("kept worktree {} ({error})", worktree.display())],
+    }
+}
+
 /// Stop one lane and drop its route. Refuses when tmux is unreachable. `--route-only`
 /// drops the registry row and never touches the pane, so the on-exit epilogue can run inside it.
 pub(crate) fn run_lane_delete(
     mail_dir_arg: Option<&Path>,
     lane: &str,
     route_only: bool,
+    merged_into: Option<&str>,
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
@@ -2743,7 +2807,7 @@ pub(crate) fn run_lane_delete(
         if route_only {
             anyhow::bail!("no registry route for lane `{lane}`")
         }
-        return run_lane_delete_carcass(lane);
+        return run_lane_delete_carcass(lane, merged_into);
     };
     if !route_only {
         if let Some(session) = route.tmux.as_deref() {
@@ -2761,6 +2825,28 @@ pub(crate) fn run_lane_delete(
     })?;
     if let Err(error) = bus::open_store(&dir).and_then(|store| store.drop_lane_commit_state(lane)) {
         warn!(lane, %error, "commit-push state not dropped");
+    }
+    // The route names the worktree; the branch is read from it. `--route-only`
+    // is the pane epilogue and leaves both the worktree and the branch alone.
+    if !route_only {
+        if let Some(worktree) = route.worktree_dir.as_deref().map(PathBuf::from) {
+            if let Some(repo) = boop::worktree::worktree_owner(&worktree) {
+                if let Some(branch) = worktree_branch(&worktree) {
+                    for line in reclaim_merged_worktree(
+                        &repo,
+                        &worktree,
+                        &branch,
+                        route.base_sha.as_deref(),
+                        merged_into,
+                    ) {
+                        println!("{line}");
+                    }
+                }
+            }
+        }
+        if let Some(target) = boop::supervise::reclaim_lane_target(lane) {
+            println!("removed target {}", target.display());
+        }
     }
     info!(lane, route_only, "lane route deleted");
     println!("deleted {lane}");
@@ -2864,14 +2950,43 @@ fn remove_one_worktree(repo: &Path, worktree: &Path) -> Result<()> {
 }
 
 /// A DOA spawn's epilogue drops the route before the driver can delete the
-/// lane, so the worktree and branch are all that is left to remove.
-pub(crate) fn run_lane_delete_carcass(lane: &str) -> Result<()> {
+/// lane, so the worktree, branch and target dir are all that is left to
+/// remove. The worktree stays unless its branch is merged into the base.
+pub(crate) fn run_lane_delete_carcass(lane: &str, merged_into: Option<&str>) -> Result<()> {
     let here = std::env::current_dir().context("read the current directory")?;
     let repo = lane::repo_root(&here)?;
-    let removed = lane::delete_carcass(&repo, lane, |target| {
-        lane::pane_process_alive(target).unwrap_or(false)
-    })?;
-    for line in removed.lines() {
+    let base_sha = boop::trail::read_spawn(lane)
+        .map(|spawn| bus::route_from_value(&spawn.route))
+        .and_then(|route| route.base_sha);
+    let carcass = lane::find_carcass(&repo, lane);
+    let target = boop::supervise::reclaim_lane_target(lane);
+    let Some(carcass) = carcass else {
+        if let Some(target) = target {
+            println!("deleted {lane}: removed target {}", target.display());
+            return Ok(());
+        }
+        anyhow::bail!(
+            "no registry route for lane `{lane}`, and no worktree under {} answers to it",
+            repo.display()
+        );
+    };
+    if lane::pane_process_alive(lane).unwrap_or(false) {
+        anyhow::bail!(
+            "lane `{lane}` has no route but its tmux session is alive; \
+             `boop beep lane patch` re-routes it, delete takes dead lanes only"
+        );
+    }
+    if let Some(target) = target {
+        println!("deleted {lane}: removed target {}", target.display());
+    }
+    let removed = reclaim_merged_worktree(
+        &repo,
+        &carcass.worktree,
+        &carcass.branch,
+        base_sha.as_deref(),
+        merged_into,
+    );
+    for line in &removed {
         println!("deleted {lane}: {line}");
     }
     // The session outlives its panes under remain-on-exit and holds the name.
@@ -2880,7 +2995,7 @@ pub(crate) fn run_lane_delete_carcass(lane: &str) -> Result<()> {
         tmux::mux().kill_session(None, lane)?;
         println!("deleted {lane}: removed tmux session {lane}");
     }
-    if removed.nothing_removed() && !session_removed {
+    if removed.is_empty() && !session_removed {
         println!("deleted {lane}: nothing left to remove");
     }
     info!(lane, "lane carcass deleted");
@@ -4141,7 +4256,7 @@ mod tests {
             },
         )
         .unwrap();
-        run_lane_delete(Some(&dir), "l", true).unwrap();
+        run_lane_delete(Some(&dir), "l", true, None).unwrap();
         let routes = read_routes(&dir).unwrap();
         assert!(
             !routes.contains_key("l"),
@@ -4714,7 +4829,7 @@ mod tests {
             Some("sprefa-coordinator"),
             "an old row is still a usable parent default"
         );
-        run_lane_delete(Some(&dir), "boop-sql", true).unwrap();
+        run_lane_delete(Some(&dir), "boop-sql", true, None).unwrap();
         let after = read_routes(&dir).unwrap();
         assert!(!after.contains_key("boop-sql"));
         assert!(

@@ -285,6 +285,72 @@ pub fn read_residency(dir: &Path, lane: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
+// ---------------------------------------------------------------------------
+// lane target dirs: placement, reclaim and the free-disk floor
+// ---------------------------------------------------------------------------
+
+/// True when `path` is `root` itself or lives under it. Canonicalized when both
+/// resolve, so a symlinked scratch root still matches.
+pub fn path_under(root: &Path, path: &Path) -> bool {
+    let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    path == root || path.starts_with(&root)
+}
+
+/// Delete one lane's cargo target dir. Only a path that resolves under the lane
+/// target root is removed; anything else warns and stays. The dir the lane
+/// actually advertised (`CARGO_TARGET_DIR`) is preferred over the derived one,
+/// so a caller's override is never mistaken for boop's.
+pub fn reclaim_lane_target(lane: &str) -> Option<PathBuf> {
+    let Ok(root) = boop_store::trail::lane_target_root() else {
+        return None;
+    };
+    // The dir the lane actually advertised, when it resolves under the root.
+    // A global CARGO_TARGET_DIR inherited by a `lane delete` caller is not the
+    // lane's dir, so it is refused and the derived path is used instead.
+    if let Some(advertised) = std::env::var_os("CARGO_TARGET_DIR")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+    {
+        if path_under(&root, &advertised) {
+            return remove_target_under(&root, &advertised, lane);
+        }
+        warn!(
+            lane,
+            target = %advertised.display(),
+            root = %root.display(),
+            "refusing to reclaim a target dir outside the lane target root"
+        );
+    }
+    let derived = boop_store::trail::lane_target_dir(lane).ok()?;
+    remove_target_under(&root, &derived, lane)
+}
+
+fn remove_target_under(root: &Path, target: &Path, lane: &str) -> Option<PathBuf> {
+    if !target.exists() {
+        return None;
+    }
+    if !path_under(root, target) {
+        warn!(
+            lane,
+            target = %target.display(),
+            root = %root.display(),
+            "refusing to reclaim a target dir outside the lane target root"
+        );
+        return None;
+    }
+    match std::fs::remove_dir_all(target) {
+        Ok(()) => {
+            info!(lane, target = %target.display(), "lane target reclaimed");
+            Some(target.to_path_buf())
+        }
+        Err(error) => {
+            warn!(lane, target = %target.display(), error = %error, "lane target reclaim failed");
+            None
+        }
+    }
+}
+
 /// What one lane run needs. Cloned into the signal thread, which owns nothing
 /// else and must still address the lane's result row.
 #[derive(Clone)]
@@ -637,6 +703,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
             let text = panic_text(&payload);
             error!(lane = lane.lane, panic = text, "lane supervisor panicked");
             record_result(&lane, PANIC_EXIT, Some(&format!("panic: {text}")));
+            reclaim_lane_target(&lane.lane);
             anyhow::bail!("supervisor panic: {text}");
         }
         Ok(ended) => ended,
@@ -667,6 +734,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
                 "supervisor exited with error",
             );
             record_result(&lane, 1, Some(&format!("supervisor error: {error}")));
+            reclaim_lane_target(&lane.lane);
             return Err(error);
         }
     };
@@ -689,6 +757,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
     if !ended.retired {
         record_result(&lane, ended.exit_code, ended.detail.as_deref());
     }
+    reclaim_lane_target(&lane.lane);
     Ok(ended.exit_code)
 }
 
@@ -722,6 +791,7 @@ fn signal_exit(lane: &LaneRun, signal: i32) -> i32 {
     let name = signal_hook::low_level::signal_name(signal).unwrap_or("unknown");
     warn!(lane = lane.lane, signal, name, "lane supervisor signalled");
     record_result(lane, 128 + signal, Some(&format!("killed by {name}")));
+    reclaim_lane_target(&lane.lane);
     128 + signal
 }
 

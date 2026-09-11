@@ -344,6 +344,14 @@ DISK: boop owns each lane's cargo target dir, so no lane fills the laptop.
     the lane's spawn (lanes root = BOOP_LANE_TARGET_ROOT, else ~/.agent/lanes).
     A caller `--env CARGO_TARGET_DIR=...` wins; `--dry-run` prints `target:`.
     The `boop-start` warmup keeps its own shared cache and is unchanged.
+  RECLAIM: every supervisor exit path (result written, retired, signalled)
+    deletes that lane's target dir; so does `lane delete`. Only a path under the
+    lane target root is ever removed; anything else is refused with a WARN. A
+    revive rebuilds the dir.
+  WORKTREE: `lane delete <lane>` also removes the worktree and branch when
+    `git branch --merged <base>` lists it (`--merged-into <branch>`, else the
+    lane's base branch, else main); an unmerged worktree stays and prints
+    `kept worktree <path> (unmerged)`.
 LAWS:
   1 Every lane spawn goes through `lane create`; a bare tmux spawn leaves no
     edge and no tracking.
