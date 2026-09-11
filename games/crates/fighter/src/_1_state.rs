@@ -109,8 +109,17 @@ impl Phase {
     }
 }
 
+/// Selected action id and its animation frame, kept together so the pair is
+/// cloned, snapshotted and serialized as one crate-owned fact.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActionState {
+    pub id: usize,
+    pub frame: usize,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct State {
+    pub action: ActionState,
     pub phase: Phase,
     pub phase_tick: u32,
     pub position: [f32; 2],
@@ -127,6 +136,7 @@ pub struct State {
 impl Default for State {
     fn default() -> Self {
         State {
+            action: ActionState::default(),
             phase: Phase::Idle,
             phase_tick: 0,
             position: [0.0, 0.0],
