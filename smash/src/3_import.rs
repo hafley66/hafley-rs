@@ -1,14 +1,17 @@
 use game_content::{
-    Guard, Op, SourceRef, SourceRule, TransitionSpec, Trigger, Unresolved,
-    conditional_choice, decode_file, emit_chart, function_evidence, if_guard,
+    Guard, Inventory, Op, RECOGNIZED_OPERATIONS, SourceRef, SourceRule, TransitionSpec, Trigger,
+    Unresolved, common_inventory, conditional_choice, decode_file, emit_chart, function_evidence,
+    if_guard,
 };
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 const MELEE_REPOSITORY: &str = "https://github.com/doldecomp/melee.git";
 const TURN_PATH: &str = "src/melee/ft/kinds/ftCommon/ftCo_Turn.c";
 const JUMP_PATH: &str = "src/melee/ft/kinds/ftCommon/ftCo_Jump.c";
 const AIR_JUMP_PATH: &str = "src/melee/ft/kinds/ftCommon/ftCo_JumpAerial.c";
+const FTCOMMON_PATH: &str = "src/melee/ft/kinds/ftCommon";
 
 #[derive(Serialize)]
 struct SourceImport {
@@ -54,11 +57,21 @@ fn falcon(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
         format!("{}\n", serde_json::to_string_pretty(&source)?),
     )?;
     std::fs::write(output.with_file_name("3_source_chart.d2"), source_chart(&source))?;
+    let (common, _) = common_inventory_record(&melee_root())?;
+    std::fs::write(
+        output.with_file_name("4_common_inventory.json"),
+        format!("{}\n", serde_json::to_string(&common)?),
+    )?;
+    std::fs::write(
+        output.with_file_name("4_common_inventory.d2"),
+        common_inventory_chart(&common),
+    )?;
     Ok(())
 }
 
 fn falcon_check(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let source = source_import()?;
+    let (common, _) = common_inventory_record(&melee_root())?;
     let expected = [
         (output.to_path_buf(), falcon_source()?),
         (output.with_file_name("1_attributes.rs"), attribute_source()?),
@@ -67,6 +80,11 @@ fn falcon_check(output: &Path) -> Result<(), Box<dyn std::error::Error>> {
             format!("{}\n", serde_json::to_string_pretty(&source)?),
         ),
         (output.with_file_name("3_source_chart.d2"), source_chart(&source)),
+        (
+            output.with_file_name("4_common_inventory.json"),
+            format!("{}\n", serde_json::to_string(&common)?),
+        ),
+        (output.with_file_name("4_common_inventory.d2"), common_inventory_chart(&common)),
     ];
     for (path, expected) in expected {
         if std::fs::read_to_string(&path)? != expected {
@@ -212,6 +230,175 @@ fn source_import() -> Result<SourceImport, Box<dyn std::error::Error>> {
     })
 }
 
+#[derive(Serialize)]
+struct OperationRecord {
+    symbol: &'static str,
+    operation: &'static str,
+    owner: &'static str,
+}
+
+#[derive(Serialize)]
+struct InventoryCounts {
+    files: usize,
+    functions: usize,
+    calls: usize,
+    recognized: usize,
+    unsupported: usize,
+}
+
+#[derive(Serialize)]
+struct CommonInventory {
+    repository: &'static str,
+    revision: String,
+    scope: &'static str,
+    operations: Vec<OperationRecord>,
+    files: Vec<String>,
+    parse_errors: Vec<usize>,
+    symbols: Vec<String>,
+    functions: Vec<(usize, usize, String)>,
+    calls: Vec<(usize, usize, usize, usize, Option<usize>)>,
+    counts: InventoryCounts,
+}
+
+fn ftcommon_sources(root: &Path) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+    let mut names: Vec<String> = std::fs::read_dir(root.join(FTCOMMON_PATH))?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<Result<Vec<std::path::PathBuf>, std::io::Error>>()?
+        .into_iter()
+        .filter(|path| path.extension().is_some_and(|extension| extension == "c"))
+        .filter_map(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()))
+        .collect();
+    names.sort();
+    let sources = names
+        .into_iter()
+        .map(|name| {
+            let relative = format!("{FTCOMMON_PATH}/{name}");
+            std::fs::read_to_string(root.join(&relative)).map(|source| (relative, source))
+        })
+        .collect::<Result<Vec<(String, String)>, std::io::Error>>()?;
+    Ok(sources)
+}
+
+fn common_inventory_record(
+    root: &Path,
+) -> Result<(CommonInventory, Inventory), Box<dyn std::error::Error>> {
+    let revision = revision(root)?;
+    let inventory = common_inventory(&ftcommon_sources(root)?)?;
+    let mut symbols: Vec<String> = inventory.calls.iter().map(|call| call.symbol.clone()).collect();
+    symbols.sort();
+    symbols.dedup();
+    let symbol_index: BTreeMap<String, usize> = symbols
+        .iter()
+        .enumerate()
+        .map(|(index, symbol)| (symbol.clone(), index))
+        .collect();
+    let calls = inventory
+        .calls
+        .iter()
+        .map(|call| {
+            (
+                call.file,
+                call.line,
+                call.function,
+                symbol_index[call.symbol.as_str()],
+                call.operation,
+            )
+        })
+        .collect();
+    let functions = inventory
+        .functions
+        .iter()
+        .map(|function| (function.file, function.line, function.name.clone()))
+        .collect();
+    let record = CommonInventory {
+        repository: MELEE_REPOSITORY,
+        revision,
+        scope: FTCOMMON_PATH,
+        operations: RECOGNIZED_OPERATIONS
+            .iter()
+            .map(|(symbol, operation, owner)| OperationRecord { symbol, operation, owner })
+            .collect(),
+        files: inventory.files.clone(),
+        parse_errors: inventory.parse_errors.clone(),
+        symbols,
+        functions,
+        calls,
+        counts: InventoryCounts {
+            files: inventory.files.len(),
+            functions: inventory.function_count(),
+            calls: inventory.call_count(),
+            recognized: inventory.recognized_count(),
+            unsupported: inventory.unsupported_count(),
+        },
+    };
+    Ok((record, inventory))
+}
+
+fn operation_family(symbol: &str) -> &str {
+    symbol.split_once('_').map_or(symbol, |(head, _)| head)
+}
+
+fn common_inventory_chart(record: &CommonInventory) -> String {
+    let mut output = String::from(
+        "# Generated by smash-import from pinned source syntax trees.\n\ndirection: right\n",
+    );
+    output.push_str(&format!(
+        "scope: \"{} ({} files, {} functions, {} direct calls)\"\n",
+        record.scope, record.counts.files, record.counts.functions, record.counts.calls,
+    ));
+    output.push_str(&format!(
+        "recognized: \"recognized {}\"\nunsupported: \"unsupported {}\"\n",
+        record.counts.recognized, record.counts.unsupported,
+    ));
+    output.push_str("scope -> recognized\nscope -> unsupported\n");
+
+    let mut recognized: BTreeMap<usize, usize> = BTreeMap::new();
+    for call in &record.calls {
+        if let Some(operation) = call.4 {
+            *recognized.entry(operation).or_default() += 1;
+        }
+    }
+    for (operation, count) in &recognized {
+        let entry = &record.operations[*operation];
+        output.push_str(&format!(
+            "r_{operation}: \"{}: {} ({count})\"\nrecognized -> r_{operation}\n",
+            entry.operation, entry.symbol,
+        ));
+    }
+
+    let mut families: BTreeMap<&str, (usize, std::collections::BTreeSet<&str>)> = BTreeMap::new();
+    for call in &record.calls {
+        if call.4.is_none() {
+            let symbol = record.symbols[call.3].as_str();
+            let family = families.entry(operation_family(symbol)).or_default();
+            family.0 += 1;
+            family.1.insert(symbol);
+        }
+    }
+    let mut ranked: Vec<(&str, usize, usize)> = families
+        .iter()
+        .map(|(family, (calls, symbols))| (*family, *calls, symbols.len()))
+        .collect();
+    ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+    let shown = ranked.iter().take(20);
+    let mut tail = (0usize, 0usize);
+    for (_, calls, symbols) in ranked.iter().skip(20) {
+        tail = (tail.0 + calls, tail.1 + symbols);
+    }
+    for (family, calls, symbols) in shown {
+        output.push_str(&format!(
+            "u_{family}: \"{family} ({symbols} symbols, {calls} calls)\"\nunsupported -> u_{family}\n",
+        ));
+    }
+    if tail.0 > 0 {
+        output.push_str(&format!(
+            "u_other: \"other ({} symbols, {} calls)\"\nunsupported -> u_other\n",
+            tail.1, tail.0,
+        ));
+    }
+    output
+}
+
 fn op(op: Op) -> &'static str {
     match op {
         Op::Less => "<",
@@ -303,6 +490,39 @@ mod tests {
             super::source_chart(&import),
             include_str!("fighters/falcon/generated/3_source_chart.d2"),
         );
+    }
+
+    #[test]
+    fn generated_common_inventory_is_current() {
+        let (common, _) = super::common_inventory_record(&super::melee_root()).unwrap();
+        assert_eq!(
+            format!("{}\n", serde_json::to_string(&common).unwrap()),
+            include_str!("fighters/falcon/generated/4_common_inventory.json"),
+        );
+        assert_eq!(
+            super::common_inventory_chart(&common),
+            include_str!("fighters/falcon/generated/4_common_inventory.d2"),
+        );
+    }
+
+    #[test]
+    fn common_inventory_covers_scope_with_sourced_calls() {
+        let (common, inventory) = super::common_inventory_record(&super::melee_root()).unwrap();
+        assert_eq!(common.counts.files, 142);
+        assert_eq!(common.counts.functions, 1697);
+        assert_eq!(common.counts.calls, 6614);
+        assert_eq!(common.counts.recognized, 372);
+        assert_eq!(common.counts.unsupported, 6242);
+        assert_eq!(common.parse_errors.len(), 3);
+        for call in &inventory.calls {
+            assert!(call.file < inventory.files.len());
+            assert!(call.function < inventory.functions.len());
+            assert!(call.line >= 1);
+            assert!(!call.symbol.is_empty());
+            if let Some(operation) = call.operation {
+                assert_eq!(game_content::RECOGNIZED_OPERATIONS[operation].0, call.symbol);
+            }
+        }
     }
 
     #[test]

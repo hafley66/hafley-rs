@@ -31,6 +31,7 @@ pub use attributes::attributes;
 mod source;
 #[cfg(feature = "ingest")]
 pub use source::{
-    FunctionEvidence, Guard, Op, SourceError, SourceRef, SourceRule, Unresolved,
-    conditional_choice, function_evidence, if_guard,
+    CallSite, FunctionEvidence, FunctionSite, Guard, Inventory, Op, RECOGNIZED_OPERATIONS,
+    SourceError, SourceRef, SourceRule, Unresolved, common_inventory, conditional_choice,
+    function_evidence, if_guard,
 };
