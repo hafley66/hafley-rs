@@ -291,25 +291,25 @@ pub fn function_evidence(source: &str, name: &str) -> Result<FunctionEvidence, S
     })
 }
 
-/// One value on the generated port's typed boundary.
+/// One value on the generated port's typed boundary. Variants carry neutral
+/// tokens (not source spellings); the source expression is recovered for
+/// provenance by [`source_expr`].
 #[derive(Clone, Debug, PartialEq)]
 pub enum PortValue {
-    /// A query field read from the fighter, e.g. `fp->input.lstick[0].x`.
-    Query(String),
-    /// A raw `p_ftCommonData` field. The numeric value is not retained, so the
+    /// A fighter input field, e.g. `fp->input.lstick[0].x`.
+    Input(&'static str),
+    /// An unresolved tuning limit. The numeric value is not retained, so the
     /// generated Rust exposes it as a typed input field rather than a constant.
-    Common(String),
-    /// A `fp->co_attrs` field, exposed as a typed attribute input.
-    Attr(String),
-    /// A decomp motion id (`ftCo_MS_*`), lowered to a typed action.
-    Action(String),
+    Tuning(&'static str),
+    /// A character attribute, exposed as a typed attribute input.
+    Attr(&'static str),
+    /// A decomp motion id (`ftCo_MS_*`), lowered to a neutral motion.
+    Motion(&'static str),
     /// A local variable bound earlier in the translated body.
-    Local(String),
+    Local(&'static str),
     Bool(bool),
     Unsigned(u32),
     Float(f32),
-    /// A `Ft_MF_*` motion flag, lowered to a typed flag constant.
-    Flags(String),
 }
 
 /// A pure expression inside the translated subset. Anything outside the subset
@@ -341,31 +341,32 @@ pub struct PortSpan {
     pub end_column: usize,
 }
 
-/// One side effect in source order. Variants name the decomp symbol where the
-/// semantics are not modeled beyond the typed arguments.
+/// One side effect in source order. Variants are neutral mechanics facts; the
+/// source call behind each fact is retained in [`PortFn::calls`] and the
+/// generated provenance.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PortEffect {
-    /// A call with no modeled arguments, e.g. `ftCommon_8007D5D4(fp)`.
-    OpaqueCall(String),
+    /// The per-callback common prelude with no modeled arguments.
+    BeginJump,
     /// `Fighter_ChangeMotionState(gobj, msid, flags, anim_start, anim_speed, anim_blend, NULL)`.
-    ChangeMotionState {
+    EnterMotion {
         motion: PortExpr,
-        flags: String,
+        flags: &'static str,
         anim_start: f32,
         anim_speed: f32,
         anim_blend: f32,
     },
-    /// `ftCo_800CB110(gobj, arg1, jump_mul)`.
-    FtCo800CB110 { arg1: PortExpr, jump_mul: f32 },
-    /// `fp->cmd_vars[<index>] = <value>`.
-    WriteCmdVar { index: u32, value: PortExpr },
-    /// `fp-><field> = <value>`.
-    WriteField { field: String, value: PortExpr },
-    /// `ftCo_800CBAC4(gobj, msid, &vel, arg3)`.
-    FtCo800CBAC4 {
+    /// `ftCo_800CB110(gobj, enabled, scale)`.
+    SetJumpParams { enabled: PortExpr, scale: f32 },
+    /// `fp->cmd_vars[<slot>] = <value>`.
+    SetCommandValue { slot: u32, value: PortExpr },
+    /// `fp-><field> = <value>` for a retained boolean flag.
+    SetFlag { value: PortExpr },
+    /// `ftCo_800CBAC4(gobj, msid, &vel, flag)`.
+    LaunchJump {
         motion: PortExpr,
-        velocity: String,
-        arg3: PortExpr,
+        velocity: &'static str,
+        flag: PortExpr,
     },
 }
 
@@ -426,6 +427,115 @@ fn valid_ident(name: &str) -> bool {
         && characters.all(|rest| rest.is_ascii_alphanumeric() || rest == '_')
 }
 
+/// Neutral token for a fighter input field.
+fn input_field(text: &str) -> Option<&'static str> {
+    Some(match text {
+        "fp->input.lstick[0].x" => "StickX",
+        "fp->facing_dir" => "Facing",
+        _ => return None,
+    })
+}
+
+/// Neutral token for an unresolved tuning limit.
+fn tuning_field(text: &str) -> Option<&'static str> {
+    Some(match text {
+        "x34" => "TurnThreshold",
+        "x78" => "JumpBackThreshold",
+        _ => return None,
+    })
+}
+
+/// Neutral token for a character attribute.
+fn attr_field(text: &str) -> Option<&'static str> {
+    Some(match text {
+        "air_jump_h_multiplier" => "AirJumpHScale",
+        "jump_v_initial_velocity" => "JumpInitialSpeed",
+        "air_jump_v_multiplier" => "AirJumpVScale",
+        _ => return None,
+    })
+}
+
+/// Neutral token for a decomp motion id.
+fn motion_name(text: &str) -> Option<&'static str> {
+    Some(match text {
+        "JumpF" => "JumpForward",
+        "JumpB" => "JumpBackward",
+        "JumpAerialF" => "AirJumpForward",
+        "JumpAerialB" => "AirJumpBackward",
+        _ => return None,
+    })
+}
+
+/// Neutral token for a decomp local variable.
+fn local_slot(text: &str) -> Option<&'static str> {
+    Some(match text {
+        "msid" => "Motion",
+        "vel" => "Velocity",
+        _ => return None,
+    })
+}
+
+/// Neutral token for a `Ft_MF_*` motion flag.
+fn motion_flag(text: &str) -> Option<&'static str> {
+    Some(match text {
+        "None" => "None",
+        _ => return None,
+    })
+}
+
+/// Neutral rule id for a lowered callback.
+fn rule_id(symbol: &str) -> Option<&'static str> {
+    Some(match symbol {
+        "ftCo_800C97A8" => "TurnRequest",
+        "ftCo_Jump_Enter" => "Takeoff",
+        "ftCo_JumpAerial_Enter_Basic" => "AirJump",
+        _ => return None,
+    })
+}
+
+fn input_source(token: &str) -> &str {
+    match token {
+        "StickX" => "fp->input.lstick[0].x",
+        "Facing" => "fp->facing_dir",
+        other => other,
+    }
+}
+
+fn tuning_source(token: &str) -> &str {
+    match token {
+        "TurnThreshold" => "p_ftCommonData->x34",
+        "JumpBackThreshold" => "p_ftCommonData->x78",
+        other => other,
+    }
+}
+
+fn attr_source(token: &str) -> &str {
+    match token {
+        "AirJumpHScale" => "fp->co_attrs.air_jump_h_multiplier",
+        "JumpInitialSpeed" => "fp->co_attrs.jump_v_initial_velocity",
+        "AirJumpVScale" => "fp->co_attrs.air_jump_v_multiplier",
+        other => other,
+    }
+}
+
+fn motion_source(token: &str) -> &str {
+    match token {
+        "JumpForward" => "ftCo_MS_JumpF",
+        "JumpBackward" => "ftCo_MS_JumpB",
+        "AirJumpForward" => "ftCo_MS_JumpAerialF",
+        "AirJumpBackward" => "ftCo_MS_JumpAerialB",
+        other => other,
+    }
+}
+
+fn local_source(token: &str) -> &str {
+    match token {
+        "Motion" => "msid",
+        "Velocity" => "vel",
+        other => other,
+    }
+}
+
 fn skip_parens<'a>(node: Node<'a>, _source: &str) -> Node<'a> {
     let mut node = node;
     while node.kind() == "parenthesized_expression" {
@@ -460,37 +570,35 @@ fn unary_operator(node: Node<'_>, source: &str) -> Option<String> {
 
 fn port_value(canonical_text: &str) -> Option<PortValue> {
     match canonical_text {
-        "fp->input.lstick[0].x" => return Some(PortValue::Query("lstick_x".into())),
-        "fp->facing_dir" => return Some(PortValue::Query("facing_dir".into())),
         "true" => return Some(PortValue::Bool(true)),
         "false" => return Some(PortValue::Bool(false)),
-        "msid" | "vel" => return Some(PortValue::Local(canonical_text.into())),
         _ => {}
     }
     if let Some(field) = canonical_text.strip_prefix("fp->co_attrs.") {
-        if valid_ident(field) {
-            return Some(PortValue::Attr(field.into()));
+        if let Some(slot) = attr_field(field) {
+            return Some(PortValue::Attr(slot));
         }
     }
     if let Some(field) = canonical_text.strip_prefix("co_attrs->") {
-        if valid_ident(field) {
-            return Some(PortValue::Attr(field.into()));
+        if let Some(slot) = attr_field(field) {
+            return Some(PortValue::Attr(slot));
         }
     }
     if let Some(field) = canonical_text.strip_prefix("p_ftCommonData->") {
-        if valid_ident(field) {
-            return Some(PortValue::Common(field.into()));
-        }
-    }
-    if let Some(flag) = canonical_text.strip_prefix("Ft_MF_") {
-        if valid_ident(flag) {
-            return Some(PortValue::Flags(flag.into()));
+        if let Some(slot) = tuning_field(field) {
+            return Some(PortValue::Tuning(slot));
         }
     }
     if let Some(action) = canonical_text.strip_prefix("ftCo_MS_") {
-        if valid_ident(action) {
-            return Some(PortValue::Action(action.into()));
+        if let Some(slot) = motion_name(action) {
+            return Some(PortValue::Motion(slot));
         }
+    }
+    if let Some(slot) = input_field(canonical_text) {
+        return Some(PortValue::Input(slot));
+    }
+    if let Some(slot) = local_slot(canonical_text) {
+        return Some(PortValue::Local(slot));
     }
     if canonical_text.bytes().all(|byte| byte.is_ascii_digit()) {
         return canonical_text.parse().ok().map(PortValue::Unsigned);
@@ -681,13 +789,13 @@ fn lower_call(node: Node<'_>, source: &str) -> Result<Option<PortEffect>, Source
     }
     let arguments = call_arguments(node)?;
     let effect = match callee.as_str() {
-        "ftCommon_8007D5D4" => PortEffect::OpaqueCall("ftCommon_8007D5D4".into()),
+        "ftCommon_8007D5D4" => PortEffect::BeginJump,
         "Fighter_ChangeMotionState" => {
             let flags = canonical(*arguments.get(2).ok_or(SourceError::Parse)?, source)
                 .strip_prefix("Ft_MF_")
-                .map(str::to_owned)
+                .and_then(motion_flag)
                 .ok_or_else(|| SourceError::UnsupportedExpression(callee.clone()))?;
-            PortEffect::ChangeMotionState {
+            PortEffect::EnterMotion {
                 motion: lower_expr(*arguments.get(1).ok_or(SourceError::Parse)?, source)?,
                 flags,
                 anim_start: float_literal(*arguments.get(3).ok_or(SourceError::Parse)?, source)?,
@@ -695,15 +803,19 @@ fn lower_call(node: Node<'_>, source: &str) -> Result<Option<PortEffect>, Source
                 anim_blend: float_literal(*arguments.get(5).ok_or(SourceError::Parse)?, source)?,
             }
         }
-        "ftCo_800CB110" => PortEffect::FtCo800CB110 {
-            arg1: lower_expr(*arguments.get(1).ok_or(SourceError::Parse)?, source)?,
-            jump_mul: float_literal(*arguments.get(2).ok_or(SourceError::Parse)?, source)?,
+        "ftCo_800CB110" => PortEffect::SetJumpParams {
+            enabled: lower_expr(*arguments.get(1).ok_or(SourceError::Parse)?, source)?,
+            scale: float_literal(*arguments.get(2).ok_or(SourceError::Parse)?, source)?,
         },
-        "ftCo_800CBAC4" => PortEffect::FtCo800CBAC4 {
-            motion: lower_expr(*arguments.get(1).ok_or(SourceError::Parse)?, source)?,
-            velocity: flow_local_name(*arguments.get(2).ok_or(SourceError::Parse)?, source),
-            arg3: lower_expr(*arguments.get(3).ok_or(SourceError::Parse)?, source)?,
-        },
+        "ftCo_800CBAC4" => {
+            let velocity = flow_local_name(*arguments.get(2).ok_or(SourceError::Parse)?, source);
+            PortEffect::LaunchJump {
+                motion: lower_expr(*arguments.get(1).ok_or(SourceError::Parse)?, source)?,
+                velocity: local_slot(&velocity)
+                    .ok_or_else(|| SourceError::UnsupportedExpression(velocity.clone()))?,
+                flag: lower_expr(*arguments.get(3).ok_or(SourceError::Parse)?, source)?,
+            }
+        }
         other => return Err(SourceError::UnsupportedExpression(other.into())),
     };
     Ok(Some(effect))
@@ -737,8 +849,10 @@ fn vector_component(
     if argument == "fp" || !valid_ident(&argument) {
         return Ok(None);
     }
+    let slot = local_slot(&argument)
+        .ok_or_else(|| SourceError::UnsupportedExpression(argument.clone()))?;
     let right = expression.child_by_field_name("right").ok_or(SourceError::Parse)?;
-    Ok(Some((argument, axis, lower_expr(right, source)?)))
+    Ok(Some((slot.into(), axis, lower_expr(right, source)?)))
 }
 
 fn flush_vector(
@@ -802,26 +916,22 @@ fn lower_statement(
             let right = expression.child_by_field_name("right").ok_or(SourceError::Parse)?;
             if left.kind() == "identifier" {
                 let target = text(left, source);
-                match target {
+                if target == "co_attrs" {
                     // `co_attrs = &fp->co_attrs` becomes the typed `attrs` input.
-                    "co_attrs" => return Ok(()),
-                    "msid" => {
-                        statements.push(PortStatement::Bind {
-                            name: target.into(),
-                            expr: lower_expr(right, source)?,
-                        });
-                        return Ok(());
-                    }
-                    _ => {}
+                    return Ok(());
+                }
+                if let Some(slot) = local_slot(target) {
+                    statements.push(PortStatement::Bind {
+                        name: slot.into(),
+                        expr: lower_expr(right, source)?,
+                    });
+                    return Ok(());
                 }
             }
             let value = lower_expr(right, source)?;
             if let Some((argument, field)) = field_parts(left, source) {
                 if argument == "fp" && field == "x2227_b0" {
-                    statements.push(PortStatement::Effect(PortEffect::WriteField {
-                        field,
-                        value,
-                    }));
+                    statements.push(PortStatement::Effect(PortEffect::SetFlag { value }));
                     return Ok(());
                 }
             }
@@ -839,8 +949,8 @@ fn lower_statement(
                         })
                     })?;
                 if argument == "fp->cmd_vars" {
-                    statements.push(PortStatement::Effect(PortEffect::WriteCmdVar {
-                        index,
+                    statements.push(PortStatement::Effect(PortEffect::SetCommandValue {
+                        slot: index,
                         value,
                     }));
                     return Ok(());
@@ -894,22 +1004,17 @@ fn op_text(op: Op) -> &'static str {
 }
 
 /// Render a lowered expression back to the C spelling it came from so the
-/// generated Rust keeps the decomp identifiers searchable.
+/// generated provenance keeps the decomp identifiers searchable.
 fn source_expr(expr: &PortExpr) -> String {
     match expr {
-        PortExpr::Value(PortValue::Query(field)) => match field.as_str() {
-            "lstick_x" => "fp->input.lstick[0].x".into(),
-            "facing_dir" => "fp->facing_dir".into(),
-            other => format!("query.{other}"),
-        },
-        PortExpr::Value(PortValue::Common(field)) => format!("p_ftCommonData->{field}"),
-        PortExpr::Value(PortValue::Attr(field)) => format!("fp->co_attrs.{field}"),
-        PortExpr::Value(PortValue::Action(name)) => format!("ftCo_MS_{name}"),
-        PortExpr::Value(PortValue::Local(name)) => name.clone(),
+        PortExpr::Value(PortValue::Input(token)) => input_source(token).into(),
+        PortExpr::Value(PortValue::Tuning(token)) => tuning_source(token).into(),
+        PortExpr::Value(PortValue::Attr(token)) => attr_source(token).into(),
+        PortExpr::Value(PortValue::Motion(token)) => motion_source(token).into(),
+        PortExpr::Value(PortValue::Local(token)) => local_source(token).into(),
         PortExpr::Value(PortValue::Bool(value)) => value.to_string(),
         PortExpr::Value(PortValue::Unsigned(value)) => value.to_string(),
         PortExpr::Value(PortValue::Float(value)) => format!("{value:?}F"),
-        PortExpr::Value(PortValue::Flags(name)) => format!("Ft_MF_{name}"),
         PortExpr::Neg(inner) => format!("-{}", source_expr(inner)),
         PortExpr::Mul(lhs, rhs) => format!("{}*{}", source_expr(lhs), source_expr(rhs)),
         PortExpr::Compare(lhs, op, rhs) => {
@@ -932,254 +1037,198 @@ fn source_expr(expr: &PortExpr) -> String {
     }
 }
 
-fn emit_expr(expr: &PortExpr) -> String {
+/// Render a lowered expression as generated neutral Rust data. The result is a
+/// reference expression of type `&'static Expr`.
+fn emit_data_expr(expr: &PortExpr) -> String {
     match expr {
-        PortExpr::Value(PortValue::Query(field)) => format!("query.{field}"),
-        PortExpr::Value(PortValue::Common(field)) => format!("common.{field}"),
-        PortExpr::Value(PortValue::Attr(field)) => format!("attrs.{field}"),
-        PortExpr::Value(PortValue::Action(name)) => format!("FtMotionId::{name}"),
-        PortExpr::Value(PortValue::Local(name)) => name.clone(),
-        PortExpr::Value(PortValue::Bool(value)) => value.to_string(),
-        PortExpr::Value(PortValue::Unsigned(value)) => value.to_string(),
-        PortExpr::Value(PortValue::Float(value)) => format!("{value:?}"),
-        PortExpr::Value(PortValue::Flags(name)) => format!("MotionFlags::{name}"),
-        PortExpr::Neg(inner) => match **inner {
-            PortExpr::Value(_) => format!("-{}", emit_expr(inner)),
-            _ => format!("-({})", emit_expr(inner)),
-        },
-        PortExpr::Mul(lhs, rhs) => format!("({} * {})", emit_expr(lhs), emit_expr(rhs)),
-        PortExpr::Compare(lhs, op, rhs) => {
-            format!("({} {} {})", emit_expr(lhs), op_text(*op), emit_expr(rhs))
+        PortExpr::Value(PortValue::Input(field)) => format!("&Expr::Input(InputField::{field})"),
+        PortExpr::Value(PortValue::Tuning(field)) => {
+            format!("&Expr::Tuning(TuningField::{field})")
         }
-        PortExpr::Conditional { condition, yes, no } => format!(
-            "if {} {{ {} }} else {{ {} }}",
-            emit_condition(condition),
-            emit_expr(yes),
-            emit_expr(no),
+        PortExpr::Value(PortValue::Attr(field)) => format!("&Expr::Attr(AttrField::{field})"),
+        PortExpr::Value(PortValue::Motion(name)) => format!("&Expr::Motion(Motion::{name})"),
+        PortExpr::Value(PortValue::Local(slot)) => format!("&Expr::Local(LocalSlot::{slot})"),
+        PortExpr::Value(PortValue::Bool(value)) => format!("&Expr::Flag({value})"),
+        PortExpr::Value(PortValue::Unsigned(value)) => format!("&Expr::Count({value})"),
+        PortExpr::Value(PortValue::Float(value)) => format!("&Expr::Number({value:?})"),
+        PortExpr::Neg(inner) => format!("&Expr::Neg({})", emit_data_expr(inner)),
+        PortExpr::Mul(lhs, rhs) => {
+            format!("&Expr::Mul({}, {})", emit_data_expr(lhs), emit_data_expr(rhs))
+        }
+        PortExpr::Compare(lhs, op, rhs) => format!(
+            "&Expr::Compare({}, CompareOp::{}, {})",
+            emit_data_expr(lhs),
+            op_variant(*op),
+            emit_data_expr(rhs),
         ),
-        PortExpr::Vector { x, y, z } => {
-            format!("Vec3 {{ x: {}, y: {}, z: {} }}", emit_expr(x), emit_expr(y), emit_expr(z))
-        }
+        PortExpr::Conditional { condition, yes, no } => format!(
+            "&Expr::Select {{ condition: {}, yes: {}, no: {} }}",
+            emit_data_expr(condition),
+            emit_data_expr(yes),
+            emit_data_expr(no),
+        ),
+        PortExpr::Vector { x, y, z } => format!(
+            "&Expr::Vector {{ x: {}, y: {}, z: {} }}",
+            emit_data_expr(x),
+            emit_data_expr(y),
+            emit_data_expr(z),
+        ),
     }
 }
 
-fn emit_condition(expr: &PortExpr) -> String {
-    match expr {
-        PortExpr::Compare(lhs, op, rhs) => {
-            format!("{} {} {}", emit_expr(lhs), op_text(*op), emit_expr(rhs))
-        }
-        _ => emit_expr(expr),
+fn op_variant(op: Op) -> &'static str {
+    match op {
+        Op::Less => "Less",
+        Op::LessEqual => "LessEqual",
+        Op::Greater => "Greater",
+        Op::GreaterEqual => "GreaterEqual",
+        Op::Equal => "Equal",
+        Op::NotEqual => "NotEqual",
     }
 }
 
-fn emit_effect(effect: &PortEffect) -> Result<String, SourceError> {
-    Ok(match effect {
-        PortEffect::OpaqueCall(symbol) => format!("FtCommonEffect::{symbol}"),
-        PortEffect::ChangeMotionState {
+fn emit_data_effect(effect: &PortEffect) -> String {
+    match effect {
+        PortEffect::BeginJump => "Effect::BeginJump".into(),
+        PortEffect::EnterMotion {
             motion,
             flags,
             anim_start,
             anim_speed,
             anim_blend,
         } => format!(
-            "FtCommonEffect::Fighter_ChangeMotionState {{\n            \
-             motion: {},\n            flags: MotionFlags::{flags},\n            \
-             anim_start: {anim_start:?},\n            anim_speed: {anim_speed:?},\n            \
-             anim_blend: {anim_blend:?},\n        }}",
-            emit_expr(motion),
+            "Effect::EnterMotion {{ motion: {}, flags: MotionFlags::{flags}, \
+             anim_start: {anim_start:?}, anim_speed: {anim_speed:?}, anim_blend: {anim_blend:?} }}",
+            emit_data_expr(motion),
         ),
-        PortEffect::FtCo800CB110 { arg1, jump_mul } => format!(
-            "FtCommonEffect::FtCo_800CB110 {{ arg1: {}, jump_mul: {jump_mul:?} }}",
-            emit_expr(arg1),
+        PortEffect::SetJumpParams { enabled, scale } => format!(
+            "Effect::SetJumpParams {{ enabled: {}, scale: {scale:?} }}",
+            emit_data_expr(enabled),
         ),
-        PortEffect::WriteCmdVar { index, value } => {
-            if *index != 0 {
-                return Err(SourceError::UnsupportedExpression(format!(
-                    "fp->cmd_vars[{index}]",
-                )));
-            }
-            format!(
-                "FtCommonEffect::WriteCmdVars0 {{ value: {} }}",
-                emit_expr(value),
-            )
+        PortEffect::SetCommandValue { slot, value } => format!(
+            "Effect::SetCommandValue {{ slot: {slot}, value: {} }}",
+            emit_data_expr(value),
+        ),
+        PortEffect::SetFlag { value } => {
+            format!("Effect::SetFlag {{ value: {} }}", emit_data_expr(value))
         }
-        PortEffect::WriteField { field, value } => {
-            if field != "x2227_b0" {
-                return Err(SourceError::UnsupportedExpression(format!("fp->{field}")));
-            }
-            format!("FtCommonEffect::WriteX2227B0 {{ value: {} }}", emit_expr(value))
-        }
-        PortEffect::FtCo800CBAC4 {
+        PortEffect::LaunchJump {
             motion,
             velocity,
-            arg3,
+            flag,
         } => format!(
-            "FtCommonEffect::FtCo_800CBAC4 {{ motion: {}, velocity: {velocity}, arg3: {} }}",
-            emit_expr(motion),
-            emit_expr(arg3),
+            "Effect::LaunchJump {{ motion: {}, velocity: LocalSlot::{velocity}, flag: {} }}",
+            emit_data_expr(motion),
+            emit_data_expr(flag),
         ),
-    })
-}
-
-#[derive(Default)]
-struct PortInputs {
-    query: bool,
-    common: bool,
-    attrs: bool,
-}
-
-impl PortInputs {
-    fn params(&self) -> String {
-        let mut params = Vec::new();
-        if self.query {
-            params.push("query: &FighterQuery");
-        }
-        if self.common {
-            params.push("common: &CommonData");
-        }
-        if self.attrs {
-            params.push("attrs: &CoAttrs");
-        }
-        params.join(", ")
     }
 }
 
-fn scan_expr(expr: &PortExpr, inputs: &mut PortInputs) {
-    match expr {
-        PortExpr::Value(PortValue::Query(_)) => inputs.query = true,
-        PortExpr::Value(PortValue::Common(_)) => inputs.common = true,
-        PortExpr::Value(PortValue::Attr(_)) => inputs.attrs = true,
-        PortExpr::Value(_) => {}
-        PortExpr::Neg(inner) => scan_expr(inner, inputs),
-        PortExpr::Mul(lhs, rhs) => {
-            scan_expr(lhs, inputs);
-            scan_expr(rhs, inputs);
-        }
-        PortExpr::Compare(lhs, _, rhs) => {
-            scan_expr(lhs, inputs);
-            scan_expr(rhs, inputs);
-        }
-        PortExpr::Conditional { condition, yes, no } => {
-            scan_expr(condition, inputs);
-            scan_expr(yes, inputs);
-            scan_expr(no, inputs);
-        }
-        PortExpr::Vector { x, y, z } => {
-            scan_expr(x, inputs);
-            scan_expr(y, inputs);
-            scan_expr(z, inputs);
-        }
-    }
+/// Escape source expression text for a Rust string literal, so provenance
+/// strings survive round trips through the generated module.
+fn escape_source(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
-fn scan_effect(effect: &PortEffect, inputs: &mut PortInputs) {
-    match effect {
-        PortEffect::OpaqueCall(_) => {}
-        PortEffect::ChangeMotionState { motion, .. } => scan_expr(motion, inputs),
-        PortEffect::FtCo800CB110 { arg1, .. } => scan_expr(arg1, inputs),
-        PortEffect::WriteCmdVar { value, .. } => scan_expr(value, inputs),
-        PortEffect::WriteField { value, .. } => scan_expr(value, inputs),
-        PortEffect::FtCo800CBAC4 { motion, arg3, .. } => {
-            scan_expr(motion, inputs);
-            scan_expr(arg3, inputs);
-        }
-    }
-}
 
-fn scan_statements(statements: &[PortStatement], inputs: &mut PortInputs) {
-    for statement in statements {
-        match statement {
-            PortStatement::Bind { expr, .. } => scan_expr(expr, inputs),
-            PortStatement::Effect(effect) => scan_effect(effect, inputs),
-        }
-    }
-}
-
-/// Render lowered callbacks as a Rust module. Ordered effects and unresolved
-/// source symbols are retained; repository identity stays in the provenance
-/// artifacts rather than the runtime-facing module. No source value is
-/// invented. Callback results are fixed-size arrays.
+/// Render lowered callbacks as generated neutral Rust rule data. Runtime
+/// declarations are neutral; the original source symbol, line span, call list
+/// and source expression text travel under [`RuleProvenance`]. Repository
+/// identity stays in the offline artifacts rather than the runtime-facing
+/// module. No source value is invented.
 pub fn emit_port_rust(file: &PortFile<'_>) -> Result<String, SourceError> {
     let mut output = String::from(
         "// @generated by smash-import from pinned source evidence.\n\
          // Do not edit by hand; run `just source-rules`.\n",
     );
     output.push_str(&format!("// source revision: {}\n\n", file.revision));
-    output.push_str("#![allow(non_snake_case, non_camel_case_types, unused_imports)]\n\n");
+    output.push_str("#![allow(unused_imports)]\n\n");
     output.push_str(
-        "use crate::{CoAttrs, CommonData, FighterQuery, FtCommonEffect, FtMotionId, MotionFlags, Vec3};\n",
+        "use crate::{\n    AttrField, CompareOp, Effect, Expr, InputField, LocalSlot, Motion, MotionFlags, Rule,\n    RuleId, RuleProvenance, Statement, TuningField,\n};\n\n",
     );
+    output.push_str("pub static RULES: &[Rule] = &[\n");
     for function in file.functions {
-        output.push('\n');
+        let id = rule_id(&function.name)
+            .ok_or_else(|| SourceError::UnsupportedExpression(function.name.clone()))?;
+        output.push_str("    Rule {\n");
+        output.push_str(&format!("        id: RuleId::{id},\n"));
+        match &function.body {
+            PortBody::Guard(expr) => {
+                output.push_str(&format!("        guard: Some({}),\n", emit_data_expr(expr)));
+                output.push_str("        statements: &[],\n");
+            }
+            PortBody::Callback(statements) => {
+                output.push_str("        guard: None,\n");
+                output.push_str("        statements: &[\n");
+                for statement in statements {
+                    match statement {
+                        PortStatement::Bind { name, expr } => output.push_str(&format!(
+                            "            Statement::Bind {{ slot: LocalSlot::{name}, value: {} }},\n",
+                            emit_data_expr(expr),
+                        )),
+                        PortStatement::Effect(effect) => output.push_str(&format!(
+                            "            Statement::Emit(&{}),\n",
+                            emit_data_effect(effect),
+                        )),
+                    }
+                }
+                output.push_str("        ],\n");
+            }
+        }
+        let calls = function
+            .calls
+            .iter()
+            .map(|call| format!("\"{}\"", escape_source(call)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let (source_guard, source_bindings): (String, Vec<String>) = match &function.body {
+            PortBody::Guard(expr) => (source_expr(expr), Vec::new()),
+            PortBody::Callback(statements) => (
+                String::new(),
+                statements
+                    .iter()
+                    .filter_map(|statement| match statement {
+                        PortStatement::Bind { name, expr } => Some(format!(
+                            "{} = {}",
+                            local_source(name),
+                            source_expr(expr),
+                        )),
+                        PortStatement::Effect(_) => None,
+                    })
+                    .collect(),
+            ),
+        };
+        let bindings = source_bindings
+            .iter()
+            .map(|binding| format!("\"{}\"", escape_source(binding)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        output.push_str("        provenance: RuleProvenance {\n");
         output.push_str(&format!(
-            "/// Source callback: `{}` (function lines {}-{}).\n",
-            function.name, function.function_line, function.function_end_line,
+            "            source_symbol: \"{}\",\n",
+            escape_source(&function.name),
         ));
         output.push_str(&format!(
-            "/// Source span: {}:{}-{}:{}.\n",
+            "            function_lines: ({}, {}),\n",
+            function.function_line, function.function_end_line,
+        ));
+        output.push_str(&format!(
+            "            span: ({}, {}, {}, {}),\n",
             function.span.line,
             function.span.column,
             function.span.end_line,
             function.span.end_column,
         ));
-        if function.calls.is_empty() {
-            output.push_str("/// Source calls: none.\n");
-        } else {
-            output.push_str(&format!(
-                "/// Source calls: {}.\n",
-                function.calls.join(", "),
-            ));
-        }
-        let mut inputs = PortInputs::default();
-        match &function.body {
-            PortBody::Guard(expr) => {
-                scan_expr(expr, &mut inputs);
-                output.push_str(&format!("/// Source guard: `{}`.\n", source_expr(expr)));
-                output.push_str(&format!(
-                    "pub fn {}({}) -> bool {{\n    {}\n}}\n",
-                    function.name,
-                    inputs.params(),
-                    emit_condition(expr),
-                ));
-            }
-            PortBody::Callback(statements) => {
-                scan_statements(statements, &mut inputs);
-                let bindings: Vec<String> = statements
-                    .iter()
-                    .filter_map(|statement| match statement {
-                        PortStatement::Bind { name, expr } => {
-                            Some(format!("{name} = {}", source_expr(expr)))
-                        }
-                        PortStatement::Effect(_) => None,
-                    })
-                    .collect();
-                if !bindings.is_empty() {
-                    output.push_str(&format!("/// Source bindings: `{}`.\n", bindings.join("; ")));
-                }
-                let count = statements
-                    .iter()
-                    .filter(|statement| matches!(statement, PortStatement::Effect(_)))
-                    .count();
-                output.push_str(&format!(
-                    "pub fn {}({}) -> [FtCommonEffect; {count}] {{\n",
-                    function.name,
-                    inputs.params(),
-                ));
-                for statement in statements {
-                    if let PortStatement::Bind { name, expr } = statement {
-                        output.push_str(&format!("    let {name} = {};\n", emit_expr(expr)));
-                    }
-                }
-                output.push_str("    [\n");
-                for statement in statements {
-                    if let PortStatement::Effect(effect) = statement {
-                        output.push_str(&format!("        {},\n", emit_effect(effect)?));
-                    }
-                }
-                output.push_str("    ]\n}\n");
-            }
-        }
+        output.push_str(&format!("            calls: &[{calls}],\n"));
+        output.push_str(&format!(
+            "            source_guard: \"{}\",\n",
+            escape_source(&source_guard),
+        ));
+        output.push_str(&format!("            source_bindings: &[{bindings}],\n"));
+        output.push_str("        },\n");
+        output.push_str("    },\n");
     }
+    output.push_str("];\n");
     Ok(output)
 }
 
@@ -1453,22 +1502,17 @@ void ftCo_JumpAerial_Enter_Basic(Fighter_GObj* gobj) {
             .iter()
             .filter_map(|statement| match statement {
                 PortStatement::Bind { .. } => None,
-                PortStatement::Effect(PortEffect::OpaqueCall(symbol)) => Some(symbol.clone()),
-                PortStatement::Effect(PortEffect::ChangeMotionState { .. }) => {
-                    Some("Fighter_ChangeMotionState".into())
-                }
-                PortStatement::Effect(PortEffect::FtCo800CB110 { .. }) => {
-                    Some("ftCo_800CB110".into())
-                }
-                PortStatement::Effect(PortEffect::FtCo800CBAC4 { .. }) => {
-                    Some("ftCo_800CBAC4".into())
-                }
-                PortStatement::Effect(PortEffect::WriteField { field, .. }) => {
-                    Some(format!("write:{field}"))
-                }
-                PortStatement::Effect(PortEffect::WriteCmdVar { index, .. }) => {
-                    Some(format!("write:cmd_vars[{index}]"))
-                }
+                PortStatement::Effect(effect) => Some(
+                    match effect {
+                        PortEffect::BeginJump => "BeginJump",
+                        PortEffect::EnterMotion { .. } => "EnterMotion",
+                        PortEffect::SetJumpParams { .. } => "SetJumpParams",
+                        PortEffect::SetCommandValue { .. } => "SetCommandValue",
+                        PortEffect::SetFlag { .. } => "SetFlag",
+                        PortEffect::LaunchJump { .. } => "LaunchJump",
+                    }
+                    .into(),
+                ),
             })
             .collect()
     }
@@ -1481,11 +1525,11 @@ void ftCo_JumpAerial_Enter_Basic(Fighter_GObj* gobj) {
             guard.body,
             PortBody::Guard(PortExpr::Compare(
                 Box::new(PortExpr::Mul(
-                    Box::new(PortExpr::Value(PortValue::Query("lstick_x".into()))),
-                    Box::new(PortExpr::Value(PortValue::Query("facing_dir".into()))),
+                    Box::new(PortExpr::Value(PortValue::Input("StickX"))),
+                    Box::new(PortExpr::Value(PortValue::Input("Facing"))),
                 )),
                 Op::LessEqual,
-                Box::new(PortExpr::Value(PortValue::Common("x34".into()))),
+                Box::new(PortExpr::Value(PortValue::Tuning("TurnThreshold"))),
             )),
         );
     }
@@ -1499,12 +1543,7 @@ void ftCo_JumpAerial_Enter_Basic(Fighter_GObj* gobj) {
         );
         assert_eq!(
             effect_names(&jump),
-            [
-                "ftCommon_8007D5D4",
-                "Fighter_ChangeMotionState",
-                "ftCo_800CB110",
-                "write:x2227_b0",
-            ],
+            ["BeginJump", "EnterMotion", "SetJumpParams", "SetFlag"],
         );
 
         let aerial =
@@ -1513,17 +1552,17 @@ void ftCo_JumpAerial_Enter_Basic(Fighter_GObj* gobj) {
         assert_eq!(aerial.calls, ["ftCommon_8007D5D4", "ftCo_800CBAC4"]);
         assert_eq!(
             effect_names(&aerial),
-            ["ftCommon_8007D5D4", "write:cmd_vars[0]", "ftCo_800CBAC4"],
+            ["BeginJump", "SetCommandValue", "LaunchJump"],
         );
         let PortBody::Callback(statements) = &aerial.body else { panic!() };
         assert!(statements.iter().any(|statement| matches!(
             statement,
-            PortStatement::Bind { name, expr: PortExpr::Vector { .. } } if name == "vel",
+            PortStatement::Bind { name, expr: PortExpr::Vector { .. } } if name == "Velocity",
         )));
     }
 
     #[test]
-    fn emits_rust_with_neutral_runtime_provenance_and_typed_inputs() {
+    fn emits_neutral_rule_data_with_source_provenance_retained() {
         let functions = vec![
             lower_guard(PORT_SOURCE, "ftCo_Turn.c", "ftCo_800C97A8").unwrap(),
             lower_callback(PORT_SOURCE, "ftCo_Jump.c", "ftCo_Jump_Enter").unwrap(),
@@ -1531,34 +1570,67 @@ void ftCo_JumpAerial_Enter_Basic(Fighter_GObj* gobj) {
                 .unwrap(),
         ];
         let generated = port_file(&functions);
-        assert!(generated.contains("pub fn ftCo_800C97A8("));
-        assert!(generated.contains("(query.lstick_x * query.facing_dir) <= common.x34"));
+        assert_eq!(port_file(&functions), generated, "emission must be deterministic");
+        // Neutral runtime declarations.
+        assert!(generated.contains("pub static RULES: &[Rule] = &["));
+        assert!(!generated.contains("pub fn ftCo_"));
+        assert!(!generated.contains("FtCommonEffect"));
+        assert!(generated.contains("id: RuleId::TurnRequest"));
+        assert!(generated.contains("id: RuleId::Takeoff"));
+        assert!(generated.contains("id: RuleId::AirJump"));
         assert!(generated.contains(
-            "pub fn ftCo_Jump_Enter(query: &FighterQuery, common: &CommonData) -> [FtCommonEffect; 4]",
+            "guard: Some(&Expr::Compare(&Expr::Mul(&Expr::Input(InputField::StickX), \
+             &Expr::Input(InputField::Facing)), CompareOp::LessEqual, \
+             &Expr::Tuning(TuningField::TurnThreshold))),",
         ));
+        assert!(generated.contains("&Expr::Tuning(TuningField::JumpBackThreshold)"));
+        assert!(generated.contains("Effect::BeginJump"));
         assert!(generated.contains(
-            "pub fn ftCo_JumpAerial_Enter_Basic(query: &FighterQuery, common: &CommonData, attrs: &CoAttrs) -> [FtCommonEffect; 3]",
-        ));
-        assert!(generated.contains("FtCommonEffect::ftCommon_8007D5D4"));
-        assert!(generated.contains("FtCommonEffect::Fighter_ChangeMotionState {"));
-        assert!(generated.contains("motion: msid"));
-        assert!(generated.contains("flags: MotionFlags::None"));
-        assert!(generated.contains("anim_start: 0.0"));
-        assert!(generated.contains("anim_speed: 1.0"));
-        assert!(generated.contains("anim_blend: 0.0"));
-        assert!(generated.contains("FtCommonEffect::FtCo_800CB110 { arg1: true, jump_mul: 1.0 }"));
-        assert!(generated.contains("FtCommonEffect::WriteX2227B0 { value: true }"));
-        assert!(generated.contains("FtCommonEffect::WriteCmdVars0 { value: 1 }"));
-        assert!(generated.contains(
-            "let vel = Vec3 { x: (query.lstick_x * attrs.air_jump_h_multiplier), y: (attrs.jump_v_initial_velocity * attrs.air_jump_v_multiplier), z: 0.0 };",
+            "Effect::EnterMotion { motion: &Expr::Local(LocalSlot::Motion), \
+             flags: MotionFlags::None, anim_start: 0.0, anim_speed: 1.0, anim_blend: 0.0 }",
         ));
         assert!(generated
-            .contains("FtCommonEffect::FtCo_800CBAC4 { motion: msid, velocity: vel, arg3: true }"));
+            .contains("Effect::SetJumpParams { enabled: &Expr::Flag(true), scale: 1.0 }"));
+        assert!(generated.contains("Effect::SetFlag { value: &Expr::Flag(true) }"));
+        assert!(generated
+            .contains("Effect::SetCommandValue { slot: 0, value: &Expr::Count(1) }"));
+        assert!(generated.contains(
+            "Effect::LaunchJump { motion: &Expr::Local(LocalSlot::Motion), \
+             velocity: LocalSlot::Velocity, flag: &Expr::Flag(true) }",
+        ));
+        assert!(generated.contains(
+            "&Expr::Vector { x: &Expr::Mul(&Expr::Input(InputField::StickX), \
+             &Expr::Attr(AttrField::AirJumpHScale)), \
+             y: &Expr::Mul(&Expr::Attr(AttrField::JumpInitialSpeed), \
+             &Expr::Attr(AttrField::AirJumpVScale)), z: &Expr::Number(0.0) }",
+        ));
+        assert!(generated.contains("&Expr::Motion(Motion::JumpForward)"));
+        assert!(generated.contains("&Expr::Motion(Motion::AirJumpBackward)"));
         assert!(generated.contains("0123456789abcdef0123456789abcdef01234567"));
         assert!(!generated.contains("github.com"));
         assert!(!generated.contains("ftCo_Turn.c"));
+        // Original source identities survive under provenance, not runtime names.
+        for symbol in [
+            "ftCo_800C97A8",
+            "ftCo_Jump_Enter",
+            "ftCo_JumpAerial_Enter_Basic",
+            "ftCommon_8007D5D4",
+            "Fighter_ChangeMotionState",
+            "ftCo_800CB110",
+            "ftCo_800CBAC4",
+            "p_ftCommonData->x34",
+            "p_ftCommonData->x78",
+            "fp->input.lstick[0].x",
+            "fp->facing_dir",
+            "ftCo_MS_JumpF",
+            "msid = ",
+            "vel = ",
+        ] {
+            assert!(generated.contains(symbol), "missing provenance {symbol}");
+        }
         assert!(generated
-            .contains("Source calls: ftCommon_8007D5D4, Fighter_ChangeMotionState, ftCo_800CB110."));
+            .contains("source_bindings: &[\"msid = fp->input.lstick[0].x*fp->facing_dir > \
+                     -p_ftCommonData->x78 ? ftCo_MS_JumpF : ftCo_MS_JumpB\"]"));
     }
 
     #[test]

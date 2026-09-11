@@ -2,48 +2,63 @@
 // Do not edit by hand; run `just source-rules`.
 // source revision: c7861544f8e1fbc530612393e91d859886e97e3c
 
-#![allow(non_snake_case, non_camel_case_types, unused_imports)]
+#![allow(unused_imports)]
 
-use crate::{CoAttrs, CommonData, FighterQuery, FtCommonEffect, FtMotionId, MotionFlags, Vec3};
+use crate::{
+    AttrField, CompareOp, Effect, Expr, InputField, LocalSlot, Motion, MotionFlags, Rule,
+    RuleId, RuleProvenance, Statement, TuningField,
+};
 
-/// Source callback: `ftCo_800C97A8` (function lines 28-36).
-/// Source span: 32:8-32:71.
-/// Source calls: none.
-/// Source guard: `fp->input.lstick[0].x*fp->facing_dir <= p_ftCommonData->x34`.
-pub fn ftCo_800C97A8(query: &FighterQuery, common: &CommonData) -> bool {
-    (query.lstick_x * query.facing_dir) <= common.x34
-}
-
-/// Source callback: `ftCo_Jump_Enter` (function lines 153-165).
-/// Source span: 153:1-165:2.
-/// Source calls: ftCommon_8007D5D4, Fighter_ChangeMotionState, ftCo_800CB110.
-/// Source bindings: `msid = fp->input.lstick[0].x*fp->facing_dir > -p_ftCommonData->x78 ? ftCo_MS_JumpF : ftCo_MS_JumpB`.
-pub fn ftCo_Jump_Enter(query: &FighterQuery, common: &CommonData) -> [FtCommonEffect; 4] {
-    let msid = if (query.lstick_x * query.facing_dir) > -common.x78 { FtMotionId::JumpF } else { FtMotionId::JumpB };
-    [
-        FtCommonEffect::ftCommon_8007D5D4,
-        FtCommonEffect::Fighter_ChangeMotionState {
-            motion: msid,
-            flags: MotionFlags::None,
-            anim_start: 0.0,
-            anim_speed: 1.0,
-            anim_blend: 0.0,
+pub static RULES: &[Rule] = &[
+    Rule {
+        id: RuleId::TurnRequest,
+        guard: Some(&Expr::Compare(&Expr::Mul(&Expr::Input(InputField::StickX), &Expr::Input(InputField::Facing)), CompareOp::LessEqual, &Expr::Tuning(TuningField::TurnThreshold))),
+        statements: &[],
+        provenance: RuleProvenance {
+            source_symbol: "ftCo_800C97A8",
+            function_lines: (28, 36),
+            span: (32, 8, 32, 71),
+            calls: &[],
+            source_guard: "fp->input.lstick[0].x*fp->facing_dir <= p_ftCommonData->x34",
+            source_bindings: &[],
         },
-        FtCommonEffect::FtCo_800CB110 { arg1: true, jump_mul: 1.0 },
-        FtCommonEffect::WriteX2227B0 { value: true },
-    ]
-}
-
-/// Source callback: `ftCo_JumpAerial_Enter_Basic` (function lines 158-177).
-/// Source span: 158:1-177:2.
-/// Source calls: ftCommon_8007D5D4, ftCo_800CBAC4.
-/// Source bindings: `msid = fp->input.lstick[0].x*fp->facing_dir > -p_ftCommonData->x78 ? ftCo_MS_JumpAerialF : ftCo_MS_JumpAerialB; vel = {fp->input.lstick[0].x*fp->co_attrs.air_jump_h_multiplier, fp->co_attrs.jump_v_initial_velocity*fp->co_attrs.air_jump_v_multiplier, 0.0F}`.
-pub fn ftCo_JumpAerial_Enter_Basic(query: &FighterQuery, common: &CommonData, attrs: &CoAttrs) -> [FtCommonEffect; 3] {
-    let msid = if (query.lstick_x * query.facing_dir) > -common.x78 { FtMotionId::JumpAerialF } else { FtMotionId::JumpAerialB };
-    let vel = Vec3 { x: (query.lstick_x * attrs.air_jump_h_multiplier), y: (attrs.jump_v_initial_velocity * attrs.air_jump_v_multiplier), z: 0.0 };
-    [
-        FtCommonEffect::ftCommon_8007D5D4,
-        FtCommonEffect::WriteCmdVars0 { value: 1 },
-        FtCommonEffect::FtCo_800CBAC4 { motion: msid, velocity: vel, arg3: true },
-    ]
-}
+    },
+    Rule {
+        id: RuleId::Takeoff,
+        guard: None,
+        statements: &[
+            Statement::Emit(&Effect::BeginJump),
+            Statement::Bind { slot: LocalSlot::Motion, value: &Expr::Select { condition: &Expr::Compare(&Expr::Mul(&Expr::Input(InputField::StickX), &Expr::Input(InputField::Facing)), CompareOp::Greater, &Expr::Neg(&Expr::Tuning(TuningField::JumpBackThreshold))), yes: &Expr::Motion(Motion::JumpForward), no: &Expr::Motion(Motion::JumpBackward) } },
+            Statement::Emit(&Effect::EnterMotion { motion: &Expr::Local(LocalSlot::Motion), flags: MotionFlags::None, anim_start: 0.0, anim_speed: 1.0, anim_blend: 0.0 }),
+            Statement::Emit(&Effect::SetJumpParams { enabled: &Expr::Flag(true), scale: 1.0 }),
+            Statement::Emit(&Effect::SetFlag { value: &Expr::Flag(true) }),
+        ],
+        provenance: RuleProvenance {
+            source_symbol: "ftCo_Jump_Enter",
+            function_lines: (153, 165),
+            span: (153, 1, 165, 2),
+            calls: &["ftCommon_8007D5D4", "Fighter_ChangeMotionState", "ftCo_800CB110"],
+            source_guard: "",
+            source_bindings: &["msid = fp->input.lstick[0].x*fp->facing_dir > -p_ftCommonData->x78 ? ftCo_MS_JumpF : ftCo_MS_JumpB"],
+        },
+    },
+    Rule {
+        id: RuleId::AirJump,
+        guard: None,
+        statements: &[
+            Statement::Emit(&Effect::BeginJump),
+            Statement::Emit(&Effect::SetCommandValue { slot: 0, value: &Expr::Count(1) }),
+            Statement::Bind { slot: LocalSlot::Motion, value: &Expr::Select { condition: &Expr::Compare(&Expr::Mul(&Expr::Input(InputField::StickX), &Expr::Input(InputField::Facing)), CompareOp::Greater, &Expr::Neg(&Expr::Tuning(TuningField::JumpBackThreshold))), yes: &Expr::Motion(Motion::AirJumpForward), no: &Expr::Motion(Motion::AirJumpBackward) } },
+            Statement::Bind { slot: LocalSlot::Velocity, value: &Expr::Vector { x: &Expr::Mul(&Expr::Input(InputField::StickX), &Expr::Attr(AttrField::AirJumpHScale)), y: &Expr::Mul(&Expr::Attr(AttrField::JumpInitialSpeed), &Expr::Attr(AttrField::AirJumpVScale)), z: &Expr::Number(0.0) } },
+            Statement::Emit(&Effect::LaunchJump { motion: &Expr::Local(LocalSlot::Motion), velocity: LocalSlot::Velocity, flag: &Expr::Flag(true) }),
+        ],
+        provenance: RuleProvenance {
+            source_symbol: "ftCo_JumpAerial_Enter_Basic",
+            function_lines: (158, 177),
+            span: (158, 1, 177, 2),
+            calls: &["ftCommon_8007D5D4", "ftCo_800CBAC4"],
+            source_guard: "",
+            source_bindings: &["msid = fp->input.lstick[0].x*fp->facing_dir > -p_ftCommonData->x78 ? ftCo_MS_JumpAerialF : ftCo_MS_JumpAerialB", "vel = {fp->input.lstick[0].x*fp->co_attrs.air_jump_h_multiplier, fp->co_attrs.jump_v_initial_velocity*fp->co_attrs.air_jump_v_multiplier, 0.0F}"],
+        },
+    },
+];
