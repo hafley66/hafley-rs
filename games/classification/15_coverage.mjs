@@ -89,7 +89,9 @@ export function expandExclusions(states, rules) {
     counts[rule.id] += 1;
     rows.push({ source_id: state.id, name: state.name, rule: rule.id, reason: rule.reason, evidence: rule.evidence });
   }
-  return { rows, counts };
+  const errors = rules.filter(rule => counts[rule.id] !== rule.expectedMatches)
+    .map(rule => `exclusion rule ${rule.id} matched ${counts[rule.id]}, expected ${rule.expectedMatches}`);
+  return { rows, counts, errors };
 }
 
 function ratio(numerator, denominator) {
@@ -144,14 +146,33 @@ function runtimeCallbackNames(runtime) {
       : callback.id ?? callback.name ?? callback.symbol ?? `${callback.domain}:${callback.state}:${callback.event}`));
 }
 
+function requirementValue(receipt, camel, snake) {
+  return receipt?.[camel] ?? receipt?.[snake];
+}
+
+function requirementKey(receipt) {
+  return `${requirementValue(receipt, 'requirementId', 'requirement_id') ?? ''}:${receipt?.axis ?? ''}`;
+}
+
+function validRequirementReceipts(receipts, { axis, sourceId, fingerprint, runtimeRevision, target }) {
+  return receipts.some(receipt =>
+    requirementValue(receipt, 'requirementId', 'requirement_id') === sourceId &&
+    receipt.axis === axis &&
+    requirementValue(receipt, 'sourceFingerprint', 'source_fingerprint') === fingerprint &&
+    requirementValue(receipt, 'runtimeRevision', 'runtime_revision') === runtimeRevision &&
+    receipt.target === target &&
+    receipt.status === 'passed');
+}
+
 // Join authored intent with source and runtime observations. No authored
 // disposition contributes to an observed numerator.
-export function joinCoverage({ port, source, runtime, receipt, fingerprint, runtimeRevision }) {
+export function joinCoverage({ port, source, runtime, receipt, requirementReceipts = [], fingerprint, runtimeRevision }) {
   const errors = [];
   const sourceById = new Map(source.states.map(row => [row.id, row]));
   const runtimeStates = new Set((runtime.runtime?.states ?? []).map(row => row.name));
   const runtimeCallbacks = runtimeCallbackNames(runtime);
   const exclusions = expandExclusions(source.states, port.exclusions);
+  errors.push(...exclusions.errors);
   const excludedIds = new Set(exclusions.rows.map(row => row.source_id));
   const mappingBySource = new Map();
   for (const mapping of port.mappings) {
@@ -185,6 +206,13 @@ export function joinCoverage({ port, source, runtime, receipt, fingerprint, runt
   if (runtime.source_revision !== source.revision) errors.push('runtime inventory source revision mismatch');
   if (runtimeRevision && runtime.runtime_revision !== runtimeRevision) errors.push('runtime inventory revision is stale');
 
+  const seenRequirements = new Set();
+  for (const requirement of requirementReceipts) {
+    const key = requirementKey(requirement);
+    if (seenRequirements.has(key)) errors.push(`duplicate requirement receipt ${key}`);
+    seenRequirements.add(key);
+  }
+
   const eligible = source.states.filter(row => !excludedIds.has(row.id));
   const mapped = eligible.filter(row => mappingBySource.has(row.id) && runtimeStates.has(mappingBySource.get(row.id).runtimeState));
   const graphReachableStates = reachable(runtime.runtime ?? {});
@@ -197,19 +225,34 @@ export function joinCoverage({ port, source, runtime, receipt, fingerprint, runt
   const callbacks = callbackRows;
   const directCalls = guardRows;
   const stale = receiptState(receipt, fingerprint, 'core') !== 'PASSED';
-  const currentReceipt = receiptState(receipt, fingerprint, 'core');
   const mappedCallbacks = callbackRows.filter(row => callbackBySource.has(row.id));
   const mappedGuards = guardRows.filter(row => guardBySource.has(row.id));
   const directCallCount = source.counts?.direct_calls ?? directCalls.length;
+  const rollbackQualified = new Set(eligible.filter(row => validRequirementReceipts(requirementReceipts, {
+    axis: 'rollback', sourceId: row.id, fingerprint, runtimeRevision, target: port.profile.target,
+  })).map(row => row.id));
+  const fidelityQualified = new Set(eligible.filter(row => validRequirementReceipts(requirementReceipts, {
+    axis: 'source fidelity', sourceId: row.id, fingerprint, runtimeRevision, target: port.profile.target,
+  })).map(row => row.id));
+  const associationRows = source.associations ?? [];
+  const strictRows = mapped.filter(row => {
+    const associations = associationRows.filter(association => association.state === row.name);
+    if (!associations.length) return false;
+    if (!associations.every(association => callbackBySource.has(association.id))) return false;
+    const callbacksForState = new Set(associations.map(association => association.callback));
+    const calls = callbackRows.filter(callback => callbacksForState.has(callback.source?.symbol)).flatMap(callback => callback.calls ?? []);
+    if (!calls.every(call => guardBySource.has(call.id))) return false;
+    return reachableStates.has(mappingBySource.get(row.id).runtimeState) &&
+      rollbackQualified.has(row.id) && fidelityQualified.has(row.id);
+  });
   const axes = {
     'state mapping': ratio(mapped.length, eligible.length),
     'transition/callback mapping': ratio(mappedCallbacks.length, callbacks.length),
     'ordered guard qualification': ratio(mappedGuards.length, directCallCount),
     'live reachability': ratio(live.length, eligible.length),
-    'rollback': ratio(stale ? 0 : mapped.length, eligible.length),
-    'source fidelity': ratio(stale ? 0 : mapped.length, eligible.length),
+    'rollback': ratio(rollbackQualified.size, eligible.length),
+    'source fidelity': ratio(fidelityQualified.size, eligible.length),
   };
-  const fullyQualified = mapped.filter(row => !stale && reachableStates.has(mappingBySource.get(row.id).runtimeState));
   const unresolvedStates = eligible.filter(row => !mappingBySource.has(row.id)).map(row => ({ source_id: row.id, name: row.name, reason: 'no authored source-to-runtime mapping' }));
   const unresolvedCallbacks = callbacks.filter(row => !callbackBySource.has(row.id)).map(row => ({ source_id: row.id, action: row.action, symbol: row.source.symbol, reason: 'no authored callback mapping' }));
   const unresolvedDirectCalls = directCalls.filter(row => !guardBySource.has(row.id)).map(row => ({ source_id: row.id, symbol: row.symbol, reason: 'no authored ordered guard qualification' }));
@@ -217,10 +260,16 @@ export function joinCoverage({ port, source, runtime, receipt, fingerprint, runt
     profile: port.profile,
     source: { ruleset: source.ruleset, repository: source.repository, revision: source.revision, counts: source.counts },
     runtime: { profile: runtime.profile, revision: runtime.runtime_revision, source_revision: runtime.source_revision, source_fingerprint: runtime.source_fingerprint, states: runtime.runtime.states.length },
-    receipts: { rollback: currentReceipt, source_fidelity: currentReceipt, fingerprint },
+    receipts: {
+      rollback: stale ? 'LEGACY_STALE' : 'LEGACY_CURRENT_UNQUALIFIED',
+      source_fidelity: stale ? 'LEGACY_STALE' : 'LEGACY_CURRENT_UNQUALIFIED',
+      fingerprint,
+      legacy_prove: receipt ? { commit: receipt.commit ?? null, source: receipt.source ?? null, status: receipt.status ?? null } : null,
+      requirement_count: requirementReceipts.length,
+    },
     exclusions: { rules: exclusions.counts, rows: exclusions.rows },
     axes,
-    strict: ratio(fullyQualified.length, eligible.length),
+    strict: ratio(strictRows.length, eligible.length),
     unresolved: { states: unresolvedStates, callbacks: unresolvedCallbacks, direct_calls: unresolvedDirectCalls },
     errors,
   };
@@ -232,6 +281,8 @@ export function renderCoverage(coverage) {
     `source revision: ${coverage.source.revision}`,
     `runtime revision: ${coverage.runtime.revision}`,
     `source fingerprint: ${coverage.receipts.fingerprint ?? 'UNMEASURED'}`,
+    `legacy prove receipt: ${coverage.receipts.legacy_prove ? `${coverage.receipts.legacy_prove.commit ?? 'unknown'} ${coverage.receipts.legacy_prove.status ?? 'unknown'} (context only; qualifies 0 requirements)` : 'absent (qualifies 0 requirements)'}`,
+    `requirement receipts: ${coverage.receipts.requirement_count}`,
     `exclusions: ${coverage.exclusions.rows.length} source states (${Object.entries(coverage.exclusions.rules).map(([id, count]) => `${id}=${count}`).join(', ')})`,
   ];
   for (const axis of coverage.profile.axes) {
@@ -244,14 +295,14 @@ export function renderCoverage(coverage) {
   return lines.join('\n') + '\n';
 }
 
-export async function buildCoverage(base = root, { raw = undefined, runtime = undefined, source = undefined, port = undefined, receipt = undefined, fingerprint = undefined } = {}) {
+export async function buildCoverage(base = root, { raw = undefined, runtime = undefined, source = undefined, port = undefined, receipt = undefined, requirementReceipts = [], fingerprint = undefined } = {}) {
   source ??= await json(sourcePath);
   port ??= await loadPort();
   raw ??= runRuntimeExport(base);
   runtime ??= runtimeObservation(raw, port, source, base);
   receipt ??= await json(provePath).catch(error => error.code === 'ENOENT' ? null : Promise.reject(error));
   fingerprint ??= currentSourceFingerprint(base);
-  return joinCoverage({ port, source, runtime, receipt, fingerprint, runtimeRevision: currentRevision(base) });
+  return joinCoverage({ port, source, runtime, receipt, requirementReceipts, fingerprint, runtimeRevision: currentRevision(base) });
 }
 
 export async function generate(base = root) {

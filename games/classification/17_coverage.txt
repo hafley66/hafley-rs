@@ -2,6 +2,8 @@ profile: pigeon-falcon-gameplay
 source revision: c7861544f8e1fbc530612393e91d859886e97e3c
 runtime revision: 24911cc3713399fb1b8238d680477c6cb841a407
 source fingerprint: 3b639b87d3956f4b0a6a5f22590688cae68a0175dce352d7015c79ffb2e14c78
+legacy prove receipt: 98b4631983eb8b1ceb32605b4ddbd41ac6ae738e passed (context only; qualifies 0 requirements)
+requirement receipts: 0
 exclusions: 93 source states (item-prefix=22, item-throw=26, item-weapon=41, item-lift=4)
 state mapping: 22/248 (8.87%)
 transition/callback mapping: 0/1314 (0%)
