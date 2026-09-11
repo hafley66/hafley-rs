@@ -102,7 +102,7 @@ pub fn observe_tape(simulation: &mut Simulation) -> Vec<(&'static str, usize)> {
         .into_iter()
         .map(|(buttons, axis)| {
             let controller = simulation.advance(Input { buttons, axis });
-            (controller.fighter.phase.name(), controller.action)
+            (controller.fighter.phase.name(), controller.action.id)
         })
         .collect()
 }
