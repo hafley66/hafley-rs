@@ -13,12 +13,14 @@ ground-chart-preview output="/private/tmp/pigeon-ground-chart.png":
 source-rules:
     cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- pigeon
     cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- catalog
+    cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- attributes
     d2 --layout elk smash/src/fighters/pigeon/generated/3_source_chart.d2 smash/src/fighters/pigeon/generated/3_source_chart.svg
     d2 --layout elk smash/src/fighters/pigeon/generated/4_common_inventory.d2 smash/src/fighters/pigeon/generated/4_common_inventory.svg
 
 source-rules-check:
     cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- pigeon --check
     cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- catalog --check
+    cargo run --locked --offline -j2 --manifest-path smash/Cargo.toml --features ingest --bin smash-import -- attributes --check
     d2 validate smash/src/fighters/pigeon/generated/3_source_chart.d2
     d2 validate smash/src/fighters/pigeon/generated/4_common_inventory.d2
 

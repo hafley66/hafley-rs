@@ -109,7 +109,7 @@ fn manifest_covers_every_retained_payload_with_exact_bytes() {
     let manifest: serde_json::Value =
         serde_json::from_str(include_str!("imported/0_sources.json")).unwrap();
     let files = manifest["files"].as_object().unwrap();
-    assert_eq!(files.len(), evidence.entries.len());
+    assert_eq!(files.len(), evidence.entries.len() + 1, "payloads plus attributes.html");
     let root = imported_root();
     for entry in &evidence.entries {
         let expected = files
@@ -128,12 +128,37 @@ fn manifest_covers_every_retained_payload_with_exact_bytes() {
     }
 }
 
+/// The retained Lucario attributes page is a first-class Dog source: its exact
+/// bytes must match the manifest hash, not merely a parse or width check.
+#[test]
+fn retained_attributes_source_sha_is_exact() {
+    let manifest: serde_json::Value =
+        serde_json::from_str(include_str!("imported/0_sources.json")).unwrap();
+    let expected = manifest["files"]["attributes.html"].as_str().unwrap();
+    assert_eq!(expected.len(), 64, "hash width for attributes.html");
+    let bytes = std::fs::read(imported_root().join("attributes.html")).unwrap();
+    assert_eq!(sha256_hex(&bytes), expected);
+}
+
+/// Parsing the retained page is byte-deterministic and yields only finite
+/// numeric rows.
+#[test]
+fn retained_attributes_parse_deterministically_and_are_finite() {
+    let html = include_str!("imported/attributes.html");
+    let first = game_content::attributes(html).unwrap();
+    let second = game_content::attributes(html).unwrap();
+    assert_eq!(first, second);
+    assert!(!first.is_empty());
+    assert!(first.values().all(|value| value.is_finite()));
+}
+
 #[test]
 fn upstream_identity_is_confined_to_imported_provenance() {
     for neutral in [
         include_str!("1_catalog.rs"),
         include_str!("generated/0_catalog.json"),
         include_str!("generated/1_baked.json"),
+        include_str!("generated/2_attributes.rs"),
     ] {
         assert!(!neutral.contains("Lucario"));
         assert!(!neutral.contains("rukaidata"));
