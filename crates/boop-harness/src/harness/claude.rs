@@ -209,10 +209,14 @@ impl Harness for Claude {
                 "1".into(),
             ),
         ]);
+        // No `--bare`: it sets `CLAUDE_CODE_SIMPLE=1`, which suppresses the
+        // peer-protocol messaging socket and leaves the session registry file
+        // with no `messagingSocketPath`, so the claude door cannot deliver.
+        // `--safe-mode` still disables hooks, plugins, skills, MCP and CLAUDE.md
+        // discovery, which is the determinism this recipe needs.
         Ok(super::mock_tui::MockTuiLaunch {
             executable: executable.display().to_string(),
             args: vec![
-                "--bare".into(),
                 "--safe-mode".into(),
                 "--model".into(),
                 "claude-sonnet-4-5".into(),
