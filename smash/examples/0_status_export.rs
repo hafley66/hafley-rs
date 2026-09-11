@@ -6,7 +6,7 @@
 //!   --example status_export`
 
 use game_fighter::Phase;
-use game_fighter::status::{air_transitions, ground_transitions};
+use game_fighter::status::{RuntimeInventory, runtime_inventory};
 use serde_json::{Value, json};
 use smash::fighters::dog;
 use smash::fighters::pigeon::movement::{self, SelectionFacts};
@@ -38,9 +38,9 @@ fn transitions(value: Vec<game_fighter::status::Transition>) -> Value {
 /// Enumerate the runtime selection over the full fact cube. Entries are
 /// executable outputs of `movement::select`, grouped by phase/action/condition;
 /// no mapping is authored here.
-fn phase_animation() -> Value {
+fn phase_animation(states: &[Phase]) -> Value {
     let mut rows: Vec<Value> = Vec::new();
-    for &phase in &Phase::ALL {
+    for &phase in states {
         for &axis in &AXIS_PROBES {
             for &attacking in &BOOLS {
                 for &attack_pressed in &BOOLS {
@@ -80,6 +80,24 @@ fn phase_animation() -> Value {
     Value::Array(rows)
 }
 
+/// Reshape the pure fighter inventory for the machine-readable export. Pigeon
+/// bindings are the observed outputs of its existing pure `movement::select`
+/// seam, including conditional action selections.
+fn runtime_inventory_value(inventory: RuntimeInventory) -> Value {
+    let pigeon_bindings = phase_animation(&inventory.states);
+    json!({
+        "states": inventory.states.iter().map(|phase| json!({
+            "name": phase.name(),
+            "grounded": phase.grounded(),
+        })).collect::<Vec<_>>(),
+        "ground": transitions(inventory.ground),
+        "air": transitions(inventory.air),
+        "callbacks": inventory.callbacks,
+        "effects": inventory.effects,
+        "pigeon_bindings": pigeon_bindings,
+    })
+}
+
 fn main() {
     // The committed generator output owns catalog membership and order; this
     // export only reshapes it for the status join and never re-derives it.
@@ -92,16 +110,19 @@ fn main() {
         .iter()
         .map(|entry| json!({ "id": entry["id"], "action": entry["name"], "file": entry["file"] }))
         .collect();
-    let phases: Value = Phase::ALL
+    let inventory = runtime_inventory();
+    let phases: Value = inventory.states
         .iter()
         .map(|phase| json!({ "name": phase.name(), "grounded": phase.grounded() }))
         .collect();
+    let runtime = runtime_inventory_value(inventory);
     let output = json!({
         "catalog": catalog,
         "phases": phases,
-        "phase_animation": phase_animation(),
-        "ground": transitions(ground_transitions()),
-        "air": transitions(air_transitions()),
+        "phase_animation": runtime["pigeon_bindings"].clone(),
+        "ground": runtime["ground"].clone(),
+        "air": runtime["air"].clone(),
+        "runtime_inventory": runtime,
         "dog": dog_evidence(),
     });
     println!("{}", serde_json::to_string(&output).expect("serialize status export"));

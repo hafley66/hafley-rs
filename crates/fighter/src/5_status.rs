@@ -7,16 +7,72 @@
 //! here without editing it.
 
 use crate::{Phase, air, ground};
+use serde::Serialize;
 
 /// One observed `(source phase, event, destination)` triple with the number of
 /// fact assignments that produce it. `to == None` is an explicit rejection that
 /// preserves the source phase.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct Transition {
     pub from: Phase,
     pub event: &'static str,
     pub to: Option<Phase>,
     pub witnesses: u32,
+}
+
+/// Pure inventory of the executable fighter decision surface.
+///
+/// `states` is sourced from [`Phase::ALL`]. Ground and air entries are
+/// collected by executing the public decision functions over their complete
+/// finite fact cubes. The vocabulary fields are projections of those observed
+/// decisions, so callers do not need a second event/effect registry.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct RuntimeInventory {
+    pub states: Vec<Phase>,
+    pub ground: Vec<Transition>,
+    pub air: Vec<Transition>,
+    pub callbacks: Vec<&'static str>,
+    pub effects: Vec<&'static str>,
+}
+
+impl RuntimeInventory {
+    /// Collect the executable inventory without filesystem, clock or host IO.
+    pub fn collect() -> Self {
+        let ground = ground_transitions();
+        let air = air_transitions();
+        let mut callbacks = Vec::new();
+        let mut effects = Vec::new();
+        for transition in ground.iter().chain(air.iter()) {
+            if !callbacks.contains(&transition.event) {
+                callbacks.push(transition.event);
+            }
+            let effect = match transition.to {
+                None => "Handled",
+                Some(to) if to == transition.from => "SelfTransition",
+                Some(_) => "Transition",
+            };
+            if !effects.contains(&effect) {
+                effects.push(effect);
+            }
+        }
+        Self {
+            states: Phase::ALL.to_vec(),
+            ground,
+            air,
+            callbacks,
+            effects,
+        }
+    }
+
+    /// Alias for callers that prefer constructor terminology.
+    pub fn new() -> Self {
+        Self::collect()
+    }
+}
+
+/// Collect the executable fighter inventory.
+pub fn runtime_inventory() -> RuntimeInventory {
+    RuntimeInventory::collect()
 }
 
 fn ground_facts(bits: u8) -> ground::Facts {
@@ -87,6 +143,58 @@ pub fn air_transitions() -> Vec<Transition> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn transition<'a>(
+        entries: &'a [Transition],
+        from: Phase,
+        event: &str,
+        to: Option<Phase>,
+    ) -> &'a Transition {
+        entries
+            .iter()
+            .find(|entry| entry.from == from && entry.event == event && entry.to == to)
+            .unwrap_or_else(|| panic!("missing {from:?} {event} -> {to:?}"))
+    }
+
+    #[test]
+    fn runtime_inventory_is_sourced_from_phase_and_decision_apis() {
+        let inventory = runtime_inventory();
+        assert_eq!(inventory.states, Phase::ALL);
+        assert_eq!(inventory.ground, ground_transitions());
+        assert_eq!(inventory.air, air_transitions());
+        assert_eq!(inventory.callbacks, ["JumpRequest", "GroundIntent", "Motion", "Land"]);
+        assert_eq!(inventory.effects, ["Transition", "Handled", "SelfTransition"]);
+    }
+
+    #[test]
+    fn runtime_inventory_keeps_self_transitions_and_guard_priority_observable() {
+        let inventory = runtime_inventory();
+        assert_eq!(
+            transition(&inventory.ground, Phase::Dash, "Motion", Some(Phase::Dash)).witnesses,
+            64
+        );
+
+        let all = ground::Facts {
+            dash: true,
+            walk: true,
+            forward: true,
+            reverse: true,
+            down: true,
+            finished: true,
+            stopped: true,
+        };
+        assert_eq!(ground::decide(Phase::Dash, ground::Event::Motion(all)), Some(Phase::Dash));
+        assert_eq!(ground::decide(Phase::Run, ground::Event::Motion(all)), Some(Phase::Turn));
+        let competing_air = air::AirFacts {
+            descending: true,
+            jump_pressed: true,
+            jumps_left: 1,
+        };
+        assert_eq!(
+            air::decide(Phase::Jump, air::AirEvent::Motion(competing_air)),
+            Some(Phase::AirJump)
+        );
+    }
 
     #[test]
     fn ground_inventory_matches_the_executable_policy() {
