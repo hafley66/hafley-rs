@@ -722,6 +722,11 @@ fn door_failure_cooldown() -> Duration {
 /// than a live door declining this body for now. A busy door is not cooled off.
 fn door_transport_failure(why: &str) -> bool {
     let why = why.to_ascii_lowercase();
+    // A session that has not published its socket yet has no door to fail;
+    // cooling it off holds the next row (a lane's result) for the whole bound.
+    if why.contains("names no messaging socket") {
+        return false;
+    }
     [
         "connect",
         "socket",
