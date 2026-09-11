@@ -287,14 +287,16 @@ statechart codec over route state, not a second source of truth.
 ## v1 combat and physics extraction, 2026-09-11
 
 The complete boundary, signatures, storage rules and stage gates live in
-`5_combat_port.md`. `game-combat` begins as a stage-1 proposal. Existing v1 code
-is evidence input; no copied numeric approximation becomes source authority.
+`5_combat_port.md`. `game-combat` is a stage-2 direct port: the v1 resolver was
+reimplemented in `crates/combat` with executable vectors rather than frozen
+first. Existing v1 code is evidence input; no copied numeric approximation
+becomes source authority.
 
 | ID | State | Terminal condition / coordinator checkpoint |
 | --- | --- | --- |
-| C1 | Queued, stage 1 | Fingerprint the five consumed v1 source files and execute data-first golden vectors against the untouched v1 implementation. Stop after the fixture receipt. |
-| C2 | Blocked on C1 | Extract pure `crates/combat` resolution using qualified `ssbm_utils` APIs. Terminal: C1 vectors pass native and WASM; advance `game-combat` 1 -> 2. |
-| C3 | Blocked on C2 | Apply launch to shared fighter hitlag/hitstun/tumble state with quantized DI and rollback tapes. Terminal: transition-point restores converge; advance `game-combat` 2 -> 2.7. |
+| C1 | Done, collapsed into direct port | No separate freeze step. `fcf750e` ports the v1 `combat`/`moves`/`physics` resolution into `crates/combat`; `f6015c7` pins the pre-hit-percent knockback input. 11 vectors in `crates/combat/tests/0_resolve.rs` each name the v1 source symbol they exercise. |
+| C2 | Done, bounded | `fcf750e`/`f6015c7`: pure `game-combat::resolve_hit` uses `ssbm_utils 0.4.0` for knockback, Sakurai angle, DI, hitstun and initial velocity; 11 native vectors pass and `wasm32-unknown-unknown` checks clean. The crate has no Godot, Rapier, SQLite or renderer dependency. `game-combat` advanced 1 -> 2. |
+| C3 | Active, stage 2 | Pigeon receiver wiring is done: `bb90cc5` routes the single sandbag contact through `game-combat::resolve_hit`, keeps Parry overlap and Rapier application outside the crate, and proves snapshot/suffix replay in `smash/src/fighters/pigeon/2_tests.rs`. Remaining: apply launch to shared `game-fighter` hitlag/hitstun/tumble state with quantized DI and rollback tapes. Not complete; `game-combat` 2 -> 2.7 is not earned. |
 | C4 | Blocked on C3 | Qualify bone-derived Parry contacts and durable Rapier/kinematic response with Pigeon-versus-Dog and native/WASM rollback fixtures. Terminal: source-fingerprinted receipts pass; advance `game-combat` 2.7 -> 3. |
 | C5 | Blocked on C4 | Move consumers and remove duplicate active combat paths after equivalence. Terminal: one resolver remains in the active graph and `just status` derives current evidence. |
 
