@@ -9,6 +9,24 @@ use crate::{Action, bake};
 use brawllib_rs::high_level_fighter::HighLevelSubaction;
 use serde::{Deserialize, Serialize};
 
+/// One ordered source entry: the subaction name as it must decode and the
+/// retained file it came from. Order is catalog identity. This is provenance
+/// input, not derived output.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SourceEntry<'a> {
+    pub name: &'a str,
+    pub file: &'a str,
+}
+
+/// A character's ingest identity and ordered source entries. Open data accepted
+/// by [`generate_catalog`]; no per-character type or enum is introduced.
+#[derive(Clone, Copy, Debug)]
+pub struct CharacterSpec<'a> {
+    pub runtime: &'a str,
+    pub display_name: &'a str,
+    pub actions: &'a [SourceEntry<'a>],
+}
+
 /// One derived catalog row. Every field comes from a decoded action; `file` is
 /// copied from the ordered source entry that produced it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -68,42 +86,41 @@ impl std::fmt::Display for CatalogError {
 
 impl std::error::Error for CatalogError {}
 
-/// Derive catalog evidence and baked actions from ordered provenance and
+/// Derive catalog evidence and baked actions from a [`CharacterSpec`] and its
 /// already-decoded payloads.
 ///
-/// `sources` is `(subaction name, retained file)` in catalog order; `actions`
-/// must be decoded in the same order. Index is catalog identity, so an entry is
-/// appended without renumbering earlier rows. A decoded action whose name does
-/// not match its declared source is rejected rather than silently relabelled.
-#[tracing::instrument(target = "game_content::ingest", skip_all, fields(actions = actions.len()))]
+/// `spec.actions` is in catalog order; `decoded` must be decoded in the same
+/// order. Index is catalog identity, so an entry is appended without
+/// renumbering earlier rows. A decoded action whose name does not match its
+/// declared source is rejected rather than silently relabelled.
+#[tracing::instrument(target = "game_content::ingest", skip_all, fields(actions = decoded.len()))]
 pub fn generate_catalog(
-    runtime: &str,
-    display_name: &str,
-    sources: &[(&str, &str)],
-    actions: &[HighLevelSubaction],
+    spec: &CharacterSpec<'_>,
+    decoded: &[HighLevelSubaction],
 ) -> Result<Catalog, CatalogError> {
-    if sources.len() != actions.len() {
+    if spec.actions.len() != decoded.len() {
         return Err(CatalogError::LengthMismatch {
-            sources: sources.len(),
-            actions: actions.len(),
+            sources: spec.actions.len(),
+            actions: decoded.len(),
         });
     }
-    let entries = sources
+    let entries = spec
+        .actions
         .iter()
-        .zip(actions)
+        .zip(decoded)
         .enumerate()
-        .map(|(id, ((name, file), action))| {
-            if action.name != *name {
+        .map(|(id, (source, action))| {
+            if action.name != source.name {
                 return Err(CatalogError::NameMismatch {
-                    file: (*file).into(),
-                    expected: (*name).into(),
+                    file: source.file.into(),
+                    expected: source.name.into(),
                     actual: action.name.clone(),
                 });
             }
             Ok(CatalogEntry {
                 id,
                 name: action.name.clone(),
-                file: (*file).into(),
+                file: source.file.into(),
                 frames: action.frames.len(),
                 hurtbox_frames: action.frames.iter().filter(|f| !f.hurt_boxes.is_empty()).count(),
                 hitbox_frames: action.frames.iter().filter(|f| !f.hit_boxes.is_empty()).count(),
@@ -114,10 +131,10 @@ pub fn generate_catalog(
         .collect::<Result<Vec<_>, CatalogError>>()?;
     Ok(Catalog {
         evidence: CatalogEvidence {
-            runtime: runtime.into(),
-            display_name: display_name.into(),
+            runtime: spec.runtime.into(),
+            display_name: spec.display_name.into(),
             entries,
         },
-        actions: bake(actions),
+        actions: bake(decoded),
     })
 }
