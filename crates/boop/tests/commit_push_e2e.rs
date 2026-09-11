@@ -1,8 +1,9 @@
 //! Commit-push end to end: a real lane supervisor watches a commit in its
 //! worktree and the row reaches a real coordinator TUI through that harness's
-//! own door, once. One pass per coordinator harness (claude, codex, opencode,
-//! kimi) against a loopback llmock provider; the model provider is the only
-//! seam, every other part is the real binary and the real TUI.
+//! own door, once. Every case runs harness H in both roles: the lane
+//! supervisor and the coordinator TUI are H, against a loopback llmock
+//! provider; the model provider is the only seam, every other part is the real
+//! binary and the real TUI.
 //!
 //! Skips a harness when its executable, or `llmock`, is absent, exactly like
 //! `shout_interrupt.rs`:
@@ -14,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use boop::harness::mock_tui::{self, MockTuiLaunch, MockTuiReplay};
@@ -21,6 +23,11 @@ use boop::harness::{shell_quote, HarnessId};
 use boop::Registry;
 
 const BOOP: &str = env!("CARGO_BIN_EXE_boop");
+
+/// Every case spawns a tmux server, an llmock provider, a lane supervisor and
+/// a real coordinator TUI against shared machine resources; run them one at a
+/// time.
+static CASE_LOCK: Mutex<()> = Mutex::new(());
 
 /// The commit-push deadline for one step.
 const STEP_DEADLINE: Duration = Duration::from_secs(30);
@@ -40,11 +47,16 @@ const FIXTURE_YAML: &str = r#"rules:
         FIXED_TERMINAL_REPLY
 "#;
 
-/// One harness's place in the matrix.
+/// One harness's place in the matrix. Both the lane and the coordinator run
+/// `id`. `lane_model` is the model the lane supervisor passes to the harness:
+/// claude and opencode use their recipe's mock spelling, codex a spelling its
+/// own model catalog knows, because codex folds an unknown-model warning into
+/// the reply the supervisor's startup ack reads.
 struct Case {
     entry: &'static str,
     id: HarnessId,
     executable_override: &'static str,
+    lane_model: &'static str,
 }
 
 const CASES: &[Case] = &[
@@ -52,21 +64,25 @@ const CASES: &[Case] = &[
         entry: "claude",
         id: HarnessId::Claude,
         executable_override: "CLAUDE_BIN",
+        lane_model: "claude-sonnet-4-5",
     },
     Case {
         entry: "codex",
         id: HarnessId::Codex,
         executable_override: "CODEX_BIN",
+        lane_model: "gpt-5.6-luna",
     },
     Case {
         entry: "opencode",
         id: HarnessId::Opencode,
         executable_override: "OPENCODE_BIN",
+        lane_model: "llmock/mock-model",
     },
     Case {
         entry: "kimi",
         id: HarnessId::Kimi,
         executable_override: "KIMI_BIN",
+        lane_model: "llmock/mock-model",
     },
 ];
 
@@ -109,14 +125,91 @@ impl Scratch {
     }
 }
 
+impl Scratch {
+    /// Every process whose cwd or inherited `HOME` sits under this scratch
+    /// root, found even when the case panicked before recording a pid. The
+    /// canonicalized root matches the cwd `lsof` reports (`/private/var` for
+    /// `temp_dir()`'s `/var`).
+    fn scratch_processes(&self) -> Vec<u32> {
+        let root = self.root.to_string_lossy().into_owned();
+        let resolved = std::fs::canonicalize(&self.root)
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_else(|_| root.clone());
+        let me = std::process::id();
+        let mut pids = cwd_pids_under(&resolved);
+        pids.extend(home_pids_under(&root));
+        pids.sort_unstable();
+        pids.dedup();
+        pids.retain(|pid| *pid != me);
+        pids
+    }
+
+    /// Kill every process the case left under the scratch root.
+    fn reap(&self) {
+        for pid in self.scratch_processes() {
+            let _ = Command::new("kill")
+                .args(["-KILL", &pid.to_string()])
+                .output();
+        }
+    }
+}
+
 impl Drop for Scratch {
     fn drop(&mut self) {
         let mail = self.mail.display().to_string();
         let _ = self.boop(&["beep", "lane", "delete", &self.lane, "--mail-dir", &mail]);
         let _ = tmux(&["kill-session", "-t", &self.lane]);
         let _ = tmux(&["kill-session", "-t", &self.coordinator_session]);
+        self.reap();
         let _ = std::fs::remove_dir_all(&self.root);
     }
+}
+
+/// Pids whose working directory sits under `root`, from one `lsof` sweep.
+fn cwd_pids_under(root: &str) -> Vec<u32> {
+    let output = Command::new("lsof")
+        .args(["-a", "-d", "cwd", "-Fn"])
+        .output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut pids = Vec::new();
+    let mut current = None;
+    for line in text.lines() {
+        if let Some(pid) = line.strip_prefix('p').and_then(|pid| pid.parse().ok()) {
+            current = Some(pid);
+        } else if let Some(path) = line.strip_prefix('n') {
+            if path.starts_with(root) {
+                if let Some(pid) = current {
+                    pids.push(pid);
+                }
+            }
+        }
+    }
+    pids
+}
+
+/// Pids whose environment `HOME` sits under `root`, from one `ps` sweep.
+/// `-ww` keeps ps from cutting the line before the `HOME=` token.
+fn home_pids_under(root: &str) -> Vec<u32> {
+    let output = Command::new("ps")
+        .args(["-E", "-ww", "-o", "pid=,command="])
+        .output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let (pid, rest) = line.trim().split_once(char::is_whitespace)?;
+            let pid = pid.parse().ok()?;
+            let home = rest
+                .split_whitespace()
+                .find_map(|token| token.strip_prefix("HOME="))?;
+            home.starts_with(root).then_some(pid)
+        })
+        .collect()
 }
 
 fn tmux(args: &[&str]) -> std::process::Output {
@@ -209,17 +302,31 @@ fn wait_for_coordinator(scratch: &Scratch, case: &Case) {
 }
 
 /// The lane route is registered under the coordinator, which is the parent edge
-/// `HeadWatch` reads to pick its subscribers.
+/// `HeadWatch` reads to pick its subscribers. Its conversation id appears only
+/// after the supervisor opened the harness channel and built that watch, so the
+/// test's commit lands after the baseline and is read as a real HEAD move
+/// rather than folded into the starting head.
 fn wait_for_lane(scratch: &Scratch, case: &Case) {
     let lane = &scratch.lane;
     let route = scratch.coordinator_route;
-    wait_for(case, 4, &format!("lane route {lane} under {route}"), || {
-        scratch
-            .query(&format!(
-                "SELECT kind FROM agent_route WHERE route = '{lane}' AND parent = '{route}'"
-            ))
-            .contains("lane")
-    });
+    wait_for(
+        case,
+        4,
+        &format!("bound lane route {lane} under {route}"),
+        || {
+            scratch
+                .query(&format!(
+                    "SELECT kind, COALESCE(session_id,'') FROM agent_route \
+                 WHERE route = '{lane}' AND parent = '{route}'"
+                ))
+                .lines()
+                .any(|line| {
+                    let mut cells = line.split('\t');
+                    cells.next().unwrap_or("") == "lane"
+                        && !cells.next().unwrap_or("").trim().is_empty()
+                })
+        },
+    );
 }
 
 /// One pane, one wrapped real TUI against the loopback provider. The recipe env
@@ -276,15 +383,16 @@ fn run_tui_in_pane(scratch: &Scratch, case: &Case, launch: &MockTuiLaunch, works
     );
 }
 
-/// Build the lane create command. The lane always runs harness `claude` in
-/// direct stream-json mode (`--bin`), pointed at the same llmock through the
-/// mock recipe's env. `BOOP_READER_HOME` points the supervisor's claude door at
-/// the coordinator's session registry; PATH carries this worktree's boop onto
-/// the pane so `nice -n 10 boop beep lane run` is the binary under test.
+/// Build the lane create command for harness `case.id`. `--harness` and
+/// `--model` name the same harness as the coordinator, `--env` carries its
+/// mock recipe (a scratch HOME, the loopback provider), and `--bin` threads
+/// the recipe's resolved executable where the harness channel accepts one.
+/// `BOOP_READER_HOME` points the supervisor's reader at the coordinator's
+/// session registry; PATH carries this worktree's boop onto the pane so
+/// `nice -n 10 boop beep lane run` is the binary under test.
 fn lane_create_command(
     scratch: &Scratch,
     case: &Case,
-    claude_bin: &Path,
     lane_launch: &MockTuiLaunch,
     base_sha: &str,
 ) -> Command {
@@ -313,12 +421,16 @@ fn lane_create_command(
         .arg(&brief)
         .arg("--base-sha")
         .arg(base_sha)
-        .args(["--harness", "claude", "--no-start", "--parent"])
+        .args(["--harness", case.entry, "--no-start", "--parent"])
         .arg(scratch.coordinator_route)
-        .arg("--bin")
-        .arg(claude_bin)
+        .args(["--model", case.lane_model])
         .arg("--mail-dir")
         .arg(&scratch.mail);
+    // Codex's lane channel is the npx ACP adapter, which owns its program, so
+    // an executable override would replace `npx` and break the row.
+    if case.id != HarnessId::Codex {
+        command.arg("--bin").arg(&lane_launch.executable);
+    }
     for (key, value) in &env {
         command.arg("--env").arg(format!("{key}={value}"));
     }
@@ -327,12 +439,7 @@ fn lane_create_command(
 
 /// One harness end to end. Prints `pass <entry>` on success; returns Err on a
 /// skip so the caller records it.
-fn run_case(
-    case: &Case,
-    llmock: &Path,
-    claude_bin: &Path,
-    registry: &Registry,
-) -> Result<(), String> {
+fn run_case(case: &Case, llmock: &Path, registry: &Registry) -> Result<(), String> {
     let root = std::env::temp_dir().join(format!(
         "boop-commitpush-{}-{}",
         case.entry,
@@ -404,18 +511,18 @@ fn run_case(
     wait_for_screen(case, &session, mock_tui::MOCK_REPLY_MARKER, "step 3");
     wait_for_coordinator(&scratch, case);
 
-    // Lane recipe: the claude adapter's mock env for a lane home and the
-    // worktree it will run in.
+    // Lane recipe: the same harness's mock env for a lane home and the
+    // worktree the supervisor will run in.
     let lane_launch = registry
-        .get(HarnessId::Claude)
+        .get(case.id)
         .mock_tui_launch(&mock_tui::MockTuiContext {
             home: &root.join("lane-home"),
             workspace: &worktree,
             port: provider.port,
         })
-        .map_err(|error| format!("lane claude recipe: {error}"))?;
+        .map_err(|error| format!("lane {} recipe: {error}", case.entry))?;
 
-    let lane_create = lane_create_command(&scratch, case, claude_bin, &lane_launch, &base_sha)
+    let lane_create = lane_create_command(&scratch, case, &lane_launch, &base_sha)
         .output()
         .expect("run lane create");
     assert!(
@@ -459,11 +566,17 @@ fn run_case(
                  WHERE m.from_route = '{lane}' ORDER BY t.sequence"
             ));
             let pushes = scratch.query("SELECT * FROM agent_commit_push");
+            let mail = scratch.query(
+                "SELECT kind, from_route, to_route, COALESCE(detail,'') \
+                 FROM agent_mail ORDER BY rowid",
+            );
             panic!(
                 "{} step 6: no agent_commit_push row within {STEP_DEADLINE:?}\n\
-                 transitions:\n{transitions}\npushes:\n{pushes}\npane:\n{}",
+                 transitions:\n{transitions}\npushes:\n{pushes}\nmail:\n{mail}\n\
+                 coordinator:\n{}\nlane:\n{}",
                 case.entry,
-                screen(&session)
+                screen(&session),
+                screen(&lane)
             );
         }
         std::thread::sleep(POLL);
@@ -538,46 +651,46 @@ fn run_one(entry: &str) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
         return Err("no llmock (cargo install --tag v0.1.2 llmock)".to_owned());
     };
-    let Some(claude_bin) = mock_tui::resolve_executable("claude", "CLAUDE_BIN") else {
-        return Err("no claude executable for the lane (set CLAUDE_BIN)".to_owned());
-    };
     if mock_tui::resolve_executable(case.entry, case.executable_override).is_none() {
         return Err(format!("no {} executable", case.entry));
     }
     let registry = Registry::discover();
-    run_case(case, &llmock, &claude_bin, &registry)
+    run_case(case, &llmock, &registry)
 }
 
-/// RECEIPT. A real lane supervisor sees a commit in its worktree and pushes it
-/// once through the claude coordinator's own door; a blocked commit arrives as
-/// a request carrying its ask. Sabotage: dropping the commit push leaves the
-/// scratch store with no `agent_commit_push` row and the coordinator pane
-/// without `commit <lane>`.
+/// RECEIPT. A real claude lane supervisor sees a commit in its worktree and
+/// pushes it once through a real claude coordinator TUI's own door; a blocked
+/// commit arrives as a request carrying its ask. Sabotage: dropping the commit
+/// push leaves the scratch store with no `agent_commit_push` row and the
+/// coordinator pane without `commit <lane>`.
 #[test]
-fn commit_push_reaches_claude_tui() {
+fn commit_push_claude_lane_to_claude_tui() {
+    let _case = CASE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     match run_one("claude") {
         Ok(()) => {}
-        Err(reason) => eprintln!("skip claude: {reason}"),
+        Err(reason) => eprintln!("skip commit_push claude: {reason}"),
     }
 }
 
-/// RECEIPT, codex coordinator. Same body as the claude case; see
-/// `commit_push_reaches_claude_tui`.
+/// RECEIPT, codex lane and coordinator. Same body as the claude case; see
+/// `commit_push_claude_lane_to_claude_tui`.
 #[test]
-fn commit_push_reaches_codex_tui() {
+fn commit_push_codex_lane_to_codex_tui() {
+    let _case = CASE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     match run_one("codex") {
         Ok(()) => {}
-        Err(reason) => eprintln!("skip codex: {reason}"),
+        Err(reason) => eprintln!("skip commit_push codex: {reason}"),
     }
 }
 
-/// RECEIPT, opencode coordinator. Same body as the claude case; see
-/// `commit_push_reaches_claude_tui`.
+/// RECEIPT, opencode lane and coordinator. Same body as the claude case; see
+/// `commit_push_claude_lane_to_claude_tui`.
 #[test]
-fn commit_push_reaches_opencode_tui() {
+fn commit_push_opencode_lane_to_opencode_tui() {
+    let _case = CASE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     match run_one("opencode") {
         Ok(()) => {}
-        Err(reason) => eprintln!("skip opencode: {reason}"),
+        Err(reason) => eprintln!("skip commit_push opencode: {reason}"),
     }
 }
 
