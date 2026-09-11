@@ -54,7 +54,9 @@ pub struct Store {
 /// creating them, and a current version stops the migration at the gate.
 /// 30 = commit-as-message: subscriptions, door pushes per (lane, subscriber,
 /// head) and the per-lane reported head; see `COMMIT_PUSH_SCHEMA`.
-pub const SCHEMA_VERSION: i64 = 30;
+/// 31 = one notice per PR url, claimed by the first producer; see
+/// `PR_NOTICE_SCHEMA`.
+pub const SCHEMA_VERSION: i64 = 31;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -997,6 +999,10 @@ impl Store {
                 self.connection.execute_batch(COMMIT_PUSH_SCHEMA)?;
                 self.connection.execute_batch("PRAGMA user_version = 30;")?;
             }
+            if self.schema_version()? < 31 {
+                self.connection.execute_batch(PR_NOTICE_SCHEMA)?;
+                self.connection.execute_batch("PRAGMA user_version = 31;")?;
+            }
             self.stamp_version()?;
             Ok(())
         })();
@@ -1503,14 +1509,14 @@ impl Store {
         Ok(())
     }
 
-    fn add_pr(&self, session: &str, turn: u64, pr_url: &str) -> Result<()> {
+    fn add_pr(&self, session: &str, turn: u64, pr_url: &str) -> Result<bool> {
         let sid = self.session_id(session)?;
         let pr_id = self.intern("dict_pr", pr_url)?;
-        self.connection.execute(
+        let inserted = self.connection.execute(
             "INSERT OR IGNORE INTO agent_pr (session_id, turn, pr_url_id) VALUES (?1, ?2, ?3)",
             params![sid, turn as i64, pr_id],
         )?;
-        Ok(())
+        Ok(inserted == 1)
     }
 
     #[cfg(test)]
@@ -3185,7 +3191,8 @@ impl Store {
     }
 
     /// Drop every commit-push row keyed to `lane`: its subscription rows, its
-    /// pushed-head ledger and its reported head. Returns the row count removed.
+    /// pushed-head ledger, its reported head and its PR notices. Returns the
+    /// row count removed.
     pub fn drop_lane_commit_state(&self, lane: &str) -> Result<usize> {
         let mut removed = self.connection.execute(
             "DELETE FROM agent_commit_subscription WHERE lane = ?1",
@@ -3198,7 +3205,61 @@ impl Store {
         removed += self
             .connection
             .execute("DELETE FROM agent_lane_head WHERE lane = ?1", params![lane])?;
+        removed += self
+            .connection
+            .execute("DELETE FROM agent_pr_notice WHERE lane = ?1", params![lane])?;
         Ok(removed)
+    }
+
+    /// Claim one PR url for `lane`. `Ok(true)` means this caller is the first
+    /// producer to see the url, so it, and only it, appends the notice rows.
+    pub fn claim_pr_notice(&self, pr_url: &str, lane: &str, at_ms: u64) -> Result<bool> {
+        let inserted = self.connection.execute(
+            "INSERT OR IGNORE INTO agent_pr_notice (pr_url, lane, at_ms)
+             VALUES (?1, ?2, ?3)",
+            params![pr_url, lane, at_ms as i64],
+        )?;
+        Ok(inserted == 1)
+    }
+
+    /// Append one `kind=pr` row per subscriber for a PR `lane` opened. Only the
+    /// first producer to claim `pr_url` appends; every later call returns an
+    /// empty list. The rows are appended to the mailbox and returned; the
+    /// supervisor producer delivers them down the ladder, the ingest producer
+    /// leaves them for the next drain.
+    pub fn notify_pr(
+        &self,
+        lane: &str,
+        pr_url: &str,
+        title: Option<&str>,
+    ) -> Result<Vec<crate::bus::Message>> {
+        if !self.claim_pr_notice(pr_url, lane, crate::bus::now_ms())? {
+            return Ok(Vec::new());
+        }
+        let title = match title {
+            Some(title) => format!(" title={title:?}"),
+            None => String::new(),
+        };
+        let body = format!("pr {lane} {pr_url}{title}\n review: gh pr diff {pr_url}");
+        let mut rows = Vec::new();
+        for subscriber in crate::bus::lane_subscribers(self, lane) {
+            let row = crate::bus::Message {
+                id: crate::bus::mint_id(),
+                from: lane.to_owned(),
+                to: subscriber,
+                from_timestamp: crate::bus::now_iso(),
+                to_timestamp: None,
+                kind: crate::bus::MessageKind::Pr,
+                reply_to: None,
+                body: body.clone(),
+                r#ref: None,
+                rc: None,
+                detail: None,
+            };
+            crate::bus::insert_message(self, "bus", &row, "pr notice")?;
+            rows.push(row);
+        }
+        Ok(rows)
     }
 
     /// Every liveness interval for one session (or all when `session` is
@@ -3577,6 +3638,16 @@ impl Store {
     }
 }
 
+/// The route name whose session id is `session`, if any. The transcript-ingest
+/// PR producer addresses a notice through it.
+fn route_by_session(store: &Store, session: &str) -> Option<String> {
+    crate::bus::routes_in(store)
+        .ok()?
+        .into_iter()
+        .find(|(_, route)| route.session_id.as_deref() == Some(session))
+        .map(|(name, _)| name)
+}
+
 /// Walk one complete line and emit its turns and typed facts.
 fn project_line(
     store: &Store,
@@ -3616,7 +3687,14 @@ fn project_line(
             walk.turn += 1;
             let inserted = store.add_turn(&sid, walk.turn, ts, "system", "", cwd)?;
             walk.record(inserted);
-            store.add_pr(&sid, walk.turn, pr_url)?;
+            // A new PR url, on a session a route names: append the notice rows
+            // held, so the next drain pushes them. A re-sync of the same url
+            // inserts nothing and appends nothing.
+            if store.add_pr(&sid, walk.turn, pr_url)? {
+                if let Some(lane) = route_by_session(store, &sid) {
+                    store.notify_pr(&lane, pr_url, None)?;
+                }
+            }
         }
         return Ok(());
     }
@@ -3987,6 +4065,17 @@ CREATE TABLE IF NOT EXISTS agent_lane_head (
 ) WITHOUT ROWID;
 ";
 
+/// Schema v31: one row per PR url, claimed by the first producer that sees it
+/// (the lane supervisor's `gh pr create` or transcript ingest). The claim is
+/// what keeps both producers from appending a second round of rows.
+const PR_NOTICE_SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS agent_pr_notice (
+  pr_url TEXT PRIMARY KEY,
+  lane TEXT NOT NULL,
+  at_ms INTEGER NOT NULL
+) WITHOUT ROWID;
+";
+
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS dict_session (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS dict_harness (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
@@ -4137,6 +4226,14 @@ CREATE INDEX IF NOT EXISTS idx_commit_push_subscriber
 CREATE TABLE IF NOT EXISTS agent_lane_head (
   lane TEXT PRIMARY KEY,
   reported_head TEXT NOT NULL,
+  at_ms INTEGER NOT NULL
+) WITHOUT ROWID;
+
+-- One row per PR url, claimed by the first producer that sees it. The claim is
+-- what keeps the supervisor and transcript ingest from appending two rounds.
+CREATE TABLE IF NOT EXISTS agent_pr_notice (
+  pr_url TEXT PRIMARY KEY,
+  lane TEXT NOT NULL,
   at_ms INTEGER NOT NULL
 ) WITHOUT ROWID;
 
@@ -6664,8 +6761,11 @@ mod tests {
                 .record_commit_push(lane, "obs", "abc", "m-1", 1)
                 .unwrap();
             store.set_lane_reported_head(lane, "abc", 1).unwrap();
+            store
+                .claim_pr_notice(&format!("https://x/{lane}"), lane, 1)
+                .unwrap();
         }
-        assert_eq!(store.drop_lane_commit_state("lane-a").unwrap(), 3);
+        assert_eq!(store.drop_lane_commit_state("lane-a").unwrap(), 4);
         assert_eq!(store.drop_lane_commit_state("lane-a").unwrap(), 0);
         assert_eq!(
             store.lane_reported_head("lane-b").unwrap().as_deref(),
@@ -6676,7 +6776,149 @@ mod tests {
             1
         );
         assert!(store.commit_push_exists("lane-b", "obs", "abc").unwrap());
+        assert!(!store
+            .claim_pr_notice("https://x/lane-b", "lane-b", 1)
+            .unwrap());
         drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// RECEIPT. The first producer to claim a PR url owns the notice; a second
+    /// claim for the same url is refused, so both producers cannot append rows.
+    #[test]
+    fn a_pr_notice_is_claimed_once() {
+        let (path, store) = fresh_store("pr-claim");
+        assert!(store.claim_pr_notice("https://x/1", "lane-a", 1).unwrap());
+        assert!(!store.claim_pr_notice("https://x/1", "lane-a", 2).unwrap());
+        assert!(store.claim_pr_notice("https://x/2", "lane-a", 3).unwrap());
+        let rows: i64 = store
+            .connection
+            .query_row("SELECT COUNT(*) FROM agent_pr_notice", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(rows, 2);
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The route shape the PR notice tests register, parent optional.
+    fn pr_test_route(parent: Option<&str>) -> crate::bus::Route {
+        crate::bus::Route {
+            kind: "lane".into(),
+            harness: None,
+            tmux: None,
+            cwd: None,
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: parent.map(str::to_owned),
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+            app_server_socket: None,
+        }
+    }
+
+    /// RECEIPT. notify_pr appends one `kind=pr` row per subscriber and a second
+    /// call for the same url appends nothing.
+    #[test]
+    fn notify_pr_appends_one_row_per_subscriber_once() {
+        let dir = std::env::temp_dir().join(format!("boop_pr_notify_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(dir.join("boop.db")).unwrap();
+        crate::bus::write_route(&dir, "mine", &pr_test_route(Some("parent"))).unwrap();
+        store
+            .set_commit_subscription(&super::CommitSubscriptionRow {
+                subscriber: "obs".into(),
+                lane: "mine".into(),
+                mode: "door".into(),
+                created_at: "t".into(),
+            })
+            .unwrap();
+        let rows = store
+            .notify_pr("mine", "https://github.com/a/b/pull/7", Some("t"))
+            .unwrap();
+        let mut tos: Vec<String> = rows.iter().map(|row| row.to.clone()).collect();
+        tos.sort();
+        assert_eq!(tos, ["obs", "parent"]);
+        assert_eq!(rows[0].kind, crate::bus::MessageKind::Pr);
+        assert!(
+            rows[0]
+                .body
+                .contains("review: gh pr diff https://github.com/a/b/pull/7"),
+            "{}",
+            rows[0].body
+        );
+        assert!(store
+            .notify_pr("mine", "https://github.com/a/b/pull/7", None)
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            crate::bus::held_messages(&store, "parent").unwrap().len(),
+            1
+        );
+        drop(store);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. The transcript-ingest producer: a new PR url on a session a
+    /// route names appends a held `kind=pr` row per subscriber, addressed
+    /// through `route_by_session`, exactly as `project_line` does.
+    #[test]
+    fn the_ingest_producer_appends_a_held_pr_row_per_subscriber() {
+        let dir = std::env::temp_dir().join(format!("boop_pr_ingest_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(dir.join("boop.db")).unwrap();
+        let mut route = pr_test_route(Some("parent"));
+        route.session_id = Some("s1".into());
+        crate::bus::write_route(&dir, "mine", &route).unwrap();
+        store
+            .set_commit_subscription(&super::CommitSubscriptionRow {
+                subscriber: "obs".into(),
+                lane: "mine".into(),
+                mode: "door".into(),
+                created_at: "t".into(),
+            })
+            .unwrap();
+        let lane = super::route_by_session(&store, "s1").unwrap();
+        let rows = store
+            .notify_pr(&lane, "https://github.com/a/b/pull/9", None)
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(
+            crate::bus::held_messages(&store, "parent").unwrap().len(),
+            1,
+            "the ingest producer leaves its rows held"
+        );
+        assert_eq!(crate::bus::held_messages(&store, "obs").unwrap().len(), 1);
+        assert!(store
+            .notify_pr(&lane, "https://github.com/a/b/pull/9", None)
+            .unwrap()
+            .is_empty());
+        drop(store);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. A v30 store gains the PR notice table in place.
+    #[test]
+    fn v31_migrates_a_v30_store_and_creates_the_pr_notice_table() {
+        let (path, store) = fresh_store("v31-migrate");
+        store
+            .connection
+            .execute_batch(
+                "DROP TABLE agent_pr_notice;
+                 PRAGMA user_version = 30;",
+            )
+            .unwrap();
+        drop(store);
+
+        let migrated = Store::open(path.clone()).unwrap();
+        assert_eq!(migrated.schema_version().unwrap(), SCHEMA_VERSION);
+        assert!(has_table(&migrated, "agent_pr_notice"));
+        drop(migrated);
         let _ = std::fs::remove_file(&path);
     }
 

@@ -1360,30 +1360,6 @@ fn registered_parent(dir: &Path, lane: &str) -> Option<String> {
     bus::read_routes(dir).ok()?.get(lane)?.parent.clone()
 }
 
-/// Every subscriber that wants this lane's commit rows: the registered parent
-/// plus each `agent_commit_subscription` row, deduped, never the lane itself. A
-/// `'*'` row counts only for the lane's parent, so a coordinator subscribing
-/// `children` does not receive every lane's commits.
-fn commit_subscribers(store: &boop_store::Store, lane: &LaneRun) -> Vec<String> {
-    let parent = registered_parent(&lane.mail_dir, &lane.lane);
-    let mut subscribers: Vec<String> = parent.iter().cloned().collect();
-    for row in store
-        .commit_subscriptions_for_lane(&lane.lane)
-        .unwrap_or_default()
-    {
-        if row.subscriber == lane.lane {
-            continue;
-        }
-        if row.lane == "*" && parent.as_deref() != Some(row.subscriber.as_str()) {
-            continue;
-        }
-        if !subscribers.contains(&row.subscriber) {
-            subscribers.push(row.subscriber);
-        }
-    }
-    subscribers
-}
-
 /// Report one HEAD move. A rewind mails the parent one mailbox row naming both
 /// shas; an advance mails every commit subscriber a `commit` row (a `request`
 /// when the burst is blocked) and records the reported head. Not gated by the
@@ -1405,7 +1381,7 @@ fn report_head_move(lane: &LaneRun, store: &boop_store::Store, worktree: &Path, 
             };
             let body = commit_body(&lane.lane, worktree, &facts);
             let detail = facts.status.as_str();
-            for subscriber in commit_subscribers(store, lane) {
+            for subscriber in bus::lane_subscribers(store, &lane.lane) {
                 mail_parent(lane, &subscriber, kind, body.clone(), Some(detail));
             }
             if let Err(error) =
