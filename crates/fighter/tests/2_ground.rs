@@ -172,3 +172,67 @@ fn serialized_phase_resumes_the_same_statig_dispatch_tape() {
         }
     }
 }
+
+/// Migrated from the deleted isolated crouch chart: the source-resolved
+/// lifecycle runs through the one live `ground::decide` authority.
+#[test]
+fn crouch_lifecycle_exact_trace_through_decide() {
+    use Phase::*;
+    let request = || {
+        Event::GroundIntent(Facts {
+            down: true,
+            ..Facts::default()
+        })
+    };
+    let finish = || {
+        Event::Motion(Facts {
+            finished: true,
+            ..Facts::default()
+        })
+    };
+    let release = || Event::Motion(Facts::default());
+    let mut phase = Idle;
+    let mut trace = vec![phase];
+    for event in [request(), request(), finish(), release(), finish()] {
+        if let Some(next) = decide(phase, event) {
+            phase = next;
+        }
+        trace.push(phase);
+    }
+    assert_eq!(
+        trace,
+        vec![Idle, CrouchEnter, CrouchEnter, CrouchHold, CrouchExit, Idle]
+    );
+}
+
+/// Migrated from the deleted isolated crouch chart: rejected events leave the
+/// live phase unchanged for every edge the live machine does not accept.
+#[test]
+fn crouch_rejected_events_leave_the_phase_unchanged() {
+    use Phase::*;
+    let request = || {
+        Event::GroundIntent(Facts {
+            down: true,
+            ..Facts::default()
+        })
+    };
+    let finish = || {
+        Event::Motion(Facts {
+            finished: true,
+            ..Facts::default()
+        })
+    };
+    let release = || Event::Motion(Facts::default());
+    // Idle rejects completion and release.
+    assert_eq!(decide(Idle, finish()), None);
+    assert_eq!(decide(Idle, release()), None);
+    // CrouchEnter rejects release and a repeated crouch request.
+    assert_eq!(decide(CrouchEnter, release()), None);
+    assert_eq!(decide(CrouchEnter, request()), None);
+    // CrouchHold rejects a repeated crouch request; release is its exit edge.
+    assert_eq!(decide(CrouchHold, request()), None);
+    // CrouchExit only completes; request and release are rejected.
+    assert_eq!(decide(CrouchExit, request()), None);
+    assert_eq!(decide(CrouchExit, release()), None);
+    assert_eq!(decide(CrouchExit, finish()), Some(Idle));
+}

@@ -54,6 +54,8 @@ impl blocking::State<Ground> for Phase {
                 _ => Handled,
             },
             Event::GroundIntent(f) => match self {
+                // ftCo_Wait_IASA:66 -> ftCo_800D5FB0 -> ftCo_Squat_Enter
+                // (ftCo_Squat_CheckInput, ftCo_Squat.c:47-81): down enters Squat.
                 Idle | Dash | Run if f.down => Transition(CrouchEnter),
                 Idle | Dash | Run if f.dash => Transition(Dash),
                 Idle if f.walk => Transition(Walk),
