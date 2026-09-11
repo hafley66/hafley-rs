@@ -33,13 +33,13 @@
     "profile": "pigeon-falcon-gameplay",
     "revision": "24911cc3713399fb1b8238d680477c6cb841a407",
     "source_revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
-    "source_fingerprint": "3b639b87d3956f4b0a6a5f22590688cae68a0175dce352d7015c79ffb2e14c78",
+    "source_fingerprint": "bedca8e388c68ff5175e96e549f58d3d21a22554a147947bc0e1211a541e3f90",
     "states": 14
   },
   "receipts": {
     "rollback": "LEGACY_STALE",
     "source_fidelity": "LEGACY_STALE",
-    "fingerprint": "3b639b87d3956f4b0a6a5f22590688cae68a0175dce352d7015c79ffb2e14c78",
+    "fingerprint": "bedca8e388c68ff5175e96e549f58d3d21a22554a147947bc0e1211a541e3f90",
     "legacy_prove": {
       "commit": "98b4631983eb8b1ceb32605b4ddbd41ac6ae738e",
       "source": "addc7e5c8bd32a7dc38e719629ade73f972187e72f3ae0675d0c6dcb3feebdac",

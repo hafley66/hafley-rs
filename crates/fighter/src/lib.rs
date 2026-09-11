@@ -27,6 +27,8 @@ pub mod ground;
 pub mod ground_chart;
 #[path = "5_status.rs"]
 pub mod status;
+#[path = "6_qualification.rs"]
+pub mod qualification;
 #[path = "3_slice.rs"]
 pub mod slice;
 #[path = "1_state.rs"]

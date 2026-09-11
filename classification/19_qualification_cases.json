@@ -1,0 +1,242 @@
+{
+  "schema": "games.animation-qualification.v1",
+  "profile": "pigeon-falcon-gameplay",
+  "target": "smash",
+  "source_inventory": "classification/12_source_inventory.json",
+  "source_revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+  "generator": "classification/18_qualification.mjs",
+  "callbacks": [
+    {
+      "source_callback_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_Dash.c:ftCo_Dash_Anim:Anim:299",
+      "source_association_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/ftmotionstates.c:ftData_MotionStateList:ftCo_Dash_Anim:IASA:63",
+      "source_state_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/forward.h:ftCommon_MotionState:ftCo_MS_Dash:20",
+      "action": "Dash",
+      "source": {
+        "repository": "https://github.com/doldecomp/melee.git",
+        "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+        "path": "src/melee/ft/kinds/ftCommon/ftCo_Dash.c",
+        "line": 74,
+        "symbol": "ftCo_Dash_Anim"
+      },
+      "runtime": {
+        "phase": "Dash",
+        "domain": "ground",
+        "event": "Motion",
+        "finished": true,
+        "forward": true,
+        "destination": "Run"
+      },
+      "source_completion": {
+        "condition": "!ftAnim_IsFramesRemaining",
+        "destination": "ftCo_MS_Wait",
+        "qualification": "unqualified",
+        "reason": "contextual ft_8008A2BC destination differs from runtime dash completion (Run/Brake)"
+      },
+      "completion_call_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_Dash.c:ftCo_Dash_Anim:Anim:299:call:0",
+      "ordered_calls": [
+        {
+          "id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_Dash.c:ftCo_Dash_Anim:Anim:299:call:0",
+          "ordinal": 0,
+          "symbol": "ftAnim_IsFramesRemaining",
+          "operation": "animation_finished",
+          "owner": "game-fighter",
+          "source": {
+            "repository": "https://github.com/doldecomp/melee.git",
+            "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+            "path": "src/melee/ft/kinds/ftCommon/ftCo_Dash.c",
+            "line": 76,
+            "symbol": "ftAnim_IsFramesRemaining"
+          }
+        },
+        {
+          "id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_Dash.c:ftCo_Dash_Anim:Anim:299:call:1",
+          "ordinal": 1,
+          "symbol": "ft_8008A2BC",
+          "operation": "motion_transition",
+          "owner": "game-fighter",
+          "source": {
+            "repository": "https://github.com/doldecomp/melee.git",
+            "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+            "path": "src/melee/ft/kinds/ftCommon/ftCo_Dash.c",
+            "line": 77,
+            "symbol": "ft_8008A2BC"
+          }
+        }
+      ]
+    },
+    {
+      "source_callback_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_Landing.c:ftCo_Landing_Anim:Anim:510",
+      "source_association_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/ftmotionstates.c:ftData_MotionStateList:ftCo_Landing_Anim:IASA:151",
+      "source_state_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/forward.h:ftCommon_MotionState:ftCo_MS_Landing:42",
+      "action": "Landing",
+      "source": {
+        "repository": "https://github.com/doldecomp/melee.git",
+        "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+        "path": "src/melee/ft/kinds/ftCommon/ftCo_Landing.c",
+        "line": 115,
+        "symbol": "ftCo_Landing_Anim"
+      },
+      "runtime": {
+        "phase": "Landing",
+        "domain": "ground",
+        "event": "Motion",
+        "finished": true,
+        "forward": false,
+        "destination": "Idle"
+      },
+      "source_completion": {
+        "condition": "!ftAnim_IsFramesRemaining",
+        "destination": "ftCo_MS_Wait",
+        "qualification": "unqualified",
+        "reason": "contextual ft_8008A2BC branches are absent from the runtime landing model"
+      },
+      "completion_call_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_Landing.c:ftCo_Landing_Anim:Anim:510:call:0",
+      "ordered_calls": [
+        {
+          "id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_Landing.c:ftCo_Landing_Anim:Anim:510:call:0",
+          "ordinal": 0,
+          "symbol": "ftAnim_IsFramesRemaining",
+          "operation": "animation_finished",
+          "owner": "game-fighter",
+          "source": {
+            "repository": "https://github.com/doldecomp/melee.git",
+            "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+            "path": "src/melee/ft/kinds/ftCommon/ftCo_Landing.c",
+            "line": 117,
+            "symbol": "ftAnim_IsFramesRemaining"
+          }
+        },
+        {
+          "id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_Landing.c:ftCo_Landing_Anim:Anim:510:call:1",
+          "ordinal": 1,
+          "symbol": "ft_8008A2BC",
+          "operation": "motion_transition",
+          "owner": "game-fighter",
+          "source": {
+            "repository": "https://github.com/doldecomp/melee.git",
+            "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+            "path": "src/melee/ft/kinds/ftCommon/ftCo_Landing.c",
+            "line": 118,
+            "symbol": "ft_8008A2BC"
+          }
+        }
+      ]
+    },
+    {
+      "source_callback_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_Squat.c:ftCo_Squat_Anim:Anim:599",
+      "source_association_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/ftmotionstates.c:ftData_MotionStateList:ftCo_Squat_Anim:IASA:139",
+      "source_state_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/forward.h:ftCommon_MotionState:ftCo_MS_Squat:39",
+      "action": "Squat",
+      "source": {
+        "repository": "https://github.com/doldecomp/melee.git",
+        "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+        "path": "src/melee/ft/kinds/ftCommon/ftCo_Squat.c",
+        "line": 71,
+        "symbol": "ftCo_Squat_Anim"
+      },
+      "runtime": {
+        "phase": "CrouchEnter",
+        "domain": "ground",
+        "event": "Motion",
+        "finished": true,
+        "forward": false,
+        "destination": "CrouchHold"
+      },
+      "source_completion": {
+        "condition": "!ftAnim_IsFramesRemaining",
+        "destination": "ftCo_MS_SquatWait",
+        "qualification": "unqualified",
+        "reason": "ftCo_800D638C has item/context branches absent from the runtime model"
+      },
+      "completion_call_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_Squat.c:ftCo_Squat_Anim:Anim:599:call:0",
+      "ordered_calls": [
+        {
+          "id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_Squat.c:ftCo_Squat_Anim:Anim:599:call:0",
+          "ordinal": 0,
+          "symbol": "ftAnim_IsFramesRemaining",
+          "operation": "animation_finished",
+          "owner": "game-fighter",
+          "source": {
+            "repository": "https://github.com/doldecomp/melee.git",
+            "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+            "path": "src/melee/ft/kinds/ftCommon/ftCo_Squat.c",
+            "line": 73,
+            "symbol": "ftAnim_IsFramesRemaining"
+          }
+        },
+        {
+          "id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_Squat.c:ftCo_Squat_Anim:Anim:599:call:1",
+          "ordinal": 1,
+          "symbol": "ftCo_800D638C",
+          "operation": "crouch_hold_enter",
+          "owner": "game-fighter",
+          "source": {
+            "repository": "https://github.com/doldecomp/melee.git",
+            "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+            "path": "src/melee/ft/kinds/ftCommon/ftCo_Squat.c",
+            "line": 74,
+            "symbol": "ftCo_800D638C"
+          }
+        }
+      ]
+    },
+    {
+      "source_callback_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_SquatRv.c:ftCo_SquatRv_Anim:Anim:603",
+      "source_association_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/ftmotionstates.c:ftData_MotionStateList:ftCo_SquatRv_Anim:IASA:147",
+      "source_state_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/forward.h:ftCommon_MotionState:ftCo_MS_SquatRv:41",
+      "action": "SquatRv",
+      "source": {
+        "repository": "https://github.com/doldecomp/melee.git",
+        "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+        "path": "src/melee/ft/kinds/ftCommon/ftCo_SquatRv.c",
+        "line": 48,
+        "symbol": "ftCo_SquatRv_Anim"
+      },
+      "runtime": {
+        "phase": "CrouchExit",
+        "domain": "ground",
+        "event": "Motion",
+        "finished": true,
+        "forward": false,
+        "destination": "Idle"
+      },
+      "source_completion": {
+        "condition": "!ftAnim_IsFramesRemaining",
+        "destination": "ftCo_MS_Wait",
+        "qualification": "unqualified",
+        "reason": "contextual ft_8008A2BC branches are absent from the runtime crouch-exit model"
+      },
+      "completion_call_id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_SquatRv.c:ftCo_SquatRv_Anim:Anim:603:call:0",
+      "ordered_calls": [
+        {
+          "id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_SquatRv.c:ftCo_SquatRv_Anim:Anim:603:call:0",
+          "ordinal": 0,
+          "symbol": "ftAnim_IsFramesRemaining",
+          "operation": "animation_finished",
+          "owner": "game-fighter",
+          "source": {
+            "repository": "https://github.com/doldecomp/melee.git",
+            "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+            "path": "src/melee/ft/kinds/ftCommon/ftCo_SquatRv.c",
+            "line": 50,
+            "symbol": "ftAnim_IsFramesRemaining"
+          }
+        },
+        {
+          "id": "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/ftCo_SquatRv.c:ftCo_SquatRv_Anim:Anim:603:call:1",
+          "ordinal": 1,
+          "symbol": "ft_8008A2BC",
+          "operation": "motion_transition",
+          "owner": "game-fighter",
+          "source": {
+            "repository": "https://github.com/doldecomp/melee.git",
+            "revision": "c7861544f8e1fbc530612393e91d859886e97e3c",
+            "path": "src/melee/ft/kinds/ftCommon/ftCo_SquatRv.c",
+            "line": 51,
+            "symbol": "ft_8008A2BC"
+          }
+        }
+      ]
+    }
+  ]
+}

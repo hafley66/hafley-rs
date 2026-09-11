@@ -20,6 +20,7 @@ const sourcePath = fileURLToPath(new URL('12_source_inventory.json', import.meta
 const runtimePath = fileURLToPath(new URL('14_runtime_inventory.json', import.meta.url));
 const coveragePath = fileURLToPath(new URL('16_coverage.json', import.meta.url));
 const textPath = fileURLToPath(new URL('17_coverage.txt', import.meta.url));
+const qualificationPath = fileURLToPath(new URL('20_qualification_receipts.json', import.meta.url));
 const provePath = fileURLToPath(new URL('../blender-godot-sqlite-proof/pigeon-lab/.workflow/prove.json', import.meta.url));
 
 export async function loadPort() {
@@ -296,12 +297,16 @@ export function renderCoverage(coverage) {
   return lines.join('\n') + '\n';
 }
 
-export async function buildCoverage(base = root, { raw = undefined, runtime = undefined, source = undefined, port = undefined, receipt = undefined, requirementReceipts = [], fingerprint = undefined } = {}) {
+export async function buildCoverage(base = root, { raw = undefined, runtime = undefined, source = undefined, port = undefined, receipt = undefined, requirementReceipts = undefined, fingerprint = undefined } = {}) {
   source ??= await json(sourcePath);
   port ??= await loadPort();
   raw ??= runRuntimeExport(base);
   runtime ??= runtimeObservation(raw, port, source, base);
   receipt ??= await json(provePath).catch(error => error.code === 'ENOENT' ? null : Promise.reject(error));
+  if (requirementReceipts === undefined) {
+    const qualification = await json(qualificationPath).catch(error => error.code === 'ENOENT' ? null : Promise.reject(error));
+    requirementReceipts = qualification?.receipts ?? [];
+  }
   fingerprint ??= currentSourceFingerprint(base);
   return joinCoverage({ port, source, runtime, receipt, requirementReceipts, fingerprint, runtimeRevision: currentRevision(base) });
 }
