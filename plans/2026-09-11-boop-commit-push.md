@@ -288,6 +288,83 @@ Untested by design:
 - Coordinator behaviour on the push (whether it reviews well); that is prompt content, not boop.
 - Worktrees on a filesystem without reliable mtime; the nudge path is the fallback and is tested.
 
+## 11. Addendum: post-PR toggle and PR push (user ask, 2026-09-11)
+
+A lane can be told to finish by opening a PR, and any PR a lane or coordinator opens is pushed to that route's subscribers once.
+
+### Toggle
+
+| surface | spelling | effect |
+|---|---|---|
+| lane create | `--post-pr [--pr-base <branch>]`, `--no-post-pr` | writes `post_pr` and `pr_base` into `spawn.json` so a revive keeps them |
+| config | `post_pr = true` globally or per preset in `boop/config.json`; `pr_base` default `main` | the default when the flag is absent |
+| supervisor | appends one closing line to the brief text it opens the conversation with | `When the deliverable is committed and validated: git push -u origin HEAD, then gh pr create --fill --base <pr-base>. The PR is your final report; boop tells your parent.` |
+
+Default off: the toggle makes a lane push to `origin` and open a GitHub PR, an outward-facing act.
+
+### Types, then pseudo-code
+
+```rust
+// crates/boop-store/src/bus.rs
+MessageKind::Pr                     // wire "pr"; NOT a supervisor_row, so the ladder pushes it like a hail
+pub fn lane_subscribers(store: &Store, lane: &str) -> Vec<String>
+// parent (agent_route.parent) + agent_commit_subscription rows for lane, a '*' row only when that
+// subscriber is the lane's parent; dedupe; never the lane. Moved here from supervise.rs
+// commit_subscribers so the ingest path shares one definition; supervise.rs calls this.
+
+// crates/boop-store/src/ident.rs
+pub fn claim_pr_notice(&self, pr_url: &str, lane: &str, at_ms: u64) -> Result<bool>
+// INSERT OR IGNORE INTO agent_pr_notice; Ok(changes() == 1)
+pub fn notify_pr(&self, lane: &str, pr_url: &str, title: Option<&str>) -> Result<Vec<Message>>
+// if !claim_pr_notice: return []; for s in lane_subscribers: append kind=pr row,
+// body "pr {lane} {url} title={title:?}\n review: gh pr diff {url}"; return the rows
+fn add_pr(&self, session, turn, pr_url) -> Result<bool>   // was Result<()>: true when the row is new
+// projection caller (ident.rs:3602 region): on true, route = agent_route row whose session_id == session;
+// if found, self.notify_pr(route, url, None). The rows stay held; the next drain pushes them.
+
+// crates/boop-proc/src/supervise.rs
+fn is_pr_create(tool: &ToolCallFact) -> bool      // completed call whose title holds `gh pr create`
+fn pr_view(cwd: &Path) -> Option<(String, String)> // `gh pr view --json url,title`, bounded 10 s by wait-timeout; warn on timeout
+// in the turn loop: if turn_tools.iter().any(is_pr_create) { if let Some((url, title)) = pr_view(cwd) {
+//     for row in store.notify_pr(lane, &url, Some(&title))? { deliver_hail(row) } } }
+// brief assembly: if post_pr { brief.push_str(&post_pr_line(pr_base)) }
+```
+
+### Instance lifetimes
+
+| type | created | dropped |
+|---|---|---|
+| `agent_pr_notice` row | first producer to claim a PR url | `lane delete` (extend `drop_lane_commit_state`) |
+| `kind=pr` mail rows | one per subscriber at claim | acked on door landing, else held until drained |
+| `post_pr` / `pr_base` | `lane create` into `spawn.json` | lane delete |
+
+### Storage, sequence, uniqueness
+
+`agent_pr_notice (pr_url TEXT PRIMARY KEY, lane TEXT NOT NULL, at_ms INTEGER NOT NULL) WITHOUT ROWID`, schema v31, same ladder pattern as v30.
+
+| producer | sequence |
+|---|---|
+| lane supervisor (fast) | tool fact `gh pr create` completed -> `gh pr view` -> `claim_pr_notice` -> append rows -> `deliver_hail` each (door) |
+| transcript ingest (covers coordinators and native subagents) | sync projection -> `add_pr` inserted -> route by session_id -> `claim_pr_notice` -> append rows held -> next drain (any sync-carrying verb, or the TUI wrapper tick every 5 s, `control.rs` `DRAIN_EVERY`) pushes |
+
+| rule | mechanism |
+|---|---|
+| one notice per PR across both producers | `agent_pr_notice` PK on `pr_url`; only the claimer appends rows |
+| one row per subscriber per PR | rows appended once, at claim |
+| PR updates after open | not notified; commit push covers new commits |
+
+### Tests
+
+| case | input | expected | why |
+|---|---|---|---|
+| toggle line | `lane create --post-pr --pr-base dev --dry-run` | prints `post-pr: dev`; the supervisor's opening text ends with the post-PR line | the toggle reaches the worker |
+| config default | preset `post_pr = true`, no flag | line appended; `--no-post-pr` removes it | config path |
+| supervisor producer | fake `gh` on PATH printing `{"url":"https://github.com/a/b/pull/7","title":"t"}`, tool fact `gh pr create` completed | one `kind=pr` row per subscriber, door landing | fast path |
+| ingest producer | `add_pr` for a lane's session | one `kind=pr` row per subscriber, held | db path |
+| both producers | supervisor then ingest for the same url | one notice, one row per subscriber | uniqueness |
+| pr kind pushes | `kind=pr` row to a coordinator | not `MailboxOnly` | a pr row takes the door |
+| gh hangs | fake `gh` sleeping 30 s | returns None within 10 s, WARN logged, turn continues | external effect is bounded |
+
 ## Critical files
 
 - `crates/boop-proc/src/supervise.rs`
