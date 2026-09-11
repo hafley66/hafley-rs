@@ -4,6 +4,7 @@
 
 pub mod config;
 pub mod deliver;
+pub mod headwatch;
 pub mod inbox;
 pub mod lane;
 pub mod mailwait;
