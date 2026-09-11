@@ -473,8 +473,66 @@ pub fn deliver_hail_budgeted(
     // `held_messages` and `boop wait --me` (head-rewound-door-retry).
     if landing.rung.carried_the_body() {
         bus::ack_messages(store, std::slice::from_ref(&message.id), &bus::now_iso())?;
+        // One push per (lane, subscriber, head): the commit row joins the
+        // ledger the moment the door takes it, so a same-head replay in the
+        // window is held rather than offered to the door again.
+        if message.kind.commit_row() {
+            store.record_commit_push(
+                &message.from,
+                &message.to,
+                &commit_head(&message.body),
+                &message.id,
+                boop_harness::live::now_ms(),
+            )?;
+        }
     }
     Ok(landing)
+}
+
+/// Whether a commit row pushes at `subscriber`'s door or stays in the mailbox.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum CommitPush {
+    Door,
+    Mailbox,
+}
+
+/// The mode a commit row to `subscriber` about `lane` follows: an exact
+/// `agent_commit_subscription` row, then its `'*'` row, else the subscriber's
+/// route kind. A coordinator, a native route, or an `acpx` route takes the
+/// door by default; a lane parent and an unknown route keep the mailbox.
+pub fn commit_push_mode(
+    store: &Store,
+    routes: &BTreeMap<String, Route>,
+    subscriber: &str,
+    lane: &str,
+) -> CommitPush {
+    match store.commit_subscription(subscriber, lane) {
+        Ok(Some(mode)) if mode == "mailbox" => CommitPush::Mailbox,
+        Ok(Some(_)) => CommitPush::Door,
+        Ok(None) | Err(_) => default_commit_push(routes, subscriber),
+    }
+}
+
+/// The mode a subscriber with no explicit subscription row follows.
+fn default_commit_push(routes: &BTreeMap<String, Route>, subscriber: &str) -> CommitPush {
+    match routes.get(subscriber) {
+        Some(route)
+            if route.kind == "coordinator"
+                || route.kind == "native"
+                || route.mode.as_deref() == Some("acpx") =>
+        {
+            CommitPush::Door
+        }
+        _ => CommitPush::Mailbox,
+    }
+}
+
+/// The new head sha a commit row's body travels in: the tail of its `a..b`
+/// range token. An unrecognised body yields the empty string.
+fn commit_head(body: &str) -> String {
+    body.split_whitespace()
+        .find_map(|token| token.split_once("..").map(|(_, new)| new.to_owned()))
+        .unwrap_or_default()
 }
 
 fn land(
@@ -486,9 +544,34 @@ fn land(
     budget: &DoorBudget,
 ) -> Result<Landing> {
     let to = message.to.as_str();
+    // A commit row is a progress row, but a wip commit may take the door when
+    // its subscriber asked for one. A done commit, a mailbox mode, and a head
+    // already pushed all stop here; only a fresh door push falls through.
+    if message.kind.commit_row() {
+        let head = commit_head(&message.body);
+        if message.detail.as_deref() == Some("done") {
+            return Ok(Landing::new(
+                Rung::MailboxOnly,
+                format!("commit {head} row; done stays in the mailbox"),
+            ));
+        }
+        if commit_push_mode(store, routes, to, message.from.as_str()) == CommitPush::Mailbox {
+            return Ok(Landing::new(
+                Rung::MailboxOnly,
+                "commit row; subscriber reads the mailbox",
+            ));
+        }
+        if store.commit_push_exists(message.from.as_str(), to, &head)? {
+            return Ok(Landing::new(
+                Rung::MailboxOnly,
+                format!("commit {head} already pushed to {to}"),
+            ));
+        }
+    }
     // Rung 0, narrowed 2026-09-07: an end row pushes so a parent hears of a
-    // death unasked; six lanes yielding flood a transcript (2026-09-05).
-    if message.kind.lane_progress_row() {
+    // death unasked; six lanes yielding flood a transcript (2026-09-05). A
+    // commit row in Door mode already fell through above and takes the door.
+    if message.kind.lane_progress_row() && !message.kind.commit_row() {
         return Ok(Landing::new(
             Rung::MailboxOnly,
             format!("{} row; no door", message.kind.as_str()),
@@ -824,8 +907,13 @@ pub fn drain_route_held_mail_budgeted(
     let mut pushed = 0usize;
     for message in held {
         // A progress row is never pushed, so re-walking the ladder would only
-        // stamp a second `held-in-mailbox`; an end row retries like a hail.
-        if message.kind.lane_progress_row() {
+        // stamp a second `held-in-mailbox`; an end row retries like a hail. A
+        // commit row in Door mode that is not done is the one progress row
+        // that retries: the door may have been cooling off when it landed.
+        let commit_retry = message.kind.commit_row()
+            && message.detail.as_deref() != Some("done")
+            && commit_push_mode(store, &routes, &message.to, &message.from) == CommitPush::Door;
+        if message.kind.lane_progress_row() && !commit_retry {
             continue;
         }
         let Ok(landing) =
@@ -2181,5 +2269,145 @@ mod tests {
             DoorAddress::None
         );
         assert_eq!(door_address(None, None), DoorAddress::None);
+    }
+
+    /// One held commit row addressed at the fake claude coordinator route
+    /// `claude-{tag}`, from lane `{tag}-lane-0`.
+    fn commit_fixture(tag: &str, body: &str, detail: &str) -> (PathBuf, Store, Message) {
+        let (dir, store) = burst_fixture(tag, 0, &[]);
+        let message = Message {
+            id: format!("m-{tag}-commit"),
+            from: format!("{tag}-lane-0"),
+            to: format!("claude-{tag}"),
+            from_timestamp: "2026-09-11T00:00:00Z".to_owned(),
+            to_timestamp: None,
+            kind: "commit".into(),
+            reply_to: None,
+            body: body.to_owned(),
+            r#ref: None,
+            rc: None,
+            detail: Some(detail.to_owned()),
+        };
+        bus::append(&dir, "bus", &message).unwrap();
+        (dir, store, message)
+    }
+
+    /// The body a wip commit row carries, with `head` as its new sha.
+    fn commit_row_body(head: &str) -> String {
+        format!(
+            "commit test-lane aaa..{head} n=1 status=wip subject=\"x\" dirty=0\n review: git -C /w log -p aaa..{head}"
+        )
+    }
+
+    /// Why: a wip commit row to a coordinator route takes the door and the
+    /// push is recorded once for (lane, subscriber, head).
+    #[test]
+    fn a_wip_commit_row_pushes_through_a_coordinator_door_once() {
+        let body = commit_row_body("bbb");
+        let (dir, store, message) = commit_fixture("commdoor", &body, "wip");
+        let landing = land_one(&dir, &store, &message, &budget(60_000, 60_000, 10));
+        assert_eq!(landing.rung, Rung::DoorQueue, "{landing:?}");
+        assert!(landing.rung.carried_the_body());
+        assert!(store
+            .commit_push_exists("commdoor-lane-0", "claude-commdoor", "bbb")
+            .unwrap());
+        assert!(
+            door_bodies().iter().any(|body| body.contains("aaa..bbb")),
+            "the commit row never reached the door"
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Why: a lane parent is delivered at its own turn boundary by its
+    /// supervisor, so a commit row for it stays in the mailbox.
+    #[test]
+    fn a_commit_row_to_a_lane_parent_stays_in_the_mailbox() {
+        let dir = std::env::temp_dir().join(format!("boop-commit-lane-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut route = unbound_route(&dir);
+        route.kind = "lane".into();
+        bus::write_route(&dir, "parent-lane", &route).unwrap();
+        let store = bus::open_store(&dir).unwrap();
+        let message = Message {
+            id: "m-lane-commit".to_owned(),
+            from: "child-lane".to_owned(),
+            to: "parent-lane".to_owned(),
+            from_timestamp: "2026-09-11T00:00:00Z".to_owned(),
+            to_timestamp: None,
+            kind: "commit".into(),
+            reply_to: None,
+            body: commit_row_body("bbb"),
+            r#ref: None,
+            rc: None,
+            detail: Some("wip".to_owned()),
+        };
+        bus::append(&dir, "bus", &message).unwrap();
+        let landing = land_one(&dir, &store, &message, &budget(60_000, 60_000, 10));
+        assert_eq!(landing.rung, Rung::MailboxOnly, "{landing:?}");
+        assert_eq!(landing.detail, "commit row; subscriber reads the mailbox");
+        assert!(!store
+            .commit_push_exists("child-lane", "parent-lane", "bbb")
+            .unwrap());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Why: one push per (lane, subscriber, head), so a second row with the
+    /// same head is held rather than offered to the door again.
+    #[test]
+    fn a_commit_head_already_pushed_is_held_on_a_second_row() {
+        let body = commit_row_body("bbb");
+        let (dir, store, first) = commit_fixture("commdedupe", &body, "wip");
+        let landing = land_one(&dir, &store, &first, &budget(60_000, 60_000, 10));
+        assert_eq!(landing.rung, Rung::DoorQueue, "{landing:?}");
+        let second = Message {
+            id: "m-commdedupe-second".to_owned(),
+            ..first.clone()
+        };
+        bus::append(&dir, "bus", &second).unwrap();
+        let landing = land_one(&dir, &store, &second, &budget(60_000, 60_000, 10));
+        assert_eq!(landing.rung, Rung::MailboxOnly, "{landing:?}");
+        assert_eq!(
+            landing.detail,
+            "commit bbb already pushed to claude-commdedupe"
+        );
+        let (_, rows) = store
+            .passthrough("SELECT COUNT(*) AS n FROM agent_commit_push")
+            .unwrap();
+        assert_eq!(rows[0]["n"].as_i64(), Some(1));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Why: a `'*'` mailbox subscription for the parent beats the coordinator
+    /// door default, so the commit stays in the mailbox.
+    #[test]
+    fn a_wildcard_mailbox_subscription_keeps_the_parents_commit_held() {
+        let (dir, store, message) = commit_fixture("commwild", &commit_row_body("bbb"), "wip");
+        store
+            .set_commit_subscription(&boop_store::ident::CommitSubscriptionRow {
+                subscriber: "claude-commwild".to_owned(),
+                lane: "*".to_owned(),
+                mode: "mailbox".to_owned(),
+                created_at: "2026-09-11T00:00:00Z".to_owned(),
+            })
+            .unwrap();
+        let landing = land_one(&dir, &store, &message, &budget(60_000, 60_000, 10));
+        assert_eq!(landing.rung, Rung::MailboxOnly, "{landing:?}");
+        assert_eq!(landing.detail, "commit row; subscriber reads the mailbox");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Why: a done commit is the turn's terminal event, so its commit row stays
+    /// in the mailbox and the result row carries the review handle.
+    #[test]
+    fn a_done_commit_row_stays_in_the_mailbox() {
+        let (dir, store, message) = commit_fixture("commdone", &commit_row_body("bbb"), "done");
+        let landing = land_one(&dir, &store, &message, &budget(60_000, 60_000, 10));
+        assert_eq!(landing.rung, Rung::MailboxOnly, "{landing:?}");
+        assert!(landing.detail.contains("done"), "{}", landing.detail);
+        assert!(!store
+            .commit_push_exists("commdone-lane-0", "claude-commdone", "bbb")
+            .unwrap());
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

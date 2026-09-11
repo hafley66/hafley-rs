@@ -3184,6 +3184,23 @@ impl Store {
         Ok(())
     }
 
+    /// Drop every commit-push row keyed to `lane`: its subscription rows, its
+    /// pushed-head ledger and its reported head. Returns the row count removed.
+    pub fn drop_lane_commit_state(&self, lane: &str) -> Result<usize> {
+        let mut removed = self.connection.execute(
+            "DELETE FROM agent_commit_subscription WHERE lane = ?1",
+            params![lane],
+        )?;
+        removed += self.connection.execute(
+            "DELETE FROM agent_commit_push WHERE lane = ?1",
+            params![lane],
+        )?;
+        removed += self
+            .connection
+            .execute("DELETE FROM agent_lane_head WHERE lane = ?1", params![lane])?;
+        Ok(removed)
+    }
+
     /// Every liveness interval for one session (or all when `session` is
     /// `None`), joined back to the TEXT status surface.
     pub fn live_span(&self, session: Option<&str>) -> Result<Vec<crate::rows::LiveSpanRow>> {
@@ -6625,6 +6642,40 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM agent_lane_head", [], |row| row.get(0))
             .unwrap();
         assert_eq!(rows, 1, "one reported head per lane");
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// RECEIPT. `lane delete` clears one lane's commit-push state and leaves
+    /// every other lane's rows alone.
+    #[test]
+    fn drop_lane_commit_state_removes_only_that_lane() {
+        let (path, store) = fresh_store("commit-lane-drop");
+        for lane in ["lane-a", "lane-b"] {
+            store
+                .set_commit_subscription(&super::CommitSubscriptionRow {
+                    subscriber: "obs".into(),
+                    lane: lane.into(),
+                    mode: "door".into(),
+                    created_at: "t".into(),
+                })
+                .unwrap();
+            store
+                .record_commit_push(lane, "obs", "abc", "m-1", 1)
+                .unwrap();
+            store.set_lane_reported_head(lane, "abc", 1).unwrap();
+        }
+        assert_eq!(store.drop_lane_commit_state("lane-a").unwrap(), 3);
+        assert_eq!(store.drop_lane_commit_state("lane-a").unwrap(), 0);
+        assert_eq!(
+            store.lane_reported_head("lane-b").unwrap().as_deref(),
+            Some("abc")
+        );
+        assert_eq!(
+            store.commit_subscriptions_for_lane("lane-b").unwrap().len(),
+            1
+        );
+        assert!(store.commit_push_exists("lane-b", "obs", "abc").unwrap());
         drop(store);
         let _ = std::fs::remove_file(&path);
     }

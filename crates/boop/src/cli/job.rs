@@ -841,6 +841,7 @@ pub(crate) struct LaneArgs {
     pub(crate) expect_commit_subject: Vec<String>,
     pub(crate) expect_commits_at_least: Option<u32>,
     pub(crate) env: Vec<(String, String)>,
+    pub(crate) commit_push: Option<String>,
 }
 
 /// Falls back to a `*coordinator*` name match only when no route declares
@@ -1022,6 +1023,10 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     // Resolved before any `args` field is moved, so the expectation is ready
     // for both the dry-run line and the post-spawn write.
     let expect = lane_expect(&args);
+    let commit_push = match args.commit_push.as_deref() {
+        Some(mode) => Some(crate::cli::subscribe::parse_commit_push_mode(mode)?),
+        None => None,
+    };
     let config_path = config::default_path()?;
     let config = config::load(&config_path)?;
     let model_given = args.model.is_some();
@@ -1203,6 +1208,9 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             }
             None => println!("parent: - (no completion hail; pass --parent <lane>)"),
         }
+        if let Some(mode) = &commit_push {
+            println!("commit-push: {mode}");
+        }
         if let Some(bin) = &bin {
             println!("bin: {bin}");
         }
@@ -1293,6 +1301,23 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             spawn_id,
         },
     )?;
+    // The parent edge is registered; a `--commit-push` mode is the explicit
+    // override the ladder reads before falling back to the parent's kind.
+    if let (Some(mode), Some(parent_name)) = (commit_push, parent.parent.as_deref()) {
+        match bus::open_store(&hail_mail_dir).and_then(|store| {
+            store.set_commit_subscription(&boop::ident::CommitSubscriptionRow {
+                subscriber: parent_name.to_owned(),
+                lane: lane_id.clone(),
+                mode,
+                created_at: bus::now_iso(),
+            })
+        }) {
+            Ok(()) => {}
+            Err(error) => {
+                warn!(lane = lane_id, error = %error, "commit-push subscription not written")
+            }
+        }
+    }
     info!(
         lane = lane_id,
         harness = harness_id.as_str(),
@@ -1598,6 +1623,24 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
             println!("{}", message.body);
             Ok(())
         }
+        AgentCmd::Subscribe {
+            target,
+            mode,
+            as_name,
+            mail_dir,
+        } => crate::cli::subscribe::run_subscribe(
+            &target,
+            Some(&mode),
+            as_name.as_deref(),
+            mail_dir.as_deref(),
+        ),
+        AgentCmd::Unsubscribe {
+            target,
+            as_name,
+            mail_dir,
+        } => {
+            crate::cli::subscribe::run_unsubscribe(&target, as_name.as_deref(), mail_dir.as_deref())
+        }
     }
 }
 
@@ -1663,6 +1706,7 @@ pub(crate) fn run_fork(
             expect_commit_subject: Vec::new(),
             expect_commits_at_least: None,
             env: Vec::new(),
+            commit_push: None,
             parent,
             on_parent_death: Default::default(),
             harness: None,
@@ -2030,6 +2074,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             expect_commit_subject,
             expect_commits_at_least,
             env,
+            commit_push,
         } => {
             // Recorded before the spawn: the route the dispatch writes replaces
             // whatever is under this lane's key.
@@ -2070,6 +2115,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
                     expect_commit_subject,
                     expect_commits_at_least,
                     env,
+                    commit_push,
                 },
             )
         }
@@ -2597,6 +2643,9 @@ pub(crate) fn run_lane_delete(
         current.remove(lane);
         Ok(())
     })?;
+    if let Err(error) = bus::open_store(&dir).and_then(|store| store.drop_lane_commit_state(lane)) {
+        warn!(lane, %error, "commit-push state not dropped");
+    }
     info!(lane, route_only, "lane route deleted");
     println!("deleted {lane}");
     Ok(())

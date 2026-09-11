@@ -3,13 +3,15 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use tracing::{debug, error, info, warn};
 
 use boop_acp::channel::{Delivery, LaneChannel, TurnEvent};
 use boop_store::bus;
+
+use crate::headwatch::{commit_body, is_git_write, CommitStatus, HeadMove, HeadWatch};
 
 /// How often the inbox is re-read while a turn runs.
 const POLL: Duration = Duration::from_millis(700);
@@ -22,6 +24,21 @@ const STALL_LIMIT_ENV: &str = "BOOP_STALL_LIMIT_SECS";
 /// Raised from 5 minutes: a turn legitimately waiting on a background build
 /// was killed mid-wait at the old bound.
 const DEFAULT_STALL_LIMIT: Duration = Duration::from_secs(30 * 60);
+
+/// Config key: the commit push quiet window in seconds. A burst of commits
+/// inside it coalesces into one row; unset/unparsable falls back to three.
+const COMMIT_QUIET_ENV: &str = "BOOP_COMMIT_QUIET_SECS";
+const DEFAULT_COMMIT_QUIET: Duration = Duration::from_secs(3);
+
+fn parse_commit_quiet(raw: Option<&str>) -> Duration {
+    raw.and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(DEFAULT_COMMIT_QUIET)
+}
+
+fn commit_quiet() -> Duration {
+    parse_commit_quiet(std::env::var(COMMIT_QUIET_ENV).ok().as_deref())
+}
 
 /// Fresh lanes prove that the harness can complete one minimal turn before
 /// the supervisor releases the brief into the conversation.
@@ -763,6 +780,14 @@ fn supervise(
     // per hail would open the store inside the delivery path.
     let mood = mood_template(&lane.lane);
     let mut watch = ParentWatch::new(&lane.mail_dir, &lane.lane);
+    // One store for the lane's whole run: the commit push reads subscriptions
+    // and records the reported head through it, and `deliver_outbound` opens
+    // its own per send.
+    let mail_store = bus::open_store(&lane.mail_dir).ok();
+    let reported = mail_store
+        .as_ref()
+        .and_then(|store| store.lane_reported_head(&lane.lane).ok().flatten());
+    let mut head_watch = HeadWatch::new(&lane.cwd, reported, commit_quiet());
     // `conversation_id` may already exist for a freshly opened channel. Codex
     // app-server returns its new thread id from `thread/start` before the first
     // turn, so only the caller's explicit resume input proves that the thread
@@ -890,6 +915,14 @@ fn supervise(
                 },
             }
             turn_tools.extend(channel.drain_tool_calls());
+            if turn_tools.iter().any(is_git_write) {
+                head_watch.nudge();
+            }
+            if let Some(mv) = head_watch.tick(&lane.cwd, Instant::now()) {
+                if let Some(store) = mail_store.as_ref() {
+                    report_head_move(lane, store, &lane.cwd, mv);
+                }
+            }
             let this_turn_activity = channel
                 .last_activity_ms()
                 .filter(|written| *written >= turn_started);
@@ -1261,7 +1294,13 @@ fn supervise(
                     );
                     return Ok(ended);
                 }
-                // A parked lane runs no tool, so HEAD cannot have moved.
+                // A parked lane runs no tool, so HEAD cannot have moved on its
+                // own; an out-of-band commit still lands here on the poll.
+                if let Some(mv) = head_watch.tick(&lane.cwd, Instant::now()) {
+                    if let Some(store) = mail_store.as_ref() {
+                        report_head_move(lane, store, &lane.cwd, mv);
+                    }
+                }
                 let arrived = pending(&lane.mail_dir, &lane.lane, &seen)?;
                 if arrived.is_empty() {
                     std::thread::sleep(POLL);
@@ -1319,6 +1358,63 @@ fn completion_verdict(brief_completed: bool, end: &TurnEvent) -> Option<(i32, Op
 /// hail the same way, so both rows answer the same wait.
 fn registered_parent(dir: &Path, lane: &str) -> Option<String> {
     bus::read_routes(dir).ok()?.get(lane)?.parent.clone()
+}
+
+/// Every subscriber that wants this lane's commit rows: the registered parent
+/// plus each `agent_commit_subscription` row, deduped, never the lane itself. A
+/// `'*'` row counts only for the lane's parent, so a coordinator subscribing
+/// `children` does not receive every lane's commits.
+fn commit_subscribers(store: &boop_store::Store, lane: &LaneRun) -> Vec<String> {
+    let parent = registered_parent(&lane.mail_dir, &lane.lane);
+    let mut subscribers: Vec<String> = parent.iter().cloned().collect();
+    for row in store
+        .commit_subscriptions_for_lane(&lane.lane)
+        .unwrap_or_default()
+    {
+        if row.subscriber == lane.lane {
+            continue;
+        }
+        if row.lane == "*" && parent.as_deref() != Some(row.subscriber.as_str()) {
+            continue;
+        }
+        if !subscribers.contains(&row.subscriber) {
+            subscribers.push(row.subscriber);
+        }
+    }
+    subscribers
+}
+
+/// Report one HEAD move. A rewind mails the parent one mailbox row naming both
+/// shas; an advance mails every commit subscriber a `commit` row (a `request`
+/// when the burst is blocked) and records the reported head. Not gated by the
+/// already-answered check: a lane that mailed a result and keeps committing
+/// still reports.
+fn report_head_move(lane: &LaneRun, store: &boop_store::Store, worktree: &Path, mv: HeadMove) {
+    match mv {
+        HeadMove::Rewound { old, new } => {
+            let body = format!(
+                "head {} rewound: {new} does not descend from the last reported {old}",
+                lane.lane,
+            );
+            mail_to_parent_kind(lane, HEAD_REWOUND, body, Some("head rewound"));
+        }
+        HeadMove::Advanced(facts) => {
+            let kind = match facts.status {
+                CommitStatus::Blocked => "request",
+                _ => COMMIT,
+            };
+            let body = commit_body(&lane.lane, worktree, &facts);
+            let detail = facts.status.as_str();
+            for subscriber in commit_subscribers(store, lane) {
+                mail_parent(lane, &subscriber, kind, body.clone(), Some(detail));
+            }
+            if let Err(error) =
+                store.set_lane_reported_head(&lane.lane, &facts.new, boop_acp::channel::now_ms())
+            {
+                warn!(lane = lane.lane, error = %error, "reported head write failed");
+            }
+        }
+    }
 }
 
 /// The result row body, for a human reading the mailbox. The exit code every
@@ -1436,6 +1532,51 @@ fn apply_expectations(
     )
 }
 
+/// How many commits sit on top of `base` in `cwd`. A git that cannot answer
+/// counts zero.
+fn commits_past_base(cwd: &Path, base: &str) -> u32 {
+    std::process::Command::new("git")
+        .args([
+            "-C",
+            &cwd.display().to_string(),
+            "rev-list",
+            "--count",
+            &format!("{base}..HEAD"),
+        ])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .and_then(|out| {
+            String::from_utf8_lossy(&out.stdout)
+                .trim()
+                .parse::<u32>()
+                .ok()
+        })
+        .unwrap_or(0)
+}
+
+/// The review handle a result row carries: where HEAD sits and how many commits
+/// landed past the registered base. Empty when the lane names no base or git
+/// cannot answer, so a main-tree lane keeps its old result shape.
+fn head_progress_detail(lane: &LaneRun) -> String {
+    let base = bus::read_routes(&lane.mail_dir).ok().and_then(|routes| {
+        routes
+            .get(&lane.lane)
+            .and_then(|route| route.base_sha.clone())
+    });
+    let Some(base) = base else {
+        return String::new();
+    };
+    let head = head_sha(&lane.cwd);
+    if head == "unknown" {
+        return String::new();
+    }
+    format!(
+        " head={head} commits_past_base={}",
+        commits_past_base(&lane.cwd, &base)
+    )
+}
+
 /// Write the lane's result row before the pane can evaporate: a killed pane
 /// never runs its epilogue, and the waiter reads only this mailbox.
 fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
@@ -1447,6 +1588,13 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
         return;
     };
     let (exit_code, detail) = apply_expectations(lane, exit_code, detail);
+    let progress = head_progress_detail(lane);
+    let detail = match (detail, progress.is_empty()) {
+        (Some(detail), false) => Some(format!("{detail}{progress}")),
+        (None, false) => Some(progress.trim_start().to_owned()),
+        (Some(detail), true) => Some(detail),
+        (None, true) => None,
+    };
     let row = bus::Message {
         id: bus::mint_id(),
         from: lane.lane.clone(),
@@ -1526,6 +1674,14 @@ pub fn report_open_failure(lane: &LaneRun, reason: &str) {
 /// The kind every progress row wears. A parent filters one word to see where
 /// each of its lanes stopped and what the worktree looked like when it did.
 pub const YIELD: &str = "yield";
+
+/// The kind a lane's commit push wears. A burst of HEAD moves inside
+/// `COMMIT_QUIET_ENV` becomes one row carrying the `a..b` range.
+pub const COMMIT: &str = "commit";
+
+/// The kind a rewind wears. A parent that holds a receipt for a sha no longer
+/// on the branch reads exactly one row naming both shas.
+pub const HEAD_REWOUND: &str = "head_rewound";
 
 /// The worktree HEAD as a short sha. A directory git cannot answer for reads
 /// `unknown` rather than dropping the field the parent greps for.
@@ -3618,5 +3774,233 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    use crate::headwatch::{CommitFacts, CommitStatus};
+
+    fn commit_facts(
+        old: &str,
+        new: &str,
+        count: u32,
+        subject: &str,
+        status: CommitStatus,
+    ) -> CommitFacts {
+        CommitFacts {
+            old: old.to_owned(),
+            new: new.to_owned(),
+            count,
+            subject: subject.to_owned(),
+            status,
+            ask: None,
+            check: None,
+            dirty: 0,
+        }
+    }
+
+    fn full_head(dir: &Path) -> String {
+        String::from_utf8_lossy(
+            &std::process::Command::new("git")
+                .args(["-C", &dir.display().to_string(), "rev-parse", "HEAD"])
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .trim()
+        .to_owned()
+    }
+
+    /// Why: a wip advance mails the registered parent one commit row carrying
+    /// the a..b range and records the reported head.
+    #[test]
+    fn a_commit_advance_mails_the_parent_one_commit_row() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let store = bus::open_store(&dir).unwrap();
+        report_head_move(
+            &lane,
+            &store,
+            &lane.cwd,
+            HeadMove::Advanced(commit_facts("aaa", "bbb", 1, "x", CommitStatus::Wip)),
+        );
+        let rows = rows_of_kind(&dir, "commit");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].from, "mine");
+        assert_eq!(rows[0].to, "coordinator");
+        assert!(
+            rows[0]
+                .body
+                .starts_with("commit mine aaa..bbb n=1 status=wip subject=\"x\""),
+            "{}",
+            rows[0].body
+        );
+        assert_eq!(rows[0].detail.as_deref(), Some("wip"));
+        assert_eq!(
+            store.lane_reported_head("mine").unwrap().as_deref(),
+            Some("bbb")
+        );
+    }
+
+    /// Why: a burst coalesces into one row whose body names the whole range.
+    #[test]
+    fn a_commit_burst_reports_the_whole_range_in_one_row() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let store = bus::open_store(&dir).unwrap();
+        report_head_move(
+            &lane,
+            &store,
+            &lane.cwd,
+            HeadMove::Advanced(commit_facts("aaa", "ddd", 3, "latest", CommitStatus::Wip)),
+        );
+        let rows = rows_of_kind(&dir, "commit");
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].body.contains("aaa..ddd n=3"), "{}", rows[0].body);
+    }
+
+    /// Why: a blocked burst is minted as a request so it takes the door and
+    /// ends a `boop wait <lane>`.
+    #[test]
+    fn a_blocked_commit_is_minted_as_a_request() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let store = bus::open_store(&dir).unwrap();
+        let mut facts = commit_facts("aaa", "bbb", 1, "need input", CommitStatus::Blocked);
+        facts.ask = Some("schema v30 or fold into agent_route?".to_owned());
+        report_head_move(&lane, &store, &lane.cwd, HeadMove::Advanced(facts));
+        assert!(rows_of_kind(&dir, "commit").is_empty());
+        let rows = rows_of_kind(&dir, "request");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].detail.as_deref(), Some("blocked"));
+        assert!(
+            rows[0].body.contains("ask=\"schema v30"),
+            "{}",
+            rows[0].body
+        );
+    }
+
+    /// Why: a fan-out adds one row per subscriber; a `'*'` row counts only for
+    /// the lane's parent, so a stranger wildcard is not a subscriber.
+    #[test]
+    fn an_explicit_subscriber_gets_its_own_commit_row() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let store = bus::open_store(&dir).unwrap();
+        for (subscriber, lane_scope) in [("obs", "mine"), ("stranger-lane", "*")] {
+            store
+                .set_commit_subscription(&boop_store::ident::CommitSubscriptionRow {
+                    subscriber: subscriber.to_owned(),
+                    lane: lane_scope.to_owned(),
+                    mode: "door".to_owned(),
+                    created_at: "2026-09-11T00:00:00Z".to_owned(),
+                })
+                .unwrap();
+        }
+        report_head_move(
+            &lane,
+            &store,
+            &lane.cwd,
+            HeadMove::Advanced(commit_facts("aaa", "bbb", 1, "x", CommitStatus::Wip)),
+        );
+        let mut tos: Vec<String> = rows_of_kind(&dir, "commit")
+            .into_iter()
+            .map(|row| row.to)
+            .collect();
+        tos.sort();
+        assert_eq!(tos, ["coordinator", "obs"]);
+    }
+
+    /// Why: a non-descendant HEAD mails the parent one head_rewound row naming
+    /// both shas and never a commit row.
+    #[test]
+    fn a_rewind_mails_one_head_rewound_row() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let store = bus::open_store(&dir).unwrap();
+        report_head_move(
+            &lane,
+            &store,
+            &lane.cwd,
+            HeadMove::Rewound {
+                old: "bbb".into(),
+                new: "aaa".into(),
+            },
+        );
+        assert!(rows_of_kind(&dir, "commit").is_empty());
+        let rows = rows_of_kind(&dir, HEAD_REWOUND);
+        assert_eq!(rows.len(), 1);
+        assert!(
+            rows[0].body.contains("does not descend"),
+            "{}",
+            rows[0].body
+        );
+    }
+
+    /// Why: the supervisor seeds HeadWatch from agent_lane_head so a revive
+    /// never re-reports the commit the previous run already mailed.
+    #[test]
+    fn a_seeded_head_watch_never_reports_the_same_head_again() {
+        let dir = tempdir();
+        let work = dir.join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        git_repo(&work);
+        let full = full_head(&work);
+        let store = bus::open_store(&dir).unwrap();
+        store.set_lane_reported_head("mine", &full, 1).unwrap();
+        let reported = store.lane_reported_head("mine").unwrap();
+        let mut watch = HeadWatch::new(&work, reported, Duration::ZERO);
+        assert_eq!(watch.tick(&work, Instant::now()), None);
+    }
+
+    /// Why: the result row carries the review handle (head and commits past
+    /// base) so a coordinator reads the diff without another query.
+    #[test]
+    fn a_result_row_names_head_and_commits_past_base() {
+        let dir = tempdir();
+        let lane_name = format!(
+            "head-result-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        );
+        let work = dir.join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        let base = git_repo(&work);
+        std::fs::write(work.join("two.txt"), "two\n").unwrap();
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .args(["-C", &work.display().to_string()])
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "two"]);
+        std::fs::write(
+            dir.join("registry.json"),
+            serde_json::json!({
+                lane_name.clone(): { "kind": "lane", "parent": "coordinator", "base_sha": base }
+            })
+            .to_string(),
+        )
+        .unwrap();
+        std::fs::write(dir.join("brief.md"), "work\n").unwrap();
+        let lane = LaneRun {
+            lane: lane_name.clone(),
+            brief: dir.join("brief.md"),
+            mail_dir: dir.to_owned(),
+            cwd: work.clone(),
+            model: None,
+            resume: None,
+        };
+        record_result(&lane, 0, None);
+        let rows = result_rows(&dir);
+        assert_eq!(rows.len(), 1);
+        let detail = rows[0].detail.as_deref().unwrap_or_default();
+        assert!(detail.contains("head="), "{detail}");
+        assert!(detail.contains("commits_past_base=1"), "{detail}");
+        assert!(
+            rows[0].body.contains("commits_past_base=1"),
+            "{}",
+            rows[0].body
+        );
     }
 }
