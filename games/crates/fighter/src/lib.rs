@@ -19,8 +19,6 @@ pub mod rules;
 pub mod air;
 #[path = "1d_combat.rs"]
 pub mod combat;
-#[path = "1a_chart.rs"]
-pub mod chart;
 #[path = "1b_ground.rs"]
 pub mod ground;
 #[path = "4_ground_chart.rs"]
@@ -34,7 +32,6 @@ pub mod slice;
 #[path = "1_state.rs"]
 pub mod state;
 
-pub use chart::{Action, CrouchChart, CrouchSlice, Facts};
 pub use combat::{CombatState, Hit, apply_hit};
 pub use rules::Rules;
 pub use slice::{FighterEvent, FighterSlice, MovementEffect, MovementSlice};
