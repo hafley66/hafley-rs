@@ -45,3 +45,11 @@ pub use catalog::{
     Catalog, CatalogEntry, CatalogError, CatalogEvidence, CharacterSpec, SourceEntry,
     generate_catalog,
 };
+
+#[path = "7_roles.rs"]
+mod roles;
+pub use roles::{
+    ActionRole, RoleBinding, RoleBindings, RoleError, RoleFallback, role_bindings_source,
+};
+#[cfg(feature = "ingest")]
+pub use roles::generate_role_bindings;

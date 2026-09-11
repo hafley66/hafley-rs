@@ -804,15 +804,44 @@ fn emit_text(path: &Path, contents: &str, check: bool) -> Result<(), Box<dyn std
 
 /// The one direct generate/check path covering both characters. Derivation goes
 /// through each fighter's own [`Spec`] and shared `game_content::generate_catalog`;
-/// this CLI never re-derives a catalog or reparses Rust.
+/// this CLI never re-derives a catalog or reparses Rust. Role bindings derive
+/// from the same evidence and are emitted as named, source-free Rust plus JSON.
 fn character_catalogs(check: bool) -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fighters");
     let pigeon = smash::fighters::pigeon::catalog::generate()?;
     emit(&root.join("pigeon/generated/5_catalog.json"), &pigeon.evidence, check)?;
     emit(&root.join("pigeon/generated/6_baked.json"), &pigeon.actions, check)?;
+    emit_roles(
+        &root.join("pigeon/generated"),
+        "8_roles.json",
+        "8_roles.rs",
+        &smash::fighters::pigeon::catalog::generate_roles(&pigeon.evidence)?,
+        check,
+    )?;
     let dog = smash::fighters::dog::catalog::generate()?;
     emit(&root.join("dog/generated/0_catalog.json"), &dog.evidence, check)?;
     emit(&root.join("dog/generated/1_baked.json"), &dog.actions, check)?;
+    emit_roles(
+        &root.join("dog/generated"),
+        "4_roles.json",
+        "4_roles.rs",
+        &smash::fighters::dog::catalog::generate_roles(&dog.evidence)?,
+        check,
+    )?;
+    Ok(())
+}
+
+/// Emit one character's generated role bindings: JSON evidence plus the named,
+/// source-free Rust table. Each character owns its artifact slot.
+fn emit_roles(
+    generated: &Path,
+    json: &str,
+    source: &str,
+    roles: &game_content::RoleBindings,
+    check: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    emit(&generated.join(json), roles, check)?;
+    emit_text(&generated.join(source), &game_content::role_bindings_source(roles), check)?;
     Ok(())
 }
 
@@ -838,6 +867,48 @@ mod tests {
         assert_eq!(
             dog,
             std::fs::read_to_string(root.join("dog/generated/2_attributes.rs")).unwrap(),
+        );
+    }
+
+    #[test]
+    fn generated_role_bindings_are_current() {
+        use game_content::ActionRole;
+
+        let pigeon = smash::fighters::pigeon::catalog::generate().unwrap();
+        let roles = smash::fighters::pigeon::catalog::generate_roles(&pigeon.evidence).unwrap();
+        assert_eq!(
+            format!("{}\n", serde_json::to_string_pretty(&roles).unwrap()),
+            include_str!("fighters/pigeon/generated/8_roles.json"),
+        );
+        assert_eq!(
+            game_content::role_bindings_source(&roles),
+            include_str!("fighters/pigeon/generated/8_roles.rs"),
+        );
+        assert_eq!(roles.missing(), Vec::new(), "Pigeon binds every role");
+
+        let dog = smash::fighters::dog::catalog::generate().unwrap();
+        let roles = smash::fighters::dog::catalog::generate_roles(&dog.evidence).unwrap();
+        assert_eq!(
+            format!("{}\n", serde_json::to_string_pretty(&roles).unwrap()),
+            include_str!("fighters/dog/generated/4_roles.json"),
+        );
+        assert_eq!(
+            game_content::role_bindings_source(&roles),
+            include_str!("fighters/dog/generated/4_roles.rs"),
+        );
+        assert_eq!(
+            roles.missing(),
+            [
+                ActionRole::WalkSlow,
+                ActionRole::WalkMiddle,
+                ActionRole::WalkFast,
+                ActionRole::Brake,
+                ActionRole::Turn,
+                ActionRole::JumpSquat,
+                ActionRole::Fall,
+                ActionRole::LandingLight,
+                ActionRole::LandingRecovery,
+            ],
         );
     }
 

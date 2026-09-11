@@ -87,10 +87,22 @@ mod ingest {
     pub fn generate() -> Result<Catalog, Error> {
         Ok(game_content::generate_catalog(&SPEC, &load()?)?)
     }
+
+    /// Dog fallback policy in this cut: none. Roles Dog retains no exact source
+    /// clip for stay explicitly missing; no substitute clip is claimed.
+    pub const FALLBACKS: [game_content::RoleFallback<'static>; 0] = [];
+
+    /// Derive role bindings from already-generated catalog evidence. Membership
+    /// is mechanical action-name matching; no numeric ID is authored here.
+    pub fn generate_roles(
+        evidence: &game_content::CatalogEvidence,
+    ) -> Result<game_content::RoleBindings, game_content::RoleError> {
+        game_content::generate_role_bindings(evidence, &FALLBACKS)
+    }
 }
 
 #[cfg(feature = "ingest")]
-pub use ingest::{generate, imported_dir, load};
+pub use ingest::{generate, generate_roles, imported_dir, load};
 
 #[cfg(test)]
 #[path = "2_tests.rs"]
