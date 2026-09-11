@@ -1,9 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { COLUMNS, joinStatus, loadStatus, receiptObservation, currentSource } from './8_status.mjs';
+import { execFileSync } from 'node:child_process';
+import { root } from './2_registry.mjs';
+import {
+  COLUMNS, joinStatus, joinDogStatus, loadStatus, loadCharacterInputs,
+  receiptObservation, currentSource, projectStatus, checkProjection,
+} from './8_status.mjs';
 
 const authored = await loadStatus();
+const pigeon = authored.characters.pigeon;
+const dogInputs = await loadCharacterInputs(authored.characters.dog);
 const H = 'a'.repeat(64);
 
 // Pure inputs for the `just status` SOURCE RULES section. These are small JSON
@@ -51,9 +58,9 @@ const codes = result => result.errors.map(error => error.code).sort();
 const SELECTED_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 19, 20];
 
 function catalogFixture() {
-  const entries = Object.values(authored.expected).sort((a, b) => a.id - b.id);
+  const entries = Object.values(pigeon.expected).sort((a, b) => a.id - b.id);
   return {
-    status: authored,
+    status: pigeon,
     axes: [...COLUMNS],
     catalog: entries.map(e => ({ id: e.id, action: e.action, file: `${e.action}.html` })),
     phases: entries.map(e => ({ name: e.action, grounded: true })),
@@ -79,13 +86,90 @@ function catalogFixture() {
   };
 }
 
-test('authored status declares the 22 stable actions and the required axes', () => {
-  assert.deepEqual(authored.axes, COLUMNS);
-  assert.equal(Object.keys(authored.expected).length, 22);
-  const ids = Object.values(authored.expected).map(entry => entry.id).sort((a, b) => a - b);
+test('authored status declares the 22 stable Pigeon actions and the required axes', () => {
+  assert.deepEqual(pigeon.axes, COLUMNS);
+  assert.equal(Object.keys(pigeon.expected).length, 22);
+  const ids = Object.values(pigeon.expected).map(entry => entry.id).sort((a, b) => a - b);
   assert.deepEqual(ids, Array.from({ length: 22 }, (_, index) => index));
-  assert.equal(authored.expected.AttackAirF.id, 2);
-  assert.equal(authored.expected.JumpAerialB.id, 21);
+  assert.equal(pigeon.expected.AttackAirF.id, 2);
+  assert.equal(pigeon.expected.JumpAerialB.id, 21);
+});
+
+test('authored Dog status names its generated inputs and authors no action inventory', () => {
+  const dog = authored.characters.dog;
+  assert.deepEqual(dog.axes, COLUMNS);
+  assert.equal(Object.keys(dog.expected).length, 0, 'Dog inventory must come from the generated catalog');
+  assert.equal(dog.runtime, 'dog');
+  assert.equal(dog.display_name, 'Dog');
+  assert.match(dog.catalog, /fighters\/dog\/generated\/0_catalog\.json$/);
+  assert.match(dog.manifest, /fighters\/dog\/imported\/0_sources\.json$/);
+  assert.match(dog.baked, /fighters\/dog\/generated\/1_baked\.json$/);
+});
+
+test('Dog joins 16 checked generated rows with unimplemented axes explicit', () => {
+  const result = joinDogStatus({
+    character: authored.characters.dog,
+    catalog: dogInputs.catalog, baked: dogInputs.baked, ingestRows: dogInputs.rows,
+    restore: 'STALE', native: 'STALE',
+  });
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.rows.length, 16);
+  assert.deepEqual(result.rows.map(row => row.id), Array.from({ length: 16 }, (_, index) => index));
+  assert.deepEqual(
+    result.rows.map(row => row.action),
+    dogInputs.catalog.entries.map(entry => entry.name));
+  assert.deepEqual(result.rows.map(row => row.catalog), dogInputs.catalog.entries.map(entry => entry.file));
+  for (const row of result.rows) {
+    assert.equal(row.payload.state, 'retained');
+    assert.equal(row.phases, null, `${row.action} phase must stay explicit, not guessed`);
+    assert.equal(row.chart, null, `${row.action} chart must stay explicit`);
+    assert.equal(row.live, null, `${row.action} live must stay explicit`);
+    assert.equal(row.fidelity, 'UNKNOWN');
+  }
+});
+
+test('Dog rejects a stale generated input instead of guessing', () => {
+  const base = { character: authored.characters.dog, restore: 'STALE', native: 'STALE' };
+
+  const frames = structuredClone(dogInputs.catalog);
+  frames.entries[0].frames += 1;
+  assert.match(
+    codes(joinDogStatus({ ...base, catalog: frames, baked: dogInputs.baked, ingestRows: dogInputs.rows })).join(','),
+    /STALE_FRAMES|STALE_BAKED/);
+
+  const baked = structuredClone(dogInputs.baked);
+  baked[1].frames = baked[1].frames.slice(0, -1);
+  assert.match(
+    codes(joinDogStatus({ ...base, catalog: dogInputs.catalog, baked, ingestRows: dogInputs.rows })).join(','),
+    /STALE_BAKED/);
+
+  const broken = structuredClone(dogInputs.rows);
+  broken[0].state = 'mismatch';
+  assert.match(
+    codes(joinDogStatus({ ...base, catalog: dogInputs.catalog, baked: dogInputs.baked, ingestRows: broken })).join(','),
+    /BROKEN_HASH/);
+
+  const renamed = structuredClone(dogInputs.catalog);
+  renamed.display_name = 'Coyote';
+  assert.match(
+    codes(joinDogStatus({ ...base, catalog: renamed, baked: dogInputs.baked, ingestRows: dogInputs.rows })).join(','),
+    /CONTRADICTION/);
+});
+
+test('the committed status projection rejects a tampered or stale record', () => {
+  const current = projectStatus({
+    dog: { runtime: 'dog', display_name: 'Dog', axes: [...COLUMNS], rows: [{ id: 0 }] },
+  });
+  assert.doesNotThrow(() => checkProjection(structuredClone(current), current));
+  const tampered = structuredClone(current);
+  tampered.characters.dog.rows.push({ id: 99 });
+  assert.throws(() => checkProjection(tampered, current), /stale status projection/);
+});
+
+test('the committed status projection is fresh against tracked generated inputs', () => {
+  execFileSync('node', ['classification/8_status.mjs', 'check'], {
+    cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+  });
 });
 
 test('success join maps payload, phase, chart, live and fidelity separately', () => {

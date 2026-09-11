@@ -74,13 +74,31 @@ alias ActionAxis =
 model ExpectedAction {
   id: int32;
   action: string;
-  // Mechanic family name shared with Games.Mechanic.family.
+  // Mechanic family name shared with Games.Mechanic.family. Authored only for
+  // a character whose expected identity is itself authored in TypeSpec; a
+  // character sourced from a generated catalog has no ExpectedAction rows.
   family: string;
 }
 
-model Status {
-  expected: Record<ExpectedAction>;
+// One character's status sources. The generated catalog owns ordered
+// membership and declared frame counts; the retained ingest manifest owns
+// payload hashes and declared frames; baked is the runtime-neutral action
+// artifact when the character has one. `expected` is authored identity only
+// for a character whose catalog cannot be read structurally; an empty record
+// means the generated catalog is authoritative. `axes` are independent
+// observation columns and no percentage is derived across them.
+model CharacterStatus {
+  runtime: string;
+  display_name: string;
+  catalog: string;
+  manifest: string;
+  baked?: string;
   axes: ActionAxis[];
+  expected: Record<ExpectedAction>;
+}
+
+model Status {
+  characters: Record<CharacterStatus>;
 }
 
 // Stable interchange shape for source extractors. Values are emitted from

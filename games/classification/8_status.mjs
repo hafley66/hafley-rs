@@ -1,10 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { resolve, relative } from 'node:path';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { root, loadRegistry, validateRegistry, renderD2, output, loadValue } from './2_registry.mjs';
-import { buildProgress, renderProgress, loadProgress } from './5_progress.mjs';
+import { root, loadRegistry, validateRegistry, renderD2, output, loadValue, existing } from './2_registry.mjs';
+import { buildProgress, renderProgress, ingestRows } from './5_progress.mjs';
 import { fingerprintSources } from '../shared/workflow/0_fingerprint.mjs';
 
 // Required observation axes, authored in `7_status.tsp` and validated against
@@ -12,6 +12,7 @@ import { fingerprintSources } from '../shared/workflow/0_fingerprint.mjs';
 export const COLUMNS = ['payload', 'catalog', 'phase', 'chart', 'live', 'restore', 'native', 'fidelity'];
 
 const statusSource = fileURLToPath(new URL('7_status.tsp', import.meta.url));
+const statusProjection = new URL('11_status.json', import.meta.url);
 const workflow = fileURLToPath(new URL('../blender-godot-sqlite-proof/pigeon-lab/.workflow/', import.meta.url));
 const sourceRules = fileURLToPath(new URL('../smash/src/fighters/pigeon/generated/2_source_rules.json', import.meta.url));
 
@@ -72,8 +73,9 @@ function familyFidelity(mechanics) {
   return families;
 }
 
-// Pure join. All inputs are explicit so tests can mutate them.
-export function joinStatus({ status, axes, catalog, phases, phaseAnimation, ground, air, ingestRows, mechanics, restore, native }) {
+// Pure join for an authored character (Pigeon). All inputs are explicit so
+// tests can mutate them.
+export function joinStatus({ status, axes, catalog, phases, phaseAnimation, ground, air, ingestRows: rows, mechanics, restore, native }) {
   const errors = [];
   const fail = (code, message) => errors.push({ code, message });
 
@@ -142,9 +144,9 @@ export function joinStatus({ status, axes, catalog, phases, phaseAnimation, grou
   }
 
   const families = familyFidelity(mechanics);
-  const ingestByAction = new Map(ingestRows.map(row => [row.action, row]));
+  const ingestByAction = new Map(rows.map(row => [row.action, row]));
 
-  const rows = expected.map(entry => {
+  const joined = expected.map(entry => {
     const observed = catalogById.get(entry.id);
     const payload = ingestByAction.get(entry.action);
     if (!payload) fail('MISSING_PAYLOAD', `${entry.action}: no retained ingest row`);
@@ -175,26 +177,143 @@ export function joinStatus({ status, axes, catalog, phases, phaseAnimation, grou
     };
   });
 
-  return { rows, errors };
+  return { rows: joined, errors };
 }
 
-function renderMatrix({ rows, errors }) {
+// Pure join for a character whose generated catalog owns the ordered inventory
+// (Dog). No action is authored in TypeSpec, so there is no family and no live
+// phase model to observe; those axes stay explicit rather than guessed. Baked
+// frame counts and manifest frame counts are cross-checked against the catalog,
+// so a stale generated input fails the join.
+export function joinDogStatus({ character, catalog, baked, ingestRows: rows, restore, native }) {
+  const errors = [];
+  const fail = (code, message) => errors.push({ code, message });
+
+  if (JSON.stringify(character.axes) !== JSON.stringify(COLUMNS)) {
+    fail('AXES', `authored axes ${JSON.stringify(character.axes)} do not match required ${JSON.stringify(COLUMNS)}`);
+  }
+  const entries = catalog?.entries ?? [];
+  if (catalog?.runtime !== character.runtime) {
+    fail('CONTRADICTION', `catalog runtime ${catalog?.runtime} != authored ${character.runtime}`);
+  }
+  if (catalog?.display_name !== character.display_name) {
+    fail('CONTRADICTION', `catalog display name ${catalog?.display_name} != authored ${character.display_name}`);
+  }
+
+  const ids = new Set();
+  const names = new Set();
+  const files = new Set();
+  entries.forEach((entry, index) => {
+    if (entry.id !== index) fail('CATALOG_ORDER', `${character.runtime}: ${entry.name} has id ${entry.id}, expected ${index}`);
+    if (ids.has(entry.id)) fail('DUPLICATE_ID', `${character.runtime}: duplicate catalog id ${entry.id}`);
+    if (names.has(entry.name)) fail('DUPLICATE_ID', `${character.runtime}: duplicate catalog action ${entry.name}`);
+    if (files.has(entry.file)) fail('DUPLICATE_ID', `${character.runtime}: duplicate catalog file ${entry.file}`);
+    ids.add(entry.id);
+    names.add(entry.name);
+    files.add(entry.file);
+  });
+
+  if (character.baked) {
+    if (!Array.isArray(baked)) {
+      fail('MISSING_BAKED', `${character.runtime}: baked artifact is absent or unreadable`);
+    } else if (baked.length !== entries.length) {
+      fail('STALE_BAKED', `${character.runtime}: baked rows ${baked.length} != catalog ${entries.length}`);
+    } else {
+      entries.forEach((entry, index) => {
+        const frames = baked[index]?.frames;
+        if (!Array.isArray(frames) || frames.length !== entry.frames) {
+          fail('STALE_BAKED', `${entry.name}: baked frames ${Array.isArray(frames) ? frames.length : '?'} != catalog ${entry.frames}`);
+        }
+      });
+    }
+  }
+
+  const ingestByAction = new Map(rows.map(row => [row.action, row]));
+  const joined = entries.map(entry => {
+    const payload = ingestByAction.get(entry.name) ?? null;
+    if (!payload) fail('MISSING_PAYLOAD', `${entry.name}: no retained ingest row`);
+    else if (payload.state !== 'retained') fail('BROKEN_HASH', `${entry.name}: ${payload.file} ${payload.state}`);
+    else if (Number.isInteger(payload.frames) && payload.frames !== entry.frames) {
+      fail('STALE_FRAMES', `${entry.name}: manifest frames ${payload.frames} != catalog ${entry.frames}`);
+    }
+    return {
+      id: entry.id,
+      action: entry.name,
+      family: null,
+      payload,
+      catalog: entry.file,
+      phases: null,
+      chart: null,
+      live: null,
+      restore,
+      native,
+      fidelity: 'UNKNOWN',
+    };
+  });
+
+  return { rows: joined, errors };
+}
+
+// Checked generated artifacts only: the generated catalog owns inventory, the
+// retained manifest owns payload bytes, the baked artifact must agree with the
+// catalog. No Rust source is read or interpreted here.
+export async function loadCharacterInputs(character, base = root) {
+  const catalog = JSON.parse(await readFile(await existing(base, character.catalog), 'utf8'));
+  const baked = character.baked
+    ? JSON.parse(await readFile(await existing(base, character.baked), 'utf8'))
+    : null;
+  const { rows } = await ingestRows(base, { manifest: character.manifest });
+  return { catalog, baked, rows };
+}
+
+// Pure projection. Only named records, no positional metadata, so the stale
+// check compares exactly the tracked inputs' effect on the terminal matrix.
+export function projectStatus(characters) {
+  const projected = {};
+  for (const [key, value] of Object.entries(characters)) {
+    const record = {
+      runtime: value.runtime,
+      display_name: value.display_name,
+      catalog: value.catalog,
+      manifest: value.manifest,
+      axes: [...value.axes],
+      rows: value.rows,
+    };
+    if (value.baked) record.baked = value.baked;
+    projected[key] = record;
+  }
+  return { characters: projected };
+}
+
+export function checkProjection(stored, current) {
+  if (JSON.stringify(stored) !== JSON.stringify(current)) {
+    const codes = Object.keys(current.characters).filter(key =>
+      JSON.stringify(stored?.characters?.[key]) !== JSON.stringify(current.characters[key]));
+    throw Error(`stale status projection: 11_status.json disagrees with tracked generated inputs (${codes.join(', ')}); run \`just status\``);
+  }
+  return current;
+}
+
+function renderMatrix(character, { rows, errors }) {
   const lines = [];
-  lines.push(`status axes: ${COLUMNS.join(' | ')}  (independent; no percentage)`);
-  lines.push('id  action        payload             catalog         phase                chart  live  restore   native    fidelity');
+  lines.push(`character ${character.runtime} (${character.display_name}): ${rows.length} rows`);
+  lines.push(`axes: ${character.axes.join(' | ')}  (independent; no percentage)`);
+  lines.push('id  action        payload             catalog         phase                chart         live         restore   native    fidelity');
   for (const row of rows) {
     const payload = row.payload
       ? `${row.payload.state === 'retained' ? 'RET' : row.payload.state.toUpperCase()} ${(row.payload.hash ?? row.payload.expected).slice(0, 8)} f=${row.payload.frames ?? '?'}`
       : 'MISSING';
-    const phase = row.phases.length ? row.phases.join(',') : '-';
+    const phase = row.phases === null ? 'UNIMPLEMENTED' : row.phases.length ? row.phases.join(',') : '-';
+    const chart = row.chart === null ? 'UNIMPLEMENTED' : row.chart ? `y(${row.chart})` : '-';
+    const live = row.live === null ? 'UNMEASURED' : row.live ? 'yes' : 'no';
     lines.push([
       String(row.id).padStart(2),
       row.action.padEnd(13),
       payload.padEnd(19),
       String(row.catalog).padEnd(15),
       phase.padEnd(20),
-      row.chart ? `y(${row.chart})`.padEnd(6) : '-'.padEnd(6),
-      (row.live ? 'yes' : 'no').padEnd(5),
+      chart.padEnd(13),
+      live.padEnd(12),
       row.restore.padEnd(9),
       row.native.padEnd(9),
       row.fidelity,
@@ -209,42 +328,87 @@ function renderMatrix({ rows, errors }) {
   return lines.join('\n');
 }
 
-async function main() {
-  const entries = await validateRegistry(await loadRegistry());
-  await output(new URL('3_registry.json', import.meta.url), JSON.stringify(entries, null, 2) + '\n', true);
-  await output(new URL('3_registry.d2', import.meta.url), renderD2(entries), true);
-  const progress = await buildProgress();
-  await output(new URL('6_progress.html', import.meta.url), renderProgress(progress), true);
+// Live observation: authored characters plus the generated inputs they name.
+// Pigeon still joins the executable Rust selection seam; Dog joins only
+// committed generated artifacts.
+export async function observeStatus(base = root) {
+  const entries = await validateRegistry(await loadRegistry(), base);
+  const progress = await buildProgress(base);
   const authored = await loadStatus();
-  const exported = runExport();
-  const extracted = await readJson(sourceRules);
-  const current = currentSource();
+  const current = currentSource(base);
   const prove = await readJson(resolve(workflow, 'prove.json'));
-  const result = joinStatus({
-    status: authored, axes: authored.axes,
+  const restore = receiptObservation(prove, current, ['core']);
+  const native = receiptObservation(prove, current, ['export', 'browser']);
+  const exported = runExport(base);
+  const pigeonStatus = joinStatus({
+    status: authored.characters.pigeon, axes: authored.characters.pigeon.axes,
     catalog: exported.catalog, phases: exported.phases,
     phaseAnimation: exported.phase_animation, ground: exported.ground, air: exported.air,
     ingestRows: progress.rows, mechanics: progress.mechanics,
-    restore: receiptObservation(prove, current, ['core']),
-    native: receiptObservation(prove, current, ['export', 'browser']),
+    restore, native,
   });
+  const dogCharacter = authored.characters.dog;
+  const dogInputs = await loadCharacterInputs(dogCharacter, base);
+  const dogStatus = joinDogStatus({
+    character: dogCharacter, catalog: dogInputs.catalog, baked: dogInputs.baked,
+    ingestRows: dogInputs.rows, restore, native,
+  });
+  const projection = projectStatus({
+    pigeon: { ...authored.characters.pigeon, rows: pigeonStatus.rows },
+    dog: { ...dogCharacter, rows: dogStatus.rows },
+  });
+  return {
+    entries, progress, authored, current, prove, exported, projection,
+    characters: {
+      pigeon: { character: authored.characters.pigeon, ...pigeonStatus },
+      dog: { character: dogCharacter, ...dogStatus },
+    },
+  };
+}
+
+async function main(mode = 'status') {
+  if (!['status', 'check'].includes(mode)) throw Error('usage: 8_status.mjs [status|check]');
+  const state = await observeStatus();
+  await output(new URL('3_registry.json', import.meta.url), JSON.stringify(state.entries, null, 2) + '\n', true);
+  await output(new URL('3_registry.d2', import.meta.url), renderD2(state.entries), true);
+  await output(new URL('6_progress.html', import.meta.url), renderProgress(state.progress), true);
+
+  if (mode === 'check') {
+    const failures = [...state.characters.pigeon.errors, ...state.characters.dog.errors];
+    if (failures.length) {
+      throw Error(`status failures: ${failures.map(error => `${error.code} (${error.message})`).join('; ')}`);
+    }
+    const stored = await readJson(statusProjection);
+    if (!stored) throw Error('stale status projection: 11_status.json is absent; run `just status`');
+    checkProjection(stored, state.projection);
+    console.log('status projection current: pigeon and dog matrices match tracked generated inputs');
+    return;
+  }
+
+  await output(statusProjection, JSON.stringify(state.projection, null, 2) + '\n', false);
+
+  const { exported, entries, characters, progress } = state;
+  const extracted = await readJson(sourceRules);
   console.log('PACKAGES');
   for (const [name, entry] of Object.entries(entries)) {
     console.log(`  ${String(entry.stage).padEnd(4)} ${entry.destination.padEnd(9)} ${entry.task.padEnd(3)} ${name.padEnd(14)} ${entry.manifest ? 'manifest' : 'proposal'}`);
   }
   console.log('MATRIX');
-  console.log(renderMatrix(result));
+  console.log(renderMatrix(characters.pigeon.character, characters.pigeon));
+  console.log(renderMatrix(characters.dog.character, characters.dog));
   console.log('SOURCE RULES');
   console.log(`  ${extracted.rules.length} extracted from ${extracted.repository}@${extracted.revision.slice(0, 12)}`);
   for (const item of extracted.unresolved) console.log(`  UNRESOLVED ${item.symbol}: ${item.reason}`);
-  const blocked = result.rows.filter(row => !row.live || row.chart === 0).length;
+  const blocked = characters.pigeon.rows.filter(row => !row.live || row.chart === 0).length;
   console.log(`GATE game-fighter: stage ${entries['game-fighter'].stage} authored, not auto-promoted; ` +
-    `${blocked}/${result.rows.length} actions lack a live phase or executable chart mapping; ` +
-    `${result.rows.filter(row => row.fidelity !== 'qualified').length} actions unqualified on source fidelity`);
-  console.log(`source fingerprint: ${current ?? 'UNMEASURED, sibling runtime checkout absent'}; ` +
-    `prove receipt: ${prove ? `${prove.commit} ${current === null ? 'UNVERIFIED' : prove.source === current ? 'current' : 'STALE'}` : 'absent'}`);
-  if (result.errors.length) {
-    console.error(`${result.errors.length} status failures`);
+    `${blocked}/${characters.pigeon.rows.length} Pigeon actions lack a live phase or executable chart mapping; ` +
+    `${characters.pigeon.rows.filter(row => row.fidelity !== 'qualified').length} Pigeon actions unqualified on source fidelity; ` +
+    `${characters.dog.rows.length} Dog actions from checked generated catalog, phase/chart/live unimplemented`);
+  console.log(`source fingerprint: ${state.current ?? 'UNMEASURED, sibling runtime checkout absent'}; ` +
+    `prove receipt: ${state.prove ? `${state.prove.commit} ${state.current === null ? 'UNVERIFIED' : state.prove.source === state.current ? 'current' : 'STALE'}` : 'absent'}`);
+  const failures = [...characters.pigeon.errors, ...characters.dog.errors];
+  if (failures.length) {
+    console.error(`${failures.length} status failures`);
     process.exitCode = 1;
   }
 }
@@ -254,5 +418,5 @@ export async function loadStatus() {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch(error => { console.error(error.message); process.exitCode = 1; });
+  main(process.argv[2] ?? 'status').catch(error => { console.error(error.message); process.exitCode = 1; });
 }

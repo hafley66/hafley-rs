@@ -331,3 +331,21 @@ absent; Melee transition rules come from the pinned `doldecomp/melee` submodule
 (`games/vendor/melee`). Verified: `node --test classification/8_status.test.mjs`
 12 passed; `just map` and `just test-map` current; game-fighter remains authored
 stage 2.7 and no stage advanced.
+
+## Dog status cut, 2026-09-11
+
+`just status` now prints two character-separated matrices. Pigeon keeps its 22
+authored actions joined to the executable Rust selection export. Dog derives its
+16-row inventory from `smash/src/fighters/dog/generated/0_catalog.json` and
+cross-checks the generated baked frame counts and the retained manifest hashes;
+phase, chart and live render explicit `UNIMPLEMENTED`/`UNMEASURED` because Dog
+has no phase model. No Dog action inventory is authored in TypeSpec.
+
+The join writes `classification/11_status.json`. `node classification/8_status.mjs
+check` recomputes it from tracked inputs and rejects either a stale generated
+input (catalog, baked or manifest) or a stale projection; `just test` runs that
+check from `classification/8_status.test.mjs`.
+
+| ID | State | Terminal condition / coordinator checkpoint |
+| --- | --- | --- |
+| S12 | Done, bounded | `just status` prints Pigeon 22 and Dog 16 rows, Dog sourced from checked generated catalog/baked/manifest. Terminal: `node --test classification/8_status.test.mjs` passes 17 tests including the stale-input and stale-projection checks. No stage advanced. |
