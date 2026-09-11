@@ -67,6 +67,35 @@ fn growth_knockback_matches_qualified_vector() {
     );
 }
 
+// v1 `1_sandbag.rs:131` passes the pre-hit percent to `ssbm_utils::knockback`,
+// whose formula incorporates `strike.damage` itself. Feeding `percent_after`
+// double-counts the damage. Same Marth-tipper input as the vector above: the
+// pre-hit result is 215.8, the double-counted result is 240.44.
+#[test]
+fn knockback_uses_pre_hit_percent() {
+    let launch = strike(20.0, 361.0, 80, 70);
+    let target = Target {
+        percent: 80.0,
+        weight: 75.0,
+        grounded: false,
+    };
+    let outcome = resolve_hit(launch, target, neutral(), ResolvePolicy::default());
+    assert!(
+        close(outcome.knockback, 215.8, 1e-3),
+        "pre-hit knockback, got {}",
+        outcome.knockback
+    );
+    assert!(
+        !close(outcome.knockback, 240.44, 1e-2),
+        "double-counted damage leaked into knockback: {}",
+        outcome.knockback
+    );
+    assert!(
+        close(outcome.percent_after, 100.0, 1e-6),
+        "output stays post-hit"
+    );
+}
+
 // Falco shine knockback, the second `ssbm_utils` knockback test vector.
 #[test]
 fn shine_knockback_matches_qualified_vector() {
