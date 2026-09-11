@@ -68,6 +68,14 @@ status-check:
 coverage:
     node classification/15_coverage.mjs generate
 
+# Execute and source-check the bounded animation qualification gap cases.
+qualification:
+    node classification/18_qualification.mjs receipts
+
+qualification-check:
+    node classification/18_qualification.mjs check
+    node classification/18_qualification.mjs receipts-check
+
 tsp:
     node classification/2_registry.mjs generate
 
@@ -76,5 +84,6 @@ test:
     node --test classification/5_progress.test.mjs
     node --test classification/8_status.test.mjs
     node --test classification/15_coverage.test.mjs
+    node --test classification/18_qualification.test.mjs
     node --test classification/9_steps.test.mjs
     just test-map
