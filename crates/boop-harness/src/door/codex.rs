@@ -1,12 +1,14 @@
 //! The codex door: `~/.codex/state_5.sqlite` says which threads exist, and the
 //! remote-control daemon's socket is where a message for one is queued.
 
+use std::io::Read;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use wait_timeout::ChildExt;
 
 use crate::door::{Delivered, Door, IdleNotice};
 use crate::harness::codex::codex_home;
@@ -21,6 +23,10 @@ pub const SOCKET_ENV: &str = "BOOP_CODEX_APP_SERVER_SOCKET";
 
 /// A thread whose last update is older than this is not a running TUI.
 const RECENT_MS: u64 = 24 * 60 * 60 * 1000;
+
+/// Every codex door call is bounded: a dead or stalled app-server is killed
+/// and reported rather than stalling the sender.
+const DOOR_DEADLINE: Duration = Duration::from_secs(5);
 
 /// Reads the codex state database and queues through the app-server socket.
 pub struct CodexDoor {
@@ -626,17 +632,46 @@ fn explicit_resume(tui_args: &[String]) -> anyhow::Result<(Option<String>, &[Str
 /// Queue one message for a thread through the remote-control daemon. This is
 /// the one place boop spells the `codex queue` command.
 pub fn queue_message(socket: &Path, thread: &str, text: &str) -> Result<()> {
-    let output = Command::new("codex")
+    let mut child = Command::new("codex")
         .args(["queue", "--thread", thread, "--message", text, "--remote"])
         .arg(format!("unix://{}", socket.display()))
-        .output()
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .context("queue message through Codex remote control")?;
-    anyhow::ensure!(
-        output.status.success(),
-        "Codex remote queue failed: {}",
-        String::from_utf8_lossy(&output.stderr).trim()
-    );
-    Ok(())
+    match child.wait_timeout(DOOR_DEADLINE)? {
+        Some(status) => {
+            let mut stdout = String::new();
+            let mut stderr = String::new();
+            if let Some(mut out) = child.stdout.take() {
+                let _ = out.read_to_string(&mut stdout);
+            }
+            if let Some(mut err) = child.stderr.take() {
+                let _ = err.read_to_string(&mut stderr);
+            }
+            anyhow::ensure!(
+                status.success(),
+                "Codex remote queue failed: {}",
+                stderr.trim()
+            );
+            Ok(())
+        }
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            let mut stdout = String::new();
+            let mut stderr = String::new();
+            if let Some(mut out) = child.stdout.take() {
+                let _ = out.read_to_string(&mut stdout);
+            }
+            if let Some(mut err) = child.stderr.take() {
+                let _ = err.read_to_string(&mut stderr);
+            }
+            let detail = format!("{}{}", stdout.trim(), stderr.trim());
+            anyhow::bail!("Codex queue door timed out after {DOOR_DEADLINE:?}: {detail}")
+        }
+    }
 }
 
 /// Keep worker progress in the active turn. Reading only the newest turn's
@@ -706,8 +741,8 @@ fn app_server_rpc(
 
     let stream = UnixStream::connect(socket)
         .with_context(|| format!("connect Codex app-server socket {}", socket.display()))?;
-    stream.set_read_timeout(Some(Duration::from_secs(15)))?;
-    stream.set_write_timeout(Some(Duration::from_secs(15)))?;
+    stream.set_read_timeout(Some(DOOR_DEADLINE))?;
+    stream.set_write_timeout(Some(DOOR_DEADLINE))?;
     let (mut websocket, _) = tungstenite::client("ws://localhost/", stream)?;
     for (id, called, parameters) in [
         (

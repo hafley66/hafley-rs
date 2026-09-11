@@ -197,16 +197,21 @@ impl OpencodeDoor {
     }
 
     fn statuses(&self) -> BTreeMap<String, LiveStatus> {
-        let Ok(text) = self.get("session/status", READ_TIMEOUT) else {
-            return BTreeMap::new();
-        };
-        serde_json::from_str::<BTreeMap<String, StatusEntry>>(&text)
+        self.status_map().unwrap_or_default()
+    }
+
+    /// `GET /session/status` with the transport error kept. A status probe is a
+    /// door call: `deliver` reads this once so a stalled or dead server is
+    /// reported as unreachable instead of being mistaken for a busy session.
+    fn status_map(&self) -> Result<BTreeMap<String, LiveStatus>> {
+        let text = self.get("session/status", READ_TIMEOUT)?;
+        Ok(serde_json::from_str::<BTreeMap<String, StatusEntry>>(&text)
             .map(|map| {
                 map.into_iter()
                     .map(|(id, entry)| (id, entry.status()))
                     .collect()
             })
-            .unwrap_or_default()
+            .unwrap_or_default())
     }
 
     /// Observe the selected TUI session from OpenCode's own event stream.
@@ -489,14 +494,29 @@ impl LiveSessions for OpencodeDoor {
         let Some(id) = route.session_id.as_deref() else {
             return Ok(None);
         };
-        let observed = route
-            .app_server_socket
-            .as_deref()
-            .map(Url::parse)
-            .transpose()?;
-        let door = observed.map(Self::at);
-        let source = door.as_ref().unwrap_or(self);
-        Ok(source
+        if let Some(base) = route.app_server_socket.as_deref() {
+            // A route that names its own server is authoritative: the session
+            // id and base are enough to address the door, and the bounded
+            // status probe lives in `deliver`, so a dead server is attempted
+            // and cooled off rather than silently skipped here.
+            return Ok(Some(LiveSession {
+                harness: HarnessId::Opencode,
+                session_id: id.to_owned(),
+                pid: None,
+                cwd: route.cwd.as_ref().map(PathBuf::from),
+                tmux_pane: route.tmux.clone(),
+                status: LiveStatus::Unknown,
+                door: DoorAddress::Http {
+                    base: Url::parse(base)?,
+                    session: id.to_owned(),
+                },
+                observed_ms: now_ms(),
+                started_ms: None,
+                scope: crate::live::LiveSessionScope::Unknown,
+                parent_session: None,
+            }));
+        }
+        Ok(self
             .live_sessions()?
             .into_iter()
             .find(|session| session.session_id == id))
@@ -637,13 +657,27 @@ impl Door for OpencodeDoor {
                 session.session_id
             )));
         };
+        let source = Self::at(base.clone());
+        // One bounded status probe before the turn starts. A server that does
+        // not answer is unreachable, not busy, so a stalled server parks the
+        // single door call here and nowhere later.
+        let statuses = match source.status_map() {
+            Ok(statuses) => statuses,
+            Err(error) => {
+                return Ok(Delivered::Unreachable(format!("opencode {base}: {error}")));
+            }
+        };
+        if statuses.get(id) == Some(&LiveStatus::Busy) {
+            return Ok(Delivered::Unreachable(
+                "opencode is busy; awaiting idle delivery".into(),
+            ));
+        }
         let url = base.join(&format!("session/{id}/prompt_async"))?;
         let mut payload = serde_json::json!({
             "parts": [{ "type": "text", "text": body }],
         });
         // A session from `POST /session` carries no `model`, and a prompt that
         // names none on one is stored with no turn run (opencode 1.18.25).
-        let source = Self::at(base.clone());
         if !source.session_has_model(id) {
             if let Some(model) = source.default_model() {
                 payload["model"] = model;
