@@ -19,8 +19,8 @@ use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use boop::harness::mock_tui::{self, MockProvider, MockTuiContext};
-use boop::harness::HarnessId;
+use boop::harness::mock_tui::{self, MockProvider, MockTuiContext, MockTuiLaunch};
+use boop::harness::{shell_quote, HarnessId};
 use boop::Registry;
 use boop_store::testing::BoopCommandExt;
 
@@ -110,6 +110,7 @@ impl Fixture {
     /// One `lane create`, pointed at the mock provider's env and executable.
     fn create(
         &self,
+        parent: &str,
         extra: &[&str],
         env: &[(String, String)],
         executable: &Path,
@@ -128,7 +129,7 @@ impl Fixture {
             .arg(&self.brief)
             .args(["--harness", "opencode", "--model", "llmock/mock-model"])
             .arg("--parent")
-            .arg("obs")
+            .arg(parent)
             .arg("--tmux")
             .arg(&self.lane)
             .arg("--socket")
@@ -143,6 +144,110 @@ impl Fixture {
         }
         command.args(extra);
         command.output().expect("run boop lane create")
+    }
+
+    /// Start a real codex coordinator TUI in a pane on the scratch server, so a
+    /// lane's door row has a parent harness to land on.
+    fn run_coordinator_tui(
+        &self,
+        route: &str,
+        session: &str,
+        launch: &MockTuiLaunch,
+        workspace: &Path,
+    ) {
+        let mut command = String::from("exec env");
+        for (key, value) in &launch.env {
+            command.push_str(&format!(" {}={}", key, shell_quote(value)));
+        }
+        command.push_str(&format!(
+            " {}={}",
+            "BOOP_DB",
+            shell_quote(&self.mail.join("boop.db").display().to_string())
+        ));
+        command.push_str(&format!(" {}={}", "BOOP_NO_SYNC", shell_quote("1")));
+        command.push_str(&format!(
+            " {} tui codex --name {} --bin {} --cwd {} --mail-dir {} --",
+            shell_quote(BOOP),
+            shell_quote(route),
+            shell_quote(&launch.executable),
+            shell_quote(&workspace.display().to_string()),
+            shell_quote(&self.mail.display().to_string()),
+        ));
+        for arg in &launch.args {
+            command.push(' ');
+            command.push_str(&shell_quote(arg));
+        }
+        let output = self.tmux(&[
+            "new-session",
+            "-d",
+            "-x",
+            "200",
+            "-y",
+            "50",
+            "-s",
+            session,
+            &command,
+        ]);
+        assert!(
+            output.status.success(),
+            "coordinator tmux new-session failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn screen(&self, session: &str) -> String {
+        let output = self.tmux(&["capture-pane", "-p", "-t", session, "-S", "-400"]);
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    }
+
+    fn wait_for_screen(&self, session: &str, wanted: &str) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let text = self.screen(session);
+            if text.contains(wanted) {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "coordinator never showed {wanted:?}\n{text}"
+            );
+            std::thread::sleep(POLL);
+        }
+    }
+
+    /// Wait for a coordinator route to bind a session or app-server socket.
+    fn wait_for_coordinator(&self, route: &str) {
+        let deadline = Instant::now() + START_DEADLINE;
+        loop {
+            let routes = boop_store::testing::routes_json(&self.mail.join("boop.db"));
+            if let Some(entry) = routes.get(route) {
+                let bound = entry
+                    .get("sessionId")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|value| !value.is_empty())
+                    || entry
+                        .get("appServerSocket")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|value| !value.is_empty());
+                if bound {
+                    return;
+                }
+            }
+            assert!(
+                Instant::now() < deadline,
+                "coordinator route {route} never bound a session"
+            );
+            std::thread::sleep(POLL);
+        }
+    }
+
+    /// Alarm rows this lane wrote.
+    fn stale_rows(&self) -> usize {
+        self.rows()
+            .into_iter()
+            .filter(|row| row.get("kind").and_then(|v| v.as_str()) == Some("stale"))
+            .filter(|row| row.get("from").and_then(|v| v.as_str()) == Some(self.lane.as_str()))
+            .count()
     }
 
     fn tmux(&self, args: &[&str]) -> std::process::Output {
@@ -369,6 +474,7 @@ fn a_held_row_defers_the_lane_result() {
     };
     let env = lane_env(&fixture, &launch_env, &[]);
     let created = fixture.create(
+        "obs",
         &["--expect-commit-subject", "the third commit"],
         &env,
         &executable,
@@ -446,7 +552,7 @@ fn a_send_to_a_retired_lane_revives_it() {
         return;
     };
     let env = lane_env(&fixture, &launch_env, &[("BOOP_IDLE_SHUTDOWN_SECS", "1")]);
-    let created = fixture.create(&[], &env, &executable);
+    let created = fixture.create("obs", &[], &env, &executable);
     assert!(
         created.status.success(),
         "lane create failed: {}",
@@ -527,7 +633,7 @@ fn a_retired_lane_closes_its_tmux_session() {
         return;
     };
     let env = lane_env(&fixture, &launch_env, &[("BOOP_IDLE_SHUTDOWN_SECS", "1")]);
-    let created = fixture.create(&[], &env, &executable);
+    let created = fixture.create("obs", &[], &env, &executable);
     assert!(
         created.status.success(),
         "lane create failed: {}",
@@ -543,4 +649,85 @@ fn a_retired_lane_closes_its_tmux_session() {
     fixture.wait_for_result(1);
     fixture.wait_for_retired();
     fixture.wait_for_session_gone();
+}
+
+/// RECEIPT. A lane parked with idle shutdown disabled tells its parent when it
+/// has been quiet past `BOOP_STALE_SECS`. The alarm takes the coordinator's
+/// door, not a mailbox-only progress rung, and repeats no faster than the
+/// bound. Sabotage: classifying the row as a progress row leaves the
+/// coordinator pane silent.
+#[test]
+fn a_stale_lane_tells_its_parent() {
+    let _lane = lane_lock();
+    let Some(llmock) = mock_tui::resolve_llmock() else {
+        eprintln!("skip: no llmock");
+        return;
+    };
+    if mock_tui::resolve_executable("opencode", "OPENCODE_BIN").is_none() {
+        eprintln!("skip: no opencode");
+        return;
+    }
+    if mock_tui::resolve_executable("codex", "CODEX_BIN").is_none() {
+        eprintln!("skip: no codex coordinator");
+        return;
+    }
+    let fixture = Fixture::new("stale");
+    let fixture_path = fixture.root.join("llmock.yaml");
+    std::fs::write(&fixture_path, fixture_yaml(0)).unwrap();
+    let provider = MockProvider::spawn(&llmock, Some(&fixture_path)).expect("spawn llmock");
+    let registry = Registry::discover();
+
+    // The parent is a real codex coordinator TUI, so the door the alarm must
+    // take is a real harness door.
+    let coord_route = "coord-stale";
+    let coord_session = format!("{coord_route}-{}", std::process::id());
+    let coord_home = fixture.root.join("coord-home");
+    let workspace = fixture.root.join("workspace");
+    std::fs::create_dir_all(&coord_home).unwrap();
+    std::fs::create_dir_all(&workspace).unwrap();
+    let codex = registry
+        .get(HarnessId::Codex)
+        .mock_tui_launch(&MockTuiContext {
+            home: &coord_home,
+            workspace: &workspace,
+            port: provider.port,
+        })
+        .expect("codex mock recipe");
+    fixture.run_coordinator_tui(coord_route, &coord_session, &codex, &workspace);
+    fixture.wait_for_coordinator(coord_route);
+
+    // The lane never retires: `BOOP_IDLE_SHUTDOWN_SECS=0` plus a short stale
+    // bound is exactly the live-store trap.
+    let opencode = mock_tui::resolve_executable("opencode", "OPENCODE_BIN").unwrap();
+    let lane_launch = registry
+        .get(HarnessId::Opencode)
+        .mock_tui_launch(&MockTuiContext {
+            home: &fixture.home,
+            workspace: &fixture.repo,
+            port: provider.port,
+        })
+        .expect("opencode mock recipe");
+    let env = lane_env(
+        &fixture,
+        &lane_launch.env,
+        &[("BOOP_STALE_SECS", "3"), ("BOOP_IDLE_SHUTDOWN_SECS", "0")],
+    );
+    let created = fixture.create(coord_route, &[], &env, &opencode);
+    assert!(
+        created.status.success(),
+        "lane create failed: {}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+
+    // Within 10s the coordinator screen shows the alarm, and it took the door.
+    fixture.wait_for_screen(&coord_session, &format!("stale {}", fixture.lane));
+    let first = fixture.stale_rows();
+    assert_eq!(first, 1, "the lane wrote exactly one alarm row");
+    // No second alarm inside the next 2s: the bound is the repeat floor.
+    std::thread::sleep(Duration::from_secs(2));
+    assert_eq!(
+        fixture.stale_rows(),
+        first,
+        "the alarm repeated before its bound"
+    );
 }

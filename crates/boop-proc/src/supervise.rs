@@ -87,6 +87,27 @@ fn idle_shutdown() -> Option<Duration> {
     parse_idle_shutdown(std::env::var(IDLE_SHUTDOWN_ENV).ok().as_deref())
 }
 
+/// Seconds of no lane activity before the supervisor tells the parent. A lane
+/// parked with `BOOP_IDLE_SHUTDOWN_SECS=0` never retires, so without this it
+/// can sit unseen for days. `0` disables the alarm.
+const STALE_ENV: &str = "BOOP_STALE_SECS";
+const DEFAULT_STALE: Duration = Duration::from_secs(7200);
+
+/// `STALE_ENV` parsed; `0` disables the alarm.
+fn parse_stale(raw: Option<&str>) -> Option<Duration> {
+    match raw.and_then(|value| value.parse::<u64>().ok()) {
+        Some(0) => None,
+        Some(secs) => Some(Duration::from_secs(secs)),
+        None => Some(DEFAULT_STALE),
+    }
+}
+
+/// The stale bound for this process. Public so `lane list` reports the same
+/// threshold the supervisor fires at.
+pub fn stale_limit() -> Option<Duration> {
+    parse_stale(std::env::var(STALE_ENV).ok().as_deref())
+}
+
 /// The residency a lane records when it leaves on the idle shutdown: its
 /// conversation is pinned on the route and `lane create --resume` re-opens it.
 pub const RESIDENCY_RETIRED: &str = "retired";
@@ -859,6 +880,12 @@ fn supervise(
     let mut empty_briefs = 0u32;
     let mut result_written = false;
     let mut turn_tools: Vec<boop_acp::channel::ToolCallFact> = Vec::new();
+    // The newest thing that counted as the lane doing anything: a turn end, a
+    // HEAD move, or mail in or out. A stale alarm itself is not activity, or
+    // it would clear the condition it reports.
+    let stale = stale_limit();
+    let last_activity = std::cell::Cell::new(std::time::Instant::now());
+    let mut last_stale: Option<std::time::Instant> = None;
 
     events.record(
         "channel-open",
@@ -946,6 +973,7 @@ fn supervise(
                 publish_pr(mail_store.as_ref(), lane, &turn_tools);
             }
             if let Some(mv) = head_watch.tick(&lane.cwd, Instant::now()) {
+                last_activity.set(std::time::Instant::now());
                 if let Some(store) = mail_store.as_ref() {
                     report_head_move(lane, store, &lane.cwd, mv);
                 }
@@ -1023,6 +1051,7 @@ fn supervise(
             }
             for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
                 seen.insert(hail.id.clone());
+                last_activity.set(std::time::Instant::now());
                 record_hail_transition(events, &hail, "claimed-by-supervisor", "inbox drain");
                 if start_ack_pending {
                     println!("[boop] hail {} held until startup acknowledgment", hail.id);
@@ -1110,6 +1139,7 @@ fn supervise(
                 }
             }
         };
+        last_activity.set(std::time::Instant::now());
         // A fast turn can finish before the 700 ms poll drains the channel's
         // tool calls; read the rest so the PR producer still sees them.
         turn_tools.extend(channel.drain_tool_calls());
@@ -1217,6 +1247,7 @@ fn supervise(
         // is the lane's last word, so only a lane with nothing held writes it.
         for hail in pending(&lane.mail_dir, &lane.lane, &seen)? {
             seen.insert(hail.id.clone());
+            last_activity.set(std::time::Instant::now());
             record_hail_transition(events, &hail, "claimed-by-supervisor", "turn boundary");
             held.push(hail);
         }
@@ -1333,8 +1364,32 @@ fn supervise(
                 // A parked lane runs no tool, so HEAD cannot have moved on its
                 // own; an out-of-band commit still lands here on the poll.
                 if let Some(mv) = head_watch.tick(&lane.cwd, Instant::now()) {
+                    last_activity.set(std::time::Instant::now());
                     if let Some(store) = mail_store.as_ref() {
                         report_head_move(lane, store, &lane.cwd, mv);
+                    }
+                }
+                // A parked lane that owes declared output but never writes it
+                // can sit here unseen; tell the parent. The alarm fires at the
+                // stale bound and repeats no faster than that bound. It is not
+                // activity, so `idle` keeps growing across alarms.
+                if let Some(limit) = stale {
+                    let idle = last_activity.get().elapsed();
+                    let due = idle >= limit && last_stale.map_or(true, |at| at.elapsed() >= limit);
+                    if due {
+                        last_stale = Some(std::time::Instant::now());
+                        mail_to_parent_kind(lane, STALE, stale_body(lane, idle), Some("stale"));
+                        events.record(
+                            "stale",
+                            TraceRecorder::session(channel),
+                            None,
+                            Some(boop_acp::channel::now_ms()),
+                            None,
+                            Some("stale"),
+                            None,
+                            None,
+                            "stale lane told its parent",
+                        );
                     }
                 }
                 let arrived = pending(&lane.mail_dir, &lane.lane, &seen)?;
@@ -1344,6 +1399,7 @@ fn supervise(
                 }
                 for hail in arrived {
                     seen.insert(hail.id.clone());
+                    last_activity.set(std::time::Instant::now());
                     record_hail_transition(
                         events,
                         &hail,
@@ -1795,6 +1851,12 @@ pub const COMMIT: &str = "commit";
 /// on the branch reads exactly one row naming both shas.
 pub const HEAD_REWOUND: &str = "head_rewound";
 
+/// The kind a stale-lane alarm wears. Deliberately not a
+/// `MessageKind::supervisor_row`, so the ladder offers it to the parent's door
+/// instead of stopping it at the mailbox: the parent a lane went quiet under
+/// must hear it without polling.
+pub const STALE: &str = "stale";
+
 /// The worktree HEAD as a short sha. A directory git cannot answer for reads
 /// `unknown` rather than dropping the field the parent greps for.
 fn head_sha(cwd: &Path) -> String {
@@ -1841,6 +1903,18 @@ fn idle_body(lane: &LaneRun, reason: &str, tools: &[boop_acp::channel::ToolCallF
         dirty_count(&lane.cwd),
         tools.len(),
         last_tool(tools),
+    )
+}
+
+/// The alarm a parked lane mails when it has been quiet for `idle`: which lane,
+/// how long, where HEAD sits, and how many paths are dirty. One line, greppable.
+fn stale_body(lane: &LaneRun, idle: Duration) -> String {
+    format!(
+        "stale {} idle={}h head={} dirty={}",
+        lane.lane,
+        idle.as_secs() / 3600,
+        head_sha(&lane.cwd),
+        dirty_count(&lane.cwd),
     )
 }
 
