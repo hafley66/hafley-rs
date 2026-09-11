@@ -17,7 +17,7 @@ function fixture() {
         { sourceId: 'a', runtimeState: 'Idle', reason: 'neutral', evidence: ['source'] },
         { sourceId: 'b', runtimeState: 'Idle', reason: 'neutral band', evidence: ['source'] },
       ],
-      exclusions: [{ id: 'items', namePrefixes: ['Item'], reason: 'outside profile', evidence: ['source'] }],
+      exclusions: [{ id: 'items', namePrefixes: ['Item'], expectedMatches: 1, reason: 'outside profile', evidence: ['source'] }],
     },
     source: {
       ruleset: 'fixture', repository: 'source', revision: 'rev',
@@ -63,7 +63,7 @@ test('omitted mappings remain unresolved', () => {
 
 test('stale receipts contribute zero to rollback and source fidelity', () => {
   const result = joinCoverage(fixture());
-  assert.equal(result.receipts.rollback, 'STALE');
+  assert.equal(result.receipts.rollback, 'LEGACY_STALE');
   assert.equal(result.axes.rollback.numerator, 0);
   assert.equal(result.axes['source fidelity'].numerator, 0);
 });
@@ -92,4 +92,56 @@ test('shared callback identities preserve every action association', () => {
   const result = joinCoverage(input);
   assert.deepEqual(result.axes['transition/callback mapping'], { numerator: 2, denominator: 2, percentage: 100 });
   assert.equal(result.unresolved.callbacks.length, 0);
+});
+
+test('exclusion expected match counts reject source drift', () => {
+  const input = fixture();
+  input.port.exclusions[0].expectedMatches = 2;
+  const result = joinCoverage(input);
+  assert.match(result.errors.join(','), /exclusion rule items matched 1, expected 2/);
+});
+
+test('a broad legacy receipt qualifies zero requirements', () => {
+  const input = fixture();
+  input.receipt.source = H;
+  const result = joinCoverage(input);
+  assert.equal(result.receipts.rollback, 'LEGACY_CURRENT_UNQUALIFIED');
+  assert.equal(result.axes.rollback.numerator, 0);
+  assert.equal(result.strict.numerator, 0);
+});
+
+test('wrong requirement id, axis, revision or fingerprint qualifies zero', () => {
+  const input = fixture();
+  input.requirementReceipts = [
+    { requirementId: 'wrong', axis: 'rollback', sourceFingerprint: H, runtimeRevision: 'runtime-rev', target: 'test', status: 'passed' },
+    { requirementId: 'a', axis: 'wrong', sourceFingerprint: H, runtimeRevision: 'runtime-rev', target: 'test', status: 'passed' },
+    { requirementId: 'a', axis: 'rollback', sourceFingerprint: 'b'.repeat(64), runtimeRevision: 'runtime-rev', target: 'test', status: 'passed' },
+    { requirementId: 'a', axis: 'rollback', sourceFingerprint: H, runtimeRevision: 'wrong', target: 'test', status: 'passed' },
+  ];
+  const result = joinCoverage(input);
+  assert.equal(result.axes.rollback.numerator, 0);
+});
+
+test('duplicate requirement receipts are errors', () => {
+  const input = fixture();
+  const receipt = { requirementId: 'a', axis: 'rollback', sourceFingerprint: H, runtimeRevision: 'runtime-rev', target: 'test', status: 'passed' };
+  input.requirementReceipts = [receipt, { ...receipt }];
+  const result = joinCoverage(input);
+  assert.match(result.errors.join(','), /duplicate requirement receipt a:rollback/);
+});
+
+test('a source state becomes strict only when all associated requirements pass', () => {
+  const input = fixture();
+  input.source.associations = [{ id: 'assoc-a', state: 'A', phase: 'Anim', callback: 'callback-one', source: { symbol: 'A' } }];
+  input.source.callbacks[0].source.symbol = 'callback-one';
+  input.runtime.runtime.callbacks = ['Motion'];
+  input.port.callbackMappings = [{ sourceId: 'assoc-a', runtimeCallback: 'Motion', reason: 'dispatch', evidence: ['runtime'] }];
+  input.requirementReceipts = [
+    { requirementId: 'a', axis: 'rollback', sourceFingerprint: H, runtimeRevision: 'runtime-rev', target: 'test', status: 'passed' },
+    { requirementId: 'a', axis: 'source fidelity', sourceFingerprint: H, runtimeRevision: 'runtime-rev', target: 'test', status: 'passed' },
+  ];
+  const result = joinCoverage(input);
+  assert.deepEqual(result.axes.rollback, { numerator: 1, denominator: 3, percentage: 33.33 });
+  assert.deepEqual(result.axes['source fidelity'], { numerator: 1, denominator: 3, percentage: 33.33 });
+  assert.deepEqual(result.strict, { numerator: 1, denominator: 3, percentage: 33.33 });
 });

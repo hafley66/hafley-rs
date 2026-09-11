@@ -273,7 +273,10 @@ transition/callback mapping `0/1,314 (0%)`, ordered guard qualification
 `0/1,993 (0%)`, live reachability `18/248 (7.26%)`, rollback `0/248 (0%)`, and
 source fidelity `0/248 (0%)`. Strict fully-qualified intersection is
 `0/248 (0%)`. The existing proof receipt has a stale source fingerprint and
-therefore contributes zero to rollback and source fidelity. `just status` prints
+is retained as legacy context only; it contributes zero to rollback and source
+fidelity. Requirement-addressed receipt count is `0`; each future receipt must
+name its exact source requirement ID, axis, source fingerprint, runtime revision,
+target and pass result. `just status` prints
 this report before returning nonzero for stale qualification; `just status-check`
 is the strict source/generated gate. No TC39 stage delta is claimed.
 

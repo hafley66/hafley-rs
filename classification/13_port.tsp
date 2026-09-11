@@ -40,9 +40,9 @@ const port: Port = #{
   callbackMappings: #[],
   guardMappings: #[],
   exclusions: #[
-    #{ id: "item-prefix", namePrefixes: #["Item"], reason: "Item-system states are outside the Pigeon/Falcon-like gameplay profile.", evidence: #["games/classification/12_source_inventory.json", "games/4_tasks.md"] },
-    #{ id: "item-throw", namePrefixes: #["LightThrow", "HeavyThrow"], reason: "Item throw states are outside the profile; item ownership is tracked by T3.", evidence: #["games/classification/12_source_inventory.json", "games/4_tasks.md"] },
-    #{ id: "item-weapon", namePrefixes: #["SwordSwing", "BatSwing", "ParasolSwing", "HarisenSwing", "StarRodSwing", "LGun", "FireFlower", "Hammer", "Kinoko"], reason: "Item weapon states are outside the profile; item-system behavior remains an explicit queue item.", evidence: #["games/classification/12_source_inventory.json", "games/4_tasks.md"] },
-    #{ id: "item-lift", namePrefixes: #["Lift"], reason: "Item lift states are outside the profile; item-system behavior remains an explicit queue item.", evidence: #["games/classification/12_source_inventory.json", "games/4_tasks.md"] },
+    #{ id: "item-prefix", namePrefixes: #["Item"], expectedMatches: 22, reason: "Item-system states are outside the Pigeon/Falcon-like gameplay profile.", evidence: #["games/classification/12_source_inventory.json", "games/4_tasks.md"] },
+    #{ id: "item-throw", namePrefixes: #["LightThrow", "HeavyThrow"], expectedMatches: 26, reason: "Item throw states are outside the profile; item ownership is tracked by T3.", evidence: #["games/classification/12_source_inventory.json", "games/4_tasks.md"] },
+    #{ id: "item-weapon", namePrefixes: #["SwordSwing", "BatSwing", "ParasolSwing", "HarisenSwing", "StarRodSwing", "LGun", "FireFlower", "Hammer", "Kinoko"], expectedMatches: 41, reason: "Item weapon states are outside the profile; item-system behavior remains an explicit queue item.", evidence: #["games/classification/12_source_inventory.json", "games/4_tasks.md"] },
+    #{ id: "item-lift", namePrefixes: #["Lift"], expectedMatches: 4, reason: "Item lift states are outside the profile; item-system behavior remains an explicit queue item.", evidence: #["games/classification/12_source_inventory.json", "games/4_tasks.md"] },
   ],
 };

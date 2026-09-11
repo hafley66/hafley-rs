@@ -37,9 +37,15 @@
     "states": 14
   },
   "receipts": {
-    "rollback": "STALE",
-    "source_fidelity": "STALE",
-    "fingerprint": "3b639b87d3956f4b0a6a5f22590688cae68a0175dce352d7015c79ffb2e14c78"
+    "rollback": "LEGACY_STALE",
+    "source_fidelity": "LEGACY_STALE",
+    "fingerprint": "3b639b87d3956f4b0a6a5f22590688cae68a0175dce352d7015c79ffb2e14c78",
+    "legacy_prove": {
+      "commit": "98b4631983eb8b1ceb32605b4ddbd41ac6ae738e",
+      "source": "addc7e5c8bd32a7dc38e719629ade73f972187e72f3ae0675d0c6dcb3feebdac",
+      "status": "passed"
+    },
+    "requirement_count": 0
   },
   "exclusions": {
     "rules": {

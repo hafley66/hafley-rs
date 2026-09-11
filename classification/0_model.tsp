@@ -203,6 +203,7 @@ model GuardRuntimeMapping {
 model ExclusionRule {
   id: string;
   namePrefixes: string[];
+  expectedMatches: int32;
   reason: string;
   evidence: string[];
 }
