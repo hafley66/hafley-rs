@@ -339,7 +339,7 @@ PRESETS: model spelling is presets only; `boop config presets` lists name,
   (bin ccz). The codex/gpt and claude families through opencode are refused at
   spawn: each has a flat-rate harness and opencode bills them metered. Gemini is allowed.
 
-DISK: boop owns each lane's cargo target dir, so no lane fills the laptop.
+DISK: each lane's cargo target dir belongs to boop, so no lane fills the laptop.
   PLACEMENT: `lane create` sets CARGO_TARGET_DIR=<lanes root>/<lane>/target on
     the lane's spawn (lanes root = BOOP_LANE_TARGET_ROOT, else ~/.agent/lanes).
     A caller `--env CARGO_TARGET_DIR=...` wins; `--dry-run` prints `target:`.
