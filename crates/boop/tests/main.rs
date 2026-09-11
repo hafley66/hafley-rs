@@ -4,6 +4,8 @@
 
 #[path = "boop_start_warm.rs"]
 mod boop_start_warm;
+#[path = "commit_push_e2e.rs"]
+mod commit_push_e2e;
 #[path = "coordinator_ping.rs"]
 mod coordinator_ping;
 #[path = "deliver_door.rs"]
