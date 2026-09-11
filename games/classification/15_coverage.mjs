@@ -31,7 +31,13 @@ async function json(path) {
 }
 
 export function currentRevision(base = root) {
-  return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: base, encoding: 'utf8' }).trim();
+  // Pin the revision that owns the runtime exporter. Documentation and receipt
+  // commits must not invalidate an otherwise unchanged executable observation.
+  const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: base, encoding: 'utf8' }).trim();
+  return execFileSync('git', [
+    'log', '-1', '--format=%H', '--',
+    'games/crates/fighter/src/5_status.rs', 'games/smash/examples/0_status_export.rs',
+  ], { cwd: repo, encoding: 'utf8' }).trim();
 }
 
 export function currentSourceFingerprint(base = root) {
