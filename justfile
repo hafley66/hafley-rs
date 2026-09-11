@@ -55,8 +55,17 @@ map-png:
     rsvg-convert -w 1500 1_roadmap.svg -o /tmp/hafley-games-roadmap.png
 
 status:
+    node classification/8_status.mjs status
+
+# Strict status gate for CI. The report itself is available from `just status`
+# even when one of these generated prerequisites is stale.
+status-check:
     just source-rules-check
-    node classification/8_status.mjs
+    node classification/8_status.mjs check
+
+# Source/runtime coverage join and its generated receipts.
+coverage:
+    node classification/15_coverage.mjs generate
 
 tsp:
     node classification/2_registry.mjs generate
@@ -65,5 +74,6 @@ test:
     node --test classification/2_registry.test.mjs
     node --test classification/5_progress.test.mjs
     node --test classification/8_status.test.mjs
+    node --test classification/15_coverage.test.mjs
     node --test classification/9_steps.test.mjs
     just test-map

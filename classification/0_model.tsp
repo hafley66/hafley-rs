@@ -163,3 +163,54 @@ model Step {
 }
 
 alias Steps = Record<Step>;
+
+// Permanent source/runtime coverage join. The profile and mappings are the
+// only authored claims; observations, counts and receipt status are generated
+// by `15_coverage.mjs`.
+alias PortAxis = "state mapping" | "transition/callback mapping" | "ordered guard qualification" | "live reachability" | "rollback" | "source fidelity";
+
+model PortProfile {
+  id: string;
+  name: string;
+  target: string;
+  sourceInventory: string;
+  runtimeInventory: string;
+  sourceRevision: string;
+  axes: PortAxis[];
+}
+
+model SourceRuntimeMapping {
+  sourceId: string;
+  runtimeState: string;
+  reason: string;
+  evidence: string[];
+}
+
+model CallbackRuntimeMapping {
+  sourceId: string;
+  runtimeCallback: string;
+  reason: string;
+  evidence: string[];
+}
+
+model GuardRuntimeMapping {
+  sourceId: string;
+  runtimePartition: string;
+  reason: string;
+  evidence: string[];
+}
+
+model ExclusionRule {
+  id: string;
+  namePrefixes: string[];
+  reason: string;
+  evidence: string[];
+}
+
+model Port {
+  profile: PortProfile;
+  mappings: SourceRuntimeMapping[];
+  callbackMappings: CallbackRuntimeMapping[];
+  guardMappings: GuardRuntimeMapping[];
+  exclusions: ExclusionRule[];
+}
