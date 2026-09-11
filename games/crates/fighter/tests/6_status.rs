@@ -1,4 +1,4 @@
-use game_fighter::{_1b_ground, _1c_air, _5_status::runtime_inventory, Phase};
+use game_fighter::{_1a_chart, _1b_ground, _1c_air, _5_status::runtime_inventory, Phase};
 
 fn has_transition(
     entries: &[game_fighter::_5_status::Transition],
@@ -38,13 +38,13 @@ fn public_runtime_inventory_matches_phase_and_decision_outputs() {
             &inventory.ground,
             phase,
             "JumpRequest",
-            _1b_ground::decide(phase, _1b_ground::Event::JumpRequest),
+            _1a_chart::decide(phase, _1a_chart::Event::JumpRequest),
         ));
         assert!(has_transition(
             &inventory.air,
             phase,
             "Land",
-            _1c_air::decide(phase, _1c_air::AirEvent::Land),
+            _1a_chart::decide(phase, _1a_chart::Event::Land),
         ));
     }
 }
@@ -69,13 +69,13 @@ fn public_inventory_preserves_self_transitions_and_ordered_guards() {
         stopped: true,
     };
     assert_eq!(
-        _1b_ground::decide(Phase::Dash, _1b_ground::Event::Motion(all)),
+        _1a_chart::decide(Phase::Dash, _1a_chart::Event::Motion(all)),
         Some(Phase::Dash)
     );
     assert_eq!(
-        _1b_ground::decide(
+        _1a_chart::decide(
             Phase::Dash,
-            _1b_ground::Event::Motion(_1b_ground::Facts {
+            _1a_chart::Event::Motion(_1b_ground::Facts {
                 reverse: false,
                 ..all
             }),
@@ -83,9 +83,9 @@ fn public_inventory_preserves_self_transitions_and_ordered_guards() {
         Some(Phase::Run),
     );
     assert_eq!(
-        _1b_ground::decide(
+        _1a_chart::decide(
             Phase::Dash,
-            _1b_ground::Event::Motion(_1b_ground::Facts {
+            _1a_chart::Event::Motion(_1b_ground::Facts {
                 reverse: false,
                 forward: false,
                 ..all
@@ -100,7 +100,7 @@ fn public_inventory_preserves_self_transitions_and_ordered_guards() {
         jumps_left: 1,
     };
     assert_eq!(
-        _1c_air::decide(Phase::Jump, _1c_air::AirEvent::Motion(both_air_facts)),
+        _1a_chart::decide(Phase::Jump, _1a_chart::Event::AirMotion(both_air_facts)),
         Some(Phase::AirJump),
     );
 }

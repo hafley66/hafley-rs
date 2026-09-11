@@ -1,12 +1,12 @@
 //! Finite executable transition inventory for status export.
 //!
 //! Every entry is obtained by evaluating the public decision functions
-//! ([`crate::_1b_ground::decide`], [`crate::_1c_air::decide`]) over the full boolean
+//! ([`crate::_1a_chart::decide`]) over the full boolean
 //! fact inventory. This module owns no transition specification of its own: it
 //! varies inputs and records the observed outputs, so a chart change is visible
 //! here without editing it.
 
-use crate::{_1b_ground, _1c_air, Phase};
+use crate::{_1a_chart, _1b_ground, _1c_air, Phase};
 use serde::Serialize;
 
 /// Runtime callback identity for one state/event dispatch. The state is kept
@@ -146,7 +146,7 @@ pub fn ground_transitions() -> Vec<Transition> {
                 from,
                 "ground",
                 "JumpRequest",
-                _1b_ground::decide(from, _1b_ground::Event::JumpRequest),
+                _1a_chart::decide(from, _1a_chart::Event::JumpRequest),
                 bits,
             );
         }
@@ -156,7 +156,7 @@ pub fn ground_transitions() -> Vec<Transition> {
                 from,
                 "ground",
                 "GroundIntent",
-                _1b_ground::decide(from, _1b_ground::Event::GroundIntent(ground_facts(bits))),
+                _1a_chart::decide(from, _1a_chart::Event::GroundIntent(ground_facts(bits))),
                 bits,
             );
             record(
@@ -164,7 +164,7 @@ pub fn ground_transitions() -> Vec<Transition> {
                 from,
                 "ground",
                 "Motion",
-                _1b_ground::decide(from, _1b_ground::Event::Motion(ground_facts(bits))),
+                _1a_chart::decide(from, _1a_chart::Event::Motion(ground_facts(bits))),
                 bits,
             );
         }
@@ -187,7 +187,7 @@ pub fn air_transitions() -> Vec<Transition> {
                 from,
                 "air",
                 "Motion",
-                _1c_air::decide(from, _1c_air::AirEvent::Motion(facts)),
+                _1a_chart::decide(from, _1a_chart::Event::AirMotion(facts)),
                 bits,
             );
         }
@@ -197,7 +197,7 @@ pub fn air_transitions() -> Vec<Transition> {
                 from,
                 "air",
                 "Land",
-                _1c_air::decide(from, _1c_air::AirEvent::Land),
+                _1a_chart::decide(from, _1a_chart::Event::Land),
                 bits,
             );
         }
@@ -321,11 +321,11 @@ mod tests {
             stopped: true,
         };
         assert_eq!(
-            _1b_ground::decide(Phase::Dash, _1b_ground::Event::Motion(all)),
+            _1a_chart::decide(Phase::Dash, _1a_chart::Event::Motion(all)),
             Some(Phase::Dash)
         );
         assert_eq!(
-            _1b_ground::decide(Phase::Run, _1b_ground::Event::Motion(all)),
+            _1a_chart::decide(Phase::Run, _1a_chart::Event::Motion(all)),
             Some(Phase::Turn)
         );
         let competing_air = _1c_air::AirFacts {
@@ -334,7 +334,7 @@ mod tests {
             jumps_left: 1,
         };
         assert_eq!(
-            _1c_air::decide(Phase::Jump, _1c_air::AirEvent::Motion(competing_air)),
+            _1a_chart::decide(Phase::Jump, _1a_chart::Event::AirMotion(competing_air)),
             Some(Phase::AirJump)
         );
     }

@@ -6,7 +6,7 @@ const entries: Record<Entry> = #{
     stage: 2.7, destination: "library", task: "S3",
     scope: "Live statig grounded decisions and turn jump permission; crouch lifecycle migration and source-game timing equivalence pending",
     manifest: "crates/fighter/Cargo.toml", targets: #["crates/fighter"],
-    evidence: #["4_tasks.md", "crates/fighter/4_graph.md", "crates/fighter/tests/1_chart.rs"],
+    evidence: #["4_tasks.md", "crates/fighter/src/_1a_chart.rs", "crates/fighter/tests/2_ground.rs"],
   },
   `game-content`: #{
     stage: 2.7, destination: "library", task: "A1",

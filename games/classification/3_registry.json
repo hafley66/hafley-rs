@@ -10,8 +10,8 @@
     ],
     "evidence": [
       "4_tasks.md",
-      "crates/fighter/4_graph.md",
-      "crates/fighter/tests/1_chart.rs"
+      "crates/fighter/src/_1a_chart.rs",
+      "crates/fighter/tests/2_ground.rs"
     ]
   },
   "game-content": {
