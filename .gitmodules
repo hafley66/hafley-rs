@@ -1,6 +1,0 @@
-[submodule "games/blender-godot-sqlite-proof/vendor/rukaidata"]
-	path = games/blender-godot-sqlite-proof/vendor/rukaidata
-	url = https://github.com/rukai/rukaidata.git
-[submodule "games/vendor/melee"]
-	path = games/vendor/melee
-	url = https://github.com/doldecomp/melee.git
