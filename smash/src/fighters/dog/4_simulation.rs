@@ -6,9 +6,8 @@
 //! mutable fact; the baked actions and rules stay outside it.
 
 use super::{catalog, rules, select};
-use crate::fighters::controller::Controller;
 use game_content::Action;
-use game_fighter::{Input, Rules, State};
+use game_fighter::{Controller, Input, Rules, State};
 use serde::{Deserialize, Serialize};
 
 /// Durable snapshot of every mutable fact. Baked actions and rules are immutable
@@ -39,12 +38,18 @@ impl Simulation {
 
     /// Animation frame for the current action, clamped to its frame count.
     pub fn frame(&self) -> usize {
-        self.controller.frame(&self.actions)
+        self.controller.frame(|index| frames(&self.actions, index))
     }
 
     /// One fixed tick through the shared controller.
     pub fn advance(&mut self, input: Input) -> &Controller {
-        self.controller.advance(input, &self.rules, &self.actions, select);
+        self.controller.advance(
+            input,
+            &self.rules,
+            self.actions.len(),
+            |index| frames(&self.actions, index),
+            select,
+        );
         &self.controller
     }
 
@@ -55,6 +60,11 @@ impl Simulation {
     pub fn load(&mut self, snapshot: &Snapshot) {
         self.controller = snapshot.0.clone();
     }
+}
+
+/// Frame count for one baked action index, or zero when the index is absent.
+fn frames(actions: &[Action], index: usize) -> usize {
+    actions.get(index).map_or(0, |action| action.frames.len())
 }
 
 /// Deterministic source-free tape. Each entry is one tick's buttons and axis.
@@ -157,7 +167,7 @@ mod tests {
         }
         for state in states.iter().step_by(7) {
             let json = serde_json::to_vec(state).unwrap();
-            let restored: crate::fighters::controller::Controller =
+            let restored: game_fighter::Controller =
                 serde_json::from_slice(&json).unwrap();
             assert_eq!(&restored, state);
         }
