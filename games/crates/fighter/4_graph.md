@@ -26,7 +26,7 @@ research inputs, not new runtime dependencies.
   substitute its comments for verified 3.6 rules. Repository README explicitly
   describes Community Completion based on development 3.6.1.
 - `kneeman-lines/5_brawl_decomp`: located; common callback coverage not qualified.
-- Falcon `imported/` retains PM3.6 animation/subaction data and attributes.
+- Pigeon `imported/` retains PM3.6 animation/subaction data and attributes.
   This payload does not establish the complete common transition graph.
 
 ## Exclusivity and independent facts

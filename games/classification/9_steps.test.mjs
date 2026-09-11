@@ -9,10 +9,10 @@ import { root, taskIds, existing, localPath } from './2_registry.mjs';
 import { loadSteps, joinSteps, observedFacts, checkSteps } from './9_steps.mjs';
 
 const steps = await loadSteps();
-const step = steps['falconFtCommonSourceImport'];
+const step = steps['pigeonFtCommonSourceImport'];
 const generated = JSON.parse(await readFile(new URL('./10_steps.json', import.meta.url), 'utf8'));
 const sourceRules = JSON.parse(await readFile(
-  new URL('../smash/src/fighters/falcon/generated/2_source_rules.json', import.meta.url), 'utf8'));
+  new URL('../smash/src/fighters/pigeon/generated/2_source_rules.json', import.meta.url), 'utf8'));
 const AUTHORED_KEYS = ['id', 'task', 'scope', 'sourceKinds', 'extractor', 'artifacts', 'consumer', 'gates', 'stage'];
 
 // One pinned-revision artifact per step is expected; additional instances stay
@@ -32,14 +32,14 @@ function authoredSteps() {
 }
 
 test('authored steps declare intent only, with ledger tasks and stages', async () => {
-  assert.deepEqual(Object.keys(steps), ['falconFtCommonSourceImport']);
+  assert.deepEqual(Object.keys(steps), ['pigeonFtCommonSourceImport']);
   assert.deepEqual(Object.keys(step), AUTHORED_KEYS);
   const tasks = await taskIds(root);
   assert.ok(tasks.has(step.task), `unknown task ${step.task}`);
-  assert.equal(step.id, 'falconFtCommonSourceImport');
+  assert.equal(step.id, 'pigeonFtCommonSourceImport');
   assert.equal(step.stage, 2);
   assert.ok(step.sourceKinds.some(kind => kind.includes('melee-decomp')), 'required source kinds name the pinned decomp');
-  assert.match(step.extractor, /smash-import -- falcon/);
+  assert.match(step.extractor, /smash-import -- pigeon/);
   assert.ok(step.consumer.trim().length > 0);
   for (const artifact of step.artifacts) await existing(root, artifact.path);
 });
@@ -174,9 +174,9 @@ test('the checker rejects schema drift and duplicate step identities', async () 
     const source = original.replace('./0_model.tsp', resolve(root, 'classification/0_model.tsp'));
     for (const [index, invalid] of [
       source.replace('stage: 2,', 'stage: 9,'),
-      source.replace('id: "falconFtCommonSourceImport"', 'ghost: "x"'),
-      source.replace('scope: "Falcon common transitions extracted from the pinned Melee decomp"',
-        'scope: "Falcon common transitions extracted from the pinned Melee decomp",\n    scope: "duplicate key"'),
+      source.replace('id: "pigeonFtCommonSourceImport"', 'ghost: "x"'),
+      source.replace('scope: "Pigeon common transitions extracted from the pinned Melee decomp"',
+        'scope: "Pigeon common transitions extracted from the pinned Melee decomp",\n    scope: "duplicate key"'),
       source.replace('gates: #[', 'gatez: #['),
     ].entries()) {
       const path = join(dir, 'invalid.tsp');

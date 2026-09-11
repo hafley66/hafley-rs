@@ -1523,7 +1523,7 @@ void ftCo_JumpAerial_Enter_Basic(Fighter_GObj* gobj) {
     }
 
     #[test]
-    fn emits_rust_retaining_names_provenance_and_typed_inputs() {
+    fn emits_rust_with_neutral_runtime_provenance_and_typed_inputs() {
         let functions = vec![
             lower_guard(PORT_SOURCE, "ftCo_Turn.c", "ftCo_800C97A8").unwrap(),
             lower_callback(PORT_SOURCE, "ftCo_Jump.c", "ftCo_Jump_Enter").unwrap(),
@@ -1555,7 +1555,8 @@ void ftCo_JumpAerial_Enter_Basic(Fighter_GObj* gobj) {
         assert!(generated
             .contains("FtCommonEffect::FtCo_800CBAC4 { motion: msid, velocity: vel, arg3: true }"));
         assert!(generated.contains("0123456789abcdef0123456789abcdef01234567"));
-        assert!(generated.contains("ftCo_Turn.c"));
+        assert!(!generated.contains("github.com"));
+        assert!(!generated.contains("ftCo_Turn.c"));
         assert!(generated
             .contains("Source calls: ftCommon_8007D5D4, Fighter_ChangeMotionState, ftCo_800CB110."));
     }

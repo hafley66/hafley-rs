@@ -1,0 +1,55 @@
+[workspace]
+resolver = "3"
+
+[package]
+name = "pigeon-lab"
+version = "0.1.0"
+edition = "2024"
+default-run = "pigeon-lab"
+
+[dependencies]
+rollback = { path = "../../crates/rollback" }
+game-fighter = { path = "../../crates/fighter" }
+game-capture = { path = "../../crates/capture" }
+smash = { path = "../../smash", features = ["ingest"] }
+brawllib_rs = "=0.29.0"
+game-content = { path = "../../crates/content", features = ["ingest"] }
+bincode = { version = "2", features = ["serde"] }
+cgmath = "0.18"
+serde_json = "1"
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["fmt", "env-filter", "json"] }
+parry3d = "=0.30.2"
+wgpu = "=29.0.4"
+pollster = "=0.4.0"
+ggrs = "=0.13.0"
+serde = { version = "1", features = ["derive"] }
+ssbm_utils = "=0.4.0"
+rapier3d = { version = "=0.35.3", features = ["serde-serialize", "enhanced-determinism"] }
+core-labs = { path = "../core-labs" }
+rusqlite = { version = "=0.40.2", features = ["bundled", "vtab"] }
+godot = { version = "=0.4.5", default-features = false, features = ["api-4-5"], optional = true }
+
+[features]
+gdext = ["dep:godot"]
+
+[lib]
+name = "pigeon_gdext"
+path = "36_library.rs"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "pigeon-lab"
+path = "2_main.rs"
+
+[[bin]]
+name = "pigeon-rollback"
+path = "8_rollback.rs"
+
+[[bin]]
+name = "pigeon-web-bake"
+path = "93_bake_web.rs"
+
+[[bin]]
+name = "pigeon-import"
+path = "97_import.rs"

@@ -3,9 +3,9 @@
 Approved destination: one Rust application crate here, no nested crates.
 Reusable first-party packages belong in `../crates/`.
 
-The app package now owns `src/fighters/falcon/`: the moved seven-action simulation,
+The app package now owns `src/fighters/pigeon/`: the moved seven-action simulation,
 input policy, snapshot state and sandbag scenario from `simulation-core`.
-Lab and web consumers import `smash::fighters::falcon`. The package currently
+Lab and web consumers import `smash::fighters::pigeon`. The package currently
 exposes a library; its executable and offline ingestion migration remain A1 in
 [the domain task ledger](../3_tasks.md). Existing fixture assets and MP4s remain
 in the lab. Movement formulas and callback coverage retain their lab limitations.
@@ -15,7 +15,7 @@ routing, side smash, down tilt, neutral air, fair and bair on Small Battlefield.
 "Crouch tilt" is provisionally interpreted as down tilt. Direction is relative to
 facing; exact PM thresholds/windows and special move coverage need source evidence.
 Record actual state in an MP4 and replay the input tape to identical authoritative
-state. Full PM3.6 Falcon remains the larger target. Stocks, respawn and the complete
+state. Full PM3.6 Pigeon remains the larger target. Stocks, respawn and the complete
 two-fighter match are on deck after this gate.
 
 See [living architecture](../1_roadmap.svg) and [rollback ownership](../2_roadmap.md).

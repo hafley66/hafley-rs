@@ -4,7 +4,7 @@ Source review, 2026-09-07. No adapter implemented or recording executed.
 Installed runtime: `godot --version` returns `4.7.stable.official.5b4e0cb0f`.
 
 Follow-up: the adapter and recording have since executed. See
-[`33_godot_readme.md`](../falcon-lab/33_godot_readme.md). The sections below retain
+[`33_godot_readme.md`](../pigeon-lab/33_godot_readme.md). The sections below retain
 the original research-stage proposals; the implementation uses a bounded Rust
 worker bridge rather than owning the SQL connection on the Godot main thread.
 

@@ -1,6 +1,6 @@
 # Shared action content
 
-Moved from the Falcon lab and `smash::fighters::falcon`; no app dependency.
+Moved from the Pigeon lab and `smash::fighters::pigeon`; no app dependency.
 `Action`, `Frame`, `Attack` preserve the existing Serde field order and wire shape.
 `Tick`, action ordering, transitions, buffer eligibility and movement remain app-owned.
 
@@ -19,11 +19,11 @@ content and mutates separate snapshots. Baked content currently omits bone poses
 which existing presentation consumers retain from decoded data. Existing game
 binary format and CLI remain unchanged. No callback execution/fidelity claim.
 
-Tests reference retained Falcon fixtures and `10_lifecycle_sources.json` provenance
-under `../../blender-godot-sqlite-proof/fixtures/falcon/`. A synthetic name mutation
+Tests reference retained Pigeon fixtures and `10_lifecycle_sources.json` provenance
+under `../../blender-godot-sqlite-proof/fixtures/pigeon/`. A synthetic name mutation
 checks identity independence. A real second-character fixture remains pending.
 No network access or fighter-specific paths occur in library implementation.
 
-From the Falcon lab, `just test-reuse` includes the ingest tests. The existing
-`falcon-import <directory>` catalogue command consumes this shared decoder.
+From the Pigeon lab, `just test-reuse` includes the ingest tests. The existing
+`pigeon-import <directory>` catalogue command consumes this shared decoder.
 `just test-simulation-wasm` compiles the default content feature set through Smash.

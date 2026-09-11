@@ -8,8 +8,8 @@
 use game_fighter::Phase;
 use game_fighter::status::{air_transitions, ground_transitions};
 use serde_json::{Value, json};
-use smash::fighters::falcon::catalog;
-use smash::fighters::falcon::movement::{self, SelectionFacts};
+use smash::fighters::pigeon::catalog;
+use smash::fighters::pigeon::movement::{self, SelectionFacts};
 
 /// Deterministic stick sweep; the phase->animation selection seam is sampled
 /// only at these points, so band changes appear as separate observed actions.

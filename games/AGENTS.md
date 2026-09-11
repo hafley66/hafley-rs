@@ -16,8 +16,8 @@ same domain tree under source, content, assets, data, or generated roots.
 
 Keep a fighter's authored behavior, configuration, imported/generated data and
 local tests together in one fighter directory. For example,
-`smash/src/fighters/falcon/` owns Falcon; do not also create
-`smash/content/fighters/falcon/`. A local `generated/` directory is permitted when
+`smash/src/fighters/pigeon/` owns Pigeon; do not also create
+`smash/content/fighters/pigeon/`. A local `generated/` directory is permitted when
 it separates machine-owned output from authored files without duplicating the
 fighter hierarchy. Apply the same colocation rule to stages, items and vehicles.
 
@@ -26,7 +26,7 @@ category trees, redundant wrapper modules, or directory levels that merely repea
 their parent. Number files within their local module's dependency/reading order;
 do not encode the full parent path again in filenames.
 
-Falcon-specific behavior belongs in the app's fighter directory. Shared crates
+Pigeon-specific behavior belongs in the app's fighter directory. Shared crates
 must remain character-independent. Offline ingestion selects a character and
 writes into that character's existing home using a common package format; do not
 create a second maintained implementation or parallel per-character output tree.
@@ -71,7 +71,7 @@ hand-write a progress table into a report or chat message.
 
 ## Source authority for status
 
-`just status` is the joined authority for Falcon action and mechanic state. Keep
+`just status` is the joined authority for Pigeon action and mechanic state. Keep
 each source strictly in its lane:
 
 - TypeSpec (`classification/7_status.tsp`, modelled in `0_model.tsp`) authors
@@ -83,11 +83,11 @@ each source strictly in its lane:
   variants, executable chart transitions and the live Phase-to-animation
   mapping. Never regex Rust semantic behavior; expose a public API or a pure
   seam instead.
-- `smash/src/fighters/falcon/imported/0_sources.json` owns retained filenames,
+- `smash/src/fighters/pigeon/imported/0_sources.json` owns retained filenames,
   hashes and declared frame counts. `just status` recomputes file presence and
   SHA256 every run.
 - Source-fingerprinted workflow receipts under
-  `blender-godot-sqlite-proof/falcon-lab/.workflow/` own test, proof and deploy
+  `blender-godot-sqlite-proof/pigeon-lab/.workflow/` own test, proof and deploy
   observations. A path existing is not a passing test: a receipt counts as
   PASSED only when its recorded source fingerprint equals the recomputed one,
   otherwise it renders STALE.
@@ -109,7 +109,7 @@ coordinator/human after each increment. Never wait for a whole promotion to repo
 Read the newest numbered `*_tasks.md` plus N=2 predecessors when available.
 Carry unfinished IDs forward with explicit disposition; never erase unfinished
 work by starting another task file. The domain ledger starts at `3_tasks.md` and
-links the earlier Falcon ledger. Every task needs a terminal condition and a
+links the earlier Pigeon ledger. Every task needs a terminal condition and a
 coordinator checkpoint. Send a progress message before implementation and when
 an intermediate result or changed approach needs review. Subagents must send
 these messages to their parent while working; yield for direction on scope
@@ -148,7 +148,7 @@ Keep experimental Cargo packages and lockfiles isolated from the parent workspac
 until promotion is explicitly requested. Retain source assets and evidence; ignore
 build caches and regenerable intermediate captures in Git.
 
-Commonize shell automation within each lab. In the Falcon lab, use its justfile
+Commonize shell automation within each lab. In the Pigeon lab, use its justfile
 for workflow entry points and source `0_shell.sh` after setting `lab_dir` for
 Cargo policy, temporary artifact directories, encoding, and media inspection.
 Keep experiment-specific assertions and capture parameters in their scripts.

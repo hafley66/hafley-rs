@@ -1,4 +1,4 @@
 pub mod fighters {
-    #[path = "falcon/2_simulation.rs"]
-    pub mod falcon;
+    #[path = "pigeon/2_simulation.rs"]
+    pub mod pigeon;
 }

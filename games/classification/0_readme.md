@@ -34,7 +34,7 @@ The receipt's `source` field reuses `8_status.mjs` `currentSource` and is null
 (UNMEASURED) when the sibling runtime checkout is not resolvable from this
 checkout. Steps do not restate anything `just status` already derives.
 
-Uses the existing `falcon-lab/contracts` compiler installation and lockfile
+Uses the existing `pigeon-lab/contracts` compiler installation and lockfile
 (@typespec/compiler 1.10.0). If absent, run `pnpm install --frozen-lockfile` there.
 No new dependency installation or Rust build is required. `cargo metadata
 --no-deps --offline` resolves package identities and source entrypoints. The
@@ -127,7 +127,7 @@ stage/scope reassessment. A file move alone does not change maturity.
 | --- | --- | --- |
 | `639083d` | Statechart composition, clone restore and GGRS qualification | Predates registry; evidence for bounded qualification, with Serde caveat |
 | `0f9e183` | Negative regression detects restored statechart reinitialization | Predates registry; additional evidence with limitation retained |
-| `1707594` | Snapshot-owned buffer consumed by Falcon, restore and SQL checks | Predates registry; integrated consumer evidence |
+| `1707594` | Snapshot-owned buffer consumed by Pigeon, restore and SQL checks | Predates registry; integrated consumer evidence |
 | `b1c2046` | Four libraries moved with tests/lockfiles and consumers | Actual registry 3 -> 3; location changes, stage retained |
 
 ### Worked promotion sequence for the current slice
@@ -136,12 +136,12 @@ Each row is a bounded commit unit; additional intermediate commits are permitted
 
 | Unit | Stage treatment | Required result |
 | --- | --- | --- |
-| Current Falcon move | App proposal 1 -> 2.7 using the existing qualified implementation | Lab/web import app-owned Falcon; core and WASM checks pass; executable still pending |
-| Pending offline ingest | New shared package goes through draft/testing | Character-selectable API tested with retained Falcon and another-character fixtures; unsupported payload/behavior reported |
+| Current Pigeon move | App proposal 1 -> 2.7 using the existing qualified implementation | Lab/web import app-owned Pigeon; core and WASM checks pass; executable still pending |
+| Pending offline ingest | New shared package goes through draft/testing | Character-selectable API tested with retained Pigeon and another-character fixtures; unsupported payload/behavior reported |
 | Pending app executable | Assess 2.7 -> 3 for the declared slice | Existing simulation, shared capture and baked content composed; replay checks and inspected actual-state MP4 |
 | Pending scoped finish | Assess 3 -> 4 | Recorded slice acceptance closed, destination ownership resolved, repeatable commands verified |
 
-Full PM Falcon, later fighters and expanded move coverage retain separate task
+Full PM Pigeon, later fighters and expanded move coverage retain separate task
 conditions. A scoped stage-4 slice does not complete those tasks. Keep ingestion
 outside simulation ticks throughout this sequence.
 
@@ -150,12 +150,12 @@ outside simulation ticks throughout this sequence.
 Use the standard attribution footer after these factual fields:
 
 ```text
-refactor(games): move Falcon policy into smash
+refactor(games): move Pigeon policy into smash
 
 Task: A1
 Package: smash
 Stage: 1 -> 2.7 (existing qualified implementation moved into app)
-Property: lab and web consume app-owned Falcon state and transitions
+Property: lab and web consume app-owned Pigeon state and transitions
 Verified: <commands and outcomes actually observed>
 Evidence: games/3_tasks.md
 Remaining: executable, generic ingestion, expanded movement/attacks

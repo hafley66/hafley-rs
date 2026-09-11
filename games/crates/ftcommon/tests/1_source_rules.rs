@@ -1,6 +1,6 @@
 //! Deterministic fixtures: the generated Rust decisions and effect sequences
 //! must agree with the source-derived rules already emitted by `smash-import`
-//! (`smash/src/fighters/falcon/generated/2_source_rules.json`).
+//! (`smash/src/fighters/pigeon/generated/2_source_rules.json`).
 //!
 //! Every rule is evaluated with the same typed inputs the generated functions
 //! receive, including the facing sign flip and a non-zero unresolved
@@ -13,7 +13,7 @@ use game_ftcommon::{
 };
 use serde_json::Value;
 
-const RULES: &str = include_str!("../../../smash/src/fighters/falcon/generated/2_source_rules.json");
+const RULES: &str = include_str!("../../../smash/src/fighters/pigeon/generated/2_source_rules.json");
 const GENERATED: &str = include_str!("../src/generated/0_ftcommon.rs");
 
 const REVISION: &str = "c7861544f8e1fbc530612393e91d859886e97e3c";
