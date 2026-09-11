@@ -2,13 +2,14 @@
 //! that harness's coordinator route, and project while it runs.
 
 use std::io::Write;
+use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use boop::bus::Route;
-use boop::harness::{Harness, NativeTuiEvent, NativeTuiSpec};
+use boop::harness::{Harness, NativeTuiEvent, NativeTuiPlan, NativeTuiSpec};
 use boop::registry::Registry;
 use tracing::{info, warn};
 
@@ -106,6 +107,32 @@ impl Drop for AlternateScreen {
         let mut out = std::io::stdout();
         let _ = out.write_all(b"\x1b[?1049l");
         let _ = out.flush();
+    }
+}
+
+/// Stop the launch's backend on every exit path, including a panic or an early
+/// `?` between the backend start and the loop's own cleanup. The wrapper
+/// registers SIGINT so a pane Ctrl-C leaves it alive; if the TUI then dies, the
+/// frontend-exit path or this guard takes the backend down with it.
+struct StopBackend(NativeTuiPlan);
+
+impl Deref for StopBackend {
+    type Target = NativeTuiPlan;
+
+    fn deref(&self) -> &NativeTuiPlan {
+        &self.0
+    }
+}
+
+impl DerefMut for StopBackend {
+    fn deref_mut(&mut self) -> &mut NativeTuiPlan {
+        &mut self.0
+    }
+}
+
+impl Drop for StopBackend {
+    fn drop(&mut self) {
+        self.0.stop();
     }
 }
 
@@ -255,6 +282,10 @@ pub(crate) fn run_native_tui(
     let mut signals = signal_hook::iterator::Signals::new([
         signal_hook::consts::SIGHUP,
         signal_hook::consts::SIGTERM,
+        // Registering SIGINT only overrides the wrapper's default kill. The
+        // TUI shares the pane's process group, so the same Ctrl-C reaches it;
+        // the wrapper ignores its copy and stops the backend once the TUI exits.
+        signal_hook::consts::SIGINT,
     ])?;
     let pane = std::env::var("TMUX_PANE")
         .ok()
@@ -307,7 +338,7 @@ pub(crate) fn run_native_tui(
         ],
     };
     let launch_started = std::time::Instant::now();
-    let mut plan = adapter.door().tui_launch(&spec)?;
+    let mut plan = StopBackend(adapter.door().tui_launch(&spec)?);
     let launch_ms = launch_started.elapsed().as_millis() as u64;
     if launch_ms >= 2_000 {
         tracing::warn!(harness = %adapter.id(), elapsed_ms = launch_ms, "slow native TUI launch (backend start before the screen)");
@@ -347,7 +378,7 @@ pub(crate) fn run_native_tui(
             pane.as_deref().unwrap_or(""),
             frontend_pid,
         );
-        if let Some(session) = plan.session_id.as_deref() {
+        if let Some(session) = plan.session_id.clone() {
             plan.source_path = Some(format!("native-session={session}"));
             info!(%session, harness = %adapter.id(), "native session route resolved");
         }
@@ -393,7 +424,11 @@ pub(crate) fn run_native_tui(
     let outcome = (|| -> Result<()> {
         loop {
             if let Some(signal) = signals.pending().next() {
-                anyhow::bail!("native TUI stopped by signal {signal}");
+                // SIGINT is the pane's Ctrl-C, meant for the TUI child. The
+                // wrapper's copy is dropped; SIGHUP and SIGTERM still end it.
+                if signal != signal_hook::consts::SIGINT {
+                    anyhow::bail!("native TUI stopped by signal {signal}");
+                }
             }
             let mut observation_failure = None;
             if let Some(observer) = plan.observer.as_ref() {
@@ -463,7 +498,7 @@ pub(crate) fn run_native_tui(
                 route.app_server_socket = next.app_server_socket.clone();
                 route.source_path = next.source_path.clone();
                 route.session_id = next.session_id.clone();
-                plan = next;
+                *plan = next;
                 boop::bus::update_native_route(&store, name, &mut route)?;
                 continue;
             }
