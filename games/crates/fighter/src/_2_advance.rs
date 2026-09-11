@@ -110,7 +110,7 @@ impl State {
 
     /// One fixed tick. Caller owns tick cadence; Melee cadence is 60 Hz.
     #[tracing::instrument(target = "game_fighter::tick", level = "trace", skip_all)]
-    pub fn advance(&mut self, input: Input, r: &Rules) {
+    pub(crate) fn advance_impl(&mut self, input: Input, r: &Rules) {
         if !input.axis.is_finite() {
             return;
         }

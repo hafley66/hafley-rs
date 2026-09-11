@@ -12,6 +12,7 @@
 //! action-state fidelity, hitbox/collision detection and contact suppression.
 
 use game_combat::{DefenseInput, HitOutcome, ResolvePolicy, Strike, Target};
+use redux::Slice;
 use serde::{Deserialize, Serialize};
 
 use crate::_1_state::State;
@@ -54,10 +55,9 @@ impl Hit {
     }
 }
 
-/// Resolve `hit` against `state`'s percent and grounded fact, then apply the
-/// outcome to `state`. Pure and reducer-compatible: no allocation, no I/O.
+/// The combat mutation called by [`crate::_3_slice::CombatSlice`].
 #[tracing::instrument(target = "game_fighter::combat", level = "trace", skip_all)]
-pub fn apply_hit(state: &mut State, hit: &Hit) -> HitOutcome {
+pub(crate) fn apply_hit_impl(state: &mut State, hit: &Hit) -> HitOutcome {
     let outcome = game_combat::resolve_hit(
         hit.strike,
         Target {
@@ -75,4 +75,9 @@ pub fn apply_hit(state: &mut State, hit: &Hit) -> HitOutcome {
     state.combat.tumble = outcome.tumble;
     state.velocity = outcome.velocity;
     outcome
+}
+
+/// Compatibility seam for callers that need the resolved outcome.
+pub fn apply_hit(state: &mut State, hit: &Hit) -> HitOutcome {
+    <crate::_3_slice::CombatSlice as Slice>::reduce(state, *hit, (), &mut |never| match never {})
 }
