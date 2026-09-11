@@ -3,38 +3,48 @@
 // repository: https://github.com/doldecomp/melee.git
 // revision: c7861544f8e1fbc530612393e91d859886e97e3c
 
-#![allow(non_snake_case)]
+#![allow(non_snake_case, non_camel_case_types, unused_imports)]
 
-use crate::{CommonData, FighterQuery, FtMotionId};
+use crate::{CoAttrs, CommonData, FighterQuery, FtCommonEffect, FtMotionId, MotionFlags, Vec3};
 
 /// C source: `ftCo_800C97A8` in `src/melee/ft/kinds/ftCommon/ftCo_Turn.c` (function lines 28-36).
-/// Guard span: src/melee/ft/kinds/ftCommon/ftCo_Turn.c:32:8-32:71.
-/// External calls: none.
+/// Source span: src/melee/ft/kinds/ftCommon/ftCo_Turn.c:32:8-32:71.
+/// Source calls: none.
 /// Source guard: `fp->input.lstick[0].x*fp->facing_dir <= p_ftCommonData->x34`.
 pub fn ftCo_800C97A8(query: &FighterQuery, common: &CommonData) -> bool {
     ((query.lstick_x * query.facing_dir) <= common.x34)
 }
 
 /// C source: `ftCo_Jump_Enter` in `src/melee/ft/kinds/ftCommon/ftCo_Jump.c` (function lines 153-165).
-/// Guard span: src/melee/ft/kinds/ftCommon/ftCo_Jump.c:159:12-161:31.
-/// Untranslated external calls: ftCommon_8007D5D4, Fighter_ChangeMotionState, ftCo_800CB110.
-/// Source decision: `fp->input.lstick[0].x*fp->facing_dir > -p_ftCommonData->x78 ? ftCo_MS_JumpF : ftCo_MS_JumpB`.
-pub fn ftCo_Jump_Enter(query: &FighterQuery, common: &CommonData) -> FtMotionId {
-    if ((query.lstick_x * query.facing_dir) > -common.x78) {
-        FtMotionId::JumpF
-    } else {
-        FtMotionId::JumpB
-    }
+/// Source span: src/melee/ft/kinds/ftCommon/ftCo_Jump.c:153:1-165:2.
+/// Source calls: ftCommon_8007D5D4, Fighter_ChangeMotionState, ftCo_800CB110.
+/// Source bindings: `msid = fp->input.lstick[0].x*fp->facing_dir > -p_ftCommonData->x78 ? ftCo_MS_JumpF : ftCo_MS_JumpB`.
+pub fn ftCo_Jump_Enter(query: &FighterQuery, common: &CommonData) -> [FtCommonEffect; 4] {
+    let msid = if ((query.lstick_x * query.facing_dir) > -common.x78) { FtMotionId::JumpF } else { FtMotionId::JumpB };
+    [
+        FtCommonEffect::ftCommon_8007D5D4,
+        FtCommonEffect::Fighter_ChangeMotionState {
+            motion: msid,
+            flags: MotionFlags::None,
+            anim_start: 0.0,
+            anim_speed: 1.0,
+            anim_blend: 0.0,
+        },
+        FtCommonEffect::FtCo_800CB110 { arg1: true, jump_mul: 1.0 },
+        FtCommonEffect::WriteX2227B0 { value: true },
+    ]
 }
 
 /// C source: `ftCo_JumpAerial_Enter_Basic` in `src/melee/ft/kinds/ftCommon/ftCo_JumpAerial.c` (function lines 158-177).
-/// Guard span: src/melee/ft/kinds/ftCommon/ftCo_JumpAerial.c:169:12-171:37.
-/// Untranslated external calls: PAD_STACK, ftCommon_8007D5D4, ftCo_800CBAC4.
-/// Source decision: `fp->input.lstick[0].x*fp->facing_dir > -p_ftCommonData->x78 ? ftCo_MS_JumpAerialF : ftCo_MS_JumpAerialB`.
-pub fn ftCo_JumpAerial_Enter_Basic(query: &FighterQuery, common: &CommonData) -> FtMotionId {
-    if ((query.lstick_x * query.facing_dir) > -common.x78) {
-        FtMotionId::JumpAerialF
-    } else {
-        FtMotionId::JumpAerialB
-    }
+/// Source span: src/melee/ft/kinds/ftCommon/ftCo_JumpAerial.c:158:1-177:2.
+/// Source calls: ftCommon_8007D5D4, ftCo_800CBAC4.
+/// Source bindings: `msid = fp->input.lstick[0].x*fp->facing_dir > -p_ftCommonData->x78 ? ftCo_MS_JumpAerialF : ftCo_MS_JumpAerialB; vel = {fp->input.lstick[0].x*fp->co_attrs.air_jump_h_multiplier, fp->co_attrs.jump_v_initial_velocity*fp->co_attrs.air_jump_v_multiplier, 0.0F}`.
+pub fn ftCo_JumpAerial_Enter_Basic(query: &FighterQuery, common: &CommonData, attrs: &CoAttrs) -> [FtCommonEffect; 3] {
+    let msid = if ((query.lstick_x * query.facing_dir) > -common.x78) { FtMotionId::JumpAerialF } else { FtMotionId::JumpAerialB };
+    let vel = Vec3 { x: (query.lstick_x * attrs.air_jump_h_multiplier), y: (attrs.jump_v_initial_velocity * attrs.air_jump_v_multiplier), z: 0.0 };
+    [
+        FtCommonEffect::ftCommon_8007D5D4,
+        FtCommonEffect::WriteCmdVars0 { value: 1 },
+        FtCommonEffect::FtCo_800CBAC4 { motion: msid, velocity: vel, arg3: true },
+    ]
 }
