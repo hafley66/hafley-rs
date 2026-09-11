@@ -82,6 +82,7 @@ pub enum MessageKind {
     OpenFailed,
     HeadRewound,
     Commit,
+    Pr,
     Other(String),
 }
 
@@ -152,6 +153,7 @@ kind_impls!(MessageKind {
     OpenFailed => "open_failed",
     HeadRewound => "head_rewound",
     Commit => "commit",
+    Pr => "pr",
 });
 
 impl MessageKind {
@@ -207,6 +209,34 @@ impl MessageKind {
     pub fn commit_row(&self) -> bool {
         matches!(self, MessageKind::Commit)
     }
+}
+
+/// Every subscriber that wants `lane`'s commit and PR rows: the registered
+/// parent plus each `agent_commit_subscription` row, deduped, never the lane
+/// itself. A `'*'` row counts only for the lane's parent, so a coordinator
+/// subscribing `children` does not receive every lane's rows. The supervisor's
+/// commit producer and the transcript-ingest PR producer share this one
+/// definition.
+pub fn lane_subscribers(store: &crate::ident::Store, lane: &str) -> Vec<String> {
+    let parent = routes_in(store)
+        .ok()
+        .and_then(|routes| routes.get(lane).and_then(|route| route.parent.clone()));
+    let mut subscribers: Vec<String> = parent.iter().cloned().collect();
+    for row in store
+        .commit_subscriptions_for_lane(lane)
+        .unwrap_or_default()
+    {
+        if row.subscriber == lane {
+            continue;
+        }
+        if row.lane == "*" && parent.as_deref() != Some(row.subscriber.as_str()) {
+            continue;
+        }
+        if !subscribers.contains(&row.subscriber) {
+            subscribers.push(row.subscriber);
+        }
+    }
+    subscribers
 }
 
 kind_impls!(RouteKind {
@@ -883,6 +913,23 @@ pub fn insert_message(
     finish(connection, result)
 }
 
+/// Append one envelope, joining the caller's transaction when it already holds
+/// one. The transcript projection appends a PR notice inside its own
+/// transaction; SQLite refuses a nested `BEGIN`, so this chooses the standalone
+/// form only when no transaction is open.
+pub fn append_message(
+    store: &crate::ident::Store,
+    mailbox: &str,
+    message: &Message,
+    detail: &str,
+) -> Result<()> {
+    if store.connection().is_autocommit() {
+        insert_message(store, mailbox, message, detail)
+    } else {
+        write_message(store, mailbox, message, detail)
+    }
+}
+
 fn write_message(
     store: &crate::ident::Store,
     mailbox: &str,
@@ -1159,7 +1206,7 @@ pub fn mail_with_landing(
     Ok(out)
 }
 
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|since| since.as_millis() as u64)
@@ -1253,7 +1300,7 @@ mod tests {
             );
         }
         for wire in [
-            "request", "hail", "note", "dispatch", "ack", "reply", "retry",
+            "request", "hail", "note", "dispatch", "ack", "reply", "retry", "pr",
         ] {
             assert!(
                 !crate::bus::MessageKind::from(wire).supervisor_row(),
@@ -1301,13 +1348,70 @@ mod tests {
                 "{wire} sits on exactly one side of the split"
             );
         }
-        for wire in ["hail", "request", "note", "dispatch", "ack"] {
+        for wire in ["hail", "request", "note", "dispatch", "ack", "pr"] {
             let kind = crate::bus::MessageKind::from(wire);
             assert!(
                 !kind.lane_end_row() && !kind.lane_progress_row(),
                 "{wire} is neither"
             );
         }
+    }
+
+    /// RECEIPT. `pr` is a typed kind a lane or a coordinator can mint, so it
+    /// round-trips its wire string and takes the door like a hail.
+    #[test]
+    fn pr_is_a_typed_row_that_takes_the_door() {
+        let pr = crate::bus::MessageKind::from("pr");
+        assert_eq!(pr, crate::bus::MessageKind::Pr);
+        assert_eq!(pr.as_str(), "pr");
+        assert!(!pr.supervisor_row());
+        assert!(!pr.lane_progress_row());
+        assert!(!pr.commit_row());
+    }
+
+    /// RECEIPT. The one subscriber list both producers share: the parent plus
+    /// an explicit row, a wildcard row counts only for the parent, and the
+    /// lane never subscribes to itself.
+    #[test]
+    fn lane_subscribers_is_the_parent_plus_explicit_rows() {
+        let dir = temp_dir("subscribers");
+        let store = super::open_store(&dir).unwrap();
+        let route = |parent: Option<&str>| super::Route {
+            kind: "lane".into(),
+            harness: None,
+            tmux: None,
+            cwd: None,
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: parent.map(str::to_owned),
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+            app_server_socket: None,
+        };
+        super::upsert_route(&store, "mine", &route(Some("parent"))).unwrap();
+        for (subscriber, lane) in [
+            ("obs", "mine"),
+            ("stranger", "*"),
+            ("parent", "*"),
+            ("mine", "mine"),
+        ] {
+            store
+                .set_commit_subscription(&crate::ident::CommitSubscriptionRow {
+                    subscriber: subscriber.into(),
+                    lane: lane.into(),
+                    mode: "door".into(),
+                    created_at: "t".into(),
+                })
+                .unwrap();
+        }
+        let mut subscribers = super::lane_subscribers(&store, "mine");
+        subscribers.sort();
+        assert_eq!(subscribers, ["obs", "parent"]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// RECEIPT. `commit` is the only wire string `commit_row` names, and it

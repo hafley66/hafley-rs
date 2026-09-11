@@ -67,6 +67,14 @@ pub struct Spawn {
     /// written before the id was carried.
     #[serde(default)]
     pub spawn_id: Option<i64>,
+    /// When set, the lane closes its brief with the push-and-open-a-PR line.
+    /// Defaults to off for a record written before the toggle existed.
+    #[serde(default)]
+    pub post_pr: bool,
+    /// The `gh pr create --base` branch when `post_pr` is set. `None` reads as
+    /// `main`.
+    #[serde(default)]
+    pub pr_base: Option<String>,
 }
 
 /// The spawn record file name under a lane's trail directory.
@@ -776,6 +784,8 @@ mod tests {
             command: "boop lane run".to_owned(),
             route: serde_json::Value::Null,
             spawn_id: Some(7),
+            post_pr: false,
+            pr_base: None,
         };
         write_spawn(&lane, &spawn).unwrap();
         assert_eq!(read_spawn(&lane), Some(spawn));

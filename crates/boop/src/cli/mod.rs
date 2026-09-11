@@ -110,6 +110,14 @@ COMMIT PUSH: a lane reports by committing; its parent watches HEAD. Every
       --preset <p> --commit-push mailbox
   Absent a row the parent's kind picks the default.
 
+PR PUSH: a lane can finish by opening a PR; any PR a lane or a coordinator
+  opens is pushed once to the route's subscribers.
+    boop beep lane create --branch feature/<name> --brief <abs-path> \\
+      --post-pr [--pr-base <branch>]
+  Config `post-pr` (global or per preset) is the default; `--no-post-pr`
+  overrides it. The supervisor's `gh pr create` and transcript ingest both
+  notify; one `agent_pr_notice` row per url keeps them to one notice.
+
 RETIRE + REVIVE: a lane whose result row is written and then sees no mail for
   BOOP_IDLE_SHUTDOWN_SECS (default 60; 0 disables) closes its harness and
   exits with the rc it already mailed; residency reads `retired` and the
