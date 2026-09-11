@@ -36,7 +36,7 @@ func _initialize():
 	assert(stage.phase_nodes.keys() == [0])
 	assert(stage.newest_phase == -1)
 	assert(stage.phase_nodes[0].title == "▶ IDLE")
-	for code in [-1.0, 12.0, 0.5, NAN, INF]:
+	for code in [-1.0, 14.0, 0.5, NAN, INF]:
 		stage._observe_phase(20, code, 1.0)
 		assert(stage.motion_phase == -1)
 		assert(stage.phase_nodes.is_empty())

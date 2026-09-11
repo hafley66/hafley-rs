@@ -45,7 +45,7 @@ const DEBUG_BASE := Vector2(960, 540)
 const DEBUG_MIN_TEXT_PX := 14.0
 const DEBUG_MIN_TOUCH_PX := 44.0
 const DEBUG_GRAPH_ZOOM := 0.65
-# Existing 12-phase order, grouped into four lifecycle bands: ground locomotion,
+# Existing 14-phase order, grouped into four lifecycle bands: ground locomotion,
 # crouch/jumpsquat, air, landing. Column index is the lifecycle band.
 const PHASE_LIFECYCLE := [[0, 1, 2, 3, 4, 5], [6, 7, 8, 9], [11, 12, 13], [10]]
 var canvas_layer: CanvasLayer
