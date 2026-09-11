@@ -21,6 +21,9 @@ pub const SESSIONS_DIR_ENV: &str = "BOOP_CLAUDE_SESSIONS_DIR";
 /// How often the idle poll re-reads a registry file.
 const POLL: Duration = Duration::from_millis(500);
 
+/// A socket write that has not drained by now has no reader behind it.
+const DOOR_DEADLINE: Duration = Duration::from_secs(5);
+
 /// Reads the registry directory and writes to the socket a file names.
 pub struct ClaudeDoor {
     dir: Option<PathBuf>,
@@ -284,6 +287,8 @@ impl Door for ClaudeDoor {
 /// one user message, each its own JSON line.
 fn write_lines(socket: &Path, token: Option<&str>, body: &str) -> std::io::Result<()> {
     let mut stream = UnixStream::connect(socket)?;
+    stream.set_write_timeout(Some(DOOR_DEADLINE))?;
+    stream.set_read_timeout(Some(DOOR_DEADLINE))?;
     if let Some(token) = token.filter(|value| !value.is_empty()) {
         let auth = serde_json::json!({ "type": "auth", "token": token });
         writeln!(stream, "{auth}")?;
