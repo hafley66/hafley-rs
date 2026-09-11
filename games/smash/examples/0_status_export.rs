@@ -9,7 +9,8 @@ use game_fighter::Phase;
 use game_fighter::status::{RuntimeInventory, runtime_inventory};
 use serde_json::{Value, json};
 use smash::fighters::dog;
-use smash::fighters::pigeon::movement::{self, SelectionFacts};
+use smash::fighters::pigeon::{self, movement::{self, SelectionFacts}};
+use std::sync::Arc;
 
 /// Deterministic stick sweep; the phase->animation selection seam is sampled
 /// only at these points, so band changes appear as separate observed actions.
@@ -28,7 +29,13 @@ fn transitions(value: Vec<game_fighter::status::Transition>) -> Value {
                     "from": t.from.name(),
                     "event": t.event,
                     "to": t.to.map(Phase::name),
+                    "callback": {
+                        "domain": t.callback.domain,
+                        "state": t.callback.state.name(),
+                        "event": t.callback.event,
+                    },
                     "witnesses": t.witnesses,
+                    "fact_bits": t.fact_bits,
                 })
             })
             .collect(),
@@ -84,7 +91,8 @@ fn phase_animation(states: &[Phase]) -> Value {
 /// bindings are the observed outputs of its existing pure `movement::select`
 /// seam, including conditional action selections.
 fn runtime_inventory_value(inventory: RuntimeInventory) -> Value {
-    let pigeon_bindings = phase_animation(&inventory.states);
+    let pigeon_selection_capability = phase_animation(&inventory.states);
+    let pigeon_bindings = pigeon_live_bindings();
     json!({
         "states": inventory.states.iter().map(|phase| json!({
             "name": phase.name(),
@@ -93,9 +101,48 @@ fn runtime_inventory_value(inventory: RuntimeInventory) -> Value {
         "ground": transitions(inventory.ground),
         "air": transitions(inventory.air),
         "callbacks": inventory.callbacks,
+        "events": inventory.events,
         "effects": inventory.effects,
         "pigeon_bindings": pigeon_bindings,
+        "pigeon_selection_capability": pigeon_selection_capability,
     })
+}
+
+/// Execute the existing Pigeon locomotion controller over its deterministic
+/// reachability tape and retain the action/phase pairs it actually selects.
+/// Selector fact-cube coverage is exported separately as a capability.
+fn pigeon_live_bindings() -> Value {
+    let actions: Arc<[pigeon::Action]> = pigeon::catalog::load_baked()
+        .expect("committed Pigeon baked actions")
+        .into();
+    let mut simulation = pigeon::Simulation::new_locomotion(actions, false);
+    let mut rows = Vec::new();
+    for tick in 0..360 {
+        let buttons = match tick {
+            35..=42 | 150..=156 | 270 => 1,
+            55 | 175 => 2,
+            220..=225 => 4,
+            _ => 0,
+        };
+        let axis = match tick {
+            0..=75 => 1.0,
+            100..=180 => -1.0,
+            240..=300 => 0.4,
+            _ => 0.0,
+        };
+        let world = simulation.advance_controlled(buttons, axis);
+        let phase = world
+            .movement
+            .as_ref()
+            .expect("Pigeon locomotion controller state")
+            .phase;
+        if !rows.iter().any(|row: &Value| {
+            row["phase"] == phase.name() && row["action"].as_u64() == Some(world.action as u64)
+        }) {
+            rows.push(json!({ "phase": phase.name(), "action": world.action }));
+        }
+    }
+    Value::Array(rows)
 }
 
 fn main() {
@@ -119,7 +166,8 @@ fn main() {
     let output = json!({
         "catalog": catalog,
         "phases": phases,
-        "phase_animation": runtime["pigeon_bindings"].clone(),
+        "phase_animation": runtime["pigeon_selection_capability"].clone(),
+        "pigeon_live_bindings": runtime["pigeon_bindings"].clone(),
         "ground": runtime["ground"].clone(),
         "air": runtime["air"].clone(),
         "runtime_inventory": runtime,

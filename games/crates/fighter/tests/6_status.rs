@@ -11,6 +11,18 @@ fn has_transition(
         .any(|entry| entry.from == from && entry.event == event && entry.to == to)
 }
 
+fn destinations(
+    entries: &[game_fighter::status::Transition],
+    from: Phase,
+    event: &str,
+) -> Vec<Option<Phase>> {
+    entries
+        .iter()
+        .filter(|entry| entry.from == from && entry.event == event)
+        .map(|entry| entry.to)
+        .collect()
+}
+
 #[test]
 fn public_runtime_inventory_matches_phase_and_decision_outputs() {
     let inventory = runtime_inventory();
@@ -82,4 +94,76 @@ fn public_inventory_preserves_self_transitions_and_ordered_guards() {
         air::decide(Phase::Jump, air::AirEvent::Motion(both_air_facts)),
         Some(Phase::AirJump),
     );
+}
+
+#[test]
+fn public_inventory_has_exact_fact_totals_and_expected_transition_groups() {
+    let inventory = runtime_inventory();
+    for phase in Phase::ALL {
+        for event in ["JumpRequest", "GroundIntent", "Motion"] {
+            let facts: u32 = inventory
+                .ground
+                .iter()
+                .filter(|entry| entry.from == phase && entry.event == event)
+                .map(|entry| entry.witnesses)
+                .sum();
+            assert_eq!(facts, 128, "ground {phase:?} {event}");
+        }
+        for event in ["Motion", "Land"] {
+            let facts: u32 = inventory
+                .air
+                .iter()
+                .filter(|entry| entry.from == phase && entry.event == event)
+                .map(|entry| entry.witnesses)
+                .sum();
+            assert_eq!(facts, 8, "air {phase:?} {event}");
+        }
+    }
+
+    use Phase::*;
+    assert_eq!(
+        destinations(&inventory.ground, Dash, "Motion"),
+        vec![Some(Brake), None, Some(Dash), Some(Run)],
+    );
+    assert_eq!(
+        destinations(&inventory.ground, Run, "Motion"),
+        vec![Some(Brake), None, Some(Turn), Some(CrouchEnter)],
+    );
+    assert_eq!(
+        destinations(&inventory.air, Jump, "Motion"),
+        vec![None, Some(Fall), Some(AirJump)],
+    );
+    assert_eq!(
+        destinations(&inventory.air, Fall, "Motion"),
+        vec![None, Some(AirJump)],
+    );
+}
+
+#[test]
+fn fact_partitions_make_guard_priority_reproducible() {
+    let inventory = runtime_inventory();
+    let dash = |to| {
+        inventory
+            .ground
+            .iter()
+            .find(|entry| entry.from == Phase::Dash && entry.event == "Motion" && entry.to == to)
+            .unwrap()
+            .fact_bits
+            .clone()
+    };
+    assert_eq!(dash(Some(Phase::Dash)), (0..128u8).filter(|bits| bits & 8 != 0).collect::<Vec<_>>());
+    assert_eq!(
+        dash(Some(Phase::Run)),
+        (0..128u8).filter(|bits| bits & 8 == 0 && bits & 4 != 0 && bits & 32 != 0).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        dash(Some(Phase::Brake)),
+        (0..128u8).filter(|bits| bits & 8 == 0 && bits & 4 == 0).collect::<Vec<_>>()
+    );
+    let air_jump = inventory
+        .air
+        .iter()
+        .find(|entry| entry.from == Phase::Jump && entry.event == "Motion" && entry.to == Some(Phase::AirJump))
+        .unwrap();
+    assert_eq!(air_jump.fact_bits, vec![6, 7]);
 }
