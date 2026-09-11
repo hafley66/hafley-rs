@@ -196,11 +196,18 @@ test('dog status projects 25 rows from checked generated inputs', async () => {
   assert.deepEqual(dog.errors, []);
   assert.deepEqual(dog.rows.map(row => row.id), Array.from({ length: 25 }, (_, index) => index));
   // The generated role artifact binds all 19 roles to 19 exact Dog actions; the
-  // 6 unbound rows are catalog actions no runtime phase selects by name.
-  assert.deepEqual(
-    dog.rows.filter(row => row.live).map(row => row.id),
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24],
-  );
+  // 6 unbound rows are catalog actions with no generated role binding. Binding
+  // is not a runtime phase, so phase and live stay explicit UNKNOWN/unmeasured.
+  const bound = dog.rows.filter(row => row.bound).map(row => row.id);
+  const unbound = dog.rows.filter(row => !row.bound).map(row => row.id);
+  assert.deepEqual(bound, [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24]);
+  assert.equal(bound.length, 19);
+  assert.deepEqual(unbound, [9, 10, 11, 13, 14, 15]);
+  assert.equal(unbound.length, 6);
+  assert.deepEqual(dog.rows[0].bindings, ['Idle']);
+  assert.equal(dog.rows[9].bindings.length, 0);
+  assert.equal(dog.rows.filter(row => row.live).length, 0);
+  assert.ok(dog.rows.every(row => row.phase === 'UNKNOWN' && row.live === false));
   assert.deepEqual(projection.characters.map(character => character.rows.length), [22, 25]);
 });
 
@@ -209,6 +216,7 @@ test('character matrices stay separated and keep unknown axes explicit', async (
   const dog = projection.characters.find(character => character.key === 'dog');
   const text = renderCharacterMatrix(dog);
   assert.equal(text.split('\n').length, 2 + dog.rows.length + 1);
+  assert.match(text, /bind\s+phase/);
   assert.match(text, /FAILURES: none/);
   assert.match(text, /UNMEASURED/);
   assert.match(text, /UNKNOWN/);
