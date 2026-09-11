@@ -484,10 +484,13 @@ enum Command {
 }
 
 const USAGE: &str = "usage: smash-import <pigeon|catalog> [--check] [output]";
+const PIGEON_USAGE: &str = "usage: smash-import pigeon [--check] [output]";
+const CATALOG_USAGE: &str = "usage: smash-import catalog [--check]";
 
-/// Pure argument parser. Any first argument other than `pigeon`/`catalog`, any
-/// unrecognized extra argument, or a non-`--check` argument where only
-/// `--check` is allowed returns [`USAGE`].
+/// Pure argument parser. `catalog` accepts exactly no argument (generate) or
+/// one `--check` (verify); `pigeon` accepts an optional `--check` and output
+/// path. Any unknown first argument or extra argument returns the matching
+/// usage error.
 fn parse_args(args: &[std::ffi::OsString]) -> Result<Command, String> {
     let is_check = |arg: &std::ffi::OsString| arg == std::ffi::OsStr::new("--check");
     let mut args = args.iter();
@@ -497,7 +500,7 @@ fn parse_args(args: &[std::ffi::OsString]) -> Result<Command, String> {
             let check = second.is_some_and(is_check);
             let output = if check { args.next() } else { second };
             if args.next().is_some() {
-                return Err(USAGE.into());
+                return Err(PIGEON_USAGE.into());
             }
             Ok(Command::Pigeon { check, output: output.map(PathBuf::from) })
         }
@@ -505,10 +508,10 @@ fn parse_args(args: &[std::ffi::OsString]) -> Result<Command, String> {
             let second = args.next();
             let check = second.is_some_and(is_check);
             if second.is_some() && !check {
-                return Err(USAGE.into());
+                return Err(CATALOG_USAGE.into());
             }
             if args.next().is_some() {
-                return Err(USAGE.into());
+                return Err(CATALOG_USAGE.into());
             }
             Ok(Command::Catalog { check })
         }
@@ -643,11 +646,12 @@ mod tests {
         );
     }
 
-    /// Only `pigeon` and `catalog` are accepted spellings; every other first or
-    /// extra argument is the usage error.
+    /// Only `pigeon` and `catalog` are accepted spellings. `catalog` accepts
+    /// exactly no argument (generate) or one `--check` (verify); every other
+    /// first or extra argument is the usage error.
     #[test]
     fn catalog_cli_spellings_are_exact() {
-        use super::{Command, parse_args};
+        use super::{CATALOG_USAGE, Command, PIGEON_USAGE, USAGE, parse_args};
         use std::ffi::OsString;
 
         let args = |parts: &[&str]| parts.iter().map(OsString::from).collect::<Vec<_>>();
@@ -674,12 +678,20 @@ mod tests {
             vec!["Pigeon"],
             vec!["Catalog"],
             vec!["--check"],
-            vec!["pigeon", "out.rs", "extra"],
+        ] {
+            assert_eq!(parse_args(&args(&bad)), Err(USAGE.into()), "{bad:?}");
+        }
+        for bad in [
             vec!["catalog", "out.rs"],
+            vec!["catalog", "extra"],
+            vec!["catalog", "generate"],
             vec!["catalog", "--check", "extra"],
             vec!["catalog", "extra", "--check"],
         ] {
-            assert_eq!(parse_args(&args(&bad)), Err(super::USAGE.into()), "{bad:?}");
+            assert_eq!(parse_args(&args(&bad)), Err(CATALOG_USAGE.into()), "{bad:?}");
+        }
+        for bad in [vec!["pigeon", "out.rs", "extra"], vec!["pigeon", "--check", "a", "b"]] {
+            assert_eq!(parse_args(&args(&bad)), Err(PIGEON_USAGE.into()), "{bad:?}");
         }
     }
 }
