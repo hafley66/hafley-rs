@@ -608,6 +608,13 @@ pub(crate) fn revive_if_retired(
     name: &str,
     route: Option<&Route>,
 ) -> Result<Option<Route>> {
+    // A dropped route plus a retired residency is the supervisor's own word that
+    // the lane parked and exited. That word outranks the pane probe: a tmux
+    // server with `remain-on-exit on` keeps a dead pane's session alive, and a
+    // send to that lane must still replay the spawn record instead of holding.
+    let retired = route.is_none()
+        && boop::supervise::read_residency(dir, name).as_deref()
+            == Some(boop::supervise::RESIDENCY_RETIRED);
     if let Some(route) = route {
         if route.kind != "lane" {
             return Ok(None);
@@ -621,12 +628,21 @@ pub(crate) fn revive_if_retired(
     let Some(spawn) = boop::trail::read_spawn(name) else {
         return Ok(None);
     };
-    if tmux::mux().target_alive(spawn.socket.as_deref(), &spawn.tmux) {
+    if !retired && tmux::mux().target_alive(spawn.socket.as_deref(), &spawn.tmux) {
         return Ok(None);
     }
     let mut revived = bus::route_from_value(&spawn.route);
     if revived.kind != "lane" {
         return Ok(None);
+    }
+    // The leftover session still owns the name; clear it so the replay can
+    // open the same one.
+    if retired
+        && tmux::mux()
+            .has_session(spawn.socket.as_deref(), &spawn.tmux)
+            .unwrap_or(false)
+    {
+        let _ = tmux::mux().kill_session(spawn.socket.as_deref(), &spawn.tmux);
     }
     revived.registered_at = Some(bus::now_iso());
     // The replayed record keeps this run's spawn id, so the pin it wrote is

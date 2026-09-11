@@ -1260,9 +1260,15 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     // pane is killed before its route-only epilogue runs.
     let result_recipient =
         completion_recipient(parent.parent.as_deref(), args.wait, &identity.lane);
-    let on_exit = result_recipient
-        .as_ref()
-        .map(|_| lane::pane_epilogue(&identity.lane, &hail_mail_dir));
+    // Close the session too: under `remain-on-exit on` a dead pane's session
+    // outlives the supervisor.
+    let on_exit = result_recipient.as_ref().map(|_| {
+        format!(
+            "{}; tmux kill-session -t {} 2>/dev/null || true",
+            lane::pane_epilogue(&identity.lane, &hail_mail_dir),
+            shell_quote(&identity.tmux),
+        )
+    });
     // boop owns each lane's cargo target dir: appended unless the caller named
     // one with `--env CARGO_TARGET_DIR=...`.
     let spawn_env = lane_spawn_env(&identity.lane, &args.env);
@@ -2417,6 +2423,9 @@ pub(crate) fn run_lane_list(
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
     let live = tmux::mux().live_sessions(None);
+    let now = epoch_ms();
+    let stale_ms = boop::supervise::stale_limit().map(|limit| limit.as_millis() as u64);
+    let newest = newest_lane_activity(&bus::read_messages(&dir)?);
     for (name, route) in &routes {
         let state = lane_state(&dir, name, &live, route, &routes);
         if let Some(want) = state_filter {
@@ -2430,6 +2439,11 @@ pub(crate) fn run_lane_list(
             }
         }
         let mut suffix = String::new();
+        if let (Some(stale_ms), Some(lane_ms)) = (stale_ms, newest.get(name).copied()) {
+            if let Some(hours) = stale_hours(lane_ms, now, stale_ms) {
+                suffix.push_str(&format!(" STALE={hours}h"));
+            }
+        }
         if state == "dead" {
             suffix.push_str(&format!(" DEAD={}", dead_reason_token(&dir, name)));
         }
@@ -2512,6 +2526,39 @@ pub(crate) fn run_lane_list(
         }
     }
     Ok(())
+}
+
+/// Epoch-ms of the newest row touching each route, from one mailbox pass. Stale
+/// alarm rows are skipped so the flag cannot clear itself.
+fn newest_lane_activity(messages: &[bus::Message]) -> BTreeMap<String, u64> {
+    let mut newest: BTreeMap<String, u64> = BTreeMap::new();
+    for message in messages {
+        if message.kind == boop::supervise::STALE {
+            continue;
+        }
+        let ms = parse_iso_ms(&message.from_timestamp).unwrap_or(0);
+        for name in [&message.from, &message.to] {
+            newest
+                .entry(name.to_owned())
+                .and_modify(|current| *current = (*current).max(ms))
+                .or_insert(ms);
+        }
+    }
+    newest
+}
+
+/// Whole hours a lane has been quiet, `None` below the stale bound.
+fn stale_hours(newest_ms: u64, now_ms: u64, stale_ms: u64) -> Option<u64> {
+    let idle = now_ms.saturating_sub(newest_ms);
+    (idle >= stale_ms).then(|| idle / 3_600_000)
+}
+
+/// Wall-clock epoch milliseconds.
+fn epoch_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// The tmux sessions no route claims: not a route `tmux` target and not a
@@ -4293,6 +4340,59 @@ mod tests {
             "a finished lane must leave no registry row"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// RECEIPT. The stale flag counts from the newest non-alarm row and hides
+    /// below the bound; the alarm's own row never refreshes it.
+    #[test]
+    fn stale_hours_reads_the_newest_non_alarm_row() {
+        let stale_ms = 1000;
+        let now = 10_000_000_000u64;
+        assert_eq!(stale_hours(now, now, stale_ms), None, "fresh is not stale");
+        assert_eq!(
+            stale_hours(now - stale_ms, now, stale_ms),
+            Some(0),
+            "at the bound the lane is stale"
+        );
+        assert_eq!(
+            stale_hours(now - 3 * 3_600_000, now, stale_ms),
+            Some(3),
+            "whole hours since activity"
+        );
+
+        let mut rows = Vec::new();
+        rows.push(message("a", "lane", "2026-01-01T00:00:00Z"));
+        rows.push(message("lane", "b", "2026-01-02T00:00:00Z"));
+        rows.push(message("lane", "b", "2026-01-03T00:00:00Z"));
+        rows.push(message("lane", "b", "2026-01-04T00:00:00Z"));
+        // The alarm is the newest row but must not count as activity.
+        rows.push(bus::Message {
+            kind: "stale".into(),
+            ..message("lane", "b", "2026-01-05T00:00:00Z")
+        });
+        let newest = newest_lane_activity(&rows);
+        let lane_ms = newest["lane"];
+        let expect = parse_iso_ms("2026-01-04T00:00:00Z").unwrap();
+        assert_eq!(
+            lane_ms, expect,
+            "the stale row must not refresh the lane's activity"
+        );
+    }
+
+    fn message(from: &str, to: &str, at: &str) -> bus::Message {
+        bus::Message {
+            id: bus::mint_id(),
+            from: from.to_owned(),
+            to: to.to_owned(),
+            from_timestamp: at.to_owned(),
+            to_timestamp: None,
+            kind: "note".into(),
+            reply_to: None,
+            body: String::new(),
+            r#ref: None,
+            rc: None,
+            detail: None,
+        }
     }
 
     fn unique_name(prefix: &str) -> String {
