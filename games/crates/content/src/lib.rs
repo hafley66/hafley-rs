@@ -42,5 +42,6 @@ pub use source::{
 mod catalog;
 #[cfg(feature = "ingest")]
 pub use catalog::{
-    Catalog, CatalogEntry, CatalogError, CatalogEvidence, generate_catalog,
+    Catalog, CatalogEntry, CatalogError, CatalogEvidence, CharacterSpec, SourceEntry,
+    generate_catalog,
 };
