@@ -11,28 +11,31 @@
 //! ft/ftcommon.c:50-60). The MULTIPLICATIVE decay (`gr_vel -= gr_vel * mul *
 //! friction`, ft/kinds/ftCommon/ftCo_Dash.c:142-144) is dash-sustain only.
 
-#[path = "2_advance.rs"]
-mod advance_impl;
 #[path = "0_rules.rs"]
 pub mod rules;
+#[path = "1_state.rs"]
+pub mod state;
+#[path = "1b_ground.rs"]
+pub mod ground;
 #[path = "1c_air.rs"]
 pub mod air;
 #[path = "1d_combat.rs"]
 pub mod combat;
-#[path = "1b_ground.rs"]
-pub mod ground;
+#[path = "2_advance.rs"]
+mod advance_impl;
+#[path = "2a_controller.rs"]
+pub mod controller;
+#[path = "3_slice.rs"]
+pub mod slice;
 #[path = "4_ground_chart.rs"]
 pub mod ground_chart;
 #[path = "5_status.rs"]
 pub mod status;
 #[path = "6_qualification.rs"]
 pub mod qualification;
-#[path = "3_slice.rs"]
-pub mod slice;
-#[path = "1_state.rs"]
-pub mod state;
 
 pub use combat::{CombatState, Hit, apply_hit};
+pub use controller::Controller;
 pub use rules::Rules;
 pub use slice::{FighterEvent, FighterSlice, MovementEffect, MovementSlice};
 pub use state::{Input, Phase, State, button};
