@@ -8,17 +8,17 @@
     },
     {
       "role": "WalkSlow",
-      "source": null,
+      "source": 16,
       "fallback": null
     },
     {
       "role": "WalkMiddle",
-      "source": null,
+      "source": 17,
       "fallback": null
     },
     {
       "role": "WalkFast",
-      "source": null,
+      "source": 18,
       "fallback": null
     },
     {
@@ -33,17 +33,17 @@
     },
     {
       "role": "Brake",
-      "source": null,
+      "source": 19,
       "fallback": null
     },
     {
       "role": "Turn",
-      "source": null,
+      "source": 20,
       "fallback": null
     },
     {
       "role": "JumpSquat",
-      "source": null,
+      "source": 21,
       "fallback": null
     },
     {
@@ -68,7 +68,7 @@
     },
     {
       "role": "Fall",
-      "source": null,
+      "source": 22,
       "fallback": null
     },
     {
@@ -83,7 +83,7 @@
     },
     {
       "role": "LandingLight",
-      "source": null,
+      "source": 23,
       "fallback": null
     },
     {
@@ -93,7 +93,7 @@
     },
     {
       "role": "LandingRecovery",
-      "source": null,
+      "source": 24,
       "fallback": null
     }
   ]

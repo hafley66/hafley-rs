@@ -401,8 +401,8 @@ async function main() {
     console.error(`${result.errors.length} status failures`);
     process.exitCode = 1;
   }
-  if (dog && dog.rows.length !== 16) {
-    console.error(`dog projection has ${dog.rows.length} rows, expected 16`);
+  if (dog && dog.rows.length !== 25) {
+    console.error(`dog projection has ${dog.rows.length} rows, expected 25`);
     process.exitCode = 1;
   }
 }

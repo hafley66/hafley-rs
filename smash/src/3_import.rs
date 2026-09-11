@@ -872,8 +872,6 @@ mod tests {
 
     #[test]
     fn generated_role_bindings_are_current() {
-        use game_content::ActionRole;
-
         let pigeon = smash::fighters::pigeon::catalog::generate().unwrap();
         let roles = smash::fighters::pigeon::catalog::generate_roles(&pigeon.evidence).unwrap();
         assert_eq!(
@@ -896,19 +894,11 @@ mod tests {
             game_content::role_bindings_source(&roles),
             include_str!("fighters/dog/generated/4_roles.rs"),
         );
-        assert_eq!(
-            roles.missing(),
-            [
-                ActionRole::WalkSlow,
-                ActionRole::WalkMiddle,
-                ActionRole::WalkFast,
-                ActionRole::Brake,
-                ActionRole::Turn,
-                ActionRole::JumpSquat,
-                ActionRole::Fall,
-                ActionRole::LandingLight,
-                ActionRole::LandingRecovery,
-            ],
+        assert_eq!(roles.missing(), Vec::new(), "Dog binds every role");
+        assert_eq!(roles.unavailable(), Vec::new(), "Dog leaves no role unavailable");
+        assert!(
+            roles.roles.iter().all(|binding| binding.fallback.is_none()),
+            "Dog declares no fallback",
         );
     }
 

@@ -11,12 +11,12 @@ pub const RUNTIME: &str = "dog";
 /// Public display name.
 pub const DISPLAY_NAME: &str = "Dog";
 /// Number of catalog rows; available without the `ingest` feature.
-pub const ACTION_COUNT: usize = 16;
+pub const ACTION_COUNT: usize = 25;
 
 /// Ordered (subaction name, retained file) source entries. Order is the catalog
 /// identity. Entries append without renumbering.
 #[cfg(feature = "ingest")]
-pub const CATALOG: [game_content::SourceEntry<'static>; 16] = [
+pub const CATALOG: [game_content::SourceEntry<'static>; 25] = [
     game_content::SourceEntry { name: "Wait1", file: "Wait1.html" },
     game_content::SourceEntry { name: "Dash", file: "Dash.html" },
     game_content::SourceEntry { name: "Run", file: "Run.html" },
@@ -33,6 +33,15 @@ pub const CATALOG: [game_content::SourceEntry<'static>; 16] = [
     game_content::SourceEntry { name: "SpecialNStart", file: "SpecialNStart.html" },
     game_content::SourceEntry { name: "SpecialNHold", file: "SpecialNHold.html" },
     game_content::SourceEntry { name: "SpecialNMax", file: "SpecialNMax.html" },
+    game_content::SourceEntry { name: "WalkSlow", file: "WalkSlow.html" },
+    game_content::SourceEntry { name: "WalkMiddle", file: "WalkMiddle.html" },
+    game_content::SourceEntry { name: "WalkFast", file: "WalkFast.html" },
+    game_content::SourceEntry { name: "RunBrake", file: "RunBrake.html" },
+    game_content::SourceEntry { name: "TurnRun", file: "TurnRun.html" },
+    game_content::SourceEntry { name: "JumpSquat", file: "JumpSquat.html" },
+    game_content::SourceEntry { name: "Fall", file: "Fall.html" },
+    game_content::SourceEntry { name: "LandingLight", file: "LandingLight.html" },
+    game_content::SourceEntry { name: "LandingAirF", file: "LandingAirF.html" },
 ];
 
 /// The one open character spec derived from [`CATALOG`]. No per-character type
@@ -88,8 +97,8 @@ mod ingest {
         Ok(game_content::generate_catalog(&SPEC, &load()?)?)
     }
 
-    /// Dog fallback policy in this cut: none. Roles Dog retains no exact source
-    /// clip for stay explicitly missing; no substitute clip is claimed.
+    /// Dog fallback policy in this cut: none. Every role binds an exact source
+    /// clip; no substitute clip is claimed.
     pub const FALLBACKS: [game_content::RoleFallback<'static>; 0] = [];
 
     /// Derive role bindings from already-generated catalog evidence. Membership

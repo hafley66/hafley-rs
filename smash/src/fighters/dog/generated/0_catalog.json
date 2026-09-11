@@ -161,6 +161,96 @@
       "hitbox_frames": 0,
       "iasa": null,
       "landing_lag": null
+    },
+    {
+      "id": 16,
+      "name": "WalkSlow",
+      "file": "WalkSlow.html",
+      "frames": 41,
+      "hurtbox_frames": 41,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 17,
+      "name": "WalkMiddle",
+      "file": "WalkMiddle.html",
+      "frames": 41,
+      "hurtbox_frames": 41,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 18,
+      "name": "WalkFast",
+      "file": "WalkFast.html",
+      "frames": 51,
+      "hurtbox_frames": 51,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 19,
+      "name": "RunBrake",
+      "file": "RunBrake.html",
+      "frames": 28,
+      "hurtbox_frames": 28,
+      "hitbox_frames": 0,
+      "iasa": 13,
+      "landing_lag": null
+    },
+    {
+      "id": 20,
+      "name": "TurnRun",
+      "file": "TurnRun.html",
+      "frames": 20,
+      "hurtbox_frames": 20,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 21,
+      "name": "JumpSquat",
+      "file": "JumpSquat.html",
+      "frames": 3,
+      "hurtbox_frames": 3,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 22,
+      "name": "Fall",
+      "file": "Fall.html",
+      "frames": 21,
+      "hurtbox_frames": 21,
+      "hitbox_frames": 0,
+      "iasa": null,
+      "landing_lag": null
+    },
+    {
+      "id": 23,
+      "name": "LandingLight",
+      "file": "LandingLight.html",
+      "frames": 3,
+      "hurtbox_frames": 3,
+      "hitbox_frames": 0,
+      "iasa": 3,
+      "landing_lag": null
+    },
+    {
+      "id": 24,
+      "name": "LandingAirF",
+      "file": "LandingAirF.html",
+      "frames": 18,
+      "hurtbox_frames": 18,
+      "hitbox_frames": 0,
+      "iasa": 18,
+      "landing_lag": null
     }
   ]
 }

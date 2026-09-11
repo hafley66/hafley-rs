@@ -3,12 +3,15 @@ use game_content::Action;
 
 /// Declared frame counts, one per catalog row. Values come from the raw
 /// payload header records and are frozen as deterministic catalog identity.
-const FRAMES: [usize; 16] = [
-    241, 31, 22, 51, 60, 8, 201, 10, 3, 40, 40, 60, 39, 14, 85, 81,
+const FRAMES: [usize; 25] = [
+    241, 31, 22, 51, 60, 8, 201, 10, 3, 40, 40, 60, 39, 14, 85, 81, 41, 41, 51, 28, 20, 3, 21, 3,
+    18,
 ];
 
 /// Frames carrying at least one hitbox, one per catalog row.
-const HITBOX_FRAMES: [usize; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 4, 9, 0, 0, 0];
+const HITBOX_FRAMES: [usize; 25] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 4, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
 
 fn canonical<T: serde::Serialize>(value: &T) -> String {
     format!("{}\n", serde_json::to_string_pretty(value).unwrap())

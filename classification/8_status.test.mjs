@@ -185,19 +185,23 @@ test('the current source fingerprint recomputes to a stable digest', () => {
   assert.equal(source, currentSource());
 });
 
-test('dog status projects 16 rows from checked generated inputs', async () => {
+test('dog status projects 25 rows from checked generated inputs', async () => {
   const projection = await buildStatusProjection();
   const pigeon = projection.characters.find(character => character.key === 'pigeon');
   const dog = projection.characters.find(character => character.key === 'dog');
   assert.equal(pigeon.catalog.count, 22);
   assert.equal(pigeon.rows.length, 22);
-  assert.equal(dog.catalog.count, 16);
-  assert.equal(dog.rows.length, 16);
+  assert.equal(dog.catalog.count, 25);
+  assert.equal(dog.rows.length, 25);
   assert.deepEqual(dog.errors, []);
-  assert.deepEqual(dog.rows.map(row => row.id), Array.from({ length: 16 }, (_, index) => index));
-  // The generated role artifact binds 10 of 16 Dog actions to a runtime phase.
-  assert.deepEqual(dog.rows.filter(row => row.live).map(row => row.id), [0, 1, 2, 3, 4, 5, 6, 7, 8, 12]);
-  assert.deepEqual(projection.characters.map(character => character.rows.length), [22, 16]);
+  assert.deepEqual(dog.rows.map(row => row.id), Array.from({ length: 25 }, (_, index) => index));
+  // The generated role artifact binds all 19 roles to 19 exact Dog actions; the
+  // 6 unbound rows are catalog actions no runtime phase selects by name.
+  assert.deepEqual(
+    dog.rows.filter(row => row.live).map(row => row.id),
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24],
+  );
+  assert.deepEqual(projection.characters.map(character => character.rows.length), [22, 25]);
 });
 
 test('character matrices stay separated and keep unknown axes explicit', async () => {
