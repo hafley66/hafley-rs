@@ -138,7 +138,7 @@ artifact checks passed, protected /game/ unchanged. Recoverable prior Game3:
 S3 remains queued: migrate grounded permissions/interrupt priority to statig,
 including Turn jump permission, without adding attacks or contacts.
 
-S3 next increment supersedes that queued checkpoint: `ground::decide` now owns
+S3 next increment supersedes that queued checkpoint: `_1b_ground::decide` now owns
 jump permissions and local ground transition selection. Numeric facts resolve
 outside the graph; State retains its single serialized Phase and existing physics.
 16 fighter tests passed, including ordered/competing guards, dash self-transition,
@@ -147,9 +147,9 @@ test distinguishes published pose 0 from next-frame clock 1. Full proof passed:
 `pigeon-lab/.workflow/prove-MifHpW/receipt.json`, six stages including browser
 and MP4 capture. Ground slice remains stage 2.7 with the scope limits above.
 
-Air/contact cut: new `crates/fighter/src/1c_air.rs` lifts the five remaining
+Air/contact cut: new `crates/fighter/src/_1c_air.rs` lifts the five remaining
 airborne writes (`Jump/AirJump -> Fall`, `Jump/Fall -> AirJump`, airborne ->
-`Landing`) into `air::decide`; `src/2_advance.rs` keeps air drift, gravity,
+`Landing`) into `_1c_air::decide`; `src/_2_advance.rs` keeps air drift, gravity,
 fast-fall, double-jump impulse and landing reset, applied once per returned
 transition. Exhaustive 12-phase by 4-fact table, rejected ground phases,
 competing descending+jump order and JSON suffix replay live in
@@ -159,7 +159,7 @@ No physics change and no stage promotion; signed jump/fall variants, distinct
 turn/stop states and crouch lifecycle remain queued.
 
 S5 followup: `crates/fighter/5_ground_chart.md` and `.svg` are generated from
-executed `ground::decide` truth sets, grouped by semantic event. `just ground-chart`
+executed `_1b_ground::decide` truth sets, grouped by semantic event. `just ground-chart`
 regenerates; fighter freshness tests check Markdown and D2. Eighteen fighter
 tests pass. Godot observed nodes now label entry ticks and clock-reset re-entry;
 headless tests cover DASH self-transition, duplicate samples and rewind.

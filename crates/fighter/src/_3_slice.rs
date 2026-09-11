@@ -1,13 +1,13 @@
 //! Redux entry points: dispatch `Input` through `MovementSlice`, or either an
 //! `Input` or a typed `Hit` through `FighterSlice`. The state method
-//! `State::advance` is the same scan; `combat::apply_hit` is the hit scan.
+//! `State::advance` is the same scan; `_1d_combat::apply_hit` is the hit scan.
 
 use redux::{Never, Slice};
 use serde::{Deserialize, Serialize};
 
-use crate::combat::{Hit, apply_hit};
-use crate::rules::Rules;
-use crate::state::{Input, State};
+use crate::_0_rules::Rules;
+use crate::_1_state::{Input, State};
+use crate::_1d_combat::{Hit, apply_hit};
 
 pub struct MovementSlice;
 
@@ -16,7 +16,7 @@ pub enum MovementEffect {}
 
 impl Slice for MovementSlice {
     type Context<'a> = &'a Rules;
-    type State = crate::state::State;
+    type State = crate::_1_state::State;
     type Event = Input;
     type Output = ();
     type Effect = MovementEffect;

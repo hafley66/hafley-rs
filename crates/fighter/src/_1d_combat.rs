@@ -14,7 +14,7 @@
 use game_combat::{DefenseInput, HitOutcome, ResolvePolicy, Strike, Target};
 use serde::{Deserialize, Serialize};
 
-use crate::state::State;
+use crate::_1_state::State;
 
 /// Rollback-owned combat response.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

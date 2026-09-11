@@ -25,13 +25,21 @@ pub struct Controller {
 
 impl Controller {
     pub fn new(fighter: State) -> Self {
-        Controller { fighter, action: 0, animation: 0 }
+        Controller {
+            fighter,
+            action: 0,
+            animation: 0,
+        }
     }
 
     /// Animation frame for the selected action, clamped to its frame count.
     pub fn frame(&self, frame_count: impl Fn(usize) -> usize) -> usize {
         let frames = frame_count(self.action);
-        if frames == 0 { 0 } else { self.animation.min(frames - 1) }
+        if frames == 0 {
+            0
+        } else {
+            self.animation.min(frames - 1)
+        }
     }
 
     /// One fixed tick: reducer first, then selection for the resulting phase and
@@ -112,7 +120,11 @@ mod tests {
 
     #[test]
     fn frame_clamps_to_action_length() {
-        let controller = Controller { fighter: State::new(&rules()), action: 0, animation: 99 };
+        let controller = Controller {
+            fighter: State::new(&rules()),
+            action: 0,
+            animation: 99,
+        };
         assert_eq!(controller.frame(|_| 4), 3);
         assert_eq!(controller.frame(|_| 0), 0);
     }

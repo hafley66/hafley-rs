@@ -37,7 +37,7 @@ export function currentRevision(base = root) {
   const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: base, encoding: 'utf8' }).trim();
   return execFileSync('git', [
     'log', '-1', '--format=%H', '--',
-    'games/crates/fighter/src/5_status.rs', 'games/smash/examples/0_status_export.rs',
+    'games/crates/fighter/src/_5_status.rs', 'games/smash/examples/0_status_export.rs',
   ], { cwd: repo, encoding: 'utf8' }).trim();
 }
 

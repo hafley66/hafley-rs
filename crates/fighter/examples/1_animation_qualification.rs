@@ -1,6 +1,6 @@
 //! Machine-readable execution receipt for the pinned animation cases.
 
-use game_fighter::{Phase, qualification::animation_completion};
+use game_fighter::{_6_qualification::animation_completion, Phase};
 use serde_json::{Value, json};
 
 const CASES: &str = include_str!(concat!(
@@ -29,7 +29,8 @@ fn main() {
         let unfinished = animation_completion(from, false, forward);
         let transition_passed = observed == Some(expected) && unfinished.is_none();
         let mut cloned = from;
-        let mut restored: Phase = serde_json::from_slice(&serde_json::to_vec(&from).unwrap()).unwrap();
+        let mut restored: Phase =
+            serde_json::from_slice(&serde_json::to_vec(&from).unwrap()).unwrap();
         let mut replay_passed = true;
         for (finished, forward) in [(false, forward), (true, forward)] {
             let expected = animation_completion(from, finished, forward);
@@ -61,10 +62,13 @@ fn main() {
             },
         }));
     }
-    println!("{}", json!({
-        "schema": "games.animation-qualification-receipts.v1",
-        "status": "unqualified",
-        "findings": findings,
-        "receipts": [],
-    }));
+    println!(
+        "{}",
+        json!({
+            "schema": "games.animation-qualification-receipts.v1",
+            "status": "unqualified",
+            "findings": findings,
+            "receipts": [],
+        })
+    );
 }

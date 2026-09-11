@@ -143,12 +143,21 @@ fn hitlag_freezes_integration_for_exact_frame_count() {
     let frozen_velocity = state.velocity;
     for tick in 0..frames {
         advance(&mut state, idle(), &rules);
-        assert_eq!(state.position, frozen_position, "position moved on tick {tick}");
-        assert_eq!(state.velocity, frozen_velocity, "velocity moved on tick {tick}");
+        assert_eq!(
+            state.position, frozen_position,
+            "position moved on tick {tick}"
+        );
+        assert_eq!(
+            state.velocity, frozen_velocity,
+            "velocity moved on tick {tick}"
+        );
     }
     assert_eq!(state.combat.hitlag, 0);
     advance(&mut state, idle(), &rules);
-    assert_ne!(state.position, frozen_position, "integration resumes after hitlag");
+    assert_ne!(
+        state.position, frozen_position,
+        "integration resumes after hitlag"
+    );
 }
 
 #[test]
@@ -160,7 +169,10 @@ fn hitstun_counts_down_and_launch_motion_advances() {
         advance(&mut state, idle(), &rules);
     }
     let launched = state.combat.hitstun;
-    assert!(launched > 0, "the strong hit stores hitstun, got {launched}");
+    assert!(
+        launched > 0,
+        "the strong hit stores hitstun, got {launched}"
+    );
 
     // One launch tick moves x by exactly the launch velocity x; no input control.
     let velocity_x = state.velocity[0];
@@ -262,7 +274,11 @@ fn hit_tape_restores_from_serde_and_replays_identically() {
     for tick in 0..30 {
         tape.push(FighterEvent::Input(Input {
             axis: if tick % 3 == 0 { -1.0 } else { 1.0 },
-            buttons: if tick % 5 == 0 { game_fighter::button::JUMP } else { 0 },
+            buttons: if tick % 5 == 0 {
+                game_fighter::button::JUMP
+            } else {
+                0
+            },
         }));
     }
 

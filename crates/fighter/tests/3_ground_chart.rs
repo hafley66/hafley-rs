@@ -1,4 +1,4 @@
-use game_fighter::ground_chart::render;
+use game_fighter::_4_ground_chart::render;
 
 const GENERATED: &str = include_str!("../5_ground_chart.md");
 
@@ -6,7 +6,7 @@ const GENERATED: &str = include_str!("../5_ground_chart.md");
 fn generated_ground_chart_is_current() {
     assert_eq!(render(), GENERATED);
     assert_eq!(
-        game_fighter::ground_chart::render_d2(),
+        game_fighter::_4_ground_chart::render_d2(),
         include_str!("../5_ground_chart.d2")
     );
 }

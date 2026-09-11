@@ -1,12 +1,12 @@
 //! Finite executable transition inventory for status export.
 //!
 //! Every entry is obtained by evaluating the public decision functions
-//! ([`crate::ground::decide`], [`crate::air::decide`]) over the full boolean
+//! ([`crate::_1b_ground::decide`], [`crate::_1c_air::decide`]) over the full boolean
 //! fact inventory. This module owns no transition specification of its own: it
 //! varies inputs and records the observed outputs, so a chart change is visible
 //! here without editing it.
 
-use crate::{Phase, air, ground};
+use crate::{_1b_ground, _1c_air, Phase};
 use serde::Serialize;
 
 /// Runtime callback identity for one state/event dispatch. The state is kept
@@ -94,8 +94,8 @@ pub fn runtime_inventory() -> RuntimeInventory {
     RuntimeInventory::collect()
 }
 
-fn ground_facts(bits: u8) -> ground::Facts {
-    ground::Facts {
+fn ground_facts(bits: u8) -> _1b_ground::Facts {
+    _1b_ground::Facts {
         dash: bits & 1 << 0 != 0,
         walk: bits & 1 << 1 != 0,
         forward: bits & 1 << 2 != 0,
@@ -114,7 +114,10 @@ fn record(
     to: Option<Phase>,
     fact_bits: u8,
 ) {
-    if let Some(entry) = out.iter_mut().find(|t| t.from == from && t.event == event && t.to == to) {
+    if let Some(entry) = out
+        .iter_mut()
+        .find(|t| t.from == from && t.event == event && t.to == to)
+    {
         entry.witnesses += 1;
         entry.fact_bits.push(fact_bits);
     } else {
@@ -122,7 +125,11 @@ fn record(
             from,
             event,
             to,
-            callback: CallbackIdentity { domain, state: from, event },
+            callback: CallbackIdentity {
+                domain,
+                state: from,
+                event,
+            },
             witnesses: 1,
             fact_bits: vec![fact_bits],
         });
@@ -139,7 +146,7 @@ pub fn ground_transitions() -> Vec<Transition> {
                 from,
                 "ground",
                 "JumpRequest",
-                ground::decide(from, ground::Event::JumpRequest),
+                _1b_ground::decide(from, _1b_ground::Event::JumpRequest),
                 bits,
             );
         }
@@ -149,7 +156,7 @@ pub fn ground_transitions() -> Vec<Transition> {
                 from,
                 "ground",
                 "GroundIntent",
-                ground::decide(from, ground::Event::GroundIntent(ground_facts(bits))),
+                _1b_ground::decide(from, _1b_ground::Event::GroundIntent(ground_facts(bits))),
                 bits,
             );
             record(
@@ -157,7 +164,7 @@ pub fn ground_transitions() -> Vec<Transition> {
                 from,
                 "ground",
                 "Motion",
-                ground::decide(from, ground::Event::Motion(ground_facts(bits))),
+                _1b_ground::decide(from, _1b_ground::Event::Motion(ground_facts(bits))),
                 bits,
             );
         }
@@ -170,7 +177,7 @@ pub fn air_transitions() -> Vec<Transition> {
     let mut out = Vec::new();
     for from in Phase::ALL {
         for bits in 0..8u8 {
-            let facts = air::AirFacts {
+            let facts = _1c_air::AirFacts {
                 descending: bits & 1 != 0,
                 jump_pressed: bits & 2 != 0,
                 jumps_left: u8::from(bits & 4 != 0),
@@ -180,7 +187,7 @@ pub fn air_transitions() -> Vec<Transition> {
                 from,
                 "air",
                 "Motion",
-                air::decide(from, air::AirEvent::Motion(facts)),
+                _1c_air::decide(from, _1c_air::AirEvent::Motion(facts)),
                 bits,
             );
         }
@@ -190,7 +197,7 @@ pub fn air_transitions() -> Vec<Transition> {
                 from,
                 "air",
                 "Land",
-                air::decide(from, air::AirEvent::Land),
+                _1c_air::decide(from, _1c_air::AirEvent::Land),
                 bits,
             );
         }
@@ -229,7 +236,10 @@ mod tests {
                 && callback.state == Phase::Dash
                 && callback.event == "Motion"
         }));
-        assert_eq!(inventory.effects, ["Transition", "Handled", "SelfTransition"]);
+        assert_eq!(
+            inventory.effects,
+            ["Transition", "Handled", "SelfTransition"]
+        );
     }
 
     #[test]
@@ -243,7 +253,10 @@ mod tests {
                     .filter(|transition| transition.from == from && transition.event == event)
                     .collect();
                 assert_eq!(
-                    entries.iter().map(|transition| transition.witnesses).sum::<u32>(),
+                    entries
+                        .iter()
+                        .map(|transition| transition.witnesses)
+                        .sum::<u32>(),
                     128,
                     "{from:?} {event}"
                 );
@@ -265,7 +278,10 @@ mod tests {
                     .filter(|transition| transition.from == from && transition.event == event)
                     .collect();
                 assert_eq!(
-                    entries.iter().map(|transition| transition.witnesses).sum::<u32>(),
+                    entries
+                        .iter()
+                        .map(|transition| transition.witnesses)
+                        .sum::<u32>(),
                     8,
                     "{from:?} {event}"
                 );
@@ -290,10 +306,12 @@ mod tests {
         );
         assert_eq!(
             transition(&inventory.ground, Phase::Dash, "Motion", Some(Phase::Dash)).fact_bits,
-            (0..128u8).filter(|bits| bits & (1 << 3) != 0).collect::<Vec<_>>()
+            (0..128u8)
+                .filter(|bits| bits & (1 << 3) != 0)
+                .collect::<Vec<_>>()
         );
 
-        let all = ground::Facts {
+        let all = _1b_ground::Facts {
             dash: true,
             walk: true,
             forward: true,
@@ -302,15 +320,21 @@ mod tests {
             finished: true,
             stopped: true,
         };
-        assert_eq!(ground::decide(Phase::Dash, ground::Event::Motion(all)), Some(Phase::Dash));
-        assert_eq!(ground::decide(Phase::Run, ground::Event::Motion(all)), Some(Phase::Turn));
-        let competing_air = air::AirFacts {
+        assert_eq!(
+            _1b_ground::decide(Phase::Dash, _1b_ground::Event::Motion(all)),
+            Some(Phase::Dash)
+        );
+        assert_eq!(
+            _1b_ground::decide(Phase::Run, _1b_ground::Event::Motion(all)),
+            Some(Phase::Turn)
+        );
+        let competing_air = _1c_air::AirFacts {
             descending: true,
             jump_pressed: true,
             jumps_left: 1,
         };
         assert_eq!(
-            air::decide(Phase::Jump, air::AirEvent::Motion(competing_air)),
+            _1c_air::decide(Phase::Jump, _1c_air::AirEvent::Motion(competing_air)),
             Some(Phase::AirJump)
         );
     }
@@ -326,7 +350,11 @@ mod tests {
         }));
         // Every phase is a source for at least one observed group, all witnessed.
         assert!(transitions.iter().all(|t| t.witnesses >= 1));
-        assert!(Phase::ALL.iter().all(|phase| transitions.iter().any(|t| t.from == *phase)));
+        assert!(
+            Phase::ALL
+                .iter()
+                .all(|phase| transitions.iter().any(|t| t.from == *phase))
+        );
     }
 
     #[test]
@@ -339,10 +367,16 @@ mod tests {
             (Phase::Jump, Phase::Landing),
         ] {
             assert!(
-                transitions.iter().any(|t| t.to == Some(to) && t.from == from),
+                transitions
+                    .iter()
+                    .any(|t| t.to == Some(to) && t.from == from),
                 "missing {from:?} -> {to:?}"
             );
         }
-        assert!(air_transitions().iter().any(|t| t.event == "Land" && t.to.is_none()));
+        assert!(
+            air_transitions()
+                .iter()
+                .any(|t| t.event == "Land" && t.to.is_none())
+        );
     }
 }

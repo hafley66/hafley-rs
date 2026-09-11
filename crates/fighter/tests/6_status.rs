@@ -1,7 +1,7 @@
-use game_fighter::{Phase, air, ground, status::runtime_inventory};
+use game_fighter::{_1b_ground, _1c_air, _5_status::runtime_inventory, Phase};
 
 fn has_transition(
-    entries: &[game_fighter::status::Transition],
+    entries: &[game_fighter::_5_status::Transition],
     from: Phase,
     event: &str,
     to: Option<Phase>,
@@ -12,7 +12,7 @@ fn has_transition(
 }
 
 fn destinations(
-    entries: &[game_fighter::status::Transition],
+    entries: &[game_fighter::_5_status::Transition],
     from: Phase,
     event: &str,
 ) -> Vec<Option<Phase>> {
@@ -27,21 +27,24 @@ fn destinations(
 fn public_runtime_inventory_matches_phase_and_decision_outputs() {
     let inventory = runtime_inventory();
     assert_eq!(inventory.states, Phase::ALL.to_vec());
-    assert_eq!(inventory.ground, game_fighter::status::ground_transitions());
-    assert_eq!(inventory.air, game_fighter::status::air_transitions());
+    assert_eq!(
+        inventory.ground,
+        game_fighter::_5_status::ground_transitions()
+    );
+    assert_eq!(inventory.air, game_fighter::_5_status::air_transitions());
 
     for phase in Phase::ALL {
         assert!(has_transition(
             &inventory.ground,
             phase,
             "JumpRequest",
-            ground::decide(phase, ground::Event::JumpRequest),
+            _1b_ground::decide(phase, _1b_ground::Event::JumpRequest),
         ));
         assert!(has_transition(
             &inventory.air,
             phase,
             "Land",
-            air::decide(phase, air::AirEvent::Land),
+            _1c_air::decide(phase, _1c_air::AirEvent::Land),
         ));
     }
 }
@@ -56,7 +59,7 @@ fn public_inventory_preserves_self_transitions_and_ordered_guards() {
         Some(Phase::Dash),
     ));
 
-    let all = ground::Facts {
+    let all = _1b_ground::Facts {
         dash: true,
         walk: true,
         forward: true,
@@ -65,18 +68,24 @@ fn public_inventory_preserves_self_transitions_and_ordered_guards() {
         finished: true,
         stopped: true,
     };
-    assert_eq!(ground::decide(Phase::Dash, ground::Event::Motion(all)), Some(Phase::Dash));
     assert_eq!(
-        ground::decide(
+        _1b_ground::decide(Phase::Dash, _1b_ground::Event::Motion(all)),
+        Some(Phase::Dash)
+    );
+    assert_eq!(
+        _1b_ground::decide(
             Phase::Dash,
-            ground::Event::Motion(ground::Facts { reverse: false, ..all }),
+            _1b_ground::Event::Motion(_1b_ground::Facts {
+                reverse: false,
+                ..all
+            }),
         ),
         Some(Phase::Run),
     );
     assert_eq!(
-        ground::decide(
+        _1b_ground::decide(
             Phase::Dash,
-            ground::Event::Motion(ground::Facts {
+            _1b_ground::Event::Motion(_1b_ground::Facts {
                 reverse: false,
                 forward: false,
                 ..all
@@ -85,13 +94,13 @@ fn public_inventory_preserves_self_transitions_and_ordered_guards() {
         Some(Phase::Brake),
     );
 
-    let both_air_facts = air::AirFacts {
+    let both_air_facts = _1c_air::AirFacts {
         descending: true,
         jump_pressed: true,
         jumps_left: 1,
     };
     assert_eq!(
-        air::decide(Phase::Jump, air::AirEvent::Motion(both_air_facts)),
+        _1c_air::decide(Phase::Jump, _1c_air::AirEvent::Motion(both_air_facts)),
         Some(Phase::AirJump),
     );
 }
@@ -151,19 +160,28 @@ fn fact_partitions_make_guard_priority_reproducible() {
             .fact_bits
             .clone()
     };
-    assert_eq!(dash(Some(Phase::Dash)), (0..128u8).filter(|bits| bits & 8 != 0).collect::<Vec<_>>());
+    assert_eq!(
+        dash(Some(Phase::Dash)),
+        (0..128u8).filter(|bits| bits & 8 != 0).collect::<Vec<_>>()
+    );
     assert_eq!(
         dash(Some(Phase::Run)),
-        (0..128u8).filter(|bits| bits & 8 == 0 && bits & 4 != 0 && bits & 32 != 0).collect::<Vec<_>>()
+        (0..128u8)
+            .filter(|bits| bits & 8 == 0 && bits & 4 != 0 && bits & 32 != 0)
+            .collect::<Vec<_>>()
     );
     assert_eq!(
         dash(Some(Phase::Brake)),
-        (0..128u8).filter(|bits| bits & 8 == 0 && bits & 4 == 0).collect::<Vec<_>>()
+        (0..128u8)
+            .filter(|bits| bits & 8 == 0 && bits & 4 == 0)
+            .collect::<Vec<_>>()
     );
     let air_jump = inventory
         .air
         .iter()
-        .find(|entry| entry.from == Phase::Jump && entry.event == "Motion" && entry.to == Some(Phase::AirJump))
+        .find(|entry| {
+            entry.from == Phase::Jump && entry.event == "Motion" && entry.to == Some(Phase::AirJump)
+        })
         .unwrap();
     assert_eq!(air_jump.fact_bits, vec![6, 7]);
 }

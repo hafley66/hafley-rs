@@ -1,5 +1,5 @@
 //! Grounded permission/transition slice consumed by the live Redux controller.
-//! Numeric thresholds, integration and entry impulses stay in `2_advance.rs`.
+//! Numeric thresholds, integration and entry impulses stay in `_2_advance.rs`.
 //! Jump edges follow ftCo_Wait/Turn_IASA and fn_800CAF78 in Dash/Run/RunBrake/
 //! TurnRun. The crouch lifecycle follows ftCo_Squat/SquatWait/SquatRv. Other
 //! guards preserve the existing lab policy, not exact PM timing.
@@ -49,8 +49,9 @@ impl blocking::State<Ground> for Phase {
             // and an already-running jumpsquat do not accept another ground jump.
             // ftCo_Squat/SquatWait/SquatRv IASA all expose ftCo_Jump_CheckInput.
             Event::JumpRequest => match self {
-                Idle | Walk | Dash | Run | Brake | Turn
-                | CrouchEnter | CrouchHold | CrouchExit => Transition(Squat),
+                Idle | Walk | Dash | Run | Brake | Turn | CrouchEnter | CrouchHold | CrouchExit => {
+                    Transition(Squat)
+                }
                 _ => Handled,
             },
             Event::GroundIntent(f) => match self {

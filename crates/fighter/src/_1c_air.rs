@@ -1,8 +1,8 @@
 //! Airborne permission/transition slice consumed by the live Redux controller.
 //! Numeric thresholds, integration, air drift, double-jump impulse and landing
-//! reset stay in `2_advance.rs`; this chart selects destination only.
+//! reset stay in `_2_advance.rs`; this chart selects destination only.
 //!
-//! Migrated procedural writes from `2_advance.rs`:
+//! Migrated procedural writes from `_2_advance.rs`:
 //!
 //! ```text
 //! Jump    --descending-->                  Fall
