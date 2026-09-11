@@ -320,7 +320,10 @@ pub(crate) fn run_native_tui(
         .transpose()?;
     let known_ms = known_started.elapsed().as_millis() as u64;
     if known_ms >= 1_000 {
-        tracing::warn!(elapsed_ms = known_ms, "slow known-session read before the TUI screen");
+        tracing::warn!(
+            elapsed_ms = known_ms,
+            "slow known-session read before the TUI screen"
+        );
     }
     let _alternate_screen =
         AlternateScreen::enter(adapter.capabilities().wrapper_owns_alternate_screen);
