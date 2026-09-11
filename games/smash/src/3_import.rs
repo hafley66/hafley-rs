@@ -2,13 +2,14 @@ use game_content::{
     Guard, Inventory, Op, PortFile, RECOGNIZED_OPERATIONS, SourceRef, SourceRule, TransitionSpec,
     Trigger, Unresolved, common_inventory, conditional_choice, decode_file, emit_chart,
     emit_port_rust, function_evidence, if_guard, lower_callback, lower_guard,
-    source_machine_inventory,
+    source_machine_inventory_with_dispatch,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 const MELEE_REPOSITORY: &str = "https://github.com/doldecomp/melee.git";
+const PINNED_MELEE_REVISION: &str = "c7861544f8e1fbc530612393e91d859886e97e3c";
 const TURN_PATH: &str = "src/melee/ft/kinds/ftCommon/ftCo_Turn.c";
 const JUMP_PATH: &str = "src/melee/ft/kinds/ftCommon/ftCo_Jump.c";
 const AIR_JUMP_PATH: &str = "src/melee/ft/kinds/ftCommon/ftCo_JumpAerial.c";
@@ -134,6 +135,41 @@ fn revision(root: &Path) -> Result<String, Box<dyn std::error::Error>> {
         return Err("cannot read pinned source submodule revision".into());
     }
     Ok(String::from_utf8(output.stdout)?.trim().into())
+}
+
+fn validate_pinned_checkout_state(
+    actual_revision: &str,
+    status: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if actual_revision != PINNED_MELEE_REVISION {
+        return Err(format!(
+            "Melee source revision {actual_revision} does not match pinned {PINNED_MELEE_REVISION}"
+        )
+        .into());
+    }
+    if !status.is_empty() {
+        return Err("Melee source checkout is dirty; source inventory requires committed blobs".into());
+    }
+    Ok(())
+}
+
+fn validate_pinned_checkout(root: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    let actual_revision = revision(root)?;
+    let output = std::process::Command::new("git")
+        .args([
+            "-C",
+            root.to_str().ok_or("non-UTF8 source path")?,
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+        ])
+        .output()?;
+    if !output.status.success() {
+        return Err("cannot inspect pinned source checkout status".into());
+    }
+    let status = String::from_utf8(output.stdout)?;
+    validate_pinned_checkout_state(&actual_revision, &status)?;
+    Ok(actual_revision)
 }
 
 fn source_ref(revision: &str, path: &str, line: usize, symbol: &str) -> SourceRef {
@@ -307,6 +343,37 @@ fn ftcommon_sources(root: &Path) -> Result<Vec<(String, String)>, Box<dyn std::e
     Ok(sources)
 }
 
+fn source_inventory_sources(root: &Path) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+    let base = root.join(FTCOMMON_PATH);
+    let mut paths = vec![base.clone()];
+    let mut files = Vec::new();
+    while let Some(path) = paths.pop() {
+        for entry in std::fs::read_dir(path)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                paths.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "c" || extension == "h") {
+                files.push(path);
+            }
+        }
+    }
+    files.push(root.join("src/melee/ft/ftmotionstates.c"));
+    files.sort();
+    files
+        .into_iter()
+        .map(|path| {
+            let relative = path
+                .strip_prefix(root)
+                .map_err(|_| "source path escaped pinned Melee root")?
+                .to_string_lossy()
+                .replace(std::path::MAIN_SEPARATOR, "/");
+            std::fs::read_to_string(path)
+                .map(|source| (relative, source))
+                .map_err(|error| error.into())
+        })
+        .collect()
+}
+
 fn common_inventory_record(
     root: &Path,
 ) -> Result<(CommonInventory, Inventory), Box<dyn std::error::Error>> {
@@ -363,15 +430,18 @@ fn common_inventory_record(
 }
 
 fn source_inventory_record(root: &Path) -> Result<game_content::SourceMachineInventory, Box<dyn std::error::Error>> {
-    let revision = revision(root)?;
+    let revision = validate_pinned_checkout(root)?;
     let vocabulary = std::fs::read_to_string(root.join(FTCOMMON_FORWARD_PATH))?;
-    Ok(source_machine_inventory(
+    let dispatch_path = "src/melee/ft/ftmotionstates.c";
+    let dispatch = std::fs::read_to_string(root.join(dispatch_path))?;
+    Ok(source_machine_inventory_with_dispatch(
         "melee-ftcommon",
         MELEE_REPOSITORY,
         &revision,
         FTCOMMON_FORWARD_PATH,
         &vocabulary,
-        &ftcommon_sources(root)?,
+        &source_inventory_sources(root)?,
+        Some((dispatch_path, &dispatch)),
     )?)
 }
 
@@ -996,7 +1066,19 @@ mod tests {
     #[test]
     fn generated_source_inventory_is_current_and_pinned() {
         let record = super::source_inventory_record(&super::melee_root()).unwrap();
+        let discovered = super::source_inventory_sources(&super::melee_root()).unwrap();
         assert_eq!(record.revision, super::revision(&super::melee_root()).unwrap());
+        assert_eq!(record.source_files.len(), discovered.len());
+        assert_eq!(
+            record.counts.c_files,
+            discovered.iter().filter(|(path, _)| path.ends_with(".c")).count()
+        );
+        assert_eq!(
+            record.counts.h_files,
+            discovered.iter().filter(|(path, _)| path.ends_with(".h")).count()
+        );
+        assert!(record.source_files.iter().any(|file| file.kind == "h"));
+        assert!(record.source_files.iter().any(|file| file.path.ends_with("ftmotionstates.c")));
         assert_eq!(record.counts.states, record.states.len());
         assert_eq!(record.counts.callbacks, record.callbacks.len());
         assert_eq!(
@@ -1012,6 +1094,16 @@ mod tests {
             format!("{}\n", serde_json::to_string_pretty(&record).unwrap()),
             include_str!("../../classification/12_source_inventory.json"),
         );
+    }
+
+    #[test]
+    fn dirty_source_same_revision_is_rejected() {
+        assert!(super::validate_pinned_checkout_state(
+            super::PINNED_MELEE_REVISION,
+            " M src/melee/ft/kinds/ftCommon/forward.h\n",
+        )
+        .is_err());
+        assert!(super::validate_pinned_checkout_state(super::PINNED_MELEE_REVISION, "").is_ok());
     }
 
     #[test]
