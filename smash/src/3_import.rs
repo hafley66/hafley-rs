@@ -475,30 +475,59 @@ fn attribute_source() -> Result<String, Box<dyn std::error::Error>> {
     Ok(output)
 }
 
+/// Parsed CLI invocation. The only accepted first spellings are `pigeon` and
+/// `catalog`; `pigeon` additionally accepts one optional output path.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Command {
+    Pigeon { check: bool, output: Option<PathBuf> },
+    Catalog { check: bool },
+}
+
+const USAGE: &str = "usage: smash-import <pigeon|catalog> [--check] [output]";
+
+/// Pure argument parser. Any first argument other than `pigeon`/`catalog`, any
+/// unrecognized extra argument, or a non-`--check` argument where only
+/// `--check` is allowed returns [`USAGE`].
+fn parse_args(args: &[std::ffi::OsString]) -> Result<Command, String> {
+    let is_check = |arg: &std::ffi::OsString| arg == std::ffi::OsStr::new("--check");
+    let mut args = args.iter();
+    match args.next().map(std::ffi::OsString::as_os_str) {
+        Some(command) if command == std::ffi::OsStr::new("pigeon") => {
+            let second = args.next();
+            let check = second.is_some_and(is_check);
+            let output = if check { args.next() } else { second };
+            if args.next().is_some() {
+                return Err(USAGE.into());
+            }
+            Ok(Command::Pigeon { check, output: output.map(PathBuf::from) })
+        }
+        Some(command) if command == std::ffi::OsStr::new("catalog") => {
+            let second = args.next();
+            let check = second.is_some_and(is_check);
+            if second.is_some() && !check {
+                return Err(USAGE.into());
+            }
+            if args.next().is_some() {
+                return Err(USAGE.into());
+            }
+            Ok(Command::Catalog { check })
+        }
+        _ => Err(USAGE.into()),
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut args = std::env::args_os().skip(1);
-    let command = args.next();
-    if command.as_deref() == Some(std::ffi::OsStr::new("pigeon")) {
-        let second = args.next();
-        let check = second.as_deref() == Some(std::ffi::OsStr::new("--check"));
-        let output_arg = if check { args.next() } else { second };
-        if args.next().is_some() {
-            return Err("usage: smash-import pigeon [--check] [output]".into());
+    let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    match parse_args(&args).map_err(|usage| -> Box<dyn std::error::Error> { usage.into() })? {
+        Command::Pigeon { check, output } => {
+            let output = output.unwrap_or_else(|| {
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("src/fighters/pigeon/generated/0_chart.rs")
+            });
+            if check { pigeon_check(&output) } else { pigeon(&output) }
         }
-        let output = output_arg.map(PathBuf::from).unwrap_or_else(|| {
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("src/fighters/pigeon/generated/0_chart.rs")
-        });
-        return if check { pigeon_check(&output) } else { pigeon(&output) };
+        Command::Catalog { check } => character_catalogs(check),
     }
-    if command.as_deref() == Some(std::ffi::OsStr::new("catalog")) {
-        let check = args.next().as_deref() == Some(std::ffi::OsStr::new("--check"));
-        if args.next().is_some() {
-            return Err("usage: smash-import catalog [--check]".into());
-        }
-        return character_catalogs(check);
-    }
-    Err("usage: smash-import <pigeon|catalog> [--check] [output]".into())
 }
 
 /// Write or verify one committed character output. Serialization is always
@@ -612,5 +641,45 @@ mod tests {
             import.unresolved.iter().map(|item| item.symbol.as_str()).collect::<Vec<_>>(),
             ["p_ftCommonData->x34", "p_ftCommonData->x78", "LandingLight selection"],
         );
+    }
+
+    /// Only `pigeon` and `catalog` are accepted spellings; every other first or
+    /// extra argument is the usage error.
+    #[test]
+    fn catalog_cli_spellings_are_exact() {
+        use super::{Command, parse_args};
+        use std::ffi::OsString;
+
+        let args = |parts: &[&str]| parts.iter().map(OsString::from).collect::<Vec<_>>();
+        assert_eq!(
+            parse_args(&args(&["pigeon"])).unwrap(),
+            Command::Pigeon { check: false, output: None },
+        );
+        assert_eq!(
+            parse_args(&args(&["pigeon", "--check"])).unwrap(),
+            Command::Pigeon { check: true, output: None },
+        );
+        assert_eq!(
+            parse_args(&args(&["pigeon", "out.rs"])).unwrap(),
+            Command::Pigeon { check: false, output: Some("out.rs".into()) },
+        );
+        assert_eq!(parse_args(&args(&["catalog"])).unwrap(), Command::Catalog { check: false });
+        assert_eq!(
+            parse_args(&args(&["catalog", "--check"])).unwrap(),
+            Command::Catalog { check: true },
+        );
+        for bad in [
+            vec![],
+            vec!["cat"],
+            vec!["Pigeon"],
+            vec!["Catalog"],
+            vec!["--check"],
+            vec!["pigeon", "out.rs", "extra"],
+            vec!["catalog", "out.rs"],
+            vec!["catalog", "--check", "extra"],
+            vec!["catalog", "extra", "--check"],
+        ] {
+            assert_eq!(parse_args(&args(&bad)), Err(super::USAGE.into()), "{bad:?}");
+        }
     }
 }
