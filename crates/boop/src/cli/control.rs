@@ -68,11 +68,33 @@ fn opened_session(
                 return Some(session.parent_session.unwrap_or(session.session_id));
             }
         }
+        // A harness whose registry carries no process identity (kimi keeps
+        // only transcripts) cannot match by pid or pane. One pane-less,
+        // pid-less session is the only one this launch can be running.
+        if let Some(session) = sole_unattributed(&live) {
+            return Some(
+                session
+                    .parent_session
+                    .clone()
+                    .unwrap_or_else(|| session.session_id.clone()),
+            );
+        }
         if std::time::Instant::now() >= deadline {
             return None;
         }
         std::thread::sleep(Duration::from_millis(250));
     }
+}
+
+/// The only session in `live` that names no process and no pane, if exactly
+/// one exists. A registrar that identifies itself by pid or pane is never
+/// picked up as a fallback.
+fn sole_unattributed(live: &[boop::live::LiveSession]) -> Option<&boop::live::LiveSession> {
+    let mut matches = live
+        .iter()
+        .filter(|session| session.pid.is_none() && session.tmux_pane.is_none());
+    let session = matches.next()?;
+    matches.next().is_none().then_some(session)
 }
 
 fn session_for_pid(live: &[boop::live::LiveSession], pid: u32) -> Option<&boop::live::LiveSession> {

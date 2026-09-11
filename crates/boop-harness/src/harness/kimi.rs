@@ -66,6 +66,35 @@ static CAPABILITIES: Capabilities = Capabilities {
 /// kimi publishes no door; the impl says so rather than guessing one.
 static DOOR: crate::door::kimi::KimiDoor = crate::door::kimi::KimiDoor;
 
+/// kimi keeps no process registry, so its live sessions are the transcripts
+/// under `~/.kimi-code/sessions`. A transcript has no pid and no pane; the
+/// native wrapper binds the single pane-less one it finds when it launches.
+pub struct KimiLive;
+
+impl crate::live::LiveSessions for KimiLive {
+    fn live_sessions(&self) -> anyhow::Result<Vec<crate::live::LiveSession>> {
+        let base = kimi_sessions_dir()?;
+        Ok(sessions_in(&base)?
+            .into_iter()
+            .map(|session| crate::live::LiveSession {
+                harness: HarnessId::Kimi,
+                session_id: session.session_id,
+                pid: None,
+                cwd: session.cwd.map(PathBuf::from),
+                tmux_pane: None,
+                status: crate::live::LiveStatus::Idle,
+                door: crate::live::DoorAddress::None,
+                observed_ms: session.modified_ms,
+                started_ms: None,
+                scope: crate::live::LiveSessionScope::Unknown,
+                parent_session: session.parent,
+            })
+            .collect())
+    }
+}
+
+static LIVE: KimiLive = KimiLive;
+
 impl Harness for Kimi {
     fn uses_native_tui(&self, args: &[String]) -> bool {
         super::interactive_arguments(
@@ -162,7 +191,7 @@ impl Harness for Kimi {
     }
 
     fn live(&self) -> &dyn crate::live::LiveSessions {
-        &DOOR
+        &LIVE
     }
 
     fn door(&self) -> &dyn crate::door::Door {
