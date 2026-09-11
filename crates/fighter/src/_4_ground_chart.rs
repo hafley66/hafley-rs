@@ -1,11 +1,12 @@
 //! Deterministic static rendering of the live grounded decision function.
 //!
-//! The renderer is deliberately driven by [`crate::_1b_ground::decide`]. It owns
+//! The renderer is deliberately driven by [`crate::_1a_chart::decide`]. It owns
 //! only the finite inventory needed to inspect the public Phase/Event values
 //! and a small exact guard summarizer for compressing equivalent exhaustive
 //! assignments. It does not contain a second transition specification.
 
-use crate::_1b_ground::{self, Event, Facts};
+use crate::_1a_chart::{self, Event};
+use crate::_1b_ground::Facts;
 use crate::Phase;
 
 const FACT_NAMES: [&str; 7] = [
@@ -59,9 +60,9 @@ fn facts(bits: u8) -> Facts {
 
 fn event_result(phase: Phase, event_index: usize, bits: u8) -> Option<Phase> {
     match event_index {
-        0 => _1b_ground::decide(phase, Event::JumpRequest),
-        1 => _1b_ground::decide(phase, Event::GroundIntent(facts(bits))),
-        2 => _1b_ground::decide(phase, Event::Motion(facts(bits))),
+        0 => _1a_chart::decide(phase, Event::JumpRequest),
+        1 => _1a_chart::decide(phase, Event::GroundIntent(facts(bits))),
+        2 => _1a_chart::decide(phase, Event::Motion(facts(bits))),
         _ => unreachable!("the event inventory is fixed above"),
     }
 }
@@ -123,7 +124,7 @@ fn event_label(event_index: usize, cube: Cube, witnesses: usize) -> String {
 /// statechart. Every event/phase/fact assignment is evaluated by `decide`.
 pub fn render() -> String {
     let mut output = format!(
-        "# Ground statechart (generated)\n\nSource: `src/_1b_ground.rs`, evaluated through `_1b_ground::decide`.\n\n\
+        "# Ground statechart (generated)\n\nSource: `src/_1a_chart.rs`, evaluated through `_1a_chart::decide`.\n\n\
 {} phases × 3 events × 128 boolean assignments. Counts measure semantic fact\n\
 combinations, including combinations the controller may never supply.\n\
 This is the local grounded policy, not full Melee/PM behavior or caller scheduling.\n\

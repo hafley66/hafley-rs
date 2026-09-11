@@ -1,5 +1,6 @@
 use game_fighter::{
-    _1c_air::{AirEvent, AirFacts, decide},
+    _1a_chart::{Event, decide},
+    _1c_air::AirFacts,
     Phase,
 };
 
@@ -29,7 +30,7 @@ fn motion_table_is_exhaustive_over_phases_and_fact_combinations() {
                         jumps_left,
                     };
                     assert_eq!(
-                        decide(phase, AirEvent::Motion(facts)),
+                        decide(phase, Event::AirMotion(facts)),
                         expected_motion(phase, facts),
                         "{phase:?} {facts:?}"
                     );
@@ -47,7 +48,7 @@ fn land_only_accepts_airborne_phases() {
         } else {
             None
         };
-        assert_eq!(decide(phase, AirEvent::Land), expected, "{phase:?}");
+        assert_eq!(decide(phase, Event::Land), expected, "{phase:?}");
     }
 }
 
@@ -59,15 +60,15 @@ fn competing_descending_and_jump_facts_resolve_in_callback_order() {
         jumps_left: 1,
     };
     assert_eq!(
-        decide(Phase::Jump, AirEvent::Motion(both)),
+        decide(Phase::Jump, Event::AirMotion(both)),
         Some(Phase::AirJump)
     );
     assert_eq!(
-        decide(Phase::AirJump, AirEvent::Motion(both)),
+        decide(Phase::AirJump, Event::AirMotion(both)),
         Some(Phase::AirJump)
     );
     assert_eq!(
-        decide(Phase::Fall, AirEvent::Motion(both)),
+        decide(Phase::Fall, Event::AirMotion(both)),
         Some(Phase::AirJump)
     );
 
@@ -76,11 +77,11 @@ fn competing_descending_and_jump_facts_resolve_in_callback_order() {
         ..both
     };
     assert_eq!(
-        decide(Phase::Jump, AirEvent::Motion(no_budget)),
+        decide(Phase::Jump, Event::AirMotion(no_budget)),
         Some(Phase::Fall)
     );
     assert_eq!(
-        decide(Phase::AirJump, AirEvent::Motion(no_budget)),
+        decide(Phase::AirJump, Event::AirMotion(no_budget)),
         Some(Phase::Fall)
     );
 }
@@ -125,12 +126,9 @@ fn serialized_air_phase_resumes_the_same_dispatch_tape() {
         let saved = serde_json::to_string(&phase).unwrap();
         let restored: Phase = serde_json::from_str(&saved).unwrap();
         assert_eq!(
-            decide(phase, AirEvent::Motion(facts)),
-            decide(restored, AirEvent::Motion(facts))
+            decide(phase, Event::AirMotion(facts)),
+            decide(restored, Event::AirMotion(facts))
         );
-        assert_eq!(
-            decide(phase, AirEvent::Land),
-            decide(restored, AirEvent::Land)
-        );
+        assert_eq!(decide(phase, Event::Land), decide(restored, Event::Land));
     }
 }

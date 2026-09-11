@@ -1,5 +1,6 @@
 use game_fighter::{
-    _1b_ground::{Event, Facts, decide},
+    _1a_chart::{Event, decide},
+    _1b_ground::Facts,
     Phase,
 };
 
@@ -186,7 +187,7 @@ fn serialized_phase_resumes_the_same_statig_dispatch_tape() {
 }
 
 /// Migrated from the deleted isolated crouch chart: the source-resolved
-/// lifecycle runs through the one live `_1b_ground::decide` authority.
+/// lifecycle runs through the one live `_1a_chart::decide` authority.
 #[test]
 fn crouch_lifecycle_exact_trace_through_decide() {
     use Phase::*;

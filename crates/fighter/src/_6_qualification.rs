@@ -8,9 +8,9 @@ use crate::Phase;
 
 /// Execute one animation completion decision through the live ground chart.
 pub fn animation_completion(phase: Phase, finished: bool, forward: bool) -> Option<Phase> {
-    crate::_1b_ground::decide(
+    crate::_1a_chart::decide(
         phase,
-        crate::_1b_ground::Event::Motion(crate::_1b_ground::Facts {
+        crate::_1a_chart::Event::Motion(crate::_1b_ground::Facts {
             finished,
             forward,
             ..crate::_1b_ground::Facts::default()

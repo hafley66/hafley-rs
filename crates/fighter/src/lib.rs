@@ -13,6 +13,7 @@
 
 pub mod _0_rules;
 pub mod _1_state;
+pub mod _1a_chart;
 pub mod _1b_ground;
 pub mod _1c_air;
 pub mod _1d_combat;

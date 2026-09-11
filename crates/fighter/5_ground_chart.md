@@ -1,6 +1,6 @@
 # Ground statechart (generated)
 
-Source: `src/_1b_ground.rs`, evaluated through `_1b_ground::decide`.
+Source: `src/_1a_chart.rs`, evaluated through `_1a_chart::decide`.
 
 14 phases × 3 events × 128 boolean assignments. Counts measure semantic fact
 combinations, including combinations the controller may never supply.
