@@ -17,7 +17,6 @@ pub mod _1b_ground;
 pub mod _1c_air;
 pub mod _1d_combat;
 mod _2_advance;
-pub mod _2a_controller;
 pub mod _3_slice;
 pub mod _4_ground_chart;
 pub mod _5_status;
@@ -26,8 +25,10 @@ pub mod _6_qualification;
 pub use _0_rules::Rules;
 pub use _1_state::{ActionState, Input, Phase, State, button};
 pub use _1d_combat::{CombatState, Hit, apply_hit};
-pub use _2a_controller::Controller;
-pub use _3_slice::{FighterEvent, FighterSlice, MovementEffect, MovementSlice};
+pub use _3_slice::{
+    ActionContext, ActionSlice, FighterEvent, FighterSlice, MovementEffect, MovementSlice, frame,
+    tick,
+};
 
 pub fn advance(state: &mut State, input: Input, rules: &Rules) {
     use redux::Slice;
