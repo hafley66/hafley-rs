@@ -1,17 +1,22 @@
-//! Lane lifecycle end to end: the real boop binary spawns real lanes whose
-//! opencode harness runs against a loopback llmock provider. The tmux server is
-//! a scratch one, deliberately running with `remain-on-exit on` so a paneless
-//! supervisor cannot quietly pass a session-exit assertion.
+//! Lane lifecycle end to end, one pass per harness: the real boop binary
+//! spawns a real lane whose harness runs against a loopback llmock provider,
+//! and every parent is a real coordinator TUI on the same harness, in the same
+//! scratch tmux server. No registry-row stand-in: the door the lane talks to is
+//! a running claude, codex or opencode pane.
 //!
-//! Three defects, three tests:
-//! 1. a held inbound row defers the lane's result;
-//! 2. a send to a retired lane revives it on its pinned conversation;
-//! 3. a retired lane closes its tmux session.
+//! Four cases, three harnesses, twelve tests named `<case>_<harness>`:
+//! 1. a held inbound row defers the lane result;
+//! 2. a send to a retired lane revives it;
+//! 3. a retired lane closes its tmux session;
+//! 4. a stale lane tells its parent.
 //!
-//! Skips when llmock or opencode is absent, like `commit_push_e2e.rs`:
+//! Live claude and live codex are required, not optional. A case skips a
+//! harness only when that harness's executable or llmock is absent, printed as
+//! `skip <case> <harness>: <reason>`. Executable overrides: CLAUDE_BIN,
+//! CODEX_BIN (a codex lane rides `npx @agentclientprotocol/codex-acp`),
+//! OPENCODE_BIN, LLMOCK_BIN. Install llmock with:
 //!   cargo install --git https://github.com/larsakerlund/llmock.git \
 //!     --tag v0.1.2 --locked llmock
-//! Executable override: OPENCODE_BIN, LLMOCK_BIN.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -19,15 +24,15 @@ use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use boop::harness::mock_tui::{self, MockProvider, MockTuiContext, MockTuiLaunch};
+use boop::harness::mock_tui::{self, MockProvider, MockTuiContext, MockTuiLaunch, MockTuiReplay};
 use boop::harness::{shell_quote, HarnessId};
 use boop::Registry;
 use boop_store::testing::BoopCommandExt;
 
 const BOOP: &str = env!("CARGO_BIN_EXE_boop");
 
-/// The lane tests each spawn a real harness and a tmux server; run them one at
-/// a time so a loaded machine does not starve a turn past its deadline.
+/// Every case spawns two real harnesses against one tmux server; run them one
+/// at a time so a loaded machine does not starve a turn past its deadline.
 static LANE_LOCK: Mutex<()> = Mutex::new(());
 
 fn lane_lock() -> std::sync::MutexGuard<'static, ()> {
@@ -37,39 +42,72 @@ fn lane_lock() -> std::sync::MutexGuard<'static, ()> {
 }
 
 const POLL: Duration = Duration::from_millis(100);
-const START_DEADLINE: Duration = Duration::from_secs(60);
+const START_DEADLINE: Duration = Duration::from_secs(90);
+const STALE_DEADLINE: Duration = Duration::from_secs(10);
 
-/// A scratch world: repo, mailbox, lane home, scratch tmux server.
+/// One harness's place in the matrix.
+struct Harness {
+    id: HarnessId,
+    entry: &'static str,
+    bin_env: &'static str,
+}
+
+const HARNESSES: [Harness; 3] = [
+    Harness {
+        id: HarnessId::Claude,
+        entry: "claude",
+        bin_env: "CLAUDE_BIN",
+    },
+    Harness {
+        id: HarnessId::Codex,
+        entry: "codex",
+        bin_env: "CODEX_BIN",
+    },
+    Harness {
+        id: HarnessId::Opencode,
+        entry: "opencode",
+        bin_env: "OPENCODE_BIN",
+    },
+];
+
+/// A scratch world: repo, mailbox, lane and coordinator homes, scratch tmux.
 struct Fixture {
     root: PathBuf,
     repo: PathBuf,
     brief: PathBuf,
     mail: PathBuf,
-    home: PathBuf,
+    lane_home: PathBuf,
+    coord_home: PathBuf,
+    workspace: PathBuf,
     bin: PathBuf,
     socket: String,
     lane: String,
+    harness: &'static str,
+    coord_route: String,
+    coord_session: String,
 }
 
 impl Fixture {
-    fn new(name: &str) -> Fixture {
-        let root =
-            std::env::temp_dir().join(format!("boop-lifecycle-{}-{name}", std::process::id()));
+    fn new(case: &str, h: &Harness) -> Fixture {
+        let root = std::env::temp_dir().join(format!(
+            "boop-lifecycle-{case}-{}-{}",
+            h.entry,
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&root);
         let repo = root.join("repo");
         let mail = root.join("mail");
-        let home = root.join("home");
+        let lane_home = root.join("lane-home");
+        let coord_home = root.join("coord-home");
+        let workspace = root.join("workspace");
         let bin = root.join("bin");
-        for dir in [&repo, &mail, &home, &bin] {
+        for dir in [&repo, &mail, &lane_home, &coord_home, &workspace, &bin] {
             std::fs::create_dir_all(dir).unwrap();
         }
         std::fs::create_dir_all(root.join("config/boop")).unwrap();
         std::fs::write(root.join("config/boop/config.json"), "{}").unwrap();
-        std::fs::write(
-            mail.join("registry.json"),
-            serde_json::json!({ "obs": { "kind": "coordinator" } }).to_string(),
-        )
-        .unwrap();
+        // The coordinator registers itself; no stand-in route for a parent.
+        std::fs::write(mail.join("registry.json"), "{}").unwrap();
         let brief = root.join("brief.md");
         std::fs::write(&brief, "finish the brief and report\n").unwrap();
         git(&repo, &["init", "-q", "-b", "main"]);
@@ -79,15 +117,21 @@ impl Fixture {
         git(&repo, &["add", "-A"]);
         git(&repo, &["commit", "-qm", "seed"]);
         std::os::unix::fs::symlink(BOOP, bin.join("boop")).unwrap();
+        let unique = std::process::id();
         Fixture {
             root,
             repo,
             brief,
             mail,
-            home,
+            lane_home,
+            coord_home,
+            workspace,
             bin,
-            socket: format!("boop-lifecycle-{}-{name}", std::process::id()),
-            lane: format!("feature-lifecycle-{name}"),
+            socket: format!("boop-lifecycle-{case}-{}-{unique}", h.entry),
+            lane: format!("feature-lifecycle-{case}-{}", h.entry),
+            harness: h.entry,
+            coord_route: format!("coord-{case}-{}", h.entry),
+            coord_session: format!("coord-{case}-{}-{unique}", h.entry),
         }
     }
 
@@ -107,13 +151,13 @@ impl Fixture {
             .expect("run boop beep")
     }
 
-    /// One `lane create`, pointed at the mock provider's env and executable.
+    /// One `lane create` under the live coordinator `parent`.
     fn create(
         &self,
         parent: &str,
         extra: &[&str],
         env: &[(String, String)],
-        executable: &Path,
+        executable: Option<&Path>,
     ) -> std::process::Output {
         let mut command = Command::new(BOOP);
         command
@@ -127,7 +171,8 @@ impl Fixture {
             .arg(&self.repo)
             .arg("--brief")
             .arg(&self.brief)
-            .args(["--harness", "opencode", "--model", "llmock/mock-model"])
+            .arg("--harness")
+            .arg(self.harness)
             .arg("--parent")
             .arg(parent)
             .arg("--tmux")
@@ -136,118 +181,15 @@ impl Fixture {
             .arg(&self.socket)
             .arg("--mail-dir")
             .arg(&self.mail)
-            .arg("--bin")
-            .arg(executable)
             .arg("--no-start");
+        if let Some(executable) = executable {
+            command.arg("--bin").arg(executable);
+        }
         for (key, value) in env {
             command.arg("--env").arg(format!("{key}={value}"));
         }
         command.args(extra);
         command.output().expect("run boop lane create")
-    }
-
-    /// Start a real codex coordinator TUI in a pane on the scratch server, so a
-    /// lane's door row has a parent harness to land on.
-    fn run_coordinator_tui(
-        &self,
-        route: &str,
-        session: &str,
-        launch: &MockTuiLaunch,
-        workspace: &Path,
-    ) {
-        let mut command = String::from("exec env");
-        for (key, value) in &launch.env {
-            command.push_str(&format!(" {}={}", key, shell_quote(value)));
-        }
-        command.push_str(&format!(
-            " {}={}",
-            "BOOP_DB",
-            shell_quote(&self.mail.join("boop.db").display().to_string())
-        ));
-        command.push_str(&format!(" {}={}", "BOOP_NO_SYNC", shell_quote("1")));
-        command.push_str(&format!(
-            " {} tui codex --name {} --bin {} --cwd {} --mail-dir {} --",
-            shell_quote(BOOP),
-            shell_quote(route),
-            shell_quote(&launch.executable),
-            shell_quote(&workspace.display().to_string()),
-            shell_quote(&self.mail.display().to_string()),
-        ));
-        for arg in &launch.args {
-            command.push(' ');
-            command.push_str(&shell_quote(arg));
-        }
-        let output = self.tmux(&[
-            "new-session",
-            "-d",
-            "-x",
-            "200",
-            "-y",
-            "50",
-            "-s",
-            session,
-            &command,
-        ]);
-        assert!(
-            output.status.success(),
-            "coordinator tmux new-session failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    fn screen(&self, session: &str) -> String {
-        let output = self.tmux(&["capture-pane", "-p", "-t", session, "-S", "-400"]);
-        String::from_utf8_lossy(&output.stdout).into_owned()
-    }
-
-    fn wait_for_screen(&self, session: &str, wanted: &str) {
-        let deadline = Instant::now() + Duration::from_secs(10);
-        loop {
-            let text = self.screen(session);
-            if text.contains(wanted) {
-                return;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "coordinator never showed {wanted:?}\n{text}"
-            );
-            std::thread::sleep(POLL);
-        }
-    }
-
-    /// Wait for a coordinator route to bind a session or app-server socket.
-    fn wait_for_coordinator(&self, route: &str) {
-        let deadline = Instant::now() + START_DEADLINE;
-        loop {
-            let routes = boop_store::testing::routes_json(&self.mail.join("boop.db"));
-            if let Some(entry) = routes.get(route) {
-                let bound = entry
-                    .get("sessionId")
-                    .and_then(|v| v.as_str())
-                    .is_some_and(|value| !value.is_empty())
-                    || entry
-                        .get("appServerSocket")
-                        .and_then(|v| v.as_str())
-                        .is_some_and(|value| !value.is_empty());
-                if bound {
-                    return;
-                }
-            }
-            assert!(
-                Instant::now() < deadline,
-                "coordinator route {route} never bound a session"
-            );
-            std::thread::sleep(POLL);
-        }
-    }
-
-    /// Alarm rows this lane wrote.
-    fn stale_rows(&self) -> usize {
-        self.rows()
-            .into_iter()
-            .filter(|row| row.get("kind").and_then(|v| v.as_str()) == Some("stale"))
-            .filter(|row| row.get("from").and_then(|v| v.as_str()) == Some(self.lane.as_str()))
-            .count()
     }
 
     fn tmux(&self, args: &[&str]) -> std::process::Output {
@@ -262,6 +204,35 @@ impl Fixture {
             .success()
     }
 
+    fn screen(&self, session: &str) -> String {
+        let output = self.tmux(&["capture-pane", "-p", "-t", session, "-S", "-400"]);
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    }
+
+    fn coord_screen(&self) -> String {
+        self.screen(&self.coord_session)
+    }
+
+    fn coordinator_shows(&self, needle: &str) -> usize {
+        self.coord_screen().matches(needle).count()
+    }
+
+    fn wait_for_screen(&self, session: &str, wanted: &str, deadline: Duration) {
+        let deadline = Instant::now() + deadline;
+        loop {
+            let text = self.screen(session);
+            if text.contains(wanted) {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "{} never showed {wanted:?}\n{text}",
+                session
+            );
+            std::thread::sleep(POLL);
+        }
+    }
+
     /// Every mailbox row, straight from the run's store.
     fn rows(&self) -> Vec<serde_json::Value> {
         boop_store::testing::mail_rows(&self.mail.join("boop.db"))
@@ -274,6 +245,14 @@ impl Fixture {
             .filter(|row| row.get("from").and_then(|v| v.as_str()) == Some(self.lane.as_str()))
             .filter_map(|row| row.get("body").and_then(|v| v.as_str()).map(str::to_owned))
             .collect()
+    }
+
+    fn stale_rows(&self) -> usize {
+        self.rows()
+            .into_iter()
+            .filter(|row| row.get("kind").and_then(|v| v.as_str()) == Some("stale"))
+            .filter(|row| row.get("from").and_then(|v| v.as_str()) == Some(self.lane.as_str()))
+            .count()
     }
 
     fn any_row_contains(&self, needle: &str) -> bool {
@@ -367,10 +346,41 @@ impl Fixture {
             std::thread::sleep(POLL);
         }
     }
+
+    /// Wait for the coordinator route to bind a session or app-server socket.
+    fn wait_for_coordinator(&self) {
+        let deadline = Instant::now() + START_DEADLINE;
+        loop {
+            let routes = boop_store::testing::routes_json(&self.mail.join("boop.db"));
+            if let Some(entry) = routes.get(&self.coord_route) {
+                let bound = entry
+                    .get("sessionId")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|value| !value.is_empty())
+                    || entry
+                        .get("appServerSocket")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|value| !value.is_empty());
+                if bound {
+                    return;
+                }
+            }
+            assert!(
+                Instant::now() < deadline,
+                "coordinator route {} never bound a session",
+                self.coord_route
+            );
+            std::thread::sleep(POLL);
+        }
+    }
 }
 
 impl Drop for Fixture {
     fn drop(&mut self) {
+        if std::env::var_os("BOOP_LIFECYCLE_KEEP").is_some() {
+            eprintln!("kept {}", self.root.display());
+            return;
+        }
         let _ = self.tmux(&["kill-server"]);
         let _ = std::fs::remove_dir_all(&self.root);
     }
@@ -389,10 +399,10 @@ fn commit(repo: &Path, subject: &str) {
     git(repo, &["commit", "--allow-empty", "-qm", subject]);
 }
 
-/// The provider fixture. The readiness probe answers `boop`; every other turn
-/// replies with text long enough that the supervisor treats the brief turn as
-/// real work rather than an empty re-feed. `pace_ms` delays the stream so a turn
-/// stays open long enough for the test to slip a hail in under it.
+/// The provider fixture. The readiness probe answers `boop`; the coordinator's
+/// typed prompt answers the terminal marker; every other turn (the lane brief)
+/// answers text long enough that the supervisor treats it as real work. `pace`
+/// delays the first token so a turn stays open under a hail.
 fn fixture_yaml(pace_ms: u64) -> String {
     format!(
         r#"rules:
@@ -400,9 +410,10 @@ fn fixture_yaml(pace_ms: u64) -> String {
       user_contains: "Respond exactly with: boop"
     respond:
       content: "boop"
-      stream:
-        ttft_ms: {pace_ms}
-        inter_token_ms: 0
+  - match:
+      user_contains: "render the terminal flow"
+    respond:
+      content: "FIXED_TERMINAL_REPLY"
   - match: {{}}
     respond:
       content: "the brief turn finished with a reply long enough to count as real work"
@@ -413,8 +424,8 @@ fn fixture_yaml(pace_ms: u64) -> String {
     )
 }
 
-/// The lane's scratch env: the mock recipe's own env, plus the test's `boop` on
-/// PATH and any caller extras.
+/// The lane's scratch env: the harness's own mock recipe env, plus the test's
+/// `boop` on PATH and any caller extras.
 fn lane_env(
     fixture: &Fixture,
     launch_env: &[(String, String)],
@@ -429,136 +440,222 @@ fn lane_env(
     env.into_iter().collect()
 }
 
-/// Spawn the llmock provider and the opencode mock recipe for one fixture.
-fn provider_and_launch(
-    fixture: &Fixture,
+/// Start the real coordinator TUI on `h`, drive its readiness prompt when its
+/// recipe needs one, and wait for the route to bind.
+fn start_coordinator(fixture: &Fixture, h: &Harness, port: u16) -> Result<(), String> {
+    let registry = Registry::discover();
+    let launch: MockTuiLaunch = registry
+        .get(h.id)
+        .mock_tui_launch(&MockTuiContext {
+            home: &fixture.coord_home,
+            workspace: &fixture.workspace,
+            port,
+        })
+        .map_err(|error| error.to_string())?;
+    run_coordinator_tui(fixture, h, &launch);
+    if let MockTuiReplay::TypePrompt { readiness } = launch.replay {
+        fixture.wait_for_screen(&fixture.coord_session, readiness, START_DEADLINE);
+        let _ = fixture.tmux(&[
+            "send-keys",
+            "-t",
+            &fixture.coord_session,
+            "-l",
+            mock_tui::MOCK_PROMPT,
+        ]);
+        std::thread::sleep(Duration::from_millis(250));
+        let _ = fixture.tmux(&["send-keys", "-t", &fixture.coord_session, "Enter"]);
+    }
+    fixture.wait_for_screen(
+        &fixture.coord_session,
+        mock_tui::MOCK_REPLY_MARKER,
+        START_DEADLINE,
+    );
+    fixture.wait_for_coordinator();
+    Ok(())
+}
+
+/// One pane, the coordinator's real TUI, on the scratch tmux server.
+fn run_coordinator_tui(fixture: &Fixture, h: &Harness, launch: &MockTuiLaunch) {
+    let mut command = String::from("exec env");
+    for (key, value) in &launch.env {
+        command.push_str(&format!(" {}={}", key, shell_quote(value)));
+    }
+    command.push_str(&format!(
+        " {}={}",
+        "BOOP_DB",
+        shell_quote(&fixture.mail.join("boop.db").display().to_string())
+    ));
+    command.push_str(&format!(" {}={}", "BOOP_NO_SYNC", shell_quote("1")));
+    command.push_str(&format!(
+        " {} tui {} --name {} --bin {} --cwd {} --mail-dir {} --",
+        shell_quote(BOOP),
+        h.entry,
+        shell_quote(&fixture.coord_route),
+        shell_quote(&launch.executable),
+        shell_quote(&fixture.workspace.display().to_string()),
+        shell_quote(&fixture.mail.display().to_string()),
+    ));
+    for arg in &launch.args {
+        command.push(' ');
+        command.push_str(&shell_quote(arg));
+    }
+    let output = fixture.tmux(&[
+        "new-session",
+        "-d",
+        "-x",
+        "220",
+        "-y",
+        "50",
+        "-s",
+        &fixture.coord_session,
+        &command,
+    ]);
+    assert!(
+        output.status.success(),
+        "coordinator tmux new-session failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// Resolve one harness's executable, or a skip reason.
+fn harness_executable(h: &Harness) -> Result<PathBuf, String> {
+    mock_tui::resolve_executable(h.entry, h.bin_env)
+        .ok_or_else(|| format!("no {} executable", h.entry))
+}
+
+/// Everything a case needs: the scratch world with its coordinator up and the
+/// lane spawned under it.
+struct Started {
+    fixture: Fixture,
+    _provider: MockProvider,
+}
+
+/// Spawn the provider, the coordinator TUI on `h`, and a lane on `h` under it.
+fn start(
+    case: &str,
+    h: &Harness,
     llmock: &Path,
     pace_ms: u64,
-) -> Option<(MockProvider, PathBuf, Vec<(String, String)>)> {
-    let registry = Registry::discover();
-    let executable = mock_tui::resolve_executable("opencode", "OPENCODE_BIN")?;
+    extra_env: &[(&str, &str)],
+    expect: &[&str],
+) -> Result<Started, String> {
+    let executable = harness_executable(h)?;
+    let fixture = Fixture::new(case, h);
     let fixture_path = fixture.root.join("llmock.yaml");
-    std::fs::write(&fixture_path, fixture_yaml(pace_ms)).unwrap();
-    let provider = MockProvider::spawn(llmock, Some(&fixture_path)).ok()?;
-    let launch = registry
-        .get(HarnessId::Opencode)
+    std::fs::write(&fixture_path, fixture_yaml(pace_ms)).map_err(|error| error.to_string())?;
+    let provider = MockProvider::spawn(llmock, Some(&fixture_path))
+        .map_err(|error| format!("llmock spawn: {error}"))?;
+
+    start_coordinator(&fixture, h, provider.port)?;
+
+    let registry = Registry::discover();
+    let lane_launch = registry
+        .get(h.id)
         .mock_tui_launch(&MockTuiContext {
-            home: &fixture.home,
+            home: &fixture.lane_home,
             workspace: &fixture.repo,
             port: provider.port,
         })
-        .ok()?;
-    Some((provider, executable, launch.env))
+        .map_err(|error| error.to_string())?;
+    let env = lane_env(&fixture, &lane_launch.env, extra_env);
+    // A codex lane speaks ACP through `npx @agentclientprotocol/codex-acp`; the
+    // others run their own binary as the harness child.
+    let bin = match h.id {
+        HarnessId::Codex => None,
+        _ => Some(executable.as_path()),
+    };
+    let created = fixture.create(&fixture.coord_route, expect, &env, bin);
+    if !created.status.success() {
+        return Err(format!(
+            "lane create failed: {}",
+            String::from_utf8_lossy(&created.stderr)
+        ));
+    }
+    Ok(Started {
+        fixture,
+        _provider: provider,
+    })
 }
 
-/// RECEIPT. A hail held at the first turn boundary defers the lane's result:
-/// the supervisor feeds the row, the test's commit lands under that deferred
-/// turn, and the only result is rc=0. Sabotage: writing the result at the
-/// first turn end leaves an rc=4 row and no second turn.
-#[test]
-fn a_held_row_defers_the_lane_result() {
-    let _lane = lane_lock();
-    let Some(llmock) = mock_tui::resolve_llmock() else {
-        eprintln!("skip: no llmock");
-        return;
-    };
-    if mock_tui::resolve_executable("opencode", "OPENCODE_BIN").is_none() {
-        eprintln!("skip: no opencode");
-        return;
+fn report(case: &str, h: &Harness, result: Result<(), String>) {
+    match result {
+        Ok(()) => println!("pass {case} {}", h.entry),
+        Err(reason) => println!("skip {case} {}: {reason}", h.entry),
     }
-    let fixture = Fixture::new("held");
-    let Some((_provider, executable, launch_env)) = provider_and_launch(&fixture, &llmock, 4000)
-    else {
-        eprintln!("skip: no opencode mock recipe");
-        return;
-    };
-    let env = lane_env(&fixture, &launch_env, &[]);
-    let created = fixture.create(
-        "obs",
-        &["--expect-commit-subject", "the third commit"],
-        &env,
-        &executable,
-    );
-    assert!(
-        created.status.success(),
-        "lane create failed: {}",
-        String::from_utf8_lossy(&created.stderr)
-    );
+}
 
-    // The ack turn is the first "turn starting"; wait for the brief turn so the
-    // hail lands under a running turn and is held, not folded into the brief.
+/// Case 1. A hail lands under the first brief turn; the result waits for the
+/// commit and rc=4 never appears. The parent proves it on its own screen.
+fn run_held(h: &Harness) -> Result<(), String> {
+    let Some(llmock) = mock_tui::resolve_llmock() else {
+        return Err("no llmock".to_owned());
+    };
+    let started = start(
+        "held",
+        h,
+        &llmock,
+        3000,
+        &[],
+        &["--expect-commit-subject", "the third commit"],
+    )?;
+    let fixture = &started.fixture;
+
+    // The ack turn is the first "turn starting"; send under the brief turn.
     fixture.wait_for_log("lane turn starting", 2);
     let beep = fixture.beep(&[
         &fixture.lane,
         "add the third commit",
         "--as",
-        "obs",
+        &fixture.coord_route,
         "--no-wait",
     ]);
-    assert!(
-        beep.status.success(),
-        "the hail failed: {}",
-        String::from_utf8_lossy(&beep.stderr)
-    );
-
-    // The brief turn ends next; a supervisor that holds the row defers its
-    // result and opens a third turn for it. Only then does the test commit, so
-    // an early rc=4 would already have been written and read below.
-    fixture.wait_for_log("lane turn starting", 3);
-    assert_eq!(
-        fixture.result_bodies().len(),
-        0,
-        "a result was written before the held turn ran:\n{}",
-        fixture.log()
-    );
+    if !beep.status.success() {
+        return Err(format!(
+            "the hail failed: {}",
+            String::from_utf8_lossy(&beep.stderr)
+        ));
+    }
     commit(&fixture.repo, "the third commit");
-    fixture.wait_for_result(1);
 
-    let bodies = fixture.result_bodies();
+    let result = format!("lane {} done rc=0", fixture.lane);
+    fixture.wait_for_screen(&fixture.coord_session, &result, START_DEADLINE);
     assert_eq!(
-        bodies.len(),
+        fixture.coordinator_shows(&result),
         1,
-        "the lane must write exactly one result row: {bodies:?}"
+        "the coordinator must hold exactly one completed result:\n{}",
+        fixture.coord_screen()
     );
     assert!(
-        bodies[0].contains("rc=0"),
-        "the lone result must be the completed lane: {bodies:?}"
+        !fixture.coord_screen().contains("rc=4"),
+        "a premature rc=4 reached the coordinator:\n{}",
+        fixture.coord_screen()
     );
     assert!(
         !fixture.any_row_contains("rc=4"),
         "a premature rc=4 row was written:\n{}",
         fixture.log()
     );
+    Ok(())
 }
 
-/// RECEIPT. A lane retires; its route is gone; a send replays the spawn record,
-/// re-registers the route, resumes the conversation and writes a fresh result.
-/// Sabotage: leaving the route unwritten holds the body instead of reviving.
-#[test]
-fn a_send_to_a_retired_lane_revives_it() {
-    let _lane = lane_lock();
+/// Case 2. A lane retires; its route is gone; a send replays the spawn record
+/// and the coordinator sees the second result.
+fn run_revive(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        eprintln!("skip: no llmock");
-        return;
+        return Err("no llmock".to_owned());
     };
-    if mock_tui::resolve_executable("opencode", "OPENCODE_BIN").is_none() {
-        eprintln!("skip: no opencode");
-        return;
-    }
-    let fixture = Fixture::new("revive");
-    let Some((_provider, executable, launch_env)) = provider_and_launch(&fixture, &llmock, 0)
-    else {
-        eprintln!("skip: no opencode mock recipe");
-        return;
-    };
-    let env = lane_env(&fixture, &launch_env, &[("BOOP_IDLE_SHUTDOWN_SECS", "1")]);
-    let created = fixture.create("obs", &[], &env, &executable);
-    assert!(
-        created.status.success(),
-        "lane create failed: {}",
-        String::from_utf8_lossy(&created.stderr)
-    );
+    let started = start(
+        "revive",
+        h,
+        &llmock,
+        0,
+        &[("BOOP_IDLE_SHUTDOWN_SECS", "1")],
+        &[],
+    )?;
+    let fixture = &started.fixture;
+    let result = format!("lane {} done rc=0", fixture.lane);
     fixture.wait_for_result(1);
+    fixture.wait_for_screen(&fixture.coord_session, &result, START_DEADLINE);
     fixture.wait_for_retired();
     fixture.wait_for_route_gone();
     assert!(
@@ -570,8 +667,6 @@ fn a_send_to_a_retired_lane_revives_it() {
     // has to revive through that leftover rather than hold behind it.
     let option = fixture.tmux(&["set-option", "-g", "remain-on-exit", "on"]);
     assert!(option.status.success(), "set remain-on-exit");
-    // Clear whatever the run left; the point is a dead pane pinned open, not
-    // which run left it.
     let _ = fixture.tmux(&["kill-session", "-t", &fixture.lane]);
     let stale = fixture.tmux(&["new-session", "-d", "-s", &fixture.lane, "true"]);
     assert!(
@@ -588,58 +683,50 @@ fn a_send_to_a_retired_lane_revives_it() {
         std::thread::sleep(POLL);
     }
 
-    let revived = fixture.beep(&[&fixture.lane, "second", "--as", "obs", "--timeout", "60"]);
+    let revived = fixture.beep(&[
+        &fixture.lane,
+        "second",
+        "--as",
+        &fixture.coord_route,
+        "--timeout",
+        "60",
+    ]);
     let stdout = String::from_utf8_lossy(&revived.stdout);
     let stderr = String::from_utf8_lossy(&revived.stderr);
-    assert!(
-        revived.status.success(),
-        "the send to the retired lane failed:\n{stdout}{stderr}\n{}",
-        fixture.log()
-    );
-    assert!(
-        stdout.contains(&format!("revive {}", fixture.lane)),
-        "no revive line:\n{stdout}"
-    );
-    assert!(
-        stdout.contains(&format!("revived {}", fixture.lane)),
-        "no revived line:\n{stdout}"
-    );
+    if !revived.status.success() {
+        return Err(format!(
+            "the send to the retired lane failed:\n{stdout}{stderr}\n{}",
+            fixture.log()
+        ));
+    }
     fixture.wait_for_result(2);
-    let bodies = fixture.result_bodies();
-    assert!(
-        bodies.last().is_some_and(|body| body.contains("rc=0")),
-        "the revived lane must write a fresh rc=0 result: {bodies:?}"
-    );
+    let deadline = Instant::now() + START_DEADLINE;
+    while fixture.coordinator_shows(&result) < 2 {
+        assert!(
+            Instant::now() < deadline,
+            "the coordinator never saw the revived result:\n{}",
+            fixture.coord_screen()
+        );
+        std::thread::sleep(POLL);
+    }
+    Ok(())
 }
 
-/// RECEIPT. A retired lane closes its tmux session even when the scratch server
-/// runs with `remain-on-exit on`, which would otherwise pin the dead pane.
-/// Sabotage: relying on the pane command's exit leaves the session alive.
-#[test]
-fn a_retired_lane_closes_its_tmux_session() {
-    let _lane = lane_lock();
+/// Case 3. A retired lane closes its tmux session even when the scratch server
+/// runs with `remain-on-exit on`.
+fn run_retired(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        eprintln!("skip: no llmock");
-        return;
+        return Err("no llmock".to_owned());
     };
-    if mock_tui::resolve_executable("opencode", "OPENCODE_BIN").is_none() {
-        eprintln!("skip: no opencode");
-        return;
-    }
-    let fixture = Fixture::new("pane");
-    let Some((_provider, executable, launch_env)) = provider_and_launch(&fixture, &llmock, 0)
-    else {
-        eprintln!("skip: no opencode mock recipe");
-        return;
-    };
-    let env = lane_env(&fixture, &launch_env, &[("BOOP_IDLE_SHUTDOWN_SECS", "1")]);
-    let created = fixture.create("obs", &[], &env, &executable);
-    assert!(
-        created.status.success(),
-        "lane create failed: {}",
-        String::from_utf8_lossy(&created.stderr)
-    );
-    // The condition the live store ran under: a server that keeps dead panes.
+    let started = start(
+        "retired",
+        h,
+        &llmock,
+        0,
+        &[("BOOP_IDLE_SHUTDOWN_SECS", "1")],
+        &[],
+    )?;
+    let fixture = &started.fixture;
     let option = fixture.tmux(&["set-option", "-g", "remain-on-exit", "on"]);
     assert!(
         option.status.success(),
@@ -649,85 +736,62 @@ fn a_retired_lane_closes_its_tmux_session() {
     fixture.wait_for_result(1);
     fixture.wait_for_retired();
     fixture.wait_for_session_gone();
+    Ok(())
 }
 
-/// RECEIPT. A lane parked with idle shutdown disabled tells its parent when it
-/// has been quiet past `BOOP_STALE_SECS`. The alarm takes the coordinator's
-/// door, not a mailbox-only progress rung, and repeats no faster than the
-/// bound. Sabotage: classifying the row as a progress row leaves the
-/// coordinator pane silent.
-#[test]
-fn a_stale_lane_tells_its_parent() {
-    let _lane = lane_lock();
+/// Case 4. A lane parked with idle shutdown disabled tells its live coordinator
+/// when it goes quiet past `BOOP_STALE_SECS`, once per bound.
+fn run_stale(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        eprintln!("skip: no llmock");
-        return;
+        return Err("no llmock".to_owned());
     };
-    if mock_tui::resolve_executable("opencode", "OPENCODE_BIN").is_none() {
-        eprintln!("skip: no opencode");
-        return;
-    }
-    if mock_tui::resolve_executable("codex", "CODEX_BIN").is_none() {
-        eprintln!("skip: no codex coordinator");
-        return;
-    }
-    let fixture = Fixture::new("stale");
-    let fixture_path = fixture.root.join("llmock.yaml");
-    std::fs::write(&fixture_path, fixture_yaml(0)).unwrap();
-    let provider = MockProvider::spawn(&llmock, Some(&fixture_path)).expect("spawn llmock");
-    let registry = Registry::discover();
-
-    // The parent is a real codex coordinator TUI, so the door the alarm must
-    // take is a real harness door.
-    let coord_route = "coord-stale";
-    let coord_session = format!("{coord_route}-{}", std::process::id());
-    let coord_home = fixture.root.join("coord-home");
-    let workspace = fixture.root.join("workspace");
-    std::fs::create_dir_all(&coord_home).unwrap();
-    std::fs::create_dir_all(&workspace).unwrap();
-    let codex = registry
-        .get(HarnessId::Codex)
-        .mock_tui_launch(&MockTuiContext {
-            home: &coord_home,
-            workspace: &workspace,
-            port: provider.port,
-        })
-        .expect("codex mock recipe");
-    fixture.run_coordinator_tui(coord_route, &coord_session, &codex, &workspace);
-    fixture.wait_for_coordinator(coord_route);
-
-    // The lane never retires: `BOOP_IDLE_SHUTDOWN_SECS=0` plus a short stale
-    // bound is exactly the live-store trap.
-    let opencode = mock_tui::resolve_executable("opencode", "OPENCODE_BIN").unwrap();
-    let lane_launch = registry
-        .get(HarnessId::Opencode)
-        .mock_tui_launch(&MockTuiContext {
-            home: &fixture.home,
-            workspace: &fixture.repo,
-            port: provider.port,
-        })
-        .expect("opencode mock recipe");
-    let env = lane_env(
-        &fixture,
-        &lane_launch.env,
+    let started = start(
+        "stale",
+        h,
+        &llmock,
+        0,
         &[("BOOP_STALE_SECS", "3"), ("BOOP_IDLE_SHUTDOWN_SECS", "0")],
-    );
-    let created = fixture.create(coord_route, &[], &env, &opencode);
-    assert!(
-        created.status.success(),
-        "lane create failed: {}",
-        String::from_utf8_lossy(&created.stderr)
-    );
-
-    // Within 10s the coordinator screen shows the alarm, and it took the door.
-    fixture.wait_for_screen(&coord_session, &format!("stale {}", fixture.lane));
-    let first = fixture.stale_rows();
-    assert_eq!(first, 1, "the lane wrote exactly one alarm row");
-    // No second alarm inside the next 2s: the bound is the repeat floor.
+        &[],
+    )?;
+    let fixture = &started.fixture;
+    let alarm = format!("stale {} ", fixture.lane);
+    fixture.wait_for_screen(&fixture.coord_session, &alarm, STALE_DEADLINE);
+    let first = fixture.coordinator_shows(&alarm);
+    assert_eq!(first, 1, "exactly one stale row reached the screen");
     std::thread::sleep(Duration::from_secs(2));
     assert_eq!(
-        fixture.stale_rows(),
+        fixture.coordinator_shows(&alarm),
         first,
-        "the alarm repeated before its bound"
+        "the alarm reached the screen again before its bound"
     );
+    assert_eq!(
+        fixture.stale_rows(),
+        1,
+        "exactly one stale row in the mailbox"
+    );
+    Ok(())
 }
+
+macro_rules! lifecycle_case {
+    ($case:literal, $runner:ident, $name:ident, $h:expr) => {
+        #[test]
+        fn $name() {
+            let _guard = lane_lock();
+            let h = &HARNESSES[$h];
+            report($case, h, $runner(h));
+        }
+    };
+}
+
+lifecycle_case!("held", run_held, held_row_defers_result_claude, 0);
+lifecycle_case!("held", run_held, held_row_defers_result_codex, 1);
+lifecycle_case!("held", run_held, held_row_defers_result_opencode, 2);
+lifecycle_case!("revive", run_revive, revive_claude, 0);
+lifecycle_case!("revive", run_revive, revive_codex, 1);
+lifecycle_case!("revive", run_revive, revive_opencode, 2);
+lifecycle_case!("retired", run_retired, retired_closes_session_claude, 0);
+lifecycle_case!("retired", run_retired, retired_closes_session_codex, 1);
+lifecycle_case!("retired", run_retired, retired_closes_session_opencode, 2);
+lifecycle_case!("stale", run_stale, stale_claude, 0);
+lifecycle_case!("stale", run_stale, stale_codex, 1);
+lifecycle_case!("stale", run_stale, stale_opencode, 2);
