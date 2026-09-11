@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { root, loadRegistry, validateRegistry, renderD2, output, loadValue, existing } from './2_registry.mjs';
 import { buildProgress, renderProgress, loadProgress, ingestRows } from './5_progress.mjs';
 import { fingerprintSources } from '../shared/workflow/0_fingerprint.mjs';
+import { buildCoverage, check as checkCoverage, generate as generateCoverage, renderCoverage } from './15_coverage.mjs';
 
 // Required observation axes, authored in `7_status.tsp` and validated against
 // this list. Each axis prints separately; no percentage combines them.
@@ -243,7 +244,7 @@ function familyFidelity(mechanics) {
 }
 
 // Pure join. All inputs are explicit so tests can mutate them.
-export function joinStatus({ status, axes, catalog, phases, phaseAnimation, ground, air, ingestRows, mechanics, restore, native }) {
+export function joinStatus({ status, axes, catalog, phases, phaseAnimation, liveAnimation = undefined, ground, air, ingestRows, mechanics, restore, native }) {
   const errors = [];
   const fail = (code, message) => errors.push({ code, message });
 
@@ -301,6 +302,7 @@ export function joinStatus({ status, axes, catalog, phases, phaseAnimation, grou
     if (!actionPhases.has(entry.action)) actionPhases.set(entry.action, new Set());
     actionPhases.get(entry.action).add(entry.phase);
   }
+  const liveActions = new Set((liveAnimation ?? phaseAnimation).map(entry => entry.action));
 
   const transitions = [...ground.map(t => ({ ...t, kind: 'ground' })), ...air.map(t => ({ ...t, kind: 'air' }))];
   for (const transition of transitions) {
@@ -338,7 +340,7 @@ export function joinStatus({ status, axes, catalog, phases, phaseAnimation, grou
       catalog: observed?.file ?? null,
       phases: mapped,
       chart: chart.length,
-      live: mapped.length > 0,
+      live: liveActions.has(entry.id),
       restore,
       native,
       fidelity: familyHits ? [...familyHits.values()][0] : 'UNKNOWN',
@@ -381,24 +383,48 @@ function renderMatrix({ rows, errors }) {
 
 async function main() {
   const mode = process.argv[2] ?? 'check';
-  if (!['check', 'generate'].includes(mode)) throw Error('usage: 8_status.mjs check|generate');
-  const entries = await validateRegistry(await loadRegistry());
-  await output(new URL('3_registry.json', import.meta.url), JSON.stringify(entries, null, 2) + '\n', true);
-  await output(new URL('3_registry.d2', import.meta.url), renderD2(entries), true);
-  const progress = await buildProgress();
-  await output(new URL('6_progress.html', import.meta.url), renderProgress(progress), true);
-  const exported = runExport();
-  const projection = mode === 'generate'
-    ? await writeStatusProjection(root, exported.dog)
-    : await checkStatusProjection(await buildStatusProjection(root, exported.dog));
-  const authored = await loadStatus();
-  const extracted = await readJson(sourceRules);
-  const current = currentSource();
-  const prove = await readJson(resolve(workflow, 'prove.json'));
+  if (!['status', 'check', 'generate'].includes(mode)) throw Error('usage: 8_status.mjs status|check|generate');
+  const coverage = mode === 'generate' ? await generateCoverage() : await buildCoverage();
+  // Print the available report before checking stale generated prerequisites.
+  console.log('COVERAGE');
+  console.log(renderCoverage(coverage));
+  const failures = [];
+  let entries;
+  let progress;
+  let exported;
+  let projection;
+  let authored;
+  let extracted;
+  let current;
+  let prove;
+  try {
+    entries = await validateRegistry(await loadRegistry());
+    const registryCheck = mode !== 'generate';
+    await output(new URL('3_registry.json', import.meta.url), JSON.stringify(entries, null, 2) + '\n', registryCheck);
+    await output(new URL('3_registry.d2', import.meta.url), renderD2(entries), registryCheck);
+    progress = await buildProgress();
+    await output(new URL('6_progress.html', import.meta.url), renderProgress(progress), registryCheck);
+    exported = runExport();
+    projection = mode === 'generate'
+      ? await writeStatusProjection(root, exported.dog)
+      : await buildStatusProjection(root, exported.dog);
+    authored = await loadStatus();
+    extracted = await readJson(sourceRules);
+    current = currentSource();
+    prove = await readJson(resolve(workflow, 'prove.json'));
+  } catch (error) {
+    failures.push(error.message);
+  }
+  if (!entries || !progress || !exported || !projection || !authored || !extracted) {
+    for (const failure of failures) console.error(failure);
+    process.exitCode = 1;
+    return;
+  }
   const result = joinStatus({
     status: authored, axes: authored.axes,
     catalog: exported.catalog, phases: exported.phases,
-    phaseAnimation: exported.phase_animation, ground: exported.ground, air: exported.air,
+    phaseAnimation: exported.phase_animation, liveAnimation: exported.pigeon_live_bindings,
+    ground: exported.ground, air: exported.air,
     ingestRows: progress.rows, mechanics: progress.mechanics,
     restore: receiptObservation(prove, current, ['core']),
     native: receiptObservation(prove, current, ['export', 'browser']),
@@ -434,6 +460,17 @@ async function main() {
   }
   if (dog && dog.rows.length !== 25) {
     console.error(`dog projection has ${dog.rows.length} rows, expected 25`);
+    process.exitCode = 1;
+  }
+  if (mode !== 'generate') {
+    try { await checkStatusProjection(projection); } catch (error) { failures.push(error.message); }
+    try { await checkCoverage(); } catch (error) { failures.push(error.message); }
+  }
+  if (mode !== 'generate' && (coverage.receipts.rollback !== 'PASSED' || coverage.receipts.source_fidelity !== 'PASSED')) {
+    failures.push(`stale or failed qualification receipt: rollback=${coverage.receipts.rollback}, source fidelity=${coverage.receipts.source_fidelity}`);
+  }
+  if (failures.length) {
+    for (const failure of failures) console.error(failure);
     process.exitCode = 1;
   }
 }
