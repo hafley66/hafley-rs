@@ -89,6 +89,20 @@ pub fn generate() -> Result<game_content::Catalog, Error> {
     Ok(game_content::generate_catalog(&SPEC, &load()?)?)
 }
 
+/// Pigeon fallback policy in this cut: none. Every role Pigeon selects is an
+/// exact retained source action, so no substitute clip is declared.
+#[cfg(feature = "ingest")]
+pub const FALLBACKS: [game_content::RoleFallback<'static>; 0] = [];
+
+/// Derive role bindings from already-generated catalog evidence. Membership is
+/// mechanical action-name matching; no numeric ID is authored here.
+#[cfg(feature = "ingest")]
+pub fn generate_roles(
+    evidence: &game_content::CatalogEvidence,
+) -> Result<game_content::RoleBindings, game_content::RoleError> {
+    game_content::generate_role_bindings(evidence, &FALLBACKS)
+}
+
 /// Source-free owned action content embedded at build time. Deserializes
 /// `generated/6_baked.json` from the compiled binary; requires no brawllib,
 /// HTML, filesystem, or parser access.

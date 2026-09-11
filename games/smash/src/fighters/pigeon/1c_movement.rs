@@ -6,6 +6,8 @@ use game_fighter::{Input, Phase, Rules, State};
 mod attr;
 #[path = "generated/7_rules.rs"]
 mod generated_rules;
+#[path = "generated/8_roles.rs"]
+mod roles;
 
 /// Live locomotion rules for Pigeon, constructed by the generated artifact.
 /// Attribute values come from the generated attribute vocabulary; explicit
@@ -19,17 +21,32 @@ pub fn initial() -> State {
     State { position: [-12.0, 0.0], ..State::new(&rules()) }
 }
 
-/// Pure host Phase -> catalog animation seam for the base pose. Conditional
-/// live selections (air attack, aerial-landing recovery) go through [`select`].
+/// Pure host Phase -> catalog animation seam for the base pose. Names come from
+/// the generated role bindings; this module authors no numeric catalog ID.
+/// Conditional live selections (air attack, aerial-landing recovery) go through
+/// [`select`].
 pub fn pose_for_phase(phase: Phase, axis: f32) -> usize {
     match phase {
-        Phase::Idle => 0,
-        Phase::Walk => if axis.abs() < 0.35 { 7 } else if axis.abs() < 0.65 { 8 } else { 9 },
-        Phase::Dash => 10, Phase::Run => 11, Phase::Brake => 12, Phase::Turn => 14,
-        Phase::Squat => 3,
-        Phase::CrouchEnter => 18, Phase::CrouchHold => 19, Phase::CrouchExit => 20,
-        Phase::Jump => 1, Phase::Fall => 4,
-        Phase::AirJump => 16, Phase::Landing => 6,
+        Phase::Idle => roles::IDLE.expect("Pigeon Idle role"),
+        Phase::Walk => if axis.abs() < 0.35 {
+            roles::WALK_SLOW.expect("Pigeon WalkSlow role")
+        } else if axis.abs() < 0.65 {
+            roles::WALK_MIDDLE.expect("Pigeon WalkMiddle role")
+        } else {
+            roles::WALK_FAST.expect("Pigeon WalkFast role")
+        },
+        Phase::Dash => roles::DASH.expect("Pigeon Dash role"),
+        Phase::Run => roles::RUN.expect("Pigeon Run role"),
+        Phase::Brake => roles::BRAKE.expect("Pigeon Brake role"),
+        Phase::Turn => roles::TURN.expect("Pigeon Turn role"),
+        Phase::Squat => roles::JUMP_SQUAT.expect("Pigeon JumpSquat role"),
+        Phase::CrouchEnter => roles::CROUCH_ENTER.expect("Pigeon CrouchEnter role"),
+        Phase::CrouchHold => roles::CROUCH_HOLD.expect("Pigeon CrouchHold role"),
+        Phase::CrouchExit => roles::CROUCH_EXIT.expect("Pigeon CrouchExit role"),
+        Phase::Jump => roles::JUMP.expect("Pigeon Jump role"),
+        Phase::Fall => roles::FALL.expect("Pigeon Fall role"),
+        Phase::AirJump => roles::AIR_JUMP.expect("Pigeon AirJump role"),
+        Phase::Landing => roles::LANDING.expect("Pigeon Landing role"),
     }
 }
 
@@ -73,42 +90,49 @@ impl Condition {
 /// the airborne attack override, then aerial-landing recovery, then a fresh
 /// airborne attack press.
 pub fn select(phase: Phase, axis: f32, facts: SelectionFacts) -> (usize, Condition) {
+    let air_attack = roles::AIR_ATTACK.expect("Pigeon AirAttack role");
+    let landing_recovery = roles::LANDING_RECOVERY.expect("Pigeon LandingRecovery role");
     let mut action = pose_for_phase(phase, axis);
     let mut condition = Condition::Base;
     if facts.attacking && !phase.grounded() {
-        action = 2;
+        action = air_attack;
         condition = Condition::AirAttack;
     }
     if (facts.landed && phase == Phase::Landing && facts.attacking && facts.landing_lag)
         || (facts.recovering && phase == Phase::Landing)
     {
-        action = 5;
+        action = landing_recovery;
         condition = Condition::LandingRecovery;
     }
     if !phase.grounded() && !facts.attacking && facts.attack_pressed {
-        action = 2;
+        action = air_attack;
         condition = Condition::AirAttack;
     }
     (action, condition)
 }
 
 pub fn advance(world: &mut World, buttons: u8, axis: f32, actions: &[Action]) -> [f32; 3] {
+    let air_attack = roles::AIR_ATTACK.expect("Pigeon AirAttack role");
+    let landing_recovery = roles::LANDING_RECOVERY.expect("Pigeon LandingRecovery role");
+    let crouch_enter = roles::CROUCH_ENTER.expect("Pigeon CrouchEnter role");
+    let crouch_exit = roles::CROUCH_EXIT.expect("Pigeon CrouchExit role");
     let mut policy = rules();
     let fighter = world.movement.as_mut().unwrap();
     let old_phase = fighter.phase;
-    let attacking = world.action == 2 && world.animation < actions[2].frames.len();
-    let recovering = world.action == 5 && world.animation < actions[5].frames.len();
-    if recovering { policy.landing_lag = actions[5].frames.len() as u32; }
+    let attacking = world.action == air_attack && world.animation < actions[air_attack].frames.len();
+    let recovering = world.action == landing_recovery
+        && world.animation < actions[landing_recovery].frames.len();
+    if recovering { policy.landing_lag = actions[landing_recovery].frames.len() as u32; }
     // Crouch lifecycle completion is animation-driven; supply the imported lengths.
-    policy.crouch_enter_ticks = actions[18].frames.len() as u32;
-    policy.crouch_exit_ticks = actions[20].frames.len() as u32;
+    policy.crouch_enter_ticks = actions[crouch_enter].frames.len() as u32;
+    policy.crouch_exit_ticks = actions[crouch_exit].frames.len() as u32;
     let input = Input { buttons: if attacking { buttons & !1 } else { buttons }, axis };
     game_fighter::advance(fighter, input, &policy);
     let landed = !old_phase.grounded() && fighter.phase == Phase::Landing;
     let pressed = buttons & !world.previous_input;
     let landing_lag = landed
         && attacking
-        && actions[2].frames[world.animation.min(actions[2].frames.len()-1)].landing_lag;
+        && actions[air_attack].frames[world.animation.min(actions[air_attack].frames.len()-1)].landing_lag;
     let (action, _) = select(fighter.phase, axis, SelectionFacts {
         attacking,
         attack_pressed: pressed & 2 != 0,
@@ -121,10 +145,14 @@ pub fn advance(world: &mut World, buttons: u8, axis: f32, actions: &[Action]) ->
     }
     if action != world.action || old_phase != fighter.phase {
         // An aerial attack's pose clock continues across the jump apex.
-        if action != 2 || world.action != 2 { world.animation = 0; }
+        if action != air_attack || world.action != air_attack { world.animation = 0; }
         world.action = action;
     }
-    if matches!(action, 0 | 4 | 7..=11 | 19) {
+    let looping = [
+        roles::IDLE, roles::FALL, roles::WALK_SLOW, roles::WALK_MIDDLE, roles::WALK_FAST,
+        roles::DASH, roles::RUN, roles::CROUCH_HOLD,
+    ];
+    if looping.contains(&Some(action)) {
         world.animation %= actions[action].frames.len();
     }
     [0.0, fighter.position[1], fighter.position[0]]
