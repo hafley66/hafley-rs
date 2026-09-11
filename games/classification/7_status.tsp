@@ -32,4 +32,22 @@ const status: Status = #{
     JumpAerialB: #{ id: 21, action: "JumpAerialB", family: "Jump and fall" },
   },
   axes: #["payload", "catalog", "phase", "chart", "live", "restore", "native", "fidelity"],
+  characters: #{
+    pigeon: #{
+      runtime: "pigeon",
+      display: "Private Pigeon",
+      catalog: "smash/src/fighters/pigeon/generated/5_catalog.json",
+      baked: "smash/src/fighters/pigeon/generated/6_baked.json",
+      roles: "smash/src/fighters/pigeon/generated/8_roles.json",
+      manifest: "smash/src/fighters/pigeon/imported/0_sources.json",
+    },
+    dog: #{
+      runtime: "dog",
+      display: "Dog",
+      catalog: "smash/src/fighters/dog/generated/0_catalog.json",
+      baked: "smash/src/fighters/dog/generated/1_baked.json",
+      roles: "smash/src/fighters/dog/generated/4_roles.json",
+      manifest: "smash/src/fighters/dog/imported/0_sources.json",
+    },
+  },
 };

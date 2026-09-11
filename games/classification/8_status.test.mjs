@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { COLUMNS, joinStatus, loadStatus, receiptObservation, currentSource } from './8_status.mjs';
+import { COLUMNS, joinStatus, loadStatus, receiptObservation, currentSource,
+  buildStatusProjection, checkStatusProjection, renderCharacterMatrix } from './8_status.mjs';
 
 const authored = await loadStatus();
 const H = 'a'.repeat(64);
@@ -182,6 +183,43 @@ test('the current source fingerprint recomputes to a stable digest', () => {
   const source = currentSource();
   assert.match(source, /^[0-9a-f]{64}$/);
   assert.equal(source, currentSource());
+});
+
+test('dog status projects 16 rows from checked generated inputs', async () => {
+  const projection = await buildStatusProjection();
+  const pigeon = projection.characters.find(character => character.key === 'pigeon');
+  const dog = projection.characters.find(character => character.key === 'dog');
+  assert.equal(pigeon.catalog.count, 22);
+  assert.equal(pigeon.rows.length, 22);
+  assert.equal(dog.catalog.count, 16);
+  assert.equal(dog.rows.length, 16);
+  assert.deepEqual(dog.errors, []);
+  assert.deepEqual(dog.rows.map(row => row.id), Array.from({ length: 16 }, (_, index) => index));
+  // The generated role artifact binds 10 of 16 Dog actions to a runtime phase.
+  assert.deepEqual(dog.rows.filter(row => row.live).map(row => row.id), [0, 1, 2, 3, 4, 5, 6, 7, 8, 12]);
+  assert.deepEqual(projection.characters.map(character => character.rows.length), [22, 16]);
+});
+
+test('character matrices stay separated and keep unknown axes explicit', async () => {
+  const projection = await buildStatusProjection();
+  const dog = projection.characters.find(character => character.key === 'dog');
+  const text = renderCharacterMatrix(dog);
+  assert.equal(text.split('\n').length, 2 + dog.rows.length + 1);
+  assert.match(text, /FAILURES: none/);
+  assert.match(text, /UNMEASURED/);
+  assert.match(text, /UNKNOWN/);
+  assert.doesNotMatch(text, /%/);
+});
+
+test('the committed status projection is rejected when a generated input or row is stale', async () => {
+  const live = await buildStatusProjection();
+  assert.deepEqual(await checkStatusProjection(live), live);
+  const rowDrift = structuredClone(live);
+  rowDrift.characters[1].rows[0].action = 'Ghost';
+  await assert.rejects(checkStatusProjection(rowDrift), /stale status projection/);
+  const inputDrift = structuredClone(live);
+  inputDrift.characters[1].catalog.sha256 = 'f'.repeat(64);
+  await assert.rejects(checkStatusProjection(inputDrift), /stale status projection/);
 });
 
 // The SOURCE RULES section prints every extracted rule and each unresolved

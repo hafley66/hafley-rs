@@ -1,15 +1,156 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { root, loadRegistry, validateRegistry, renderD2, output, loadValue } from './2_registry.mjs';
-import { buildProgress, renderProgress, loadProgress } from './5_progress.mjs';
+import { root, loadRegistry, validateRegistry, renderD2, output, loadValue, existing } from './2_registry.mjs';
+import { buildProgress, renderProgress, loadProgress, ingestRows } from './5_progress.mjs';
 import { fingerprintSources } from '../shared/workflow/0_fingerprint.mjs';
 
 // Required observation axes, authored in `7_status.tsp` and validated against
 // this list. Each axis prints separately; no percentage combines them.
 export const COLUMNS = ['payload', 'catalog', 'phase', 'chart', 'live', 'restore', 'native', 'fidelity'];
+
+async function fileDigest(base, path) {
+  const bytes = await readFile(await existing(base, path));
+  return { path, sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length };
+}
+
+// Pure projection from checked generated inputs. Rows are the catalog's own
+// membership and order; the phase axis is the generated role binding whose
+// source is that action id; chart stays explicit unknown because no generated
+// per-character chart artifact exists. Independent axes, no percentage.
+export async function buildStatusProjection(base = root) {
+  const { characters: specs } = await loadStatus();
+  const characters = [];
+  for (const [key, spec] of Object.entries(specs)) {
+    const catalog = JSON.parse(await readFile(await existing(base, spec.catalog), 'utf8'));
+    const baked = JSON.parse(await readFile(await existing(base, spec.baked), 'utf8'));
+    const roles = JSON.parse(await readFile(await existing(base, spec.roles), 'utf8'));
+    const { rows: ingest } = await ingestRows(base, { manifest: spec.manifest });
+    const ingestByAction = new Map(ingest.map(row => [row.action, row]));
+
+    const errors = [];
+    if (baked.length !== catalog.entries.length) {
+      errors.push({
+        code: 'BAKED_LENGTH',
+        message: `${key}: ${baked.length} baked entries != ${catalog.entries.length} catalog actions`,
+      });
+    }
+
+    const rolesBySource = new Map();
+    for (const binding of roles.roles) {
+      if (binding.source === null || binding.source === undefined) continue;
+      if (!rolesBySource.has(binding.source)) rolesBySource.set(binding.source, []);
+      rolesBySource.get(binding.source).push(binding.role);
+    }
+
+    const rows = catalog.entries.map((entry, index) => {
+      if (entry.id !== index) {
+        errors.push({ code: 'CATALOG_ORDER', message: `${key}: ${entry.name} id ${entry.id}, expected ${index}` });
+      }
+      const payload = ingestByAction.get(entry.name);
+      if (!payload) errors.push({ code: 'MISSING_PAYLOAD', message: `${key}: ${entry.name} has no retained ingest row` });
+      else if (payload.state !== 'retained') {
+        errors.push({ code: 'BROKEN_HASH', message: `${key}: ${entry.name} ${payload.state}` });
+      }
+      const bakedFrames = baked[entry.id]?.frames?.length;
+      if (bakedFrames !== entry.frames) {
+        errors.push({
+          code: 'BAKED_FRAMES',
+          message: `${key}: ${entry.name} baked ${bakedFrames} frames != catalog ${entry.frames}`,
+        });
+      }
+      const phase = (rolesBySource.get(entry.id) ?? []).slice().sort();
+      return {
+        id: entry.id,
+        action: entry.name,
+        file: entry.file,
+        frames: entry.frames,
+        payload: {
+          state: payload?.state ?? 'missing',
+          hash: payload?.hash ?? null,
+          expected: payload?.expected ?? null,
+          frames: payload?.frames ?? null,
+        },
+        phase,
+        live: phase.length > 0,
+      };
+    });
+
+    for (const sourceId of rolesBySource.keys()) {
+      if (!catalog.entries.some(entry => entry.id === sourceId)) {
+        errors.push({
+          code: 'IMPOSSIBLE_MAPPING',
+          message: `${key}: role binding references unknown action id ${sourceId}`,
+        });
+      }
+    }
+
+    const catalogDigest = await fileDigest(base, spec.catalog);
+    const bakedDigest = await fileDigest(base, spec.baked);
+    characters.push({
+      key,
+      display: spec.display,
+      catalog: { ...catalogDigest, count: catalog.entries.length },
+      baked: { ...bakedDigest, count: baked.length },
+      roles: await fileDigest(base, spec.roles),
+      manifest: await fileDigest(base, spec.manifest),
+      rows,
+      errors,
+    });
+  }
+  return { characters };
+}
+
+export function renderCharacterMatrix(character) {
+  const lines = [];
+  lines.push(`status axes: ${COLUMNS.join(' | ')}  (independent; no percentage)`);
+  lines.push('id  action        payload             catalog         phase                chart  live  restore   native    fidelity');
+  for (const row of character.rows) {
+    const payload = row.payload.hash
+      ? `${row.payload.state === 'retained' ? 'RET' : row.payload.state.toUpperCase()} ${(row.payload.hash ?? row.payload.expected).slice(0, 8)} f=${row.payload.frames ?? row.frames ?? '?'}`
+      : 'MISSING';
+    const phase = row.phase.length ? row.phase.join(',') : '-';
+    lines.push([
+      String(row.id).padStart(2),
+      row.action.padEnd(13),
+      payload.padEnd(19),
+      String(row.file).padEnd(15),
+      phase.padEnd(20),
+      '-'.padEnd(6),
+      (row.live ? 'yes' : 'no').padEnd(5),
+      'UNMEASURED'.padEnd(9),
+      'UNMEASURED'.padEnd(9),
+      'UNKNOWN',
+    ].join(' '));
+  }
+  if (character.errors.length) {
+    lines.push(`FAILURES (${character.errors.length}):`);
+    for (const error of character.errors) lines.push(`  ${error.code}: ${error.message}`);
+  } else {
+    lines.push('FAILURES: none');
+  }
+  return lines.join('\n');
+}
+
+const projectionOutput = new URL('11_status.json', import.meta.url);
+
+export async function checkStatusProjection(live) {
+  if (!live) live = await buildStatusProjection();
+  const stored = JSON.parse(await readFile(projectionOutput, 'utf8'));
+  if (JSON.stringify(stored) !== JSON.stringify(live)) {
+    throw Error('stale status projection: generated input or committed projection changed; run `node classification/8_status.mjs generate`');
+  }
+  return live;
+}
+
+export async function writeStatusProjection(base = root) {
+  const projection = await buildStatusProjection(base);
+  await output(projectionOutput, JSON.stringify(projection, null, 2) + '\n', false);
+  return projection;
+}
 
 const statusSource = fileURLToPath(new URL('7_status.tsp', import.meta.url));
 const workflow = fileURLToPath(new URL('../blender-godot-sqlite-proof/pigeon-lab/.workflow/', import.meta.url));
@@ -210,11 +351,14 @@ function renderMatrix({ rows, errors }) {
 }
 
 async function main() {
+  const mode = process.argv[2] ?? 'check';
+  if (!['check', 'generate'].includes(mode)) throw Error('usage: 8_status.mjs check|generate');
   const entries = await validateRegistry(await loadRegistry());
   await output(new URL('3_registry.json', import.meta.url), JSON.stringify(entries, null, 2) + '\n', true);
   await output(new URL('3_registry.d2', import.meta.url), renderD2(entries), true);
   const progress = await buildProgress();
   await output(new URL('6_progress.html', import.meta.url), renderProgress(progress), true);
+  const projection = mode === 'generate' ? await writeStatusProjection() : await checkStatusProjection();
   const authored = await loadStatus();
   const exported = runExport();
   const extracted = await readJson(sourceRules);
@@ -232,19 +376,33 @@ async function main() {
   for (const [name, entry] of Object.entries(entries)) {
     console.log(`  ${String(entry.stage).padEnd(4)} ${entry.destination.padEnd(9)} ${entry.task.padEnd(3)} ${name.padEnd(14)} ${entry.manifest ? 'manifest' : 'proposal'}`);
   }
-  console.log('MATRIX');
+  console.log('MATRIX PIGEON');
   console.log(renderMatrix(result));
+  const dog = projection.characters.find(character => character.key === 'dog');
+  console.log('MATRIX DOG');
+  console.log(renderCharacterMatrix(dog));
   console.log('SOURCE RULES');
   console.log(`  ${extracted.rules.length} extracted from ${extracted.repository}@${extracted.revision.slice(0, 12)}`);
   for (const item of extracted.unresolved) console.log(`  UNRESOLVED ${item.symbol}: ${item.reason}`);
+  console.log(`STATUS PROJECTION: ${projection.characters.map(character =>
+    `${character.key} ${character.rows.length} actions ${mode === 'generate' ? 'generated' : 'current'}`).join('; ')}`);
   const blocked = result.rows.filter(row => !row.live || row.chart === 0).length;
   console.log(`GATE game-fighter: stage ${entries['game-fighter'].stage} authored, not auto-promoted; ` +
-    `${blocked}/${result.rows.length} actions lack a live phase or executable chart mapping; ` +
+    `${blocked}/${result.rows.length} Pigeon actions lack a live phase or executable chart mapping; ` +
     `${result.rows.filter(row => row.fidelity !== 'qualified').length} actions unqualified on source fidelity`);
   console.log(`source fingerprint: ${current ?? 'UNMEASURED, sibling runtime checkout absent'}; ` +
     `prove receipt: ${prove ? `${prove.commit} ${current === null ? 'UNVERIFIED' : prove.source === current ? 'current' : 'STALE'}` : 'absent'}`);
+  const projectionErrors = projection.characters.flatMap(character => character.errors.map(error => `${character.key} ${error.code}: ${error.message}`));
+  if (projectionErrors.length) {
+    console.error(`${projectionErrors.length} projection failures`);
+    process.exitCode = 1;
+  }
   if (result.errors.length) {
     console.error(`${result.errors.length} status failures`);
+    process.exitCode = 1;
+  }
+  if (dog && dog.rows.length !== 16) {
+    console.error(`dog projection has ${dog.rows.length} rows, expected 16`);
     process.exitCode = 1;
   }
 }

@@ -78,9 +78,24 @@ model ExpectedAction {
   family: string;
 }
 
+// One character's status sources. Artifact paths locate the generated catalog
+// (ordered membership and declared frame counts), baked frames, runtime role
+// bindings and the retained ingest manifest that owns payload hashes. TypeSpec
+// only locates those files; every observed value is read from them, and the
+// generated catalog remains each character's action inventory authority.
+model CharacterStatus {
+  runtime: string;
+  display: string;
+  catalog: string;
+  baked: string;
+  roles: string;
+  manifest: string;
+}
+
 model Status {
   expected: Record<ExpectedAction>;
   axes: ActionAxis[];
+  characters: Record<CharacterStatus>;
 }
 
 // Stable interchange shape for source extractors. Values are emitted from
