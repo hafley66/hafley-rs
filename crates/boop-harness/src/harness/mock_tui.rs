@@ -76,6 +76,20 @@ pub fn terminal_env(home: &Path) -> Vec<(String, String)> {
             }
         }
     }
+    // A scratch npx cache re-extracts codex-acp's 211 MB codex per run, and macOS
+    // shows a focus-stealing "Verifying" window for each new copy.
+    let npm_cache = std::env::var("npm_config_cache")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            std::env::var("HOME")
+                .ok()
+                .filter(|value| !value.is_empty())
+                .map(|real_home| format!("{real_home}/.npm"))
+        });
+    if let Some(cache) = npm_cache {
+        env.push(("npm_config_cache".to_owned(), cache));
+    }
     env.push(("HOME".to_owned(), home.display().to_string()));
     env.push(("TERM".to_owned(), "xterm-256color".to_owned()));
     env
