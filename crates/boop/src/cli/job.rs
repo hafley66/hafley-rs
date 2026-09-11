@@ -239,6 +239,44 @@ pub(crate) fn spawn_env_stamp(
     stamp
 }
 
+/// The lane's own cargo target dir. A caller `--env CARGO_TARGET_DIR` wins, so
+/// the value is never duplicated in the spawn env.
+fn supplied_target(env: &[(String, String)]) -> Option<String> {
+    env.iter()
+        .find(|(key, _)| key == "CARGO_TARGET_DIR")
+        .map(|(_, value)| value.clone())
+}
+
+/// The env a lane's spawn carries when boop owns placement: the caller's pairs,
+/// plus boop's own `CARGO_TARGET_DIR` when the caller named none.
+/// `BOOP_LANE_TARGET_ROOT` rides too, so the supervisor resolves the same root
+/// and can prove a path is under it before deleting anything.
+fn lane_spawn_env(lane: &str, env: &[(String, String)]) -> Vec<(String, String)> {
+    let mut out = env.to_vec();
+    if supplied_target(env).is_none() {
+        if let Ok(target) = boop::trail::lane_target_dir(lane) {
+            out.push(("CARGO_TARGET_DIR".to_owned(), target.display().to_string()));
+        }
+    }
+    if let Some(root) = std::env::var_os("BOOP_LANE_TARGET_ROOT").filter(|root| !root.is_empty()) {
+        if !out.iter().any(|(key, _)| key == "BOOP_LANE_TARGET_ROOT") {
+            out.push((
+                "BOOP_LANE_TARGET_ROOT".to_owned(),
+                root.to_string_lossy().into_owned(),
+            ));
+        }
+    }
+    out
+}
+
+/// The target dir a dry run prints: the caller's `--env` override, else boop's
+/// own placement.
+fn effective_target(lane: &str, env: &[(String, String)]) -> Option<PathBuf> {
+    supplied_target(env)
+        .map(PathBuf::from)
+        .or_else(|| boop::trail::lane_target_dir(lane).ok())
+}
+
 pub(crate) fn git_head(repo: &str) -> Result<Option<String>> {
     let output = std::process::Command::new("git")
         .args(["-C", repo, "rev-parse", "HEAD"])
@@ -1198,6 +1236,10 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     let on_exit = result_recipient
         .as_ref()
         .map(|_| lane::pane_epilogue(&identity.lane, &hail_mail_dir));
+    // boop owns each lane's cargo target dir: appended unless the caller named
+    // one with `--env CARGO_TARGET_DIR=...`.
+    let spawn_env = lane_spawn_env(&identity.lane, &args.env);
+    let target = effective_target(&identity.lane, &args.env);
 
     if args.dry_run {
         info!(
@@ -1221,7 +1263,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
                 &identity.lane,
                 harness_id.as_str(),
                 parent.parent.as_deref(),
-                &args.env,
+                &spawn_env,
                 None,
             )),
             model: model.clone(),
@@ -1249,6 +1291,9 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         }
         if let Some(worktree_dir) = &identity.worktree_dir {
             println!("worktree: {}", worktree_dir.display());
+        }
+        if let Some(target) = &target {
+            println!("target: {}", target.display());
         }
         println!("{}", start_plan(&repo, args.no_start)?);
         println!("base-sha: {} (from {})", base.sha, base.rev);
@@ -1357,7 +1402,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             warm_start: !args.no_start,
             variant: variant.clone(),
             bin: bin.clone(),
-            env: args.env.clone(),
+            env: spawn_env.clone(),
             spawn_id,
             post_pr,
             pr_base: Some(pr_base),

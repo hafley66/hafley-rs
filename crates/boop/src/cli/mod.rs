@@ -339,6 +339,11 @@ PRESETS: model spelling is presets only; `boop config presets` lists name,
   (bin ccz). The codex/gpt and claude families through opencode are refused at
   spawn: each has a flat-rate harness and opencode bills them metered. Gemini is allowed.
 
+DISK: boop owns each lane's cargo target dir, so no lane fills the laptop.
+  PLACEMENT: `lane create` sets CARGO_TARGET_DIR=<lanes root>/<lane>/target on
+    the lane's spawn (lanes root = BOOP_LANE_TARGET_ROOT, else ~/.agent/lanes).
+    A caller `--env CARGO_TARGET_DIR=...` wins; `--dry-run` prints `target:`.
+    The `boop-start` warmup keeps its own shared cache and is unchanged.
 LAWS:
   1 Every lane spawn goes through `lane create`; a bare tmux spawn leaves no
     edge and no tracking.
@@ -346,7 +351,8 @@ LAWS:
     subagents (Agent tool). Lanes are for opencode, codex, kimi and ccz.
   3 A lane can die silently. Liveness is TWO checks: `boop beep ps <lane>`
     AND `git -C <worktree> status --short`. A REPORT.md alone proves nothing.
-  4 Give each lane its own CARGO_TARGET_DIR; shared target dirs race.
+  4 Give each lane its own CARGO_TARGET_DIR; boop places it and reclaims it,
+    so no lane and no hand-run spawn shares one.
   5 A brief never writes an absolute `cd` to the primary checkout; the lane
     works in $PWD, its worktree.
   6 `lane delete --state dead` removes each dead lane's own worktree and

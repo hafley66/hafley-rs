@@ -37,6 +37,21 @@ pub fn lane_dir(lane: &str) -> Result<PathBuf> {
     Ok(lane_dir_in(&lanes_root()?, lane))
 }
 
+/// The root every lane cargo target dir lives under. `BOOP_LANE_TARGET_ROOT`
+/// names it when set; otherwise the lane trail root itself, so placement and
+/// reclaim read one location and a delete can prove a path is under it.
+pub fn lane_target_root() -> Result<PathBuf> {
+    if let Some(root) = std::env::var_os("BOOP_LANE_TARGET_ROOT").filter(|root| !root.is_empty()) {
+        return Ok(PathBuf::from(root));
+    }
+    lanes_root()
+}
+
+/// The cargo target dir boop owns for one lane: `<root>/<lane>/target`.
+pub fn lane_target_dir(lane: &str) -> Result<PathBuf> {
+    Ok(lane_dir_in(&lane_target_root()?, lane).join("target"))
+}
+
 /// What a lane must produce to count as complete. `paths` are relative to the
 /// lane worktree; `commit_subjects` are exact subject lines of any commit after
 /// `base_sha`; `commits_at_least` is a lower bound on those commits.
