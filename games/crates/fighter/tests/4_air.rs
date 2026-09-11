@@ -1,13 +1,13 @@
 use game_fighter::{
+    _1c_air::{AirEvent, AirFacts, decide},
     Phase,
-    air::{AirEvent, AirFacts, decide},
 };
 
 const AIRBORNE: [Phase; 3] = [Phase::Jump, Phase::AirJump, Phase::Fall];
 
 fn expected_motion(phase: Phase, facts: AirFacts) -> Option<Phase> {
     use Phase::*;
-    // Guard order mirrors 2_advance.rs: the pre-gravity jump check precedes the
+    // Guard order mirrors _2_advance.rs: the pre-gravity jump check precedes the
     // post-gravity fall write, so a competing descending fact loses to jump.
     match phase {
         Jump | AirJump if facts.jump_pressed && facts.jumps_left > 0 => Some(AirJump),

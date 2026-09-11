@@ -5,7 +5,7 @@
 //! execute the public game-fighter decision seam and replay the transition from
 //! both a clone and a serde-restored phase.
 
-use game_fighter::{Phase, qualification::animation_completion};
+use game_fighter::{_6_qualification::animation_completion, Phase};
 use serde_json::Value;
 
 const CASES: &str = include_str!(concat!(
@@ -42,11 +42,14 @@ fn pinned_cases_preserve_source_ids_and_execute_all_four_transitions() {
             .unwrap_or_else(|| panic!("missing source callback {callback_id}"));
         assert_eq!(case["source"], callback["source"]);
         let association_id = case["source_association_id"].as_str().unwrap();
-        assert!(inventory["associations"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|row| row["id"] == association_id && row["callback"] == case["source"]["symbol"]));
+        assert!(
+            inventory["associations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row["id"] == association_id
+                    && row["callback"] == case["source"]["symbol"])
+        );
 
         let calls = case["ordered_calls"].as_array().unwrap();
         assert_eq!(calls.len(), 2);
@@ -65,13 +68,29 @@ fn pinned_cases_preserve_source_ids_and_execute_all_four_transitions() {
         let finished = runtime["finished"].as_bool().unwrap();
         let forward = runtime["forward"].as_bool().unwrap();
         let expected = phase(runtime["destination"].as_str().unwrap());
-        assert_eq!(animation_completion(from, false, forward), None, "{} unfinished", callback_id);
-        assert_eq!(animation_completion(from, finished, forward), Some(expected), "{} finished", callback_id);
+        assert_eq!(
+            animation_completion(from, false, forward),
+            None,
+            "{} unfinished",
+            callback_id
+        );
+        assert_eq!(
+            animation_completion(from, finished, forward),
+            Some(expected),
+            "{} finished",
+            callback_id
+        );
         assert_eq!(case["source_completion"]["qualification"], "unqualified");
-        assert!(!case["source_completion"]["reason"].as_str().unwrap().is_empty());
+        assert!(
+            !case["source_completion"]["reason"]
+                .as_str()
+                .unwrap()
+                .is_empty()
+        );
 
         let mut cloned = from;
-        let mut restored: Phase = serde_json::from_slice(&serde_json::to_vec(&from).unwrap()).unwrap();
+        let mut restored: Phase =
+            serde_json::from_slice(&serde_json::to_vec(&from).unwrap()).unwrap();
         for (finished, forward) in [(false, forward), (true, forward)] {
             let expected = animation_completion(from, finished, forward);
             let clone_result = animation_completion(cloned, finished, forward);

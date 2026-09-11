@@ -35,18 +35,18 @@ common callback rules, and its unnamed `ftCommonData` fields are DAT-only.
 maps every host `Phase` to one fixed catalog ID. `movement::select`
 (`1c_movement.rs:92`) overrides only ID2 (air attack) and ID5 (landing
 recovery). No path emits IDs 13, 15, 17, 18, 19, 20, 21. Host phases are the 12
-variants in `games/crates/fighter/src/1_state.rs:33`; ground permission is
-`ground::decide` (`games/crates/fighter/src/1b_ground.rs:44`) and air permission
-is `air::decide` (`games/crates/fighter/src/1c_air.rs:59`).
+variants in `games/crates/fighter/src/_1_state.rs:33`; ground permission is
+`_1b_ground::decide` (`games/crates/fighter/src/_1b_ground.rs:44`) and air permission
+is `_1c_air::decide` (`games/crates/fighter/src/_1c_air.rs:59`).
 
 | Catalog ID | Clip | Emitting path today | Reached by |
 | ---: | --- | --- | --- |
-| 13 | Turn | none | `Phase::Turn` maps to ID14 TurnRun (`1c_movement.rs:47`); `ground::decide` enters Turn only from Run (`1b_ground.rs:66`) |
+| 13 | Turn | none | `Phase::Turn` maps to ID14 TurnRun (`1c_movement.rs:47`); `_1b_ground::decide` enters Turn only from Run (`_1b_ground.rs:66`) |
 | 15 | JumpB | none | `pose_for_phase(Phase::Jump)` is ID1 JumpF (`1c_movement.rs:48`) |
 | 17 | LandingLight | none | `pose_for_phase(Phase::Landing)` is ID6 LandingHeavy (`1c_movement.rs:49`) |
 | 18 | Squat | none | `Phase::Squat` is ID3 JumpSquat and `Phase::Crouch` is ID3 (`1c_movement.rs:48-49`) |
-| 19 | SquatWait | none | `Phase::Crouch` is ID3; crouch entered straight from Idle (`1b_ground.rs:54`) |
-| 20 | SquatRv | none | crouch release is `Crouch -> Idle` (`1b_ground.rs:72`) |
+| 19 | SquatWait | none | `Phase::Crouch` is ID3; crouch entered straight from Idle (`_1b_ground.rs:54`) |
+| 20 | SquatRv | none | crouch release is `Crouch -> Idle` (`_1b_ground.rs:72`) |
 | 21 | JumpAerialB | none | `pose_for_phase(Phase::AirJump)` is ID16 JumpAerialF (`1c_movement.rs:49`) |
 
 ## Selection map
@@ -98,7 +98,7 @@ the same callbacks. `LandingLight` selection is not in any local source
   has `State.facing` and `State.phase_tick` but no turn-origin flag and no
   standing-turn phase distinct from the running turn.
 - Evidence: `kneeman-lines/4_melee_decomp/src/melee/ft/kinds/ftCommon/ftCo_Turn.c:26,41,67,75-98,100`;
-  `ftCo_Wait.c:67`. Local: `1c_movement.rs:47`, `1b_ground.rs:66`.
+  `ftCo_Wait.c:67`. Local: `1c_movement.rs:47`, `_1b_ground.rs:66`.
 - Representable: no. `Phase::Turn` is the running-turn policy entered only from
   Run and mapped to ID14. Source Turn ID13 needs a standing-turn entry
   (`Wait` + reverse stick) and, for fidelity, the `frames_to_turn` countdown.
@@ -117,7 +117,7 @@ the same callbacks. `LandingLight` selection is not in any local source
   `Phase::Jump` stores no takeoff direction; `select` receives the current-tick
   axis, not the takeoff axis (`1c_movement.rs:92`).
 - Evidence: `ftCo_Jump.c:155,160-162,169-174`; `ftCo_KneeBend.c:30-42`.
-  Local: `1c_movement.rs:48`, `games/crates/fighter/src/2_advance.rs:78`
+  Local: `1c_movement.rs:48`, `games/crates/fighter/src/_2_advance.rs:78`
   (`takeoff` enters `Phase::Jump`).
 - Representable: no. A backward-jump fact or phase is needed; the axis at
   takeoff is not durable in `World`.
@@ -152,10 +152,10 @@ the same callbacks. `LandingLight` selection is not in any local source
 - Exit: `ftCo_Squat_Anim` -> `ftCo_800D638C` -> `ftCo_MS_SquatWait` on
   animation end (`ftCo_Squat.c:83-86`, `ftCo_SquatWait.c:94`).
 - Required durable facts: a crouch-enter phase and the down-stick threshold
-  fact. Local `ground::decide` collapses Idle/Dash/Run + down straight to
-  `Phase::Crouch` (`1b_ground.rs:54`); there is no enter phase.
+  fact. Local `_1b_ground::decide` collapses Idle/Dash/Run + down straight to
+  `Phase::Crouch` (`_1b_ground.rs:54`); there is no enter phase.
 - Evidence: `ftCo_Squat.c:47,62,72,83-86,106`; `ftCo_SquatWait.c:94`.
-  Local: `1b_ground.rs:54`, `1c_movement.rs:48-49`.
+  Local: `_1b_ground.rs:54`, `1c_movement.rs:48-49`.
 - Representable: no. Needs a crouch-enter phase (`Phase::Crouch` is hold-only).
 
 ### 19 SquatWait
@@ -183,10 +183,10 @@ the same callbacks. `LandingLight` selection is not in any local source
   (`ftCo_SquatWait.c:121`).
 - Exit: `ftCo_SquatRv_Anim` -> `ft_8008A2BC` on animation end
   (`ftCo_SquatRv.c:59-64`).
-- Required durable facts: a crouch-exit phase. Local `ground::decide` sends
-  `Crouch -> Idle` directly on release (`1b_ground.rs:72`), with no exit action.
+- Required durable facts: a crouch-exit phase. Local `_1b_ground::decide` sends
+  `Crouch -> Idle` directly on release (`_1b_ground.rs:72`), with no exit action.
 - Evidence: `ftCo_SquatRv.c:42,53,59-64`; `ftCo_SquatWait.c:121`.
-  Local: `1b_ground.rs:72`.
+  Local: `_1b_ground.rs:72`.
 - Representable: no. Needs a crouch-exit phase (the action is 10 frames with no
   interruptible window, so it cannot be a one-tick emission).
 
@@ -204,10 +204,10 @@ the same callbacks. `LandingLight` selection is not in any local source
   (`ftCo_JumpAerial.c:274-279`).
 - Required durable facts: takeoff stick sign relative to facing at the double
   jump, sampled once. Local `enter_air` uses `input.axis` for the horizontal
-  impulse (`2_advance.rs:320`) but stores no direction fact, and
+  impulse (`_2_advance.rs:320`) but stores no direction fact, and
   `pose_for_phase(Phase::AirJump)` is ID16.
 - Evidence: `ftCo_JumpAerial.c:50-58,90,162,173-175,274-279`.
-  Local: `1c_movement.rs:49`, `2_advance.rs:317-334`.
+  Local: `1c_movement.rs:49`, `_2_advance.rs:317-334`.
 - Representable: no. A backward-air-jump fact or phase is needed.
 
 ## Expected-tape table

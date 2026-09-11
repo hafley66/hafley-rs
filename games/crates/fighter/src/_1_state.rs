@@ -4,8 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::combat::CombatState;
-use crate::rules::Rules;
+use crate::_0_rules::Rules;
+use crate::_1d_combat::CombatState;
 
 /// Input bits: bit 1 jump, bit 2 attack, bit 4 down.
 pub mod button {

@@ -4,16 +4,16 @@
 //! completion facts. This function delegates to the same ground decision used
 //! by the live fighter controller.
 
-use crate::{Phase, ground};
+use crate::Phase;
 
 /// Execute one animation completion decision through the live ground chart.
 pub fn animation_completion(phase: Phase, finished: bool, forward: bool) -> Option<Phase> {
-    ground::decide(
+    crate::_1b_ground::decide(
         phase,
-        ground::Event::Motion(ground::Facts {
+        crate::_1b_ground::Event::Motion(crate::_1b_ground::Facts {
             finished,
             forward,
-            ..ground::Facts::default()
+            ..crate::_1b_ground::Facts::default()
         }),
     )
 }

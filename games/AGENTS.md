@@ -26,6 +26,13 @@ category trees, redundant wrapper modules, or directory levels that merely repea
 their parent. Number files within their local module's dependency/reading order;
 do not encode the full parent path again in filenames.
 
+Rust modules use `_<order>_<name>.rs` so each filename is a valid module
+identifier and `#[path]` aliasing is unnecessary. Use the extract move and
+extract rename commands first for file and symbol changes. If extract reports a
+syntax or macro ambiguity, record the report and apply only syntax-scoped module
+declaration, import, or path-qualified-reference edits needed to complete the
+change. Preserve same-spelled fields, locals, strings, trace targets, and prose.
+
 Pigeon-specific behavior belongs in the app's fighter directory. Shared crates
 must remain character-independent. Offline ingestion selects a character and
 writes into that character's existing home using a common package format; do not
@@ -78,7 +85,7 @@ each source strictly in its lane:
   only stable expected action IDs, required observation axes, mechanic-family
   intent and the explicit TC39 stage. It never restates an observed value.
 - The executable Rust export
-  (`smash/examples/0_status_export.rs`, through `game_fighter::status` and
+  (`smash/examples/0_status_export.rs`, through `game_fighter::_5_status` and
   `movement::pose_for_phase`) owns observed catalog membership/order, Phase
   variants, executable chart transitions and the live Phase-to-animation
   mapping. Never regex Rust semantic behavior; expose a public API or a pure

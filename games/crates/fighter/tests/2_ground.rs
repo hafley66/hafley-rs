@@ -1,14 +1,26 @@
 use game_fighter::{
+    _1b_ground::{Event, Facts, decide},
     Phase,
-    ground::{Event, Facts, decide},
 };
 
 #[test]
 fn ground_jump_permissions_are_exclusive_and_air_landing_squat_reject() {
     use Phase::*;
     let phases = [
-        Idle, Walk, Dash, Run, Brake, Turn, Squat, CrouchEnter, CrouchHold, CrouchExit,
-        Landing, Jump, Fall, AirJump,
+        Idle,
+        Walk,
+        Dash,
+        Run,
+        Brake,
+        Turn,
+        Squat,
+        CrouchEnter,
+        CrouchHold,
+        CrouchExit,
+        Landing,
+        Jump,
+        Fall,
+        AirJump,
     ];
     assert_eq!(
         phases.map(|phase| decide(phase, Event::JumpRequest)),
@@ -174,7 +186,7 @@ fn serialized_phase_resumes_the_same_statig_dispatch_tape() {
 }
 
 /// Migrated from the deleted isolated crouch chart: the source-resolved
-/// lifecycle runs through the one live `ground::decide` authority.
+/// lifecycle runs through the one live `_1b_ground::decide` authority.
 #[test]
 fn crouch_lifecycle_exact_trace_through_decide() {
     use Phase::*;

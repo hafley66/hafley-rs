@@ -2,8 +2,8 @@
 
 Status: source-backed design inventory, with a four-edge crouch qualification in
 `src/1a_chart.rs` and `tests/1_chart.rs`. The live controller now dispatches its
-grounded decisions through `src/1b_ground.rs`; air/contact decisions remain in
-`src/2_advance.rs`. The crouch qualification handles one
+grounded decisions through `src/_1b_ground.rs`; air/contact decisions remain in
+`src/_2_advance.rs`. The crouch qualification handles one
 semantic dispatch, not the source game's full per-tick callback schedule.
 Scope: action exclusivity, transitions, guards, ordering and snapshot semantics.
 No velocity integration, collision solver, device mapping or animation renderer.
@@ -91,7 +91,7 @@ their own source evidence before executable translation.
 
 ### Live ground slice, S3
 
-`ground::decide(Phase, Event) -> Option<Phase>` executes statig with borrowed
+`_1b_ground::decide(Phase, Event) -> Option<Phase>` executes statig with borrowed
 semantic facts. `Some(current)` is a real self-transition resetting dash age;
 `None` keeps the phase and clock. The caller retains physics and entry impulses.
 Redux still serializes the single `State.phase`; a stack-local uninitialized

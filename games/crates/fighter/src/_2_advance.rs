@@ -2,10 +2,10 @@
 //! motion states. Unsupported in this cut: attacks (ATTACK bit is read but
 //! has no effect), ledges, walls, platforms.
 
-use crate::air::{self, AirEvent, AirFacts};
-use crate::ground::{self, Event, Facts};
-use crate::rules::Rules;
-use crate::state::{Input, Phase, State, button};
+use crate::_0_rules::Rules;
+use crate::_1_state::{Input, Phase, State, button};
+use crate::_1b_ground::{self, Event, Facts};
+use crate::_1c_air::{self, AirEvent, AirFacts};
 
 /// Linear ground friction toward zero, clamped to not overshoot
 /// (`ftCommon_ApplyFrictionGround`, ft/ftcommon.c:50-60).
@@ -100,7 +100,7 @@ impl State {
             walk: can_walk && input.axis.abs() >= r.walk_stick_threshold,
             ..Facts::default()
         };
-        match ground::decide(self.phase, Event::GroundIntent(facts)) {
+        match _1b_ground::decide(self.phase, Event::GroundIntent(facts)) {
             Some(Phase::Dash) => self.start_dash(input.axis, r),
             Some(Phase::Walk) => self.start_walk(input.axis, r),
             Some(next) => self.enter(next),
@@ -138,8 +138,8 @@ impl State {
         let down_held = input.buttons & button::DOWN != 0;
         let down_pressed = down_held && frame.previous.buttons as u8 & button::DOWN == 0;
 
-        let jump_starts_squat =
-            jump_pressed && ground::decide(self.phase, Event::JumpRequest) == Some(Phase::Squat);
+        let jump_starts_squat = jump_pressed
+            && _1b_ground::decide(self.phase, Event::JumpRequest) == Some(Phase::Squat);
         let facts = Facts {
             dash: input.axis.abs() >= r.dash_stick_threshold,
             walk: input.axis.abs() >= r.walk_stick_threshold,
@@ -176,14 +176,14 @@ impl State {
                     } else {
                         apply_ground_friction(&mut self.velocity[0], r.ground_friction);
                     }
-                    match ground::decide(self.phase, Event::Motion(facts)) {
+                    match _1b_ground::decide(self.phase, Event::Motion(facts)) {
                         Some(Phase::Dash) => self.start_dash(input.axis, r),
                         Some(next) => self.enter(next),
                         None => self.facing = input.axis.signum(),
                     }
                 }
                 Phase::Dash => {
-                    match ground::decide(
+                    match _1b_ground::decide(
                         self.phase,
                         Event::Motion(Facts {
                             finished: self.phase_tick >= r.dash_ticks,
@@ -204,13 +204,13 @@ impl State {
                 }
                 Phase::Run => {
                     dash_run_step(&mut self.velocity[0], input.axis, r);
-                    if let Some(next) = ground::decide(self.phase, Event::Motion(facts)) {
+                    if let Some(next) = _1b_ground::decide(self.phase, Event::Motion(facts)) {
                         self.enter(next);
                     }
                 }
                 Phase::Brake => {
                     apply_ground_friction(&mut self.velocity[0], r.ground_friction);
-                    if let Some(next) = ground::decide(
+                    if let Some(next) = _1b_ground::decide(
                         self.phase,
                         Event::Motion(Facts {
                             stopped: self.velocity[0] == 0.0,
@@ -225,7 +225,7 @@ impl State {
                     // ftCo_Turn.c:69-86: countdown, flip, pivot window.
                     apply_ground_friction(&mut self.velocity[0], r.ground_friction);
                     let wanted = -self.facing;
-                    match ground::decide(
+                    match _1b_ground::decide(
                         self.phase,
                         Event::Motion(Facts {
                             finished: self.phase_tick >= r.turn_ticks,
@@ -246,7 +246,7 @@ impl State {
                     if jump_released {
                         self.short_hop = true;
                     }
-                    if ground::decide(
+                    if _1b_ground::decide(
                         self.phase,
                         Event::Motion(Facts {
                             finished: self.phase_tick + 1 >= r.jump_startup_time,
@@ -259,7 +259,7 @@ impl State {
                 }
                 Phase::CrouchEnter => {
                     apply_ground_friction(&mut self.velocity[0], r.ground_friction);
-                    if let Some(next) = ground::decide(
+                    if let Some(next) = _1b_ground::decide(
                         self.phase,
                         Event::Motion(Facts {
                             finished: self.phase_tick >= r.crouch_enter_ticks,
@@ -271,14 +271,14 @@ impl State {
                 }
                 Phase::CrouchHold => {
                     apply_ground_friction(&mut self.velocity[0], r.ground_friction);
-                    if let Some(next) = ground::decide(self.phase, Event::Motion(facts)) {
+                    if let Some(next) = _1b_ground::decide(self.phase, Event::Motion(facts)) {
                         self.enter(next);
                         self.ground_common(input, r, true);
                     }
                 }
                 Phase::CrouchExit => {
                     apply_ground_friction(&mut self.velocity[0], r.ground_friction);
-                    if let Some(next) = ground::decide(
+                    if let Some(next) = _1b_ground::decide(
                         self.phase,
                         Event::Motion(Facts {
                             finished: self.phase_tick >= r.crouch_exit_ticks,
@@ -291,7 +291,7 @@ impl State {
                 }
                 Phase::Landing => {
                     apply_ground_friction(&mut self.velocity[0], r.ground_friction);
-                    if let Some(next) = ground::decide(
+                    if let Some(next) = _1b_ground::decide(
                         self.phase,
                         Event::Motion(Facts {
                             finished: self.phase_tick + 1 >= r.landing_lag,
@@ -335,7 +335,7 @@ impl State {
                 jump_pressed: false,
                 jumps_left: self.jumps_left,
             };
-            if let Some(next) = air::decide(self.phase, AirEvent::Motion(facts)) {
+            if let Some(next) = _1c_air::decide(self.phase, AirEvent::Motion(facts)) {
                 self.enter_air(next, input, r);
             }
         } else {
@@ -344,7 +344,7 @@ impl State {
         }
 
         if airborne && self.position[1] <= 0.0 && self.velocity[1] < 0.0 {
-            if let Some(next) = air::decide(self.phase, AirEvent::Land) {
+            if let Some(next) = _1c_air::decide(self.phase, AirEvent::Land) {
                 self.enter_air(next, input, r);
             }
         }
@@ -412,7 +412,7 @@ impl State {
             jump_pressed,
             jumps_left: self.jumps_left,
         };
-        if let Some(next) = air::decide(self.phase, AirEvent::Motion(facts)) {
+        if let Some(next) = _1c_air::decide(self.phase, AirEvent::Motion(facts)) {
             self.enter_air(next, input, r);
             return;
         }

@@ -11,34 +11,23 @@
 //! ft/ftcommon.c:50-60). The MULTIPLICATIVE decay (`gr_vel -= gr_vel * mul *
 //! friction`, ft/kinds/ftCommon/ftCo_Dash.c:142-144) is dash-sustain only.
 
-#[path = "0_rules.rs"]
-pub mod rules;
-#[path = "1_state.rs"]
-pub mod state;
-#[path = "1b_ground.rs"]
-pub mod ground;
-#[path = "1c_air.rs"]
-pub mod air;
-#[path = "1d_combat.rs"]
-pub mod combat;
-#[path = "2_advance.rs"]
-mod advance_impl;
-#[path = "2a_controller.rs"]
-pub mod controller;
-#[path = "3_slice.rs"]
-pub mod slice;
-#[path = "4_ground_chart.rs"]
-pub mod ground_chart;
-#[path = "5_status.rs"]
-pub mod status;
-#[path = "6_qualification.rs"]
-pub mod qualification;
+pub mod _0_rules;
+pub mod _1_state;
+pub mod _1b_ground;
+pub mod _1c_air;
+pub mod _1d_combat;
+mod _2_advance;
+pub mod _2a_controller;
+pub mod _3_slice;
+pub mod _4_ground_chart;
+pub mod _5_status;
+pub mod _6_qualification;
 
-pub use combat::{CombatState, Hit, apply_hit};
-pub use controller::Controller;
-pub use rules::Rules;
-pub use slice::{FighterEvent, FighterSlice, MovementEffect, MovementSlice};
-pub use state::{Input, Phase, State, button};
+pub use _0_rules::Rules;
+pub use _1_state::{Input, Phase, State, button};
+pub use _1d_combat::{CombatState, Hit, apply_hit};
+pub use _2a_controller::Controller;
+pub use _3_slice::{FighterEvent, FighterSlice, MovementEffect, MovementSlice};
 
 pub fn advance(state: &mut State, input: Input, rules: &Rules) {
     use redux::Slice;

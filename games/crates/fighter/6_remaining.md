@@ -1,8 +1,8 @@
 # Remaining base movement machine
 
 Read-only audit of the requested primordial locomotion set before the shared
-fighter statechart covers it. Sources: `1_state.rs`, `1a_chart.rs`, `1b_ground.rs`,
-`2_advance.rs`, `4_ground_chart.rs`, generated `5_ground_chart.md`, Pigeon
+fighter statechart covers it. Sources: `_1_state.rs`, `1a_chart.rs`, `_1b_ground.rs`,
+`_2_advance.rs`, `_4_ground_chart.rs`, generated `5_ground_chart.md`, Pigeon
 `1c_movement.rs`/`2_simulation.rs`, and read-only Melee decomp under
 `kneeman-lines/4_melee_decomp`. Excludes attacks, hits, defense, grabs, ledges,
 lifecycle, items and stage contacts except the landing entry fact. No transition
@@ -13,10 +13,10 @@ or edge is inferred from an animation name; every edge below cites a callback.
 | Axis | Present | Missing / other | Basis |
 | --- | --- | --- | --- |
 | Source actions in scope | 30 named | 0 unnumbered | `ftCommon/forward.h` motion enum |
-| Host `Phase` states | 12 | 2 source actions absent (`RunDirect`, `SquatRv`); 16 collapsed into a shared host | `1_state.rs:33-46` |
-| Executed chart edges | 28 | 22 remaining | `1b_ground.rs` `decide` |
+| Host `Phase` states | 12 | 2 source actions absent (`RunDirect`, `SquatRv`); 16 collapsed into a shared host | `_1_state.rs:33-46` |
+| Executed chart edges | 28 | 22 remaining | `_1b_ground.rs` `decide` |
 | Isolated crouch chart edges | 4 | unwired to live | `1a_chart.rs` |
-| Procedural phase moves (`2_advance.rs`) | 5 | to migrate | `2_advance.rs:292-308,319-326` |
+| Procedural phase moves (`_2_advance.rs`) | 5 | to migrate | `_2_advance.rs:292-308,319-326` |
 | Duplicate authorities | 6 | see below | |
 | Pigeon catalog IDs selected live | 15 of 22 | 7 never selected (`13,15,17,18,19,20,21`) | `1b_catalog.rs`, `1c_movement.rs:51-57` |
 
@@ -29,10 +29,10 @@ covers `JumpAerialF/B`; Fall covers `Fall/F/B/FallAerial/F/B`; Landing covers
 ## Duplicate authorities
 
 1. Two crouch machines: `chart::Action`/`CrouchChart` (`1a_chart.rs`) and
-   `Phase::Crouch` inside `ground::decide` (`1b_ground.rs`). The isolated chart is
+   `Phase::Crouch` inside `_1b_ground::decide` (`_1b_ground.rs`). The isolated chart is
    unwired; live crouch is hold-only and emits the jumpsquat pose.
-2. Selection vs entry split: `ground::decide` returns a `Phase`, then
-   `State::enter` in `2_advance.rs` writes it and applies transition-specific
+2. Selection vs entry split: `_1b_ground::decide` returns a `Phase`, then
+   `State::enter` in `_2_advance.rs` writes it and applies transition-specific
    impulses (`start_dash`, `start_walk`, `takeoff`).
 3. Naming collision: host `Phase::Squat` is source `KneeBend` (jumpsquat) while
    source `Squat` is host `Phase::Crouch`.
@@ -41,20 +41,20 @@ covers `JumpAerialF/B`; Fall covers `Fall/F/B/FallAerial/F/B`; Landing covers
 5. `Phase::Landing` conflates source `Landing` and the five `LandingAir*`; Pigeon
    additionally overrides `landing_lag` from `actions[5].frames.len()` in the app.
 6. Air decisions (`Jump`, `Fall`, `AirJump`, `Landing`) live only in
-   `2_advance.rs`; the generated chart proves they reject `JumpRequest` only.
+   `_2_advance.rs`; the generated chart proves they reject `JumpRequest` only.
 
-## Transitions still procedural in 2_advance.rs
+## Transitions still procedural in _2_advance.rs
 
-No `ground::decide` call, direct `State::enter`:
+No `_1b_ground::decide` call, direct `State::enter`:
 
-1. `Jump -> Fall` on `velocity[1] <= 0` (`2_advance.rs:292-296`).
+1. `Jump -> Fall` on `velocity[1] <= 0` (`_2_advance.rs:292-296`).
 2. `AirJump -> Fall` on the same condition.
 3. `Fall -> AirJump` on `jump_pressed && jumps_left > 0` (`air_step`, 319-326).
 4. `Jump -> AirJump` on the same branch.
 5. any airborne -> `Landing` on `position[1] <= 0 && velocity[1] < 0` (302-308).
 
-`Squat -> Jump` is chart-selected (`1b_ground.rs:74`) but the `Jump` write and
-takeoff impulse stay in `2_advance.rs:239-242`.
+`Squat -> Jump` is chart-selected (`_1b_ground.rs:74`) but the `Jump` write and
+takeoff impulse stay in `_2_advance.rs:239-242`.
 
 ## Remaining transitions (ordered)
 
@@ -114,8 +114,8 @@ for a verified 3.6 rule; PM3.6 behavior stays unresolved here.
 
 ### Cut 1: air/contact chart
 
-- Owned: new `crates/fighter/src/1c_air.rs`; `crates/fighter/src/lib.rs`;
-  `crates/fighter/src/2_advance.rs`; new `crates/fighter/tests/4_air.rs`.
+- Owned: new `crates/fighter/src/_1c_air.rs`; `crates/fighter/src/lib.rs`;
+  `crates/fighter/src/_2_advance.rs`; new `crates/fighter/tests/4_air.rs`.
 - Signature:
   ```rust
   pub struct AirFacts { pub vy: f32, pub jump_pressed: bool, pub jumps_left: u8 }
@@ -126,11 +126,11 @@ for a verified 3.6 rule; PM3.6 behavior stays unresolved here.
   `Fall -> AirJump` needs `jumps_left > 0`; `Land` requires airborne and `vy < 0`);
   serialized phase suffix replay.
 - Terminal: no `enter(Phase::Fall | Phase::AirJump | Phase::Landing)` stays in
-  `2_advance.rs`; the existing 360-tick Pigeon tape is byte-identical; tests pass.
+  `_2_advance.rs`; the existing 360-tick Pigeon tape is byte-identical; tests pass.
 
 ### Cut 2: distinct stopping and turning states
 
-- Owned: `crates/fighter/src/1_state.rs`, `crates/fighter/src/1b_ground.rs`,
+- Owned: `crates/fighter/src/_1_state.rs`, `crates/fighter/src/_1b_ground.rs`,
   `crates/fighter/tests/2_ground.rs`.
 - Signature: add `Phase::TurnRun`, `Phase::RunDirect`, `Phase::RunBrake`; edges
   `Run -> TurnRun` (reverse), `Run -> RunBrake` (no stick), `TurnRun -> Run`
@@ -142,7 +142,7 @@ for a verified 3.6 rule; PM3.6 behavior stays unresolved here.
 
 ### Cut 3: wire crouch lifecycle and Pigeon poses
 
-- Owned: `crates/fighter/src/1a_chart.rs`, `crates/fighter/src/2_advance.rs`
+- Owned: `crates/fighter/src/1a_chart.rs`, `crates/fighter/src/_2_advance.rs`
   crouch branch, `smash/src/fighters/pigeon/1c_movement.rs`,
   `crates/fighter/tests/1_chart.rs`.
 - Signature: `CrouchChart::step(Facts) -> Action` driven from `Phase::Crouch`;

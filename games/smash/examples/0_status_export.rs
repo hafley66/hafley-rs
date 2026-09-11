@@ -6,7 +6,7 @@
 //!   --example status_export`
 
 use game_fighter::Phase;
-use game_fighter::status::{RuntimeInventory, runtime_inventory};
+use game_fighter::_5_status::{RuntimeInventory, runtime_inventory};
 use serde_json::{Value, json};
 use smash::fighters::dog;
 use smash::fighters::pigeon::{self, movement::{self, SelectionFacts}};
@@ -20,7 +20,7 @@ const AXIS_PROBES: [f32; 21] = [
 ];
 const BOOLS: [bool; 2] = [false, true];
 
-fn transitions(value: Vec<game_fighter::status::Transition>) -> Value {
+fn transitions(value: Vec<game_fighter::_5_status::Transition>) -> Value {
     Value::Array(
         value
             .into_iter()
