@@ -14,6 +14,12 @@ const entries: Record<Entry> = #{
     manifest: "crates/content/Cargo.toml", targets: #["crates/content"],
     evidence: #["crates/content/0_readme.md", "3_tasks.md"],
   },
+  `game-ftcommon`: #{
+    stage: 2.7, destination: "library", task: "S11",
+    scope: "Generated C-to-Rust port of the pinned ftCommon movement callbacks; typed query/effect boundary plus deterministic fixtures against the emitted source rules. External engine calls and p_ftCommonData values stay explicit; no live consumer.",
+    manifest: "crates/ftcommon/Cargo.toml", targets: #["crates/ftcommon"],
+    evidence: #["crates/ftcommon/src/generated/0_ftcommon.rs", "crates/ftcommon/tests/1_source_rules.rs", "crates/content/src/5_source.rs"],
+  },
   redux: #{
     stage: 3, destination: "library", task: "A1",
     scope: "Reducer composition and snapshot-owned statechart qualification",
