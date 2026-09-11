@@ -289,6 +289,90 @@ pub fn read_residency(dir: &Path, lane: &str) -> Option<String> {
 // lane target dirs: placement, reclaim and the free-disk floor
 // ---------------------------------------------------------------------------
 
+/// Config key: the free-disk floor in GB on the lane target root's volume.
+/// Unset or unparsable falls back to `DEFAULT_DISK_FLOOR_GB`.
+pub const DISK_FLOOR_ENV: &str = "BOOP_DISK_FLOOR_GB";
+const DEFAULT_DISK_FLOOR_GB: f64 = 30.0;
+/// How often a supervisor re-reads the free disk while parked.
+const DISK_TICK: Duration = Duration::from_secs(60);
+/// How often a parked lane may repeat its `disk-low` row to the parent.
+const DISK_ALARM: Duration = Duration::from_secs(600);
+
+/// The free-disk floor in GB. A bad value keeps the default rather than
+/// turning the floor off.
+pub fn disk_floor_gb() -> f64 {
+    std::env::var(DISK_FLOOR_ENV)
+        .ok()
+        .and_then(|raw| raw.parse::<f64>().ok())
+        .filter(|floor| *floor >= 0.0)
+        .unwrap_or(DEFAULT_DISK_FLOOR_GB)
+}
+
+/// Free space in GB on the volume holding `path`, the number `df` prints.
+/// Walks up to the nearest existing ancestor, so a root not yet created still
+/// answers; `None` when no ancestor can be stat'd.
+pub fn free_disk_gb(path: &Path) -> Option<f64> {
+    let mut probe = path;
+    loop {
+        if let Some(free) = statvfs_gb(probe) {
+            return Some(free);
+        }
+        probe = probe.parent()?;
+    }
+}
+
+fn statvfs_gb(path: &Path) -> Option<f64> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    let c_path = CString::new(path.as_os_str().as_bytes()).ok()?;
+    // SAFETY: `statvfs` fills a zeroed struct; the C string outlives the call.
+    let stat = unsafe {
+        let mut stat: libc::statvfs = std::mem::zeroed();
+        if libc::statvfs(c_path.as_ptr(), &mut stat) != 0 {
+            return None;
+        }
+        stat
+    };
+    let free = (stat.f_bavail as u128) * (stat.f_frsize as u128);
+    Some(free as f64 / 1_000_000_000.0)
+}
+
+/// One lane's cargo target dir on disk, with the lane name and the dir's
+/// modification time (the oldest-first eviction key).
+#[derive(Clone, Debug)]
+pub struct LaneTarget {
+    pub lane: String,
+    pub target: PathBuf,
+    pub modified: std::time::SystemTime,
+}
+
+/// Every existing `<root>/<lane>/target` directory, unsorted.
+pub fn lane_targets(root: &Path) -> Vec<LaneTarget> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let Ok(name) = entry.file_name().into_string() else {
+            continue;
+        };
+        let target = entry.path().join("target");
+        let Ok(meta) = std::fs::metadata(&target) else {
+            continue;
+        };
+        if !meta.is_dir() {
+            continue;
+        }
+        let modified = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        out.push(LaneTarget {
+            lane: name,
+            target,
+            modified,
+        });
+    }
+    out
+}
+
 /// True when `path` is `root` itself or lives under it. Canonicalized when both
 /// resolve, so a symlinked scratch root still matches.
 pub fn path_under(root: &Path, path: &Path) -> bool {
@@ -348,6 +432,153 @@ fn remove_target_under(root: &Path, target: &Path, lane: &str) -> Option<PathBuf
             warn!(lane, target = %target.display(), error = %error, "lane target reclaim failed");
             None
         }
+    }
+}
+
+/// The lane targets whose lane is retired or dead: no route, or a route whose
+/// pane is not live. `keep` (the current lane) is never a candidate.
+pub fn evictable_targets(mail_dir: &Path, root: &Path, keep: Option<&str>) -> Vec<LaneTarget> {
+    let routes = bus::read_routes(mail_dir).unwrap_or_default();
+    let mut out: Vec<LaneTarget> = lane_targets(root)
+        .into_iter()
+        .filter(|candidate| Some(candidate.lane.as_str()) != keep)
+        .filter(|candidate| match routes.get(&candidate.lane) {
+            None => true,
+            Some(route) => {
+                let live = route
+                    .tmux
+                    .as_deref()
+                    .is_some_and(|target| boop_store::tmux::mux().target_alive(None, target));
+                !live
+            }
+        })
+        .collect();
+    out.sort_by_key(|candidate| candidate.modified);
+    out
+}
+
+/// Evict retired or dead lane targets oldest-first until the free space on
+/// `root`'s volume reaches `floor_gb`, or nothing is left to evict. Returns the
+/// free space measured after the last eviction (or before, when none ran).
+pub fn evict_targets_until_above_floor(
+    mail_dir: &Path,
+    root: &Path,
+    floor_gb: f64,
+    keep: Option<&str>,
+) -> Option<f64> {
+    let mut free = free_disk_gb(root)?;
+    while free < floor_gb {
+        let Some(victim) = evictable_targets(mail_dir, root, keep).into_iter().next() else {
+            break;
+        };
+        match std::fs::remove_dir_all(&victim.target) {
+            Ok(()) => {
+                info!(
+                    lane = victim.lane,
+                    target = %victim.target.display(),
+                    "evicted lane target below the disk floor"
+                );
+                println!(
+                    "[boop] evicted {} target {} (free {:.1}G)",
+                    victim.lane,
+                    victim.target.display(),
+                    free
+                );
+            }
+            Err(error) => {
+                warn!(
+                    lane = victim.lane,
+                    target = %victim.target.display(),
+                    error = %error,
+                    "lane target eviction failed"
+                );
+                break;
+            }
+        }
+        free = free_disk_gb(root)?;
+    }
+    Some(free)
+}
+
+/// The `limit` largest lane target dirs under `root`, largest first, one
+/// `"<n.n>G <path>"` line each. Read only when a create is refused.
+pub fn biggest_targets(root: &Path, limit: usize) -> Vec<String> {
+    let mut sized: Vec<(u64, PathBuf)> = lane_targets(root)
+        .into_iter()
+        .map(|candidate| (dir_size(&candidate.target), candidate.target))
+        .collect();
+    sized.sort_by(|a, b| b.0.cmp(&a.0));
+    sized
+        .into_iter()
+        .take(limit)
+        .map(|(bytes, path)| format!("{:.1}G {}", bytes as f64 / 1_000_000_000.0, path.display()))
+        .collect()
+}
+
+fn dir_size(path: &Path) -> u64 {
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return 0;
+    };
+    entries
+        .flatten()
+        .map(|entry| match entry.file_type() {
+            Ok(kind) if kind.is_dir() => dir_size(&entry.path()),
+            Ok(_) => entry.metadata().map(|meta| meta.len()).unwrap_or(0),
+            Err(_) => 0,
+        })
+        .sum()
+}
+
+/// The parked lane's disk tick: at most one free-disk read a minute, evicting
+/// retired or dead targets below the floor, and at most one `disk-low` row to
+/// the parent every ten minutes when the floor is still not met.
+struct DiskWatch {
+    last_check: Option<Instant>,
+    last_alarm: Option<Instant>,
+}
+
+impl DiskWatch {
+    fn new() -> Self {
+        Self {
+            last_check: None,
+            last_alarm: None,
+        }
+    }
+
+    fn tick(&mut self, lane: &LaneRun) {
+        let now = Instant::now();
+        if self
+            .last_check
+            .is_some_and(|at| now.duration_since(at) < DISK_TICK)
+        {
+            return;
+        }
+        self.last_check = Some(now);
+        let Ok(root) = boop_store::trail::lane_target_root() else {
+            return;
+        };
+        let floor = disk_floor_gb();
+        let Some(free) =
+            evict_targets_until_above_floor(&lane.mail_dir, &root, floor, Some(&lane.lane))
+        else {
+            return;
+        };
+        if free >= floor {
+            return;
+        }
+        if self
+            .last_alarm
+            .is_some_and(|at| now.duration_since(at) < DISK_ALARM)
+        {
+            return;
+        }
+        self.last_alarm = Some(now);
+        mail_to_parent_kind(
+            lane,
+            "note",
+            format!("disk-low free={free:.0}G"),
+            Some("disk low"),
+        );
     }
 }
 
@@ -878,6 +1109,7 @@ fn supervise(
         .as_ref()
         .and_then(|store| store.lane_reported_head(&lane.lane).ok().flatten());
     let mut head_watch = HeadWatch::new(&lane.cwd, reported, commit_quiet());
+    let mut disk_watch = DiskWatch::new();
     // `conversation_id` may already exist for a freshly opened channel. Codex
     // app-server returns its new thread id from `thread/start` before the first
     // turn, so only the caller's explicit resume input proves that the thread
@@ -945,6 +1177,7 @@ fn supervise(
         info!(turn_bytes = turn.len(), "lane turn starting");
         turn_tools.clear();
         record_residency(&lane.mail_dir, &lane.lane, RESIDENCY_LIVE);
+        disk_watch.tick(lane);
         let limit = if start_ack_pending {
             start_ack_limit()
         } else {
@@ -1404,6 +1637,7 @@ fn supervise(
                         report_head_move(lane, store, &lane.cwd, mv);
                     }
                 }
+                disk_watch.tick(lane);
                 let arrived = pending(&lane.mail_dir, &lane.lane, &seen)?;
                 if arrived.is_empty() {
                     std::thread::sleep(POLL);

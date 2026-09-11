@@ -352,6 +352,12 @@ DISK: boop owns each lane's cargo target dir, so no lane fills the laptop.
     `git branch --merged <base>` lists it (`--merged-into <branch>`, else the
     lane's base branch, else main); an unmerged worktree stays and prints
     `kept worktree <path> (unmerged)`.
+  FLOOR: `lane create` and each parked supervisor tick (once a minute) read the
+    free disk on the target root's volume. Below BOOP_DISK_FLOOR_GB (default
+    30), retired or dead lane targets are evicted oldest-first until above it.
+    Still below: `lane create` exits non-zero naming free space and the biggest
+    targets, and a parked lane mails one `disk-low free=<n>G` row (per 10 min).
+
 LAWS:
   1 Every lane spawn goes through `lane create`; a bare tmux spawn leaves no
     edge and no tracking.

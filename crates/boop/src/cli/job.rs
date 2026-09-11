@@ -277,6 +277,33 @@ fn effective_target(lane: &str, env: &[(String, String)]) -> Option<PathBuf> {
         .or_else(|| boop::trail::lane_target_dir(lane).ok())
 }
 
+/// Refuse a spawn when the lane target root's volume stays below the floor
+/// even after evicting retired or dead lane targets. Names the free space and
+/// the biggest remaining targets so the caller can act.
+fn disk_floor_admit(mail_dir: &Path, lane: &str) -> Result<()> {
+    let root = boop::trail::lane_target_root()?;
+    let floor = boop::supervise::disk_floor_gb();
+    let Some(free) =
+        boop::supervise::evict_targets_until_above_floor(mail_dir, &root, floor, Some(lane))
+    else {
+        return Ok(());
+    };
+    if free >= floor {
+        return Ok(());
+    }
+    let biggest = boop::supervise::biggest_targets(&root, 5);
+    let listing = if biggest.is_empty() {
+        "  (no lane target dirs)".to_owned()
+    } else {
+        biggest.join("\n")
+    };
+    anyhow::bail!(
+        "refusing to spawn {lane}: free disk {free:.1}G is below the {floor:.0}G floor \
+         (BOOP_DISK_FLOOR_GB) on {}\nbiggest lane targets:\n{listing}",
+        root.display()
+    );
+}
+
 pub(crate) fn git_head(repo: &str) -> Result<Option<String>> {
     let output = std::process::Command::new("git")
         .args(["-C", repo, "rev-parse", "HEAD"])
@@ -1344,6 +1371,9 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         println!("reclaim: worktree, branch and tmux session removed first, if the name is dead");
         return Ok(());
     }
+    // Below the free-disk floor, refused before a route or a pane exists:
+    // eviction has already run and named what is left to clean up.
+    disk_floor_admit(&hail_mail_dir, &identity.lane)?;
     for line in reset_dead_identity(&repo, &identity, &routes, &|target| {
         lane::pane_process_alive(target).unwrap_or(false)
     })? {
