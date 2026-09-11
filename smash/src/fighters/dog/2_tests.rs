@@ -145,6 +145,7 @@ fn retained_attributes_source_sha_is_exact() {
 
 /// Parsing the retained page is byte-deterministic and yields only finite
 /// numeric rows.
+#[cfg(feature = "ingest")]
 #[test]
 fn retained_attributes_parse_deterministically_and_are_finite() {
     let html = include_str!("imported/attributes.html");
