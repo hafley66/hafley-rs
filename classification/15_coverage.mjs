@@ -128,10 +128,22 @@ function reachable(runtime) {
 }
 
 function callbackAssociations(source) {
-  if (Array.isArray(source.associations)) return source.associations;
+  const callbacksBySymbol = new Map((source.callbacks ?? []).map(row => [row.source?.symbol, row]));
+  if (Array.isArray(source.associations)) return source.associations.map(association => ({
+    ...association,
+    action: association.state,
+    source_association_id: association.id,
+    source_callback_id: callbacksBySymbol.get(association.callback)?.id ?? null,
+  }));
   return (source.callbacks ?? []).flatMap(row => {
     const actions = row.actions ?? (row.action === undefined ? [null] : [row.action]);
-    return actions.map(action => ({ ...row, action }));
+    return actions.map(action => ({
+      ...row,
+      id: actions.length === 1 ? row.id : `${row.id}:${action}`,
+      action,
+      source_association_id: actions.length === 1 ? row.id : `${row.id}:${action}`,
+      source_callback_id: row.id,
+    }));
   });
 }
 
@@ -155,14 +167,17 @@ function requirementKey(receipt) {
   return `${requirementValue(receipt, 'requirementId', 'requirement_id') ?? ''}:${receipt?.axis ?? ''}`;
 }
 
-function validRequirementReceipts(receipts, { axis, sourceId, fingerprint, runtimeRevision, target }) {
+export function validRequirementReceipts(receipts, { axis, sourceId, fingerprint, runtimeRevision, target }) {
   return receipts.some(receipt =>
     requirementValue(receipt, 'requirementId', 'requirement_id') === sourceId &&
     receipt.axis === axis &&
     requirementValue(receipt, 'sourceFingerprint', 'source_fingerprint') === fingerprint &&
     requirementValue(receipt, 'runtimeRevision', 'runtime_revision') === runtimeRevision &&
     receipt.target === target &&
-    receipt.status === 'passed');
+    receipt.status === 'passed' &&
+    [receipt.sourceAssociationId, receipt.source_association_id, receipt.result?.source_association_id]
+      .filter(value => value !== undefined)
+      .every(value => value === sourceId));
 }
 
 // Join authored intent with source and runtime observations. No authored
@@ -185,9 +200,19 @@ export function joinCoverage({ port, source, runtime, receipt, requirementReceip
   const callbackRows = callbackAssociations(source);
   const callbackHandlers = source.callbacks ?? [];
   const callbackBySource = new Map();
+  const seenCallbackAssociations = new Set();
+  for (const row of callbackRows) {
+    if (seenCallbackAssociations.has(row.id)) errors.push(`duplicate association id ${row.id}`);
+    seenCallbackAssociations.add(row.id);
+  }
   for (const mapping of port.callbackMappings ?? []) {
-    if (!callbackRows.some(row => row.id === mapping.sourceId)) errors.push(`callback mapping references unknown source id ${mapping.sourceId}`);
+    const association = callbackRows.find(row => row.id === mapping.sourceId);
+    if (!association) errors.push(`callback mapping references unknown source id ${mapping.sourceId}`);
     if (!runtimeCallbacks.has(mapping.runtimeCallback)) errors.push(`callback mapping references unknown runtime callback ${mapping.runtimeCallback}`);
+    if (callbackBySource.has(mapping.sourceId)) errors.push(`duplicate callback mapping for source id ${mapping.sourceId}`);
+    if (mapping.sourceCallbackId !== undefined && mapping.sourceCallbackId !== association?.source_callback_id) {
+      errors.push(`callback mapping parent mismatch for source id ${mapping.sourceId}`);
+    }
     callbackBySource.set(mapping.sourceId, mapping);
   }
   const guardRows = directCallRows(source);
@@ -256,7 +281,14 @@ export function joinCoverage({ port, source, runtime, receipt, requirementReceip
     'source fidelity': ratio(fidelityQualified.size, eligible.length),
   };
   const unresolvedStates = eligible.filter(row => !mappingBySource.has(row.id)).map(row => ({ source_id: row.id, name: row.name, reason: 'no authored source-to-runtime mapping' }));
-  const unresolvedCallbacks = callbacks.filter(row => !callbackBySource.has(row.id)).map(row => ({ source_id: row.id, action: row.action, symbol: row.source.symbol, reason: 'no authored callback mapping' }));
+  const unresolvedCallbacks = callbacks.filter(row => !callbackBySource.has(row.id)).map(row => ({
+    source_id: row.id,
+    source_association_id: row.source_association_id ?? row.id,
+    source_callback_id: row.source_callback_id ?? null,
+    action: row.action ?? row.state,
+    symbol: row.callback ?? row.source?.symbol,
+    reason: 'no authored callback mapping',
+  }));
   const unresolvedDirectCalls = directCalls.filter(row => !guardBySource.has(row.id)).map(row => ({ source_id: row.id, symbol: row.symbol, reason: 'no authored ordered guard qualification' }));
   return {
     profile: port.profile,

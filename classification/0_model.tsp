@@ -187,7 +187,11 @@ model SourceRuntimeMapping {
 }
 
 model CallbackRuntimeMapping {
+  // Stable source association ID, not the parent callback ID. One source
+  // callback can serve multiple state/action associations.
   sourceId: string;
+  // Parent source callback identity is carried separately for provenance.
+  sourceCallbackId: string;
   runtimeCallback: string;
   reason: string;
   evidence: string[];

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AXES, joinCoverage, renderCoverage } from './15_coverage.mjs';
+import { AXES, joinCoverage, renderCoverage, validRequirementReceipts } from './15_coverage.mjs';
 
 const H = 'a'.repeat(64);
 const sourceState = (id, name) => ({ id, name, ordinal: Number(id), source: { symbol: name } });
@@ -83,15 +83,55 @@ test('authored mappings alone cannot raise observed fidelity', () => {
   assert.match(renderCoverage(result), /source revision: rev/);
 });
 
-test('shared callback identities preserve every action association', () => {
+test('mapping one shared callback association leaves its sibling unresolved', () => {
   const input = fixture();
-  input.source.callbacks = [{ id: 'shared', actions: ['A', 'B'], phase: 'Anim', source: { symbol: 'shared' }, calls: [] }];
+  input.source.callbacks = [{ id: 'shared-callback', actions: ['A', 'B'], phase: 'Anim', source: { symbol: 'shared' }, calls: [] }];
+  input.source.associations = [
+    { id: 'assoc-a', state: 'A', phase: 'Anim', callback: 'shared', source: { symbol: 'A' } },
+    { id: 'assoc-b', state: 'B', phase: 'Anim', callback: 'shared', source: { symbol: 'B' } },
+  ];
   input.source.counts.callbacks = 1;
   input.runtime.runtime.callbacks = [{ id: 'Motion' }];
-  input.port.callbackMappings = [{ sourceId: 'shared', runtimeCallback: 'Motion', reason: 'shared event', evidence: ['runtime'] }];
+  input.port.callbackMappings = [{ sourceId: 'assoc-a', runtimeCallback: 'Motion', reason: 'shared event', evidence: ['runtime'] }];
   const result = joinCoverage(input);
-  assert.deepEqual(result.axes['transition/callback mapping'], { numerator: 2, denominator: 2, percentage: 100 });
-  assert.equal(result.unresolved.callbacks.length, 0);
+  assert.deepEqual(result.axes['transition/callback mapping'], { numerator: 1, denominator: 2, percentage: 50 });
+  assert.deepEqual(result.unresolved.callbacks, [{
+    source_id: 'assoc-b',
+    source_association_id: 'assoc-b',
+    source_callback_id: 'shared-callback',
+    action: 'B',
+    symbol: 'shared',
+    reason: 'no authored callback mapping',
+  }]);
+});
+
+test('duplicate source association IDs are errors', () => {
+  const input = fixture();
+  input.source.associations = [
+    { id: 'assoc-a', state: 'A', phase: 'Anim', callback: 'callback-one', source: { symbol: 'A' } },
+    { id: 'assoc-a', state: 'B', phase: 'Anim', callback: 'callback-one', source: { symbol: 'B' } },
+  ];
+  const result = joinCoverage(input);
+  assert.match(result.errors.join(','), /duplicate association id assoc-a/);
+});
+
+test('requirement receipts cannot cross source callback associations', () => {
+  const receipt = {
+    requirementId: 'assoc-a',
+    axis: 'transition/callback mapping',
+    sourceFingerprint: H,
+    runtimeRevision: 'runtime-rev',
+    target: 'test',
+    status: 'passed',
+    result: { source_association_id: 'assoc-b' },
+  };
+  assert.equal(validRequirementReceipts([receipt], {
+    axis: receipt.axis,
+    sourceId: 'assoc-a',
+    fingerprint: H,
+    runtimeRevision: 'runtime-rev',
+    target: 'test',
+  }), false);
 });
 
 test('exclusion expected match counts reject source drift', () => {

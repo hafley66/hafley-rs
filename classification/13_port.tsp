@@ -37,6 +37,8 @@ const port: Port = #{
     #{ sourceId: "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/forward.h:ftCommon_MotionState:ftCo_MS_FallAerialF:33", runtimeState: "Fall", reason: "Runtime Fall is the shared falling phase.", evidence: #["games/classification/12_source_inventory.json", "games/crates/fighter/src/5_status.rs"] },
     #{ sourceId: "melee-ftcommon:c7861544f8e1fbc530612393e91d859886e97e3c:src/melee/ft/kinds/ftCommon/forward.h:ftCommon_MotionState:ftCo_MS_FallAerialB:34", runtimeState: "Fall", reason: "Runtime Fall is the shared falling phase.", evidence: #["games/classification/12_source_inventory.json", "games/crates/fighter/src/5_status.rs"] },
   ],
+  // Each mapping sourceId will identify one source.associations row. The
+  // parent callback identity is a separate field in the mapping contract.
   callbackMappings: #[],
   guardMappings: #[],
   exclusions: #[
