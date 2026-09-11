@@ -253,6 +253,30 @@ tests: 25 passed. Smash ingest tests: 12 passed. Classification/status tests:
 22 passed plus D2/SVG freshness. Source fidelity and native/WASM receipts remain
 unqualified or stale; no stage advanced.
 
+## Permanent source/runtime coverage join, 2026-09-11
+
+`classification/13_port.tsp` owns the Pigeon/Falcon-like profile, explicit
+source-to-runtime state mappings, item-system exclusions and the six required
+axes. `classification/14_runtime_inventory.json` is generated from the
+executable Rust export. `classification/16_coverage.json` and
+`classification/17_coverage.txt` join those observations with the pinned source
+inventory; generated observations do not enter TypeSpec.
+
+Current generated receipt: source revision
+`c7861544f8e1fbc530612393e91d859886e97e3c`, 341 source states, 1,314 callback
+associations across 721 callbacks, 1,993 direct calls and 1,939 unresolved source
+records. The profile
+maps 22 source states into runtime phases, excludes 93 item-system rows (every
+excluded row retains its rule, reason and evidence), and leaves 226 in-profile
+state mappings unresolved. Exact axes are state mapping `22/248 (8.87%)`,
+transition/callback mapping `0/1,314 (0%)`, ordered guard qualification
+`0/1,993 (0%)`, live reachability `18/248 (7.26%)`, rollback `0/248 (0%)`, and
+source fidelity `0/248 (0%)`. Strict fully-qualified intersection is
+`0/248 (0%)`. The existing proof receipt has a stale source fingerprint and
+therefore contributes zero to rollback and source fidelity. `just status` prints
+this report before returning nonzero for stale qualification; `just status-check`
+is the strict source/generated gate. No TC39 stage delta is claimed.
+
 ## Attack, geometry and netplay proof chain
 
 This chain follows T1 locomotion completion and precedes T2 ledge work. Each

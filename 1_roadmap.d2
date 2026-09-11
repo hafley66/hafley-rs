@@ -20,6 +20,12 @@ board: "HAFLEY-RS / GAMES · structural timeline · grows upward" {
     e: "RETIRED\nretain history" {class: retired}
   }
   inventory: @classification/3_registry
+  m11: "11 · 2026-09-11 PERMANENT SOURCE/RUNTIME COVERAGE JOIN" {
+    grid-columns: 3
+    profile: "AUTHORED · Pigeon/Falcon-like gameplay\nExplicit source IDs → Rust runtime phases\nItem-system exclusions expanded per source row\nRequired axes and pinned source revision" {class: source}
+    observed: "OBSERVED · generated inventories\n12 source inventory: 341 states / 1,314 associations / 1,993 calls\n721 callbacks; 1,939 unresolved source records\n14 runtime inventory: phases/callback identities/witness partitions" {class: partial}
+    coverage: "CURRENT · 22/248 state mapping · 8.87%\nLive reachability 18/248 · 7.26%\nCallback 0/1,314 · guards 0/1,993\nRollback/fidelity 0/248: stale receipt" {class: partial}
+  }
   m10: "10 · 2026-09-11 V1 COMBAT / direct port and Pigeon receiver" {
     grid-columns: 5
     donor: "SOURCE · v1 Rust combat\ncombat + physics + moves + fighter + step\nDirect port, not freeze-first\nVectors execute in crate tests" {class: source}
@@ -116,3 +122,4 @@ board.m1 -> board.m2: "extract verified machinery"
 board.m2 -> board.m3: "qualify missing behavior"
 board.m3 -> board.m4: "integrate only with evidence"
 board.m9 -> board.m10: "port, execute vectors, integrate receiver"
+board.m10 -> board.m11: "join source rows to runtime observations"

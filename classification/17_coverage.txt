@@ -1,0 +1,13 @@
+profile: pigeon-falcon-gameplay
+source revision: c7861544f8e1fbc530612393e91d859886e97e3c
+runtime revision: 918225dfb9d51dadc5dabb4636bbae578488133f
+source fingerprint: 3b639b87d3956f4b0a6a5f22590688cae68a0175dce352d7015c79ffb2e14c78
+exclusions: 93 source states (item-prefix=22, item-throw=26, item-weapon=41, item-lift=4)
+state mapping: 22/248 (8.87%)
+transition/callback mapping: 0/1314 (0%)
+ordered guard qualification: 0/1993 (0%)
+live reachability: 18/248 (7.26%)
+rollback: 0/248 (0%)
+source fidelity: 0/248 (0%)
+strict fully-qualified intersection: 0/248 (0%)
+unresolved: states=226 callbacks=1314 direct_calls=1993
