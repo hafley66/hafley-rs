@@ -1,26 +1,26 @@
 //! Dog source-free runtime slice.
 //!
 //! [`Simulation`] owns immutable baked actions and generated [`Rules`] plus the
-//! shared [`Controller`]. It reads only committed JSON embedded at build time:
+//! canonical [`State`]. It reads only committed JSON embedded at build time:
 //! no `ingest` feature, no filesystem, no decoder. A [`Snapshot`] carries every
 //! mutable fact; the baked actions and rules stay outside it.
 
 use super::{catalog, rules, select};
 use game_content::Action;
-use game_fighter::{Controller, Input, Rules, State};
+use game_fighter::{Input, Rules, State, tick};
 use serde::{Deserialize, Serialize};
 
 /// Durable snapshot of every mutable fact. Baked actions and rules are immutable
 /// and are not part of a snapshot.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Snapshot(Controller);
+pub struct Snapshot(State);
 
-/// Source-free Dog simulation over the shared controller and the authoritative
-/// `game_fighter` reducer.
+/// Source-free Dog simulation over the canonical `game_fighter` state and the
+/// shared action tick.
 pub struct Simulation {
     actions: Vec<Action>,
     rules: Rules,
-    controller: Controller,
+    fighter: State,
 }
 
 impl Simulation {
@@ -28,37 +28,38 @@ impl Simulation {
     pub fn new() -> Result<Self, serde_json::Error> {
         let actions = catalog::load_baked()?;
         let rules = rules();
-        let controller = Controller::new(State::new(&rules));
-        Ok(Simulation { actions, rules, controller })
+        let fighter = State::new(&rules);
+        Ok(Simulation { actions, rules, fighter })
     }
 
-    pub fn state(&self) -> &Controller {
-        &self.controller
+    pub fn state(&self) -> &State {
+        &self.fighter
     }
 
     /// Animation frame for the current action, clamped to its frame count.
     pub fn frame(&self) -> usize {
-        self.controller.frame(|index| frames(&self.actions, index))
+        game_fighter::frame(&self.fighter, |index| frames(&self.actions, index))
     }
 
-    /// One fixed tick through the shared controller.
-    pub fn advance(&mut self, input: Input) -> &Controller {
-        self.controller.advance(
+    /// One fixed tick through the shared action slice.
+    pub fn advance(&mut self, input: Input) -> &State {
+        tick(
+            &mut self.fighter,
             input,
             &self.rules,
             self.actions.len(),
-            |index| frames(&self.actions, index),
-            select,
+            &|index| frames(&self.actions, index),
+            &select,
         );
-        &self.controller
+        &self.fighter
     }
 
     pub fn save(&self) -> Snapshot {
-        Snapshot(self.controller.clone())
+        Snapshot(self.fighter.clone())
     }
 
     pub fn load(&mut self, snapshot: &Snapshot) {
-        self.controller = snapshot.0.clone();
+        self.fighter = snapshot.0.clone();
     }
 }
 
@@ -101,8 +102,8 @@ pub fn observe_tape(simulation: &mut Simulation) -> Vec<(&'static str, usize)> {
     tape()
         .into_iter()
         .map(|(buttons, axis)| {
-            let controller = simulation.advance(Input { buttons, axis });
-            (controller.fighter.phase.name(), controller.fighter.action.id)
+            let state = simulation.advance(Input { buttons, axis });
+            (state.phase.name(), state.action.id)
         })
         .collect()
 }
@@ -167,8 +168,7 @@ mod tests {
         }
         for state in states.iter().step_by(7) {
             let json = serde_json::to_vec(state).unwrap();
-            let restored: game_fighter::Controller =
-                serde_json::from_slice(&json).unwrap();
+            let restored: game_fighter::State = serde_json::from_slice(&json).unwrap();
             assert_eq!(&restored, state);
         }
         for state in states.iter().step_by(7) {
