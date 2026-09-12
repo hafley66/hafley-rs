@@ -6,7 +6,7 @@ Status: wip
 
 - Base: 2376a81
 - Worktree: fix/luna-visible-tui-20260912
-- Checkpoints: cae3ab3, fa619fd
+- Checkpoints: cae3ab3, fa619fd, pending receipt/binding fix
 
 ## Implementation
 
@@ -24,7 +24,9 @@ tmux server. After socket propagation, Codex created a native session, then
 reported "thread ... is not materialized yet; thread/turns/list is unavailable
 before first user message". The channel now falls back to the native pane for
 that first user message, targets the canonical lane session, and uses the door
-after materialization.
+after materialization. Turn completion now requires transcript evidence for a
+new assistant message and includes text and tool count in TurnReceipt. Fresh
+Claude binding checks the frontend PID against the native session registry.
 
 ## Startup reliability
 

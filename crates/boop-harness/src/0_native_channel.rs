@@ -5,7 +5,7 @@ use std::thread;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use boop_acp::channel::{Delivery, LaneChannel, TurnEvent};
+use boop_acp::channel::{Delivery, LaneChannel, TurnEvent, TurnReceipt};
 use boop_store::bus::Route;
 
 use crate::harness::{Harness, HarnessId, NativeTuiEvent, NativeTuiPlan, NativeTuiSpec};
@@ -17,6 +17,7 @@ pub struct NativeLaneChannel {
     session: Option<String>,
     route: Route,
     target: String,
+    baseline_seq: Option<u64>,
 }
 
 pub fn open(
@@ -49,6 +50,12 @@ pub fn open(
             if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
                 args.extend(["--model".into(), model.into()]);
             }
+            if let Some(effort) = spec.effort.as_deref().filter(|value| !value.is_empty()) {
+                args.extend([
+                    "-c".into(),
+                    format!("model_reasoning_effort={effort}").into(),
+                ]);
+            }
             args.push("--no-alt-screen".into());
         }
         HarnessId::Opencode => {
@@ -57,6 +64,9 @@ pub fn open(
             }
             if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
                 args.extend(["--model".into(), model.into()]);
+            }
+            if let Some(effort) = spec.effort.as_deref().filter(|value| !value.is_empty()) {
+                args.extend(["--variant".into(), effort.into()]);
             }
         }
         HarnessId::Kimi => anyhow::bail!("kimi lanes retain their ACP channel"),
@@ -87,14 +97,16 @@ pub fn open(
             .current_dir(&native.cwd)
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
-            .stderr(boop_store::trail::child_stderr(Some(lane)))
+            // The native frontend owns the pane's rendering fd. Supervisor
+            // diagnostics are emitted by its own file logger.
+            .stderr(Stdio::inherit())
             .spawn()
             .with_context(|| format!("start native {harness} lane TUI"))?,
     );
     let route = Route {
         kind: "lane".into(),
         harness: Some(harness),
-        tmux: std::env::var("TMUX_PANE").ok(),
+        tmux: Some(lane.to_owned()),
         cwd: Some(native.cwd.display().to_string()),
         model: spec.model.clone(),
         mode: Some("native-lane".into()),
@@ -113,6 +125,7 @@ pub fn open(
         plan,
         route,
         target: lane.to_owned(),
+        baseline_seq: None,
     }))
 }
 
@@ -127,24 +140,49 @@ impl NativeLaneChannel {
     }
 
     fn observe(&mut self) -> Result<()> {
-        let Some(observer) = self.plan.observer.as_mut() else {
-            return Ok(());
-        };
-        for event in observer.events.try_iter() {
-            match event {
-                NativeTuiEvent::Session { session_id, .. } => self.session = Some(session_id),
-                NativeTuiEvent::Closed { session_id }
-                    if self.session.as_deref() == Some(&session_id) =>
-                {
-                    self.session = None;
+        if let Some(observer) = self.plan.observer.as_mut() {
+            for event in observer.events.try_iter() {
+                match event {
+                    NativeTuiEvent::Session { session_id, .. } => self.session = Some(session_id),
+                    NativeTuiEvent::Closed { session_id }
+                        if self.session.as_deref() == Some(&session_id) =>
+                    {
+                        self.session = None;
+                    }
+                    NativeTuiEvent::Failed(error) => {
+                        anyhow::bail!("native TUI observation failed: {error}")
+                    }
+                    NativeTuiEvent::Settings { .. } | NativeTuiEvent::Closed { .. } => {}
                 }
-                NativeTuiEvent::Failed(error) => {
-                    anyhow::bail!("native TUI observation failed: {error}")
-                }
-                NativeTuiEvent::Settings { .. } | NativeTuiEvent::Closed { .. } => {}
             }
         }
+        if self.session.is_none() {
+            let pid = self.plan.frontend.as_ref().map(std::process::Child::id);
+            self.session = self
+                .adapter()
+                .live()
+                .live_sessions()?
+                .into_iter()
+                .find(|session| pid.is_some_and(|pid| session.pid == Some(pid)))
+                .map(|session| session.session_id);
+        }
         Ok(())
+    }
+
+    fn receipt(&self) -> Option<TurnReceipt> {
+        let id = self.session.as_deref()?;
+        let adapter = self.adapter();
+        let session = adapter.session_by_id(id, self.route.cwd.as_deref())?;
+        let messages = adapter.messages(&session, self.baseline_seq);
+        let text = messages
+            .iter()
+            .filter(|m| m.role == "assistant")
+            .map(|m| m.text.as_str())
+            .collect::<String>();
+        (!text.is_empty()).then_some(TurnReceipt {
+            text,
+            tool_calls: messages.iter().filter(|m| m.role == "tool").count() as u32,
+        })
     }
 
     fn live_session(&self) -> Result<LiveSession> {
@@ -184,6 +222,16 @@ impl LaneChannel for NativeLaneChannel {
 
     fn start_turn(&mut self, text: &str) -> Result<()> {
         self.observe()?;
+        self.baseline_seq = None;
+        if let Some(id) = self.session.as_deref() {
+            if let Some(session) = self.adapter().session_by_id(id, self.route.cwd.as_deref()) {
+                self.baseline_seq = self
+                    .adapter()
+                    .messages(&session, None)
+                    .last()
+                    .map(|m| m.seq);
+            }
+        }
         let binding_deadline = std::time::Instant::now() + Duration::from_secs(10);
         while self.session.is_none() && std::time::Instant::now() < binding_deadline {
             thread::sleep(Duration::from_millis(100));
@@ -222,7 +270,12 @@ impl LaneChannel for NativeLaneChannel {
                     &session,
                     deadline.saturating_duration_since(std::time::Instant::now()),
                 ) {
-                    Ok(_) => Ok(Some(TurnEvent::ok("native TUI idle"))),
+                    Ok(_) => match self.receipt() {
+                        Some(receipt) => {
+                            Ok(Some(TurnEvent::ok_with_receipt("native TUI idle", receipt)))
+                        }
+                        None => Ok(None),
+                    },
                     Err(error)
                         if error.to_string().contains("stayed busy")
                             || error.to_string().contains("stayed active") =>
