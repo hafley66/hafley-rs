@@ -6,7 +6,7 @@ Status: wip
 
 - Base: 2376a81
 - Worktree: fix/luna-visible-tui-20260912
-- Checkpoints: cae3ab3, fa619fd, a5572a2, pending target/readiness fix
+- Checkpoints: cae3ab3, fa619fd, a5572a2, 5b22b75, 57534d8, e4b0cdf, pending target/readiness fix
 
 ## Implementation
 
@@ -44,6 +44,7 @@ integration verification.
 - cargo fmt --all and git diff --check: pass.
 - cargo test --locked -p boop --test main boop_start_warm -- --nocapture --test-threads=1: 5 passed.
 - Native Codex lifecycle regression: failed before the materialization fallback; rerun required after the latest change.
+- Focused real Codex TUI lifecycle after bounded readiness: failed with `native TUI composer readiness timed out for target feature-lifecycle-held-codex`.
 - Earlier baseline TUI, commit, PR, and lifecycle suites retained failures and do not establish the requested matrix.
 
 No fake harness, fake channel, fake door, provider charge, push, merge, PR
