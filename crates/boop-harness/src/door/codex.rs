@@ -547,7 +547,14 @@ async fn forward_tui(
 
 #[derive(Default)]
 struct TurnEvidence {
-    by_thread: std::collections::BTreeMap<String, (String, u32)>,
+    by_turn: std::collections::BTreeMap<(String, String), TurnState>,
+}
+
+#[derive(Default)]
+struct TurnState {
+    text: String,
+    tool_calls: u32,
+    item_ids: std::collections::BTreeSet<String>,
 }
 
 fn native_turn_event(
@@ -557,44 +564,61 @@ fn native_turn_event(
     let method = value["method"].as_str()?;
     let params = &value["params"];
     let thread = params["threadId"].as_str()?;
+    let turn = params["turnId"]
+        .as_str()
+        .or_else(|| params["turn"]["id"].as_str())
+        .unwrap_or("active");
     let mut state = evidence.lock().ok()?;
+    if method == "turn/completed" {
+        let status = params["turn"]["status"]
+            .as_str()
+            .or_else(|| params["status"].as_str());
+        if !matches!(status, Some("completed" | "failed" | "interrupted")) {
+            return None;
+        }
+        let turn_id = turn.to_owned();
+        let state = state
+            .by_turn
+            .remove(&(thread.to_owned(), turn_id.clone()))?;
+        return Some(NativeTuiEvent::Receipt {
+            session_id: thread.to_owned(),
+            turn_id,
+            status: status.unwrap_or("failed").to_owned(),
+            text: state.text,
+            tool_calls: state.tool_calls,
+        });
+    }
     let entry = state
-        .by_thread
-        .entry(thread.to_owned())
-        .or_insert_with(|| (String::new(), 0));
+        .by_turn
+        .entry((thread.to_owned(), turn.to_owned()))
+        .or_default();
     match method {
         "item/agentMessage/delta" => {
-            entry.0.push_str(params["delta"].as_str()?);
+            entry.text.push_str(params["delta"].as_str()?);
             None
         }
         "item/completed" => {
             let item = &params["item"];
+            let item_id = item["id"].as_str().unwrap_or("");
+            if !item_id.is_empty() && !entry.item_ids.insert(item_id.to_owned()) {
+                return None;
+            }
             match item["type"].as_str()? {
                 "agentMessage" | "agent_message" => {
-                    if entry.0.is_empty() {
-                        entry.0 = item_text(item);
+                    let text = item_text(item);
+                    if !text.is_empty() && !entry.text.contains(&text) {
+                        if !entry.text.is_empty() {
+                            entry.text.push('\n');
+                        }
+                        entry.text.push_str(&text);
                     }
                 }
                 "functionCall" | "function_call" | "customToolCall" | "custom_tool_call" => {
-                    entry.1 += 1;
+                    entry.tool_calls += 1;
                 }
                 _ => {}
             }
             None
-        }
-        "turn/completed" => {
-            let status = params["turn"]["status"]
-                .as_str()
-                .or_else(|| params["status"].as_str());
-            if !matches!(status, Some("completed" | "failed" | "interrupted")) {
-                return None;
-            }
-            let (text, tool_calls) = state.by_thread.remove(thread)?;
-            (!text.trim().is_empty()).then_some(NativeTuiEvent::Receipt {
-                session_id: thread.to_owned(),
-                text,
-                tool_calls,
-            })
         }
         _ => None,
     }
@@ -863,6 +887,92 @@ fn app_server_rpc(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_turn_receipt_uses_agent_text_and_tool_item_shapes() {
+        let evidence = std::sync::Arc::new(std::sync::Mutex::new(TurnEvidence::default()));
+        let delta = serde_json::json!({
+            "method": "item/agentMessage/delta",
+            "params": {"threadId": "thread", "delta": "boop"}
+        });
+        let tool = serde_json::json!({
+            "method": "item/completed",
+            "params": {"threadId": "thread", "item": {"type": "functionCall"}}
+        });
+        let done = serde_json::json!({
+            "method": "turn/completed",
+            "params": {"threadId": "thread", "turn": {"status": "completed"}}
+        });
+        assert_eq!(native_turn_event(&delta, &evidence), None);
+        assert_eq!(native_turn_event(&tool, &evidence), None);
+        assert_eq!(
+            native_turn_event(&done, &evidence),
+            Some(NativeTuiEvent::Receipt {
+                session_id: "thread".into(),
+                turn_id: "active".into(),
+                status: "completed".into(),
+                text: "boop".into(),
+                tool_calls: 1,
+            })
+        );
+        assert_eq!(native_turn_event(&done, &evidence), None);
+    }
+
+    #[test]
+    fn native_turn_receipts_preserve_status_turns_and_item_deduplication() {
+        let evidence = std::sync::Arc::new(std::sync::Mutex::new(TurnEvidence::default()));
+        let item = |turn: &str, id: &str, text: &str| {
+            serde_json::json!({"method":"item/completed","params":{
+                "threadId":"thread", "turnId":turn,
+                "item":{"id":id,"type":"agentMessage","text":text}
+            }})
+        };
+        let done = |turn: &str, status: &str| {
+            serde_json::json!({"method":"turn/completed","params":{
+                "threadId":"thread", "turn":{"id":turn,"status":status}
+            }})
+        };
+        assert_eq!(
+            native_turn_event(&item("one", "a", "first"), &evidence),
+            None
+        );
+        assert_eq!(
+            native_turn_event(&item("one", "a", "first"), &evidence),
+            None
+        );
+        assert_eq!(
+            native_turn_event(&item("one", "b", "second"), &evidence),
+            None
+        );
+        assert_eq!(
+            native_turn_event(&done("one", "failed"), &evidence),
+            Some(NativeTuiEvent::Receipt {
+                session_id: "thread".into(),
+                turn_id: "one".into(),
+                status: "failed".into(),
+                text: "first\nsecond".into(),
+                tool_calls: 0,
+            })
+        );
+        assert_eq!(
+            native_turn_event(&item("two", "c", "partial"), &evidence),
+            None
+        );
+        assert_eq!(
+            native_turn_event(&done("two", "interrupted"), &evidence),
+            Some(NativeTuiEvent::Receipt {
+                session_id: "thread".into(),
+                turn_id: "two".into(),
+                status: "interrupted".into(),
+                text: "partial".into(),
+                tool_calls: 0,
+            })
+        );
+        assert_eq!(
+            native_turn_event(&done("two", "completed"), &evidence),
+            None
+        );
+    }
 
     /// The columns this reader names, in the shape codex 0.149 writes them.
     const SCHEMA: &str = "CREATE TABLE threads (

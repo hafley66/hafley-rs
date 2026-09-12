@@ -19,7 +19,7 @@ pub struct NativeLaneChannel {
     target: String,
     baseline_seq: Option<u64>,
     pending: bool,
-    pending_receipt: Option<TurnReceipt>,
+    pending_event: Option<TurnEvent>,
 }
 
 pub fn open(
@@ -131,7 +131,7 @@ pub fn open(
         target: std::env::var("BOOP_TMUX_TARGET").unwrap_or_else(|_| lane.to_owned()),
         baseline_seq: None,
         pending: false,
-        pending_receipt: None,
+        pending_event: None,
     }))
 }
 
@@ -160,11 +160,27 @@ impl NativeLaneChannel {
                     }
                     NativeTuiEvent::Receipt {
                         session_id,
+                        turn_id,
+                        status,
                         text,
                         tool_calls,
                     } if self.pending && self.session.as_deref() == Some(&session_id) => {
                         self.pending = false;
-                        self.pending_receipt = Some(TurnReceipt { text, tool_calls });
+                        self.pending_event = Some(match status.as_str() {
+                            "completed" if !text.trim().is_empty() => TurnEvent::ok_with_receipt(
+                                format!("native TUI turn {turn_id} completed"),
+                                TurnReceipt { text, tool_calls },
+                            ),
+                            "completed" => TurnEvent::failed(format!(
+                                "native TUI turn {turn_id} completed without assistant receipt"
+                            )),
+                            "interrupted" => {
+                                TurnEvent::flaked(format!("native TUI turn {turn_id} interrupted"))
+                            }
+                            _ => TurnEvent::failed(format!(
+                                "native TUI turn {turn_id} ended with status {status}"
+                            )),
+                        });
                     }
                     NativeTuiEvent::Settings { .. }
                     | NativeTuiEvent::Closed { .. }
@@ -228,11 +244,11 @@ impl NativeLaneChannel {
                 .capture_pane(socket.as_deref(), target, Some(80))
                 .ok();
             let ready = screen.as_deref().is_some_and(|screen| {
-                    let rows = screen.lines().collect::<Vec<_>>();
-                    self.adapter().terminal_input_region(&rows).is_some()
-                        || (self.adapter_id == HarnessId::Codex
-                            && screen.contains("Ask Codex to do anything"))
-                });
+                let rows = screen.lines().collect::<Vec<_>>();
+                self.adapter().terminal_input_region(&rows).is_some()
+                    || (self.adapter_id == HarnessId::Codex
+                        && screen.contains("Ask Codex to do anything"))
+            });
             if ready && stable_screen.as_deref() == screen.as_deref() {
                 stable_samples += 1;
             } else if ready {
@@ -286,13 +302,13 @@ impl NativeLaneChannel {
             thread::sleep(Duration::from_millis(100));
         }
         boop_store::tmux::mux().send_text(socket.as_deref(), &input_target, text)?;
-        boop_store::tmux::mux().send_key_named(socket.as_deref(), &input_target, "Enter")?;
-        let evidence = serde_json::json!({
+        let after_text = serde_json::json!({
             "socket": socket,
             "target": target,
             "pane_id": boop_store::tmux::mux().pane_id(socket.as_deref(), target),
             "input_target": input_target,
             "screen": boop_store::tmux::mux().capture_pane(socket.as_deref(), target, Some(80)).ok(),
+            "stage": "after_text_before_enter",
             "frontend_pid": self.plan.frontend.as_ref().map(std::process::Child::id),
             "frontend_status": self.plan.frontend.as_mut().and_then(|child| {
                 child.try_wait().ok().flatten().map(|status| status.to_string())
@@ -309,7 +325,29 @@ impl NativeLaneChannel {
         }
         let _ = std::fs::write(
             &path,
-            serde_json::to_vec_pretty(&evidence).unwrap_or_default(),
+            serde_json::to_vec_pretty(&after_text).unwrap_or_default(),
+        );
+        thread::sleep(Duration::from_millis(250));
+        boop_store::tmux::mux().send_key_named(socket.as_deref(), &input_target, "Enter")?;
+        let after_enter = serde_json::json!({
+            "socket": socket,
+            "target": target,
+            "pane_id": boop_store::tmux::mux().pane_id(socket.as_deref(), target),
+            "input_target": input_target,
+            "screen": boop_store::tmux::mux().capture_pane(socket.as_deref(), target, Some(80)).ok(),
+            "stage": "after_enter",
+            "frontend_pid": self.plan.frontend.as_ref().map(std::process::Child::id),
+            "frontend_status": self.plan.frontend.as_mut().and_then(|child| {
+                child.try_wait().ok().flatten().map(|status| status.to_string())
+            }),
+        });
+        let _ = std::fs::write(
+            &path,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "after_text": after_text,
+                "after_enter": after_enter,
+            }))
+            .unwrap_or_default(),
         );
         Ok(())
     }
@@ -379,9 +417,7 @@ impl LaneChannel for NativeLaneChannel {
         loop {
             self.observe()?;
             if !self.pending {
-                return Ok(self.pending_receipt.take().map(|receipt| {
-                    TurnEvent::ok_with_receipt("native TUI turn completed", receipt)
-                }));
+                return Ok(self.pending_event.take());
             }
             if let Some(child) = self.plan.frontend.as_mut() {
                 if let Some(status) = child.try_wait()? {
@@ -401,10 +437,14 @@ impl LaneChannel for NativeLaneChannel {
                 ) {
                     Ok(_) => {
                         self.observe()?;
-                        match self.pending_receipt.take().or_else(|| self.receipt()) {
-                            Some(receipt) => {
+                        match self.pending_event.take().or_else(|| {
+                            self.receipt().map(|receipt| {
+                                TurnEvent::ok_with_receipt("native TUI idle", receipt)
+                            })
+                        }) {
+                            Some(event) => {
                                 self.pending = false;
-                                Ok(Some(TurnEvent::ok_with_receipt("native TUI idle", receipt)))
+                                Ok(Some(event))
                             }
                             None => Ok(None),
                         }

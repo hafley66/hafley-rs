@@ -270,6 +270,8 @@ pub enum NativeTuiEvent {
     },
     Receipt {
         session_id: String,
+        turn_id: String,
+        status: String,
         text: String,
         tool_calls: u32,
     },
