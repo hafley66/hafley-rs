@@ -18,6 +18,7 @@ pub struct NativeLaneChannel {
     route: Route,
     target: String,
     baseline_seq: Option<u64>,
+    pending: bool,
 }
 
 pub fn open(
@@ -128,6 +129,7 @@ pub fn open(
         route,
         target: std::env::var("BOOP_TMUX_TARGET").unwrap_or_else(|_| lane.to_owned()),
         baseline_seq: None,
+        pending: false,
     }))
 }
 
@@ -226,34 +228,21 @@ impl NativeLaneChannel {
         boop_store::tmux::mux().send_key_named(socket.as_deref(), &target, "Enter")?;
         Ok(())
     }
-}
 
-impl LaneChannel for NativeLaneChannel {
-    fn conversation_id(&self) -> Option<String> {
-        self.session.clone()
+    fn capture_baseline(&mut self) {
+        self.baseline_seq = self.session.as_deref().and_then(|id| {
+            self.adapter()
+                .session_by_id(id, self.route.cwd.as_deref())
+                .and_then(|session| {
+                    self.adapter()
+                        .messages(&session, None)
+                        .last()
+                        .map(|m| m.seq)
+                })
+        });
     }
 
-    fn conversation_id_kind(&self) -> &'static str {
-        "native_tui_session"
-    }
-
-    fn start_turn(&mut self, text: &str) -> Result<()> {
-        self.observe()?;
-        self.baseline_seq = None;
-        if let Some(id) = self.session.as_deref() {
-            if let Some(session) = self.adapter().session_by_id(id, self.route.cwd.as_deref()) {
-                self.baseline_seq = self
-                    .adapter()
-                    .messages(&session, None)
-                    .last()
-                    .map(|m| m.seq);
-            }
-        }
-        let binding_deadline = std::time::Instant::now() + Duration::from_secs(10);
-        while self.session.is_none() && std::time::Instant::now() < binding_deadline {
-            thread::sleep(Duration::from_millis(100));
-            self.observe()?;
-        }
+    fn submit_turn(&self, text: &str) -> Result<()> {
         if self.session.is_some() {
             let session = self.live_session()?;
             match self.adapter().door().deliver(&session, text) {
@@ -271,9 +260,36 @@ impl LaneChannel for NativeLaneChannel {
         }
         self.submit_terminal(text)
     }
+}
+
+impl LaneChannel for NativeLaneChannel {
+    fn conversation_id(&self) -> Option<String> {
+        self.session.clone()
+    }
+
+    fn conversation_id_kind(&self) -> &'static str {
+        "native_tui_session"
+    }
+
+    fn start_turn(&mut self, text: &str) -> Result<()> {
+        self.observe()?;
+        let binding_deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while self.session.is_none() && std::time::Instant::now() < binding_deadline {
+            thread::sleep(Duration::from_millis(100));
+            self.observe()?;
+        }
+        self.capture_baseline();
+        self.submit_turn(text)?;
+        self.pending = true;
+        Ok(())
+    }
 
     fn steer(&mut self, text: &str) -> Result<Delivery> {
-        self.start_turn(text)?;
+        if !self.pending {
+            self.start_turn(text)?;
+            return Ok(Delivery::NextTurn);
+        }
+        self.submit_turn(text)?;
         Ok(Delivery::NextTurn)
     }
 
@@ -281,6 +297,19 @@ impl LaneChannel for NativeLaneChannel {
         let deadline = std::time::Instant::now() + timeout;
         loop {
             self.observe()?;
+            if !self.pending {
+                return Ok(None);
+            }
+            if let Some(child) = self.plan.frontend.as_mut() {
+                if let Some(status) = child.try_wait()? {
+                    self.pending = false;
+                    return Ok(Some(if status.success() {
+                        TurnEvent::flaked("native TUI exited before turn receipt")
+                    } else {
+                        TurnEvent::failed(format!("native TUI exited with {status}"))
+                    }));
+                }
+            }
             if self.session.is_some() {
                 let session = self.live_session()?;
                 return match self.adapter().door().notify_idle(
@@ -289,6 +318,7 @@ impl LaneChannel for NativeLaneChannel {
                 ) {
                     Ok(_) => match self.receipt() {
                         Some(receipt) => {
+                            self.pending = false;
                             Ok(Some(TurnEvent::ok_with_receipt("native TUI idle", receipt)))
                         }
                         None => Ok(None),
