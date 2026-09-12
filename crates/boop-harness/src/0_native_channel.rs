@@ -367,18 +367,45 @@ impl NativeLaneChannel {
 
     fn submit_turn(&mut self, text: &str) -> Result<()> {
         if self.session.is_some() {
-            let session = self.live_session()?;
-            match self.adapter().door().deliver(&session, text) {
-                Ok(crate::Delivered::Injected | crate::Delivered::QueuedForTurnBoundary) => {
-                    return Ok(())
-                }
-                Ok(crate::Delivered::Unreachable(detail)) => {
-                    if !detail.contains("not materialized") {
+            // A turn boundary can be seen here before the harness's own status
+            // flips to idle (OpenCode reports busy for a beat after the
+            // transcript is complete), and a resumed frontend registers itself
+            // live a moment after spawn. Wait both out, then deliver, instead
+            // of failing the lane on a transient state.
+            let deadline = std::time::Instant::now() + Duration::from_secs(20);
+            loop {
+                let session = match self.live_session() {
+                    Ok(session) => session,
+                    Err(_error) if std::time::Instant::now() < deadline => {
+                        thread::sleep(Duration::from_millis(100));
+                        self.observe()?;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                match self.adapter().door().deliver(&session, text) {
+                    Ok(crate::Delivered::Injected | crate::Delivered::QueuedForTurnBoundary) => {
+                        return Ok(())
+                    }
+                    Ok(crate::Delivered::Unreachable(detail)) => {
+                        if detail.contains("not materialized") {
+                            break;
+                        }
+                        if detail.contains("busy") {
+                            if std::time::Instant::now() >= deadline {
+                                break;
+                            }
+                            let _ = self
+                                .adapter()
+                                .door()
+                                .notify_idle(&session, Duration::from_millis(700));
+                            continue;
+                        }
                         anyhow::bail!("native TUI delivery failed: {detail}");
                     }
+                    Err(error) if error.to_string().contains("not materialized") => break,
+                    Err(error) => return Err(error),
                 }
-                Err(error) if error.to_string().contains("not materialized") => {}
-                Err(error) => return Err(error),
             }
         }
         self.submit_terminal(text)
@@ -453,6 +480,20 @@ impl LaneChannel for NativeLaneChannel {
                         if error.to_string().contains("stayed busy")
                             || error.to_string().contains("stayed active") =>
                     {
+                        // OpenCode emits one complete assistant message per
+                        // turn, so finished transcript text after the baseline
+                        // is turn completion even when the idle event raced
+                        // past this subscriber. Other adapters keep the door's
+                        // explicit status and only poll again here.
+                        if self.adapter_id == HarnessId::Opencode {
+                            if let Some(receipt) = self.receipt() {
+                                self.pending = false;
+                                return Ok(Some(TurnEvent::ok_with_receipt(
+                                    "native TUI turn completed",
+                                    receipt,
+                                )));
+                            }
+                        }
                         Ok(None)
                     }
                     Err(error) => Err(error),

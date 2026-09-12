@@ -644,6 +644,46 @@ fn run_coordinator_tui(fixture: &Fixture, h: &Harness, launch: &MockTuiLaunch) {
     );
 }
 
+/// Pin one harness's real binary before its isolated HOME exists.
+///
+/// The operator's PATH leads with `claude-ansi`, a shell wrapper that resolves
+/// its payload under `$HOME/.local/share/claude/versions`. A lane runs under an
+/// isolated HOME, so the wrapper finds nothing. `CLAUDE_BIN` names the real
+/// executable directly (a Mach-O, not a `#!` script); resolve it here so both
+/// the coordinator and the lane pass the absolute path.
+fn pin_harness_binaries(h: &Harness) {
+    if h.id != HarnessId::Claude || std::env::var_os("CLAUDE_BIN").is_some() {
+        return;
+    }
+    let Some(path) = std::env::var_os("PATH") else {
+        return;
+    };
+    for dir in std::env::split_paths(&path) {
+        let candidate = dir.join(h.entry);
+        if !candidate.is_file() {
+            continue;
+        }
+        let resolved = std::fs::canonicalize(&candidate).unwrap_or_else(|_| candidate.clone());
+        if is_real_binary(&resolved) {
+            std::env::set_var("CLAUDE_BIN", &resolved);
+            return;
+        }
+    }
+}
+
+/// A native executable starts with a format magic, never `#!`. This rejects the
+/// `claude-ansi` shell wrapper while keeping the versioned binary it wraps.
+fn is_real_binary(path: &Path) -> bool {
+    std::fs::File::open(path)
+        .and_then(|mut file| {
+            use std::io::Read;
+            let mut magic = [0u8; 2];
+            file.read_exact(&mut magic).map(|()| magic)
+        })
+        .map(|magic| magic != *b"#!")
+        .unwrap_or(false)
+}
+
 /// Resolve one harness's executable, or a skip reason.
 fn harness_executable(h: &Harness) -> Result<PathBuf, String> {
     mock_tui::resolve_executable(h.entry, h.bin_env)
@@ -923,6 +963,7 @@ macro_rules! lifecycle_case {
         fn $name() {
             let _guard = lane_lock();
             let h = &HARNESSES[$h];
+            pin_harness_binaries(h);
             report($case, h, $runner(h));
         }
     };

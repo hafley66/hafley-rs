@@ -714,30 +714,37 @@ impl Door for OpencodeDoor {
         }
         let deadline = Instant::now() + timeout;
         let url = base.join("event")?;
-        let response = agent(timeout).get(url.as_str()).call()?;
-        let reader = BufReader::new(response.into_body().into_reader());
-        for line in reader.lines() {
-            let line = match line {
-                Ok(line) => line,
-                Err(error) => anyhow::bail!("opencode event stream: {error}"),
-            };
-            if Instant::now() >= deadline {
-                break;
-            }
-            let Some(payload) = line.strip_prefix("data: ") else {
-                continue;
-            };
-            let Ok(event) = serde_json::from_str::<EventLine>(payload) else {
-                continue;
-            };
-            if event.kind == "session.idle"
-                && event.properties.session_id.as_deref() == Some(session.session_id.as_str())
-            {
-                return Ok(IdleNotice::now(Some(event.kind)));
+        // A missing idle inside the window is not an error: the turn may have
+        // finished before this subscriber connected, and the caller polls on.
+        // Reading the stream must not panic when its global timeout expires.
+        if let Ok(response) = agent(timeout).get(url.as_str()).call() {
+            let reader = BufReader::new(response.into_body().into_reader());
+            for line in reader.lines() {
+                let Ok(line) = line else { break };
+                if Instant::now() >= deadline {
+                    break;
+                }
+                let Some(payload) = line.strip_prefix("data: ") else {
+                    continue;
+                };
+                let Ok(event) = serde_json::from_str::<EventLine>(payload) else {
+                    continue;
+                };
+                if event.kind == "session.idle"
+                    && event.properties.session_id.as_deref() == Some(session.session_id.as_str())
+                {
+                    return Ok(IdleNotice::now(Some(event.kind)));
+                }
             }
         }
+        // The turn may have completed while this subscriber was connecting, so
+        // one last status probe decides; otherwise the caller keeps polling, as
+        // the other doors' "stayed busy" answer does.
+        if source.statuses().get(&session.session_id) == Some(&LiveStatus::Idle) {
+            return Ok(IdleNotice::now(Some("idle".into())));
+        }
         anyhow::bail!(
-            "opencode session `{}` reported no idle event within {timeout:?}",
+            "opencode session `{}` stayed active for {timeout:?}",
             session.session_id
         )
     }
