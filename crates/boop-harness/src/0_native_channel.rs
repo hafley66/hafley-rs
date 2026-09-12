@@ -16,6 +16,7 @@ pub struct NativeLaneChannel {
     plan: NativeTuiPlan,
     session: Option<String>,
     route: Route,
+    target: String,
 }
 
 pub fn open(
@@ -111,6 +112,7 @@ pub fn open(
         session: plan.session_id.clone(),
         plan,
         route,
+        target: lane.to_owned(),
     }))
 }
 
@@ -159,7 +161,11 @@ impl NativeLaneChannel {
     }
 
     fn submit_terminal(&self, text: &str) -> Result<()> {
-        let target = std::env::var("TMUX_PANE").context("native lane TUI has no tmux pane")?;
+        // Codex announces the fresh thread before its composer has accepted
+        // terminal input. Give the native frontend a bounded startup window
+        // before submitting the first materializing turn.
+        thread::sleep(Duration::from_secs(1));
+        let target = &self.target;
         let socket = std::env::var("BOOP_TMUX_SOCKET").ok();
         boop_store::tmux::mux().send_text(socket.as_deref(), &target, text)?;
         boop_store::tmux::mux().send_key_named(socket.as_deref(), &target, "Enter")?;
