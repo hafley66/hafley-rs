@@ -2259,7 +2259,8 @@ mod tests {
         req.resume_session = Some("ses_abc123".into());
         req.on_exit = Some("finish-fixture".into());
         assert_eq!(Opencode.preview_command(&req).unwrap(),
-            "nice -n 10 boop beep lane run --lane 'lane-test' --harness 'opencode' --brief '/tmp/brief.md' --mail-dir '/tmp' --model 'provider/model' --variant 'low' --resume 'ses_abc123'; __rc=$?; finish-fixture; exit $__rc"
+            "BOOP_TMUX_SOCKET='{}' nice -n 10 boop beep lane run --lane 'lane-test' --harness 'opencode' --brief '/tmp/brief.md' --mail-dir '/tmp' --model 'provider/model' --variant 'low' --resume 'ses_abc123'; __rc=$?; finish-fixture; exit $__rc"
+                .replace("{}", &guard.socket)
                 .replace("--mail-dir '/tmp'", &format!("--mail-dir {}", super::super::shell_quote(&req.mail_dir.display().to_string()))));
     }
 
