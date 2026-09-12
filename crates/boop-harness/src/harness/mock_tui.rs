@@ -108,7 +108,13 @@ pub fn workspace_spellings(workspace: &Path) -> Result<Vec<String>> {
     Ok(spellings)
 }
 
-/// `$env_override` wins, else the first executable `name` on PATH.
+/// `$env_override` wins, else the first real `name` executable on PATH.
+///
+/// A mock recipe runs the harness under an isolated HOME, so a PATH entry that
+/// is a shell wrapper (a `#!` script that resolves its payload under `$HOME`,
+/// e.g. `claude-ansi`) cannot launch there. Prefer a native executable; fall
+/// back to the first PATH hit only when no native one exists. Callers that want
+/// a specific wrapper set the override variable.
 pub fn resolve_executable(name: &str, env_override: &str) -> Option<PathBuf> {
     if let Ok(path) = std::env::var(env_override) {
         if !path.is_empty() {
@@ -116,9 +122,32 @@ pub fn resolve_executable(name: &str, env_override: &str) -> Option<PathBuf> {
         }
     }
     let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|dir| dir.join(name))
-        .find(|candidate| candidate.is_file())
+    let mut fallback = None;
+    for candidate in std::env::split_paths(&path).map(|dir| dir.join(name)) {
+        if !candidate.is_file() {
+            continue;
+        }
+        let resolved = std::fs::canonicalize(&candidate).unwrap_or_else(|_| candidate.clone());
+        if !is_shell_wrapper(&resolved) {
+            return Some(resolved);
+        }
+        if fallback.is_none() {
+            fallback = Some(resolved);
+        }
+    }
+    fallback
+}
+
+/// A shell script starts with `#!`; a native executable starts with its format
+/// magic. A file that cannot be read is treated as a wrapper so resolution
+/// keeps looking.
+fn is_shell_wrapper(path: &std::path::Path) -> bool {
+    use std::io::Read;
+    let mut magic = [0u8; 2];
+    std::fs::File::open(path)
+        .and_then(|mut file| file.read_exact(&mut magic))
+        .map(|()| magic == *b"#!")
+        .unwrap_or(true)
 }
 
 /// `LLMOCK_BIN` wins, else the first `llmock` on PATH.
