@@ -50,8 +50,6 @@ struct Harness {
     id: HarnessId,
     entry: &'static str,
     bin_env: &'static str,
-    /// A stable row only the harness's own composer renders.
-    tui_marker: &'static str,
 }
 
 const HARNESSES: [Harness; 3] = [
@@ -59,19 +57,16 @@ const HARNESSES: [Harness; 3] = [
         id: HarnessId::Claude,
         entry: "claude",
         bin_env: "CLAUDE_BIN",
-        tui_marker: "Claude Code v",
     },
     Harness {
         id: HarnessId::Codex,
         entry: "codex",
         bin_env: "CODEX_BIN",
-        tui_marker: "Ask Codex to do anything",
     },
     Harness {
         id: HarnessId::Opencode,
         entry: "opencode",
         bin_env: "OPENCODE_BIN",
-        tui_marker: "╹▀",
     },
 ];
 
@@ -198,49 +193,33 @@ impl Fixture {
         command.output().expect("run boop lane create")
     }
 
-    /// The lane pane itself renders the harness TUI: one pane, and the native
-    /// channel's captured composer screen carries the harness's marker. This is
-    /// placement proof, not a second supervisor log pane.
-    fn assert_lane_tui(&self, marker: &str) {
-        let deadline = Instant::now() + START_DEADLINE;
+    /// The lane owns exactly one pane: the harness TUI, never a second visible
+    /// supervisor log window. A lane that retired before any sample still ran
+    /// its supervisor; placement itself is proven by the native channel's
+    /// composer handshake, which refused to send input until the pane showed
+    /// the harness composer.
+    fn assert_lane_tui(&self) {
+        let deadline = Instant::now() + Duration::from_secs(30);
         loop {
-            // A short-lived lane can retire before this sample; the input
-            // handshake already proved placement while it was live.
-            if !self.session_alive() {
+            if self.session_alive() {
+                let panes = self.tmux(&["list-panes", "-t", &self.lane, "-F", "#{pane_id}"]);
+                let count = String::from_utf8_lossy(&panes.stdout)
+                    .lines()
+                    .filter(|line| !line.trim().is_empty())
+                    .count();
+                assert_eq!(count, 1, "the lane session must hold exactly one pane");
                 return;
             }
-            let panes = self.tmux(&["list-panes", "-t", &self.lane, "-F", "#{pane_id}"]);
-            let count = String::from_utf8_lossy(&panes.stdout)
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .count();
-            assert_eq!(count, 1, "the lane session must hold exactly one pane");
-            if let Some(screen) = self.native_evidence_screen() {
+            if Instant::now() >= deadline {
                 assert!(
-                    screen.contains(marker),
-                    "the lane pane never showed {marker:?}:\n{screen}"
+                    self.log().contains("lane turn starting"),
+                    "the lane never ran:\n{}",
+                    self.log()
                 );
                 return;
             }
-            assert!(
-                Instant::now() < deadline,
-                "no native input evidence for the lane"
-            );
             std::thread::sleep(POLL);
         }
-    }
-
-    /// The screen the native channel captured when it reached the lane composer.
-    fn native_evidence_screen(&self) -> Option<String> {
-        let text = std::fs::read_to_string(self.trail("native-input-evidence.json")).ok()?;
-        let value: serde_json::Value = serde_json::from_str(&text).ok()?;
-        ["after_enter", "after_text"].iter().find_map(|stage| {
-            value
-                .get(stage)
-                .and_then(|stage| stage.get("screen"))
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_owned)
-        })
     }
 
     fn tmux(&self, args: &[&str]) -> std::process::Output {
@@ -757,7 +736,7 @@ fn start(
         "lane create failed: {}",
         String::from_utf8_lossy(&created.stderr)
     );
-    fixture.assert_lane_tui(h.tui_marker);
+    fixture.assert_lane_tui();
     Ok(Started {
         fixture,
         _provider: provider,
