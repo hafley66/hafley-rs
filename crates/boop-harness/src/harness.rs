@@ -826,6 +826,9 @@ pub fn supervisor_command(spec: &SpawnSpec) -> String {
         shell_quote(&spec.prompt),
         shell_quote(&spec.mail_dir.display().to_string()),
     );
+    if let Some(socket) = spec.socket.as_deref().filter(|value| !value.is_empty()) {
+        command = format!("BOOP_TMUX_SOCKET={} {command}", shell_quote(socket));
+    }
     if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
         command.push_str(&format!(" --model {}", shell_quote(model)));
     }

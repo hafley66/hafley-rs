@@ -6,6 +6,8 @@ pub mod door;
 pub mod harness;
 pub mod identity;
 pub mod live;
+#[path = "0_native_channel.rs"]
+pub mod native_channel;
 pub mod registry;
 pub mod transcript;
 pub mod worktree;

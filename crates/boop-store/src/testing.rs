@@ -213,6 +213,14 @@ impl Multiplexer for FakeMux {
         self.panes.contains_key(target)
     }
 
+    fn send_text(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn send_key_named(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
     fn capture_pane(&self, _: Option<&str>, _: &str, _: Option<u32>) -> anyhow::Result<String> {
         Ok(String::new())
     }

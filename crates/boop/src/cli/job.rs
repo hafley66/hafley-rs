@@ -416,6 +416,8 @@ pub(crate) fn run_lane_supervisor(
     );
     let adapter = registry.resolve(Some(harness_id))?;
     let dir = mail_dir(mail_dir_arg)?;
+    std::env::set_var("BOOP_MAIL_DIR", &dir);
+    std::env::set_var("BOOP_DB", boop::bus::db_path(&dir)?);
     let cwd = std::env::current_dir().context("read the current directory")?;
     // A respawned lane continues its pinned conversation instead of cold-
     // starting a new one with the full brief.

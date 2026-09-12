@@ -1,77 +1,54 @@
 # Boop visible lane TUI receipt
 
-Status: blocked
+Status: wip
 
 ## Revision
 
 - Base: 2376a81
 - Worktree: fix/luna-visible-tui-20260912
-- Code edits: none
-- Report file: TASKS/boop-luna-visible-tui.REPORT.md
+- Checkpoint: native lane channel and isolated tmux input routing
 
-## Findings
+## Implementation
 
-Harness::spawn creates one detached tmux session whose only pane runs
-boop beep lane run. run_lane_supervisor then opens an ACP or direct
-stream-json child with piped stdio. The child owns the model conversation but
-has no terminal, so the registered lane target is necessarily the supervisor
-log pane.
+The lane supervisor now selects a native terminal-backed channel for Claude,
+Codex, and OpenCode. The channel launches the adapter's existing
+NativeTuiPlan, inherits the canonical pane terminal, observes the native
+session, uses the adapter door for delivery and idle events, and records the
+native session identity in the existing supervisor route. Kimi retains ACP.
+Supervisor diagnostics remain in supervise.log. Native input uses the
+declared isolated tmux socket carried through BOOP_TMUX_SOCKET.
 
-The historical pre-refactor TuiChannel created a second harness window,
-drove that TUI through tmux, and swapped it to window 0. The current
-boop-acp extraction removed that channel. boop-mux still exposes the
-window operations, but no current lane path uses them. Repointing
-agent_route.tmux to a guessed child target would create a competing
-conversation or an unowned pane and would break supervisor identity,
-resume, retirement, and input delivery.
-
-Required implementation dependency: restore a terminal-backed
-LaneChannel in boop-acp or add a lane-native attach mode to each harness
-door. The supervisor must publish the selected window-0 target before route
-consumers open it. The four harness adapters need explicit profiles and
-resume behavior. A regression suite must then assert pane count, window 0,
-same conversation identity, input delivery, normal lane creation, and fork
-creation.
+The first native Codex attempt recorded "startup acknowledgment timed out
+after 30s"; the session was created but the initial input addressed the default
+tmux server. After socket propagation, Codex created a native session, then
+reported "thread ... is not materialized yet; thread/turns/list is unavailable
+before first user message". The channel now falls back to the native pane for
+that first user message and uses the door after materialization.
 
 ## Startup reliability
 
-The dispatched startup attempt ran just boop-start in a fresh external
-target and exceeded Boop's 120-second SPAWN_CHILD_TIMEOUT; Boop killed the
-process group and the parent retried with --no-start. The existing warmup
-tests pass for no recipe, shared-target reuse, dry-run reporting, and
-preamble recording. The timeout remains a cold-build launch blocker because
-the current bounded warmup treats a slow build as a failed spawn.
+The dispatched startup attempt ran just boop-start in a fresh external target,
+exceeded Boop's 120-second SPAWN_CHILD_TIMEOUT, and was killed while building.
+The parent retried with --no-start. The bounded warmup test passed with 5 cases,
+including shared target reuse. Cold-build launch behavior remains under
+integration verification.
 
 ## Validation
 
-Passed:
-
+- cargo check --locked -p boop-harness -p boop: pass.
+- cargo fmt --all and git diff --check: pass.
 - cargo test --locked -p boop --test main boop_start_warm -- --nocapture --test-threads=1: 5 passed.
-- cargo test --locked -p boop --lib lane_subscribers -- --nocapture --test-threads=1: 0 matching tests, command passed.
-- Codex and OpenCode cases in tui_sigint_e2e passed: 2 passed, 1 Claude failure.
-- Commit push Codex, OpenCode, and Kimi cases passed: 3 passed, 1 Claude failure.
-- Lifecycle held-row Codex and OpenCode cases passed before the suite continued into existing failures.
+- Native Codex lifecycle regression: failed before the materialization fallback; rerun required after the latest change.
+- Earlier baseline TUI, commit, PR, and lifecycle suites retained failures and do not establish the requested matrix.
 
-Failed or unavailable in the current environment:
+No fake harness, fake channel, fake door, provider charge, push, merge, PR
+publication, or user-session mutation was used.
 
-- tui_sigint_e2e: Claude executable absent from the isolated test HOME.
-- commit_push_e2e: Claude coordinator readiness absent; 3 passed, 1 failed.
-- pr_push_e2e: Claude executable absent; Codex/OpenCode supervisor and ingest assertions failed in the current baseline.
-- lane_lifecycle_e2e: Claude executable absent; Codex/OpenCode progressed, with the full suite still failing.
-- Ignored live harness: Claude executable absent.
+## Automatic routing scope
 
-No fake harness, fake channel, fake door, provider, push, merge, PR publication,
-or user-session mutation was used.
-
-## Automatic routing observed
-
-The source contracts currently cover parent result rows, explicit commit
-subscribers, commit deduplication by (lane, subscriber, head), and PR notice
-deduplication by URL and subscriber. The focused routing unit coverage and the
-passing Codex/OpenCode/Kimi commit cases provide evidence for those paths.
-The requested same-harness live TUI matrix and subscriber receipt matrix could
-not be established because the lane TUI path is absent and Claude is
-unavailable.
-
-Boop-Ask: restore or specify the lane TUI attachment contract after the
-boop-acp extraction, then rerun the required real-TUI matrix.
+Existing source contracts route lifecycle results to the parent, commit notices
+to the parent and explicit subscribers with (lane, subscriber, head)
+deduplication, and PR notices by URL and subscriber. Existing focused source
+coverage and prior commit cases provide evidence for those paths. The native
+lane receipt matrix and explicit subscriber integration evidence remain to be
+run after the launch path passes.

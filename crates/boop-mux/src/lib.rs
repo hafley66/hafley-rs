@@ -97,6 +97,10 @@ pub trait Multiplexer {
     /// Whether a route's tmux target is live, judged by a direct per-target
     /// probe: exact `has-session =` for a name, `list-panes` for a pane.
     fn target_alive(&self, socket: Option<&str>, target: &str) -> bool;
+    /// Send literal text to a target pane.
+    fn send_text(&self, socket: Option<&str>, target: &str, text: &str) -> Result<()>;
+    /// Send one tmux key name to a target pane.
+    fn send_key_named(&self, socket: Option<&str>, target: &str, key: &str) -> Result<()>;
     /// Capture a pane's visible region, or the last `lines` rows of history.
     fn capture_pane(
         &self,
@@ -333,6 +337,38 @@ impl Multiplexer for Tmux {
             .output()
             .ok();
         matches!(output, Some(out) if out.status.success())
+    }
+
+    fn send_text(&self, socket: Option<&str>, target: &str, text: &str) -> Result<()> {
+        let mut builder = Command::new("tmux");
+        if let Some(socket) = socket {
+            builder.args(["-L", socket]);
+        }
+        let output = builder
+            .args(["send-keys", "-t", target, "-l", text])
+            .output()?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "send-keys text to {target}: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Ok(())
+    }
+
+    fn send_key_named(&self, socket: Option<&str>, target: &str, key: &str) -> Result<()> {
+        let mut builder = Command::new("tmux");
+        if let Some(socket) = socket {
+            builder.args(["-L", socket]);
+        }
+        let output = builder.args(["send-keys", "-t", target, key]).output()?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "send-keys {key} to {target}: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Ok(())
     }
 
     fn capture_pane(

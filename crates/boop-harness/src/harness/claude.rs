@@ -140,15 +140,7 @@ impl Harness for Claude {
         // CLAUDE_ADAPTER is an npx row, so its program is npx and there is no
         // slot in it for an alternate claude binary. A lane that names one
         // takes the direct stream-json channel, which spawns that binary.
-        if spec.executable.is_some() {
-            return Ok(Box::new(boop_acp::channel::claude::ClaudeChannel::open(
-                spec,
-            )?));
-        }
-        Ok(Box::new(boop_acp::channel::acp::AcpChannel::open_adapter(
-            spec,
-            boop_acp::channel::acp::CLAUDE_ADAPTER,
-        )?))
+        Ok(crate::native_channel::open(self, spec)?)
     }
 
     fn id(&self) -> HarnessId {

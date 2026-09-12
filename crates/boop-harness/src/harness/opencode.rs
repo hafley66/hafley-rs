@@ -100,10 +100,7 @@ impl Harness for Opencode {
         &self,
         spec: &boop_acp::channel::ChannelSpec,
     ) -> anyhow::Result<Box<dyn boop_acp::channel::LaneChannel>> {
-        Ok(Box::new(boop_acp::channel::acp::AcpChannel::open_adapter(
-            spec,
-            boop_acp::channel::acp::OPENCODE_ADAPTER,
-        )?))
+        Ok(crate::native_channel::open(self, spec)?)
     }
 
     fn id(&self) -> HarnessId {
