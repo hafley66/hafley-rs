@@ -498,7 +498,7 @@ pub fn evict_targets_until_above_floor(
                     target = %victim.target.display(),
                     "evicted lane target below the disk floor"
                 );
-                println!(
+                info!(
                     "[boop] evicted {} target {} (free {:.1}G)",
                     victim.lane,
                     victim.target.display(),
@@ -772,7 +772,7 @@ fn reparent(lane: &LaneRun, dead: &str) -> Option<String> {
         lane = lane.lane,
         adopter, dead, "lane parent edge rewritten"
     );
-    println!("[boop] parent {dead} is gone; reparented to {adopter}");
+    info!("[boop] parent {dead} is gone; reparented to {adopter}");
     Some(adopter)
 }
 
@@ -809,7 +809,7 @@ impl ParentWatch {
         if let Some(pane) = self.own_pane.as_deref() {
             if !multiplexer.target_alive(None, pane) {
                 warn!(lane = lane.lane, pane, "own pane gone; ending the lane");
-                println!("[boop] pane {pane} is gone; ending the lane");
+                info!("[boop] pane {pane} is gone; ending the lane");
                 return Some(Ended {
                     exit_code: PARENT_DIED_EXIT,
                     detail: Some(format!("{}: {pane}", boop_store::trail::PANE_GONE)),
@@ -827,7 +827,7 @@ impl ParentWatch {
         match self.policy {
             ParentDeathPolicy::Kill => {
                 warn!(lane = lane.lane, parent, "parent gone; ending the lane");
-                println!("[boop] parent {parent} is gone; ending the lane");
+                info!("[boop] parent {parent} is gone; ending the lane");
                 Some(Ended {
                     exit_code: PARENT_DIED_EXIT,
                     detail: Some(format!("{}: {parent}", boop_store::trail::PARENT_DIED)),
@@ -1088,13 +1088,13 @@ fn accepted_resume(lane: &LaneRun, spawn_id: Option<i64>) -> Option<String> {
                 pinned,
                 "lane resume is not the pinned conversation"
             );
-            println!("[boop] fresh conversation: pinned for this cwd is {pinned}, not {id}");
+            info!("[boop] fresh conversation: pinned for this cwd is {pinned}, not {id}");
             None
         }
         Err(refusal) => {
             let reason = refusal.reason();
             warn!(lane = lane.lane, resume = id, reason, "lane resume refused");
-            println!("[boop] fresh conversation: {reason}");
+            info!("[boop] fresh conversation: {reason}");
             None
         }
     }
@@ -1150,7 +1150,7 @@ fn supervise(
                 conversation_id = conversation,
                 "lane revived from retirement"
             );
-            println!("[boop] revived conversation {conversation}");
+            info!("[boop] revived conversation {conversation}");
             let arrived = pending(&lane.mail_dir, &lane.lane, &seen)?;
             for hail in &arrived {
                 seen.insert(hail.id.clone());
@@ -1172,7 +1172,7 @@ fn supervise(
                 conversation_id = conversation,
                 "lane resuming pinned conversation"
             );
-            println!("{}", resume_line(conversation, spawn_id, &lane.cwd));
+            info!("{}", resume_line(conversation, spawn_id, &lane.cwd));
             RESUME_NUDGE.to_owned()
         }
         None => START_ACK_PROMPT.to_owned(),
@@ -1303,7 +1303,7 @@ fn supervise(
                     )
                 };
                 warn!(reported_ms, detail, "lane harness child killed");
-                println!("[boop] {detail}; stopping");
+                info!("[boop] {detail}; stopping");
                 if !start_ack_pending {
                     if let Err(error) = channel.close() {
                         events.record(
@@ -1355,7 +1355,7 @@ fn supervise(
                 last_activity.set(std::time::Instant::now());
                 record_hail_transition(events, &hail, "claimed-by-supervisor", "inbox drain");
                 if start_ack_pending {
-                    println!("[boop] hail {} held until startup acknowledgment", hail.id);
+                    info!("[boop] hail {} held until startup acknowledgment", hail.id);
                     held.push(hail);
                     continue;
                 }
@@ -1369,7 +1369,7 @@ fn supervise(
                         );
                         return Err(error);
                     }
-                    println!(
+                    info!(
                         "[boop] interrupt {} ({}); body lands next turn",
                         hail.id, hail.from
                     );
@@ -1407,7 +1407,7 @@ fn supervise(
                             "submitted-to-harness",
                             "mid-turn steer",
                         );
-                        println!("[boop] hail {} delivered midturn", hail.id);
+                        info!("[boop] hail {} delivered midturn", hail.id);
                         info!(
                             hail_id = hail.id,
                             from = hail.from,
@@ -1428,7 +1428,7 @@ fn supervise(
                         );
                     }
                     Delivery::NextTurn => {
-                        println!("[boop] hail {} held for the next turn", hail.id);
+                        info!("[boop] hail {} held for the next turn", hail.id);
                         info!(
                             hail_id = hail.id,
                             from = hail.from,
@@ -1447,7 +1447,7 @@ fn supervise(
         if !pr_checked {
             publish_pr(mail_store.as_ref(), lane, &turn_tools);
         }
-        println!("[boop] turn ended: {}", end.detail());
+        info!("[boop] turn ended: {}", end.detail());
         // Every turn end reports itself. The parent's picture of this lane
         // never depends on the model choosing to run `tell-parent`.
         if !start_ack_pending {
@@ -1490,7 +1490,7 @@ fn supervise(
                 });
             }
             start_ack_pending = false;
-            println!("[boop] startup acknowledged; submitting brief");
+            info!("[boop] startup acknowledged; submitting brief");
             let arrived = std::mem::take(&mut held);
             opening_hails = arrived.clone();
             turn = std::iter::once(brief.clone())
@@ -1509,7 +1509,7 @@ fn supervise(
                         chars,
                         "lane brief turn produced nothing; re-sending the brief"
                     );
-                    println!(
+                    info!(
                         "[boop] brief turn produced nothing ({chars} chars, no tool call); \
                          re-sending the brief ({empty_briefs}/{EMPTY_BRIEF_REFEEDS})"
                     );
@@ -1530,7 +1530,7 @@ fn supervise(
         }
         if end.retryable() && flake_resumes < FLAKE_RESUME_CAP {
             flake_resumes += 1;
-            println!("[boop] provider flake, resuming ({flake_resumes}/{FLAKE_RESUME_CAP})");
+            info!("[boop] provider flake, resuming ({flake_resumes}/{FLAKE_RESUME_CAP})");
             warn!(
                 flake_resumes,
                 flake_resume_cap = FLAKE_RESUME_CAP,
@@ -1587,14 +1587,14 @@ fn supervise(
         }
         if held.is_empty() {
             record_residency(&lane.mail_dir, &lane.lane, RESIDENCY_IDLE);
-            println!("[boop] lane idle, parked on the mailbox");
+            info!("[boop] lane idle, parked on the mailbox");
             let parked_at = std::time::Instant::now();
             let shutdown = idle_shutdown().filter(|_| result_written);
             loop {
                 if let Some(limit) = shutdown.filter(|limit| parked_at.elapsed() >= *limit) {
                     let secs = limit.as_secs();
                     info!(lane = lane.lane, idle_secs = secs, "lane idle shutdown");
-                    println!("[boop] no mail for {secs}s after the result row; retiring");
+                    info!("[boop] no mail for {secs}s after the result row; retiring");
                     if let Err(error) = channel.close() {
                         warn!(lane = lane.lane, error = %error, "close on idle shutdown failed");
                     }
@@ -2082,14 +2082,14 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
                 parent, exit_code, "lane result row written"
             );
             let landed = deliver_outbound(lane, &row);
-            println!(
+            info!(
                 "[boop] result rc={exit_code} hailed to {parent}: {}",
                 landed.unwrap_or_else(|| "held in the mailbox".to_owned())
             );
         }
         Err(error) => {
             error!(lane = lane.lane, parent, error = %error, "lane result row write failed");
-            println!("[boop] result row write failed: {error}");
+            info!("[boop] result row write failed: {error}");
         }
     }
 }
@@ -2292,7 +2292,7 @@ fn mail_parent(lane: &LaneRun, parent: &str, kind: &str, body: String, detail: O
         Ok(()) => {
             info!(lane = lane.lane, parent, kind, "lane parent row written");
             let landed = deliver_outbound(lane, &row);
-            println!(
+            info!(
                 "[boop] {kind} hailed to {parent}: {}",
                 landed.unwrap_or_else(|| "held in the mailbox".to_owned())
             );
@@ -2357,7 +2357,7 @@ fn hail_parent_once(lane: &LaneRun, kind: &str, attempt: u32, reason: &str) {
     match append_row(&lane.mail_dir, &row) {
         Ok(()) => {
             info!(lane = lane.lane, parent, kind, "lane failure hail written");
-            println!("[boop] {kind} hailed to {parent}");
+            info!("[boop] {kind} hailed to {parent}");
         }
         Err(error) => {
             error!(lane = lane.lane, parent, kind, error = %error, "failure hail write failed");
