@@ -12,6 +12,7 @@ use boop_acp::channel::{Delivery, LaneChannel, ToolCallFact, TurnEvent, TOOL_STA
 use boop_store::bus;
 
 use crate::headwatch::{commit_body, is_git_write, CommitStatus, HeadMove, HeadWatch};
+use crate::review;
 
 /// How often the inbox is re-read while a turn runs.
 const POLL: Duration = Duration::from_millis(700);
@@ -38,19 +39,6 @@ fn parse_commit_quiet(raw: Option<&str>) -> Duration {
 
 fn commit_quiet() -> Duration {
     parse_commit_quiet(std::env::var(COMMIT_QUIET_ENV).ok().as_deref())
-}
-
-/// Config key: the deadline on one `gh pr view` child. Unset/unparsable falls
-/// back to ten seconds, so a hung gh never blocks the turn loop.
-const PR_VIEW_TIMEOUT_ENV: &str = "BOOP_PR_VIEW_TIMEOUT_SECS";
-const DEFAULT_PR_VIEW_TIMEOUT: Duration = Duration::from_secs(10);
-
-fn pr_view_timeout() -> Duration {
-    std::env::var(PR_VIEW_TIMEOUT_ENV)
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .map(Duration::from_secs)
-        .unwrap_or(DEFAULT_PR_VIEW_TIMEOUT)
 }
 
 /// Fresh lanes prove that the harness can complete one minimal turn before
@@ -1125,6 +1113,10 @@ fn supervise(
     // and records the reported head through it, and `deliver_outbound` opens
     // its own per send.
     let mail_store = bus::open_store(&lane.mail_dir).ok();
+    // Start the one shared cache consumer and register this lane's worktree so
+    // cached PR/push changes can be correlated to it. Discovery no longer runs
+    // `gh pr view`; the cache is the only source.
+    review::observe_lane(&lane.mail_dir, &lane.lane, &lane.cwd);
     let reported = mail_store
         .as_ref()
         .and_then(|store| store.lane_reported_head(&lane.lane).ok().flatten());
@@ -1241,9 +1233,6 @@ fn supervise(
             record_delivery(events, &lane.mail_dir, &hail, Delivery::NextTurn);
         }
         remember_conversation(lane, channel);
-        // One `gh pr view` per turn, not one per poll: the tool fact stays in
-        // `turn_tools` for the rest of the turn once it lands.
-        let mut pr_checked = false;
         let end = loop {
             match channel.next_event(POLL) {
                 Err(error) => {
@@ -1268,10 +1257,6 @@ fn supervise(
             turn_tools.extend(channel.drain_tool_calls());
             if turn_tools.iter().any(is_git_write) {
                 head_watch.nudge();
-            }
-            if !pr_checked && turn_tools.iter().any(is_pr_create) {
-                pr_checked = true;
-                publish_pr(mail_store.as_ref(), lane, &turn_tools);
             }
             if let Some(mv) = head_watch.tick(&lane.cwd, Instant::now()) {
                 last_activity.set(std::time::Instant::now());
@@ -1442,11 +1427,8 @@ fn supervise(
         };
         last_activity.set(std::time::Instant::now());
         // A fast turn can finish before the 700 ms poll drains the channel's
-        // tool calls; read the rest so the PR producer still sees them.
+        // tool calls; read the rest so the commit producer still sees them.
         turn_tools.extend(channel.drain_tool_calls());
-        if !pr_checked {
-            publish_pr(mail_store.as_ref(), lane, &turn_tools);
-        }
         info!("[boop] turn ended: {}", end.detail());
         // Every turn end reports itself. The parent's picture of this lane
         // never depends on the model choosing to run `tell-parent`.
@@ -1804,84 +1786,11 @@ fn brief_with_post_pr(brief: String, post_pr: bool, pr_base: &str) -> String {
 }
 
 /// Whether a completed tool call ran `gh pr create`.
+///
+/// Retained for adapters and tests that classify a turn's tools. PR discovery
+/// itself no longer reads this: cached ghcache change events are the source.
 pub fn is_pr_create(tool: &ToolCallFact) -> bool {
     tool.status == TOOL_STATUS_COMPLETED && tool.title.contains("gh pr create")
-}
-
-/// Append and push one notice for a PR the turn opened, if the tools name one.
-/// `notify_pr` claims the url, so a second producer appends nothing.
-fn publish_pr(store: Option<&boop_store::Store>, lane: &LaneRun, tools: &[ToolCallFact]) {
-    let Some(store) = store else {
-        return;
-    };
-    if !tools.iter().any(is_pr_create) {
-        return;
-    }
-    let Some((url, title)) = pr_view(&lane.cwd) else {
-        return;
-    };
-    match store.notify_pr(&lane.lane, &url, Some(&title)) {
-        Ok(rows) => {
-            for row in rows {
-                deliver_outbound(lane, &row);
-            }
-        }
-        Err(error) => warn!(lane = lane.lane, error = %error, "PR notice write failed"),
-    }
-}
-
-/// The url and title of the PR at HEAD, read with `gh pr view`. A gh that
-/// hangs is killed after `pr_view_timeout` and reports `None`; the caller warns
-/// and the turn continues.
-fn pr_view(cwd: &Path) -> Option<(String, String)> {
-    use std::io::Read;
-    use std::process::{Command, Stdio};
-    use wait_timeout::ChildExt;
-
-    let timeout = pr_view_timeout();
-    let started = Instant::now();
-    let mut child = Command::new("gh")
-        .args(["pr", "view", "--json", "url,title"])
-        .current_dir(cwd)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
-    let stdout = match child.wait_timeout(timeout) {
-        Ok(Some(_)) => {
-            let mut stdout = Vec::new();
-            if let Some(mut pipe) = child.stdout.take() {
-                let _ = pipe.read_to_end(&mut stdout);
-            }
-            if !child.wait().ok()?.success() {
-                return None;
-            }
-            stdout
-        }
-        Ok(None) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            warn!(
-                elapsed_ms = started.elapsed().as_millis() as u64,
-                "gh pr view timed out"
-            );
-            return None;
-        }
-        Err(_) => return None,
-    };
-    let value: serde_json::Value = serde_json::from_slice(&stdout).ok()?;
-    let url = value
-        .get("url")
-        .and_then(serde_json::Value::as_str)
-        .filter(|url| !url.is_empty())?
-        .to_owned();
-    let title = value
-        .get("title")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("")
-        .to_owned();
-    Some((url, title))
 }
 
 /// The result row body, for a human reading the mailbox. The exit code every
