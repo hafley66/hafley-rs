@@ -38,10 +38,6 @@ pub fn open(
     let mut args = Vec::new();
     match harness {
         HarnessId::Claude => {
-            // A lane works unattended in a fresh worktree; the interactive
-            // trust and permission prompts the ACP channel skipped stay
-            // skipped here.
-            args.push("--dangerously-skip-permissions".into());
             if let Some(session) = spec.resume.as_deref() {
                 args.extend(["--resume".into(), session.into()]);
             }
@@ -556,12 +552,6 @@ fn trust_claude_workspace(cwd: &std::path::Path) {
     let Some(object) = root.as_object_mut() else {
         return;
     };
-    // The interactive bypass-permissions disclaimer is separate from the
-    // workspace trust dialog; both must be settled before the composer.
-    object.insert(
-        "bypassPermissionsModeAccepted".into(),
-        serde_json::Value::Bool(true),
-    );
     let projects = object
         .entry("projects")
         .or_insert_with(|| serde_json::json!({}));
