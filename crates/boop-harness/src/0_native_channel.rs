@@ -106,7 +106,9 @@ pub fn open(
     let route = Route {
         kind: "lane".into(),
         harness: Some(harness),
-        tmux: Some(lane.to_owned()),
+        tmux: std::env::var("BOOP_TMUX_TARGET")
+            .ok()
+            .or_else(|| std::env::var("TMUX_PANE").ok()),
         cwd: Some(native.cwd.display().to_string()),
         model: spec.model.clone(),
         mode: Some("native-lane".into()),
@@ -124,7 +126,7 @@ pub fn open(
         session: plan.session_id.clone(),
         plan,
         route,
-        target: lane.to_owned(),
+        target: std::env::var("BOOP_TMUX_TARGET").unwrap_or_else(|_| lane.to_owned()),
         baseline_seq: None,
     }))
 }
@@ -199,12 +201,27 @@ impl NativeLaneChannel {
     }
 
     fn submit_terminal(&self, text: &str) -> Result<()> {
-        // Codex announces the fresh thread before its composer has accepted
-        // terminal input. Give the native frontend a bounded startup window
-        // before submitting the first materializing turn.
-        thread::sleep(Duration::from_secs(1));
         let target = &self.target;
         let socket = std::env::var("BOOP_TMUX_SOCKET").ok();
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        loop {
+            let ready = boop_store::tmux::mux()
+                .capture_pane(socket.as_deref(), target, Some(80))
+                .ok()
+                .map(|screen| {
+                    let rows = screen.lines().collect::<Vec<_>>();
+                    self.adapter().terminal_input_region(&rows).is_some()
+                })
+                .unwrap_or(false);
+            if ready {
+                break;
+            }
+            anyhow::ensure!(
+                std::time::Instant::now() < deadline,
+                "native TUI composer readiness timed out for target {target}"
+            );
+            thread::sleep(Duration::from_millis(100));
+        }
         boop_store::tmux::mux().send_text(socket.as_deref(), &target, text)?;
         boop_store::tmux::mux().send_key_named(socket.as_deref(), &target, "Enter")?;
         Ok(())

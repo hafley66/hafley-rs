@@ -829,6 +829,9 @@ pub fn supervisor_command(spec: &SpawnSpec) -> String {
     if let Some(socket) = spec.socket.as_deref().filter(|value| !value.is_empty()) {
         command = format!("BOOP_TMUX_SOCKET={} {command}", shell_quote(socket));
     }
+    if let Some(target) = spec.tmux.as_deref().filter(|value| !value.is_empty()) {
+        command = format!("BOOP_TMUX_TARGET={} {command}", shell_quote(target));
+    }
     if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
         command.push_str(&format!(" --model {}", shell_quote(model)));
     }

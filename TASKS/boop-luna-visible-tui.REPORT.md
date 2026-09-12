@@ -6,7 +6,7 @@ Status: wip
 
 - Base: 2376a81
 - Worktree: fix/luna-visible-tui-20260912
-- Checkpoints: cae3ab3, fa619fd, pending receipt/binding fix
+- Checkpoints: cae3ab3, fa619fd, a5572a2, pending target/readiness fix
 
 ## Implementation
 
@@ -27,6 +27,8 @@ that first user message, targets the canonical lane session, and uses the door
 after materialization. Turn completion now requires transcript evidence for a
 new assistant message and includes text and tool count in TurnReceipt. Fresh
 Claude binding checks the frontend PID against the native session registry.
+Native input uses the declared SpawnSpec tmux target and socket. Submission
+waits up to 15 seconds for adapter composer evidence from the target pane.
 
 ## Startup reliability
 
