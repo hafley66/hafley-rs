@@ -38,6 +38,10 @@ pub fn open(
     let mut args = Vec::new();
     match harness {
         HarnessId::Claude => {
+            // A lane works unattended in a fresh worktree; the interactive
+            // trust and permission prompts the ACP channel skipped stay
+            // skipped here.
+            args.push("--dangerously-skip-permissions".into());
             if let Some(session) = spec.resume.as_deref() {
                 args.extend(["--resume".into(), session.into()]);
             }
@@ -92,6 +96,19 @@ pub fn open(
         ],
     };
     let mut plan = adapter.door().tui_launch(&native)?;
+    if harness == HarnessId::Claude {
+        // An interactive claude reads trust per canonical directory. A lane
+        // worktree is new on every spawn, so the workspace-trust dialog would
+        // otherwise park the pane before the composer exists. The ACP channel
+        // skipped it through print mode; the TUI needs the persisted grant.
+        trust_claude_workspace(&native.cwd);
+    }
+    if harness == HarnessId::Codex {
+        // Same shape as claude: codex compares the cwd spelling literally and
+        // a fresh worktree misses the recipe's trust table, so the composer
+        // readiness probe would match an overlaid trust dialog instead.
+        trust_codex_workspace(&native.cwd);
+    }
     plan.frontend = Some(
         std::process::Command::new(&plan.program)
             .args(&plan.args)
@@ -509,5 +526,90 @@ impl LaneChannel for NativeLaneChannel {
     fn close(&mut self) -> Result<()> {
         self.plan.stop();
         Ok(())
+    }
+}
+
+/// Mark `cwd` trusted in the claude config this lane will read. The config dir
+/// is `$CLAUDE_CONFIG_DIR` when set, else `~/.claude`; the file is
+/// `.claude.json` beside it. Other keys are preserved; a missing or unreadable
+/// file becomes a fresh object.
+fn trust_claude_workspace(cwd: &std::path::Path) {
+    // With `CLAUDE_CONFIG_DIR` the state file is `$CLAUDE_CONFIG_DIR/.claude.json`;
+    // without it claude keeps `~/.claude.json`.
+    let path = match std::env::var_os("CLAUDE_CONFIG_DIR") {
+        Some(dir) if !dir.is_empty() => std::path::PathBuf::from(dir).join(".claude.json"),
+        _ => match dirs::home_dir() {
+            Some(home) => home.join(".claude.json"),
+            None => return,
+        },
+    };
+    let Some(key) = std::fs::canonicalize(cwd)
+        .ok()
+        .map(|path| path.display().to_string())
+    else {
+        return;
+    };
+    let mut root: serde_json::Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+    let Some(object) = root.as_object_mut() else {
+        return;
+    };
+    // The interactive bypass-permissions disclaimer is separate from the
+    // workspace trust dialog; both must be settled before the composer.
+    object.insert(
+        "bypassPermissionsModeAccepted".into(),
+        serde_json::Value::Bool(true),
+    );
+    let projects = object
+        .entry("projects")
+        .or_insert_with(|| serde_json::json!({}));
+    let Some(projects) = projects.as_object_mut() else {
+        return;
+    };
+    projects.insert(key, serde_json::json!({ "hasTrustDialogAccepted": true }));
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(text) = serde_json::to_string_pretty(&root) {
+        let temp = path.with_extension("json.tmp");
+        if std::fs::write(&temp, text).is_ok() {
+            let _ = std::fs::rename(&temp, &path);
+        }
+    }
+}
+
+/// Append a trusted-project table for `cwd` to the codex config this lane will
+/// read. The config dir is `$CODEX_HOME` when set, else `~/.codex`; the file is
+/// `config.toml`. An existing table for the same canonical key is left alone.
+fn trust_codex_workspace(cwd: &std::path::Path) {
+    let config_dir = std::env::var_os("CODEX_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".codex")));
+    let Some(config_dir) = config_dir else {
+        return;
+    };
+    let Some(key) = std::fs::canonicalize(cwd)
+        .ok()
+        .map(|path| path.display().to_string())
+    else {
+        return;
+    };
+    let Ok(quoted) = serde_json::to_string(&key) else {
+        return;
+    };
+    let path = config_dir.join("config.toml");
+    let mut text = std::fs::read_to_string(&path).unwrap_or_default();
+    let header = format!("[projects.{quoted}]");
+    if text.contains(&header) {
+        return;
+    }
+    if !text.is_empty() && !text.ends_with('\n') {
+        text.push('\n');
+    }
+    text.push_str(&format!("{header}\ntrust_level = \"trusted\"\n"));
+    if std::fs::create_dir_all(&config_dir).is_ok() {
+        let _ = std::fs::write(&path, text);
     }
 }

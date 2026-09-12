@@ -156,6 +156,10 @@ impl Scratch {
 
 impl Drop for Scratch {
     fn drop(&mut self) {
+        if std::env::var_os("BOOP_COMMITPUSH_KEEP").is_some() {
+            eprintln!("kept {}", self.root.display());
+            return;
+        }
         let mail = self.mail.display().to_string();
         let _ = self.boop(&["beep", "lane", "delete", &self.lane, "--mail-dir", &mail]);
         let _ = tmux(&["kill-session", "-t", &self.lane]);
@@ -401,10 +405,8 @@ fn lane_create_command(
     let boop_dir = Path::new(BOOP).parent().unwrap().display().to_string();
     let path = std::env::var("PATH").unwrap_or_default();
     env.insert("PATH".into(), format!("{boop_dir}:{path}"));
-    env.insert(
-        "BOOP_READER_HOME".into(),
-        scratch.root.join("home").display().to_string(),
-    );
+    // A native lane's own live registry and transcript live under the lane's
+    // HOME; `BOOP_READER_HOME` must not point them at the coordinator's.
 
     let brief = scratch.repo.join("brief.md");
     let mut command = Command::new(BOOP);
