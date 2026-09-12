@@ -419,6 +419,7 @@ fn observe_tui(frontend: &str, backend: &str) -> Result<NativeTuiObserver> {
     listener.set_nonblocking(true)?;
     let backend = backend.to_owned();
     let (send, events) = std::sync::mpsc::sync_channel(64);
+    let evidence = std::sync::Arc::new(std::sync::Mutex::new(TurnEvidence::default()));
     let stop = Arc::new(AtomicBool::new(false));
     let stopping = stop.clone();
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -443,8 +444,9 @@ fn observe_tui(frontend: &str, backend: &str) -> Result<NativeTuiObserver> {
                         let send = send.clone();
                         let stop = stopping.clone();
                         let backend = backend.clone();
+                        let evidence = evidence.clone();
                         connections.spawn(async move {
-                            if let Err(error) = forward_tui(client, &backend, &send, &stop).await {
+                            if let Err(error) = forward_tui(client, &backend, &send, &stop, evidence).await {
                                 emit_tui_event(&send, &stop, NativeTuiEvent::Failed(error.to_string())).await;
                             }
                         });
@@ -472,6 +474,7 @@ async fn forward_tui(
     backend: &str,
     send: &std::sync::mpsc::SyncSender<NativeTuiEvent>,
     stop: &std::sync::atomic::AtomicBool,
+    evidence: std::sync::Arc<std::sync::Mutex<TurnEvidence>>,
 ) -> Result<()> {
     use futures_util::{SinkExt, StreamExt};
     use tungstenite::Message;
@@ -523,6 +526,9 @@ async fn forward_tui(
                     if let Some(event) = tui_event(&value, selected) {
                         emit_tui_event(send, stop, event).await;
                     }
+                    if let Some(event) = native_turn_event(&value, &evidence) {
+                        emit_tui_event(send, stop, event).await;
+                    }
                 }
             }
             let closing = frame.is_close();
@@ -537,6 +543,77 @@ async fn forward_tui(
         anyhow::Ok(())
     };
     tokio::select! { result = outgoing => result, result = incoming => result }
+}
+
+#[derive(Default)]
+struct TurnEvidence {
+    by_thread: std::collections::BTreeMap<String, (String, u32)>,
+}
+
+fn native_turn_event(
+    value: &serde_json::Value,
+    evidence: &std::sync::Arc<std::sync::Mutex<TurnEvidence>>,
+) -> Option<NativeTuiEvent> {
+    let method = value["method"].as_str()?;
+    let params = &value["params"];
+    let thread = params["threadId"].as_str()?;
+    let mut state = evidence.lock().ok()?;
+    let entry = state
+        .by_thread
+        .entry(thread.to_owned())
+        .or_insert_with(|| (String::new(), 0));
+    match method {
+        "item/agentMessage/delta" => {
+            entry.0.push_str(params["delta"].as_str()?);
+            None
+        }
+        "item/completed" => {
+            let item = &params["item"];
+            match item["type"].as_str()? {
+                "agentMessage" | "agent_message" => {
+                    if entry.0.is_empty() {
+                        entry.0 = item_text(item);
+                    }
+                }
+                "functionCall" | "function_call" | "customToolCall" | "custom_tool_call" => {
+                    entry.1 += 1;
+                }
+                _ => {}
+            }
+            None
+        }
+        "turn/completed" => {
+            let status = params["turn"]["status"]
+                .as_str()
+                .or_else(|| params["status"].as_str());
+            if !matches!(status, Some("completed" | "failed" | "interrupted")) {
+                return None;
+            }
+            let (text, tool_calls) = state.by_thread.remove(thread)?;
+            (!text.trim().is_empty()).then_some(NativeTuiEvent::Receipt {
+                session_id: thread.to_owned(),
+                text,
+                tool_calls,
+            })
+        }
+        _ => None,
+    }
+}
+
+fn item_text(item: &serde_json::Value) -> String {
+    item["text"]
+        .as_str()
+        .map(str::to_owned)
+        .or_else(|| {
+            item["content"].as_array().map(|parts| {
+                parts
+                    .iter()
+                    .filter_map(|part| part["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("")
+            })
+        })
+        .unwrap_or_default()
 }
 
 /// One websocket on the remote-control socket, `initialize`, then read

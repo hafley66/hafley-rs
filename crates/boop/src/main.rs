@@ -435,7 +435,10 @@ fn run_cli(cli: Cli) -> Result<()> {
         SubCmd::Tui { harness, name, .. } => {
             init_tracing(name.clone().or_else(|| tui_trail(harness)).as_deref(), true)?
         }
-        _ => init_tracing(supervised_lane(&command), false)?,
+        _ => {
+            let lane = supervised_lane(&command);
+            init_tracing(lane, lane.is_some())?
+        }
     }
     let registry = Registry::discover();
     let needs_startup_sync = startup_sync_wanted(&command, sync_suppressed());

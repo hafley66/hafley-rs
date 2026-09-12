@@ -268,6 +268,11 @@ pub enum NativeTuiEvent {
     Closed {
         session_id: String,
     },
+    Receipt {
+        session_id: String,
+        text: String,
+        tool_calls: u32,
+    },
     Failed(String),
 }
 

@@ -19,6 +19,7 @@ pub struct NativeLaneChannel {
     target: String,
     baseline_seq: Option<u64>,
     pending: bool,
+    pending_receipt: Option<TurnReceipt>,
 }
 
 pub fn open(
@@ -130,6 +131,7 @@ pub fn open(
         target: std::env::var("BOOP_TMUX_TARGET").unwrap_or_else(|_| lane.to_owned()),
         baseline_seq: None,
         pending: false,
+        pending_receipt: None,
     }))
 }
 
@@ -156,7 +158,17 @@ impl NativeLaneChannel {
                     NativeTuiEvent::Failed(error) => {
                         anyhow::bail!("native TUI observation failed: {error}")
                     }
-                    NativeTuiEvent::Settings { .. } | NativeTuiEvent::Closed { .. } => {}
+                    NativeTuiEvent::Receipt {
+                        session_id,
+                        text,
+                        tool_calls,
+                    } if self.pending && self.session.as_deref() == Some(&session_id) => {
+                        self.pending = false;
+                        self.pending_receipt = Some(TurnReceipt { text, tool_calls });
+                    }
+                    NativeTuiEvent::Settings { .. }
+                    | NativeTuiEvent::Closed { .. }
+                    | NativeTuiEvent::Receipt { .. } => {}
                 }
             }
         }
@@ -202,30 +214,103 @@ impl NativeLaneChannel {
             .with_context(|| format!("native TUI session {id} is not live"))
     }
 
-    fn submit_terminal(&self, text: &str) -> Result<()> {
+    fn submit_terminal(&mut self, text: &str) -> Result<()> {
         let target = &self.target;
         let socket = std::env::var("BOOP_TMUX_SOCKET").ok();
+        let input_target = boop_store::tmux::mux()
+            .pane_id(socket.as_deref(), target)
+            .unwrap_or_else(|| target.clone());
         let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        let mut stable_screen = None;
+        let mut stable_samples = 0;
         loop {
-            let ready = boop_store::tmux::mux()
+            let screen = boop_store::tmux::mux()
                 .capture_pane(socket.as_deref(), target, Some(80))
-                .ok()
-                .map(|screen| {
+                .ok();
+            let ready = screen.as_deref().is_some_and(|screen| {
                     let rows = screen.lines().collect::<Vec<_>>();
                     self.adapter().terminal_input_region(&rows).is_some()
-                })
-                .unwrap_or(false);
-            if ready {
+                        || (self.adapter_id == HarnessId::Codex
+                            && screen.contains("Ask Codex to do anything"))
+                });
+            if ready && stable_screen.as_deref() == screen.as_deref() {
+                stable_samples += 1;
+            } else if ready {
+                stable_screen = screen;
+                stable_samples = 1;
+            } else {
+                stable_screen = None;
+                stable_samples = 0;
+            }
+            if stable_samples >= 3 {
                 break;
             }
-            anyhow::ensure!(
-                std::time::Instant::now() < deadline,
-                "native TUI composer readiness timed out for target {target}"
-            );
+            if std::time::Instant::now() >= deadline {
+                let mux = boop_store::tmux::mux();
+                let pane = mux.pane_id(socket.as_deref(), target);
+                let screen = mux.capture_pane(socket.as_deref(), target, Some(80)).ok();
+                let artifact = serde_json::json!({
+                    "socket": socket,
+                    "target": target,
+                    "pane_id": pane,
+                    "input_target": input_target,
+                    "screen": screen,
+                    "screen_snapshot": screen.clone(),
+                    "input_region": false,
+                    "frontend_pid": self.plan.frontend.as_ref().map(std::process::Child::id),
+                    "frontend_status": self.plan.frontend.as_mut().and_then(|child| {
+                        child.try_wait().ok().flatten().map(|status| status.to_string())
+                    }),
+                    "argv": std::iter::once(self.plan.program.clone())
+                        .chain(self.plan.args.iter().map(|arg| arg.to_string_lossy().into_owned()))
+                        .collect::<Vec<_>>(),
+                });
+                let path = std::env::var_os("BOOP_MAIL_DIR")
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|| std::path::PathBuf::from("."))
+                    .join("lanes")
+                    .join(std::env::var("BOOP_LANE").unwrap_or_else(|_| "native".into()))
+                    .join("native-readiness-failure.json");
+                if let Some(parent) = path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let _ = std::fs::write(
+                    &path,
+                    serde_json::to_vec_pretty(&artifact).unwrap_or_default(),
+                );
+                anyhow::bail!(
+                    "native TUI composer readiness timed out for target {target}; artifact {}",
+                    path.display()
+                );
+            }
             thread::sleep(Duration::from_millis(100));
         }
-        boop_store::tmux::mux().send_text(socket.as_deref(), &target, text)?;
-        boop_store::tmux::mux().send_key_named(socket.as_deref(), &target, "Enter")?;
+        boop_store::tmux::mux().send_text(socket.as_deref(), &input_target, text)?;
+        boop_store::tmux::mux().send_key_named(socket.as_deref(), &input_target, "Enter")?;
+        let evidence = serde_json::json!({
+            "socket": socket,
+            "target": target,
+            "pane_id": boop_store::tmux::mux().pane_id(socket.as_deref(), target),
+            "input_target": input_target,
+            "screen": boop_store::tmux::mux().capture_pane(socket.as_deref(), target, Some(80)).ok(),
+            "frontend_pid": self.plan.frontend.as_ref().map(std::process::Child::id),
+            "frontend_status": self.plan.frontend.as_mut().and_then(|child| {
+                child.try_wait().ok().flatten().map(|status| status.to_string())
+            }),
+        });
+        let path = std::env::var_os("BOOP_MAIL_DIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("lanes")
+            .join(std::env::var("BOOP_LANE").unwrap_or_else(|_| "native".into()))
+            .join("native-input-evidence.json");
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(
+            &path,
+            serde_json::to_vec_pretty(&evidence).unwrap_or_default(),
+        );
         Ok(())
     }
 
@@ -242,7 +327,7 @@ impl NativeLaneChannel {
         });
     }
 
-    fn submit_turn(&self, text: &str) -> Result<()> {
+    fn submit_turn(&mut self, text: &str) -> Result<()> {
         if self.session.is_some() {
             let session = self.live_session()?;
             match self.adapter().door().deliver(&session, text) {
@@ -285,11 +370,7 @@ impl LaneChannel for NativeLaneChannel {
     }
 
     fn steer(&mut self, text: &str) -> Result<Delivery> {
-        if !self.pending {
-            self.start_turn(text)?;
-            return Ok(Delivery::NextTurn);
-        }
-        self.submit_turn(text)?;
+        let _ = text;
         Ok(Delivery::NextTurn)
     }
 
@@ -298,7 +379,9 @@ impl LaneChannel for NativeLaneChannel {
         loop {
             self.observe()?;
             if !self.pending {
-                return Ok(None);
+                return Ok(self.pending_receipt.take().map(|receipt| {
+                    TurnEvent::ok_with_receipt("native TUI turn completed", receipt)
+                }));
             }
             if let Some(child) = self.plan.frontend.as_mut() {
                 if let Some(status) = child.try_wait()? {
@@ -316,13 +399,16 @@ impl LaneChannel for NativeLaneChannel {
                     &session,
                     deadline.saturating_duration_since(std::time::Instant::now()),
                 ) {
-                    Ok(_) => match self.receipt() {
-                        Some(receipt) => {
-                            self.pending = false;
-                            Ok(Some(TurnEvent::ok_with_receipt("native TUI idle", receipt)))
+                    Ok(_) => {
+                        self.observe()?;
+                        match self.pending_receipt.take().or_else(|| self.receipt()) {
+                            Some(receipt) => {
+                                self.pending = false;
+                                Ok(Some(TurnEvent::ok_with_receipt("native TUI idle", receipt)))
+                            }
+                            None => Ok(None),
                         }
-                        None => Ok(None),
-                    },
+                    }
                     Err(error)
                         if error.to_string().contains("stayed busy")
                             || error.to_string().contains("stayed active") =>
