@@ -6,7 +6,7 @@ Status: wip
 
 - Base: 2376a81
 - Worktree: fix/luna-visible-tui-20260912
-- Checkpoint: native lane channel and isolated tmux input routing
+- Checkpoints: cae3ab3, fa619fd
 
 ## Implementation
 
@@ -23,7 +23,8 @@ after 30s"; the session was created but the initial input addressed the default
 tmux server. After socket propagation, Codex created a native session, then
 reported "thread ... is not materialized yet; thread/turns/list is unavailable
 before first user message". The channel now falls back to the native pane for
-that first user message and uses the door after materialization.
+that first user message, targets the canonical lane session, and uses the door
+after materialization.
 
 ## Startup reliability
 
