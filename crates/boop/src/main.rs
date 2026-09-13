@@ -867,6 +867,10 @@ enum BeepCmd {
         /// The config preset the lane spawns from: harness, model, effort.
         #[arg(long)]
         preset: Option<String>,
+        /// Open Claude presets in the native interactive TUI. Other harnesses
+        /// retain their supervised lane launch. Used by Instant's fork panel.
+        #[arg(long)]
+        claude_tui: bool,
         /// Repo to branch from; defaults to the repo the caller stands in.
         #[arg(long)]
         cwd: Option<String>,

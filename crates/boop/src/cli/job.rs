@@ -1,3 +1,6 @@
+#[path = "job/0_interactive.rs"]
+mod interactive;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -26,6 +29,7 @@ use crate::{AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, 
 // ---------------------------------------------------------------------------
 
 pub(crate) struct DispatchArgs {
+    pub(crate) interactive: bool,
     pub(crate) to: String,
     pub(crate) cwd: String,
     pub(crate) cmd: String,
@@ -146,6 +150,9 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
         mail_dir: dir.clone(),
         warm_start: args.warm_start,
     };
+    if args.interactive {
+        return interactive::dispatch(&spec, &message, args.parent, args.goal);
+    }
     let session = adapter.spawn(&spec)?;
     // The record a send to a retired lane replays to bring the pane back.
     // The route's cwd is where the harness actually runs (the worktree when
@@ -896,6 +903,7 @@ pub(crate) fn parse_iso_ms(text: &str) -> Option<u64> {
 // ---------------------------------------------------------------------------
 
 pub(crate) struct LaneArgs {
+    pub(crate) claude_tui: bool,
     pub(crate) name: Option<String>,
     pub(crate) cwd: Option<String>,
     pub(crate) harness: Option<String>,
@@ -1166,6 +1174,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         requested_model.as_deref(),
     )?;
     let adapter = registry.get(harness_id);
+    let interactive = args.claude_tui && harness_id == HarnessId::Claude;
     let here = std::env::current_dir().context("read the current directory")?;
     let (repo, repo_source) = spawn_repo(args.cwd.as_deref(), args.brief.as_deref(), &here)?;
     if let Some(drift) = repo_drift_line(&repo, repo_source, &here) {
@@ -1308,9 +1317,13 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             mail_dir: hail_mail_dir.clone(),
             warm_start: !args.no_start,
         };
-        let command = adapter
-            .preview_command(&spec)
-            .unwrap_or_else(|| format!("{} {}", adapter.id(), shell_quote(&prompt)));
+        let command = if interactive {
+            interactive::command(&spec)
+        } else {
+            adapter
+                .preview_command(&spec)
+                .unwrap_or_else(|| format!("{} {}", adapter.id(), shell_quote(&prompt)))
+        };
         println!("cmd: {command}");
         println!("to: {}", identity.lane);
         println!("cwd: {}", repo.display());
@@ -1410,6 +1423,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     run_dispatch(
         registry,
         DispatchArgs {
+            interactive,
             to: identity.lane,
             cwd: repo.display().to_string(),
             cmd: prompt,
@@ -1550,6 +1564,7 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
         ),
         #[cfg(feature = "agent-read")]
         BeepCmd::Fork {
+            claude_tui,
             comment,
             cmd,
             preset,
@@ -1583,6 +1598,7 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
             None => match comment {
                 Some(comment) => run_fork(
                     registry,
+                    claude_tui,
                     comment,
                     preset,
                     cwd,
@@ -1794,6 +1810,7 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_fork(
     registry: &Registry,
+    claude_tui: bool,
     comment_id: i64,
     preset: Option<String>,
     cwd: Option<String>,
@@ -1834,8 +1851,9 @@ pub(crate) fn run_fork(
         .take(120)
         .collect::<String>();
     println!("brief {}", brief_path.display());
-    run_beep_lane(
+    run_beep_lane_with_tui(
         registry,
+        claude_tui,
         LaneCmd::Create {
             branch: Some(branch.clone()),
             brief: Some(brief_path.clone()),
@@ -2178,6 +2196,10 @@ fn fork_brief(comment: &boop::ident::TurnComment, turns: &[boop::rows::TurnRow])
 }
 
 pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
+    run_beep_lane_with_tui(registry, false, cmd)
+}
+
+fn run_beep_lane_with_tui(registry: &Registry, claude_tui: bool, cmd: LaneCmd) -> Result<()> {
     match cmd {
         LaneCmd::List {
             state,
@@ -2239,6 +2261,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
             run_lane(
                 registry,
                 LaneArgs {
+                    claude_tui,
                     name: lane,
                     cwd,
                     harness,

@@ -351,11 +351,14 @@ pub(crate) fn run_native_tui(
             );
         }
     }
-    let parent = existing.and_then(|route| route.parent).or_else(|| {
-        boop::identity::from_env()
-            .and_then(|identity| identity.session)
-            .filter(|caller| caller != name)
-    });
+    let parent = existing
+        .as_ref()
+        .and_then(|route| route.parent.clone())
+        .or_else(|| {
+            boop::identity::from_env()
+                .and_then(|identity| identity.session)
+                .filter(|caller| caller != name)
+        });
     let spec = NativeTuiSpec {
         executable: executable.into(),
         cwd: cwd.to_path_buf(),
@@ -429,18 +432,23 @@ pub(crate) fn run_native_tui(
         harness: Some(adapter.id()),
         tmux: pane.clone(),
         cwd: Some(cwd.display().to_string()),
-        model: None,
+        model: existing.as_ref().and_then(|route| route.model.clone()),
         mode: Some(plan.mode.clone()),
         session_id: plan.session_id.clone(),
         source_path: plan.source_path.clone(),
         parent,
-        goal: None,
-        registered_at: Some(boop::bus::now_iso()),
-        base_sha: None,
-        worktree_dir: None,
+        goal: existing.as_ref().and_then(|route| route.goal.clone()),
+        registered_at: existing
+            .as_ref()
+            .and_then(|route| route.registered_at.clone())
+            .or_else(|| Some(boop::bus::now_iso())),
+        base_sha: existing.as_ref().and_then(|route| route.base_sha.clone()),
+        worktree_dir: existing
+            .as_ref()
+            .and_then(|route| route.worktree_dir.clone()),
         app_server_socket: plan.app_server_socket.clone(),
     };
-    let mut trace = None;
+    let mut trace = store.trace_of(name)?;
     if let Some(session) = route.session_id.clone() {
         bind_native_session(&store, &mut route, &mut trace, &session, frontend_pid)?;
     }
