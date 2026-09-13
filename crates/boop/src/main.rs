@@ -88,6 +88,12 @@ enum SubCmd {
         cwd: Option<PathBuf>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
+        /// Submit once the native composer is ready (requires tmux).
+        #[arg(long)]
+        initial_prompt: Option<String>,
+        /// Apply an OpenCode variant before its first prompt.
+        #[arg(long, requires = "name")]
+        initial_effort: Option<String>,
         /// Arguments forwarded to the ordinary harness TUI.
         #[arg(last = true)]
         args: Vec<String>,
@@ -453,6 +459,8 @@ fn run_cli(cli: Cli) -> Result<()> {
                 name,
                 cwd,
                 mail_dir,
+                initial_prompt,
+                initial_effort,
                 args,
             } => {
                 let cwd = cwd.unwrap_or(std::env::current_dir()?);
@@ -466,6 +474,8 @@ fn run_cli(cli: Cli) -> Result<()> {
                     &cwd,
                     mail_dir.as_deref(),
                     executable.as_deref(),
+                    initial_prompt.as_deref(),
+                    initial_effort.as_deref(),
                     &args,
                 )
             }
@@ -867,10 +877,9 @@ enum BeepCmd {
         /// The config preset the lane spawns from: harness, model, effort.
         #[arg(long)]
         preset: Option<String>,
-        /// Open Claude presets in the native interactive TUI. Other harnesses
-        /// retain their supervised lane launch. Used by Instant's fork panel.
-        #[arg(long)]
-        claude_tui: bool,
+        /// Open the selected harness in its native interactive TUI.
+        #[arg(long, alias = "claude-tui")]
+        interactive: bool,
         /// Repo to branch from; defaults to the repo the caller stands in.
         #[arg(long)]
         cwd: Option<String>,

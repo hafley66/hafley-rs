@@ -903,7 +903,7 @@ pub(crate) fn parse_iso_ms(text: &str) -> Option<u64> {
 // ---------------------------------------------------------------------------
 
 pub(crate) struct LaneArgs {
-    pub(crate) claude_tui: bool,
+    pub(crate) interactive: bool,
     pub(crate) name: Option<String>,
     pub(crate) cwd: Option<String>,
     pub(crate) harness: Option<String>,
@@ -1174,7 +1174,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         requested_model.as_deref(),
     )?;
     let adapter = registry.get(harness_id);
-    let interactive = args.claude_tui && harness_id == HarnessId::Claude;
+    let interactive = args.interactive;
     let here = std::env::current_dir().context("read the current directory")?;
     let (repo, repo_source) = spawn_repo(args.cwd.as_deref(), args.brief.as_deref(), &here)?;
     if let Some(drift) = repo_drift_line(&repo, repo_source, &here) {
@@ -1564,7 +1564,7 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
         ),
         #[cfg(feature = "agent-read")]
         BeepCmd::Fork {
-            claude_tui,
+            interactive,
             comment,
             cmd,
             preset,
@@ -1598,7 +1598,7 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
             None => match comment {
                 Some(comment) => run_fork(
                     registry,
-                    claude_tui,
+                    interactive,
                     comment,
                     preset,
                     cwd,
@@ -1810,7 +1810,7 @@ pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_fork(
     registry: &Registry,
-    claude_tui: bool,
+    interactive: bool,
     comment_id: i64,
     preset: Option<String>,
     cwd: Option<String>,
@@ -1837,6 +1837,21 @@ pub(crate) fn run_fork(
     let brief_path = dir.join("forks").join(format!("comment-{comment_id}.md"));
     std::fs::create_dir_all(brief_path.parent().expect("forks dir has a parent"))?;
     std::fs::write(&brief_path, &brief)?;
+    let source_dir = cwd
+        .as_ref()
+        .map(PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    anyhow::ensure!(
+        source_dir.is_dir(),
+        "fork working directory does not exist: {}",
+        source_dir.display()
+    );
+    let has_repo = lane::repo_root(&source_dir).is_ok();
+    anyhow::ensure!(
+        interactive || has_repo,
+        "headless forks require a Git repository; use --interactive for this directory"
+    );
+    let cwd = Some(source_dir.display().to_string());
     let branch = format!("fork/comment-{comment_id}");
     let lane = branch.replace('/', "-");
     let goal = comment
@@ -1853,9 +1868,9 @@ pub(crate) fn run_fork(
     println!("brief {}", brief_path.display());
     run_beep_lane_with_tui(
         registry,
-        claude_tui,
+        interactive,
         LaneCmd::Create {
-            branch: Some(branch.clone()),
+            branch: has_repo.then(|| branch.clone()),
             brief: Some(brief_path.clone()),
             goal: Some(goal),
             mood: None,
@@ -1880,7 +1895,7 @@ pub(crate) fn run_fork(
             bin: None,
             wait: false,
             wait_timeout: 3600,
-            lane: None,
+            lane: (!has_repo).then(|| lane.clone()),
             tmux: None,
             socket: None,
             mail_dir: Some(dir.clone()),
@@ -1894,7 +1909,7 @@ pub(crate) fn run_fork(
     store.record_turn_comment_fork(&boop::ident::TurnCommentFork {
         comment_id,
         lane: lane.clone(),
-        branch,
+        branch: if has_repo { branch } else { String::new() },
         brief: brief_path.display().to_string(),
         created_ts: boop::live::now_ms() as i64,
     })?;
@@ -2199,7 +2214,7 @@ pub(crate) fn run_beep_lane(registry: &Registry, cmd: LaneCmd) -> Result<()> {
     run_beep_lane_with_tui(registry, false, cmd)
 }
 
-fn run_beep_lane_with_tui(registry: &Registry, claude_tui: bool, cmd: LaneCmd) -> Result<()> {
+fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) -> Result<()> {
     match cmd {
         LaneCmd::List {
             state,
@@ -2261,7 +2276,7 @@ fn run_beep_lane_with_tui(registry: &Registry, claude_tui: bool, cmd: LaneCmd) -
             run_lane(
                 registry,
                 LaneArgs {
-                    claude_tui,
+                    interactive,
                     name: lane,
                     cwd,
                     harness,

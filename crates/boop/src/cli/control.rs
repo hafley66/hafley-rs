@@ -304,6 +304,8 @@ pub(crate) fn run_native_tui(
     cwd: &Path,
     mail_dir_arg: Option<&Path>,
     executable: Option<&str>,
+    initial_prompt: Option<&str>,
+    initial_effort: Option<&str>,
     tui_args: &[String],
 ) -> Result<()> {
     let executable = executable.unwrap_or(adapter.id().as_str());
@@ -326,6 +328,10 @@ pub(crate) fn run_native_tui(
     let pane = std::env::var("TMUX_PANE")
         .ok()
         .filter(|pane| !pane.is_empty());
+    anyhow::ensure!(
+        initial_prompt.is_none() || pane.is_some(),
+        "--initial-prompt requires a tmux pane"
+    );
     let default_name = native_route_name(adapter.id().as_str());
     let name = name.unwrap_or(&default_name);
     let dir = mail_dir(mail_dir_arg)?;
@@ -378,6 +384,15 @@ pub(crate) fn run_native_tui(
     };
     let launch_started = std::time::Instant::now();
     let mut plan = StopBackend(adapter.door().tui_launch(&spec)?);
+    if let Some(effort) = initial_effort {
+        let mut settings_route = existing
+            .clone()
+            .context("--initial-effort requires a registered fork route")?;
+        settings_route.session_id = plan.session_id.clone();
+        settings_route.app_server_socket = plan.app_server_socket.clone();
+        let model = settings_route.model.as_deref().context("fork route has no model")?;
+        adapter.door().change_native_settings(&settings_route, model, effort)?;
+    }
     let launch_ms = launch_started.elapsed().as_millis() as u64;
     if launch_ms >= 2_000 {
         tracing::warn!(harness = %adapter.id(), elapsed_ms = launch_ms, "slow native TUI launch (backend start before the screen)");
@@ -470,8 +485,18 @@ pub(crate) fn run_native_tui(
     let mut last_parent_project = std::time::Instant::now() - parent_project_every;
     let mut last_discover = std::time::Instant::now() - discover_every;
     let mut last_drain = std::time::Instant::now() - DRAIN_EVERY;
+    let mut pending_prompt = initial_prompt;
     let outcome = (|| -> Result<()> {
         loop {
+            if let (Some(prompt), Some(pane)) = (pending_prompt, pane.as_deref()) {
+                let screen = boop::tmux::mux().capture_pane(None, pane, None)?;
+                let rows = screen.lines().collect::<Vec<_>>();
+                if adapter.terminal_input_region(&rows).is_some() {
+                    crate::cli::paste::send_keys(pane, &[prompt], true)?;
+                    crate::cli::paste::send_keys(pane, &["Enter"], false)?;
+                    pending_prompt = None;
+                }
+            }
             if let Some(signal) = signals.pending().next() {
                 // SIGINT is the pane's Ctrl-C, meant for the TUI child. The
                 // wrapper's copy is dropped; SIGHUP and SIGTERM still end it.

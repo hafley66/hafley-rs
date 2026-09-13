@@ -234,57 +234,71 @@ fn instant_forks_select_the_native_claude_tui_and_keep_other_presets() {
             ts: 1,
         })
         .unwrap();
-    for (preset, row) in rows().into_iter().filter(|(name, _)| name != REFUSED) {
-        let output = Command::new(env!("CARGO_BIN_EXE_boop"))
-            .boop_test_root(&fixture.root)
-            .env("BOOP_CONFIG", fixture.root.join("config/boop/config.json"))
-            .env("BOOP_DB", fixture.root.join("boop.db"))
-            .env("BOOP_NO_SYNC", "1")
-            .args([
-                "beep",
-                "fork",
-                &id.to_string(),
-                "--claude-tui",
-                "--dry-run",
-                "--preset",
-                &preset,
-            ])
-            .arg("--cwd")
-            .arg(&fixture.repo)
-            .arg("--mail-dir")
-            .arg(&fixture.mail)
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{preset}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let stdout = String::from_utf8(output.stdout).unwrap();
-        let command = stdout
-            .lines()
-            .find_map(|line| line.strip_prefix("cmd: "))
-            .unwrap();
-        assert_eq!(
-            command.contains("boop tui claude"),
-            row.harness == "claude",
-            "{preset}: {command}"
-        );
-        assert_eq!(
-            command.contains("beep lane run"),
-            row.harness != "claude",
-            "{preset}: {command}"
-        );
-        assert!(
-            command.contains(&format!("--model '{}'", row.model)),
-            "{command}"
-        );
-        assert!(parses_as_shell(command), "{command}");
-        let brief =
-            std::fs::read_to_string(fixture.mail.join("forks").join(format!("comment-{id}.md")))
+    for cwd in [&fixture.repo, &fixture.root] {
+        for (preset, row) in rows().into_iter().filter(|(name, _)| name != REFUSED) {
+            let output = Command::new(env!("CARGO_BIN_EXE_boop"))
+                .boop_test_root(&fixture.root)
+                .env("BOOP_CONFIG", fixture.root.join("config/boop/config.json"))
+                .env("BOOP_DB", fixture.root.join("boop.db"))
+                .env("BOOP_NO_SYNC", "1")
+                .args([
+                    "beep",
+                    "fork",
+                    &id.to_string(),
+                    "--interactive",
+                    "--dry-run",
+                    "--preset",
+                    &preset,
+                ])
+                .arg("--cwd")
+                .arg(cwd)
+                .arg("--mail-dir")
+                .arg(&fixture.mail)
+                .output()
                 .unwrap();
-        assert!(brief.contains("Explain the quote like a textbook"));
-        assert!(brief.contains("unification"));
+            assert!(
+                output.status.success(),
+                "{preset}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let stdout = String::from_utf8(output.stdout).unwrap();
+            let command = stdout
+                .lines()
+                .find_map(|line| line.strip_prefix("cmd: "))
+                .unwrap();
+            assert!(
+                command.contains(&format!("boop tui {}", row.harness)),
+                "{preset}: {command}"
+            );
+            assert!(!command.contains("beep lane run"), "{preset}: {command}");
+            if row.harness == "codex" {
+                if let Some(effort) = &row.effort {
+                    assert!(
+                        command.contains(&format!("model_reasoning_effort={effort}")),
+                        "{command}"
+                    );
+                }
+            }
+            assert!(
+                command.contains(&format!("--model '{}'", row.model)),
+                "{command}"
+            );
+            if row.harness == "opencode" {
+                if let Some(variant) = row.variant.as_ref().or(row.effort.as_ref()) {
+                    assert!(
+                        command.contains(&format!("--initial-effort '{variant}'")),
+                        "{command}"
+                    );
+                }
+            }
+            assert!(parses_as_shell(command), "{command}");
+            let brief = std::fs::read_to_string(
+                fixture.mail.join("forks").join(format!("comment-{id}.md")),
+            )
+            .unwrap();
+            assert!(brief.contains("Explain the quote like a textbook"));
+            assert!(brief.contains("unification"));
+        }
     }
 }
 
@@ -308,133 +322,149 @@ fn interactive_fork_accepts_keyboard_input_in_its_tmux_pane() {
                 .output();
         }
     }
-    let fixture = Fixture::new("interactive-tmux");
-    let server = Server {
-        bin: tmux,
-        name: format!("boop-fork-input-{}", std::process::id()),
-    };
-    let bin = fixture.root.join("bin");
-    std::fs::create_dir_all(&bin).unwrap();
-    let fake = bin.join("fixture-claude");
-    std::fs::write(&fake, "#!/usr/bin/env python3\nimport sys\nprint('FORK-INPUT-READY', flush=True)\nprint(repr(sys.argv[1:]), flush=True)\nfor line in sys.stdin:\n print('FORK-INPUT-ECHO:' + line.strip(), flush=True)\n").unwrap();
-    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mux = bin.join("tmux");
-    std::fs::write(
-        &mux,
-        format!(
-            "#!/bin/sh\nexec '{}' -L '{}' -f /dev/null \"$@\"\n",
-            server.bin, server.name
-        ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&mux, std::fs::Permissions::from_mode(0o755)).unwrap();
-    std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_boop"), bin.join("boop")).unwrap();
-    let mut config: serde_json::Value = serde_json::from_str(TABLE).unwrap();
-    config["model-presets"]["fable"]["bin"] = fake.display().to_string().into();
-    std::fs::write(
-        fixture.root.join("config/boop/config.json"),
-        config.to_string(),
-    )
-    .unwrap();
-    git(
-        &fixture.repo,
-        &["update-ref", "refs/remotes/origin/main", "HEAD"],
-    );
-    let store = boop::bus::open_store(&fixture.mail).unwrap();
-    let id = store
-        .turn_comment_upsert(&boop::ident::TurnCommentUpsert {
-            client_id: "tmux-fork",
-            kind: "note",
-            quote: "quoted context",
-            note: Some("Explain this"),
-            enabled: true,
-            tab_name: Some("source"),
-            targets: &[],
-            ts: 1,
-        })
-        .unwrap();
-    let lane = format!("fork-comment-{id}");
-    let output = Command::new(env!("CARGO_BIN_EXE_boop"))
-        .boop_test_root(&fixture.root)
-        .env(
-            "PATH",
-            format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+    for has_repo in [true, false] {
+        let fixture = Fixture::new("interactive-tmux");
+        let server = Server {
+            bin: tmux.clone(),
+            name: format!("boop-fork-input-{}", std::process::id()),
+        };
+        let bin = fixture.root.join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let fake = bin.join("fixture-claude");
+        std::fs::write(&fake, "#!/usr/bin/env python3\nimport sys\nprint('FORK-INPUT-READY', flush=True)\nprint(repr(sys.argv[1:]), flush=True)\nfor line in sys.stdin:\n print('FORK-INPUT-ECHO:' + line.strip(), flush=True)\n").unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mux = bin.join("tmux");
+        std::fs::write(
+            &mux,
+            format!(
+                "#!/bin/sh\nexec '{}' -L '{}' -f /dev/null \"$@\"\n",
+                server.bin, server.name
+            ),
         )
-        .env("BOOP_CONFIG", fixture.root.join("config/boop/config.json"))
-        .env("BOOP_DB", fixture.mail.join("boop.db"))
-        .env("BOOP_NO_SYNC", "1")
-        .env("BOOP_DISK_FLOOR_GB", "0")
-        .args([
-            "beep",
-            "fork",
-            &id.to_string(),
-            "--claude-tui",
-            "--preset",
-            "fable",
-        ])
-        .arg("--cwd")
-        .arg(&fixture.repo)
-        .arg("--mail-dir")
-        .arg(&fixture.mail)
-        .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let deadline = Instant::now() + Duration::from_secs(20);
-    loop {
-        let screen = Command::new(&server.bin)
-            .args(["-L", &server.name, "capture-pane", "-p", "-t", &lane])
-            .output()
-            .unwrap();
-        if String::from_utf8_lossy(&screen.stdout).contains("FORK-INPUT-READY") {
-            break;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "native input did not open: {}",
-            String::from_utf8_lossy(&screen.stdout)
+        std::fs::set_permissions(&mux, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_boop"), bin.join("boop")).unwrap();
+        let mut config: serde_json::Value = serde_json::from_str(TABLE).unwrap();
+        config["model-presets"]["fable"]["bin"] = fake.display().to_string().into();
+        std::fs::write(
+            fixture.root.join("config/boop/config.json"),
+            config.to_string(),
+        )
+        .unwrap();
+        git(
+            &fixture.repo,
+            &["update-ref", "refs/remotes/origin/main", "HEAD"],
         );
-        std::thread::sleep(Duration::from_millis(100));
-    }
-    assert!(Command::new(&server.bin)
-        .args([
-            "-L",
-            &server.name,
-            "send-keys",
-            "-t",
-            &lane,
-            "next-question",
-            "Enter"
-        ])
-        .status()
-        .unwrap()
-        .success());
-    loop {
-        let screen = Command::new(&server.bin)
-            .args(["-L", &server.name, "capture-pane", "-p", "-t", &lane])
+        let store = boop::bus::open_store(&fixture.mail).unwrap();
+        let id = store
+            .turn_comment_upsert(&boop::ident::TurnCommentUpsert {
+                client_id: "tmux-fork",
+                kind: "note",
+                quote: "quoted context",
+                note: Some("Explain this"),
+                enabled: true,
+                tab_name: Some("source"),
+                targets: &[],
+                ts: 1,
+            })
+            .unwrap();
+        let lane = format!("fork-comment-{id}");
+        let output = Command::new(env!("CARGO_BIN_EXE_boop"))
+            .boop_test_root(&fixture.root)
+            .env(
+                "PATH",
+                format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+            )
+            .env("BOOP_CONFIG", fixture.root.join("config/boop/config.json"))
+            .env("BOOP_DB", fixture.mail.join("boop.db"))
+            .env("BOOP_NO_SYNC", "1")
+            .env("BOOP_DISK_FLOOR_GB", "0")
+            .args([
+                "beep",
+                "fork",
+                &id.to_string(),
+                "--interactive",
+                "--preset",
+                "fable",
+            ])
+            .arg("--cwd")
+            .arg(if has_repo {
+                &fixture.repo
+            } else {
+                &fixture.root
+            })
+            .arg("--mail-dir")
+            .arg(&fixture.mail)
             .output()
             .unwrap();
-        let screen = String::from_utf8_lossy(&screen.stdout);
-        let routes = boop::bus::read_routes(&fixture.mail).unwrap();
-        let route = &routes[&lane];
-        if screen.contains("FORK-INPUT-ECHO:next-question") && route.source_path.is_some() {
-            assert_eq!(route.kind.as_str(), "coordinator");
-            assert_eq!(route.goal.as_deref(), Some("Explain this"));
-            assert!(route.base_sha.is_some());
-            assert!(route
-                .worktree_dir
-                .as_ref()
-                .unwrap()
-                .ends_with(&format!("fork/comment-{id}")));
-            assert!(screen.contains("Read the fork context"));
-            assert_eq!(store.turn_comment_forks(id).unwrap()[0].lane, lane);
-            break;
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            let screen = Command::new(&server.bin)
+                .args(["-L", &server.name, "capture-pane", "-p", "-t", &lane])
+                .output()
+                .unwrap();
+            if String::from_utf8_lossy(&screen.stdout).contains("FORK-INPUT-READY") {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "native input did not open: {}",
+                String::from_utf8_lossy(&screen.stdout)
+            );
+            std::thread::sleep(Duration::from_millis(100));
         }
-        assert!(Instant::now() < deadline, "input/route not ready: {screen}");
-        std::thread::sleep(Duration::from_millis(100));
+        assert!(Command::new(&server.bin)
+            .args([
+                "-L",
+                &server.name,
+                "send-keys",
+                "-t",
+                &lane,
+                "next-question",
+                "Enter"
+            ])
+            .status()
+            .unwrap()
+            .success());
+        loop {
+            let screen = Command::new(&server.bin)
+                .args(["-L", &server.name, "capture-pane", "-p", "-t", &lane])
+                .output()
+                .unwrap();
+            let screen = String::from_utf8_lossy(&screen.stdout);
+            let routes = boop::bus::read_routes(&fixture.mail).unwrap();
+            let route = &routes[&lane];
+            if screen.contains("FORK-INPUT-ECHO:next-question") && route.source_path.is_some() {
+                assert_eq!(route.kind.as_str(), "coordinator");
+                assert_eq!(route.goal.as_deref(), Some("Explain this"));
+                assert_eq!(route.base_sha.is_some(), has_repo);
+                if has_repo {
+                    assert!(route
+                        .worktree_dir
+                        .as_ref()
+                        .unwrap()
+                        .ends_with(&format!("fork/comment-{id}")));
+                } else {
+                    assert_eq!(route.worktree_dir, None);
+                    assert_eq!(
+                        std::fs::canonicalize(route.cwd.as_ref().unwrap()).unwrap(),
+                        std::fs::canonicalize(&fixture.root).unwrap()
+                    );
+                    assert_eq!(store.turn_comment_forks(id).unwrap()[0].branch, "");
+                    assert!(!fixture.root.join(".git").exists());
+                }
+                assert!(screen.contains("Read the fork context"));
+                assert_eq!(store.turn_comment_forks(id).unwrap()[0].lane, lane);
+                break;
+            }
+            assert!(Instant::now() < deadline, "input/route not ready: {screen}");
+            std::thread::sleep(Duration::from_millis(100));
+        }
     }
 }

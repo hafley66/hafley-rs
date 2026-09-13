@@ -2,31 +2,53 @@ use anyhow::Result;
 use boop::bus::{self, Route};
 use boop::harness::{shell_quote, SpawnSpec};
 
-/// The visible Claude process reads the same fork brief as a supervised lane.
+/// The visible native process reads the same fork brief as a supervised lane.
 /// No supervisor startup acknowledgment or completion/idle epilogue runs here.
 pub(super) fn command(spec: &SpawnSpec) -> String {
     let mut command = format!(
-        "boop tui claude --name {} --mail-dir {}",
+        "boop tui {} --name {} --mail-dir {}",
+        spec.harness,
         shell_quote(&spec.lane),
         shell_quote(&spec.mail_dir.display().to_string()),
     );
     if let Some(bin) = &spec.bin {
         command.push_str(&format!(" --bin {}", shell_quote(bin)));
     }
+    let prompt = format!(
+        "Read the fork context and answer the request in this brief: {}",
+        spec.prompt
+    );
+    if spec.harness == boop::harness::HarnessId::Kimi {
+        command.push_str(&format!(" --initial-prompt {}", shell_quote(&prompt)));
+    }
+    if spec.harness == boop::harness::HarnessId::Opencode {
+        if let Some(effort) = spec.variant.as_ref().or(spec.effort.as_ref()) {
+            command.push_str(&format!(" --initial-effort {}", shell_quote(effort)));
+        }
+    }
     command.push_str(" --");
     if let Some(model) = &spec.model {
         command.push_str(&format!(" --model {}", shell_quote(model)));
     }
     if let Some(effort) = &spec.effort {
-        command.push_str(&format!(" --effort {}", shell_quote(effort)));
+        match spec.harness {
+            boop::harness::HarnessId::Claude => {
+                command.push_str(&format!(" --effort {}", shell_quote(effort)))
+            }
+            boop::harness::HarnessId::Codex => command.push_str(&format!(
+                " -c {}",
+                shell_quote(&format!("model_reasoning_effort={effort}"))
+            )),
+            _ => {}
+        }
     }
-    command.push_str(&format!(
-        " {}",
-        shell_quote(&format!(
-            "Read the fork context and answer the request in this brief: {}",
-            spec.prompt
-        ))
-    ));
+    match spec.harness {
+        boop::harness::HarnessId::Kimi => {}
+        boop::harness::HarnessId::Opencode => {
+            command.push_str(&format!(" --prompt {}", shell_quote(&prompt)))
+        }
+        _ => command.push_str(&format!(" {}", shell_quote(&prompt))),
+    }
     match &spec.env_stamp {
         Some(stamp) => format!("{stamp} {command}"),
         None => command,
@@ -39,7 +61,11 @@ pub(super) fn dispatch(
     parent: Option<String>,
     goal: Option<String>,
 ) -> Result<()> {
-    let cwd = boop::worktree::prepare_spawn_dir(spec)?;
+    let cwd = if spec.worktree_dir.is_some() {
+        boop::worktree::prepare_spawn_dir(spec)?
+    } else {
+        spec.repo.clone()
+    };
     let tmux = spec.tmux.as_deref().unwrap_or(&spec.lane);
     // Register before starting the native wrapper, which owns subsequent
     // process/session observations. A lane route would reject a TUI owner.
@@ -55,7 +81,7 @@ pub(super) fn dispatch(
         parent,
         goal,
         registered_at: Some(bus::now_iso()),
-        base_sha: Some(spec.base_sha.clone()),
+        base_sha: super::git_head(&cwd.display().to_string())?,
         worktree_dir: spec
             .worktree_dir
             .as_ref()
