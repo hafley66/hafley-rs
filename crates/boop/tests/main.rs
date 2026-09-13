@@ -47,6 +47,8 @@ mod preset_dry_run;
 mod presets_json;
 #[path = "registry_kinds.rs"]
 mod registry_kinds;
+#[path = "selection_backend.rs"]
+mod selection_backend;
 #[path = "session_mood.rs"]
 mod session_mood;
 #[path = "shout_interrupt.rs"]

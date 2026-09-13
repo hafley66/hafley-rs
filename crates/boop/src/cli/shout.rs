@@ -34,6 +34,21 @@ pub(crate) enum Reach {
     Dead(&'static str),
 }
 
+/// How one route stands right now. `alive` is the tmux seam
+/// `(socket, target) -> live`, injected so selection needs no server.
+fn reach_of(route: &Route, alive: &mut impl FnMut(Option<&str>, &str) -> bool) -> Reach {
+    match route.tmux.as_deref().filter(|t| !t.is_empty()) {
+        Some(target) if alive(None, target) => {
+            Reach::LivePane(boop::live::pane_of_target(target).unwrap_or_else(|| target.to_owned()))
+        }
+        Some(_) => Reach::Dead("tmux target is gone"),
+        None => match route.kind.as_str() {
+            "coordinator" | "native" => Reach::DoorOnly,
+            _ => Reach::Dead("no pane"),
+        },
+    }
+}
+
 /// Every connected route except the caller; `alive` is the tmux seam
 /// `(socket, target) -> live`, injected so selection needs no server.
 pub(crate) fn connected<'a>(
@@ -45,16 +60,7 @@ pub(crate) fn connected<'a>(
         .iter()
         .filter(|(name, _)| Some(name.as_str()) != caller)
         .filter_map(|(name, route)| {
-            let reach = match route.tmux.as_deref().filter(|t| !t.is_empty()) {
-                Some(target) if alive(None, target) => Reach::LivePane(
-                    boop::live::pane_of_target(target).unwrap_or_else(|| target.to_owned()),
-                ),
-                Some(_) => Reach::Dead("tmux target is gone"),
-                None => match route.kind.as_str() {
-                    "coordinator" | "native" => Reach::DoorOnly,
-                    _ => Reach::Dead("no pane"),
-                },
-            };
+            let reach = reach_of(route, &mut alive);
             matches!(reach, Reach::LivePane(_) | Reach::DoorOnly).then_some((
                 name.as_str(),
                 route,
@@ -64,18 +70,19 @@ pub(crate) fn connected<'a>(
         .collect()
 }
 
-/// Who the broadcast is from: the same ladder a send's sender walks.
+/// Who the broadcast is from: an explicit `--as` is the sender even when it is
+/// not a registered route (the UI sends as `instant`); without one, the whoami
+/// ladder must name a registered route.
 fn caller_name(routes: &BTreeMap<String, Route>, as_name: Option<&str>) -> Option<String> {
-    let name = match as_name {
-        Some(name) => name.to_owned(),
+    match as_name {
+        Some(name) => Some(name.to_owned()),
         None => {
             let identity = identity::resolve_as(None);
             lane::caller_route(&identity, routes)
                 .map(|(caller, _)| caller)
-                .ok()?
+                .ok()
         }
-    };
-    routes.contains_key(&name).then_some(name)
+    }
 }
 
 /// The interrupt keys a route's harness takes; `None` names the fallback the
@@ -88,6 +95,7 @@ fn interrupt_keys(registry: &Registry, route: &Route) -> Option<&'static str> {
 }
 
 pub(crate) struct Broadcast<'a> {
+    pub targets: Option<&'a [String]>,
     pub body: &'a str,
     pub kind: &'a str,
     pub as_name: Option<&'a str>,
@@ -107,17 +115,64 @@ pub(crate) fn run_broadcast(
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
     let caller = caller_name(&routes, broadcast.as_name);
-    let targets = connected(&routes, caller.as_deref(), |socket, target| {
-        tmux::mux().target_alive(socket, target)
-    });
+    let mux = tmux::mux();
+
+    // An explicit set is a snapshot: every requested route is reported, never
+    // silently widened to a broadcast and never a silent success when none of
+    // them is reachable.
+    let mut unreachable: Vec<String> = Vec::new();
+    let mut targets: Vec<(String, &Route, Reach)> = Vec::new();
+    match broadcast.targets {
+        Some(names) => {
+            if names.is_empty() {
+                anyhow::bail!("no explicit recipients given");
+            }
+            let mut seen = std::collections::BTreeSet::new();
+            for name in names {
+                if !seen.insert(name) {
+                    continue;
+                }
+                let Some(route) = routes.get(name.as_str()) else {
+                    println!("no-route {name} (unknown route)");
+                    unreachable.push(name.clone());
+                    continue;
+                };
+                let reach = reach_of(route, &mut |socket, target| {
+                    mux.target_alive(socket, target)
+                });
+                match reach {
+                    Reach::LivePane(_) | Reach::DoorOnly => {
+                        targets.push((name.clone(), route, reach));
+                    }
+                    Reach::Dead(why) => {
+                        println!("no-route {name} ({why})");
+                        unreachable.push(name.clone());
+                    }
+                }
+            }
+        }
+        None => {
+            targets = connected(&routes, caller.as_deref(), |socket, target| {
+                mux.target_alive(socket, target)
+            })
+            .into_iter()
+            .map(|(name, route, reach)| (name.to_owned(), route, reach))
+            .collect();
+        }
+    }
     if targets.is_empty() {
-        println!("no connected agent to receive a broadcast");
-        return Ok(());
+        if unreachable.is_empty() {
+            println!("no connected agent to receive a broadcast");
+            return Ok(());
+        }
+        anyhow::bail!("no reachable recipients: {}", unreachable.join(", "));
     }
     let store = bus::open_store(&dir)?;
     let budget = boop::mail::DoorBudget::from_env();
     let (mut landed, mut cooled, mut dead) = (0usize, 0usize, 0usize);
-    for (name, route, reach) in targets {
+    for (name, route, reach) in &targets {
+        let name: &str = name;
+        let route: &Route = route;
         let kind = match (broadcast.interrupt, route.kind.as_str()) {
             (true, "lane") => "cancel",
             _ => broadcast.kind,
@@ -280,9 +335,13 @@ mod tests {
     }
 
     #[test]
-    fn caller_name_resolves_only_registered_senders() {
+    fn caller_name_resolves_registered_senders_and_honors_explicit_as() {
         let routes = registry_of(&[("root", "coordinator", Some("sess:0.0"))]);
         assert_eq!(caller_name(&routes, Some("root")).as_deref(), Some("root"));
-        assert_eq!(caller_name(&routes, Some("ghost")), None);
+        assert_eq!(
+            caller_name(&routes, Some("ghost")).as_deref(),
+            Some("ghost"),
+            "an explicit --as is the sender even when unregistered"
+        );
     }
 }

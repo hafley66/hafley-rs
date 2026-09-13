@@ -934,9 +934,23 @@ enum BeepCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
+    /// Persistent recipient selection: list live harness panes, tick one
+    /// route, record focus, or clear the set.
+    Selection {
+        #[command(subcommand)]
+        cmd: cli::selection::SelectionCmd,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
     /// One row to every connected agent (live panes and registered pane-less
     /// routes), the caller excepted. The stop-gap broadcast.
     Shout {
+        /// Send only to the persisted checkbox selection.
+        #[arg(long, conflicts_with = "to")]
+        selected: bool,
+        /// Explicit recipient routes; repeat for a one-time recipient set.
+        #[arg(long)]
+        to: Vec<String>,
         /// The message; omitted sends "stahp what ur doing please".
         body: Option<String>,
         /// Who the rows are from, when the whoami ladder cannot say.

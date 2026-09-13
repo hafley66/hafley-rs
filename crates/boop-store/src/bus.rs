@@ -1076,11 +1076,30 @@ pub fn routes_in(store: &crate::ident::Store) -> Result<BTreeMap<String, Route>>
 }
 
 fn upsert_route(store: &crate::ident::Store, id: &str, route: &Route) -> Result<()> {
+    // ON CONFLICT DO UPDATE, never INSERT OR REPLACE: REPLACE is a delete then
+    // an insert, so it fires every `REFERENCES agent_route(route) ON DELETE
+    // CASCADE` child (agent_route_selection) on each route rewrite. The update
+    // form leaves child rows attached to the same route row.
     store.connection().execute(
-        "INSERT OR REPLACE INTO agent_route
+        "INSERT INTO agent_route
            (route, kind, harness, tmux, cwd, model, mode, session_id, source_path,
             parent, goal, registered_at, base_sha, worktree_dir, app_server_socket)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+         ON CONFLICT(route) DO UPDATE SET
+           kind = excluded.kind,
+           harness = excluded.harness,
+           tmux = excluded.tmux,
+           cwd = excluded.cwd,
+           model = excluded.model,
+           mode = excluded.mode,
+           session_id = excluded.session_id,
+           source_path = excluded.source_path,
+           parent = excluded.parent,
+           goal = excluded.goal,
+           registered_at = excluded.registered_at,
+           base_sha = excluded.base_sha,
+           worktree_dir = excluded.worktree_dir,
+           app_server_socket = excluded.app_server_socket",
         rusqlite::params![
             id,
             route.kind.as_str(),
@@ -1247,6 +1266,90 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    fn route() -> super::Route {
+        super::Route {
+            kind: "lane".into(),
+            harness: Some(HarnessId::Claude),
+            tmux: Some("%1".into()),
+            cwd: None,
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: None,
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+            app_server_socket: None,
+        }
+    }
+
+    /// RECEIPT. A route rewrite keeps `agent_route_selection` attached (the
+    /// upsert is an UPDATE, not a REPLACE), and deleting the route is the one
+    /// thing that clears it, through the declared cascade. Sabotage: INSERT OR
+    /// REPLACE erases the child on rewrite; a table without the FK leaves a
+    /// stale checkbox for a re-created route.
+    #[test]
+    fn route_rewrite_keeps_selection_and_route_delete_cascades_it() {
+        let dir = temp_dir("route-selection");
+        super::write_route(&dir, "alpha", &route()).unwrap();
+        let store = crate::ident::Store::open(dir.join("boop.db")).unwrap();
+        store.connection().pragma_update(None, "foreign_keys", "ON").unwrap();
+        let enforced: i64 = store
+            .connection()
+            .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(enforced, 1, "this connection enforces the declared relation");
+        store
+            .connection()
+            .execute_batch(
+                "CREATE TABLE agent_route_selection (
+                   route TEXT PRIMARY KEY REFERENCES agent_route(route) ON DELETE CASCADE,
+                   last_focused_at INTEGER,
+                   selected INTEGER NOT NULL DEFAULT 0
+                 ) WITHOUT ROWID;",
+            )
+            .unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO agent_route_selection(route, last_focused_at, selected)
+                 VALUES ('alpha', 9, 1)",
+                [],
+            )
+            .unwrap();
+
+        let mut rewritten = route();
+        rewritten.model = Some("changed".into());
+        super::upsert_route(&store, "alpha", &rewritten).unwrap();
+
+        let (selected, at): (i64, i64) = store
+            .connection()
+            .query_row(
+                "SELECT selected, last_focused_at FROM agent_route_selection WHERE route='alpha'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((selected, at), (1, 9), "a rewrite must keep the child row");
+
+        store
+            .connection()
+            .execute("DELETE FROM agent_route WHERE route = 'alpha'", [])
+            .unwrap();
+        let left: i64 = store
+            .connection()
+            .query_row("SELECT COUNT(*) FROM agent_route_selection", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(left, 0, "route deletion cascades the selection away");
+
+        drop(store);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     fn send(id: &str) -> super::Message {

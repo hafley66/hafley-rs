@@ -1636,22 +1636,37 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
             format,
             mail_dir,
         } => run_pstree(mail_dir.as_deref(), all, format),
+        BeepCmd::Selection { cmd, mail_dir } => crate::cli::selection::run(cmd, mail_dir),
         BeepCmd::Shout {
+            selected,
+            to,
             body,
             as_name,
             kind,
             mail_dir,
-        } => crate::cli::shout::run_broadcast(
-            registry,
-            mail_dir.as_deref(),
-            &crate::cli::shout::Broadcast {
-                body: body.as_deref().unwrap_or(crate::cli::shout::SHOUT_BODY),
-                kind: &kind,
-                as_name: as_name.as_deref(),
-                interrupt: false,
-                double: false,
-            },
-        ),
+        } => {
+            let dir = crate::cli::mail_dir(mail_dir.as_deref())?;
+            let targets = if selected {
+                crate::cli::selection::selected_routes(&dir)?
+            } else {
+                to
+            };
+            // An explicit set is passed through as its own snapshot; only the
+            // no-flag path is a broadcast.
+            let explicit = selected || !targets.is_empty();
+            crate::cli::shout::run_broadcast(
+                registry,
+                mail_dir.as_deref(),
+                &crate::cli::shout::Broadcast {
+                    body: body.as_deref().unwrap_or(crate::cli::shout::SHOUT_BODY),
+                    kind: &kind,
+                    as_name: as_name.as_deref(),
+                    targets: explicit.then_some(targets.as_slice()),
+                    interrupt: false,
+                    double: false,
+                },
+            )
+        }
         BeepCmd::Scream {
             body,
             as_name,
@@ -1664,6 +1679,7 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
                 body: body.as_deref().unwrap_or(crate::cli::shout::SCREAM_BODY),
                 kind: "hail",
                 as_name: as_name.as_deref(),
+                targets: None,
                 interrupt: true,
                 double,
             },
