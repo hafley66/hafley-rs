@@ -34,6 +34,10 @@ pub struct AgentSessionGraphQuery {
     /// after this epoch-millisecond boundary. Roots remain present to keep the
     /// returned family connected.
     pub history_since_ts: Option<u64>,
+    /// Populate `trace_events`. The trace read runs one query per selected lane,
+    /// so a consumer that does not read the member should leave this false and
+    /// keep the graph read bounded by the lane set. Defaults to false.
+    pub include_trace_events: bool,
 }
 
 /// Function type for the pure durable graph projection.
@@ -322,7 +326,9 @@ pub fn load_agent_session_graph(
         trace_events: Vec::new(),
     };
     focus_graph(&mut graph, &query);
-    graph.trace_events = query_trace_events(store, &graph.sessions, &graph.shells)?;
+    if query.include_trace_events {
+        graph.trace_events = query_trace_events(store, &graph.sessions, &graph.shells)?;
+    }
     Ok(graph)
 }
 
@@ -428,7 +434,9 @@ pub fn load_agent_session_graph_with_runtime(
         .shells
         .sort_by(|left, right| left.lane.cmp(&right.lane));
     focus_graph(&mut graph, &query);
-    graph.trace_events = query_trace_events(store, &graph.sessions, &graph.shells)?;
+    if query.include_trace_events {
+        graph.trace_events = query_trace_events(store, &graph.sessions, &graph.shells)?;
+    }
     Ok(graph)
 }
 
@@ -1247,6 +1255,7 @@ mod tests {
             AgentSessionGraphQuery {
                 cwd: Some("/repo".into()),
                 include_history: false,
+                include_trace_events: true,
                 ..AgentSessionGraphQuery::default()
             },
         )
@@ -1325,6 +1334,7 @@ mod tests {
             AgentSessionGraphQuery {
                 cwd: Some("/repo".into()),
                 include_history: true,
+                include_trace_events: true,
                 ..AgentSessionGraphQuery::default()
             },
         )
@@ -1346,6 +1356,56 @@ mod tests {
             .trace_events
             .iter()
             .all(|event| !event.lane.ends_with("other")));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn trace_events_are_opt_in_per_query() {
+        let path = std::env::temp_dir().join(format!(
+            "boop-session-graph-trace-optin-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        let session = store.intern_public("dict_session", "optin").unwrap();
+        let harness = store.intern_public("dict_harness", "codex").unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                rusqlite::params![session, harness],
+            )
+            .unwrap();
+        store
+            .record_trace_event(&TraceEvent {
+                event_key: "optin-event".into(),
+                lane: "optin".into(),
+                trace: None,
+                session: Some("optin".into()),
+                kind: "turn-finish".into(),
+                from_lane: None,
+                to_lane: None,
+                started_ts: None,
+                finished_ts: None,
+                delivery_state: None,
+                classification: None,
+                detail: "fixture".into(),
+                created_ts: 1,
+            })
+            .unwrap();
+        // Default query leaves the per-lane trace read out, so an incidental
+        // product read never pays one query per selected lane.
+        let off = load_agent_session_graph(&store, AgentSessionGraphQuery::default()).unwrap();
+        assert!(off.trace_events.is_empty());
+        let on = load_agent_session_graph(
+            &store,
+            AgentSessionGraphQuery {
+                include_trace_events: true,
+                ..AgentSessionGraphQuery::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(on.trace_events.len(), 1);
         let _ = std::fs::remove_file(path);
     }
 

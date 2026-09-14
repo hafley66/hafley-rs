@@ -1561,6 +1561,8 @@ pub(crate) fn agent_session_graph_query(
         include_history,
         tmux,
         history_since_ts,
+        // The CLI's `agent sessions` JSON contract includes trace_events.
+        include_trace_events: true,
     }
 }
 
