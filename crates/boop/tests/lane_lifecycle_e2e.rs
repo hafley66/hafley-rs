@@ -4,11 +4,12 @@
 //! scratch tmux server. No registry-row stand-in: the door the lane talks to is
 //! a running claude, codex or opencode pane.
 //!
-//! Four cases, three harnesses, twelve tests named `<case>_<harness>`:
+//! Five cases, three harnesses, fifteen tests named `<case>_<harness>`:
 //! 1. a held inbound row defers the lane result;
 //! 2. a send to a retired lane revives it;
 //! 3. a retired lane closes its tmux session;
-//! 4. a stale lane tells its parent.
+//! 4. a stale lane tells its parent;
+//! 5. a quiet running lane warns its parent before the hard stall kill.
 //!
 //! Live claude and live codex are required, not optional. A case skips a
 //! harness only when that harness's executable or llmock is absent, printed as
@@ -252,6 +253,15 @@ impl Fixture {
         self.rows()
             .into_iter()
             .filter(|row| row.get("kind").and_then(|v| v.as_str()) == Some("stale"))
+            .filter(|row| row.get("from").and_then(|v| v.as_str()) == Some(self.lane.as_str()))
+            .count()
+    }
+
+    /// Rows of one kind from this lane, for the progress-warning case.
+    fn kind_rows(&self, kind: &str) -> usize {
+        self.rows()
+            .into_iter()
+            .filter(|row| row.get("kind").and_then(|v| v.as_str()) == Some(kind))
             .filter(|row| row.get("from").and_then(|v| v.as_str()) == Some(self.lane.as_str()))
             .count()
     }
@@ -917,6 +927,46 @@ fn run_stale(h: &Harness) -> Result<(), String> {
     Ok(())
 }
 
+/// Case 5. A lane whose brief turn stays open with no harness activity warns
+/// its live coordinator past `BOOP_PROGRESS_WARNING_SECS`, once, without
+/// killing the turn; the hard stall bound is separate and much larger.
+fn run_no_progress(h: &Harness) -> Result<(), String> {
+    let Some(llmock) = mock_tui::resolve_llmock() else {
+        return Err("no llmock".to_owned());
+    };
+    let started = start(
+        "no-progress",
+        h,
+        &llmock,
+        60_000,
+        &[
+            ("BOOP_PROGRESS_WARNING_SECS", "2"),
+            ("BOOP_STALL_LIMIT_SECS", "600"),
+        ],
+        &[],
+    )?;
+    let fixture = &started.fixture;
+    let warning = format!("no_progress {} ", fixture.lane);
+    fixture.wait_for_screen(&fixture.coord_session, &warning, START_DEADLINE);
+    assert_eq!(
+        fixture.coordinator_shows(&warning),
+        1,
+        "exactly one warning reached the coordinator screen"
+    );
+    assert_eq!(
+        fixture.kind_rows("no_progress"),
+        1,
+        "exactly one no_progress row in the mailbox"
+    );
+    std::thread::sleep(Duration::from_secs(2));
+    assert_eq!(
+        fixture.coordinator_shows(&warning),
+        1,
+        "the warning repeated inside one quiet episode"
+    );
+    Ok(())
+}
+
 macro_rules! lifecycle_case {
     ($case:literal, $runner:ident, $name:ident, $h:expr) => {
         #[test]
@@ -940,3 +990,6 @@ lifecycle_case!("retired", run_retired, retired_closes_session_opencode, 2);
 lifecycle_case!("stale", run_stale, stale_claude, 0);
 lifecycle_case!("stale", run_stale, stale_codex, 1);
 lifecycle_case!("stale", run_stale, stale_opencode, 2);
+lifecycle_case!("no-progress", run_no_progress, no_progress_claude, 0);
+lifecycle_case!("no-progress", run_no_progress, no_progress_codex, 1);
+lifecycle_case!("no-progress", run_no_progress, no_progress_opencode, 2);

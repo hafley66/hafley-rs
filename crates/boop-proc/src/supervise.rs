@@ -107,6 +107,27 @@ pub fn stale_limit() -> Option<Duration> {
     parse_stale(std::env::var(STALE_ENV).ok().as_deref())
 }
 
+/// Seconds a RUNNING lane may be quiet before its parent is warned, well ahead
+/// of the hard `STALL_LIMIT_ENV` kill. Non-destructive: the lane keeps running
+/// and the harness child is never closed. `0` disables it. Read once per run,
+/// like the stall bound.
+const PROGRESS_WARNING_ENV: &str = "BOOP_PROGRESS_WARNING_SECS";
+const DEFAULT_PROGRESS_WARNING: Duration = Duration::from_secs(300);
+
+/// `PROGRESS_WARNING_ENV` parsed; `0` disables the warning.
+fn parse_progress_warning(raw: Option<&str>) -> Option<Duration> {
+    match raw.and_then(|value| value.trim().parse::<u64>().ok()) {
+        Some(0) => None,
+        Some(secs) => Some(Duration::from_secs(secs)),
+        None => Some(DEFAULT_PROGRESS_WARNING),
+    }
+}
+
+/// The progress-warning bound for this process.
+fn progress_warning() -> Option<Duration> {
+    parse_progress_warning(std::env::var(PROGRESS_WARNING_ENV).ok().as_deref())
+}
+
 /// The residency a lane records when it leaves on the idle shutdown: its
 /// conversation is pinned on the route and `lane create --resume` re-opens it.
 pub const RESIDENCY_RETIRED: &str = "retired";
@@ -1184,6 +1205,10 @@ fn supervise(
     // Last turn end, HEAD move, or mail; a stale alarm is excluded so it cannot
     // clear the condition it reports.
     let stale = stale_limit();
+    // The running-turn quiet warning: read once, like the stall bound, and
+    // seeded so a respawn into an already-quiet episode does not repeat it.
+    let warning = progress_warning();
+    let mut progress_watch = ProgressWatch::seeded(&lane.mail_dir, &lane.lane);
     let last_activity = std::cell::Cell::new(std::time::Instant::now());
     let mut last_stale: Option<std::time::Instant> = None;
 
@@ -1285,6 +1310,56 @@ fn supervise(
             let now_ms = boop_acp::channel::now_ms();
             let idle_ms = idle_ms(now_ms, turn_started, this_turn_activity);
             let start_ack_elapsed_ms = now_ms.saturating_sub(turn_started);
+            // Warn before the hard kill, once per quiet episode, on the real
+            // harness-activity clock: mail and coordinator checks never reset
+            // it. Skipped while the readiness probe is the turn.
+            if !start_ack_pending {
+                if let Some(limit) = warning {
+                    let quiet = idle_ms > limit.as_millis() as u64;
+                    match progress_watch.tick(quiet) {
+                        Some(ProgressTransition::Warned) => {
+                            let elapsed = Duration::from_millis(idle_ms);
+                            mail_to_parent_kind(
+                                lane,
+                                NO_PROGRESS,
+                                progress_body(lane, elapsed, &turn_tools),
+                                Some(NO_PROGRESS),
+                            );
+                            events.record(
+                                "no-progress",
+                                TraceRecorder::session(channel),
+                                Some(turn_started),
+                                Some(now_ms),
+                                None,
+                                Some("warned"),
+                                None,
+                                None,
+                                "running lane quiet past the warning bound",
+                            );
+                        }
+                        Some(ProgressTransition::Recovered) => {
+                            mail_to_parent_kind(
+                                lane,
+                                PROGRESS_RESUMED,
+                                resumed_body(lane, &turn_tools),
+                                Some(PROGRESS_RESUMED),
+                            );
+                            events.record(
+                                "progress-resumed",
+                                TraceRecorder::session(channel),
+                                Some(turn_started),
+                                Some(now_ms),
+                                None,
+                                Some("recovered"),
+                                None,
+                                None,
+                                "running lane harness activity resumed",
+                            );
+                        }
+                        None => {}
+                    }
+                }
+            }
             if (start_ack_pending && start_ack_elapsed_ms > limit.as_millis() as u64)
                 || (!start_ack_pending && stalled(idle_ms, limit))
             {
@@ -1591,48 +1666,6 @@ fn supervise(
             let parked_at = std::time::Instant::now();
             let shutdown = idle_shutdown().filter(|_| result_written);
             loop {
-                if let Some(limit) = shutdown.filter(|limit| parked_at.elapsed() >= *limit) {
-                    let secs = limit.as_secs();
-                    info!(lane = lane.lane, idle_secs = secs, "lane idle shutdown");
-                    println!("[boop] no mail for {secs}s after the result row; retiring");
-                    if let Err(error) = channel.close() {
-                        warn!(lane = lane.lane, error = %error, "close on idle shutdown failed");
-                    }
-                    record_residency(&lane.mail_dir, &lane.lane, RESIDENCY_RETIRED);
-                    let conversation = channel.conversation_id().unwrap_or_default();
-                    // The result row already told the parent the lane is done;
-                    // the retire note would only cost the parent another turn.
-                    if !has_answered(&lane.mail_dir, &lane.lane) {
-                        mail_to_parent_kind(
-                            lane,
-                            "note",
-                            format!(
-                                "lane {} retired: idle {secs}s after its result row; \
-                             `boop beep {} <body>` revives conversation {conversation}",
-                                lane.lane, lane.lane
-                            ),
-                            Some(RESIDENCY_RETIRED),
-                        );
-                    }
-                    events.record(
-                        "idle-shutdown",
-                        TraceRecorder::session(channel),
-                        None,
-                        Some(boop_acp::channel::now_ms()),
-                        None,
-                        Some("retired"),
-                        None,
-                        None,
-                        "lane retired on idle shutdown",
-                    );
-                    let (exit_code, detail) = completion_verdict(brief_completed, &end)
-                        .unwrap_or_else(|| (1, Some(end.detail().to_owned())));
-                    return Ok(Ended {
-                        exit_code,
-                        detail,
-                        retired: true,
-                    });
-                }
                 if let Some(ended) = watch.probe(lane, boop_store::tmux::mux()) {
                     if let Err(error) = channel.close() {
                         warn!(lane = lane.lane, error = %error, "close while parked failed");
@@ -1674,7 +1707,7 @@ fn supervise(
                 // not activity, so `idle` keeps growing across alarms.
                 if let Some(limit) = stale {
                     let idle = last_activity.get().elapsed();
-                    let due = idle >= limit && last_stale.map_or(true, |at| at.elapsed() >= limit);
+                    let due = idle >= limit && last_stale.is_none_or(|at| at.elapsed() >= limit);
                     if due {
                         last_stale = Some(std::time::Instant::now());
                         mail_to_parent_kind(lane, STALE, stale_body(lane, idle), Some("stale"));
@@ -1691,23 +1724,57 @@ fn supervise(
                         );
                     }
                 }
+                // Drain the mailbox before deciding to retire: a follow-up
+                // that arrived by the time the shutdown fired must open a turn,
+                // never be left unclaimed on a route that stopped listening.
                 let arrived = pending(&lane.mail_dir, &lane.lane, &seen)?;
-                if arrived.is_empty() {
-                    std::thread::sleep(POLL);
-                    continue;
+                let deadline = shutdown.is_some_and(|limit| parked_at.elapsed() >= limit);
+                match park_step(deadline, !arrived.is_empty()) {
+                    ParkStep::Wake => {
+                        for hail in arrived {
+                            seen.insert(hail.id.clone());
+                            last_activity.set(std::time::Instant::now());
+                            record_hail_transition(
+                                events,
+                                &hail,
+                                "claimed-by-supervisor",
+                                "parked inbox drain",
+                            );
+                            held.push(hail);
+                        }
+                        break;
+                    }
+                    ParkStep::Retire => {
+                        let secs = shutdown.map(|limit| limit.as_secs()).unwrap_or_default();
+                        info!(lane = lane.lane, idle_secs = secs, "lane idle shutdown");
+                        println!("[boop] no mail for {secs}s after the result row; retiring");
+                        if let Err(error) = channel.close() {
+                            warn!(lane = lane.lane, error = %error, "close on idle shutdown failed");
+                        }
+                        record_residency(&lane.mail_dir, &lane.lane, RESIDENCY_RETIRED);
+                        let conversation = channel.conversation_id().unwrap_or_default();
+                        mail_retirement(lane, parked_at.elapsed(), &conversation);
+                        events.record(
+                            "idle-shutdown",
+                            TraceRecorder::session(channel),
+                            None,
+                            Some(boop_acp::channel::now_ms()),
+                            None,
+                            Some("retired"),
+                            None,
+                            None,
+                            "lane retired on idle shutdown",
+                        );
+                        let (exit_code, detail) = completion_verdict(brief_completed, &end)
+                            .unwrap_or_else(|| (1, Some(end.detail().to_owned())));
+                        return Ok(Ended {
+                            exit_code,
+                            detail,
+                            retired: true,
+                        });
+                    }
+                    ParkStep::Sleep => std::thread::sleep(POLL),
                 }
-                for hail in arrived {
-                    seen.insert(hail.id.clone());
-                    last_activity.set(std::time::Instant::now());
-                    record_hail_transition(
-                        events,
-                        &hail,
-                        "claimed-by-supervisor",
-                        "parked inbox drain",
-                    );
-                    held.push(hail);
-                }
-                break;
             }
         }
         opening_hails = held.clone();
@@ -2222,6 +2289,180 @@ fn last_tool(tools: &[boop_acp::channel::ToolCallFact]) -> String {
         Some(call) => format!(" last={:?}", call.title),
         None => String::new(),
     }
+}
+
+/// The kind a running lane's quiet warning wears. Outside
+/// `MessageKind::supervisor_row`, like `STALE`, so the ladder offers it to the
+/// parent's door rather than parking it in the mailbox.
+pub const NO_PROGRESS: &str = "no_progress";
+/// The kind a running lane's recovery wears, once activity resumes.
+pub const PROGRESS_RESUMED: &str = "progress_resumed";
+
+/// One running lane's quiet episode. A quiet stretch longer than the warning
+/// bound mails one `no_progress` row; the first harness activity after it
+/// mails one `progress_resumed` and resets, so the next episode may warn
+/// again. Between those transitions nothing is mailed: the 700 ms poll is not
+/// a notification clock.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct ProgressWatch {
+    warned: bool,
+}
+
+/// What one `ProgressWatch::tick` decided, if anything.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProgressTransition {
+    Warned,
+    Recovered,
+}
+
+impl ProgressWatch {
+    /// Seed from the mailbox: a supervisor respawned into an already-quiet
+    /// episode does not repeat the warning a previous run already sent. The
+    /// newest of the two episode kinds decides, so a recovery resets the seed.
+    fn seeded(dir: &Path, lane: &str) -> Self {
+        let warned = last_episode_kind(dir, lane).as_deref() == Some(NO_PROGRESS);
+        ProgressWatch { warned }
+    }
+
+    /// `quiet` is the current poll's verdict; a transition fires on the edge
+    /// only, so repeats of the same poll mail nothing.
+    fn tick(&mut self, quiet: bool) -> Option<ProgressTransition> {
+        match (quiet, self.warned) {
+            (true, false) => {
+                self.warned = true;
+                Some(ProgressTransition::Warned)
+            }
+            (false, true) => {
+                self.warned = false;
+                Some(ProgressTransition::Recovered)
+            }
+            _ => None,
+        }
+    }
+}
+
+/// The newest `no_progress`/`progress_resumed` row a lane wrote, if any. ISO
+/// timestamps sort oldest-first, so the max is the latest transition.
+fn last_episode_kind(dir: &Path, lane: &str) -> Option<String> {
+    let mut newest: Option<(String, String)> = None;
+    for path in bus::read_boxes(dir).unwrap_or_default() {
+        for row in bus::parse_box(&path) {
+            if row.from != lane || !matches!(row.kind.as_str(), NO_PROGRESS | PROGRESS_RESUMED) {
+                continue;
+            }
+            if newest
+                .as_ref()
+                .is_none_or(|(at, _)| row.from_timestamp >= *at)
+            {
+                newest = Some((row.from_timestamp.clone(), row.kind.as_str().to_owned()));
+            }
+        }
+    }
+    newest.map(|(_, kind)| kind)
+}
+
+/// The body a running lane mails when it has been quiet for `idle`: which lane,
+/// the phase, how long, where HEAD sits, how many paths are dirty, and the last
+/// tool the agent reported. One line, greppable.
+fn progress_body(
+    lane: &LaneRun,
+    idle: Duration,
+    tools: &[boop_acp::channel::ToolCallFact],
+) -> String {
+    format!(
+        "no_progress {} phase=running idle={}s head={} dirty={} did={}{}",
+        lane.lane,
+        idle.as_secs(),
+        head_sha(&lane.cwd),
+        dirty_count(&lane.cwd),
+        tools.len(),
+        last_tool(tools),
+    )
+}
+
+/// The body a running lane mails when harness activity returns after a warned
+/// episode.
+fn resumed_body(lane: &LaneRun, tools: &[boop_acp::channel::ToolCallFact]) -> String {
+    format!(
+        "progress_resumed {} phase=running head={} dirty={} did={}{}",
+        lane.lane,
+        head_sha(&lane.cwd),
+        dirty_count(&lane.cwd),
+        tools.len(),
+        last_tool(tools),
+    )
+}
+
+/// The kind a retired lane's note wears. Distinct from `result`: the task may
+/// be complete or incomplete, but the route has stopped listening either way.
+pub const RETIRED: &str = "retired";
+
+/// What a parked lane does on one poll. Mail wins over the idle deadline: a
+/// follow-up that arrived by the time the shutdown fired is a turn, never a
+/// silent retirement. The old order checked the deadline first and retired
+/// with the row still unclaimed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ParkStep {
+    Wake,
+    Retire,
+    Sleep,
+}
+
+fn park_step(deadline_elapsed: bool, mail_waiting: bool) -> ParkStep {
+    if mail_waiting {
+        ParkStep::Wake
+    } else if deadline_elapsed {
+        ParkStep::Retire
+    } else {
+        ParkStep::Sleep
+    }
+}
+
+/// Tell the parent a lane retired. Unlike the old note this is not gated on
+/// `has_answered`: the result row already told the parent the task verdict, but
+/// only this row says the route stopped listening, so completion and
+/// retirement stay distinguishable. At most one per lane per run.
+fn mail_retirement(lane: &LaneRun, idle: Duration, conversation: &str) {
+    if already_hailed(&lane.mail_dir, &lane.lane, RETIRED) {
+        return;
+    }
+    let rc = last_result_rc(&lane.mail_dir, &lane.lane);
+    let verdict = match rc {
+        Some(rc) => format!("result rc={rc}"),
+        None => "no result row".to_owned(),
+    };
+    let body = format!(
+        "lane {} retired: idle {}s after the result row ({verdict}); head={} dirty={}; \
+         `boop beep {} <body>` revives conversation {conversation}",
+        lane.lane,
+        idle.as_secs(),
+        head_sha(&lane.cwd),
+        dirty_count(&lane.cwd),
+        lane.lane,
+    );
+    mail_to_parent_kind(lane, RETIRED, body, Some(RESIDENCY_RETIRED));
+}
+
+/// The rc of the newest result row a lane wrote, if any.
+fn last_result_rc(dir: &Path, lane: &str) -> Option<i32> {
+    let mut newest: Option<(String, i32)> = None;
+    for path in bus::read_boxes(dir).unwrap_or_default() {
+        for row in bus::parse_box(&path) {
+            let Some(rc) = row.rc else {
+                continue;
+            };
+            if row.from != lane || row.kind.as_str() != "result" {
+                continue;
+            }
+            if newest
+                .as_ref()
+                .is_none_or(|(at, _)| row.from_timestamp >= *at)
+            {
+                newest = Some((row.from_timestamp.clone(), rc));
+            }
+        }
+    }
+    newest.map(|(_, rc)| rc)
 }
 
 /// Resolve the parent and mail one row of `kind`. A parentless lane writes
@@ -4562,5 +4803,194 @@ mod tests {
             .unwrap()
             .is_empty());
         assert_eq!(rows_of_kind(&dir, "pr").len(), 1);
+    }
+
+    #[test]
+    fn the_progress_warning_defaults_to_five_minutes_and_zero_disables_it() {
+        assert_eq!(parse_progress_warning(None), Some(Duration::from_secs(300)));
+        assert_eq!(
+            parse_progress_warning(Some(" 45 ")),
+            Some(Duration::from_secs(45))
+        );
+        assert_eq!(parse_progress_warning(Some("0")), None);
+        assert_eq!(
+            parse_progress_warning(Some("x")),
+            Some(Duration::from_secs(300))
+        );
+    }
+
+    /// FAIL-PRE-FIX: the running-turn loop had one bound, so a quiet lane was
+    /// killed at the stall limit with no earlier word to its parent. The watch
+    /// fires on the edge only, so the 700 ms poll is not a notification clock.
+    #[test]
+    fn a_quiet_episode_warns_once_and_a_resumed_episode_may_warn_again() {
+        let mut watch = ProgressWatch::default();
+        assert_eq!(watch.tick(false), None);
+        assert_eq!(watch.tick(true), Some(ProgressTransition::Warned));
+        // Repeats of the same quiet verdict mail nothing.
+        assert_eq!(watch.tick(true), None);
+        assert_eq!(watch.tick(true), None);
+        // Real activity resumes: one recovery, then silence while active.
+        assert_eq!(watch.tick(false), Some(ProgressTransition::Recovered));
+        assert_eq!(watch.tick(false), None);
+        // A later quiet episode warns again.
+        assert_eq!(watch.tick(true), Some(ProgressTransition::Warned));
+    }
+
+    /// A respawned supervisor reads the mailbox and does not repeat a warning
+    /// its previous run already sent; a recorded recovery resets the seed.
+    #[test]
+    fn a_seeded_watch_does_not_repeat_a_warning_that_already_landed() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let mut warn = message("w1", "coordinator", NO_PROGRESS);
+        warn.from = "mine".into();
+        warn.from_timestamp = "2026-09-14T00:00:01.000Z".into();
+        append_row(&dir, &warn).unwrap();
+        assert!(ProgressWatch::seeded(&dir, "mine").warned);
+
+        let mut resumed = message("r1", "coordinator", PROGRESS_RESUMED);
+        resumed.from = "mine".into();
+        resumed.from_timestamp = "2026-09-14T00:00:02.000Z".into();
+        append_row(&dir, &resumed).unwrap();
+        assert!(!ProgressWatch::seeded(&dir, "mine").warned);
+    }
+
+    /// FAIL-PRE-FIX: the park loop tested the idle deadline before it drained
+    /// the mailbox, so a follow-up that arrived on the deadline tick was left
+    /// unclaimed on a route that then stopped listening. Mail wins.
+    #[test]
+    fn mail_beats_the_idle_deadline_when_both_fire_on_one_poll() {
+        assert_eq!(park_step(true, true), ParkStep::Wake);
+        assert_eq!(park_step(true, false), ParkStep::Retire);
+        assert_eq!(park_step(false, true), ParkStep::Wake);
+        assert_eq!(park_step(false, false), ParkStep::Sleep);
+    }
+
+    /// FAIL-PRE-FIX: the retire note was gated on `!has_answered`, so a lane
+    /// with a result row retired silently and the parent could not tell
+    /// completion from retirement. One retirement row per lane, even with a
+    /// prior result, and it names the rc the result carried.
+    #[test]
+    fn a_retirement_is_reported_even_after_the_result_row() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        record_result(&lane, 0, None);
+        mail_retirement(&lane, Duration::from_secs(60), "ses_x");
+        mail_retirement(&lane, Duration::from_secs(60), "ses_x");
+
+        let retired = rows_of_kind(&dir, RETIRED);
+        assert_eq!(retired.len(), 1, "one retirement row per lane");
+        assert_eq!(retired[0].to, "coordinator");
+        assert_eq!(retired[0].detail.as_deref(), Some(RESIDENCY_RETIRED));
+        assert!(retired[0].body.contains("retired"), "{}", retired[0].body);
+        assert!(
+            retired[0].body.contains("result rc=0"),
+            "{}",
+            retired[0].body
+        );
+        assert!(
+            retired[0].body.contains("revives conversation ses_x"),
+            "{}",
+            retired[0].body
+        );
+        // The kind differs from the result row, which is the whole point.
+        assert_eq!(rows_of_kind(&dir, "result").len(), 1);
+    }
+
+    /// Drives a quiet brief turn: turn one acknowledges at once, the brief turn
+    /// reports no activity until the test advances the clock and releases it.
+    #[derive(Clone, Default)]
+    struct QuietThenResumedChannel {
+        turns: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+        clock: std::sync::Arc<std::sync::atomic::AtomicU64>,
+        release: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    impl LaneChannel for QuietThenResumedChannel {
+        fn conversation_id(&self) -> Option<String> {
+            Some("quiet-thread-id".to_owned())
+        }
+
+        fn start_turn(&mut self, text: &str) -> Result<()> {
+            self.turns.lock().unwrap().push(text.to_owned());
+            Ok(())
+        }
+
+        fn steer(&mut self, _text: &str) -> Result<Delivery> {
+            Ok(Delivery::MidTurn)
+        }
+
+        fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
+            let last = self.turns.lock().unwrap().last().cloned();
+            if self.turns.lock().unwrap().len() <= 1 {
+                return Ok(Some(fake_turn(last.as_ref())));
+            }
+            if self.release.load(std::sync::atomic::Ordering::SeqCst) {
+                return Ok(Some(fake_turn(last.as_ref())));
+            }
+            Ok(None)
+        }
+
+        fn last_activity_ms(&self) -> Option<u64> {
+            match self.clock.load(std::sync::atomic::Ordering::SeqCst) {
+                0 => None,
+                written => Some(written),
+            }
+        }
+
+        fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    // FAIL-PRE-FIX: a running lane with no harness activity produced no parent
+    // row until the hard stall kill. The warning lands first, once, and a
+    // recovery follows when activity returns.
+    #[test]
+    fn a_quiet_running_turn_warns_its_parent_before_the_stall_kill() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "quiet-lane", "coordinator");
+        let mut channel = QuietThenResumedChannel::default();
+        let clock = channel.clock.clone();
+        let release = channel.release.clone();
+        // Accelerate both bounds so the test parks and retires in seconds.
+        std::env::set_var(PROGRESS_WARNING_ENV, "1");
+        std::env::set_var(IDLE_SHUTDOWN_ENV, "1");
+        let handle = std::thread::spawn(move || {
+            let _ = run(lane, &mut channel);
+        });
+
+        wait_for(
+            || rows_of_kind(&dir, NO_PROGRESS).len() == 1,
+            Duration::from_secs(10),
+        );
+        let warned = rows_of_kind(&dir, NO_PROGRESS);
+        assert_eq!(warned[0].to, "coordinator");
+        assert!(
+            warned[0].body.contains("phase=running"),
+            "{}",
+            warned[0].body
+        );
+
+        // Real harness activity returns: one recovery, and the warning is not
+        // repeated.
+        clock.store(
+            boop_acp::channel::now_ms(),
+            std::sync::atomic::Ordering::SeqCst,
+        );
+        wait_for(
+            || rows_of_kind(&dir, PROGRESS_RESUMED).len() == 1,
+            Duration::from_secs(10),
+        );
+        assert_eq!(rows_of_kind(&dir, NO_PROGRESS).len(), 1);
+
+        release.store(true, std::sync::atomic::Ordering::SeqCst);
+        wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(10));
+        assert_eq!(rows_of_kind(&dir, PROGRESS_RESUMED).len(), 1);
+        // The short idle shutdown lets the parked lane retire and join.
+        let _ = handle.join();
+        std::env::remove_var(PROGRESS_WARNING_ENV);
+        std::env::remove_var(IDLE_SHUTDOWN_ENV);
     }
 }

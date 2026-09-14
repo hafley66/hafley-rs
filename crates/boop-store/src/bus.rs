@@ -83,6 +83,16 @@ pub enum MessageKind {
     HeadRewound,
     Commit,
     Pr,
+    /// A running lane quiet past the progress-warning bound. Outside
+    /// `supervisor_row` on purpose: the ladder offers it to the parent's door,
+    /// the same rung the parked `stale` alarm takes.
+    NoProgress,
+    /// A running lane whose harness activity resumed after `NoProgress`.
+    ProgressResumed,
+    /// A lane that closed on the idle shutdown after its result row. Distinct
+    /// from `Result`: retirement says the route is gone, not that the task is
+    /// incomplete.
+    Retired,
     Other(String),
 }
 
@@ -154,6 +164,9 @@ kind_impls!(MessageKind {
     HeadRewound => "head_rewound",
     Commit => "commit",
     Pr => "pr",
+    NoProgress => "no_progress",
+    ProgressResumed => "progress_resumed",
+    Retired => "retired",
 });
 
 impl MessageKind {
@@ -1297,12 +1310,18 @@ mod tests {
         let dir = temp_dir("route-selection");
         super::write_route(&dir, "alpha", &route()).unwrap();
         let store = crate::ident::Store::open(dir.join("boop.db")).unwrap();
-        store.connection().pragma_update(None, "foreign_keys", "ON").unwrap();
+        store
+            .connection()
+            .pragma_update(None, "foreign_keys", "ON")
+            .unwrap();
         let enforced: i64 = store
             .connection()
             .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(enforced, 1, "this connection enforces the declared relation");
+        assert_eq!(
+            enforced, 1,
+            "this connection enforces the declared relation"
+        );
         store
             .connection()
             .execute_batch(
@@ -1403,7 +1422,18 @@ mod tests {
             );
         }
         for wire in [
-            "request", "hail", "note", "dispatch", "ack", "reply", "retry", "pr",
+            "request",
+            "hail",
+            "note",
+            "dispatch",
+            "ack",
+            "reply",
+            "retry",
+            "pr",
+            "stale",
+            "no_progress",
+            "progress_resumed",
+            "retired",
         ] {
             assert!(
                 !crate::bus::MessageKind::from(wire).supervisor_row(),
