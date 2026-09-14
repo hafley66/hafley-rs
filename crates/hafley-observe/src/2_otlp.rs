@@ -10,7 +10,7 @@ use tracing_subscriber::registry::LookupSpan;
 
 use crate::Config;
 
-pub const DEFAULT_OTLP_ENDPOINT: &str = "http://127.0.0.1:4318";
+pub const DEFAULT_OTLP_ENDPOINT: &str = "http://127.0.0.1:4318/v1/traces";
 
 pub type OtlpError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -31,7 +31,7 @@ pub struct OtlpConfig {
 }
 
 impl OtlpConfig {
-    /// Creates the explicit localhost-only configuration used for local proof.
+/// Creates the explicit localhost-only HTTP/protobuf trace endpoint used for local proof.
     pub fn localhost() -> Self {
         Self {
             endpoint: DEFAULT_OTLP_ENDPOINT.to_owned(),
@@ -50,6 +50,7 @@ impl OtlpConfig {
 pub fn otlp_provider(config: &Config, otlp: OtlpConfig) -> Result<SdkTracerProvider, OtlpError> {
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_http()
+        .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
         .with_endpoint(otlp.endpoint)
         .with_timeout(otlp.export_timeout)
         .build()?;
@@ -88,10 +89,14 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, Instant};
+
     use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
     use tracing_subscriber::layer::SubscriberExt;
 
-    use super::otlp_layer;
+    use crate::{Config, OutputFormat};
+
+    use super::{otlp_layer, otlp_provider, OtlpConfig};
 
     #[test]
     fn layer_exports_tracing_span_attributes_and_provider_shuts_down() {
@@ -119,5 +124,71 @@ mod tests {
         assert!(attributes.contains(&("bodies".to_owned(), "2".to_owned())));
         provider.shutdown().unwrap();
         assert!(exporter.is_shutdown_called());
+    }
+
+    #[test]
+    #[ignore = "requires a loopback OTLP/HTTP collector"]
+    fn http_exporter_sends_resource_and_parent_child_spans() {
+        let config = Config {
+            service_name: "hafley-observe-proof",
+            service_version: "0.1.0-proof",
+            default_filter: "info",
+            format: OutputFormat::Json,
+            ansi: false,
+        };
+        let provider = otlp_provider(
+            &config,
+            OtlpConfig {
+                endpoint: std::env::var("HAFLEY_OTLP_PROOF_ENDPOINT").unwrap(),
+                export_timeout: Duration::from_secs(1),
+                scheduled_delay: Duration::from_secs(60),
+                max_queue_size: 16,
+                max_export_batch_size: 16,
+            },
+        )
+        .unwrap();
+        let subscriber = tracing_subscriber::registry().with(otlp_layer(&provider, "proof"));
+
+        tracing::subscriber::with_default(subscriber, || {
+            let parent = tracing::info_span!("proof.parent", tick = 7_u64);
+            let _parent = parent.enter();
+            let child = tracing::info_span!("proof.child", bodies = 2_u64);
+            let _child = child.enter();
+        });
+
+        provider.force_flush().unwrap();
+        provider.shutdown_with_timeout(Duration::from_secs(2)).unwrap();
+    }
+
+    #[test]
+    fn unavailable_loopback_export_does_not_block_span_completion() {
+        let config = Config {
+            service_name: "hafley-observe-unavailable",
+            service_version: "0.1.0-test",
+            default_filter: "info",
+            format: OutputFormat::Json,
+            ansi: false,
+        };
+        let provider = otlp_provider(
+            &config,
+            OtlpConfig {
+                endpoint: "http://127.0.0.1:9".to_owned(),
+                export_timeout: Duration::from_millis(100),
+                scheduled_delay: Duration::from_secs(60),
+                max_queue_size: 16,
+                max_export_batch_size: 16,
+            },
+        )
+        .unwrap();
+        let subscriber = tracing_subscriber::registry().with(otlp_layer(&provider, "unavailable"));
+
+        let completed_at = Instant::now();
+        tracing::subscriber::with_default(subscriber, || {
+            let span = tracing::info_span!("proof.unavailable", tick = 8_u64);
+            let _entered = span.enter();
+        });
+        assert!(completed_at.elapsed() < Duration::from_millis(10));
+        assert!(provider.force_flush().is_err());
+        let _ = provider.shutdown_with_timeout(Duration::from_millis(250));
     }
 }
