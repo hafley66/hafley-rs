@@ -937,9 +937,11 @@ fn run_stale(h: &Harness) -> Result<(), String> {
 }
 
 /// Case 5. A lane whose brief turn stays open with no harness write warns its
-/// live coordinator past `BOOP_PROGRESS_WARNING_SECS`, then reports recovery
-/// when the provider's first token arrives. The hard stall bound is separate
-/// and much larger, so the turn is never killed.
+/// live coordinator past `BOOP_PROGRESS_WARNING_SECS`. A streaming channel
+/// (codex, opencode) then reports recovery when the provider's first token
+/// arrives; claude's non-streaming mock exposes no mid-turn write, so it warns
+/// and claims no recovery. The hard stall bound is separate and much larger, so
+/// the turn is never killed.
 fn run_quiet(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
         return Err("no llmock".to_owned());
@@ -971,14 +973,18 @@ fn run_quiet(h: &Harness) -> Result<(), String> {
         "exactly one harness_quiet row in the mailbox"
     );
     if h.id == HarnessId::Claude {
-        // The claude stream-json adapter emits no incremental line during the
-        // mock turn, so the supervisor has no mid-turn write to observe and
-        // cannot see recovery; it does still warn off the turn-start fallback.
-        // Recovery is replayed on codex and opencode, whose channels stream.
-        return Err(
-            "claude stream-json emitted no mid-turn write in the mock; recovery not observable"
-                .to_owned(),
+        // Contract for the non-streaming channel: the claude stream-json
+        // adapter emitted no mid-turn line, so the supervisor's only clock is
+        // the turn-start fallback. It warns, and makes no recovery claim it
+        // cannot support. Recovery is asserted below on the streaming
+        // harnesses; this is the documented channel limitation, not a skip.
+        assert_eq!(
+            fixture.kind_rows("harness_active"),
+            0,
+            "claude claimed a recovery it cannot observe:\n{}",
+            fixture.log()
         );
+        return Ok(());
     }
     // The provider's first token arrives: recovery, once, and no repeat.
     let active = format!("harness_active {} ", fixture.lane);
@@ -1022,12 +1028,11 @@ fn run_retire_mail(h: &Harness) -> Result<(), String> {
         &fixture.coord_route,
         "--no-wait",
     ]);
-    if !beep.status.success() {
-        return Err(format!(
-            "the follow-up hail failed: {}",
-            String::from_utf8_lossy(&beep.stderr)
-        ));
-    }
+    assert!(
+        beep.status.success(),
+        "the follow-up hail failed: {}",
+        String::from_utf8_lossy(&beep.stderr)
+    );
     // The accepted follow-up opens a third turn instead of being lost at
     // retirement. A follow-up turn writes no second result (one result per
     // run), so the lane trail is the evidence the mail was acted on.
