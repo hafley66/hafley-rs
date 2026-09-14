@@ -108,16 +108,83 @@ impl ClaudeDoor {
             .ok()
             .map(|key| key.peer_token)
     }
+
+    /// Registry files whose process is still alive. A file outlives its process.
+    fn live_files(&self) -> Result<Vec<RegistryFile>> {
+        Ok(self
+            .files()?
+            .into_iter()
+            .filter(|file| pid_alive(file.pid))
+            .collect())
+    }
+
+    /// The session one host record presents. An interactive host parked on a
+    /// background job presents that job's conversation, so the job row wins
+    /// when its `jobId` equals the host's `parkedJobId` explicitly and exactly
+    /// one live `bg` record carries it. A missing, dead, or duplicate job
+    /// leaves the host row in place: the native record is kept rather than
+    /// guessed at.
+    fn presented_from_host(&self, host: &RegistryFile, live: &[RegistryFile]) -> LiveSession {
+        let host_session = || host.clone().into_live(self.token_for(host.pid));
+        let Some(parked) = host.parked_job_id.as_deref().filter(|id| !id.is_empty()) else {
+            return host_session();
+        };
+        let mut jobs = live.iter().filter(|file| {
+            file.kind.as_deref() == Some("bg") && file.job_id.as_deref() == Some(parked)
+        });
+        match (jobs.next(), jobs.next()) {
+            (Some(job), None) => job.clone().into_live(self.token_for(job.pid)),
+            _ => host_session(),
+        }
+    }
+
+    /// The conversation a tmux pane presents. The pane-matching host is
+    /// selected as before, then redirected to the background job it parks.
+    fn presented_session_in_pane(&self, pane: &str) -> Result<Option<LiveSession>> {
+        let wanted = pane.trim().trim_start_matches('%');
+        if wanted.is_empty() {
+            return Ok(None);
+        }
+        let live = self.live_files()?;
+        let Some(host) = live.iter().find(|file| {
+            file.tmux
+                .as_deref()
+                .and_then(pane_of_target)
+                .is_some_and(|held| held.trim_start_matches('%') == wanted)
+        }) else {
+            return Ok(None);
+        };
+        Ok(Some(self.presented_from_host(host, &live)))
+    }
+
+    /// The conversation an explicitly bound session id presents. A live host
+    /// row parked on a job redirects the same way a pane does.
+    fn presented_session(&self, session_id: &str) -> Result<Option<LiveSession>> {
+        let live = self.live_files()?;
+        let Some(host) = live.iter().find(|file| file.session_id == session_id) else {
+            return Ok(None);
+        };
+        Ok(Some(self.presented_from_host(host, &live)))
+    }
 }
 
 /// One `~/.claude/sessions/<pid>.json`.
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RegistryFile {
     pid: u32,
     session_id: String,
     #[serde(default)]
     cwd: Option<String>,
+    /// `interactive` for a TUI host, `bg` for a backgrounded job record.
+    #[serde(default)]
+    kind: Option<String>,
+    /// The background job a `bg` record runs, named by its owning host.
+    #[serde(default)]
+    job_id: Option<String>,
+    /// On an `interactive` host, the background job currently parked in it.
+    #[serde(default)]
+    parked_job_id: Option<String>,
     /// `projects-2:@3418.%3418`.
     #[serde(default)]
     tmux: Option<String>,
@@ -185,6 +252,31 @@ impl LiveSessions for ClaudeDoor {
             live.push(file.into_live(token));
         }
         Ok(live)
+    }
+
+    /// A pane shows the conversation hosted there, which is the parked job's
+    /// when the interactive host has parked one.
+    fn live_session_in_pane(&self, pane: &str) -> Result<Option<LiveSession>> {
+        self.presented_session_in_pane(pane)
+    }
+
+    /// A route bound to a host session follows the conversation the host is
+    /// presenting, so a route left naming the parked root resolves to the job.
+    /// A route naming no session falls back to its pane.
+    fn live_session_for_route(
+        &self,
+        route: &boop_store::bus::Route,
+    ) -> Result<Option<LiveSession>> {
+        if let Some(id) = route.session_id.as_deref() {
+            return self.presented_session(id);
+        }
+        match route.tmux.as_deref() {
+            Some(target) => {
+                let pane = pane_of_target(target).unwrap_or_else(|| target.to_owned());
+                self.presented_session_in_pane(&pane)
+            }
+            None => Ok(None),
+        }
     }
 }
 
@@ -358,6 +450,58 @@ mod tests {
             .unwrap();
         }
 
+        fn record(&self, pid: u32, value: serde_json::Value) {
+            std::fs::write(
+                self.dir.join(format!("{pid}.json")),
+                serde_json::to_vec(&value).unwrap(),
+            )
+            .unwrap();
+        }
+
+        /// An interactive host record. `parked` names the background job the
+        /// host has parked in its pane, when it has one.
+        fn write_host(
+            &self,
+            pid: u32,
+            session: &str,
+            tmux: &str,
+            status: &str,
+            parked: Option<&str>,
+        ) {
+            let mut file = serde_json::json!({
+                "pid": pid,
+                "sessionId": session,
+                "cwd": "/Users/someone/projects",
+                "kind": "interactive",
+                "tmux": tmux,
+                "messagingSocketPath": format!("/tmp/cc-socks/{session}.sock"),
+                "status": status,
+                "updatedAt": 1787434679415u64,
+            });
+            if let Some(parked) = parked {
+                file["parkedJobId"] = serde_json::json!(parked);
+            }
+            self.record(pid, file);
+        }
+
+        /// A background job record. It carries no pane of its own; its owning
+        /// host names the pane it is presented in.
+        fn write_job(&self, pid: u32, session: &str, job_id: &str, socket: &str) {
+            self.record(
+                pid,
+                serde_json::json!({
+                    "pid": pid,
+                    "sessionId": session,
+                    "cwd": "/Users/someone/projects",
+                    "kind": "bg",
+                    "jobId": job_id,
+                    "messagingSocketPath": socket,
+                    "status": "busy",
+                    "updatedAt": 1787434679415u64,
+                }),
+            );
+        }
+
         fn door(&self) -> ClaudeDoor {
             ClaudeDoor::at(&self.dir)
         }
@@ -368,6 +512,36 @@ mod tests {
             let _ = std::fs::remove_dir_all(&self.dir);
         }
     }
+
+    /// A real child process, alive while held, killed when dropped. Its pid
+    /// stands in for a live background job the way a running Claude job would.
+    struct Sleeper(std::process::Child);
+
+    impl Sleeper {
+        fn new() -> Sleeper {
+            Sleeper(
+                std::process::Command::new("sleep")
+                    .arg("60")
+                    .spawn()
+                    .expect("sleep is a real process"),
+            )
+        }
+
+        fn pid(&self) -> u32 {
+            self.0.id()
+        }
+    }
+
+    impl Drop for Sleeper {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    /// `BOOP_CLAUDE_SESSIONS_DIR` is process-global; the one test that sets it
+    /// holds this lock so no other test reads a scratch registry.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     /// A listener that answers one connection and hands back what it read.
     fn listener(path: &Path) -> mpsc::Receiver<Vec<String>> {
@@ -431,6 +605,212 @@ mod tests {
                 .map(|found| found.session_id),
             Some("5c7c1a83-2d6f".to_string())
         );
+    }
+
+    /// The pane a fixture door resolves, through the public pane lookup.
+    fn pane_id(fixture: &Fixture) -> String {
+        fixture
+            .door()
+            .live_session_in_pane("%9")
+            .unwrap()
+            .unwrap()
+            .session_id
+    }
+
+    /// RECEIPT. An interactive host parked on a background job presents the
+    /// job's conversation in its pane, and the native host row still lists.
+    #[test]
+    fn a_parked_host_presents_its_live_job() {
+        let fixture = Fixture::new("parked");
+        let job = Sleeper::new();
+        fixture.write_host(
+            std::process::id(),
+            "old-root",
+            "compiler:@9.%9",
+            "idle",
+            Some("job-a"),
+        );
+        fixture.write_job(job.pid(), "current-root", "job-a", "/tmp/cc-socks/job.sock");
+
+        let found = fixture.door().live_session_in_pane("%9").unwrap().unwrap();
+        assert_eq!(found.session_id, "current-root");
+        assert_eq!(found.pid, Some(job.pid()));
+        assert_eq!(
+            found.door,
+            DoorAddress::UnixSocket {
+                path: PathBuf::from("/tmp/cc-socks/job.sock"),
+                token: None,
+            }
+        );
+        // The host row survives: `live_sessions` reports native records.
+        assert_eq!(fixture.door().live_sessions().unwrap().len(), 2);
+    }
+
+    /// RECEIPT. A host that parked nothing presents its own conversation.
+    #[test]
+    fn an_unparked_host_presents_itself() {
+        let fixture = Fixture::new("unparked");
+        fixture.write_host(std::process::id(), "host-root", "a:@1.%9", "idle", None);
+        assert_eq!(pane_id(&fixture), "host-root");
+    }
+
+    /// RECEIPT. A missing job file and a job whose process is dead both leave
+    /// the native host row in place rather than guessing.
+    #[test]
+    fn a_missing_or_dead_job_leaves_the_host_row() {
+        let missing = Fixture::new("missing-job");
+        missing.write_host(
+            std::process::id(),
+            "old-root",
+            "a:@1.%9",
+            "idle",
+            Some("job-a"),
+        );
+        assert_eq!(pane_id(&missing), "old-root");
+
+        let dead = Fixture::new("dead-job");
+        dead.write_host(
+            std::process::id(),
+            "old-root",
+            "a:@1.%9",
+            "idle",
+            Some("job-a"),
+        );
+        dead.write_job(
+            4_000_000,
+            "current-root",
+            "job-a",
+            "/tmp/cc-socks/dead.sock",
+        );
+        assert_eq!(pane_id(&dead), "old-root");
+    }
+
+    /// RECEIPT. Two live jobs carrying the same id make the match ambiguous,
+    /// which leaves the host row rather than picking one.
+    #[test]
+    fn duplicate_live_jobs_leave_the_host_row() {
+        let fixture = Fixture::new("dup-job");
+        let one = Sleeper::new();
+        let two = Sleeper::new();
+        fixture.write_host(
+            std::process::id(),
+            "old-root",
+            "a:@1.%9",
+            "idle",
+            Some("job-a"),
+        );
+        fixture.write_job(one.pid(), "first", "job-a", "/tmp/one.sock");
+        fixture.write_job(two.pid(), "second", "job-a", "/tmp/two.sock");
+        assert_eq!(pane_id(&fixture), "old-root");
+    }
+
+    /// RECEIPT. The parked id matches whole, so a longer id that merely extends
+    /// it is not the job.
+    #[test]
+    fn only_the_exact_job_id_matches() {
+        let fixture = Fixture::new("exact-job");
+        let job = Sleeper::new();
+        fixture.write_host(
+            std::process::id(),
+            "old-root",
+            "a:@1.%9",
+            "idle",
+            Some("job-a"),
+        );
+        fixture.write_job(job.pid(), "almost", "job-ab", "/tmp/almost.sock");
+        assert_eq!(pane_id(&fixture), "old-root");
+    }
+
+    /// RECEIPT. When the host parks a different job, the pane presents the new
+    /// job's conversation.
+    #[test]
+    fn a_changed_parked_job_presents_the_new_job() {
+        let fixture = Fixture::new("changed-job");
+        let a = Sleeper::new();
+        let b = Sleeper::new();
+        fixture.write_job(a.pid(), "session-a", "job-a", "/tmp/a.sock");
+        fixture.write_job(b.pid(), "session-b", "job-b", "/tmp/b.sock");
+        fixture.write_host(
+            std::process::id(),
+            "old-root",
+            "a:@1.%9",
+            "idle",
+            Some("job-a"),
+        );
+        assert_eq!(pane_id(&fixture), "session-a");
+        fixture.write_host(
+            std::process::id(),
+            "old-root",
+            "a:@1.%9",
+            "idle",
+            Some("job-b"),
+        );
+        assert_eq!(pane_id(&fixture), "session-b");
+    }
+
+    /// RECEIPT. A route left naming the parked host resolves to the presented
+    /// job, by session id or by pane.
+    #[test]
+    fn a_route_naming_a_parked_host_resolves_to_the_job() {
+        let fixture = Fixture::new("parked-route");
+        let job = Sleeper::new();
+        fixture.write_host(
+            std::process::id(),
+            "old-root",
+            "compiler:@9.%9",
+            "idle",
+            Some("job-a"),
+        );
+        fixture.write_job(job.pid(), "current-root", "job-a", "/tmp/cc-socks/job.sock");
+        let door = fixture.door();
+        let bound = boop_store::bus::route_from_value(&serde_json::json!({
+            "kind": "coordinator", "harness": "claude",
+            "tmux": "compiler:@9.%9", "session_id": "old-root"
+        }));
+        assert_eq!(
+            door.live_session_for_route(&bound)
+                .unwrap()
+                .unwrap()
+                .session_id,
+            "current-root"
+        );
+        let by_pane = boop_store::bus::route_from_value(&serde_json::json!({
+            "kind": "coordinator", "harness": "claude", "tmux": "compiler:@9.%9"
+        }));
+        assert_eq!(
+            door.live_session_for_route(&by_pane)
+                .unwrap()
+                .unwrap()
+                .session_id,
+            "current-root"
+        );
+    }
+
+    /// RECEIPT, public path. The shared pane resolver reads the real Claude
+    /// registry through `Claude`'s static door and follows a parked host.
+    #[test]
+    fn the_public_pane_lookup_follows_a_parked_host() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let fixture = Fixture::new("public-pane");
+        let job = Sleeper::new();
+        fixture.write_host(
+            std::process::id(),
+            "old-root",
+            "compiler:@9.%9",
+            "idle",
+            Some("job-a"),
+        );
+        fixture.write_job(job.pid(), "current-root", "job-a", "/tmp/cc-socks/job.sock");
+
+        let previous = std::env::var_os(SESSIONS_DIR_ENV);
+        std::env::set_var(SESSIONS_DIR_ENV, &fixture.dir);
+        let found =
+            crate::live::session_in_pane(&crate::Registry::discover(), "%9", &fixture.dir).unwrap();
+        match previous {
+            Some(value) => std::env::set_var(SESSIONS_DIR_ENV, value),
+            None => std::env::remove_var(SESSIONS_DIR_ENV),
+        }
+        assert_eq!(found.as_deref(), Some("current-root"));
     }
 
     /// RECEIPT. What lands on the socket is the two documented JSON lines,
