@@ -1,133 +1,138 @@
 # goose harness fixtures
 
-Receipts from probing `goose` (Block) 1.50.0 for the boop goose adapter. Fixtures only; no Rust.
+Receipts from probing `goose` (Block's goose CLI, `block-goose-cli` 1.50.0) for the boop goose adapter. Fixtures only; no Rust.
 
 ## TOC
 
 - [Install and version](#install-and-version)
-- [One-shot `run -t` round trip](#one-shot-run--t-round-trip)
+- [One-shot round trip](#one-shot-round-trip)
+- [Session store](#session-store)
 - [ACP round trip](#acp-round-trip)
 - [Idle RSS](#idle-rss)
 - [Interrupt](#interrupt)
-- [Session on disk](#session-on-disk)
 - [Failed commands](#failed-commands)
 
 ## Install and version
 
 ```bash
-brew install block-goose-cli   # pours block-goose-cli--1.50.0 (14 files, 328.9MB)
-goose --version                #  1.50.0
+brew install block-goose-cli   # goose 1.50.0 (formula block-goose-cli, cask group)
+goose --version                # 1.50.0
 ```
 
-Binary: `/opt/homebrew/bin/goose`.
+Binary: `/opt/homebrew/bin/goose -> ../Cellar/block-goose-cli/1.50.0/bin/goose`.
 
-Provider/backend via env (no interactive `goose configure` needed):
-
-```bash
-export GOOSE_PROVIDER=openrouter
-export GOOSE_MODEL=deepseek/deepseek-v4-flash-0731
-export OPENROUTER_API_KEY=...   # working key, exported for the lane only, never committed
-```
-
-Config dir `~/.config/goose`, session DB `~/.local/share/goose/sessions/sessions.db` (sqlite), logs `~/.local/state/goose/logs`.
-
-## One-shot `run -t` round trip
+## One-shot round trip
 
 Command and stdout (exit 0):
 
 ```bash
-timeout 120 goose run -t 'reply with the single word pong' \
-  --provider openrouter --model deepseek/deepseek-v4-flash-0731 --no-session -q
+goose run -q --provider openrouter --model deepseek/deepseek-v4-flash-0731 \
+  --no-session -t "reply with the single word pong"
 ```
-
 ```
 pong
 ```
 
-`-q` suppresses the banner (`__( O)>` and `● new session · openrouter deepseek/deepseek-v4-flash-0731`); without it those lines precede the reply. `--no-session` avoids writing a session file; drop it to persist.
-
-JSON mode adds usage metadata on stdout:
+With `--stats`:
 
 ```bash
-timeout 120 goose run -t 'reply with the single word pong' \
-  --provider openrouter --model deepseek/deepseek-v4-flash-0731 --no-session -q --output-format json
+goose run -q --provider openrouter --model deepseek/deepseek-v4-flash-0731 \
+  --no-session -t "reply with the single word pong" --stats
+```
+```
+pong
+
+Stats:
+  Time to first token: 15.46s
+  Tokens/sec: 0.26
+  Output tokens: 4
 ```
 
-| metadata | value |
-|---|---|
-| `total_tokens` | 4996 |
-| `input_tokens` | 4992 |
-| `output_tokens` | 4 |
-| `cost_usd` | 0.0002862288 |
-| `status` | `completed` |
+## Session store
+
+Session records live in SQLite, one database per install: `~/.local/share/goose/sessions/sessions.db`. Tables: `schema_version`, `sessions`, `messages`, `usage_ledger`, `provider_inventory_entries`, `provider_inventory_models`. Fixture: `session.txt` (schema for the three relevant tables plus one JSON row per table for the ACP probe session `20260914_15`).
+
+| table | key | row count for `20260914_15` |
+|---|---|---|
+| `sessions` | `id` (TEXT PK, `YYYYMMDD_N`) | 1 |
+| `messages` | `id` (INTEGER PK) | 3 |
+| `usage_ledger` | `id` (INTEGER PK) | 1 |
+
+Session id shape is `<YYYYMMDD>_<increment>` (per-day counter), e.g. `20260914_15`. A `session/prompt` turn writes: one user row with the raw prompt, one synthetic user row holding a `<turn-context>` (current time + working dir + task reminder), one assistant row with the reply, and one `usage_ledger` row with provider-reported token counts and cost.
 
 ## ACP round trip
 
-Fixture: `acp-handshake.jsonl`. Entry point is `goose acp` (stdio server; `goose serve` is the HTTP/WebSocket variant).
+Fixture: `acp-handshake.jsonl`. Entry point is the `goose acp` subcommand (stdio ACP server). It requires provider env vars (`GOOSE_PROVIDER`, `GOOSE_MODEL`) plus `OPENROUTER_API_KEY`; without them `session/new` returns an error (see [Failed commands](#failed-commands)).
 
 | step | request id | result |
 |---|---|---|
-| `initialize` | 1 | `protocolVersion: 1`, `agentInfo: {name: goose, version: 1.50.0}`, `agentCapabilities: {loadSession, promptCapabilities{image,audio:false,embeddedContext}, mcpCapabilities{http:true,sse:false}, sessionCapabilities{list,delete,close}}`, `authMethods: [{id: goose-provider}]` |
-| `session/new` | 2 | `sessionId: 20260914_9`, `modes: {auto, approve, smart_approve, chat}`, `configOptions` (provider, mode, model, thinking_effort), `_meta.workingDir` |
-| `session/prompt` | 3 | `stopReason: "end_turn"`, `usage: {totalTokens: 4996, inputTokens: 4992, outputTokens: 4}` |
+| `initialize` | 1 | `protocolVersion: 1`, `agentInfo: {name: goose, version: 1.50.0}`, `agentCapabilities: {loadSession, promptCapabilities: {image, audio, embeddedContext}, mcpCapabilities: {http}, sessionCapabilities: {list, delete, close}}` |
+| `session/new` | 2 | `sessionId: 20260914_15`, `modes` (auto/approve/smart_approve/chat), `configOptions` (provider select, mode select, model select, thinking effort) |
+| `session/prompt` | 3 | `stopReason: "end_turn"`, `usage: {inputTokens: 5018, outputTokens: 4, totalTokens: 5022}` |
 
-`session/update` notification kinds observed, with counts:
+`session/prompt` streams `session/update` notifications then returns the result. `session/update` kinds observed, with counts:
 
 | `sessionUpdate` | count |
 |---|---|
-| `agent_message_chunk` | 1 |
-| `available_commands_update` | 1 |
-| `session_info_update` | 2 |
+| `session_info_update` | 3 |
 | `usage_update` | 2 |
+| `available_commands_update` | 1 |
+| `agent_message_chunk` | 1 |
 
-`usage_update` carried `used: 4996, size: 1048576, cost: {amount: 1.686048e-05, currency: USD}`. Fixed token overhead per turn (system prompt + tools): input 4992 tokens.
+`prompt` must be an array of content blocks (`[{"type":"text","text":...}]`), not a bare string. Fixed per-turn token overhead (`session/prompt` result usage): `inputTokens: 5018`, `outputTokens: 4`, `totalTokens: 5022` (cost `$0.000068` per the usage_update cost field).
 
 ## Idle RSS
 
-Interactive TUI in tmux, 10s idle, then process scan:
+Interactive TUI started in tmux with provider env exported:
 
 ```bash
-tmux new -d -s goose-probe -c "$PWD" 'goose'
-sleep 10
-pgrep -x goose
+GOOSE_PROVIDER=openrouter GOOSE_MODEL=deepseek/deepseek-v4-flash-0731 \
+  OPENROUTER_API_KEY=$KEY goose
 ```
 
-| measure | value |
+After 14s idle (10s initial sleep + 4s settle), `ps -eo rss,args | grep goose`:
+
+| metric | value |
 |---|---|
-| goose processes | 1 |
-| RSS | 20960 KB (20.5 MB) |
+| process count | 1 |
+| RSS | 62,960 KB (~61.5 MiB) |
+
+Single `goose` process holds the whole TUI; no separate worker/child process while idle.
 
 ## Interrupt
 
-Single `Escape` while the TUI was streaming a long story: generation did NOT stop. The key echoed into the output as a literal `^[` marker and streaming continued. A `C-c` stopped it (`> Interrupted, what should goose work on instead?`).
+With a prompt streaming in the TUI, a single `Escape` keystroke did **not** stop generation; the reply kept streaming to completion (a 1-to-200 count completed fully). The on-screen help names the interrupt key as `Ctrl+C`, not Escape:
 
-Single-ESC interrupt: NO. Goose requires `C-c` (a two-press interrupt is not single-ESC).
+```
+◒  Accelerating abstract algebras...  (Ctrl+C to interrupt)
+```
 
-## Session on disk
-
-Sessions are rows in the sqlite DB `~/.local/share/goose/sessions/sessions.db` (WAL mode), not per-session files. Fixture: `session.txt` (schema dump + one row per table as JSON).
-
-Session id shape: `YYYYMMDD_N` (e.g. `20260914_9`), monotonic per day. Working dir stored per session. Tool call / turn history lives in the `messages` table; token usage in `usage_ledger`.
-
-| table | row |
-|---|---|
-| `sessions` | id `20260914_9`, `session_type: user`, `working_dir: <worktree>`, `provider_name: openrouter`, `goose_mode: auto` |
-| `messages` | user `reply with the single word pong`; assistant `pong` (`message_id` = `gen-<ts>-<suffix>`) |
-| `usage_ledger` | model `deepseek/deepseek-v4-flash-0731`, input 4992, output 4, total 4996, cache_read 4864, cost 1.686e-05, `cost_source: provider_reported` |
-| `provider_inventory_entries` | provider_id `openrouter`, provider_family `openrouter` |
+`Ctrl+C` did stop the count mid-stream (cut output at 200 on the second run after several more numbers). Net: one `Escape` does not interrupt; `Ctrl+C` does.
 
 ## Failed commands
 
-Environment `OPENROUTER_API_KEY` is expired (401 `API key expired`). All live calls above used the working key in `~/.config/opencode/opencode.json`, exported in-shell only. Exact failure:
+Interactive `goose` with no provider configured (env or config) exits with status 1:
 
 ```bash
-timeout 120 goose run -t 'pong' --provider openrouter --model deepseek/deepseek-v4-flash-0731
+goose
+```
+```
+error: No provider configured. Run 'goose configure' first.
 ```
 
+`goose acp` without provider env: `session/new` returns an RPC error:
+
+```bash
+export OPENROUTER_API_KEY=...   # but no GOOSE_PROVIDER / GOOSE_MODEL
+goose acp   # send session/new
 ```
-error: Ran into this error: Authentication error: Authentication failed for https://openrouter.ai/api/v1/chat/completions. Status: 401 Unauthorized. Response: API key expired..
+```json
+{"code":-32603,"message":"Internal error","data":"Failed to resolve provider: Configuration value not found: GOOSE_PROVIDER"}
 ```
 
-exit 1.
+Environment `OPENROUTER_API_KEY` alone is expired (401). All live calls above used the working key from `~/.config/opencode/opencode.json` exported in the shell only; it is not written to any committed file.
 
-Bare interactive `goose` with no prior auth and no `GOOSE_*`/key env opens the OpenRouter OAuth browser flow (`Auth URL: https://openrouter.ai/auth?callback_url=...`) instead of using an API key; the env vars above are required to skip it.
+`goose run` requires either `-i FILE` or `-t TEXT`; `goose run -i` with no value errors:
+```
+error: a value is required for '--instructions <FILE>' but none was supplied
+```

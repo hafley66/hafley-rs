@@ -29,6 +29,22 @@ Options:
   -h, --help     Print help
   -V, --version  Print version
 
+# goose acp --help
+
+Run goose as an ACP agent server on stdio
+
+Usage: goose acp [OPTIONS]
+
+Options:
+      --with-builtin <NAME>
+          Add one or more builtin extensions that are bundled with goose by specifying their names, comma-separated
+
+      --enable-scheduler
+          Enable scheduled recipe execution
+
+  -h, --help
+          Print help (see a summary with '-h')
+
 # goose run --help
 
 Execute commands from an instruction file or stdin
@@ -126,23 +142,3 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
-
-# goose acp --help
-
-Run goose as an ACP agent server on stdio
-
-Usage: goose acp [OPTIONS]
-
-Options:
-      --with-builtin <NAME>
-          Add one or more builtin extensions that are bundled with goose by specifying their names, comma-separated
-
-      --enable-scheduler
-          Enable scheduled recipe execution
-
-  -h, --help
-          Print help (see a summary with '-h')
-
-# goose --version
-
- 1.50.0

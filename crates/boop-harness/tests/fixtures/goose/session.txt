@@ -1,11 +1,9 @@
-goose sessions live in SQLite at ~/.local/share/goose/sessions/sessions.db (WAL mode). One row per table as JSON, scrubbed. Session id 20260914_9 = ACP session/prompt pong turn.
+# goose session store: SQLite at ~/.local/share/goose/sessions/sessions.db
+# tables: schema_version, sessions, messages, usage_ledger, provider_inventory_entries, provider_inventory_models
+# session rows below: the ACP probe session id 20260914_15 (deepseek/deepseek-v4-flash-0731 via openrouter)
 
-=== schema (goose 1.50.0) ===
-
-CREATE TABLE schema_version (
-                version INTEGER PRIMARY KEY,
-                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
+## schema (relevant tables)
+```sql
 CREATE TABLE sessions (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL DEFAULT '',
@@ -37,6 +35,10 @@ CREATE TABLE sessions (
                 project_id TEXT,
                 parent_session_id TEXT
             );
+CREATE INDEX idx_sessions_updated ON sessions(updated_at DESC);
+CREATE INDEX idx_sessions_type ON sessions(session_type);
+CREATE INDEX idx_sessions_parent ON sessions(parent_session_id);
+
 CREATE TABLE messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 message_id TEXT,
@@ -48,7 +50,11 @@ CREATE TABLE messages (
                 tokens INTEGER,
                 metadata_json TEXT
             );
-CREATE TABLE sqlite_sequence(name,seq);
+CREATE INDEX idx_messages_session ON messages(session_id);
+CREATE INDEX idx_messages_timestamp ON messages(timestamp);
+CREATE INDEX idx_messages_message_id ON messages(message_id);
+CREATE INDEX idx_messages_session_created ON messages(session_id, created_timestamp, id);
+
 CREATE TABLE usage_ledger (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -63,48 +69,22 @@ CREATE TABLE usage_ledger (
                 cost_source TEXT,
                 is_compaction INTEGER DEFAULT 0
             );
-CREATE INDEX idx_messages_session ON messages(session_id);
-CREATE INDEX idx_messages_timestamp ON messages(timestamp);
-CREATE INDEX idx_messages_message_id ON messages(message_id);
-CREATE INDEX idx_messages_session_created ON messages(session_id, created_timestamp, id);
-CREATE INDEX idx_sessions_updated ON sessions(updated_at DESC);
-CREATE INDEX idx_sessions_type ON sessions(session_type);
-CREATE INDEX idx_sessions_parent ON sessions(parent_session_id);
 CREATE INDEX idx_usage_ledger_session ON usage_ledger(session_id);
-CREATE TABLE provider_inventory_entries (
-            inventory_key TEXT PRIMARY KEY,
-            provider_id TEXT NOT NULL,
-            provider_family TEXT NOT NULL,
-            last_updated_at TEXT,
-            last_refresh_attempt_at TEXT,
-            last_refresh_error TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-CREATE TABLE provider_inventory_models (
-            inventory_key TEXT NOT NULL REFERENCES provider_inventory_entries(inventory_key) ON DELETE CASCADE,
-            ordinal INTEGER NOT NULL,
-            model_id TEXT NOT NULL,
-            name TEXT NOT NULL,
-            family TEXT,
-            context_limit INTEGER,
-            reasoning BOOLEAN,
-            recommended BOOLEAN,
-            PRIMARY KEY (inventory_key, ordinal)
-        );
-CREATE INDEX idx_provider_inventory_provider_id ON provider_inventory_entries(provider_id);
+```
 
-=== one row per table (JSON) ===
+## sessions row (id=20260914_15)
+```json
+{"id":"20260914_15","name":"pong","session_type":"acp","working_dir":"/Users/chrishafley/projects/hafley-rs/.boop-worktrees/test/crush-probe","created_at":"2026-09-14 23:02:58","updated_at":"2026-09-14 23:03:14","total_tokens":5022,"input_tokens":5018,"output_tokens":4,"accumulated_cost":6.8088e-05,"provider_name":"openrouter","goose_mode":"auto"}
+```
 
-sessions:
-{"id":"20260914_9","name":"","description":"","user_set_name":0,"session_type":"user","working_dir":"/Users/chrishafley/projects/hafley-rs/.boop-worktrees/test/goose-probe","created_at":"2026-09-14 19:33:05","updated_at":"2026-09-14 19:34:07","provider_name":"openrouter","goose_mode":"auto","total_tokens":null,"input_tokens":null,"output_tokens":null,"cache_read_tokens":null,"cache_write_tokens":null,"accumulated_cost":null}
+## messages rows (id=20260914_15)
+```json
+{"id":30,"message_id":"msg_fbcc7795-46f6-4897-9ac6-bcf4c207082e","session_id":"20260914_15","role":"user","content_json":"[{\"type\":\"text\",\"text\":\"reply with the single word pong\"}]"}
+{"id":31,"message_id":"msg_f12ee815-3b73-4c64-a301-307570505722","session_id":"20260914_15","role":"user","content_json":"[{\"type\":\"text\",\"text\":\"<turn-context>\\n<current-time>2026-09-14 19:02:00 -04:00</current-time>\\n<working-directory>/Users/chrishafley/projects/hafley-rs/.boop-worktrees/test/crush-probe</working-directory>\\n\\nCurrent tasks and notes:\\nOnce given a task, immediately update your todo with all explicit and implicit requirements\\n\\n</turn-context>\"}]"}
+{"id":32,"message_id":"gen-1789426978-ylTjhUK2jKFdEf1P4DUb","session_id":"20260914_15","role":"assistant","content_json":"[{\"type\":\"text\",\"text\":\"pong\"}]"}
+```
 
-messages:
-{"message_id":"msg_b8b59dbb-b4bb-4865-a931-5357fc324cbf","session_id":"20260914_9","role":"user","created_timestamp":1789414446,"tokens":null,"content_json":"[{\"type\":\"text\",\"text\":\"reply with the single word pong\"}]"}
-{"message_id":"gen-1789414446-4dUq1J50UKzGJN8d8EhB","session_id":"20260914_9","role":"assistant","created_timestamp":1789414447,"tokens":null,"content_json":"[{\"type\":\"text\",\"text\":\"pong\"}]"}
-
-usage_ledger:
-{"session_id":"20260914_9","created_timestamp":1789414447,"model":"deepseek/deepseek-v4-flash-0731","input_tokens":4992,"output_tokens":4,"total_tokens":4996,"cache_read_tokens":4864,"cache_write_tokens":null,"cost":1.686048e-05,"cost_source":"provider_reported"}
-
-provider_inventory_entries:
-{"inventory_key":"openrouter","provider_id":"openrouter","provider_family":"openrouter","last_updated_at":"2026-09-14T19:33:05Z","last_refresh_error":null}
+## usage_ledger row (id=20260914_15)
+```json
+{"id":7,"session_id":"20260914_15","model":"deepseek/deepseek-v4-flash-0731","input_tokens":5018,"output_tokens":4,"total_tokens":5022,"cache_read_tokens":4864,"cache_write_tokens":0,"cost":6.8088e-05,"cost_source":"provider_reported"}
+```
