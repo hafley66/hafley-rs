@@ -1,0 +1,64 @@
+name: docs
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Read-only by default; the deploy job opts into Pages and OIDC.
+permissions:
+  contents: read
+
+# One build per ref. Stale pull-request builds cancel; a main build queues
+# behind an in-flight deploy instead of cancelling it.
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v7
+      - name: install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: cache cargo and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: docs
+      - name: install pinned mdbook
+        uses: taiki-e/install-action@v2
+        with:
+          # Pinned for a reproducible site build; installed from mdBook's
+          # GitHub Releases with checksum verification.
+          tool: mdbook@0.5.4
+          fallback: none
+      - name: build and check the docs site
+        run: bash scripts/docs/0_build_site.sh target/docs-site
+      - name: configure pages
+        # Pull requests validate the build; only main and manual runs publish.
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v6
+      - name: upload pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: target/docs-site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: deploy to github pages
+        id: deployment
+        uses: actions/deploy-pages@v5

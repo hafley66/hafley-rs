@@ -59,6 +59,11 @@ test *ARGS:
 test-ci:
     cargo test --workspace --locked
 
+# Build the mdBook and the full workspace rustdoc into target/docs-site, then
+# run the API coverage and link checker.
+docs:
+    bash scripts/docs/0_build_site.sh target/docs-site
+
 test-source-mutations-commit:
     cargo test -p soopy --test main -- t14_commit_engine --nocapture
 

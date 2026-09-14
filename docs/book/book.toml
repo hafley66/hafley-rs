@@ -1,0 +1,18 @@
+[book]
+title = "hafley-rs"
+authors = ["hafley-rs contributors"]
+description = "Workspace guide and crate API reference for hafley-rs."
+language = "en"
+src = "src"
+
+[output.html]
+site-url = "/hafley-rs/"
+git-repository-url = "https://github.com/hafley66/hafley-rs"
+edit-url-template = "https://github.com/hafley66/hafley-rs/edit/main/docs/book/src/{path}"
+default-theme = "navy"
+preferred-dark-theme = "navy"
+
+# The chapters are numbered from 0, so mdBook does not mint an index.html by
+# itself. Serve the first chapter at the site root.
+[output.html.redirect]
+"/index.html" = "0_overview.html"

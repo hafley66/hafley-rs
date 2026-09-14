@@ -39,6 +39,13 @@ Releases are tagged `boop-vX.Y.Z` and `boop-mux-vX.Y.Z`; the changelog is
 [CHANGELOG.md](CHANGELOG.md). Contribution rules are in
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Documentation
+
+The workspace guide and the full crate API reference build into one site. The
+book source is in [`docs/book`](docs/book); `just docs` writes the whole site
+to `target/docs-site`. On `main`, `.github/workflows/docs.yml` publishes it to
+GitHub Pages at <https://hafley66.github.io/hafley-rs/>.
+
 ## License
 
 MIT or Apache-2.0, at your option. See [LICENSE-MIT](LICENSE-MIT) and
