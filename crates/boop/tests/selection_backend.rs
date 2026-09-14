@@ -156,7 +156,7 @@ fn list_is_json_rows_ordered_by_focus() {
     let f1 = scratch.selection(&["focus", &first, "--at", "1000"]);
     assert!(
         f1.status.success(),
-        "focus {first} ({first}): {}",
+        "focus {first}: {}",
         String::from_utf8_lossy(&f1.stderr)
     );
     let f2 = scratch.selection(&["focus", &second, "--at", "2000"]);
@@ -173,8 +173,48 @@ fn list_is_json_rows_ordered_by_focus() {
     assert!(json.contains(r#""lastFocusedAt":2000"#), "{json}");
     assert!(json.contains(r#""lastFocusedAt":1000"#), "{json}");
     assert!(json.contains(r#""session":"sel-list""#), "{json}");
-    assert!(json.contains(r#""pane":""#), "{json}");
+    assert!(json.contains(r#""kind":"lane""#), "{json}");
+    assert!(json.contains(r#""pane":"%"#), "{json}");
+    assert!(json.contains(r#""target":"sel-list:0.0""#), "{json}");
     assert!(json.contains(r#""selected":false"#), "{json}");
+}
+
+/// RECEIPT. The list is unchanged in scope: every harness route with a live
+/// pane is still listed, lane included, each row stamped with its kind and
+/// composed target. The Instant dropdown, not the CLI, decides which kinds are
+/// recipients. Sabotage: filtering lanes in the CLI hides rows other consumers
+/// rely on.
+#[test]
+fn list_stamps_kind_metadata_and_keeps_every_live_route() {
+    let scratch = Scratch::new("kinds");
+    scratch.new_session("sel-kinds");
+    let coord = scratch.pane("sel-kinds:0");
+    scratch.tmux(&["new-window", "-t", "sel-kinds", "-n", "lane"]);
+    let lane = scratch.pane("sel-kinds:1");
+    scratch.tmux(&["new-window", "-t", "sel-kinds", "-n", "native"]);
+    let native = scratch.pane("sel-kinds:2");
+    scratch.write_registry(&format!(
+        r#"{{"coord":{{"kind":"coordinator","harness":"claude","tmux":"{coord}"}},
+             "lane":{{"kind":"lane","harness":"claude","tmux":"{lane}"}},
+             "native":{{"kind":"native","harness":"codex","tmux":"{native}"}},
+             "paneless-native":{{"kind":"native","harness":"codex"}}}}"#
+    ));
+
+    let json = scratch.list_json();
+    assert!(json.contains(r#""route":"coord""#), "{json}");
+    assert!(json.contains(r#""route":"lane""#), "{json}");
+    assert!(json.contains(r#""route":"native""#), "{json}");
+    assert!(json.contains(r#""kind":"coordinator""#), "{json}");
+    assert!(json.contains(r#""kind":"lane""#), "{json}");
+    assert!(json.contains(r#""kind":"native""#), "{json}");
+    assert!(
+        json.contains(r#""target":"sel-kinds:1.0""#),
+        "lane row carries its composed target: {json}"
+    );
+    assert!(
+        !json.contains("paneless-native"),
+        "a pane-less route is never listed: {json}"
+    );
 }
 
 /// RECEIPT. Focus is monotone: a later `--at` moves a route, an earlier one

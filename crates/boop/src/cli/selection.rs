@@ -47,8 +47,14 @@ pub enum SelectionCmd {
 #[serde(rename_all = "camelCase")]
 pub struct SelectionRow {
     route: String,
+    /// The registry route kind (`coordinator`, `native`, `lane`, `shell`), so a
+    /// consumer can tell a live recipient from a supervised lane without
+    /// guessing from the route name.
+    kind: String,
     session: String,
     pane: String,
+    /// `session:window.pane`, the spelling a tab's tmux target may carry.
+    target: String,
     title: String,
     last_focused_at: Option<i64>,
     selected: bool,
@@ -70,6 +76,7 @@ struct PaneObs {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ResolvedRoute {
     route: String,
+    kind: String,
     session: String,
     pane: String,
     target: String,
@@ -80,8 +87,10 @@ impl ResolvedRoute {
     fn row(&self, last_focused_at: Option<i64>, selected: bool) -> SelectionRow {
         SelectionRow {
             route: self.route.clone(),
+            kind: self.kind.clone(),
             session: self.session.clone(),
             pane: self.pane.clone(),
+            target: self.target.clone(),
             title: self.title.clone(),
             last_focused_at,
             selected,
@@ -201,7 +210,9 @@ fn pane_for_target<'a>(panes: &'a [PaneObs], target: &str) -> Option<&'a PaneObs
         .find(|pane| pane.session == target && pane.window_active && pane.pane_active)
 }
 
-/// Every registered harness route with a live pane, one row per route.
+/// Every registered harness route with a live pane, one row per route. The row
+/// carries the route kind so a consumer (the Instant dropdown) can decide which
+/// kinds are recipients; the CLI itself lists every kind, unchanged.
 fn resolve_route_panes(
     routes: &BTreeMap<String, bus::Route>,
     panes: &[PaneObs],
@@ -219,6 +230,7 @@ fn resolve_route_panes(
         };
         out.push(ResolvedRoute {
             route: name.clone(),
+            kind: route.kind.as_str().to_owned(),
             session: pane.session.clone(),
             pane: pane.id.clone(),
             target: pane.target.clone(),
