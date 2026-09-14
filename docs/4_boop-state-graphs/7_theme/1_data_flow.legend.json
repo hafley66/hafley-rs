@@ -1,0 +1,62 @@
+[
+  {
+    "group": "observations.native",
+    "color": "#67d5e8",
+    "dash": 0
+  },
+  {
+    "group": "observations.files",
+    "color": "#ffc66d",
+    "dash": 0
+  },
+  {
+    "group": "storage.bind",
+    "color": "#91c4ff",
+    "dash": 0
+  },
+  {
+    "group": "storage.sync",
+    "color": "#a5dc83",
+    "dash": 0
+  },
+  {
+    "group": "observations.supervisor",
+    "color": "#ff9784",
+    "dash": 0
+  },
+  {
+    "group": "storage.db",
+    "color": "#e5d482",
+    "dash": 0
+  },
+  {
+    "group": "storage.registry",
+    "color": "#75d9b0",
+    "dash": 0
+  },
+  {
+    "group": "observations.os",
+    "color": "#c0cce0",
+    "dash": 0
+  },
+  {
+    "group": "observations.tmux",
+    "color": "#f2ad78",
+    "dash": 0
+  },
+  {
+    "group": "readers.runtime",
+    "color": "#86cad4",
+    "dash": 0
+  },
+  {
+    "group": "storage.residence",
+    "color": "#bcd16d",
+    "dash": 0
+  },
+  {
+    "group": "readers.graph",
+    "color": "#b7b5fb",
+    "dash": 0
+  }
+]

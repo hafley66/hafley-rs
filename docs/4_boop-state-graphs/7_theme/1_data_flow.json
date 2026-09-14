@@ -1,0 +1,107 @@
+{
+  "theme": "midnight",
+  "palette": "categorical",
+  "mode": "round-robin",
+  "assignments": [
+    {
+      "target": "(observations.native -> storage.bind)[0]",
+      "kind": "edge",
+      "group": "observations.native"
+    },
+    {
+      "target": "(observations.files -> storage.sync)[0]",
+      "kind": "edge",
+      "group": "observations.files"
+    },
+    {
+      "target": "(storage.bind -> storage.db)[0]",
+      "kind": "edge",
+      "group": "storage.bind"
+    },
+    {
+      "target": "(storage.bind -> storage.registry)[0]",
+      "kind": "edge",
+      "group": "storage.bind"
+    },
+    {
+      "target": "(storage.sync -> storage.db)[0]",
+      "kind": "edge",
+      "group": "storage.sync"
+    },
+    {
+      "target": "(observations.supervisor -> storage.residence)[0]",
+      "kind": "edge",
+      "group": "observations.supervisor"
+    },
+    {
+      "target": "(storage.db -> readers.runtime)[0]",
+      "kind": "edge",
+      "group": "storage.db"
+    },
+    {
+      "target": "(storage.registry -> readers.runtime)[0]",
+      "kind": "edge",
+      "group": "storage.registry"
+    },
+    {
+      "target": "(observations.os -> readers.runtime)[0]",
+      "kind": "edge",
+      "group": "observations.os"
+    },
+    {
+      "target": "(observations.tmux -> readers.runtime)[0]",
+      "kind": "edge",
+      "group": "observations.tmux"
+    },
+    {
+      "target": "(readers.runtime -> readers.summary)[0]",
+      "kind": "edge",
+      "group": "readers.runtime"
+    },
+    {
+      "target": "(readers.runtime -> readers.graph)[0]",
+      "kind": "edge",
+      "group": "readers.runtime"
+    },
+    {
+      "target": "(storage.db -> readers.graph)[0]",
+      "kind": "edge",
+      "group": "storage.db"
+    },
+    {
+      "target": "(observations.tmux -> readers.graph)[0]",
+      "kind": "edge",
+      "group": "observations.tmux"
+    },
+    {
+      "target": "(storage.registry -> readers.cli)[0]",
+      "kind": "edge",
+      "group": "storage.registry"
+    },
+    {
+      "target": "(storage.residence -> readers.cli)[0]",
+      "kind": "edge",
+      "group": "storage.residence"
+    },
+    {
+      "target": "(observations.tmux -> readers.cli)[0]",
+      "kind": "edge",
+      "group": "observations.tmux"
+    },
+    {
+      "target": "(readers.graph -> instant.network)[0]",
+      "kind": "edge",
+      "group": "readers.graph"
+    },
+    {
+      "target": "(observations.tmux -> instant.screenshot)[0]",
+      "kind": "edge",
+      "group": "observations.tmux"
+    },
+    {
+      "target": "(observations.os -> instant.screenshot)[0]",
+      "kind": "edge",
+      "group": "observations.os"
+    }
+  ]
+}

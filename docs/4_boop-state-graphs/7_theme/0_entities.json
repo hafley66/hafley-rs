@@ -1,0 +1,66 @@
+{
+  "theme": "midnight",
+  "palette": "categorical",
+  "mode": "round-robin",
+  "assignments": [
+    {
+      "target": "(dictionary -> session)[0]",
+      "kind": "edge",
+      "group": "dictionary"
+    },
+    {
+      "target": "(dictionary -> membership)[0]",
+      "kind": "edge",
+      "group": "dictionary"
+    },
+    {
+      "target": "(trace -> membership)[0]",
+      "kind": "edge",
+      "group": "trace"
+    },
+    {
+      "target": "(dictionary -> live)[0]",
+      "kind": "edge",
+      "group": "dictionary"
+    },
+    {
+      "target": "(dictionary -> intervals)[0]",
+      "kind": "edge",
+      "group": "dictionary"
+    },
+    {
+      "target": "(session -> turns)[0]",
+      "kind": "edge",
+      "group": "session"
+    },
+    {
+      "target": "(trace -> lane)[0]",
+      "kind": "edge",
+      "group": "trace"
+    },
+    {
+      "target": "(route -> dictionary)[0]",
+      "kind": "edge",
+      "group": "route",
+      "dash": 3
+    },
+    {
+      "target": "(route -> lane)[0]",
+      "kind": "edge",
+      "group": "route",
+      "dash": 3
+    },
+    {
+      "target": "(route -> residency)[0]",
+      "kind": "edge",
+      "group": "route",
+      "dash": 3
+    },
+    {
+      "target": "(live -> process)[0]",
+      "kind": "edge",
+      "group": "live",
+      "dash": 3
+    }
+  ]
+}

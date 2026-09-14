@@ -1,0 +1,29 @@
+# Source audit: ../1_boop-session-state-audit.md
+# Main: hafley-rs 2376a81f; Instant 9fca010e; 2026-09-13
+vars: { d2-config: { theme-id: 201; layout-engine: elk; pad: 32 } }
+classes: {
+  fact: { style.fill: "#153b43"; style.stroke: "#63c7cd"; style.font-color: "#e1f5f5" }
+  good: { style.fill: "#203e2b"; style.stroke: "#79b98b"; style.font-color: "#e5f3e8" }
+  gap: { style.fill: "#473819"; style.stroke: "#d5b66e"; style.font-color: "#fff0c5" }
+  bad: { style.fill: "#462629"; style.stroke: "#cb888a"; style.font-color: "#ffe2e2" }
+}
+
+direction: right
+ banner: "PROPOSED CONTRACT\nNot implemented\nReview alongside implemented ER diagram" {class: gap}
+ process: "ProcessKey\nHOST + PID + START TIME" {class: fact}
+ pane: "PaneKey\nTMUX SERVER + PANE ID" {class: fact}
+ session: "SessionKey\nHARNESS + NATIVE ID" {class: fact}
+ binding: "SessionBinding\nROUTE + GENERATION\nopened_at / closed_at\nunresolved / bound / detached / closed" {class: good}
+ trace: "Trace\nTRACE ID" {class: fact}
+ lineage: "LineageEvent\nfrom session / to session\nfresh / clear / resume / fork\nobserved timestamp" {class: good}
+ turn: "Turn observation\nunknown / idle / running / waiting\nturn ID + reason + observed_at" {class: fact}
+ residency: "Supervisor observation\nunknown / running turn / parked / retired" {class: fact}
+ process -> binding: "1 process : many successive bindings"
+ session -> binding: "1 session : many resume bindings"
+ pane -> binding: "optional; qualified by server"
+ trace -> lineage: "1 : many events"
+ session -> lineage: "explicit from/to references"
+ binding -> turn: "independent observation"
+ binding -> residency: "independent observation"
+ guard: "EVENT OWNERSHIP\nvalidate generation + producer sequence\nretain unknown on observation failure" {class: gap}
+ guard -> binding: "stale events cannot replace newer owner"

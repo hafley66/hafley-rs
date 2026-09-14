@@ -1,0 +1,32 @@
+[
+  {
+    "group": "process",
+    "color": "#67d5e8",
+    "dash": 0
+  },
+  {
+    "group": "session",
+    "color": "#ffc66d",
+    "dash": 0
+  },
+  {
+    "group": "pane",
+    "color": "#91c4ff",
+    "dash": 0
+  },
+  {
+    "group": "trace",
+    "color": "#a5dc83",
+    "dash": 0
+  },
+  {
+    "group": "binding",
+    "color": "#ff9784",
+    "dash": 0
+  },
+  {
+    "group": "guard",
+    "color": "#e5d482",
+    "dash": 0
+  }
+]

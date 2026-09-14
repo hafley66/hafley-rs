@@ -1,0 +1,79 @@
+{
+  "theme": "midnight",
+  "palette": "categorical",
+  "mode": "semantic",
+  "assignments": [
+    {
+      "target": "(unbound -> bound)[0]",
+      "kind": "edge",
+      "group": "success",
+      "role": "success"
+    },
+    {
+      "target": "(unbound -> unbound)[0]",
+      "kind": "edge",
+      "group": "warning",
+      "role": "warning"
+    },
+    {
+      "target": "(bound -> bound)[0]",
+      "kind": "edge",
+      "group": "success",
+      "role": "success"
+    },
+    {
+      "target": "(bound -> replace)[0]",
+      "kind": "edge",
+      "group": "identity",
+      "role": "identity"
+    },
+    {
+      "target": "(replace -> bound)[0]",
+      "kind": "edge",
+      "group": "success",
+      "role": "success"
+    },
+    {
+      "target": "(bound -> closed)[0]",
+      "kind": "edge",
+      "group": "failure",
+      "role": "failure"
+    },
+    {
+      "target": "(closed -> bound)[0]",
+      "kind": "edge",
+      "group": "success",
+      "role": "success"
+    },
+    {
+      "target": "(bound -> detached)[0]",
+      "kind": "edge",
+      "group": "inactive",
+      "role": "inactive"
+    },
+    {
+      "target": "(bound -> bound)[1]",
+      "kind": "edge",
+      "group": "success",
+      "role": "success"
+    },
+    {
+      "target": "(detached -> respawn)[0]",
+      "kind": "edge",
+      "group": "control",
+      "role": "control"
+    },
+    {
+      "target": "(respawn -> unbound)[0]",
+      "kind": "edge",
+      "group": "warning",
+      "role": "warning"
+    },
+    {
+      "target": "(respawn -> ended)[0]",
+      "kind": "edge",
+      "group": "failure",
+      "role": "failure"
+    }
+  ]
+}

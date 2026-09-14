@@ -1,0 +1,117 @@
+{
+  "theme": "midnight",
+  "palette": "categorical",
+  "mode": "round-robin",
+  "assignments": [
+    {
+      "target": "(user -> harness)[0]",
+      "kind": "edge",
+      "group": "fresh launch: process P1"
+    },
+    {
+      "target": "(harness -> wrapper)[0]",
+      "kind": "edge",
+      "group": "fresh launch: process P1"
+    },
+    {
+      "target": "(wrapper -> store)[0]",
+      "kind": "edge",
+      "group": "fresh launch: process P1"
+    },
+    {
+      "target": "(store -> view)[0]",
+      "kind": "edge",
+      "group": "fresh launch: process P1"
+    },
+    {
+      "target": "(user -> harness)[1]",
+      "kind": "edge",
+      "group": "compact"
+    },
+    {
+      "target": "(harness -> harness)[0]",
+      "kind": "edge",
+      "group": "compact"
+    },
+    {
+      "target": "(harness -> view)[0]",
+      "kind": "edge",
+      "group": "compact"
+    },
+    {
+      "target": "(user -> harness)[2]",
+      "kind": "edge",
+      "group": "clear/new"
+    },
+    {
+      "target": "(harness -> wrapper)[1]",
+      "kind": "edge",
+      "group": "clear/new"
+    },
+    {
+      "target": "(wrapper -> store)[1]",
+      "kind": "edge",
+      "group": "clear/new"
+    },
+    {
+      "target": "(store -> view)[1]",
+      "kind": "edge",
+      "group": "clear/new"
+    },
+    {
+      "target": "(user -> harness)[3]",
+      "kind": "edge",
+      "group": "exit"
+    },
+    {
+      "target": "(wrapper -> store)[2]",
+      "kind": "edge",
+      "group": "exit"
+    },
+    {
+      "target": "(store -> view)[2]",
+      "kind": "edge",
+      "group": "exit"
+    },
+    {
+      "target": "(user -> harness)[4]",
+      "kind": "edge",
+      "group": "resume B: new process P2"
+    },
+    {
+      "target": "(harness -> wrapper)[2]",
+      "kind": "edge",
+      "group": "resume B: new process P2"
+    },
+    {
+      "target": "(wrapper -> store)[3]",
+      "kind": "edge",
+      "group": "resume B: new process P2"
+    },
+    {
+      "target": "(store -> view)[3]",
+      "kind": "edge",
+      "group": "resume B: new process P2"
+    },
+    {
+      "target": "(user -> harness)[5]",
+      "kind": "edge",
+      "group": "select previously known C"
+    },
+    {
+      "target": "(harness -> wrapper)[3]",
+      "kind": "edge",
+      "group": "select previously known C"
+    },
+    {
+      "target": "(wrapper -> store)[4]",
+      "kind": "edge",
+      "group": "select previously known C"
+    },
+    {
+      "target": "(store -> view)[4]",
+      "kind": "edge",
+      "group": "select previously known C"
+    }
+  ]
+}

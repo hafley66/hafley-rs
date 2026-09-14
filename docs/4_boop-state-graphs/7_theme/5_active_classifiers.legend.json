@@ -1,0 +1,52 @@
+[
+  {
+    "group": "pid",
+    "color": "#67d5e8",
+    "dash": 0
+  },
+  {
+    "group": "target",
+    "color": "#ffc66d",
+    "dash": 0
+  },
+  {
+    "group": "process",
+    "color": "#91c4ff",
+    "dash": 0
+  },
+  {
+    "group": "tmux",
+    "color": "#a5dc83",
+    "dash": 0
+  },
+  {
+    "group": "shell",
+    "color": "#ff9784",
+    "dash": 0
+  },
+  {
+    "group": "evidence",
+    "color": "#e5d482",
+    "dash": 0
+  },
+  {
+    "group": "runtime.process",
+    "color": "#75d9b0",
+    "dash": 0
+  },
+  {
+    "group": "runtime.tmux",
+    "color": "#c0cce0",
+    "dash": 0
+  },
+  {
+    "group": "graph.native",
+    "color": "#f2ad78",
+    "dash": 0
+  },
+  {
+    "group": "graph.pane",
+    "color": "#86cad4",
+    "dash": 0
+  }
+]

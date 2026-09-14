@@ -1,0 +1,44 @@
+[
+  {
+    "group": "success",
+    "role": "success",
+    "color": "#a5dc83",
+    "dash": 0
+  },
+  {
+    "group": "data",
+    "role": "data",
+    "color": "#67d5e8",
+    "dash": 0
+  },
+  {
+    "group": "control",
+    "role": "control",
+    "color": "#ffc66d",
+    "dash": 0
+  },
+  {
+    "group": "failure",
+    "role": "failure",
+    "color": "#ff9784",
+    "dash": 0
+  },
+  {
+    "group": "inactive",
+    "role": "inactive",
+    "color": "#c0cce0",
+    "dash": 5
+  },
+  {
+    "group": "storage",
+    "role": "storage",
+    "color": "#75d9b0",
+    "dash": 0
+  },
+  {
+    "group": "warning",
+    "role": "warning",
+    "color": "#e5d482",
+    "dash": 3
+  }
+]

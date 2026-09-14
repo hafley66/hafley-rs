@@ -1,0 +1,32 @@
+[
+  {
+    "group": "fresh launch: process P1",
+    "color": "#67d5e8",
+    "dash": 0
+  },
+  {
+    "group": "compact",
+    "color": "#ffc66d",
+    "dash": 0
+  },
+  {
+    "group": "clear/new",
+    "color": "#91c4ff",
+    "dash": 0
+  },
+  {
+    "group": "exit",
+    "color": "#a5dc83",
+    "dash": 0
+  },
+  {
+    "group": "resume B: new process P2",
+    "color": "#ff9784",
+    "dash": 0
+  },
+  {
+    "group": "select previously known C",
+    "color": "#e5d482",
+    "dash": 0
+  }
+]

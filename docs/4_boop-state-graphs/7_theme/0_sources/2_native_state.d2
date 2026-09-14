@@ -1,0 +1,31 @@
+# Source audit: ../1_boop-session-state-audit.md
+# Main: hafley-rs 2376a81f; Instant 9fca010e; 2026-09-13
+vars: { d2-config: { theme-id: 201; layout-engine: dagre; pad: 32 } }
+classes: {
+  fact: { style.fill: "#153b43"; style.stroke: "#63c7cd"; style.font-color: "#e1f5f5" }
+  good: { style.fill: "#203e2b"; style.stroke: "#79b98b"; style.font-color: "#e5f3e8" }
+  gap: { style.fill: "#473819"; style.stroke: "#d5b66e"; style.font-color: "#fff0c5" }
+  bad: { style.fill: "#462629"; style.stroke: "#cb888a"; style.font-color: "#ffe2e2" }
+}
+
+direction: down
+ unbound: "UNBOUND\nprocess may already exist\nroute.session_id = None" {class: gap}
+ bound: "BOUND(S)\nagent_live = live\nPID + pane attached" {class: good}
+ replace: "REPLACE A WITH B\nA -> detached\nclear A PID/pane" {class: fact}
+ closed: "CLOSED(S)\nclear selected session/model\nclear PID/pane" {class: bad}
+ detached: "DETACHED(S)\nclear PID/pane and door\nretain session + trace" {class: bad}
+ respawn: "RESPAWN GATE\nobserver failure or numeric nonzero exit\nuptime >= 10s AND attempts < 3" {shape: diamond; class: gap}
+ ended: "WRAPPER ENDED\nstored conversation remains" {class: bad}
+ unbound -> bound: "Session(S) observed\nunique PID / pane / adapter fallback"
+ unbound -> unbound: "discovery deadline\nno identity found"
+ bound -> bound: "Session(S), settings(S), compact\nlate events for other sessions ignored"
+ bound -> replace: "Session(B), B != A"
+ replace -> bound: "bind B\ntrace(B) else carried trace else trace-B"
+ bound -> closed: "Closed(S) for selected S"
+ closed -> bound: "later Session(S or B)"
+ bound -> detached: "wrapper releases\nrecorded PID still owned"
+ bound -> bound: "release after another PID rebound\nnew owner preserved"
+ detached -> respawn
+ respawn -> unbound: "retry allowed\nnew process / resume"
+ respawn -> ended: "clean exit / signal / short uptime / cap"
+ note: "control.rs: bind_native_session / apply_native_event / release_native_route\nBoxes combine route binding and stored observations for this view.\nNo clearing or compacting state is persisted on main." {class: gap}

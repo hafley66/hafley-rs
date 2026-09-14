@@ -1,0 +1,45 @@
+# Source audit: ../1_boop-session-state-audit.md
+# Main: hafley-rs 2376a81f; Instant 9fca010e; 2026-09-13
+vars: { d2-config: { theme-id: 201; layout-engine: elk; pad: 32 } }
+classes: {
+  fact: { style.fill: "#153b43"; style.stroke: "#63c7cd"; style.font-color: "#e1f5f5" }
+  good: { style.fill: "#203e2b"; style.stroke: "#79b98b"; style.font-color: "#e5f3e8" }
+  gap: { style.fill: "#473819"; style.stroke: "#d5b66e"; style.font-color: "#fff0c5" }
+  bad: { style.fill: "#462629"; style.stroke: "#cb888a"; style.font-color: "#ffe2e2" }
+}
+
+direction: down
+ evidence: "SAME LANE / SESSION\nseparate evidence sources" {class: fact}
+ runtime: "runtime_snapshot" {
+  pid: "Recorded PID present?" {shape: diamond}
+  process: "yes: Live\nno: Dead\nno PID: Unknown"
+  target: "Target's session name listed?" {shape: diamond}
+  tmux: "yes: Live / no: Dead\nlisting failure: Inaccessible\nno target: Unmanaged"
+  count: "active_agents\nprocess Live OR tmux Live" {class: good}
+  pid -> process
+  target -> tmux
+  process -> count
+  tmux -> count
+ }
+ graph: "session graph" {
+  native: "Native node\nstored agent_live.status" {class: gap}
+  shell: "Shell node\nany Live -> live\nelse any Dead -> dead\nelse stored status or unknown"
+  pane: "Exact %pane alive\ncan override shell to live"
+  shell -> pane
+ }
+ ui: "Instant graph" {
+  recency: "local active\nlast_activity or started >= cutoff" {class: fact}
+  filter: "active-only\nstate == live OR live descendant" {class: fact}
+ }
+ screenshot: "Instant tmux table\nattached = tmux client count > 0\nopen = frontend tab exists\nproc = command label" {class: gap}
+ evidence -> runtime.pid
+ evidence -> runtime.target
+ evidence -> graph.native
+ evidence -> ui.recency
+ evidence -> screenshot
+ runtime.process -> graph.shell
+ runtime.tmux -> graph.shell
+ graph.native -> ui.filter
+ graph.pane -> ui.filter
+ gap: "EXIT DISPLAY GAP\nwrapper writes detached or closed\nfinished_ts SQL considers only dead" {class: bad}
+ graph.native -> gap

@@ -1,0 +1,47 @@
+{
+  "theme": "midnight",
+  "palette": "categorical",
+  "mode": "round-robin",
+  "assignments": [
+    {
+      "target": "(process -> binding)[0]",
+      "kind": "edge",
+      "group": "process"
+    },
+    {
+      "target": "(session -> binding)[0]",
+      "kind": "edge",
+      "group": "session"
+    },
+    {
+      "target": "(pane -> binding)[0]",
+      "kind": "edge",
+      "group": "pane"
+    },
+    {
+      "target": "(trace -> lineage)[0]",
+      "kind": "edge",
+      "group": "trace"
+    },
+    {
+      "target": "(session -> lineage)[0]",
+      "kind": "edge",
+      "group": "session"
+    },
+    {
+      "target": "(binding -> turn)[0]",
+      "kind": "edge",
+      "group": "binding"
+    },
+    {
+      "target": "(binding -> residency)[0]",
+      "kind": "edge",
+      "group": "binding"
+    },
+    {
+      "target": "(guard -> binding)[0]",
+      "kind": "edge",
+      "group": "guard"
+    }
+  ]
+}

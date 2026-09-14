@@ -1,0 +1,27 @@
+[
+  {
+    "group": "dictionary",
+    "color": "#67d5e8",
+    "dash": 0
+  },
+  {
+    "group": "trace",
+    "color": "#ffc66d",
+    "dash": 0
+  },
+  {
+    "group": "session",
+    "color": "#91c4ff",
+    "dash": 0
+  },
+  {
+    "group": "route",
+    "color": "#a5dc83",
+    "dash": 0
+  },
+  {
+    "group": "live",
+    "color": "#ff9784",
+    "dash": 0
+  }
+]

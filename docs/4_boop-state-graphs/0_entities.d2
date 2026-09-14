@@ -1,0 +1,134 @@
+# Source audit: ../1_boop-session-state-audit.md
+# Main: hafley-rs 2376a81f; Instant 9fca010e; 2026-09-13
+vars: { d2-config: { theme-id: 201; layout-engine: elk; pad: 32 } }
+classes: {
+  fact: { style.fill: "#153b43"; style.stroke: "#63c7cd"; style.font-color: "#e1f5f5" }
+  good: { style.fill: "#203e2b"; style.stroke: "#79b98b"; style.font-color: "#e5f3e8" }
+  gap: { style.fill: "#473819"; style.stroke: "#d5b66e"; style.font-color: "#fff0c5" }
+  bad: { style.fill: "#462629"; style.stroke: "#cb888a"; style.font-color: "#ffe2e2" }
+}
+
+direction: right
+ dictionary: dict_session {shape: sql_table; id: integer {constraint: primary_key}; value: text {constraint: unique}}
+ session: agent_session {shape: sql_table; session_id: integer {constraint: primary_key}; harness_id: integer; cwd_id: integer; started_ts: timestamp}
+ trace: agent_trace {shape: sql_table; trace_id: integer {constraint: primary_key}; root_session_id: integer; started_ts: timestamp}
+ membership: agent_trace_span {shape: sql_table; session_id: integer {constraint: primary_key}; trace_id: integer; attach_id: integer; attached_ts: timestamp}
+ live: agent_live {shape: sql_table; session_id: integer {constraint: primary_key}; pid: nullable; tmux_pane_id: nullable; status_id: nullable; door_kind: text; door_addr: text}
+ intervals: agent_live_span {shape: sql_table; session_id: integer {constraint: primary_key}; from_ts: timestamp {constraint: primary_key}; to_ts: nullable; pid: nullable; tmux_pane_id: nullable; status_id: integer}
+ turns: agent_turn {shape: sql_table; session_id: integer {constraint: primary_key}; turn: integer {constraint: primary_key}; ts: timestamp; role_id: integer}
+ lane: agent_lane {shape: sql_table; spawn_id: integer {constraint: primary_key}; lane_id: integer; parent_lane_id: nullable; trace_id: nullable; spawned_ts: timestamp}
+ route: "registry.json route\nkey: lane name\nselected session / parent / tmux\nmodel / registration time" {class: fact}
+ residency: "lane-residency.json\nkey: lane name\nlive | idle | retired" {class: fact}
+ process: "OS process snapshot\nPID + parent + start time\ncurrent binding checks only PID" {class: gap}
+ dictionary -> session: "1 : 0..1"
+ dictionary -> membership: "1 : 0..1"
+ trace -> membership: "1 : many sessions"
+ dictionary -> live: "1 : 0..1"
+ dictionary -> intervals: "1 : many intervals"
+ session -> turns: "1 : many turns"
+ trace -> lane: "1 : many spawn records"
+ route -> dictionary: "optional selected session\nlogical reference" {style.stroke-dash: 3}
+ route -> lane: "name lookup\nmay match multiple spawns" {style.stroke-dash: 3}
+ route -> residency: "same lane name" {style.stroke-dash: 3}
+ live -> process: "PID presence lookup" {style.stroke-dash: 3}
+ note: "IMPLEMENTED STORAGE\nLogical cardinalities; edges do not assert SQL FK constraints.\nFirst trace attachment wins. Bare session IDs are globally unique.\nTrace has no lifecycle state; bindings omit process start time." {class: gap}
+
+# D2 theme kit: midnight / categorical
+vars: { d2-config: { theme-id: 200; theme-overrides: { N1: "#edf3f8"; N2: "#edf3f8"; N3: "#edf3f8"; N4: "#c0cce0"; N5: "#1d252d"; N6: "#1d252d"; N7: "#101820"; B1: "#67d5e8"; B2: "#67d5e8"; B3: "#67d5e8"; B4: "#1d252d"; B5: "#1d252d"; B6: "#1d252d"; AA2: "#ffc66d"; AA4: "#1d252d"; AA5: "#1d252d"; AB4: "#1d252d"; AB5: "#1d252d" } } }
+style.fill: "#101820"
+classes: {
+  kit_c0: { style.fill: "#1b313a"; style.stroke: "#67d5e8"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c0: { style.stroke: "#67d5e8"; style.font-color: "#67d5e8"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c1: { style.fill: "#2f2f2a"; style.stroke: "#ffc66d"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c1: { style.stroke: "#ffc66d"; style.font-color: "#ffc66d"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c2: { style.fill: "#212e3d"; style.stroke: "#91c4ff"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c2: { style.stroke: "#91c4ff"; style.font-color: "#91c4ff"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c3: { style.fill: "#23312d"; style.stroke: "#a5dc83"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c3: { style.stroke: "#a5dc83"; style.font-color: "#a5dc83"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c4: { style.fill: "#2f292d"; style.stroke: "#ff9784"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c4: { style.stroke: "#ff9784"; style.font-color: "#ff9784"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c5: { style.fill: "#2c302d"; style.stroke: "#e5d482"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c5: { style.stroke: "#e5d482"; style.font-color: "#e5d482"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c6: { style.fill: "#1d3133"; style.stroke: "#75d9b0"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c6: { style.stroke: "#75d9b0"; style.font-color: "#75d9b0"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c7: { style.fill: "#272f39"; style.stroke: "#c0cce0"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c7: { style.stroke: "#c0cce0"; style.font-color: "#c0cce0"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c8: { style.fill: "#2d2b2b"; style.stroke: "#f2ad78"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c8: { style.stroke: "#f2ad78"; style.font-color: "#f2ad78"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c9: { style.fill: "#1f2f37"; style.stroke: "#86cad4"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c9: { style.stroke: "#86cad4"; style.font-color: "#86cad4"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c10: { style.fill: "#26302a"; style.stroke: "#bcd16d"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c10: { style.stroke: "#bcd16d"; style.font-color: "#bcd16d"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c11: { style.fill: "#262c3c"; style.stroke: "#b7b5fb"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c11: { style.stroke: "#b7b5fb"; style.font-color: "#b7b5fb"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c12: { style.fill: "#2b2d31"; style.stroke: "#e2bda5"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c12: { style.stroke: "#e2bda5"; style.font-color: "#e2bda5"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c13: { style.fill: "#1e2c3b"; style.stroke: "#7eb5ef"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c13: { style.stroke: "#7eb5ef"; style.font-color: "#7eb5ef"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c14: { style.fill: "#293231"; style.stroke: "#d4dfa4"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c14: { style.stroke: "#d4dfa4"; style.font-color: "#d4dfa4"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_c15: { style.fill: "#282f36"; style.stroke: "#c5c9cb"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_c15: { style.stroke: "#c5c9cb"; style.font-color: "#c5c9cb"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_data: { style.fill: "#1b313a"; style.stroke: "#67d5e8"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_data: { style.stroke: "#67d5e8"; style.font-color: "#67d5e8"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_control: { style.fill: "#2f2f2a"; style.stroke: "#ffc66d"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_control: { style.stroke: "#ffc66d"; style.font-color: "#ffc66d"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_identity: { style.fill: "#212e3d"; style.stroke: "#91c4ff"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_identity: { style.stroke: "#91c4ff"; style.font-color: "#91c4ff"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_success: { style.fill: "#23312d"; style.stroke: "#a5dc83"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_success: { style.stroke: "#a5dc83"; style.font-color: "#a5dc83"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_failure: { style.fill: "#2f292d"; style.stroke: "#ff9784"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_failure: { style.stroke: "#ff9784"; style.font-color: "#ff9784"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_warning: { style.fill: "#2c302d"; style.stroke: "#e5d482"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_warning: { style.stroke: "#e5d482"; style.font-color: "#e5d482"; style.stroke-width: 3; style.stroke-dash: 3 }
+  kit_storage: { style.fill: "#1d3133"; style.stroke: "#75d9b0"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_storage: { style.stroke: "#75d9b0"; style.font-color: "#75d9b0"; style.stroke-width: 3; style.stroke-dash: 0 }
+  kit_inactive: { style.fill: "#272f39"; style.stroke: "#c0cce0"; style.font-color: "#edf3f8"; style.stroke-width: 2 }
+  kit_edge_inactive: { style.stroke: "#c0cce0"; style.font-color: "#c0cce0"; style.stroke-width: 3; style.stroke-dash: 5 }
+}
+
+# Explicit group assignments
+(dictionary -> session)[0].style.stroke: "#67d5e8"
+(dictionary -> session)[0].style.stroke-width: 3
+(dictionary -> session)[0].style.font-color: "#67d5e8"
+(dictionary -> session)[0].style.stroke-dash: 0
+(dictionary -> membership)[0].style.stroke: "#67d5e8"
+(dictionary -> membership)[0].style.stroke-width: 3
+(dictionary -> membership)[0].style.font-color: "#67d5e8"
+(dictionary -> membership)[0].style.stroke-dash: 0
+(trace -> membership)[0].style.stroke: "#ffc66d"
+(trace -> membership)[0].style.stroke-width: 3
+(trace -> membership)[0].style.font-color: "#ffc66d"
+(trace -> membership)[0].style.stroke-dash: 0
+(dictionary -> live)[0].style.stroke: "#67d5e8"
+(dictionary -> live)[0].style.stroke-width: 3
+(dictionary -> live)[0].style.font-color: "#67d5e8"
+(dictionary -> live)[0].style.stroke-dash: 0
+(dictionary -> intervals)[0].style.stroke: "#67d5e8"
+(dictionary -> intervals)[0].style.stroke-width: 3
+(dictionary -> intervals)[0].style.font-color: "#67d5e8"
+(dictionary -> intervals)[0].style.stroke-dash: 0
+(session -> turns)[0].style.stroke: "#91c4ff"
+(session -> turns)[0].style.stroke-width: 3
+(session -> turns)[0].style.font-color: "#91c4ff"
+(session -> turns)[0].style.stroke-dash: 0
+(trace -> lane)[0].style.stroke: "#ffc66d"
+(trace -> lane)[0].style.stroke-width: 3
+(trace -> lane)[0].style.font-color: "#ffc66d"
+(trace -> lane)[0].style.stroke-dash: 0
+(route -> dictionary)[0].style.stroke: "#a5dc83"
+(route -> dictionary)[0].style.stroke-width: 3
+(route -> dictionary)[0].style.font-color: "#a5dc83"
+(route -> dictionary)[0].style.stroke-dash: 3
+(route -> lane)[0].style.stroke: "#a5dc83"
+(route -> lane)[0].style.stroke-width: 3
+(route -> lane)[0].style.font-color: "#a5dc83"
+(route -> lane)[0].style.stroke-dash: 3
+(route -> residency)[0].style.stroke: "#a5dc83"
+(route -> residency)[0].style.stroke-width: 3
+(route -> residency)[0].style.font-color: "#a5dc83"
+(route -> residency)[0].style.stroke-dash: 3
+(live -> process)[0].style.stroke: "#ff9784"
+(live -> process)[0].style.stroke-width: 3
+(live -> process)[0].style.font-color: "#ff9784"
+(live -> process)[0].style.stroke-dash: 3

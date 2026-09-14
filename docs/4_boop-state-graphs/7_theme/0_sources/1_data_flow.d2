@@ -1,0 +1,55 @@
+# Source audit: ../1_boop-session-state-audit.md
+# Main: hafley-rs 2376a81f; Instant 9fca010e; 2026-09-13
+vars: { d2-config: { theme-id: 201; layout-engine: elk; pad: 32 } }
+classes: {
+  fact: { style.fill: "#153b43"; style.stroke: "#63c7cd"; style.font-color: "#e1f5f5" }
+  good: { style.fill: "#203e2b"; style.stroke: "#79b98b"; style.font-color: "#e5f3e8" }
+  gap: { style.fill: "#473819"; style.stroke: "#d5b66e"; style.font-color: "#fff0c5" }
+  bad: { style.fill: "#462629"; style.stroke: "#cb888a"; style.font-color: "#ffe2e2" }
+}
+
+direction: down
+ observations: "OBSERVATION SOURCES" {
+  native: "Harness registry / native events" {class: fact}
+  files: "Transcript sync" {class: fact}
+  os: "OS process snapshot" {class: fact}
+  tmux: "tmux listing + pane probes" {class: fact}
+  supervisor: "Supervisor turn loop" {class: fact}
+ }
+ storage: "WRITERS AND STORES" {
+  bind: "bind_native_session\nattach trace / update route\nrecord live or detached"
+  sync: "sync_session_with\nwith pane: live\nwithout pane: idle"
+  db: "agent_live + intervals\ntrace memberships + sessions" {shape: cylinder}
+  registry: "registry.json" {shape: cylinder}
+  residence: "lane-residency.json\nlive / idle / retired" {shape: cylinder}
+ }
+ readers: "INDEPENDENT CLASSIFIERS" {
+  runtime: "runtime_snapshot\nPID existence + tmux membership"
+  graph: "session graph\nnative nodes: stored status\nshells: runtime fold + pane probe" {class: gap}
+  summary: "active_agents\nprocess Live OR tmux Live"
+  cli: "lane list\nparent hop + target_alive + residency" {class: gap}
+ }
+ instant: "INSTANT" {
+  network: "Boop network\nactive-only: state == live\nor a live descendant"
+  screenshot: "Screenshot tmux table\nsession / title / proc / win\nno typed process or turn state" {class: gap}
+ }
+ observations.native -> storage.bind
+ observations.files -> storage.sync
+ storage.bind -> storage.db
+ storage.bind -> storage.registry
+ storage.sync -> storage.db
+ observations.supervisor -> storage.residence
+ storage.db -> readers.runtime
+ storage.registry -> readers.runtime
+ observations.os -> readers.runtime
+ observations.tmux -> readers.runtime
+ readers.runtime -> readers.summary
+ readers.runtime -> readers.graph
+ storage.db -> readers.graph: "durable native state"
+ observations.tmux -> readers.graph: "exact pane correction"
+ storage.registry -> readers.cli
+ storage.residence -> readers.cli
+ observations.tmux -> readers.cli
+ readers.graph -> instant.network
+ observations.tmux -> instant.screenshot: "pty.rs: command/title strings"
+ observations.os -> instant.screenshot: "resolve boop descendant command"

@@ -1,0 +1,104 @@
+{
+  "theme": "midnight",
+  "palette": "categorical",
+  "mode": "semantic",
+  "assignments": [
+    {
+      "target": "(start -> running)[0]",
+      "kind": "edge",
+      "group": "success",
+      "role": "success"
+    },
+    {
+      "target": "(running -> running)[0]",
+      "kind": "edge",
+      "group": "success",
+      "role": "success"
+    },
+    {
+      "target": "(running -> boundary)[0]",
+      "kind": "edge",
+      "group": "data",
+      "role": "data"
+    },
+    {
+      "target": "(boundary -> retry)[0]",
+      "kind": "edge",
+      "group": "control",
+      "role": "control"
+    },
+    {
+      "target": "(retry -> running)[0]",
+      "kind": "edge",
+      "group": "success",
+      "role": "success"
+    },
+    {
+      "target": "(retry -> held)[0]",
+      "kind": "edge",
+      "group": "control",
+      "role": "control"
+    },
+    {
+      "target": "(held -> running)[0]",
+      "kind": "edge",
+      "group": "success",
+      "role": "success"
+    },
+    {
+      "target": "(held -> success)[0]",
+      "kind": "edge",
+      "group": "control",
+      "role": "control"
+    },
+    {
+      "target": "(success -> ended)[0]",
+      "kind": "edge",
+      "group": "failure",
+      "role": "failure"
+    },
+    {
+      "target": "(success -> idle)[0]",
+      "kind": "edge",
+      "group": "inactive",
+      "role": "inactive"
+    },
+    {
+      "target": "(success -> result)[0]",
+      "kind": "edge",
+      "group": "storage",
+      "role": "storage",
+      "dash": 3
+    },
+    {
+      "target": "(idle -> running)[0]",
+      "kind": "edge",
+      "group": "success",
+      "role": "success"
+    },
+    {
+      "target": "(idle -> retired)[0]",
+      "kind": "edge",
+      "group": "warning",
+      "role": "warning"
+    },
+    {
+      "target": "(running -> ended)[0]",
+      "kind": "edge",
+      "group": "failure",
+      "role": "failure"
+    },
+    {
+      "target": "(idle -> ended)[0]",
+      "kind": "edge",
+      "group": "failure",
+      "role": "failure"
+    },
+    {
+      "target": "(running -> running)[1]",
+      "kind": "edge",
+      "group": "success",
+      "role": "success"
+    }
+  ]
+}

@@ -1,0 +1,1232 @@
+[
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs",
+    "branch": "main",
+    "head": "2376a81fb137e58e596511e2f5e08417f845fa2f",
+    "exists": true,
+    "ahead_behind": "0\t0",
+    "dirty": "?? TASKS/boop-f41-handoff.BRIEF.md\n?? TASKS/boop-ghcache-adapter-final.BRIEF.md\n?? TASKS/boop-ghcache-review.BRIEF.md\n?? TASKS/boop-ghcacher-pr.BRIEF.md\n?? TASKS/boop-luna-visible-tui.BRIEF.md\n?? TASKS/boop-luna-visible-tui.CONTINUE.md\n?? TASKS/boop-luna-visible-tui.REVIEW-1.md\n?? TASKS/boop-progress-warning.BRIEF.md\n?? TASKS/boop-ps-activity.BRIEF.md\n?? TASKS/boop-ps.BRIEF.md\n?? TASKS/boop-tui-revive.BRIEF.md\n?? TASKS/context-cap.BRIEF.md\n?? TASKS/lane-list-liveness.BRIEF.md",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/private/tmp/boop-install.1XAcyS/tree",
+    "branch": "detached",
+    "head": "bcdeb2c8eab2144db07005459e526ae49e6e558d",
+    "exists": false,
+    "ahead_behind": "133\t0",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-game-runtime",
+    "branch": "astra/game-runtime",
+    "head": "8646fa2b91a9827dd7e671d85ea5585f2264c507",
+    "exists": true,
+    "ahead_behind": "293\t104",
+    "dirty": "M games/kneeman/app/crates/godot-shell/src/kneeman/mesh.rs\n M games/kneeman/src/v1/chars/falcon.rs\n M games/kneeman/src/v1/fighter.rs\n M games/kneeman/src/v1/land_cancel_tests.rs\n M games/kneeman/src/v1/moves/mod.rs\n M games/kneeman/src/v1/net/mod.rs\n M games/kneeman/src/v1/za_warudo.rs\n?? labs/",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-worktrees/acp-host",
+    "branch": "feature/boop-acp-host",
+    "head": "6821d85d79e9d442f9682c297fc3f67bf2df6a25",
+    "exists": true,
+    "ahead_behind": "567\t1",
+    "dirty": "",
+    "commits": "6821d85 feat(boop): a resident ACP session host per route"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-worktrees/boop-doa-carcass",
+    "branch": "fix/boop-doa-carcass",
+    "head": "a684825ba8fb690f9003b435cbc324dacf0f07b3",
+    "exists": true,
+    "ahead_behind": "584\t2",
+    "dirty": "",
+    "commits": "6ebd1f1 fix(boop): reclaim a dead lane's worktree and branch (#boop-doa-lane-carcass)"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-worktrees/boop-fixture-purge",
+    "branch": "fix/boop-fixture-lanes-purge",
+    "head": "14c584413378afafdaaaa5e7591a075d63ff7b92",
+    "exists": true,
+    "ahead_behind": "581\t1",
+    "dirty": "",
+    "commits": "14c5844 boop: name the two src unit tests that write into the live ~/.agent"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-worktrees/boop-harness-model-spec-2",
+    "branch": "fix/boop-harness-model-spec-2",
+    "head": "c2ad9d2e97206a4e1b0d341761e075b6660e9413",
+    "exists": true,
+    "ahead_behind": "589\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-worktrees/boop-help-sweep",
+    "branch": "docs/boop-help-sweep",
+    "head": "c80c544237faa0a7668d4faeb5958029f0be3db3",
+    "exists": true,
+    "ahead_behind": "567\t2",
+    "dirty": "",
+    "commits": "4924b49 docs(boop): make --help the delivery contract it claims to be"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-worktrees/boop-parent-death",
+    "branch": "feature/boop-parent-death",
+    "head": "61e634daceaa752783c7da3b41717f028091bb1d",
+    "exists": true,
+    "ahead_behind": "582\t1",
+    "dirty": "",
+    "commits": "61e634d feat: parent-death policy and typed parent failure mail"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-worktrees/boop-session-mood",
+    "branch": "feature/boop-session-mood",
+    "head": "be403508ed1d06728f4c692f76bc3cd2bb788d46",
+    "exists": true,
+    "ahead_behind": "589\t1",
+    "dirty": "",
+    "commits": "be40350 feat(boop): per-session mood, mail rendered through the receiver's format"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-worktrees/boop-spawn-guards-2",
+    "branch": "fix/boop-spawn-guards-2",
+    "head": "41ce7715be55e7d2503f9119ed5a076314f8b2c7",
+    "exists": true,
+    "ahead_behind": "589\t2",
+    "dirty": "",
+    "commits": "b8e442c boop: bound the spawn path's git children, close both spawn-guard cards"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-worktrees/boop-start-warm",
+    "branch": "feature/boop-start-warm-detect",
+    "head": "d8719c22a72d5cc7f1e0027da255520ffb3d851b",
+    "exists": true,
+    "ahead_behind": "581\t2",
+    "dirty": "",
+    "commits": "d8719c2 test(boop): pin the shared target count, the no-recipe notice, the preamble\n35584df feat(boop): detect boop-start, run it, and tell the spawned agent"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-worktrees/boop-tell-parent",
+    "branch": "feature/boop-tell-parent-2",
+    "head": "6f5fef40353105263ddbc48e0edc5508bb4e4c67",
+    "exists": true,
+    "ahead_behind": "584\t1",
+    "dirty": "",
+    "commits": "6f5fef4 feat(boop): tell-parent and tell-children"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-worktrees/dl6-boop-concatmap-golden",
+    "branch": "feature/dl6-boop-concatmap-golden",
+    "head": "6b6315f7aecf280af21166307ecff50174322b02",
+    "exists": true,
+    "ahead_behind": "624\t2",
+    "dirty": "D crates/boop/target/bench-grid.md",
+    "commits": "6b6315f boop: expose typed DL6 one-shot host\nafaf0e7 boop: decouple foreground waits from coordinators"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-worktrees/feature-lane-status-command-terra",
+    "branch": "feature/lane-status-command-terra",
+    "head": "99ada50b7a49d28188506968023b1c4286e74d42",
+    "exists": true,
+    "ahead_behind": "629\t2",
+    "dirty": "D crates/boop/target/bench-grid.md",
+    "commits": "8ea3fae boop: add typed lane status"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs-worktrees/lane-tracing-events-json",
+    "branch": "feature/lane-tracing-events-json",
+    "head": "a18beb910b75ecbe773a63d2087d7058b9e092c7",
+    "exists": true,
+    "ahead_behind": "644\t4",
+    "dirty": "D crates/boop/target/bench-grid.md",
+    "commits": "a18beb9 boop: expose trace events in session graph\n6ac9ef6 boop: persist lane tracing events\n2e861a9 boop: keep pane and native routes live"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/f41-falcon-selection-review",
+    "branch": "chore/f41-falcon-selection-review",
+    "head": "cad89f96f67585e76bb6893f66cca4ea55380e98",
+    "exists": true,
+    "ahead_behind": "121\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/f41-game-combat-stage2-status",
+    "branch": "chore/f41-game-combat-stage2-status",
+    "head": "1a4294123cb01ad100156e794dd57c2b82fd525f",
+    "exists": true,
+    "ahead_behind": "82\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/f41-games-roadmap-today",
+    "branch": "chore/f41-games-roadmap-today",
+    "head": "6fa8e03967b3b54b37efec2c9195ef43ff85bdb7",
+    "exists": true,
+    "ahead_behind": "133\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/f41-statechart-remaining",
+    "branch": "chore/f41-statechart-remaining",
+    "head": "9c392dab8be7ee3763d4683ee516a5846de07ad3",
+    "exists": true,
+    "ahead_behind": "127\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/f41-statechart-remaining-review",
+    "branch": "chore/f41-statechart-remaining-review",
+    "head": "1e914c2ccdb487b2abeaf03f69472d357edb15f6",
+    "exists": true,
+    "ahead_behind": "127\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/f41-ui-tc39",
+    "branch": "chore/f41-ui-tc39",
+    "head": "cbea4c15008be8fc46a82bb0a605f475a5faaced",
+    "exists": true,
+    "ahead_behind": "123\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/falcon-movement-evidence",
+    "branch": "chore/falcon-movement-evidence",
+    "head": "8123990b537023ea529f54597d0d849f18ab2a07",
+    "exists": true,
+    "ahead_behind": "158\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/glm53f-falcon-source-status",
+    "branch": "chore/glm53f-falcon-source-status",
+    "head": "0cc5c34f749a38e576b7cdcf24b78450d1a619b2",
+    "exists": true,
+    "ahead_behind": "117\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/chore/harness-replay-research",
+    "branch": "chore/harness-replay-research",
+    "head": "cf424f476bcf1c14d7ce29dd3121a1de2a5b1648",
+    "exists": true,
+    "ahead_behind": "149\t3",
+    "dirty": "",
+    "commits": "cf424f4 test(boop): replay relative terminal pipe fixture\n2a83a48 test(boop): prove offline codex fixture replay\nf4007a9 docs(boop): inventory harness replay reuse and external options"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/docs/gem38f-combat-field-diagrams",
+    "branch": "docs/gem38f-combat-field-diagrams",
+    "head": "124a688d2d6e231e375c17ce14f8690a88f1ed11",
+    "exists": true,
+    "ahead_behind": "89\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/boop-commit-push",
+    "branch": "feature/boop-commit-push",
+    "head": "5602f812349e8f16cc0f8079283c89f35a75a0b3",
+    "exists": true,
+    "ahead_behind": "5\t0",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/boop-ps",
+    "branch": "feature/boop-ps",
+    "head": "9ca41fed4e4a2ed8b438baacbefe4bd6024b7fd7",
+    "exists": true,
+    "ahead_behind": "160\t0",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/boop-quiet-yields",
+    "branch": "feature/boop-quiet-yields",
+    "head": "7948e825b7e2d57d2988d1723dce56a4624eb263",
+    "exists": true,
+    "ahead_behind": "352\t1",
+    "dirty": "",
+    "commits": "7948e82 supervise: quiet yields toward coordinator parents"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/boop-reminders-instant",
+    "branch": "feature/boop-reminders-instant",
+    "head": "09b65565a60848340e5c76aa8b781e4298f50dd0",
+    "exists": true,
+    "ahead_behind": "293\t3",
+    "dirty": "",
+    "commits": "596c9f4 boop: verify optional favorite reasons through both CLI paths\nf0a9566 boop: schedule expiring reminders through existing routes"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/context-cap",
+    "branch": "feature/context-cap",
+    "head": "2cb1a079b0b7ab340e3764a41412a37deead7dfd",
+    "exists": true,
+    "ahead_behind": "160\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-adapter-replay",
+    "branch": "feature/f41-adapter-replay",
+    "head": "24da024df7b94d19732347609454613b23ea8c32",
+    "exists": true,
+    "ahead_behind": "149\t7",
+    "dirty": "",
+    "commits": "24da024 test(boop): assert replayed event kinds independently and hold partial lines\nab633a1 test(boop): replay claude, kimi and opencode adapters offline\nf92828f feat(boop): log each CLI invocation to the existing trace store\ned296fc test(boop): reuse replay seam across os pipe and codex adapter\ncf424f4 test(boop): replay relative terminal pipe fixture\n2a83a48 test(boop): prove offline codex fixture replay\nf4007a9 docs(boop): inventory harness replay reuse and external options"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-air-chart-lift",
+    "branch": "feature/f41-air-chart-lift",
+    "head": "f49335fff3e55107a47b35f59afd9868b1c2ed78",
+    "exists": true,
+    "ahead_behind": "126\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-boop-live-harness",
+    "branch": "feature/f41-boop-live-harness",
+    "head": "749020545c3734f766aa54a875d5d3aac1787738",
+    "exists": true,
+    "ahead_behind": "133\t2",
+    "dirty": "",
+    "commits": "7490205 test(boop): replay all four live harnesses through llmock and the real PTY\n3220147 test(boop): replay a live codex turn through llmock and a real PTY"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-character-action-roles",
+    "branch": "feature/f41-character-action-roles",
+    "head": "f771847280d1a5e9f229ecebd4f318cc3dc4d7d2",
+    "exists": true,
+    "ahead_behind": "96\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-character-rules-codegen",
+    "branch": "feature/f41-character-rules-codegen",
+    "head": "9b25c73ae9fc11bd9fc760b8f66edebbdf19af24",
+    "exists": true,
+    "ahead_behind": "97\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-character-select-contract",
+    "branch": "feature/f41-character-select-contract",
+    "head": "493e155ef40d1dbea091d6a059dc731387d0ca98",
+    "exists": true,
+    "ahead_behind": "89\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-dog-complete-locomotion",
+    "branch": "feature/f41-dog-complete-locomotion",
+    "head": "127acd79b7126dfd342a92676ff87a28a4edd42d",
+    "exists": true,
+    "ahead_behind": "94\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-dog-runtime-slice2",
+    "branch": "feature/f41-dog-runtime-slice2",
+    "head": "cf5ff18d65517f9160f2511cd8d2d7317bd90c46",
+    "exists": true,
+    "ahead_behind": "92\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-dog-status-cut3",
+    "branch": "feature/f41-dog-status-cut3",
+    "head": "f20d1e60001373616954cddf1d8b8d65fdbb0e13",
+    "exists": true,
+    "ahead_behind": "96\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-dog-status-cut4",
+    "branch": "feature/f41-dog-status-cut4",
+    "head": "009946760532001280033c9093559a3706415e60",
+    "exists": true,
+    "ahead_behind": "95\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-falcon-crouch-lifecycle",
+    "branch": "feature/f41-falcon-crouch-lifecycle",
+    "head": "3afb27782f5b56f84a3161c5a56d00876db49fbf",
+    "exists": true,
+    "ahead_behind": "120\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-ftcommon-rust-port",
+    "branch": "feature/f41-ftcommon-rust-port",
+    "head": "89fbf56472c6857298b77752912e98b699f797d7",
+    "exists": true,
+    "ahead_behind": "112\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-game-combat-direct-port",
+    "branch": "feature/f41-game-combat-direct-port",
+    "head": "3b4e3d90adcadc19a31b64579b3b760992149cf2",
+    "exists": true,
+    "ahead_behind": "86\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-game-combat-direct-port2",
+    "branch": "feature/f41-game-combat-direct-port2",
+    "head": "b5503a7a3c3d51656fcb63d5f409cfbb7a17962c",
+    "exists": true,
+    "ahead_behind": "86\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-game-combat-direct-port3",
+    "branch": "feature/f41-game-combat-direct-port3",
+    "head": "a186a9eee0153dd502057ba258dbd6a4a3e67363",
+    "exists": true,
+    "ahead_behind": "86\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-game-status-cut",
+    "branch": "feature/f41-game-status-cut",
+    "head": "98f458a4393d918104cad52ba93913e1bfe5d6fe",
+    "exists": true,
+    "ahead_behind": "125\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-ghcache-final-20260912",
+    "branch": "feature/f41-ghcache-final-20260912",
+    "head": "dccd071e33a69b731fc0f43b2f6da97c46815da9",
+    "exists": true,
+    "ahead_behind": "0\t18",
+    "dirty": "",
+    "commits": "dccd071 boop: add cached review-notification adapter (source only)\nc922ff7 boop: assert one lane pane and refresh the visible-TUI receipt\n87fda45 boop: drop the claude bypass flag and assert lane TUI placement\n2a1e7bb boop: trust lane worktree and read the lane's own registry\n9a88627 boop: resolve real harness binary past PATH wrappers\n98adfca boop: green native lane matrix across claude codex opencode\n28844a7 boop: complete native lane input handshake\na71f454 boop: retain native turn evidence\n5de7cad boop: preserve native turn ownership\ne4b0cdf boop: track native turn receipts exactly once\n57534d8 boop: resolve native lane attachment readiness\n5b22b75 boop: resolve native lane target readiness\na5572a2 boop: require native turn receipt evidence\nfa619fd boop: target native lane input at lane session\ncae3ab3 boop: add native lane TUI channel"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-ground-chart",
+    "branch": "feature/f41-ground-chart",
+    "head": "258b1877f30a6044e7c4c56d2dd6970c635342cc",
+    "exists": true,
+    "ahead_behind": "150\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-pigeon-combat-redux",
+    "branch": "feature/f41-pigeon-combat-redux",
+    "head": "f8e5bc2b16d702df9f0abbb51ddd669dabdfe15a",
+    "exists": true,
+    "ahead_behind": "83\t1",
+    "dirty": "M games/smash/examples/0_status_export.rs\n M games/smash/src/3_import.rs\n M games/smash/src/fighters/0_controller.rs\n M games/smash/src/fighters/dog/1_catalog.rs\n M games/smash/src/fighters/dog/2_tests.rs\n M games/smash/src/fighters/dog/3_movement.rs\n M games/smash/src/fighters/dog/4_simulation.rs\n M games/smash/src/fighters/dog/generated/3_rules.rs\n M games/smash/src/fighters/dog/generated/4_roles.rs\n M games/smash/src/fighters/pigeon/1a_actions.rs\n M games/smash/src/fighters/pigeon/1b_catalog.rs\n M games/smash/src/fighters/pigeon/1c_movement.rs\n M games/smash/src/fighters/pigeon/generated/0_chart.rs\n M games/smash/src/fighters/pigeon/generated/7_rules.rs\n M games/smash/src/fighters/pigeon/generated/8_roles.rs",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-pigeon-dog-attributes",
+    "branch": "feature/f41-pigeon-dog-attributes",
+    "head": "79f0980bf9cec6804c078e492f097521a22da518",
+    "exists": true,
+    "ahead_behind": "98\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-pm36-coyote-ingest",
+    "branch": "feature/f41-pm36-coyote-ingest",
+    "head": "8c5109b507890d975f6f98b97833ab38c07fba5c",
+    "exists": true,
+    "ahead_behind": "107\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/f41-state-coverage-truth",
+    "branch": "feature/f41-state-coverage-truth",
+    "head": "b0dc04e2a566ed1653a96c2421de12c8e7707845",
+    "exists": true,
+    "ahead_behind": "80\t0",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/falcon-animation-coverage",
+    "branch": "feature/falcon-animation-coverage",
+    "head": "1296d99da76ee22e909b953e9becf54a7ae9d166",
+    "exists": true,
+    "ahead_behind": "149\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/falcon-locomotion-ingest",
+    "branch": "feature/falcon-locomotion-ingest",
+    "head": "5f7827bd9a5be18658a951c4c489cea01ccb19e3",
+    "exists": true,
+    "ahead_behind": "158\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/falcon-runtime-chart",
+    "branch": "feature/falcon-runtime-chart",
+    "head": "e82a5bda65231e79c6b3beb3d440bfee403d13cf",
+    "exists": true,
+    "ahead_behind": "149\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/gem38f-ascii-scenes2",
+    "branch": "feature/gem38f-ascii-scenes2",
+    "head": "f9b1f47cd71189259accf8bccdd35eb524bbc8ee",
+    "exists": true,
+    "ahead_behind": "89\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/glm53f-ftcommon-inventory",
+    "branch": "feature/glm53f-ftcommon-inventory",
+    "head": "df51bfb1853df61fa8eef6a9f79891e6a80c723e",
+    "exists": true,
+    "ahead_behind": "115\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/glm53f-port-step-contract",
+    "branch": "feature/glm53f-port-step-contract",
+    "head": "0ad35f49dc4f86e2a2036742720ae3b346f363fa",
+    "exists": true,
+    "ahead_behind": "115\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/opus-falcon-observer",
+    "branch": "feature/opus-falcon-observer",
+    "head": "73c1cf675b449c189526d32a721ffc868984536a",
+    "exists": true,
+    "ahead_behind": "141\t2",
+    "dirty": "?? games/blender-godot-sqlite-proof/falcon-lab/contracts/node_modules",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/opus-port-progress",
+    "branch": "feature/opus-port-progress",
+    "head": "d1ab3ac7433567e41775eec8f1001201d32171d7",
+    "exists": true,
+    "ahead_behind": "137\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/replay-pipes-f41",
+    "branch": "feature/replay-pipes-f41",
+    "head": "f92828fd17d0af510bd92907f68ba3fa2d6bf603",
+    "exists": true,
+    "ahead_behind": "149\t5",
+    "dirty": "",
+    "commits": "f92828f feat(boop): log each CLI invocation to the existing trace store\ned296fc test(boop): reuse replay seam across os pipe and codex adapter\ncf424f4 test(boop): replay relative terminal pipe fixture\n2a83a48 test(boop): prove offline codex fixture replay\nf4007a9 docs(boop): inventory harness replay reuse and external options"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/static-ground-chart",
+    "branch": "feature/static-ground-chart",
+    "head": "fc294c4e23148ea18f30177cac9b6d9bab15386a",
+    "exists": true,
+    "ahead_behind": "144\t1",
+    "dirty": "M games/crates/fighter/5_ground_chart.md\n M games/crates/fighter/src/4_ground_chart.rs\n M games/crates/fighter/tests/3_ground_chart.rs",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/tui-revive",
+    "branch": "feature/tui-revive",
+    "head": "123b3deea3782aa0156515fef27f7f9c218f78ca",
+    "exists": true,
+    "ahead_behind": "0\t2",
+    "dirty": "M crates/boop/src/cli/control.rs\n M crates/boop/src/cli/job.rs\n M crates/boop/src/cli/mod.rs\n M crates/boop/src/main.rs\n M crates/boop/tests/tui_revive_e2e.rs\n?? TASKS/boop-tui-revive.REPORT.md",
+    "commits": "123b3de test(boop): a killed coordinator pane revives on its own session\n98da18d feat(boop): revive a dead boop tui coordinator pane"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/boop-door-backoff",
+    "branch": "fix/boop-door-backoff",
+    "head": "587e1a29117bf11aee4d69538fe16fa9e6d41db0",
+    "exists": true,
+    "ahead_behind": "51\t1",
+    "dirty": "",
+    "commits": "587e1a2 wip(boop): parent-saved work from a lane that died on a full disk"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/boop-door-backoff-r2",
+    "branch": "fix/boop-door-backoff-r2",
+    "head": "4f049bf815eb4b15a16799a763bf09a1dc9edae2",
+    "exists": true,
+    "ahead_behind": "51\t2",
+    "dirty": "",
+    "commits": "4f049bf wip(boop): parent-saved work, lane paused while hunting a focus-stealing e2e\n587e1a2 wip(boop): parent-saved work from a lane that died on a full disk"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/boop-lane-lifecycle-r2",
+    "branch": "fix/boop-lane-lifecycle-r2",
+    "head": "796812e3c9051b58896e0a767bf2ad8e897c9e54",
+    "exists": true,
+    "ahead_behind": "45\t0",
+    "dirty": "M crates/boop/tests/lane_lifecycle_e2e.rs",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/boop-worktree-reclaim",
+    "branch": "fix/boop-worktree-reclaim",
+    "head": "a15fedd4cce3a8588edbdbcbda1b81a6ef48742f",
+    "exists": true,
+    "ahead_behind": "51\t1",
+    "dirty": "",
+    "commits": "a15fedd wip(boop): parent-saved work, lane paused while hunting a focus-stealing e2e"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/delivery-e2e",
+    "branch": "fix/delivery-e2e",
+    "head": "1c825edba5f138279bb9fb91f0e3bd30d7c0020c",
+    "exists": true,
+    "ahead_behind": "149\t4",
+    "dirty": "",
+    "commits": "1c825ed fix(boop): bound unique door progress bursts at 32\n96d19dc test(boop): characterize explicit door cooldown bursts\n40c9626 docs(boop): record door-budget cool-off as the stored delay cause\n7a80c32 test(boop): reproduce delayed worker delivery routing and transport gap"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-analytics-finish",
+    "branch": "fix/f41-analytics-finish",
+    "head": "605132d380617aff537f95ac4ef8c11ccea955a0",
+    "exists": true,
+    "ahead_behind": "149\t8",
+    "dirty": "",
+    "commits": "605132d docs(boop): describe invocation start/finish analytics and stale-schema behavior\na3c2110 fix(boop): keep invocation analytics off the writer wait\n153baa3 fix(boop): redact invocation metadata from argv\nf92828f feat(boop): log each CLI invocation to the existing trace store\ned296fc test(boop): reuse replay seam across os pipe and codex adapter\ncf424f4 test(boop): replay relative terminal pipe fixture\n2a83a48 test(boop): prove offline codex fixture replay\nf4007a9 docs(boop): inventory harness replay reuse and external options"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-boop-invocation-build-id",
+    "branch": "fix/f41-boop-invocation-build-id",
+    "head": "291af2ce06e599dd95a2a5afdae72ee6d511b22e",
+    "exists": true,
+    "ahead_behind": "127\t0",
+    "dirty": "M crates/boop/build.rs\n M crates/boop/src/invoke.rs\n M crates/boop/src/lib.rs\n M crates/boop/src/main.rs",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-browser-dash-dance",
+    "branch": "fix/f41-browser-dash-dance",
+    "head": "8e757e807f723af0d870aee4170796aff4a8bed7",
+    "exists": true,
+    "ahead_behind": "133\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-claude-delivery",
+    "branch": "fix/f41-claude-delivery",
+    "head": "e868593291dd12b67605b4642ac716caf0f16a08",
+    "exists": true,
+    "ahead_behind": "135\t2",
+    "dirty": "",
+    "commits": "e868593 test(boop): verify failed lane result reaches the door once\n1498cda fix(boop): mail one end row per failed lane"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-coyote-ingest-review",
+    "branch": "fix/f41-coyote-ingest-review",
+    "head": "e382d34424cd914265b8cdcd4aad9b69d98eb989",
+    "exists": true,
+    "ahead_behind": "107\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-dog-status-binding-truth",
+    "branch": "fix/f41-dog-status-binding-truth",
+    "head": "9ee138f70ff24ad5226379db6c8d658d5dadc880",
+    "exists": true,
+    "ahead_behind": "93\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-dog-status-tsp-source",
+    "branch": "fix/f41-dog-status-tsp-source",
+    "head": "c377c742713b44fddaf12d872f2ed875f981dd0c",
+    "exists": true,
+    "ahead_behind": "95\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-falcon-source-codegen-review",
+    "branch": "fix/f41-falcon-source-codegen-review",
+    "head": "6c62874092d99afc6622d65f990eb6b4e68ebfff",
+    "exists": true,
+    "ahead_behind": "117\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-game-status-harmonic",
+    "branch": "fix/f41-game-status-harmonic",
+    "head": "1890a669f36beaddcd85b40c3f38ec0294eca13a",
+    "exists": true,
+    "ahead_behind": "125\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-native-model-replay",
+    "branch": "fix/f41-native-model-replay",
+    "head": "021df4fff3e6e59acee2838e19ff7eeaa94f58a2",
+    "exists": true,
+    "ahead_behind": "137\t3",
+    "dirty": "",
+    "commits": "021df4f test(boop-harness): gate native model evidence behind explicit output and split red/green\n93601a7 test(boop-harness): record green replay receipt for native codex model\n4c44069 fix(boop-harness): attribute codex usage to the turn_context model"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-statechart-ui",
+    "branch": "fix/f41-statechart-ui",
+    "head": "ea04c5be9d3aff00216ff6e07a4b15d5cc086c27",
+    "exists": true,
+    "ahead_behind": "133\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-status-main-harmonic",
+    "branch": "fix/f41-status-main-harmonic",
+    "head": "90f12c3248a23f4a1ae9ad35537655cbbc0f0919",
+    "exists": true,
+    "ahead_behind": "123\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/f41-visible-tui-20260912",
+    "branch": "fix/f41-visible-tui-20260912",
+    "head": "b52826ff8af42e37a26ce24c0021414636b46a6c",
+    "exists": true,
+    "ahead_behind": "0\t21",
+    "dirty": "",
+    "commits": "b52826f boop: prove same-server session survival and exclude tmux from sweeps\n23dd3f2 boop: complete a native turn only when the harness is idle\n88083d9 boop: end only owned tmux sessions in tests\nc922ff7 boop: assert one lane pane and refresh the visible-TUI receipt\n87fda45 boop: drop the claude bypass flag and assert lane TUI placement\n2a1e7bb boop: trust lane worktree and read the lane's own registry\n9a88627 boop: resolve real harness binary past PATH wrappers\n98adfca boop: green native lane matrix across claude codex opencode\n28844a7 boop: complete native lane input handshake\na71f454 boop: retain native turn evidence\n5de7cad boop: preserve native turn ownership\ne4b0cdf boop: track native turn receipts exactly once\n57534d8 boop: resolve native lane attachment readiness\n5b22b75 boop: resolve native lane target readiness\na5572a2 boop: require native turn receipt evidence\nfa619fd boop: target native lane input at lane session\ncae3ab3 boop: add native lane TUI channel"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/invocation-review",
+    "branch": "fix/invocation-review",
+    "head": "153baa354936223d112e21d7fe5076437567ccc8",
+    "exists": true,
+    "ahead_behind": "149\t6",
+    "dirty": "",
+    "commits": "153baa3 fix(boop): redact invocation metadata from argv\nf92828f feat(boop): log each CLI invocation to the existing trace store\ned296fc test(boop): reuse replay seam across os pipe and codex adapter\ncf424f4 test(boop): replay relative terminal pipe fixture\n2a83a48 test(boop): prove offline codex fixture replay\nf4007a9 docs(boop): inventory harness replay reuse and external options"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/lane-list-liveness",
+    "branch": "fix/lane-list-liveness",
+    "head": "9ca41fed4e4a2ed8b438baacbefe4bd6024b7fd7",
+    "exists": true,
+    "ahead_behind": "160\t0",
+    "dirty": "M crates/boop/src/cli/job.rs\n M crates/boop/src/cli/mail.rs\n M crates/boop/src/main.rs\n M crates/boop/tests/main.rs\n M crates/boop/tests/native_agent_liveness.rs\n?? crates/boop/tests/lane_list_e2e.rs",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/luna-visible-tui-20260912",
+    "branch": "fix/luna-visible-tui-20260912",
+    "head": "28844a7edfabcf3c9e584394ff768ccc1973cb6b",
+    "exists": true,
+    "ahead_behind": "0\t12",
+    "dirty": "",
+    "commits": "28844a7 boop: complete native lane input handshake\na71f454 boop: retain native turn evidence\n5de7cad boop: preserve native turn ownership\ne4b0cdf boop: track native turn receipts exactly once\n57534d8 boop: resolve native lane attachment readiness\n5b22b75 boop: resolve native lane target readiness\na5572a2 boop: require native turn receipt evidence\nfa619fd boop: target native lane input at lane session\ncae3ab3 boop: add native lane TUI channel"
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/fix/private-pigeon-f41",
+    "branch": "fix/private-pigeon-f41",
+    "head": "e35c03ef6ace716f6d8689b071c4c12a9ee4cf9f",
+    "exists": true,
+    "ahead_behind": "107\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/f41-action-state-dedupe",
+    "branch": "refactor/f41-action-state-dedupe",
+    "head": "53df6cc5e992a4fd6220e699e308ab53d8620f7c",
+    "exists": true,
+    "ahead_behind": "63\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/f41-action-state-owner",
+    "branch": "refactor/f41-action-state-owner",
+    "head": "cc7cfc70a2f1349fb207229ce18220873f86bfe1",
+    "exists": true,
+    "ahead_behind": "62\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/f41-character-generator-core",
+    "branch": "refactor/f41-character-generator-core",
+    "head": "2a273ed585e9b9d351c9f46ccd16a714eb51ebe0",
+    "exists": true,
+    "ahead_behind": "103\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/f41-character-generator-models",
+    "branch": "refactor/f41-character-generator-models",
+    "head": "8bee258b3f129bde741d0c72d94e936705c882c7",
+    "exists": true,
+    "ahead_behind": "103\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/f41-coyote-to-dog",
+    "branch": "refactor/f41-coyote-to-dog",
+    "head": "dc6d1fe8aac55811f8da50b9b9091de13ef02144",
+    "exists": true,
+    "ahead_behind": "103\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/f41-dedupe-crouch-chart",
+    "branch": "refactor/f41-dedupe-crouch-chart",
+    "head": "a29b3db20d694e22c3df76941fac576017abeddd",
+    "exists": true,
+    "ahead_behind": "67\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/f41-dedupe-fighter-reducers",
+    "branch": "refactor/f41-dedupe-fighter-reducers",
+    "head": "a6399df0e8ff5719c3326e66b818c041558f3da0",
+    "exists": true,
+    "ahead_behind": "67\t0",
+    "dirty": "M games/crates/fighter/src/2_advance.rs\n M games/crates/fighter/src/3_slice.rs\n M games/crates/fighter/src/lib.rs\n M games/crates/fighter/tests/0_movement.rs\n M games/crates/fighter/tests/5_combat.rs\n M games/smash/src/fighters/0_controller.rs\n M games/smash/src/fighters/pigeon/1c_movement.rs",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/f41-dog-movement-module",
+    "branch": "refactor/f41-dog-movement-module",
+    "head": "f4d524c8c1b72365757d9c896b5cfd513d41dd7f",
+    "exists": true,
+    "ahead_behind": "97\t2",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/f41-lift-fighter-controller",
+    "branch": "refactor/f41-lift-fighter-controller",
+    "head": "a6399df0e8ff5719c3326e66b818c041558f3da0",
+    "exists": true,
+    "ahead_behind": "67\t0",
+    "dirty": "M games/crates/fighter/src/lib.rs\nD  games/smash/src/fighters/0_controller.rs\n M games/smash/src/fighters/dog/4_simulation.rs\n M games/smash/src/lib.rs\n?? games/crates/fighter/src/2a_controller.rs\n?? games/crates/fighter/tests/8_controller.rs",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/f41-lift-fighter-controller-cut2",
+    "branch": "refactor/f41-lift-fighter-controller-cut2",
+    "head": "760613d4808008fb48ba447936baeef89991c6bd",
+    "exists": true,
+    "ahead_behind": "66\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/f41-neutral-mechanics-codegen",
+    "branch": "refactor/f41-neutral-mechanics-codegen",
+    "head": "4c42df3dd61981b51907a93b9deaae73a4b21019",
+    "exists": true,
+    "ahead_behind": "107\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/f41-redux-controller-dedupe",
+    "branch": "refactor/f41-redux-controller-dedupe",
+    "head": "5f4229d16f925e6e7ff27ac88c98d27a35e8f911",
+    "exists": true,
+    "ahead_behind": "61\t1",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/refactor/f41-wire-pigeon-dog-generator",
+    "branch": "refactor/f41-wire-pigeon-dog-generator",
+    "head": "fa0621d6ca10f7f687cdc6ee0a08e929d48d5e33",
+    "exists": true,
+    "ahead_behind": "101\t3",
+    "dirty": "",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/hafley-rs/.worktrees/origin-main",
+    "branch": "detached",
+    "head": "f98130cdbd3101b9626f3e4820095efd9d4bbfce",
+    "exists": true,
+    "ahead_behind": "485\t0",
+    "dirty": "?? origin-main",
+    "commits": ""
+  },
+  {
+    "repo": "hafley-rs",
+    "path": "/Users/chrishafley/projects/sprefa-worktrees/hafley-identity",
+    "branch": "fix/caller-identity-rung",
+    "head": "9b95aaa14960ae0c84d68914fe4651e5674f38e7",
+    "exists": true,
+    "ahead_behind": "568\t5",
+    "dirty": "",
+    "commits": "48c7e38 feat(whoami): --mail-dir, so the ladder can be read against a built registry\n9d889de fix(tell-children): spawn edges as children, one result per target\n231cba6 fix(identity): the caller resolves from its pane, its harness and its cwd\n10f9b59 fix(mux): resolve a tmux target to its pane, and stop a probe printing"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant",
+    "branch": "main",
+    "head": "9fca010e3eca040aff367e258a9eaa65bd80b575",
+    "exists": true,
+    "ahead_behind": "0\t0",
+    "dirty": "M chat_log/LATEST.md\n M src-tauri/Cargo.lock\n?? chat_log/20260902.1.codex-boop-identity-v0.1.21-local-release.md\n?? chat_log/20260907.0.boop-identity-tags-and-instant-fork-menu.md\n?? issues/instant-feature-atlas/\n?? plans/briefs/0_app-atlas-luna.md\n?? plans/briefs/1_scoped-network-showcase-luna.md\n?? plans/briefs/3_scoped-network-review.md\n?? plans/briefs/4_f41-showcase-handoff.md\n?? plans/briefs/5_f41-independent-review.md\n?? plans/briefs/7_f41-isolation-red-repro.md\n?? plans/briefs/9_final-integration.md\n?? plans/briefs/feature-fork-note-on-click.md\n?? plans/briefs/fix-navmenu-flip-hover.md\n?? plans/briefs/host-trait.md\n?? plans/briefs/media-open-external.md\n?? plans/briefs/serve-bin.md\n?? plans/briefs/ws-transport.md\n?? target/",
+    "commits": ""
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant-native-webview-e2e",
+    "branch": "test/native-webview-e2e",
+    "head": "53708e729fa79b46fbe655c8cd0d45597e1908f8",
+    "exists": true,
+    "ahead_behind": "170\t1",
+    "dirty": "M artifacts/v2-terminal-input-selection.png\n M package.json\n M pnpm-lock.yaml\n M test-results/.last-run.json\n?? .vitest-attachments/\n?? e2e-vitest/\n?? out/\n?? vitest.e2e.config.ts",
+    "commits": "53708e72 test: add compiled Tauri WebView E2E"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant-worktrees/boop-reminders-instant-integration/instant",
+    "branch": "feature/boop-reminders-instant",
+    "head": "f7a647fd5bdce3761068b9ac5585fd8a6454ec31",
+    "exists": true,
+    "ahead_behind": "73\t2",
+    "dirty": "",
+    "commits": "f7a647fd docs: pin the tested Boop widget runtime artifacts\n5b8ee406 boop: edit optional favorite reasons in the existing turn widget"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant-worktrees/condom",
+    "branch": "integration/tauri-condom",
+    "head": "8777177c0e2ef355e1a8adfa979263bed91d4ccd",
+    "exists": true,
+    "ahead_behind": "17\t0",
+    "dirty": "M chat_log/LATEST.md\n M src-tauri/src/pty.rs\n?? chat_log/20260907.0.tauri-condom-real-tier-landed.md\n?? chat_log/20260907.1.tauri-condom-real-tier-landed.md",
+    "commits": ""
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant-worktrees/harness-store-dedupe",
+    "branch": "refactor/harness-store-dedupe",
+    "head": "a1a27b0a65377101684957446e4ed2c5c23afa87",
+    "exists": true,
+    "ahead_behind": "217\t0",
+    "dirty": "?? package-lock.json",
+    "commits": ""
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant-worktrees/tmux-rename",
+    "branch": "chore/drop-next-button",
+    "head": "57e1b6809f5a6efa200b163abae92d53d998a2b0",
+    "exists": true,
+    "ahead_behind": "170\t0",
+    "dirty": "?? artifacts/terminal-pinned-selection.png",
+    "commits": ""
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant/.boop-worktrees/chore/f41-final-integration-20260912",
+    "branch": "chore/f41-final-integration-20260912",
+    "head": "e9241faef05821012b870f40ab9d11504db97473",
+    "exists": true,
+    "ahead_behind": "0\t22",
+    "dirty": "",
+    "commits": "e9241fae docs: correct the delivery receipt after review\n6835ff57 test: refresh the boop-harness fixtures for cargo test --lib\n4fb0cd33 test: bound tmux cleanup to explicit, owned session ids\ncc563d1f docs: final f41 integration delivery receipt\n53f17a20 docs: link showcase screenshots and declare the scoped-panel seam\n2454d8f5 src: one definition of the boop-tab instance id"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant/.boop-worktrees/chore/f41-independent-review-20260912",
+    "branch": "chore/f41-independent-review-20260912",
+    "head": "d14c13aa9c94d4ad27680ce92faf778a0ef0fd64",
+    "exists": true,
+    "ahead_behind": "0\t6",
+    "dirty": "",
+    "commits": "d14c13aa review: assess isolation patch c8b856d7 assertions and cleanup ownership\na5759e79 add independent review and cleanup proposal\na895ae63 bounded tmux socket cleanup for the scoped-network tier\nd02d75f9 scope Boop network showcase to per-run fixtures and real replay\ne386b369 complete scoped Boop network showcase\n2c8fe3c0 scope Boop network to terminal target"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant/.boop-worktrees/chore/luna-app-atlas-20260912",
+    "branch": "chore/luna-app-atlas-20260912",
+    "head": "88c170fbd00950ed011cea8d25fe1887f8d193b9",
+    "exists": true,
+    "ahead_behind": "0\t4",
+    "dirty": "",
+    "commits": "88c170fb docs: make atlas sibling roots portable\n12e23d09 docs: map ghcache and Boop notification ownership\nac8b5f63 docs: close app atlas declaration gaps\nf2194616 docs: add Instant developer map and feature atlas"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant/.boop-worktrees/fix/f41-scoped-network-20260912",
+    "branch": "fix/f41-scoped-network-20260912",
+    "head": "d42e3349fa4471bc3626c5cece6ed3ab6387b095",
+    "exists": true,
+    "ahead_behind": "0\t9",
+    "dirty": "",
+    "commits": "d42e3349 harden scratch ownership against prefix-only sockets and symlinks\n791d28bd test: import the finalized isolation boundary from the red lane\n9f85fc93 probe the configured tmux socket in the session graph\nb787e1ef own or reject the scoped-network scratch root\nc8b856d7 isolate Boop discovery env for the scoped-network serve\na895ae63 bounded tmux socket cleanup for the scoped-network tier"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant/.boop-worktrees/fix/instant-origin-family-reconcile-terra",
+    "branch": "fix/instant-origin-family-reconcile-terra",
+    "head": "ae0242c2b8bef2b05e6a15848c1dee676cfdc45a",
+    "exists": true,
+    "ahead_behind": "273\t0",
+    "dirty": "D 0_native_pan_proof.html\n D 0_paintSvg.ts\n D Dockerfile.release-audit\n D LICENSE\n D NATIVE_HTTP.md\n D e2e-dock-strip-in-tab.html\n D e2e-live/0_live.ts\n D e2e-live/README.md\n D e2e-live/boop-four-agent-shells.live.ts\n D e2e-live/external-shells.live.ts\n D e2e-live/strip-live.live.ts\n D e2e-mail-preview.html\n D e2e-pdf.html\n D e2e-svg-link.html\n D e2e-waterfall.html\n D extension/README.md\n D extension/build.mjs\n D extension/manifest.json\n D extension/src/0_types.ts\n D extension/src/1_match.ts\n D extension/src/2_scan.ts\n D extension/src/3_extract.test.ts\n D extension/src/3_extract.ts\n D extension/src/4_browserEffects.test.ts\n D extension/src/4_browserEffects.ts\n D extension/src/5_scheduleRuntime.test.ts\n D extension/src/5_scheduleRuntime.ts\n D extension/src/6_v2Rules.test.ts\n D extension/src/6_v2Rules.ts\n D extension/src/background.ts\n D extension/src/content.ts\n D extension/src/httpTransport.ts\n D extension/src/inject.ts\n D extension/tsconfig.json\n D index.html\n D justfile\n D labs/json-rx-mvp/0_types.ts\n D labs/json-rx-mvp/10_v2.test.ts\n D labs/json-rx-mvp/11_codex-v2.fixture.ts\n D labs/json-rx-mvp/12_codex-v2.test.ts\n D labs/json-rx-mvp/13_receipt.spec.ts\n D labs/json-rx-mvp/13_receipt.spec.ts-snapshots/json-rx-lab-gate-darwin.png\n D labs/json-rx-mvp/14_playwright.config.ts\n D labs/json-rx-mvp/1_identity.ts\n D labs/json-rx-mvp/2_runtime.ts\n D labs/json-rx-mvp/3_fixture.ts\n D labs/json-rx-mvp/4_mvp.test.ts\n D labs/json-rx-mvp/5_vitest.config.ts\n D labs/json-rx-mvp/6_tsconfig.json\n D labs/json-rx-mvp/7_v2-schema.ts\n D labs/json-rx-mvp/8_v2-runtime.ts\n D labs/json-rx-mvp/9_claude-v2.fixture.ts\n D labs/json-rx-mvp/README.md\n D labs/livespawn/livespawn.test.ts\n D labs/livespawn/png/00-parent-alone.png\n D labs/livespawn/png/01-child-live-dispatch.png\n D labs/livespawn/png/14-both-idle-acked.png\n D labs/patchset-ledger/0_pre-push\n D labs/patchset-ledger/1_lab.ts\n D labs/patchset-ledger/2_lab.test.ts\n D labs/patchset-ledger/3_receipt.spec.ts\n D labs/patchset-ledger/3_receipt.spec.ts-snapshots/patchset-gerrit-translation-darwin.png\n D labs/patchset-ledger/3_receipt.spec.ts-snapshots/patchset-ledger-darwin.png\n D labs/patchset-ledger/4_vitest.config.ts\n D labs/patchset-ledger/5_playwright.config.ts\n D labs/patchset-ledger/6_gerrit_ui_brief.md\n D labs/patchset-ledger/7_git_to_gerrit.ts\n D labs/patchset-ledger/8_git_to_gerrit.test.ts\n D labs/patchset-ledger/9_findings.md\n D labs/patchset-ledger/README.md\n D plans/2026-08-08-canvas-state-ideas.md\n D plans/2026-08-08-pulse-route-signal.md\n D plans/2026-08-08-reactive-ir-exploration.not-done.md\n D plans/2026-08-09-interactive-svg-rendering-research.md\n D plans/2026-08-10-boop-lane-observability-followup.md\n D plans/2026-08-12-md-fs-grapht-viewport-decomposition.md\n D plans/2026-08-14-concatmap-rust-rewrite.sketch.md\n D plans/2026-08-14-concatmap.md\n D plans/20260720.0.serializable-reactive-workflow-runtime.md\n D plans/20260720.1.visibility-aware-codex-usage-dashboard.md\n D plans/20260720.2.production-json-rx-codex-metrics.md\n D playwright.busmail.config.ts\n D pnpm-lock.yaml",
+    "commits": ""
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant/.boop-worktrees/fix/luna-scoped-network-20260912",
+    "branch": "fix/luna-scoped-network-20260912",
+    "head": "e386b369984b450a94219b310342a9e0f483a27c",
+    "exists": true,
+    "ahead_behind": "0\t2",
+    "dirty": "M .gitignore\n M docs/screenshots/turn-attribution.png\n M e2e-vitest/0_scopedNetwork.ts\n M e2e-vitest/scoped-network.e2e.test.ts\n M scripts/0_scoped-network-serve.sh\n M vitest.scoped-network.config.ts",
+    "commits": "e386b369 complete scoped Boop network showcase\n2c8fe3c0 scope Boop network to terminal target"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant/.boop-worktrees/test/f41-isolation-red-20260912",
+    "branch": "test/f41-isolation-red-20260912",
+    "head": "7a84a180cf728cfb206b8ee7d3cf3a7048b0ace9",
+    "exists": true,
+    "ahead_behind": "0\t9",
+    "dirty": "",
+    "commits": "7a84a180 test: fail the observation subprocess instead of coercing empty output\ncc39f105 test: correct cleanup-ownership contract to sentinel-unchanged\nb2fd9859 test: observe operator-session ingestion at the scratch store boundary\nf0926205 test: red cleanup-ownership regression for scoped-network teardown\n3aea6fbe test: red isolation regression for the scoped-network serve\na895ae63 bounded tmux socket cleanup for the scoped-network tier"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant/.worktrees/boop-turn-visibility-v2",
+    "branch": "feature/boop-turn-visibility-v2",
+    "head": "8ed7b77ea603650946befbcf35b0c5526b37b7fc",
+    "exists": true,
+    "ahead_behind": "249\t0",
+    "dirty": "M test-results/.last-run.json",
+    "commits": ""
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant/.worktrees/dockview-reactflow-lab",
+    "branch": "lab/dockview-reactflow",
+    "head": "f539f174783a1078a2e2ed6437ba8eaba70c530f",
+    "exists": true,
+    "ahead_behind": "326\t1",
+    "dirty": "?? playwright-report-dock-canvas/",
+    "commits": "f539f174 wip: preserve uncommitted work before reclaiming the worktree"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant/.worktrees/flash-json-rx-gate",
+    "branch": "lane/flash-json-rx-gate",
+    "head": "b61c8603808e50b2b7bf90f6d85b07eb6f7fca85",
+    "exists": true,
+    "ahead_behind": "358\t1",
+    "dirty": "?? playwright-report/json-rx-lab/",
+    "commits": "b61c8603 wip: preserve uncommitted work before reclaiming the worktree"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant/.worktrees/patchset-ui",
+    "branch": "ui/patchset-diff-polish",
+    "head": "2ed9109d425afe97be77fa961429bf438bfb6d6e",
+    "exists": true,
+    "ahead_behind": "338\t10",
+    "dirty": "M test-results/.last-run.json",
+    "commits": "2ed9109d wip: preserve uncommitted work before reclaiming the worktree\n30159b45 docs(patchset-diff): manual matches the code\ndc7bbfd5 fix(patchset-diff): load a grammar per file so colour reaches the last file\n5d17152d feat(patchset-diff): ImageMagick pixel difference for image files\nf5e97fa8 feat(patchset-diff): image diff for binary files\nbacc9ee0 feat(patchset-diff): collapsible files, flush stacking, live shiki sheet"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/instant/.worktrees/sequence-board-e2e",
+    "branch": "feature/sequence-board-e2e",
+    "head": "51b2079e8b0cfb21e62cb4cbf09ebaca8d0f286d",
+    "exists": true,
+    "ahead_behind": "221\t3",
+    "dirty": "?? artifacts/sequence-mermaid-1-fitted-source-actors.png\n?? artifacts/sequence-mermaid-2-vertical-pan-sticky-actors.png",
+    "commits": "51b2079e md: replace sequence actor projection\n8436398f md: pin renderer-owned sequence actors\nf78d299e md: add sticky sequence SVG focus controls"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/worktrees/instant-markdown-terminal-replay",
+    "branch": "fix/markdown-terminal-replay",
+    "head": "124b84df1d8062157fe4bca674c7eb70955a95cc",
+    "exists": true,
+    "ahead_behind": "170\t1",
+    "dirty": "",
+    "commits": "124b84df terminal: replay synchronized TUI and Boop fixtures"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/worktrees/instant-tauri-request-signals",
+    "branch": "refactor/tauri-request-signals",
+    "head": "69ab2290b36b311b7d25da14c9a54eb0fe4efbe9",
+    "exists": true,
+    "ahead_behind": "170\t1",
+    "dirty": "",
+    "commits": "69ab2290 transport: move native commands behind endpoints"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/worktrees/instant-terminal-replay-research",
+    "branch": "research/terminal-replay-prior-art",
+    "head": "746a6bcf7c76e3d0ba1ffcc22852f11d7780a3ae",
+    "exists": true,
+    "ahead_behind": "170\t1",
+    "dirty": "",
+    "commits": "746a6bcf docs: map terminal agent replay prior art"
+  },
+  {
+    "repo": "instant",
+    "path": "/Users/chrishafley/projects/worktrees/turn-attribution/instant",
+    "branch": "fix/turn-attribution-input-traits",
+    "head": "57e1b6809f5a6efa200b163abae92d53d998a2b0",
+    "exists": true,
+    "ahead_behind": "170\t0",
+    "dirty": "M src-tauri/src/0_boop.rs\n M src-tauri/src/0_harness_store.rs\n M src-tauri/src/0_harness_store_tests.rs\n M src/0_terminalTurnVisibility.test.ts\n M src/0_terminalTurnVisibility.ts\n M src/0_turnDebugOverlay.test.ts\n M src/terminal.ts",
+    "commits": ""
+  }
+]

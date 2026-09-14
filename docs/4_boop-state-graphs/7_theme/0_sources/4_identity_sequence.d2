@@ -1,0 +1,38 @@
+# Source audit: ../1_boop-session-state-audit.md
+# Main: hafley-rs 2376a81f; Instant 9fca010e; 2026-09-13
+vars: { d2-config: { theme-id: 201; layout-engine: elk; pad: 32 } }
+classes: {
+  fact: { style.fill: "#153b43"; style.stroke: "#63c7cd"; style.font-color: "#e1f5f5" }
+  good: { style.fill: "#203e2b"; style.stroke: "#79b98b"; style.font-color: "#e5f3e8" }
+  gap: { style.fill: "#473819"; style.stroke: "#d5b66e"; style.font-color: "#fff0c5" }
+  bad: { style.fill: "#462629"; style.stroke: "#cb888a"; style.font-color: "#ffe2e2" }
+}
+
+shape: sequence_diagram
+user: "Operation"
+wrapper: "Boop wrapper\nroute + carried trace"
+harness: "Native harness"
+store: "Boop store"
+view: "Identity after event"
+user -> harness: "fresh launch: process P1"
+harness -> wrapper: "observed Session(A)"
+wrapper -> store: "attach A -> T; write live(A,P1,pane)"
+store -> view: "P1 / A / T"
+user -> harness: "compact"
+harness -> harness: "native compaction receipt\nlifecycle gate expects A unchanged"
+harness -> view: "P1 / A / T\nno Compacted event in main wrapper enum"
+user -> harness: "clear/new"
+harness -> wrapper: "observed Session(B), B != A"
+wrapper -> store: "A detached; bind B to P1\nattach B -> T if B has no prior trace"
+store -> view: "P1 / B / T\nA retained in trace history"
+user -> harness: "exit"
+wrapper -> store: "detach B only if P1 still owns row\nclear door; retain B -> T"
+store -> view: "no bound process / B / T"
+user -> harness: "resume B: new process P2"
+harness -> wrapper: "observed Session(B)"
+wrapper -> store: "existing trace(B)=T\nwrite live(B,P2,pane)"
+store -> view: "P2 / B / T"
+user -> harness: "select previously known C"
+harness -> wrapper: "observed Session(C)"
+wrapper -> store: "existing trace(C)=U takes precedence\ndetach B; bind C"
+store -> view: "P2 / C / U"

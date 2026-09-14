@@ -1,0 +1,82 @@
+{
+  "theme": "midnight",
+  "palette": "categorical",
+  "mode": "round-robin",
+  "assignments": [
+    {
+      "target": "runtime.(pid -> process)[0]",
+      "kind": "edge",
+      "group": "pid"
+    },
+    {
+      "target": "runtime.(target -> tmux)[0]",
+      "kind": "edge",
+      "group": "target"
+    },
+    {
+      "target": "runtime.(process -> count)[0]",
+      "kind": "edge",
+      "group": "process"
+    },
+    {
+      "target": "runtime.(tmux -> count)[0]",
+      "kind": "edge",
+      "group": "tmux"
+    },
+    {
+      "target": "graph.(shell -> pane)[0]",
+      "kind": "edge",
+      "group": "shell"
+    },
+    {
+      "target": "(evidence -> runtime.pid)[0]",
+      "kind": "edge",
+      "group": "evidence"
+    },
+    {
+      "target": "(evidence -> runtime.target)[0]",
+      "kind": "edge",
+      "group": "evidence"
+    },
+    {
+      "target": "(evidence -> graph.native)[0]",
+      "kind": "edge",
+      "group": "evidence"
+    },
+    {
+      "target": "(evidence -> ui.recency)[0]",
+      "kind": "edge",
+      "group": "evidence"
+    },
+    {
+      "target": "(evidence -> screenshot)[0]",
+      "kind": "edge",
+      "group": "evidence"
+    },
+    {
+      "target": "(runtime.process -> graph.shell)[0]",
+      "kind": "edge",
+      "group": "runtime.process"
+    },
+    {
+      "target": "(runtime.tmux -> graph.shell)[0]",
+      "kind": "edge",
+      "group": "runtime.tmux"
+    },
+    {
+      "target": "(graph.native -> ui.filter)[0]",
+      "kind": "edge",
+      "group": "graph.native"
+    },
+    {
+      "target": "(graph.pane -> ui.filter)[0]",
+      "kind": "edge",
+      "group": "graph.pane"
+    },
+    {
+      "target": "(graph.native -> gap)[0]",
+      "kind": "edge",
+      "group": "graph.native"
+    }
+  ]
+}
