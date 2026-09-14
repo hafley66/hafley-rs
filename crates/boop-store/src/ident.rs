@@ -7602,7 +7602,7 @@ mod tests {
                 include_history: true,
                 tmux: None,
                 history_since_ts: None,
-                include_trace_events: false,
+                include_trace_events: true,
             },
         )
         .unwrap();

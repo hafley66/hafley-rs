@@ -23,7 +23,7 @@ pub const AGENT_SESSION_GRAPH_SCHEMA_VERSION: u32 = 1;
 const AGENT_SESSION_GRAPH_TRACE_EVENT_LIMIT: u64 = 1_000;
 
 /// Filters for one session-graph read.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct AgentSessionGraphQuery {
     pub cwd: Option<PathBuf>,
     pub include_history: bool,
@@ -35,9 +35,22 @@ pub struct AgentSessionGraphQuery {
     /// returned family connected.
     pub history_since_ts: Option<u64>,
     /// Populate `trace_events`. The trace read runs one query per selected lane,
-    /// so a consumer that does not read the member should leave this false and
-    /// keep the graph read bounded by the lane set. Defaults to false.
+    /// so a consumer that does not read the member should set this false and
+    /// keep the graph read bounded by the lane set. `Default` keeps it true so
+    /// existing callers that spread `..Default::default()` retain the member.
     pub include_trace_events: bool,
+}
+
+impl Default for AgentSessionGraphQuery {
+    fn default() -> Self {
+        Self {
+            cwd: None,
+            include_history: false,
+            tmux: None,
+            history_since_ts: None,
+            include_trace_events: true,
+        }
+    }
 }
 
 /// Function type for the pure durable graph projection.
@@ -1360,7 +1373,7 @@ mod tests {
     }
 
     #[test]
-    fn trace_events_are_opt_in_per_query() {
+    fn default_keeps_trace_events_and_explicit_opt_out_skips() {
         let path = std::env::temp_dir().join(format!(
             "boop-session-graph-trace-optin-{}.db",
             std::process::id()
@@ -1393,19 +1406,22 @@ mod tests {
                 created_ts: 1,
             })
             .unwrap();
-        // Default query leaves the per-lane trace read out, so an incidental
-        // product read never pays one query per selected lane.
-        let off = load_agent_session_graph(&store, AgentSessionGraphQuery::default()).unwrap();
-        assert!(off.trace_events.is_empty());
-        let on = load_agent_session_graph(
+        // `Default` preserves the long-standing behavior: existing callers that
+        // spread `..Default::default()` keep their trace events.
+        let default_read =
+            load_agent_session_graph(&store, AgentSessionGraphQuery::default()).unwrap();
+        assert_eq!(default_read.trace_events.len(), 1);
+        // A caller that does not read the member opts out explicitly and skips
+        // the one-query-per-lane trace read.
+        let skipped = load_agent_session_graph(
             &store,
             AgentSessionGraphQuery {
-                include_trace_events: true,
+                include_trace_events: false,
                 ..AgentSessionGraphQuery::default()
             },
         )
         .unwrap();
-        assert_eq!(on.trace_events.len(), 1);
+        assert!(skipped.trace_events.is_empty());
         let _ = std::fs::remove_file(path);
     }
 
