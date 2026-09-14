@@ -853,6 +853,19 @@ mod tests {
         let found =
             crate::live::session_in_pane(&crate::Registry::discover(), "%9", &fixture.dir).unwrap();
         assert_eq!(found.as_deref(), Some("current-root"));
+
+        // Public baseline: the same pane with an unparked host resolves to the
+        // host's own session.
+        fixture.write_host(
+            std::process::id(),
+            "old-root",
+            "compiler:@9.%9",
+            "idle",
+            None,
+        );
+        let plain =
+            crate::live::session_in_pane(&crate::Registry::discover(), "%9", &fixture.dir).unwrap();
+        assert_eq!(plain.as_deref(), Some("old-root"));
     }
 
     /// RECEIPT. What lands on the socket is the two documented JSON lines,
