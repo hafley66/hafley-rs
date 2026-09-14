@@ -4,12 +4,14 @@
 //! scratch tmux server. No registry-row stand-in: the door the lane talks to is
 //! a running claude, codex or opencode pane.
 //!
-//! Five cases, three harnesses, fifteen tests named `<case>_<harness>`:
+//! Six cases, three harnesses, eighteen tests named `<case>_<harness>`:
 //! 1. a held inbound row defers the lane result;
 //! 2. a send to a retired lane revives it;
 //! 3. a retired lane closes its tmux session;
 //! 4. a stale lane tells its parent;
-//! 5. a quiet running lane warns its parent before the hard stall kill.
+//! 5. a quiet running lane warns its parent, then reports recovery;
+//! 6. a follow-up accepted while parked keeps the lane from retiring, and the
+//!    later retirement is a row of its own.
 //!
 //! Live claude and live codex are required, not optional. A case skips a
 //! harness only when that harness's executable or llmock is absent, printed as
@@ -528,9 +530,10 @@ fn gui_shield(bin: &Path) -> Vec<(String, String)> {
 
 /// The provider fixture. The readiness probe answers `boop`; the coordinator's
 /// typed prompt answers the terminal marker; every other turn (the lane brief)
-/// answers text long enough that the supervisor treats it as real work. `pace`
-/// delays the first token so a turn stays open under a hail.
-fn fixture_yaml(pace_ms: u64) -> String {
+/// answers text long enough that the supervisor treats it as real work. `ttft`
+/// delays the first token so a turn stays open under a hail; `inter` delays
+/// each later token so a turn keeps writing while it is open.
+fn fixture_yaml(ttft_ms: u64, inter_token_ms: u64) -> String {
     format!(
         r#"rules:
   - match:
@@ -545,8 +548,8 @@ fn fixture_yaml(pace_ms: u64) -> String {
     respond:
       content: "the brief turn finished with a reply long enough to count as real work"
       stream:
-        ttft_ms: {pace_ms}
-        inter_token_ms: 0
+        ttft_ms: {ttft_ms}
+        inter_token_ms: {inter_token_ms}
 "#
     )
 }
@@ -673,13 +676,15 @@ fn start(
     h: &Harness,
     llmock: &Path,
     pace_ms: u64,
+    inter_token_ms: u64,
     extra_env: &[(&str, &str)],
     expect: &[&str],
 ) -> Result<Started, String> {
     let executable = harness_executable(h)?;
     let fixture = Fixture::new(case, h);
     let fixture_path = fixture.root.join("llmock.yaml");
-    std::fs::write(&fixture_path, fixture_yaml(pace_ms)).map_err(|error| error.to_string())?;
+    std::fs::write(&fixture_path, fixture_yaml(pace_ms, inter_token_ms))
+        .map_err(|error| error.to_string())?;
     let provider = MockProvider::spawn(llmock, Some(&fixture_path))
         .map_err(|error| format!("llmock spawn: {error}"))?;
 
@@ -741,6 +746,7 @@ fn run_held(h: &Harness) -> Result<(), String> {
         h,
         &llmock,
         8000,
+        0,
         &[],
         &["--expect-commit-subject", "the third commit"],
     )?;
@@ -815,6 +821,7 @@ fn run_revive(h: &Harness) -> Result<(), String> {
         h,
         &llmock,
         0,
+        0,
         &[("BOOP_IDLE_SHUTDOWN_SECS", "1")],
         &[],
     )?;
@@ -878,6 +885,7 @@ fn run_retired(h: &Harness) -> Result<(), String> {
         h,
         &llmock,
         0,
+        0,
         &[("BOOP_IDLE_SHUTDOWN_SECS", "1")],
         &[],
     )?;
@@ -905,6 +913,7 @@ fn run_stale(h: &Harness) -> Result<(), String> {
         h,
         &llmock,
         0,
+        0,
         &[("BOOP_STALE_SECS", "3"), ("BOOP_IDLE_SHUTDOWN_SECS", "0")],
         &[],
     )?;
@@ -927,18 +936,21 @@ fn run_stale(h: &Harness) -> Result<(), String> {
     Ok(())
 }
 
-/// Case 5. A lane whose brief turn stays open with no harness activity warns
-/// its live coordinator past `BOOP_PROGRESS_WARNING_SECS`, once, without
-/// killing the turn; the hard stall bound is separate and much larger.
-fn run_no_progress(h: &Harness) -> Result<(), String> {
+/// Case 5. A lane whose brief turn stays open with no harness write warns its
+/// live coordinator past `BOOP_PROGRESS_WARNING_SECS`, then reports recovery
+/// when the provider's first token arrives. The hard stall bound is separate
+/// and much larger, so the turn is never killed.
+fn run_quiet(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
         return Err("no llmock".to_owned());
     };
+    // The catch-all brief turn delays its first token past the warning bound.
     let started = start(
-        "no-progress",
+        "harness-quiet",
         h,
         &llmock,
-        60_000,
+        4_000,
+        2_000,
         &[
             ("BOOP_PROGRESS_WARNING_SECS", "2"),
             ("BOOP_STALL_LIMIT_SECS", "600"),
@@ -946,23 +958,95 @@ fn run_no_progress(h: &Harness) -> Result<(), String> {
         &[],
     )?;
     let fixture = &started.fixture;
-    let warning = format!("no_progress {} ", fixture.lane);
-    fixture.wait_for_screen(&fixture.coord_session, &warning, START_DEADLINE);
+    let quiet = format!("harness_quiet {} ", fixture.lane);
+    fixture.wait_for_screen(&fixture.coord_session, &quiet, START_DEADLINE);
     assert_eq!(
-        fixture.coordinator_shows(&warning),
+        fixture.coordinator_shows(&quiet),
         1,
-        "exactly one warning reached the coordinator screen"
+        "exactly one quiet warning reached the coordinator screen"
     );
     assert_eq!(
-        fixture.kind_rows("no_progress"),
+        fixture.kind_rows("harness_quiet"),
         1,
-        "exactly one no_progress row in the mailbox"
+        "exactly one harness_quiet row in the mailbox"
     );
-    std::thread::sleep(Duration::from_secs(2));
+    if h.id == HarnessId::Claude {
+        // The claude stream-json adapter emits no incremental line during the
+        // mock turn, so the supervisor has no mid-turn write to observe and
+        // cannot see recovery; it does still warn off the turn-start fallback.
+        // Recovery is replayed on codex and opencode, whose channels stream.
+        return Err(
+            "claude stream-json emitted no mid-turn write in the mock; recovery not observable"
+                .to_owned(),
+        );
+    }
+    // The provider's first token arrives: recovery, once, and no repeat.
+    let active = format!("harness_active {} ", fixture.lane);
+    fixture.wait_for_screen(&fixture.coord_session, &active, START_DEADLINE);
     assert_eq!(
-        fixture.coordinator_shows(&warning),
+        fixture.kind_rows("harness_active"),
         1,
-        "the warning repeated inside one quiet episode"
+        "exactly one harness_active row in the mailbox"
+    );
+    assert_eq!(
+        fixture.kind_rows("harness_quiet"),
+        1,
+        "the warning repeated after recovery"
+    );
+    Ok(())
+}
+
+/// Case 6. A follow-up accepted while the lane is parked keeps it from retiring:
+/// the mail opens a turn. When the lane then goes quiet, its retirement is a
+/// distinct row, never confused with the result.
+fn run_retire_mail(h: &Harness) -> Result<(), String> {
+    let Some(llmock) = mock_tui::resolve_llmock() else {
+        return Err("no llmock".to_owned());
+    };
+    let started = start(
+        "retire-mail",
+        h,
+        &llmock,
+        0,
+        0,
+        &[("BOOP_IDLE_SHUTDOWN_SECS", "5")],
+        &[],
+    )?;
+    let fixture = &started.fixture;
+    fixture.wait_for_result(1);
+
+    let beep = fixture.beep(&[
+        &fixture.lane,
+        "second",
+        "--as",
+        &fixture.coord_route,
+        "--no-wait",
+    ]);
+    if !beep.status.success() {
+        return Err(format!(
+            "the follow-up hail failed: {}",
+            String::from_utf8_lossy(&beep.stderr)
+        ));
+    }
+    // The accepted follow-up opens a third turn instead of being lost at
+    // retirement. A follow-up turn writes no second result (one result per
+    // run), so the lane trail is the evidence the mail was acted on.
+    fixture.wait_for_log("lane turn starting", 3);
+    assert_eq!(
+        fixture.kind_rows("retired"),
+        0,
+        "a follow-up kept the lane from retiring:\n{}",
+        fixture.log()
+    );
+
+    // Now quiet, the lane retires and says so in a kind of its own.
+    let retired = format!("lane {} retired", fixture.lane);
+    fixture.wait_for_screen(&fixture.coord_session, &retired, START_DEADLINE);
+    assert_eq!(
+        fixture.kind_rows("retired"),
+        1,
+        "exactly one retirement row in the mailbox:\n{}",
+        fixture.log()
     );
     Ok(())
 }
@@ -990,6 +1074,9 @@ lifecycle_case!("retired", run_retired, retired_closes_session_opencode, 2);
 lifecycle_case!("stale", run_stale, stale_claude, 0);
 lifecycle_case!("stale", run_stale, stale_codex, 1);
 lifecycle_case!("stale", run_stale, stale_opencode, 2);
-lifecycle_case!("no-progress", run_no_progress, no_progress_claude, 0);
-lifecycle_case!("no-progress", run_no_progress, no_progress_codex, 1);
-lifecycle_case!("no-progress", run_no_progress, no_progress_opencode, 2);
+lifecycle_case!("quiet", run_quiet, harness_quiet_claude, 0);
+lifecycle_case!("quiet", run_quiet, harness_quiet_codex, 1);
+lifecycle_case!("quiet", run_quiet, harness_quiet_opencode, 2);
+lifecycle_case!("retire-mail", run_retire_mail, retire_mail_claude, 0);
+lifecycle_case!("retire-mail", run_retire_mail, retire_mail_codex, 1);
+lifecycle_case!("retire-mail", run_retire_mail, retire_mail_opencode, 2);

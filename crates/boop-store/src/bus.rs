@@ -83,12 +83,14 @@ pub enum MessageKind {
     HeadRewound,
     Commit,
     Pr,
-    /// A running lane quiet past the progress-warning bound. Outside
+    /// A running lane whose harness channel has written nothing for the
+    /// warning bound. Named for the clock, not for model progress: the
+    /// supervisor can only see the channel's newest write. Outside
     /// `supervisor_row` on purpose: the ladder offers it to the parent's door,
     /// the same rung the parked `stale` alarm takes.
-    NoProgress,
-    /// A running lane whose harness activity resumed after `NoProgress`.
-    ProgressResumed,
+    HarnessQuiet,
+    /// A running lane whose harness channel wrote again after `HarnessQuiet`.
+    HarnessActive,
     /// A lane that closed on the idle shutdown after its result row. Distinct
     /// from `Result`: retirement says the route is gone, not that the task is
     /// incomplete.
@@ -164,8 +166,8 @@ kind_impls!(MessageKind {
     HeadRewound => "head_rewound",
     Commit => "commit",
     Pr => "pr",
-    NoProgress => "no_progress",
-    ProgressResumed => "progress_resumed",
+    HarnessQuiet => "harness_quiet",
+    HarnessActive => "harness_active",
     Retired => "retired",
 });
 
@@ -1422,19 +1424,14 @@ mod tests {
             );
         }
         for wire in [
-            "request",
-            "hail",
-            "note",
-            "dispatch",
-            "ack",
-            "reply",
-            "retry",
-            "pr",
-            "stale",
-            "no_progress",
-            "progress_resumed",
-            "retired",
+            "request", "hail", "note", "dispatch", "ack", "reply", "retry", "pr",
         ] {
+            assert!(
+                !crate::bus::MessageKind::from(wire).supervisor_row(),
+                "{wire} keeps the door"
+            );
+        }
+        for wire in ["stale", "harness_quiet", "harness_active", "retired"] {
             assert!(
                 !crate::bus::MessageKind::from(wire).supervisor_row(),
                 "{wire} keeps the door"

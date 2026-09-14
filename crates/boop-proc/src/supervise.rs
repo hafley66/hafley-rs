@@ -1208,7 +1208,7 @@ fn supervise(
     // The running-turn quiet warning: read once, like the stall bound, and
     // seeded so a respawn into an already-quiet episode does not repeat it.
     let warning = progress_warning();
-    let mut progress_watch = ProgressWatch::seeded(&lane.mail_dir, &lane.lane);
+    let mut quiet_watch = QuietWatch::seeded(&lane.mail_dir, &lane.lane);
     let last_activity = std::cell::Cell::new(std::time::Instant::now());
     let mut last_stale: Option<std::time::Instant> = None;
 
@@ -1310,50 +1310,50 @@ fn supervise(
             let now_ms = boop_acp::channel::now_ms();
             let idle_ms = idle_ms(now_ms, turn_started, this_turn_activity);
             let start_ack_elapsed_ms = now_ms.saturating_sub(turn_started);
-            // Warn before the hard kill, once per quiet episode, on the real
-            // harness-activity clock: mail and coordinator checks never reset
-            // it. Skipped while the readiness probe is the turn.
+            // Warn before the hard kill, once per quiet episode, on the harness
+            // channel's newest-write clock: mail and coordinator checks never
+            // reset it. Skipped while the readiness probe is the turn.
             if !start_ack_pending {
                 if let Some(limit) = warning {
                     let quiet = idle_ms > limit.as_millis() as u64;
-                    match progress_watch.tick(quiet) {
-                        Some(ProgressTransition::Warned) => {
+                    match quiet_watch.tick(quiet, this_turn_activity) {
+                        Some(QuietTransition::Quiet) => {
                             let elapsed = Duration::from_millis(idle_ms);
                             mail_to_parent_kind(
                                 lane,
-                                NO_PROGRESS,
-                                progress_body(lane, elapsed, &turn_tools),
-                                Some(NO_PROGRESS),
+                                HARNESS_QUIET,
+                                quiet_body(lane, elapsed, &turn_tools),
+                                Some(HARNESS_QUIET),
                             );
                             events.record(
-                                "no-progress",
+                                "harness-quiet",
                                 TraceRecorder::session(channel),
                                 Some(turn_started),
                                 Some(now_ms),
                                 None,
-                                Some("warned"),
+                                Some("quiet"),
                                 None,
                                 None,
-                                "running lane quiet past the warning bound",
+                                "running lane harness channel quiet past the warning bound",
                             );
                         }
-                        Some(ProgressTransition::Recovered) => {
+                        Some(QuietTransition::Active) => {
                             mail_to_parent_kind(
                                 lane,
-                                PROGRESS_RESUMED,
-                                resumed_body(lane, &turn_tools),
-                                Some(PROGRESS_RESUMED),
+                                HARNESS_ACTIVE,
+                                active_body(lane, &turn_tools),
+                                Some(HARNESS_ACTIVE),
                             );
                             events.record(
-                                "progress-resumed",
+                                "harness-active",
                                 TraceRecorder::session(channel),
                                 Some(turn_started),
                                 Some(now_ms),
                                 None,
-                                Some("recovered"),
+                                Some("active"),
                                 None,
                                 None,
-                                "running lane harness activity resumed",
+                                "running lane harness channel wrote again",
                             );
                         }
                         None => {}
@@ -2291,63 +2291,79 @@ fn last_tool(tools: &[boop_acp::channel::ToolCallFact]) -> String {
     }
 }
 
-/// The kind a running lane's quiet warning wears. Outside
-/// `MessageKind::supervisor_row`, like `STALE`, so the ladder offers it to the
-/// parent's door rather than parking it in the mailbox.
-pub const NO_PROGRESS: &str = "no_progress";
-/// The kind a running lane's recovery wears, once activity resumes.
-pub const PROGRESS_RESUMED: &str = "progress_resumed";
+/// The kind a running lane's quiet warning wears. Named for the harness
+/// channel clock, not for model progress. Outside `MessageKind::supervisor_row`,
+/// like `STALE`, so the ladder offers it to the parent's door rather than
+/// parking it in the mailbox.
+pub const HARNESS_QUIET: &str = "harness_quiet";
+/// The kind a running lane's recovery wears, once the harness channel writes
+/// again.
+pub const HARNESS_ACTIVE: &str = "harness_active";
 
-/// One running lane's quiet episode. A quiet stretch longer than the warning
-/// bound mails one `no_progress` row; the first harness activity after it
-/// mails one `progress_resumed` and resets, so the next episode may warn
-/// again. Between those transitions nothing is mailed: the 700 ms poll is not
-/// a notification clock.
+/// One running lane's quiet episode, measured on the only clock the supervisor
+/// has: the harness channel's newest write (`LaneChannel::last_activity_ms`).
+/// An ACP `session/update` is emitted for agent text, tool calls and status, so
+/// a write is activity but not proof of semantic model progress; a channel
+/// whose adapter returns `None` leaves the clock at the turn start. The warning
+/// bound is a bound on transport quiet, and the row says so.
+///
+/// A quiet stretch past the bound mails one `harness_quiet`; the first channel
+/// write newer than the one seen at warning time mails one `harness_active` and
+/// resets, so the next episode may warn again. A turn boundary alone is not
+/// recovery: with no newer write the watch stays quiet across turns. Between
+/// those edges the 700 ms poll mails nothing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct ProgressWatch {
+struct QuietWatch {
     warned: bool,
+    /// The channel write observed when the warning fired; `None` when there was
+    /// none. Recovery requires a write that differs from it.
+    warned_write: Option<u64>,
 }
 
-/// What one `ProgressWatch::tick` decided, if anything.
+/// What one `QuietWatch::tick` decided, if anything.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ProgressTransition {
-    Warned,
-    Recovered,
+enum QuietTransition {
+    Quiet,
+    Active,
 }
 
-impl ProgressWatch {
+impl QuietWatch {
     /// Seed from the mailbox: a supervisor respawned into an already-quiet
     /// episode does not repeat the warning a previous run already sent. The
     /// newest of the two episode kinds decides, so a recovery resets the seed.
     fn seeded(dir: &Path, lane: &str) -> Self {
-        let warned = last_episode_kind(dir, lane).as_deref() == Some(NO_PROGRESS);
-        ProgressWatch { warned }
+        QuietWatch {
+            warned: last_episode_kind(dir, lane).as_deref() == Some(HARNESS_QUIET),
+            warned_write: None,
+        }
     }
 
-    /// `quiet` is the current poll's verdict; a transition fires on the edge
-    /// only, so repeats of the same poll mail nothing.
-    fn tick(&mut self, quiet: bool) -> Option<ProgressTransition> {
-        match (quiet, self.warned) {
-            (true, false) => {
-                self.warned = true;
-                Some(ProgressTransition::Warned)
-            }
-            (false, true) => {
-                self.warned = false;
-                Some(ProgressTransition::Recovered)
-            }
-            _ => None,
+    /// `quiet` is the current poll's verdict; `write` is this turn's newest
+    /// channel write (`None` when the channel reports none). A transition fires
+    /// on the edge only, and recovery needs a write newer than the warned one,
+    /// so a turn that merely reset its clock does not read as progress.
+    fn tick(&mut self, quiet: bool, write: Option<u64>) -> Option<QuietTransition> {
+        if self.warned && write.is_some() && write != self.warned_write {
+            self.warned = false;
+            self.warned_write = None;
+            return Some(QuietTransition::Active);
         }
+        if quiet && !self.warned {
+            self.warned = true;
+            self.warned_write = write;
+            return Some(QuietTransition::Quiet);
+        }
+        None
     }
 }
 
-/// The newest `no_progress`/`progress_resumed` row a lane wrote, if any. ISO
+/// The newest `harness_quiet`/`harness_active` row a lane wrote, if any. ISO
 /// timestamps sort oldest-first, so the max is the latest transition.
 fn last_episode_kind(dir: &Path, lane: &str) -> Option<String> {
     let mut newest: Option<(String, String)> = None;
     for path in bus::read_boxes(dir).unwrap_or_default() {
         for row in bus::parse_box(&path) {
-            if row.from != lane || !matches!(row.kind.as_str(), NO_PROGRESS | PROGRESS_RESUMED) {
+            if row.from != lane || !matches!(row.kind.as_str(), HARNESS_QUIET | HARNESS_ACTIVE) {
                 continue;
             }
             if newest
@@ -2361,16 +2377,13 @@ fn last_episode_kind(dir: &Path, lane: &str) -> Option<String> {
     newest.map(|(_, kind)| kind)
 }
 
-/// The body a running lane mails when it has been quiet for `idle`: which lane,
-/// the phase, how long, where HEAD sits, how many paths are dirty, and the last
-/// tool the agent reported. One line, greppable.
-fn progress_body(
-    lane: &LaneRun,
-    idle: Duration,
-    tools: &[boop_acp::channel::ToolCallFact],
-) -> String {
+/// The body a running lane mails when its harness channel has been quiet for
+/// `idle`: which lane, the phase, the clock the bound reads, how long, where
+/// HEAD sits, how many paths are dirty, and the last tool the agent reported.
+/// One line, greppable.
+fn quiet_body(lane: &LaneRun, idle: Duration, tools: &[boop_acp::channel::ToolCallFact]) -> String {
     format!(
-        "no_progress {} phase=running idle={}s head={} dirty={} did={}{}",
+        "harness_quiet {} phase=running clock=harness_last_write idle={}s head={} dirty={} did={}{}",
         lane.lane,
         idle.as_secs(),
         head_sha(&lane.cwd),
@@ -2380,11 +2393,11 @@ fn progress_body(
     )
 }
 
-/// The body a running lane mails when harness activity returns after a warned
-/// episode.
-fn resumed_body(lane: &LaneRun, tools: &[boop_acp::channel::ToolCallFact]) -> String {
+/// The body a running lane mails when its harness channel writes again after a
+/// warned episode.
+fn active_body(lane: &LaneRun, tools: &[boop_acp::channel::ToolCallFact]) -> String {
     format!(
-        "progress_resumed {} phase=running head={} dirty={} did={}{}",
+        "harness_active {} phase=running clock=harness_last_write head={} dirty={} did={}{}",
         lane.lane,
         head_sha(&lane.cwd),
         dirty_count(&lane.cwd),
@@ -2421,9 +2434,11 @@ fn park_step(deadline_elapsed: bool, mail_waiting: bool) -> ParkStep {
 /// Tell the parent a lane retired. Unlike the old note this is not gated on
 /// `has_answered`: the result row already told the parent the task verdict, but
 /// only this row says the route stopped listening, so completion and
-/// retirement stay distinguishable. At most one per lane per run.
+/// retirement stay distinguishable. Deduped per episode: a row already newer
+/// than the lane's newest result covers it, so a retired lane that a follow-up
+/// revives and that retires again emits a second row.
 fn mail_retirement(lane: &LaneRun, idle: Duration, conversation: &str) {
-    if already_hailed(&lane.mail_dir, &lane.lane, RETIRED) {
+    if retirement_already_sent(&lane.mail_dir, &lane.lane) {
         return;
     }
     let rc = last_result_rc(&lane.mail_dir, &lane.lane);
@@ -2441,6 +2456,36 @@ fn mail_retirement(lane: &LaneRun, idle: Duration, conversation: &str) {
         lane.lane,
     );
     mail_to_parent_kind(lane, RETIRED, body, Some(RESIDENCY_RETIRED));
+}
+
+/// Whether the lane's newest retirement row already covers its newest result
+/// row. The retirement belongs to one result episode: a revive writes a newer
+/// result and earns a fresh retirement row.
+fn retirement_already_sent(dir: &Path, lane: &str) -> bool {
+    let retired = newest_kind_ts(dir, lane, RETIRED);
+    let result = newest_kind_ts(dir, lane, "result");
+    match (retired, result) {
+        (Some(retired), Some(result)) => retired >= result,
+        (Some(_), None) => true,
+        (None, _) => false,
+    }
+}
+
+/// The newest `from_timestamp` of one kind a lane wrote, if any. ISO timestamps
+/// sort oldest-first, so the max is the latest row.
+fn newest_kind_ts(dir: &Path, lane: &str, kind: &str) -> Option<String> {
+    let mut newest: Option<String> = None;
+    for path in bus::read_boxes(dir).unwrap_or_default() {
+        for row in bus::parse_box(&path) {
+            if row.from != lane || row.kind.as_str() != kind {
+                continue;
+            }
+            if newest.as_ref().is_none_or(|at| row.from_timestamp >= *at) {
+                newest = Some(row.from_timestamp.clone());
+            }
+        }
+    }
+    newest
 }
 
 /// The rc of the newest result row a lane wrote, if any.
@@ -4806,7 +4851,7 @@ mod tests {
     }
 
     #[test]
-    fn the_progress_warning_defaults_to_five_minutes_and_zero_disables_it() {
+    fn the_quiet_warning_defaults_to_five_minutes_and_zero_disables_it() {
         assert_eq!(parse_progress_warning(None), Some(Duration::from_secs(300)));
         assert_eq!(
             parse_progress_warning(Some(" 45 ")),
@@ -4822,19 +4867,36 @@ mod tests {
     /// FAIL-PRE-FIX: the running-turn loop had one bound, so a quiet lane was
     /// killed at the stall limit with no earlier word to its parent. The watch
     /// fires on the edge only, so the 700 ms poll is not a notification clock.
+    ///
+    /// REGRESSION: a new turn resets `idle_ms` to ~0, but that is not harness
+    /// progress. Recovery needs a channel write newer than the one seen at
+    /// warning time; a turn boundary with no newer write must not recover.
     #[test]
-    fn a_quiet_episode_warns_once_and_a_resumed_episode_may_warn_again() {
-        let mut watch = ProgressWatch::default();
-        assert_eq!(watch.tick(false), None);
-        assert_eq!(watch.tick(true), Some(ProgressTransition::Warned));
-        // Repeats of the same quiet verdict mail nothing.
-        assert_eq!(watch.tick(true), None);
-        assert_eq!(watch.tick(true), None);
-        // Real activity resumes: one recovery, then silence while active.
-        assert_eq!(watch.tick(false), Some(ProgressTransition::Recovered));
-        assert_eq!(watch.tick(false), None);
+    fn a_quiet_episode_warns_once_and_only_a_newer_write_recovers_it() {
+        let mut watch = QuietWatch::default();
+        assert_eq!(watch.tick(false, None), None);
+        assert_eq!(watch.tick(true, None), Some(QuietTransition::Quiet));
+        assert_eq!(watch.tick(true, None), None);
+        assert_eq!(watch.tick(true, None), None);
+        // The turn restarted with no harness write: not recovery.
+        assert_eq!(watch.tick(false, None), None);
+        // A real channel write recovers, once.
+        assert_eq!(watch.tick(false, Some(10)), Some(QuietTransition::Active));
+        assert_eq!(watch.tick(false, Some(10)), None);
         // A later quiet episode warns again.
-        assert_eq!(watch.tick(true), Some(ProgressTransition::Warned));
+        assert_eq!(watch.tick(true, Some(10)), Some(QuietTransition::Quiet));
+    }
+
+    /// The same stale write must not be read as recovery either: recovery is a
+    /// write that differs from the one the warning recorded.
+    #[test]
+    fn a_warning_on_a_known_write_recovers_only_on_a_newer_one() {
+        let mut watch = QuietWatch::default();
+        assert_eq!(watch.tick(true, Some(50)), Some(QuietTransition::Quiet));
+        assert_eq!(watch.tick(true, Some(50)), None);
+        assert_eq!(watch.tick(false, Some(50)), None);
+        assert_eq!(watch.tick(false, Some(60)), Some(QuietTransition::Active));
+        assert_eq!(watch.tick(false, Some(60)), None);
     }
 
     /// A respawned supervisor reads the mailbox and does not repeat a warning
@@ -4843,17 +4905,17 @@ mod tests {
     fn a_seeded_watch_does_not_repeat_a_warning_that_already_landed() {
         let dir = tempdir();
         let lane = parented_lane(&dir, "mine", "coordinator");
-        let mut warn = message("w1", "coordinator", NO_PROGRESS);
+        let mut warn = message("w1", "coordinator", HARNESS_QUIET);
         warn.from = "mine".into();
         warn.from_timestamp = "2026-09-14T00:00:01.000Z".into();
         append_row(&dir, &warn).unwrap();
-        assert!(ProgressWatch::seeded(&dir, "mine").warned);
+        assert!(QuietWatch::seeded(&dir, "mine").warned);
 
-        let mut resumed = message("r1", "coordinator", PROGRESS_RESUMED);
-        resumed.from = "mine".into();
-        resumed.from_timestamp = "2026-09-14T00:00:02.000Z".into();
-        append_row(&dir, &resumed).unwrap();
-        assert!(!ProgressWatch::seeded(&dir, "mine").warned);
+        let mut active = message("a1", "coordinator", HARNESS_ACTIVE);
+        active.from = "mine".into();
+        active.from_timestamp = "2026-09-14T00:00:02.000Z".into();
+        append_row(&dir, &active).unwrap();
+        assert!(!QuietWatch::seeded(&dir, "mine").warned);
     }
 
     /// FAIL-PRE-FIX: the park loop tested the idle deadline before it drained
@@ -4869,18 +4931,22 @@ mod tests {
 
     /// FAIL-PRE-FIX: the retire note was gated on `!has_answered`, so a lane
     /// with a result row retired silently and the parent could not tell
-    /// completion from retirement. One retirement row per lane, even with a
-    /// prior result, and it names the rc the result carried.
+    /// completion from retirement. The row is scoped to the result episode, so
+    /// a revive earns a second row and one episode never duplicates.
     #[test]
-    fn a_retirement_is_reported_even_after_the_result_row() {
+    fn retirement_is_reported_once_per_episode_and_again_after_a_revive() {
         let dir = tempdir();
         let lane = parented_lane(&dir, "mine", "coordinator");
-        record_result(&lane, 0, None);
-        mail_retirement(&lane, Duration::from_secs(60), "ses_x");
-        mail_retirement(&lane, Duration::from_secs(60), "ses_x");
+        let mut first = message("r1", "coordinator", "result");
+        first.from = "mine".into();
+        first.from_timestamp = "2026-09-14T00:00:01.000Z".into();
+        first.rc = Some(0);
+        append_row(&dir, &first).unwrap();
 
+        mail_retirement(&lane, Duration::from_secs(60), "ses_x");
+        mail_retirement(&lane, Duration::from_secs(60), "ses_x");
         let retired = rows_of_kind(&dir, RETIRED);
-        assert_eq!(retired.len(), 1, "one retirement row per lane");
+        assert_eq!(retired.len(), 1, "one retirement row per episode");
         assert_eq!(retired[0].to, "coordinator");
         assert_eq!(retired[0].detail.as_deref(), Some(RESIDENCY_RETIRED));
         assert!(retired[0].body.contains("retired"), "{}", retired[0].body);
@@ -4894,103 +4960,26 @@ mod tests {
             "{}",
             retired[0].body
         );
-        // The kind differs from the result row, which is the whole point.
         assert_eq!(rows_of_kind(&dir, "result").len(), 1);
-    }
 
-    /// Drives a quiet brief turn: turn one acknowledges at once, the brief turn
-    /// reports no activity until the test advances the clock and releases it.
-    #[derive(Clone, Default)]
-    struct QuietThenResumedChannel {
-        turns: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
-        clock: std::sync::Arc<std::sync::atomic::AtomicU64>,
-        release: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    }
-
-    impl LaneChannel for QuietThenResumedChannel {
-        fn conversation_id(&self) -> Option<String> {
-            Some("quiet-thread-id".to_owned())
-        }
-
-        fn start_turn(&mut self, text: &str) -> Result<()> {
-            self.turns.lock().unwrap().push(text.to_owned());
-            Ok(())
-        }
-
-        fn steer(&mut self, _text: &str) -> Result<Delivery> {
-            Ok(Delivery::MidTurn)
-        }
-
-        fn next_event(&mut self, _timeout: Duration) -> Result<Option<TurnEvent>> {
-            let last = self.turns.lock().unwrap().last().cloned();
-            if self.turns.lock().unwrap().len() <= 1 {
-                return Ok(Some(fake_turn(last.as_ref())));
-            }
-            if self.release.load(std::sync::atomic::Ordering::SeqCst) {
-                return Ok(Some(fake_turn(last.as_ref())));
-            }
-            Ok(None)
-        }
-
-        fn last_activity_ms(&self) -> Option<u64> {
-            match self.clock.load(std::sync::atomic::Ordering::SeqCst) {
-                0 => None,
-                written => Some(written),
-            }
-        }
-
-        fn close(&mut self) -> Result<()> {
-            Ok(())
-        }
-    }
-
-    // FAIL-PRE-FIX: a running lane with no harness activity produced no parent
-    // row until the hard stall kill. The warning lands first, once, and a
-    // recovery follows when activity returns.
-    #[test]
-    fn a_quiet_running_turn_warns_its_parent_before_the_stall_kill() {
-        let dir = tempdir();
-        let lane = parented_lane(&dir, "quiet-lane", "coordinator");
-        let mut channel = QuietThenResumedChannel::default();
-        let clock = channel.clock.clone();
-        let release = channel.release.clone();
-        // Accelerate both bounds so the test parks and retires in seconds.
-        std::env::set_var(PROGRESS_WARNING_ENV, "1");
-        std::env::set_var(IDLE_SHUTDOWN_ENV, "1");
-        let handle = std::thread::spawn(move || {
-            let _ = run(lane, &mut channel);
-        });
-
-        wait_for(
-            || rows_of_kind(&dir, NO_PROGRESS).len() == 1,
-            Duration::from_secs(10),
+        // A revive runs again and writes a newer result: a new episode.
+        std::thread::sleep(Duration::from_millis(5));
+        let mut second = message("r2", "coordinator", "result");
+        second.from = "mine".into();
+        second.from_timestamp = bus::now_iso();
+        second.rc = Some(0);
+        append_row(&dir, &second).unwrap();
+        mail_retirement(&lane, Duration::from_secs(60), "ses_x");
+        assert_eq!(
+            rows_of_kind(&dir, RETIRED).len(),
+            2,
+            "retire -> revive -> retire emits a second row"
         );
-        let warned = rows_of_kind(&dir, NO_PROGRESS);
-        assert_eq!(warned[0].to, "coordinator");
-        assert!(
-            warned[0].body.contains("phase=running"),
-            "{}",
-            warned[0].body
+        mail_retirement(&lane, Duration::from_secs(60), "ses_x");
+        assert_eq!(
+            rows_of_kind(&dir, RETIRED).len(),
+            2,
+            "no duplicate within the second episode"
         );
-
-        // Real harness activity returns: one recovery, and the warning is not
-        // repeated.
-        clock.store(
-            boop_acp::channel::now_ms(),
-            std::sync::atomic::Ordering::SeqCst,
-        );
-        wait_for(
-            || rows_of_kind(&dir, PROGRESS_RESUMED).len() == 1,
-            Duration::from_secs(10),
-        );
-        assert_eq!(rows_of_kind(&dir, NO_PROGRESS).len(), 1);
-
-        release.store(true, std::sync::atomic::Ordering::SeqCst);
-        wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(10));
-        assert_eq!(rows_of_kind(&dir, PROGRESS_RESUMED).len(), 1);
-        // The short idle shutdown lets the parked lane retire and join.
-        let _ = handle.join();
-        std::env::remove_var(PROGRESS_WARNING_ENV);
-        std::env::remove_var(IDLE_SHUTDOWN_ENV);
     }
 }
