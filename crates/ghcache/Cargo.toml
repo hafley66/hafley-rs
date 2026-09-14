@@ -1,14 +1,10 @@
-[workspace]
-members = [
-    ".",
-    "ghcache-client",
-]
-resolver = "2"
-
 [package]
 name = "ghcache"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/hafley66/hafley-rs"
+description = "local worktree cache and sync daemon for GitHub repositories"
 
 [[bin]]
 name = "ghcache"
