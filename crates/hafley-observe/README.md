@@ -15,3 +15,11 @@ included `tick=7` and `bodies=2`.
 The collector bound only `127.0.0.1:4318`, received Ctrl-C after the proof, and
 reported `Shutdown complete.` The downloaded archive was placed under a
 temporary `/private/tmp` directory; no collector daemon or installation remains.
+
+## Root lockfile resolution note
+
+`b05b31c9:Cargo.toml` already excludes `crates/sprefa-extract` from the root
+workspace. That directory exists and owns a standalone `crates/sprefa-extract/Cargo.lock`.
+The root resolver therefore prunes stale `sprefa-extract`, ast-grep, oxc,
+rust-analyzer, and related parser records from the root `Cargo.lock`; no workspace
+member was removed or re-added for OTLP.
