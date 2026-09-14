@@ -33,8 +33,15 @@ rather than the other way around.
 ## Documentation coverage
 
 `cargo doc --workspace --no-deps --locked` documents the library and binary
-targets of every crate. Examples, integration tests, and build scripts are not
-documented (their targets carry `doc = false`); the site's coverage checker
-lists them rather than dropping them silently. The generated landing page at
-`api/index.html` is built from the workspace membership and the targets the
-doc build actually emitted.
+targets of every crate that its default features enable. Examples, integration
+tests, and build scripts are not documented (their targets carry `doc = false`),
+and a target whose `required-features` the default feature set does not enable
+is not built. The coverage checker lists every excluded target with its reason
+rather than dropping it silently.
+
+Rustdoc names an output directory after the crate name, so a hyphen becomes an
+underscore (`boop-acp` documents to `boop_acp`). A crate whose library and
+binary share a name documents to one directory; the landing page shows that
+directory once with the combined kind. The generated page at `api/index.html`
+is built from the workspace membership and the pages the doc build actually
+emitted.

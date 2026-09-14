@@ -5,7 +5,8 @@
 #
 # Usage: scripts/docs/0_build_site.sh [site-dir]
 #   site-dir defaults to <repo>/target/docs-site. Relative paths are resolved
-#   against the repository root.
+#   against the repository root. The destination is validated by
+#   scripts/docs/site_paths.py before anything is deleted.
 #
 # WARNING: this does a full workspace `cargo doc` and wipes site-dir first.
 set -euo pipefail
@@ -17,9 +18,22 @@ case "$site_dir" in
   *) site_dir="$repo_root/$site_dir" ;;
 esac
 
+# Keep Python from writing __pycache__ into the source tree.
+export PYTHONDONTWRITEBYTECODE=1
+
 command -v mdbook >/dev/null || { echo "mdbook is not on PATH (pin 0.5.4)" >&2; exit 1; }
 command -v cargo >/dev/null || { echo "cargo is not on PATH" >&2; exit 1; }
 command -v python3 >/dev/null || { echo "python3 is not on PATH" >&2; exit 1; }
+
+target_dir="$(cargo metadata --manifest-path "$repo_root/Cargo.toml" \
+  --no-deps --format-version 1 --locked \
+  | python3 -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])')"
+
+site_dir="$(python3 "$repo_root/scripts/docs/site_paths.py" \
+  --repo-root "$repo_root" \
+  --site-dir "$site_dir" \
+  --cargo-target-dir "$target_dir" \
+  --doc-dir "$target_dir/doc")"
 
 rm -rf "$site_dir"
 mkdir -p "$site_dir"
@@ -33,10 +47,6 @@ touch "$site_dir/.nojekyll"
 
 echo "docs: building workspace rustdoc"
 cargo doc --workspace --no-deps --locked --manifest-path "$repo_root/Cargo.toml"
-
-target_dir="$(cargo metadata --manifest-path "$repo_root/Cargo.toml" \
-  --no-deps --format-version 1 --locked \
-  | python3 -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])')"
 
 echo "docs: copying $target_dir/doc -> $site_dir/api"
 rm -rf "$site_dir/api"

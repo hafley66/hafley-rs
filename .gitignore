@@ -4,3 +4,7 @@ target/
 .issuectl/write.lock
 .dl/
 .worktrees/
+
+# Python caches from scripts/docs
+__pycache__/
+*.pyc

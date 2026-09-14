@@ -3,9 +3,14 @@
 
 The page is derived from two sources: the workspace membership reported by
 `cargo metadata`, and the rustdoc directories `cargo doc` actually emitted
-under the target directory. A crate is listed as a link only when its target
-emitted `index.html`; an expected target that did not emit is reported on
-stdout and on the page as "not emitted" rather than dropped.
+under the target directory. Only targets `cargo doc --workspace --no-deps
+--locked` documents with default features are expected (see `cargo_targets`).
+A crate is linked only when its emitted directory has an `index.html`; an
+expected page that did not emit is reported on stdout and on the page as
+"not emitted" rather than dropped.
+
+A library and binary that share a name emit one directory, so rows are keyed by
+emitted directory name and show the combined kind.
 
 Links are document-relative, so the page works under any GitHub Pages base
 path without a rewrite step.
@@ -15,47 +20,10 @@ from __future__ import annotations
 
 import argparse
 import html
-import json
-import subprocess
 import sys
 from pathlib import Path
 
-DOCUMENTED_KINDS = ("lib", "bin", "proc-macro")
-
-KIND_LABEL = {
-    "lib": "library",
-    "bin": "binary",
-    "proc-macro": "proc-macro",
-}
-
-
-def cargo_metadata(repo_root: Path) -> dict:
-    result = subprocess.run(
-        ["cargo", "metadata", "--no-deps", "--format-version", "1", "--locked"],
-        cwd=repo_root,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return json.loads(result.stdout)
-
-
-def documented_targets(metadata: dict) -> list[dict]:
-    """Workspace packages, each with its documented lib/bin targets."""
-    members = set(metadata.get("workspace_members", []))
-    packages = []
-    for package in metadata["packages"]:
-        if package["id"] not in members:
-            continue
-        targets = [
-            target
-            for target in package["targets"]
-            if any(kind in target["kind"] for kind in DOCUMENTED_KINDS)
-            and target.get("doc", True)
-        ]
-        packages.append({"package": package, "targets": targets})
-    packages.sort(key=lambda entry: entry["package"]["name"])
-    return packages
+import cargo_targets as ct
 
 
 def emitted_dirs(doc_dir: Path) -> set[str]:
@@ -68,35 +36,45 @@ def emitted_dirs(doc_dir: Path) -> set[str]:
     }
 
 
-def build_page(packages: list[dict], doc_dir: Path) -> tuple[str, list[str]]:
+def build_page(metadata: dict, doc_dir: Path) -> tuple[str, int, list[str], int]:
     emitted = emitted_dirs(doc_dir)
     missing: list[str] = []
     rows: list[str] = []
+    targets_total = 0
+    pages_total = 0
 
-    for entry in packages:
-        package = entry["package"]
-        targets = entry["targets"]
-        if not targets:
+    for package in ct.workspace_packages(metadata):
+        name = package["name"]
+        documented, _ = ct.classify_targets(package)
+        targets_total += len(documented)
+        if not documented:
             rows.append(
                 "<tr><td>{name}</td><td>no documented targets</td>"
                 "<td><span class=\"missing\">none</span></td></tr>".format(
-                    name=html.escape(package["name"])
+                    name=html.escape(name)
                 )
             )
             continue
-        for target in targets:
-            name = target["name"]
-            kind = "+".join(KIND_LABEL.get(k, k) for k in target["kind"] if k in KIND_LABEL)
-            if name in emitted:
-                cell = f'<a href="./{html.escape(name)}/index.html">{html.escape(name)}</a>'
+
+        by_dir: dict[str, list[dict]] = {}
+        for target in documented:
+            by_dir.setdefault(ct.emitted_dir_name(target), []).append(target)
+
+        for directory in sorted(by_dir):
+            pages_total += 1
+            kinds = "+".join(
+                dict.fromkeys(
+                    ct.target_kind_label(target) for target in by_dir[directory]
+                )
+            )
+            if directory in emitted:
+                cell = f'<a href="./{html.escape(directory)}/index.html">{html.escape(directory)}</a>'
             else:
-                cell = f'<span class="missing">{html.escape(name)} (not emitted)</span>'
-                missing.append(f"{package['name']} ({kind}): {name}")
+                cell = f'<span class="missing">{html.escape(directory)} (not emitted)</span>'
+                missing.append(f"{name} ({kinds}): {directory}")
             rows.append(
                 "<tr><td>{package}</td><td>{kind}</td><td>{cell}</td></tr>".format(
-                    package=html.escape(package["name"]),
-                    kind=html.escape(kind),
-                    cell=cell,
+                    package=html.escape(name), kind=html.escape(kinds), cell=cell
                 )
             )
 
@@ -132,7 +110,7 @@ code {{ background: #f2f2f2; padding: 0.1rem 0.25rem; border-radius: 3px; }}
 </body>
 </html>
 """
-    return page, missing
+    return page, pages_total, missing, targets_total
 
 
 def main() -> int:
@@ -142,15 +120,16 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
-    metadata = cargo_metadata(args.repo_root)
-    packages = documented_targets(metadata)
-    page, missing = build_page(packages, args.doc_dir)
+    metadata = ct.cargo_metadata(args.repo_root)
+    page, pages, missing, targets = build_page(metadata, args.doc_dir)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(page, encoding="utf-8")
 
-    total = sum(len(entry["targets"]) for entry in packages)
-    print(f"api index: {len(packages)} crates, {total} documented targets -> {args.out}")
+    print(
+        f"api index: {pages} rustdoc pages for {targets} documented targets "
+        f"-> {args.out}"
+    )
     for item in missing:
         print(f"api index: not emitted: {item}", file=sys.stderr)
     return 0

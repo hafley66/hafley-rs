@@ -1,86 +1,74 @@
 #!/usr/bin/env python3
 """Coverage and link checker for the assembled docs site.
 
-Coverage: every workspace crate's documented lib/bin target must have emitted
-`index.html` under the rustdoc directory, and that target must be linked from
-`api/index.html`. Targets that cargo does not document (examples, integration
-tests, build scripts, anything with `doc = false`) are listed in the report so
-an exclusion is visible, never silent.
+Coverage follows the same rules as `cargo doc --workspace --no-deps --locked`
+with default features (see `cargo_targets`):
+
+- every lib/bin/proc-macro target with `doc != false` and satisfied
+  `required-features` must have emitted `target/doc/<name>/index.html`, and that
+  page must be linked from `api/index.html`;
+- rustdoc output directories use underscores for hyphens;
+- a library and binary sharing a name emit one directory, so existence and the
+  landing link are keyed by directory;
+- every other target is reported with its reason (not a lib/bin target,
+  `doc = false`, or an unmet `required-features`) so a gap is visible, never
+  silent.
 
 Links: internal href/src values in the book's HTML pages and in the generated
-API landing page must resolve to a file in the site. A leading `/` is reported
-as a base-path failure, because the site is served from `/hafley-rs/`.
+API landing page must resolve to a file in the site. An absolute link is
+accepted only when it stays inside the configured Pages base path.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
-DOCUMENTED_KINDS = ("lib", "bin", "proc-macro")
+import cargo_targets as ct
+
 LINK_ATTR = re.compile(r'(?:href|src)\s*=\s*"([^"]*)"')
 SKIP_SCHEMES = ("http", "https", "mailto", "tel", "data", "javascript")
 
 
-def cargo_metadata(repo_root: Path) -> dict:
-    result = subprocess.run(
-        ["cargo", "metadata", "--no-deps", "--format-version", "1", "--locked"],
-        cwd=repo_root,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return json.loads(result.stdout)
-
-
-def workspace_packages(metadata: dict) -> list[dict]:
-    members = set(metadata.get("workspace_members", []))
-    return sorted(
-        (p for p in metadata["packages"] if p["id"] in members),
-        key=lambda package: package["name"],
-    )
-
-
-def check_coverage(metadata: dict, doc_dir: Path, api_index: Path) -> tuple[list[str], list[str]]:
+def check_coverage(
+    metadata: dict, doc_dir: Path, api_index: Path
+) -> tuple[list[str], list[str], int]:
     failures: list[str] = []
     exclusions: list[str] = []
+    documented_total = 0
     index_text = api_index.read_text(encoding="utf-8") if api_index.is_file() else ""
 
     if not api_index.is_file():
         failures.append("api/index.html: missing (index generator did not run)")
 
-    for package in workspace_packages(metadata):
-        documented = [
-            target
-            for target in package["targets"]
-            if any(kind in target["kind"] for kind in DOCUMENTED_KINDS)
-            and target.get("doc", True)
-        ]
-        for target in package["targets"]:
-            if target in documented:
-                continue
+    for package in ct.workspace_packages(metadata):
+        name = package["name"]
+        documented, excluded = ct.classify_targets(package)
+        documented_total += len(documented)
+        for target, reason in excluded:
             kind = "+".join(target["kind"])
-            exclusions.append(f"{package['name']} ({kind}): {target['name']}")
+            exclusions.append(f"{name} ({kind}): {target['name']} [{reason}]")
 
         if not documented:
-            failures.append(f"{package['name']}: no documented lib/bin target")
+            failures.append(f"{name}: no documented lib/bin target with default features")
             continue
 
+        seen_dirs: set[str] = set()
         for target in documented:
-            name = target["name"]
-            page = doc_dir / name / "index.html"
-            if not page.is_file():
-                failures.append(f"{package['name']}: rustdoc missing at {page}")
-                continue
-            marker = f'href="./{name}/index.html"'
-            if marker not in index_text:
-                failures.append(f"{package['name']}: api/index.html does not link {name}")
-    return failures, exclusions
+            directory = ct.emitted_dir_name(target)
+            page = doc_dir / directory / "index.html"
+            if directory not in seen_dirs:
+                seen_dirs.add(directory)
+                if not page.is_file():
+                    failures.append(f"{name}: rustdoc missing at {page}")
+                marker = f'href="./{directory}/index.html"'
+                if marker not in index_text:
+                    failures.append(f"{name}: api/index.html does not link {directory}")
+
+    return failures, exclusions, documented_total
 
 
 def check_links(files: list[Path], site_dir: Path, base_path: str) -> list[str]:
@@ -98,9 +86,6 @@ def check_links(files: list[Path], site_dir: Path, base_path: str) -> list[str]:
             if not target:
                 continue
             if target.startswith("/"):
-                # An absolute link is only sound when it stays inside the
-                # project Pages base path. Everything the book and the landing
-                # page emit is document-relative; this catches the rest.
                 if target.rstrip("/") == root.rstrip("/"):
                     relative = ""
                 elif target.startswith(root):
@@ -136,10 +121,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    metadata = cargo_metadata(args.repo_root)
+    metadata = ct.cargo_metadata(args.repo_root)
     api_index = args.site_dir / "api" / "index.html"
 
-    failures, exclusions = check_coverage(metadata, args.doc_dir, api_index)
+    failures, exclusions, documented_total = check_coverage(
+        metadata, args.doc_dir, api_index
+    )
 
     if not (args.site_dir / "index.html").is_file():
         failures.append("index.html: missing (book root did not build)")
@@ -149,7 +136,10 @@ def main() -> int:
         scanned.append(api_index)
     failures.extend(check_links(scanned, args.site_dir, args.base_path))
 
-    print(f"coverage: {len(scanned)} pages scanned, {len(exclusions)} undocumented targets")
+    print(
+        f"coverage: {documented_total} documented targets expected, "
+        f"{len(scanned)} pages scanned, {len(exclusions)} targets not documented"
+    )
     for item in exclusions:
         print(f"  not documented: {item}")
     if failures:
