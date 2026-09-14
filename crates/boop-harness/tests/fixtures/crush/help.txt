@@ -1,0 +1,165 @@
+# crush --help
+
+
+  A glamorous, terminal-first AI assistant for software development and adjacent tasks
+
+  USAGE
+
+    crush [command] [--flags]
+
+  EXAMPLES
+
+    # Run in interactive mode
+    crush
+
+    # Run non-interactively
+    crush run "Guess my 5 favorite Pokémon"
+
+    # Run a non-interactively with pipes and redirection
+    cat README.md | crush run "make this more glamorous" > GLAMOROUS_README.md
+
+    # Run with debug logging in a specific directory
+    crush --debug --cwd /path/to/project
+
+    # Run in yolo mode (auto-accept all permissions; use with care)
+    crush --yolo
+
+    # Run with custom data directory
+    crush --data-dir /path/to/custom/.crush
+
+    # Continue a previous session
+    crush --session {session-id}
+
+    # Continue the most recent session
+    crush --continue
+
+  COMMANDS
+
+    completion [command]                      Generate the autocompletion script for the specified shell
+    dirs                                      Show config and data directories
+    help [command]                            Help about any command
+    login [platform] [--flags]                Login Crush to a platform
+    logout [platform] [--flags]               Logout Crush from a platform
+    logs [--flags]                            View crush logs
+    models                                    List all available models from known providers
+    projects [--flags]                        List project directories
+    run [prompt...] [--flags]                 Run a single non-interactive prompt
+    server [--flags]                          Start the Crush server
+    session [command]                         Manage sessions
+    stats [--flags]                           Show usage statistics
+    update-providers [path-or-url] [--flags]  Update providers
+
+  FLAGS
+
+    -C --continue                             Continue the most recent session
+    -c --cwd                                  Current working directory
+    -D --data-dir                             Custom crush data directory
+    -d --debug                                Debug
+    -h --help                                 Help
+    -H --host                                 Connect to a specific crush server host (for advanced users) (unix:///var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/crush-501.sock)
+    -s --session                              Continue a previous session by ID
+    -v --version                              Version for crush
+    -y --yolo                                 Automatically accept all permissions (dangerous mode)
+
+
+# crush run --help
+
+
+  Run a single prompt in non-interactive mode and exit.
+  The prompt can be provided as arguments or piped from stdin.
+
+  USAGE
+
+    crush run [prompt...] [--flags]
+
+  EXAMPLES
+
+    # Run a simple prompt
+    crush run "Guess my 5 favorite Pokémon"
+
+    # Pipe input from stdin
+    curl https://charm.land | crush run "Summarize this website"
+
+    # Read from a file
+    crush run "What is this code doing?" <<< prrr.go
+
+    # Redirect output to a file
+    crush run "Generate a hot README for this project" > MY_HOT_README.md
+
+    # Run in quiet mode (hide the spinner)
+    crush run --quiet "Generate a README for this project"
+
+    # Run in verbose mode (show logs)
+    crush run --verbose "Generate a README for this project"
+
+    # Use a specific reasoning effort
+    # Levels depend on the model, unsupported values are rejected
+    # with the accepted values listed
+    crush run --reasoning-effort high "What is the meaning of life?"
+
+    # Continue a previous session
+    crush run --session {session-id} "Follow up on your last response"
+
+    # Continue the most recent session
+    crush run --continue "Follow up on your last response"
+
+
+  FLAGS
+
+    -C --continue       Continue the most recent session
+    -c --cwd            Current working directory
+    -D --data-dir       Custom crush data directory
+    -d --debug          Debug
+    -h --help           Help for run
+    -H --host           Connect to a specific crush server host (for advanced users) (unix:///var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/crush-501.sock)
+    -m --model          Model to use. Accepts 'model' or 'provider/model' to disambiguate models with the same name across providers
+    -q --quiet          Hide spinner
+    --reasoning-effort  Reasoning effort for the model (e.g. low, medium, high). Levels depend on the model; unsupported values are rejected with the accepted values listed
+    -s --session        Continue a previous session by ID
+    --small-model       Small model to use. If not provided, uses the default small model for the provider
+    -v --verbose        Show logs
+
+
+# crush server --help
+
+
+  Start the Crush server
+
+  USAGE
+
+    crush server [--flags]
+
+  FLAGS
+
+    -c --cwd       Current working directory
+    -D --data-dir  Custom crush data directory
+    -d --debug     Debug
+    -h --help      Help for server
+    -H --host      Server host (TCP or Unix socket) (unix:///var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/crush-501.sock)
+
+
+# crush session --help
+
+
+  Manage Crush sessions. Agents can use --json for machine-readable output.
+
+  USAGE
+
+    crush session [command] [--flags]
+
+  COMMANDS
+
+    delete <id> [--flags]          Delete a session
+    last [--flags]                 Show most recent session
+    list [--flags]                 List all sessions
+    rename <id> <title> [--flags]  Rename a session
+    show <id> [--flags]            Show session details
+
+  FLAGS
+
+    -c --cwd                       Current working directory
+    -D --data-dir                  Custom crush data directory
+    -d --debug                     Debug
+    -h --help                      Help for session
+    -H --host                      Connect to a specific crush server host (for advanced users) (unix:///var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/crush-501.sock)
+
