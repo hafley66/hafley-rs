@@ -508,6 +508,7 @@ fn run_case(case: &Case, llmock: &Path, registry: &Registry) -> Result<(), Strin
         HarnessId::Codex => "commit-e2e-codex",
         HarnessId::Opencode => "commit-e2e-opencode",
         HarnessId::Kimi => "commit-e2e-kimi",
+        HarnessId::Omp => "commit-e2e-omp",
     };
     let lane = format!("feature-e2e-{}", case.entry);
     let worktree = repo

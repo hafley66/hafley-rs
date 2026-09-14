@@ -64,6 +64,7 @@ const FULL_ACCESS_MODE: &str = "agent-full-access";
 pub const CLAUDE_ADAPTER: &[&str] = &["npx", "-y", "@agentclientprotocol/claude-agent-acp"];
 pub const CODEX_ADAPTER: &[&str] = &["npx", "-y", "@agentclientprotocol/codex-acp"];
 pub const KIMI_ADAPTER: &[&str] = &["kimi", "acp"];
+pub const OMP_ADAPTER: &[&str] = &["omp", "--mode", "acp"];
 pub const OPENCODE_ADAPTER: &[&str] = &["opencode", "acp"];
 
 /// The argv a roster row spawns as. An `executable` override replaces the

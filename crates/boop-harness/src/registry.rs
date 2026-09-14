@@ -4,6 +4,7 @@
 use crate::harness::claude::Claude;
 use crate::harness::codex::Codex;
 use crate::harness::kimi::Kimi;
+use crate::harness::omp::Omp;
 use crate::harness::opencode::Opencode;
 use crate::harness::{Harness, HarnessId, SessionRef};
 use crate::transcript::{Message, SessionMeta};
@@ -19,6 +20,7 @@ impl Registry {
             Box::new(Claude),
             Box::new(Codex),
             Box::new(Kimi),
+            Box::new(Omp),
             Box::new(Opencode),
         ])
     }
@@ -180,6 +182,9 @@ mod tests {
                 true,
             ),
             ("opencode", &["run", "prompt"], false),
+            ("omp", &["--print", "x"], false),
+            ("omp", &["--mode", "acp"], false),
+            ("omp", &["--model", "x"], true),
         ];
         let observed = cases
             .iter()

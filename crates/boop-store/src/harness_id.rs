@@ -19,15 +19,17 @@ pub enum HarnessId {
     Claude,
     Codex,
     Kimi,
+    Omp,
     Opencode,
 }
 
 impl HarnessId {
     /// Every harness, in `as_str` order.
-    pub const ALL: [HarnessId; 4] = [
+    pub const ALL: [HarnessId; 5] = [
         HarnessId::Claude,
         HarnessId::Codex,
         HarnessId::Kimi,
+        HarnessId::Omp,
         HarnessId::Opencode,
     ];
 
@@ -37,6 +39,7 @@ impl HarnessId {
             HarnessId::Claude => "claude",
             HarnessId::Codex => "codex",
             HarnessId::Kimi => "kimi",
+            HarnessId::Omp => "omp",
             HarnessId::Opencode => "opencode",
         }
     }
@@ -95,6 +98,7 @@ mod tests {
     fn serde_is_the_lowercase_short_id() {
         let json = serde_json::to_string(&HarnessId::Opencode).unwrap();
         assert_eq!(json, "\"opencode\"");
+        assert_eq!(serde_json::to_string(&HarnessId::Omp).unwrap(), "\"omp\"");
         assert_eq!(
             serde_json::from_str::<HarnessId>("\"claude\"").unwrap(),
             HarnessId::Claude

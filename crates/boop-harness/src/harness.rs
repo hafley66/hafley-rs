@@ -193,6 +193,7 @@ pub mod claude;
 pub mod codex;
 pub mod kimi;
 pub mod mock_tui;
+pub mod omp;
 pub mod opencode;
 pub mod replay;
 

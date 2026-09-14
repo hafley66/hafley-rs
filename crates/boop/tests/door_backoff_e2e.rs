@@ -321,6 +321,7 @@ impl Scratch {
                 base: self.server_base.clone().expect("opencode base"),
             },
             HarnessId::Kimi => unreachable!("kimi has no door endpoint in this matrix"),
+            HarnessId::Omp => unreachable!("omp has no door endpoint in this matrix"),
         }
     }
 

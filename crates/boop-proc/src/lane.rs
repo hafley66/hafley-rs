@@ -329,11 +329,11 @@ fn plan_harness_family(model: &str) -> Result<Option<Cow<'static, str>>> {
         }))
 }
 
-/// The refused-from-opencode error, naming the flat-rate harness that owns the
+/// The refused-from-`harness` error, naming the flat-rate harness that owns the
 /// family.
-fn banned_error(model: &str, owner: &str) -> anyhow::Error {
+fn banned_error(harness: HarnessId, model: &str, owner: &str) -> anyhow::Error {
     anyhow::anyhow!(
-        "model `{model}` is BANNED from opencode: its family runs on the `{owner}` harness's flat-rate plan, and opencode would pay metered API credit for it. Spell the bare model name (no provider path) so the `{owner}` harness picks it up."
+        "model `{model}` is BANNED from {harness}: its family runs on the `{owner}` harness's flat-rate plan, and {harness} would pay metered API credit for it. Spell the bare model name (no provider path) so the `{owner}` harness picks it up."
     )
 }
 
@@ -359,7 +359,7 @@ pub fn harness_for_spawn(
     if capabilities.bans_plan_family_models {
         if let Some(model) = model_named {
             if let Some(owner) = plan_harness_family(model)? {
-                return Err(banned_error(model, &owner));
+                return Err(banned_error(harness, model, &owner));
             }
         }
     }
