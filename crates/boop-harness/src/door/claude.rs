@@ -129,6 +129,12 @@ impl ClaudeDoor {
         let Some(parked) = host.parked_job_id.as_deref().filter(|id| !id.is_empty()) else {
             return host_session();
         };
+        // Only an interactive host presents a parked job; a `bg` record that
+        // happens to carry a parked id is not evidence it shows another
+        // conversation.
+        if host.kind.as_deref() != Some("interactive") {
+            return host_session();
+        }
         let mut jobs = live.iter().filter(|file| {
             file.kind.as_deref() == Some("bg") && file.job_id.as_deref() == Some(parked)
         });
@@ -539,10 +545,6 @@ mod tests {
         }
     }
 
-    /// `BOOP_CLAUDE_SESSIONS_DIR` is process-global; the one test that sets it
-    /// holds this lock so no other test reads a scratch registry.
-    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
     /// A listener that answers one connection and hands back what it read.
     fn listener(path: &Path) -> mpsc::Receiver<Vec<String>> {
         let listener = UnixListener::bind(path).unwrap();
@@ -721,6 +723,27 @@ mod tests {
         assert_eq!(pane_id(&fixture), "old-root");
     }
 
+    /// RECEIPT. Only an `interactive` host redirects to a parked job; a record
+    /// of another kind keeps its own conversation.
+    #[test]
+    fn only_an_interactive_host_redirects_to_a_parked_job() {
+        let fixture = Fixture::new("kind-guard");
+        let job = Sleeper::new();
+        fixture.write_job(job.pid(), "current-root", "job-a", "/tmp/cc-socks/job.sock");
+        fixture.record(
+            std::process::id(),
+            serde_json::json!({
+                "pid": std::process::id(),
+                "sessionId": "odd-root",
+                "kind": "bg",
+                "tmux": "a:@1.%9",
+                "parkedJobId": "job-a",
+                "status": "idle",
+            }),
+        );
+        assert_eq!(pane_id(&fixture), "odd-root");
+    }
+
     /// RECEIPT. When the host parks a different job, the pane presents the new
     /// job's conversation.
     #[test]
@@ -787,12 +810,37 @@ mod tests {
     }
 
     /// RECEIPT, public path. The shared pane resolver reads the real Claude
-    /// registry through `Claude`'s static door and follows a parked host.
+    /// registry through `Claude`'s static door and follows a parked host. The
+    /// registry dir reaches the resolver through a process-global env var, so
+    /// this case re-execs the test binary instead of mutating the environment
+    /// behind parallel tests.
     #[test]
     fn the_public_pane_lookup_follows_a_parked_host() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        let fixture = Fixture::new("public-pane");
-        let job = Sleeper::new();
+        const CHILD_ENV: &str = "BOOP_TEST_CLAUDE_PANE_CHILD";
+        const JOB_PID_ENV: &str = "BOOP_TEST_CLAUDE_PANE_JOB_PID";
+        const TEST_NAME: &str = "door::claude::tests::the_public_pane_lookup_follows_a_parked_host";
+
+        if std::env::var_os(CHILD_ENV).is_none() {
+            // Parent: a scratch registry dir and a real live job process, then
+            // a child test binary that receives both and resolves the pane.
+            let fixture = Fixture::new("public-pane");
+            let job = Sleeper::new();
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([TEST_NAME, "--exact", "--nocapture"])
+                .env(CHILD_ENV, &fixture.dir)
+                .env(JOB_PID_ENV, job.pid().to_string())
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{output:#?}");
+            return;
+        }
+
+        // Child: this process's own pid is the live host, the parent's sleeper
+        // the live job. Write both records, then run the public resolver.
+        let fixture = Fixture {
+            dir: PathBuf::from(std::env::var_os(CHILD_ENV).unwrap()),
+        };
+        let job_pid: u32 = std::env::var(JOB_PID_ENV).unwrap().parse().unwrap();
         fixture.write_host(
             std::process::id(),
             "old-root",
@@ -800,16 +848,10 @@ mod tests {
             "idle",
             Some("job-a"),
         );
-        fixture.write_job(job.pid(), "current-root", "job-a", "/tmp/cc-socks/job.sock");
-
-        let previous = std::env::var_os(SESSIONS_DIR_ENV);
+        fixture.write_job(job_pid, "current-root", "job-a", "/tmp/cc-socks/job.sock");
         std::env::set_var(SESSIONS_DIR_ENV, &fixture.dir);
         let found =
             crate::live::session_in_pane(&crate::Registry::discover(), "%9", &fixture.dir).unwrap();
-        match previous {
-            Some(value) => std::env::set_var(SESSIONS_DIR_ENV, value),
-            None => std::env::remove_var(SESSIONS_DIR_ENV),
-        }
         assert_eq!(found.as_deref(), Some("current-root"));
     }
 
