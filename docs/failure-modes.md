@@ -1,5 +1,33 @@
 # failure modes
 
+## 15. the workspace Cargo.lock kept an excluded crate's graph, and every CI run failed `--locked`
+
+**Incident.** 2026-09-14. Every `main` CI run since `02cc2ea8` failed at
+`bash crates/boop/scripts/0_regression_gate.sh deterministic` and at
+`cargo test --workspace --locked` with `cannot update the lock file ... because
+--locked was passed`. PR #64 showed the same failure and was read as the PR's
+fault. A clean checkout of `b05b31c9` reproduces it offline.
+
+**RCA.** `02cc2ea8` excluded `crates/sprefa-extract` from the workspace so it
+could keep its own lockfile, and did not re-resolve the root `Cargo.lock`. The
+root lock still carried the excluded crate's dependency graph. Cargo under
+`--locked` refuses to prune it.
+
+| count | what |
+|---|---|
+| 2423 | lock lines removed by `cargo update --workspace --offline` |
+| 65 | lock lines added (entries re-placed, no version bumps) |
+| 196 | `Removing`/`Adding`/`Updating` lines cargo printed |
+
+**Fail-pre-fix test.** `cargo metadata --locked --offline --format-version 1`
+on `b05b31c9`: error. After the update: exit 0.
+
+**Rail.** `cargo update --workspace --offline` after any workspace member add,
+remove or exclude, in the same commit. `cargo metadata --locked --offline` is the
+one-line check before pushing.
+
+**Entry.** `02cc2ea8` excluded the crate; this entry's commit prunes the lock.
+
 Every incident that bit gets a row: what happened, why, the test that fails
 without the fix, the rail that stops it recurring. Newest first.
 
