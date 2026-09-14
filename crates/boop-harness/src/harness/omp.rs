@@ -134,7 +134,7 @@ impl Harness for Omp {
     }
 
     fn preview_command(&self, spec: &SpawnSpec) -> Option<String> {
-        Some(spawn_command(spec))
+        Some(crate::harness::supervisor_command(spec))
     }
 
     fn spawn(&self, spec: &SpawnSpec) -> Result<SessionRef> {
@@ -143,7 +143,7 @@ impl Harness for Omp {
             .clone()
             .unwrap_or_else(|| format!("boop-{}", spec.lane));
         let cwd = crate::worktree::prepare_spawn_dir(spec)?;
-        let command = spawn_command(spec);
+        let command = crate::harness::supervisor_command(spec);
         boop_store::tmux::mux().new_detached_session(
             spec.socket.as_deref(),
             &tmux_name,
@@ -225,14 +225,3 @@ fn omp_sessions_dir() -> Result<PathBuf> {
     Ok(root.join("sessions"))
 }
 
-/// The command a supervised omp lane pane runs: the raw omp TUI, pinned to the
-/// worktree with `--allow-home` (omp would otherwise auto-switch to a temp
-/// cwd), opened on the brief as its first `@file` message.
-fn spawn_command(spec: &SpawnSpec) -> String {
-    let mut command = "omp --allow-home".to_owned();
-    if let Some(model) = spec.model.as_deref().filter(|value| !value.is_empty()) {
-        command.push_str(&format!(" --model {}", crate::harness::shell_quote(model)));
-    }
-    command.push_str(&format!(" @{}", crate::harness::shell_quote(&spec.prompt)));
-    command
-}
