@@ -8,7 +8,7 @@ src = "src"
 [output.html]
 site-url = "/hafley-rs/"
 git-repository-url = "https://github.com/hafley66/hafley-rs"
-edit-url-template = "https://github.com/hafley66/hafley-rs/edit/main/docs/book/src/{path}"
+edit-url-template = "https://github.com/hafley66/hafley-rs/edit/main/docs/book/{path}"
 default-theme = "navy"
 preferred-dark-theme = "navy"
 
