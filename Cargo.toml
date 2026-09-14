@@ -4,8 +4,9 @@ resolver = "2"
 # ghcache and ghcache-client resolve their own sqlite stacks (sqlx vs boop's
 # rusqlite). One lockfile cannot hold two libsqlite3-sys versions, so they
 # build as standalone crates in place; excluded dirs are their own workspace
-# roots even under a parent [workspace].
-exclude = ["crates/ghcache", "crates/ghcache-client"]
+# roots even under a parent [workspace]. sprefa-extract resolves its own
+# lockfile too, decoupled from the boop/soopy dependency graph.
+exclude = ["crates/ghcache", "crates/ghcache-client", "crates/sprefa-extract"]
 
 [workspace.package]
 version = "0.1.0"
