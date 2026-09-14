@@ -37,7 +37,7 @@ Command, from the worktree root:
 
 ```sh
 npm_config_offline=true bash v6/tools/run-capped.sh 600 cargo test \
-  --offline --manifest-path v6/sprefa-extract/Cargo.toml --features cli \
+  --offline --manifest-path crates/sprefa-extract/Cargo.toml --features cli \
   --no-fail-fast \
   --target-dir /private/tmp/sprefa-extract-scip-reliability-target.IuDQPc \
   --color never
@@ -45,7 +45,7 @@ npm_config_offline=true bash v6/tools/run-capped.sh 600 cargo test \
 
 This run had permission to access macOS resource counters and the pinned Go
 indexer's toolchain. The existing npm-based test used local TypeScript 5.6.3
-through the ignored `v6/sprefa-extract/node_modules/typescript` symlink to
+through the ignored `crates/sprefa-extract/node_modules/typescript` symlink to
 `/Users/chrishafley/projects/instant/node_modules/typescript`; no npm package
 was downloaded. The symlink is local test setup, not a source change.
 

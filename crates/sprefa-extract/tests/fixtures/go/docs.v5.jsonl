@@ -39,12 +39,12 @@ df_node	var_read	trimmed	967
 df_node	var_read	value	768
 df_param_pos	0	0
 df_param_pos	3	0
-doc	v6/sprefa-extract/tests/fixtures/go/docs.go::alias::Mode	22
-doc	v6/sprefa-extract/tests/fixtures/go/docs.go::function::MakeEngine	31
-doc	v6/sprefa-extract/tests/fixtures/go/docs.go::function::Trim	25
-doc	v6/sprefa-extract/tests/fixtures/go/docs.go::interface::Sizer	17
-doc	v6/sprefa-extract/tests/fixtures/go/docs.go::method::Engine.Mode	38
-doc	v6/sprefa-extract/tests/fixtures/go/docs.go::struct::Engine	12
+doc	crates/sprefa-extract/tests/fixtures/go/docs.go::alias::Mode	22
+doc	crates/sprefa-extract/tests/fixtures/go/docs.go::function::MakeEngine	31
+doc	crates/sprefa-extract/tests/fixtures/go/docs.go::function::Trim	25
+doc	crates/sprefa-extract/tests/fixtures/go/docs.go::interface::Sizer	17
+doc	crates/sprefa-extract/tests/fixtures/go/docs.go::method::Engine.Mode	38
+doc	crates/sprefa-extract/tests/fixtures/go/docs.go::struct::Engine	12
 type_node	alias	Mode	22
 type_node	function	MakeEngine	31
 type_node	function	Trim	25

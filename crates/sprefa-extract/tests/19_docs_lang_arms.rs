@@ -59,7 +59,7 @@ fn oracle_doc_rows(baseline: &str) -> BTreeSet<String> {
 
 #[test]
 fn ts_docs_match_v5() {
-    let path = "v6/sprefa-extract/tests/fixtures/ts/docs.ts";
+    let path = "crates/sprefa-extract/tests/fixtures/ts/docs.ts";
     let v6 = doc_rows(path, include_bytes!("fixtures/ts/docs.ts"));
     let v5 = oracle_doc_rows(include_str!("fixtures/ts/docs.v5.jsonl"));
     assert_eq!(v6, v5, "ts docs parity vs v5 oracle");
@@ -73,7 +73,7 @@ fn ts_docs_match_v5() {
 
 #[test]
 fn go_docs_match_v5() {
-    let path = "v6/sprefa-extract/tests/fixtures/go/docs.go";
+    let path = "crates/sprefa-extract/tests/fixtures/go/docs.go";
     let v6 = doc_rows(path, include_bytes!("fixtures/go/docs.go"));
     let v5 = oracle_doc_rows(include_str!("fixtures/go/docs.v5.jsonl"));
     // Set equality with the 6-row oracle is also the no-spurious-row check: an
@@ -84,7 +84,7 @@ fn go_docs_match_v5() {
 
 #[test]
 fn python_docs_match_v5() {
-    let path = "v6/sprefa-extract/tests/fixtures/python/docs.py";
+    let path = "crates/sprefa-extract/tests/fixtures/python/docs.py";
     let v6 = doc_rows(path, include_bytes!("fixtures/python/docs.py"));
     let v5 = oracle_doc_rows(include_str!("fixtures/python/docs.v5.jsonl"));
     // The module docstring anchors on the `<module>` entity (v5's
@@ -98,7 +98,7 @@ fn python_docs_match_v5() {
 
 #[test]
 fn kotlin_docs_self_graded() {
-    let path = "v6/sprefa-extract/tests/fixtures/kotlin/docs.kt";
+    let path = "crates/sprefa-extract/tests/fixtures/kotlin/docs.kt";
     let out = dispatch(
         path,
         include_bytes!("fixtures/kotlin/docs.kt"),
