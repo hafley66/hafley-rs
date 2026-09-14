@@ -367,6 +367,7 @@ codex() { boop_wrap codex codex "$@"; }
 claude() { boop_wrap claude claude "$@"; }
 ccz() { boop_wrap claude ccz "$@"; }
 kimi() { boop_wrap kimi kimi "$@"; }
+omp() { boop_wrap omp omp "$@"; }
 opencode() { boop_wrap opencode opencode "$@"; }
 "#;
 
@@ -2563,7 +2564,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).expect("make shell-init fixture");
         let capture = root.join("captured");
-        for entry in ["codex", "claude", "ccz", "kimi", "opencode"] {
+        for entry in ["codex", "claude", "ccz", "kimi", "omp", "opencode"] {
             executable(&root.join(entry), "#!/bin/sh\nexit 42\n");
         }
         executable(
@@ -2580,6 +2581,7 @@ mod tests {
             ("claude", "claude"),
             ("ccz", "claude"),
             ("kimi", "kimi"),
+            ("omp", "omp"),
             ("opencode", "opencode"),
         ] {
             for pane in ["", "%999"] {
