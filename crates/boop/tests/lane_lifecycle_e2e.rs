@@ -660,7 +660,7 @@ fn run_coordinator_tui(fixture: &Fixture, h: &Harness, launch: &MockTuiLaunch) {
 /// Resolve one harness's executable, or a skip reason.
 fn harness_executable(h: &Harness) -> Result<PathBuf, String> {
     mock_tui::resolve_executable(h.entry, h.bin_env)
-        .ok_or_else(|| format!("no {} executable", h.entry))
+        .ok_or_else(|| skip(format!("no {} executable", h.entry)))
 }
 
 /// Everything a case needs: the scratch world with its coordinator up and the
@@ -728,10 +728,22 @@ fn start(
     })
 }
 
+/// The one prefix a runner uses for a skip it is allowed to take. A missing
+/// harness executable and a missing llmock are the only allowed skips; every
+/// other error, including a provider spawn failure, must fail the case.
+const SKIP_PREFIX: &str = "skip: ";
+
+fn skip(reason: impl Into<String>) -> String {
+    format!("{SKIP_PREFIX}{}", reason.into())
+}
+
 fn report(case: &str, h: &Harness, result: Result<(), String>) {
     match result {
         Ok(()) => println!("pass {case} {}", h.entry),
-        Err(reason) => println!("skip {case} {}: {reason}", h.entry),
+        Err(reason) => match reason.strip_prefix(SKIP_PREFIX) {
+            Some(reason) => println!("skip {case} {}: {reason}", h.entry),
+            None => panic!("{case} {} failed: {reason}", h.entry),
+        },
     }
 }
 
@@ -739,7 +751,7 @@ fn report(case: &str, h: &Harness, result: Result<(), String>) {
 /// commit and rc=4 never appears. The parent proves it on its own screen.
 fn run_held(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        return Err("no llmock".to_owned());
+        return Err(skip("no llmock"));
     };
     let started = start(
         "held",
@@ -811,10 +823,11 @@ fn run_held(h: &Harness) -> Result<(), String> {
 }
 
 /// Case 2. A lane retires; its route is gone; a send replays the spawn record
-/// and the coordinator sees the second result.
+/// and the coordinator sees the second result. The revived lane retires again,
+/// so the retirement row is per episode: retire -> revive -> retire is two rows.
 fn run_revive(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        return Err("no llmock".to_owned());
+        return Err(skip("no llmock"));
     };
     let started = start(
         "revive",
@@ -871,6 +884,24 @@ fn run_revive(h: &Harness) -> Result<(), String> {
         );
         std::thread::sleep(POLL);
     }
+    // The revived lane goes quiet and retires again. The retirement row belongs
+    // to the result episode, so this is a second row for the lane, not a
+    // duplicate of the first.
+    let deadline = Instant::now() + START_DEADLINE;
+    while fixture.kind_rows("retired") < 2 {
+        assert!(
+            Instant::now() < deadline,
+            "the second retirement was never reported:\n{}",
+            fixture.log()
+        );
+        std::thread::sleep(POLL);
+    }
+    assert_eq!(
+        fixture.kind_rows("retired"),
+        2,
+        "retire -> revive -> retire reports two retirement rows:\n{}",
+        fixture.log()
+    );
     Ok(())
 }
 
@@ -878,7 +909,7 @@ fn run_revive(h: &Harness) -> Result<(), String> {
 /// runs with `remain-on-exit on`.
 fn run_retired(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        return Err("no llmock".to_owned());
+        return Err(skip("no llmock"));
     };
     let started = start(
         "retired",
@@ -906,7 +937,7 @@ fn run_retired(h: &Harness) -> Result<(), String> {
 /// when it goes quiet past `BOOP_STALE_SECS`, once per bound.
 fn run_stale(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        return Err("no llmock".to_owned());
+        return Err(skip("no llmock"));
     };
     let started = start(
         "stale",
@@ -944,7 +975,7 @@ fn run_stale(h: &Harness) -> Result<(), String> {
 /// the turn is never killed.
 fn run_quiet(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        return Err("no llmock".to_owned());
+        return Err(skip("no llmock"));
     };
     // The catch-all brief turn delays its first token past the warning bound.
     let started = start(
@@ -1007,7 +1038,7 @@ fn run_quiet(h: &Harness) -> Result<(), String> {
 /// distinct row, never confused with the result.
 fn run_retire_mail(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        return Err("no llmock".to_owned());
+        return Err(skip("no llmock"));
     };
     let started = start(
         "retire-mail",
