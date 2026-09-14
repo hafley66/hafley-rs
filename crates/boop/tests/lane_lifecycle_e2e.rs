@@ -4,11 +4,14 @@
 //! scratch tmux server. No registry-row stand-in: the door the lane talks to is
 //! a running claude, codex or opencode pane.
 //!
-//! Four cases, three harnesses, twelve tests named `<case>_<harness>`:
+//! Six cases, three harnesses, eighteen tests named `<case>_<harness>`:
 //! 1. a held inbound row defers the lane result;
 //! 2. a send to a retired lane revives it;
 //! 3. a retired lane closes its tmux session;
-//! 4. a stale lane tells its parent.
+//! 4. a stale lane tells its parent;
+//! 5. a quiet running lane warns its parent, then reports recovery;
+//! 6. a follow-up accepted while parked keeps the lane from retiring, and the
+//!    later retirement is a row of its own.
 //!
 //! Live claude and live codex are required, not optional. A case skips a
 //! harness only when that harness's executable or llmock is absent, printed as
@@ -252,6 +255,15 @@ impl Fixture {
         self.rows()
             .into_iter()
             .filter(|row| row.get("kind").and_then(|v| v.as_str()) == Some("stale"))
+            .filter(|row| row.get("from").and_then(|v| v.as_str()) == Some(self.lane.as_str()))
+            .count()
+    }
+
+    /// Rows of one kind from this lane, for the progress-warning case.
+    fn kind_rows(&self, kind: &str) -> usize {
+        self.rows()
+            .into_iter()
+            .filter(|row| row.get("kind").and_then(|v| v.as_str()) == Some(kind))
             .filter(|row| row.get("from").and_then(|v| v.as_str()) == Some(self.lane.as_str()))
             .count()
     }
@@ -518,9 +530,10 @@ fn gui_shield(bin: &Path) -> Vec<(String, String)> {
 
 /// The provider fixture. The readiness probe answers `boop`; the coordinator's
 /// typed prompt answers the terminal marker; every other turn (the lane brief)
-/// answers text long enough that the supervisor treats it as real work. `pace`
-/// delays the first token so a turn stays open under a hail.
-fn fixture_yaml(pace_ms: u64) -> String {
+/// answers text long enough that the supervisor treats it as real work. `ttft`
+/// delays the first token so a turn stays open under a hail; `inter` delays
+/// each later token so a turn keeps writing while it is open.
+fn fixture_yaml(ttft_ms: u64, inter_token_ms: u64) -> String {
     format!(
         r#"rules:
   - match:
@@ -535,8 +548,8 @@ fn fixture_yaml(pace_ms: u64) -> String {
     respond:
       content: "the brief turn finished with a reply long enough to count as real work"
       stream:
-        ttft_ms: {pace_ms}
-        inter_token_ms: 0
+        ttft_ms: {ttft_ms}
+        inter_token_ms: {inter_token_ms}
 "#
     )
 }
@@ -647,7 +660,7 @@ fn run_coordinator_tui(fixture: &Fixture, h: &Harness, launch: &MockTuiLaunch) {
 /// Resolve one harness's executable, or a skip reason.
 fn harness_executable(h: &Harness) -> Result<PathBuf, String> {
     mock_tui::resolve_executable(h.entry, h.bin_env)
-        .ok_or_else(|| format!("no {} executable", h.entry))
+        .ok_or_else(|| skip(format!("no {} executable", h.entry)))
 }
 
 /// Everything a case needs: the scratch world with its coordinator up and the
@@ -663,13 +676,15 @@ fn start(
     h: &Harness,
     llmock: &Path,
     pace_ms: u64,
+    inter_token_ms: u64,
     extra_env: &[(&str, &str)],
     expect: &[&str],
 ) -> Result<Started, String> {
     let executable = harness_executable(h)?;
     let fixture = Fixture::new(case, h);
     let fixture_path = fixture.root.join("llmock.yaml");
-    std::fs::write(&fixture_path, fixture_yaml(pace_ms)).map_err(|error| error.to_string())?;
+    std::fs::write(&fixture_path, fixture_yaml(pace_ms, inter_token_ms))
+        .map_err(|error| error.to_string())?;
     let provider = MockProvider::spawn(llmock, Some(&fixture_path))
         .map_err(|error| format!("llmock spawn: {error}"))?;
 
@@ -713,10 +728,22 @@ fn start(
     })
 }
 
+/// The one prefix a runner uses for a skip it is allowed to take. A missing
+/// harness executable and a missing llmock are the only allowed skips; every
+/// other error, including a provider spawn failure, must fail the case.
+const SKIP_PREFIX: &str = "skip: ";
+
+fn skip(reason: impl Into<String>) -> String {
+    format!("{SKIP_PREFIX}{}", reason.into())
+}
+
 fn report(case: &str, h: &Harness, result: Result<(), String>) {
     match result {
         Ok(()) => println!("pass {case} {}", h.entry),
-        Err(reason) => println!("skip {case} {}: {reason}", h.entry),
+        Err(reason) => match reason.strip_prefix(SKIP_PREFIX) {
+            Some(reason) => println!("skip {case} {}: {reason}", h.entry),
+            None => panic!("{case} {} failed: {reason}", h.entry),
+        },
     }
 }
 
@@ -724,13 +751,14 @@ fn report(case: &str, h: &Harness, result: Result<(), String>) {
 /// commit and rc=4 never appears. The parent proves it on its own screen.
 fn run_held(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        return Err("no llmock".to_owned());
+        return Err(skip("no llmock"));
     };
     let started = start(
         "held",
         h,
         &llmock,
         8000,
+        0,
         &[],
         &["--expect-commit-subject", "the third commit"],
     )?;
@@ -795,15 +823,17 @@ fn run_held(h: &Harness) -> Result<(), String> {
 }
 
 /// Case 2. A lane retires; its route is gone; a send replays the spawn record
-/// and the coordinator sees the second result.
+/// and the coordinator sees the second result. The revived lane retires again,
+/// so the retirement row is per episode: retire -> revive -> retire is two rows.
 fn run_revive(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        return Err("no llmock".to_owned());
+        return Err(skip("no llmock"));
     };
     let started = start(
         "revive",
         h,
         &llmock,
+        0,
         0,
         &[("BOOP_IDLE_SHUTDOWN_SECS", "1")],
         &[],
@@ -854,6 +884,24 @@ fn run_revive(h: &Harness) -> Result<(), String> {
         );
         std::thread::sleep(POLL);
     }
+    // The revived lane goes quiet and retires again. The retirement row belongs
+    // to the result episode, so this is a second row for the lane, not a
+    // duplicate of the first.
+    let deadline = Instant::now() + START_DEADLINE;
+    while fixture.kind_rows("retired") < 2 {
+        assert!(
+            Instant::now() < deadline,
+            "the second retirement was never reported:\n{}",
+            fixture.log()
+        );
+        std::thread::sleep(POLL);
+    }
+    assert_eq!(
+        fixture.kind_rows("retired"),
+        2,
+        "retire -> revive -> retire reports two retirement rows:\n{}",
+        fixture.log()
+    );
     Ok(())
 }
 
@@ -861,12 +909,13 @@ fn run_revive(h: &Harness) -> Result<(), String> {
 /// runs with `remain-on-exit on`.
 fn run_retired(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        return Err("no llmock".to_owned());
+        return Err(skip("no llmock"));
     };
     let started = start(
         "retired",
         h,
         &llmock,
+        0,
         0,
         &[("BOOP_IDLE_SHUTDOWN_SECS", "1")],
         &[],
@@ -888,12 +937,13 @@ fn run_retired(h: &Harness) -> Result<(), String> {
 /// when it goes quiet past `BOOP_STALE_SECS`, once per bound.
 fn run_stale(h: &Harness) -> Result<(), String> {
     let Some(llmock) = mock_tui::resolve_llmock() else {
-        return Err("no llmock".to_owned());
+        return Err(skip("no llmock"));
     };
     let started = start(
         "stale",
         h,
         &llmock,
+        0,
         0,
         &[("BOOP_STALE_SECS", "3"), ("BOOP_IDLE_SHUTDOWN_SECS", "0")],
         &[],
@@ -913,6 +963,126 @@ fn run_stale(h: &Harness) -> Result<(), String> {
         fixture.stale_rows(),
         1,
         "exactly one stale row in the mailbox"
+    );
+    Ok(())
+}
+
+/// Case 5. A lane whose brief turn stays open with no harness write warns its
+/// live coordinator past `BOOP_PROGRESS_WARNING_SECS`. A streaming channel
+/// (codex, opencode) then reports recovery when the provider's first token
+/// arrives; claude's non-streaming mock exposes no mid-turn write, so it warns
+/// and claims no recovery. The hard stall bound is separate and much larger, so
+/// the turn is never killed.
+fn run_quiet(h: &Harness) -> Result<(), String> {
+    let Some(llmock) = mock_tui::resolve_llmock() else {
+        return Err(skip("no llmock"));
+    };
+    // The catch-all brief turn delays its first token past the warning bound.
+    let started = start(
+        "harness-quiet",
+        h,
+        &llmock,
+        4_000,
+        2_000,
+        &[
+            ("BOOP_PROGRESS_WARNING_SECS", "2"),
+            ("BOOP_STALL_LIMIT_SECS", "600"),
+        ],
+        &[],
+    )?;
+    let fixture = &started.fixture;
+    let quiet = format!("harness_quiet {} ", fixture.lane);
+    fixture.wait_for_screen(&fixture.coord_session, &quiet, START_DEADLINE);
+    assert_eq!(
+        fixture.coordinator_shows(&quiet),
+        1,
+        "exactly one quiet warning reached the coordinator screen"
+    );
+    assert_eq!(
+        fixture.kind_rows("harness_quiet"),
+        1,
+        "exactly one harness_quiet row in the mailbox"
+    );
+    if h.id == HarnessId::Claude {
+        // Contract for the non-streaming channel: the claude stream-json
+        // adapter emitted no mid-turn line, so the supervisor's only clock is
+        // the turn-start fallback. It warns, and makes no recovery claim it
+        // cannot support. Recovery is asserted below on the streaming
+        // harnesses; this is the documented channel limitation, not a skip.
+        assert_eq!(
+            fixture.kind_rows("harness_active"),
+            0,
+            "claude claimed a recovery it cannot observe:\n{}",
+            fixture.log()
+        );
+        return Ok(());
+    }
+    // The provider's first token arrives: recovery, once, and no repeat.
+    let active = format!("harness_active {} ", fixture.lane);
+    fixture.wait_for_screen(&fixture.coord_session, &active, START_DEADLINE);
+    assert_eq!(
+        fixture.kind_rows("harness_active"),
+        1,
+        "exactly one harness_active row in the mailbox"
+    );
+    assert_eq!(
+        fixture.kind_rows("harness_quiet"),
+        1,
+        "the warning repeated after recovery"
+    );
+    Ok(())
+}
+
+/// Case 6. A follow-up accepted while the lane is parked keeps it from retiring:
+/// the mail opens a turn. When the lane then goes quiet, its retirement is a
+/// distinct row, never confused with the result.
+fn run_retire_mail(h: &Harness) -> Result<(), String> {
+    let Some(llmock) = mock_tui::resolve_llmock() else {
+        return Err(skip("no llmock"));
+    };
+    let started = start(
+        "retire-mail",
+        h,
+        &llmock,
+        0,
+        0,
+        &[("BOOP_IDLE_SHUTDOWN_SECS", "5")],
+        &[],
+    )?;
+    let fixture = &started.fixture;
+    fixture.wait_for_result(1);
+
+    let beep = fixture.beep(&[
+        &fixture.lane,
+        "second",
+        "--as",
+        &fixture.coord_route,
+        "--no-wait",
+    ]);
+    assert!(
+        beep.status.success(),
+        "the follow-up hail failed: {}",
+        String::from_utf8_lossy(&beep.stderr)
+    );
+    // The accepted follow-up opens a third turn instead of being lost at
+    // retirement. A follow-up turn writes no second result (one result per
+    // run), so the lane trail is the evidence the mail was acted on.
+    fixture.wait_for_log("lane turn starting", 3);
+    assert_eq!(
+        fixture.kind_rows("retired"),
+        0,
+        "a follow-up kept the lane from retiring:\n{}",
+        fixture.log()
+    );
+
+    // Now quiet, the lane retires and says so in a kind of its own.
+    let retired = format!("lane {} retired", fixture.lane);
+    fixture.wait_for_screen(&fixture.coord_session, &retired, START_DEADLINE);
+    assert_eq!(
+        fixture.kind_rows("retired"),
+        1,
+        "exactly one retirement row in the mailbox:\n{}",
+        fixture.log()
     );
     Ok(())
 }
@@ -940,3 +1110,9 @@ lifecycle_case!("retired", run_retired, retired_closes_session_opencode, 2);
 lifecycle_case!("stale", run_stale, stale_claude, 0);
 lifecycle_case!("stale", run_stale, stale_codex, 1);
 lifecycle_case!("stale", run_stale, stale_opencode, 2);
+lifecycle_case!("quiet", run_quiet, harness_quiet_claude, 0);
+lifecycle_case!("quiet", run_quiet, harness_quiet_codex, 1);
+lifecycle_case!("quiet", run_quiet, harness_quiet_opencode, 2);
+lifecycle_case!("retire-mail", run_retire_mail, retire_mail_claude, 0);
+lifecycle_case!("retire-mail", run_retire_mail, retire_mail_codex, 1);
+lifecycle_case!("retire-mail", run_retire_mail, retire_mail_opencode, 2);
