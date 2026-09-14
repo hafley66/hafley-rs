@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = ["crates/*", "crates/sprefa-extract/tree-sitter-dl6"]
 resolver = "2"
 # ghcache and ghcache-client resolve their own sqlite stacks (sqlx vs boop's
 # rusqlite). One lockfile cannot hold two libsqlite3-sys versions, so they
@@ -23,3 +23,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"]
 # Workspace members stay at opt-level 0; an edit has to rebuild them.
 [profile.dev.package."*"]
 opt-level = 1
+
+[profile.dist]
+inherits = "release"
+lto = "thin"
