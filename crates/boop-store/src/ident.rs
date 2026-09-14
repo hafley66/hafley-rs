@@ -56,7 +56,9 @@ pub struct Store {
 /// head) and the per-lane reported head; see `COMMIT_PUSH_SCHEMA`.
 /// 31 = one notice per PR url, claimed by the first producer; see
 /// `PR_NOTICE_SCHEMA`.
-pub const SCHEMA_VERSION: i64 = 31;
+/// 32 = a covering (session_id, ts) index on agent_turn so the session-graph
+/// MAX(ts) activity aggregate reads the index alone, not the wide turn body.
+pub const SCHEMA_VERSION: i64 = 32;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -1002,6 +1004,10 @@ impl Store {
             if self.schema_version()? < 31 {
                 self.connection.execute_batch(PR_NOTICE_SCHEMA)?;
                 self.connection.execute_batch("PRAGMA user_version = 31;")?;
+            }
+            if self.schema_version()? < 32 {
+                self.connection.execute_batch(TURN_ACTIVITY_INDEX_SCHEMA)?;
+                self.connection.execute_batch("PRAGMA user_version = 32;")?;
             }
             self.stamp_version()?;
             Ok(())
@@ -4076,6 +4082,15 @@ CREATE TABLE IF NOT EXISTS agent_pr_notice (
 ) WITHOUT ROWID;
 ";
 
+/// Schema v32: the covering activity index on agent_turn, on its own so an
+/// older store adds it in place without a rebuild. `MAX(ts)` grouped by
+/// session then answers from this index btree, reading only (session_id, ts)
+/// rather than every turn's wide `said` body. The same text sits inside
+/// `SCHEMA` for a fresh store.
+const TURN_ACTIVITY_INDEX_SCHEMA: &str = "
+CREATE INDEX IF NOT EXISTS idx_turn_session_ts ON agent_turn(session_id, ts);
+";
+
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS dict_session (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS dict_harness (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
@@ -4308,6 +4323,11 @@ CREATE TABLE IF NOT EXISTS agent_turn (
   cwd_id INTEGER,
   PRIMARY KEY (session_id, turn)
 ) WITHOUT ROWID;
+-- A covering (session_id, ts) index: MAX(ts) per session answers from the
+-- index btree alone, never reading the wide `said` payload from the table row.
+-- The primary key still owns turn-order reads; this only serves the activity
+-- aggregate.
+CREATE INDEX IF NOT EXISTS idx_turn_session_ts ON agent_turn(session_id, ts);
 
 -- The directory one turn ran in, falling back to the session's cwd when the
 -- turn records none (kimi/opencode and legacy rows before schema v27). Readers
@@ -5280,6 +5300,101 @@ mod tests {
         assert_eq!(view, 1, "v_turn_cwd exists after in-place migration");
         drop(migrated);
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// The covering activity index exists after a fresh open and the grouped
+    /// MAX(ts) plan reads it without the agent_turn table payload.
+    #[test]
+    fn fresh_store_carries_covering_turn_activity_index() {
+        let (path, store) = fresh_store("v32-activity-index-fresh");
+        let present: i64 = store
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                  WHERE type = 'index' AND name = 'idx_turn_session_ts'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(present, 1, "fresh store has the covering index");
+        let plan = activity_plan(&store);
+        assert!(
+            plan.contains("COVERING INDEX idx_turn_session_ts"),
+            "MAX(ts) does not cover:\n{plan}"
+        );
+        assert!(
+            !plan.contains("SCAN t") && !plan.contains("SCAN agent_turn"),
+            "payload scan remains:\n{plan}"
+        );
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A v31 store without the index migrates in place: the index appears, the
+    /// stored turns survive, and the aggregate plan covers.
+    #[test]
+    fn v32_migrates_previous_schema_and_adds_activity_index() {
+        let (path, store) = fresh_store("v32-activity-index-migrate");
+        store
+            .write_turn("active", 1, 20, "assistant", "wide body", None)
+            .unwrap();
+        store
+            .write_turn("active", 2, 10, "assistant", "older ts later turn", None)
+            .unwrap();
+        drop(store);
+        let rewind = Connection::open(&path).unwrap();
+        rewind
+            .execute_batch(
+                "DROP INDEX idx_turn_session_ts;
+                 PRAGMA user_version = 31;",
+            )
+            .unwrap();
+        drop(rewind);
+
+        let migrated = Store::open(path.clone()).unwrap();
+        assert_eq!(migrated.schema_version().unwrap(), SCHEMA_VERSION);
+        let present: i64 = migrated
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                  WHERE type = 'index' AND name = 'idx_turn_session_ts'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(present, 1, "migration added the covering index");
+        let turns: i64 = migrated
+            .connection
+            .query_row("SELECT COUNT(*) FROM agent_turn", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(turns, 2, "migration preserved the turns");
+        let plan = activity_plan(&migrated);
+        assert!(
+            plan.contains("COVERING INDEX idx_turn_session_ts"),
+            "migrated store still scans the payload:\n{plan}"
+        );
+        drop(migrated);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The query plan for the session-graph turn aggregate shape: grouped
+    /// MAX(ts) over a scoped session id set.
+    fn activity_plan(store: &Store) -> String {
+        let mut statement = store
+            .connection
+            .prepare(
+                "EXPLAIN QUERY PLAN
+                 SELECT t.session_id, MAX(t.ts) FROM agent_turn t
+                  WHERE t.session_id IN (SELECT session_id FROM agent_session)
+                  GROUP BY t.session_id",
+            )
+            .unwrap();
+        statement
+            .query_map([], |row| row.get::<_, String>(3))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .join("\n")
     }
 
     #[test]

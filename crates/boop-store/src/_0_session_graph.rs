@@ -809,6 +809,66 @@ mod tests {
         let _ = std::fs::remove_file(path);
     }
 
+    /// A wide turn body never changes the activity answer and never appears in
+    /// the turn aggregate plan: the (session_id, ts) index serves MAX(ts) from
+    /// its own entries, not the table's `said` payload. Timestamps deliberately
+    /// do not follow turn order, so the newest turn is the first one.
+    #[test]
+    fn wide_turn_bodies_do_not_change_scoped_activity_and_index_covers() {
+        let path = std::env::temp_dir().join(format!(
+            "boop-session-graph-covering-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        let session = store.intern_public("dict_session", "wide").unwrap();
+        let harness = store.intern_public("dict_harness", "codex").unwrap();
+        let role = store.intern_public("dict_role", "assistant").unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                rusqlite::params![session, harness],
+            )
+            .unwrap();
+        let wide = "x".repeat(32 * 1024);
+        for turn in 1..=256u64 {
+            let ts = 10_000 - turn;
+            store
+                .connection()
+                .execute(
+                    "INSERT INTO agent_turn(session_id, turn, ts, role_id, said)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    rusqlite::params![session, turn as i64, ts as i64, role, wide],
+                )
+                .unwrap();
+        }
+        let plan_sql = format!("EXPLAIN QUERY PLAN {SESSION_GRAPH_SQL}");
+        let plan = store
+            .connection()
+            .prepare(&plan_sql)
+            .unwrap()
+            .query_map(
+                rusqlite::params![Option::<String>::None, false],
+                |row| row.get::<_, String>(3),
+            )
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap()
+            .join("\n");
+        assert!(
+            plan.contains("COVERING INDEX idx_turn_session_ts"),
+            "turn aggregate is not covered by the activity index:\n{plan}"
+        );
+        assert!(
+            !plan.contains("SCAN t") && !plan.contains("SCAN agent_turn"),
+            "turn aggregate scans the corpus:\n{plan}"
+        );
+        let graph = load_agent_session_graph(&store, AgentSessionGraphQuery::default()).unwrap();
+        assert_eq!(graph.sessions[0].last_activity_ts, Some(10_000 - 1));
+        let _ = std::fs::remove_file(path);
+    }
+
     #[test]
     fn unmatched_harness_routes_project_as_shell_nodes() {
         let route = ResolvedRoute {
