@@ -1,6 +1,6 @@
 ---
 created: 2026-08-13
-updated: 2026-08-14
+updated: 2026-09-14
 type: task
 status: open
 priority: high
@@ -46,3 +46,7 @@ Observed 2026-08-13: `boop beep lane wait --timeout N <lane>` returned control t
 ### 2026-08-15T00:19:50Z · @codex
 
 Observed 2026-08-14: two read-only audit lanes exited rc=1 before attaching a supervisor conversation. Their worktrees retained unrelated stale REPORT.md files from prior use, so report existence alone was false evidence. Lane status must report spawn/run failure and report provenance or freshness.
+
+### 2026-09-14T13:59:48Z · @codex
+
+Cleanup 2026-09-14: typed lane-status candidate retained at archive/boop-cleanup-20260914/feature/lane-status-command-terra (99ada50b7a49d28188506968023b1c4286e74d42). 8_lane_status.rs is absent from current main. Review and port its useful fields through the current CLI architecture. Worktree removed; generated bench-grid deletion backed up. Source-only audit, no new test pass.

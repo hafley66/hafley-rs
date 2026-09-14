@@ -1,6 +1,6 @@
 ---
 created: 2026-08-20
-updated: 2026-08-20
+updated: 2026-09-14
 type: improvement
 status: open
 priority: high
@@ -84,3 +84,9 @@ is a separate decision and is NOT part of this card.
 - [ ] `write_inbox_hooks` and its two hook lines are deleted, or fork 1 is decided the other way and the card is rewritten
 - [ ] a coordinator restarted mid-session recovers its channel through `session/resume`
 - [ ] a test asserts a hail to a coordinator arrives as an ACP user turn, not as keystrokes
+
+## Comments
+
+### 2026-09-14T13:59:48Z · @codex
+
+Cleanup 2026-09-14: resident ACP-host experiment retained at archive/boop-cleanup-20260914/feature/boop-acp-host (6821d85d79e9d442f9682c297fc3f67bf2df6a25). host.rs, agents.rs, ACP agent registry and CLI hosting are absent in main. Preserve for architecture review against current door-based delivery; no automatic merge or new test claim. Its idle worktree was removed.
