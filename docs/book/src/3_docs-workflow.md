@@ -25,10 +25,12 @@ writes the whole site to `target/docs-site`. The recipe calls
 5. generates `api/index.html` from `cargo metadata` and the emitted targets,
 6. runs the coverage and link checker.
 
-Destination guard tests are deterministic and need no build:
+Destination guard and coverage-rule tests are deterministic and need no build:
 
 ```bash
-python3 scripts/docs/3_test_guards.py   # or: just docs-guard
+python3 scripts/docs/3_test_guards.py     # path guard
+python3 scripts/docs/4_test_coverage.py   # cargo documented-target rules
+# or: just docs-guard
 ```
 
 The scripts can be run directly:
@@ -36,6 +38,7 @@ The scripts can be run directly:
 ```bash
 bash scripts/docs/0_build_site.sh target/docs-site
 python3 scripts/docs/3_test_guards.py
+python3 scripts/docs/4_test_coverage.py
 python3 scripts/docs/1_index_api.py --repo-root . --doc-dir target/doc \
   --out target/docs-site/api/index.html
 python3 scripts/docs/2_check_site.py --repo-root . --site-dir target/docs-site \

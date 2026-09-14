@@ -23,9 +23,11 @@ jobs:
     steps:
       - name: checkout repository
         uses: actions/checkout@v7
-      - name: test docs path guard
+      - name: test docs path guard and coverage rules
         # Deterministic, no build: the build script wipes its destination.
-        run: python3 scripts/docs/3_test_guards.py
+        run: |
+          python3 scripts/docs/3_test_guards.py
+          python3 scripts/docs/4_test_coverage.py
       - name: install rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: cache cargo and target

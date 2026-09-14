@@ -64,9 +64,11 @@ test-ci:
 docs:
     bash scripts/docs/0_build_site.sh target/docs-site
 
-# Deterministic tests for the docs-site destination guard (no build).
+# Deterministic tests for the docs-site destination guard and coverage rules
+# (no build).
 docs-guard:
     python3 scripts/docs/3_test_guards.py
+    python3 scripts/docs/4_test_coverage.py
 
 test-source-mutations-commit:
     cargo test -p soopy --test main -- t14_commit_engine --nocapture
