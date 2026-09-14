@@ -47,6 +47,7 @@ pub(super) fn command(spec: &SpawnSpec) -> String {
         boop::harness::HarnessId::Opencode => {
             command.push_str(&format!(" --prompt {}", shell_quote(&prompt)))
         }
+        boop::harness::HarnessId::Omp => command.push_str(&format!(" {}", shell_quote(&prompt))),
         _ => command.push_str(&format!(" {}", shell_quote(&prompt))),
     }
     match &spec.env_stamp {

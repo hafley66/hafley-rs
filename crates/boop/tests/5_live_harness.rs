@@ -91,6 +91,7 @@ fn resolve_executable(id: HarnessId) -> Option<PathBuf> {
         HarnessId::Claude => ("claude", "CLAUDE_BIN"),
         HarnessId::Codex => ("codex", "CODEX_BIN"),
         HarnessId::Kimi => ("kimi", "KIMI_BIN"),
+        HarnessId::Omp => ("omp", "OMP_BIN"),
         HarnessId::Opencode => ("opencode", "OPENCODE_BIN"),
     };
     if let Some(value) = std::env::var_os(override_var).filter(|value| !value.is_empty()) {
@@ -148,6 +149,7 @@ fn launch(
         HarnessId::Codex => codex(home, &workspace_name, port, &mut env)?,
         HarnessId::Claude => claude(home, &workspace_name, port, &mut env)?,
         HarnessId::Kimi => kimi(home, port, &mut env)?,
+        HarnessId::Omp => anyhow::bail!("omp live harness recipe lands with its transcript readers"),
         HarnessId::Opencode => opencode(home, port, &mut env)?,
     };
     Ok(LiveHarnessLaunch {

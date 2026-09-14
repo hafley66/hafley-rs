@@ -802,6 +802,7 @@ fn run_case(case: &Case, llmock: &Path) -> Result<(), String> {
         HarnessId::Codex => "reclaim-e2e-codex",
         HarnessId::Opencode => "reclaim-e2e-opencode",
         HarnessId::Kimi => unreachable!(),
+        HarnessId::Omp => unreachable!(),
     };
 
     let fixture = root.join("llmock.yaml");

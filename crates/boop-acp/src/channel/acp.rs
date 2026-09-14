@@ -64,6 +64,7 @@ const FULL_ACCESS_MODE: &str = "agent-full-access";
 pub const CLAUDE_ADAPTER: &[&str] = &["npx", "-y", "@agentclientprotocol/claude-agent-acp"];
 pub const CODEX_ADAPTER: &[&str] = &["npx", "-y", "@agentclientprotocol/codex-acp"];
 pub const KIMI_ADAPTER: &[&str] = &["kimi", "acp"];
+pub const OMP_ADAPTER: &[&str] = &["omp", "acp"];
 pub const OPENCODE_ADAPTER: &[&str] = &["opencode", "acp"];
 
 /// The argv a roster row spawns as. An `executable` override replaces the
@@ -1130,6 +1131,7 @@ mod tests {
             CLAUDE_ADAPTER,
             CODEX_ADAPTER,
             KIMI_ADAPTER,
+            OMP_ADAPTER,
             OPENCODE_ADAPTER,
         ] {
             assert!(adapter.len() >= 2, "{adapter:?}");
@@ -1142,6 +1144,7 @@ mod tests {
         assert_eq!(CLAUDE_ADAPTER[0], "npx");
         assert_eq!(CODEX_ADAPTER[0], "npx");
         assert_eq!(KIMI_ADAPTER, ["kimi", "acp"]);
+        assert_eq!(OMP_ADAPTER, ["omp", "acp"]);
     }
 
     /// RECEIPT. An executable override replaces the roster row's program and
