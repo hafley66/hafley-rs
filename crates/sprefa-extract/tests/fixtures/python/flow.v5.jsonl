@@ -83,10 +83,10 @@ df_edge	88	81
 df_fields	31	..	30
 df_fields	31	k	29
 df_fields	54	label	53
-df_loop	v6/sprefa-extract/tests/fixtures/python/flow.py	3
-df_loop	v6/sprefa-extract/tests/fixtures/python/flow.py	5
-df_loop	v6/sprefa-extract/tests/fixtures/python/flow.py	7
-df_nest	v6/sprefa-extract/tests/fixtures/python/flow.py:7	1
+df_loop	crates/sprefa-extract/tests/fixtures/python/flow.py	3
+df_loop	crates/sprefa-extract/tests/fixtures/python/flow.py	5
+df_loop	crates/sprefa-extract/tests/fixtures/python/flow.py	7
+df_nest	crates/sprefa-extract/tests/fixtures/python/flow.py:7	1
 df_node	binop		105
 df_node	binop		130
 df_node	binop		153
@@ -96,7 +96,7 @@ df_node	binop		75
 df_node	binop		81
 df_node	call_res		314
 df_node	call_res		485
-df_node	closure	v6/sprefa-extract/tests/fixtures/python/flow.py::function::total::closure::10_13	288
+df_node	closure	crates/sprefa-extract/tests/fixtures/python/flow.py::function::total::closure::10_13	288
 df_node	cond		254
 df_node	let_bind	acc	124
 df_node	let_bind	acc	30

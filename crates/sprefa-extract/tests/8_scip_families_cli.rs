@@ -251,6 +251,7 @@ fn only_real_scip_resolves_the_cross_file_call_the_heuristic_cannot() {
 /// is a property of having a real index rather than a quirk of one tool.
 /// `scip/gamma.rs` does `use crate::scip::alpha::helper` and calls it; alpha and
 /// beta both define `helper`.
+#[ignore = "needs rust-analyzer on PATH"]
 #[test]
 fn the_discrimination_holds_through_rust_analyzer_too() {
     let cache = scratch("discriminating-rust");
@@ -378,6 +379,7 @@ fn diet_scip_is_exactly_the_existing_resolve_pass_with_both_arms() {
 /// produce shows up, including the two rust-analyzer alone reaches:
 /// `scip_callee_type` (the `impl#[T]` receiver parse) and `scip_local` (the
 /// per-document `local N` join through display_name).
+#[ignore = "needs rust-analyzer on PATH"]
 #[test]
 fn the_rust_plane_produces_the_relations_only_a_real_index_carries() {
     let cache = scratch("rust-plane");

@@ -33,7 +33,7 @@ df_edge	648	643
 df_fields	8	name	7
 df_node	call_res		390
 df_node	call_res		643
-df_node	closure	v6/sprefa-extract/tests/fixtures/rust/sample.rs::function::apply::closure::33_15	618
+df_node	closure	crates/sprefa-extract/tests/fixtures/rust/sample.rs::function::apply::closure::33_15	618
 df_node	let_bind	engine	410
 df_node	let_bind	func	611
 df_node	let_bind	picked	518

@@ -247,3 +247,5 @@ libc = "0.2"
 # as the dependency above, so cargo unifies one SQLite into the test binary.
 rusqlite = { version = "0.40", features = ["bundled", "limits", "trace"] }
 
+
+[workspace]

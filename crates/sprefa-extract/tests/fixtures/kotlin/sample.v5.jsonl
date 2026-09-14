@@ -72,8 +72,8 @@ df_node	call_res		1113
 df_node	call_res		1230
 df_node	call_res		1281
 df_node	call_res		876
-df_node	closure	v6/sprefa-extract/tests/fixtures/kotlin/sample.kt::function::foldAll::closure::36_25	1241
-df_node	closure	v6/sprefa-extract/tests/fixtures/kotlin/sample.kt::function::foldAll::closure::37_25	1288
+df_node	closure	crates/sprefa-extract/tests/fixtures/kotlin/sample.kt::function::foldAll::closure::36_25	1241
+df_node	closure	crates/sprefa-extract/tests/fixtures/kotlin/sample.kt::function::foldAll::closure::37_25	1288
 df_node	let_bind	cfg	1044
 df_node	let_bind	doubled	1271
 df_node	let_bind	found	868
