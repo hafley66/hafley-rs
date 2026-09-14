@@ -11,12 +11,12 @@ use serde_json::Value;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub const DDL: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../schema/generated/4_facts.sql"
+    "/schema/generated/4_facts.sql"
 ));
 pub mod writers {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../schema/generated/7_writers_auto.rs"
+        "/schema/generated/7_writers_auto.rs"
     ));
 }
 

@@ -35,7 +35,7 @@ const EXPECTED: &[(&str, &str, u32, u32)] = &[
 
 fn unresolved_rows(bytes: &[u8]) -> Vec<(String, String, u32, u32)> {
     let out = dispatch(
-        "v6/sprefa-extract/tests/fixtures/ts_unresolved/unresolved.ts",
+        "crates/sprefa-extract/tests/fixtures/ts_unresolved/unresolved.ts",
         bytes,
         FamilyMask::ALL,
     )
@@ -106,7 +106,7 @@ fn unresolved_negatives_absent() {
 fn unresolved_jsonl_line_byte_exact() {
     let fixture = include_bytes!("fixtures/ts_unresolved/unresolved.ts");
     let out = dispatch(
-        "v6/sprefa-extract/tests/fixtures/ts_unresolved/unresolved.ts",
+        "crates/sprefa-extract/tests/fixtures/ts_unresolved/unresolved.ts",
         fixture,
         FamilyMask::ALL,
     )

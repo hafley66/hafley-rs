@@ -22,7 +22,7 @@ fn run(args: &[&str]) -> std::process::Output {
 
 const CATALOG: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../schema/generated/5_facts.json"
+    "/schema/generated/5_facts.json"
 ));
 
 #[derive(Deserialize)]

@@ -25,7 +25,7 @@ struct Case {
 
 const CASES: &[Case] = &[Case {
     name: "kotlin_sample",
-    path: "v6/sprefa-extract/tests/fixtures/kotlin/sample.kt",
+    path: "crates/sprefa-extract/tests/fixtures/kotlin/sample.kt",
     fixture: include_bytes!("fixtures/kotlin/sample.kt"),
     baseline: include_str!("fixtures/kotlin/sample.v5.jsonl"),
     fixture_dir: "kotlin",

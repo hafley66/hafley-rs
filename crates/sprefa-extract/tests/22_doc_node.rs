@@ -10,7 +10,7 @@ use sprefa_extract::{
     TypeEdgeKind, TypeF,
 };
 
-const MD_PATH: &str = "v6/sprefa-extract/tests/fixtures/markdown/doc_node.md";
+const MD_PATH: &str = "crates/sprefa-extract/tests/fixtures/markdown/doc_node.md";
 const MD: &[u8] = include_bytes!("fixtures/markdown/doc_node.md");
 const RUST_SAMPLE: &[u8] = include_bytes!("fixtures/rust/sample.rs");
 const TS_SAMPLE: &[u8] = include_bytes!("fixtures/ts/sample.ts");
@@ -60,7 +60,7 @@ fn with_resolve_cx<R>(
         (
             content_id_of(RUST_SAMPLE),
             dispatch(
-                "v6/sprefa-extract/tests/fixtures/rust/sample.rs",
+                "crates/sprefa-extract/tests/fixtures/rust/sample.rs",
                 RUST_SAMPLE,
                 FamilyMask::ALL,
             )
@@ -70,7 +70,7 @@ fn with_resolve_cx<R>(
         (
             content_id_of(TS_SAMPLE),
             dispatch(
-                "v6/sprefa-extract/tests/fixtures/ts/sample.ts",
+                "crates/sprefa-extract/tests/fixtures/ts/sample.ts",
                 TS_SAMPLE,
                 FamilyMask::ALL,
             )
@@ -80,7 +80,7 @@ fn with_resolve_cx<R>(
         (
             content_id_of(TS_DOCS),
             dispatch(
-                "v6/sprefa-extract/tests/fixtures/ts/docs.ts",
+                "crates/sprefa-extract/tests/fixtures/ts/docs.ts",
                 TS_DOCS,
                 FamilyMask::ALL,
             )

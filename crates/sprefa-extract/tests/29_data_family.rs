@@ -137,7 +137,7 @@ fn taking_the_roster_slot_kept_the_cst_plane() {
 /// stream, so the diff stays readable.
 #[test]
 fn the_pokeapi_spec_answers_every_operation_id_under_the_ten_second_law() {
-    let source = "../dl/fixtures/pokeapi.openapi.yml";
+    let source = "tests/fixtures/data/pokeapi.openapi.yml";
     let started = Instant::now();
     let facts = run(&["--family", "data", source]);
     let elapsed = started.elapsed();

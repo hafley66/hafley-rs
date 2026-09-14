@@ -1,12 +1,3 @@
-# Standalone crate: its own [workspace] table decouples it from the v5 root
-# workspace so `cargo test` here is fully isolated (the whole point: prove the
-# v6 extraction leaf with no v5 tree in the build graph).
-[workspace]
-members = [
-    ".",
-    "tree-sitter-dl6",
-]
-
 [package]
 name = "sprefa-extract"
 version = "0.1.0"
@@ -15,8 +6,8 @@ build = "build.rs"
 description = "v6 extraction leaf: a corpus at a version -> normalized graph facts. Sync, rayon-parallel, arena-mastered. No DB, no async."
 license = "MIT OR Apache-2.0"
 publish = false
-repository = "https://github.com/hafley66/sprefa"
-homepage = "https://github.com/hafley66/sprefa"
+repository = "https://github.com/hafley66/hafley-rs"
+homepage = "https://github.com/hafley66/hafley-rs"
 
 # publish=false keeps crates.io out; dist=true opts into cargo-dist releases
 # (tag sprefa-extract-vX.Y.Z), same shell-installer flow as sprefa-dl.
@@ -164,7 +155,7 @@ gomod-parser = "0.5"
 regex = "1"
 # Repository/revision/path enumeration and Git batch reads live in the
 # standalone hafley-rs crate. Extract consumes its source coordinates and bytes.
-soopy = { path = "../../hafley-rs/crates/soopy" }
+soopy = { path = "../soopy" }
 # prost decodes index.scip for the ScipSource seam (commit 4c). v5's pairing
 # (scip = "0.7.1" + protobuf = "3.7"; src/scip_import.rs) was REJECTED here:
 # protobuf 3.7.2 hard-deps thiserror 1, a NEW dup against this tree's
@@ -198,7 +189,7 @@ quick_cache = "0.7"
 # and versions the engine crate carries (sprefa-engine-rs/Cargo.toml:36-37), so
 # one process linking both installs one subscriber that sees both crates.
 tracing = "0.1"
-hafley-observe = { path = "../../hafley-rs/crates/hafley-observe", optional = true }
+hafley-observe = { path = "../hafley-observe", optional = true }
 # getloadavg beside every timing, so a wall number reports the machine it was
 # taken on. Already unified in this lock through soopy -> rustix -> errno.
 libc = { version = "0.2", optional = true }
@@ -256,7 +247,3 @@ libc = "0.2"
 # as the dependency above, so cargo unifies one SQLite into the test binary.
 rusqlite = { version = "0.40", features = ["bundled", "limits", "trace"] }
 
-# cargo-dist builds with this profile; mirrors the root workspace's.
-[profile.dist]
-inherits = "release"
-lto = "thin"

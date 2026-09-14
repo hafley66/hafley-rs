@@ -153,7 +153,11 @@ const PARSES_CLEAN: &[&str] = &[
 ///    -> "PARSES_CLEAN names files the corpus no longer has".
 #[test]
 fn prolog_parser_error_recovery_ledger_for_the_v6_corpus() {
-    let corpus = std::path::Path::new("../prolog");
+    let Some(corpus) = v6_prolog_corpus() else {
+        eprintln!("skipped: no v6 prolog corpus; set SPREFA_ROOT to a sprefa checkout");
+        return;
+    };
+    let corpus = corpus.as_path();
     let mut files = Vec::new();
     collect_prolog_files(corpus, &mut files);
     files.sort();
@@ -335,4 +339,23 @@ hello.
             ("side_effect", None, "other"),
         ]
     );
+}
+
+/// The corpus lives in the sprefa repository: `SPREFA_ROOT`, else `sprefa`
+/// beside the directory that holds this repository's git common dir.
+fn v6_prolog_corpus() -> Option<std::path::PathBuf> {
+    let root = std::env::var_os("SPREFA_ROOT")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            let output = std::process::Command::new("git")
+                .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
+                .current_dir(env!("CARGO_MANIFEST_DIR"))
+                .output()
+                .ok()?;
+            let common = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let projects = std::path::Path::new(&common).parent()?.parent()?;
+            Some(projects.join("sprefa"))
+        })?;
+    let corpus = root.join("v6/prolog");
+    corpus.is_dir().then_some(corpus)
 }

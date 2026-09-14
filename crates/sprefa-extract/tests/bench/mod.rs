@@ -22,11 +22,31 @@ use sprefa_extract::{
     resolve_project, FlatFact, ResolveArms, ResolveRequest, ScipMode, ScipRecords,
 };
 
-/// Where the committed oracle tsvs and RATCHET.tsv live.
-pub const BENCH_DIR: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../plans/extract-bench-2026-08-29"
-);
+/// The committed oracle tsvs and RATCHET.tsv live in the sprefa repository.
+pub fn bench_dir() -> PathBuf {
+    sprefa_root().join("plans/extract-bench-2026-08-29")
+}
+
+/// The sprefa checkout: `SPREFA_ROOT`, else `sprefa` beside the directory that
+/// holds this repository's git common dir, so linked worktrees resolve it too.
+pub fn sprefa_root() -> PathBuf {
+    if let Some(root) = std::env::var_os("SPREFA_ROOT") {
+        return PathBuf::from(root);
+    }
+    let common = std::process::Command::new("git")
+        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .unwrap_or_default();
+    Path::new(&common)
+        .parent()
+        .and_then(Path::parent)
+        .map(|projects| projects.join("sprefa"))
+        .unwrap_or_else(|| PathBuf::from("../sprefa"))
+}
 
 /// The per-call wall budget (the timeout-gun law; every extract call under
 /// timeout 30). The go corpus sits near 12 s median at #579, known red and
@@ -257,7 +277,7 @@ fn oracle_files() -> &'static [OracleFile] {
     ]
 }
 
-/// The tsv under BENCH_DIR for one key. An unlisted key is a panic: a case
+/// The tsv under bench_dir() for one key. An unlisted key is a panic: a case
 /// whose file cannot be named is a case that silently never scored.
 pub fn oracle_path(lang: &str, family: &str, oracle: &str) -> PathBuf {
     let entry = oracle_files()
@@ -268,7 +288,7 @@ pub fn oracle_path(lang: &str, family: &str, oracle: &str) -> PathBuf {
                 "no oracle file for {lang}.{family}.<tier>.{oracle}; add a row to oracle_files()"
             )
         });
-    Path::new(BENCH_DIR).join(entry.file)
+    bench_dir().join(entry.file)
 }
 
 /// The whole matrix, one place. Hand-listed, never a cartesian product: a
@@ -1314,11 +1334,11 @@ pub const COST_HEADER: &str = "# extract ratchet, cost: one row per (lang, tool,
 pub const COST_TOOL: &str = "sprefa";
 
 pub fn ratchet_path() -> PathBuf {
-    Path::new(BENCH_DIR).join("RATCHET.tsv")
+    bench_dir().join("RATCHET.tsv")
 }
 
 pub fn cost_path() -> PathBuf {
-    Path::new(BENCH_DIR).join("RATCHET.cost.tsv")
+    bench_dir().join("RATCHET.cost.tsv")
 }
 
 #[derive(Clone)]

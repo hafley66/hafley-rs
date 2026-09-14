@@ -6,7 +6,7 @@
 //! df-aux facets. This test asserts, per fixture, that the v6 flat facts fold
 //! to EXACTLY the oracle's `df_fields\t{node_idx}\t{field}\t{val_idx}` and
 //! `df_lits\t{node_idx}\t{kind}\t{text}` lines — the same 16 rows
-//! `grep -hE '^(df_fields|df_lits)' v6/sprefa-extract/tests/fixtures/*/*.v5.jsonl`
+//! `grep -hE '^(df_fields|df_lits)' crates/sprefa-extract/tests/fixtures/*/*.v5.jsonl`
 //! prints, byte for byte.
 //!
 //! Three facts the oracle pins:
@@ -33,55 +33,55 @@ struct Case {
 const CASES: &[Case] = &[
     Case {
         name: "ts_consts",
-        path: "v6/sprefa-extract/tests/fixtures/ts/consts.ts",
+        path: "crates/sprefa-extract/tests/fixtures/ts/consts.ts",
         fixture: include_bytes!("fixtures/ts/consts.ts"),
         baseline: include_str!("fixtures/ts/consts.v5.jsonl"),
     },
     Case {
         name: "ts_sample",
-        path: "v6/sprefa-extract/tests/fixtures/ts/sample.ts",
+        path: "crates/sprefa-extract/tests/fixtures/ts/sample.ts",
         fixture: include_bytes!("fixtures/ts/sample.ts"),
         baseline: include_str!("fixtures/ts/sample.v5.jsonl"),
     },
     Case {
         name: "ts_docs",
-        path: "v6/sprefa-extract/tests/fixtures/ts/docs.ts",
+        path: "crates/sprefa-extract/tests/fixtures/ts/docs.ts",
         fixture: include_bytes!("fixtures/ts/docs.ts"),
         baseline: include_str!("fixtures/ts/docs.v5.jsonl"),
     },
     Case {
         name: "ts_lambdas",
-        path: "v6/sprefa-extract/tests/fixtures/ts/lambdas.ts",
+        path: "crates/sprefa-extract/tests/fixtures/ts/lambdas.ts",
         fixture: include_bytes!("fixtures/ts/lambdas.ts"),
         baseline: include_str!("fixtures/ts/lambdas.v5.jsonl"),
     },
     Case {
         name: "rust_sample",
-        path: "v6/sprefa-extract/tests/fixtures/rust/sample.rs",
+        path: "crates/sprefa-extract/tests/fixtures/rust/sample.rs",
         fixture: include_bytes!("fixtures/rust/sample.rs"),
         baseline: include_str!("fixtures/rust/sample.v5.jsonl"),
     },
     Case {
         name: "rust_docs",
-        path: "v6/sprefa-extract/tests/fixtures/rust/docs.rs",
+        path: "crates/sprefa-extract/tests/fixtures/rust/docs.rs",
         fixture: include_bytes!("fixtures/rust/docs.rs"),
         baseline: include_str!("fixtures/rust/docs.v5.jsonl"),
     },
     Case {
         name: "go_sample",
-        path: "v6/sprefa-extract/tests/fixtures/go/sample.go",
+        path: "crates/sprefa-extract/tests/fixtures/go/sample.go",
         fixture: include_bytes!("fixtures/go/sample.go"),
         baseline: include_str!("fixtures/go/sample.v5.jsonl"),
     },
     Case {
         name: "go_docs",
-        path: "v6/sprefa-extract/tests/fixtures/go/docs.go",
+        path: "crates/sprefa-extract/tests/fixtures/go/docs.go",
         fixture: include_bytes!("fixtures/go/docs.go"),
         baseline: include_str!("fixtures/go/docs.v5.jsonl"),
     },
     Case {
         name: "kotlin_sample",
-        path: "v6/sprefa-extract/tests/fixtures/kotlin/sample.kt",
+        path: "crates/sprefa-extract/tests/fixtures/kotlin/sample.kt",
         fixture: include_bytes!("fixtures/kotlin/sample.kt"),
         baseline: include_str!("fixtures/kotlin/sample.v5.jsonl"),
     },

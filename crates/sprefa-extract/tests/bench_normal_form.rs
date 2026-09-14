@@ -168,7 +168,7 @@ fn rust_normal_form_agrees_with_normalize_py_over_the_go_corpus() {
         .arg(&corpus.root)
         .arg(&call_out)
         .arg(&type_out)
-        .current_dir(bench::BENCH_DIR)
+        .current_dir(bench::bench_dir())
         .status()
         .expect("python3 runs normalize.py");
     assert!(status.success(), "normalize.py exited {status}");
@@ -192,7 +192,7 @@ fn rust_normal_form_agrees_with_normalize_py_over_the_go_corpus() {
         println!("parity {name}: {} rows agree", ours.len());
     }
 
-    let committed = Path::new(bench::BENCH_DIR).join("go.parse.call.tsv");
+    let committed = bench::bench_dir().join("go.parse.call.tsv");
     if committed.is_file() {
         let committed = bench::load_tsv(&committed);
         let gained = forms.call.difference(&committed).count();

@@ -14,9 +14,9 @@ use std::collections::BTreeSet;
 
 use sprefa_extract::{dispatch, flatten_jsonl, FamilyMask};
 
-const LINKS_PATH: &str = "v6/sprefa-extract/tests/fixtures/markdown/links.md";
+const LINKS_PATH: &str = "crates/sprefa-extract/tests/fixtures/markdown/links.md";
 const LINKS: &[u8] = include_bytes!("fixtures/markdown/links.md");
-const FENCES_PATH: &str = "v6/sprefa-extract/tests/fixtures/markdown/fences.md";
+const FENCES_PATH: &str = "crates/sprefa-extract/tests/fixtures/markdown/fences.md";
 const FENCES: &[u8] = include_bytes!("fixtures/markdown/fences.md");
 
 /// Markdown projects `doc_nodes` onto the types plane only when the raw cst

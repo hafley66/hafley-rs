@@ -385,7 +385,7 @@ fn extract_observations(
                     args: fact.args,
                 });
             }
-            Ok(())
+            Ok::<(), std::convert::Infallible>(())
         })?;
     }
     Ok(observations)
