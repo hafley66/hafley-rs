@@ -1312,18 +1312,12 @@ mod tests {
         let dir = temp_dir("route-selection");
         super::write_route(&dir, "alpha", &route()).unwrap();
         let store = crate::ident::Store::open(dir.join("boop.db")).unwrap();
-        store
-            .connection()
-            .pragma_update(None, "foreign_keys", "ON")
-            .unwrap();
+        store.connection().pragma_update(None, "foreign_keys", "ON").unwrap();
         let enforced: i64 = store
             .connection()
             .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(
-            enforced, 1,
-            "this connection enforces the declared relation"
-        );
+        assert_eq!(enforced, 1, "this connection enforces the declared relation");
         store
             .connection()
             .execute_batch(
