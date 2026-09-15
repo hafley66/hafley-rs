@@ -341,7 +341,8 @@ fn omp_agent_dir() -> Result<PathBuf> {
 
 /// omp writes one exact active-TUI relation per terminal. A tmux record is
 /// named `tmux-%<pane>` and contains the launch cwd followed by the active
-/// transcript path. The transcript header supplies the session UUID.
+/// transcript path. The transcript header supplies the active session UUID.
+/// `parentSession` is transcript history lineage, not a live TUI parent edge.
 fn omp_terminal_sessions_dir() -> Result<PathBuf> {
     Ok(omp_agent_dir()?.join("terminal-sessions"))
 }
@@ -398,12 +399,8 @@ fn omp_live_sessions_in(base: &Path) -> Result<Vec<LiveSession>> {
             door: DoorAddress::None,
             observed_ms,
             started_ms: None,
-            scope: if header.parent.is_some() {
-                LiveSessionScope::Child
-            } else {
-                LiveSessionScope::Root
-            },
-            parent_session: header.parent,
+            scope: LiveSessionScope::Root,
+            parent_session: None,
         });
     }
     live.sort_by(|left, right| left.tmux_pane.cmp(&right.tmux_pane));
@@ -873,7 +870,11 @@ mod tests {
         let first = sessions.join("first.jsonl");
         let second = sessions.join("second.jsonl");
         transcript(&first, "first", None);
-        transcript(&second, "second", Some("parent"));
+        transcript(
+            &second,
+            "second",
+            Some("/fixture/sessions/previous-session.jsonl"),
+        );
         std::fs::write(
             terminal.join("tmux-%41"),
             format!("/shared\n{}\n", first.display()),
@@ -904,11 +905,12 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![
                 (Some("%41"), "first", None),
-                (Some("%42"), "second", Some("parent")),
+                (Some("%42"), "second", None),
             ]
         );
         assert_eq!(live[0].scope, LiveSessionScope::Root);
-        assert_eq!(live[1].scope, LiveSessionScope::Child);
+        assert_eq!(live[1].scope, LiveSessionScope::Root);
+        assert_eq!(crate::live::interactive_session_id(&live[1], &live), "second");
 
         std::fs::write(
             terminal.join("tmux-%41"),
