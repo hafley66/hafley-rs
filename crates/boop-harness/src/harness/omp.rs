@@ -876,12 +876,12 @@ mod tests {
         transcript(&second, "second", Some("parent"));
         std::fs::write(
             terminal.join("tmux-%41"),
-            format!("/one\n{}\n", first.display()),
+            format!("/shared\n{}\n", first.display()),
         )
         .unwrap();
         std::fs::write(
             terminal.join("tmux-%42"),
-            format!("/two\n{}\n", second.display()),
+            format!("/shared\n{}\n", second.display()),
         )
         .unwrap();
         std::fs::write(
@@ -912,7 +912,7 @@ mod tests {
 
         std::fs::write(
             terminal.join("tmux-%41"),
-            format!("/one\n{}\n", second.display()),
+            format!("/shared\n{}\n", second.display()),
         )
         .unwrap();
         assert_eq!(
