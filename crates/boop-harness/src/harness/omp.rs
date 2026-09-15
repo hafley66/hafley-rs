@@ -44,6 +44,22 @@ impl LiveSessions for OmpLive {
     fn live_sessions(&self) -> Result<Vec<LiveSession>> {
         omp_live_sessions_in(&omp_terminal_sessions_dir()?)
     }
+
+    fn live_session_in_pane(&self, pane: &str) -> Result<Option<LiveSession>> {
+        let pane = pane.trim().trim_start_matches('%');
+        if pane.is_empty() {
+            return Ok(None);
+        }
+        let pane_id = format!("%{pane}");
+        let Some(panes) = boop_store::tmux::mux().list_panes(None) else {
+            return Ok(None);
+        };
+        let Some(observed) = panes.iter().find(|candidate| candidate.id == pane_id) else {
+            return Ok(None);
+        };
+        let base = omp_terminal_sessions_dir()?;
+        omp_live_session_for_pane(&base, &pane_id, Some(&observed.tty))
+    }
 }
 
 static LIVE: OmpLive = OmpLive;
@@ -361,50 +377,75 @@ fn omp_live_sessions_in(base: &Path) -> Result<Vec<LiveSession>> {
             continue;
         }
         let filename = entry.file_name();
-        let Some(pane) = filename
-            .to_str()
-            .and_then(|name| name.strip_prefix("tmux-"))
-            .filter(|pane| pane.starts_with('%') && pane.len() > 1)
-        else {
+        let Some(terminal) = filename.to_str().filter(|name| !name.is_empty()) else {
             continue;
         };
-        let Ok(record) = std::fs::read_to_string(entry.path()) else {
-            continue;
-        };
-        let mut lines = record.lines();
-        let Some(cwd) = lines.next().filter(|line| !line.is_empty()) else {
-            continue;
-        };
-        let Some(path) = lines.next().filter(|line| !line.is_empty()) else {
-            continue;
-        };
-        let path = PathBuf::from(path);
-        let Some(header) = session_header(&path).filter(|header| !header.id.is_empty()) else {
-            continue;
-        };
-        let observed_ms = entry
-            .metadata()
-            .ok()
-            .and_then(|metadata| metadata.modified().ok())
-            .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|elapsed| elapsed.as_millis() as u64)
-            .unwrap_or_else(crate::live::now_ms);
-        live.push(LiveSession {
-            harness: HarnessId::Omp,
-            session_id: header.id,
-            pid: None,
-            cwd: Some(PathBuf::from(cwd)),
-            tmux_pane: Some(pane.to_owned()),
-            status: LiveStatus::Unknown,
-            door: DoorAddress::None,
-            observed_ms,
-            started_ms: None,
-            scope: LiveSessionScope::Root,
-            parent_session: None,
-        });
+        let pane = terminal
+            .strip_prefix("tmux-")
+            .filter(|pane| pane.starts_with('%') && pane.len() > 1);
+        if let Some(session) = omp_live_session_from_record(&entry.path(), pane) {
+            live.push(session);
+        }
     }
-    live.sort_by(|left, right| left.tmux_pane.cmp(&right.tmux_pane));
+    live.sort_by(|left, right| {
+        left.tmux_pane
+            .cmp(&right.tmux_pane)
+            .then_with(|| left.session_id.cmp(&right.session_id))
+    });
     Ok(live)
+}
+
+/// Resolve one OMP breadcrumb selected by a terminal identity. `pane` is
+/// supplied by boop's mux observation and is not read from the breadcrumb.
+fn omp_live_session_for_terminal(
+    base: &Path,
+    terminal: &str,
+    pane: Option<&str>,
+) -> Result<Option<LiveSession>> {
+    Ok(omp_live_session_from_record(&base.join(terminal), pane))
+}
+
+/// Resolve the exact OMP breadcrumb for a visible pane. OMP uses the tty
+/// whenever one exists; the tmux filename is only its documented no-tty
+/// fallback. A missing tty breadcrumb therefore cannot borrow a fallback
+/// record left by another frontend.
+fn omp_live_session_for_pane(
+    base: &Path,
+    pane: &str,
+    tty: Option<&str>,
+) -> Result<Option<LiveSession>> {
+    match tty.filter(|tty| !tty.is_empty()) {
+        Some(tty) => omp_live_session_for_terminal(base, tty, Some(pane)),
+        None => omp_live_session_for_terminal(base, &format!("tmux-{pane}"), Some(pane)),
+    }
+}
+
+fn omp_live_session_from_record(record_path: &Path, pane: Option<&str>) -> Option<LiveSession> {
+    let record = std::fs::read_to_string(record_path).ok()?;
+    let mut lines = record.lines();
+    let cwd = lines.next().filter(|line| !line.is_empty())?;
+    let path = PathBuf::from(lines.next().filter(|line| !line.is_empty())?);
+    let header = session_header(&path).filter(|header| !header.id.is_empty())?;
+    let observed_ms = record_path
+        .metadata()
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|elapsed| elapsed.as_millis() as u64)
+        .unwrap_or_else(crate::live::now_ms);
+    Some(LiveSession {
+        harness: HarnessId::Omp,
+        session_id: header.id,
+        pid: None,
+        cwd: Some(PathBuf::from(cwd)),
+        tmux_pane: pane.map(str::to_owned),
+        status: LiveStatus::Unknown,
+        door: DoorAddress::None,
+        observed_ms,
+        started_ms: None,
+        scope: LiveSessionScope::Root,
+        parent_session: None,
+    })
 }
 
 // ---- omp transcript reader and shaping.
@@ -876,21 +917,21 @@ mod tests {
             Some("/fixture/sessions/previous-session.jsonl"),
         );
         std::fs::write(
-            terminal.join("tmux-%41"),
+            terminal.join("ttys094"),
             format!("/shared\n{}\n", first.display()),
         )
         .unwrap();
         std::fs::write(
-            terminal.join("tmux-%42"),
+            terminal.join("ttys095"),
             format!("/shared\n{}\n", second.display()),
         )
         .unwrap();
         std::fs::write(
-            terminal.join("ttys999"),
-            format!("/ignored\n{}\n", first.display()),
+            terminal.join("tmux-%41"),
+            format!("/other\n{}\n", second.display()),
         )
         .unwrap();
-        std::fs::write(terminal.join("tmux-%43"), "/stale\n/missing.jsonl\n").unwrap();
+        std::fs::write(terminal.join("ttys096"), "/stale\n/missing.jsonl\n").unwrap();
 
         let live = omp_live_sessions_in(&terminal).unwrap();
         assert_eq!(
@@ -904,24 +945,39 @@ mod tests {
                 })
                 .collect::<Vec<_>>(),
             vec![
-                (Some("%41"), "first", None),
-                (Some("%42"), "second", None),
+                (None, "first", None),
+                (None, "second", None),
+                (Some("%41"), "second", None),
             ]
         );
         assert_eq!(live[0].scope, LiveSessionScope::Root);
         assert_eq!(live[1].scope, LiveSessionScope::Root);
         assert_eq!(crate::live::interactive_session_id(&live[1], &live), "second");
 
-        std::fs::write(
-            terminal.join("tmux-%41"),
-            format!("/shared\n{}\n", second.display()),
-        )
-        .unwrap();
         assert_eq!(
-            omp_live_sessions_in(&terminal)
+            omp_live_session_for_pane(&terminal, "%41", Some("ttys094"))
                 .unwrap()
-                .into_iter()
-                .find(|session| session.tmux_pane.as_deref() == Some("%41"))
+                .map(|session| (
+                    crate::live::interactive_session_id(&session, &live),
+                    session.session_id,
+                )),
+            Some(("first".into(), "first".into()))
+        );
+        assert_eq!(
+            omp_live_session_for_pane(&terminal, "%42", Some("ttys095"))
+                .unwrap()
+                .map(|session| (session.tmux_pane, session.session_id)),
+            Some((Some("%42".into()), "second".into()))
+        );
+        // `%41` has a tmux fallback breadcrumb, but a tty-bearing frontend
+        // must not borrow it when its own tty record is missing.
+        assert_eq!(
+            omp_live_session_for_pane(&terminal, "%41", Some("ttys097")).unwrap(),
+            None
+        );
+        assert_eq!(
+            omp_live_session_for_pane(&terminal, "%41", None)
+                .unwrap()
                 .map(|session| session.session_id),
             Some("second".into())
         );
