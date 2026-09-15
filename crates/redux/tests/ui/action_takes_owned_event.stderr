@@ -1,0 +1,24 @@
+error[E0308]: mismatched types
+  --> tests/ui/action_takes_owned_event.rs:26:1
+   |
+26 | / machine! {
+27 | |     OwnedEvent for State {
+28 | |         context: Cx,
+29 | |         event: Event,
+...  |
+37 | | }
+   | | ^
+   | | |
+   | |_expected `Event`, found `&Event`
+   |   arguments to this function are incorrect
+   |
+note: function defined here
+  --> tests/ui/action_takes_owned_event.rs:24:4
+   |
+24 | fn go(_st: &mut State, _cx: Cx, _ev: Event, _fx: &mut impl FnMut(())) {}
+   |    ^^                           ----------
+   = note: this error originates in the macro `machine` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider using clone here
+   |
+37 | }.clone()
+   |  ++++++++
