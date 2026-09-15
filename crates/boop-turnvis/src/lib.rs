@@ -427,8 +427,11 @@ pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<Vi
             .iter()
             .filter(|hit| !claimed_rows.contains(&hit.line.start))
             .collect();
-        if unclaimed.len() * 2 < m.hits.len()
-            || !has_discriminating_hit(&unclaimed, &screen, &m.source, &row_owners)
+        if unclaimed.len() * 2 < m.hits.len() {
+            continue;
+        }
+        if m.source.turn.role == "tool"
+            && !has_discriminating_hit(&unclaimed, &screen, &m.source, &row_owners)
         {
             continue;
         }

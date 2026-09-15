@@ -261,6 +261,40 @@ fn short_unambiguous_non_tool_turn_is_visible() {
 }
 
 #[test]
+fn compact_parent_turn_beats_approval_quoting_the_same_response() {
+    let response = "Properties:\n- Every streamed write resets the quiet timer.\n- switchMap cancels the previous wait.\n- No polling.";
+    let mut parent = turn(14, "assistant", response);
+    parent.session = "parent".to_string();
+    parent.ts = 140;
+    let mut approval = turn(
+        80,
+        "assistant",
+        &format!(
+            "Review the following proposed response:\n<assistant_response>\n{response}\n</assistant_response>\nReturn an approval decision."
+        ),
+    );
+    approval.session = "approval-child".to_string();
+    approval.ts = 150;
+
+    let found = locate_visible_turns(
+        &[
+            line("Properties:", 70),
+            line("- Every streamed write resets the quiet timer.", 71),
+            line("- switchMap cancels the previous wait.", 72),
+            line("- No polling.", 73),
+        ],
+        &[approval, parent],
+    );
+    assert_eq!(
+        found
+            .iter()
+            .map(|turn| (&turn.id, turn.buffer_start, turn.buffer_end))
+            .collect::<Vec<_>>(),
+        vec![(&"parent:14".to_string(), 70, 73)]
+    );
+}
+
+#[test]
 fn repeated_identical_tool_calls_are_unassigned() {
     let said = "bash\n{\"command\":\"echo repeated-tool-command\"}";
     let found = locate_visible_turns(
