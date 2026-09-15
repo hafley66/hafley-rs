@@ -16,12 +16,17 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 /// `MarkdownInline` is never routed from a path (a `.md` routes to the block
 /// grammar); a caller names it directly to reach the inline plane.
+/// `Gdscript`/`Commonlisp` are the two syntax-only front-ends: their grammars
+/// are not in ast-grep's `SupportLang`, so `get_ts_language` names them here and
+/// a `.gd`/`.lisp` routes to the `Source` that owns the parse.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum ExtractLang {
     Sg(SupportLang),
     Prolog,
     Markdown,
     MarkdownInline,
+    Gdscript,
+    Commonlisp,
 }
 
 impl ExtractLang {
@@ -39,6 +44,8 @@ impl ExtractLang {
             Self::Prolog => Cow::Borrowed("prolog"),
             Self::Markdown => Cow::Borrowed("markdown"),
             Self::MarkdownInline => Cow::Borrowed("markdown_inline"),
+            Self::Gdscript => Cow::Borrowed("gdscript"),
+            Self::Commonlisp => Cow::Borrowed("commonlisp"),
         }
     }
 
@@ -49,6 +56,8 @@ impl ExtractLang {
             "prolog" => Some(Self::Prolog),
             "markdown" | "md" => Some(Self::Markdown),
             "markdown_inline" | "md_inline" => Some(Self::MarkdownInline),
+            "gdscript" | "gd" => Some(Self::Gdscript),
+            "commonlisp" | "lisp" | "cl" => Some(Self::Commonlisp),
             _ => SupportLang::from_str(name).ok().map(Self::Sg),
         }
     }
@@ -89,13 +98,17 @@ impl Language for ExtractLang {
     /// That is the C/C++/CSS sigil
     /// (ast-grep-language lib.rs:186-190), not the `µ` of lib.rs:196-211.
     /// Markdown keeps `µ` because `_` is emphasis syntax there.
+    /// GDScript and Common Lisp take `_` for the opposite reason: a GDScript
+    /// identifier is `[A-Za-z_][A-Za-z0-9_]*` and a Lisp symbol absorbs any
+    /// constituent character, so `_T` lexes as ONE identifier token under both
+    /// (the C/C++/CSS sigil of ast-grep-language lib.rs:186-190).
     /// Pattern side only: a PATTERN variable spelled `_ALLCAPS` is read as a
     /// metavar; `_Mixed` stays literal, and SOURCE text is never rewritten.
     /// @comment-ok: the sigil per grammar is the one fact the code cannot show
     fn expando_char(&self) -> char {
         match self {
             Self::Sg(sg) => sg.expando_char(),
-            Self::Prolog => '_',
+            Self::Prolog | Self::Gdscript | Self::Commonlisp => '_',
             Self::Markdown | Self::MarkdownInline => 'µ',
         }
     }
@@ -144,6 +157,10 @@ impl LanguageExt for ExtractLang {
             Self::Prolog => tree_sitter::Language::new(tree_sitter_prolog::LANGUAGE),
             Self::Markdown => tree_sitter::Language::new(tree_sitter_md::LANGUAGE),
             Self::MarkdownInline => tree_sitter::Language::new(tree_sitter_md::INLINE_LANGUAGE),
+            Self::Gdscript => tree_sitter::Language::new(tree_sitter_gdscript::LANGUAGE),
+            Self::Commonlisp => {
+                tree_sitter::Language::new(tree_sitter_commonlisp::LANGUAGE_COMMONLISP)
+            }
         }
     }
 }

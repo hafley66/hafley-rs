@@ -11,9 +11,11 @@
 #[path = "1_ast_rule.rs"]
 pub mod ast_rule;
 pub mod astgrep;
+pub mod commonlisp;
 pub mod data;
 pub mod extract_lang;
 pub mod fact;
+pub mod gdscript;
 pub mod go;
 pub mod go_checker;
 pub mod go_modules;
@@ -61,8 +63,10 @@ pub use astgrep::{
     query_patterns, AstCaptureFact, AstGrepParser, AstPatternQuery, AstgrepSource, CstProjector,
     SgRoot,
 };
+pub use commonlisp::CommonlispSource;
 pub use data::DataSource;
 pub use extract_lang::ExtractLang;
+pub use gdscript::GdscriptSource;
 pub use fact::{
     dl6_db_path, open_dl6_readonly, open_readonly, FactError, FactMatcher, FactSet,
     DL6_DB_RELATIVE_PATH,
@@ -105,6 +109,10 @@ use crate::types::{RehomeArm, Rename};
 /// order-dependent call, typegraph/mod.rs:488).
 /// DataSource precedes AstgrepSource so a `.json`/`.yaml` reaches the data plane;
 /// it delegates its own cst plane back to AstgrepSource, so no row is lost.
+/// GdscriptSource/CommonlispSource precede AstgrepSource for the same reason
+/// RustSource does: their grammars are not in ast-grep's `SupportLang`, so only
+/// these rows can route a `.gd`/`.lisp` at all. Neither claims a suffix an
+/// earlier row owns (`.gd`, `.lisp`, `.lsp`, `.cl`, `.asd` are unclaimed above).
 pub fn sources() -> &'static [&'static dyn Source] {
     &[
         &RustSource,
@@ -115,6 +123,8 @@ pub fn sources() -> &'static [&'static dyn Source] {
         &PythonSource,
         &DataSource,
         &TsSource,
+        &GdscriptSource,
+        &CommonlispSource,
         &AstgrepSource,
     ]
 }

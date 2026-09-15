@@ -66,6 +66,8 @@ const ROSTER_FIXTURES: &[(&str, &str)] = &[
     ("prolog", "tests/fixtures/prolog/0_sample.pl"),
     ("python", "tests/fixtures/python/sample.py"),
     ("markdown", "tests/fixtures/markdown/0_sample.md"),
+    ("gdscript", "tests/fixtures/gdscript/sample.gd"),
+    ("commonlisp", "tests/fixtures/commonlisp/sample.lisp"),
     ("data", "tests/fixtures/data/nested.json"),
     ("astgrep", "tests/fixtures/astgrep/sample.html"),
 ];

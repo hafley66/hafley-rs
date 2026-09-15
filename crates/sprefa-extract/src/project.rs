@@ -1751,6 +1751,22 @@ pub static RESOLVE_ARMS: &[ResolveArm] = &[
         drops: None,
         type_plane: TypePlane::Nodes,
     },
+    // The two syntax-only front-ends: one cst plane, nothing that names another
+    // file, so every arm is absent by declaration rather than by omission.
+    ResolveArm {
+        name: "gdscript",
+        call: None,
+        types: None,
+        drops: None,
+        type_plane: TypePlane::Nodes,
+    },
+    ResolveArm {
+        name: "commonlisp",
+        call: None,
+        types: None,
+        drops: None,
+        type_plane: TypePlane::Nodes,
+    },
     ResolveArm {
         name: "astgrep",
         call: None,

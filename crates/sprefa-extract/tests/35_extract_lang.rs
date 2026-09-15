@@ -9,6 +9,8 @@ use sprefa_extract::{
 
 const PROLOG_SAMPLE: &str = "tests/fixtures/prolog/0_sample.pl";
 const MARKDOWN_SAMPLE: &str = "tests/fixtures/markdown/0_sample.md";
+const GDSCRIPT_SAMPLE: &str = "tests/fixtures/gdscript/sample.gd";
+const COMMONLISP_SAMPLE: &str = "tests/fixtures/commonlisp/sample.lisp";
 
 fn query(id: &str, pattern: &str, selector: Option<&str>, captures: &[&str]) -> AstPatternQuery {
     AstPatternQuery {
@@ -41,6 +43,14 @@ fn from_path_routes_the_extract_grammars_and_delegates_the_rest() {
         ExtractLang::from_path("a.markdown"),
         Some(ExtractLang::Markdown)
     );
+    assert_eq!(ExtractLang::from_path("p.gd"), Some(ExtractLang::Gdscript));
+    for lisp in ["l.lisp", "l.lsp", "l.cl", "l.asd"] {
+        assert_eq!(
+            ExtractLang::from_path(lisp),
+            Some(ExtractLang::Commonlisp),
+            "{lisp}"
+        );
+    }
     for (path, sg) in [
         ("a.rs", SupportLang::Rust),
         ("a.ts", SupportLang::TypeScript),
@@ -61,6 +71,8 @@ fn every_lang_name_round_trips_through_the_yaml_spelling() {
         ExtractLang::Prolog,
         ExtractLang::Markdown,
         ExtractLang::MarkdownInline,
+        ExtractLang::Gdscript,
+        ExtractLang::Commonlisp,
     ];
     langs.extend(
         SupportLang::all_langs()
@@ -83,6 +95,8 @@ fn every_lang_name_round_trips_through_the_yaml_spelling() {
 #[test]
 fn expando_char_is_underscore_for_prolog_and_mu_for_markdown() {
     assert_eq!(ExtractLang::Prolog.expando_char(), '_');
+    assert_eq!(ExtractLang::Gdscript.expando_char(), '_');
+    assert_eq!(ExtractLang::Commonlisp.expando_char(), '_');
     assert_eq!(ExtractLang::Markdown.expando_char(), 'µ');
     assert_eq!(ExtractLang::MarkdownInline.expando_char(), 'µ');
     assert_eq!(
@@ -93,7 +107,12 @@ fn expando_char_is_underscore_for_prolog_and_mu_for_markdown() {
         ExtractLang::Sg(SupportLang::C).expando_char(),
         SupportLang::C.expando_char()
     );
-    for lang in [ExtractLang::Prolog, ExtractLang::Markdown] {
+    for lang in [
+        ExtractLang::Prolog,
+        ExtractLang::Markdown,
+        ExtractLang::Gdscript,
+        ExtractLang::Commonlisp,
+    ] {
         assert_eq!(lang.meta_var_char(), '$');
     }
 }
@@ -166,6 +185,46 @@ fn markdown_ast_pattern_matches_a_heading() {
     );
 }
 
+/// The same door for the two syntax-only front-ends. Both take `_` as the
+/// expando char, and the pattern only parses because of it: `_NAME` is ONE
+/// identifier token for a GDScript `[A-Za-z_][A-Za-z0-9_]*` lexer and one
+/// symbol for a Lisp reader, while `µNAME` would be a lex error under both.
+#[test]
+fn gdscript_and_lisp_ast_patterns_match_their_declarations() {
+    let content = read(GDSCRIPT_SAMPLE);
+    let facts = query_patterns(
+        GDSCRIPT_SAMPLE,
+        &content,
+        &[query(
+            "const",
+            "const $NAME := $VALUE",
+            None,
+            &["NAME", "VALUE"],
+        )],
+    )
+    .expect("gdscript pattern query");
+    assert_eq!(captured(&facts, "NAME"), vec!["SPEED", "WAYPOINTS"]);
+    assert_eq!(
+        captured(&facts, "VALUE").first().map(String::as_str),
+        Some("120.0")
+    );
+
+    let content = read(COMMONLISP_SAMPLE);
+    let facts = query_patterns(
+        COMMONLISP_SAMPLE,
+        &content,
+        &[query(
+            "defparameter",
+            "(defparameter $NAME $VALUE)",
+            None,
+            &["NAME", "VALUE"],
+        )],
+    )
+    .expect("commonlisp pattern query");
+    assert_eq!(captured(&facts, "NAME"), vec!["*speed*"]);
+    assert_eq!(captured(&facts, "VALUE"), vec!["120.0"]);
+}
+
 #[test]
 fn a_yaml_ast_rule_runs_on_a_prolog_file() {
     let yaml = "id: use_module\nrule:\n  pattern: use_module($MODULE)\n";
@@ -193,7 +252,7 @@ fn an_unknown_extension_still_reports_no_grammar() {
 }
 
 #[test]
-fn the_cli_ast_pattern_door_reaches_prolog_and_markdown() {
+fn the_cli_ast_pattern_door_reaches_every_own_grammar_front_end() {
     for (path, pattern, capture, expected) in [
         (
             PROLOG_SAMPLE,
@@ -202,6 +261,18 @@ fn the_cli_ast_pattern_door_reaches_prolog_and_markdown() {
             "'../shared/graph'",
         ),
         (MARKDOWN_SAMPLE, "rule=# $TEXT\n", "rule=TEXT", "title"),
+        (
+            GDSCRIPT_SAMPLE,
+            "rule=const $NAME := $VALUE",
+            "rule=NAME",
+            "SPEED",
+        ),
+        (
+            COMMONLISP_SAMPLE,
+            "rule=(defparameter $NAME $VALUE)",
+            "rule=NAME",
+            "*speed*",
+        ),
     ] {
         let output = Command::new(env!("CARGO_BIN_EXE_extract"))
             .args(["--ast-pattern", pattern, "--ast-capture", capture, path])

@@ -257,6 +257,14 @@ const V6_ONLY_LANGS: &[(&str, &str)] = &[
         "astgrep",
         "the cst-only fallback; v5's `sg` roster has no per-language oracle",
     ),
+    (
+        "gdscript",
+        "v5 had no gdscript front-end and no Godot corpus; the grammar is the whole increment",
+    ),
+    (
+        "commonlisp",
+        "v5 had no lisp front-end at all; the cst plane is the grammar's own output",
+    ),
 ];
 
 #[test]

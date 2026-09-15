@@ -170,6 +170,8 @@ LANGUAGE COVERAGE (first-match, by extension)
   kt/kts                           full     kinds: cst, type, call, df (no const facet)
   pl/pro/prolog/datalog/horn       full     kinds: cst, type, call, df
   md/markdown                      cst only (tree-sitter-md block + inline grammars)
+  gd                               cst only (tree-sitter-gdscript grammar)
+  lisp/lsp/cl/asd                  cst only (tree-sitter-commonlisp grammar)
   json/jsonl/ndjson/yaml/yml/toml  data     kinds: data (+ cst where ast-grep has
                                             the grammar: json, yaml)
   html/css                         cst only (ast-grep grammar, no native front-end)
