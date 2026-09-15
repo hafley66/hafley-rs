@@ -76,6 +76,15 @@ impl Scratch {
         String::from_utf8_lossy(&output.stdout).trim().to_owned()
     }
 
+    fn tmux_context(&self) -> String {
+        let output = tmux(
+            &self.socket,
+            &["display-message", "-p", "#{socket_path},#{pid},0"],
+        );
+        assert!(output.status.success(), "read scratch TMUX context: {output:?}");
+        String::from_utf8_lossy(&output.stdout).trim().to_owned()
+    }
+
     fn screen(&self, session: &str) -> String {
         let output = tmux(
             &self.socket,
@@ -98,7 +107,7 @@ struct EnvGuard {
 }
 
 impl EnvGuard {
-    fn set(key: &'static str, value: &Path) -> Self {
+    fn set(key: &'static str, value: impl AsRef<std::ffi::OsStr>) -> Self {
         let previous = std::env::var_os(key);
         // SAFETY: this standalone integration target contains one test body.
         unsafe { std::env::set_var(key, value) };
@@ -320,6 +329,7 @@ fn omp_live_panes_bind_distinct_sessions_and_project_real_transcripts() {
 
     let pane_a = scratch.pane("omp-live-a");
     let pane_b = scratch.pane("omp-live-b");
+    let _tmux = EnvGuard::set("TMUX", scratch.tmux_context());
     assert_ne!(pane_a, pane_b, "two real OMP TUIs share a pane");
     let session_a = route_session(&scratch, "omp-live-a");
     let session_b = route_session(&scratch, "omp-live-b");
@@ -362,6 +372,12 @@ fn omp_live_panes_bind_distinct_sessions_and_project_real_transcripts() {
         );
         wait_for_turns(&scratch, expected);
     }
+    assert_eq!(
+        boop::live::session_in_pane(&registry, &pane_a, &scratch.mail())
+            .expect("Registry inherited-TMUX dispatch")
+            .as_deref(),
+        Some(session_a.as_str())
+    );
 
     let _ = tmux(&scratch.socket, &["kill-session", "-t", "omp-live-a"]);
     wait(
@@ -371,6 +387,15 @@ fn omp_live_panes_bind_distinct_sessions_and_project_real_transcripts() {
                 .live()
                 .live_session_in_pane_on_socket(&pane_a, Some(&scratch.socket))
                 .expect("query dead OMP pane")
+                .is_none()
+        },
+        || scratch.screen("omp-live-b"),
+    );
+    wait(
+        "dead OMP pane inherited shared lookup",
+        || {
+            boop::live::session_in_pane(&registry, &pane_a, &scratch.mail())
+                .expect("dispatch dead OMP pane through inherited TMUX")
                 .is_none()
         },
         || scratch.screen("omp-live-b"),

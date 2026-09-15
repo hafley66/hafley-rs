@@ -220,15 +220,14 @@ fn route_session_in_pane(
     socket: Option<&str>,
     mail_dir: &Path,
 ) -> anyhow::Result<Option<String>> {
-    if let Some(socket) = socket {
-        let Some(panes) = boop_store::tmux::mux().list_panes(Some(socket)) else {
-            return Ok(None);
-        };
-        if !panes.iter().any(|candidate| {
-            candidate.id.trim_start_matches('%') == pane.trim_start_matches('%')
-        }) {
-            return Ok(None);
-        }
+    let Some(panes) = boop_store::tmux::mux().list_panes(socket) else {
+        return Ok(None);
+    };
+    if !panes
+        .iter()
+        .any(|candidate| candidate.id.trim_start_matches('%') == pane.trim_start_matches('%'))
+    {
+        return Ok(None);
     }
     let routes = boop_store::bus::read_routes(mail_dir)?;
     Ok(routes.into_values().find_map(|route| {
