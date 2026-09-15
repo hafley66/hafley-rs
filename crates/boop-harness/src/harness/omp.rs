@@ -14,6 +14,7 @@ use crate::harness::{
     jsonl_files, Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, LanePolicy,
     MailPolicy, OneShotSpec, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
 };
+use crate::live::{DoorAddress, LiveSession, LiveSessionScope, LiveSessions, LiveStatus};
 use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
 use boop_store::tail;
@@ -31,8 +32,21 @@ static CAPABILITIES: Capabilities = Capabilities {
     wrapper_owns_alternate_screen: false,
     native_backend: super::NativeBackendSupport::Unsupported,
     native_settings: super::NativeSettingsSupport::Unsupported("omp has no control plane"),
-    registry_names_processes: false,
+    // omp's terminal-session record names the exact tmux pane and transcript.
+    // It is an identity relation, so the native wrapper never falls back to a
+    // cwd/newest-transcript selection for this harness.
+    registry_names_processes: true,
 };
+
+struct OmpLive;
+
+impl LiveSessions for OmpLive {
+    fn live_sessions(&self) -> Result<Vec<LiveSession>> {
+        omp_live_sessions_in(&omp_terminal_sessions_dir()?)
+    }
+}
+
+static LIVE: OmpLive = OmpLive;
 
 /// The `--mode` values that run omp without its TUI; a value outside this set
 /// (or no `--mode` at all) leaves the interactive frontend in charge. The
@@ -46,6 +60,10 @@ impl Harness for Omp {
 
     fn capabilities(&self) -> &'static Capabilities {
         &CAPABILITIES
+    }
+
+    fn live(&self) -> &dyn LiveSessions {
+        &LIVE
     }
 
     fn matches_model(&self, _name: &str) -> bool {
@@ -288,7 +306,10 @@ impl Harness for Omp {
 
     fn session_by_id(&self, session_id: &str, _cwd: Option<&str>) -> Option<SessionRef> {
         let sessions = self.sessions().ok()?;
-        if let Some(exact) = sessions.iter().find(|session| session.session_id == session_id) {
+        if let Some(exact) = sessions
+            .iter()
+            .find(|session| session.session_id == session_id)
+        {
             return Some(exact.clone());
         }
         let prefixes: Vec<&SessionRef> = sessions
@@ -302,14 +323,91 @@ impl Harness for Omp {
 /// omp's session root: `$PI_CODING_AGENT_DIR` when set, else `~/.omp/agent`,
 /// under `sessions`.
 fn omp_sessions_dir() -> Result<PathBuf> {
-    let root = match std::env::var_os("PI_CODING_AGENT_DIR").filter(|value| !value.is_empty()) {
-        Some(dir) => PathBuf::from(dir),
-        None => dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("resolve omp agent dir"))?
-            .join(".omp")
-            .join("agent"),
+    Ok(omp_agent_dir()?.join("sessions"))
+}
+
+/// omp's agent root, shared by transcript and terminal-session discovery.
+fn omp_agent_dir() -> Result<PathBuf> {
+    Ok(
+        match std::env::var_os("PI_CODING_AGENT_DIR").filter(|value| !value.is_empty()) {
+            Some(dir) => PathBuf::from(dir),
+            None => dirs::home_dir()
+                .ok_or_else(|| anyhow::anyhow!("resolve omp agent dir"))?
+                .join(".omp")
+                .join("agent"),
+        },
+    )
+}
+
+/// omp writes one exact active-TUI relation per terminal. A tmux record is
+/// named `tmux-%<pane>` and contains the launch cwd followed by the active
+/// transcript path. The transcript header supplies the session UUID.
+fn omp_terminal_sessions_dir() -> Result<PathBuf> {
+    Ok(omp_agent_dir()?.join("terminal-sessions"))
+}
+
+fn omp_live_sessions_in(base: &Path) -> Result<Vec<LiveSession>> {
+    let mut live = Vec::new();
+    let entries = match std::fs::read_dir(base) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(live),
+        Err(error) => return Err(error).with_context(|| format!("read {}", base.display())),
     };
-    Ok(root.join("sessions"))
+    for entry in entries {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        if !file_type.is_file() {
+            continue;
+        }
+        let filename = entry.file_name();
+        let Some(pane) = filename
+            .to_str()
+            .and_then(|name| name.strip_prefix("tmux-"))
+            .filter(|pane| pane.starts_with('%') && pane.len() > 1)
+        else {
+            continue;
+        };
+        let Ok(record) = std::fs::read_to_string(entry.path()) else {
+            continue;
+        };
+        let mut lines = record.lines();
+        let Some(cwd) = lines.next().filter(|line| !line.is_empty()) else {
+            continue;
+        };
+        let Some(path) = lines.next().filter(|line| !line.is_empty()) else {
+            continue;
+        };
+        let path = PathBuf::from(path);
+        let Some(header) = session_header(&path).filter(|header| !header.id.is_empty()) else {
+            continue;
+        };
+        let observed_ms = entry
+            .metadata()
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+            .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|elapsed| elapsed.as_millis() as u64)
+            .unwrap_or_else(crate::live::now_ms);
+        live.push(LiveSession {
+            harness: HarnessId::Omp,
+            session_id: header.id,
+            pid: None,
+            cwd: Some(PathBuf::from(cwd)),
+            tmux_pane: Some(pane.to_owned()),
+            status: LiveStatus::Unknown,
+            door: DoorAddress::None,
+            observed_ms,
+            started_ms: None,
+            scope: if header.parent.is_some() {
+                LiveSessionScope::Child
+            } else {
+                LiveSessionScope::Root
+            },
+            parent_session: header.parent,
+        });
+    }
+    live.sort_by(|left, right| left.tmux_pane.cmp(&right.tmux_pane));
+    Ok(live)
 }
 
 // ---- omp transcript reader and shaping.
@@ -325,7 +423,11 @@ struct OmpHeader {
 fn session_header(path: &Path) -> Option<OmpHeader> {
     for value in crate::transcript::head_values(path) {
         if value.get("type").and_then(Value::as_str) == Some("session") {
-            let id = value.get("id").and_then(Value::as_str).unwrap_or("").to_owned();
+            let id = value
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_owned();
             let cwd = value.get("cwd").and_then(Value::as_str).map(str::to_owned);
             let parent = value
                 .get("parentSession")
@@ -353,7 +455,11 @@ fn sessions_in(base: &Path) -> Result<Vec<SessionRef>> {
             continue;
         };
         let uuid = file_stem_uuid(&file.path).unwrap_or_else(|| header.id.clone());
-        let session_id = if header.id.is_empty() { uuid.clone() } else { header.id.clone() };
+        let session_id = if header.id.is_empty() {
+            uuid.clone()
+        } else {
+            header.id.clone()
+        };
         sessions.push(SessionRef {
             harness: HarnessId::Omp,
             session_id,
@@ -418,7 +524,10 @@ fn parse_line(session: &SessionRef, line: &tail::CompleteLine) -> Result<Vec<Age
     let Some(message) = value.get("message") else {
         return Ok(Vec::new());
     };
-    let role = message.get("role").and_then(Value::as_str).unwrap_or("user");
+    let role = message
+        .get("role")
+        .and_then(Value::as_str)
+        .unwrap_or("user");
     match role {
         "toolResult" => {
             let name = message
@@ -432,10 +541,7 @@ fn parse_line(session: &SessionRef, line: &tail::CompleteLine) -> Result<Vec<Age
             if let Some(items) = message.get("content").and_then(Value::as_array) {
                 for item in items {
                     if item.get("type").and_then(Value::as_str) == Some("toolCall") {
-                        let name = item
-                            .get("name")
-                            .and_then(Value::as_str)
-                            .map(str::to_owned);
+                        let name = item.get("name").and_then(Value::as_str).map(str::to_owned);
                         events.push(build_event(session, line, &value, "toolCall", name));
                     }
                 }
@@ -533,7 +639,10 @@ fn project_line(
         .and_then(boop_store::session::parse_iso_ms)
         .unwrap_or(0);
     let sid = session.session_id.clone();
-    let role = message.get("role").and_then(Value::as_str).unwrap_or("user");
+    let role = message
+        .get("role")
+        .and_then(Value::as_str)
+        .unwrap_or("user");
     match role {
         "user" => {
             let text = message_text(message);
@@ -560,13 +669,7 @@ fn project_line(
                             let inserted =
                                 store.write_turn(&sid, *turn, ts, "tool", &body, None)?;
                             record(stat, inserted);
-                            store.write_tool_fact(
-                                &sid,
-                                *turn,
-                                ts,
-                                name,
-                                item.get("arguments"),
-                            )?;
+                            store.write_tool_fact(&sid, *turn, ts, name, item.get("arguments"))?;
                         }
                         _ => {}
                     }
@@ -591,10 +694,7 @@ fn project_line(
                     .unwrap_or("");
                 let input = usage.get("input").and_then(Value::as_i64).unwrap_or(0);
                 let output = usage.get("output").and_then(Value::as_i64).unwrap_or(0);
-                let cache_write = usage
-                    .get("cacheWrite")
-                    .and_then(Value::as_i64)
-                    .unwrap_or(0);
+                let cache_write = usage.get("cacheWrite").and_then(Value::as_i64).unwrap_or(0);
                 let cached = usage.get("cacheRead").and_then(Value::as_i64).unwrap_or(0);
                 let cost = usage
                     .get("cost")
@@ -689,7 +789,11 @@ fn omp_meta(path: &Path) -> (Option<u64>, Option<String>, Option<String>, u64) {
 
 /// Every `message` line as a `Message`, oldest first. `after_seq` returns only
 /// newer lines.
-fn read_omp(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate::transcript::Message> {
+fn read_omp(
+    path: &Path,
+    session_id: &str,
+    after_seq: Option<u64>,
+) -> Vec<crate::transcript::Message> {
     let Ok(file) = File::open(path) else {
         return Vec::new();
     };
@@ -712,7 +816,11 @@ fn read_omp(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate:
         let Some(message) = v.get("message") else {
             continue;
         };
-        let role = message.get("role").and_then(Value::as_str).unwrap_or("").to_owned();
+        let role = message
+            .get("role")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_owned();
         let text = message_text(message);
         if text.trim().is_empty() {
             continue;
@@ -739,3 +847,81 @@ fn read_omp(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate:
     out
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn transcript(path: &Path, id: &str, parent: Option<&str>) {
+        let mut session = serde_json::json!({
+            "type": "session",
+            "id": id,
+            "cwd": "/fixture",
+        });
+        if let Some(parent) = parent {
+            session["parentSession"] = serde_json::Value::String(parent.to_owned());
+        }
+        std::fs::write(path, format!("{session}\n")).unwrap();
+    }
+
+    #[test]
+    fn omp_terminal_records_bind_only_their_exact_tmux_transcript() {
+        let root = tempfile::tempdir().unwrap();
+        let terminal = root.path().join("terminal-sessions");
+        let sessions = root.path().join("sessions");
+        std::fs::create_dir_all(&terminal).unwrap();
+        std::fs::create_dir_all(&sessions).unwrap();
+        let first = sessions.join("first.jsonl");
+        let second = sessions.join("second.jsonl");
+        transcript(&first, "first", None);
+        transcript(&second, "second", Some("parent"));
+        std::fs::write(
+            terminal.join("tmux-%41"),
+            format!("/one\n{}\n", first.display()),
+        )
+        .unwrap();
+        std::fs::write(
+            terminal.join("tmux-%42"),
+            format!("/two\n{}\n", second.display()),
+        )
+        .unwrap();
+        std::fs::write(
+            terminal.join("ttys999"),
+            format!("/ignored\n{}\n", first.display()),
+        )
+        .unwrap();
+        std::fs::write(terminal.join("tmux-%43"), "/stale\n/missing.jsonl\n").unwrap();
+
+        let live = omp_live_sessions_in(&terminal).unwrap();
+        assert_eq!(
+            live.iter()
+                .map(|session| {
+                    (
+                        session.tmux_pane.as_deref(),
+                        session.session_id.as_str(),
+                        session.parent_session.as_deref(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            vec![
+                (Some("%41"), "first", None),
+                (Some("%42"), "second", Some("parent")),
+            ]
+        );
+        assert_eq!(live[0].scope, LiveSessionScope::Root);
+        assert_eq!(live[1].scope, LiveSessionScope::Child);
+
+        std::fs::write(
+            terminal.join("tmux-%41"),
+            format!("/one\n{}\n", second.display()),
+        )
+        .unwrap();
+        assert_eq!(
+            omp_live_sessions_in(&terminal)
+                .unwrap()
+                .into_iter()
+                .find(|session| session.tmux_pane.as_deref() == Some("%41"))
+                .map(|session| session.session_id),
+            Some("second".into())
+        );
+    }
+}

@@ -117,6 +117,30 @@ fn session_for_pid(live: &[boop::live::LiveSession], pid: u32) -> Option<&boop::
     matches.next().is_none().then_some(session)
 }
 
+/// A harness may publish an exact pane-to-session relation without a child
+/// pid. Preserve pid matching when it exists, then use one unambiguous pane
+/// row for the same frontend. Neither path considers cwd or transcript age.
+fn session_for_frontend<'a>(
+    live: &'a [boop::live::LiveSession],
+    pid: u32,
+    pane: Option<&str>,
+) -> Option<&'a boop::live::LiveSession> {
+    session_for_pid(live, pid).or_else(|| {
+        let pane = pane?.trim().trim_start_matches('%');
+        if pane.is_empty() {
+            return None;
+        }
+        let mut matches = live.iter().filter(|session| {
+            session
+                .tmux_pane
+                .as_deref()
+                .is_some_and(|held| held.trim_start_matches('%') == pane)
+        });
+        let session = matches.next()?;
+        matches.next().is_none().then_some(session)
+    })
+}
+
 /// Holds the pane in the terminal's alternate screen for a harness whose own
 /// TUI never asks for it. codex 0.151.0 parses `[tui] alternate_screen` and
 /// then renders inline anyway (openai/codex#24552), so its repaints scroll into
@@ -390,8 +414,13 @@ pub(crate) fn run_native_tui(
             .context("--initial-effort requires a registered fork route")?;
         settings_route.session_id = plan.session_id.clone();
         settings_route.app_server_socket = plan.app_server_socket.clone();
-        let model = settings_route.model.as_deref().context("fork route has no model")?;
-        adapter.door().change_native_settings(&settings_route, model, effort)?;
+        let model = settings_route
+            .model
+            .as_deref()
+            .context("fork route has no model")?;
+        adapter
+            .door()
+            .change_native_settings(&settings_route, model, effort)?;
     }
     let launch_ms = launch_started.elapsed().as_millis() as u64;
     if launch_ms >= 2_000 {
@@ -619,7 +648,9 @@ pub(crate) fn run_native_tui(
                 // clear/new transition within that process. Cwd and pane alone
                 // cannot distinguish concurrent conversations.
                 let observed = adapter.live().live_sessions()?;
-                if let Some(session) = session_for_pid(&observed, frontend_pid) {
+                if let Some(session) =
+                    session_for_frontend(&observed, frontend_pid, pane.as_deref())
+                {
                     if route.session_id.as_deref() != Some(session.session_id.as_str()) {
                         bind_native_session(
                             &store,
@@ -709,10 +740,47 @@ pub(crate) fn run_native_tui(
 
 #[cfg(test)]
 mod tests {
-    use super::{respawn_wanted, RESPAWN_MIN_UPTIME};
+    use super::{respawn_wanted, session_for_frontend, RESPAWN_MIN_UPTIME};
     use std::os::unix::process::ExitStatusExt;
     use std::process::ExitStatus;
     use std::time::Duration;
+
+    fn live(id: &str, pid: Option<u32>, pane: Option<&str>) -> boop::live::LiveSession {
+        boop::live::LiveSession {
+            harness: boop::harness::HarnessId::Omp,
+            session_id: id.into(),
+            pid,
+            cwd: None,
+            tmux_pane: pane.map(str::to_owned),
+            status: boop::live::LiveStatus::Unknown,
+            door: boop::live::DoorAddress::None,
+            observed_ms: 0,
+            started_ms: None,
+            scope: boop::live::LiveSessionScope::Root,
+            parent_session: None,
+        }
+    }
+
+    #[test]
+    fn pane_bound_registry_refreshes_the_frontend_without_a_pid() {
+        let first = vec![live("first", None, Some("%382"))];
+        assert_eq!(
+            session_for_frontend(&first, 999, Some("%382"))
+                .map(|session| session.session_id.as_str()),
+            Some("first")
+        );
+        let switched = vec![live("second", None, Some("%382"))];
+        assert_eq!(
+            session_for_frontend(&switched, 999, Some("382"))
+                .map(|session| session.session_id.as_str()),
+            Some("second")
+        );
+        let duplicate = vec![
+            live("one", None, Some("%382")),
+            live("two", None, Some("%382")),
+        ];
+        assert!(session_for_frontend(&duplicate, 999, Some("%382")).is_none());
+    }
 
     #[test]
     fn native_observation_preserves_a_registered_parent_update() {
