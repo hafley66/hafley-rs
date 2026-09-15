@@ -228,3 +228,58 @@ fn golden_fixtures() {
     }
     assert!(all_failures.is_empty(), "\n{}", all_failures.join("\n"));
 }
+
+fn turn(turn: i64, role: &str, said: &str) -> BoopTurn {
+    BoopTurn {
+        session: "edge".to_string(),
+        harness: "omp".to_string(),
+        turn,
+        ts: turn,
+        role: role.to_string(),
+        said: said.to_string(),
+    }
+}
+
+fn line(text: &str, row: usize) -> LogicalLine {
+    LogicalLine {
+        text: text.to_string(),
+        start: row,
+        end: row,
+    }
+}
+
+#[test]
+fn short_unambiguous_non_tool_turn_is_visible() {
+    let found = locate_visible_turns(&[line("done", 1)], &[turn(1, "assistant", "done")]);
+    assert_eq!(
+        found
+            .iter()
+            .map(|turn| (&turn.id, turn.anchor_start, turn.anchor_end))
+            .collect::<Vec<_>>(),
+        vec![(&"edge:1".to_string(), 1, 1)]
+    );
+}
+
+#[test]
+fn repeated_identical_tool_calls_are_unassigned() {
+    let said = "bash\n{\"command\":\"echo repeated-tool-command\"}";
+    let found = locate_visible_turns(
+        &[line("│ $ echo repeated-tool-command", 1)],
+        &[turn(1, "tool", said), turn(2, "tool", said)],
+    );
+    assert!(found.is_empty());
+}
+
+#[test]
+fn interleaved_anchor_intervals_do_not_overlap() {
+    let found = locate_visible_turns(
+        &[line("alpha", 1), line("bravo", 2), line("charlie", 3)],
+        &[
+            turn(1, "assistant", "alpha\ncharlie"),
+            turn(2, "assistant", "bravo"),
+        ],
+    );
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, "edge:1");
+    assert_eq!((found[0].buffer_start, found[0].buffer_end), (1, 3));
+}

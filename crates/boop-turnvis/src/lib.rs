@@ -269,10 +269,15 @@ fn has_discriminating_hit(
             .iter()
             .find(|row| row.line.start == hit.line.start)
             .is_some_and(|row| {
-                row.normalized.chars().count() >= 8
-                    && (owners.get(&(hit.line.start, source.turn.role.clone())) == Some(&1)
+                let unambiguous =
+                    owners.get(&(hit.line.start, source.turn.role.clone())) == Some(&1);
+                if source.turn.role == "tool" {
+                    unambiguous && row.normalized.chars().count() >= 8
+                } else {
+                    unambiguous
                         || (source.turn.role == "user"
-                            && row.line.text.trim_start().starts_with('❯')))
+                            && row.line.text.trim_start().starts_with('❯'))
+                }
             })
     })
 }
@@ -427,11 +432,17 @@ pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<Vi
         {
             continue;
         }
+        let anchor_start = unclaimed.iter().map(|hit| hit.line.start).min().unwrap();
+        let anchor_end = unclaimed.iter().map(|hit| hit.line.end).max().unwrap();
+        if visible
+            .iter()
+            .any(|turn| anchor_start <= turn.anchor_end && turn.anchor_start <= anchor_end)
+        {
+            continue;
+        }
         for hit in &unclaimed {
             claimed_rows.insert(hit.line.start);
         }
-        let anchor_start = unclaimed.iter().map(|hit| hit.line.start).min().unwrap();
-        let anchor_end = unclaimed.iter().map(|hit| hit.line.end).max().unwrap();
         visible.push(VisibleTurn {
             session: m.source.turn.session.clone(),
             harness: m.source.turn.harness.clone(),
