@@ -1,0 +1,5 @@
+error[E0425]: cannot find value `attempts` in this scope
+  --> tests/ui/source_binding_does_not_escape.rs:34:57
+   |
+34 |         ([Awaiting { attempts }] [Go] -> [Open { token: attempts }], id: GO),
+   |                                                         ^^^^^^^^ not found in this scope
