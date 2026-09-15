@@ -135,6 +135,11 @@ jobs:
       BUILD_MANIFEST_NAME: ${{ github.workspace }}/crates/sprefa-extract/target/distrib/${{ join(matrix.targets, '-') }}-dist-manifest.json
     steps:
       - name: enable windows longpaths
+        # Hand-added: this is the only `run:` step that executes BEFORE
+        # actions/checkout, and the workflow-level default points at
+        # crates/sprefa-extract, which the runner has not created yet (the job
+        # dies with "working directory ... No such file or directory").
+        working-directory: ${{ github.workspace }}
         run: |
           git config --global core.longpaths true
       - uses: actions/checkout@v6

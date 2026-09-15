@@ -191,6 +191,7 @@ mod sink {
     }
 
     /// The 1-minute load average, 0.0 where the platform will not report it.
+    #[cfg(unix)]
     pub fn load_avg_1min() -> f64 {
         let mut avg = [0f64; 3];
         // SAFETY: getloadavg fills at most `nelem` entries of the caller's array.
@@ -200,6 +201,15 @@ mod sink {
         } else {
             0.0
         }
+    }
+
+    /// Windows has no `getloadavg` (the `libc` crate declares it for unix
+    /// only), which is the "platform will not report it" the doc above names.
+    /// Spelled out rather than cfg'd inside one body so the dist release can
+    /// build x86_64-pc-windows-msvc at all.
+    #[cfg(not(unix))]
+    pub fn load_avg_1min() -> f64 {
+        0.0
     }
 
     /// Shared rather than dropped-at-exit: a `Layer` inside a `Registry` has no
