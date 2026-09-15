@@ -1,17 +1,22 @@
 //! The oh-my-pi (`omp`) adapter. omp writes one session file per conversation
 //! under `$PI_CODING_AGENT_DIR/sessions` (default `~/.omp/agent/sessions`) in a
 //! `<encoded cwd>/<timestamp>_<id>.jsonl` file whose header is the `type ==
-//! "session"` line, not line 1; the transcript readers land in a later lane, so
-//! this skeleton lists no sessions and reads no bytes.
+//! "session"` line, not line 1.
 
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::BufRead;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use serde_json::Value;
 
 use crate::harness::{
-    Capabilities, ControlCapabilities, Harness, HarnessId, LanePolicy, MailPolicy, OneShotSpec,
-    ReadChunk, SessionRef, SpawnSpec, VariantSupport,
+    jsonl_files, Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, LanePolicy,
+    MailPolicy, OneShotSpec, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
 };
+use boop_store::event::AgentEvent;
+use boop_store::ident::{Store, SyncStat, UsageRow};
+use boop_store::tail;
 
 pub struct Omp;
 
@@ -117,19 +122,53 @@ impl Harness for Omp {
     }
 
     fn sessions(&self) -> Result<Vec<SessionRef>> {
-        Ok(Vec::new())
+        sessions_in(&omp_sessions_dir()?)
     }
 
     fn session_roots(&self) -> Result<Vec<PathBuf>> {
         Ok(vec![omp_sessions_dir()?])
     }
 
-    fn read_from(&self, _session: &SessionRef, offset: u64) -> Result<ReadChunk> {
+    fn read_from(&self, session: &SessionRef, offset: u64) -> Result<ReadChunk> {
+        let mut file = File::open(&session.path)
+            .with_context(|| format!("open transcript {}", session.path.display()))?;
+        let result = tail::read_complete_lines(&mut file, offset)?;
+
+        let mut events = Vec::new();
+        let mut skipped = 0usize;
+        for line in &result.lines {
+            match parse_line(session, line) {
+                Ok(mut decoded) => events.append(&mut decoded),
+                Err(_) => skipped += 1,
+            }
+        }
+
         Ok(ReadChunk {
-            events: Vec::new(),
-            next_offset: offset,
-            reset: false,
-            skipped: 0,
+            events,
+            next_offset: result.next_offset,
+            reset: result.reset,
+            skipped,
+        })
+    }
+
+    fn ingest(&self, store: &Store, session: &SessionRef, from: u64) -> Result<Ingested> {
+        let mut file = File::open(&session.path)
+            .with_context(|| format!("open transcript {}", session.path.display()))?;
+        let result = tail::read_complete_lines(&mut file, from)?;
+        if result.lines.is_empty() {
+            return Ok(Ingested {
+                stat: SyncStat::default(),
+                next_cursor: from,
+            });
+        }
+        let mut turn = store.begin_walk(&session.session_id)?;
+        let mut stat = SyncStat::default();
+        for line in &result.lines {
+            project_line(store, session, line, &mut turn, &mut stat)?;
+        }
+        Ok(Ingested {
+            stat,
+            next_cursor: result.next_offset,
         })
     }
 
@@ -210,6 +249,54 @@ impl Harness for Omp {
             subagent_visible: false,
         }
     }
+
+    fn describe(&self, session: &SessionRef) -> Option<crate::transcript::SessionMeta> {
+        let (input_tokens, model, provider, created) = omp_meta(&session.path);
+        Some(crate::transcript::SessionMeta {
+            id: session.session_id.clone(),
+            harness: HarnessId::Omp,
+            cwd: session.cwd.clone().unwrap_or_default(),
+            source_path: Some(session.path.to_string_lossy().into_owned()),
+            title: None,
+            model,
+            provider,
+            input_tokens,
+            parent_id: session.parent.clone(),
+            parent_kind: None,
+            created_at_ms: created,
+            last_activity_ms: session.modified_ms,
+        })
+    }
+
+    fn messages(
+        &self,
+        session: &SessionRef,
+        after_seq: Option<u64>,
+    ) -> Vec<crate::transcript::Message> {
+        read_omp(&session.path, &session.session_id, after_seq)
+    }
+
+    /// Every omp session is a strip row; there is no main/sub-agent split.
+    fn lists_session(&self, _session: &SessionRef) -> bool {
+        true
+    }
+
+    /// omp resumes on the header uuid, which is the session id.
+    fn resume_id<'a>(&self, session: &'a SessionRef) -> &'a str {
+        &session.session_id
+    }
+
+    fn session_by_id(&self, session_id: &str, _cwd: Option<&str>) -> Option<SessionRef> {
+        let sessions = self.sessions().ok()?;
+        if let Some(exact) = sessions.iter().find(|session| session.session_id == session_id) {
+            return Some(exact.clone());
+        }
+        let prefixes: Vec<&SessionRef> = sessions
+            .iter()
+            .filter(|session| session.session_id.starts_with(session_id))
+            .collect();
+        (prefixes.len() == 1).then(|| prefixes[0].clone())
+    }
 }
 
 /// omp's session root: `$PI_CODING_AGENT_DIR` when set, else `~/.omp/agent`,
@@ -223,5 +310,432 @@ fn omp_sessions_dir() -> Result<PathBuf> {
             .join("agent"),
     };
     Ok(root.join("sessions"))
+}
+
+// ---- omp transcript reader and shaping.
+
+/// The `type == "session"` header's identity fields; the session header is
+/// found by type, never by line index (line 1 is a `title` record).
+struct OmpHeader {
+    id: String,
+    cwd: Option<String>,
+    parent: Option<String>,
+}
+
+fn session_header(path: &Path) -> Option<OmpHeader> {
+    for value in crate::transcript::head_values(path) {
+        if value.get("type").and_then(Value::as_str) == Some("session") {
+            let id = value.get("id").and_then(Value::as_str).unwrap_or("").to_owned();
+            let cwd = value.get("cwd").and_then(Value::as_str).map(str::to_owned);
+            let parent = value
+                .get("parentSession")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            return Some(OmpHeader { id, cwd, parent });
+        }
+    }
+    None
+}
+
+/// The session uuid from a `<timestamp>_<uuid>.jsonl` file stem.
+fn file_stem_uuid(path: &Path) -> Option<String> {
+    let stem = path.file_stem()?.to_str()?;
+    stem.split_once('_').map(|(_, uuid)| uuid.to_owned())
+}
+
+/// One `SessionRef` per `jsonl` under the sessions root. `session_id` is the
+/// header id (falling back to the file-stem uuid), `nickname` the file-stem
+/// uuid, `cwd` the header cwd, `parent` the header `parentSession`.
+fn sessions_in(base: &Path) -> Result<Vec<SessionRef>> {
+    let mut sessions = Vec::new();
+    for file in jsonl_files(base)? {
+        let Some(header) = session_header(&file.path) else {
+            continue;
+        };
+        let uuid = file_stem_uuid(&file.path).unwrap_or_else(|| header.id.clone());
+        let session_id = if header.id.is_empty() { uuid.clone() } else { header.id.clone() };
+        sessions.push(SessionRef {
+            harness: HarnessId::Omp,
+            session_id,
+            nickname: uuid,
+            path: file.path,
+            cwd: header.cwd,
+            git_branch: None,
+            modified_ms: file.modified_ms,
+            size: file.size,
+            tmux: None,
+            tmux_socket: None,
+            parent: header.parent,
+        });
+    }
+    sessions.sort_by_key(|session| session.modified_ms);
+    Ok(sessions)
+}
+
+fn build_event(
+    session: &SessionRef,
+    line: &tail::CompleteLine,
+    value: &Value,
+    record_type: &str,
+    tool_name: Option<String>,
+) -> AgentEvent {
+    AgentEvent {
+        harness: session.harness.as_str(),
+        session_id: session.session_id.clone(),
+        ts_ms: value
+            .get("timestamp")
+            .and_then(Value::as_str)
+            .and_then(boop_store::session::parse_iso_ms)
+            .unwrap_or(0),
+        uuid: value.get("id").and_then(Value::as_str).map(str::to_owned),
+        parent_uuid: value
+            .get("parentId")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        cwd: session.cwd.clone(),
+        git_branch: session.git_branch.clone(),
+        record_type: record_type.to_owned(),
+        tool_name,
+        paths: Vec::new(),
+        urls: Vec::new(),
+        raw_line_offset: line.start,
+    }
+}
+
+/// Decode one line into its events. `message` records emit one event each; an
+/// assistant message additionally emits one `toolCall` event per tool call.
+/// The recognized non-event records (`title`, `session`, `model_change`,
+/// `thinking_level_change`, `title_change`, `custom`) and anything not a
+/// `message` yield an empty vec. A line that fails to parse as JSON is an
+/// error, which the caller counts as skipped.
+fn parse_line(session: &SessionRef, line: &tail::CompleteLine) -> Result<Vec<AgentEvent>> {
+    let value: Value = serde_json::from_slice(&line.bytes)
+        .with_context(|| format!("invalid omp json at byte {}", line.start))?;
+    let record_type = value.get("type").and_then(Value::as_str).unwrap_or("");
+    if record_type != "message" {
+        return Ok(Vec::new());
+    }
+    let Some(message) = value.get("message") else {
+        return Ok(Vec::new());
+    };
+    let role = message.get("role").and_then(Value::as_str).unwrap_or("user");
+    match role {
+        "toolResult" => {
+            let name = message
+                .get("toolName")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            Ok(vec![build_event(session, line, &value, "toolResult", name)])
+        }
+        "assistant" => {
+            let mut events = vec![build_event(session, line, &value, "message", None)];
+            if let Some(items) = message.get("content").and_then(Value::as_array) {
+                for item in items {
+                    if item.get("type").and_then(Value::as_str) == Some("toolCall") {
+                        let name = item
+                            .get("name")
+                            .and_then(Value::as_str)
+                            .map(str::to_owned);
+                        events.push(build_event(session, line, &value, "toolCall", name));
+                    }
+                }
+            }
+            Ok(events)
+        }
+        _ => Ok(vec![build_event(session, line, &value, "message", None)]),
+    }
+}
+
+fn record(stat: &mut SyncStat, inserted: usize) {
+    if inserted == 0 {
+        stat.dropped += 1;
+    } else {
+        stat.written += 1;
+    }
+}
+
+/// The readable text of a message's `content`: a bare string, or the `text`
+/// parts of a content array joined with newlines.
+fn message_text(message: &Value) -> String {
+    match message.get("content") {
+        Some(Value::String(text)) => text.clone(),
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(|item| {
+                if item.get("type").and_then(Value::as_str) == Some("text") {
+                    item.get("text").and_then(Value::as_str)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        _ => String::new(),
+    }
+}
+
+/// A tool call's readable body: the name, then the arguments verbatim.
+fn tool_call_body(name: &str, arguments: Option<&Value>) -> String {
+    let input = match arguments {
+        Some(Value::String(text)) => text.clone(),
+        Some(other) => other.to_string(),
+        None => String::new(),
+    };
+    format!("{name}\n{}", crate::transcript::cap(&input, 2000))
+}
+
+/// A tool result's readable body: the `text` parts of its content joined.
+fn tool_result_body(content: Option<&Value>) -> String {
+    let text = match content {
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(|item| {
+                if item.get("type").and_then(Value::as_str) == Some("text") {
+                    item.get("text").and_then(Value::as_str)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        Some(Value::String(text)) => text.clone(),
+        _ => String::new(),
+    };
+    if text.is_empty() {
+        "tool result (empty)".to_owned()
+    } else {
+        crate::transcript::cap(&text, 4000)
+    }
+}
+
+/// Write one `message` line's turns and usage. `turn` is the running ordinal
+/// handed out by `begin_walk`; each written turn advances it.
+fn project_line(
+    store: &Store,
+    session: &SessionRef,
+    line: &tail::CompleteLine,
+    turn: &mut u64,
+    stat: &mut SyncStat,
+) -> Result<()> {
+    let value: Value = match serde_json::from_slice(&line.bytes) {
+        Ok(value) => value,
+        Err(_) => return Ok(()),
+    };
+    if value.get("type").and_then(Value::as_str) != Some("message") {
+        return Ok(());
+    }
+    let Some(message) = value.get("message") else {
+        return Ok(());
+    };
+    let ts = value
+        .get("timestamp")
+        .and_then(Value::as_str)
+        .and_then(boop_store::session::parse_iso_ms)
+        .unwrap_or(0);
+    let sid = session.session_id.clone();
+    let role = message.get("role").and_then(Value::as_str).unwrap_or("user");
+    match role {
+        "user" => {
+            let text = message_text(message);
+            if !text.is_empty() {
+                *turn += 1;
+                let inserted = store.write_turn(&sid, *turn, ts, "user", &text, None)?;
+                record(stat, inserted);
+            }
+        }
+        "assistant" => {
+            let mut prose = Vec::new();
+            if let Some(items) = message.get("content").and_then(Value::as_array) {
+                for item in items {
+                    match item.get("type").and_then(Value::as_str) {
+                        Some("text") => {
+                            if let Some(text) = item.get("text").and_then(Value::as_str) {
+                                prose.push(text.to_owned());
+                            }
+                        }
+                        Some("toolCall") => {
+                            let name = item.get("name").and_then(Value::as_str).unwrap_or("tool");
+                            *turn += 1;
+                            let body = tool_call_body(name, item.get("arguments"));
+                            let inserted =
+                                store.write_turn(&sid, *turn, ts, "tool", &body, None)?;
+                            record(stat, inserted);
+                            store.write_tool_fact(
+                                &sid,
+                                *turn,
+                                ts,
+                                name,
+                                item.get("arguments"),
+                            )?;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            let text = prose.join("\n");
+            if !text.is_empty() {
+                *turn += 1;
+                let inserted = store.write_turn(&sid, *turn, ts, "assistant", &text, None)?;
+                record(stat, inserted);
+            }
+            if let Some(usage) = message.get("usage") {
+                let model = message
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown")
+                    .to_owned();
+                let message_id = format!("{sid}#t{turn}");
+                let request_id = value
+                    .get("responseId")
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                let input = usage.get("input").and_then(Value::as_i64).unwrap_or(0);
+                let output = usage.get("output").and_then(Value::as_i64).unwrap_or(0);
+                let cache_write = usage
+                    .get("cacheWrite")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(0);
+                let cached = usage.get("cacheRead").and_then(Value::as_i64).unwrap_or(0);
+                let cost = usage
+                    .get("cost")
+                    .and_then(|cost| cost.get("total"))
+                    .and_then(Value::as_f64);
+                let usage_row = UsageRow {
+                    ts,
+                    message_id: &message_id,
+                    request_id,
+                    model: &model,
+                    service_tier: None,
+                    input_tokens: input,
+                    output_tokens: output,
+                    cache_create_5m_tokens: cache_write,
+                    cache_create_1h_tokens: 0,
+                    cache_read_tokens: cached,
+                    is_sidechain: session.parent.is_some(),
+                    cost_usd_recorded: cost,
+                };
+                let (is_new, changed) = store.write_usage(&sid, *turn, &usage_row)?;
+                if changed {
+                    if is_new {
+                        stat.usage_written += 1;
+                    } else {
+                        stat.usage_updated += 1;
+                    }
+                }
+            }
+        }
+        "toolResult" => {
+            *turn += 1;
+            let body = tool_result_body(message.get("content"));
+            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body, None)?;
+            record(stat, inserted);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// The strip's metadata: input tokens from the last assistant `usage`, model
+/// from the last assistant message (falling back to the last `model_change`),
+/// provider from the last assistant message, and the session header timestamp
+/// as the created time.
+fn omp_meta(path: &Path) -> (Option<u64>, Option<String>, Option<String>, u64) {
+    let Ok(file) = File::open(path) else {
+        return (None, None, None, 0);
+    };
+    let mut input = None;
+    let mut model = None;
+    let mut model_change = None;
+    let mut provider = None;
+    let mut created = 0;
+    for line in std::io::BufReader::new(file).lines().map_while(Result::ok) {
+        let Some(value) = crate::transcript::json(&line) else {
+            continue;
+        };
+        match value.get("type").and_then(Value::as_str) {
+            Some("session") => {
+                created = value
+                    .get("timestamp")
+                    .and_then(Value::as_str)
+                    .and_then(boop_store::session::parse_iso_ms)
+                    .unwrap_or(0);
+            }
+            Some("model_change") => {
+                if let Some(name) = value.get("model").and_then(Value::as_str) {
+                    model_change = Some(name.to_owned());
+                }
+            }
+            Some("message") => {
+                let Some(message) = value.get("message") else {
+                    continue;
+                };
+                if message.get("role").and_then(Value::as_str) == Some("assistant") {
+                    if let Some(name) = message.get("model").and_then(Value::as_str) {
+                        model = Some(name.to_owned());
+                    }
+                    if let Some(name) = message.get("provider").and_then(Value::as_str) {
+                        provider = Some(name.to_owned());
+                    }
+                    if let Some(usage) = message.get("usage") {
+                        input = usage.get("input").and_then(Value::as_u64);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    (input, model.or(model_change), provider, created)
+}
+
+/// Every `message` line as a `Message`, oldest first. `after_seq` returns only
+/// newer lines.
+fn read_omp(path: &Path, session_id: &str, after_seq: Option<u64>) -> Vec<crate::transcript::Message> {
+    let Ok(file) = File::open(path) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for (seq, line) in std::io::BufReader::new(file).lines().enumerate() {
+        let seq = seq as u64;
+        if after_seq.is_some_and(|n| seq <= n) {
+            continue;
+        }
+        let Ok(v) = line
+            .ok()
+            .and_then(|line| serde_json::from_str::<Value>(&line).ok())
+            .ok_or(())
+        else {
+            continue;
+        };
+        if v.get("type").and_then(Value::as_str) != Some("message") {
+            continue;
+        }
+        let Some(message) = v.get("message") else {
+            continue;
+        };
+        let role = message.get("role").and_then(Value::as_str).unwrap_or("").to_owned();
+        let text = message_text(message);
+        if text.trim().is_empty() {
+            continue;
+        }
+        let ts = v
+            .get("timestamp")
+            .and_then(Value::as_str)
+            .and_then(boop_store::session::parse_iso_ms)
+            .unwrap_or(0);
+        let id = v.get("id").and_then(Value::as_str).unwrap_or("").to_owned();
+        out.push(crate::transcript::Message {
+            harness: HarnessId::Omp,
+            session_id: session_id.to_owned(),
+            id,
+            seq,
+            role,
+            subtype: None,
+            ts,
+            preview: crate::transcript::cap(&text, 180),
+            text,
+            locator: format!("omp:{}#L{}", path.display(), seq + 1),
+        });
+    }
+    out
 }
 
