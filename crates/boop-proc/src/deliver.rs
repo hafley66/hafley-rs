@@ -906,18 +906,15 @@ fn keystroke_route(
         return Landing::new(Rung::Mailbox, WHY);
     }
     let pane = pane_of_target(target).unwrap_or_else(|| target.to_owned());
-    if route.harness == Some(HarnessId::Kimi) {
+    let submit_key = route
+        .harness
+        .and_then(|id| registry.get(id).composer_submit_key());
+    if let Some(key) = submit_key {
         // A newline would submit the prompt mid-body, so the line is flattened
         // and the composer key pressed once.
         let line = rendered.replace('\n', " ");
         return match paster.paste(&pane, &line) {
-            Some(_)
-                if paster
-                    .submit(&pane, boop_harness::harness::kimi::SUBMIT_KEY)
-                    .is_some() =>
-            {
-                Landing::pane_submit(&pane, WHY)
-            }
+            Some(_) if paster.submit(&pane, key).is_some() => Landing::pane_submit(&pane, WHY),
             _ => Landing::new(Rung::Mailbox, WHY),
         };
     }
