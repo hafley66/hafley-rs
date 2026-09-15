@@ -33,7 +33,7 @@ df_edge	996	987
 df_fields	8	name	7
 df_node	call_res		1305
 df_node	call_res		967
-df_node	closure	crates/sprefa-extract/tests/fixtures/rust/docs.rs::function::apply::closure::46_15	1280
+df_node	closure	v6/sprefa-extract/tests/fixtures/rust/docs.rs::function::apply::closure::46_15	1280
 df_node	let_bind	engine	987
 df_node	let_bind	func	1273
 df_node	let_bind	picked	1124
@@ -60,11 +60,11 @@ df_param_pos	0	0
 df_param_pos	16	0
 df_param_pos	17	0
 df_param_pos	3	0
-doc	crates/sprefa-extract/tests/fixtures/rust/docs.rs::enum::Mode	16
-doc	crates/sprefa-extract/tests/fixtures/rust/docs.rs::function::make_engine	30
-doc	crates/sprefa-extract/tests/fixtures/rust/docs.rs::function::trim	25
-doc	crates/sprefa-extract/tests/fixtures/rust/docs.rs::method::Engine.mode	38
-doc	crates/sprefa-extract/tests/fixtures/rust/docs.rs::struct::Engine	11
+doc	v6/sprefa-extract/tests/fixtures/rust/docs.rs::enum::Mode	16
+doc	v6/sprefa-extract/tests/fixtures/rust/docs.rs::function::make_engine	30
+doc	v6/sprefa-extract/tests/fixtures/rust/docs.rs::function::trim	25
+doc	v6/sprefa-extract/tests/fixtures/rust/docs.rs::method::Engine.mode	38
+doc	v6/sprefa-extract/tests/fixtures/rust/docs.rs::struct::Engine	11
 type_edge	Engine	String	field
 type_edge	Mode	Mode::Fast	variant
 type_edge	Mode	Mode::Slow	variant

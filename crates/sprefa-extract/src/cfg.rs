@@ -56,8 +56,8 @@ pub enum CfgRole {
     /// A goal naming the enclosing clause's own head: one statement plus a jump
     /// edge back to the Entry. Assigned only where the names agree.
     SelfCall,
-    /// A fold over the body's rows (`count(child)` in a dl6 head): one Loop
-    /// node with no arm.
+    /// A fold over the body's rows (a head naming an aggregate such as
+    /// `count(child)`): one Loop node with no arm.
     Aggregate,
 }
 
@@ -185,33 +185,6 @@ pub const PROLOG_ROLES: &[(&str, RoleRule)] = &[
     ("atom", Named(&[], Some(SelfCall))),
 ];
 
-/// tree-sitter-dl6 node kinds. Aggregates live in the head only
-/// (`compile/registry.pl` `surface(count/1, aggregate, ...)`).
-pub const DL6_ROLES: &[(&str, RoleRule)] = &[
-    ("rule", Fixed(Clause)),
-    ("fact", Fixed(Clause)),
-    ("query", Fixed(Clause)),
-    ("match_statement", Fixed(Branch)),
-    ("goal_list", Fixed(Seq)),
-    (
-        "atom",
-        Named(
-            &[
-                ("not", Negation),
-                ("count", Aggregate),
-                ("sum", Aggregate),
-                ("min", Aggregate),
-                ("max", Aggregate),
-                ("avg", Aggregate),
-                ("group_concat", Aggregate),
-                ("json_group_array", Aggregate),
-                ("json_object", Aggregate),
-            ],
-            Some(SelfCall),
-        ),
-    ),
-];
-
 /// The kind_role table for one `Source::name()`, None for a language with no
 /// hand-authored rows (its CFG is empty rather than wrong).
 pub fn roles_for(lang: &str) -> Option<&'static [(&'static str, RoleRule)]> {
@@ -222,7 +195,6 @@ pub fn roles_for(lang: &str) -> Option<&'static [(&'static str, RoleRule)]> {
         "kotlin" => Some(KOTLIN_ROLES),
         "python" => Some(PYTHON_ROLES),
         "prolog" => Some(PROLOG_ROLES),
-        "dl6" => Some(DL6_ROLES),
         _ => None,
     }
 }

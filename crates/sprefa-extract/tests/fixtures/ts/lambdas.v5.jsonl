@@ -82,11 +82,11 @@ df_node	call_res		1283
 df_node	call_res		1480
 df_node	call_res		787
 df_node	call_res		901
-df_node	closure	crates/sprefa-extract/tests/fixtures/ts/lambdas.ts::function::pairs::closure::1272	1272
-df_node	closure	crates/sprefa-extract/tests/fixtures/ts/lambdas.ts::function::pairs::closure::1272::closure::1306	1306
-df_node	closure	crates/sprefa-extract/tests/fixtures/ts/lambdas.ts::function::summarize::closure::1061	1061
-df_node	closure	crates/sprefa-extract/tests/fixtures/ts/lambdas.ts::function::summarize::closure::798	798
-df_node	closure	crates/sprefa-extract/tests/fixtures/ts/lambdas.ts::function::summarize::closure::915	915
+df_node	closure	v6/sprefa-extract/tests/fixtures/ts/lambdas.ts::function::pairs::closure::1272	1272
+df_node	closure	v6/sprefa-extract/tests/fixtures/ts/lambdas.ts::function::pairs::closure::1272::closure::1306	1306
+df_node	closure	v6/sprefa-extract/tests/fixtures/ts/lambdas.ts::function::summarize::closure::1061	1061
+df_node	closure	v6/sprefa-extract/tests/fixtures/ts/lambdas.ts::function::summarize::closure::798	798
+df_node	closure	v6/sprefa-extract/tests/fixtures/ts/lambdas.ts::function::summarize::closure::915	915
 df_node	concat		1096
 df_node	concat		1291
 df_node	let_bind	factor	679

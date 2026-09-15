@@ -42,7 +42,7 @@ The focused Rust command was run from the recovered worktree root:
 
 ```sh
 npm_config_offline=true cargo test --offline \
-  --manifest-path crates/sprefa-extract/Cargo.toml --features cli --test 0_sqlite \
+  --manifest-path v6/sprefa-extract/Cargo.toml --features cli --test 0_sqlite \
   --target-dir /private/tmp/extract-recovered-cargo.8prmG2 --color never
 ```
 

@@ -28,11 +28,6 @@ tests/fixtures/df_loops/sample.go
 tests/fixtures/df_loops/sample.kt
 tests/fixtures/df_loops/sample.rs
 tests/fixtures/df_loops/sample.ts
-tests/fixtures/dl6/0_sample.dl6
-tests/fixtures/dl6/1_caller.dl6
-tests/fixtures/dl6/2_callee.dl6
-tests/fixtures/dl6/3_typecaller.dl6
-tests/fixtures/dl6/4_typedef.dl6
 tests/fixtures/go/docs.go
 tests/fixtures/go/docs.v5.jsonl
 tests/fixtures/go/edges.go
@@ -89,8 +84,6 @@ tests/fixtures/prolog/0_sample.pl
 tests/fixtures/prolog/1_refs.pl
 tests/fixtures/python/sample.py
 tests/fixtures/resolve/0_caller.ts
-tests/fixtures/resolve/10_dl6_resolved_edges.jsonl
-tests/fixtures/resolve/11_dl6_resolved_type_edges.jsonl
 tests/fixtures/resolve/1_callee.ts
 tests/fixtures/resolve/2_resolved_edges.jsonl
 tests/fixtures/resolve/3_kotlin.kt

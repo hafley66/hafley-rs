@@ -74,14 +74,14 @@ df_param_pos	1	1
 df_param_pos	22	0
 df_param_pos	6	0
 df_param_pos	7	1
-doc	crates/sprefa-extract/tests/fixtures/ts/docs.ts::alias::Vec	23
-doc	crates/sprefa-extract/tests/fixtures/ts/docs.ts::class::Vec2	32
-doc	crates/sprefa-extract/tests/fixtures/ts/docs.ts::enum::Dir	26
-doc	crates/sprefa-extract/tests/fixtures/ts/docs.ts::function::add	12
-doc	crates/sprefa-extract/tests/fixtures/ts/docs.ts::function::mirror	50
-doc	crates/sprefa-extract/tests/fixtures/ts/docs.ts::interface::Point	17
-doc	crates/sprefa-extract/tests/fixtures/ts/docs.ts::method::Vec2.magnitude	36
-doc	crates/sprefa-extract/tests/fixtures/ts/docs.ts::method::Vec2.scaled	41
+doc	v6/sprefa-extract/tests/fixtures/ts/docs.ts::alias::Vec	23
+doc	v6/sprefa-extract/tests/fixtures/ts/docs.ts::class::Vec2	32
+doc	v6/sprefa-extract/tests/fixtures/ts/docs.ts::enum::Dir	26
+doc	v6/sprefa-extract/tests/fixtures/ts/docs.ts::function::add	12
+doc	v6/sprefa-extract/tests/fixtures/ts/docs.ts::function::mirror	50
+doc	v6/sprefa-extract/tests/fixtures/ts/docs.ts::interface::Point	17
+doc	v6/sprefa-extract/tests/fixtures/ts/docs.ts::method::Vec2.magnitude	36
+doc	v6/sprefa-extract/tests/fixtures/ts/docs.ts::method::Vec2.scaled	41
 type_edge	Dir	Dir::North	variant
 type_edge	Dir	Dir::South	variant
 type_edge	Vec	Point	field

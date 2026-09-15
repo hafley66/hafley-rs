@@ -7,13 +7,8 @@ use sprefa_extract::{
     AstRuleError, ExtractLang,
 };
 
-const DL6_SAMPLE: &str = "tests/fixtures/dl6/0_sample.dl6";
 const PROLOG_SAMPLE: &str = "tests/fixtures/prolog/0_sample.pl";
 const MARKDOWN_SAMPLE: &str = "tests/fixtures/markdown/0_sample.md";
-
-/// A dl6 source spelling the language's own `$Name` hole (parse_dl_dcg.pl:1688
-/// `dollar_var`, grammar.js:113 `capture_key`) twice under different names.
-const DL6_HOLES: &str = "rel patch(doc: json).\npatch(Doc) <- shape(Doc, { $KEY: Value }).\npatch(Doc) <- shape(Doc, { $OTHER: Value }).\n";
 
 fn query(id: &str, pattern: &str, selector: Option<&str>, captures: &[&str]) -> AstPatternQuery {
     AstPatternQuery {
@@ -38,7 +33,6 @@ fn read(path: &str) -> Vec<u8> {
 
 #[test]
 fn from_path_routes_the_extract_grammars_and_delegates_the_rest() {
-    assert_eq!(ExtractLang::from_path("a/b.dl6"), Some(ExtractLang::Dl6));
     assert_eq!(ExtractLang::from_path("go.pl"), Some(ExtractLang::Prolog));
     assert_eq!(ExtractLang::from_path("t.plt"), Some(ExtractLang::Prolog));
     assert_eq!(ExtractLang::from_path("r.horn"), Some(ExtractLang::Prolog));
@@ -64,7 +58,6 @@ fn from_path_routes_the_extract_grammars_and_delegates_the_rest() {
 #[test]
 fn every_lang_name_round_trips_through_the_yaml_spelling() {
     let mut langs = vec![
-        ExtractLang::Dl6,
         ExtractLang::Prolog,
         ExtractLang::Markdown,
         ExtractLang::MarkdownInline,
@@ -82,14 +75,13 @@ fn every_lang_name_round_trips_through_the_yaml_spelling() {
 }
 
 /// `µ` is what ast-grep-language picks for every grammar whose identifiers take
-/// Unicode letters (lib.rs:196-211). dl6 and prolog are not such grammars: dl6
-/// `variable` is `[A-Z]...` and `identifier` is `_*[a-z]...` (grammar.js:129-130),
-/// so `µT` parses to `(ERROR (UNEXPECTED 181))` under both and `_T` is a plain
-/// variable. `_` is the C/C++/CSS choice (ast-grep-language lib.rs:186-190).
-/// @comment-ok: fail-first receipt, the sigil is why the three parse at all
+/// Unicode letters (lib.rs:196-211). prolog is not such a grammar: `variable` is
+/// `[A-Z]...` and `identifier` is `_*[a-z]...`, so `µT` parses to
+/// `(ERROR (UNEXPECTED 181))` under it and `_T` is a plain variable. `_` is the
+/// C/C++/CSS choice (ast-grep-language lib.rs:186-190).
+/// @comment-ok: fail-first receipt, the sigil is why the two parse at all
 #[test]
-fn expando_char_is_underscore_for_dl6_and_prolog_and_mu_for_markdown() {
-    assert_eq!(ExtractLang::Dl6.expando_char(), '_');
+fn expando_char_is_underscore_for_prolog_and_mu_for_markdown() {
     assert_eq!(ExtractLang::Prolog.expando_char(), '_');
     assert_eq!(ExtractLang::Markdown.expando_char(), 'µ');
     assert_eq!(ExtractLang::MarkdownInline.expando_char(), 'µ');
@@ -101,7 +93,7 @@ fn expando_char_is_underscore_for_dl6_and_prolog_and_mu_for_markdown() {
         ExtractLang::Sg(SupportLang::C).expando_char(),
         SupportLang::C.expando_char()
     );
-    for lang in [ExtractLang::Dl6, ExtractLang::Prolog, ExtractLang::Markdown] {
+    for lang in [ExtractLang::Prolog, ExtractLang::Markdown] {
         assert_eq!(lang.meta_var_char(), '$');
     }
 }
@@ -126,95 +118,7 @@ fn pre_process_pattern_matches_the_ast_grep_rewrite() {
             "{query}"
         );
     }
-    assert_eq!(ExtractLang::Dl6.pre_process_pattern("seen($T)"), "seen(_T)");
-    assert_eq!(ExtractLang::Dl6.pre_process_pattern("f($$$A)"), "f(___A)");
-    assert_eq!(ExtractLang::Dl6.pre_process_pattern("f($x)"), "f($x)");
     assert_eq!(ExtractLang::Markdown.pre_process_pattern("# $T"), "# µT");
-}
-
-#[test]
-fn dl6_ast_pattern_matches_rule_head_and_body() {
-    let content = read(DL6_SAMPLE);
-    let facts = query_patterns(
-        DL6_SAMPLE,
-        &content,
-        &[query(
-            "rule",
-            "path($LEFT, $RIGHT) <- $BODY.",
-            None,
-            &["LEFT", "RIGHT", "BODY"],
-        )],
-    )
-    .expect("dl6 pattern query");
-    assert_eq!(captured(&facts, "LEFT"), vec!["X", "X"]);
-    assert_eq!(captured(&facts, "RIGHT"), vec!["Y", "Z"]);
-    assert_eq!(
-        captured(&facts, "BODY"),
-        vec!["edge(X, Y)", "edge(X, Y), path(Y, Z)"]
-    );
-    let first = facts
-        .iter()
-        .find(|fact| fact.capture == "BODY")
-        .expect("a BODY capture");
-    let text = String::from_utf8(content.clone()).expect("utf8 fixture");
-    assert_eq!(
-        &text[first.start as usize..first.end as usize],
-        "edge(X, Y)"
-    );
-    assert_eq!(
-        &text[first.match_start as usize..first.match_end as usize],
-        "path(X, Y) <- edge(X, Y)."
-    );
-}
-
-/// A dl6 `$Name` is a hole in the LANGUAGE (parse_dl_dcg.pl:1688), and a SOURCE
-/// carrying one reaches the matcher untouched: `pre_process_pattern` rewrites
-/// patterns only. So a metavar binds the hole as literal text and no capture
-/// named after it exists. The other half does not hold: a PATTERN cannot spell a
-/// literal `$KEY`, because the rewrite eats every `$` before `[A-Z_]` whatever
-/// the expando char is (ast-grep-language lib.rs:88-97).
-/// @comment-ok: the one-way separation is the fact this test pins
-#[test]
-fn a_dollar_hole_in_dl6_source_is_not_an_ast_grep_metavar() {
-    let facts = query_patterns(
-        "holes.dl6",
-        DL6_HOLES.as_bytes(),
-        &[query(
-            "hole",
-            "patch(Doc) <- shape($DOC, $OBJECT).",
-            None,
-            &["DOC", "OBJECT"],
-        )],
-    )
-    .expect("dl6 hole query");
-    assert_eq!(captured(&facts, "DOC"), vec!["Doc", "Doc"]);
-    assert_eq!(
-        captured(&facts, "OBJECT"),
-        vec!["{ $KEY: Value }", "{ $OTHER: Value }"]
-    );
-    let first = facts.first().expect("a match");
-    assert_eq!(
-        &DL6_HOLES[first.match_start as usize..first.match_end as usize],
-        "patch(Doc) <- shape(Doc, { $KEY: Value })."
-    );
-
-    let unbound = query_patterns(
-        "holes.dl6",
-        DL6_HOLES.as_bytes(),
-        &[query(
-            "unbound",
-            "patch(Doc) <- shape($DOC, $OBJECT).",
-            None,
-            &["KEY"],
-        )],
-    );
-    let Err(sprefa_extract::ParseError::Parse(message)) = unbound else {
-        panic!("a dl6 source hole must not define an ast-grep capture");
-    };
-    assert_eq!(
-        message,
-        "ast pattern 'unbound' does not define capture 'KEY'"
-    );
 }
 
 #[test]
@@ -263,42 +167,6 @@ fn markdown_ast_pattern_matches_a_heading() {
 }
 
 #[test]
-fn a_yaml_ast_rule_runs_on_a_dl6_file_and_proposes_a_fix() {
-    let yaml = "id: path_to_reach\nrule:\n  pattern: path($LEFT, $RIGHT) <- $BODY.\nfix: reach($LEFT, $RIGHT) <- $BODY.\n";
-    let request = decode_ast_rule_yaml(yaml).expect("yaml decodes");
-    let content = read(DL6_SAMPLE);
-    let matches = query_ast_rule(DL6_SAMPLE, &content, &request).expect("dl6 yaml rule");
-    assert_eq!(matches.len(), 2);
-    let replacements = matches
-        .iter()
-        .map(|matched| {
-            matched
-                .proposal
-                .as_ref()
-                .expect("a fix proposal")
-                .replacement
-                .clone()
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(
-        replacements,
-        vec![
-            "reach(X, Y) <- edge(X, Y).",
-            "reach(X, Z) <- edge(X, Y), path(Y, Z).",
-        ]
-    );
-    let captures = matches[0]
-        .captures
-        .iter()
-        .map(|capture| (capture.name.as_str(), capture.text.as_str()))
-        .collect::<Vec<_>>();
-    assert_eq!(
-        captures,
-        vec![("BODY", "edge(X, Y)"), ("LEFT", "X"), ("RIGHT", "Y")]
-    );
-}
-
-#[test]
 fn a_yaml_ast_rule_runs_on_a_prolog_file() {
     let yaml = "id: use_module\nrule:\n  pattern: use_module($MODULE)\n";
     let request = decode_ast_rule_yaml(yaml).expect("yaml decodes");
@@ -325,14 +193,8 @@ fn an_unknown_extension_still_reports_no_grammar() {
 }
 
 #[test]
-fn the_cli_ast_pattern_door_reaches_dl6_prolog_and_markdown() {
+fn the_cli_ast_pattern_door_reaches_prolog_and_markdown() {
     for (path, pattern, capture, expected) in [
-        (
-            DL6_SAMPLE,
-            "rule=path($LEFT, $RIGHT) <- $BODY.",
-            "rule=BODY",
-            "edge(X, Y)",
-        ),
         (
             PROLOG_SAMPLE,
             "rule=use_module($MODULE, $IMPORTS)",
@@ -356,47 +218,4 @@ fn the_cli_ast_pattern_door_reaches_dl6_prolog_and_markdown() {
             "{path} stdout: {stdout}"
         );
     }
-}
-
-const DL6_UNDERSCORE: &str = "rel seen(node: text).\nseen(_Target) <- edge(_Target, Other).\nseen(Plain) <- edge(Plain, Other).\n";
-
-/// The expando is `_`, and ast-grep only reads expando + an ALL-CAPS name as a
-/// metavar. So in a PATTERN `_Target` stays a literal variable (one match) while
-/// `_TARGET` is a metavar (both rules match). SOURCE text is never rewritten.
-#[test]
-fn an_underscore_variable_in_a_dl6_pattern_is_literal_unless_all_caps() {
-    let literal = query_patterns(
-        "underscore.dl6",
-        DL6_UNDERSCORE.as_bytes(),
-        &[query(
-            "literal",
-            "seen(_Target) <- edge(_Target, $O).",
-            None,
-            &["O"],
-        )],
-    )
-    .expect("dl6 literal query");
-    assert_eq!(captured(&literal, "O"), vec!["Other"]);
-
-    let metavar = query_patterns(
-        "underscore.dl6",
-        DL6_UNDERSCORE.as_bytes(),
-        &[query(
-            "metavar",
-            "seen(_TARGET) <- edge(_TARGET, $O).",
-            None,
-            &["O"],
-        )],
-    )
-    .expect("dl6 metavar query");
-    assert_eq!(captured(&metavar, "O"), vec!["Other", "Other"]);
-
-    // Source side: a `$X` metavar binds the literal `_Target` text unchanged.
-    let facts = query_patterns(
-        "underscore.dl6",
-        DL6_UNDERSCORE.as_bytes(),
-        &[query("bind", "seen($X) <- edge($X, Other).", None, &["X"])],
-    )
-    .expect("dl6 bind query");
-    assert_eq!(captured(&facts, "X"), vec!["_Target", "Plain"]);
 }

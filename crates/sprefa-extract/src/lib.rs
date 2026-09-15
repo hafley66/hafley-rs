@@ -77,7 +77,7 @@ pub use lang::{
     query_tree_sitter, query_tree_sitter_spans, rehome_for, rehomes, rename_for, renames, respell,
     source_for, sources, ts_specifiers, AstCaptureFact, AstPatternQuery, AstRule, AstRuleCapture,
     AstRuleError, AstRuleMatch, AstRuleMutationProposal, AstRuleRequest, AstgrepSource, BuildPaths,
-    ByteRange, DataSource, DlSource, ExtractLang, FactError, FactMatcher, FactSet, GitBlobFact,
+    ByteRange, DataSource, ExtractLang, FactError, FactMatcher, FactSet, GitBlobFact,
     GoSource, KotlinSource, MarkdownSource, NamedAstRule, OwnedRegion, OwnedRegionError,
     OwnedRegionProposal, PrologSource, PythonSource, RustSource, SourceCaptureFact,
     SourceMatchFact, SourcePlace, SourceQuery, SourceQueryError, SourceQueryFact, SourceQueryFacts,

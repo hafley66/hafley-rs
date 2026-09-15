@@ -32,8 +32,8 @@ use crate::lang::python::{py_module_facts, PyModuleFacts, PyModuleIndex};
 use crate::lang::rust_modules::{RustModuleFacts, RustModuleIndex};
 use crate::lang::ts_resolve::{ModuleFacts, TsModuleIndex};
 use crate::lang::{
-    source_for, DlSource, GoSource, KotlinSource, MarkdownSource, PrologSource, PythonSource,
-    RustSource, TsSource,
+    source_for, GoSource, KotlinSource, MarkdownSource, PrologSource, PythonSource, RustSource,
+    TsSource,
 };
 use crate::rows::FamilyBundle;
 use crate::scip::{ScipGo, ScipRust, ScipTypescript};
@@ -59,7 +59,7 @@ pub struct ResolveArms {
     /// source in the roster except the ast-grep CST fallback.
     pub call: bool,
     /// `Resolve<TypeF>`: resolved type reference edges. Implemented for TS, Go,
-    /// Rust, dl6 and Kotlin; Prolog has no arm and is skipped, never dispatched.
+    /// Rust and Kotlin; Prolog has no arm and is skipped, never dispatched.
     pub types: bool,
     /// `FlowF`: the inter-procedural value-flow join over resolved call edges.
     /// A pure join, so it needs the `call` resolve to have run and emits
@@ -1716,13 +1716,6 @@ pub static RESOLVE_ARMS: &[ResolveArm] = &[
         type_plane: TypePlane::Nodes,
     },
     ResolveArm {
-        name: "dl6",
-        call: Some(|out, cx| Resolve::<CallF>::resolve(&DlSource, out, cx)),
-        types: Some(|out, cx| Resolve::<TypeF>::resolve(&DlSource, out, cx)),
-        drops: None,
-        type_plane: TypePlane::Nodes,
-    },
-    ResolveArm {
         name: "kotlin",
         call: Some(|out, cx| Resolve::<CallF>::resolve(&KotlinSource, out, cx)),
         types: Some(|out, cx| Resolve::<TypeF>::resolve(&KotlinSource, out, cx)),
@@ -2362,8 +2355,8 @@ fn conformance_tsi_rows(
     (out, next)
 }
 
-/// A closure def carries no name, and `resolve_at` types caller_name `text`
-/// (`v6/dl/fixtures/flagship-flow.dl6:35`): a null drops the whole row.
+/// A closure def carries no name, and `resolve_at` types caller_name `text`:
+/// a null drops the whole row.
 fn caller_name(
     bundle: &FamilyBundle<crate::types::CallF>,
     output: &ExtractOutput,

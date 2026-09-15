@@ -37,7 +37,7 @@ only in `scip.rs` and `scip_ensure.rs`.
 
 ## 1. Complete gate
 
-The final command ran from `crates/sprefa-extract` with one lane-dedicated target:
+The final command ran from `v6/sprefa-extract` with one lane-dedicated target:
 
 ```sh
 CARGO_TARGET_DIR=/private/tmp/extract-final-gate.ODHlZ8/cargo-target \

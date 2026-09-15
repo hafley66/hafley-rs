@@ -1,6 +1,6 @@
-//! The CFG plane for python, prolog and dl6: the whole edge set of each fixture
+//! The CFG plane for python and prolog: the whole edge set of each fixture
 //! under `tests/fixtures/cfg/`, hand-derived from the source, plus the receipt
-//! that the three census fixtures now carry cfg rows.
+//! that the census fixtures now carry cfg rows.
 
 use std::collections::BTreeSet;
 
@@ -166,37 +166,6 @@ fn prolog_if_then_else_cut_negation_recursion_edge_set() {
     );
 }
 
-/// The rel declarations mint nothing. A rule runs its body, folds its head
-/// aggregate, then produces its head; a fact or a `?` query is head only.
-#[test]
-fn dl6_rule_negation_aggregate_query_edge_set() {
-    let (path, source) = fixture("cfg/walk.dl6");
-    expect(
-        cfg_edges(&path, &source),
-        &[
-            "entry(edge(\"a\", \"b\").) -next-> stmt(edge(\"a\", \"b\"))",
-            "stmt(edge(\"a\", \"b\")) -exit-> exit(edge(\"a\", \"b\").)",
-            "entry(path(A, B) <- edge(A, B).) -next-> stmt(edge(A, B))",
-            "stmt(edge(A, B)) -next-> stmt(path(A, B))",
-            "stmt(path(A, B)) -exit-> exit(path(A, B) <- edge(A, B).)",
-            "entry(path(X, Z) <- edge(X, Y), no) -next-> stmt(edge(X, Y))",
-            "stmt(edge(X, Y)) -next-> branch(not(blocked(Y)))",
-            "branch(not(blocked(Y))) -arm-> stmt(blocked(Y))",
-            "branch(not(blocked(Y))) -next-> stmt(path(Y, Z))",
-            "stmt(blocked(Y)) -next-> stmt(path(Y, Z))",
-            "stmt(path(Y, Z)) -jump-> entry(path(X, Z) <- edge(X, Y), no)",
-            "stmt(path(Y, Z)) -next-> stmt(path(X, Z))",
-            "stmt(path(X, Z)) -exit-> exit(path(X, Z) <- edge(X, Y), no)",
-            "entry(fan(S, count(D)) <- edge(S, ) -next-> stmt(edge(S, D))",
-            "stmt(edge(S, D)) -next-> loop(count(D))",
-            "loop(count(D)) -next-> stmt(fan(S, count(D)))",
-            "stmt(fan(S, count(D))) -exit-> exit(fan(S, count(D)) <- edge(S, )",
-            "entry(? path(X, Y).) -next-> stmt(path(X, Y))",
-            "stmt(path(X, Y)) -exit-> exit(? path(X, Y).)",
-        ],
-    );
-}
-
 /// The census fixtures the plan names: 0 cfg rows before this table, more
 /// than 0 after, with the node kinds each construct set implies.
 #[test]
@@ -218,13 +187,4 @@ fn census_fixtures_carry_cfg_rows() {
         5,
         "entry -> 4 goals in sequence -> exit"
     );
-
-    let (path, source) = fixture("dl6/2_callee.dl6");
-    let kinds = cfg_node_kinds(&path, &source);
-    assert_eq!(
-        kinds.into_iter().collect::<Vec<_>>(),
-        vec!["entry", "exit", "stmt"],
-        "a rel declaration mints nothing; the one fact is a bodiless clause"
-    );
-    assert_eq!(cfg_edges(&path, &source).len(), 2, "entry -> head -> exit");
 }

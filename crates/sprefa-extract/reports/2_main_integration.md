@@ -43,7 +43,7 @@ Source files differed in formatter output between the two lineages. `cargo fmt` 
 
 ## Tests
 
-All test commands ran from `crates/sprefa-extract` with the dedicated target directory `/tmp/sprefa-extract-main-integration-target.LCsjvv`.
+All test commands ran from `v6/sprefa-extract` with the dedicated target directory `/tmp/sprefa-extract-main-integration-target.LCsjvv`.
 
 A focused regression set covered CLI aliases and build metadata, shared telemetry, source-tree missing-file handling, SCIP families and re-export discrimination, freshness and Cargo staging, named-indexer selection and cache paths, Rust checker behavior, SCIP relationship conformance, and the Go checker tier. It completed with 79 passed, 0 failed, and 0 ignored. The platform-gated Rust checker files compiled but registered zero active tests on this host; the real rust-analyzer discrimination test in `8_scip_families_cli` ran and passed.
 

@@ -19,7 +19,6 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum ExtractLang {
     Sg(SupportLang),
-    Dl6,
     Prolog,
     Markdown,
     MarkdownInline,
@@ -37,7 +36,6 @@ impl ExtractLang {
     pub fn name(&self) -> Cow<'static, str> {
         match self {
             Self::Sg(sg) => Cow::Owned(sg.to_string()),
-            Self::Dl6 => Cow::Borrowed("dl6"),
             Self::Prolog => Cow::Borrowed("prolog"),
             Self::Markdown => Cow::Borrowed("markdown"),
             Self::MarkdownInline => Cow::Borrowed("markdown_inline"),
@@ -48,7 +46,6 @@ impl ExtractLang {
     /// (ast-grep-language lib.rs:378-389), so either spelling of `Sg` resolves.
     pub fn parse_name(name: &str) -> Option<Self> {
         match name {
-            "dl6" => Some(Self::Dl6),
             "prolog" => Some(Self::Prolog),
             "markdown" | "md" => Some(Self::Markdown),
             "markdown_inline" | "md_inline" => Some(Self::MarkdownInline),
@@ -86,10 +83,10 @@ impl Language for ExtractLang {
         }
     }
 
-    /// dl6 and prolog have no lexer rule whose charset holds `µ` (dl6
-    /// grammar.js:129-130: `variable` = `[A-Z]...`, `identifier` =
-    /// `_*[a-z]...`), so `µT` parses to `(ERROR (UNEXPECTED 181))` under both,
-    /// while `_T` is a plain `variable` in each. That is the C/C++/CSS sigil
+    /// prolog has no lexer rule whose charset holds `µ` (`variable` =
+    /// `[A-Z]...`, `identifier` = `_*[a-z]...`), so `µT` parses to
+    /// `(ERROR (UNEXPECTED 181))` under it, while `_T` is a plain `variable`.
+    /// That is the C/C++/CSS sigil
     /// (ast-grep-language lib.rs:186-190), not the `µ` of lib.rs:196-211.
     /// Markdown keeps `µ` because `_` is emphasis syntax there.
     /// Pattern side only: a PATTERN variable spelled `_ALLCAPS` is read as a
@@ -98,7 +95,7 @@ impl Language for ExtractLang {
     fn expando_char(&self) -> char {
         match self {
             Self::Sg(sg) => sg.expando_char(),
-            Self::Dl6 | Self::Prolog => '_',
+            Self::Prolog => '_',
             Self::Markdown | Self::MarkdownInline => 'µ',
         }
     }
@@ -140,11 +137,10 @@ impl Language for ExtractLang {
 
 impl LanguageExt for ExtractLang {
     /// The same `LANGUAGE` constants the raw extractors parse with
-    /// (dl6/_0_source.rs:26, prolog/_0_source.rs:25, markdown/_0_source.rs:86).
+    /// (prolog/_0_source.rs:25, markdown/_0_source.rs:86).
     fn get_ts_language(&self) -> TSLanguage {
         match self {
             Self::Sg(sg) => sg.get_ts_language(),
-            Self::Dl6 => tree_sitter::Language::new(tree_sitter_dl6::LANGUAGE),
             Self::Prolog => tree_sitter::Language::new(tree_sitter_prolog::LANGUAGE),
             Self::Markdown => tree_sitter::Language::new(tree_sitter_md::LANGUAGE),
             Self::MarkdownInline => tree_sitter::Language::new(tree_sitter_md::INLINE_LANGUAGE),

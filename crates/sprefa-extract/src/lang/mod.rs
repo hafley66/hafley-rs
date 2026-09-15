@@ -12,7 +12,6 @@
 pub mod ast_rule;
 pub mod astgrep;
 pub mod data;
-pub mod dl6;
 pub mod extract_lang;
 pub mod fact;
 pub mod go;
@@ -63,7 +62,6 @@ pub use astgrep::{
     SgRoot,
 };
 pub use data::DataSource;
-pub use dl6::DlSource;
 pub use extract_lang::ExtractLang;
 pub use fact::{
     dl6_db_path, open_dl6_readonly, open_readonly, FactError, FactMatcher, FactSet,
@@ -116,7 +114,6 @@ pub fn sources() -> &'static [&'static dyn Source] {
         &PrologSource,
         &PythonSource,
         &DataSource,
-        &DlSource,
         &TsSource,
         &AstgrepSource,
     ]

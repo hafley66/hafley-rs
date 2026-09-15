@@ -10,7 +10,10 @@ repository = "https://github.com/hafley66/hafley-rs"
 homepage = "https://github.com/hafley66/hafley-rs"
 
 # publish=false keeps crates.io out; dist=true opts into cargo-dist releases
-# (tag sprefa-extract-vX.Y.Z), same shell-installer flow as sprefa-dl.
+# (tag sprefa-extract-vX.Y.Z), same shell-installer flow as sprefa-dl. The
+# config is crates/sprefa-extract/dist-workspace.toml and the flow is the
+# repository-root .github/workflows/release.yml (hand-patched: this crate is
+# excluded from the root workspace, so every CI step runs in this directory).
 [package.metadata.dist]
 dist = true
 features = ["cli"]
@@ -114,7 +117,6 @@ tree-sitter-kotlin-sg = "0.4"
 # MIT superset grammar for ISO Prolog plus the SWI/DCG/ProbLog syntax used by
 # v6/prolog. ABI 14 and LanguageFn match the tree-sitter 0.25 runtime above.
 tree-sitter-prolog = "0.1"
-tree-sitter-dl6 = { path = "tree-sitter-dl6" }
 # The `data` family's three grammars, v5's `src/datapath.rs` plane ported.
 # yaml/toml-ng match v5's own pins (root Cargo.toml:129-130). json is 0.23, NOT
 # v5's 0.24 (root Cargo.toml:108): 0.23.0 is already an ast-grep-language
@@ -247,5 +249,8 @@ libc = "0.2"
 # as the dependency above, so cargo unifies one SQLite into the test binary.
 rusqlite = { version = "0.40", features = ["bundled", "limits", "trace"] }
 
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
 
-[workspace]

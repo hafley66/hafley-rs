@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*", "crates/sprefa-extract/tree-sitter-dl6"]
+members = ["crates/*"]
 resolver = "2"
 # ghcache and ghcache-client resolve their own sqlite stacks (sqlx vs boop's
 # rusqlite). One lockfile cannot hold two libsqlite3-sys versions, so they

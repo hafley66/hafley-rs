@@ -43,8 +43,8 @@ cache, interning policy, or IVM behavior changed.
 - SQLite integration coverage now includes signed-64 maximum, its unsigned
   successor, unsigned-64 maximum and nullable unsigned timestamps.
 
-Self-extraction read `crates/sprefa-extract/src/wire.rs` and
-`crates/sprefa-extract/src/tsi/types.rs` using both the recovered and new binaries:
+Self-extraction read `v6/sprefa-extract/src/wire.rs` and
+`v6/sprefa-extract/src/tsi/types.rs` using both the recovered and new binaries:
 
 ```text
 /private/tmp/extract-rusqlite-smoke.zYcTlY/recovered.db
@@ -67,7 +67,7 @@ just gen-check
 npm_config_offline=true CARGO_TERM_PROGRESS_WHEN=never \
   CARGO_TARGET_DIR=/private/tmp/extract-recovered-cargo.8prmG2 \
   bash v6/tools/run-capped.sh 600 cargo test --offline \
-  --manifest-path crates/sprefa-extract/Cargo.toml --features cli --no-fail-fast
+  --manifest-path v6/sprefa-extract/Cargo.toml --features cli --no-fail-fast
 ```
 
 Full-suite tests require macOS resource-counter access and access to the

@@ -126,7 +126,7 @@ FIELDS
   imported     the name the SOURCE module spells for a binding, when the local
                name renames it (`import {inner as local}`, a default import's
                `default`); null when the two agree or when the module path's
-               trailing segment already spells it (rust, go, kotlin, dl6,
+               trailing segment already spells it (rust, go, kotlin,
                prolog). v5's module_binding imported column.
   reason       why a runtime-computed edge marker fired (see its vocabulary).
   detail       the computed expression's source text, exactly the text at `span`.

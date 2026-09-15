@@ -21,10 +21,10 @@ df_node	ret		565
 df_node	var_read	local	488
 df_param_pos	0	0
 df_param_pos	7	0
-doc	crates/sprefa-extract/tests/fixtures/python/docs.py::class::Engine	11
-doc	crates/sprefa-extract/tests/fixtures/python/docs.py::function::helper	30
-doc	crates/sprefa-extract/tests/fixtures/python/docs.py::method::Engine.run	20
-doc	crates/sprefa-extract/tests/fixtures/python/docs.py::module::<module>	1
+doc	v6/sprefa-extract/tests/fixtures/python/docs.py::class::Engine	11
+doc	v6/sprefa-extract/tests/fixtures/python/docs.py::function::helper	30
+doc	v6/sprefa-extract/tests/fixtures/python/docs.py::method::Engine.run	20
+doc	v6/sprefa-extract/tests/fixtures/python/docs.py::module::<module>	1
 type_edge	Engine	Base	impl
 type_edge	Engine	Speed	field
 type_edge	helper	Engine	returns

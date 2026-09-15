@@ -4,7 +4,7 @@
 # constructor call resolves to the class's __init__ method, never to the class
 # def itself (a class-name callee row is a bench false positive).
 # Previous pin: callee_name="Widget" (the class TypeF def), chosen because a
-# null callee_name breaks the dl6 4-col join. The null defect stays pinned by
+# null callee_name breaks the 4-col join. The null defect stays pinned by
 # the `!contains("callee_name":null)` assertion; the class-name row is gone.
 class Widget:
     def __init__(self):

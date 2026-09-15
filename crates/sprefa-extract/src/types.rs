@@ -731,7 +731,7 @@ pub struct Specifier {
     /// The name the SOURCE module spells, when the local binding renames it
     /// (`import {inner as local}`, a default import's `default`). `None` when
     /// local and imported agree, or when `module`'s trailing segment already
-    /// spells it (the path-shaped languages: rust, go, kotlin, dl6, prolog).
+    /// spells it (the path-shaped languages: rust, go, kotlin, prolog).
     // @comment-ok: v5's module_binding carried (local, imported, kind); this is the imported seat
     pub imported: Option<NameId>,
 }
@@ -1518,7 +1518,7 @@ impl DataValueKind {
 /// file one per non-empty line, json and toml exactly one. `ordinal` is the
 /// surrogate key every `DataValueRow` of the document joins on. `value` is the
 /// document as a json VALUE built from the same parse the rows come from, and it
-/// is the column dl6's `decode/2` brace pattern reads.
+/// is the column the `decode/2` brace pattern reads.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DataDoc {
     pub ordinal: u32,
@@ -3849,13 +3849,13 @@ impl<L: LanguageExt> PendingReplaceDoc<L> {
 // ════════════════════════════════════════════════════════════════════════════
 // @comment-ok: this module mirrors every lang/*.rs shape as a commented sketch
 //
-// pub enum ExtractLang { Sg(SupportLang), Dl6, Prolog, Markdown, MarkdownInline }
+// pub enum ExtractLang { Sg(SupportLang), Prolog, Markdown, MarkdownInline }
 // impl ExtractLang {
-//     pub fn from_path(path: &str) -> Option<Self>;  // .dl6/.pl/.md, else SupportLang
+//     pub fn from_path(path: &str) -> Option<Self>;  // .pl/.md, else SupportLang
 //     pub fn name(&self) -> Cow<'static, str>;       // the YAML `language:` spelling
 //     pub fn parse_name(name: &str) -> Option<Self>;
 // }
-// impl Language for ExtractLang      // expando_char '_' for dl6/prolog, 'µ' for md
+// impl Language for ExtractLang      // expando_char '_' for prolog, 'µ' for md
 // impl LanguageExt for ExtractLang   // get_ts_language: the linked LANGUAGE consts
 //
 // SgRoot = AstGrep<StrDoc<ExtractLang>> (lang/astgrep.rs), so --ast-pattern and

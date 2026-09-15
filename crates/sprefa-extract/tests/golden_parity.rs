@@ -1551,7 +1551,6 @@ fn call_resolve_scip_ratchet_go() {
 /// and count HERE under external-no-edge — legs 1-5 are untouched. A
 /// missing/failed rust-analyzer is a loud test failure, never a skipped
 /// green.
-#[ignore = "needs rust-analyzer on PATH"]
 #[test]
 fn call_resolve_scip_ratchet_rust() {
     let fixture_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rust");

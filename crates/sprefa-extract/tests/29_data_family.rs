@@ -166,7 +166,7 @@ fn the_pokeapi_spec_answers_every_operation_id_under_the_ten_second_law() {
 }
 
 /// A `data_doc` row carries the document as a json VALUE, which is the column
-/// dl6's `decode/2` brace pattern reads. Nothing else in the stream does.
+/// the `decode/2` brace pattern reads. Nothing else in the stream does.
 #[test]
 fn the_document_row_carries_a_readable_json_value() {
     let facts = run(&["--family", "data", "tests/fixtures/data/stream.yaml"]);

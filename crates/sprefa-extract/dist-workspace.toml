@@ -1,0 +1,24 @@
+[workspace]
+members = ["cargo:."]
+
+# Config for 'dist'
+[dist]
+# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.32.0"
+# CI backends to support
+ci = "github"
+# release.yml is hand-patched in the repository root: cargo-dist does not emit
+# the workspace path for a workspace that is not the repository root
+# (axodotdev/cargo-dist#706), so the file carries a workflow-level
+# `defaults.run.working-directory: crates/sprefa-extract` and absolute
+# `${{ github.workspace }}/crates/sprefa-extract/...` paths on the steps that
+# upload or download artifacts. This marks it as intentionally hand-modified.
+allow-dirty = ["ci"]
+# The installers to generate for each app
+installers = ["shell"]
+# Path that installers should place binaries in
+install-path = "CARGO_HOME"
+# Whether to install an updater program
+install-updater = false
+# Target platforms to build apps for (Rust target-triple syntax)
+targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]

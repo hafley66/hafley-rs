@@ -254,10 +254,6 @@ const V6_ONLY_LANGS: &[(&str, &str)] = &[
         "v5 answered json/yaml/toml through the `json`/`jsonp` OPS, not a language",
     ),
     (
-        "dl6",
-        "v5's `dl` grammar was cst-only; the type/call planes are v6-native",
-    ),
-    (
         "astgrep",
         "the cst-only fallback; v5's `sg` roster has no per-language oracle",
     ),

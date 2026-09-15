@@ -74,7 +74,6 @@ fn macro_sites(facts: &[Value]) -> Vec<(u32, u32, String, String)> {
     rows
 }
 
-#[ignore = "needs rust-analyzer on PATH"]
 #[test]
 fn macro_calls_mint_scip_macro_edges_inside_the_invocation() {
     let facts = resolve(true);
@@ -100,7 +99,6 @@ fn macro_calls_mint_scip_macro_edges_inside_the_invocation() {
     }
 }
 
-#[ignore = "needs rust-analyzer on PATH"]
 #[test]
 fn an_occurrence_with_a_parse_site_mints_no_duplicate() {
     let facts = resolve(true);

@@ -506,7 +506,7 @@ fn parse(
 fn default_patterns() -> Vec<soopy::Pattern> {
     [
         "**/*.rs", "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.go", "**/*.py", "**/*.kt",
-        "**/*.kts", "**/*.dl6", "**/*.dl7", "**/*.pl",
+        "**/*.kts", "**/*.dl7", "**/*.pl",
     ]
     .into_iter()
     .map(|pattern| soopy::Pattern(pattern.into()))

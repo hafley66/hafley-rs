@@ -198,7 +198,7 @@ fn extract_lang_has_no_path_switch() {
         source.contains("source_for"),
         "ExtractLang::from_path must delegate to the Source roster"
     );
-    for suffix in [".dl6", ".pl", ".md", ".markdown", ".horn", ".datalog"] {
+    for suffix in [".pl", ".md", ".markdown", ".horn", ".datalog"] {
         assert!(
             !source.contains(&format!("ends_with(\"{suffix}\")")),
             "extract_lang.rs still path-switches on '{suffix}'; that knowledge belongs to the Source roster"
