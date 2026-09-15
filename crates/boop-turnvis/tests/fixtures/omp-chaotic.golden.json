@@ -1,0 +1,27 @@
+{
+  "fixture": "omp-chaotic",
+  "cols": 120,
+  "rows": 16,
+  "lines": [
+    { "start": 500, "end": 500, "normalized": "", "id": null },
+    { "start": 501, "end": 501, "normalized": "cd packages/grapht && python3 - <<'pyeof'", "id": "01a0a289-c8c6-7000-97cc-3aa77c2d40ea:541" },
+    { "start": 502, "end": 502, "normalized": "p = 'src/lib/4svgmovement.ts'", "id": "01a0a289-c8c6-7000-97cc-3aa77c2d40ea:541" },
+    { "start": 503, "end": 503, "normalized": "s = open(p).read()", "id": "01a0a289-c8c6-7000-97cc-3aa77c2d40ea:541" },
+    { "start": 504, "end": 504, "normalized": "s = s.replace('import { routebindingroles }', 'import { routebindingroles, type svgbindingrole }')", "id": "01a0a289-c8c6-7000-97cc-3aa77c2d40ea:541" },
+    { "start": 505, "end": 505, "normalized": "open(p, 'w').write(s)", "id": "01a0a289-c8c6-7000-97cc-3aa77c2d40ea:541" },
+    { "start": 506, "end": 506, "normalized": "print('import fixed')", "id": "01a0a289-c8c6-7000-97cc-3aa77c2d40ea:541" },
+    { "start": 507, "end": 507, "normalized": "pyeof", "id": "01a0a289-c8c6-7000-97cc-3aa77c2d40ea:541" },
+    { "start": 508, "end": 508, "normalized": "pnpm exec tsc --noemit -p tsconfig.json 2>&1 head -5; cd adapters/2rendercytoscape && pnpm exec tsc --noemit -p tsconfig.json 2>&1 head -5; echo checked", "id": "01a0a289-c8c6-7000-97cc-3aa77c2d40ea:541" },
+    { "start": 509, "end": 509, "normalized": "output", "id": null },
+    { "start": 510, "end": 510, "normalized": "import fixed", "id": "01a0a289-c8c6-7000-97cc-3aa77c2d40ea:542" },
+    { "start": 511, "end": 511, "normalized": "checked", "id": "01a0a289-c8c6-7000-97cc-3aa77c2d40ea:542" },
+    { "start": 512, "end": 512, "normalized": "", "id": null },
+    { "start": 513, "end": 513, "normalized": "", "id": null },
+    { "start": 514, "end": 514, "normalized": "echo repeated-tool-command", "id": null },
+    { "start": 515, "end": 515, "normalized": "", "id": null }
+  ],
+  "turns": [
+    { "id": "01a0a289-c8c6-7000-97cc-3aa77c2d40ea:541", "turn": 541, "role": "tool", "confidence": "anchored", "anchorStart": 501, "anchorEnd": 508, "bufferStart": 501, "bufferEnd": 508 },
+    { "id": "01a0a289-c8c6-7000-97cc-3aa77c2d40ea:542", "turn": 542, "role": "tool", "confidence": "anchored", "anchorStart": 510, "anchorEnd": 511, "bufferStart": 510, "bufferEnd": 511 }
+  ]
+}

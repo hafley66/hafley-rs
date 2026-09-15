@@ -85,11 +85,18 @@ pub fn normalize_turn_line(line: &str) -> String {
     while i < chars.len() && is_js_whitespace(chars[i]) {
         i += 1;
     }
+    let had_card_gutter = chars.get(i) == Some(&'│');
     while i < chars.len() && is_leading_marker(chars[i]) {
         i += 1;
     }
     while i < chars.len() && is_js_whitespace(chars[i]) {
         i += 1;
+    }
+    if had_card_gutter && chars.get(i) == Some(&'$') {
+        i += 1;
+        while i < chars.len() && is_js_whitespace(chars[i]) {
+            i += 1;
+        }
     }
     let mut out = String::with_capacity(chars.len());
     let mut pending_space = false;
@@ -216,6 +223,60 @@ fn monotonic_turn_match(screen: &[ScreenRow], source: &Source) -> Option<TurnMat
     })
 }
 
+fn source_lines(turn: &BoopTurn) -> Vec<String> {
+    let Some((tool_name, arguments)) = turn.said.split_once('\n') else {
+        return turn.said.split('\n').map(str::to_owned).collect();
+    };
+    if turn.role != "tool" {
+        return turn.said.split('\n').map(str::to_owned).collect();
+    }
+    let Ok(arguments) = serde_json::from_str::<serde_json::Value>(arguments) else {
+        return turn.said.split('\n').map(str::to_owned).collect();
+    };
+    let Some(command) = arguments.get("command").and_then(serde_json::Value::as_str) else {
+        return turn.said.split('\n').map(str::to_owned).collect();
+    };
+    std::iter::once(tool_name.to_owned())
+        .chain(command.split('\n').map(str::to_owned))
+        .collect()
+}
+
+fn match_row_owners(matches: &[TurnMatch]) -> std::collections::HashMap<(usize, String), usize> {
+    let mut owners: std::collections::HashMap<(usize, String), std::collections::HashSet<&str>> =
+        std::collections::HashMap::new();
+    for m in matches {
+        for hit in &m.hits {
+            owners
+                .entry((hit.line.start, m.source.turn.role.clone()))
+                .or_default()
+                .insert(m.source.id.as_str());
+        }
+    }
+    owners
+        .into_iter()
+        .map(|(key, sources)| (key, sources.len()))
+        .collect()
+}
+
+fn has_discriminating_hit(
+    hits: &[&Hit],
+    screen: &[ScreenRow],
+    source: &Source,
+    owners: &std::collections::HashMap<(usize, String), usize>,
+) -> bool {
+    hits.iter().any(|hit| {
+        screen
+            .iter()
+            .find(|row| row.line.start == hit.line.start)
+            .is_some_and(|row| {
+                row.normalized.chars().count() >= 8
+                    && (owners.get(&(hit.line.start, source.turn.role.clone())) == Some(&1)
+                        || (source.turn.role == "user"
+                            && row.line.text.trim_start().starts_with('❯')))
+            })
+    })
+}
+
 /// A blank row is where one message stops being the other. Extending across one
 /// merged two on-screen turns into a single attributed block.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -249,7 +310,7 @@ fn extend_to(screen: &[ScreenRow], anchor: usize, limit: usize, step: Step) -> u
         } else {
             edge >= limit
         };
-        if !inside || row.normalized.is_empty() {
+        if !inside || row.normalized.is_empty() || row.normalized == "output" {
             break;
         }
         reached = edge;
@@ -324,10 +385,9 @@ pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<Vi
         .iter()
         .map(|turn| Source {
             id: format!("{}:{}", turn.session, turn.turn),
-            normalized: turn
-                .said
-                .split('\n')
-                .map(normalize_turn_line)
+            normalized: source_lines(turn)
+                .iter()
+                .map(|line| normalize_turn_line(line))
                 .filter(|line| !line.is_empty())
                 .collect(),
             turn: turn.clone(),
@@ -353,22 +413,25 @@ pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<Vi
             .then(right.source.turn.ts.cmp(&left.source.turn.ts))
     });
 
+    let row_owners = match_row_owners(&matches);
     let mut claimed_rows: std::collections::HashSet<usize> = std::collections::HashSet::new();
     let mut visible: Vec<VisibleTurn> = Vec::new();
     for m in &matches {
-        let unclaimed = m
+        let unclaimed: Vec<&Hit> = m
             .hits
             .iter()
             .filter(|hit| !claimed_rows.contains(&hit.line.start))
-            .count();
-        if unclaimed * 2 < m.hits.len() {
+            .collect();
+        if unclaimed.len() * 2 < m.hits.len()
+            || !has_discriminating_hit(&unclaimed, &screen, &m.source, &row_owners)
+        {
             continue;
         }
-        for hit in &m.hits {
+        for hit in &unclaimed {
             claimed_rows.insert(hit.line.start);
         }
-        let anchor_start = m.hits.iter().map(|hit| hit.line.start).min().unwrap();
-        let anchor_end = m.hits.iter().map(|hit| hit.line.end).max().unwrap();
+        let anchor_start = unclaimed.iter().map(|hit| hit.line.start).min().unwrap();
+        let anchor_end = unclaimed.iter().map(|hit| hit.line.end).max().unwrap();
         visible.push(VisibleTurn {
             session: m.source.turn.session.clone(),
             harness: m.source.turn.harness.clone(),

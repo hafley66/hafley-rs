@@ -141,6 +141,19 @@ fn compare_lines(
 
 fn compare(fixture: &str, got: &[VisibleTurn], golden: &Golden) -> Vec<String> {
     let mut failures = Vec::new();
+    for pair in got.windows(2) {
+        if pair[0].buffer_end >= pair[1].buffer_start {
+            failures.push(format!(
+                "{fixture}: final spans overlap: {} {}..={} and {} {}..={}",
+                pair[0].id,
+                pair[0].buffer_start,
+                pair[0].buffer_end,
+                pair[1].id,
+                pair[1].buffer_start,
+                pair[1].buffer_end,
+            ));
+        }
+    }
     if got.len() != golden.turns.len() {
         failures.push(format!(
             "{fixture}: turn count got {}, want {}",
@@ -189,6 +202,7 @@ const FIXTURES: &[&str] = &[
     "ccz",
     "opencode",
     "kimi",
+    "omp-chaotic",
 ];
 
 fn load<T: for<'de> Deserialize<'de>>(path: &str) -> T {

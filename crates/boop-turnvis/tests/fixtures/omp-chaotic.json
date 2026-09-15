@@ -1,0 +1,24 @@
+{
+  "session": "01a0a289-c8c6-7000-97cc-3aa77c2d40ea",
+  "cols": 120,
+  "rows": 16,
+  "bytes": 0,
+  "lines": [
+    { "text": "┌────────────────────────────────────────────────────────────────────────────────────────────────────┐", "start": 500, "end": 500 },
+    { "text": "│ $ cd packages/grapht && python3 - <<'PYEOF'", "start": 501, "end": 501 },
+    { "text": "│ p = 'src/lib/4_svgMovement.ts'", "start": 502, "end": 502 },
+    { "text": "│ s = open(p).read()", "start": 503, "end": 503 },
+    { "text": "│ s = s.replace('import { ROUTE_BINDING_ROLES }', 'import { ROUTE_BINDING_ROLES, type SvgBindingRole }')", "start": 504, "end": 504 },
+    { "text": "│ open(p, 'w').write(s)", "start": 505, "end": 505 },
+    { "text": "│ print('import fixed')", "start": 506, "end": 506 },
+    { "text": "│ PYEOF", "start": 507, "end": 507 },
+    { "text": "│ pnpm exec tsc --noEmit -p tsconfig.json 2>&1 | head -5; cd adapters/2_render_cytoscape && pnpm exec tsc --noEmit -p tsconfig.json 2>&1 | head -5; echo CHECKED", "start": 508, "end": 508 },
+    { "text": "│ Output", "start": 509, "end": 509 },
+    { "text": "│ import fixed", "start": 510, "end": 510 },
+    { "text": "│ CHECKED", "start": 511, "end": 511 },
+    { "text": "└────────────────────────────────────────────────────────────────────────────────────────────────────┘", "start": 512, "end": 512 },
+    { "text": "┌────────────────────────────────────────────────────────────────────────────────────────────────────┐", "start": 513, "end": 513 },
+    { "text": "│ $ echo repeated-tool-command", "start": 514, "end": 514 },
+    { "text": "└────────────────────────────────────────────────────────────────────────────────────────────────────┘", "start": 515, "end": 515 }
+  ]
+}
