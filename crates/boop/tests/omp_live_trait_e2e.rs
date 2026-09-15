@@ -378,6 +378,24 @@ fn omp_live_panes_bind_distinct_sessions_and_project_real_transcripts() {
             .as_deref(),
         Some(session_a.as_str())
     );
+    let route_only = Registry::with(Vec::new());
+    assert_eq!(
+        session_in_pane_on_socket(
+            &route_only,
+            &pane_a,
+            Some(&scratch.socket),
+            &scratch.mail(),
+        )
+        .expect("explicit socket route fallback")
+        .as_deref(),
+        Some(session_a.as_str())
+    );
+    assert_eq!(
+        boop::live::session_in_pane(&route_only, &pane_a, &scratch.mail())
+            .expect("inherited-TMUX route fallback")
+            .as_deref(),
+        Some(session_a.as_str())
+    );
 
     let _ = tmux(&scratch.socket, &["kill-session", "-t", "omp-live-a"]);
     wait(
@@ -399,6 +417,21 @@ fn omp_live_panes_bind_distinct_sessions_and_project_real_transcripts() {
                 .is_none()
         },
         || scratch.screen("omp-live-b"),
+    );
+    assert!(
+        session_in_pane_on_socket(
+            &route_only,
+            &pane_a,
+            Some(&scratch.socket),
+            &scratch.mail(),
+        )
+        .expect("dead explicit socket route fallback")
+        .is_none()
+    );
+    assert!(
+        boop::live::session_in_pane(&route_only, &pane_a, &scratch.mail())
+            .expect("dead inherited-TMUX route fallback")
+            .is_none()
     );
     wait(
         "dead OMP pane shared lookup",
