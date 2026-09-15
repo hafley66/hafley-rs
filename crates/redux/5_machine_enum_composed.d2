@@ -1,0 +1,32 @@
+direction: right
+classes: {
+  state: {style: {fill: "#18303b"; stroke: "#65d9e6"; font-color: "#e2edf0"; border-radius: 8}}
+  transition: {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
+  route: {style: {stroke: "#efcf75"; stroke-dash: 4; font-color: "#efcf75"}}
+}
+"Composed routing (illustrative cross edges)": "Composed routing (illustrative cross edges)" {
+  "S_Idle": "S_Idle" {class: state}
+  "S_Awaiting": "S_Awaiting" {class: state}
+  "S_Open": "S_Open" {class: state}
+  "S_Faulted": "S_Faulted" {class: state}
+  "S_Idle" -> "S_Awaiting": "BEGIN: Begin begin()" {class: transition}
+  "S_Idle" -> "S_Idle": "IDLE_PING_GUARDED: Ping [never] ping()" {class: transition}
+  "S_Idle" -> "S_Idle": "IDLE_PING_FALLBACK: Ping ping()" {class: transition}
+  "S_Awaiting" -> "S_Awaiting": "RETRY: Retry [can_retry] retry()" {class: transition}
+  "S_Awaiting" -> "S_Open": "CONFIRM: Confirm confirm()" {class: transition}
+  "S_Awaiting" -> "S_Idle": "ABORT_AWAITING: Abort stop()" {class: transition}
+  "S_Open" -> "S_Open": "OPEN_TICK: Tick tick()" {class: transition}
+  "S_Open" -> "S_Idle": "ABORT_OPEN: Abort stop()" {class: transition}
+  "G_Dormant": "G_Dormant" {class: state}
+  "G_Armed": "G_Armed" {class: state}
+  "G_Spent": "G_Spent" {class: state}
+  "G_Dormant" -> "G_Armed": "ARM: Arm arm()" {class: transition}
+  "G_Dormant" -> "G_Dormant": "DORMANT_NOP: Nop" {class: transition}
+  "G_Armed" -> "G_Armed": "FIRE: Fire fire()" {class: transition}
+  "G_Armed" -> "G_Armed": "ARMED_NOP: Nop" {class: transition}
+  "G_Armed" -> "G_Armed": "ARMED_KEEP: Arm" {class: transition}
+  "O_Handled": "Handled" {class: state}
+  "O_Unhandled": "Unhandled" {class: state}
+  "O_Handled" -> "G_Dormant": "Arm (illustrative)" {class: route}
+  "O_Unhandled" -> "G_Dormant": "Nop (illustrative)" {class: route}
+}

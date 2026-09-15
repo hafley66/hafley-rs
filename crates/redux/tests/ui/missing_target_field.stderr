@@ -1,0 +1,17 @@
+error[E0533]: expected value, found struct variant `__MachineState::Open`
+  --> tests/ui/missing_target_field.rs:25:1
+   |
+25 | / machine! {
+26 | |     MissingField for State {
+27 | |         context: Cx,
+28 | |         event: Event,
+...  |
+36 | | }
+   | |_^ not a value
+   |
+   = note: this error originates in the macro `$crate::__machine_assign` which comes from the expansion of the macro `machine` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: you might have meant to create a new value of the struct
+  --> src/_3_machine.rs
+   |
+   |         *$st = $alias::$target { token: /* value */ } $($rest)*;
+   |                                ++++++++++++++++++++++

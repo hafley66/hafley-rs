@@ -848,10 +848,9 @@ mod tests {
             .connection()
             .prepare(&plan_sql)
             .unwrap()
-            .query_map(
-                rusqlite::params![Option::<String>::None, false],
-                |row| row.get::<_, String>(3),
-            )
+            .query_map(rusqlite::params![Option::<String>::None, false], |row| {
+                row.get::<_, String>(3)
+            })
             .unwrap()
             .collect::<rusqlite::Result<Vec<_>>>()
             .unwrap()

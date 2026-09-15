@@ -980,8 +980,14 @@ mod tests {
         assert!(live
             .iter()
             .all(|session| session.scope == LiveSessionScope::Root));
-        let second_live = live.iter().find(|session| session.session_id == "second").unwrap();
-        assert_eq!(crate::live::interactive_session_id(second_live, &live), "second");
+        let second_live = live
+            .iter()
+            .find(|session| session.session_id == "second")
+            .unwrap();
+        assert_eq!(
+            crate::live::interactive_session_id(second_live, &live),
+            "second"
+        );
 
         assert_eq!(
             omp_live_session_for_pane(&terminal, "%41", Some("ttys094"))

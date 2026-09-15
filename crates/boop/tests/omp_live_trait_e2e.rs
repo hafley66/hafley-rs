@@ -81,7 +81,10 @@ impl Scratch {
             &self.socket,
             &["display-message", "-p", "#{socket_path},#{pid},0"],
         );
-        assert!(output.status.success(), "read scratch TMUX context: {output:?}");
+        assert!(
+            output.status.success(),
+            "read scratch TMUX context: {output:?}"
+        );
         String::from_utf8_lossy(&output.stdout).trim().to_owned()
     }
 
