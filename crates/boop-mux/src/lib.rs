@@ -45,7 +45,8 @@ impl Session {
     }
 }
 
-/// A `tmux` invocation on the selected server (`-L <socket>`), or the default.
+/// A `tmux` invocation on an explicit server (`-L <socket>`), or the calling
+/// process's inherited `TMUX` context when no socket is supplied.
 fn tmux_command(socket: Option<&str>) -> Command {
     let mut builder = Command::new("tmux");
     if let Some(socket) = socket {

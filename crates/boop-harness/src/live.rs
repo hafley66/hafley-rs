@@ -108,6 +108,17 @@ pub trait LiveSessions: Send + Sync {
                 .is_some_and(|held| held.trim_start_matches('%') == wanted)
         }))
     }
+
+    /// The session occupying `pane` on an explicitly selected tmux socket.
+    /// `None` retains the calling process's `TMUX` context. Harnesses without
+    /// a mux-backed registry use the pane-only implementation.
+    fn live_session_in_pane_on_socket(
+        &self,
+        pane: &str,
+        _socket: Option<&str>,
+    ) -> Result<Option<LiveSession>> {
+        self.live_session_in_pane(pane)
+    }
 }
 
 /// Milliseconds since the epoch, the stamp every observation carries.
@@ -140,14 +151,35 @@ pub fn session_in_pane(
     pane: &str,
     mail_dir: &Path,
 ) -> anyhow::Result<Option<String>> {
+    session_in_pane_on_socket(registry, pane, None, mail_dir)
+}
+
+/// Socket-aware form of [`session_in_pane`]. Callers that already carry a
+/// `SpawnSpec.socket` pass it here; callers inside a tmux client pass `None`
+/// and preserve that client's inherited `TMUX` context.
+pub fn session_in_pane_on_socket(
+    registry: &Registry,
+    pane: &str,
+    socket: Option<&str>,
+    mail_dir: &Path,
+) -> anyhow::Result<Option<String>> {
     for harness in registry.all() {
-        if let Ok(Some(live)) = harness.live().live_session_in_pane(pane) {
-            let sessions = harness.live().live_sessions().unwrap_or_default();
-            return Ok(Some(interactive_session_id(&live, &sessions)));
+        if let Some(session) = session_from_live_in_pane(harness.live(), pane, socket) {
+            return Ok(Some(session));
         }
     }
     route_session_in_pane(pane, mail_dir)
         .map(|session| session.map(|session| resolve_registered_session(registry, &session)))
+}
+
+fn session_from_live_in_pane(
+    live: &dyn LiveSessions,
+    pane: &str,
+    socket: Option<&str>,
+) -> Option<String> {
+    let bound = live.live_session_in_pane_on_socket(pane, socket).ok().flatten()?;
+    let sessions = live.live_sessions().unwrap_or_default();
+    Some(interactive_session_id(&bound, &sessions))
 }
 
 /// Resolve an observed process or pane to its interactive session. Only an
@@ -200,6 +232,32 @@ mod tests {
         fn live_sessions(&self) -> Result<Vec<LiveSession>> {
             Ok(vec![session("a", Some("%1")), session("b", Some("%3418"))])
         }
+    }
+
+    struct SocketAware;
+
+    impl LiveSessions for SocketAware {
+        fn live_sessions(&self) -> Result<Vec<LiveSession>> {
+            Ok(vec![])
+        }
+
+        fn live_session_in_pane_on_socket(
+            &self,
+            pane: &str,
+            socket: Option<&str>,
+        ) -> Result<Option<LiveSession>> {
+            Ok((pane == "%7" && socket == Some("instant-fixture"))
+                .then(|| session("tty-bound", None)))
+        }
+    }
+
+    #[test]
+    fn socket_aware_pane_lookup_preserves_the_explicit_server() {
+        assert_eq!(
+            session_from_live_in_pane(&SocketAware, "%7", Some("instant-fixture")),
+            Some("tty-bound".into())
+        );
+        assert_eq!(session_from_live_in_pane(&SocketAware, "%7", None), None);
     }
 
     fn session(id: &str, pane: Option<&str>) -> LiveSession {

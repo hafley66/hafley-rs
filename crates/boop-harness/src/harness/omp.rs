@@ -46,19 +46,27 @@ impl LiveSessions for OmpLive {
     }
 
     fn live_session_in_pane(&self, pane: &str) -> Result<Option<LiveSession>> {
+        self.live_session_in_pane_on_socket(pane, None)
+    }
+
+    fn live_session_in_pane_on_socket(
+        &self,
+        pane: &str,
+        socket: Option<&str>,
+    ) -> Result<Option<LiveSession>> {
         let pane = pane.trim().trim_start_matches('%');
         if pane.is_empty() {
             return Ok(None);
         }
         let pane_id = format!("%{pane}");
-        let Some(panes) = boop_store::tmux::mux().list_panes(None) else {
+        let Some(panes) = boop_store::tmux::mux().list_panes(socket) else {
             return Ok(None);
         };
         let Some(observed) = panes.iter().find(|candidate| candidate.id == pane_id) else {
             return Ok(None);
         };
         let base = omp_terminal_sessions_dir()?;
-        omp_live_session_for_pane(&base, &pane_id, Some(&observed.tty))
+        omp_live_session_for_pane(&base, &pane_id, Some(&omp_terminal_id(&observed.tty)))
     }
 }
 
@@ -393,6 +401,16 @@ fn omp_live_sessions_in(base: &Path) -> Result<Vec<LiveSession>> {
             .then_with(|| left.session_id.cmp(&right.session_id))
     });
     Ok(live)
+}
+
+/// `getTerminalId()` removes `/dev/` and replaces remaining path separators.
+/// tmux reports `#{pane_tty}` as `/dev/ttys094` on macOS and `/dev/pts/3` on
+/// Linux, while OMP stores `ttys094` and `pts-3` respectively.
+fn omp_terminal_id(tty: &str) -> String {
+    tty.trim()
+        .strip_prefix("/dev/")
+        .unwrap_or(tty.trim())
+        .replace('/', "-")
 }
 
 /// Resolve one OMP breadcrumb selected by a terminal identity. `pane` is
@@ -927,6 +945,11 @@ mod tests {
         )
         .unwrap();
         std::fs::write(
+            terminal.join("pts-3"),
+            format!("/linux\n{}\n", first.display()),
+        )
+        .unwrap();
+        std::fs::write(
             terminal.join("tmux-%41"),
             format!("/other\n{}\n", second.display()),
         )
@@ -946,13 +969,16 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![
                 (None, "first", None),
+                (None, "first", None),
                 (None, "second", None),
                 (Some("%41"), "second", None),
             ]
         );
-        assert_eq!(live[0].scope, LiveSessionScope::Root);
-        assert_eq!(live[1].scope, LiveSessionScope::Root);
-        assert_eq!(crate::live::interactive_session_id(&live[1], &live), "second");
+        assert!(live
+            .iter()
+            .all(|session| session.scope == LiveSessionScope::Root));
+        let second_live = live.iter().find(|session| session.session_id == "second").unwrap();
+        assert_eq!(crate::live::interactive_session_id(second_live, &live), "second");
 
         assert_eq!(
             omp_live_session_for_pane(&terminal, "%41", Some("ttys094"))
@@ -968,6 +994,12 @@ mod tests {
                 .unwrap()
                 .map(|session| (session.tmux_pane, session.session_id)),
             Some((Some("%42".into()), "second".into()))
+        );
+        assert_eq!(
+            omp_live_session_for_pane(&terminal, "%43", Some(&omp_terminal_id("/dev/pts/3")))
+                .unwrap()
+                .map(|session| session.session_id),
+            Some("first".into())
         );
         // `%41` has a tmux fallback breadcrumb, but a tty-bearing frontend
         // must not borrow it when its own tty record is missing.

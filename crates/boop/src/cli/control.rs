@@ -58,18 +58,15 @@ fn opened_session(
     let deadline = std::time::Instant::now() + wait;
     loop {
         let live = adapter.live().live_sessions().unwrap_or_default();
-        if let Some(session) = session_for_pid(&live, pid) {
+        if let Some(session) =
+            session_for_native_frontend(adapter.live(), &live, pid, Some(my_pane))
+        {
             return Some(
                 session
                     .parent_session
                     .clone()
                     .unwrap_or_else(|| session.session_id.clone()),
             );
-        }
-        if !my_pane.is_empty() {
-            if let Ok(Some(session)) = adapter.live().live_session_in_pane(my_pane) {
-                return Some(session.parent_session.unwrap_or(session.session_id));
-            }
         }
         // A harness whose registry names no process (kimi keeps only
         // transcripts) cannot match by pid or pane. It is identified by the
@@ -117,28 +114,20 @@ fn session_for_pid(live: &[boop::live::LiveSession], pid: u32) -> Option<&boop::
     matches.next().is_none().then_some(session)
 }
 
-/// A harness may publish an exact pane-to-session relation without a child
-/// pid. Preserve pid matching when it exists, then use one unambiguous pane
-/// row for the same frontend. Neither path considers cwd or transcript age.
-fn session_for_frontend<'a>(
-    live: &'a [boop::live::LiveSession],
+/// Resolve a native frontend using an exact pid first, then the harness's
+/// pane endpoint. The endpoint may use process or terminal evidence that is
+/// intentionally absent from the list projection.
+fn session_for_native_frontend(
+    registry: &dyn boop::live::LiveSessions,
+    live: &[boop::live::LiveSession],
     pid: u32,
     pane: Option<&str>,
-) -> Option<&'a boop::live::LiveSession> {
-    session_for_pid(live, pid).or_else(|| {
-        let pane = pane?.trim().trim_start_matches('%');
-        if pane.is_empty() {
-            return None;
-        }
-        let mut matches = live.iter().filter(|session| {
-            session
-                .tmux_pane
-                .as_deref()
-                .is_some_and(|held| held.trim_start_matches('%') == pane)
-        });
-        let session = matches.next()?;
-        matches.next().is_none().then_some(session)
-    })
+) -> Option<boop::live::LiveSession> {
+    if let Some(session) = session_for_pid(live, pid) {
+        return Some(session.clone());
+    }
+    pane.filter(|pane| !pane.trim().is_empty())
+        .and_then(|pane| registry.live_session_in_pane(pane).ok().flatten())
 }
 
 /// Holds the pane in the terminal's alternate screen for a harness whose own
@@ -648,9 +637,12 @@ pub(crate) fn run_native_tui(
                 // clear/new transition within that process. Cwd and pane alone
                 // cannot distinguish concurrent conversations.
                 let observed = adapter.live().live_sessions()?;
-                if let Some(session) =
-                    session_for_frontend(&observed, frontend_pid, pane.as_deref())
-                {
+                if let Some(session) = session_for_native_frontend(
+                    adapter.live(),
+                    &observed,
+                    frontend_pid,
+                    pane.as_deref(),
+                ) {
                     if route.session_id.as_deref() != Some(session.session_id.as_str()) {
                         bind_native_session(
                             &store,
@@ -740,9 +732,12 @@ pub(crate) fn run_native_tui(
 
 #[cfg(test)]
 mod tests {
-    use super::{respawn_wanted, session_for_frontend, RESPAWN_MIN_UPTIME};
+    use super::{respawn_wanted, session_for_native_frontend, RESPAWN_MIN_UPTIME};
+    use anyhow::Result;
+    use boop::live::LiveSessions;
     use std::os::unix::process::ExitStatusExt;
     use std::process::ExitStatus;
+    use std::sync::Mutex;
     use std::time::Duration;
 
     fn live(id: &str, pid: Option<u32>, pane: Option<&str>) -> boop::live::LiveSession {
@@ -761,25 +756,58 @@ mod tests {
         }
     }
 
+    struct TtyBoundLive {
+        active: Mutex<String>,
+    }
+
+    impl LiveSessions for TtyBoundLive {
+        fn live_sessions(&self) -> Result<Vec<boop::live::LiveSession>> {
+            // This is OMP's list projection: a TTY breadcrumb has no tmux
+            // pane, while a stale headless fallback claims the same pane.
+            Ok(vec![live("headless-fallback", None, Some("%382"))])
+        }
+
+        fn live_session_in_pane(
+            &self,
+            pane: &str,
+        ) -> Result<Option<boop::live::LiveSession>> {
+            if pane.trim_start_matches('%') != "382" {
+                return Ok(None);
+            }
+            Ok(Some(live(&self.active.lock().unwrap(), None, None)))
+        }
+    }
+
     #[test]
-    fn pane_bound_registry_refreshes_the_frontend_without_a_pid() {
-        let first = vec![live("first", None, Some("%382"))];
+    fn native_start_and_refresh_use_the_tty_pane_endpoint_over_a_tmux_fallback() {
+        let registry = TtyBoundLive {
+            active: Mutex::new("tty-first".into()),
+        };
+        let listed = registry.live_sessions().unwrap();
         assert_eq!(
-            session_for_frontend(&first, 999, Some("%382"))
-                .map(|session| session.session_id.as_str()),
-            Some("first")
+            session_for_native_frontend(&registry, &listed, 999, Some("%382"))
+                .map(|session| session.session_id),
+            Some("tty-first".into())
         );
-        let switched = vec![live("second", None, Some("%382"))];
+        *registry.active.lock().unwrap() = "tty-switched".into();
         assert_eq!(
-            session_for_frontend(&switched, 999, Some("382"))
-                .map(|session| session.session_id.as_str()),
-            Some("second")
+            session_for_native_frontend(&registry, &listed, 999, Some("382"))
+                .map(|session| session.session_id),
+            Some("tty-switched".into())
         );
-        let duplicate = vec![
-            live("one", None, Some("%382")),
-            live("two", None, Some("%382")),
-        ];
-        assert!(session_for_frontend(&duplicate, 999, Some("%382")).is_none());
+    }
+
+    #[test]
+    fn native_refresh_preserves_pid_precedence() {
+        let registry = TtyBoundLive {
+            active: Mutex::new("tty-first".into()),
+        };
+        let listed = vec![live("pid-bound", Some(999), None)];
+        assert_eq!(
+            session_for_native_frontend(&registry, &listed, 999, Some("%382"))
+                .map(|session| session.session_id),
+            Some("pid-bound".into())
+        );
     }
 
     #[test]
