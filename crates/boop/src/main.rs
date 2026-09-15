@@ -426,6 +426,7 @@ fn main() -> Result<()> {
     let result = run_cli(cli);
     let outcome = if result.is_ok() { "ok" } else { "error" };
     invoke::finish(&invocation, now_ms().saturating_sub(started_ms), outcome);
+    hafley_observe::shutdown();
     result
 }
 
