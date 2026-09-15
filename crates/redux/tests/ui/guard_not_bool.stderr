@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+  --> tests/ui/guard_not_bool.rs:28:1
+   |
+28 | / machine! {
+29 | |     NotBool for State {
+30 | |         context: Cx,
+31 | |         event: Event,
+...  |
+39 | | }
+   | | ^
+   | | |
+   | |_expected `bool`, found `u32`
+   |   expected because this is `bool`
+   |
+   = note: this error originates in the macro `machine` (in Nightly builds, run with -Z macro-backtrace for more info)
