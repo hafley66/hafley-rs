@@ -85,3 +85,7 @@ required-features = ["agent-read"]
 [[test]]
 name = "main"
 path = "tests/main.rs"
+
+[[test]]
+name = "omp_live_trait_e2e"
+path = "tests/omp_live_trait_e2e.rs"

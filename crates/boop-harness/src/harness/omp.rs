@@ -151,7 +151,10 @@ impl Harness for Omp {
             ]
             .join("\n"),
         )?;
-        let env = terminal_env(ctx.home);
+        let mut env = terminal_env(ctx.home);
+        // A fresh scratch HOME otherwise opens OMP's interactive provider
+        // setup before it reads this recipe's loopback model configuration.
+        env.push(("OMP_SKIP_SETUP".into(), "1".into()));
         Ok(super::mock_tui::MockTuiLaunch {
             executable: executable.display().to_string(),
             args: vec!["--model".into(), "llmock/mock-model".into()],
