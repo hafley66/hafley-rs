@@ -767,10 +767,7 @@ mod tests {
             Ok(vec![live("headless-fallback", None, Some("%382"))])
         }
 
-        fn live_session_in_pane(
-            &self,
-            pane: &str,
-        ) -> Result<Option<boop::live::LiveSession>> {
+        fn live_session_in_pane(&self, pane: &str) -> Result<Option<boop::live::LiveSession>> {
             if pane.trim_start_matches('%') != "382" {
                 return Ok(None);
             }

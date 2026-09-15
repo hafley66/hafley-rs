@@ -30,8 +30,7 @@ fn openrouter_key() -> Option<String> {
     let path = home.join(".config").join("opencode").join("opencode.json");
     let text = std::fs::read_to_string(&path).ok()?;
     let root = serde_json::from_str::<serde_json::Value>(&text).ok()?;
-    root
-        .get("provider")
+    root.get("provider")
         .and_then(|provider| provider.get("openrouter"))
         .and_then(|openrouter| openrouter.get("options"))
         .and_then(|options| options.get("apiKey"))
@@ -100,7 +99,9 @@ fn fixture_parse_lists_one_session_and_reads_two_messages() {
     let dest = encoded.join(format!("2026-09-14T18-21-03-191Z_{FIXTURE_ID}.jsonl"));
     std::fs::copy(FIXTURE, &dest).expect("copy fixture transcript");
 
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let sessions = with_env(
         "PI_CODING_AGENT_DIR",
         Some(dir.path().to_str().unwrap()),
@@ -113,8 +114,15 @@ fn fixture_parse_lists_one_session_and_reads_two_messages() {
     assert_eq!(session.harness, HarnessId::Omp);
 
     let chunk = Omp.read_from(session, 0).expect("read fixture");
-    assert_eq!(chunk.events.len(), 2, "exactly user and assistant message events");
-    assert_eq!(chunk.skipped, 0, "recognized non-events do not count as skipped");
+    assert_eq!(
+        chunk.events.len(),
+        2,
+        "exactly user and assistant message events"
+    );
+    assert_eq!(
+        chunk.skipped, 0,
+        "recognized non-events do not count as skipped"
+    );
     assert_eq!(
         chunk
             .events
@@ -150,7 +158,9 @@ fn real_run_then_ingest() {
     let agent_dir = tempfile::tempdir().expect("temp agent dir");
     let cwd = tempfile::tempdir().expect("temp cwd");
 
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     run_omp(
         cwd.path(),
         agent_dir.path(),
@@ -173,11 +183,17 @@ fn real_run_then_ingest() {
         .filter_map(|event| event.tool_name.clone())
         .collect();
     assert!(
-        chunk.events.iter().any(|event| event.record_type == "toolCall"),
+        chunk
+            .events
+            .iter()
+            .any(|event| event.record_type == "toolCall"),
         "a tool call event is present, tool names: {tool_names:?}"
     );
     assert!(
-        chunk.events.iter().any(|event| event.record_type == "toolResult"),
+        chunk
+            .events
+            .iter()
+            .any(|event| event.record_type == "toolResult"),
         "a tool result event is present, tool names: {tool_names:?}"
     );
     println!(
@@ -196,16 +212,27 @@ fn real_run_then_ingest() {
     ));
     let _ = std::fs::remove_file(&db);
     let store = boop_store::ident::Store::open(db.clone()).expect("open store");
-    let ingested = Omp.ingest(&store, session, 0).expect("ingest real transcript");
-    assert!(ingested.stat.written >= 2, "user, tool and assistant turns land");
-    assert!(ingested.stat.usage_written >= 1, "the assistant usage row lands");
+    let ingested = Omp
+        .ingest(&store, session, 0)
+        .expect("ingest real transcript");
+    assert!(
+        ingested.stat.written >= 2,
+        "user, tool and assistant turns land"
+    );
+    assert!(
+        ingested.stat.usage_written >= 1,
+        "the assistant usage row lands"
+    );
     drop(store);
     let totals = boop_store::testing::usage_totals_at(&db);
     assert!(totals.input_tokens > 0, "usage input tokens are non-zero");
     let _ = std::fs::remove_file(&db);
 
     let meta = Omp.describe(session).expect("describe real session");
-    assert_eq!(meta.model.as_deref(), Some("deepseek/deepseek-v4-flash-0731"));
+    assert_eq!(
+        meta.model.as_deref(),
+        Some("deepseek/deepseek-v4-flash-0731")
+    );
     println!("omp_transcript real_run_then_ingest: ran LIVE");
 }
 
@@ -225,7 +252,9 @@ fn resume_reuses_the_same_file_and_reads_only_new_lines() {
     let agent_dir = tempfile::tempdir().expect("temp agent dir");
     let cwd = tempfile::tempdir().expect("temp cwd");
 
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     run_omp(
         cwd.path(),
         agent_dir.path(),
@@ -259,9 +288,16 @@ fn resume_reuses_the_same_file_and_reads_only_new_lines() {
         Some(agent_dir.path().to_str().unwrap()),
         || Omp.sessions().expect("discover omp sessions after resume"),
     );
-    assert_eq!(sessions.len(), 1, "resume appends to the same file, no second session");
+    assert_eq!(
+        sessions.len(),
+        1,
+        "resume appends to the same file, no second session"
+    );
     let after = count_lines(&path);
-    assert!(after > before, "resume appended lines: before={before} after={after}");
+    assert!(
+        after > before,
+        "resume appended lines: before={before} after={after}"
+    );
 
     let chunk = Omp.read_from(&session, cursor).expect("incremental read");
     assert!(!chunk.reset, "file was not truncated");

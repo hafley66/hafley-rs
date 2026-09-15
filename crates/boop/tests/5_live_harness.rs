@@ -149,7 +149,9 @@ fn launch(
         HarnessId::Codex => codex(home, &workspace_name, port, &mut env)?,
         HarnessId::Claude => claude(home, &workspace_name, port, &mut env)?,
         HarnessId::Kimi => kimi(home, port, &mut env)?,
-        HarnessId::Omp => anyhow::bail!("omp live harness recipe lands with its transcript readers"),
+        HarnessId::Omp => {
+            anyhow::bail!("omp live harness recipe lands with its transcript readers")
+        }
         HarnessId::Opencode => opencode(home, port, &mut env)?,
     };
     Ok(LiveHarnessLaunch {

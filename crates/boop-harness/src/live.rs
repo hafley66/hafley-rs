@@ -168,7 +168,7 @@ pub fn session_in_pane_on_socket(
             return Ok(Some(session));
         }
     }
-    route_session_in_pane(pane, mail_dir)
+    route_session_in_pane(pane, socket, mail_dir)
         .map(|session| session.map(|session| resolve_registered_session(registry, &session)))
 }
 
@@ -177,7 +177,10 @@ fn session_from_live_in_pane(
     pane: &str,
     socket: Option<&str>,
 ) -> Option<String> {
-    let bound = live.live_session_in_pane_on_socket(pane, socket).ok().flatten()?;
+    let bound = live
+        .live_session_in_pane_on_socket(pane, socket)
+        .ok()
+        .flatten()?;
     let sessions = live.live_sessions().unwrap_or_default();
     Some(interactive_session_id(&bound, &sessions))
 }
@@ -212,7 +215,21 @@ fn resolve_registered_session(registry: &Registry, session: &str) -> String {
 
 // Only claude fills `LiveSession.tmux_pane`; the other three fall back to the
 // boop route registry.
-fn route_session_in_pane(pane: &str, mail_dir: &Path) -> anyhow::Result<Option<String>> {
+fn route_session_in_pane(
+    pane: &str,
+    socket: Option<&str>,
+    mail_dir: &Path,
+) -> anyhow::Result<Option<String>> {
+    if let Some(socket) = socket {
+        let Some(panes) = boop_store::tmux::mux().list_panes(Some(socket)) else {
+            return Ok(None);
+        };
+        if !panes.iter().any(|candidate| {
+            candidate.id.trim_start_matches('%') == pane.trim_start_matches('%')
+        }) {
+            return Ok(None);
+        }
+    }
     let routes = boop_store::bus::read_routes(mail_dir)?;
     Ok(routes.into_values().find_map(|route| {
         let held = route.tmux.as_deref()?;

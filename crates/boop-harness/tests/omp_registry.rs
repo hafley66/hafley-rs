@@ -6,7 +6,9 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use boop_acp::channel::ChannelSpec;
-use boop_harness::harness::mock_tui::{resolve_llmock, MockProvider, MOCK_PROMPT, MOCK_REPLY_MARKER};
+use boop_harness::harness::mock_tui::{
+    resolve_llmock, MockProvider, MOCK_PROMPT, MOCK_REPLY_MARKER,
+};
 use boop_harness::harness::omp::Omp;
 use boop_harness::{Harness, HarnessId, OneShotSpec, Registry};
 
@@ -53,8 +55,7 @@ fn openrouter_key() -> Option<String> {
     let path = home.join(".config").join("opencode").join("opencode.json");
     let text = std::fs::read_to_string(&path).ok()?;
     let root = serde_json::from_str::<serde_json::Value>(&text).ok()?;
-    root
-        .get("provider")
+    root.get("provider")
         .and_then(|provider| provider.get("openrouter"))
         .and_then(|openrouter| openrouter.get("options"))
         .and_then(|options| options.get("apiKey"))
@@ -105,7 +106,9 @@ fn one_shot_runs_omp_against_a_mock_provider() {
     let Some(key) = openrouter_key() else {
         return;
     };
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let reply = with_home(home.path(), || {
         with_env("OPENROUTER_API_KEY", Some(key.as_str()), || {
             Omp.one_shot(&OneShotSpec {
@@ -132,7 +135,9 @@ fn open_channel_reaches_a_real_omp_acp_session() {
     let Some(key) = openrouter_key() else {
         return;
     };
-    let _guard = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let session = with_home(home.path(), || {
         with_env("OPENROUTER_API_KEY", Some(key.as_str()), || {
             let spec = ChannelSpec {

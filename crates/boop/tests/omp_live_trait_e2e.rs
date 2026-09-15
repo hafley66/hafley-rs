@@ -282,7 +282,6 @@ fn wait_for_turns(scratch: &Scratch, session: &str) {
 /// transcript and terminal record. Registry dispatch, socket-aware pane lookup,
 /// transcript messages, and Boop's stored turns preserve their distinct UUIDs.
 #[test]
-#[ignore = "DEFECT: session_in_pane_on_socket returns the retired OMP route after its tmux pane exits"]
 fn omp_live_panes_bind_distinct_sessions_and_project_real_transcripts() {
     let Some(llmock) = mock_tui::resolve_llmock() else {
         eprintln!("skip omp_live_trait_e2e: no llmock (set LLMOCK_BIN)");
