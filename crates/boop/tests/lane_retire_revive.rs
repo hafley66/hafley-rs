@@ -341,7 +341,9 @@ fn a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation() {
         "body never reached the harness"
     );
 
-    // 6. and it retires again on its own, still without a second note.
+    // 6. and it retires again on its own. Each retirement mails its own note:
+    //    `628c2553` made the retired row unconditional, one per result episode,
+    //    so the brief turn and the revived turn produce one note each.
     wait_for(
         "second retirement",
         || !fx.pane_alive(),
@@ -349,7 +351,7 @@ fn a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation() {
     );
     assert_eq!(
         fx.mailbox().matches("lane feature-retire retired").count(),
-        0,
-        "no retire note either time"
+        2,
+        "one retire note per result episode"
     );
 }
