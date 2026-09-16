@@ -2409,6 +2409,18 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
             socket,
             mail_dir,
         } => run_lane_pane(mail_dir.as_deref(), &lane, lines, socket.as_deref()),
+        #[cfg(feature = "agent-read")]
+        LaneCmd::Squares {
+            lane,
+            format,
+            socket,
+            mail_dir,
+        } => crate::cli::screen::run_lane_squares(
+            mail_dir.as_deref(),
+            &lane,
+            format,
+            socket.as_deref(),
+        ),
         LaneCmd::Message { cmd } => match cmd {
             LaneMessageCmd::List { lane, mail_dir } => {
                 run_list(mail_dir.as_deref(), Some(&lane), true)

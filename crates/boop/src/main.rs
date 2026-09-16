@@ -1282,6 +1282,20 @@ enum LaneCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
+    /// The user/agent squares on the lane's screen: one per visible turn, in
+    /// screen order, each with the viewport rows it sits on. Reads the pane
+    /// through the multiplexer and reports the pane's own geometry, so a
+    /// renderer drawing the right-margin navigator asks one verb for both.
+    #[cfg(feature = "agent-read")]
+    Squares {
+        lane: String,
+        #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
+        format: QueryFormat,
+        #[arg(long)]
+        socket: Option<String>,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
     /// The lane's mailbox.
     Message {
         #[command(subcommand)]

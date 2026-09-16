@@ -336,6 +336,7 @@ dependencies = [
  "boop-harness",
  "boop-proc",
  "boop-store",
+ "boop-turnvis",
  "clap",
  "dirs 5.0.1",
  "hafley-observe",
@@ -405,7 +406,6 @@ dependencies = [
  "serde",
  "tmux_interface",
  "tracing",
- "unicode-width",
 ]
 
 [[package]]

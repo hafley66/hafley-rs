@@ -13,8 +13,5 @@ tmux_interface = "0.4"
 # The terminal snapshot is the wire shape a host renders an overlay from, so it
 # derives Serialize/Deserialize; field names are never renamed on the way out.
 serde = { version = "1", features = ["derive"] }
-# Wrap inference compares a row's display width against the viewport, so width
-# has to be counted in cells: a CJK glyph is one char and two cells.
-unicode-width = "0.2"
 # boop owns the subscriber; this library only emits operation boundaries.
 tracing.workspace = true

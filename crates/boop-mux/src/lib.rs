@@ -384,10 +384,11 @@ impl Multiplexer for Tmux {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     }
 
-    /// Two one-shot reads, not one: `display-message` carries the facts and the
-    /// size, `capture-pane -pN` carries the grid. They race under live output,
-    /// which is what `generation` is for — this source has no memory of its
-    /// last answer, so it reports `0` and callers compare with `grid_eq`.
+    /// Three one-shot reads, not one: `display-message` carries the facts and
+    /// the size, `capture-pane -p` carries the rows, and `capture-pane -pJ`
+    /// carries tmux's own wrap flags for the same rows. They race under live
+    /// output, which is what `generation` is for — this source has no memory of
+    /// its last answer, so it reports `0` and callers compare with `grid_eq`.
     fn pane_snapshot(&self, socket: Option<&str>, target: &str) -> Option<TerminalSnapshot> {
         let mut facts_builder = tmux_command(socket);
         let facts_output = facts_builder
@@ -404,18 +405,21 @@ impl Multiplexer for Tmux {
             return None;
         }
         let facts = parse_snapshot_facts(&String::from_utf8_lossy(&facts_output.stdout))?;
-        let mut rows_builder = tmux_command(socket);
-        let rows_output = rows_builder
-            .args(["capture-pane", "-pN", "-t", target])
-            .output()
-            .ok()?;
-        if !rows_output.status.success() {
-            return None;
-        }
-        let rows = rows_from_capture(
-            &String::from_utf8_lossy(&rows_output.stdout),
-            facts.size,
-        );
+        let capture = |extra: Option<&str>| {
+            let mut builder = tmux_command(socket);
+            builder.args(["capture-pane", "-p", "-t", target]);
+            if let Some(extra) = extra {
+                builder.arg(extra);
+            }
+            let output = builder.output().ok()?;
+            if !output.status.success() {
+                return None;
+            }
+            Some(String::from_utf8_lossy(&output.stdout).into_owned())
+        };
+        let trimmed = capture(None)?;
+        let joined = capture(Some("-J"))?;
+        let rows = rows_from_capture(&trimmed, &joined, facts.size);
         Some(TerminalSnapshot {
             target: TerminalTarget {
                 host: "tmux".to_owned(),
@@ -1344,14 +1348,13 @@ mod tests {
             .pane_snapshot(Some(&server.socket), "boop-no-such-session")
             .is_none());
 
-        // A row that fills the viewport width must come back flagged, because
-        // that flag is the only wrap evidence and the whole reason the capture
-        // preserves trailing spaces.
+        // A run that overflows the viewport width must come back with tmux's
+        // own join: the row after the full-width row continues it.
         let columns = blank.size.columns as usize;
         send_keys(
             &server.socket,
             &name,
-            &format!("printf '%0.sA' $(seq 1 {columns})"),
+            &format!("printf '%0.sA' $(seq 1 {})", columns + 5),
         );
         let full = "A".repeat(columns);
         let snapshot = poll_snapshot(&server.socket, &name, |snapshot| {
@@ -1364,8 +1367,13 @@ mod tests {
             .expect("the full-width row");
         assert!(
             snapshot.rows[at + 1].wraps_previous,
-            "the row after a full-width row continues it: {:?}",
+            "tmux joins the overflow row to the full-width one: {:?}",
             &snapshot.rows[at..=at + 1]
+        );
+        assert!(
+            snapshot.rows[at + 1].text.starts_with("AAAAA"),
+            "the overflow row keeps the tail of the run: {:?}",
+            &snapshot.rows[at + 1]
         );
     }
 
