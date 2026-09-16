@@ -299,7 +299,8 @@ pub fn update_native_route(
 }
 
 /// Every undelivered envelope addressed to one route: `to_timestamp` still
-/// open and no door has ever accepted it. A drain re-pushes these.
+/// open and no door acceptance or pane notice has been recorded. A drain
+/// re-pushes these. A pane notice leaves the body unread for explicit retrieval.
 ///
 /// "Ever" is the rail (failure mode 14): one `accepted-by-harness` row, or
 /// one row whose detail names a door, anywhere in the message's history,
@@ -316,7 +317,8 @@ pub fn held_messages(store: &crate::ident::Store, route: &str) -> Result<Vec<Mes
            AND NOT EXISTS (
                SELECT 1 FROM agent_delivery_transition t
                WHERE t.message_id = m.message_id
-                 AND (t.outcome = 'accepted-by-harness'
+                 AND t.route = m.to_route
+                 AND (t.outcome IN ('accepted-by-harness', 'pasted-into-pane')
                       OR t.detail IN ('door', 'door queue')))
          ORDER BY m.seq",
     )?;
