@@ -402,8 +402,10 @@ name = "boop-mux"
 version = "0.0.9"
 dependencies = [
  "anyhow",
+ "serde",
  "tmux_interface",
  "tracing",
+ "unicode-width",
 ]
 
 [[package]]
@@ -449,6 +451,7 @@ dependencies = [
 name = "boop-turnvis"
 version = "0.1.0"
 dependencies = [
+ "boop-mux",
  "serde",
  "serde_json",
 ]

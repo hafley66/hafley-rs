@@ -14,6 +14,12 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use anyhow::{Context, Result};
 use tracing::{debug, warn};
 
+mod _0_snapshot;
+pub use _0_snapshot::{
+    rows_from_capture, History, Screen, TerminalRow, TerminalSize, TerminalSnapshot,
+    TerminalTarget,
+};
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pane {
     pub session: String,
@@ -105,6 +111,14 @@ pub trait Multiplexer {
         target: &str,
         lines: Option<u32>,
     ) -> Result<String>;
+    /// One immutable grid snapshot of the pane `target` names: its cell size,
+    /// its visible rows with wrap flags, the screen it is on, the history it
+    /// can hand back, and the cursor. This is the geometry-bearing read a
+    /// renderer places an overlay against; `capture_pane` is the same text with
+    /// none of it. `None` means tmux is unreachable or the target is unknown.
+    fn pane_snapshot(&self, _socket: Option<&str>, _target: &str) -> Option<TerminalSnapshot> {
+        None
+    }
     /// Spawn a detached tmux session with a shell command.
     fn new_detached_session(
         &self,
@@ -368,6 +382,53 @@ impl Multiplexer for Tmux {
             );
         }
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    }
+
+    /// Two one-shot reads, not one: `display-message` carries the facts and the
+    /// size, `capture-pane -pN` carries the grid. They race under live output,
+    /// which is what `generation` is for — this source has no memory of its
+    /// last answer, so it reports `0` and callers compare with `grid_eq`.
+    fn pane_snapshot(&self, socket: Option<&str>, target: &str) -> Option<TerminalSnapshot> {
+        let mut facts_builder = tmux_command(socket);
+        let facts_output = facts_builder
+            .args([
+                "display-message",
+                "-p",
+                "-t",
+                target,
+                "#{pane_id}\t#{pane_width}\t#{pane_height}\t#{history_size}\t#{history_limit}\t#{cursor_x}\t#{cursor_y}\t#{alternate_on}\t#{pid}",
+            ])
+            .output()
+            .ok()?;
+        if !facts_output.status.success() {
+            return None;
+        }
+        let facts = parse_snapshot_facts(&String::from_utf8_lossy(&facts_output.stdout))?;
+        let mut rows_builder = tmux_command(socket);
+        let rows_output = rows_builder
+            .args(["capture-pane", "-pN", "-t", target])
+            .output()
+            .ok()?;
+        if !rows_output.status.success() {
+            return None;
+        }
+        let rows = rows_from_capture(
+            &String::from_utf8_lossy(&rows_output.stdout),
+            facts.size,
+        );
+        Some(TerminalSnapshot {
+            target: TerminalTarget {
+                host: "tmux".to_owned(),
+                terminal: facts.pane_id,
+                incarnation: facts.server_pid,
+            },
+            generation: 0,
+            size: facts.size,
+            screen: facts.screen,
+            history: facts.history,
+            cursor: facts.cursor,
+            rows,
+        })
     }
 
     fn new_detached_session(
@@ -823,6 +884,54 @@ fn parse_sessions(
         .collect()
 }
 
+/// The facts behind a `pane_snapshot`, parsed from one `display-message -p`
+/// line. Field order is the format string's, not tmux's.
+struct SnapshotFacts {
+    pane_id: String,
+    server_pid: u64,
+    size: TerminalSize,
+    screen: Screen,
+    history: History,
+    cursor: Option<(u16, u16)>,
+}
+
+fn parse_snapshot_facts(text: &str) -> Option<SnapshotFacts> {
+    let line = text.lines().find(|line| !line.trim().is_empty())?;
+    let fields: Vec<&str> = line.split('\t').collect();
+    if fields.len() < 9 {
+        return None;
+    }
+    let columns: u16 = fields[1].trim().parse().ok()?;
+    let rows: u16 = fields[2].trim().parse().ok()?;
+    let history_size: u32 = fields[3].trim().parse().ok()?;
+    let history_limit: u32 = fields[4].trim().parse().ok()?;
+    let cursor_x: u16 = fields[5].trim().parse().ok()?;
+    let cursor_y: u16 = fields[6].trim().parse().ok()?;
+    let alternate = fields[7].trim() == "1";
+    Some(SnapshotFacts {
+        pane_id: fields[0].trim().to_owned(),
+        server_pid: fields[8].trim().parse().ok()?,
+        size: TerminalSize { columns, rows },
+        screen: if alternate {
+            Screen::Alternate
+        } else {
+            Screen::Primary
+        },
+        // An alternate screen has nothing to scroll back into; a host that
+        // reports history there would be handing back the full-screen
+        // program's own redraws.
+        history: if alternate {
+            History::Unavailable
+        } else {
+            History::Retained {
+                rows: history_size,
+                capacity: history_limit,
+            }
+        },
+        cursor: Some((cursor_x, cursor_y)),
+    })
+}
+
 /// The exact-match target form. `-t name` prefix-matches a sibling session
 /// (`-t boop` matches `boop-shell-v2`); `-t =name` pins to the exact name.
 pub(crate) fn exact_target(name: &str) -> String {
@@ -1164,6 +1273,130 @@ mod tests {
     #[allow(dead_code)] // bracketed-paste sink scaffolding, no live test yet
     struct Sink {
         path: std::path::PathBuf,
+    }
+
+    #[test]
+    fn snapshot_facts_split_the_format_line() {
+        let facts = super::parse_snapshot_facts("%3\t203\t52\t117\t2000\t9\t14\t0\t4242\n")
+            .expect("nine tab-joined fields");
+        assert_eq!(facts.pane_id, "%3");
+        assert_eq!(facts.server_pid, 4242);
+        assert_eq!(
+            facts.size,
+            super::TerminalSize {
+                columns: 203,
+                rows: 52
+            }
+        );
+        assert_eq!(facts.screen, super::Screen::Primary);
+        assert_eq!(
+            facts.history,
+            super::History::Retained {
+                rows: 117,
+                capacity: 2000
+            }
+        );
+        assert_eq!(facts.cursor, Some((9, 14)));
+
+        let alternate = super::parse_snapshot_facts("%3\t80\t24\t0\t2000\t0\t0\t1\t4242\n")
+            .expect("an alternate screen still answers");
+        assert_eq!(alternate.screen, super::Screen::Alternate);
+        assert_eq!(alternate.history, super::History::Unavailable);
+
+        assert!(super::parse_snapshot_facts("").is_none());
+        assert!(super::parse_snapshot_facts("%3\t80\t24\n").is_none());
+    }
+
+    #[test]
+    fn a_live_pane_answers_a_snapshot_with_the_geometry_of_its_wrap() {
+        if !tmux_on_path() {
+            eprintln!("skipping: tmux not on PATH");
+            return;
+        }
+        let server = TestServer::new();
+        let name = session_name();
+        server.create_session(&name);
+
+        let blank = mux()
+            .pane_snapshot(Some(&server.socket), &name)
+            .expect("a live session answers a snapshot");
+        assert_eq!(
+            blank.rows.len(),
+            blank.size.rows as usize,
+            "a snapshot is the whole visible grid, not the written part of it"
+        );
+        assert_eq!(blank.screen, super::Screen::Primary);
+        assert_eq!(blank.target.host, "tmux");
+        assert!(blank.target.terminal.starts_with('%'));
+        assert!(
+            blank.target.incarnation > 0,
+            "the server pid is the incarnation"
+        );
+        assert!(blank.cursor.is_some());
+        assert!(matches!(
+            blank.history,
+            super::History::Retained { capacity, .. } if capacity > 0
+        ));
+
+        // An unknown target is an absent snapshot, not an error and not a
+        // blank grid: a renderer must not draw an overlay over nothing.
+        assert!(mux()
+            .pane_snapshot(Some(&server.socket), "boop-no-such-session")
+            .is_none());
+
+        // A row that fills the viewport width must come back flagged, because
+        // that flag is the only wrap evidence and the whole reason the capture
+        // preserves trailing spaces.
+        let columns = blank.size.columns as usize;
+        send_keys(
+            &server.socket,
+            &name,
+            &format!("printf '%0.sA' $(seq 1 {columns})"),
+        );
+        let full = "A".repeat(columns);
+        let snapshot = poll_snapshot(&server.socket, &name, |snapshot| {
+            snapshot.rows.iter().any(|row| row.text == full)
+        });
+        let at = snapshot
+            .rows
+            .iter()
+            .position(|row| row.text == full)
+            .expect("the full-width row");
+        assert!(
+            snapshot.rows[at + 1].wraps_previous,
+            "the row after a full-width row continues it: {:?}",
+            &snapshot.rows[at..=at + 1]
+        );
+    }
+
+    fn send_keys(socket: &str, target: &str, text: &str) {
+        let status = Command::new("tmux")
+            .args(["-L", socket, "send-keys", "-t", target, text, "Enter"])
+            .status()
+            .expect("tmux send-keys");
+        assert!(status.success(), "send-keys into {target}");
+    }
+
+    fn poll_snapshot(
+        socket: &str,
+        target: &str,
+        want: impl Fn(&super::TerminalSnapshot) -> bool,
+    ) -> super::TerminalSnapshot {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let snapshot = mux()
+                .pane_snapshot(Some(socket), target)
+                .expect("tmux installed and reachable");
+            if want(&snapshot) {
+                return snapshot;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "pane never showed the expected content: {:#?}",
+                snapshot.rows
+            );
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
     }
 
     #[allow(dead_code)] // bracketed-paste sink scaffolding, no live test yet
