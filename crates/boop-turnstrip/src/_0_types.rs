@@ -154,39 +154,76 @@ pub struct Placement {
     /// `0 < seen < 1` is a turn the reader is halfway through.
     pub seen: f64,
     pub measured: bool,
+    /// The buffer rows the matcher actually saw on screen, inclusive — the
+    /// turn's own span clipped to the viewport. `None` when nothing was
+    /// measured. This is the extent a strip that draws on the reader's rows
+    /// needs: `start`/`rows` describe the whole turn, estimated, so a turn whose
+    /// head scrolled off the top ends above the window in that space while it is
+    /// plainly on screen.
+    pub visible: Option<(f64, f64)>,
 }
 
-/// Pinned by measurement on a busy pane, not by taste: `square_height` and
-/// `strip_max` mirror the CSS, the rest are the TypeScript `STRIP_DEFAULTS`.
+/// Which placement the strip draws.
+///
+/// Two answers to "where does a square go", and they disagree about what the
+/// strip *is*:
+///
+///   - [`Mode::Relative`]: the strip is the reader's window. A square sits on
+///     the row its turn starts on, so a scroll moves every square with the text
+///     and a turn whose head scrolled off the top draws at row 0. Only a turn
+///     the matcher saw on these rows has a row to name, so a turn above the
+///     window draws no square at all — except the reader's own, which the pinned
+///     band keeps.
+///   - [`Mode::Map`]: the strip is the rolling window of turns, and a square
+///     sits where its turn falls in it, estimated rows and all, so a scroll
+///     moves the block that marks the reader's rows and leaves the squares
+///     alone. Every turn the window holds draws, measured or not.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Mode {
+    #[default]
+    Relative,
+    Map,
+}
+
+/// Pinned by measurement on a busy pane, not by taste. The crate has no pixel
+/// constants in either mode: a caller draws `y * cell_height` (relative) or
+/// scales `y / span` onto its own track (map).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Options {
-    pub square_height: f64,
-    pub strip_max: f64,
+    pub mode: Mode,
     /// Scale given to a turn twice the window's median: `1 + flex` at
     /// `2 × L_ref`.
     pub ratio_flex: f64,
     pub scale_min: f64,
     pub scale_max: f64,
-    pub block_min: f64,
-    /// The strip's own cap: [`crate::layout`] keeps only the newest
-    /// `max_squares` rows of the window, `0` meaning no cap. This is a
-    /// rendering budget the *server* owns, not a measurement: because the cap
-    /// trims the window before anything is measured, it changes `span` and with
-    /// it every square's `y`, so the same pane at two caps is two different
-    /// strips and a caller must not mix their output.
+    /// Least distance between two squares, in window rows. A square draws
+    /// smaller than one row, so `1` keeps adjacent rows from touching. Relative
+    /// mode only: a map has no rows to collide on.
+    pub min_gap: f64,
+    /// The strip's own budget: at most this many squares (`0` = only the mode's
+    /// own bound, which in relative mode is one square per window row). The
+    /// turns a cap drops are the oldest; the one being read is always kept.
     pub max_squares: usize,
+    /// Draw the tool turns at all. A pane whose tools are chatty can fill the
+    /// strip with them, so a reader can ask for the conversation only.
+    pub show_tools: bool,
+    /// How many of the reader's own turns stay on the strip even when the mode
+    /// does not place them — the pinned band. `0` turns the band off.
+    pub user_keep: usize,
 }
 
 /// The measured defaults, spelled once.
 pub const STRIP_DEFAULTS: Options = Options {
-    square_height: 9.0,
-    strip_max: 320.0,
+    mode: Mode::Relative,
     ratio_flex: 0.35,
     scale_min: 0.7,
     scale_max: 1.9,
-    block_min: 6.0,
-    max_squares: 24,
+    min_gap: 1.0,
+    max_squares: 0,
+    show_tools: true,
+    user_keep: 4,
 };
 
 impl Default for Options {
@@ -202,12 +239,15 @@ impl Default for Options {
 pub struct Square {
     pub id: String,
     pub kind: TurnKind,
+    /// The turn's first row *inside the window*: `0.0` is the window's first
+    /// row, `height - 1.0` its last. A caller draws it at `y * cell_height`, so
+    /// a square sits on the row its turn starts on and moves with the scroll.
     pub y: f64,
     pub scale: f64,
     pub active: bool,
 }
 
-/// The on-screen range, in the same `0..track` space the squares use.
+/// The reader's rows, in the same space the map's squares use.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {
@@ -215,13 +255,60 @@ pub struct Block {
     pub height: f64,
 }
 
-/// The strip. `row_at` in the TypeScript is a closure over the placements;
-/// here the same mapping is `_3_layout::row_at`, called directly.
+/// The strip in [`Mode::Relative`]: the window's turns, each at the row it
+/// starts on, plus the pinned band.
+///
+/// `squares[..band]` are the pinned ones, oldest first, `y` counting positions
+/// in the band rather than rows — they are the reader's own turns kept on the
+/// strip while the mode places none of them, so they are not positions and the
+/// caller draws them in their own lane. Everything after them is a window row:
+/// `y` in `0..rows`, `y * cell_height` from the window's first row.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Layout {
+pub struct RelativeStrip {
     pub squares: Vec<Square>,
-    /// Estimated rows the whole window occupies, the strip's denominator.
+    pub band: usize,
+    /// The window's height in rows: what a relative square's `y` is measured in.
+    pub rows: f64,
+}
+
+/// The strip in [`Mode::Map`]: every turn the rolling window holds, at the row
+/// it falls in it.
+///
+/// `y` and `span` are map rows — estimated buffer rows — so a caller draws
+/// `y / span` along its own track and the same pane at two track heights is the
+/// same map. `block` is the reader's window in that space, which is what moves
+/// on a scroll while the squares stay.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MapStrip {
+    pub squares: Vec<Square>,
+    pub band: usize,
     pub span: f64,
     pub block: Block,
+}
+
+/// The strip, in whichever mode was asked for. Tagged on the wire (`"mode"`),
+/// so a client branches once and never has to guess which space `y` is in.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "camelCase")]
+pub enum Layout {
+    Relative(RelativeStrip),
+    Map(MapStrip),
+}
+
+impl Layout {
+    pub fn squares(&self) -> &[Square] {
+        match self {
+            Layout::Relative(strip) => &strip.squares,
+            Layout::Map(strip) => &strip.squares,
+        }
+    }
+
+    pub fn band(&self) -> usize {
+        match self {
+            Layout::Relative(strip) => strip.band,
+            Layout::Map(strip) => strip.band,
+        }
+    }
 }

@@ -61,6 +61,7 @@ pub fn place_window(
                 total: turn.total,
                 seen: 1.0,
                 measured: false,
+                visible: None,
             },
             Some(sample) => {
                 let rows = (sample.end - sample.start + 1) as f64;
@@ -81,6 +82,7 @@ pub fn place_window(
                     total: sample.total,
                     seen,
                     measured: true,
+                    visible: Some((sample.start as f64, sample.end as f64)),
                 }
             }
         })
