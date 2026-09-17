@@ -433,6 +433,7 @@ fn main() -> Result<()> {
     let result = run_cli(cli);
     let outcome = if result.is_ok() { "ok" } else { "error" };
     invoke::finish(&invocation, now_ms().saturating_sub(started_ms), outcome);
+    hafley_observe::shutdown();
     result
 }
 
@@ -1285,6 +1286,20 @@ enum LaneCmd {
         lane: String,
         #[arg(long)]
         lines: Option<u32>,
+        #[arg(long)]
+        socket: Option<String>,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// The user/agent squares on the lane's screen: one per visible turn, in
+    /// screen order, each with the viewport rows it sits on. Reads the pane
+    /// through the multiplexer and reports the pane's own geometry, so a
+    /// renderer drawing the right-margin navigator asks one verb for both.
+    #[cfg(feature = "agent-read")]
+    Squares {
+        lane: String,
+        #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
+        format: QueryFormat,
         #[arg(long)]
         socket: Option<String>,
         #[arg(long)]

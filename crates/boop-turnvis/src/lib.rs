@@ -1,7 +1,12 @@
 //! Port of the terminal turn matcher from TypeScript, byte-identical on the
 //! golden fixture corpus.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+mod _1_snapshot;
+pub use _1_snapshot::{
+    logical_lines, locate_snapshot_turns, visible_squares, TurnSquare, PREVIEW_CHARS,
+};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct BoopTurn {
@@ -20,7 +25,7 @@ pub struct LogicalLine {
     pub end: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum Confidence {
     Anchored,
     Extended,
