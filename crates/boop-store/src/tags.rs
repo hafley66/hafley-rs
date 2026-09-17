@@ -4,10 +4,11 @@
 use std::collections::BTreeMap;
 
 use anyhow::{bail, Result};
-use rusqlite::params;
+use rusqlite::{params, params_from_iter};
 use serde::{Deserialize, Serialize};
 
 use crate::ident::Store;
+use crate::runtime::sql_placeholders;
 
 /// One tag with its use count and last use; `boop tag list` and the recent
 /// list read it.
@@ -159,6 +160,34 @@ impl Store {
             .prepare("SELECT tag FROM agent_tag_link WHERE source = ?1 ORDER BY ts ASC, tag ASC")?;
         let rows = statement.query_map(params![source.trim()], |row| row.get::<_, String>(0))?;
         Ok(rows.collect::<rusqlite::Result<Vec<String>>>()?)
+    }
+
+    /// The tags each named source carries, oldest link first, keyed by source.
+    /// One statement covers the whole batch. A requested source nobody tagged
+    /// answers an empty list, so a caller indexes the answer directly: the
+    /// right-margin strip asks once per visible-set change, not once per square.
+    pub fn tags_for_many(&self, sources: &[String]) -> Result<BTreeMap<String, Vec<String>>> {
+        let asked: Vec<&str> = sources.iter().map(|source| source.trim()).collect();
+        if asked.is_empty() {
+            return Ok(BTreeMap::new());
+        }
+        let mut out: BTreeMap<String, Vec<String>> = asked
+            .iter()
+            .map(|source| ((*source).to_owned(), Vec::new()))
+            .collect();
+        let placeholders = sql_placeholders(asked.len());
+        let mut statement = self.connection().prepare(&format!(
+            "SELECT source, tag FROM agent_tag_link WHERE source IN ({placeholders})
+              ORDER BY ts ASC, tag ASC"
+        ))?;
+        let mut rows = statement.query(params_from_iter(asked))?;
+        while let Some(row) = rows.next()? {
+            let source: String = row.get(0)?;
+            if let Some(tags) = out.get_mut(&source) {
+                tags.push(row.get(1)?);
+            }
+        }
+        Ok(out)
     }
 
     /// The sources one tag hangs on, oldest link first.
@@ -352,6 +381,44 @@ mod tests {
         assert!(store.tag_unlink("x", "s1").unwrap());
         assert!(store.tags_for("s1").unwrap().is_empty());
         assert!(!store.tag_unlink("x", "s1").unwrap());
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The strip's read: one statement answers a whole visible set, every
+    /// source asked for comes back, and the answer equals the single read.
+    #[test]
+    fn a_batch_read_answers_every_source_asked_about() {
+        let (path, store) = fresh_store("batch-read");
+        store.tag_apply("rust", "turn:s1:2", 10).unwrap();
+        store.tag_apply("perf", "turn:s1:2", 11).unwrap();
+        store.tag_apply("docs", "turn:s1:5", 12).unwrap();
+        let asked: Vec<String> = ["turn:s1:2", "turn:s1:5", "turn:s1:9", " turn:s1:2 "]
+            .iter()
+            .map(|source| (*source).to_owned())
+            .collect();
+
+        let batch = store.tags_for_many(&asked).unwrap();
+
+        assert_eq!(
+            batch["turn:s1:2"],
+            ["rust", "perf"],
+            "one ts per link, so the tag breaks the tie"
+        );
+        assert_eq!(batch["turn:s1:5"], ["docs"]);
+        assert!(
+            batch["turn:s1:9"].is_empty(),
+            "a source nobody tagged keeps its place, empty"
+        );
+        assert_eq!(batch.len(), 3, "the same source twice is one entry, trimmed");
+        for source in &asked {
+            assert_eq!(
+                batch[source.trim()],
+                store.tags_for(source).unwrap(),
+                "the batch read answers what the single read answers"
+            );
+        }
+        assert!(store.tags_for_many(&[]).unwrap().is_empty());
         drop(store);
         let _ = std::fs::remove_file(&path);
     }

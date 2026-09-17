@@ -440,7 +440,7 @@ const RUNTIME_PROCESSES_SQL: &str = "SELECT d.value, status.value, live.pid, pan
           LEFT JOIN dict_status status ON status.id = live.status_id
           LEFT JOIN dict_pane pane ON pane.id = live.tmux_pane_id";
 
-fn sql_placeholders(count: usize) -> String {
+pub(crate) fn sql_placeholders(count: usize) -> String {
     if count == 0 {
         return "NULL".into();
     }

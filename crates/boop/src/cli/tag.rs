@@ -47,6 +47,26 @@ pub(crate) fn run_tag_of(source: &str) -> Result<()> {
     Ok(())
 }
 
+/// The tags every named source carries, one read for the whole batch. A source
+/// with no tag answers an empty list rather than dropping out of the answer.
+pub(crate) fn run_tag_for(sources: &[String], format: TagFormat) -> Result<()> {
+    let tags = open_store()?.tags_for_many(sources)?;
+    match format {
+        TagFormat::Json => line(&serde_json::to_string_pretty(&tags)?),
+        TagFormat::Text => {
+            for (source, tags) in &tags {
+                let mut row = source.clone();
+                for tag in tags {
+                    row.push('\t');
+                    row.push_str(tag);
+                }
+                line(&row);
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn run_tag_sources(tag: &str) -> Result<()> {
     for source in open_store()?.sources_for(tag)? {
         line(&source);

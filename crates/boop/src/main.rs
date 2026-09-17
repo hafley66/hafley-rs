@@ -26,8 +26,8 @@ use cli::mail::{run_inbox, run_send, Outbound};
 use cli::me::run_me_favorite;
 use cli::me::{run_me_mood, run_whoami};
 use cli::tag::{
-    run_tag_add, run_tag_backfill, run_tag_list, run_tag_of, run_tag_recent, run_tag_rm,
-    run_tag_search, run_tag_sources,
+    run_tag_add, run_tag_backfill, run_tag_for, run_tag_list, run_tag_of, run_tag_recent,
+    run_tag_rm, run_tag_search, run_tag_sources,
 };
 use cli::{doctrine, line, mail_dir, now_ms};
 
@@ -265,6 +265,13 @@ enum TagCmd {
     },
     /// The tags one source carries.
     Of { source: String },
+    /// The tags several sources carry, one read for the batch.
+    For {
+        #[arg(value_name = "SOURCE", required = true)]
+        sources: Vec<String>,
+        #[arg(long, value_enum, default_value_t = TagFormat::Text)]
+        format: TagFormat,
+    },
     /// The sources one tag hangs on.
     Sources { tag: String },
     /// Take one tag off one source.
@@ -575,6 +582,7 @@ fn run_cli(cli: Cli) -> Result<()> {
                 } => run_tag_search(&query, limit, format),
                 TagCmd::List { format } => run_tag_list(format),
                 TagCmd::Of { source } => run_tag_of(&source),
+                TagCmd::For { sources, format } => run_tag_for(&sources, format),
                 TagCmd::Sources { tag } => run_tag_sources(&tag),
                 TagCmd::Rm { tag, source } => run_tag_rm(&tag, &source),
                 TagCmd::Backfill => run_tag_backfill(),
@@ -2084,6 +2092,23 @@ mod tests {
         assert!(
             Cli::try_parse_from(["boop", "tag", "add"]).is_err(),
             "a tag add with no tag is a parse error"
+        );
+    }
+
+    #[test]
+    fn tag_for_takes_a_batch_of_sources() {
+        let cli = Cli::try_parse_from(["boop", "tag", "for", "turn:s:1", "turn:s:2"])
+            .expect("two sources parse");
+        let Some(SubCmd::Tag {
+            cmd: TagCmd::For { sources, .. },
+        }) = cli.command
+        else {
+            panic!("boop tag for is a Tag/For command");
+        };
+        assert_eq!(sources, ["turn:s:1", "turn:s:2"]);
+        assert!(
+            Cli::try_parse_from(["boop", "tag", "for"]).is_err(),
+            "a batch read with no source is a parse error"
         );
     }
 

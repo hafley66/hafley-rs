@@ -380,6 +380,7 @@ above. Feature-gated `dl6` forms are covered by the central feature gate.
 | `boop tag` | `boop tag <COMMAND>` | none |
 | `boop tag add` | `boop tag add [OPTIONS] <TAG>...` | `--source <SOURCE>` |
 | `boop tag backfill` | `boop tag backfill` | none |
+| `boop tag for` | `boop tag for <SOURCE>...` | `--format <FORMAT>` |
 | `boop tag list` | `boop tag list [OPTIONS]` | `--format <FORMAT>` |
 | `boop tag of` | `boop tag of <SOURCE>` | none |
 | `boop tag recent` | `boop tag recent [OPTIONS]` | `-n, --limit <LIMIT>`, `--format <FORMAT>` |

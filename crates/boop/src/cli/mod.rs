@@ -307,6 +307,9 @@ TAGS: one tag table every surface shares (favorites, comments, turns, lanes).
     boop tag search rus -n 20         substring match on the tag column
     boop tag list                     every tag, most used first
     boop tag of favorite:12           the tags one source carries
+    boop tag for turn:s1:4 turn:s1:7  the same read for a whole batch: text
+                                      rows are `source tag...`, json is one
+                                      object keyed by source
     boop tag sources rust             the sources one tag hangs on
     boop tag rm rust --source favorite:12
     boop tag backfill                 favorite notes become tags, once
