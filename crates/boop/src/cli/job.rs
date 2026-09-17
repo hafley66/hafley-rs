@@ -4611,7 +4611,13 @@ mod tests {
         assert_eq!(lane_state(&dir, "mine", &live, &route, &routes), "idle");
 
         drop(session);
-        let dead_live = tmux::mux().live_sessions(None);
+        // A reachable server whose session is gone. Probing the ambient socket
+        // here answers `None` (unreachable) whenever no other test's session is
+        // alive at that instant, and an unreachable server answers "?" — a
+        // different question, decided by the runner rather than by this test.
+        let dead_live = Some(boop::tmux::LiveSessions {
+            names: BTreeSet::new(),
+        });
         assert_eq!(
             lane_state(&dir, "mine", &dead_live, &route, &routes),
             "dead"
