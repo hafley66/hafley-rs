@@ -44,6 +44,14 @@ tokio = { version = "1", features = ["rt", "net", "time", "macros", "sync"] }
 futures-util = { version = "0.3", features = ["sink"] }
 # Resolve the claude home dir without XDG project-dir machinery.
 dirs = "5"
+# omp keys its custom providers in `~/.omp/agent/models.yml`, hand-written in
+# flow style with `!command` secret values. Read-modify-write needs a YAML
+# round-trip that keeps unknown keys. Candidates weighed: serde_yaml (dtolnay,
+# archived 2024, still the reference), serde_yml (fork with an unsafe-libyaml
+# rewrite that drew soundness reports), noyalib (young, no Value round-trip
+# yet), yaml-rust2 (parser only, no serde). serde_yaml_ng is the maintained
+# serde_yaml fork with the same Value API.
+serde_yaml_ng = "0.10"
 # Parallel filesystem acquisition for transcript candidates. Harness adapters
 # retain their own roots and transcript identity parsing.
 ignore = "0.4"
