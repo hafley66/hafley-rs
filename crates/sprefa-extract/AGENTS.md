@@ -49,9 +49,10 @@ everyday workhorse. Everything else: programs, NOT extractors.
 
 Intra-procedural extraction ONLY — the per-file purity is what keeps this
 crate parallel and incremental. arg->param / ret->call-res flow is DERIVED
-in the engine from df_args/df_param_pos + resolve edges
-(FlowEdgeKind{ArgToParam, RetToCallRes, LambdaElem, LambdaRet} is already
-reserved in the vocabulary). Eager whole-repo context-sensitive extraction
+in the engine from df_args/df_param_pos + resolve edges: `flow_edges`
+(`src/types.rs`) emits `FlowEdgeKind::{ArgToParam, RetToCallRes}` today;
+`LambdaElem` / `LambdaRet` are reserved in the vocabulary and never
+constructed. Eager whole-repo context-sensitive extraction
 is the IFDS trap: never queued, never start it.
 
 ## Pointers

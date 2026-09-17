@@ -23,10 +23,10 @@
 //!   (duplicate_def_python_cross_file, green) does flip to absent, so the
 //!   drop-on-ambiguity behavior is inconsistent between the two shapes.
 //!
-//! rust has no duplicate-def row: no rust leg answers `corpus_unique`
-//! (survey: same_file/module_plane/receiver/self_type only), so the
-//! invariant's premise never arises. python and ts mint no `same_file` call
-//! edges, so their conservation rows hold over an empty set.
+//! rust has no duplicate-def row yet: rust does answer `corpus_unique`
+//! (`src/lang/rust.rs:459,493,1222`), so the invariant applies and the row
+//! is owed. python and ts mint no `same_file` call edges, so their
+//! conservation rows hold over an empty set.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

@@ -3663,9 +3663,8 @@ pub enum FlatFact {
         kind: String,
     },
     /// One import binding, resolved through the LANGUAGE'S OWN module plane
-    /// (ECMAScript ResolveExport for ts/js). The go and rust arms take the same
-    /// row shape when their planes land; neither emits it today. Column meanings
-    /// live at `--schema`.
+    /// (ECMAScript ResolveExport for ts/js); all five arms emit it, see
+    /// `src/lang/*_modules.rs` and `ts_resolve.rs`. Column meanings live at `--schema`.
     /// @comment-ok: the cross-language contract a second arm has to honor
     #[serde(rename = "resolved_import")]
     ResolvedImportRow {
