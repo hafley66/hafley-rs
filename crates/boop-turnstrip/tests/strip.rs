@@ -1,0 +1,461 @@
+//! The TypeScript fixture, ported: one claude pane mid-stream, a reader who has
+//! scrolled so that two of its five turns are on screen, and the rest of the
+//! rolling window extrapolated from those two.
+//!
+//! Every expected number below is the inline snapshot in
+//! `1_agentSquaresEstimate.test.ts`, which pins them to two decimals the way
+//! `Number(value.toFixed(2))` pins them there; `close` is the same rounding
+//! stated as a tolerance. The rows and lines the matcher reported are replayed
+//! as a grid — each attributed row carries the turn line that landed on it —
+//! and the empty rows stay empty, which is what the aligner must ignore.
+
+use boop_turnstrip::{
+    layout, measure, place_window, rows_of, samples_from, strip_layout, window_of, Options,
+    Placement, TurnKind, TurnRow, Viewport, KINDS,
+};
+use boop_turnvis::{Confidence, LogicalLine, VisibleTurn};
+
+/// One projection turn: the span the matcher found, its line count, and the
+/// buffer rows its lines landed on.
+struct TurnSpec {
+    id: String,
+    role: &'static str,
+    span: (i64, i64),
+    lines: i64,
+    rows: Vec<i64>,
+}
+
+fn spec(id: &str, role: &'static str, span: (i64, i64), lines: i64, rows: &[i64]) -> TurnSpec {
+    TurnSpec {
+        id: id.to_string(),
+        role,
+        span,
+        lines,
+        rows: rows.to_vec(),
+    }
+}
+
+fn said(lines: i64) -> String {
+    (1..=lines)
+        .map(|index| format!("line {index}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// A claude pane mid-stream: a one-line prompt, a long answer that wraps, a SQL
+/// result, a short answer, a short tool result. Rows 2, 31-32, 51 and 59-60
+/// hold nothing the matcher attributed — blank lines and the result's own
+/// separator.
+fn pane() -> Vec<TurnSpec> {
+    vec![
+        spec("u1", "user", (0, 1), 1, &[0]),
+        spec(
+            "a2",
+            "assistant",
+            (3, 30),
+            24,
+            &[
+                3, 5, 7, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+                29, 30,
+            ],
+        ),
+        spec(
+            "t3",
+            "tool",
+            (33, 50),
+            12,
+            &[33, 35, 37, 39, 41, 43, 45, 46, 47, 48, 49, 50],
+        ),
+        spec("a4", "assistant", (52, 58), 6, &[52, 54, 55, 56, 57, 58]),
+        spec("t5", "tool", (61, 63), 2, &[61, 63]),
+    ]
+}
+
+/// The reader has scrolled so the SQL result's tail and the short answer are on
+/// screen: 24 rows, of which t3 shows 10 of its 12 lines and a4 all 6 of its.
+const VIEWPORT: Viewport = Viewport {
+    top: 37,
+    bottom: 60,
+};
+
+/// The same pane with the turn the matcher dropped (`x2`) in it, and the two
+/// neighbours whose gap has to hold it.
+fn gap() -> Vec<TurnSpec> {
+    vec![
+        spec("x1", "assistant", (0, 9), 5, &[0, 2, 4, 6, 8]),
+        spec("x3", "assistant", (23, 32), 4, &[23, 25, 27, 29]),
+    ]
+}
+
+fn all() -> Vec<TurnSpec> {
+    vec![
+        spec("x1", "assistant", (0, 9), 5, &[0, 2, 4, 6, 8]),
+        spec("x2", "tool", (12, 20), 3, &[12, 15, 18]),
+        spec("x3", "assistant", (23, 32), 4, &[23, 25, 27, 29]),
+    ]
+}
+
+/// `count` turns, two rows apart, one line each: the row cap's fixture.
+fn many(count: i64) -> Vec<TurnSpec> {
+    (0..count)
+        .map(|index| {
+            spec(
+                &format!("s{}", index + 1),
+                "assistant",
+                (index * 2, index * 2 + 1),
+                1,
+                &[index * 2],
+            )
+        })
+        .collect()
+}
+
+fn turn_of(spec: &TurnSpec) -> VisibleTurn {
+    VisibleTurn {
+        session: "s1".to_string(),
+        harness: "claude".to_string(),
+        turn: 0,
+        ts: 0,
+        role: spec.role.to_string(),
+        said: said(spec.lines),
+        id: spec.id.clone(),
+        buffer_start: spec.span.0 as usize,
+        buffer_end: spec.span.1 as usize,
+        anchor_start: spec.span.0 as usize,
+        anchor_end: spec.span.1 as usize,
+        confidence: Confidence::Anchored,
+    }
+}
+
+/// The pane's grid: every attributed row carries the turn line that landed on
+/// it, and every other row is empty — the blank lines and the separator the
+/// matcher attributed nothing to.
+fn grid(specs: &[TurnSpec]) -> Vec<LogicalLine> {
+    let last = specs
+        .iter()
+        .flat_map(|spec| spec.rows.iter().copied())
+        .max()
+        .unwrap_or(-1);
+    let mut lines: Vec<LogicalLine> = (0..=last)
+        .map(|row| LogicalLine {
+            text: String::new(),
+            start: row as usize,
+            end: row as usize,
+        })
+        .collect();
+    for spec in specs {
+        assert_eq!(
+            spec.rows.len() as i64,
+            spec.lines,
+            "{} has a row per line",
+            spec.id
+        );
+        for (offset, row) in spec.rows.iter().enumerate() {
+            lines[*row as usize].text = format!("line {}", offset + 1);
+        }
+    }
+    lines
+}
+
+fn rows_for(specs: &[TurnSpec], viewport: Viewport) -> Vec<TurnRow> {
+    let grid = grid(specs);
+    specs
+        .iter()
+        .map(|spec| rows_of(&grid, &turn_of(spec), viewport))
+        .collect()
+}
+
+fn placements_of(rows: &[TurnRow], viewport: Viewport) -> Vec<Placement> {
+    let samples = samples_from(rows, viewport);
+    place_window(
+        &window_of(rows),
+        &samples,
+        &measure(&samples, viewport),
+        viewport,
+    )
+}
+
+/// The TypeScript pins its snapshots to two decimals, so a match is a value
+/// that rounds to the same hundredth.
+fn close(got: f64, want: f64) -> bool {
+    (got - want).abs() <= 0.005 + 1e-9
+}
+
+#[test]
+fn reads_the_viewport_the_way_the_matcher_reported_it() {
+    let samples = samples_from(&rows_for(&pane(), VIEWPORT), VIEWPORT);
+    assert_eq!(samples.len(), 2, "only the reached turns are sampled");
+    let t3 = &samples[0];
+    assert_eq!(
+        (
+            t3.id.as_str(),
+            t3.kind,
+            t3.turn_start,
+            t3.start,
+            t3.end,
+            t3.lines,
+            t3.total
+        ),
+        ("t3", TurnKind::Tool, 33, 37, 50, 10, 12)
+    );
+    let a4 = &samples[1];
+    assert_eq!(
+        (
+            a4.id.as_str(),
+            a4.kind,
+            a4.turn_start,
+            a4.start,
+            a4.end,
+            a4.lines,
+            a4.total
+        ),
+        ("a4", TurnKind::Agent, 52, 52, 58, 6, 6)
+    );
+}
+
+#[test]
+fn measures_wrap_and_gap_overhead_from_what_is_on_screen() {
+    let samples = samples_from(&rows_for(&pane(), VIEWPORT), VIEWPORT);
+    let estimates = measure(&samples, VIEWPORT);
+    let kappa = |kind: TurnKind| estimates.kappa[kind.index()];
+    assert!(close(kappa(TurnKind::Agent), 1.1666666666666667));
+    assert!(close(kappa(TurnKind::Other), 1.3125));
+    assert!(close(kappa(TurnKind::Tool), 1.4));
+    assert!(close(kappa(TurnKind::User), 1.3125));
+    assert!(close(estimates.kappa_max, 1.4));
+    for kind in KINDS {
+        assert!(
+            close(estimates.gamma[kind.index()], 1.0),
+            "{kind:?} overhead could not be measured, so every other kind's is pooled"
+        );
+    }
+}
+
+#[test]
+fn places_every_turn_in_the_window_when_only_two_of_them_are_visible() {
+    let placements = placements_of(&rows_for(&pane(), VIEWPORT), VIEWPORT);
+    let expected: [(&str, TurnKind, bool, f64, f64, f64, i64); 5] = [
+        ("u1", TurnKind::User, false, 1.3125, 1.0, 1.6875, 1),
+        ("a2", TurnKind::Agent, false, 28.0, 1.0, 4.0, 24),
+        (
+            "t3",
+            TurnKind::Tool,
+            true,
+            16.8,
+            0.8333333333333334,
+            33.0,
+            12,
+        ),
+        ("a4", TurnKind::Agent, true, 7.0, 1.0, 52.0, 6),
+        ("t5", TurnKind::Tool, false, 2.8, 1.0, 60.0, 2),
+    ];
+    assert_eq!(placements.len(), expected.len());
+    for (placement, (id, kind, measured, rows, seen, start, total)) in
+        placements.iter().zip(expected)
+    {
+        assert_eq!(placement.id.as_str(), id);
+        assert_eq!(placement.kind, kind);
+        assert_eq!(placement.measured, measured);
+        assert_eq!(placement.total, total);
+        assert!(close(placement.rows, rows), "{id} rows {}", placement.rows);
+        assert!(close(placement.seen, seen), "{id} seen {}", placement.seen);
+        assert!(
+            close(placement.start, start),
+            "{id} start {}",
+            placement.start
+        );
+    }
+}
+
+#[test]
+fn keeps_the_measured_turns_at_their_own_rows_and_stacks_the_rest_around_them() {
+    let specs = pane();
+    let placements = placements_of(&rows_for(&specs, VIEWPORT), VIEWPORT);
+    for placement in placements.iter().filter(|placement| placement.measured) {
+        let turn = specs
+            .iter()
+            .find(|spec| spec.id == placement.id)
+            .expect("a measured placement is a turn of the pane");
+        assert!(
+            close(placement.start, turn.span.0 as f64),
+            "{} sits at {} and not at its own first row {}",
+            placement.id,
+            placement.start,
+            turn.span.0
+        );
+    }
+    // The next turn sits one unattributed row below the one before it, which is
+    // the gap the window measured.
+    assert!(close(
+        placements[4].start,
+        placements[3].start + placements[3].rows + 1.0
+    ));
+}
+
+#[test]
+fn lays_the_strip_out_with_one_height_a_clamped_scale_and_the_readers_block() {
+    let placements = placements_of(&rows_for(&pane(), VIEWPORT), VIEWPORT);
+    let strip = strip_layout(&placements, Some(40), VIEWPORT, &Options::default());
+    assert!(close(strip.span, 55.91), "span {}", strip.span);
+    assert!(close(strip.block.top, 185.29), "block {}", strip.block.top);
+    assert!(
+        close(strip.block.height, 115.7),
+        "block height {}",
+        strip.block.height
+    );
+    let expected: [(&str, TurnKind, f64, f64, bool); 5] = [
+        ("u1", TurnKind::User, 0.0, 0.71, false),
+        ("a2", TurnKind::Agent, 7.3, 1.9, false),
+        ("t3", TurnKind::Tool, 163.04, 1.35, true),
+        ("a4", TurnKind::Agent, 256.49, 1.0, false),
+        ("t5", TurnKind::Tool, 295.43, 0.77, false),
+    ];
+    assert_eq!(strip.squares.len(), expected.len());
+    for (square, (id, kind, y, scale, active)) in strip.squares.iter().zip(expected) {
+        assert_eq!(square.id.as_str(), id);
+        assert_eq!(square.kind, kind);
+        assert_eq!(square.active, active);
+        assert!(close(square.y, y), "{id} y {}", square.y);
+        assert!(close(square.scale, scale), "{id} scale {}", square.scale);
+    }
+}
+
+#[test]
+fn marks_the_square_the_reader_is_looking_at_and_the_ends_when_nothing_is() {
+    let placements = placements_of(&rows_for(&pane(), VIEWPORT), VIEWPORT);
+    let active = |row: Option<i64>| {
+        strip_layout(&placements, row, VIEWPORT, &Options::default())
+            .squares
+            .iter()
+            .position(|square| square.active)
+    };
+    assert_eq!(
+        [
+            active(Some(40)),
+            active(Some(56)),
+            active(Some(0)),
+            active(Some(999)),
+            active(None),
+        ],
+        [Some(2), Some(3), Some(0), Some(4), Some(4)]
+    );
+}
+
+#[test]
+fn slides_the_block_down_as_the_reader_scrolls_and_keeps_it_visible_at_both_ends() {
+    let options = Options::default();
+    let placements = placements_of(&rows_for(&pane(), VIEWPORT), VIEWPORT);
+    let block_at = |top: i64| {
+        strip_layout(
+            &placements,
+            Some(top),
+            Viewport {
+                top,
+                bottom: top + 23,
+            },
+            &options,
+        )
+        .block
+    };
+    let expected: [(i64, f64, f64); 4] = [
+        (0, 0.0, 118.55),
+        (20, 96.3, 127.93),
+        (40, 201.98, 109.02),
+        (60, 295.43, 15.57),
+    ];
+    let mut tops: Vec<f64> = Vec::new();
+    for (top, want_top, want_height) in expected {
+        let block = block_at(top);
+        assert!(
+            close(block.top, want_top),
+            "block top at {top}: {}",
+            block.top
+        );
+        assert!(
+            close(block.height, want_height),
+            "block height at {top}: {}",
+            block.height
+        );
+        assert!(
+            block.height >= options.block_min,
+            "the block stays visible at {top}"
+        );
+        tops.push(block.top);
+    }
+    assert!(
+        tops.windows(2).all(|pair| pair[0] <= pair[1]),
+        "the block has to slide down as the reader scrolls: {tops:?}"
+    );
+}
+
+#[test]
+fn fits_a_turn_the_matcher_dropped_into_the_gap_its_neighbours_left() {
+    let whole = Viewport { top: 0, bottom: 32 };
+    let samples = samples_from(&rows_for(&gap(), whole), whole);
+    let placements = place_window(
+        &window_of(&rows_for(&all(), whole)),
+        &samples,
+        &measure(&samples, whole),
+        whole,
+    );
+    let expected: [(&str, f64, f64, bool); 3] = [
+        ("x1", 0.0, 10.0, true),
+        ("x2", 13.17, 6.67, false),
+        ("x3", 23.0, 10.0, true),
+    ];
+    assert_eq!(placements.len(), expected.len());
+    for (placement, (id, start, rows, measured)) in placements.iter().zip(expected) {
+        assert_eq!(placement.id.as_str(), id);
+        assert_eq!(placement.measured, measured);
+        assert!(
+            close(placement.start, start),
+            "{id} start {}",
+            placement.start
+        );
+        assert!(close(placement.rows, rows), "{id} rows {}", placement.rows);
+    }
+}
+
+#[test]
+fn layout_keeps_only_the_newest_max_squares_rows() {
+    let whole = Viewport { top: 0, bottom: 59 };
+    // Fed newest-first, so surviving means the trim ordered the window by
+    // buffer row rather than trusting the caller's order.
+    let mut rows = rows_for(&many(30), whole);
+    rows.reverse();
+
+    let capped = layout(
+        &rows,
+        whole,
+        0,
+        &Options {
+            max_squares: 24,
+            ..Options::default()
+        },
+    );
+    let ids: Vec<&str> = capped
+        .squares
+        .iter()
+        .map(|square| square.id.as_str())
+        .collect();
+    let newest: Vec<String> = (7..=30).map(|index| format!("s{index}")).collect();
+    assert_eq!(ids, newest.iter().map(String::as_str).collect::<Vec<_>>());
+    assert!(
+        !ids.iter()
+            .any(|id| ["s1", "s2", "s3", "s4", "s5", "s6"].contains(id)),
+        "the six dropped are the oldest by start: {ids:?}"
+    );
+
+    // Zero is no cap at all.
+    let uncapped = layout(
+        &rows,
+        whole,
+        0,
+        &Options {
+            max_squares: 0,
+            ..Options::default()
+        },
+    );
+    assert_eq!(uncapped.squares.len(), 30);
+    assert_eq!(uncapped.squares[0].id, "s1");
+}

@@ -446,6 +446,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "boop-turnstrip"
+version = "0.1.0"
+dependencies = [
+ "boop-turnvis",
+ "serde",
+]
+
+[[package]]
 name = "boop-turnvis"
 version = "0.1.0"
 dependencies = [
