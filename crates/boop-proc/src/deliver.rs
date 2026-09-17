@@ -498,6 +498,18 @@ pub fn deliver_hail_budgeted(
             "previously accepted by harness or its queue",
         ));
     }
+    if store
+        .delivery_rows(&message.id)?
+        .iter()
+        .any(|row| row.route == message.to && row.outcome == DeliveryState::PastedIntoPane.as_str())
+    {
+        // The notice is already in the composer. Keep the body unread, and
+        // preserve the existing receipt without another paste or transition.
+        return Ok(Landing::new(
+            Rung::PanePaste,
+            "pane notice already delivered",
+        ));
+    }
     if !store.has_delivery_transition(&message.id)? {
         store.append_delivery_transition(
             &message.id,
@@ -1370,6 +1382,54 @@ mod tests {
             rc: None,
             detail: None,
         }
+    }
+
+    #[test]
+    fn pane_notice_is_sent_once_and_body_stays_unread_across_restarts() {
+        struct CountingPane(std::cell::Cell<usize>);
+        impl PanePaster for CountingPane {
+            fn paste(&self, pane: &str, _notice: &str) -> Option<String> {
+                self.0.set(self.0.get() + 1);
+                Some(pane.to_owned())
+            }
+            fn alive(&self, _target: &str) -> bool {
+                true
+            }
+        }
+        let dir = std::env::temp_dir().join(format!("boop-pane-notice-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let registry = Registry::with(vec![]);
+        let mut route = unbound_route(&dir);
+        route.harness = None;
+        route.cwd = None;
+        route.tmux = Some("%77".into());
+        bus::write_route(&dir, "pane-recipient", &route).unwrap();
+        let routes = bus::read_routes(&dir).unwrap();
+        let message = message("pane-recipient");
+        bus::append(&dir, "bus", &message).unwrap();
+        let paster = CountingPane(std::cell::Cell::new(0));
+
+        for _ in 0..8 {
+            let store = bus::open_store(&dir).unwrap();
+            let landing = deliver_hail_with(&registry, &store, &routes, &message, &paster).unwrap();
+            assert_eq!(landing.rung, Rung::PanePaste);
+            assert!(!landing.carried_the_body());
+            assert_eq!(
+                drain_route_held_mail(&dir, &registry, &store, &message.to),
+                0
+            );
+            assert!(bus::held_messages(&store, &message.to).unwrap().is_empty());
+            let unread = bus::messages_in(&store).unwrap();
+            assert_eq!(unread.len(), 1);
+            assert_eq!(
+                (&unread[0].body, &unread[0].to_timestamp),
+                (&message.body, &None)
+            );
+            assert_eq!(store.delivery_rows(&message.id).unwrap().len(), 2);
+        }
+        assert_eq!(paster.0.get(), 1);
+        drop(routes);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     /// A pane-less root session in the test cwd, the shape a bare codex

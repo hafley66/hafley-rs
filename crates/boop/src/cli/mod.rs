@@ -6,6 +6,8 @@ pub(crate) mod job;
 pub(crate) mod mail;
 pub(crate) mod me;
 pub(crate) mod paste;
+#[cfg(feature = "agent-read")]
+pub(crate) mod screen;
 pub(crate) mod selection;
 pub(crate) mod shout;
 pub(crate) mod subscribe;

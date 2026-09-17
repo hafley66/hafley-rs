@@ -1217,6 +1217,28 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         None => config::resolve_spawn_preset(None, None, default_preset.as_deref(), &config_path)?,
     };
     let model = spawning.as_ref().map(|preset| preset.model.clone());
+    // An upstream pin spells the model through omp's provider block, which is
+    // minted here so the ACP config option names a listed `provider/id`.
+    let model = match spawning
+        .as_ref()
+        .and_then(|preset| preset.upstream.as_deref())
+    {
+        Some(upstream) => {
+            if harness_id != boop::harness::HarnessId::Omp {
+                anyhow::bail!(
+                    "`upstream` pins an openrouter route for omp lanes only; this preset runs {}",
+                    harness_id.as_str()
+                );
+            }
+            let model = model.as_deref().unwrap_or_default();
+            Some(boop::harness::omp::pin_openrouter_upstream(
+                &boop::harness::omp::omp_agent_dir()?,
+                model,
+                upstream,
+            )?)
+        }
+        None => model,
+    };
     // Effort reaches the harness as its own config; the model string stays
     // bare (presets-only-model-spelling, luna open_failed 02:10:31).
     let effort = spawning.as_ref().and_then(|preset| preset.effort.clone());
@@ -2409,6 +2431,18 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
             socket,
             mail_dir,
         } => run_lane_pane(mail_dir.as_deref(), &lane, lines, socket.as_deref()),
+        #[cfg(feature = "agent-read")]
+        LaneCmd::Squares {
+            lane,
+            format,
+            socket,
+            mail_dir,
+        } => crate::cli::screen::run_lane_squares(
+            mail_dir.as_deref(),
+            &lane,
+            format,
+            socket.as_deref(),
+        ),
         LaneCmd::Message { cmd } => match cmd {
             LaneMessageCmd::List { lane, mail_dir } => {
                 run_list(mail_dir.as_deref(), Some(&lane), true)
@@ -4577,7 +4611,13 @@ mod tests {
         assert_eq!(lane_state(&dir, "mine", &live, &route, &routes), "idle");
 
         drop(session);
-        let dead_live = tmux::mux().live_sessions(None);
+        // A reachable server whose session is gone. Probing the ambient socket
+        // here answers `None` (unreachable) whenever no other test's session is
+        // alive at that instant, and an unreachable server answers "?" — a
+        // different question, decided by the runner rather than by this test.
+        let dead_live = Some(boop::tmux::LiveSessions {
+            names: BTreeSet::new(),
+        });
         assert_eq!(
             lane_state(&dir, "mine", &dead_live, &route, &routes),
             "dead"
