@@ -1,0 +1,19 @@
+direction: right
+classes: {
+  state: {style: {fill: "#18303b"; stroke: "#65d9e6"; font-color: "#e2edf0"; border-radius: 8}}
+  transition: {style: {stroke: "#65d9e6"; font-color: "#efcf75"}}
+}
+"Session machine": "Session machine" {
+  "Idle": "Idle" {class: state}
+  "Awaiting": "Awaiting" {class: state}
+  "Open": "Open" {class: state}
+  "Faulted": "Faulted" {class: state}
+  "Idle" -> "Awaiting": "BEGIN: Begin begin()" {class: transition}
+  "Idle" -> "Idle": "IDLE_PING_GUARDED: Ping [never] ping()" {class: transition}
+  "Idle" -> "Idle": "IDLE_PING_FALLBACK: Ping ping()" {class: transition}
+  "Awaiting" -> "Awaiting": "RETRY: Retry [can_retry] retry()" {class: transition}
+  "Awaiting" -> "Open": "CONFIRM: Confirm confirm()" {class: transition}
+  "Awaiting" -> "Idle": "ABORT_AWAITING: Abort stop()" {class: transition}
+  "Open" -> "Open": "OPEN_TICK: Tick tick()" {class: transition}
+  "Open" -> "Idle": "ABORT_OPEN: Abort stop()" {class: transition}
+}

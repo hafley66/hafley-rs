@@ -146,6 +146,7 @@ fn projector_worker() {
     for _ in 0..IDLE_PASSES_PER_PROCESS {
         assert_eq!(known.len(), STORED_SESSIONS);
     }
+    hafley_observe::shutdown();
 }
 
 #[test]

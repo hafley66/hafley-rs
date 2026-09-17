@@ -6,3 +6,5 @@ edition = "2021"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# The snapshot a host hands the matcher: rows, wrap flags and viewport size.
+boop-mux = { version = "0.0.9", path = "../boop-mux" }

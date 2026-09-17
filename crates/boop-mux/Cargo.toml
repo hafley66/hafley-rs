@@ -10,5 +10,8 @@ license.workspace = true
 anyhow = "1"
 # Layer 1: typed tmux command argv builder for the one-shot commands.
 tmux_interface = "0.4"
+# The terminal snapshot is the wire shape a host renders an overlay from, so it
+# derives Serialize/Deserialize; field names are never renamed on the way out.
+serde = { version = "1", features = ["derive"] }
 # boop owns the subscriber; this library only emits operation boundaries.
 tracing.workspace = true

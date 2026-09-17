@@ -376,6 +376,7 @@ fn main() -> Result<()> {
             )?;
         }
     }
+    hafley_observe::shutdown();
     Ok(())
 }
 

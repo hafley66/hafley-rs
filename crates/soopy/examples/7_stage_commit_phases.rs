@@ -130,6 +130,7 @@ fn main() {
     );
 
     let _ = fs::remove_dir_all(&base);
+    hafley_observe::shutdown();
 }
 
 fn stage_and_load<S: StageStore>(
