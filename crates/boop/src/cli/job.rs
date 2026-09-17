@@ -1217,6 +1217,28 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         None => config::resolve_spawn_preset(None, None, default_preset.as_deref(), &config_path)?,
     };
     let model = spawning.as_ref().map(|preset| preset.model.clone());
+    // An upstream pin spells the model through omp's provider block, which is
+    // minted here so the ACP config option names a listed `provider/id`.
+    let model = match spawning
+        .as_ref()
+        .and_then(|preset| preset.upstream.as_deref())
+    {
+        Some(upstream) => {
+            if harness_id != boop::harness::HarnessId::Omp {
+                anyhow::bail!(
+                    "`upstream` pins an openrouter route for omp lanes only; this preset runs {}",
+                    harness_id.as_str()
+                );
+            }
+            let model = model.as_deref().unwrap_or_default();
+            Some(boop::harness::omp::pin_openrouter_upstream(
+                &boop::harness::omp::omp_agent_dir()?,
+                model,
+                upstream,
+            )?)
+        }
+        None => model,
+    };
     // Effort reaches the harness as its own config; the model string stays
     // bare (presets-only-model-spelling, luna open_failed 02:10:31).
     let effort = spawning.as_ref().and_then(|preset| preset.effort.clone());
