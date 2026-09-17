@@ -165,6 +165,12 @@ impl Parser for AstGrepParser {
     }
 }
 
+/// A named node whose kind is an identifier (`identifier`, `type_identifier`,
+/// `property_identifier`, `simple_identifier`, ...) with no named children.
+fn is_identifier_leaf(node: &SgNode<StrDoc<ExtractLang>>, kind: &str) -> bool {
+    kind.contains("identifier") && node.children().all(|child| !child.is_named())
+}
+
 /// The CstF projector: walks the parsed ast-grep tree, emitting one row per
 /// named node + a `Child` edge to its nearest named ancestor.
 #[derive(Default)]
@@ -189,8 +195,18 @@ impl Project<CstF> for CstProjector {
                     len: (byte_range.end - byte_range.start) as u32,
                 };
                 let ix = NodeRef(sink.nodes.len() as u32);
-                let kind = strings.intern(&*node.kind());
-                sink.nodes.push(Node::new(span, kind));
+                let kind_text = node.kind();
+                let kind = strings.intern(&kind_text);
+                // Name = the grammar's `name:` field, else an identifier leaf's own text.
+                let mut row = Node::new(span, kind);
+                row.name = match node.field("name") {
+                    Some(field) => Some(strings.intern(&field.text())),
+                    None if is_identifier_leaf(&node, &kind_text) => {
+                        Some(strings.intern(&node.text()))
+                    }
+                    None => None,
+                };
+                sink.nodes.push(row);
                 if let Some(parent_ix) = nearest_named {
                     // child edge: parent -> child (v5 `child(parent, child)`).
                     sink.edges
