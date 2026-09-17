@@ -51,6 +51,12 @@ pub struct ModelPreset {
     /// The `gh pr create --base` branch for a `post_pr` preset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pr_base: Option<String>,
+    /// The one openrouter upstream an omp lane's requests land on (`deepseek`,
+    /// `fireworks`, `morph`). The spawn spells `model` through the
+    /// `openrouter-<upstream>` provider block in omp's `models.yml`, minting
+    /// the block on first use; `model` stays the plain `openrouter/<id>`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream: Option<String>,
 }
 
 impl ModelPreset {
@@ -434,6 +440,21 @@ mod tests {
         );
         let error = resolve_preset("bad", &path).unwrap_err().to_string();
         assert!(error.contains("turbo"), "{error}");
+    }
+
+    /// The upstream rides beside the model, never inside its spelling: the
+    /// preset stays readable and the provider block is boop's to mint.
+    #[test]
+    fn a_preset_carries_its_openrouter_upstream_as_a_field() {
+        let path = write_config(
+            r#"{ "model-presets": { "flash-omp": { "harness": "omp",
+                "model": "openrouter/deepseek/deepseek-v4.1-flash", "upstream": "deepseek" } } }"#,
+            "upstream-field",
+        );
+        let preset = resolve_preset("flash-omp", &path).unwrap();
+        assert_eq!(preset.upstream.as_deref(), Some("deepseek"));
+        assert_eq!(preset.model, "openrouter/deepseek/deepseek-v4.1-flash");
+        assert_eq!(preset.harness.as_deref(), Some("omp"));
     }
 
     #[test]

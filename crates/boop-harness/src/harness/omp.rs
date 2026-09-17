@@ -354,7 +354,7 @@ fn omp_sessions_dir() -> Result<PathBuf> {
 }
 
 /// omp's agent root, shared by transcript and terminal-session discovery.
-fn omp_agent_dir() -> Result<PathBuf> {
+pub fn omp_agent_dir() -> Result<PathBuf> {
     Ok(
         match std::env::var_os("PI_CODING_AGENT_DIR").filter(|value| !value.is_empty()) {
             Some(dir) => PathBuf::from(dir),
@@ -364,6 +364,113 @@ fn omp_agent_dir() -> Result<PathBuf> {
                 .join("agent"),
         },
     )
+}
+
+/// The custom-provider name omp resolves an `openrouter/<id>` model through
+/// when its requests must land on one upstream: `openrouter-<upstream>`.
+pub fn openrouter_upstream_provider(upstream: &str) -> String {
+    format!("openrouter-{upstream}")
+}
+
+/// Spell `model` through the provider block that pins `upstream`, minting the
+/// block in `<agent_dir>/models.yml` when it is missing. Under ACP omp accepts
+/// only a `provider/id` it already lists, so a routing pin has to exist as a
+/// provider row before the session opens; the CLI's `model@upstream` spelling
+/// never reaches the ACP config option. A block already present for the same
+/// model id is kept byte-for-byte, so the file is written only on first use.
+pub fn pin_openrouter_upstream(agent_dir: &Path, model: &str, upstream: &str) -> Result<String> {
+    let Some(model_id) = model.strip_prefix("openrouter/") else {
+        anyhow::bail!(
+            "upstream `{upstream}` pins an openrouter model; `{model}` is not spelled `openrouter/<id>`"
+        )
+    };
+    if !upstream
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-')
+        || upstream.is_empty()
+    {
+        anyhow::bail!("upstream `{upstream}` is not an openrouter provider slug");
+    }
+    let provider = openrouter_upstream_provider(upstream);
+    let spelling = format!("{provider}/{model_id}");
+    let path = agent_dir.join("models.yml");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(error).with_context(|| format!("read {}", path.display())),
+    };
+    let mut root: serde_yaml_ng::Value = if text.trim().is_empty() {
+        serde_yaml_ng::Value::Mapping(Default::default())
+    } else {
+        serde_yaml_ng::from_str(&text).with_context(|| format!("parse {}", path.display()))?
+    };
+    let providers = root
+        .as_mapping_mut()
+        .ok_or_else(|| anyhow::anyhow!("{}: top level is not a mapping", path.display()))?
+        .entry("providers".into())
+        .or_insert_with(|| serde_yaml_ng::Value::Mapping(Default::default()));
+    let providers = providers
+        .as_mapping_mut()
+        .ok_or_else(|| anyhow::anyhow!("{}: `providers` is not a mapping", path.display()))?;
+    let listed = providers
+        .get(provider.as_str())
+        .and_then(|block| block.get("models"))
+        .and_then(|models| models.as_sequence())
+        .is_some_and(|models| {
+            models
+                .iter()
+                .any(|row| row.get("id").and_then(|id| id.as_str()) == Some(model_id))
+        });
+    if listed {
+        return Ok(spelling);
+    }
+    // The key an existing openrouter-* block already resolves, so a mint never
+    // asks for a credential the user has not spelled; a bare file falls back to
+    // the environment variable omp's own openrouter provider reads.
+    let api_key = providers
+        .iter()
+        .filter(|(name, _)| name.as_str().is_some_and(|n| n.starts_with("openrouter-")))
+        .find_map(|(_, block)| block.get("apiKey").cloned())
+        .unwrap_or_else(|| "$OPENROUTER_API_KEY".into());
+    let row: serde_yaml_ng::Value = serde_yaml_ng::from_str(&format!(
+        r#"
+id: {model_id}
+name: "{model_id} via {upstream}"
+reasoning: true
+thinking: {{ mode: effort, efforts: [low, high, max], defaultLevel: high }}
+input: [text]
+supportsTools: true
+contextWindow: 1048576
+maxTokens: 131072
+compat: {{ openRouterRouting: {{ only: [{upstream}], order: [{upstream}] }} }}
+"#
+    ))?;
+    let block = providers
+        .entry(provider.clone().into())
+        .or_insert_with(|| serde_yaml_ng::Value::Mapping(Default::default()));
+    let block = block
+        .as_mapping_mut()
+        .ok_or_else(|| anyhow::anyhow!("{}: `{provider}` is not a mapping", path.display()))?;
+    block
+        .entry("baseUrl".into())
+        .or_insert_with(|| "https://openrouter.ai/api/v1".into());
+    block
+        .entry("api".into())
+        .or_insert_with(|| "openai-completions".into());
+    block.entry("apiKey".into()).or_insert(api_key);
+    let models = block
+        .entry("models".into())
+        .or_insert_with(|| serde_yaml_ng::Value::Sequence(Vec::new()));
+    models
+        .as_sequence_mut()
+        .ok_or_else(|| anyhow::anyhow!("{}: `{provider}.models` is not a list", path.display()))?
+        .push(row);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    }
+    let rendered = serde_yaml_ng::to_string(&root)?;
+    std::fs::write(&path, rendered).with_context(|| format!("write {}", path.display()))?;
+    Ok(spelling)
 }
 
 /// omp writes one exact active-TUI relation per terminal. A tmux record is
@@ -980,8 +1087,14 @@ mod tests {
         assert!(live
             .iter()
             .all(|session| session.scope == LiveSessionScope::Root));
-        let second_live = live.iter().find(|session| session.session_id == "second").unwrap();
-        assert_eq!(crate::live::interactive_session_id(second_live, &live), "second");
+        let second_live = live
+            .iter()
+            .find(|session| session.session_id == "second")
+            .unwrap();
+        assert_eq!(
+            crate::live::interactive_session_id(second_live, &live),
+            "second"
+        );
 
         assert_eq!(
             omp_live_session_for_pane(&terminal, "%41", Some("ttys094"))
@@ -1016,5 +1129,83 @@ mod tests {
                 .map(|session| session.session_id),
             Some("second".into())
         );
+    }
+
+    fn pin_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("boop-omp-pin-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// RECEIPT (2026-09-16): the r4 dot-paths lane ran on deepinfra because
+    /// the preset spelled the provider by hand; a pin names the upstream once.
+    #[test]
+    fn a_pin_mints_the_provider_block_once_and_spells_the_model_through_it() {
+        let dir = pin_dir("mint");
+        let first =
+            pin_openrouter_upstream(&dir, "openrouter/deepseek/deepseek-v4.1-flash", "deepseek")
+                .unwrap();
+        assert_eq!(first, "openrouter-deepseek/deepseek/deepseek-v4.1-flash");
+        let written = std::fs::read_to_string(dir.join("models.yml")).unwrap();
+        let root: serde_yaml_ng::Value = serde_yaml_ng::from_str(&written).unwrap();
+        let block = &root["providers"]["openrouter-deepseek"];
+        assert_eq!(
+            block["baseUrl"].as_str(),
+            Some("https://openrouter.ai/api/v1")
+        );
+        assert_eq!(block["apiKey"].as_str(), Some("$OPENROUTER_API_KEY"));
+        let row = &block["models"][0];
+        assert_eq!(row["id"].as_str(), Some("deepseek/deepseek-v4.1-flash"));
+        assert_eq!(
+            row["compat"]["openRouterRouting"]["only"][0].as_str(),
+            Some("deepseek")
+        );
+        let second =
+            pin_openrouter_upstream(&dir, "openrouter/deepseek/deepseek-v4.1-flash", "deepseek")
+                .unwrap();
+        assert_eq!(second, first);
+        assert_eq!(
+            std::fs::read_to_string(dir.join("models.yml")).unwrap(),
+            written,
+            "a listed model rewrites nothing"
+        );
+    }
+
+    /// A hand-written flow-style file with a `!command` secret keeps its
+    /// blocks, and the mint copies that secret rather than inventing one.
+    #[test]
+    fn a_pin_keeps_existing_blocks_and_copies_their_api_key() {
+        let dir = pin_dir("keep");
+        std::fs::write(
+            dir.join("models.yml"),
+            "{providers: {openrouter-morph: {baseUrl: https://openrouter.ai/api/v1, api: openai-completions, apiKey: \"!sqlite3 keys.db 'select k'\", models: [{id: deepseek/deepseek-v4.1-flash, name: Morph}]}}}\n",
+        )
+        .unwrap();
+        let spelled =
+            pin_openrouter_upstream(&dir, "openrouter/deepseek/deepseek-v4.1-flash", "fireworks")
+                .unwrap();
+        assert_eq!(spelled, "openrouter-fireworks/deepseek/deepseek-v4.1-flash");
+        let root: serde_yaml_ng::Value =
+            serde_yaml_ng::from_str(&std::fs::read_to_string(dir.join("models.yml")).unwrap())
+                .unwrap();
+        assert_eq!(
+            root["providers"]["openrouter-morph"]["models"][0]["name"].as_str(),
+            Some("Morph")
+        );
+        assert_eq!(
+            root["providers"]["openrouter-fireworks"]["apiKey"].as_str(),
+            Some("!sqlite3 keys.db 'select k'")
+        );
+    }
+
+    #[test]
+    fn a_pin_refuses_a_model_not_spelled_through_openrouter() {
+        let dir = pin_dir("refuse");
+        let error = pin_openrouter_upstream(&dir, "deepseek/deepseek-v4.1-flash", "deepseek")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("openrouter/<id>"), "{error}");
+        assert!(!dir.join("models.yml").exists());
     }
 }
