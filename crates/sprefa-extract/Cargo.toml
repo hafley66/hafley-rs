@@ -18,6 +18,10 @@ homepage = "https://github.com/hafley66/hafley-rs"
 dist = true
 features = ["cli"]
 
+# Own workspace root: without this table a git worktree under .claude/worktrees/
+# walks up past the parent's `exclude` and fails to resolve. Railed by tests/112_build_metadata.rs.
+[workspace]
+
 [dependencies]
 # The newline scan behind the per-document line table. Already unified in the
 # workspace lock through regex/aho-corasick, so this pins no new copy.

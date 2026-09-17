@@ -6,6 +6,10 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/hafley66/hafley-rs"
 description = "local worktree cache and sync daemon for GitHub repositories"
 
+# Own workspace root: without this table a git worktree under .claude/worktrees/
+# walks up past the parent's `exclude`. Railed by sprefa-extract/tests/112_build_metadata.rs.
+[workspace]
+
 [[bin]]
 name = "ghcache"
 path = "src/main.rs"
