@@ -9,7 +9,13 @@
 //!     an estimate is a guess at where a turn *would* be, and a square drawn
 //!     from one points at text that is not its own, which is exactly what this
 //!     mode must not do. The turn the reader's top row is inside is always one
-//!     of the squares, whatever the gap or the cap says.
+//!     of the squares, whatever the gap or the cap says. A square is also as
+//!     big as the part of its turn the reader can see: the placement's own
+//!     intersection with the window, floored at `options.scale_min`, so a turn
+//!     scrolled halfway out is half a square, a turn wholly in view is full
+//!     size, and a sliver keeps the floor. The scroll is the animation —
+//!     re-projecting after a scroll changes a square's size and its row, never
+//!     the turn it names.
 //!   - [`Mode::Recent`]: the strip is the newest turns of the session, one
 //!     square each, uniform, oldest first, read from the store rather than from
 //!     the window — a turn the window lost is a member like any other. `y`
@@ -46,6 +52,9 @@ use crate::_2_place::{place_window, window_of};
 /// `pins` arrives oldest first — the caller read the session's turns and kept
 /// the ones the matcher did not find on screen — so the tail is the newest,
 /// which is the end a reader wants kept when the band is too short.
+///
+/// They draw uniform, at `1.0`: a pin is an id and nothing else, so the turn has
+/// no rows here and the band has no intersection with the window to size by.
 fn band(pins: &[String], drawn: &[String], options: &Options) -> Vec<Square> {
     if options.user_keep == 0 {
         return Vec::new();
@@ -111,25 +120,6 @@ fn window_row(placement: &Placement, top: f64, bottom: f64) -> Option<f64> {
     Some(start.max(top) - top)
 }
 
-/// The window's median turn, the reference size: it keeps the plain square
-/// while bigger turns grow and smaller ones shrink, both clamped.
-fn reference_of(placements: &[Placement], kept: &[(usize, f64)]) -> f64 {
-    let mut totals: Vec<f64> = kept
-        .iter()
-        .map(|&(index, _)| placements[index].total as f64)
-        .collect();
-    totals.sort_by(f64::total_cmp);
-    if totals.is_empty() {
-        return 1.0;
-    }
-    let middle = totals.len() >> 1;
-    if totals.len() % 2 == 1 {
-        totals[middle]
-    } else {
-        (totals[middle - 1] + totals[middle]) / 2.0
-    }
-}
-
 /// The strip in [`Mode::Relative`]: the window's turns, each at the row it
 /// starts on, plus the band.
 ///
@@ -145,6 +135,14 @@ fn reference_of(placements: &[Placement], kept: &[(usize, f64)]) -> f64 {
 ///   - **budget**: `options.max_squares` caps the count outright (`0` leaves the
 ///     window as the only bound, and the window holds one square per row). The
 ///     reader's own turn is kept either way, even when it is the oldest.
+///
+/// A square's size is the reader's own intersection with its turn: the
+/// placement's `seen` — the fraction of the turn inside the viewport — floored
+/// at `options.scale_min` and capped at the plain square. A turn wholly in view
+/// draws full size, a turn scrolled halfway out draws half a square, and a
+/// sliver keeps the floor so it stays findable. Nothing here sizes a square
+/// against its neighbours: how long a turn is says nothing about how much of it
+/// the reader can see, which is the one thing the size is about.
 pub fn relative_layout(
     placements: &[Placement],
     focus_row: Option<i64>,
@@ -252,7 +250,6 @@ pub fn relative_layout(
         }
     };
 
-    let reference = reference_of(placements, &kept);
     let mut squares: Vec<Square> = kept
         .iter()
         .enumerate()
@@ -262,11 +259,7 @@ pub fn relative_layout(
                 id: placement.id.clone(),
                 kind: placement.kind,
                 y: row,
-                scale: clamp(
-                    1.0 + options.ratio_flex * (placement.total as f64 / 1.0f64.max(reference) - 1.0),
-                    options.scale_min,
-                    options.scale_max,
-                ),
+                scale: clamp(placement.seen, options.scale_min, 1.0),
                 active: Some(position) == active,
             }
         })
@@ -298,6 +291,11 @@ pub fn relative_layout(
 /// fall off silently, with no marker to say how many did. A caller that leaves
 /// it at `0` gets [`DEFAULT_RECENT_MAX`]: recent mode has no window to bound it,
 /// and a block taller than the pane is a list whose end the reader cannot reach.
+///
+/// Every square draws at `1.0`. Relative mode sizes a square by the reader's
+/// intersection with its turn, and a place in a list has neither rows nor a
+/// viewport to intersect: the list is a list of places, so there is no
+/// intersection to scale by and every place is the same size.
 pub fn recent_layout(
     listed: &[ListedTurn],
     focus: Option<&str>,

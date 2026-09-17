@@ -202,11 +202,11 @@ pub enum Mode {
 #[serde(rename_all = "camelCase")]
 pub struct Options {
     pub mode: Mode,
-    /// Scale given to a turn twice the window's median: `1 + flex` at
-    /// `2 × L_ref`.
-    pub ratio_flex: f64,
+    /// The floor a square's size may fall to. A square is as big as the part of
+    /// its turn the reader can see ([`Square::scale`]), and a sliver of a turn
+    /// clamps here rather than shrinking away, so a turn the window barely holds
+    /// stays findable.
     pub scale_min: f64,
-    pub scale_max: f64,
     /// Least distance between two squares, in window rows. A square draws
     /// smaller than one row, so `1` keeps adjacent rows from touching. Relative
     /// mode only: a recent strip has no rows to collide on.
@@ -228,9 +228,11 @@ pub const DEFAULT_RECENT_MAX: usize = 20;
 /// The measured defaults, spelled once.
 pub const STRIP_DEFAULTS: Options = Options {
     mode: Mode::Relative,
-    ratio_flex: 0.35,
-    scale_min: 0.7,
-    scale_max: 1.9,
+    // The intersection gradient runs from this floor to full size: a turn 40%
+    // visible draws at 40%, and anything less than that stays at 40% rather than
+    // shrinking out of reach. A floor near 1 compresses the gradient into a
+    // range the reader cannot see, which is what 0.7 did.
+    scale_min: 0.4,
     min_gap: 1.0,
     max_squares: 0,
     user_keep: 4,
@@ -256,9 +258,11 @@ pub struct Square {
     /// the block, `0.0` the oldest, so a caller steps down its own track and a
     /// scroll moves nothing.
     pub y: f64,
-    /// The relative strip's size for the turn: bigger turns grow and smaller
-    /// ones shrink, both clamped. Always `1.0` in recent mode, which draws
-    /// every square the same.
+    /// How big the turn draws, as the part of it the reader can see: relative
+    /// mode sizes the square from the placement's own intersection with the
+    /// window, floored at `options.scale_min` — a turn scrolled halfway out is
+    /// half a square, a turn wholly in view is full size, and a sliver keeps the
+    /// floor. Always `1.0` in recent mode, which draws every square the same.
     pub scale: f64,
     pub active: bool,
 }

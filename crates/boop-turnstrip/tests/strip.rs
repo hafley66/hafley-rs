@@ -305,11 +305,12 @@ fn lays_the_strip_out_in_the_windows_own_rows() {
     let placements = placements_of(&rows_for(&pane(), window), window);
     let strip = relative_layout(&placements, Some(40), window, &[], &Options::default());
     // `a2` draws on the window's first row because that is where the reader met
-    // it, and `a4` on its own row, twenty-seven below. Their sizes are the two
-    // turns' own against the median of what the strip holds.
+    // it, and `a4` on its own row, twenty-seven below. Their sizes are the
+    // reader's own intersection with them: the window holds half of `a2`, so
+    // half a square; `a4` is wholly in view and draws full size.
     let expected: [(&str, TurnKind, f64, f64, bool); 2] = [
-        ("a2", TurnKind::Agent, 0.0, 1.21, false),
-        ("a4", TurnKind::Agent, 27.0, 0.79, true),
+        ("a2", TurnKind::Agent, 0.0, 0.5, false),
+        ("a4", TurnKind::Agent, 27.0, 1.0, true),
     ];
     assert_eq!(strip.squares.len(), expected.len());
     for (square, (id, kind, y, scale, active)) in strip.squares.iter().zip(expected) {
@@ -319,6 +320,92 @@ fn lays_the_strip_out_in_the_windows_own_rows() {
         assert!(close(square.y, y), "{id} y {}", square.y);
         assert!(close(square.scale, scale), "{id} scale {}", square.scale);
     }
+}
+
+#[test]
+fn scales_a_square_by_the_part_of_its_turn_the_reader_can_see() {
+    // One six-line answer, one line per row, so `seen` is exactly the fraction
+    // of the turn the window holds and the viewport alone decides the size. The
+    // floor is out of the way for the two cases below, so they state the
+    // intersection rule itself; the default floor's own bite follows.
+    let specs = [spec("a1", "assistant", (0, 5), 6, &[0, 1, 2, 3, 4, 5])];
+    let bare = Options {
+        scale_min: 0.0,
+        ..Options::default()
+    };
+    let one = |viewport: Viewport, options: &Options| -> (String, f64, f64) {
+        let placements = placements_of(&rows_for(&specs, viewport), viewport);
+        let strip = relative_layout(&placements, Some(viewport.top), viewport, &[], options);
+        assert_eq!(strip.squares.len(), 1, "one turn in the window, one square");
+        let square = &strip.squares[0];
+        (square.id.clone(), square.y, square.scale)
+    };
+
+    // Wholly inside the window: the reader can see all of the turn, so it draws
+    // full size.
+    assert_eq!(
+        one(Viewport { top: 0, bottom: 5 }, &bare),
+        ("a1".to_string(), 0.0, 1.0),
+        "a turn fully in view is full size"
+    );
+
+    // Three of the six lines on screen: the square is half a square.
+    assert_eq!(
+        one(Viewport { top: 0, bottom: 2 }, &bare),
+        ("a1".to_string(), 0.0, 0.5),
+        "a turn seen half through draws at seen = 0.5"
+    );
+
+    // The default floor is 0.4. `a2` seen through a quarter of the window — six
+    // of its twenty-four rows — is held up to the floor rather than drawn at a
+    // quarter.
+    let floored = Options::default();
+    assert_eq!(floored.scale_min, 0.4);
+    let quarter = Viewport {
+        top: 25,
+        bottom: 41,
+    };
+    let placements = placements_of(&rows_for(&pane(), quarter), quarter);
+    let strip = relative_layout(&placements, Some(quarter.top), quarter, &[], &floored);
+    let a2 = strip
+        .squares
+        .iter()
+        .find(|square| square.id == "a2")
+        .expect("a2 draws in this window");
+    assert_eq!(
+        a2.scale, 0.4,
+        "the floor is the least a square may draw at"
+    );
+
+    // Scrolling the same turn out of the window restates it: `a4` is wholly in
+    // view twelve rows into one window and half out of the next, so its square
+    // resizes and moves — and it is still `a4`'s square.
+    let strip_of = |viewport: Viewport| {
+        let placements = placements_of(&rows_for(&pane(), viewport), viewport);
+        relative_layout(&placements, Some(viewport.top), viewport, &[], &bare)
+    };
+    let live = strip_of(Viewport { top: 40, bottom: 63 });
+    assert_eq!(live.squares.len(), 1);
+    assert_eq!(
+        (
+            live.squares[0].id.as_str(),
+            live.squares[0].y,
+            live.squares[0].scale
+        ),
+        ("a4", 12.0, 1.0),
+        "the whole answer, on its own row"
+    );
+    let scrolled = strip_of(Viewport { top: 56, bottom: 63 });
+    assert_eq!(scrolled.squares.len(), 1);
+    assert_eq!(
+        (
+            scrolled.squares[0].id.as_str(),
+            scrolled.squares[0].y,
+            scrolled.squares[0].scale
+        ),
+        ("a4", 0.0, 0.5),
+        "the same turn half out of the window: resized and moved, never renamed"
+    );
 }
 
 #[test]
@@ -893,3 +980,4 @@ fn the_relative_strips_top_square_is_the_turn_the_reader_is_inside() {
     assert_eq!(strip.squares()[0].y, 0.0);
     assert!(strip.squares()[0].active);
 }
+
