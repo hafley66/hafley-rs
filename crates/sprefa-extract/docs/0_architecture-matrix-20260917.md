@@ -14,13 +14,13 @@ Date: 2026-09-17. Receipts are `file:line` inside `crates/sprefa-extract/` at co
 
 ## 1. Context
 
-`extract` is used at work to gather code context before a model call. Today's CTF on the crate's own source showed the syntax planes hold (cst, df, spans, names after `16ebd451`) and the parse-based cross-file call resolver lies (148 false `push` edges, 3 of 4 `project` callers missed). The user wants: a matrix of what works per language in fast and slow mode, a re-explanation of the architecture from zero, a comparison against Joern and CodeQL, and a plan that makes `extract move` / `extract rename` correct without a compiler, using syn (rust), oxc_semantic + oxc_resolver (ts), and tree-sitter (go, kotlin, python).
+`extract` is used at work to gather code context before a model call. Today's CTF on the crate's own source showed the syntax planes hold (cst, df, spans, names after `16ebd451`) and the parse-based cross-file call resolver lies (155 false `push` edges: 118 `corpus_unique`, 30 `same_file`, 7 `receiver`; 3 of 5 `CstProjector.project` callers unresolved and 1 bound to the wrong file). The user wants: a matrix of what works per language in fast and slow mode, a re-explanation of the architecture from zero, a comparison against Joern and CodeQL, and a plan that makes `extract move` / `extract rename` correct without a compiler, using syn (rust), oxc_semantic + oxc_resolver (ts), and tree-sitter (go, kotlin, python).
 
 ## 2. Reader's model (zero knowledge assumed)
 
 | term | meaning | where |
 | --- | --- | --- |
-| fact | one JSONL row: a node, an edge, or an aux row, with byte spans | `src/types.rs:3006` `FlatFact`, 57 variants |
+| fact | one JSONL row: a node, an edge, or an aux row, with byte spans | `src/types.rs:3006` `FlatFact`, 60 variants |
 | family / plane | one graph layer over a file: `cst` (syntax tree), `type` (declarations), `call` (call sites + defs), `df` (dataflow), `cfg` (control flow, derived from cst), `data` (json/yaml/toml values) | `src/types.rs:173` `Family`, `FamilyBundle{nodes, edges, aux}` at `:1635` |
 | phase 1 | one file in, its facts out. Pure, parallel, cacheable. No cross-file knowledge | `Source::extract` `src/types.rs:2713`, `dispatch` `src/dispatch.rs:48` |
 | phase 2 | `--resolve`: bind names across files. Runs per language "legs" in order; first leg that answers wins | `resolve_project` `src/project.rs:236`, `Resolve<CallF>`/`Resolve<TypeF>` `src/types.rs:2353` |
@@ -88,8 +88,8 @@ Legend: `Y` works, `-` absent, `p` partial. Receipts in the per-row file:line co
 | --- | --- |
 | `tests/90_mutation_battery.rs:389-402` | python: a param named like an import does not shadow it; call keeps a `corpus_unique` edge |
 | `tests/90_mutation_battery.rs:379-386` | python: same-file duplicate def does not flip the edge to absent |
-| `tests/90_mutation_battery.rs:24-27` | rust answers no `corpus_unique`; python and ts mint no `same_file` edges: the origins are not one vocabulary across languages |
-| today's CTF | rust: `corpus_unique` absorbs every `Vec::push` (148 false edges); spelled receiver `CstProjector.project` unresolved; `same_file` beats the spelled receiver in ts.rs |
+| `tests/90_mutation_battery.rs:26-29` | header says rust answers no `corpus_unique`; the code (`rust.rs:459,493,1222`) and the CTF (813 rows corpus-wide) say it does: the header is stale. python and ts mint no `same_file` edges |
+| today's CTF | rust: name-match legs absorb every `Vec::push` (155 edges: 118 `corpus_unique`, 30 `same_file`, 7 `receiver`); `CstProjector.project(..)` records no receiver at phase 1 (`site.callee_path` NULL), so the receiver leg never fires: 3 of 5 sites unresolved (`inferred`), `ts.rs:4073` bound by `same_file` to ts.rs's own `project` (wrong file) |
 | `src/lang/markdown/_0_source.rs:142` | `FamilyMask::ALL` on markdown yields `types: None` |
 
 ## 4. Architecture boards
@@ -119,14 +119,14 @@ flowchart LR
     p1 --> cx["ProjectCx{files, manifests, reader, digest, indexes, witness}<br/>types.rs:1879"]
     cx --> mp["module plane per language<br/>once per file set"]
     cx --> di["DefIndex: every def name in corpus"]
-    mp --> legs["Resolve legs, first answer wins:<br/>same_file, module_plane, receiver, self_type, corpus_unique, checker, scip"]
+    mp --> legs["Resolve legs, first answer wins (rust order):<br/>receiver, module_plane (qualified), self_type, same_file, module_plane (import), corpus_unique, then scip fold, then checker override"]
     di --> legs
     legs --> re["resolved_edge{caller, callee, kind, resolution_origin}"]
     legs --> un["unresolved{span, reason, detail}"]
     legs --> tsi["tsi run/witness/coverage/diagnostic rows"]
 ```
 
-The order of legs is the accuracy story: `same_file` and `corpus_unique` answer before a spelled receiver is examined (today's CTF: `ts.rs:4073` and the 148 `push` edges).
+Measured leg order per language is in `plans/reviews/2026-09-17-plan-review-1-premise.md`, section "Actual leg order". The receiver leg runs first in rust (`rust.rs:1151`) and go (`go.rs:4227`); ts runs the module plane first (`ts.rs:4934`). The accuracy story is what happens when the receiver leg has nothing to fire on: a member call on an untyped receiver falls through to `same_file` then `corpus_unique`, and those bind by name alone (the 155 `push` edges).
 
 ### 4c. Slow lane, SCIP
 
@@ -194,7 +194,7 @@ Wire rows: `specifier` (phase 1, per language), `resolved_import{src_path, name,
 | --- | --- |
 | entity kinds | `Struct Enum Class Interface Alias Function Method Const Ext(lang)`; rust adds `TRAIT`, python adds `MODULE` |
 | edge kinds | `Field Variant Impl Generic Param Returns Uses DocRef` (doc says 7, lists 8) |
-| rows | `sig{owner, slot param|ret, pos, ty}`, `const{owner, field, text, kind}`, `method_owner{owner, self_type, trait}` (rust only fills), `resolved_type_edge{owner_*, target_*, kind, resolution_origin}` |
+| rows | `sig{owner, slot param|ret, pos, ty}`, `const{owner, field, text, kind}`, `resolved_type_edge{owner_*, target_*, kind, resolution_origin}`; `method_owner{owner, self_type, trait}` is a call-plane aux row (`types.rs:845`), filled by rust and go |
 | per-language entities | rust 6+TRAIT, ts 7, go 5, kotlin 4, python 4+MODULE, prolog 1 (Function), gdscript/commonlisp 0 |
 | per-language edges | ts all 7 core, rust 5 (via `rust_type_edges.rs`), python 5, go 4, kotlin 4 |
 
@@ -206,15 +206,15 @@ Nodes `Entry Exit Stmt Branch Loop Jump Ret`; edges `Next Arm Jump Exit`. One ge
 
 | axis | CodeQL | Joern | extract |
 | --- | --- | --- | --- |
-| how facts get made | one extractor per language, compiled langs hook the real build (javac, cl.exe); JS/Python/Ruby via own parsers | one frontend per language: c2cpg (fuzzy, no build), jssrc2cpg (TypeScript compiler), javasrc2cpg (JavaParser + symbol solver), kotlin2cpg (kotlinc frontend), pysrc2cpg (own parser), gosrc2cpg (own) | fast: syn / oxc / tree-sitter per file. slow: SCIP index from the language's own indexer subprocess |
+| how facts get made | one extractor per language, compiled langs hook the real build (javac, cl.exe), with `build-mode: none` for Java/Kotlin, C#, C/C++, Swift; JS/TS via the TypeScript compiler API; Python and Ruby via own parsers | one frontend per language: c2cpg (fuzzy, no build), jssrc2cpg (TypeScript compiler), javasrc2cpg (JavaParser + symbol solver), kotlin2cpg (Kotlin compiler PSI), pysrc2cpg (own ANTLR-derived grammar), gosrc2cpg (astgen on `go/parser`) | fast: syn / oxc / tree-sitter per file. slow: SCIP index from the language's own indexer subprocess |
 | what the graph is | relational tables (TRAP tuples) per AST node kind, with typed columns | Code Property Graph: one property graph, nodes typed AST/CFG/PDG/CALL/TYPE, edges labelled | JSONL / SQLite rows: `node{family, span, kind, name}`, `edge{family, kind, from, to}`, aux rows per plane |
 | planes | AST, CFG, SSA dataflow, call graph, types; taint library per language | AST, CFG, CDG, DDG (REACHING_DEF), PDG, CALL, TYPE, EVAL_TYPE | cst, cfg, df (intra), call, type, module rows, scip rows |
-| cross-file name binding | exact for compiled languages (build-integrated); for JS/Python their own inference | fuzzy by design; a "type recovery" pass guesses; precision documented as partial | fast: ordered legs with a label per edge. slow: SCIP |
+| cross-file name binding | exact for build-integrated languages; JS/Python arms do their own module resolution | c2cpg fuzzy by design with a type-recovery pass; javasrc2cpg (symbol solver) and jssrc2cpg (TypeScript compiler) type-assisted | fast: ordered legs with a label per edge. slow: SCIP |
 | inter-procedural dataflow | global taint tracking, configured by source/sink/sanitizer classes | call-graph joined REACHING_DEF; taint via dataflowengineoss | `ArgToParam` / `RetToCallRes` joined in phase 2; the rest deferred to programs over facts |
 | query language | QL (Datalog with classes) | Scala traversal DSL over the graph | SQL over sqlite today; `.dl` datalog programs one layer up (AGENTS.md) |
-| incremental | no; a database is one build | per-file passes exist but the CPG is whole-program | yes; phase 1 is per-file, content-keyed, cacheable |
+| incremental | overlay databases (base + overlay) in code scanning for several languages; one `codeql database create` is one build | per-file passes exist but the CPG is whole-program | yes; phase 1 is per-file, content-keyed, cacheable |
 | refactoring | none | none | `move`, `rename` with staging + verify + rollback |
-| crawl many repos at many revs without building | no (compiled langs need the build) | c2cpg / jssrc2cpg yes, others need deps | fast yes; slow needs the project buildable |
+| crawl many repos at many revs without building | partial: `build-mode: none` covers Java/Kotlin, C#, C/C++, Swift; others need the build | c2cpg / jssrc2cpg yes, others need deps | fast yes; slow needs the project buildable |
 
 Joern is the nearest shape to `extract fast`: fuzzy frontends, a labelled property graph, honest about partial precision. CodeQL is the nearest shape to `extract slow`: exact because the compiler ran.
 
@@ -228,7 +228,7 @@ Joern is the nearest shape to `extract fast`: fuzzy frontends, a labelled proper
 | dangling edge | a call site or type reference whose target vertex is in another file; phase 1 records the *name* on it, no target |
 | phase 2 | for each dangling edge, pick a target vertex. Each rule that picks is a "leg"; the rule's name is stamped on the edge as `resolution_origin` |
 | deterministic legs | follow a path that the language spec defines: the module plane (`use a::b` -> file that declares `b`), a spelled receiver (`Type::method`), the enclosing `impl` (`self_type`), a param's declared type. Each has exactly one answer or none |
-| guess legs | pick by a global property of the whole graph: `corpus_unique` ("only one vertex in the corpus has this name, take it"), `same_file` ("a vertex with this name exists in this file, take it"). These have no locality; the 148 false `push` edges are `corpus_unique` picking `RustCallDefs::push` for every `Vec::push` in the corpus |
+| guess legs | pick by a global property of the whole graph: `corpus_unique` ("only one vertex in the corpus has this name, take it"), `same_file` ("a vertex with this name exists in this file, take it"). These have no locality; the 155 false `push` edges are `corpus_unique` (118) and `same_file` (30) picking `RustCallDefs::push` for `Vec::push` calls whose receiver type no leg traced |
 | the slow graph | the same vertices (spans) with edges the compiler chose; `scip_occurrence{start, end, symbol, roles}` |
 | accuracy | fast graph minus slow graph, joined on span: edges in both = true, fast-only = false positive, slow-only = miss. This is the number the issue asks for and no test computes today |
 | move | rewrite every edge that names a file path; only module-plane edges do, so move needs only the deterministic legs |
