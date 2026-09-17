@@ -10,8 +10,9 @@
 //! and the empty rows stay empty, which is what the aligner must ignore.
 
 use boop_turnstrip::{
-    layout, layout_pinned, map_layout, measure, place_window, relative_layout, rows_of, samples_from,
-    window_of, Layout, Mode, Options, Placement, RelativeStrip, TurnKind, TurnRow, Viewport, KINDS,
+    drawn_at_all, kind_of, layout, layout_pinned, measure, place_window, recent_layout,
+    relative_layout, rows_of, samples_from, window_of, Layout, ListedTurn, Mode, Options,
+    Placement, RecentStrip, RelativeStrip, TurnKind, TurnRow, Viewport, DEFAULT_RECENT_MAX, KINDS,
 };
 use boop_turnvis::{Confidence, LogicalLine, VisibleTurn};
 
@@ -294,16 +295,21 @@ fn keeps_the_measured_turns_at_their_own_rows_and_stacks_the_rest_around_them() 
 
 #[test]
 fn lays_the_strip_out_in_the_windows_own_rows() {
-    let placements = placements_of(&rows_for(&pane(), VIEWPORT), VIEWPORT);
-    let strip = relative_layout(&placements, Some(40), VIEWPORT, &[], &Options::default());
-    // The window is rows 37..=60, so the two turns above it are not in the
-    // strip at all, `t3` (which starts at 33) draws on the window's first row
-    // because that is where the reader met it, and `a4` draws on its own. `t5`
-    // is *estimated* to start at 60, inside the window, and is not drawn: only a
-    // turn the matcher saw on these rows has a row to name.
+    // A window the reader scrolled into the middle of the long answer: `a2`'s
+    // head is above it, `a4` sits below it, and the SQL result the matcher saw
+    // between them is a tool turn, which draws nothing.
+    let window = Viewport {
+        top: 25,
+        bottom: 58,
+    };
+    let placements = placements_of(&rows_for(&pane(), window), window);
+    let strip = relative_layout(&placements, Some(40), window, &[], &Options::default());
+    // `a2` draws on the window's first row because that is where the reader met
+    // it, and `a4` on its own row, twenty-seven below. Their sizes are the two
+    // turns' own against the median of what the strip holds.
     let expected: [(&str, TurnKind, f64, f64, bool); 2] = [
-        ("t3", TurnKind::Tool, 0.0, 1.1166666666666667, true),
-        ("a4", TurnKind::Agent, 15.0, 0.8833333333333333, false),
+        ("a2", TurnKind::Agent, 0.0, 1.21, false),
+        ("a4", TurnKind::Agent, 27.0, 0.79, true),
     ];
     assert_eq!(strip.squares.len(), expected.len());
     for (square, (id, kind, y, scale, active)) in strip.squares.iter().zip(expected) {
@@ -317,22 +323,28 @@ fn lays_the_strip_out_in_the_windows_own_rows() {
 
 #[test]
 fn marks_the_square_the_reader_is_looking_at_and_the_nearest_when_nothing_is() {
-    let placements = placements_of(&rows_for(&pane(), VIEWPORT), VIEWPORT);
+    // The same two-square window as the test above.
+    let window = Viewport {
+        top: 25,
+        bottom: 58,
+    };
+    let placements = placements_of(&rows_for(&pane(), window), window);
     let active = |row: Option<i64>| {
-        relative_layout(&placements, row, VIEWPORT, &[], &Options::default())
+        relative_layout(&placements, row, window, &[], &Options::default())
             .squares
             .iter()
             .position(|square| square.active)
     };
     assert_eq!(
         [
-            active(Some(40)),
-            active(Some(56)),
-            active(Some(0)),
-            active(Some(999)),
-            active(None),
+            active(Some(30)),  // inside `a2`, whose head is above the window
+            active(Some(56)),  // inside `a4`
+            active(Some(0)),   // above every square: the nearest is the first
+            active(Some(999)), // below every square: the nearest is the last
+            active(Some(40)),  // inside a tool turn, which owns no square
+            active(None),      // nothing focused: the end the reader is heading for
         ],
-        [Some(0), Some(1), Some(0), Some(1), Some(1)]
+        [Some(0), Some(1), Some(0), Some(1), Some(1), Some(1)]
     );
 }
 
@@ -367,20 +379,27 @@ fn moves_every_square_by_the_rows_a_scroll_moved() {
             .map(|square| square.y)
     };
 
-    // The whole pane: every turn is at its own row inside the window.
+    // The whole pane: every conversation turn is at its own row inside the
+    // window, and the two tool turns the pane holds draw nothing.
     let live = at(0, 64);
-    assert_eq!(live.squares.len(), 5);
+    assert_eq!(
+        rows(&live),
+        [
+            ("u1".to_string(), 0.0),
+            ("a2".to_string(), 3.0),
+            ("a4".to_string(), 52.0),
+        ]
+    );
     let start_of = |id: &str| of(&live, id).expect("the live window holds every turn");
-    assert!(live.squares.iter().all(|square| (0.0..64.0).contains(&square.y)));
 
-    // Twenty rows up. Every square the window still holds moved by exactly the
-    // scroll, none is drawn outside the window, and the turns that scrolled out
-    // are gone rather than pinned to the strip's ends.
-    let scrolled = at(20, 24);
-    assert!(
-        scrolled.squares.len() < live.squares.len(),
-        "the turns above the window are not drawn: {:?}",
-        rows(&scrolled)
+    // Two rows up: the square the window still holds moved by exactly the
+    // scroll, and the turn that scrolled out is gone rather than pinned to the
+    // strip's ends.
+    let scrolled = at(2, 24);
+    assert_eq!(
+        rows(&scrolled),
+        [("a2".to_string(), 1.0)],
+        "the turn above the window is not drawn"
     );
     for (id, y) in rows(&scrolled) {
         assert!(
@@ -388,19 +407,24 @@ fn moves_every_square_by_the_rows_a_scroll_moved() {
             "{id} draws outside the window at {y}"
         );
         assert!(
-            close(start_of(&id) - y, 20.0) || y == 0.0,
-            "{id} moved {} rows for a 20-row scroll",
+            close(start_of(&id) - y, 2.0),
+            "{id} moved {} rows for a 2-row scroll",
             start_of(&id) - y
         );
     }
+    assert_eq!(
+        of(&scrolled, "a4"),
+        None,
+        "nor is the answer below it, which the matcher did not see here"
+    );
 
-    // At the bottom of the capture, a turn whose head is above the window draws
-    // on row 0 — that is where the reader met it — and the newest sits on its
-    // own row.
+    // At the bottom of the capture, the answer the matcher saw sits on its own
+    // row, and the tool turn above it — the turn the reader is inside — draws
+    // nothing at all.
     let tail = at(40, 24);
-    assert_eq!(of(&tail, "t3"), Some(0.0));
-    assert!(close(of(&tail, "t5").unwrap(), 61.0 - 40.0));
-    assert_eq!(of(&tail, "u1"), None, "a turn above the window is not drawn");
+    assert_eq!(of(&tail, "t3"), None, "a tool turn is never drawn");
+    assert_eq!(of(&tail, "a2"), None, "a turn above the window is not drawn");
+    assert!(close(of(&tail, "a4").expect("a4 is on screen"), 52.0 - 40.0));
 }
 
 #[test]
@@ -500,8 +524,27 @@ fn fits_a_turn_the_matcher_dropped_into_the_gap_its_neighbours_left() {
 fn relative(strip: &Layout) -> &RelativeStrip {
     match strip {
         Layout::Relative(relative) => relative,
-        Layout::Map(_) => panic!("relative mode asked for, a map came back"),
+        Layout::Recent(_) => panic!("relative mode asked for, a recent strip came back"),
     }
+}
+
+/// The strip in recent mode.
+fn recent(strip: &Layout) -> &RecentStrip {
+    match strip {
+        Layout::Recent(recent) => recent,
+        Layout::Relative(_) => panic!("recent mode asked for, a relative strip came back"),
+    }
+}
+
+/// The session's turns as a recency list wants them: id and kind, no rows.
+fn listed_of(specs: &[TurnSpec]) -> Vec<ListedTurn> {
+    specs
+        .iter()
+        .map(|spec| ListedTurn {
+            id: spec.id.clone(),
+            kind: kind_of(spec.role),
+        })
+        .collect()
 }
 
 fn ids_of(strip: &Layout) -> Vec<String> {
@@ -513,84 +556,227 @@ fn ids_of(strip: &Layout) -> Vec<String> {
 }
 
 #[test]
-fn the_maps_squares_do_not_move_on_a_scroll_and_its_block_does() {
-    let whole = Viewport { top: 0, bottom: 63 };
-    let placements = placements_of(&rows_for(&pane(), whole), whole);
-    let options = Options {
-        mode: Mode::Map,
-        ..Options::default()
-    };
-    let live = map_layout(&placements, whole, &[], &options);
-    let scrolled = map_layout(
-        &placements,
-        Viewport {
-            top: 20,
-            bottom: 43,
-        },
-        &[],
-        &options,
-    );
+fn a_recent_strip_lists_its_turns_oldest_first_and_uniform() {
+    let listed = listed_of(&pane());
+    let viewport = Viewport { top: 0, bottom: 23 };
+    let strip = recent_layout(&listed, None, viewport, &Options::default());
+    // The pane's tool turns are not the conversation, so the list is the prompt
+    // and its two answers: oldest first, one place each, all the same size. No
+    // turn is under the reader's row, so the newest square is active — the end
+    // the reader is heading for.
+    let expected: [(&str, TurnKind, f64, bool); 3] = [
+        ("u1", TurnKind::User, 0.0, false),
+        ("a2", TurnKind::Agent, 1.0, false),
+        ("a4", TurnKind::Agent, 2.0, true),
+    ];
+    assert_eq!(strip.squares.len(), expected.len());
+    for (square, (id, kind, y, active)) in strip.squares.iter().zip(expected) {
+        assert_eq!(square.id.as_str(), id);
+        assert_eq!(square.kind, kind);
+        assert_eq!(square.y, y, "{id} counts places in the block");
+        assert_eq!(square.scale, 1.0, "{id} is the size of every other square");
+        assert_eq!(square.active, active);
+    }
+    assert_eq!(strip.rows, 24.0, "the track, measured as relative measures it");
 
-    // Every turn the window holds draws, measured or not: that is the point of
-    // the map, and it is what a relative strip refuses to do.
-    assert_eq!(ids_of(&Layout::Map(live.clone())), ["u1", "a2", "t3", "a4", "t5"]);
-    assert!(close(live.span, 58.0), "span {}", live.span);
-    assert!(close(live.block.top, 0.0));
-    assert!(
-        close(live.block.height, live.span),
-        "a reader at the live bottom is looking at the whole map: {}",
-        live.block.height
-    );
-
-    // A scroll moves the block and leaves every square where it was.
+    // A turn the reader is inside is the active one instead.
+    let focused = recent_layout(&listed, Some("a2"), viewport, &Options::default());
     assert_eq!(
-        live.squares.iter().map(|square| square.y).collect::<Vec<_>>(),
-        scrolled.squares.iter().map(|square| square.y).collect::<Vec<_>>(),
-        "the map's squares are the map's, not the reader's"
-    );
-    assert!(close(scrolled.span, live.span), "a scroll is not a new map");
-    assert!(scrolled.block.top > live.block.top, "the block moved down");
-    assert!(
-        scrolled.block.height < live.block.height,
-        "twenty-four rows of a sixty-four-row pane take less of the map"
+        focused.squares.iter().position(|square| square.active),
+        Some(1)
     );
 }
 
 #[test]
-fn the_map_caps_its_newest_turns_and_hides_the_tools_on_request() {
-    let whole = Viewport { top: 0, bottom: 59 };
-    let rows = rows_for(&many(30), whole);
+fn a_scroll_leaves_every_recent_place_alone() {
+    let whole = Viewport { top: 0, bottom: 63 };
+    let rows = rows_for(&pane(), whole);
+    let listed = listed_of(&pane());
     let options = Options {
-        mode: Mode::Map,
+        mode: Mode::Recent,
         ..Options::default()
     };
-    let uncapped = layout(&rows, whole, 0, &options);
-    assert_eq!(uncapped.squares().len(), 30);
+    let at = |viewport: Viewport, focus_row: i64| {
+        let strip = layout_pinned(&rows, &[], &listed, viewport, focus_row, &options);
+        recent(&strip).clone()
+    };
+    let places = |strip: &RecentStrip| -> Vec<(String, f64, f64)> {
+        strip
+            .squares
+            .iter()
+            .map(|square| (square.id.clone(), square.y, square.scale))
+            .collect()
+    };
 
-    let capped = layout(
-        &rows,
-        whole,
-        0,
+    // A row inside the second answer, then a scroll into a tool turn the strip
+    // does not list: every place is the same place.
+    let live = at(whole, 3);
+    let scrolled = at(
+        Viewport {
+            top: 40,
+            bottom: 63,
+        },
+        40,
+    );
+    assert_eq!(places(&live), places(&scrolled), "a scroll is not a new list");
+    // But the track the block is centred in is the window's, and it moved.
+    assert_eq!(live.rows, 64.0);
+    assert_eq!(scrolled.rows, 24.0);
+    // Only `active` moves: the reader met the second answer, scrolled into a
+    // tool turn, and is now heading for the newest answer.
+    assert_eq!(live.squares.iter().position(|square| square.active), Some(1));
+    assert_eq!(
+        scrolled.squares.iter().position(|square| square.active),
+        Some(2)
+    );
+}
+
+#[test]
+fn the_recent_cap_keeps_the_newest_and_drops_the_oldest() {
+    let listed = listed_of(&many(30));
+    let viewport = Viewport { top: 0, bottom: 23 };
+    let capped = recent_layout(
+        &listed,
+        None,
+        viewport,
         &Options {
             max_squares: 4,
-            ..options
+            ..Options::default()
         },
     );
-    assert_eq!(ids_of(&capped), ["s27", "s28", "s29", "s30"]);
+    assert_eq!(
+        capped
+            .squares
+            .iter()
+            .map(|square| square.id.as_str())
+            .collect::<Vec<_>>(),
+        ["s27", "s28", "s29", "s30"],
+        "the oldest places fall off, with no marker to say how many"
+    );
+    assert_eq!(
+        capped
+            .squares
+            .iter()
+            .map(|square| square.y)
+            .collect::<Vec<_>>(),
+        [0.0, 1.0, 2.0, 3.0],
+        "the block counts from the oldest place kept"
+    );
+    assert_eq!(capped.squares.iter().position(|square| square.active), Some(3));
 
-    // A hidden tool takes no row of the map either: the squares are the turns
-    // that draw, not the rows they used to take.
-    let pane_rows = rows_for(&pane(), Viewport { top: 0, bottom: 63 });
-    let hidden = layout(
-        &pane_rows,
-        Viewport { top: 0, bottom: 63 },
-        0,
+    // A cap the list does not reach is the whole list; the default `0` is not
+    // room, it is the mode's own hard max.
+    let roomy = recent_layout(
+        &listed,
+        None,
+        viewport,
         &Options {
-            show_tools: false,
-            ..options
+            max_squares: 99,
+            ..Options::default()
         },
     );
-    assert_eq!(ids_of(&hidden), ["u1", "a2", "a4"]);
+    assert_eq!(roomy.squares.len(), 30);
+    assert_eq!(
+        recent_layout(&listed, None, viewport, &Options::default())
+            .squares
+            .len(),
+        DEFAULT_RECENT_MAX
+    );
+}
+
+#[test]
+fn a_recent_block_takes_its_hard_max_when_the_caller_sets_none() {
+    // Forty turns and a pane of twenty-four rows: the block would not fit, so it
+    // stops at the hard max — and the newest turn, the end the reader is heading
+    // for, is still there.
+    let listed = listed_of(&many(40));
+    let strip = recent_layout(
+        &listed,
+        None,
+        Viewport { top: 0, bottom: 23 },
+        &Options::default(),
+    );
+    assert_eq!(strip.squares.len(), DEFAULT_RECENT_MAX);
+    assert_eq!(strip.squares.len(), 20);
+    assert_eq!(
+        strip.squares[0].id, "s21",
+        "the oldest of the newest twenty, counting places from zero"
+    );
+    assert_eq!(strip.squares[0].y, 0.0);
+    let newest = strip.squares.last().expect("the block is not empty");
+    assert_eq!(
+        (newest.id.as_str(), newest.y, newest.active),
+        ("s40", 19.0, true)
+    );
+}
+
+#[test]
+fn only_the_conversation_draws_in_either_mode() {
+    // A tool turn and a meta turn between two answers, one row apart each, with
+    // a gap wider than that: a hidden turn that still took a spacing slot would
+    // drop the older answer, so both answers surviving is what says the hidden
+    // turns cost no slot.
+    let whole = Viewport { top: 0, bottom: 10 };
+    let specs = [
+        spec("a1", "assistant", (7, 7), 1, &[7]),
+        spec("t2", "tool", (8, 8), 1, &[8]),
+        spec("m3", "meta", (9, 9), 1, &[9]),
+        spec("a4", "assistant", (10, 10), 1, &[10]),
+    ];
+    let rows = rows_for(&specs, whole);
+    assert!(drawn_at_all(TurnKind::User));
+    assert!(drawn_at_all(TurnKind::Agent));
+    assert!(!drawn_at_all(TurnKind::Tool));
+    assert!(!drawn_at_all(TurnKind::Other));
+
+    let strip = layout(
+        &rows,
+        whole,
+        7,
+        &Options {
+            min_gap: 2.0,
+            ..Options::default()
+        },
+    );
+    assert_eq!(ids_of(&strip), ["a1", "a4"]);
+
+    // The pane fixture's own window holds two tool turns, and neither is drawn
+    // in relative mode either.
+    let whole_pane = Viewport { top: 0, bottom: 63 };
+    let pane_rows = rows_for(&pane(), whole_pane);
+    assert_eq!(
+        ids_of(&layout(&pane_rows, whole_pane, 0, &Options::default())),
+        ["u1", "a2", "a4"]
+    );
+
+    // Nothing in the layout draws a kind the conversation does not own: not a
+    // window square, not a band square.
+    let banded = layout_pinned(
+        &rows,
+        &["p1".to_string()],
+        &[],
+        whole,
+        7,
+        &Options::default(),
+    );
+    assert!(
+        banded.squares().iter().all(|square| drawn_at_all(square.kind)),
+        "the band holds the conversation too"
+    );
+
+    // A recency list arrives whole — the caller's store holds every turn — and
+    // the strip is what filters it.
+    let listed = listed_of(&specs);
+    assert_eq!(listed.len(), 4);
+    let listed_strip = recent_layout(&listed, None, whole, &Options::default());
+    assert_eq!(
+        listed_strip
+            .squares
+            .iter()
+            .map(|square| square.id.as_str())
+            .collect::<Vec<_>>(),
+        ["a1", "a4"]
+    );
 }
 
 #[test]
@@ -603,36 +789,58 @@ fn the_band_keeps_the_readers_own_turns_the_mode_placed_nothing_for() {
         top: 37,
         bottom: 60,
     };
-    let strip = layout_pinned(&rows, &["u1".to_string()], viewport, 37, &Options::default());
+    let strip = layout_pinned(
+        &rows,
+        &["u1".to_string()],
+        &[],
+        viewport,
+        37,
+        &Options::default(),
+    );
     let relative = relative(&strip);
     assert_eq!(relative.band, 1);
     assert_eq!(relative.squares[0].id, "u1");
     assert_eq!(relative.squares[0].y, 0.0, "a band square counts places, not rows");
     assert!(!relative.squares[0].active);
-    assert_eq!(relative.squares.len(), 3, "the band plus the window's own two");
+    assert_eq!(
+        relative.squares.len(),
+        2,
+        "the band plus the window's own answer"
+    );
 
     // A pin the window already draws is not drawn twice.
-    let doubled = layout_pinned(&rows, &["t3".to_string()], viewport, 37, &Options::default());
+    let doubled = layout_pinned(
+        &rows,
+        &["a4".to_string()],
+        &[],
+        viewport,
+        37,
+        &Options::default(),
+    );
     assert_eq!(doubled.band(), 0);
 
-    // The map places its own turns, so nothing is left to pin.
-    let mapped = layout_pinned(
+    // A recent strip has no band: its list of the newest turns already holds
+    // the reader's own prompts, so a pin beside it would say a turn twice.
+    let listed_recent = layout_pinned(
         &rows,
         &["u1".to_string()],
+        &listed_of(&pane()),
         viewport,
         37,
         &Options {
-            mode: Mode::Map,
+            mode: Mode::Recent,
             ..Options::default()
         },
     );
-    assert_eq!(mapped.band(), 0);
+    assert_eq!(listed_recent.band(), 0);
+    assert_eq!(recent(&listed_recent).squares.len(), 3);
 
     // A band shorter than the list keeps the newest of the reader's turns.
     let pins: Vec<String> = ["p1", "p2", "p3"].iter().map(|id| id.to_string()).collect();
     let short = layout_pinned(
         &rows,
         &pins,
+        &[],
         viewport,
         37,
         &Options {
@@ -653,13 +861,13 @@ fn the_relative_strips_top_square_is_the_turn_the_reader_is_inside() {
     let strip = layout(
         &rows,
         Viewport {
-            top: 40,
-            bottom: 63,
+            top: 20,
+            bottom: 43,
         },
-        40,
+        20,
         &Options::default(),
     );
-    assert_eq!(strip.squares()[0].id, "t3");
+    assert_eq!(strip.squares()[0].id, "a2");
     assert_eq!(strip.squares()[0].y, 0.0);
     assert!(strip.squares()[0].active);
 
@@ -684,26 +892,4 @@ fn the_relative_strips_top_square_is_the_turn_the_reader_is_inside() {
     assert_eq!(strip.squares()[0].id, "u1");
     assert_eq!(strip.squares()[0].y, 0.0);
     assert!(strip.squares()[0].active);
-}
-
-#[test]
-fn hiding_the_tools_takes_their_squares_out_of_the_relative_strip() {
-    let whole = Viewport { top: 0, bottom: 63 };
-    let rows = rows_for(&pane(), whole);
-    let shown = layout(&rows, whole, 0, &Options::default());
-    assert_eq!(ids_of(&shown), ["u1", "a2", "t3", "a4", "t5"]);
-    let hidden = layout(
-        &rows,
-        whole,
-        0,
-        &Options {
-            show_tools: false,
-            ..Options::default()
-        },
-    );
-    assert_eq!(ids_of(&hidden), ["u1", "a2", "a4"]);
-    assert!(
-        hidden.squares().iter().all(|square| square.kind != TurnKind::Tool),
-        "a hidden tool leaves no square behind"
-    );
 }
