@@ -403,13 +403,8 @@ pub(crate) fn run_native_tui(
             .context("--initial-effort requires a registered fork route")?;
         settings_route.session_id = plan.session_id.clone();
         settings_route.app_server_socket = plan.app_server_socket.clone();
-        let model = settings_route
-            .model
-            .as_deref()
-            .context("fork route has no model")?;
-        adapter
-            .door()
-            .change_native_settings(&settings_route, model, effort)?;
+        let model = settings_route.model.as_deref().context("fork route has no model")?;
+        adapter.door().change_native_settings(&settings_route, model, effort)?;
     }
     let launch_ms = launch_started.elapsed().as_millis() as u64;
     if launch_ms >= 2_000 {

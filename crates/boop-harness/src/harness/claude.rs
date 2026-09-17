@@ -5,8 +5,8 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 use crate::harness::{
-    jsonl_files, shell_quote, Capabilities, ControlCapabilities, Harness, HarnessId, KnownSessions,
-    LanePolicy, MailPolicy, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
+    jsonl_files, Capabilities, ControlCapabilities, Harness, HarnessId, KnownSessions, LanePolicy,
+    MailPolicy, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
 };
 use anyhow::Context;
 use boop_store::event::{Access, AgentEvent, ToolPath};
@@ -236,24 +236,6 @@ impl Harness for Claude {
 
     fn capabilities(&self) -> &'static Capabilities {
         &CAPABILITIES
-    }
-
-    fn interactive_fork_arguments(
-        &self,
-        prompt: &str,
-        model: Option<&str>,
-        effort: Option<&str>,
-        _variant: Option<&str>,
-    ) -> String {
-        let mut command = String::from(" --");
-        if let Some(model) = model {
-            command.push_str(&format!(" --model {}", shell_quote(model)));
-        }
-        if let Some(effort) = effort {
-            command.push_str(&format!(" --effort {}", shell_quote(effort)));
-        }
-        command.push_str(&format!(" {}", shell_quote(prompt)));
-        command
     }
 
     fn tui_composer(&self) -> crate::harness::TuiComposer {

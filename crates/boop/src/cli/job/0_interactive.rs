@@ -1,7 +1,6 @@
 use anyhow::Result;
 use boop::bus::{self, Route};
 use boop::harness::{shell_quote, SpawnSpec};
-use boop::registry::Registry;
 
 /// The visible native process reads the same fork brief as a supervised lane.
 /// No supervisor startup acknowledgment or completion/idle epilogue runs here.
@@ -19,16 +18,37 @@ pub(super) fn command(spec: &SpawnSpec) -> String {
         "Read the fork context and answer the request in this brief: {}",
         spec.prompt
     );
-    command.push_str(
-        &Registry::discover()
-            .get(spec.harness)
-            .interactive_fork_arguments(
-                &prompt,
-                spec.model.as_deref(),
-                spec.effort.as_deref(),
-                spec.variant.as_deref(),
-            ),
-    );
+    if spec.harness == boop::harness::HarnessId::Kimi {
+        command.push_str(&format!(" --initial-prompt {}", shell_quote(&prompt)));
+    }
+    if spec.harness == boop::harness::HarnessId::Opencode {
+        if let Some(effort) = spec.variant.as_ref().or(spec.effort.as_ref()) {
+            command.push_str(&format!(" --initial-effort {}", shell_quote(effort)));
+        }
+    }
+    command.push_str(" --");
+    if let Some(model) = &spec.model {
+        command.push_str(&format!(" --model {}", shell_quote(model)));
+    }
+    if let Some(effort) = &spec.effort {
+        match spec.harness {
+            boop::harness::HarnessId::Claude => {
+                command.push_str(&format!(" --effort {}", shell_quote(effort)))
+            }
+            boop::harness::HarnessId::Codex => command.push_str(&format!(
+                " -c {}",
+                shell_quote(&format!("model_reasoning_effort={effort}"))
+            )),
+            _ => {}
+        }
+    }
+    match spec.harness {
+        boop::harness::HarnessId::Kimi => {}
+        boop::harness::HarnessId::Opencode => {
+            command.push_str(&format!(" --prompt {}", shell_quote(&prompt)))
+        }
+        _ => command.push_str(&format!(" {}", shell_quote(&prompt))),
+    }
     match &spec.env_stamp {
         Some(stamp) => format!("{stamp} {command}"),
         None => command,

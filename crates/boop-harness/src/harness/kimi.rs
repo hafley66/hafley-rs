@@ -13,8 +13,8 @@ use anyhow::Context;
 use serde_json::Value;
 
 use crate::harness::{
-    shell_quote, Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, LanePolicy,
-    MailPolicy, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
+    Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, LanePolicy, MailPolicy,
+    ReadChunk, SessionRef, SpawnSpec, VariantSupport,
 };
 use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
@@ -236,25 +236,6 @@ impl Harness for Kimi {
 
     fn capabilities(&self) -> &'static Capabilities {
         &CAPABILITIES
-    }
-
-    fn interactive_fork_arguments(
-        &self,
-        prompt: &str,
-        model: Option<&str>,
-        _effort: Option<&str>,
-        _variant: Option<&str>,
-    ) -> String {
-        let mut command = format!(" --initial-prompt {}", shell_quote(prompt));
-        command.push_str(" --");
-        if let Some(model) = model {
-            command.push_str(&format!(" --model {}", shell_quote(model)));
-        }
-        command
-    }
-
-    fn composer_submit_key(&self) -> Option<&'static str> {
-        Some(SUBMIT_KEY)
     }
 
     fn tui_composer(&self) -> crate::harness::TuiComposer {

@@ -53,12 +53,13 @@ mod _2_place;
 mod _3_layout;
 
 pub use _0_types::{
-    clamp, kind_of, lines_of, Block, Estimates, Layout, Options, Placement, Square, TurnKind,
-    TurnRow, TurnSample, Viewport, WindowTurn, KINDS, STRIP_DEFAULTS, ZEROED,
+    clamp, kind_of, lines_of, Block, Estimates, Layout, MapStrip, Mode, Options, Placement,
+    RelativeStrip, Square, TurnKind, TurnRow, TurnSample, Viewport, WindowTurn, KINDS,
+    STRIP_DEFAULTS, ZEROED,
 };
 pub use _1_measure::{align_rows, estimate_rows, measure, rows_of, samples_from};
 pub use _2_place::{place_window, window_of};
-pub use _3_layout::{layout, strip_layout};
+pub use _3_layout::{layout, layout_pinned, map_layout, relative_layout};
 
 #[cfg(test)]
 mod tests {
@@ -166,12 +167,11 @@ mod tests {
     }
 
     #[test]
-    fn layout_of_no_rows_is_an_empty_strip_with_a_placeholder_span() {
+    fn layout_of_no_rows_is_an_empty_strip() {
         let options = Options::default();
         let strip = layout(&[], Viewport { top: 0, bottom: 23 }, 0, &options);
-        assert!(strip.squares.is_empty());
-        assert_eq!(strip.span, 1.0);
-        assert!(strip.block.height >= options.block_min);
+        assert!(strip.squares().is_empty());
+        assert_eq!(strip.band(), 0);
     }
 
     #[test]
