@@ -14,6 +14,143 @@ use boop_store::testing::BoopCommandExt;
 
 const BOOP: &str = env!("CARGO_BIN_EXE_boop");
 
+/// Real tmux bytes and a real Claude messaging socket, with an isolated
+/// registry. The sink records keys and can acknowledge the interrupted turn
+/// by publishing idle before the socket receives the hail.
+#[test]
+fn scream_records_one_key_before_hail_and_skips_idle_unknown_and_dead_sessions() {
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixListener;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+    use std::time::{Duration, Instant};
+
+    for (status, acknowledge, expected) in [
+        ("busy", true, "key 1b\nhail\n"),
+        ("idle", true, "hail\n"),
+        ("unknown", true, "hail\n"),
+        ("dead", true, ""),
+        ("busy", false, "key 1b\n"),
+    ] {
+        let scratch = Scratch::new(&format!("scream-{status}-{acknowledge}"));
+        let sessions = scratch.root.join(".claude/sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        let record = sessions.join("test.json");
+        let trace = scratch.root.join("trace");
+        let ready = scratch.root.join("ready");
+        let script = scratch.root.join("sink.py");
+        std::fs::write(
+            &script,
+            r#"import sys, tty, json, pathlib, os
+tty.setraw(0)
+record, trace, ready, acknowledge = sys.argv[1:]
+pathlib.Path(ready).touch()
+while True:
+    key = os.read(0, 1)
+    if not key: break
+    with open(trace, 'a') as out: out.write('key ' + key.hex() + '\n')
+    if acknowledge == 'true':
+        data = json.loads(pathlib.Path(record).read_text())
+        data['status'] = 'idle'
+        temp = record + '.tmp'
+        pathlib.Path(temp).write_text(json.dumps(data))
+        os.replace(temp, record)
+"#,
+        )
+        .unwrap();
+        let command = format!(
+            "python3 {} {} {} {} {}",
+            boop::harness::shell_quote(&script.display().to_string()),
+            boop::harness::shell_quote(&record.display().to_string()),
+            boop::harness::shell_quote(&trace.display().to_string()),
+            boop::harness::shell_quote(&ready.display().to_string()),
+            acknowledge
+        );
+        scratch.new_session("scream");
+        let output = scratch.tmux(&["set-window-option", "-t", "scream", "remain-on-exit", "on"]);
+        assert!(output.status.success(), "{output:?}");
+        let output = scratch.tmux(&["respawn-pane", "-k", "-t", "scream", &command]);
+        assert!(output.status.success(), "{output:?}");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !ready.exists() {
+            assert!(
+                Instant::now() < deadline,
+                "key sink did not start: {:?}",
+                scratch.tmux(&["capture-pane", "-p", "-t", "scream"])
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let pane = scratch.pane("scream");
+        let mut routes = serde_json::json!({"test": {
+            "kind": "coordinator", "harness": "claude", "tmux": pane,
+            "session_id": "test-session"
+        }});
+        if status == "busy" && !acknowledge {
+            routes["alias"] = routes["test"].clone();
+        }
+        scratch.write_registry(&routes.to_string());
+        let socket = scratch.root.join("door.sock");
+        let listener = UnixListener::bind(&socket).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        if status != "dead" {
+            std::fs::write(
+                &record,
+                serde_json::json!({
+                    "pid": std::process::id(), "sessionId": "test-session", "tmux": pane,
+                    "status": status, "messagingSocketPath": socket
+                })
+                .to_string(),
+            )
+            .unwrap();
+        }
+        let finished = Arc::new(AtomicBool::new(false));
+        let done = finished.clone();
+        let received_trace = trace.clone();
+        let receiver = std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                match listener.accept() {
+                    Ok((stream, _)) => {
+                        stream.set_nonblocking(false).unwrap();
+                        let mut line = String::new();
+                        BufReader::new(stream).read_line(&mut line).unwrap();
+                        let mut trace = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(received_trace)
+                            .unwrap();
+                        trace.write_all(b"hail\n").unwrap();
+                        return Some(line);
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+                    Err(error) => panic!("door accept: {error}"),
+                }
+                if done.load(Ordering::Acquire) {
+                    return None;
+                }
+                assert!(Instant::now() < deadline, "scream did not complete");
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        });
+        let output = scratch.boop(&["beep", "scream", "test hail", "--as", "sender"]);
+        finished.store(true, Ordering::Release);
+        let body = receiver.join().unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(
+            std::fs::read_to_string(&trace).unwrap_or_default(),
+            expected,
+            "status={status}, acknowledge={acknowledge}: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        assert_eq!(body.is_some(), expected.contains("hail"));
+        if let Some(body) = body {
+            assert!(body.contains("test hail"), "{body}");
+        }
+    }
+}
+
 /// One scratch root: mail store, tmux socket dir, config. Every tmux client and
 /// every boop subprocess runs with `TMUX`/`TMUX_PANE` removed and `TMUX_TMPDIR`
 /// pointed at the scratch dir, so the user's default server is never touched.

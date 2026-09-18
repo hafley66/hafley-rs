@@ -193,14 +193,16 @@ SHOUT + SCREAM: the broadcast pair, scoped to every connected agent (live
   panes and registered pane-less routes), the caller excepted:
     boop beep shout [body] [--kind hail]   one row per agent; a bare shout
                                            sends \"stahp what ur doing please\"
-    boop beep scream [body] [--double]     interrupt too: the harness's
+    boop beep scream [body]              interrupt too: the harness's
                                            interrupt key into every live TUI
                                            pane (claude/codex Esc, opencode
                                            C-g) and a kind=cancel row into
                                            every lane; a bare scream sends
                                            \"stop what ur doing check ps\"
   A lane supervisor answers a cancel row with channel.interrupt() and the
-  body opens the lane's next turn. --double presses the key twice. A fan-out
+  body opens the lane's next turn. TUI keys require a measured busy session;
+  idle and unknown sessions take no keys. One declared key is sent, then idle
+  is confirmed before the hail is delivered. A fan-out
   prints one line per target and ends in a tally; nothing blocks.
   It walks the same ladder every send walks, prints the rung that took the row,
   then blocks. Exits: 0 on a reply or the recipient's turn ending, 124 on the

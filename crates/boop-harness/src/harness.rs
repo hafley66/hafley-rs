@@ -41,7 +41,7 @@ pub struct Capabilities {
     /// a harness with no such key takes a path instead.
     pub image_paste_keys: Option<&'static str>,
     /// The tmux key name that interrupts the TUI's running turn (`boop beep
-    /// scream`); `None` is unverified, so the caller falls back to Escape.
+    /// scream`); `None` means no verified key and the caller skips key presses.
     pub interrupt_keys: Option<&'static str>,
     /// Whether the native TUI wrapper runs the store projector alongside it.
     /// Was `boop/src/cli/control.rs:44`.

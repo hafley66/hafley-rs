@@ -124,9 +124,9 @@ fn boop(scratch: &Scratch, args: &[&str]) -> std::process::Output {
 }
 
 /// RECEIPT. A real harness TUI, mock-provisioned by its own adapter recipe,
-/// registers as a coordinator; `boop beep scream` presses the interrupt key
-/// into its pane and leaves the broadcast row in the scratch store. Sabotage:
-/// dropping the key press leaves scream's stdout without `interrupted`.
+/// registers as a coordinator; `boop beep scream` leaves the broadcast row
+/// in the scratch store. Completed/unknown turns skip keys. A measured busy
+/// turn takes one key and must confirm idle before its hail is pushed.
 #[test]
 fn scream_interrupts_each_real_tui() {
     let Some(llmock) = mock_tui::resolve_llmock() else {
@@ -186,13 +186,25 @@ fn scream_interrupts_each_real_tui() {
         );
         let stdout = String::from_utf8_lossy(&screamed.stdout);
         assert!(screamed.status.success(), "{}: {stdout}", case.entry);
-        assert!(
-            stdout.contains(&format!("interrupted {route} in ")),
-            "{}: scream never pressed a key\n{stdout}",
-            case.entry
-        );
-        if case.id == HarnessId::Claude {
-            wait_for_screen(&tag, "nterrupted", case.entry);
+        if stdout.contains(&format!("interrupt-sent {route} in ")) {
+            assert_eq!(
+                stdout
+                    .lines()
+                    .filter(|line| line.starts_with("interrupt-sent "))
+                    .count(),
+                1,
+                "{stdout}"
+            );
+            assert!(
+                stdout.contains("idle confirmed") || stdout.contains("interrupt-unconfirmed"),
+                "{stdout}"
+            );
+        } else {
+            assert!(
+                stdout.contains(&format!("interrupt-skipped {route} (")),
+                "{}: no interrupt disposition\n{stdout}",
+                case.entry
+            );
         }
         let rows = boop(
             &scratch,

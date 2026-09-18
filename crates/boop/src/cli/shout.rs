@@ -3,11 +3,13 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use tracing::info;
 
 use boop::bus::Route;
+use boop::live::{LiveSession, LiveStatus};
 use boop::registry::Registry;
 use boop::{bus, identity, lane, tmux};
 
@@ -17,10 +19,6 @@ use crate::cli::{append_message, mail_dir};
 pub(crate) const SHOUT_BODY: &str = "stahp what ur doing please";
 /// The body a bare `scream` sends.
 pub(crate) const SCREAM_BODY: &str = "stop what ur doing check ps";
-
-/// The key a scream presses when the harness declares none: what every TUI in
-/// this registry but kimi takes, and kimi's is unverified rather than absent.
-const FALLBACK_INTERRUPT_KEYS: &str = "Escape";
 
 /// How one route stands, measured before any row is written.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -85,13 +83,26 @@ fn caller_name(routes: &BTreeMap<String, Route>, as_name: Option<&str>) -> Optio
     }
 }
 
-/// The interrupt keys a route's harness takes; `None` names the fallback the
-/// caller must print a caveat for.
-fn interrupt_keys(registry: &Registry, route: &Route) -> Option<&'static str> {
-    registry
-        .get(route.harness?) // TUI-owning harnesses always declare one
-        .capabilities()
-        .interrupt_keys
+/// Composer keys are authorized only for a measured busy session. A retained
+/// pane, idle composer, or unknown status cannot authorize a key press.
+fn interrupt_key(
+    reach: &Reach,
+    session: Option<&LiveSession>,
+    declared_key: Option<&'static str>,
+) -> std::result::Result<&'static str, &'static str> {
+    let Reach::LivePane(pane) = reach else {
+        return Err("no live TUI pane");
+    };
+    let session = session.ok_or("no live harness session")?;
+    if session.tmux_pane.as_ref().is_some_and(|held| held != pane) {
+        return Err("session occupies a different pane");
+    }
+    match session.status {
+        LiveStatus::Idle => return Err("session is idle"),
+        LiveStatus::Unknown => return Err("turn status is unknown"),
+        LiveStatus::Busy => {}
+    }
+    declared_key.ok_or("harness declares no interrupt key")
 }
 
 pub(crate) struct Broadcast<'a> {
@@ -101,8 +112,6 @@ pub(crate) struct Broadcast<'a> {
     pub as_name: Option<&'a str>,
     /// A scream sends keys and cancel rows; a shout sends rows only.
     pub interrupt: bool,
-    /// Press the interrupt key twice (the claude double-Esc move).
-    pub double: bool,
 }
 
 /// One row (and, for a scream, one key press) per connected route, ending in
@@ -170,12 +179,31 @@ pub(crate) fn run_broadcast(
     let store = bus::open_store(&dir)?;
     let budget = boop::mail::DoorBudget::from_env();
     let (mut landed, mut cooled, mut dead) = (0usize, 0usize, 0usize);
+    let mut interrupted_panes = BTreeMap::new();
     for (name, route, reach) in &targets {
         let name: &str = name;
         let route: &Route = route;
         let kind = match (broadcast.interrupt, route.kind.as_str()) {
             (true, "lane") => "cancel",
             _ => broadcast.kind,
+        };
+        let ready = if broadcast.interrupt && route.kind.as_str() != "lane" {
+            if let Reach::LivePane(pane) = reach {
+                if let Some(ready) = interrupted_panes.get(pane) {
+                    println!("interrupt-skipped {name} (pane {pane} already addressed)");
+                    *ready
+                } else {
+                    let ready = press_interrupt_keys(registry, name, route, reach)?;
+                    if let Some(ready) = ready {
+                        interrupted_panes.insert(pane.clone(), ready);
+                    }
+                    ready.unwrap_or(true)
+                }
+            } else {
+                press_interrupt_keys(registry, name, route, reach)?.unwrap_or(true)
+            }
+        } else {
+            true
         };
         let message = bus::Message {
             id: bus::mint_id(),
@@ -192,6 +220,14 @@ pub(crate) fn run_broadcast(
         };
         append_message(&dir, &message)?;
         crate::cli::mail::record_control_edge(&message)?;
+        if !ready {
+            dead += 1;
+            println!(
+                "no-route {name} (interrupt not confirmed idle; message {} held in mailbox)",
+                message.id
+            );
+            continue;
+        }
         let landing = boop::mail::deliver_hail_budgeted(
             registry,
             &store,
@@ -219,45 +255,63 @@ pub(crate) fn run_broadcast(
                 println!("no-route {name} ({})", landing.detail());
             }
         }
-        if broadcast.interrupt {
-            press_interrupt_keys(registry, name, route, &reach, broadcast.double)?;
-        }
     }
     println!("{landed} landed, {cooled} cooled-off, {dead} no-route");
     info!(landed, cooled, dead, "broadcast complete");
     Ok(())
 }
 
-/// The scream's key half. Only a live pane takes a press: a lane's pane
-/// holds the supervisor (its interrupt is the cancel row).
+/// Stop a busy TUI, then wait for its idle signal before delivering the hail.
+/// Lanes consume their cancel row through the supervisor instead.
 fn press_interrupt_keys(
     registry: &Registry,
     name: &str,
     route: &Route,
     reach: &Reach,
-    double: bool,
-) -> Result<()> {
+) -> Result<Option<bool>> {
     if route.kind.as_str() == "lane" {
-        return Ok(());
+        return Ok(None);
     }
+    let Some(id) = route.harness else {
+        println!("interrupt-skipped {name} (route declares no harness)");
+        return Ok(None);
+    };
+    let harness = registry.get(id);
+    let session = match harness.live().live_session_for_route(route) {
+        Ok(session) => session,
+        Err(error) => {
+            println!("interrupt-skipped {name} (live session lookup failed: {error})");
+            return Ok(None);
+        }
+    };
+    let key = match interrupt_key(
+        reach,
+        session.as_ref(),
+        harness.capabilities().interrupt_keys,
+    ) {
+        Ok(key) => key,
+        Err(why) => {
+            println!("interrupt-skipped {name} ({why})");
+            return Ok(None);
+        }
+    };
     let Reach::LivePane(pane) = reach else {
-        return Ok(());
+        unreachable!()
     };
-    let (keys, caveat) = match interrupt_keys(registry, route) {
-        Some(keys) => (keys, None),
-        None => (FALLBACK_INTERRUPT_KEYS, Some("unverified for this harness")),
-    };
-    let presses = match double {
-        true => vec![keys, keys],
-        false => vec![keys],
-    };
-    crate::cli::paste::send_keys(pane, &presses, false)
+    let session = session.expect("interrupt_key verified the live session");
+    crate::cli::paste::send_keys(pane, &[key], false)
         .with_context(|| format!("interrupt {name} in pane {pane}"))?;
-    match caveat {
-        Some(why) => println!("interrupted {name} in {pane} with {keys} ({why})"),
-        None => println!("interrupted {name} in {pane} with {keys}"),
+    println!("interrupt-sent {name} in {pane} with {key}");
+    match harness.door().notify_idle(&session, Duration::from_secs(2)) {
+        Ok(_) => {
+            println!("interrupted {name} in {pane} (idle confirmed)");
+            Ok(Some(true))
+        }
+        Err(error) => {
+            println!("interrupt-unconfirmed {name} ({error})");
+            Ok(Some(false))
+        }
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -342,6 +396,70 @@ mod tests {
             caller_name(&routes, Some("ghost")).as_deref(),
             Some("ghost"),
             "an explicit --as is the sender even when unregistered"
+        );
+    }
+
+    #[test]
+    fn retained_tmux_pane_without_live_harness_session_cannot_be_interrupted() {
+        assert_eq!(
+            interrupt_key(&Reach::LivePane("%1".into()), None, Some("Escape")),
+            Err("no live harness session")
+        );
+    }
+
+    #[test]
+    fn interrupt_keys_require_busy_status_and_use_the_adapter_key() {
+        use boop::live::{DoorAddress, LiveSessionScope};
+        let registry = Registry::discover();
+        let pane = Reach::LivePane("%1".into());
+        let mut results = Vec::new();
+        for id in [
+            HarnessId::Claude,
+            HarnessId::Codex,
+            HarnessId::Opencode,
+            HarnessId::Omp,
+            HarnessId::Kimi,
+        ] {
+            for status in [LiveStatus::Busy, LiveStatus::Idle, LiveStatus::Unknown] {
+                let session = LiveSession {
+                    harness: id,
+                    session_id: "test-session".into(),
+                    pid: None,
+                    cwd: None,
+                    tmux_pane: Some("%1".into()),
+                    status,
+                    door: DoorAddress::None,
+                    observed_ms: 0,
+                    started_ms: None,
+                    scope: LiveSessionScope::Root,
+                    parent_session: None,
+                };
+                results.push(interrupt_key(
+                    &pane,
+                    Some(&session),
+                    registry.get(id).capabilities().interrupt_keys,
+                ));
+            }
+        }
+        assert_eq!(
+            results,
+            vec![
+                Ok("Escape"),
+                Err("session is idle"),
+                Err("turn status is unknown"),
+                Ok("Escape"),
+                Err("session is idle"),
+                Err("turn status is unknown"),
+                Ok("C-g"),
+                Err("session is idle"),
+                Err("turn status is unknown"),
+                Ok("Escape"),
+                Err("session is idle"),
+                Err("turn status is unknown"),
+                Err("harness declares no interrupt key"),
+                Err("session is idle"),
+                Err("turn status is unknown"),
+            ]
         );
     }
 }

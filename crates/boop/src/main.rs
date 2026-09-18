@@ -972,17 +972,14 @@ enum BeepCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
-    /// Interrupt every connected agent: the harness's interrupt key into
-    /// every live TUI pane, a cancel row into every lane.
+    /// Interrupt busy agents with one declared harness key before delivering
+    /// the message. Idle and unknown TUIs take no keys; lanes take cancel rows.
     Scream {
         /// The message; omitted sends "stop what ur doing check ps".
         body: Option<String>,
         /// Who the rows are from, when the whoami ladder cannot say.
         #[arg(long = "as", value_name = "NAME")]
         as_name: Option<String>,
-        /// Press the interrupt key twice (the claude double-Esc move).
-        #[arg(long)]
-        double: bool,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -2203,7 +2200,7 @@ mod tests {
         for argv in [
             vec!["boop", "beep", "shout"],
             vec!["boop", "beep", "shout", "all hands"],
-            vec!["boop", "beep", "scream", "--double"],
+            vec!["boop", "beep", "scream"],
             vec!["boop", "beep", "scream", "stop now", "--as", "root"],
         ] {
             let cli = Cli::try_parse_from(&argv).unwrap_or_else(|e| panic!("{argv:?}: {e}"));
@@ -2212,6 +2209,7 @@ mod tests {
                 "{argv:?} reads no agent_* row and must not sync"
             );
         }
+        assert!(Cli::try_parse_from(["boop", "beep", "scream", "--double"]).is_err());
     }
 
     /// RECEIPT. `--bin` reaches both legs of the lane pair: `lane create`
