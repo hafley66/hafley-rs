@@ -62,6 +62,9 @@ mod region_writer;
 #[path = "../4_watch.rs"]
 mod watch;
 
+#[path = "../5_diff.rs"]
+mod diff;
+
 #[path = "../0_rename.rs"]
 mod source_rename;
 
@@ -577,6 +580,13 @@ fn emit(line: &str) -> Result<(), std::io::Error> {
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     if std::env::args().nth(1).as_deref() == Some("watch") {
         return watch::run(std::env::args().skip(1));
+    }
+    if std::env::args().nth(1).as_deref() == Some("diff") {
+        if let Err(error) = diff::run(std::env::args().skip(1)) {
+            eprintln!("{error}");
+            std::process::exit(2);
+        }
+        return Ok(());
     }
     if std::env::args().nth(1).as_deref() == Some("query") {
         if let Err(error) = query::run(std::env::args().skip(1)) {
