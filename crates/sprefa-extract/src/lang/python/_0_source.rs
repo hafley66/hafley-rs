@@ -35,6 +35,8 @@ use crate::source::{ExtractOutput, FamilyMask, ProjectCx, Source};
 use crate::trace;
 use crate::types::{DfLoop, LangKind, ScipIndex};
 
+use super::PyModuleIndex;
+
 /// Kinds only Python constructs: the core enums do not carry them
 /// (tests/6_kind_vocab.rs). `cond` is `a if c else b`.
 pub const COND: DfNodeKind = DfNodeKind::Ext(LangKind {
@@ -2616,6 +2618,7 @@ fn resolve_type_dst(
     strings: &Strings,
     index: Option<&DefIndex>,
     name: &str,
+    module_leg: Option<(ContentId, Span)>,
 ) -> Option<(ContentId, Span, ResolutionOrigin)> {
     let same_file = types
         .nodes
@@ -2626,6 +2629,9 @@ fn resolve_type_dst(
             .iter()
             .find(|site| site.span == node.span)
             .map(|site| (site.blob.clone(), site.span, ResolutionOrigin::SameFile));
+    }
+    if let Some((blob, span)) = module_leg {
+        return Some((blob, span, ResolutionOrigin::ModulePlane));
     }
     let sites = index.map(|index| corpus_defs(index, name)).unwrap_or(&[]);
     match sites {
@@ -2640,6 +2646,10 @@ impl Resolve<TypeF> for PythonSource {
             return Vec::new();
         };
         let index = cx.indexes.def_index.get();
+        let own = own_blob(cx, output);
+        let paths = cx.indexes.paths.get();
+        let own_path = own.as_ref().zip(paths).and_then(|(b, p)| p.get(b));
+        let modules = cx.indexes.py_modules.get();
         let mut edges = Vec::new();
         for candidate in PythonSource::type_edge_candidates(output) {
             let Some(src_ix) = types
@@ -2649,11 +2659,20 @@ impl Resolve<TypeF> for PythonSource {
             else {
                 continue;
             };
+            let name = output.strings.lookup(candidate.to);
+            let module_leg = match (modules, own_path, index, paths) {
+                (Some(m), Some(ow), Some(idx), Some(p)) => {
+                    PythonSource::module_target(Some(m), Some(ow), idx, Some(p), name)
+                        .map(|(blob, span, _)| (blob, span))
+                }
+                _ => None,
+            };
             let (dst_blob, dst_span, origin) = resolve_type_dst(
                 types,
                 &output.strings,
                 index,
-                output.strings.lookup(candidate.to),
+                name,
+                module_leg,
             )
             .unwrap_or((ZERO_CONTENT_ID, Span::empty(), ResolutionOrigin::Unresolved));
             edges.push(ProjectEdge::new(
@@ -2860,11 +2879,16 @@ impl Resolve<CallF> for PythonSource {
                 Some((index, joined, doc_ix))
             });
         let own = own_blob(cx, output);
+        let paths = cx.indexes.paths.get();
+        let own_path = own.as_ref().zip(paths).and_then(|(b, p)| p.get(b)).map(str::to_string);
+        let modules = cx.indexes.py_modules.get();
         let mut resolver = PyResolver {
             output,
             index: def_index,
             call,
             own: own.clone(),
+            modules,
+            own_path,
             decor_binds: Vec::new(),
             decor_extras: Vec::new(),
             active: std::cell::RefCell::new(Vec::new()),
@@ -3031,6 +3055,10 @@ struct PyResolver<'a> {
     call: &'a FamilyBundle<CallF>,
     /// This file's blob, when its own bytes are part of the run's file set.
     own: Option<ContentId>,
+    /// The corpus python module plane, when built.
+    modules: Option<&'a PyModuleIndex>,
+    /// This file's project-relative path, when resolvable.
+    own_path: Option<String>,
     /// Binds synthesized from decorator applications (decorated name ->
     /// wrapper name), consulted BEFORE the file's own rows: the outermost
     /// decorator's return is what the decorated name means from then on.

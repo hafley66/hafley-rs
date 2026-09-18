@@ -65,6 +65,10 @@ pub struct PyModuleFacts {
     /// `def`, `class`, and assignment targets at module depth: the names a
     /// `from m import name` can bind without a further hop.
     top_level: HashSet<String>,
+    /// The module's `__all__` list, when declared: the only names a
+    /// `from m import *` exports. `None` means every top-level name not
+    /// starting with `_` is exported.
+    all_names: Option<HashSet<String>>,
 }
 
 /// `None`: a non-python path, or a parse that fails.
@@ -79,6 +83,7 @@ pub fn py_module_facts(path: &str, content: &[u8]) -> Option<PyModuleFacts> {
     let mut facts = PyModuleFacts::default();
     walk_imports(root, src, &mut facts.imports);
     collect_top_level(root, src, &mut facts.top_level);
+    facts.all_names = collect_all_names(root, src);
     Some(facts)
 }
 
@@ -213,6 +218,49 @@ fn collect_assignment_targets(node: tree_sitter::Node, src: &[u8], out: &mut Has
         }
         _ => {}
     }
+}
+
+/// A module-level `__all__ = [...]`: the string elements of the list, as a
+/// set. `None` when no `__all__` is declared.
+fn collect_all_names(root: tree_sitter::Node, src: &[u8]) -> Option<HashSet<String>> {
+    let mut cursor = root.walk();
+    for child in root.named_children(&mut cursor) {
+        if child.kind() != "expression_statement" {
+            continue;
+        }
+        let mut items = child.walk();
+        let Some(assignment) = child
+            .named_children(&mut items)
+            .find(|item| item.kind() == "assignment")
+        else {
+            continue;
+        };
+        let Some(left) = assignment.child_by_field_name("left") else {
+            continue;
+        };
+        if left.kind() != "identifier" || py_text(left, src) != "__all__" {
+            continue;
+        }
+        let Some(right) = assignment.child_by_field_name("right") else {
+            continue;
+        };
+        if right.kind() != "list" {
+            continue;
+        }
+        let mut names = HashSet::new();
+        let mut elements = right.walk();
+        for element in right.named_children(&mut elements) {
+            if element.kind() == "string" {
+                let text = py_text(element, src);
+                let name = text.trim_matches('"').trim_matches('\'');
+                if !name.is_empty() {
+                    names.insert(name.to_string());
+                }
+            }
+        }
+        return Some(names);
+    }
+    None
 }
 
 // ── the module plane proper ──────────────────────────────────────────────────
@@ -429,6 +477,9 @@ impl PyModuleIndex {
             let Some(target) = self.module_file(path, module) else {
                 continue;
             };
+            if !self.star_exports(&target, name) {
+                continue;
+            }
             let Some(hit) = self.resolve_name(&target, name, stack) else {
                 continue;
             };
@@ -457,6 +508,38 @@ impl PyModuleIndex {
                 hops: 1,
             })
         })
+    }
+
+    /// Whether `name` is exported by a `from path import *`: `path`'s `__all__`
+    /// when it declares one, else every top-level name not starting with `_`.
+    fn star_exports(&self, path: &str, name: &str) -> bool {
+        let Some(facts) = self.facts.get(path) else {
+            return false;
+        };
+        match &facts.all_names {
+            Some(all) => all.contains(name),
+            None => !name.starts_with('_'),
+        }
+    }
+
+    /// The def a call to `callee` in `path` resolves to through an import
+    /// binding: the binding whose local name is `callee`, naming a def in its
+    /// target file. `None` when no binding matches or it names only a module.
+    pub fn resolve_callee(&self, path: &str, callee: &str) -> Option<(String, String)> {
+        self.bindings(path).into_iter().find_map(|row| {
+            if row.local == callee {
+                row.target_name.map(|name| (row.target_path, name))
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Whether `path` declares `name` at module depth (`def`/`class`/assignment).
+    pub fn is_top_level(&self, path: &str, name: &str) -> bool {
+        self.facts
+            .get(path)
+            .is_some_and(|facts| facts.top_level.contains(name))
     }
 
     /// The submodule `name` of the package whose `__init__.py` is `path`.
