@@ -4371,7 +4371,9 @@ pub fn call_drops(
                     ts_receivers::TypeBinding::Decl(_) | ts_receivers::TypeBinding::Field(_, _) => {
                         return None
                     }
-                    ts_receivers::TypeBinding::Inferred => UnresolvedReason::Inferred,
+                    ts_receivers::TypeBinding::Inferred | ts_receivers::TypeBinding::Shadowed => {
+                        UnresolvedReason::Inferred
+                    }
                     ts_receivers::TypeBinding::Ambiguous => UnresolvedReason::Ambiguous,
                 };
                 return Some(crate::project::ResolveDrop {
@@ -4831,10 +4833,15 @@ impl Resolve<CallF> for TsSource {
             };
             let callee = output.strings.lookup(site.callee);
             let written = site.callee_path.map(|id| output.strings.lookup(id));
-            let import_t = modules
-                .and_then(|(modules, path)| module_target(modules, path, callee, written).ok())
-                .flatten();
             let receiver = recv_map.get(&(site.span.start, site.span.end()));
+            // A scope-bound local owns a plain-call name: the module plane
+            // declines with the corpus name match.
+            let import_t = match receiver {
+                Some(ts_receivers::TypeBinding::Shadowed) => None,
+                _ => modules
+                    .and_then(|(modules, path)| module_target(modules, path, callee, written).ok())
+                    .flatten(),
+            };
             // The spec, and the blob the type name was written in when the
             // receiver came one hop through an initializer.
             let recv_spec: Option<(ts_receivers::RecvSpec, Option<ContentId>)> = match receiver {
@@ -4866,7 +4873,9 @@ impl Resolve<CallF> for TsSource {
                             Some(ctx.clone()),
                         )
                     }),
-                Some(ts_receivers::TypeBinding::Ambiguous) | None => None,
+                Some(ts_receivers::TypeBinding::Ambiguous)
+                | Some(ts_receivers::TypeBinding::Shadowed)
+                | None => None,
             };
             // A traceable receiver owns the site: a member bind is the answer,
             // and a missing member is a drop, never a name-match fallback.
