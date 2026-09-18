@@ -58,7 +58,9 @@ pub struct Store {
 /// `PR_NOTICE_SCHEMA`.
 /// 32 = a covering (session_id, ts) index on agent_turn so the session-graph
 /// MAX(ts) activity aggregate reads the index alone, not the wide turn body.
-pub const SCHEMA_VERSION: i64 = 32;
+/// 33 = historical peer messages (`said LIKE 'Another Claude session sent a
+/// message:%'`) stored as `user` are reclassified to `meta`.
+pub const SCHEMA_VERSION: i64 = 33;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -1014,6 +1016,10 @@ impl Store {
             if self.schema_version()? < 32 {
                 self.connection.execute_batch(TURN_ACTIVITY_INDEX_SCHEMA)?;
                 self.connection.execute_batch("PRAGMA user_version = 32;")?;
+            }
+            if self.schema_version()? < 33 {
+                self.backfill_peer_turn_role()?;
+                self.connection.execute_batch("PRAGMA user_version = 33;")?;
             }
             self.stamp_version()?;
             Ok(())
@@ -2593,6 +2599,23 @@ impl Store {
         Ok(attached)
     }
 
+    /// Map historical peer messages from `user` to `meta`. Stores written
+    /// before the walker classified injected peer lines carry them with role
+    /// `user`, so the agent-squares strip draws them as the reader's own turns.
+    /// The `said` prefix is the exact text the CLI prepends to every cross-session
+    /// message, so nothing a user typed matches. Runs once, gated by the v33
+    /// migration step.
+    fn backfill_peer_turn_role(&self) -> Result<usize> {
+        let meta_id = self.intern("dict_role", "meta")?;
+        Ok(self.connection.execute(
+            "UPDATE agent_turn
+                SET role_id = ?1
+              WHERE role_id = (SELECT id FROM dict_role WHERE value = 'user')
+                AND said LIKE 'Another Claude session sent a message:%'",
+            params![meta_id],
+        )?)
+    }
+
     fn session_name(&self, id: i64) -> Result<String> {
         Ok(self.connection.query_row(
             "SELECT value FROM dict_session WHERE id = ?1",
@@ -3714,7 +3737,6 @@ fn project_line(
     if record_type != "user" && record_type != "assistant" {
         return Ok(());
     }
-    let role = record_type;
     let Some(message) = object.get("message") else {
         return Ok(());
     };
@@ -3734,6 +3756,13 @@ fn project_line(
             }
         }
     };
+    // User records are `user` unless a sibling classifier in boop-harness
+    // (`classify_user_line`) would mark them meta: cross-session peer messages
+    // arrive `promptSource:"system"` or `isMeta:true`, and both are injections,
+    // not the reader's own typed turns. A user record whose content carries a
+    // `tool_result` block keeps the old `user` role, since those blocks write
+    // no row today. Assistant records are untouched.
+    let role = classify_user_role(record_type, object, &blocks);
     let mut first_turn: Option<u64> = None;
     for block in &blocks {
         let Some(block) = block.as_object() else {
@@ -3763,7 +3792,10 @@ fn project_line(
                     .unwrap_or("");
                 let input = block.get("input");
                 walk.turn += 1;
-                let inserted = store.add_turn(&sid, walk.turn, ts, "tool", "", cwd)?;
+                // The name goes into the row's `said`, one line, so a reader sizing
+                // the turn from its newline count keeps a tool at one estimated row, the
+                // same as the empty string did. The tool facts still carry the args.
+                let inserted = store.add_turn(&sid, walk.turn, ts, "tool", name, cwd)?;
                 walk.record(inserted);
                 first_turn.get_or_insert(walk.turn);
                 emit_tool_fact(store, &sid, walk.turn, ts, name, input)?;
@@ -3795,6 +3827,42 @@ fn project_line(
         }
     }
     Ok(())
+}
+
+/// The stored role for one user record, matching the sibling policy in
+/// `boop-harness::harness::claude::classify_user_line`: cross-session peer
+/// messages and slash-command bodies the CLI injected are `meta` rows, not the
+/// reader's own turns. A user record whose content carries a `tool_result`
+/// block keeps the old verbatim `user` role, because those blocks write no row
+/// today. An assistant record passes through unchanged.
+fn classify_user_role<'a>(
+    record_type: &'a str,
+    object: &'a serde_json::Map<String, serde_json::Value>,
+    blocks: &'a [serde_json::Value],
+) -> &'a str {
+    if record_type != "user" {
+        return record_type;
+    }
+    // A tool_result-bearing user record predates the injection flags; leave it
+    // the role the walker has always stored.
+    let has_tool_result = blocks
+        .iter()
+        .any(|block| block.get("type").and_then(serde_json::Value::as_str) == Some("tool_result"));
+    if has_tool_result {
+        return "user";
+    }
+    let system = object.get("promptSource").and_then(serde_json::Value::as_str) == Some("system");
+    let meta = object
+        .get("isMeta")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    if system || meta {
+        "meta"
+    } else {
+        // Includes "[Request interrupted by user]", which is the user acting, so
+        // it stays a user row on purpose, the same call `classify_user_line` makes.
+        "user"
+    }
 }
 
 /// Read `message.usage` off one assistant record. `None` for every record that
@@ -6209,6 +6277,7 @@ mod tests {
         assert_eq!(rows[0]["role"], "user");
         assert_eq!(rows[0]["said"], "hello");
         assert_eq!(rows[2]["role"], "tool");
+        assert_eq!(rows[2]["said"], "Bash");
 
         drop(store);
         let _ = std::fs::remove_file(&db_path);
@@ -7747,5 +7816,152 @@ mod tests {
         drop(store);
         let _ = std::fs::remove_file(&db_path);
         let _ = std::fs::remove_dir_all(&mail_dir);
+    }
+
+    /// The stored role of turn 1 for a transcript file ingested into a fresh
+    /// store. `db` distinguishes the store from a peer test's siblings, since
+    /// the temp paths are keyed only by process id and name.
+    fn stored_role(db: &str, path: &std::path::Path, line: &str) -> String {
+        let db_path = temp_path(db);
+        let _ = std::fs::remove_file(&db_path);
+        let store = Store::open(db_path.clone()).unwrap();
+        let mut file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(path)
+            .unwrap();
+        writeln!(file, "{line}").unwrap();
+        drop(file);
+        let session = session_for(path);
+        sync_session_with(&store, &session, None, 0, project_cursor).unwrap();
+        let filter = super::TurnQuery {
+            session: Some("ses-1".to_owned()),
+            ..Default::default()
+        };
+        let rows = store.query_turns(&filter).unwrap();
+        let role = rows[0]["role"].as_str().unwrap().to_owned();
+        drop(store);
+        let _ = std::fs::remove_file(&db_path);
+        role
+    }
+
+    /// A peer message injected by the CLI (origin.kind "peer", promptSource
+    /// "system") is a meta row, not the reader's own turn, matching the sibling
+    /// classifier in boop-harness `classify_user_line`.
+    #[test]
+    fn peer_message_ingests_as_meta() {
+        let path = temp_path("peer_role_peer.jsonl");
+        let role = stored_role(
+            "db_peer_ingest",
+            &path,
+            r#"{"type":"user","isMeta":true,"promptSource":"system","origin":{"kind":"peer","from":"unknown"},"message":{"content":"Another Claude session sent a message:\nhello"}}"#,
+        );
+        assert_eq!(role, "meta");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A slash-command body the CLI wrote (isMeta true) is a meta row.
+    #[test]
+    fn slash_command_body_ingests_as_meta() {
+        let path = temp_path("peer_role_slash.jsonl");
+        let role = stored_role(
+            "db_slash",
+            &path,
+            r#"{"type":"user","isMeta":true,"promptSource":"queued","message":{"content":"/compact"}}"#,
+        );
+        assert_eq!(role, "meta");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A plain typed line stays a user row.
+    #[test]
+    fn typed_line_ingests_as_user() {
+        let path = temp_path("peer_role_typed.jsonl");
+        let role = stored_role("db_typed", &path, r#"{"type":"user","message":"hello"}"#);
+        assert_eq!(role, "user");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// `[Request interrupted by user]` is the user acting, so it stays a user
+    /// row on purpose, the same call the sibling classifier makes.
+    #[test]
+    fn interrupted_line_ingests_as_user() {
+        let path = temp_path("peer_role_interrupt.jsonl");
+        let role = stored_role(
+            "db_interrupt",
+            &path,
+            r#"{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#,
+        );
+        assert_eq!(role, "user");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// An assistant record keeps its role (regression guard).
+    #[test]
+    fn assistant_line_ingests_as_assistant() {
+        let path = temp_path("peer_role_assistant.jsonl");
+        let role = stored_role(
+            "db_assistant",
+            &path,
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"said"}]}}"#,
+        );
+        assert_eq!(role, "assistant");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The one-time fixup maps an already-stored peer row from `user` to
+    /// `meta`, once, and a second open changes nothing.
+    #[test]
+    fn peer_fixup_flips_legacy_user_rows_once() {
+        let db_path = temp_path("peer_role_fixup");
+        let _ = std::fs::remove_file(&db_path);
+        // Build a legacy store: write the peer row as `user`, then rewind the
+        // version gate so the next open runs the v33 backfill step.
+        let store = Store::open(db_path.clone()).unwrap();
+        store
+            .write_turn(
+                "ses-fixup",
+                1,
+                0,
+                "user",
+                "Another Claude session sent a message:\nlegacy",
+                None,
+            )
+            .unwrap();
+        store
+            .connection()
+            .execute_batch("PRAGMA user_version = 32;")
+            .unwrap();
+        drop(store);
+        let session = "ses-fixup";
+
+        let store = Store::open(db_path.clone()).unwrap();
+        assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
+        let role: String = store
+            .connection()
+            .query_row(
+                "SELECT r.value FROM agent_turn t JOIN dict_role r ON r.id = t.role_id
+                 WHERE t.session_id = (SELECT id FROM dict_session WHERE value = ?1)",
+                params![session],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(role, "meta", "migration flips the legacy peer row");
+        drop(store);
+
+        let store = Store::open(db_path.clone()).unwrap();
+        let role: String = store
+            .connection()
+            .query_row(
+                "SELECT r.value FROM agent_turn t JOIN dict_role r ON r.id = t.role_id
+                 WHERE t.session_id = (SELECT id FROM dict_session WHERE value = ?1)",
+                params![session],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(role, "meta", "second open leaves the row alone");
+        drop(store);
+        let _ = std::fs::remove_file(&db_path);
     }
 }
