@@ -61,6 +61,7 @@ impl KtBindPlan {
         self.owners.values().any(|owner| owner == ty)
             || self.fields.keys().any(|(owner, _)| owner == ty)
     }
+
 }
 
 static PLAN_CACHE: LazyLock<Mutex<HashMap<ContentId, Arc<KtBindPlan>>>> =
@@ -576,8 +577,8 @@ fn class_param_head(node: Node, src: &[u8]) -> Option<(String, Option<String>)> 
     Some((name, written))
 }
 
-/// A written type's principal name: the dotted path's last simple_identifier,
-/// generic arguments stripped, `T?` unwrapped. A function type names nothing.
+/// A written type's principal name: the dotted path's last identifier, generic
+/// arguments stripped, `T?` unwrapped. A function type names nothing.
 fn written_ty(node: Node, src: &[u8]) -> Option<String> {
     match node.kind() {
         "type_identifier" => Some(kt_text(node, src).to_string()),
@@ -592,7 +593,7 @@ fn written_ty(node: Node, src: &[u8]) -> Option<String> {
             let mut cursor = node.walk();
             let mut last: Option<String> = None;
             for child in node.children(&mut cursor) {
-                if child.kind() == "simple_identifier" {
+                if matches!(child.kind(), "simple_identifier" | "type_identifier") {
                     last = Some(kt_text(child, src).to_string());
                 }
             }

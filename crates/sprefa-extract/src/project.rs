@@ -1719,7 +1719,7 @@ pub static RESOLVE_ARMS: &[ResolveArm] = &[
         name: "kotlin",
         call: Some(|out, cx| Resolve::<CallF>::resolve(&KotlinSource, out, cx)),
         types: Some(|out, cx| Resolve::<TypeF>::resolve(&KotlinSource, out, cx)),
-        drops: None,
+        drops: Some(crate::lang::kotlin::call_drops),
         type_plane: TypePlane::Nodes,
     },
     ResolveArm {
