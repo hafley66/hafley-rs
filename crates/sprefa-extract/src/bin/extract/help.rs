@@ -141,11 +141,13 @@ CROSS-FILE RESOLUTION: --resolve PATH...
   not emitted. One path is a legal universe and resolves that file's edges into
   itself. Pass files, never directories; expand a tree with a glob or find.
 
-  The stream carries phase-2 records only (resolved_edge, resolved_type_edge,
-  flow_edge), never the per-file phase-1 records `--schema` also lists (node,
-  edge, sig, site, specifier, unresolved and the rest). Those carry no path
-  field, so they cannot name their file in a multi-file stream; get them one
-  file at a time from a plain `extract FILE`.
+  The stdout stream carries phase-2 records only (resolved_edge,
+  resolved_type_edge, flow_edge), never the per-file phase-1 records
+  `--schema` also lists (node, edge, sig, site, specifier, unresolved and the
+  rest). Those carry no path field on stdout, so they cannot name their file
+  in a multi-file stream there; get them one file at a time from a plain
+  `extract FILE`, or add `--sqlite PATH`: the database keeps phase 1 and
+  phase 2 both, each phase-1 row naming its file in `path`.
 
   Add `--project-root DIR` plus `--scip-index FILE` (an index you already have)
   or `--scip-build` (build one first) to put a compiler index in the loop; the

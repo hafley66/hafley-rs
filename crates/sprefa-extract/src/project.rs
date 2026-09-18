@@ -285,7 +285,14 @@ pub fn resolve_project_with_raw<E>(
                 .expect("fresh project input has its file row"),
         })
         .map_err(ResolveWithRawError::RawSink)?;
-        crate::wire::flatten_each(input.output.as_ref(), None, &mut |fact| {
+        crate::wire::flatten_each(input.output.as_ref(), None, &mut |mut fact| {
+            // Stamp the phase-1 `path: None` left by `wire.rs` so it matches
+            // the phase-2 shape `call_drop_facts` already sets above.
+            if let FlatFact::Unresolved { path, .. } = &mut fact {
+                if path.is_none() {
+                    *path = Some(input.path.clone());
+                }
+            }
             push_raw(RawProjectFact {
                 path: &input.path,
                 content_id: &input.blob,
