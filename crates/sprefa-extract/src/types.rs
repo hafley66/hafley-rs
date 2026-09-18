@@ -3329,6 +3329,8 @@ pub enum FlatFact {
         callee_name: Option<String>,
         caller_site_start: u32,
         caller_site_end: u32,
+        callee_start: u32,
+        callee_end: u32,
         kind: String,
         /// Which resolver leg answered (`ResolutionOrigin::as_str`).
         resolution_origin: String,

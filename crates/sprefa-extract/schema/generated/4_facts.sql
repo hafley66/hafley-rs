@@ -427,6 +427,8 @@ CREATE TABLE IF NOT EXISTS "resolved_edge" (
     "callee_name" TEXT,
     "caller_site_start" INTEGER NOT NULL,
     "caller_site_end" INTEGER NOT NULL,
+    "callee_start" INTEGER NOT NULL,
+    "callee_end" INTEGER NOT NULL,
     "kind" TEXT NOT NULL,
     "resolution_origin" TEXT NOT NULL
 );

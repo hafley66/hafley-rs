@@ -1935,6 +1935,8 @@ fn call_facts(
                 callee_name: callee_name(targets, target, edge.dst_span),
                 caller_site_start: edge.call_site.map_or(0, |span| span.start),
                 caller_site_end: edge.call_site.map_or(0, |span| span.end()),
+                callee_start: edge.dst_span.start,
+                callee_end: edge.dst_span.end(),
                 kind: edge.kind.as_str().to_string(),
                 resolution_origin: edge.origin.as_str().to_string(),
             })

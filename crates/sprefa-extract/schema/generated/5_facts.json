@@ -3643,6 +3643,24 @@
         "nullable": false
       },
       {
+        "name": "callee_start",
+        "path": [
+          "callee_start"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "callee_end",
+        "path": [
+          "callee_end"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
         "name": "kind",
         "path": [
           "kind"
