@@ -18,6 +18,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use sprefa_extract::{ScipRust, ScipSource};
+
 const ANCHOR: &str = "src/util.rs";
 
 struct Fixture {
@@ -353,4 +355,259 @@ fn re_aim_path_deps(source: &Path, manifest: &Path) {
         out = out.replace(rel, &absolute.to_string_lossy());
     }
     std::fs::write(manifest, out).expect("write manifest");
+}
+
+// ── E.1 `#[path]` placement ─────────────────────────────────────────────────
+
+/// `#[path = "elsewhere/impl.rs"] mod util;` places the file at the module the
+/// attr names, not the layout guess: the decl, the `use`, and every path in
+/// `lib.rs` rename, and `src/other.rs`'s unrelated `Helper` stays.
+#[test]
+fn path_attr_places_the_file_and_renames_its_seats() {
+    let fixture = fixture("path", "commit");
+    rename_verb(&fixture, "src/elsewhere/impl.rs#Helper", "Tool", &["--commit"]);
+    let entries = diff_rq(&fixture.root, &tree("path", "after"));
+    assert!(
+        entries.is_empty(),
+        "committed tree differs from after/:\n{}",
+        entries.join("\n")
+    );
+}
+
+// ── E.2 field and variant seats ─────────────────────────────────────────────
+
+/// A field anchor renames through the receiver plane: the decl, `self.size` in
+/// an `impl` method, `h.size` typed off a param annotation, the struct-literal
+/// key, and the destructuring-pattern key (which respells shorthand, `size` ->
+/// `width: size`, so the local binding keeps its name). `Other.size` and the
+/// param typed `&Other` stay untouched, same field name, different owner.
+#[test]
+fn field_seats_rename_through_the_receiver_plane() {
+    let fixture = fixture("field", "commit");
+    let text = std::fs::read_to_string(tree("field", "before").join("src/util.rs"))
+        .expect("field fixture text");
+    let at = text.find("size").expect("size field in fixture").to_string();
+    rename_verb(
+        &fixture,
+        "src/util.rs#size",
+        "width",
+        &["--at", &at, "--commit"],
+    );
+    let entries = diff_rq(&fixture.root, &tree("field", "after"));
+    assert!(
+        entries.is_empty(),
+        "committed tree differs from after/:\n{}",
+        entries.join("\n")
+    );
+}
+
+/// `let v = make(); v.size` where `make` is declared in another file sits
+/// outside the one-hop same-file return-type rule, so the receiver types
+/// Unknown: a `Dynamic` stop, one seat, form `untyped field`, tree untouched.
+#[test]
+fn untyped_field_access_is_a_dynamic_stop() {
+    let fixture = fixture("field_stop", "stop");
+    let output = run_rename(
+        &fixture.root,
+        &fixture.state,
+        "src/util.rs#size",
+        "width",
+        &["--commit"],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    assert_eq!(output.status.code(), Some(6), "Dynamic exits 6:\n{stderr}");
+    assert!(
+        stderr.contains("untyped field"),
+        "the stop names the form:\n{stderr}"
+    );
+    let lines: Vec<&str> = stderr.lines().collect();
+    assert_eq!(lines.len(), 1, "one seat, one line:\n{stderr}");
+    let entries = diff_rq(&fixture.root, &tree("field_stop", "before"));
+    assert!(
+        entries.is_empty(),
+        "the stopped run edited the tree:\n{}",
+        entries.join("\n")
+    );
+}
+
+/// A variant anchor renames every path whose segments end `[Kind, Old]` once
+/// `Kind` resolves to the anchor's module: the bare path in `make()`, the match
+/// arm, the `use Kind::Old;` clause, and the bare `Old` it binds inside
+/// `via_use()`. `mod other`'s own `Kind::Old` is a different enum and stays.
+#[test]
+fn variant_seats_rename_through_owner_and_use() {
+    let fixture = fixture("variant", "commit");
+    rename_verb(&fixture, "src/lib.rs#Old", "Prior", &["--commit"]);
+    let entries = diff_rq(&fixture.root, &tree("variant", "after"));
+    assert!(
+        entries.is_empty(),
+        "committed tree differs from after/:\n{}",
+        entries.join("\n")
+    );
+}
+
+// ── E.3 serde and string spellings ──────────────────────────────────────────
+
+/// `#[serde(rename = "size")]` sits beside `struct Helper { size: u32 }`: the
+/// field rename touches the decl and `h.size`, and leaves the literal, the
+/// derive, and the `len` field it renames untouched, byte for byte.
+#[test]
+fn serde_field_seat_renames_and_leaves_the_literal() {
+    let fixture = fixture("serde", "commit");
+    rename_verb(&fixture, "src/util.rs#size", "width", &["--commit"]);
+    let entries = diff_rq(&fixture.root, &tree("serde", "after"));
+    assert!(
+        entries.is_empty(),
+        "committed tree differs from after/:\n{}",
+        entries.join("\n")
+    );
+}
+
+/// `--text-refs` reports the `#[serde(rename = "size")]` literal once: it is a
+/// string, never a symbol, so the rename NEVER touches it, and the report is
+/// the only place it surfaces.
+#[test]
+fn serde_literal_is_reported_as_a_text_ref() {
+    let fixture = fixture("serde", "textrefs");
+    let stdout = rename_verb(&fixture, "src/util.rs#size", "width", &["--text-refs"]);
+    let text = std::fs::read_to_string(tree("serde", "before").join("src/util.rs"))
+        .expect("serde fixture text");
+    let line = 1 + text
+        .lines()
+        .position(|line| line.contains("\"size\""))
+        .expect("serde rename literal in fixture");
+    let rows: Vec<String> = stdout
+        .lines()
+        .filter(|line| line.starts_with("text-ref "))
+        .map(str::to_string)
+        .collect();
+    assert_eq!(
+        rows,
+        vec![format!("text-ref src/util.rs:{line} \"size\" -> \"width\"")],
+        "exactly the one literal carrier:\n{stdout}"
+    );
+    let entries = diff_rq(&fixture.root, &tree("serde", "before"));
+    assert!(
+        entries.is_empty(),
+        "the report changed the tree:\n{}",
+        entries.join("\n")
+    );
+}
+
+// ── E.4 fn-body `use` ───────────────────────────────────────────────────────
+
+/// `use crate::util::Helper;` inside `fn a`'s body binds the name for that
+/// block only: the clause and `Helper::new()` inside `a` rename, while `fn b`'s
+/// module-scope `struct Helper;` and its own two spellings stay, a same-named
+/// item the fn-body `use` never shadows outside its block.
+#[test]
+fn fn_body_use_scopes_the_bare_name_to_its_block() {
+    let fixture = fixture("fnuse", "commit");
+    rename_verb(&fixture, "src/util.rs#Helper", "Tool", &["--commit"]);
+    let entries = diff_rq(&fixture.root, &tree("fnuse", "after"));
+    assert!(
+        entries.is_empty(),
+        "committed tree differs from after/:\n{}",
+        entries.join("\n")
+    );
+}
+
+// ── cargo check on every new after/ crate ───────────────────────────────────
+
+/// rustc judges each new fixture's committed tree: `#[path]` placement, field
+/// and variant receiver typing, the serde literal staying inert, and fn-body
+/// `use` scoping all still compile once the plan lands.
+#[test]
+fn new_fixture_crates_pass_cargo_check() {
+    let cases: [(&str, &str, &str); 5] = [
+        ("path", "src/elsewhere/impl.rs#Helper", "Tool"),
+        ("field", "src/util.rs#size", "width"),
+        ("variant", "src/lib.rs#Old", "Prior"),
+        ("serde", "src/util.rs#size", "width"),
+        ("fnuse", "src/util.rs#Helper", "Tool"),
+    ];
+    for (case, target, new) in cases {
+        let fixture = fixture(case, "check");
+        if case == "field" {
+            let text = std::fs::read_to_string(fixture.root.join("src/util.rs"))
+                .expect("field fixture text");
+            let at = text.find("size").expect("size field in fixture").to_string();
+            rename_verb(&fixture, target, new, &["--at", &at, "--commit"]);
+        } else {
+            rename_verb(&fixture, target, new, &["--commit"]);
+        }
+        let check = Command::new("cargo")
+            .args(["check", "--offline"])
+            .env("CARGO_TARGET_DIR", fixture.root.join("target"))
+            .current_dir(&fixture.root)
+            .output()
+            .expect("cargo runs");
+        assert!(
+            check.status.success(),
+            "cargo check on {case}/after: {}",
+            String::from_utf8_lossy(&check.stderr)
+        );
+    }
+}
+
+// ── --verify-scip, rust-analyzer as the E.2 oracle ──────────────────────────
+
+fn scip_rows(stdout: &str) -> Vec<String> {
+    stdout
+        .lines()
+        .filter(|line| line.starts_with("scip-verify "))
+        .map(str::to_string)
+        .collect()
+}
+
+/// rust-analyzer binds fields, so it is the oracle for the field fixture: the
+/// plan's decl/self/param/literal/pattern seats are exactly the index's
+/// occurrences of `Helper::size`. MEASURED 2026-09-18: 2.8 s on this fixture,
+/// under the 10 s cap, so no `#[ignore]`.
+#[test]
+fn scip_verify_agrees_on_the_field_fixture() {
+    let fixture = fixture("field", "scip");
+    let index = ScipRust.build(&fixture.root).expect("rust-analyzer scip index");
+    let text = std::fs::read_to_string(tree("field", "before").join("src/util.rs"))
+        .expect("field fixture text");
+    let at = text.find("size").expect("size field in fixture").to_string();
+    let stdout = rename_verb(
+        &fixture,
+        "src/util.rs#size",
+        "width",
+        &[
+            "--at",
+            &at,
+            "--verify-scip",
+            index.to_str().expect("index path is UTF-8"),
+        ],
+    );
+    assert_eq!(
+        scip_rows(&stdout),
+        vec!["scip-verify disagreements=0".to_string()],
+        "the index and the plan agree on this fixture:\n{stdout}"
+    );
+}
+
+/// rust-analyzer binds enum variants too: the oracle for the variant fixture,
+/// same claim. MEASURED 2026-09-18: 2.2 s on this fixture, under the 10 s cap,
+/// so no `#[ignore]`.
+#[test]
+fn scip_verify_agrees_on_the_variant_fixture() {
+    let fixture = fixture("variant", "scip");
+    let index = ScipRust.build(&fixture.root).expect("rust-analyzer scip index");
+    let stdout = rename_verb(
+        &fixture,
+        "src/lib.rs#Old",
+        "Prior",
+        &[
+            "--verify-scip",
+            index.to_str().expect("index path is UTF-8"),
+        ],
+    );
+    assert_eq!(
+        scip_rows(&stdout),
+        vec!["scip-verify disagreements=0".to_string()],
+        "the index and the plan agree on this fixture:\n{stdout}"
+    );
 }
