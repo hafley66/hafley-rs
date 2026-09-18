@@ -6,7 +6,7 @@ use tracing::info;
 
 use boop::harness::{Harness, NativeChildEvent, SessionRef};
 use boop::registry::Registry;
-use boop::{bus, ident, tmux};
+use boop::{bus, ident, proc, tmux};
 #[cfg(feature = "agent-read")]
 use boop::{query, usage};
 
@@ -1459,6 +1459,7 @@ pub(crate) fn run_status(window_minutes: u64, format: QueryFormat) -> Result<()>
     let dir = mail_dir(None)?;
     let routes = bus::read_routes(&dir).unwrap_or_default();
     let live = tmux::mux().live_sessions(None);
+    let snapshot = proc::SysinfoSnapshot::capture()?;
     for row in &mut rows {
         let session = row["session"].as_str().unwrap_or("").to_owned();
         let lane = routes.iter().find(|(_, route)| {
@@ -1468,7 +1469,7 @@ pub(crate) fn run_status(window_minutes: u64, format: QueryFormat) -> Result<()>
         let (lane_name, state) = match lane {
             Some((name, route)) => (
                 Some(name.clone()),
-                lane_state(&dir, name, &live, route, &routes),
+                lane_state(&dir, name, &live, route, &routes, &snapshot),
             ),
             None => (None, "unknown"),
         };
