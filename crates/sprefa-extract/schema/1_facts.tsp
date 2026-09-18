@@ -65,7 +65,9 @@ model ResolvedEdge {
   ...ExportRow; record: "resolved_edge"; fact?: uint32;
   caller_path: string; caller_name: string | null;
   callee_path: string; callee_name: string | null;
-  caller_site_start: uint32; caller_site_end: uint32; kind: string; resolution_origin: string;
+  caller_site_start: uint32; caller_site_end: uint32;
+  callee_start: uint32; callee_end: uint32;
+  kind: string; resolution_origin: string;
 }
 model ResolvedTypeEdge {
   ...ExportRow; record: "resolved_type_edge"; fact?: uint32;

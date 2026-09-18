@@ -24,6 +24,8 @@ fn edge(
         callee_name: callee_name.map(String::from),
         caller_site_start: 0,
         caller_site_end: 0,
+        callee_start: 0,
+        callee_end: 0,
         kind: "name_resolve".to_string(),
         resolution_origin: "corpus_unique".to_string(),
     }

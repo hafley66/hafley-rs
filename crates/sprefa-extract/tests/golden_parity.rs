@@ -27,8 +27,8 @@
 //!           type_edge legs are also v6-only (reported, never asserted). All
 //!           reported, not asserted.
 
-use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::{Arc, Mutex};
 
 use sprefa_extract::{
     build_def_index, byte_range_cached, containing_def_site, content_id_of, covering_def,
@@ -1026,6 +1026,21 @@ fn call_resolve_scip_ratchet_ts() {
         let content = reader(rel).unwrap();
         let Some(call) = &out.call else { continue };
         let edges = Resolve::<sprefa_extract::CallF>::resolve(&TsSource, out, &cx);
+        // The twin re-derives outcomes without origins; join each row back
+        // to the arm edge to meter by resolution origin.
+        let mut edge_origin: HashMap<_, &'static str> = HashMap::new();
+        for edge in edges.iter().filter(|edge| edge.kind != CallEdgeKind::ValueRef) {
+            edge_origin.insert(
+                (
+                    edge.src.0,
+                    edge.dst_span.start,
+                    edge.dst_span.end(),
+                    edge.kind.as_str(),
+                    edge.dst_blob.clone(),
+                ),
+                edge.origin.as_str(),
+            );
+        }
         let mut actual: Vec<(u32, u32, u32, &'static str, ContentId)> = edges
             .iter()
             // The ratchet grades SITE outcomes against scip occurrences; a
@@ -1050,7 +1065,9 @@ fn call_resolve_scip_ratchet_ts() {
             let line = line_of(&content, site.span.start);
             // scip's independent word on this site.
             let occ = site_occurrence(doc, &content, site.span, callee);
-            if occ.is_none() {
+            if occ.is_some() {
+                counts.join_hits += 1;
+            } else {
                 counts.missing_occurrence += 1;
                 lines.push(format!("MISSING-OCCURRENCE {rel}:{line} {callee}"));
             }
@@ -1083,8 +1100,11 @@ fn call_resolve_scip_ratchet_ts() {
                 };
                 Some((caller, dst, kind))
             });
+            let mut origin: Option<&'static str> = None;
             if let Some((caller, dst, kind)) = &twin {
                 let from = call.node(*caller).span;
+                let key = (caller.0, dst.1.start, dst.1.end(), kind.as_str(), dst.0.clone());
+                origin = edge_origin.get(&key).copied();
                 expected.push((
                     from.start,
                     dst.1.start,
@@ -1098,12 +1118,18 @@ fn call_resolve_scip_ratchet_ts() {
                 (Some((_, dst, CallEdgeKind::NameResolve)), Some(s)) => {
                     if !(dst.0 == s.0 && callee == s.2) {
                         counts.disagreements += 1;
+                        if let Some(o) = origin {
+                            counts.wrong_target(o);
+                        }
                         lines.push(format!(
                             "DISAGREE {rel}:{line} {callee}: v6 NameResolve -> ({:?}, {callee}), scip -> ({:?}, {})",
                             short(&dst.0), short(&s.0), s.2
                         ));
                     } else {
                         counts.name_resolve += 1;
+                        if let Some(o) = origin {
+                            counts.resolved(o);
+                        }
                     }
                 }
                 (Some((_, dst, CallEdgeKind::NameResolve)), None) => {
@@ -1124,6 +1150,9 @@ fn call_resolve_scip_ratchet_ts() {
                         "override with a matching name-match is no override at {rel}:{line} {callee}"
                     );
                     counts.scip_override += 1;
+                    if let Some(o) = origin {
+                        counts.resolved(o);
+                    }
                     lines.push(format!(
                         "OVERRIDE {rel}:{line} {callee}: name-match {} displaced; scip -> ({:?}, {})",
                         match name_t {
@@ -1151,6 +1180,7 @@ fn call_resolve_scip_ratchet_ts() {
                 (Some((_, _, CallEdgeKind::CheckerResolve)), _) => {}
                 (None, Some(s)) => {
                     counts.misses += 1;
+                    counts.unresolved();
                     lines.push(format!(
                         "MISS {rel}:{line} {callee}: scip resolves to corpus ({:?}, {}) but v6 emitted no edge",
                         short(&s.0), s.2
@@ -1182,6 +1212,15 @@ fn call_resolve_scip_ratchet_ts() {
         counts.external_no_edge, counts.missing_occurrence, counts.disagreements,
         counts.misses, counts.overbound
     );
+    eprintln!("lang\torigin\ttrue\twrong_target\tunresolved");
+    for (origin, (t, w, u)) in &counts.by_origin {
+        eprintln!("ts\t{origin}\t{t}\t{w}\t{u}");
+    }
+    assert!(
+        counts.join_hits > 0,
+        "ts: zero join coverage: not one site joined to a scip occurrence"
+    );
+    pin_ratchet_tsv("ts", &counts.by_origin);
     for line in &lines {
         eprintln!("  {line}");
     }
@@ -1338,6 +1377,21 @@ fn call_resolve_scip_ratchet_go() {
         let content = reader(rel).unwrap();
         let Some(call) = &out.call else { continue };
         let edges = Resolve::<sprefa_extract::CallF>::resolve(&GoSource, out, &cx);
+        // The twin re-derives outcomes without origins; join each row back
+        // to the arm edge to meter by resolution origin.
+        let mut edge_origin: HashMap<_, &'static str> = HashMap::new();
+        for edge in edges.iter().filter(|edge| edge.kind != CallEdgeKind::ValueRef) {
+            edge_origin.insert(
+                (
+                    edge.src.0,
+                    edge.dst_span.start,
+                    edge.dst_span.end(),
+                    edge.kind.as_str(),
+                    edge.dst_blob.clone(),
+                ),
+                edge.origin.as_str(),
+            );
+        }
         let mut actual: Vec<(u32, u32, u32, &'static str, ContentId)> = edges
             .iter()
             // The ratchet grades SITE outcomes against scip occurrences; a
@@ -1362,7 +1416,9 @@ fn call_resolve_scip_ratchet_go() {
             let line = line_of(&content, site.span.start);
             // scip's independent word on this site.
             let occ = site_occurrence(doc, &content, site.span, callee);
-            if occ.is_none() {
+            if occ.is_some() {
+                counts.join_hits += 1;
+            } else {
                 counts.missing_occurrence += 1;
                 lines.push(format!("MISSING-OCCURRENCE {rel}:{line} {callee}"));
             }
@@ -1395,8 +1451,11 @@ fn call_resolve_scip_ratchet_go() {
                 };
                 Some((caller, dst, kind))
             });
+            let mut origin: Option<&'static str> = None;
             if let Some((caller, dst, kind)) = &twin {
                 let from = call.node(*caller).span;
+                let key = (caller.0, dst.1.start, dst.1.end(), kind.as_str(), dst.0.clone());
+                origin = edge_origin.get(&key).copied();
                 expected.push((
                     from.start,
                     dst.1.start,
@@ -1410,12 +1469,18 @@ fn call_resolve_scip_ratchet_go() {
                 (Some((_, dst, CallEdgeKind::NameResolve)), Some(s)) => {
                     if !(dst.0 == s.0 && callee == s.2) {
                         counts.disagreements += 1;
+                        if let Some(o) = origin {
+                            counts.wrong_target(o);
+                        }
                         lines.push(format!(
                             "DISAGREE {rel}:{line} {callee}: v6 NameResolve -> ({:?}, {callee}), scip -> ({:?}, {})",
                             short(&dst.0), short(&s.0), s.2
                         ));
                     } else {
                         counts.name_resolve += 1;
+                        if let Some(o) = origin {
+                            counts.resolved(o);
+                        }
                     }
                 }
                 (Some((_, dst, CallEdgeKind::NameResolve)), None) => {
@@ -1436,6 +1501,9 @@ fn call_resolve_scip_ratchet_go() {
                         "override with a matching name-match is no override at {rel}:{line} {callee}"
                     );
                     counts.scip_override += 1;
+                    if let Some(o) = origin {
+                        counts.resolved(o);
+                    }
                     lines.push(format!(
                         "OVERRIDE {rel}:{line} {callee}: name-match {} displaced; scip -> ({:?}, {})",
                         match name_t {
@@ -1463,6 +1531,7 @@ fn call_resolve_scip_ratchet_go() {
                 (Some((_, _, CallEdgeKind::CheckerResolve)), _) => {}
                 (None, Some(s)) => {
                     counts.misses += 1;
+                    counts.unresolved();
                     lines.push(format!(
                         "MISS {rel}:{line} {callee}: scip resolves to corpus ({:?}, {}) but v6 emitted no edge",
                         short(&s.0), s.2
@@ -1494,6 +1563,15 @@ fn call_resolve_scip_ratchet_go() {
         counts.external_no_edge, counts.missing_occurrence, counts.disagreements,
         counts.misses, counts.overbound
     );
+    eprintln!("lang\torigin\ttrue\twrong_target\tunresolved");
+    for (origin, (t, w, u)) in &counts.by_origin {
+        eprintln!("go\t{origin}\t{t}\t{w}\t{u}");
+    }
+    assert!(
+        counts.join_hits > 0,
+        "go: zero join coverage: not one site joined to a scip occurrence"
+    );
+    pin_ratchet_tsv("go", &counts.by_origin);
     for line in &lines {
         eprintln!("  {line}");
     }
@@ -1638,6 +1716,21 @@ fn call_resolve_scip_ratchet_rust() {
         let content = reader(rel).unwrap();
         let Some(call) = &out.call else { continue };
         let edges = Resolve::<sprefa_extract::CallF>::resolve(&RustSource, out, &cx);
+        // The twin re-derives outcomes without origins; join each row back
+        // to the arm edge to meter by resolution origin.
+        let mut edge_origin: HashMap<_, &'static str> = HashMap::new();
+        for edge in edges.iter().filter(|edge| edge.kind != CallEdgeKind::ValueRef) {
+            edge_origin.insert(
+                (
+                    edge.src.0,
+                    edge.dst_span.start,
+                    edge.dst_span.end(),
+                    edge.kind.as_str(),
+                    edge.dst_blob.clone(),
+                ),
+                edge.origin.as_str(),
+            );
+        }
         let mut actual: Vec<(u32, u32, u32, &'static str, ContentId)> = edges
             .iter()
             // The ratchet grades SITE outcomes against scip occurrences; a
@@ -1663,7 +1756,9 @@ fn call_resolve_scip_ratchet_rust() {
             // scip's independent word on this site (the local guard is the
             // rust adaptation: a local binding is NOT a corpus call target).
             let occ = site_occurrence(doc, &content, site.span, callee);
-            if occ.is_none() {
+            if occ.is_some() {
+                counts.join_hits += 1;
+            } else {
                 counts.missing_occurrence += 1;
                 lines.push(format!("MISSING-OCCURRENCE {rel}:{line} {callee}"));
             }
@@ -1697,8 +1792,11 @@ fn call_resolve_scip_ratchet_rust() {
                 };
                 Some((caller, dst, kind))
             });
+            let mut origin: Option<&'static str> = None;
             if let Some((caller, dst, kind)) = &twin {
                 let from = call.node(*caller).span;
+                let key = (caller.0, dst.1.start, dst.1.end(), kind.as_str(), dst.0.clone());
+                origin = edge_origin.get(&key).copied();
                 expected.push((
                     from.start,
                     dst.1.start,
@@ -1712,12 +1810,18 @@ fn call_resolve_scip_ratchet_rust() {
                 (Some((_, dst, CallEdgeKind::NameResolve)), Some(s)) => {
                     if !(dst.0 == s.0 && callee == s.2) {
                         counts.disagreements += 1;
+                        if let Some(o) = origin {
+                            counts.wrong_target(o);
+                        }
                         lines.push(format!(
                             "DISAGREE {rel}:{line} {callee}: v6 NameResolve -> ({:?}, {callee}), scip -> ({:?}, {})",
                             short(&dst.0), short(&s.0), s.2
                         ));
                     } else {
                         counts.name_resolve += 1;
+                        if let Some(o) = origin {
+                            counts.resolved(o);
+                        }
                     }
                 }
                 (Some((_, dst, CallEdgeKind::NameResolve)), None) => {
@@ -1738,6 +1842,9 @@ fn call_resolve_scip_ratchet_rust() {
                         "override with a matching name-match is no override at {rel}:{line} {callee}"
                     );
                     counts.scip_override += 1;
+                    if let Some(o) = origin {
+                        counts.resolved(o);
+                    }
                     lines.push(format!(
                         "OVERRIDE {rel}:{line} {callee}: name-match {} displaced; scip -> ({:?}, {})",
                         match name_t {
@@ -1765,6 +1872,7 @@ fn call_resolve_scip_ratchet_rust() {
                 (Some((_, _, CallEdgeKind::CheckerResolve)), _) => {}
                 (None, Some(s)) => {
                     counts.misses += 1;
+                    counts.unresolved();
                     lines.push(format!(
                         "MISS {rel}:{line} {callee}: scip resolves to corpus ({:?}, {}) but v6 emitted no edge",
                         short(&s.0), s.2
@@ -1796,6 +1904,15 @@ fn call_resolve_scip_ratchet_rust() {
         counts.external_no_edge, counts.missing_occurrence, counts.disagreements,
         counts.misses, counts.overbound
     );
+    eprintln!("lang\torigin\ttrue\twrong_target\tunresolved");
+    for (origin, (t, w, u)) in &counts.by_origin {
+        eprintln!("rust\t{origin}\t{t}\t{w}\t{u}");
+    }
+    assert!(
+        counts.join_hits > 0,
+        "rust: zero join coverage: not one site joined to a scip occurrence"
+    );
+    pin_ratchet_tsv("rust", &counts.by_origin);
     for line in &lines {
         eprintln!("  {line}");
     }
@@ -1834,6 +1951,80 @@ struct RatchetCounts {
     disagreements: usize,
     misses: usize,
     overbound: usize,
+    /// Per resolution_origin: (true, wrong_target, unresolved).
+    by_origin: BTreeMap<String, (usize, usize, usize)>,
+    /// Sites whose join to the scip index found an occurrence.
+    join_hits: usize,
+}
+
+impl RatchetCounts {
+    /// The fast edge target equals scip's `definition_of` target.
+    fn resolved(&mut self, origin: &str) {
+        self.by_origin.entry(origin.to_string()).or_default().0 += 1;
+    }
+    /// The fast edge exists and disagrees with scip's corpus target.
+    fn wrong_target(&mut self, origin: &str) {
+        self.by_origin.entry(origin.to_string()).or_default().1 += 1;
+    }
+    /// Unresolved sites emit no edge, so they carry no origin.
+    fn unresolved(&mut self) {
+        self.by_origin.entry("none".to_string()).or_default().2 += 1;
+    }
+}
+
+/// Pin one ratchet's origin histogram in tests/RATCHET.tsv: `true` a floor,
+/// `wrong_target` a ceiling; `RATCHET_BUMP=1` moves each one way only.
+fn pin_ratchet_tsv(lang: &str, by_origin: &BTreeMap<String, (usize, usize, usize)>) {
+    static TSV_LOCK: Mutex<()> = Mutex::new(());
+    let _guard = TSV_LOCK.lock().expect("RATCHET.tsv lock");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/RATCHET.tsv");
+    let parse = |text: &str| {
+        text.lines()
+            .skip(1)
+            .filter(|line| !line.is_empty())
+            .map(|line| {
+                let f: Vec<&str> = line.split('\t').collect();
+                assert_eq!(f.len(), 5, "RATCHET.tsv row needs 5 columns: {line}");
+                let cell = |i: usize| f[i].parse::<usize>().expect("RATCHET.tsv cell");
+                (f[0].to_string(), f[1].to_string(), cell(2), cell(3), cell(4))
+            })
+            .collect::<Vec<_>>()
+    };
+    if matches!(std::env::var("RATCHET_BUMP").as_deref(), Ok("1")) {
+        let mut rows = parse(&std::fs::read_to_string(&path).unwrap_or_default());
+        for (origin, (t, w, u)) in by_origin {
+            match rows.iter().position(|r| r.0 == lang && r.1 == *origin) {
+                Some(i) => {
+                    rows[i].2 = rows[i].2.max(*t);
+                    rows[i].3 = rows[i].3.min(*w);
+                }
+                None => rows.push((lang.to_string(), origin.clone(), *t, *w, *u)),
+            }
+        }
+        rows.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+        let mut out = String::from("lang\torigin\ttrue\twrong_target\tunresolved\n");
+        for (lang, origin, t, w, u) in &rows {
+            out.push_str(&format!("{lang}\t{origin}\t{t}\t{w}\t{u}\n"));
+        }
+        std::fs::write(&path, out).expect("write RATCHET.tsv");
+    } else {
+        let rows = parse(&std::fs::read_to_string(&path).unwrap_or_default());
+        for (origin, (t, w, _u)) in by_origin {
+            let Some(row) = rows.iter().find(|r| r.0 == lang && r.1 == *origin) else {
+                panic!("unpinned histogram row ({lang}, {origin}): run once with RATCHET_BUMP=1");
+            };
+            assert!(
+                *t >= row.2,
+                "{lang}/{origin}: true {t} below the pinned floor {}",
+                row.2
+            );
+            assert!(
+                *w <= row.3,
+                "{lang}/{origin}: wrong_target {w} above the pinned ceiling {}",
+                row.3
+            );
+        }
+    }
 }
 
 /// A short diagnostic label for a blob in divergence listings, never compared

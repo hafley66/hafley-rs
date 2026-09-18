@@ -589,6 +589,8 @@ pub mod models {
         pub callee_name: Option<String>,
         pub caller_site_start: u32,
         pub caller_site_end: u32,
+        pub callee_start: u32,
+        pub callee_end: u32,
         pub kind: String,
         pub resolution_origin: String,
     }
@@ -1566,7 +1568,7 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     let flow_edge_capacity = if flow_edge.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"flow_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"kind\", \"from_blob\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let resolved_edge_capacity = if resolved_edge.is_empty() { 1 } else { statement_capacity(conn, 13, "INSERT INTO \"resolved_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let resolved_edge_capacity = if resolved_edge.is_empty() { 1 } else { statement_capacity(conn, 15, "INSERT INTO \"resolved_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"callee_start\", \"callee_end\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let resolved_type_edge_capacity = if resolved_type_edge.is_empty() { 1 } else { statement_capacity(conn, 13, "INSERT INTO \"resolved_type_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"owner_path\", \"owner_name\", \"owner_start\", \"owner_end\", \"target_path\", \"target_name\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -1979,7 +1981,7 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     }
 
     for chunk in resolved_edge.chunks(resolved_edge_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"resolved_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"resolved_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"callee_start\", \"callee_end\", \"kind\", \"resolution_origin\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -3320,6 +3322,10 @@ impl models::ResolvedEdge {
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.caller_site_end)?;
         parameter += 1;
+        statement.raw_bind_parameter(parameter, self.callee_start)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.callee_end)?;
+        parameter += 1;
         statement.raw_bind_parameter(parameter, self.kind.as_str())?;
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.resolution_origin.as_str())?;
@@ -3327,7 +3333,7 @@ impl models::ResolvedEdge {
         Ok(parameter)
     }
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"resolved_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"kind\", \"resolution_origin\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        let mut statement = conn.prepare_cached("INSERT INTO \"resolved_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"callee_start\", \"callee_end\", \"kind\", \"resolution_origin\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
