@@ -663,6 +663,9 @@ pub enum ReceiverOutcome {
     Inferred,
     /// Two conflicting type declarations bind the same name in this scope.
     Ambiguous,
+    /// The callee name is a scope-bound local at this site; no name-match leg
+    /// answers.
+    Shadowed,
 }
 
 /// A Prolog term-occurrence reference: a compound constructed or destructured in
@@ -853,7 +856,8 @@ pub struct CallFAux {
     /// consumer can subtract the name and still keep every shipped call.
     pub test_only_calls: Vec<TestOnlyCall>,
     /// One row per call site whose receiver type this file could trace, joined
-    /// to `CallSite.span`. Go populates it; other languages leave it empty.
+    /// to `CallSite.span`. The go and rust arms populate it; other languages
+    /// leave it empty.
     pub receivers: Vec<ReceiverBinding>,
     /// One row per macro invocation that minted a def/site elsewhere in this
     /// bundle, joined by span to whatever phase-1 arm found the expansion.

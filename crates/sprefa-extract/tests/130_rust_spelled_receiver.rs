@@ -109,3 +109,32 @@ fn trait_bound_generic_receiver_binds() {
         "{rows:?}"
     );
 }
+
+fn drops(names: &[&str]) -> Vec<(String, String)> {
+    let mut rows: Vec<(String, String)> = run(names)
+        .iter()
+        .filter(|row| row["record"] == "unresolved" && row["family"] == "call")
+        .map(|row| (text(row, "detail"), text(row, "reason")))
+        .collect();
+    rows.sort();
+    rows
+}
+
+#[test]
+fn shadowed_call_does_not_bind_free_fn() {
+    // C.6: `fn run(project: impl Fn()) { project() }`; `project` is a scope
+    // param, so the call names the local, never the free `fn project` in
+    // free.rs. Zero edges to free.rs, drop reason `inferred`.
+    let rows = edges(&["shadow.rs", "free.rs"]);
+    assert!(
+        !rows.iter().any(|(_, callee, file, _)| callee == "project" && file == "free"),
+        "{rows:?}"
+    );
+    let drops = drops(&["shadow.rs", "free.rs"]);
+    assert!(
+        drops
+            .iter()
+            .any(|(detail, reason)| detail == "project" && reason == "inferred"),
+        "{drops:?}"
+    );
+}

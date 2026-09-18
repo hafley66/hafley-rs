@@ -264,6 +264,39 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for ReceiverWalk<'a> {
         syn::visit::visit_expr_method_call(self, call);
     }
 
+    /// A closure scopes its own params: a closure param named X shadows X
+    /// inside the body, and the enclosing def's scope resumes on the way out.
+    fn visit_expr_closure(&mut self, closure: &'ast syn::ExprClosure) {
+        self.scopes.push(Default::default());
+        for input in &closure.inputs {
+            if let syn::Pat::Ident(pat) = input {
+                self.insert(pat.ident.to_string(), TypeBinding::Unknown);
+            }
+        }
+        syn::visit::visit_expr_closure(self, closure);
+        self.scopes.pop();
+    }
+
+    /// A plain `X()` whose X is scope-bound names the local, never a corpus
+    /// fn: the Shadowed row makes every name-match leg decline the site.
+    fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+        let syn::Expr::Path(path) = call.func.as_ref() else {
+            syn::visit::visit_expr_call(self, call);
+            return;
+        };
+        if path.path.segments.len() == 1 {
+            let ident = path.path.segments[0].ident.to_string();
+            if ident != "self" && self.lookup(&ident).is_some() {
+                let span = syn_span(self.line_starts, path.span());
+                self.out.push(ReceiverBinding {
+                    call_site: span,
+                    outcome: ReceiverOutcome::Shadowed,
+                });
+            }
+        }
+        syn::visit::visit_expr_call(self, call);
+    }
+
 }
 
 impl<'a> ReceiverWalk<'a> {

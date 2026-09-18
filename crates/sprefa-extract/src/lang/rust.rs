@@ -1089,9 +1089,14 @@ impl Resolve<CallF> for RustSource {
                     })
                     .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve))
             });
-            // The receiver's type was SEEN in scope (even if no impl binds).
+            // The receiver was SEEN in scope (typed, or a plain call to a
+            // scope-bound name): even unbound, the name-match legs never run.
             let recv_known = call.aux.receivers.iter().any(|r| {
-                r.call_site == site.span && matches!(r.outcome, ReceiverOutcome::Named(_))
+                r.call_site == site.span
+                    && matches!(
+                        r.outcome,
+                        ReceiverOutcome::Named(_) | ReceiverOutcome::Shadowed
+                    )
             });
             // The associated leg: `T::f()` / `a::T::f()` names T's impl block;
             // `Self::f()` names the enclosing impl's self type via the file's
@@ -1377,7 +1382,9 @@ pub fn call_drops(
         .aux
         .receivers
         .iter()
-        .filter(|r| matches!(r.outcome, ReceiverOutcome::Inferred))
+        .filter(|r| {
+            matches!(r.outcome, ReceiverOutcome::Inferred | ReceiverOutcome::Shadowed)
+        })
         .map(|r| (r.call_site.start, r.call_site.end()))
         .collect();
     call.aux
