@@ -256,8 +256,8 @@ ts-checker = []
 go-checker = []
 
 [[bin]]
-name = "extract"
-path = "src/bin/extract.rs"
+name = "ryi"
+path = "src/bin/ryi.rs"
 required-features = ["cli"]
 
 # @comment-ok: build-vs-buy candidate table, the law this file's every dep

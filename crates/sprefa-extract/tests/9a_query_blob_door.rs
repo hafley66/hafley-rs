@@ -1,7 +1,7 @@
 use std::process::Command;
 
 fn run_in(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_extract"))
+    Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(dir)
         .args(args)
         .output()

@@ -85,7 +85,7 @@ fn the_callee_stays_the_trailing_name() {
 /// `(caller_name, callee_name, callee_path)` per resolved edge of one
 /// `--resolve` run over `paths`.
 fn resolved_edges(paths: &[String]) -> Vec<(String, String, String)> {
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .args(paths)
         .output()
@@ -276,7 +276,7 @@ fn qualified_module(dir: &std::path::Path, n: usize) -> Vec<String> {
 
 fn resolve_wall(paths: &[String]) -> f64 {
     let start = Instant::now();
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .args(paths)
         .output()

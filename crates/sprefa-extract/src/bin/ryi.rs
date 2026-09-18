@@ -34,10 +34,10 @@ use sprefa_extract::{
     ResolveRequest, ScipFamilyRequest, ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
 };
 
-#[path = "extract/help.rs"]
+#[path = "ryi/help.rs"]
 mod help;
 
-#[path = "extract/0_sqlite.rs"]
+#[path = "ryi/0_sqlite.rs"]
 mod sqlite;
 
 use help::{

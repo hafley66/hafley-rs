@@ -12,7 +12,7 @@ const USE: &str = "tests/fixtures/kotlin/corpus_3_ops_use.kt";
 const NOT_IN: &str = "tests/fixtures/kotlin/corpus_4_not_in.kt";
 
 fn run(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(args)
         .output()
         .expect("extract binary runs");

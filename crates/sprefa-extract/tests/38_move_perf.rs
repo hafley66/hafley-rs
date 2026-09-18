@@ -14,7 +14,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const BIN: &str = env!("CARGO_BIN_EXE_extract");
+const BIN: &str = env!("CARGO_BIN_EXE_ryi");
 
 /// Six prolog files, three gates. `a.pl` names the moved file, `b.pl` and
 /// `d.pl` carry a directive naming something else, `e.pl` carries the moved

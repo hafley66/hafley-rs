@@ -39,7 +39,7 @@ fn walk(dir: &str) -> Vec<String> {
 /// `(caller_name, callee_name, callee_path, kind)` per resolved edge of one
 /// `--resolve` run over `paths`.
 fn resolved_edges(paths: &[String]) -> Vec<(String, String, String, String)> {
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .args(paths)
         .output()
@@ -68,7 +68,7 @@ fn resolved_edges(paths: &[String]) -> Vec<(String, String, String, String)> {
 
 /// `(path, reason, detail)` per `unresolved` row of one `--resolve` run.
 fn unresolved_rows(paths: &[String]) -> Vec<(String, String, String)> {
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .args(paths)
         .output()
@@ -270,7 +270,7 @@ fn generated_callers(dir: &std::path::Path, n: usize) -> Vec<String> {
 
 fn resolve_wall(paths: &[String]) -> f64 {
     let start = Instant::now();
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .args(paths)
         .output()

@@ -21,7 +21,7 @@ const CALLEE: &str = "tests/fixtures/resolve/1_callee.ts";
 const CALL_GOLDEN: &str = include_str!("fixtures/resolve/2_resolved_edges.jsonl");
 
 fn run(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(args)
         .output()
         .expect("extract binary runs");
@@ -71,7 +71,7 @@ fn call_and_flow_arms_emit_both_families() {
 
 #[test]
 fn unknown_arm_names_flow_in_its_error() {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(["--resolve", "--family", "bogus", CALLER])
         .output()
         .expect("extract binary runs");
@@ -98,11 +98,11 @@ fn bench_runs_the_cfg_pass_when_the_family_names_it() {
     // The per-file bench numbers are a `tracing` event, so the assert reads the
     // JSON door rather than a stderr line whose shape nothing pinned.
     let bench = |args: &[&str]| -> serde_json::Value {
-        let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+        let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
             .args(args)
-            // The bench event's target is the BIN crate, `extract`, never the
+            // The bench event's target is the BIN crate, `ryi`, never the
             // library's `sprefa_extract`.
-            .env("RUST_LOG", "extract=info")
+            .env("RUST_LOG", "ryi=info")
             .env("HAFLEY_LOG_FORMAT", "json")
             .env("DL_TRAIL", "0")
             .output()

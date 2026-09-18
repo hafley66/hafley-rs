@@ -25,7 +25,7 @@ fn scip_facts_takes_a_root_directory() {
     let index = root.join("index.scip");
     std::fs::write(&index, b"not a real index").unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args([
             "--scip-facts",
             "--project-root",
@@ -53,7 +53,7 @@ fn scip_deps_takes_a_root_directory() {
     let index = root.join("index.scip");
     std::fs::write(&index, b"not a real index").unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args([
             "--scip-deps",
             "--project-root",
@@ -74,7 +74,7 @@ fn scip_deps_takes_a_root_directory() {
 #[test]
 fn resolve_on_a_directory_still_exits_2() {
     let root = temp_root("resolve-dir");
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(["--resolve", root.to_str().unwrap()])
         .output()
         .expect("extract binary runs");
@@ -98,7 +98,7 @@ fn broken_pipe_exits_0_silently() {
 
     // This asserts stderr is silent on EPIPE, so it opts out of the
     // sprefa_extract=info default (src/trace.rs:580).
-    let mut child = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg(file.to_str().unwrap())
         .env("RUST_LOG", "off")
         .stdout(std::process::Stdio::piped())
@@ -150,7 +150,7 @@ fn scip_timeout_caps_the_family_scip_build() {
     let bin = fake_sleeper(&root);
     let cache = root.join("cache");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", fake_path(&bin))
         .args([
             "--family",
@@ -178,7 +178,7 @@ fn scip_timeout_caps_the_scip_build_flag() {
     let bin = fake_sleeper(&root);
     let file = root.join("main.go");
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", fake_path(&bin))
         .args([
             "--scip-facts",
@@ -268,7 +268,7 @@ fn run_failed_rust_indexer(
         std::fs::set_permissions(&indexer, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_extract"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
     command
         .env("PATH", fake_path(&indexer))
         .env("HAFLEY_LOG_FORMAT", log_format)
@@ -321,7 +321,7 @@ fn failed_indexer_retains_bounded_root_cause_tail_status_and_telemetry() {
     }
 
     let cache = root.join("cache");
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", fake_path(&indexer))
         .env_remove("RUST_LOG")
         .env("HAFLEY_LOG_FORMAT", "json")

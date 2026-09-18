@@ -39,7 +39,7 @@ fn resolve_wall(bin: &str, args: &[String]) -> f64 {
 fn resolve_wall_grows_linearly_with_file_count() {
     let dir = std::env::temp_dir().join("sprefa-extract-46-resolve");
     std::fs::create_dir_all(&dir).unwrap();
-    let bin = env!("CARGO_BIN_EXE_extract");
+    let bin = env!("CARGO_BIN_EXE_ryi");
 
     let args200 = module_files(&dir, 200);
     let args400 = module_files(&dir, 400);

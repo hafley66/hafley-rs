@@ -36,7 +36,7 @@ fn run(families: &str) -> Vec<Value> {
             .iter()
             .map(|name| format!("tests/fixtures/go_modules/{name}")),
     );
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(&args)
         .output()
@@ -276,7 +276,7 @@ fn import_count_matches_the_fixtures_written_bindings() {
 /// twin-package fixtures get their own file list, so `FILES` stays the
 /// two-module workspace set the other tests pin).
 fn run_paths(paths: &[String]) -> Vec<Value> {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .arg("--resolve")
         .args(paths)
@@ -512,7 +512,7 @@ fn qualified_corpus(dir: &Path, n: usize) -> Vec<String> {
 
 fn resolve_wall(paths: &[String]) -> f64 {
     let start = Instant::now();
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .arg("--family")
         .arg("call")

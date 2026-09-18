@@ -101,7 +101,7 @@ const LIB_ROWS: &[(&str, usize)] = &[
 ];
 
 fn extract(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(args)
         .output()
@@ -358,7 +358,7 @@ fn probe(witness: bool) -> Probe {
         args.insert(0, "--witness");
     }
     args.push("src/trace.rs");
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         // A bare `info` turns on rust-analyzer's own span close events, whose
         // formatting cost lands inside the very phase this reads.

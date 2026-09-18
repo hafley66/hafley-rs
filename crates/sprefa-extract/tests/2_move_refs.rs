@@ -96,7 +96,7 @@ fn write_list(fixture: &Fixture) -> PathBuf {
 }
 
 fn run_move(fixture: &Fixture, extra: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_extract"))
+    Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("move")
         .arg("--list")
         .arg(write_list(fixture))

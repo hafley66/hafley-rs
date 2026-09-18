@@ -20,7 +20,7 @@ const TYPE_A: &str = "tests/fixtures/ts/sample.ts";
 const TYPE_B: &str = "tests/fixtures/ts/consts.ts";
 
 fn extract(args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_extract"))
+    Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(args)
         .output()

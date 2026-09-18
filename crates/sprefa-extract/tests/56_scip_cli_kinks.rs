@@ -32,7 +32,7 @@ fn scip_build_honors_scip_timeout_on_the_go_arm() {
     }
 
     let started = Instant::now();
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", format!("{}:/bin:/usr/bin", bin_dir.display()))
         .env_remove("SPREFA_SCIP_TIMEOUT_SECS")
         .args([

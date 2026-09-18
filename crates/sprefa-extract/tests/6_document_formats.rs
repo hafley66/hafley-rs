@@ -48,7 +48,7 @@ fn document_format_coverage_is_what_the_cli_claims() {
         let path = dir.join(format!("sample.{extension}"));
         std::fs::write(&path, body(extension)).unwrap();
 
-        let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+        let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
             .arg(&path)
             .output()
             .expect("extract binary runs");
@@ -84,7 +84,7 @@ fn document_format_coverage_is_what_the_cli_claims() {
 /// covered. A caller reads `--help`, not this file.
 #[test]
 fn the_cli_help_names_the_fallback_formats() {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--help")
         .output()
         .expect("extract binary runs");

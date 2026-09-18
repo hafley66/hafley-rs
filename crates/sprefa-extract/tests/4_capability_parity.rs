@@ -49,7 +49,7 @@ use std::process::Command;
 
 use sprefa_extract::{dispatch, flatten_jsonl, sources, FamilyMask};
 
-const BIN: &str = env!("CARGO_BIN_EXE_extract");
+const BIN: &str = env!("CARGO_BIN_EXE_ryi");
 
 // ════════════════════════════════════════════════════════════════════════════
 // LEG 1: the roster. Runtime-enumerated, so a new language cannot skip it.

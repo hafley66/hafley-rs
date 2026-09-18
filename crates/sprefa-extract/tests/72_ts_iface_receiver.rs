@@ -24,7 +24,7 @@ const DIR: &str = "tests/fixtures/ts5_findings/iface_receiver";
 fn resolved_edges() -> Vec<(String, String, String)> {
     let root = env!("CARGO_MANIFEST_DIR");
     let files = ["api.ts", "impls.ts", "use.ts"];
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .args(files.map(|file| format!("{root}/{DIR}/{file}")))
         .output()

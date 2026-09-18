@@ -52,7 +52,7 @@ fn run() -> Vec<Value> {
         tpl.replace("{CRATE_A}", CRATE_A)
             .replace("{CRATE_B}", CRATE_B)
     }));
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(&args)
         .output()

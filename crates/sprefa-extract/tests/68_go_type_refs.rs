@@ -35,7 +35,7 @@ fn type_edges() -> Vec<(String, String, String, String)> {
             .iter()
             .map(|name| format!("tests/fixtures/go_type_refs/{name}")),
     );
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(&args)
         .output()

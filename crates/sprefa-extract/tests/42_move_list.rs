@@ -74,7 +74,7 @@ fn write_list(fixture: &Fixture, body: &str) -> PathBuf {
 }
 
 fn move_list(fixture: &Fixture, list: &Path, extra: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_extract"))
+    Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("move")
         .arg("--list")
         .arg(list)
@@ -257,7 +257,7 @@ fn a_row_with_no_tab_ends_the_run_instead_of_being_skipped() {
 fn the_list_and_the_positional_form_are_exclusive() {
     let fixture = three_move_fixture("both");
     let list = write_list(&fixture, THREE_MOVES);
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("move")
         .arg(fixture.root.join("src/a.ts"))
         .arg(fixture.root.join("lib/a.ts"))

@@ -85,7 +85,7 @@ fn run_rename(
     new: &str,
     extra: &[&str],
 ) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_extract"))
+    Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("rename")
         .arg(target)
         .arg(new)
@@ -252,7 +252,7 @@ fn list_commit_is_atomic_across_rows() {
         "src/lib.rs\tground\t_1b_ground\nsrc/twins.rs\tWyll\tVyle\n",
     )
     .expect("write rename list");
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(["rename", "--list"])
         .arg(&list)
         .arg("--root")

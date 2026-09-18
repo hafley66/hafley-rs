@@ -122,7 +122,7 @@ fn own_blob_probes_stay_linear_in_the_file_count() {
 #[test]
 fn rust_resolve_wall_grows_linearly_with_file_count() {
     let dir = corpus_dir("wall");
-    let bin = env!("CARGO_BIN_EXE_extract");
+    let bin = env!("CARGO_BIN_EXE_ryi");
     let paths200 = corpus_files(&dir, 200);
     let paths400 = corpus_files(&dir, 400);
 
@@ -159,7 +159,7 @@ fn a_generated_node_file_resolves_under_the_ten_second_law() {
     let mut paths = corpus_files(&dir, MODULE_FILES);
     paths.push(dir.join("nodes.rs"));
 
-    let wall = resolve_wall(env!("CARGO_BIN_EXE_extract"), &paths);
+    let wall = resolve_wall(env!("CARGO_BIN_EXE_ryi"), &paths);
     assert!(
         wall < 10.0,
         "{wall:.3}s over {} files is a per-site rescan, not a resolve",
@@ -172,7 +172,7 @@ fn a_generated_node_file_resolves_under_the_ten_second_law() {
 /// file-identity join and taking the first corpus `helper`.
 #[test]
 fn same_file_helper_still_wins_after_the_hoist() {
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args([
             "--resolve",
             "tests/fixtures/rust_scopes/corpus_scope_a.rs",

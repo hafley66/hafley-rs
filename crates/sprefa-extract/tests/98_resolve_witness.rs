@@ -17,7 +17,7 @@ const TSI_DIR: &str = "tests/fixtures/tsi";
 
 /// One `extract` run from the crate root, stdout as raw lines.
 fn lines(args: &[&str], typescript: Option<String>) -> Vec<String> {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_extract"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
     command.current_dir(env!("CARGO_MANIFEST_DIR")).args(args);
     if let Some(path) = typescript {
         command.env("SPREFA_TS_CHECKER_TYPESCRIPT", path);

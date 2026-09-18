@@ -14,7 +14,7 @@ const DIRECTIVE: &str = "tests/fixtures/prolog/corpus_3_meta_directive.pl";
 const SPECS: &str = "tests/fixtures/prolog/corpus_4_meta_specs.pl";
 
 fn raw(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_extract"))
+    Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(args)
         .output()
         .expect("extract binary runs")

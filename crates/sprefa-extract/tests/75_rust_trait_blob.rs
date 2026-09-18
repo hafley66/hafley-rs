@@ -25,7 +25,7 @@ fn run() -> Vec<Value> {
         "call".to_string(),
     ];
     args.extend(FILES.iter().map(|tpl| tpl.replace("{SRC}", SRC)));
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(&args)
         .output()

@@ -31,7 +31,7 @@ use sprefa_extract::{resolve_specifier, Policy, TsconfigPaths};
 const DEPS_ROOT: &str = "tests/fixtures/deps";
 
 fn run(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(args)
         .output()
         .expect("extract binary runs");
@@ -273,7 +273,7 @@ fn the_tsconfig_reader_degrades_to_empty_never_to_wrong() {
 /// guessing one would silently reshape every path in the output.
 #[test]
 fn diet_deps_without_a_project_root_is_a_named_error() {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(["--deps", &format!("{DEPS_ROOT}/app.ts")])
         .output()
         .expect("extract binary runs");

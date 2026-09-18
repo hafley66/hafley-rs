@@ -14,7 +14,7 @@ const DIR: &str = "tests/fixtures/ts_binding_legs";
 
 fn resolve_files(names: &[&str]) -> String {
     let root = env!("CARGO_MANIFEST_DIR");
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .args(names.iter().map(|name| format!("{root}/{DIR}/{name}")))
         .output()

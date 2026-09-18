@@ -1,7 +1,7 @@
 #![cfg(feature = "cli")]
 #![allow(dead_code)]
 
-#[path = "../src/bin/extract/0_sqlite.rs"]
+#[path = "../src/bin/ryi/0_sqlite.rs"]
 mod sqlite;
 
 use rusqlite::{types::Value as SqlValue, Connection};
@@ -12,7 +12,7 @@ use std::path::Path;
 use std::process::Command;
 
 fn run(args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_extract"))
+    Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(args)
         .env("DL_TRAIL", "0")
         .env("DL_TRACE", "0")

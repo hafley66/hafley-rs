@@ -23,7 +23,7 @@ fn run(names: &[&str]) -> Vec<Value> {
         "call".to_string(),
     ];
     args.extend(names.iter().map(|name| format!("{SRC}/{name}")));
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(&args)
         .output()
@@ -74,7 +74,7 @@ fn type_edges(names: &[&str]) -> Vec<(String, String, String)> {
         "type".to_string(),
     ];
     args.extend(names.iter().map(|name| format!("{SRC}/{name}")));
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(&args)
         .output()

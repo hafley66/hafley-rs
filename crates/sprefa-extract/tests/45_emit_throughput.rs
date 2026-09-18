@@ -74,7 +74,7 @@ fn emit_throughput_350k_rows_under_budget() {
     }
     std::fs::write(&path, &src).unwrap();
 
-    let bin = env!("CARGO_BIN_EXE_extract");
+    let bin = env!("CARGO_BIN_EXE_ryi");
     let arg = path.to_string_lossy().into_owned();
 
     // 25,563,904 B is over the default --max-bytes ceiling, and being over it

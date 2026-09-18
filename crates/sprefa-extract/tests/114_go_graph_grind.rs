@@ -50,7 +50,7 @@ fn walk(dir: &str) -> Vec<String> {
 fn resolve() -> Vec<serde_json::Value> {
     let mut paths = walk(&fixture("go_grind"));
     paths.sort();
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .arg("--family")
         .arg("call,type")

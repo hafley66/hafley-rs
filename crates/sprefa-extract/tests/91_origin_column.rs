@@ -37,7 +37,7 @@ const ORIGINS: &[&str] = &[
 ];
 
 fn run(args: &[&str]) -> Vec<Value> {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .arg("--resolve")
         .args(args)
