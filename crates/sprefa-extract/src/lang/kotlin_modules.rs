@@ -106,6 +106,9 @@ pub struct KtModuleIndex {
     /// package -> the files declaring it, sorted so a star import's rows are
     /// byte-stable whatever order the inputs arrive in.
     package_files: HashMap<String, Vec<String>>,
+    /// (package, top-level name) -> the one file declaring it; a name two
+    /// files of one package both declare binds nothing (absent from the map).
+    names_by_package: HashMap<(String, String), String>,
 }
 
 impl KtModuleIndex {
@@ -124,10 +127,66 @@ impl KtModuleIndex {
         for paths in index.package_files.values_mut() {
             paths.sort();
         }
+        let mut counts: HashMap<(String, String), (usize, String)> = HashMap::new();
+        for (file, facts) in &files {
+            let Some(package) = &facts.package else {
+                continue;
+            };
+            for name in &facts.top_level {
+                let entry = counts
+                    .entry((package.clone(), name.clone()))
+                    .or_insert_with(|| (0, file.clone()));
+                entry.0 += 1;
+            }
+        }
+        index.names_by_package = counts
+            .into_iter()
+            .filter(|(_, (n, _))| *n == 1)
+            .map(|(key, (_, file))| (key, file))
+            .collect();
         index.facts = files.into_iter().collect();
         index
     }
 
+    /// `path`'s own `package` header, if it declares one.
+    pub fn package_of(&self, path: &str) -> Option<&str> {
+        self.facts.get(path)?.package.as_deref()
+    }
+
+    /// The one file declaring `name` at top level in `package`; two files
+    /// declaring it is ambiguous and binds nothing.
+    pub fn package_scope(&self, package: &str, name: &str) -> Option<&str> {
+        self.names_by_package
+            .get(&(package.to_string(), name.to_string()))
+            .map(String::as_str)
+    }
+
+    /// The def file an import of `path` binds `name` to, with the def's
+    /// declared name: a wildcard binds any top-level name of its package, a
+    /// named import binds by its alias-or-last-segment and the def is the
+    /// path's last segment. The referring file itself never answers.
+    pub fn import_target(&self, path: &str, name: &str) -> Option<(String, String)> {
+        let facts = self.facts.get(path)?;
+        for import in &facts.imports {
+            let (package, def) = if import.wildcard {
+                (import.path.clone(), name.to_string())
+            } else {
+                if import.local != name {
+                    continue;
+                }
+                match self.split_import(&import.path) {
+                    Some((package, segment)) => (package, segment),
+                    None => continue,
+                }
+            };
+            if let Some(file) = self.declaring_file(&package, &def) {
+                if file != path {
+                    return Some((file.to_string(), def));
+                }
+            }
+        }
+        None
+    }
     /// The one file in `package` declaring `name` at top level; two files
     /// declaring it is ambiguous.
     fn declaring_file(&self, package: &str, name: &str) -> Option<&str> {

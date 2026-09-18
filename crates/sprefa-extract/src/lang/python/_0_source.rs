@@ -27,13 +27,15 @@ use crate::lang::{AstGrepParser, CstProjector};
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::seams::{
-    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex, Parser, Project,
-    Resolve,
+    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex, DefSite, Parser,
+    Project, Resolve,
 };
 use crate::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::source::{ExtractOutput, FamilyMask, ProjectCx, Source};
 use crate::trace;
-use crate::types::{DfLoop, LangKind, ScipIndex};
+use crate::types::{DfLoop, LangKind, PathIndex, ScipIndex};
+
+use super::PyModuleIndex;
 
 /// Kinds only Python constructs: the core enums do not carry them
 /// (tests/6_kind_vocab.rs). `cond` is `a if c else b`.
@@ -2616,6 +2618,7 @@ fn resolve_type_dst(
     strings: &Strings,
     index: Option<&DefIndex>,
     name: &str,
+    module_leg: Option<(ContentId, Span)>,
 ) -> Option<(ContentId, Span, ResolutionOrigin)> {
     let same_file = types
         .nodes
@@ -2627,10 +2630,50 @@ fn resolve_type_dst(
             .find(|site| site.span == node.span)
             .map(|site| (site.blob.clone(), site.span, ResolutionOrigin::SameFile));
     }
+    if let Some((blob, span)) = module_leg {
+        return Some((blob, span, ResolutionOrigin::ModulePlane));
+    }
     let sites = index.map(|index| corpus_defs(index, name)).unwrap_or(&[]);
     match sites {
         [only] => Some((only.blob.clone(), only.span, ResolutionOrigin::CorpusUnique)),
         _ => None,
+    }
+}
+
+impl PythonSource {
+    /// The module-plane leg for a bare callee/type name: the def its import
+    /// binding names (the plane's re-export walk included), never this file
+    /// itself. Stamps `ModulePlane`.
+    fn module_target(
+        modules: Option<&PyModuleIndex>,
+        own_path: Option<&str>,
+        index: &DefIndex,
+        paths: Option<&PathIndex>,
+        name: &str,
+    ) -> Option<(ContentId, Span, ResolutionOrigin)> {
+        let (modules, own_path, paths) = (modules?, own_path?, paths?);
+        let (file, def_name) = modules.resolve_callee(own_path, name)?;
+        if file == own_path {
+            return None;
+        }
+        let sites: Vec<&DefSite> = corpus_defs(index, &def_name)
+            .iter()
+            .filter(|s| paths.get(&s.blob) == Some(file.as_str()))
+            .collect();
+        let mut blobs: Vec<&ContentId> = Vec::new();
+        for s in &sites {
+            if !blobs.contains(&&s.blob) {
+                blobs.push(&s.blob);
+            }
+        }
+        let Some(&blob) = blobs.first() else {
+            return None;
+        };
+        let site = sites
+            .iter()
+            .find(|s| s.family == FamilyTag::Call)
+            .unwrap_or(&sites[0]);
+        Some((blob.clone(), site.span, ResolutionOrigin::ModulePlane))
     }
 }
 
@@ -2640,6 +2683,10 @@ impl Resolve<TypeF> for PythonSource {
             return Vec::new();
         };
         let index = cx.indexes.def_index.get();
+        let own = own_blob(cx, output);
+        let paths = cx.indexes.paths.get();
+        let own_path = own.as_ref().zip(paths).and_then(|(b, p)| p.get(b));
+        let modules = cx.indexes.py_modules.get();
         let mut edges = Vec::new();
         for candidate in PythonSource::type_edge_candidates(output) {
             let Some(src_ix) = types
@@ -2649,11 +2696,20 @@ impl Resolve<TypeF> for PythonSource {
             else {
                 continue;
             };
+            let name = output.strings.lookup(candidate.to);
+            let module_leg = match (modules, own_path, index, paths) {
+                (Some(m), Some(ow), Some(idx), Some(p)) => {
+                    PythonSource::module_target(Some(m), Some(ow), idx, Some(p), name)
+                        .map(|(blob, span, _)| (blob, span))
+                }
+                _ => None,
+            };
             let (dst_blob, dst_span, origin) = resolve_type_dst(
                 types,
                 &output.strings,
                 index,
-                output.strings.lookup(candidate.to),
+                name,
+                module_leg,
             )
             .unwrap_or((ZERO_CONTENT_ID, Span::empty(), ResolutionOrigin::Unresolved));
             edges.push(ProjectEdge::new(
@@ -2860,11 +2916,17 @@ impl Resolve<CallF> for PythonSource {
                 Some((index, joined, doc_ix))
             });
         let own = own_blob(cx, output);
+        let paths = cx.indexes.paths.get();
+        let own_path = own.as_ref().zip(paths).and_then(|(b, p)| p.get(b)).map(str::to_string);
+        let modules = cx.indexes.py_modules.get();
         let mut resolver = PyResolver {
             output,
             index: def_index,
             call,
             own: own.clone(),
+            modules,
+            own_path: own_path.clone(),
+            paths,
             decor_binds: Vec::new(),
             decor_extras: Vec::new(),
             active: std::cell::RefCell::new(Vec::new()),
@@ -2936,9 +2998,10 @@ impl Resolve<CallF> for PythonSource {
                         .with_call_site(site.span),
                 );
             };
-            // Tier order: scip (compiler) -> dynamic shapes -> name-match.
-            // A wrapper bind or a shadowing parameter is what the name means
-            // there; the corpus name-match is the last resort.
+            // Tier order: scip (compiler) -> dynamic shapes -> module plane ->
+            // corpus name-match. A wrapper bind or a shadowing parameter is
+            // what the name means there; the module plane binds the file an
+            // import clause named.
             let scip_t = scip.as_ref().and_then(|(index, joined, doc_ix)| {
                 scip_call_target(index, joined, *doc_ix, site, callee, def_index)
             });
@@ -2963,7 +3026,8 @@ impl Resolve<CallF> for PythonSource {
                 );
             } else if !resolver.shadowed(callee, site.span) {
                 // Shadowed names stay dropped: the corpus match must not
-                // resurrect the module-level binding resolve_site declined.
+                // resurrect the binding resolve_site declined. resolve_site
+                // itself carries the module-plane leg ahead of this match.
                 if let Some((dst_blob, dst_span)) =
                     PythonSource::call_name_match(output, def_index, callee)
                 {
@@ -3031,6 +3095,13 @@ struct PyResolver<'a> {
     call: &'a FamilyBundle<CallF>,
     /// This file's blob, when its own bytes are part of the run's file set.
     own: Option<ContentId>,
+    /// The corpus python module plane, when built.
+    modules: Option<&'a PyModuleIndex>,
+    /// This file's project-relative path, when resolvable.
+    own_path: Option<String>,
+    /// The resolve universe's blob -> path table, for the module leg's file
+    /// filter.
+    paths: Option<&'a PathIndex>,
     /// Binds synthesized from decorator applications (decorated name ->
     /// wrapper name), consulted BEFORE the file's own rows: the outermost
     /// decorator's return is what the decorated name means from then on.
@@ -3347,6 +3418,15 @@ impl<'a> PyResolver<'a> {
             }
             if self.shadowed(callee, site.span) {
                 return None;
+            }
+            if let Some((blob, span, _)) = PythonSource::module_target(
+                self.modules,
+                self.own_path.as_deref(),
+                self.index,
+                self.paths,
+                callee,
+            ) {
+                return Some((blob, span, ResolutionOrigin::ModulePlane));
             }
             return PythonSource::call_name_match(self.output, self.index, callee)
                 .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))

@@ -43,10 +43,15 @@ use crate::family::{
     TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
 };
 use crate::rows::{Edge, FamilyBundle, Node};
-use crate::seams::{corpus_defs, covering_def, def_named, DefIndex, Parser, Project, Resolve};
+use crate::seams::{
+    corpus_defs, covering_def, def_named, own_blob, DefIndex, DefSite, Parser, Project, Resolve,
+};
 use crate::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::source::{ExtractOutput, FamilyMask, ProjectCx, Source};
 use crate::trace;
+use crate::types::PathIndex;
+
+use super::kotlin_modules::KtModuleIndex;
 
 // ── the tree-sitter-kotlin parse (one parse feeds type/call/df) ─────────────
 
@@ -1733,16 +1738,33 @@ impl Resolve<CallF> for KotlinSource {
         let Some(def_index) = cx.indexes.def_index.get() else {
             return Vec::new();
         };
+        let own = own_blob(cx, output);
+        let paths = cx.indexes.paths.get();
+        let own_path = own.as_ref().zip(paths).and_then(|(b, p)| p.get(b));
+        let modules = cx.indexes.kt_modules.get();
         let mut edges = Vec::new();
         for site in &call.aux.sites {
             let Some(caller) = covering_def(call, site.span) else {
                 continue;
             };
             let callee = output.strings.lookup(site.callee);
-            let Some((dst_blob, dst_span)) =
-                KotlinSource::call_name_match(output, def_index, callee)
-            else {
+            if KotlinSource::shadowed(output, callee, site.span) {
                 continue;
+            }
+            let dst = KotlinSource::module_target(
+                modules,
+                own_path,
+                def_index,
+                paths,
+                callee,
+                FamilyTag::Call,
+            );
+            let (dst_blob, dst_span, origin) = match dst {
+                Some(x) => x,
+                None => match KotlinSource::call_name_match(output, def_index, callee) {
+                    Some((blob, span)) => (blob, span, ResolutionOrigin::CorpusUnique),
+                    None => continue,
+                },
             };
             edges.push(
                 ProjectEdge::new(
@@ -1750,12 +1772,73 @@ impl Resolve<CallF> for KotlinSource {
                     dst_blob,
                     dst_span,
                     CallEdgeKind::NameResolve,
-                    ResolutionOrigin::CorpusUnique,
+                    origin,
                 )
                 .with_call_site(site.span),
             );
         }
         edges
+    }
+}
+
+impl KotlinSource {
+    /// The module-plane legs for a bare callee name, ahead of the corpus
+    /// name-match: the import leg (`a.b.callee` or `a.b.*` binds a corpus file)
+    /// then the same-package leg (a bare name declared in another file of the
+    /// referring file's own package). Both stamp `ModulePlane`.
+    fn module_target(
+        modules: Option<&KtModuleIndex>,
+        own_path: Option<&str>,
+        index: &DefIndex,
+        paths: Option<&PathIndex>,
+        callee: &str,
+        prefer: FamilyTag,
+    ) -> Option<(ContentId, Span, ResolutionOrigin)> {
+        let (modules, own_path, paths) = (modules?, own_path?, paths?);
+        if let Some((file, def)) = modules.import_target(own_path, callee) {
+            if let Some((blob, span)) = def_in_file(index, paths, &def, &file, prefer) {
+                return Some((blob, span, ResolutionOrigin::ModulePlane));
+            }
+        }
+        if let Some(package) = modules.package_of(own_path) {
+            if let Some(file) = modules.package_scope(package, callee) {
+                if file != own_path {
+                    if let Some((blob, span)) = def_in_file(index, paths, callee, file, prefer) {
+                        return Some((blob, span, ResolutionOrigin::ModulePlane));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// `callee` is bound by a param or `val`/`var` of the innermost enclosing
+    /// callable, so no name-match leg may answer for the site: the local
+    /// binding is what the name means there.
+    fn shadowed(output: &ExtractOutput, callee: &str, site_span: Span) -> bool {
+        let Some(call) = &output.call else {
+            return false;
+        };
+        let strings = &output.strings;
+        let Some(scope) = call
+            .nodes
+            .iter()
+            .filter(|n| n.span.start <= site_span.start && site_span.end() <= n.span.end())
+            .min_by_key(|n| (n.span.end() - n.span.start, n.span.start))
+        else {
+            return false;
+        };
+        if let Some(df) = &output.df {
+            if df.nodes.iter().any(|n| {
+                matches!(n.kind, DfNodeKind::Param | DfNodeKind::LetBind)
+                    && n.span.start >= scope.span.start
+                    && n.span.end() <= scope.span.end()
+                    && n.name.is_some_and(|id| strings.lookup(id) == callee)
+            }) {
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -1776,16 +1859,50 @@ impl KotlinSource {
     }
 }
 
+/// The def site for `name` in exactly one blob that `paths` maps to `file`,
+/// the `prefer` family's site first (a class carries both a TypeF entity at
+/// the decl and a CallF constructor row at the def span; the plane reading the
+/// edge names the span that its own name table joins).
+/// `None` when the file holds no such def or holds it in more than one blob.
+fn def_in_file(
+    index: &DefIndex,
+    paths: &PathIndex,
+    name: &str,
+    file: &str,
+    prefer: FamilyTag,
+) -> Option<(ContentId, Span)> {
+    let sites: Vec<&DefSite> = corpus_defs(index, name)
+        .iter()
+        .filter(|s| paths.get(&s.blob) == Some(file))
+        .collect();
+    let mut blobs: Vec<&ContentId> = Vec::new();
+    for s in &sites {
+        if !blobs.contains(&&s.blob) {
+            blobs.push(&s.blob);
+        }
+    }
+    let [blob] = blobs.as_slice() else {
+        return None;
+    };
+    let site = sites
+        .iter()
+        .find(|s| s.family == prefer)
+        .unwrap_or(&sites[0]);
+    Some(((*blob).clone(), site.span))
+}
+
 /// The dst leg of one candidate: same-file TypeF entity first (its span joined
-/// through the `DefIndex` for the blob), else a unique corpus site, else None
-/// (text stays text, the zero leg). Name-only resolution, per the 4a ADDENDUM
-/// site-key discipline (no receiver typing).
+/// through the `DefIndex` for the blob), else the module-plane target
+/// (`module_leg`, precomputed by the caller), else a unique corpus site, else
+/// None (text stays text, the zero leg). Name-only resolution, per the 4a
+/// ADDENDUM site-key discipline (no receiver typing).
 // @comment-ok: helper doc mirroring the go/rust resolve_type_dst
 fn resolve_type_dst(
     types: &FamilyBundle<TypeF>,
     strings: &Strings,
     index: Option<&DefIndex>,
     name: &str,
+    module_leg: Option<(ContentId, Span)>,
 ) -> Option<(ContentId, Span, ResolutionOrigin)> {
     let same_file = types
         .nodes
@@ -1796,6 +1913,9 @@ fn resolve_type_dst(
             .iter()
             .find(|site| site.span == node.span)
             .map(|site| (site.blob.clone(), site.span, ResolutionOrigin::SameFile));
+    }
+    if let Some((blob, span)) = module_leg {
+        return Some((blob, span, ResolutionOrigin::ModulePlane));
     }
     let sites = index.map(|index| corpus_defs(index, name)).unwrap_or(&[]);
     match sites {
@@ -1810,6 +1930,10 @@ impl Resolve<TypeF> for KotlinSource {
             return Vec::new();
         };
         let index = cx.indexes.def_index.get();
+        let own = own_blob(cx, output);
+        let paths = cx.indexes.paths.get();
+        let own_path = own.as_ref().zip(paths).and_then(|(b, p)| p.get(b));
+        let modules = cx.indexes.kt_modules.get();
         let mut edges = Vec::new();
         for candidate in KotlinSource::type_edge_candidates(output) {
             // src: the TypeF entity at the owner span (a miss is a collection
@@ -1821,11 +1945,27 @@ impl Resolve<TypeF> for KotlinSource {
             else {
                 continue;
             };
+            let name = output.strings.lookup(candidate.to);
+            let module_leg = match (modules, own_path, index, paths) {
+                (Some(m), Some(ow), Some(idx), Some(p)) => {
+                    KotlinSource::module_target(
+                        Some(m),
+                        Some(ow),
+                        idx,
+                        Some(p),
+                        name,
+                        FamilyTag::Type,
+                    )
+                    .map(|(blob, span, _)| (blob, span))
+                }
+                _ => None,
+            };
             let (dst_blob, dst_span, origin) = resolve_type_dst(
                 types,
                 &output.strings,
                 index,
-                output.strings.lookup(candidate.to),
+                name,
+                module_leg,
             )
             .unwrap_or((ZERO_CONTENT_ID, Span::empty(), ResolutionOrigin::Unresolved));
             edges.push(ProjectEdge::new(
