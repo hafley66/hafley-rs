@@ -1065,7 +1065,9 @@ fn call_resolve_scip_ratchet_ts() {
             let line = line_of(&content, site.span.start);
             // scip's independent word on this site.
             let occ = site_occurrence(doc, &content, site.span, callee);
-            if occ.is_none() {
+            if occ.is_some() {
+                counts.join_hits += 1;
+            } else {
                 counts.missing_occurrence += 1;
                 lines.push(format!("MISSING-OCCURRENCE {rel}:{line} {callee}"));
             }
@@ -1214,6 +1216,10 @@ fn call_resolve_scip_ratchet_ts() {
     for (origin, (t, w, u)) in &counts.by_origin {
         eprintln!("ts\t{origin}\t{t}\t{w}\t{u}");
     }
+    assert!(
+        counts.join_hits > 0,
+        "ts: zero join coverage: not one site joined to a scip occurrence"
+    );
     pin_ratchet_tsv("ts", &counts.by_origin);
     for line in &lines {
         eprintln!("  {line}");
@@ -1410,7 +1416,9 @@ fn call_resolve_scip_ratchet_go() {
             let line = line_of(&content, site.span.start);
             // scip's independent word on this site.
             let occ = site_occurrence(doc, &content, site.span, callee);
-            if occ.is_none() {
+            if occ.is_some() {
+                counts.join_hits += 1;
+            } else {
                 counts.missing_occurrence += 1;
                 lines.push(format!("MISSING-OCCURRENCE {rel}:{line} {callee}"));
             }
@@ -1559,6 +1567,10 @@ fn call_resolve_scip_ratchet_go() {
     for (origin, (t, w, u)) in &counts.by_origin {
         eprintln!("go\t{origin}\t{t}\t{w}\t{u}");
     }
+    assert!(
+        counts.join_hits > 0,
+        "go: zero join coverage: not one site joined to a scip occurrence"
+    );
     pin_ratchet_tsv("go", &counts.by_origin);
     for line in &lines {
         eprintln!("  {line}");
@@ -1744,7 +1756,9 @@ fn call_resolve_scip_ratchet_rust() {
             // scip's independent word on this site (the local guard is the
             // rust adaptation: a local binding is NOT a corpus call target).
             let occ = site_occurrence(doc, &content, site.span, callee);
-            if occ.is_none() {
+            if occ.is_some() {
+                counts.join_hits += 1;
+            } else {
                 counts.missing_occurrence += 1;
                 lines.push(format!("MISSING-OCCURRENCE {rel}:{line} {callee}"));
             }
@@ -1894,6 +1908,10 @@ fn call_resolve_scip_ratchet_rust() {
     for (origin, (t, w, u)) in &counts.by_origin {
         eprintln!("rust\t{origin}\t{t}\t{w}\t{u}");
     }
+    assert!(
+        counts.join_hits > 0,
+        "rust: zero join coverage: not one site joined to a scip occurrence"
+    );
     pin_ratchet_tsv("rust", &counts.by_origin);
     for line in &lines {
         eprintln!("  {line}");
@@ -1935,6 +1953,8 @@ struct RatchetCounts {
     overbound: usize,
     /// Per resolution_origin: (true, wrong_target, unresolved).
     by_origin: BTreeMap<String, (usize, usize, usize)>,
+    /// Sites whose join to the scip index found an occurrence.
+    join_hits: usize,
 }
 
 impl RatchetCounts {
