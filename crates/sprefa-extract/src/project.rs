@@ -1922,7 +1922,7 @@ fn call_facts(
     let Some(call) = input.output.call.as_ref() else {
         return Vec::new();
     };
-    let mut seen: std::collections::BTreeSet<(String, u32, u32, String, u32, u32)> =
+    let mut seen: std::collections::BTreeSet<(u32, u32, u32, String, u32, u32)> =
         std::collections::BTreeSet::new();
     let mut facts = Vec::new();
     for edge in edges {
@@ -1935,10 +1935,10 @@ fn call_facts(
         let caller_site_end = edge.call_site.map_or(0, |span| span.end());
         let callee_start = edge.dst_span.start;
         let callee_end = edge.dst_span.end();
-        // A site inside a closure or spliced macro resolves more than once;
-        // one (site, target) pair emits one row, keeping the first.
+        // A spliced macro resolves one site more than once; one (caller node,
+        // site, target) triple emits one row, so closure mirror rows survive.
         if !seen.insert((
-            caller_path.clone(),
+            edge.src.0,
             caller_site_start,
             caller_site_end,
             callee_path.clone(),
