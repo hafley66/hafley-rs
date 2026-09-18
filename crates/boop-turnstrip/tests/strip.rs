@@ -10,9 +10,10 @@
 //! and the empty rows stay empty, which is what the aligner must ignore.
 
 use boop_turnstrip::{
-    drawn_at_all, kind_of, layout, layout_pinned, measure, place_window, recent_layout,
-    relative_layout, rows_of, samples_from, window_of, Layout, ListedTurn, Mode, Options,
-    Placement, RecentStrip, RelativeStrip, TurnKind, TurnRow, Viewport, DEFAULT_RECENT_MAX, KINDS,
+    drawn_at_all, drawn_as_tool, kind_of, layout, layout_pinned, measure, place_window,
+    recent_layout, relative_layout, rows_of, samples_from, window_of, Layout, ListedTurn, Mode,
+    Options, Placement, RecentStrip, RelativeStrip, TurnKind, TurnRow, Viewport,
+    DEFAULT_RECENT_MAX, KINDS,
 };
 use boop_turnvis::{Confidence, LogicalLine, VisibleTurn};
 
@@ -103,6 +104,23 @@ fn many(count: i64) -> Vec<TurnSpec> {
             spec(
                 &format!("s{}", index + 1),
                 "assistant",
+                (index * 2, index * 2 + 1),
+                1,
+                &[index * 2],
+            )
+        })
+        .collect()
+}
+
+/// `count` tool turns, two rows apart, one line each: the tool budget's
+/// fixture. A dense run of tools in one turn is exactly what the strip must
+/// compress, so the rows are packed at the tool gap's own distance.
+fn many_tools(count: i64) -> Vec<TurnSpec> {
+    (0..count)
+        .map(|index| {
+            spec(
+                &format!("t{}", index + 1),
+                "tool",
                 (index * 2, index * 2 + 1),
                 1,
                 &[index * 2],
@@ -297,7 +315,7 @@ fn keeps_the_measured_turns_at_their_own_rows_and_stacks_the_rest_around_them() 
 fn lays_the_strip_out_in_the_windows_own_rows() {
     // A window the reader scrolled into the middle of the long answer: `a2`'s
     // head is above it, `a4` sits below it, and the SQL result the matcher saw
-    // between them is a tool turn, which draws nothing.
+    // between them is a tool turn, which draws a tiny square on its own row.
     let window = Viewport {
         top: 25,
         bottom: 58,
@@ -307,9 +325,11 @@ fn lays_the_strip_out_in_the_windows_own_rows() {
     // `a2` draws on the window's first row because that is where the reader met
     // it, and `a4` on its own row, twenty-seven below. Their sizes are the
     // reader's own intersection with them: the window holds half of `a2`, so
-    // half a square; `a4` is wholly in view and draws full size.
-    let expected: [(&str, TurnKind, f64, f64, bool); 2] = [
+    // half a square; `a4` is wholly in view and draws full size. The tool result
+    // between them draws at the fixed tool scale, never active.
+    let expected: [(&str, TurnKind, f64, f64, bool); 3] = [
         ("a2", TurnKind::Agent, 0.0, 0.5, true),
+        ("t3", TurnKind::Tool, 8.0, 0.35, false),
         ("a4", TurnKind::Agent, 27.0, 1.0, true),
     ];
     assert_eq!(strip.squares.len(), expected.len());
@@ -385,13 +405,13 @@ fn scales_a_square_by_the_part_of_its_turn_the_reader_can_see() {
         top: 40,
         bottom: 63,
     });
-    assert_eq!(live.squares.len(), 1);
+    let live_a4 = live
+        .squares
+        .iter()
+        .find(|square| square.id == "a4")
+        .expect("a4 draws in this window");
     assert_eq!(
-        (
-            live.squares[0].id.as_str(),
-            live.squares[0].y,
-            live.squares[0].scale
-        ),
+        (live_a4.id.as_str(), live_a4.y, live_a4.scale),
         ("a4", 12.0, 1.0),
         "the whole answer, on its own row"
     );
@@ -399,13 +419,13 @@ fn scales_a_square_by_the_part_of_its_turn_the_reader_can_see() {
         top: 56,
         bottom: 63,
     });
-    assert_eq!(scrolled.squares.len(), 1);
+    let scrolled_a4 = scrolled
+        .squares
+        .iter()
+        .find(|square| square.id == "a4")
+        .expect("a4 still draws in this window");
     assert_eq!(
-        (
-            scrolled.squares[0].id.as_str(),
-            scrolled.squares[0].y,
-            scrolled.squares[0].scale
-        ),
+        (scrolled_a4.id.as_str(), scrolled_a4.y, scrolled_a4.scale),
         ("a4", 0.0, 0.5),
         "the same turn half out of the window: resized and moved, never renamed"
     );
@@ -472,14 +492,17 @@ fn moves_every_square_by_the_rows_a_scroll_moved() {
     };
 
     // The whole pane: every conversation turn is at its own row inside the
-    // window, and the two tool turns the pane holds draw nothing.
+    // window, and the two tool turns the pane holds draw as tiny squares beside
+    // them.
     let live = at(0, 64);
     assert_eq!(
         rows(&live),
         [
             ("u1".to_string(), 0.0),
             ("a2".to_string(), 3.0),
+            ("t3".to_string(), 33.0),
             ("a4".to_string(), 52.0),
+            ("t5".to_string(), 61.0),
         ]
     );
     let start_of = |id: &str| of(&live, id).expect("the live window holds every turn");
@@ -511,10 +534,10 @@ fn moves_every_square_by_the_rows_a_scroll_moved() {
     );
 
     // At the bottom of the capture, the answer the matcher saw sits on its own
-    // row, and the tool turn above it — the turn the reader is inside — draws
-    // nothing at all.
+    // row, and the tool turn above it draws a tiny square on the window's first
+    // row, where the reader met it.
     let tail = at(40, 24);
-    assert_eq!(of(&tail, "t3"), None, "a tool turn is never drawn");
+    assert_eq!(of(&tail, "t3"), Some(0.0), "a tool draws at its first visible row");
     assert_eq!(
         of(&tail, "a2"),
         None,
@@ -568,6 +591,100 @@ fn keeps_one_square_per_row_and_the_readers_own_turn_under_a_budget() {
     );
     let newest: Vec<String> = (1..=30).map(|index| format!("s{index}")).collect();
     assert_eq!(capped, newest);
+}
+
+#[test]
+fn a_dense_run_of_tools_compresses_to_the_tool_budget_newest_first() {
+    // Thirty tools, two rows apart, all inside the window: a dense run of the
+    // kind one turn flies. The strip keeps at most the tool budget of them,
+    // newest first, and they are at least the tool gap apart.
+    let whole = Viewport { top: 0, bottom: 63 };
+    let rows = rows_for(&many_tools(30), whole);
+    let strip = layout(&rows, whole, 0, &Options::default());
+    let tools = strip
+        .squares()
+        .iter()
+        .filter(|square| square.kind == TurnKind::Tool)
+        .collect::<Vec<_>>();
+    assert_eq!(tools.len(), 16, "thirty tools compress to the tool budget");
+    let y = |index: usize| tools[index].y;
+    assert_eq!(y(0), 28.0, "the newest first: the highest rows survive");
+    assert_eq!(y(15), 58.0);
+    for index in 1..tools.len() {
+        assert!(
+            (y(index) - y(index - 1)).abs() >= 2.0,
+            "tools are at least the tool gap apart"
+        );
+    }
+    for square in tools {
+        assert_eq!(square.scale, 0.35, "a tool square draws at the fixed tool scale");
+        assert!(!square.active, "a tool is never active");
+    }
+}
+
+#[test]
+fn a_conversation_square_inside_a_tool_run_keeps_its_own_row_and_gap() {
+    // A conversation turn in the middle of a tool run: the tool budget must not
+    // evict it, and the conversation's own `min_gap` must still decide whether
+    // it draws. Two conversation turns two rows apart (at `min_gap 2.0`) both
+    // survive, and the tools around them take the tiny squares on their own
+    // rows without evicting either answer.
+    let whole = Viewport { top: 0, bottom: 40 };
+    let rows = rows_for(
+        &[
+            spec("t0", "tool", (0, 1), 1, &[0]),
+            spec("a1", "assistant", (4, 5), 1, &[4]),
+            spec("a2", "assistant", (6, 7), 1, &[6]),
+            spec("t3", "tool", (10, 11), 1, &[10]),
+            spec("t4", "tool", (12, 13), 1, &[12]),
+        ],
+        whole,
+    );
+    let strip = layout(
+        &rows,
+        whole,
+        0,
+        &Options {
+            min_gap: 2.0,
+            ..Options::default()
+        },
+    );
+    let ids = strip
+        .squares()
+        .iter()
+        .map(|square| (square.id.as_str(), square.y))
+        .collect::<Vec<_>>();
+    // `a1` and `a2` are two rows apart, exactly `min_gap 2.0`, so both clear it
+    // and survive: the conversation behavior, untouched by the tools beside
+    // them.
+    assert_eq!(
+        ids,
+        [("t0", 0.0), ("a1", 4.0), ("a2", 6.0), ("t3", 10.0), ("t4", 12.0)]
+    );
+}
+
+#[test]
+fn recent_mode_lists_no_tool() {
+    // The recency list is the conversation's: a chatty tool run takes no place
+    // in it, whatever the store hands over.
+    let listed = listed_of(&many_tools(10));
+    let strip = recent_layout(&listed, None, Viewport { top: 0, bottom: 40 }, &Options::default());
+    assert_eq!(strip.squares.len(), 0);
+    // And a recent strip with a conversation turn lists that turn only, never
+    // the tool that flew beside it.
+    let mixed = listed_of(&[
+        spec("a1", "assistant", (0, 1), 1, &[0]),
+        spec("t2", "tool", (2, 3), 1, &[2]),
+    ]);
+    let strip = recent_layout(&mixed, None, Viewport { top: 0, bottom: 40 }, &Options::default());
+    assert_eq!(
+        strip
+            .squares
+            .iter()
+            .map(|square| square.id.as_str())
+            .collect::<Vec<_>>(),
+        ["a1"]
+    );
 }
 
 #[test]
@@ -827,7 +944,7 @@ fn a_recent_block_takes_its_hard_max_when_the_caller_sets_none() {
 }
 
 #[test]
-fn only_the_conversation_draws_in_either_mode() {
+fn conversation_draws_in_both_modes_and_tools_only_in_relative() {
     // A tool turn and a meta turn between two answers, one row apart each, with
     // a gap wider than that: a hidden turn that still took a spacing slot would
     // drop the older answer, so both answers surviving is what says the hidden
@@ -844,7 +961,12 @@ fn only_the_conversation_draws_in_either_mode() {
     assert!(drawn_at_all(TurnKind::Agent));
     assert!(!drawn_at_all(TurnKind::Tool));
     assert!(!drawn_at_all(TurnKind::Other));
+    assert!(drawn_as_tool(TurnKind::Tool));
+    assert!(!drawn_as_tool(TurnKind::Agent));
 
+    // Relative mode draws the conversation and the tool, but not the meta turn:
+    // `m3` is not conversation, and it is not a tool either, so no predicate
+    // admits it and it costs no slot.
     let strip = layout(
         &rows,
         whole,
@@ -854,19 +976,19 @@ fn only_the_conversation_draws_in_either_mode() {
             ..Options::default()
         },
     );
-    assert_eq!(ids_of(&strip), ["a1", "a4"]);
+    assert_eq!(ids_of(&strip), ["a1", "t2", "a4"]);
 
-    // The pane fixture's own window holds two tool turns, and neither is drawn
-    // in relative mode either.
+    // The pane fixture's own window holds two tool turns, and both draw as tiny
+    // squares in relative mode.
     let whole_pane = Viewport { top: 0, bottom: 63 };
     let pane_rows = rows_for(&pane(), whole_pane);
     assert_eq!(
         ids_of(&layout(&pane_rows, whole_pane, 0, &Options::default())),
-        ["u1", "a2", "a4"]
+        ["u1", "a2", "t3", "a4", "t5"]
     );
 
-    // Nothing in the layout draws a kind the conversation does not own: not a
-    // window square, not a band square.
+    // The band holds only the conversation: a pin is the reader's own prompt, a
+    // place a tool must never take.
     let banded = layout_pinned(
         &rows,
         &["p1".to_string()],
@@ -877,14 +999,14 @@ fn only_the_conversation_draws_in_either_mode() {
     );
     assert!(
         banded
-            .squares()
+            .squares()[..banded.band()]
             .iter()
             .all(|square| drawn_at_all(square.kind)),
         "the band holds the conversation too"
     );
 
     // A recency list arrives whole — the caller's store holds every turn — and
-    // the strip is what filters it.
+    // the strip is what filters it. Recent mode has no tool squares.
     let listed = listed_of(&specs);
     assert_eq!(listed.len(), 4);
     let listed_strip = recent_layout(&listed, None, whole, &Options::default());
@@ -926,8 +1048,8 @@ fn the_band_keeps_the_readers_own_turns_the_mode_placed_nothing_for() {
     assert!(!relative.squares[0].active);
     assert_eq!(
         relative.squares.len(),
-        2,
-        "the band plus the window's own answer"
+        3,
+        "the band, the window's own answer, and the tool the window holds"
     );
 
     // A pin the window already draws is not drawn twice.
